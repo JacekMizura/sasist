@@ -2,6 +2,15 @@ import logging
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+
+from fastapi import Depends
+from ..auth.warehouse_deps import (
+    require_operable_warehouse,
+    require_active_operable_warehouse,
+    require_active_or_query_operable_warehouse,
+    assert_stock_document_warehouse,
+    enforce_warehouse_access,
+)
 from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -107,7 +116,7 @@ def warehouse_occupancy_metrics(
 @router.post("/occupancy-metrics/rebuild")
 def warehouse_occupancy_metrics_rebuild(
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     db: Session = Depends(get_db),
 ):
     """To samo co GET — brak osobnej tabeli cache; endpoint pod integracje / „wymuś odświeżenie”."""

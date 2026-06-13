@@ -15,6 +15,14 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from ..auth.deps import get_optional_current_user
+from fastapi import Depends
+from ..auth.warehouse_deps import (
+    require_operable_warehouse,
+    require_active_operable_warehouse,
+    require_active_or_query_operable_warehouse,
+    assert_stock_document_warehouse,
+    enforce_warehouse_access,
+)
 from ..database import get_db
 from ..models.app_user import AppUser
 from ..models.order import Order
@@ -538,7 +546,7 @@ def serialize_order_issue_task_list_card(
 @router.get("/order-issue-tasks/resolve-scan", response_model=OrderIssueTaskListItem)
 def resolve_order_issue_task_scan(
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     scan: str = Query(..., min_length=1, description="Kod kreskowy zamówienia lub numer"),
     db: Session = Depends(get_db),
     current_user: AppUser | None = Depends(get_optional_current_user),
@@ -618,7 +626,7 @@ def resolve_order_issue_task_scan(
 def get_order_issue_task(
     task_id: int,
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     db: Session = Depends(get_db),
     current_user: AppUser | None = Depends(get_optional_current_user),
 ):
@@ -895,7 +903,7 @@ def _build_order_issue_tasks_list(
 @router.get("/order-issue-tasks", response_model=OrderIssueTaskListResponse)
 def list_order_issue_tasks(
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     sync: bool = Query(
         False,
         description="Pełne przeliczenie stanów braków przed listą (wolniejsze; użyj przy ręcznym odświeżeniu)",
@@ -946,7 +954,7 @@ def post_order_issue_task_log(
     task_id: int,
     body: OrderIssueTaskLogBody,
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     db: Session = Depends(get_db),
 ):
     ensure_order_issue_task_table_schema(db)
@@ -971,7 +979,7 @@ def post_order_issue_task_done(
     task_id: int,
     body: OrderIssueTaskDoneBody | None = None,
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     db: Session = Depends(get_db),
     current_user: AppUser | None = Depends(get_optional_current_user),
 ):
@@ -1008,7 +1016,7 @@ def post_order_issue_task_archive(
     task_id: int,
     body: OrderIssueTaskArchiveBody | None = None,
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     db: Session = Depends(get_db),
     current_user: AppUser | None = Depends(get_optional_current_user),
 ):
@@ -1067,7 +1075,7 @@ def post_order_issue_task_force_remove(
     task_id: int,
     body: OrderIssueTaskForceRemoveBody,
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     db: Session = Depends(get_db),
     current_user: AppUser | None = Depends(get_optional_current_user),
 ):

@@ -72,6 +72,57 @@ def _resolve_supervisor_user_id(db: Session, supervisor_id: int | None) -> int |
     return sid
 
 
+def _normalize_warehouse_ids(db: Session, warehouse_ids: list[int]) -> list[int]:
+    seen: set[int] = set()
+    ordered: list[int] = []
+    for wid in warehouse_ids:
+        w = int(wid)
+        if w in seen:
+            continue
+        if db.query(Warehouse.id).filter(Warehouse.id == w).first() is None:
+            continue
+        seen.add(w)
+        ordered.append(w)
+    return ordered
+
+
+def validate_wms_warehouse_profile(
+    db: Session,
+    *,
+    role: str,
+    warehouse_ids: list[int],
+    default_warehouse_id: int | None,
+    wms_operational_modes: list[str] | None,
+) -> tuple[list[int], int | None]:
+    """
+    Normalize warehouse assignments for admin save.
+    Raises ValueError with stable codes for API mapping.
+    """
+    ids = _normalize_warehouse_ids(db, warehouse_ids)
+    dw = int(default_warehouse_id) if default_warehouse_id is not None else None
+
+    modes = [str(m) for m in (wms_operational_modes or []) if is_valid_wms_mode(str(m))]
+    is_operational_wms = bool(modes)
+
+    if is_super_role(role):
+        if dw is not None and dw not in ids:
+            ids = list(dict.fromkeys([*ids, dw]))
+        if dw is None and ids:
+            dw = ids[0]
+        return ids, dw
+
+    if dw is not None and dw not in ids:
+        raise ValueError("DEFAULT_WAREHOUSE_NOT_ASSIGNED")
+
+    if is_operational_wms and not ids:
+        raise ValueError("WMS_WAREHOUSE_REQUIRED")
+
+    if dw is None and ids:
+        dw = ids[0]
+
+    return ids, dw
+
+
 def sync_warehouse_assignments(db: Session, user_id: int, warehouse_ids: list[int], *, default_warehouse_id: int | None = None) -> None:
     from .user_warehouse_context_service import sync_user_warehouse_assignments
 
@@ -93,11 +144,10 @@ def sync_warehouse_assignments(db: Session, user_id: int, warehouse_ids: list[in
         db.add(AppUserWarehouse(user_id=user_id, warehouse_id=wid))
 
 
-def apply_wms_profile_create(db: Session, user_id: int, wms: WmsProfileInput) -> None:
+def apply_wms_profile_create(db: Session, user_id: int, wms: WmsProfileInput, *, role: str = "user") -> None:
     p = ensure_wms_profile(db, user_id)
     p.barcode_login_code = (wms.barcode_login_code or "").strip() or None
     p.language = wms.language or "pl"
-    p.default_warehouse_id = wms.default_warehouse_id
     p.require_scan_every_product = bool(wms.require_scan_every_product)
     p.can_edit_products_preview = bool(wms.can_edit_products_preview)
     p.picker_color = (wms.picker_color or "").strip() or None
@@ -119,10 +169,14 @@ def apply_wms_profile_create(db: Session, user_id: int, wms: WmsProfileInput) ->
     p.workforce_active_zone_ids_json = json.dumps(zids, ensure_ascii=False) if zids else None
     p.workforce_default_workstation = (wms.workforce_default_workstation or "").strip() or None
     p.workforce_color_tag = (wms.workforce_color_tag or "").strip() or None
-    ids = list(dict.fromkeys(wms.warehouse_ids))
-    dw = wms.default_warehouse_id
-    if dw is not None and db.query(Warehouse).filter(Warehouse.id == dw).first() is not None:
-        ids = list(dict.fromkeys([*ids, dw]))
+    ids, dw = validate_wms_warehouse_profile(
+        db,
+        role=role,
+        warehouse_ids=list(dict.fromkeys(wms.warehouse_ids)),
+        default_warehouse_id=wms.default_warehouse_id,
+        wms_operational_modes=modes,
+    )
+    p.default_warehouse_id = dw
     sync_warehouse_assignments(db, user_id, ids, default_warehouse_id=dw)
 
 
@@ -178,12 +232,53 @@ def apply_wms_profile_update(db: Session, user_id: int, wms: WmsProfileUpdate) -
     if "workforce_color_tag" in data:
         v = data["workforce_color_tag"]
         p.workforce_color_tag = None if v is None else ((str(v).strip()) or None)
-    if "warehouse_ids" in data and data["warehouse_ids"] is not None:
-        ids = list(dict.fromkeys(data["warehouse_ids"]))
-        dw = p.default_warehouse_id
-        if dw is not None and db.query(Warehouse).filter(Warehouse.id == dw).first() is not None:
-            ids = list(dict.fromkeys([*ids, dw]))
-        sync_warehouse_assignments(db, user_id, ids, default_warehouse_id=dw)
+
+    _sync_wms_warehouse_assignments_from_profile(db, user_id, p, data)
+
+
+def _assignment_warehouse_ids(db: Session, user_id: int) -> list[int]:
+    rows = (
+        db.query(UserWarehouseAssignment.warehouse_id)
+        .filter(UserWarehouseAssignment.user_id == int(user_id))
+        .order_by(UserWarehouseAssignment.warehouse_id.asc())
+        .all()
+    )
+    return [int(r[0]) for r in rows]
+
+
+def _sync_wms_warehouse_assignments_from_profile(
+    db: Session,
+    user_id: int,
+    profile: UserWmsProfile,
+    patch: dict[str, Any],
+) -> None:
+    if not any(k in patch for k in ("warehouse_ids", "default_warehouse_id", "wms_operational_modes")):
+        return
+    user = db.query(AppUser).filter(AppUser.id == int(user_id)).first()
+    role = (user.role if user is not None else "user") or "user"
+    if "warehouse_ids" in patch and patch["warehouse_ids"] is not None:
+        wh_ids = list(dict.fromkeys(patch["warehouse_ids"]))
+    else:
+        wh_ids = _assignment_warehouse_ids(db, user_id)
+    dw = profile.default_warehouse_id
+    modes_raw = profile.wms_operational_modes_json
+    modes: list[str] = []
+    if modes_raw:
+        try:
+            parsed = json.loads(modes_raw)
+            if isinstance(parsed, list):
+                modes = [str(m) for m in parsed if is_valid_wms_mode(str(m))]
+        except json.JSONDecodeError:
+            modes = []
+    ids, dw = validate_wms_warehouse_profile(
+        db,
+        role=role,
+        warehouse_ids=wh_ids,
+        default_warehouse_id=dw,
+        wms_operational_modes=modes,
+    )
+    profile.default_warehouse_id = dw
+    sync_warehouse_assignments(db, user_id, ids, default_warehouse_id=dw)
 
 
 def create_user_transaction(
@@ -224,7 +319,7 @@ def create_user_transaction(
     db.flush()
 
     wms_for_profile = WmsProfileInput(**{**body.wms_profile.model_dump(), "language": wl})
-    apply_wms_profile_create(db, u.id, wms_for_profile)
+    apply_wms_profile_create(db, u.id, wms_for_profile, role=role_stored)
 
     if not is_super_role(u.role):
         for pk in stored_perms:

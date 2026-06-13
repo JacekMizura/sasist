@@ -9,6 +9,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from ..auth.roles import is_super_role
+from ..auth.warehouse_access_config import wms_warehouse_assignment_enforcement_enabled
 from ..models.app_user import AppUser, UserWmsProfile
 from ..models.user_warehouse_assignment import UserWarehouseAssignment
 from ..models.warehouse import Warehouse
@@ -39,14 +40,20 @@ def has_explicit_assignments(db: Session, user_id: int) -> bool:
     )
 
 
+def _legacy_all_warehouses_fallback(db: Session) -> list[int]:
+    return [int(r[0]) for r in db.query(Warehouse.id).order_by(Warehouse.id.asc()).all()]
+
+
 def list_operable_warehouse_ids(db: Session, user: AppUser) -> list[int]:
-    """Warehouse IDs the user may operate on. Empty assignments → all warehouses (legacy)."""
+    """Warehouse IDs the user may operate on. No assignments → empty when enforcement on."""
     if is_super_role(user.role):
-        return [int(r[0]) for r in db.query(Warehouse.id).order_by(Warehouse.id.asc()).all()]
+        return _legacy_all_warehouses_fallback(db)
 
     rows = _assignment_rows(db, int(user.id))
     if not rows:
-        return [int(r[0]) for r in db.query(Warehouse.id).order_by(Warehouse.id.asc()).all()]
+        if wms_warehouse_assignment_enforcement_enabled():
+            return []
+        return _legacy_all_warehouses_fallback(db)
 
     return sorted(
         {
@@ -76,6 +83,8 @@ def user_can_operate_warehouse(db: Session, user: AppUser, warehouse_id: int) ->
     if is_super_role(user.role):
         return db.query(Warehouse.id).filter(Warehouse.id == wid).first() is not None
     if not has_explicit_assignments(db, int(user.id)):
+        if wms_warehouse_assignment_enforcement_enabled():
+            return False
         return db.query(Warehouse.id).filter(Warehouse.id == wid).first() is not None
     row = (
         db.query(UserWarehouseAssignment)
@@ -205,6 +214,10 @@ def warehouse_context_payload(db: Session, user: AppUser) -> dict[str, Any]:
         "warehouses": [{"id": int(w.id), "name": str(w.name or f"Magazyn #{w.id}")} for w in whs],
         "show_warehouse_selector": len(whs) > 1,
         "assignments": assignments,
-        "uses_legacy_all_warehouses": not has_explicit_assignments(db, int(user.id))
-        and not is_super_role(user.role),
+        "uses_legacy_all_warehouses": (
+            not wms_warehouse_assignment_enforcement_enabled()
+            and not has_explicit_assignments(db, int(user.id))
+            and not is_super_role(user.role)
+        ),
+        "wms_warehouse_enforcement": wms_warehouse_assignment_enforcement_enabled(),
     }

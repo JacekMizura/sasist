@@ -6,6 +6,15 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+
+from fastapi import Depends
+from ..auth.warehouse_deps import (
+    require_operable_warehouse,
+    require_active_operable_warehouse,
+    require_active_or_query_operable_warehouse,
+    assert_stock_document_warehouse,
+    enforce_warehouse_access,
+)
 from sqlalchemy.orm import Session
 
 from ..database import get_db
@@ -116,7 +125,7 @@ def post_suggest_putaway(body: SuggestPutawayBody, db: Session = Depends(get_db)
 
 @router.get("/warehouse-heatmap", response_model=WarehouseHeatmapRead)
 def get_warehouse_heatmap(
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     tenant_id: int = Query(..., ge=1),
     db: Session = Depends(get_db),
 ):

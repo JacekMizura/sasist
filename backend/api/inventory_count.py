@@ -10,6 +10,14 @@ from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from ..auth.deps import get_optional_current_user
+from fastapi import Depends
+from ..auth.warehouse_deps import (
+    require_operable_warehouse,
+    require_active_operable_warehouse,
+    require_active_or_query_operable_warehouse,
+    assert_stock_document_warehouse,
+    enforce_warehouse_access,
+)
 from ..database import get_db
 from ..models.app_user import AppUser
 from ..models.inventory_count.document import InventoryDocument

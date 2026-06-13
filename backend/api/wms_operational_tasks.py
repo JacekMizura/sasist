@@ -8,6 +8,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from ..auth.deps import get_current_user
+from fastapi import Depends
+from ..auth.warehouse_deps import (
+    require_operable_warehouse,
+    require_active_operable_warehouse,
+    require_active_or_query_operable_warehouse,
+    assert_stock_document_warehouse,
+    enforce_warehouse_access,
+)
 from ..database import get_db
 from ..models.app_user import AppUser
 from ..schemas.wms_operational_task import (
@@ -85,7 +93,7 @@ def _task_session_metadata(t: WmsOperationalTask) -> dict:
 @router.get("", response_model=WmsOperationalTaskListResponse)
 def get_operational_tasks(
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     queue: str | None = Query(default=None),
     status: str | None = Query(default=None),
     limit: int = Query(200, ge=1, le=500),
@@ -113,7 +121,7 @@ def get_operational_tasks(
 @router.get("/queues/summary")
 def get_operational_queues_summary(
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     db: Session = Depends(get_db),
 ):
     return queue_summary(db, tenant_id=tenant_id, warehouse_id=warehouse_id)
@@ -122,7 +130,7 @@ def get_operational_queues_summary(
 @router.get("/resolve-scan", response_model=WmsOperationalTaskDetail)
 def get_operational_task_resolve_scan(
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     scan: str = Query(..., min_length=1),
     db: Session = Depends(get_db),
     current_user: AppUser = Depends(get_current_user),

@@ -9,6 +9,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from ..auth.deps import get_optional_current_user
+from fastapi import Depends
+from ..auth.warehouse_deps import (
+    require_operable_warehouse,
+    require_active_operable_warehouse,
+    require_active_or_query_operable_warehouse,
+    assert_stock_document_warehouse,
+    enforce_warehouse_access,
+)
 from ..database import get_db
 from ..models.app_user import AppUser
 from ..schemas.inventory_count import (
@@ -115,7 +123,7 @@ def _map_error(exc: InventoryCountError) -> HTTPException:
 @router.get("/active-documents", response_model=list[WmsActiveInventoryDocumentRead])
 def wms_inventory_active_documents(
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     db: Session = Depends(get_db),
     _: AppUser | None = Depends(require_inventory_permission_optional(PERM_EXECUTE)),
 ):
@@ -126,7 +134,7 @@ def wms_inventory_active_documents(
 @router.get("/tasks", response_model=List[InventoryTaskRead])
 def wms_inventory_tasks_legacy(
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     document_id: Optional[int] = Query(None, ge=1),
     db: Session = Depends(get_db),
     user: AppUser | None = Depends(get_optional_current_user),
@@ -144,7 +152,7 @@ def wms_inventory_tasks_legacy(
 @router.get("/tasks/queue", response_model=InventoryTaskPageRead)
 def wms_inventory_task_queue(
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     document_id: Optional[int] = Query(None, ge=1),
     zone: Optional[str] = Query(None),
     assigned_user_id: Optional[int] = Query(None, ge=1),
@@ -183,7 +191,7 @@ def wms_inventory_task_queue(
 @router.get("/resolve-location")
 def wms_inventory_resolve_location(
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     code: str = Query(..., min_length=1),
     document_id: Optional[int] = Query(None, ge=1),
     db: Session = Depends(get_db),
@@ -209,7 +217,7 @@ def wms_inventory_resolve_location(
 @router.get("/search", response_model=InventoryUniversalSearchRead)
 def wms_inventory_universal_search(
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     q: str = Query(..., min_length=1),
     document_id: Optional[int] = Query(None, ge=1),
     limit: int = Query(25, ge=1, le=50),
@@ -253,7 +261,7 @@ def wms_inventory_execution_summary(
 @router.get("/audit-queues", response_model=InventoryAuditQueuesRead)
 def wms_inventory_audit_queues(
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     document_id: Optional[int] = Query(None, ge=1),
     limit: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
@@ -271,7 +279,7 @@ def wms_inventory_audit_queues(
 def wms_inventory_create_unknown_product(
     body: InventoryUnknownProductCreateBody,
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     session_id: Optional[int] = Query(None, ge=1),
     db: Session = Depends(get_db),
     user: AppUser | None = Depends(require_inventory_permission_optional(PERM_EXECUTE)),
@@ -399,7 +407,7 @@ def wms_inventory_resolve_carrier(
 def wms_inventory_open_session(
     body: InventorySessionOpenBody,
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     db: Session = Depends(get_db),
     user: AppUser | None = Depends(get_optional_current_user),
 ):

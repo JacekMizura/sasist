@@ -3,6 +3,15 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+
+from fastapi import Depends
+from ..auth.warehouse_deps import (
+    require_operable_warehouse,
+    require_active_operable_warehouse,
+    require_active_or_query_operable_warehouse,
+    assert_stock_document_warehouse,
+    enforce_warehouse_access,
+)
 from sqlalchemy.orm import Session
 
 from ..database import get_db
@@ -26,7 +35,7 @@ router = APIRouter(tags=["Product warehouse slotting"])
 @router.get("/products/slotting", response_model=WarehouseSlottingBulkRead)
 def get_warehouse_product_slotting_bulk(
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     db: Session = Depends(get_db),
 ):
     """All slotting rows for a warehouse (Designer / import-export)."""
@@ -45,7 +54,7 @@ def get_warehouse_product_slotting_bulk(
 def get_product_warehouse_slotting(
     product_id: int,
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     db: Session = Depends(get_db),
 ):
     product = (
@@ -71,7 +80,7 @@ def put_product_warehouse_slotting(
     product_id: int,
     body: ProductWarehouseSlottingPutBody,
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     db: Session = Depends(get_db),
 ):
     """Replace slotting plan for one product in one warehouse (does not touch other warehouses)."""

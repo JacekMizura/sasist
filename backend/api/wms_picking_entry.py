@@ -12,6 +12,14 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, joinedload
 
 from ..auth.deps import get_current_user, get_optional_current_user
+from fastapi import Depends
+from ..auth.warehouse_deps import (
+    require_operable_warehouse,
+    require_active_operable_warehouse,
+    require_active_or_query_operable_warehouse,
+    assert_stock_document_warehouse,
+    enforce_warehouse_access,
+)
 from ..database import get_db
 from ..models.app_user import AppUser
 from ..models.order import Order
@@ -172,7 +180,7 @@ def _resolve_source_order_ui_status(
 def post_picking_config_replace(
     body: WmsPickingConfigReplaceBody,
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     db: Session = Depends(get_db),
 ):
     """
@@ -201,7 +209,7 @@ def post_picking_config_replace(
 @router.get("/picking/configured-statuses", response_model=list[WmsPickingConfiguredStatusItem])
 def get_picking_configured_statuses(
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     db: Session = Depends(get_db),
 ):
     """
@@ -272,7 +280,7 @@ def get_picking_configured_statuses(
 @router.get("/picking/config", response_model=WmsPickingFlowConfigRead)
 def get_picking_flow_config(
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     status: int = Query(..., ge=1, description="source_status_id — ID statusu panelu z konfiguracji"),
     db: Session = Depends(get_db),
 ):
@@ -308,7 +316,7 @@ def get_picking_flow_config(
 @router.get("/picking/status-workload", response_model=WmsPickingStatusWorkloadResponse)
 def get_picking_status_workload(
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     db: Session = Depends(get_db),
 ):
     """
@@ -393,7 +401,7 @@ def get_picking_status_workload(
 @router.get("/picking/resolve-cart", response_model=WmsPickingResolveCartResponse)
 def get_picking_resolve_cart(
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     cart_code: str = Query(..., min_length=1, description="Kod zeskanowany lub nazwa wózka"),
     db: Session = Depends(get_db),
 ):
@@ -423,7 +431,7 @@ def get_picking_resolve_cart(
 @router.get("/picking/default-cart", response_model=WmsPickingResolveCartResponse)
 def get_picking_default_cart(
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     db: Session = Depends(get_db),
 ):
     """Domyślny wózek BULK dla magazynu (sesja bez skanu kodu)."""
@@ -451,7 +459,7 @@ def get_picking_default_cart(
 @router.get("/picking/product-lines", response_model=WmsPickingProductLinesResponse)
 def get_picking_product_lines(
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     source_status_id: int = Query(..., ge=1),
     order_type: WmsPickingOrderTypeFilter = Query(..., description="single | multi | all"),
     cart_id: int | None = Query(
@@ -569,7 +577,7 @@ def get_picking_product_lines(
 @router.get("/picking/product-lines/detail", response_model=WmsPickingProductDetailResponse)
 def get_picking_product_detail(
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     source_status_id: int = Query(..., ge=1),
     order_type: WmsPickingOrderTypeFilter = Query(...),
     product_id: int = Query(..., ge=1),
@@ -782,7 +790,7 @@ def post_picking_quick_pick(
 def post_picking_report_shortage(
     body: WmsPickingReportShortageBody,
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     source_status_id: int = Query(..., ge=1),
     order_type: WmsPickingOrderTypeFilter = Query(...),
     db: Session = Depends(get_db),
@@ -862,7 +870,7 @@ def post_picking_report_shortage(
 def post_picking_recovery_finalize(
     body: WmsPickingRecoveryFinalizeBody,
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     db: Session = Depends(get_db),
     current_user: AppUser = Depends(get_current_user),
 ):
@@ -977,7 +985,7 @@ def _batch_session_to_read(sess) -> dict:
 def post_recovery_batch_create(
     body: WmsRecoveryBatchCreateBody,
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     db: Session = Depends(get_db),
     current_user: AppUser = Depends(get_current_user),
 ):
@@ -1022,7 +1030,7 @@ def get_recovery_batch_detail(
 @router.post("/picking/finalize-cart", response_model=WmsPickingFinalizeCartResponse)
 def post_picking_finalize_cart(
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     source_status_id: int = Query(..., ge=1),
     order_type: WmsPickingOrderTypeFilter = Query(...),
     cart_id: int = Query(

@@ -456,6 +456,16 @@ def create_user(
             raise HTTPException(status_code=400, detail="Email is required") from e
         if msg.startswith("UNKNOWN_PERMISSIONS"):
             raise HTTPException(status_code=400, detail=msg) from e
+        if msg == "WMS_WAREHOUSE_REQUIRED":
+            raise HTTPException(
+                status_code=400,
+                detail="Użytkownik operacyjny WMS musi mieć co najmniej jeden przypisany magazyn.",
+            ) from e
+        if msg == "DEFAULT_WAREHOUSE_NOT_ASSIGNED":
+            raise HTTPException(
+                status_code=400,
+                detail="Domyślny magazyn musi być wśród przypisanych magazynów.",
+            ) from e
         raise HTTPException(status_code=400, detail=msg) from e
 
 
@@ -499,6 +509,16 @@ def update_user(
             raise HTTPException(status_code=400, detail="Email is required") from e
         if msg.startswith("UNKNOWN_PERMISSIONS"):
             raise HTTPException(status_code=400, detail=msg) from e
+        if msg == "WMS_WAREHOUSE_REQUIRED":
+            raise HTTPException(
+                status_code=400,
+                detail="Użytkownik operacyjny WMS musi mieć co najmniej jeden przypisany magazyn.",
+            ) from e
+        if msg == "DEFAULT_WAREHOUSE_NOT_ASSIGNED":
+            raise HTTPException(
+                status_code=400,
+                detail="Domyślny magazyn musi być wśród przypisanych magazynów.",
+            ) from e
         raise HTTPException(status_code=400, detail=msg) from e
     except IntegrityError as e:
         db.rollback()

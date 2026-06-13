@@ -5,6 +5,15 @@ Brak integracji z przypisaniami / stanem / MM.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+
+from fastapi import Depends
+from ..auth.warehouse_deps import (
+    require_operable_warehouse,
+    require_active_operable_warehouse,
+    require_active_or_query_operable_warehouse,
+    assert_stock_document_warehouse,
+    enforce_warehouse_access,
+)
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -30,7 +39,7 @@ router = APIRouter(prefix="/wms/picking-config", tags=["WMS Picking Config"])
 @router.get("", response_model=PickingConfigListResponse)
 def get_picking_configs(
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     db: Session = Depends(get_db),
 ):
     rows = list_picking_configs(db, tenant_id=tenant_id, warehouse_id=warehouse_id)
@@ -40,7 +49,7 @@ def get_picking_configs(
 @router.get("/by-source-status", response_model=PickingConfigRead)
 def get_picking_config_by_source_status(
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     source_status_id: int = Query(..., ge=1),
     db: Session = Depends(get_db),
 ):
@@ -77,7 +86,7 @@ def put_picking_config(
     config_id: int,
     body: PickingConfigUpdate,
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     db: Session = Depends(get_db),
 ):
     row = (
@@ -111,7 +120,7 @@ def put_picking_config(
 def delete_picking_config(
     config_id: int,
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     db: Session = Depends(get_db),
 ):
     row = (

@@ -5,6 +5,15 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, Depends, Query
+
+from fastapi import Depends
+from ..auth.warehouse_deps import (
+    require_operable_warehouse,
+    require_active_operable_warehouse,
+    require_active_or_query_operable_warehouse,
+    assert_stock_document_warehouse,
+    enforce_warehouse_access,
+)
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -19,7 +28,7 @@ logger = logging.getLogger(__name__)
 @router.get("/dashboard/summary", response_model=WmsDashboardSummaryOut)
 def get_wms_dashboard_summary(
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     db: Session = Depends(get_db),
 ):
     try:

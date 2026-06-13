@@ -103,6 +103,11 @@ class WmsCreateReceivingPzBody(BaseModel):
 
     supplier_name: str = Field(..., min_length=1, max_length=256)
     supplier_id: Optional[int] = Field(default=None, ge=1)
+    warehouse_id: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Magazyn docelowy; domyślnie aktywny magazyn operatora.",
+    )
 
     @field_validator("supplier_name")
     @classmethod

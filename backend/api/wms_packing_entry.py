@@ -10,6 +10,14 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from ..auth.deps import get_optional_current_user
+from fastapi import Depends
+from ..auth.warehouse_deps import (
+    require_operable_warehouse,
+    require_active_operable_warehouse,
+    require_active_or_query_operable_warehouse,
+    assert_stock_document_warehouse,
+    enforce_warehouse_access,
+)
 from ..database import get_db
 from ..models.app_user import AppUser
 from ..models.order import Order
@@ -47,7 +55,7 @@ logger = logging.getLogger(__name__)
 @router.get("/packing/target-statuses", response_model=list[WmsPackingTargetStatusItem])
 def get_packing_target_statuses(
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     db: Session = Depends(get_db),
 ):
     """
@@ -64,7 +72,7 @@ def get_packing_target_statuses(
 @router.get("/packing/modes", response_model=WmsPackingModeDistribution)
 def get_packing_modes(
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     status: int = Query(..., ge=1, description="order_ui_status_id — status kolejki pakowania"),
     db: Session = Depends(get_db),
 ):
@@ -82,7 +90,7 @@ def get_packing_modes(
 @router.get("/packing/orders", response_model=list[WmsPackingOrderCard])
 def get_packing_orders(
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     status: int = Query(..., ge=1, description="order_ui_status_id — status „gotowe do pakowania”"),
     mode: str = Query(
         ...,
@@ -146,7 +154,7 @@ def _packing_scan_http_exception(exc: PackingScanError) -> HTTPException:
 @router.get("/packing/resolve-ean", response_model=WmsPackingResolveEanOut)
 def get_packing_resolve_ean(
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     status: int = Query(..., ge=1, description="order_ui_status_id — jak w GET /wms/packing/orders"),
     mode: str = Query(..., description="no_cart | bulk | baskets"),
     cart_id: int | None = Query(default=None, ge=1),
@@ -178,7 +186,7 @@ def get_packing_resolve_ean(
 def post_packing_order_enter(
     order_id: int,
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     source_workflow: str = Query(default="shortage", max_length=32),
     redirected_from: str | None = Query(default=None, max_length=64),
     db: Session = Depends(get_db),
@@ -210,7 +218,7 @@ def post_packing_order_enter(
 def get_packing_order_detail(
     order_id: int,
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     status: int = Query(..., ge=1),
     mode: str = Query(...),
     cart_id: int | None = Query(default=None, ge=1),
@@ -274,7 +282,7 @@ def post_packing_order_scan(
     order_id: int,
     body: WmsPackingScanBody,
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     status: int = Query(..., ge=1),
     mode: str = Query(...),
     cart_id: int | None = Query(default=None, ge=1),
@@ -310,7 +318,7 @@ def post_packing_order_line_pack(
     order_id: int,
     body: WmsPackingLinePackBody,
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     status: int = Query(..., ge=1),
     mode: str = Query(...),
     cart_id: int | None = Query(default=None, ge=1),
@@ -350,7 +358,7 @@ def post_packing_order_line_pack(
 def post_packing_order_finish(
     order_id: int,
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     status: int = Query(..., ge=1),
     mode: str = Query(...),
     cart_id: int | None = Query(default=None, ge=1),
@@ -413,7 +421,7 @@ def post_packing_order_finish(
 def post_packing_order_pack_all(
     order_id: int,
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     status: int = Query(..., ge=1),
     mode: str = Query(...),
     cart_id: int | None = Query(default=None, ge=1),
@@ -447,7 +455,7 @@ def post_packing_order_pack_all(
 def post_packing_order_pause(
     order_id: int,
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     reason: Optional[str] = Query(default=None),
     db: Session = Depends(get_db),
     current_user: Optional[AppUser] = Depends(get_optional_current_user),
@@ -485,7 +493,7 @@ def post_packing_order_pause(
 def post_packing_order_resume(
     order_id: int,
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     db: Session = Depends(get_db),
     current_user: Optional[AppUser] = Depends(get_optional_current_user),
 ):

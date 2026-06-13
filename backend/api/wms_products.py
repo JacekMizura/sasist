@@ -3,6 +3,15 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+
+from fastapi import Depends
+from ..auth.warehouse_deps import (
+    require_operable_warehouse,
+    require_active_operable_warehouse,
+    require_active_or_query_operable_warehouse,
+    assert_stock_document_warehouse,
+    enforce_warehouse_access,
+)
 from sqlalchemy.orm import Session
 
 from ..database import get_db
@@ -46,7 +55,7 @@ def get_wms_incomplete_receiving_products(
 @router.get("/incomplete-receiving-data/resolve-scan", response_model=WmsProductIncompleteScanResolve)
 def get_wms_incomplete_receiving_resolve_scan(
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     code: str = Query(..., min_length=1, max_length=128),
     db: Session = Depends(get_db),
 ):
@@ -64,7 +73,7 @@ def get_wms_incomplete_receiving_resolve_scan(
 @router.get("/search", response_model=list[WmsProductSearchHit])
 def get_wms_products_search(
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     q: str = Query(..., min_length=2, max_length=128),
     limit: int = Query(20, ge=1, le=50),
     db: Session = Depends(get_db),
@@ -108,7 +117,7 @@ def post_wms_minimal_product(
 def get_wms_product_view(
     product_id: int,
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     db: Session = Depends(get_db),
 ):
     """Podgląd produktu dla magazynu: stany wg inventory, lokalizacje, logistyka, karton (bez cen i zamówień)."""

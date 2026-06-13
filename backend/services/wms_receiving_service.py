@@ -358,12 +358,17 @@ def create_wms_empty_pz(
     body: WmsCreateReceivingPzBody,
     *,
     created_by: Optional[AppUser] = None,
+    warehouse_id: int | None = None,
 ) -> StockDocumentRead:
     """Ad-hoc PZ from WMS: supplier only, no delivery lines, receiving already IN_PROGRESS."""
     sup = get_or_create_wms_supplier(db, tenant_id, body.supplier_name, body.supplier_id)
     now = datetime.utcnow()
-    whs = list_tenant_warehouse_ids(db, tenant_id)
-    initial_wh = whs[0] if len(whs) == 1 else None
+    wh_from_body = getattr(body, "warehouse_id", None)
+    initial_wh = int(warehouse_id) if warehouse_id is not None else (
+        int(wh_from_body) if wh_from_body is not None else None
+    )
+    if initial_wh is None:
+        raise ValueError("Magazyn docelowy PZ jest wymagany.")
     doc = StockDocument(
         tenant_id=int(tenant_id),
         document_type="PZ",
@@ -811,12 +816,23 @@ def _load_draft_pz_docs_with_lines(
     return docs, by_doc
 
 
-def list_wms_receiving_pz_documents(db: Session, tenant_id: int) -> List[WmsReceivingPzListRow]:
+def list_wms_receiving_pz_documents(
+    db: Session,
+    tenant_id: int,
+    *,
+    warehouse_id: int | None = None,
+) -> List[WmsReceivingPzListRow]:
     """Draft PZ where przyjęcie workflow is not DONE yet."""
+    extra: tuple = (StockDocument.receiving_status != "DONE",)
+    if warehouse_id is not None:
+        extra = (
+            StockDocument.receiving_status != "DONE",
+            StockDocument.warehouse_id == int(warehouse_id),
+        )
     docs, by_doc = _load_draft_pz_docs_with_lines(
         db,
         tenant_id,
-        extra_filters=(StockDocument.receiving_status != "DONE",),
+        extra_filters=extra,
     )
     sup_ids = {int(d.supplier_id) for d in docs if getattr(d, "supplier_id", None) is not None}
     sup_by_id: dict[int, Supplier] = {}

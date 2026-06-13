@@ -8,6 +8,15 @@ API: Waves (Wave Picking)
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+
+from fastapi import Depends
+from ..auth.warehouse_deps import (
+    require_operable_warehouse,
+    require_active_operable_warehouse,
+    require_active_or_query_operable_warehouse,
+    assert_stock_document_warehouse,
+    enforce_warehouse_access,
+)
 from sqlalchemy.orm import Session
 
 from ..database import get_db
@@ -20,7 +29,7 @@ router = APIRouter(prefix="/waves", tags=["Waves"])
 @router.post("/", response_model=WaveRead)
 def create_wave_endpoint(
     tenant_id: int = Query(...),
-    warehouse_id: int = Query(...),
+    warehouse_id: int = Depends(require_operable_warehouse),
     body: WaveCreate | None = None,
     db: Session = Depends(get_db),
 ):
@@ -54,7 +63,7 @@ def create_wave_endpoint(
 @router.get("/", response_model=list[WaveListRead])
 def list_waves_endpoint(
     tenant_id: int = Query(...),
-    warehouse_id: int = Query(...),
+    warehouse_id: int = Depends(require_operable_warehouse),
     db: Session = Depends(get_db),
 ):
     """List waves for tenant/warehouse with orders_count and carts_count."""
@@ -65,7 +74,7 @@ def list_waves_endpoint(
 def get_wave_endpoint(
     wave_id: int,
     tenant_id: int = Query(...),
-    warehouse_id: int = Query(...),
+    warehouse_id: int = Depends(require_operable_warehouse),
     db: Session = Depends(get_db),
 ):
     """Get wave by id with metrics."""
@@ -91,7 +100,7 @@ def get_wave_endpoint(
 def assign_wave_endpoint(
     wave_id: int,
     tenant_id: int = Query(...),
-    warehouse_id: int = Query(...),
+    warehouse_id: int = Depends(require_operable_warehouse),
     cart_id: int = Query(..., description="Cart to assign wave orders to"),
     db: Session = Depends(get_db),
 ):

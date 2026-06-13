@@ -12,6 +12,14 @@ from ..services.document_number_service import DocumentSeriesOperationalError
 from ..services.relocation_document_series_service import RELOCATION_DOCUMENT_SERIES_MISSING_MSG
 
 from ..auth.deps import get_current_user
+from fastapi import Depends
+from ..auth.warehouse_deps import (
+    require_operable_warehouse,
+    require_active_operable_warehouse,
+    require_active_or_query_operable_warehouse,
+    assert_stock_document_warehouse,
+    enforce_warehouse_access,
+)
 from ..database import get_db
 from ..models.app_user import AppUser
 from ..schemas.stock_document import StockDocumentRead
@@ -72,7 +80,7 @@ def _raise_relocation_http_error(exc: Exception) -> None:
 def get_wms_relocation_batch_context(
     order_id: int = Query(..., ge=1),
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     db: Session = Depends(get_db),
     _user: AppUser = Depends(get_current_user),
 ):
@@ -98,7 +106,7 @@ def get_wms_relocation_batch_context(
 def post_wms_relocation_add_items(
     body: WmsRelocationAddItemsBody,
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     db: Session = Depends(get_db),
     user: AppUser = Depends(get_current_user),
 ):
@@ -130,7 +138,7 @@ def post_wms_relocation_add_items(
 def post_wms_relocation_start_session(
     body: WmsRelocationStartSessionBody,
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     db: Session = Depends(get_db),
     user: AppUser = Depends(get_current_user),
 ):

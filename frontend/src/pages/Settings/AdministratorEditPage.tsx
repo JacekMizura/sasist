@@ -43,6 +43,7 @@ import {
 import { PageContainer } from "../../components/layout/PageLayout";
 import { PageHeader } from "../../components/layout/PageHeader";
 import { useAuth } from "../../context/AuthContext";
+import { useWarehouse } from "../../context/WarehouseContext";
 import { isSuperRole } from "../../auth/isSuperRole";
 import { PLATFORM_ROLE_OPTIONS } from "../../settings/platformRoles";
 import { warehouseService, type Warehouse } from "../../services/warehouseService";
@@ -50,7 +51,6 @@ import UserPanelStatusMatrix from "../../components/admin/UserPanelStatusMatrix"
 import { fetchEmployeeCostProfile, putEmployeeCostProfile } from "../../api/workforceApi";
 import { fetchWorkforceUserGroups, type WorkforceUserGroupDto } from "../../api/workforceGroupsApi";
 import { DAMAGE_TENANT_ID } from "../../constants/panelTenant";
-import { useWarehouse } from "../../context/WarehouseContext";
 import { WMS_OPERATIONAL_MODE_KEYS, WMS_OPERATIONAL_MODE_LABELS_PL } from "../../constants/wmsOperationalModes";
 import {
   auditDetailLines,
@@ -114,6 +114,7 @@ export default function AdministratorEditPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { user, loading: authLoading, hasPermission, sessionReady } = useAuth();
+  const { refreshWarehouses } = useWarehouse();
   const { selectedWarehouseId } = useWarehouse();
   const canManageUsers = hasPermission("settings.users") || isSuperRole(user?.role ?? "");
   
@@ -453,6 +454,20 @@ export default function AdministratorEditPage() {
   const onSave = async () => {
     setSaving(true);
     try {
+      if (wmsOperationalModes.length > 0 && !isSuperRole(role) && warehouseIds.length === 0) {
+        toast.error("Użytkownik operacyjny WMS musi mieć co najmniej jeden przypisany magazyn.");
+        setSaving(false);
+        return;
+      }
+      if (
+        defaultWarehouseId !== "" &&
+        warehouseIds.length > 0 &&
+        !warehouseIds.includes(Number(defaultWarehouseId))
+      ) {
+        toast.error("Domyślny magazyn musi być wśród przypisanych magazynów.");
+        setSaving(false);
+        return;
+      }
       if (isNew) {
         if (!password.trim()) {
           toast.error("Podaj hasło dla nowego użytkownika.");
@@ -538,6 +553,11 @@ export default function AdministratorEditPage() {
       const refreshed = await fetchUser(numericId);
       applyUserToForm(refreshed);
       snapshotRef.current = buildSnapshot();
+      if (tab === "wms" || tab === "identity") {
+        if (user?.id === numericId) {
+          await refreshWarehouses();
+        }
+      }
       toast.success(toastLabel);
     } catch (err: unknown) {
       console.error("[AdministratorEdit] onSave", err);
@@ -751,7 +771,7 @@ export default function AdministratorEditPage() {
                                 onChange={(e) => setDefaultWarehouseId(e.target.value ? Number(e.target.value) : "")}
                               >
                                 <option value="">— Wybierz —</option>
-                                {warehouses.map((w) => (
+                                {(warehouseIds.length ? warehouses.filter((w) => warehouseIds.includes(w.id)) : warehouses).map((w) => (
                                   <option key={w.id} value={w.id}>
                                     {w.name}
                                   </option>
@@ -786,7 +806,20 @@ export default function AdministratorEditPage() {
                                   key={w.id}
                                   type="button"
                                   onClick={() =>
-                                    setWarehouseIds((prev) => (on ? prev.filter((x) => x !== w.id) : [...prev, w.id]))
+                                    setWarehouseIds((prev) => {
+                                      if (on) {
+                                        const next = prev.filter((x) => x !== w.id);
+                                        if (defaultWarehouseId === w.id) {
+                                          setDefaultWarehouseId(next[0] ?? "");
+                                        }
+                                        return next;
+                                      }
+                                      const next = [...prev, w.id];
+                                      if (prev.length === 0) {
+                                        setDefaultWarehouseId(w.id);
+                                      }
+                                      return next;
+                                    })
                                   }
                                   className={`rounded-xl border px-4 py-2 text-sm font-bold transition-all ${
                                     on ? "border-indigo-600 bg-indigo-50 text-indigo-800" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"

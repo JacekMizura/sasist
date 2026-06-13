@@ -1,4 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+
+from fastapi import Depends
+from ..auth.warehouse_deps import (
+    require_operable_warehouse,
+    require_active_operable_warehouse,
+    require_active_or_query_operable_warehouse,
+    assert_stock_document_warehouse,
+    enforce_warehouse_access,
+)
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from starlette import status
@@ -33,7 +42,7 @@ def get_carts(tenant_id: int, cart_type: str | None = None, db: Session = Depend
 def get_cart_by_code(
     code: str,
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     db: Session = Depends(get_db),
 ):
     """Wózek po kodzie skanowanym (``code`` lub legacy ``barcode``) w obrębie tenant + magazyn."""
@@ -45,7 +54,7 @@ def get_cart_by_code(
 def get_cart_packing_orders_by_code(
     code: str,
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     status: int = Query(..., ge=1, description="order_ui_status_id — status kolejki pakowania"),
     mode: str = Query(
         ...,

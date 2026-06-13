@@ -8,6 +8,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from ..auth.deps import get_current_user
+from fastapi import Depends
+from ..auth.warehouse_deps import (
+    require_operable_warehouse,
+    require_active_operable_warehouse,
+    require_active_or_query_operable_warehouse,
+    assert_stock_document_warehouse,
+    enforce_warehouse_access,
+)
 from ..database import get_db
 from ..models.app_user import AppUser
 from ..schemas.wms_replenishment import (
@@ -34,7 +42,7 @@ router = APIRouter(prefix="/wms", tags=["WMS replenishment"])
 @router.get("/replenishment/lines", response_model=List[WmsReplenishmentLineRead])
 def get_wms_replenishment_lines(
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     db: Session = Depends(get_db),
 ):
     try:
@@ -70,7 +78,7 @@ def post_wms_replenishment_execute(
 @router.get("/replenishment/tasks", response_model=List[WmsReplenishmentTaskRead])
 def get_replenishment_tasks(
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     view: str = Query("location"),
     db: Session = Depends(get_db),
 ):
@@ -97,7 +105,7 @@ def get_replenishment_task_by_id(
 @router.post("/replenishment/tasks/generate", response_model=WmsReplenishmentTaskGenerateResult)
 def post_replenishment_tasks_generate(
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     db: Session = Depends(get_db),
 ):
     try:

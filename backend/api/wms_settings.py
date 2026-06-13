@@ -7,6 +7,15 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+
+from fastapi import Depends
+from ..auth.warehouse_deps import (
+    require_operable_warehouse,
+    require_active_operable_warehouse,
+    require_active_or_query_operable_warehouse,
+    assert_stock_document_warehouse,
+    enforce_warehouse_access,
+)
 from sqlalchemy.orm import Session
 
 from ..database import get_db
@@ -309,7 +318,7 @@ def _packing_row_to_read(row: WmsPackingSettings) -> WmsPackingSettingsRead:
 @router.get("/packing", response_model=WmsPackingSettingsRead)
 def get_wms_packing_settings(
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     db: Session = Depends(get_db),
 ):
     """``warehouse_id`` z zapytania — ten sam magazyn co lista ``document-series`` (nie magazyn domyślny)."""
@@ -424,7 +433,7 @@ def _shortage_settings_row_to_read(row: WmsPickingShortageSettings) -> WmsPickin
 @router.get("/picking-shortage", response_model=WmsPickingShortageSettingsRead)
 def get_wms_picking_shortage_settings(
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     db: Session = Depends(get_db),
 ):
     row = get_or_create_wms_picking_shortage_settings(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id))
@@ -478,7 +487,7 @@ def save_wms_picking_shortage_settings(
 @router.get("/direct-sales", response_model=DirectSalesSettingsRead)
 def get_wms_direct_sales_settings(
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     db: Session = Depends(get_db),
 ):
     return resolve_direct_sales_settings(db, tenant_id=tenant_id, warehouse_id=warehouse_id)

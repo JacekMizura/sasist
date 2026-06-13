@@ -6,6 +6,16 @@ Available = quantity - reserved. Response shape unchanged for existing UI.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+
+from ..auth.deps import get_current_user
+from fastapi import Depends
+from ..auth.warehouse_deps import (
+    require_operable_warehouse,
+    require_active_operable_warehouse,
+    require_active_or_query_operable_warehouse,
+    assert_stock_document_warehouse,
+    enforce_warehouse_access,
+)
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_, and_
 from typing import List, Optional
@@ -100,7 +110,7 @@ def _reserved_for_stock(db: Session, stock_rows: list) -> dict:
 @router.get("/", response_model=List[InventoryReadWithNames])
 def list_inventory(
     tenant_id: Optional[int] = Query(None),
-    warehouse_id: Optional[int] = Query(None),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     product_id: Optional[int] = Query(None),
     location_id: Optional[int] = Query(None),
     hide_empty: bool = Query(
@@ -134,8 +144,7 @@ def list_inventory(
     q = db.query(Inventory)
     if tenant_id is not None:
         q = q.filter(Inventory.tenant_id == tenant_id)
-    if warehouse_id is not None:
-        q = q.filter(Inventory.warehouse_id == warehouse_id)
+    q = q.filter(Inventory.warehouse_id == warehouse_id)
     if product_id is not None:
         q = q.filter(Inventory.product_id == product_id)
     if location_id is not None:

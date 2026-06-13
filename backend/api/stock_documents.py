@@ -12,6 +12,14 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ..auth.deps import get_current_user, get_optional_current_user
+from fastapi import Depends
+from ..auth.warehouse_deps import (
+    require_operable_warehouse,
+    require_active_operable_warehouse,
+    require_active_or_query_operable_warehouse,
+    assert_stock_document_warehouse,
+    enforce_warehouse_access,
+)
 from ..database import get_db
 from ..models.app_user import AppUser
 from ..models.customer import Customer
@@ -64,24 +72,22 @@ _logger = logging.getLogger(__name__)
 def list_stock_documents(
     tenant_id: int = Query(..., ge=1),
     document_type: Optional[str] = Query(None, description="Filter e.g. PZ"),
-    warehouse_id: Optional[int] = Query(None, ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
 ):
-    if warehouse_id is not None:
-        try:
-            ensure_default_document_series(db, int(tenant_id), int(warehouse_id))
-        except Exception:
-            _logger.exception(
-                "ensure_default_document_series failed in list_stock_documents tenant=%s warehouse=%s",
-                tenant_id,
-                warehouse_id,
-            )
-            db.rollback()
+    try:
+        ensure_default_document_series(db, int(tenant_id), int(warehouse_id))
+    except Exception:
+        _logger.exception(
+            "ensure_default_document_series failed in list_stock_documents tenant=%s warehouse=%s",
+            tenant_id,
+            warehouse_id,
+        )
+        db.rollback()
     q = db.query(StockDocument).filter(StockDocument.tenant_id == tenant_id)
     if document_type and document_type.strip():
         q = q.filter(StockDocument.document_type == document_type.strip().upper())
-    if warehouse_id is not None:
-        q = q.filter(StockDocument.warehouse_id == warehouse_id)
+    q = q.filter(StockDocument.warehouse_id == warehouse_id)
     docs = q.order_by(StockDocument.created_at.desc()).all()
     if not docs:
         return []
@@ -315,6 +321,12 @@ def get_stock_document(
     read = get_stock_document_read(db, tenant_id, document_id)
     if not read:
         raise HTTPException(status_code=404, detail="Document not found")
+    if current_user is not None and getattr(read, "warehouse_id", None) is not None:
+        assert_stock_document_warehouse(
+            db,
+            current_user,
+            type("Doc", (), {"warehouse_id": read.warehouse_id})(),
+        )
     if current_user is not None and current_user.id is not None and getattr(read, "warehouse_id", None) is not None:
         dtype = str(getattr(read, "document_type", "") or "").upper()
         receiving_status = str(getattr(read, "receiving_status", "") or "").upper()

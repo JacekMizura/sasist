@@ -8,6 +8,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from ..auth.deps import get_current_user, get_optional_current_user
+from fastapi import Depends
+from ..auth.warehouse_deps import (
+    require_operable_warehouse,
+    require_active_operable_warehouse,
+    require_active_or_query_operable_warehouse,
+    assert_stock_document_warehouse,
+    enforce_warehouse_access,
+)
 from ..database import get_db
 from ..models.app_user import AppUser
 from ..schemas.stock_document import StockDocumentRead
@@ -38,7 +46,7 @@ router = APIRouter(prefix="/wms", tags=["WMS MM transfer"])
 @router.get("/mm/resolve-location", response_model=WmsMmResolveLocationOut)
 def get_wms_mm_resolve_location(
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     code: str = Query(..., min_length=1, max_length=256),
     db: Session = Depends(get_db),
 ):
@@ -51,7 +59,7 @@ def get_wms_mm_resolve_location(
 @router.get("/mm/location-inventory", response_model=List[WmsMmLocationInventoryRow])
 def get_wms_mm_location_inventory(
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     location_id: int = Query(..., ge=1),
     db: Session = Depends(get_db),
 ):
@@ -137,7 +145,7 @@ def get_wms_mm_relocation_document(
 @router.get("/mm/draft", response_model=Optional[StockDocumentRead])
 def get_wms_mm_draft(
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
     db: Session = Depends(get_db),
 ):
     try:
