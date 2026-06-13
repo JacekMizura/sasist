@@ -1,5 +1,14 @@
 # Current context
 
+## P5.4 — Consolidation shelf deposits & packing readiness (2026-06-08)
+- **Zasada:** `RECEIVED ≠ STAGED`, `PICKED ≠ STAGED` — odkładanie na półkę tylko po explicit confirm (`stage_plan_item`)
+- Nowe statusy pozycji planu: `TO_PICK` (lokalne), `PICKED` (po WMS pick, przed półką); MM bez zmian do `RECEIVED`
+- `try_complete_staging` → plan `COMPLETED`, `order.fulfillment_state = READY_TO_PACK`, faza `FULFILLMENT_ASSIGNED` (bez `on_packing_started` — półka zostaje do skanu pakowania)
+- Picking: `consolidation_context` + wyjątek `for_picking=True` w `wms_queue_eligibility`; detail API: `consolidation_shelf_label`, `pending_shelf_deposit`
+- Packing: blokada kolejki gdy plan nie `COMPLETED`; skan półki → `GET /wms/consolidation-staging/resolve`
+- UI: badge Konsolidacja + „Odłóż na RK-01/A2” w pickingu; postęp MM/lokalne + READY_TO_PACK na szczególe planu; skan półki w pakowaniu
+- Tests: `test_consolidation_deposits.py` (10) + pełny pakiet konsolidacji **40/40**
+
 ## P5.2 — Consolidation exceptions & recovery (2026-06-08)
 - Statusy pozycji: SHORTAGE, DAMAGED, LOST, BLOCKED
 - Statusy planu: EXCEPTION, MANUAL_REVIEW_REQUIRED (+ istniejące)

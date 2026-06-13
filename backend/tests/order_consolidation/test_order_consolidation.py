@@ -26,10 +26,12 @@ from backend.services.fulfillment_assignment.phase_constants import (
     PHASE_FULFILLMENT_ASSIGNED,
     is_consolidation_wave_blocked,
 )
+from backend.services.order_consolidation.consolidation_context import mark_local_plan_item_picked
 from backend.services.order_consolidation.constants import (
     ITEM_STATUS_IN_TRANSIT,
     ITEM_STATUS_MM_CREATED,
     ITEM_STATUS_RECEIVED,
+    ITEM_STATUS_TO_PICK,
     ITEM_STATUS_STAGED,
     ITEM_STATUS_WAITING,
     PLAN_STATUS_COMPLETED,
@@ -312,9 +314,12 @@ def test_consolidation_completion(mock_commercial, consolidation_db):
 
     start_consolidation_staging(db, plan_id=int(plan.id), tenant_id=1)
     db.commit()
-    items = db.query(OrderConsolidationPlanItem).filter_by(plan_id=int(plan.id)).all()
-    for it in items:
-        if str(it.status).upper() == ITEM_STATUS_RECEIVED:
+    for it in db.query(OrderConsolidationPlanItem).filter_by(plan_id=int(plan.id)).all():
+        st = str(it.status).upper()
+        if st == ITEM_STATUS_RECEIVED:
+            stage_plan_item(db, plan_id=int(plan.id), plan_item_id=int(it.id), tenant_id=1)
+        elif st == ITEM_STATUS_TO_PICK:
+            mark_local_plan_item_picked(db, order_id=int(order.id), product_id=int(it.product_id))
             stage_plan_item(db, plan_id=int(plan.id), plan_item_id=int(it.id), tenant_id=1)
     db.commit()
     db.refresh(plan)

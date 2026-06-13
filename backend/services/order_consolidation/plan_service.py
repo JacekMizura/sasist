@@ -33,6 +33,8 @@ from .constants import (
     ITEM_STATUS_MM_CREATED,
     ITEM_STATUS_RECEIVED,
     ITEM_STATUS_STAGED,
+    ITEM_STATUS_TO_PICK,
+    ITEM_STATUS_PICKED,
     ITEM_STATUS_WAITING,
     MM_CREATION_SOURCE_CONSOLIDATION,
     PLAN_STATUS_CANCELLED,
@@ -218,7 +220,7 @@ def generate_consolidation_plan(db: Session, order_id: int) -> GenerateConsolida
                     quantity=line.quantity,
                     source_warehouse_id=target_id,
                     target_warehouse_id=target_id,
-                    status=ITEM_STATUS_RECEIVED,
+                    status=ITEM_STATUS_TO_PICK,
                 )
             )
             continue
@@ -386,11 +388,11 @@ def refresh_consolidation_plan_progress(db: Session, plan_id: int) -> bool:
     changed = False
     for it in items:
         st = str(it.status).upper()
-        if st in (ITEM_STATUS_RECEIVED, ITEM_STATUS_STAGED, ITEM_STATUS_CANCELLED) or st in ITEM_STATUS_EXCEPTION:
+        if st in (ITEM_STATUS_RECEIVED, ITEM_STATUS_TO_PICK, ITEM_STATUS_PICKED, ITEM_STATUS_STAGED, ITEM_STATUS_CANCELLED) or st in ITEM_STATUS_EXCEPTION:
             continue
         if int(it.source_warehouse_id) == int(it.target_warehouse_id):
-            if st != ITEM_STATUS_RECEIVED:
-                it.status = ITEM_STATUS_RECEIVED
+            if st != ITEM_STATUS_TO_PICK:
+                it.status = ITEM_STATUS_TO_PICK
                 changed = True
                 db.add(it)
             continue
@@ -467,9 +469,9 @@ def _build_plan_payload(
     names = _warehouse_name_map(db, list(wh_ids))
     product_names = _product_name_map(db, list(product_ids))
     progress = progress_fields_for_items(items, names)
-    from .staging_service import _shelf_info_for_order
+    from .consolidation_context import deposit_progress_fields
 
-    shelf = _shelf_info_for_order(db, int(plan.order_id))
+    deposit = deposit_progress_fields(db, plan)
     return {
         "id": int(plan.id),
         "order_id": int(plan.order_id),
@@ -478,8 +480,7 @@ def _build_plan_payload(
         "target_warehouse_name": names.get(int(plan.target_warehouse_id)),
         "status": str(plan.status),
         "created_at": plan.created_at.isoformat() if plan.created_at else None,
-        "shelf_label": shelf["shelf_label"] if shelf else None,
-        "segment_id": shelf["segment_id"] if shelf else None,
+        **deposit,
         **progress,
         "items": [
             {

@@ -54,6 +54,17 @@ export type ConsolidationPlanDetail = {
   transfers_total: number;
   progress_label: string;
   pending_source_warehouses: string[];
+  mm_staged_count?: number;
+  mm_staging_total?: number;
+  mm_staging_label?: string;
+  local_staged_count?: number;
+  local_staging_total?: number;
+  local_staging_label?: string;
+  staged_count?: number;
+  staging_total?: number;
+  staging_label?: string;
+  packing_ready?: boolean;
+  packing_ready_label?: string;
   items: {
     id: number;
     product_id: number;
@@ -207,7 +218,7 @@ export async function resolveConsolidationShelf(
   tenantId: number,
   warehouseId: number,
   code: string,
-): Promise<{ segment_id: number; shelf_label: string; order_id: number; order_number: string | null }> {
+): Promise<{ segment_id: number; shelf_label: string; order_id: number; order_number: string | null; packing_ready: boolean }> {
   const { data } = await api.get("/wms/consolidation-staging/resolve", {
     params: { tenant_id: tenantId, warehouse_id: warehouseId, code },
   });

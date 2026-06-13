@@ -42,6 +42,7 @@ def apply_fulfillment_state(
     *,
     clear_cart: bool = True,
     clear_session: bool = True,
+    invoke_packing_lifecycle: bool = True,
 ) -> None:
     """Ustaw ``fulfillment_state`` i opcjonalnie wyczyść kontekst wózka/sesji."""
     prev = getattr(order, "fulfillment_state", None)
@@ -62,9 +63,10 @@ def apply_fulfillment_state(
     state_u = (state or "").strip().upper()
     # Domknięcie zbierania (w tym braki / decyzja) — znacznik czasu, nie wyprowadzamy ze stanów picków.
     if state_u in (READY_TO_PACK, "NEEDS_DECISION", "MISSING"):
-        from .order_fulfillment_lifecycle_service import on_packing_started
+        if invoke_packing_lifecycle:
+            from .order_fulfillment_lifecycle_service import on_packing_started
 
-        on_packing_started(order)
+            on_packing_started(order)
         now = datetime.utcnow()
         if getattr(order, "picking_finished_at", None) is None:
             order.picking_finished_at = now

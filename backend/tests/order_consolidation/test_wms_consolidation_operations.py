@@ -23,10 +23,12 @@ from backend.services.fulfillment_assignment.phase_constants import (
     PHASE_CONSOLIDATING,
     PHASE_FULFILLMENT_ASSIGNED,
 )
+from backend.services.order_consolidation.consolidation_context import mark_local_plan_item_picked
 from backend.services.order_consolidation.constants import (
     ITEM_STATUS_IN_TRANSIT,
     ITEM_STATUS_MM_CREATED,
     ITEM_STATUS_RECEIVED,
+    ITEM_STATUS_TO_PICK,
     ITEM_STATUS_WAITING,
     PLAN_STATUS_COMPLETED,
     PLAN_STATUS_IN_PROGRESS,
@@ -228,7 +230,11 @@ def test_all_transfers_completed(mock_commercial, wms_consolidation_db):
     start_consolidation_staging(db, plan_id=int(plan.id), tenant_id=1)
     db.commit()
     for it in db.query(OrderConsolidationPlanItem).filter_by(plan_id=int(plan.id)).all():
-        if str(it.status).upper() == ITEM_STATUS_RECEIVED:
+        st = str(it.status).upper()
+        if st == ITEM_STATUS_RECEIVED:
+            stage_plan_item(db, plan_id=int(plan.id), plan_item_id=int(it.id), tenant_id=1)
+        elif st == ITEM_STATUS_TO_PICK:
+            mark_local_plan_item_picked(db, order_id=int(order.id), product_id=int(it.product_id))
             stage_plan_item(db, plan_id=int(plan.id), plan_item_id=int(it.id), tenant_id=1)
     db.commit()
     db.refresh(plan)

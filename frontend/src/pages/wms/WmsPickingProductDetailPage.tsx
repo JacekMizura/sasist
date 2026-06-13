@@ -10,6 +10,7 @@ import {
   type WmsPickingProductDetailApi,
   type WmsPickingProductLocationRowApi,
 } from "../../api/wmsPickingProductsApi";
+import { postStageConsolidationItem } from "../../api/wmsConsolidationApi";
 import { useMergedPickingSession, useWmsPickingCart } from "../../context/WmsPickingCartContext";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { WmsOperationalPageBody, WmsOperationalPageShell } from "../../components/wms/execution/WmsOperationalPageShell";
@@ -30,6 +31,7 @@ import {
   wmsPickingShortageDefaultQty,
 } from "./wmsPickingUiGates";
 import { pageContainerWidthAlignClass } from "../../components/layout/PageContainer";
+import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 
 const BASKET_PUT_STYLE_RING: readonly string[] = [
   "border-violet-500 bg-violet-100/95 text-violet-950 ring-2 ring-violet-400/50",
@@ -137,6 +139,7 @@ export default function WmsPickingProductDetailPage() {
   const [shortageBusy, setShortageBusy] = useState(false);
   const [shortageErr, setShortageErr] = useState<string | null>(null);
   const [shortageQtyInput, setShortageQtyInput] = useState(1);
+  const [depositBusy, setDepositBusy] = useState(false);
 
   const detailLoadSeqRef = useRef(0);
 
@@ -324,7 +327,11 @@ export default function WmsPickingProductDetailPage() {
       playScanBeep();
       const nextRem = remaining - Math.min(qty, remaining);
       if (nextRem <= 1e-9) {
-        goBackToList(true);
+        if (detail?.consolidation_active) {
+          await load();
+        } else {
+          goBackToList(true);
+        }
       } else {
         await load();
         setManualOpen(false);
@@ -341,6 +348,38 @@ export default function WmsPickingProductDetailPage() {
       setPickMsg(msg);
     } finally {
       setPickBusy(false);
+    }
+  }
+
+  async function confirmShelfDeposit() {
+    if (
+      !detail?.consolidation_plan_id ||
+      !detail.consolidation_plan_item_id ||
+      !detail.pending_shelf_deposit
+    ) {
+      return;
+    }
+    setDepositBusy(true);
+    setPickMsg(null);
+    try {
+      await postStageConsolidationItem(
+        detail.consolidation_plan_id,
+        detail.consolidation_plan_item_id,
+        pickingTenantId ?? DAMAGE_TENANT_ID,
+      );
+      playScanBeep();
+      goBackToList(true);
+    } catch (e: unknown) {
+      let msg = "Potwierdzenie odłożenia nie powiodło się.";
+      if (axios.isAxiosError(e)) {
+        const data = e.response?.data;
+        const d = data as { detail?: unknown; error?: string } | undefined;
+        if (d?.detail != null) msg = formatFastApiErrorDetail({ detail: d.detail });
+        else if (d?.error) msg = String(d.error);
+      }
+      setPickMsg(msg);
+    } finally {
+      setDepositBusy(false);
     }
   }
 
@@ -454,14 +493,23 @@ export default function WmsPickingProductDetailPage() {
               )}
             </div>
             <div className="text-center md:text-left flex-1 min-w-0">
+              {detail.consolidation_active ? (
+                <span className="mb-3 inline-flex rounded-lg border border-violet-300 bg-violet-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-violet-800">
+                  Konsolidacja
+                </span>
+              ) : null}
               <p className="text-xl font-black text-slate-900 tracking-tight mb-1">EAN: <span className="font-mono">{detail.ean ?? "—"}</span></p>
               <h3 className="text-sm font-semibold text-slate-400 mb-4 leading-tight">{detail.name}</h3>
               
-              {detail.put_to_basket_label && (
+              {detail.consolidation_active && detail.consolidation_shelf_label ? (
+                <div className="w-fit px-5 py-3 rounded-2xl border-2 border-violet-500 bg-violet-100/95 font-black uppercase tracking-wider text-sm text-violet-950 ring-2 ring-violet-400/50">
+                  Odłóż na: {detail.consolidation_shelf_label}
+                </div>
+              ) : detail.put_to_basket_label ? (
                 <div className={`w-fit px-5 py-3 rounded-2xl border-2 font-black uppercase tracking-wider text-sm ${BASKET_PUT_STYLE_RING[(detail.put_to_basket_color_index ?? 0) % BASKET_PUT_STYLE_RING.length]}`}>
                   Odłóż do koszyka: {detail.put_to_basket_label}
                 </div>
-              )}
+              ) : null}
             </div>
           </div>
 
@@ -476,9 +524,21 @@ export default function WmsPickingProductDetailPage() {
             </div>
 
             {pickQueueDone ? (
-              <div className="flex items-center gap-2 px-6 py-3 bg-emerald-500 text-white rounded-2xl font-black uppercase tracking-wider text-xs shadow-lg shadow-emerald-500/10">
-                <Check size={14} strokeWidth={3} /> Skompletowano pozycję
-              </div>
+              detail.pending_shelf_deposit ? (
+                <button
+                  type="button"
+                  disabled={depositBusy}
+                  onClick={() => void confirmShelfDeposit()}
+                  className="flex items-center gap-2 px-6 py-3 bg-violet-600 text-white rounded-2xl font-black uppercase tracking-wider text-xs shadow-lg shadow-violet-500/10 disabled:opacity-50"
+                >
+                  <Check size={14} strokeWidth={3} />
+                  Odłożono na półkę {detail.consolidation_shelf_label ?? ""}
+                </button>
+              ) : (
+                <div className="flex items-center gap-2 px-6 py-3 bg-emerald-500 text-white rounded-2xl font-black uppercase tracking-wider text-xs shadow-lg shadow-emerald-500/10">
+                  <Check size={14} strokeWidth={3} /> Skompletowano pozycję
+                </div>
+              )
             ) : (
               <div className="text-[10px] font-black text-indigo-500 uppercase tracking-widest bg-indigo-50 border border-indigo-100 px-4 py-2 rounded-xl">
                 Zeskanuj kod EAN produktu, aby dodać kolejną sztukę

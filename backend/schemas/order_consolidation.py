@@ -60,6 +60,14 @@ class ConsolidationPlanRead(BaseModel):
     created_at: Optional[str] = None
     shelf_label: Optional[str] = None
     segment_id: Optional[int] = None
+    mm_staged_count: int = 0
+    mm_staging_total: int = 0
+    mm_staging_label: str = "—"
+    local_staged_count: int = 0
+    local_staging_total: int = 0
+    local_staging_label: str = "—"
+    packing_ready: bool = False
+    packing_ready_label: str = "NIEGOTOWE"
     transfers_received: int = 0
     transfers_total: int = 0
     progress_label: str = "—"
@@ -182,3 +190,4 @@ class ResolveShelfResponse(BaseModel):
     shelf_label: str
     order_id: int
     order_number: Optional[str] = None
+    packing_ready: bool = False

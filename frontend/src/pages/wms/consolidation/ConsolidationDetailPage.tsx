@@ -155,10 +155,42 @@ export default function ConsolidationDetailPage() {
                 <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Postęp transferów</dt>
                 <dd className="mt-0.5 text-sm font-semibold tabular-nums text-slate-900">{plan.progress_label}</dd>
               </div>
+              {(plan.mm_staging_total ?? 0) > 0 ? (
+                <div>
+                  <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">MM — odłożone</dt>
+                  <dd className="mt-0.5 text-sm font-semibold tabular-nums text-slate-900">
+                    {plan.mm_staging_label ?? `${plan.mm_staged_count ?? 0} / ${plan.mm_staging_total}`}
+                  </dd>
+                </div>
+              ) : null}
+              {(plan.local_staging_total ?? 0) > 0 ? (
+                <div>
+                  <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Lokalne — odłożone</dt>
+                  <dd className="mt-0.5 text-sm font-semibold tabular-nums text-slate-900">
+                    {plan.local_staging_label ?? `${plan.local_staged_count ?? 0} / ${plan.local_staging_total}`}
+                  </dd>
+                </div>
+              ) : null}
               {plan.shelf_label ? (
                 <div className="sm:col-span-2">
                   <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Półka kompletacyjna</dt>
                   <dd className="mt-0.5 font-mono text-sm font-semibold text-slate-900">{plan.shelf_label}</dd>
+                </div>
+              ) : null}
+              {isStaging || plan.status.toUpperCase() === "COMPLETED" ? (
+                <div className="sm:col-span-2">
+                  <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Gotowość do pakowania</dt>
+                  <dd className="mt-0.5">
+                    <span
+                      className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-semibold ${
+                        plan.packing_ready
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                          : "border-amber-200 bg-amber-50 text-amber-950"
+                      }`}
+                    >
+                      {plan.packing_ready_label ?? (plan.packing_ready ? "READY_TO_PACK" : "NIEGOTOWE")}
+                    </span>
+                  </dd>
                 </div>
               ) : null}
             </dl>
@@ -240,7 +272,7 @@ export default function ConsolidationDetailPage() {
                 <p className="mt-2 text-xs font-medium text-slate-500">
                   Status: {consolidationItemStatusLabel(it.status)}
                 </p>
-                {isStaging && it.status.toUpperCase() === "RECEIVED" ? (
+                {isStaging && (it.status.toUpperCase() === "RECEIVED" || it.status.toUpperCase() === "PICKED") ? (
                   <button
                     type="button"
                     disabled={actionBusy}

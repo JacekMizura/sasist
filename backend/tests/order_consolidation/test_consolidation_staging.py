@@ -21,10 +21,12 @@ from backend.models.tenant_warehouse import TenantWarehouse
 from backend.models.warehouse import Warehouse
 from backend.services.fulfillment_assignment.phase_constants import PHASE_FULFILLMENT_ASSIGNED
 from backend.services.order_consolidation.alert_service import cancel_consolidation_plan
+from backend.services.order_consolidation.consolidation_context import mark_local_plan_item_picked
 from backend.services.order_consolidation.constants import (
     ITEM_STATUS_MM_CREATED,
     ITEM_STATUS_RECEIVED,
     ITEM_STATUS_STAGED,
+    ITEM_STATUS_TO_PICK,
     PLAN_STATUS_COMPLETED,
     PLAN_STATUS_READY_FOR_STAGING,
     PLAN_STATUS_STAGING,
@@ -214,7 +216,11 @@ def test_stage_items_completes_plan(mock_commercial, staging_db):
 
     items = db.query(OrderConsolidationPlanItem).filter_by(plan_id=int(plan.id)).all()
     for it in items:
-        if str(it.status).upper() == ITEM_STATUS_RECEIVED:
+        st = str(it.status).upper()
+        if st == ITEM_STATUS_RECEIVED:
+            stage_plan_item(db, plan_id=int(plan.id), plan_item_id=int(it.id), tenant_id=1)
+        elif st == ITEM_STATUS_TO_PICK:
+            mark_local_plan_item_picked(db, order_id=int(order.id), product_id=int(it.product_id))
             stage_plan_item(db, plan_id=int(plan.id), plan_item_id=int(it.id), tenant_id=1)
     db.commit()
     db.refresh(plan)
@@ -293,9 +299,20 @@ def test_resolve_shelf_for_packing(mock_commercial, staging_db):
     started = start_consolidation_staging(db, plan_id=int(plan.id), tenant_id=1)
     db.commit()
 
+    items = db.query(OrderConsolidationPlanItem).filter_by(plan_id=int(plan.id)).all()
+    for it in items:
+        st = str(it.status).upper()
+        if st == ITEM_STATUS_RECEIVED:
+            stage_plan_item(db, plan_id=int(plan.id), plan_item_id=int(it.id), tenant_id=1)
+        elif st == ITEM_STATUS_TO_PICK:
+            mark_local_plan_item_picked(db, order_id=int(order.id), product_id=int(it.product_id))
+            stage_plan_item(db, plan_id=int(plan.id), plan_item_id=int(it.id), tenant_id=1)
+    db.commit()
+
     resolved = resolve_segment_by_label(db, tenant_id=1, warehouse_id=2, code=started["shelf_label"])
     assert resolved["order_id"] == int(order.id)
     assert resolved["order_number"] == "RS-1"
+    assert resolved["packing_ready"] is True
 
 
 @patch("backend.services.order_consolidation.feasibility_service.commercially_sellable_qty")

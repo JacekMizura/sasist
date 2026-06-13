@@ -330,6 +330,7 @@ def _packing_orders_base_query(
         wms_queue_fulfillment_mode_clauses,
         wms_queue_consolidation_phase_clauses,
         wms_queue_consolidation_plan_clauses,
+        wms_queue_consolidation_packing_clauses,
     )
 
     q = db.query(Order).filter(
@@ -347,6 +348,7 @@ def _packing_orders_base_query(
         ),
         *wms_queue_consolidation_phase_clauses(),
         *wms_queue_consolidation_plan_clauses(),
+        *wms_queue_consolidation_packing_clauses(),
     )
     return q
 

@@ -60,6 +60,8 @@ const ITEM_STATUS_LABELS: Record<string, string> = {
   MM_CREATED: "MM utworzone",
   IN_TRANSIT: "W drodze",
   RECEIVED: "Przyjęte",
+  TO_PICK: "Do pobrania",
+  PICKED: "Pobrane",
   STAGED: "Na półce",
   CANCELLED: "Anulowane",
   SHORTAGE: "Brak",

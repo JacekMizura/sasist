@@ -192,6 +192,20 @@ class WmsPickingProductDetailResponse(BaseModel):
         ge=0,
         description="Suma ``shortage_declarable_qty`` po zamówieniach sesji — do odblokowania „Zgłoś brak” gdy remaining_to_pick=0.",
     )
+    consolidation_active: bool = Field(
+        False,
+        description="P5.4 — zamówienie w STAGING z przypisaną półką kompletacyjną.",
+    )
+    consolidation_shelf_label: Optional[str] = Field(
+        None,
+        description="Etykieta półki kompletacyjnej (np. RK-01/A2) — zamiast koszyka.",
+    )
+    consolidation_plan_id: Optional[int] = None
+    consolidation_plan_item_id: Optional[int] = None
+    pending_shelf_deposit: bool = Field(
+        False,
+        description="True gdy lokalna pozycja planu ma status PICKED i czeka na potwierdzenie odłożenia.",
+    )
 
 
 class WmsPickingQuickPickBody(BaseModel):

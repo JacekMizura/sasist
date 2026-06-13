@@ -42,6 +42,7 @@ def _order_item_not_replaced_clause():
 from .order_fulfillment_state import (
     MISSING as FS_MISSING,
     NEEDS_DECISION as FS_NEEDS_DECISION,
+    PICKING,
     READY_TO_PACK as FS_READY_TO_PACK,
     apply_fulfillment_state,
     touch_picking_in_progress,
@@ -366,7 +367,7 @@ def _picking_queue_eligibility_clauses(
             features=features,
             queue_name="picking",
         ),
-        *wms_queue_consolidation_phase_clauses(),
+        *wms_queue_consolidation_phase_clauses(for_picking=True),
         *wms_queue_consolidation_plan_clauses(),
     )
 
@@ -1542,6 +1543,37 @@ def build_wms_picking_product_detail(
 
     pr = db.query(Product).filter(Product.tenant_id == int(tenant_id), Product.id == int(product_id)).first()
     decl_total = round(sum(float(r.shortage_declarable_qty) for r in order_rows), 6)
+
+    consolidation_active = False
+    consolidation_shelf_label: Optional[str] = None
+    consolidation_plan_id: Optional[int] = None
+    consolidation_plan_item_id: Optional[int] = None
+    pending_shelf_deposit = False
+    if active_fifo_order_id is not None:
+        from .order_consolidation.consolidation_context import (
+            active_consolidation_plan,
+            local_plan_item_for_product,
+            order_in_consolidation_staging_pick,
+        )
+        from .order_consolidation.staging_service import _shelf_info_for_order
+
+        if order_in_consolidation_staging_pick(db, int(active_fifo_order_id)):
+            consolidation_active = True
+            put_to_basket_label = None
+            put_to_basket_color_index = 0
+            for lid in hint_merge:
+                hint_merge[lid] = {}
+            shelf = _shelf_info_for_order(db, int(active_fifo_order_id))
+            consolidation_shelf_label = shelf["shelf_label"] if shelf else None
+            plan = active_consolidation_plan(db, int(active_fifo_order_id))
+            consolidation_plan_id = int(plan.id) if plan else None
+            local_item = local_plan_item_for_product(
+                db, order_id=int(active_fifo_order_id), product_id=int(product_id)
+            )
+            if local_item is not None:
+                consolidation_plan_item_id = int(local_item.id)
+                pending_shelf_deposit = str(local_item.status).upper() == "PICKED"
+
     return WmsPickingProductDetailResponse(
         product_id=int(product_id),
         name=pr.name if pr and pr.name else row.name,
@@ -1558,6 +1590,11 @@ def build_wms_picking_product_detail(
         put_to_basket_color_index=put_to_basket_color_index,
         allow_continue_other_lines_after_shortage=lines_resp.allow_continue_other_lines_after_shortage,
         shortage_declarable_total=decl_total,
+        consolidation_active=consolidation_active,
+        consolidation_shelf_label=consolidation_shelf_label,
+        consolidation_plan_id=consolidation_plan_id,
+        consolidation_plan_item_id=consolidation_plan_item_id,
+        pending_shelf_deposit=pending_shelf_deposit,
     )
 
 
@@ -1752,6 +1789,9 @@ def record_wms_quick_pick(
 
     for oid_touch in touched_order_ids:
         recompute_order_fulfillment(db, int(oid_touch), commit=False, session_cart_id=cid)
+        from .order_consolidation.consolidation_context import mark_local_plan_item_picked
+
+        mark_local_plan_item_picked(db, order_id=int(oid_touch), product_id=int(product_id))
 
     return last_oid, last_oiid
 
@@ -2743,7 +2783,12 @@ def finalize_wms_picking_cart(
             if kind == "all_picked" and not pack_ok:
                 panel_kind = "some_missing"
             if kind == "all_picked" and pack_ok:
-                fs = FS_READY_TO_PACK
+                from .order_consolidation.consolidation_context import consolidation_blocks_ready_to_pack
+
+                if consolidation_blocks_ready_to_pack(db, int(o.id)):
+                    fs = PICKING
+                else:
+                    fs = FS_READY_TO_PACK
             elif kind == "all_missing":
                 fs = FS_MISSING
             else:

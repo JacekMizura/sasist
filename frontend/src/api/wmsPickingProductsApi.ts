@@ -103,6 +103,12 @@ export type WmsPickingProductDetailApi = {
   allow_continue_other_lines_after_shortage?: boolean;
   /** Suma shortage_declarable_qty po zamówieniach sesji — odblokowuje zgłoszenie gdy remaining_to_pick = 0. */
   shortage_declarable_total?: number;
+  /** P5.4 — konsolidacja: odkładanie na półkę zamiast koszyka */
+  consolidation_active?: boolean;
+  consolidation_shelf_label?: string | null;
+  consolidation_plan_id?: number | null;
+  consolidation_plan_item_id?: number | null;
+  pending_shelf_deposit?: boolean;
 };
 
 export async function getWmsPickingProductLines(

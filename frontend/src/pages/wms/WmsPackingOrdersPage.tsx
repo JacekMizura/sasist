@@ -12,6 +12,7 @@ import {
   wmsPackingApiErrorCode,
 } from "../../api/wmsPackingApi";
 import { getWmsPickingResolveCart } from "../../api/wmsPickingProductsApi";
+import { resolveConsolidationShelf } from "../../api/wmsConsolidationApi";
 import { OrdersListView } from "../../components/wms/packing/ordersList/OrdersListView";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { useWmsScanner } from "../../context/WmsScannerContext";
@@ -201,11 +202,11 @@ export default function WmsPackingOrdersPage() {
   const sMode = session?.mode;
   useEffect(() => {
     if (sMode === "no_cart") {
-      setScannerInputPlaceholder("Zeskanuj EAN — przejście do zamówienia");
+      setScannerInputPlaceholder("Zeskanuj EAN lub półkę kompletacyjną (np. RK-01/A2)");
     } else if (sMode === "baskets") {
-      setScannerInputPlaceholder("EAN, koszyk (np. S-1-2) lub kod wózka");
+      setScannerInputPlaceholder("EAN, półka (RK-01/A2), koszyk lub kod wózka");
     } else {
-      setScannerInputPlaceholder("EAN produktu lub kod wózka");
+      setScannerInputPlaceholder("EAN, półka kompletacyjna lub kod wózka");
     }
     refocusScannerInput();
   }, [setScannerInputPlaceholder, refocusScannerInput, sMode]);
@@ -257,6 +258,28 @@ export default function WmsPackingOrdersPage() {
       listScanBusyRef.current = true;
       let tryCart = false;
       try {
+        try {
+          const shelfResolved = await resolveConsolidationShelf(DAMAGE_TENANT_ID, warehouseId, scan);
+          if (shelfResolved.packing_ready && shelfResolved.order_id > 0) {
+            playScanBeep();
+            appendScanToHistory(scan);
+            if (activePriorityTask && assignedOrderIds.length > 0 && !assignedOrderSet.has(shelfResolved.order_id)) {
+              showScannerToast("To zamówienie jest poza aktywnym zadaniem kierownika.");
+              return;
+            }
+            navigate(WMS_ROUTES.packingOrder(shelfResolved.order_id));
+            return;
+          }
+        } catch (se) {
+          const isShelf404 = axios.isAxiosError(se) && se.response?.status === 404;
+          if (!isShelf404 && axios.isAxiosError(se) && se.response?.status !== 400) {
+            const shelfMsg = extractApiErrorMessage(se, "");
+            if (shelfMsg && !shelfMsg.toLowerCase().includes("nie znaleziono")) {
+              showScannerToast(shelfMsg);
+              return;
+            }
+          }
+        }
         try {
           const r = await getWmsPackingResolveEan(
             DAMAGE_TENANT_ID,

@@ -6,7 +6,7 @@ from typing import Any, Sequence
 
 from ...models.consolidation_rack import ConsolidationRack, ConsolidationRackLevel, RackSegment
 from ...models.order_consolidation_plan import OrderConsolidationPlanItem
-from .constants import ITEM_STATUS_RECEIVED, ITEM_STATUS_STAGED, ITEM_STATUS_EXCEPTION
+from .constants import ITEM_STATUS_RECEIVED, ITEM_STATUS_PICKED, ITEM_STATUS_STAGED, ITEM_STATUS_EXCEPTION
 
 
 def is_cross_warehouse_transfer(item: OrderConsolidationPlanItem) -> bool:
@@ -23,7 +23,7 @@ def compute_transfer_progress(items: Sequence[OrderConsolidationPlanItem]) -> tu
     received = sum(
         1
         for it in transfers
-        if str(it.status).upper() in (ITEM_STATUS_RECEIVED, ITEM_STATUS_STAGED)
+        if str(it.status).upper() in (ITEM_STATUS_RECEIVED, ITEM_STATUS_PICKED)
         and str(it.status).upper() not in ITEM_STATUS_EXCEPTION
     )
     return received, total
@@ -43,7 +43,7 @@ def pending_source_warehouse_names(
     out: list[str] = []
     seen: set[int] = set()
     for it in transfer_items(items):
-        if str(it.status).upper() in (ITEM_STATUS_RECEIVED, ITEM_STATUS_STAGED):
+        if str(it.status).upper() in (ITEM_STATUS_RECEIVED, ITEM_STATUS_PICKED, ITEM_STATUS_STAGED):
             continue
         wid = int(it.source_warehouse_id)
         if wid in seen:

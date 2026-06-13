@@ -8,11 +8,14 @@ from ...models.consolidation_rack import ConsolidationRack, ConsolidationRackLev
 from ...models.order import Order
 from ...models.order_consolidation_plan import OrderConsolidationPlan, OrderConsolidationPlanItem
 from ..fulfillment_assignment.phase_constants import PHASE_FULFILLMENT_ASSIGNED
+from ..order_fulfillment_state import READY_TO_PACK as FS_READY_TO_PACK, apply_fulfillment_state
 from .constants import (
     ITEM_STATUS_CANCELLED,
     ITEM_STATUS_EXCEPTION,
     ITEM_STATUS_RECEIVED,
+    ITEM_STATUS_PICKED,
     ITEM_STATUS_STAGED,
+    ITEM_STATUS_TO_PICK,
     PLAN_STATUS_CANCELLED,
     PLAN_STATUS_COMPLETED,
     PLAN_STATUS_EXCEPTION,
@@ -127,6 +130,13 @@ def try_complete_staging(db: Session, plan: OrderConsolidationPlan, order: Order
     plan.status = PLAN_STATUS_COMPLETED
     order.fulfillment_assignment_phase = PHASE_FULFILLMENT_ASSIGNED
     order.warehouse_id = int(plan.target_warehouse_id)
+    apply_fulfillment_state(
+        order,
+        FS_READY_TO_PACK,
+        clear_cart=False,
+        clear_session=False,
+        invoke_packing_lifecycle=False,
+    )
     db.add(plan)
     db.add(order)
     db.flush()
@@ -146,10 +156,17 @@ def recompute_plan_staging_readiness(db: Session, plan: OrderConsolidationPlan) 
     transfers = [it for it in items if is_cross_warehouse_transfer(it)]
     transfers_ready = (
         not transfers
-        or all(str(it.status).upper() in (ITEM_STATUS_RECEIVED, ITEM_STATUS_STAGED) for it in transfers)
+        or all(
+            str(it.status).upper() in (ITEM_STATUS_RECEIVED, ITEM_STATUS_PICKED, ITEM_STATUS_STAGED)
+            for it in transfers
+        )
     )
-    all_received = all(str(it.status).upper() in (ITEM_STATUS_RECEIVED, ITEM_STATUS_STAGED) for it in items)
-    if transfers_ready and all_received and st not in (PLAN_STATUS_READY_FOR_STAGING, PLAN_STATUS_STAGING):
+    all_ready = all(
+        str(it.status).upper()
+        in (ITEM_STATUS_RECEIVED, ITEM_STATUS_TO_PICK, ITEM_STATUS_PICKED, ITEM_STATUS_STAGED)
+        for it in items
+    )
+    if transfers_ready and all_ready and st not in (PLAN_STATUS_READY_FOR_STAGING, PLAN_STATUS_STAGING):
         plan.status = PLAN_STATUS_READY_FOR_STAGING
         db.add(plan)
         db.flush()
@@ -225,8 +242,10 @@ def stage_plan_item(db: Session, *, plan_id: int, plan_item_id: int, tenant_id: 
         raise ConsolidationStagingError(f"Pozycja w statusie {st} — nie można odłożyć na półkę.")
     if st == ITEM_STATUS_STAGED:
         return {"plan_id": int(plan.id), "plan_item_id": int(item.id), "status": ITEM_STATUS_STAGED, "completed": False}
-    if st != ITEM_STATUS_RECEIVED:
-        raise ConsolidationStagingError(f"Pozycja musi być RECEIVED przed odłożeniem (obecnie: {st}).")
+    if st not in (ITEM_STATUS_RECEIVED, ITEM_STATUS_PICKED):
+        raise ConsolidationStagingError(
+            f"Pozycja musi być RECEIVED (MM) lub PICKED (lokalnie) przed odłożeniem na półkę (obecnie: {st})."
+        )
 
     item.status = ITEM_STATUS_STAGED
     db.add(item)
@@ -268,11 +287,20 @@ def resolve_segment_by_label(
         label = format_segment_label(rack.name, level, seg).upper().replace(" ", "")
         if label == needle or label.endswith(needle) or needle.endswith(label):
             order = db.query(Order).filter(Order.id == int(seg.order_id)).first()
+            if order is None:
+                continue
+            from .consolidation_context import consolidation_packing_ready
+
+            if not consolidation_packing_ready(db, int(seg.order_id)):
+                raise ConsolidationStagingError(
+                    "Zamówienie nie jest gotowe do pakowania — ukończ odkładanie wszystkich pozycji na półkę."
+                )
             return {
                 "segment_id": int(seg.id),
                 "shelf_label": format_segment_label(rack.name, level, seg),
                 "order_id": int(seg.order_id),
                 "order_number": str(order.number) if order and order.number else None,
+                "packing_ready": True,
             }
     raise ConsolidationStagingError("Nie znaleziono zamówienia dla podanej półki kompletacyjnej.")
 

@@ -10,10 +10,22 @@ from __future__ import annotations
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
+from ..models.consolidation_rack import RackSegment
 from ..models.order import Order
 from ..models.order_consolidation_plan import OrderConsolidationPlan
 from ..schemas.commerce_enums import WMS_ELIGIBLE_FULFILLMENT_MODES
 from .order_consolidation.constants import PLAN_STATUS_BLOCKS_FULFILLMENT
+from .order_consolidation.constants import (
+    PLAN_STATUS_COMPLETED,
+    PLAN_STATUS_STAGING,
+    PLAN_STATUS_READY_FOR_STAGING,
+    PLAN_STATUS_IN_PROGRESS,
+    PLAN_STATUS_DRAFT,
+    PLAN_STATUS_READY,
+    PLAN_STATUS_EXCEPTION,
+    PLAN_STATUS_MANUAL_REVIEW_REQUIRED,
+    PLAN_STATUS_CANCELLED,
+)
 from .operational_features_context import (
     OperationalFeaturesContext,
     resolve_operational_features_context,
@@ -30,9 +42,43 @@ class WmsConsolidationBlockedError(ValueError):
     """Order is in consolidation — WMS pick/pack/wave not allowed yet."""
 
 
-def wms_queue_consolidation_phase_clauses():
-    """Exclude orders awaiting inter-warehouse consolidation."""
-    return (Order.fulfillment_assignment_phase.notin_(tuple(CONSOLIDATION_WAVE_BLOCKED_PHASES)),)
+PLAN_STATUS_INCOMPLETE_FOR_PACKING = (
+    PLAN_STATUS_DRAFT,
+    PLAN_STATUS_READY,
+    PLAN_STATUS_IN_PROGRESS,
+    PLAN_STATUS_READY_FOR_STAGING,
+    PLAN_STATUS_STAGING,
+    PLAN_STATUS_EXCEPTION,
+    PLAN_STATUS_MANUAL_REVIEW_REQUIRED,
+)
+
+
+def wms_queue_consolidation_phase_clauses(*, for_picking: bool = False):
+    """Exclude orders awaiting inter-warehouse consolidation.
+
+    P5.4: during STAGING with assigned shelf, local picking is allowed (exception).
+    """
+    if not for_picking:
+        return (Order.fulfillment_assignment_phase.notin_(tuple(CONSOLIDATION_WAVE_BLOCKED_PHASES)),)
+    staging_pick_orders = (
+        select(OrderConsolidationPlan.order_id)
+        .join(RackSegment, RackSegment.order_id == OrderConsolidationPlan.order_id)
+        .where(OrderConsolidationPlan.status == PLAN_STATUS_STAGING)
+    )
+    return (
+        or_(
+            Order.fulfillment_assignment_phase.notin_(tuple(CONSOLIDATION_WAVE_BLOCKED_PHASES)),
+            Order.id.in_(staging_pick_orders),
+        ),
+    )
+
+
+def wms_queue_consolidation_packing_clauses():
+    """Block packing until consolidation plan is COMPLETED (all items STAGED)."""
+    incomplete = select(OrderConsolidationPlan.order_id).where(
+        OrderConsolidationPlan.status.in_(tuple(PLAN_STATUS_INCOMPLETE_FOR_PACKING))
+    )
+    return (~Order.id.in_(incomplete),)
 
 
 def wms_queue_consolidation_plan_clauses():
@@ -43,7 +89,17 @@ def wms_queue_consolidation_plan_clauses():
     return (~Order.id.in_(blocked_orders),)
 
 
-def assert_order_wms_fulfillment_not_blocked(order: Order, db: Session | None = None) -> None:
+def assert_order_wms_fulfillment_not_blocked(
+    order: Order,
+    db: Session | None = None,
+    *,
+    for_picking: bool = False,
+) -> None:
+    if db is not None and for_picking:
+        from .order_consolidation.consolidation_context import order_in_consolidation_staging_pick
+
+        if order_in_consolidation_staging_pick(db, int(order.id)):
+            return
     if is_consolidation_wave_blocked(getattr(order, "fulfillment_assignment_phase", None)):
         raise WmsConsolidationBlockedError(
             "Zamówienie oczekuje na konsolidację magazynową — kompletacja i pakowanie niedostępne."
