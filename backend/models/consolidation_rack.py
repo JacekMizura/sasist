@@ -40,5 +40,11 @@ class RackSegment(Base):
     segment_index = Column(Integer, nullable=False)
     order_id = Column(Integer, ForeignKey("orders.id", ondelete="SET NULL"), nullable=True)
     fill_percent = Column(Float, default=0)  # 0–100
+    # Optional operator label (A1, TV-01…); NULL → computed default from level + index.
+    slot_label = Column(String(64), nullable=True)
+    length_mm = Column(Float, nullable=True)
+    width_mm = Column(Float, nullable=True)
+    height_mm = Column(Float, nullable=True)
+    capacity_dm3 = Column(Float, nullable=True)  # auto from L×W×H when all dims set
 
     level = relationship("ConsolidationRackLevel", back_populates="segments")

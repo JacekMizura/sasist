@@ -15,7 +15,7 @@ from .constants import (
     PLAN_STATUS_MANUAL_REVIEW_REQUIRED,
     PLAN_STATUS_STAGING,
 )
-from .progress_helpers import format_segment_label, is_cross_warehouse_transfer
+from .progress_helpers import format_segment_label, is_cross_warehouse_transfer, segment_slot_label
 
 SEGMENT_STATE_FREE = "FREE"
 SEGMENT_STATE_STAGING = "STAGING"
@@ -24,12 +24,7 @@ SEGMENT_STATE_EXCEPTION = "EXCEPTION"
 
 
 def _short_slot_label(level: ConsolidationRackLevel, segment: RackSegment) -> str:
-    level_part = (level.name or "").strip()
-    if not level_part:
-        level_part = chr(ord("A") + int(level.level_index or 0))
-    if level.is_segmented:
-        return f"{level_part}{int(segment.segment_index) + 1}"
-    return level_part
+    return segment_slot_label(level, segment)
 
 
 def _progress_from_items(items: list[OrderConsolidationPlanItem]) -> dict:

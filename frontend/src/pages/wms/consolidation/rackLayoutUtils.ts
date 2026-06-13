@@ -18,13 +18,16 @@ export function columnLetter(colIndex: number): string {
   return String.fromCharCode(65 + colIndex);
 }
 
-/** Etykieta pola siatki (A1, B2) — zgodna z backend format_segment_label / _short_slot_label. */
+/** Etykieta pola siatki (A1, B2, TV-01…) — zgodna z backend segment_slot_label. */
 export function computeSlotLabel(
   levelName: string | null | undefined,
   levelIndex: number,
   segmentIndex: number,
   isSegmented: boolean,
+  customSlotLabel?: string | null,
 ): string {
+  const custom = (customSlotLabel ?? "").trim();
+  if (custom) return custom;
   const levelPart = (levelName ?? "").trim() || columnLetter(levelIndex);
   if (isSegmented || segmentIndex > 0) {
     return `${levelPart}${segmentIndex + 1}`;
@@ -38,8 +41,9 @@ export function computeShelfLabel(
   levelIndex: number,
   segmentIndex: number,
   isSegmented: boolean,
+  customSlotLabel?: string | null,
 ): string {
-  return `${rackName}/${computeSlotLabel(levelName, levelIndex, segmentIndex, isSegmented)}`;
+  return `${rackName}/${computeSlotLabel(levelName, levelIndex, segmentIndex, isSegmented, customSlotLabel)}`;
 }
 
 /** Wizard: liczba kolumn × liczba rzędów → payload levels dla POST /racks/ */
@@ -105,6 +109,12 @@ export type RackGridLevel = {
     order_id: number | null;
     order_number?: string | null;
     fill_percent?: number;
+    slot_label?: string | null;
+    effective_slot_label?: string | null;
+    length_mm?: number | null;
+    width_mm?: number | null;
+    height_mm?: number | null;
+    capacity_dm3?: number | null;
   }>;
 };
 
@@ -133,7 +143,13 @@ export function levelsToGrid(levels: RackGridLevel[]): {
       line.push({
         ...seg,
         level,
-        slotLabel: computeSlotLabel(level.name, level.level_index, seg.segment_index, level.is_segmented),
+        slotLabel: computeSlotLabel(
+          level.name,
+          level.level_index,
+          seg.segment_index,
+          level.is_segmented,
+          seg.slot_label ?? seg.effective_slot_label,
+        ),
       });
     }
     cells.push(line);

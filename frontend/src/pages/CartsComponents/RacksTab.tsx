@@ -9,6 +9,7 @@ import { Layers } from "lucide-react";
 import ConsolidationRackGrid from "../wms/consolidation/ConsolidationRackGrid";
 import ConsolidationRackSegmentPanel, {
   type SegmentPanelData,
+  type SegmentSavePayload,
 } from "../wms/consolidation/ConsolidationRackSegmentPanel";
 import { rackOccupancyStats, type RackGridLevel } from "../wms/consolidation/rackLayoutUtils";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
@@ -48,6 +49,14 @@ export default function RacksTab() {
   useEffect(() => {
     void fetchRacks();
   }, [fetchRacks]);
+
+  const handleSegmentSave = useCallback(
+    async (segmentId: number, payload: SegmentSavePayload) => {
+      await api.patch(`/racks/segments/${segmentId}/`, payload);
+      await fetchRacks();
+    },
+    [fetchRacks],
+  );
 
   const rackStats = useMemo(
     () => racks.map((rack) => ({ rack, stats: rackOccupancyStats(rack.levels ?? []) })),
@@ -110,6 +119,7 @@ export default function RacksTab() {
                   levels={rack.levels ?? []}
                   onSegmentClick={(cell) =>
                     setPanel({
+                      segmentId: cell.segmentId,
                       shelfLabel: cell.shelfLabel,
                       slotLabel: cell.slotLabel,
                       columnName: cell.columnName,
@@ -118,6 +128,12 @@ export default function RacksTab() {
                       orderId: cell.orderId,
                       orderNumber: cell.orderNumber,
                       fillPercent: cell.fillPercent,
+                      slotLabelCustom: cell.slotLabelCustom,
+                      lengthMm: cell.lengthMm,
+                      widthMm: cell.widthMm,
+                      heightMm: cell.heightMm,
+                      capacityDm3: cell.capacityDm3,
+                      readOnly: false,
                     })
                   }
                 />
@@ -135,7 +151,7 @@ export default function RacksTab() {
         </div>
       )}
 
-      <ConsolidationRackSegmentPanel segment={panel} onClose={() => setPanel(null)} />
+      <ConsolidationRackSegmentPanel segment={panel} onClose={() => setPanel(null)} onSave={handleSegmentSave} />
     </div>
   );
 }

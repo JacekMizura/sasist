@@ -53,15 +53,25 @@ def pending_source_warehouse_names(
     return out
 
 
-def format_segment_label(rack_name: str, level: ConsolidationRackLevel, segment: RackSegment) -> str:
+def default_segment_slot_label(level: ConsolidationRackLevel, segment: RackSegment) -> str:
+    """Default slot name (A1, B2…) when operator has not set a custom label."""
     level_part = (level.name or "").strip()
     if not level_part:
         level_part = chr(ord("A") + int(level.level_index))
-    if level.is_segmented and int(segment.segment_index) > 0:
-        return f"{rack_name}/{level_part}{int(segment.segment_index) + 1}"
-    if level.is_segmented:
-        return f"{rack_name}/{level_part}{int(segment.segment_index) + 1}"
-    return f"{rack_name}/{level_part}"
+    if level.is_segmented or int(segment.segment_index) > 0:
+        return f"{level_part}{int(segment.segment_index) + 1}"
+    return level_part
+
+
+def segment_slot_label(level: ConsolidationRackLevel, segment: RackSegment) -> str:
+    custom = (getattr(segment, "slot_label", None) or "").strip()
+    if custom:
+        return custom
+    return default_segment_slot_label(level, segment)
+
+
+def format_segment_label(rack_name: str, level: ConsolidationRackLevel, segment: RackSegment) -> str:
+    return f"{rack_name}/{segment_slot_label(level, segment)}"
 
 
 def segment_label_for_row(segment: RackSegment, level: ConsolidationRackLevel, rack: ConsolidationRack) -> str:

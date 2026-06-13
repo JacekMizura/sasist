@@ -10,11 +10,16 @@ export type RackGridSegmentClick = {
   segmentId?: number;
   shelfLabel: string;
   slotLabel: string;
+  slotLabelCustom?: string | null;
   columnName: string | null;
   rowNumber: number;
   orderId: number | null;
   orderNumber: string | null;
   fillPercent?: number;
+  lengthMm?: number | null;
+  widthMm?: number | null;
+  heightMm?: number | null;
+  capacityDm3?: number | null;
   state?: string;
 };
 
@@ -89,11 +94,16 @@ export default function ConsolidationRackGrid({
                           segmentId: cell.id,
                           shelfLabel,
                           slotLabel: cell.slotLabel,
+                          slotLabelCustom: cell.slot_label,
                           columnName: cell.level.name,
                           rowNumber: rowIdx + 1,
                           orderId: cell.order_id,
                           orderNumber: cell.order_number ?? dash?.order_number ?? null,
                           fillPercent: cell.fill_percent ?? dash?.fill_percent,
+                          lengthMm: cell.length_mm,
+                          widthMm: cell.width_mm,
+                          heightMm: cell.height_mm,
+                          capacityDm3: cell.capacity_dm3,
                           state: dash?.state,
                         })
                       }

@@ -11,7 +11,7 @@ from .schema_introspection import get_table_column_names, has_table
 
 logger = logging.getLogger(__name__)
 
-ORDER_CONSOLIDATION_SCHEMA_VERSION = "2026.06.08.p5.2.consolidation.exceptions"
+ORDER_CONSOLIDATION_SCHEMA_VERSION = "2026.06.08.p5.8.rack-segment-profile"
 
 
 def ensure_order_consolidation_schema(engine: Engine) -> None:
@@ -158,4 +158,24 @@ def ensure_order_consolidation_schema(engine: Engine) -> None:
                     )
                 )
 
+        _ensure_rack_segment_profile_columns(conn, engine)
+
     logger.info("[order_consolidation] schema ok version=%s", ORDER_CONSOLIDATION_SCHEMA_VERSION)
+
+
+def _ensure_rack_segment_profile_columns(conn, engine: Engine) -> None:
+    """P5.8 prep — custom slot labels + optional segment dimensions."""
+    if not has_table(engine, "rack_segments"):
+        return
+    cols = get_table_column_names(engine, "rack_segments")
+    float_type = "DOUBLE PRECISION" if engine.dialect.name == "postgresql" else "REAL"
+    additions: list[tuple[str, str]] = [
+        ("slot_label", "VARCHAR(64)"),
+        ("length_mm", float_type),
+        ("width_mm", float_type),
+        ("height_mm", float_type),
+        ("capacity_dm3", float_type),
+    ]
+    for col_name, col_type in additions:
+        if col_name not in cols:
+            conn.execute(text(f"ALTER TABLE rack_segments ADD COLUMN {col_name} {col_type} NULL"))

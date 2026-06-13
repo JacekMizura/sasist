@@ -1,5 +1,15 @@
 # Current context
 
+## P5.8 prep — Segment profile (names + dimensions) (2026-06-08)
+- **Bez zmian P5.7** — alokacja nadal: pierwsza wolna półka wg istniejących reguł
+- Model `RackSegment`: `slot_label`, `length_mm`, `width_mm`, `height_mm`, `capacity_dm3` (auto L×W×H)
+- SSOT etykiet: `segment_slot_label()` / `format_segment_label()` — custom `slot_label` lub domyślne A1, A2…
+- Skan/resolve/staging/packing przez istniejący `lookup_shelf_assignment` (bez zmian algorytmu)
+- Adapter slotting: `segment_capacity_service.py` → `LocationCapacityProfile` + `calculate_location_capacity()` (prep only)
+- API: `PATCH /racks/segments/{id}/`; migracja w `order_consolidation_schema.py`
+- UX: panel półki w `/carts/racks` — nazwa + opcjonalne wymiary
+- Tests: `test_consolidation_segment_profile.py` (5/5); P5.7 suite bez regresji
+
 ## P5.6A — Consolidation rack UX refactor (2026-06-08)
 - Frontend-only: kreator regału (kolumny × rzędy), siatka A1/B2, panel półki, dashboard zajętości
 - Mapowanie UX→API: kolumny=ConsolidationRackLevel (name A,B,C), rzędy=RackSegment (segment_index)
