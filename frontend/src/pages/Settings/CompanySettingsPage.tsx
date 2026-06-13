@@ -329,6 +329,16 @@ export default function CompanySettingsPage() {
     setEditFulfillmentPriority(assignment?.fulfillment_priority ?? 100);
   };
 
+  const closeWarehouseEdit = () => {
+    if (editWhSaving) return;
+    setEditWh(null);
+    setEditWhName("");
+    setEditWhAssignmentId(null);
+    setEditParticipatesNetwork(true);
+    setEditFulfillmentEligible(true);
+    setEditFulfillmentPriority(100);
+  };
+
   const defaultTenantsForWarehouse = (wid: number) =>
     assignments.filter((a) => a.warehouse_id === wid && a.is_default).map((a) => tenantById(a.tenant_id));
 
