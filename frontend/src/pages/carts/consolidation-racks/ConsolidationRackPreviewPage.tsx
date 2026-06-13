@@ -5,21 +5,12 @@ import { Link, useParams } from "react-router-dom";
 import api from "../../../api/axios";
 import { useWarehouse } from "../../../context/WarehouseContext";
 import { cartsPageShellClass } from "../../../modules/carts/cartsModuleTokens";
-import ConsolidationRackGrid from "../../../modules/consolidation-racks/ConsolidationRackGrid";
 import { ConsolidationRackFormShell } from "../../../modules/consolidation-racks/ConsolidationRackFormShell";
-import ConsolidationRackSegmentModal from "../../../modules/consolidation-racks/ConsolidationRackSegmentModal";
-import {
-  findSegmentInRack,
-  segmentToModal,
-  type ConsolidationRack,
-  type SegmentModalData,
-} from "../../../modules/consolidation-racks/consolidationRackTypes";
-import {
-  inferRackDefaultDims,
-  levelsToGrid,
-  rackOccupancyStats,
-  segmentIsOverridden,
-} from "../../../modules/consolidation-racks/rackLayoutUtils";
+import ConsolidationRackStructureEditor from "../../../modules/consolidation-racks/ConsolidationRackStructureEditor";
+import ConsolidationRackStructurePreview from "../../../modules/consolidation-racks/ConsolidationRackStructurePreview";
+import type { ConsolidationRack } from "../../../modules/consolidation-racks/consolidationRackTypes";
+import { rackOccupancyStats } from "../../../modules/consolidation-racks/rackLayoutUtils";
+import { apiRackToDraft, type RackStructureDraft } from "../../../modules/consolidation-racks/rackStructureModel";
 
 export default function ConsolidationRackPreviewPage() {
   const { rackId } = useParams<{ rackId: string }>();
@@ -27,7 +18,8 @@ export default function ConsolidationRackPreviewPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [rack, setRack] = useState<ConsolidationRack | null>(null);
-  const [modal, setModal] = useState<SegmentModalData | null>(null);
+  const [draft, setDraft] = useState<RackStructureDraft | null>(null);
+  const [expandedLevels, setExpandedLevels] = useState<Set<string>>(() => new Set());
 
   const loadRack = useCallback(async (id: number) => {
     setLoading(true);
@@ -35,6 +27,9 @@ export default function ConsolidationRackPreviewPage() {
     try {
       const { data } = await api.get<ConsolidationRack>(`/racks/${id}/`);
       setRack(data);
+      const nextDraft = apiRackToDraft(data);
+      setDraft(nextDraft);
+      setExpandedLevels(new Set(nextDraft.levels.map((l) => l.clientId)));
     } catch (err: unknown) {
       console.error("[ConsolidationRackPreview] load error:", err);
       setError("Nie udało się wczytać regału.");
@@ -48,24 +43,34 @@ export default function ConsolidationRackPreviewPage() {
   }, [rackId, loadRack]);
 
   const stats = useMemo(() => rackOccupancyStats(rack?.levels ?? []), [rack]);
-  const gridMeta = useMemo(() => levelsToGrid(rack?.levels ?? []), [rack]);
-  const rackDefaults = useMemo(() => inferRackDefaultDims(rack?.levels ?? []), [rack]);
 
-  const overriddenSegmentIds = useMemo(() => {
-    const ids = new Set<number>();
-    if (!rack) return ids;
-    for (const lv of rack.levels ?? []) {
+  const occupancyBySegmentId = useMemo(() => {
+    const map = new Map<number, { orderNumber?: string | null; tone?: string }>();
+    for (const lv of rack?.levels ?? []) {
       for (const seg of lv.segments ?? []) {
-        if (seg.id != null && segmentIsOverridden(seg, rackDefaults)) ids.add(seg.id);
+        if (seg.id == null) continue;
+        map.set(seg.id, {
+          orderNumber: seg.order_number,
+          tone: seg.order_id != null ? "#fff7ed" : undefined,
+        });
       }
     }
-    return ids;
-  }, [rack, rackDefaults]);
+    return map;
+  }, [rack]);
 
   const warehouseLabel =
     warehouses.find((w) => w.id === (rack?.warehouse_id ?? warehouse?.id))?.name
     ?? warehouse?.name
     ?? "—";
+
+  const toggleLevel = useCallback((clientId: string) => {
+    setExpandedLevels((prev) => {
+      const next = new Set(prev);
+      if (next.has(clientId)) next.delete(clientId);
+      else next.add(clientId);
+      return next;
+    });
+  }, []);
 
   if (loading) {
     return (
@@ -76,7 +81,7 @@ export default function ConsolidationRackPreviewPage() {
     );
   }
 
-  if (error || !rack) {
+  if (error || !rack || !draft) {
     return (
       <div className={`${cartsPageShellClass} rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800`}>
         {error ?? "Regał nie istnieje."}
@@ -111,57 +116,26 @@ export default function ConsolidationRackPreviewPage() {
           </div>
         }
         sidebar={
-          <div className="space-y-4">
-            <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
-              <div className="text-[10px] font-bold uppercase text-slate-500">Nazwa</div>
-              <div className="font-mono font-semibold text-slate-900">{rack.name}</div>
-            </div>
-            <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
-              <div className="text-[10px] font-bold uppercase text-slate-500">Magazyn</div>
-              <div className="text-slate-800">{warehouseLabel}</div>
-            </div>
-            <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
-              <div className="text-[10px] font-bold uppercase text-slate-500">Układ</div>
-              <div className="tabular-nums text-slate-800">
-                {gridMeta.rowCount} rzędów × {gridMeta.colCount} kolumn
-              </div>
-            </div>
-            <div className="rounded-lg border border-violet-100 bg-violet-50/50 px-3 py-2 text-sm">
-              <div className="text-[10px] font-bold uppercase text-slate-500">Domyślny profil segmentu</div>
-              <div className="mt-1 font-mono tabular-nums text-slate-800">
-                {rackDefaults.length_mm ?? "—"} × {rackDefaults.width_mm ?? "—"} × {rackDefaults.height_mm ?? "—"} mm
-              </div>
-              <div className="mt-1 text-xs text-slate-500">
-                Nadpisanych segmentów: {overriddenSegmentIds.size}
-              </div>
-            </div>
-          </div>
+          <ConsolidationRackStructureEditor
+            draft={draft}
+            onChange={() => {}}
+            warehouseLabel={warehouseLabel}
+            warehouses={warehouses}
+            showWarehouseSelect={false}
+            structureLocked
+            readOnly
+            expandedLevels={expandedLevels}
+            onToggleLevel={toggleLevel}
+          />
         }
         preview={
-          <ConsolidationRackGrid
-            rackName={rack.name}
-            levels={rack.levels ?? []}
-            overriddenSegmentIds={overriddenSegmentIds}
-            onSegmentClick={(cell) => {
-              if (cell.segmentId == null) return;
-              const hit = findSegmentInRack(rack, cell.segmentId);
-              setModal(
-                segmentToModal(
-                  rack.name,
-                  {
-                    ...cell,
-                    isOverridden: hit ? segmentIsOverridden(hit.seg, rackDefaults) : false,
-                  },
-                  hit?.seg,
-                  true,
-                ),
-              );
-            }}
+          <ConsolidationRackStructurePreview
+            draft={draft}
+            showOccupancy
+            occupancyBySegmentId={occupancyBySegmentId}
           />
         }
       />
-
-      <ConsolidationRackSegmentModal segment={modal} rackDefaults={rackDefaults} onClose={() => setModal(null)} />
     </div>
   );
 }

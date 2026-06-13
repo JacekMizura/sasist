@@ -2,6 +2,16 @@
  * Mapowanie UX siatki (kolumny × rzędy) na model backendu ConsolidationRackLevel + RackSegment.
  */
 
+export const MAX_RACK_DIM = 10_000;
+
+export function parseOptionalDim(raw: string): number | null {
+  const t = raw.trim();
+  if (!t) return null;
+  const n = Number(t);
+  if (!Number.isFinite(n) || n <= 0 || n > MAX_RACK_DIM) return null;
+  return n;
+}
+
 export type RackLevelPayload = {
   level_index: number;
   name: string;

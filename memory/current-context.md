@@ -1,5 +1,15 @@
 # Current context
 
+## P5.12 — Przebudowa konfiguratora regałów kompletacyjnych (poziomy × segmenty) (2026-06-08)
+- **Frontend-only UX** — bez zmian `ConsolidationRack` / `ConsolidationRackLevel` / `RackSegment`, API, P5.7–P5.9
+- Zastąpiono model „liczba rzędów × kolumn” → **poziomy z własną wysokością + segmenty o zmiennej szerokości**
+- Lewa kolumna: dane regału, parametry globalne (szer./głęb. mm), lista poziomów z inline edycją segmentów
+- Prawa kolumna: `ConsolidationRackStructurePreview` (SVG, proporcjonalne wys./szer.) — nie uniform 4×4
+- **Tworzenie**: `POST /racks/` z `draftToApiPayload()`; dodawanie/usuwanie poziomów i segmentów
+- **Edycja**: ten sam ekran, bez modala i klikalnej siatki; struktura zablokowana; `PUT` nazwa + `PATCH` segmentów
+- Pliki: `rackStructureModel.ts`, `ConsolidationRackStructureEditor.tsx`, `ConsolidationRackStructurePreview.tsx`; refactor `ConsolidationRackEditorPage`, `ConsolidationRackPreviewPage`
+- WMS `ConsolidationRackGrid` bez zmian (operacyjny podgląd)
+
 ## P5.11 — Refaktor UX ekranów operacyjnych konsolidacji WMS (2026-06-08)
 - **Frontend-only** — bez zmian backend / API / workflow
 - Kolejka `/wms/consolidations` = ekran **Do zrobienia** (3 sekcje priorytetów z tower queues + supply plans)
