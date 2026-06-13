@@ -328,6 +328,7 @@ from .api.workforce_api import router as workforce_router
 from .api.company_profile import router as company_profile_router
 from .api.fulfillment_configuration import router as fulfillment_configuration_router
 from .api.order_consolidation import consolidation_plans_router, router as order_consolidation_router
+from .api.wms_consolidation import router as wms_consolidation_router
 from .api.admin_users import router as admin_users_router
 from .api.uploads import router as uploads_router
 from .api.bdo_packaging import router as bdo_packaging_router
@@ -1708,6 +1709,7 @@ _API_ROUTERS = (
     fulfillment_configuration_router,
     order_consolidation_router,
     consolidation_plans_router,
+    wms_consolidation_router,
     admin_users_router,
     uploads_router,
     tenant_router,

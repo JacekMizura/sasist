@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { fetchWmsActiveInventoryDocuments } from "@/api/inventoryCountApi";
+import { fetchWmsConsolidationSummary } from "@/api/wmsConsolidationApi";
 import { getWarehouseOperationsSnapshot } from "@/api/warehouseOperationsApi";
 import { listWmsOrderIssueTasks } from "@/api/wmsOrderIssueTasksApi";
 import { DAMAGE_TENANT_ID } from "@/pages/damage/damageShared";
@@ -32,10 +33,11 @@ export function useWmsLauncherBadges(warehouseId: number | null) {
     setLoading(true);
     try {
       const next: WmsLauncherMetricsMap = {};
-      const [issues, snapshot, inventoryDocs] = await Promise.all([
+      const [issues, snapshot, inventoryDocs, consolidationSummary] = await Promise.all([
         listWmsOrderIssueTasks(DAMAGE_TENANT_ID, warehouseId).catch(() => ({ tasks: [] as unknown[] })),
         getWarehouseOperationsSnapshot({ tenantId: DAMAGE_TENANT_ID, warehouseId }),
         fetchWmsActiveInventoryDocuments(DAMAGE_TENANT_ID, warehouseId).catch(() => []),
+        fetchWmsConsolidationSummary(DAMAGE_TENANT_ID, warehouseId).catch(() => null),
       ]);
 
       const issueCount = issues.tasks?.length ?? 0;
@@ -78,6 +80,20 @@ export function useWmsLauncherBadges(warehouseId: number | null) {
         invStats.push(stat(`${invCount} aktywnych`, "info"));
       }
       setMetrics(next, "inventory_count", invStats);
+
+      if (consolidationSummary) {
+        const consStats: WmsModuleStatChip[] = [];
+        if (consolidationSummary.pending_count > 0) {
+          consStats.push(stat(`${consolidationSummary.pending_count} oczekujących`, "warning"));
+        }
+        if (consolidationSummary.in_progress_count > 0) {
+          consStats.push(stat(`${consolidationSummary.in_progress_count} w toku`, "info"));
+        }
+        if (consolidationSummary.completed_count > 0) {
+          consStats.push(stat(`${consolidationSummary.completed_count} gotowych`, "neutral"));
+        }
+        setMetrics(next, "consolidations", consStats);
+      }
 
       setMetricsState(next);
     } finally {

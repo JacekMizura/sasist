@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from ...models.order import Order
 from ...models.order_consolidation_plan import OrderConsolidationPlan, OrderConsolidationPlanItem
+from ...models.product import Product
 from ...models.stock_document import StockDocument, StockDocumentItem
 from ...models.tenant_warehouse import TenantWarehouse
 from ...models.warehouse import Warehouse
@@ -27,6 +28,7 @@ from ..relocation_document_series_service import assert_relocation_document_seri
 from ..wms_mm_internal_placeholder import get_or_create_mm_placeholder_fks
 from .constants import (
     ITEM_STATUS_CANCELLED,
+    ITEM_STATUS_IN_TRANSIT,
     ITEM_STATUS_MM_CREATED,
     ITEM_STATUS_RECEIVED,
     ITEM_STATUS_WAITING,
@@ -39,6 +41,7 @@ from .constants import (
     RESULT_MANUAL_REVIEW_REQUIRED,
     RESULT_PLAN_CREATED,
 )
+from .progress_helpers import progress_fields_for_items
 from .feasibility_service import (
     OrderLineDemand,
     _avail_at,
@@ -371,6 +374,15 @@ def refresh_consolidation_plan_progress(db: Session, plan_id: int) -> bool:
                 it.status = ITEM_STATUS_RECEIVED
                 changed = True
                 db.add(it)
+        elif recv in ("NEW", "IN_PROGRESS") and it.status in (
+            ITEM_STATUS_MM_CREATED,
+            ITEM_STATUS_WAITING,
+            ITEM_STATUS_IN_TRANSIT,
+        ):
+            if it.status != ITEM_STATUS_IN_TRANSIT:
+                it.status = ITEM_STATUS_IN_TRANSIT
+                changed = True
+                db.add(it)
 
     active_items = [it for it in items if it.status != ITEM_STATUS_CANCELLED]
     if active_items and all(it.status == ITEM_STATUS_RECEIVED for it in active_items):
@@ -383,6 +395,11 @@ def refresh_consolidation_plan_progress(db: Session, plan_id: int) -> bool:
                 order.fulfillment_assignment_phase = PHASE_FULFILLMENT_ASSIGNED
                 order.warehouse_id = int(plan.target_warehouse_id)
                 db.add(order)
+    elif any(it.status in (ITEM_STATUS_MM_CREATED, ITEM_STATUS_IN_TRANSIT) for it in active_items):
+        if plan.status not in (PLAN_STATUS_IN_PROGRESS, PLAN_STATUS_COMPLETED):
+            plan.status = PLAN_STATUS_IN_PROGRESS
+            changed = True
+            db.add(plan)
     elif plan.status == PLAN_STATUS_DRAFT and any(
         it.status in (ITEM_STATUS_MM_CREATED, ITEM_STATUS_RECEIVED) for it in items
     ):
@@ -393,6 +410,61 @@ def refresh_consolidation_plan_progress(db: Session, plan_id: int) -> bool:
     if changed:
         db.flush()
     return changed
+
+
+def _product_name_map(db: Session, product_ids: Sequence[int]) -> Dict[int, str]:
+    if not product_ids:
+        return {}
+    rows = db.query(Product).filter(Product.id.in_(tuple(int(x) for x in product_ids))).all()
+    return {int(p.id): str(p.name or p.sku or f"#{p.id}") for p in rows}
+
+
+def _build_plan_payload(
+    db: Session,
+    plan: OrderConsolidationPlan,
+    *,
+    order_number: str | None = None,
+) -> dict:
+    items = (
+        db.query(OrderConsolidationPlanItem)
+        .filter(OrderConsolidationPlanItem.plan_id == int(plan.id))
+        .order_by(OrderConsolidationPlanItem.id)
+        .all()
+    )
+    wh_ids = {int(plan.target_warehouse_id)}
+    product_ids: set[int] = set()
+    for it in items:
+        wh_ids.add(int(it.source_warehouse_id))
+        wh_ids.add(int(it.target_warehouse_id))
+        product_ids.add(int(it.product_id))
+    names = _warehouse_name_map(db, list(wh_ids))
+    product_names = _product_name_map(db, list(product_ids))
+    progress = progress_fields_for_items(items, names)
+    return {
+        "id": int(plan.id),
+        "order_id": int(plan.order_id),
+        "order_number": order_number,
+        "target_warehouse_id": int(plan.target_warehouse_id),
+        "target_warehouse_name": names.get(int(plan.target_warehouse_id)),
+        "status": str(plan.status),
+        "created_at": plan.created_at.isoformat() if plan.created_at else None,
+        **progress,
+        "items": [
+            {
+                "id": int(it.id),
+                "product_id": int(it.product_id),
+                "product_name": product_names.get(int(it.product_id)),
+                "quantity": float(it.quantity),
+                "source_warehouse_id": int(it.source_warehouse_id),
+                "source_warehouse_name": names.get(int(it.source_warehouse_id)),
+                "target_warehouse_id": int(it.target_warehouse_id),
+                "target_warehouse_name": names.get(int(it.target_warehouse_id)),
+                "status": str(it.status),
+                "stock_document_id": int(it.stock_document_id) if it.stock_document_id else None,
+            }
+            for it in items
+        ],
+    }
 
 
 def get_order_consolidation_plan_read(db: Session, order_id: int) -> dict | None:
@@ -413,41 +485,9 @@ def get_order_consolidation_plan_read(db: Session, order_id: int) -> dict | None
 
     refresh_consolidation_plan_progress(db, int(plan.id))
     db.refresh(plan)
-
-    items = (
-        db.query(OrderConsolidationPlanItem)
-        .filter(OrderConsolidationPlanItem.plan_id == int(plan.id))
-        .order_by(OrderConsolidationPlanItem.id)
-        .all()
-    )
-    wh_ids = {int(plan.target_warehouse_id)}
-    for it in items:
-        wh_ids.add(int(it.source_warehouse_id))
-        wh_ids.add(int(it.target_warehouse_id))
-    names = _warehouse_name_map(db, list(wh_ids))
-
-    return {
-        "id": int(plan.id),
-        "order_id": int(plan.order_id),
-        "target_warehouse_id": int(plan.target_warehouse_id),
-        "target_warehouse_name": names.get(int(plan.target_warehouse_id)),
-        "status": str(plan.status),
-        "created_at": plan.created_at.isoformat() if plan.created_at else None,
-        "items": [
-            {
-                "id": int(it.id),
-                "product_id": int(it.product_id),
-                "quantity": float(it.quantity),
-                "source_warehouse_id": int(it.source_warehouse_id),
-                "source_warehouse_name": names.get(int(it.source_warehouse_id)),
-                "target_warehouse_id": int(it.target_warehouse_id),
-                "target_warehouse_name": names.get(int(it.target_warehouse_id)),
-                "status": str(it.status),
-                "stock_document_id": int(it.stock_document_id) if it.stock_document_id else None,
-            }
-            for it in items
-        ],
-    }
+    order = db.query(Order).filter(Order.id == int(plan.order_id)).first()
+    order_number = str(order.number) if order and order.number else None
+    return _build_plan_payload(db, plan, order_number=order_number)
 
 
 def assert_order_eligible_for_wave(order: Order) -> None:

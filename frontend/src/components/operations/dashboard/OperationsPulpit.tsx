@@ -9,6 +9,7 @@ import { WMS_ROUTES } from "../../../pages/wms/wmsRoutes";
 import { OperationalTimeline } from "../OperationalTimeline";
 import { ActionFeedPanel } from "./ActionFeedPanel";
 import { OperationsKpiStrip } from "./OperationsKpiStrip";
+import { WmsConsolidationDashboardLink } from "./WmsConsolidationDashboardLink";
 import { ZoneStatusPanel } from "./ZoneStatusPanel";
 
 type Props = {
@@ -72,6 +73,7 @@ export function OperationsPulpit({
         </p>
       ) : null}
       <OperationsKpiStrip kpis={kpis} />
+      <WmsConsolidationDashboardLink />
       <div className="flex min-h-0 flex-1 flex-col gap-3 lg:flex-row">
         <ActionFeedPanel items={actionFeed} onAckAlert={onAckAlert} />
         <aside className="w-full shrink-0 lg:w-56">

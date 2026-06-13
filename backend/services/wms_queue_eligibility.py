@@ -18,6 +18,26 @@ from .operational_features_context import (
 )
 from .operational_observability import log_wms_eligibility
 from .order_operational_mode import resolve_order_operational_mode
+from .fulfillment_assignment.phase_constants import (
+    CONSOLIDATION_WAVE_BLOCKED_PHASES,
+    is_consolidation_wave_blocked,
+)
+
+
+class WmsConsolidationBlockedError(ValueError):
+    """Order is in consolidation — WMS pick/pack/wave not allowed yet."""
+
+
+def wms_queue_consolidation_phase_clauses():
+    """Exclude orders awaiting inter-warehouse consolidation."""
+    return (Order.fulfillment_assignment_phase.notin_(tuple(CONSOLIDATION_WAVE_BLOCKED_PHASES)),)
+
+
+def assert_order_wms_fulfillment_not_blocked(order: Order) -> None:
+    if is_consolidation_wave_blocked(getattr(order, "fulfillment_assignment_phase", None)):
+        raise WmsConsolidationBlockedError(
+            "Zamówienie oczekuje na konsolidację magazynową — kompletacja i pakowanie niedostępne."
+        )
 
 
 def order_eligible_for_wms_queues(

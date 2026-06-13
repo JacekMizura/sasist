@@ -10,6 +10,9 @@ import {
   generateOrderConsolidationPlan,
   type ConsolidationPlanDto,
 } from "../../api/orderConsolidationApi";
+import {
+  consolidationPlanStatusClass,
+} from "../../pages/wms/consolidation/consolidationStatusUi";
 
 type Props = {
   orderId: number;
@@ -87,6 +90,9 @@ export default function OrderConsolidationPanel({ orderId, onChanged }: Props) {
   const transferItems = (plan?.items ?? []).filter(
     (it) => it.source_warehouse_id !== it.target_warehouse_id,
   );
+  const transfersReceived = plan?.transfers_received ?? transferItems.filter((it) => it.status === "RECEIVED").length;
+  const transfersTotal = plan?.transfers_total ?? transferItems.length;
+  const pendingWarehouses = plan?.pending_source_warehouses ?? [];
   const showMmButton =
     plan != null &&
     plan.status !== "COMPLETED" &&
@@ -141,12 +147,29 @@ export default function OrderConsolidationPanel({ orderId, onChanged }: Props) {
             <div>
               <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Status</dt>
               <dd className="mt-0.5">
-                <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-xs font-semibold text-slate-800">
+                <span
+                  className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-semibold ${wmsPlanStatusClass(plan.status)}`}
+                >
                   {consolidationPlanStatusLabel(plan.status)}
                 </span>
               </dd>
             </div>
+            {transfersTotal > 0 ? (
+              <div className="sm:col-span-2">
+                <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Postęp</dt>
+                <dd className="mt-0.5 text-sm font-semibold tabular-nums text-slate-900">
+                  {transfersReceived}/{transfersTotal}
+                </dd>
+              </div>
+            ) : null}
           </dl>
+
+          {pendingWarehouses.length > 0 ? (
+            <p className="text-sm text-amber-900">
+              Oczekujemy na:{" "}
+              <span className="font-semibold">{pendingWarehouses.join(", ")}</span>
+            </p>
+          ) : null}
 
           {transferItems.length > 0 ? (
             <div>
@@ -156,6 +179,10 @@ export default function OrderConsolidationPanel({ orderId, onChanged }: Props) {
               <ul className="divide-y divide-slate-100 rounded-lg border border-slate-100">
                 {transferItems.map((it) => (
                   <li key={it.id} className="flex flex-wrap items-center gap-2 px-3 py-2.5 text-sm">
+                    <span className="font-medium text-slate-800">
+                      {it.product_name ?? `Produkt #${it.product_id}`}
+                    </span>
+                    <span className="text-slate-400">·</span>
                     <span className="font-medium text-slate-800">
                       {it.source_warehouse_name ?? `#${it.source_warehouse_id}`}
                     </span>

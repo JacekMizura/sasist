@@ -13,6 +13,7 @@ import {
   Inbox,
   ListChecks,
   Package,
+  PackageCheck,
   ScanSearch,
   ShoppingCart,
   Undo2,
@@ -24,6 +25,7 @@ export type WmsTabId =
   | "receiving"
   | "putaway"
   | "mm"
+  | "consolidations"
   | "picking"
   | "product_preview"
   | "packing"
@@ -91,6 +93,15 @@ export const WMS_MODULES: WmsModuleDefinition[] = [
     sortOrder: 40,
     dashboard: true,
     shortDescription: "Przesunięcia między lokalizacjami i strefami magazynu",
+  },
+  {
+    id: "consolidations",
+    path: "/wms/consolidations",
+    label: "Konsolidacje",
+    icon: PackageCheck,
+    sortOrder: 45,
+    dashboard: true,
+    shortDescription: "Ściąganie towaru z innych magazynów przed kompletacją",
   },
   {
     id: "picking",
@@ -191,6 +202,9 @@ export function isWmsTabPathActive(pathname: string, tab: WmsTabConfigItem): boo
   }
   if (tab.id === "inventory_count") {
     return p.startsWith("/wms/inventory-count");
+  }
+  if (tab.id === "consolidations") {
+    return p.startsWith("/wms/consolidations");
   }
   return p === tab.path || p.startsWith(`${tab.path}/`);
 }

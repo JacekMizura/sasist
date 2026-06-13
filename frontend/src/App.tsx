@@ -164,6 +164,8 @@ import WmsPutawayItemDetailPage from "./pages/wms/WmsPutawayItemDetailPage"
 import WmsPutawayExecutePage from "./pages/wms/WmsPutawayExecutePage"
 import WmsMenuPage from "./pages/wms/WmsMenuPage"
 import WmsMmTransferPage from "./pages/wms/WmsMmTransferPage"
+import ConsolidationQueuePage from "./pages/wms/consolidation/ConsolidationQueuePage"
+import ConsolidationDetailPage from "./pages/wms/consolidation/ConsolidationDetailPage"
 import { WMS_ROUTES } from "./pages/wms/wmsRoutes"
 import WarehouseCarriersPage from "./pages/warehouse/WarehouseCarriersPage"
 import WarehouseCarrierDetailPage from "./pages/warehouse/WarehouseCarrierDetailPage"
@@ -383,6 +385,8 @@ export const router = createBrowserRouter(
         <Route path="mm/relocation/:pzId/item/:itemId" element={<WmsPutawayItemDetailPage />} />
         <Route path="mm/relocation/:pzId" element={<WmsPutawayPzPage />} />
         <Route path="mm" element={<WmsMmTransferPage />} />
+        <Route path="consolidations" element={<ConsolidationQueuePage />} />
+        <Route path="consolidations/:planId" element={<ConsolidationDetailPage />} />
         <Route path="replenishment/*" element={<Navigate to="/wms/mm" replace />} />
         {/* Nośniki nie są modułem WMS — legacy URL → przyjęcia (tworzenie / przypisanie tylko z PZ). */}
         <Route path="carriers/*" element={<Navigate to={WMS_ROUTES.receiving} replace />} />

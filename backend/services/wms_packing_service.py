@@ -326,7 +326,7 @@ def _packing_orders_base_query(
     )
     # cart_id ignorowany — ten sam zestaw zamówień we wszystkich trybach (etykieta trybu tylko w UI).
     _ = cart_id
-    from .wms_queue_eligibility import wms_queue_fulfillment_mode_clauses
+    from .wms_queue_eligibility import wms_queue_fulfillment_mode_clauses, wms_queue_consolidation_phase_clauses
 
     q = db.query(Order).filter(
         Order.tenant_id == int(tenant_id),
@@ -341,6 +341,7 @@ def _packing_orders_base_query(
             warehouse_id=int(warehouse_id),
             queue_name="packing",
         ),
+        *wms_queue_consolidation_phase_clauses(),
     )
     return q
 

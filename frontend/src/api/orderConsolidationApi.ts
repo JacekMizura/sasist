@@ -3,6 +3,7 @@ import api from "./axios";
 export type ConsolidationPlanItemDto = {
   id: number;
   product_id: number;
+  product_name?: string | null;
   quantity: number;
   source_warehouse_id: number;
   source_warehouse_name: string | null;
@@ -15,10 +16,15 @@ export type ConsolidationPlanItemDto = {
 export type ConsolidationPlanDto = {
   id: number;
   order_id: number;
+  order_number?: string | null;
   target_warehouse_id: number;
   target_warehouse_name: string | null;
   status: string;
   created_at: string | null;
+  transfers_received?: number;
+  transfers_total?: number;
+  progress_label?: string;
+  pending_source_warehouses?: string[];
   items: ConsolidationPlanItemDto[];
 };
 

@@ -1,5 +1,13 @@
 # Current context
 
+## P5.1 — WMS consolidation operations (2026-06-08)
+- WMS moduł **Konsolidacje** (`/wms/consolidations`) — lista + szczegół planu (magazyn docelowy)
+- API: `GET /wms/consolidation-plans`, `GET /wms/consolidation-plans/{id}`, `GET /wms/consolidation-plans/summary`
+- Auto-sync MM → `IN_TRANSIT` / `RECEIVED` → plan `COMPLETED` → `order.phase = FULFILLMENT_ASSIGNED`
+- Blokada pick/pack/wave: `wms_queue_consolidation_phase_clauses()` w kolejkach WMS
+- UI: kafel WMS menu (liczniki), widget na pulpicie Operacje, OMS panel postęp + „Oczekujemy na”
+- Tests: `test_wms_consolidation_operations.py` (5) + P5 foundation (7) = 12/12
+
 ## P5 — Consolidation fulfillment foundation (2026-06-08)
 - **`tenant_fulfillment_configurations.consolidation_warehouse_id`** (nullable) — preferowany magazyn konsolidacyjny
 - Tabele: **`order_consolidation_plans`**, **`order_consolidation_plan_items`**

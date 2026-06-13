@@ -40,6 +40,7 @@ class GenerateConsolidationPlanResponse(BaseModel):
 class ConsolidationPlanItemRead(BaseModel):
     id: int
     product_id: int
+    product_name: Optional[str] = None
     quantity: float
     source_warehouse_id: int
     source_warehouse_name: Optional[str] = None
@@ -52,11 +53,41 @@ class ConsolidationPlanItemRead(BaseModel):
 class ConsolidationPlanRead(BaseModel):
     id: int
     order_id: int
+    order_number: Optional[str] = None
     target_warehouse_id: int
     target_warehouse_name: Optional[str] = None
     status: str
     created_at: Optional[str] = None
+    transfers_received: int = 0
+    transfers_total: int = 0
+    progress_label: str = "—"
+    pending_source_warehouses: List[str] = Field(default_factory=list)
     items: List[ConsolidationPlanItemRead] = Field(default_factory=list)
+
+
+class ConsolidationPlanListRow(BaseModel):
+    id: int
+    order_id: int
+    order_number: str
+    target_warehouse_id: int
+    target_warehouse_name: Optional[str] = None
+    status: str
+    created_at: Optional[str] = None
+    transfers_received: int = 0
+    transfers_total: int = 0
+    progress_label: str = "—"
+    pending_source_warehouses: List[str] = Field(default_factory=list)
+
+
+class ConsolidationPlanListOut(BaseModel):
+    plans: List[ConsolidationPlanListRow] = Field(default_factory=list)
+
+
+class ConsolidationSummaryOut(BaseModel):
+    pending_count: int = 0
+    in_progress_count: int = 0
+    completed_count: int = 0
+    active_count: int = 0
 
 
 class GenerateMmDraftsResponse(BaseModel):

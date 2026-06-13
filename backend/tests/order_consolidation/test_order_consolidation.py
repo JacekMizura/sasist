@@ -25,6 +25,7 @@ from backend.services.fulfillment_assignment.phase_constants import (
     is_consolidation_wave_blocked,
 )
 from backend.services.order_consolidation.constants import (
+    ITEM_STATUS_IN_TRANSIT,
     ITEM_STATUS_MM_CREATED,
     ITEM_STATUS_RECEIVED,
     ITEM_STATUS_WAITING,
@@ -244,7 +245,7 @@ def test_generate_mm_drafts(
         db.query(OrderConsolidationPlanItem)
         .filter(
             OrderConsolidationPlanItem.plan_id == int(plan.id),
-            OrderConsolidationPlanItem.status == ITEM_STATUS_MM_CREATED,
+            OrderConsolidationPlanItem.status.in_((ITEM_STATUS_MM_CREATED, ITEM_STATUS_IN_TRANSIT)),
         )
         .all()
     )

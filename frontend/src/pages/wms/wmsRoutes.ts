@@ -83,6 +83,9 @@ export const WMS_ROUTES = {
     `/wms/mm/relocation/${docId}/item/${itemId}`,
   mmRelocationItemExecute: (docId: number | string, itemId: number | string) =>
     `/wms/mm/relocation/${docId}/item/${itemId}/execute`,
+  /** P5.1 — kolejka konsolidacji (magazyn docelowy). */
+  consolidations: "/wms/consolidations",
+  consolidationDetail: (planId: number | string) => `/wms/consolidations/${planId}`,
   putawayPz: (pzId: number | string) => `/wms/putaway/${pzId}`,
   /** Krok 2: produkt + sugerowane lokalizacje. */
   putawayItem: (pzId: number | string, itemId: number | string) => `/wms/putaway/${pzId}/item/${itemId}`,
