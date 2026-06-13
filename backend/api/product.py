@@ -1813,6 +1813,14 @@ def get_products(
         ge=1,
         description="When set, only products in this supplier's catalog (supplier_products or legacy default supplier). Response includes supplier_offer for PO pricing.",
     ),
+    include_network_stock: bool = Query(
+        False,
+        description="P4 — include network_commercially_sellable_qty per product (requires tenant_id).",
+    ),
+    include_warehouse_stocks: bool = Query(
+        False,
+        description="P4 — include warehouse_stocks map per tenant warehouse (requires tenant_id).",
+    ),
 ):
     """
     Lista produktów z filtrowaniem, sortowaniem (sort_by, sort_dir: asc|desc) i paginacją.
@@ -1967,12 +1975,110 @@ def get_products(
             product_dicts=items,
         )
 
+    if items and tenant_id is not None and (include_network_stock or include_warehouse_stocks):
+        from ..services.product_warehouse_stock_breakdown_service import (
+            attach_multi_warehouse_stock_to_product_dicts,
+        )
+
+        attach_multi_warehouse_stock_to_product_dicts(
+            db,
+            tenant_id=int(tenant_id),
+            products=list(rows),
+            product_dicts=items,
+            include_network_stock=bool(include_network_stock),
+            include_warehouse_stocks=bool(include_warehouse_stocks),
+        )
+
     if default_supplier_id is not None and items:
         _attach_supplier_offers_to_product_dicts(db, items, rows, default_supplier_id)
 
     if use_pagination:
         return {"items": items, "total": total}
     return items
+
+
+@router.get("/{product_id}/warehouse-stock-breakdown")
+def get_product_warehouse_stock_breakdown(
+    product_id: int,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    from ..schemas.multi_warehouse_ui import ProductWarehouseStockBreakdownRead
+    from ..services.product_warehouse_stock_breakdown_service import build_product_warehouse_stock_breakdown
+
+    product = (
+        db.query(Product)
+        .filter(Product.id == int(product_id), Product.tenant_id == int(tenant_id), Product.deleted_at.is_(None))
+        .first()
+    )
+    if product is None:
+        raise HTTPException(status_code=404, detail="Product not found")
+    payload = build_product_warehouse_stock_breakdown(db, tenant_id=int(tenant_id), product_id=int(product_id))
+    return ProductWarehouseStockBreakdownRead(**payload)
+
+
+@router.get("/{product_id}/slotting-by-warehouse")
+def get_product_slotting_by_warehouse(
+    product_id: int,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    from ..models.location import Location
+    from ..models.tenant_warehouse import TenantWarehouse
+    from ..models.warehouse import Warehouse
+    from ..schemas.multi_warehouse_ui import ProductWarehouseSlottingAllRead, ProductWarehouseSlottingRowRead
+    from ..services.product_warehouse_slotting_service import get_product_slotting_entries
+
+    product = (
+        db.query(Product)
+        .filter(Product.id == int(product_id), Product.tenant_id == int(tenant_id), Product.deleted_at.is_(None))
+        .first()
+    )
+    if product is None:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    wh_rows = (
+        db.query(TenantWarehouse.warehouse_id, Warehouse.name)
+        .join(Warehouse, Warehouse.id == TenantWarehouse.warehouse_id)
+        .filter(TenantWarehouse.tenant_id == int(tenant_id))
+        .order_by(TenantWarehouse.fulfillment_priority.asc(), TenantWarehouse.warehouse_id.asc())
+        .all()
+    )
+    all_uuids: list[str] = []
+    per_wh: list[tuple[int, str, list[str]]] = []
+    for wh_id, wh_name in wh_rows:
+        entries = get_product_slotting_entries(
+            db, tenant_id=int(tenant_id), product_id=int(product_id), warehouse_id=int(wh_id)
+        )
+        uuids = [str(e.get("locationUUID") or "").strip() for e in entries if e.get("locationUUID")]
+        per_wh.append((int(wh_id), (wh_name or "").strip() or f"Magazyn #{wh_id}", uuids))
+        all_uuids.extend(u for u in uuids if u)
+
+    uuid_to_code: dict[str, str] = {}
+    if all_uuids:
+        unique = list(dict.fromkeys(all_uuids))
+        for loc_uuid, loc_name in (
+            db.query(Location.location_uuid, Location.name)
+            .filter(Location.location_uuid.in_(unique))
+            .all()
+        ):
+            u = str(loc_uuid or "").strip()
+            if u:
+                uuid_to_code[u] = (loc_name or "").strip() or u
+
+    warehouses = [
+        ProductWarehouseSlottingRowRead(
+            warehouse_id=wid,
+            warehouse_name=wname,
+            location_codes=[uuid_to_code.get(u, u) for u in uuids],
+        )
+        for wid, wname, uuids in per_wh
+    ]
+    return ProductWarehouseSlottingAllRead(
+        product_id=int(product_id),
+        tenant_id=int(tenant_id),
+        warehouses=warehouses,
+    )
 
 
 @router.get("/{product_id}/replacement-suggestions", response_model=ReplacementSuggestionsResponse)

@@ -39,6 +39,8 @@ import { ProductLogisticsPackagingMatchingSection } from "../../components/produ
 import { RetailLabel } from "../../components/products/RetailLabel";
 import { WarehouseFormCard as Card } from "../../components/products/WarehouseFormCard";
 import { ProductWarehouseStockPanel } from "../../components/products/ProductWarehouseStockPanel";
+import ProductMultiWarehouseStockSection from "../../components/products/ProductMultiWarehouseStockSection";
+import ProductMultiWarehouseSlottingSection from "../../components/products/ProductMultiWarehouseSlottingSection";
 import { ProductStockCorrectionModal } from "../../components/products/ProductStockCorrectionModal";
 import { getInventoryManagementSettings } from "../../api/inventoryManagementPolicyApi";
 import { ProductManufacturingPanel } from "../Production/ProductManufacturingPanel";
@@ -2272,6 +2274,7 @@ export function ProductEditModal({
                 )}
 
                 {activeTab === "warehouse" && (
+                  <>
                   <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-3 lg:gap-8">
                     <div className="space-y-6">
                       <ProductWarehouseStockPanel
@@ -2586,6 +2589,14 @@ export function ProductEditModal({
                       </section>
                     </div>
                   </div>
+
+                  {!isNew && product?.id && tenantId != null ? (
+                    <div className="mt-8 w-full max-w-7xl space-y-8">
+                      <ProductMultiWarehouseStockSection productId={product.id} tenantId={tenantId} />
+                      <ProductMultiWarehouseSlottingSection productId={product.id} tenantId={tenantId} />
+                    </div>
+                  ) : null}
+                  </>
                 )}
 
                 {activeTab === "images" && (

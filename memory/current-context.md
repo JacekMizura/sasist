@@ -1,5 +1,28 @@
 # Current context
 
+## P4 — Multi-warehouse UI (2026-06-08)
+- Karta produktu (Magazyn): sekcje Stany magazynowe + Plan rozmieszczenia (read-only)
+- Lista produktów: kolumna Stan sieciowy (domyślnie) + dynamiczne kolumny per magazyn (konfigurator)
+- Karta zamówienia: panel magazynu + meta audytu + tabela historii
+- Dashboard: sekcja Sieć magazynów
+- MM: Z magazynu / Do magazynu (source/destination_warehouse)
+- Nośniki: kolumna Magazyn + current_warehouse_name
+- API: GET product warehouse-stock-breakdown, slotting-by-warehouse; GET order fulfillment-assignment-audits; GET tenant warehouse-network-stock; list products include_network_stock / include_warehouse_stocks
+- **Bez zmian:** auto-sourcing, split fulfillment, ATP routing, network reservations
+
+## P3 — Fulfillment lifecycle (2026-06-08)
+- **`orders.fulfillment_assignment_phase`**: UNASSIGNED | FULFILLMENT_ASSIGNED | WAVE_CREATED | PICKING | PACKING | SHIPPED (default FULFILLMENT_ASSIGNED dla istniejących)
+- SSOT: `order_fulfillment_lifecycle_service.py` — initial assign, manual assign, phase advance, import lock
+- Audyt: `order_fulfillment_assignment_audits` (strategy, assigned_by_user_id, reason — bez JSON)
+- API: `POST /orders/{id}/assign-warehouse` (warehouse_id, reason)
+- Hooki: create/import → `apply_initial_fulfillment_assignment`; wave → WAVE_CREATED; pick/pack/ship → fazy
+- Import (P3.7): od FULFILLMENT_ASSIGNED nie nadpisuje warehouse_id / phase
+- UI: `OrderFulfillmentWarehousePanel` na karcie zamówienia (magazyn + badge fazy + „Przypisz magazyn” gdy UNASSIGNED)
+- Schema: `order_fulfillment_lifecycle_schema.ensure_order_fulfillment_lifecycle_schema`
+- Tests: `backend/tests/order_fulfillment/test_fulfillment_lifecycle.py` (9/9) + P2.5 (5/5)
+- **TODO:** superadmin force override endpoint
+- **Bez zmian:** split fulfillment, auto-sourcing ATP, multi-WH allocation, network reservations
+
 ## P2.5 — Fulfillment assignment configuration (2026-06-08)
 - Tabela **`tenant_fulfillment_configurations`**: `fulfillment_assignment_mode` (MANUAL | DEFAULT_WAREHOUSE | FULFILLMENT_PRIORITY | AUTO_ATP_FUTURE)
 - SSOT resolver: `fulfillment_assignment_resolver.resolve_initial_fulfillment_warehouse()` — bez ATP

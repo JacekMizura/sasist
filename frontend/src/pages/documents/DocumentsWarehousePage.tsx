@@ -31,6 +31,8 @@ import {
   documentSourceLabelDetail,
   listValueGross,
   listValueNet,
+  mmFromLabel,
+  mmToLabel,
   seriesCode,
   shouldShowCustomerCard,
   shouldShowDocumentSourceCard,
@@ -887,9 +889,11 @@ export default function DocumentsWarehousePage() {
                           </dd>
                         </div>
                         <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3">
-                          <dt className="text-slate-500">Magazyn</dt>
+                          <dt className="text-slate-500">{detailDocType === "MM" ? "Z magazynu" : "Magazyn"}</dt>
                           <dd className="text-right font-medium text-slate-900">
-                            {detail.warehouse_id == null ? (
+                            {detailDocType === "MM" ? (
+                              mmFromLabel(detail)
+                            ) : detail.warehouse_id == null ? (
                               <span className="text-amber-800">— (WMS → Przyjęcie)</span>
                             ) : (
                               (detail.warehouse_name || "").trim() || `#${detail.warehouse_id}`
@@ -897,9 +901,11 @@ export default function DocumentsWarehousePage() {
                           </dd>
                         </div>
                         <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3">
-                          <dt className="text-slate-500">Lokalizacja</dt>
+                          <dt className="text-slate-500">{detailDocType === "MM" ? "Do magazynu" : "Lokalizacja"}</dt>
                           <dd className="text-right font-medium text-slate-900">
-                            {detail.location_id == null ? (
+                            {detailDocType === "MM" ? (
+                              mmToLabel(detail)
+                            ) : detail.location_id == null ? (
                               <span className="text-amber-800">— (WMS → Przyjęcie)</span>
                             ) : (
                               (detail.location_name || "").trim() || `#${detail.location_id}`

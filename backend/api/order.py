@@ -53,6 +53,7 @@ from ..schemas.order import (
     PanelFulfillmentHistoryEntry,
     ProductInOrder,
     OrderAddLineBody,
+    OrderAssignWarehouseBody,
     OrderItemPanelPatchBody,
     OrderCreateBody,
     OrderCreateResponse,
@@ -1413,6 +1414,9 @@ def create_order(body: OrderCreateBody, db: Session = Depends(get_db)):
     db.add(order)
     db.flush()
     assign_order_scan_code(order)
+    from ..services.order_fulfillment_lifecycle_service import apply_initial_fulfillment_assignment
+
+    apply_initial_fulfillment_assignment(db, order)
     assign_default_new_panel_status_to_order(db, order)
 
     inst_to_parent_item_id: dict[str, int] = {}
@@ -1984,6 +1988,31 @@ def build_order_read(db: Session, order: Order) -> OrderRead:
         for row in linked_documents_for_order(db, order)
     ]
 
+    from ..services.fulfillment_assignment.phase_constants import is_warehouse_change_locked
+    from ..services.order_fulfillment_lifecycle_service import warehouse_display_name
+
+    f_phase = str(getattr(order, "fulfillment_assignment_phase", None) or "FULFILLMENT_ASSIGNED")
+    f_wh_name = warehouse_display_name(db, int(order.warehouse_id))
+    from ..services.order_fulfillment_lifecycle_service import latest_fulfillment_assignment_audit
+
+    latest_audit = latest_fulfillment_assignment_audit(db, int(order.id))
+    f_strategy = None
+    f_assigned_at = None
+    f_assigned_by = None
+    f_reason = None
+    if latest_audit is not None:
+        f_strategy = str(latest_audit.strategy or "").strip().upper() or None
+        f_assigned_at = latest_audit.created_at
+        f_reason = (latest_audit.reason or "").strip() or None
+        if latest_audit.assigned_by_user_id:
+            from ..models.app_user import AppUser
+            from ..services.document_creator_service import app_user_full_name
+
+            u = db.query(AppUser).filter(AppUser.id == int(latest_audit.assigned_by_user_id)).first()
+            f_assigned_by = app_user_full_name(u) or f"Użytkownik #{latest_audit.assigned_by_user_id}"
+        else:
+            f_assigned_by = "AUTO"
+
     return OrderRead(
         id=order.id,
         tenant_id=int(order.tenant_id),
@@ -2046,6 +2075,13 @@ def build_order_read(db: Session, order: Order) -> OrderRead:
         order_channel=str(getattr(order, "order_channel", None) or "").strip() or None,
         fulfillment_mode=str(getattr(order, "fulfillment_mode", None) or "").strip() or None,
         linked_documents=linked_docs_out,
+        fulfillment_assignment_phase=f_phase,
+        fulfillment_warehouse_name=f_wh_name,
+        fulfillment_warehouse_change_locked=is_warehouse_change_locked(f_phase),
+        fulfillment_assignment_strategy=f_strategy,
+        fulfillment_assigned_at=f_assigned_at,
+        fulfillment_assigned_by_label=f_assigned_by,
+        fulfillment_assignment_reason=f_reason,
     )
 
 
@@ -3319,6 +3355,53 @@ async def post_order_custom_field_file(
         out["order_document_id"] = int(doc_row.id)
     db.commit()
     return out
+
+
+@router.get("/{order_id}/fulfillment-assignment-audits")
+def list_order_fulfillment_assignment_audits(
+    order_id: int,
+    db: Session = Depends(get_db),
+):
+    from ..schemas.multi_warehouse_ui import OrderFulfillmentAssignmentAuditRead
+    from ..services.order_fulfillment_lifecycle_service import list_fulfillment_assignment_audits
+
+    order = db.query(Order).filter(Order.id == int(order_id)).first()
+    if order is None:
+        raise HTTPException(status_code=404, detail="Zamówienie nie istnieje.")
+    rows = list_fulfillment_assignment_audits(db, int(order_id))
+    return [OrderFulfillmentAssignmentAuditRead(**r) for r in rows]
+
+
+@router.post("/{order_id}/assign-warehouse", response_model=OrderRead)
+def assign_order_fulfillment_warehouse_endpoint(
+    order_id: int,
+    body: OrderAssignWarehouseBody,
+    db: Session = Depends(get_db),
+    current_user: AppUser = Depends(get_current_user),
+):
+    order = db.query(Order).filter(Order.id == int(order_id)).first()
+    if order is None:
+        raise HTTPException(status_code=404, detail="Zamówienie nie istnieje.")
+    from ..services.order_fulfillment_lifecycle_service import (
+        FulfillmentWarehouseAssignmentError,
+        assign_order_fulfillment_warehouse,
+    )
+
+    try:
+        assign_order_fulfillment_warehouse(
+            db,
+            order,
+            warehouse_id=int(body.warehouse_id),
+            reason=str(body.reason).strip(),
+            assigned_by_user_id=int(current_user.id) if current_user else None,
+            strategy="MANUAL",
+        )
+        db.commit()
+        db.refresh(order)
+    except FulfillmentWarehouseAssignmentError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return build_order_read(db, order)
 
 
 @router.get("/{order_id}/", response_model=OrderRead)

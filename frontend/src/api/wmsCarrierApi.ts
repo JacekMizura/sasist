@@ -25,6 +25,8 @@ export type WarehouseCarrierRead = {
   carrier_group_code?: string | null;
   current_location_id?: number | null;
   current_location_code?: string | null;
+  current_warehouse_id?: number | null;
+  current_warehouse_name?: string | null;
   status: string;
   notes?: string | null;
   is_mixed: boolean;

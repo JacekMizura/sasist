@@ -62,6 +62,8 @@ class Order(Base):
 
     #: WMS: jednolity stan realizacji (zbieranie / braki / pakowanie) — patrz ``order_fulfillment_state``.
     fulfillment_state = Column(String(32), nullable=True, index=True)
+    #: P3 — faza przypisania magazynu realizacji (lifecycle OMS → WMS).
+    fulfillment_assignment_phase = Column(String(32), nullable=False, default="FULFILLMENT_ASSIGNED", index=True)
     #: Opcjonalna sesja klienta zbierania (czyszczona przy zmianie statusu).
     picking_session_id = Column(Integer, nullable=True, index=True)
 

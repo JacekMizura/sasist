@@ -100,6 +100,17 @@ def list_stock_documents(
         if getattr(d, "document_series_id", None) is not None and str(d.document_series_id).strip()
     }
     wids = {d.warehouse_id for d in docs if d.warehouse_id is not None}
+    src_wids = {
+        int(d.source_warehouse_id)
+        for d in docs
+        if getattr(d, "source_warehouse_id", None) is not None
+    }
+    dst_wids = {
+        int(d.destination_warehouse_id)
+        for d in docs
+        if getattr(d, "destination_warehouse_id", None) is not None
+    }
+    all_wh_ids = wids | src_wids | dst_wids
     lids = {d.location_id for d in docs if d.location_id is not None}
     poids = {
         int(d.production_order_id)
@@ -142,7 +153,9 @@ def list_stock_documents(
         for loc in db.query(Location).filter(Location.id.in_(mm_loc_ids)).all():
             mm_loc_names[int(loc.id)] = (loc.name or "").strip()
     wh_names = (
-        {r.id: (r.name or "").strip() for r in db.query(Warehouse).filter(Warehouse.id.in_(wids)).all()} if wids else {}
+        {r.id: (r.name or "").strip() for r in db.query(Warehouse).filter(Warehouse.id.in_(all_wh_ids)).all()}
+        if all_wh_ids
+        else {}
     )
     loc_names = (
         {r.id: (r.name or "").strip() for r in db.query(Location).filter(Location.id.in_(lids)).all()} if lids else {}
@@ -286,6 +299,24 @@ def list_stock_documents(
                 mm_to_location_name=(
                     mm_loc_names.get(int(d.mm_to_location_id), "")
                     if getattr(d, "mm_to_location_id", None) is not None
+                    else ""
+                ),
+                source_warehouse_id=(
+                    int(d.source_warehouse_id) if getattr(d, "source_warehouse_id", None) is not None else None
+                ),
+                destination_warehouse_id=(
+                    int(d.destination_warehouse_id)
+                    if getattr(d, "destination_warehouse_id", None) is not None
+                    else None
+                ),
+                source_warehouse_name=(
+                    wh_names.get(int(d.source_warehouse_id), "")
+                    if getattr(d, "source_warehouse_id", None) is not None
+                    else ""
+                ),
+                destination_warehouse_name=(
+                    wh_names.get(int(d.destination_warehouse_id), "")
+                    if getattr(d, "destination_warehouse_id", None) is not None
                     else ""
                 ),
                 creation_source=str(getattr(d, "creation_source", None) or "PANEL").strip().upper() or "PANEL",

@@ -143,3 +143,16 @@ def get_tenant_inventory_value(
     if breakdown:
         payload["warehouses"] = warehouses
     return payload
+
+
+@router.get("/{tenant_id}/warehouse-network-stock")
+def get_tenant_warehouse_network_stock(tenant_id: int, db: Session = Depends(get_db)):
+    """P4 — aggregated stock metrics per warehouse for owner dashboard."""
+    from ..schemas.multi_warehouse_ui import TenantWarehouseNetworkSummaryRead
+    from ..services.tenant_warehouse_network_service import build_tenant_warehouse_network_summary
+
+    tenant = db.query(Tenant).filter(Tenant.id == int(tenant_id)).first()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    payload = build_tenant_warehouse_network_summary(db, tenant_id=int(tenant_id))
+    return TenantWarehouseNetworkSummaryRead(**payload)

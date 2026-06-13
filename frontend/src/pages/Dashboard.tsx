@@ -19,6 +19,7 @@ import { useWarehouse } from "../context/WarehouseContext";
 import { getBackendPublicOrigin } from "../config/apiBase";
 import { DAMAGE_TENANT_ID } from "./damage/damageShared";
 import { ORDERS_OPERATIONS_UPDATED_EVENT, WMS_ROUTES, WMS_SHORTAGES_UPDATED_EVENT } from "./wms/wmsRoutes";
+import DashboardWarehouseNetworkSection from "../components/dashboard/DashboardWarehouseNetworkSection";
 
 /** Polski plural: „1 zamówienie”, „2 zamówienia”, „5 zamówień”, „24 zamówienia”. */
 function ordersCountLabel(n: number): string {
@@ -232,6 +233,10 @@ export default function Dashboard() {
                   <p className="text-sm tabular-nums text-slate-700">{fmtMoney(profitYesterday)} marża</p>
                 </div>
               </div>
+            </section>
+
+            <section className="mb-8">
+              <DashboardWarehouseNetworkSection tenantId={DAMAGE_TENANT_ID} />
             </section>
           </>
         ) : null}

@@ -156,6 +156,7 @@ export function CarriersGroupTable({
             <tr>
               <th className={cartsTableHeadCellClass}>Nośnik</th>
               <th className={cartsTableHeadCellClass}>Status</th>
+              <th className={cartsTableHeadCellClass}>Magazyn</th>
               <th className={cartsTableHeadCellClass}>Lokalizacja</th>
               <th className={cartsTableHeadCellClass}>Zawartość</th>
               <th className={cartsTableHeadCellClass}>Ostatni ruch</th>
@@ -174,6 +175,12 @@ export function CarriersGroupTable({
                   </td>
                   <td className={cartsTableCellClass}>
                     <CarrierStatusBadge status={row.status} />
+                  </td>
+                  <td className={cartsTableCellClass}>
+                    <span className="text-sm text-slate-800">
+                      {(row.current_warehouse_name || "").trim() ||
+                        (row.current_warehouse_id != null ? `#${row.current_warehouse_id}` : "—")}
+                    </span>
                   </td>
                   <td className={cartsTableCellClass}>
                     <CarrierLocationLink

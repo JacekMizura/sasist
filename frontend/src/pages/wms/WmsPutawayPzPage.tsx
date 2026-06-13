@@ -3,7 +3,8 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, CheckCircle2, ScanBarcode, MoreVertical, Package, User } from "lucide-react";
 import axios from "axios";
 import { fetchUsers } from "../../api/authApi";
-import { type StockDocumentItemRead, type StockDocumentRead } from "../../api/stockDocumentsApi";
+import { type StockDocumentItemRead, type StockDocumentRead, type StockDocumentListRow } from "../../api/stockDocumentsApi";
+import { mmFromLabel, mmToLabel } from "../documents/warehouseDocumentHelpers";
 import { finalizeWmsRelocationPz } from "../../api/wmsPutawayApi";
 import { getWarehouseLocations, type WarehouseLocationItem } from "../../api/warehouseGraphApi";
 import { PutawayActiveCarrierBar } from "../../components/wms/putaway/PutawayActiveCarrierBar";
@@ -553,6 +554,16 @@ export default function WmsPutawayPzPage() {
             <div className="text-[11px] font-bold text-slate-500 mt-0.5">
               {isReturnReceiptDoc ? "Rozlokowanie Z-PZ (zwrot RMZ)" : ui.flowName}
             </div>
+            {isMmFlow && doc ? (
+              <div className="mt-1 flex flex-wrap gap-x-4 text-[11px] font-medium text-slate-600">
+                <span>
+                  <span className="text-slate-500">Z magazynu:</span> {mmFromLabel(doc as StockDocumentListRow)}
+                </span>
+                <span>
+                  <span className="text-slate-500">Do magazynu:</span> {mmToLabel(doc as StockDocumentListRow)}
+                </span>
+              </div>
+            ) : null}
           </div>
         </div>
 

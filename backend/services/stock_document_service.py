@@ -1463,6 +1463,11 @@ def build_stock_document_read(
     )
     mm_to_loc = db.query(Location).filter(Location.id == mm_to_id).first() if mm_to_id is not None else None
 
+    src_wh_id = getattr(doc, "source_warehouse_id", None)
+    dst_wh_id = getattr(doc, "destination_warehouse_id", None)
+    src_wh = db.query(Warehouse).filter(Warehouse.id == int(src_wh_id)).first() if src_wh_id is not None else None
+    dst_wh = db.query(Warehouse).filter(Warehouse.id == int(dst_wh_id)).first() if dst_wh_id is not None else None
+
     rs = str(getattr(doc, "receiving_status", None) or "NEW").strip() or "NEW"
     ps = str(getattr(doc, "putaway_status", None) or "NOT_STARTED").strip() or "NOT_STARTED"
     rls = str(getattr(doc, "relocation_status", None) or "OPEN").strip() or "OPEN"
@@ -1596,6 +1601,10 @@ def build_stock_document_read(
         mm_to_location_id=int(mm_to_id) if mm_to_id is not None else None,
         mm_from_location_name=(mm_from_loc.name or "").strip() if mm_from_loc else "",
         mm_to_location_name=(mm_to_loc.name or "").strip() if mm_to_loc else "",
+        source_warehouse_id=int(src_wh_id) if src_wh_id is not None else None,
+        destination_warehouse_id=int(dst_wh_id) if dst_wh_id is not None else None,
+        source_warehouse_name=(src_wh.name or "").strip() if src_wh else "",
+        destination_warehouse_name=(dst_wh.name or "").strip() if dst_wh else "",
         status=doc.status,
         receiving_status=rs,
         putaway_status=ps,

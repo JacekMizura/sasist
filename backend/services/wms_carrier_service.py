@@ -15,6 +15,7 @@ from ..models.app_user import AppUser
 from ..models.inventory import Inventory
 from ..models.location import Location
 from ..models.product import Product
+from ..models.warehouse import Warehouse
 from ..models.inventory_serial import SERIAL_STATUS_ON_HAND, InventorySerial
 from ..models.warehouse_carrier import (
     WarehouseCarrier,
@@ -313,6 +314,10 @@ def carrier_to_read(db: Session, c: WarehouseCarrier) -> WarehouseCarrierRead:
     if c.carrier_group_id:
         g = db.query(WarehouseCarrierGroup).filter(WarehouseCarrierGroup.id == int(c.carrier_group_id)).first()
         gcode = (g.code or "").strip() if g else None
+    wh_name: str | None = None
+    if getattr(c, "current_warehouse_id", None):
+        wh_row = db.query(Warehouse).filter(Warehouse.id == int(c.current_warehouse_id)).first()
+        wh_name = (wh_row.name or "").strip() if wh_row else None
     return WarehouseCarrierRead(
         id=int(c.id),
         tenant_id=int(c.tenant_id),
@@ -324,6 +329,7 @@ def carrier_to_read(db: Session, c: WarehouseCarrier) -> WarehouseCarrierRead:
         current_location_id=int(c.current_location_id) if c.current_location_id else None,
         current_location_code=_loc_code(db, c.current_location_id),
         current_warehouse_id=int(c.current_warehouse_id) if getattr(c, "current_warehouse_id", None) else None,
+        current_warehouse_name=wh_name,
         status=str(c.status or "ACTIVE"),
         is_mixed=bool(getattr(c, "is_mixed", False)),
         weight=c.weight,

@@ -503,9 +503,42 @@ class OrderRead(BaseModel):
         default_factory=list,
         description="Powiązane dokumenty PA/FV i WZ.",
     )
+    fulfillment_assignment_phase: Optional[str] = Field(
+        None,
+        description="P3 — UNASSIGNED | FULFILLMENT_ASSIGNED | WAVE_CREATED | PICKING | PACKING | SHIPPED",
+    )
+    fulfillment_warehouse_name: Optional[str] = Field(
+        None,
+        description="Nazwa magazynu realizacji (orders.warehouse_id).",
+    )
+    fulfillment_warehouse_change_locked: bool = Field(
+        False,
+        description="True od WAVE_CREATED — brak zmiany magazynu przez operatora.",
+    )
+    fulfillment_assignment_strategy: Optional[str] = Field(
+        None,
+        description="Strategia z ostatniego audytu przypisania magazynu.",
+    )
+    fulfillment_assigned_at: Optional[datetime] = Field(
+        None,
+        description="Data ostatniego przypisania magazynu realizacji.",
+    )
+    fulfillment_assigned_by_label: Optional[str] = Field(
+        None,
+        description="AUTO lub nazwa użytkownika z audytu.",
+    )
+    fulfillment_assignment_reason: Optional[str] = Field(
+        None,
+        description="Powód z ostatniego audytu przypisania.",
+    )
 
     class Config:
         from_attributes = True
+
+
+class OrderAssignWarehouseBody(BaseModel):
+    warehouse_id: int = Field(..., ge=1)
+    reason: str = Field(..., min_length=1, max_length=2000)
 
 
 class OrderCreateLine(BaseModel):

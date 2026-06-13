@@ -279,6 +279,10 @@ def create_wave(
     for order in orders_ready:
         order.wave_id = wave.id
 
+    from .order_fulfillment_lifecycle_service import on_wave_created_for_orders
+
+    on_wave_created_for_orders(orders_ready)
+
     # Create stock reservations and pick tasks from order items (allocate from Inventory)
     order_ids = [o.id for o in orders_ready]
     order_items = (

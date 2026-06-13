@@ -63,6 +63,9 @@ import { formatApiError } from "../../utils/apiErrorMessage";
 import { saleDocumentPdfUrl, stockDocumentPdfUrl } from "../../api/saleDocumentsApi";
 import { isStationarySaleOrder, printButtonLabelPl } from "../../components/directSales/directSalesTerminology";
 import { OrderDirectSalesBadge } from "../../components/orders/orderList/OrderDirectSalesBadge";
+import OrderFulfillmentWarehousePanel from "../../components/orders/OrderFulfillmentWarehousePanel";
+import OrderFulfillmentAssignmentHistory from "../../components/orders/OrderFulfillmentAssignmentHistory";
+import type { FulfillmentAssignmentPhase } from "../../api/orderFulfillmentApi";
 import { formatMoney } from "../../utils/formatOrderMoney";
 import { openPdfUrlInPrintViewer } from "../../utils/openPdfForBrowserPrint";
 import OrderAdditionalFieldsSection from "../../components/orders/OrderAdditionalFieldsSection";
@@ -207,6 +210,13 @@ type OrderDetail = {
   wms_packed_at?: string | null;
   wms_packed_by_label?: string | null;
   wms_workflow_phase?: string | null;
+  fulfillment_assignment_phase?: FulfillmentAssignmentPhase | string | null;
+  fulfillment_warehouse_name?: string | null;
+  fulfillment_warehouse_change_locked?: boolean;
+  fulfillment_assignment_strategy?: string | null;
+  fulfillment_assigned_at?: string | null;
+  fulfillment_assigned_by_label?: string | null;
+  fulfillment_assignment_reason?: string | null;
   panel_amount_paid?: string | null;
   panel_shipping_cost?: number | null;
   panel_shipping_cost_display?: string | null;
@@ -1989,6 +1999,23 @@ export default function OrderDetailPage() {
                         <Link to={WMS_ROUTES.packingOrder(order.id)} className="ml-2 inline-flex items-center justify-center rounded-md bg-blue-600 px-5 py-2 text-sm font-bold text-white shadow-sm transition-colors hover:bg-blue-700">Spakuj</Link>
                       ) : null}
                   </div>
+                </div>
+
+                <div className="flex flex-col gap-4 border-t border-slate-100 pt-4 pb-2">
+                  <OrderFulfillmentWarehousePanel
+                    orderId={order.id}
+                    tenantId={order.tenant_id ?? DAMAGE_TENANT_ID}
+                    warehouseId={orderFulfillmentWhId}
+                    warehouseName={order.fulfillment_warehouse_name ?? null}
+                    phase={order.fulfillment_assignment_phase}
+                    locked={Boolean(order.fulfillment_warehouse_change_locked)}
+                    strategy={order.fulfillment_assignment_strategy}
+                    assignedAt={order.fulfillment_assigned_at}
+                    assignedByLabel={order.fulfillment_assigned_by_label}
+                    assignmentReason={order.fulfillment_assignment_reason}
+                    onAssigned={() => reloadOrderById(order.id)}
+                  />
+                  <OrderFulfillmentAssignmentHistory orderId={order.id} />
                 </div>
 
                 <div className="flex flex-wrap items-center gap-4 border-t border-slate-100 pt-4 pb-2">

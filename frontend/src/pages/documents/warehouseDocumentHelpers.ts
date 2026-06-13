@@ -90,19 +90,31 @@ export function listValueGross(row: StockDocumentListRow): number | null {
 }
 
 export function mmFromLabel(row: StockDocumentListRow): string {
+  const wh = (row.source_warehouse_name || "").trim();
+  if (wh) return wh;
   const name = (row.mm_from_location_name || "").trim();
   if (name) return name;
-  const wh = (row.warehouse_name || "").trim();
-  if (wh) return wh;
-  return row.warehouse_id != null ? `#${row.warehouse_id}` : "—";
+  const legacy = (row.warehouse_name || "").trim();
+  if (legacy) return legacy;
+  return row.source_warehouse_id != null
+    ? `#${row.source_warehouse_id}`
+    : row.warehouse_id != null
+      ? `#${row.warehouse_id}`
+      : "—";
 }
 
 export function mmToLabel(row: StockDocumentListRow): string {
+  const wh = (row.destination_warehouse_name || "").trim();
+  if (wh) return wh;
   const name = (row.mm_to_location_name || "").trim();
   if (name) return name;
   const loc = (row.location_name || "").trim();
   if (loc) return loc;
-  return row.location_id != null ? `#${row.location_id}` : "—";
+  return row.destination_warehouse_id != null
+    ? `#${row.destination_warehouse_id}`
+    : row.location_id != null
+      ? `#${row.location_id}`
+      : "—";
 }
 
 export function shouldShowSupplierCard(

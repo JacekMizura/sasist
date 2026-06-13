@@ -131,6 +131,14 @@ def create_order_from_session(
     db.add(order)
     db.flush()
 
+    from ..order_fulfillment_lifecycle_service import (
+        apply_initial_fulfillment_assignment,
+        on_order_shipped,
+    )
+
+    apply_initial_fulfillment_assignment(db, order)
+    on_order_shipped(order)
+
     panel_status_id: int | None = None
     try:
         settings = resolve_direct_sales_settings(db, tenant_id=tid, warehouse_id=wid)

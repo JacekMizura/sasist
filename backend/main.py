@@ -1030,6 +1030,9 @@ try:
     from .db.tenant_fulfillment_configuration_schema import ensure_tenant_fulfillment_configuration_schema
 
     ensure_tenant_fulfillment_configuration_schema(engine)
+    from .db.order_fulfillment_lifecycle_schema import ensure_order_fulfillment_lifecycle_schema
+
+    ensure_order_fulfillment_lifecycle_schema(engine)
     from .db.product_warehouse_slotting_schema import (
         ensure_product_warehouse_slotting_schema,
         run_startup_slotting_backfill,
@@ -1409,6 +1412,9 @@ def _upgrade_schema_background() -> None:
         from .db.tenant_fulfillment_configuration_schema import ensure_tenant_fulfillment_configuration_schema
 
         ensure_tenant_fulfillment_configuration_schema(engine)
+        from .db.order_fulfillment_lifecycle_schema import ensure_order_fulfillment_lifecycle_schema
+
+        ensure_order_fulfillment_lifecycle_schema(engine)
         from .db.product_warehouse_slotting_schema import (
             ensure_product_warehouse_slotting_schema,
             run_startup_slotting_backfill,

@@ -49,6 +49,12 @@ export function mapProductListRow(p: Record<string, unknown>): ProductListRow {
     commercially_sellable_qty:
       p.commercially_sellable_qty != null ? Number(p.commercially_sellable_qty) : undefined,
     sales_blocked_qty: p.sales_blocked_qty != null ? Number(p.sales_blocked_qty) : undefined,
+    network_commercially_sellable_qty:
+      p.network_commercially_sellable_qty != null ? Number(p.network_commercially_sellable_qty) : undefined,
+    warehouse_stocks:
+      p.warehouse_stocks != null && typeof p.warehouse_stocks === "object"
+        ? (p.warehouse_stocks as ProductListRow["warehouse_stocks"])
+        : undefined,
     inventory_value: invVal,
     average_purchase_price: avgPur,
     current_cost:

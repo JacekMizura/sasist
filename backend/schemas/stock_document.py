@@ -360,6 +360,10 @@ class StockDocumentRead(BaseModel):
     mm_to_location_id: Optional[int] = None
     mm_from_location_name: str = ""
     mm_to_location_name: str = ""
+    source_warehouse_id: Optional[int] = None
+    destination_warehouse_id: Optional[int] = None
+    source_warehouse_name: str = ""
+    destination_warehouse_name: str = ""
     status: str
     """WMS przyjęcie (workflow): NEW | IN_PROGRESS | DONE."""
     receiving_status: str = "NEW"
@@ -420,6 +424,10 @@ class StockDocumentListRow(BaseModel):
     location_name: str = ""
     mm_from_location_name: str = ""
     mm_to_location_name: str = ""
+    source_warehouse_id: Optional[int] = None
+    destination_warehouse_id: Optional[int] = None
+    source_warehouse_name: str = ""
+    destination_warehouse_name: str = ""
     creation_source: str = "PANEL"
     status: str
     created_at: datetime

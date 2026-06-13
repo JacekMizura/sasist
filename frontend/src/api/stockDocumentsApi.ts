@@ -31,6 +31,10 @@ export type StockDocumentListRow = {
   location_name?: string;
   mm_from_location_name?: string;
   mm_to_location_name?: string;
+  source_warehouse_id?: number | null;
+  destination_warehouse_id?: number | null;
+  source_warehouse_name?: string;
+  destination_warehouse_name?: string;
   creation_source?: string;
   status: string;
   created_at: string;
@@ -189,6 +193,10 @@ export type StockDocumentRead = {
   mm_to_location_id?: number | null;
   mm_from_location_name?: string;
   mm_to_location_name?: string;
+  source_warehouse_id?: number | null;
+  destination_warehouse_id?: number | null;
+  source_warehouse_name?: string;
+  destination_warehouse_name?: string;
   status: string;
   receiving_status?: string;
   putaway_status?: string;

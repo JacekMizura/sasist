@@ -230,8 +230,8 @@ export const WAREHOUSE_COLUMN_LABELS: Record<WarehouseListColumnId, string> = {
   customer: "Klient",
   supplier: "Dostawca",
   sourceReason: "Powód / źródło",
-  mmFrom: "Magazyn źródłowy",
-  mmTo: "Magazyn docelowy",
+  mmFrom: "Z magazynu",
+  mmTo: "Do magazynu",
   actions: "Akcje",
 };
 

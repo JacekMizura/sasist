@@ -62,6 +62,9 @@ def apply_fulfillment_state(
     state_u = (state or "").strip().upper()
     # Domknięcie zbierania (w tym braki / decyzja) — znacznik czasu, nie wyprowadzamy ze stanów picków.
     if state_u in (READY_TO_PACK, "NEEDS_DECISION", "MISSING"):
+        from .order_fulfillment_lifecycle_service import on_packing_started
+
+        on_packing_started(order)
         now = datetime.utcnow()
         if getattr(order, "picking_finished_at", None) is None:
             order.picking_finished_at = now
@@ -71,6 +74,9 @@ def apply_fulfillment_state(
 
 def touch_picking_in_progress(order: Order) -> None:
     """Pierwszy pick / praca na zamówieniu: oznacz jako PICKING jeśli jeszcze nie ustawione."""
+    from .order_fulfillment_lifecycle_service import on_picking_started
+
+    on_picking_started(order)
     cur = getattr(order, "fulfillment_state", None)
     if cur in (None, ""):
         order.fulfillment_state = PICKING

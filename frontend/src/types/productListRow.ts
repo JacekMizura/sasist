@@ -1,7 +1,6 @@
 import type { AssignedLocation } from "./warehouse";
 import type { ProductDispositionStock } from "./productDispositionStock";
 
-/** Normalized product row shared by list + edit page fetch (types only — safe for api/ imports). */
 export type ProductListRow = {
   id: number;
   tenant_id?: number;
@@ -69,6 +68,16 @@ export type ProductListRow = {
   disposition_stock?: ProductDispositionStock;
   commercially_sellable_qty?: number;
   sales_blocked_qty?: number;
+  network_commercially_sellable_qty?: number;
+  warehouse_stocks?: Record<
+    string,
+    {
+      physical_quantity?: number;
+      available_quantity?: number;
+      reserved_quantity?: number;
+      commercially_sellable_qty?: number;
+    }
+  >;
   inventory_value?: number | null;
   average_purchase_price?: number | null;
   current_cost?: {

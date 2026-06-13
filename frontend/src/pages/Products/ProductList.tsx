@@ -67,10 +67,15 @@ import {
   saveColumnLayout,
 } from "../../preferences/columnLayoutPreferences";
 import {
+  buildProductListColumnCatalog,
   PRODUCT_LIST_DEFAULT_TABLE_COLUMN_ORDER,
-  PRODUCT_LIST_TABLE_CATALOG_IDS,
-  PRODUCT_LIST_TABLE_COLUMN_CATALOG,
-} from "./productListColumnCatalog";
+  PRODUCT_NETWORK_STOCK_COLUMN_ID,
+  parseWarehouseStockColumnId,
+  productListNeedsNetworkStock,
+  productListNeedsWarehouseStocks,
+} from "./productListWarehouseColumns";
+import { warehouseService, type TenantWarehouseAssignment } from "../../services/warehouseService";
+import { fmtStockQty } from "../../api/multiWarehouseUiApi";
 
 const ProductLocationMapModal = lazy(() => import("./ProductLocationMapModal"));
 
@@ -481,15 +486,75 @@ export default function ProductList() {
   const tableHScrollMirrorBottomRef = useRef<HTMLDivElement>(null);
   const tableElementRef = useRef<HTMLTableElement>(null);
   const [columnPickerOpen, setColumnPickerOpen] = useState(false);
-  const [productColumnOrder, setProductColumnOrder] = useState<string[]>(() =>
-    loadColumnLayout(PRODUCTS_COLUMNS_LAYOUT_KEY, PRODUCT_LIST_TABLE_CATALOG_IDS, PRODUCT_LIST_DEFAULT_TABLE_COLUMN_ORDER),
+  const [tenantAssignments, setTenantAssignments] = useState<TenantWarehouseAssignment[]>([]);
+  const [warehouseNameById, setWarehouseNameById] = useState<Map<number, string>>(() => new Map());
+
+  const productColumnCatalog = useMemo(
+    () => buildProductListColumnCatalog(tenantAssignments, warehouseNameById),
+    [tenantAssignments, warehouseNameById],
+  );
+  const productColumnCatalogIds = useMemo(
+    () => productColumnCatalog.map((c) => c.id),
+    [productColumnCatalog],
   );
 
-  const persistProductColumns = useCallback((next: string[]) => {
-    const n = normalizeColumnOrder(next, PRODUCT_LIST_TABLE_CATALOG_IDS, PRODUCT_LIST_DEFAULT_TABLE_COLUMN_ORDER);
-    setProductColumnOrder(n);
-    saveColumnLayout(PRODUCTS_COLUMNS_LAYOUT_KEY, n);
-  }, []);
+  const [productColumnOrder, setProductColumnOrder] = useState<string[]>(() =>
+    loadColumnLayout(PRODUCTS_COLUMNS_LAYOUT_KEY, productColumnCatalogIds, PRODUCT_LIST_DEFAULT_TABLE_COLUMN_ORDER),
+  );
+
+  const persistProductColumns = useCallback(
+    (next: string[]) => {
+      const n = normalizeColumnOrder(next, productColumnCatalogIds, PRODUCT_LIST_DEFAULT_TABLE_COLUMN_ORDER);
+      setProductColumnOrder(n);
+      saveColumnLayout(PRODUCTS_COLUMNS_LAYOUT_KEY, n);
+    },
+    [productColumnCatalogIds],
+  );
+
+  const needsNetworkStockColumns = useMemo(
+    () => productListNeedsNetworkStock(productColumnOrder),
+    [productColumnOrder],
+  );
+  const needsPerWarehouseStockColumns = useMemo(
+    () => productListNeedsWarehouseStocks(productColumnOrder),
+    [productColumnOrder],
+  );
+
+  useEffect(() => {
+    if (tenantFilter == null) {
+      setTenantAssignments([]);
+      return;
+    }
+    let cancelled = false;
+    void Promise.all([
+      warehouseService.getAssignments({ tenant_id: tenantFilter }),
+      warehouseService.getAllWarehouses(),
+    ])
+      .then(([aRes, wRes]) => {
+        if (cancelled) return;
+        setTenantAssignments(Array.isArray(aRes.data) ? aRes.data : []);
+        const m = new Map<number, string>();
+        for (const w of Array.isArray(wRes.data) ? wRes.data : []) {
+          m.set(w.id, w.name);
+        }
+        setWarehouseNameById(m);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setTenantAssignments([]);
+          setWarehouseNameById(new Map());
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tenantFilter]);
+
+  useEffect(() => {
+    setProductColumnOrder((prev) =>
+      normalizeColumnOrder(prev, productColumnCatalogIds, PRODUCT_LIST_DEFAULT_TABLE_COLUMN_ORDER),
+    );
+  }, [productColumnCatalogIds]);
 
   useEffect(() => {
     if (manufacturerFilterId == null || tenantFilter == null) {
@@ -582,6 +647,8 @@ export default function ProductList() {
     if (sortBy) params.set("sort_by", sortBy);
     params.set("sort_dir", sortDir);
     if (selectedWarehouseId != null) params.set("warehouse_id", String(selectedWarehouseId));
+    if (needsNetworkStockColumns) params.set("include_network_stock", "true");
+    if (needsPerWarehouseStockColumns) params.set("include_warehouse_stocks", "true");
 
     api
       .get(`/products/?${params.toString()}`)
@@ -605,6 +672,8 @@ export default function ProductList() {
     sortBy,
     sortDir,
     selectedWarehouseId,
+    needsNetworkStockColumns,
+    needsPerWarehouseStockColumns,
   ]);
 
   const fetchClientBatch = useCallback(() => {
@@ -621,6 +690,8 @@ export default function ProductList() {
     if (sortBy) params.set("sort_by", sortBy);
     params.set("sort_dir", sortDir);
     if (selectedWarehouseId != null) params.set("warehouse_id", String(selectedWarehouseId));
+    if (needsNetworkStockColumns) params.set("include_network_stock", "true");
+    if (needsPerWarehouseStockColumns) params.set("include_warehouse_stocks", "true");
 
     api
       .get(`/products/?${params.toString()}`)
@@ -633,7 +704,7 @@ export default function ProductList() {
       })
       .catch(() => log("Błąd pobierania produktów"))
       .finally(() => setLoading(false));
-  }, [tenantFilter, manufacturerFilterId, appliedFilters, sortBy, sortDir, selectedWarehouseId]);
+  }, [tenantFilter, manufacturerFilterId, appliedFilters, sortBy, sortDir, selectedWarehouseId, needsNetworkStockColumns, needsPerWarehouseStockColumns]);
 
   useEffect(() => {
     if (!clientMode) return;
@@ -1063,6 +1134,12 @@ export default function ProductList() {
             Stan
           </th>
         );
+      case PRODUCT_NETWORK_STOCK_COLUMN_ID:
+        return (
+          <th key={col} className={`${listSellasistTableHeaderCellGrid} text-right`}>
+            Stan sieciowy
+          </th>
+        );
       case "inventory_value":
         return <Th key={col} label="Wartość mag." sortKey="inventory_value" align="right" />;
       case "locations":
@@ -1074,8 +1151,18 @@ export default function ProductList() {
             Lokalizacje
           </th>
         );
-      default:
+      default: {
+        const whColId = parseWarehouseStockColumnId(col);
+        if (whColId != null) {
+          const label = productColumnCatalog.find((c) => c.id === col)?.label ?? `Stan #${whColId}`;
+          return (
+            <th key={col} className={`${listSellasistTableHeaderCellGrid} text-right`}>
+              {label}
+            </th>
+          );
+        }
         return null;
+      }
     }
   };
 
@@ -1196,6 +1283,15 @@ export default function ProductList() {
             )}
           </td>
         );
+      case PRODUCT_NETWORK_STOCK_COLUMN_ID:
+        return (
+          <td
+            key={`${p.id}-${col}`}
+            className={`${listSellasistTableBodyCellGrid} text-right text-sm tabular-nums text-slate-800`}
+          >
+            {fmtStockQty(p.network_commercially_sellable_qty ?? 0)}
+          </td>
+        );
       case "inventory_value":
         return (
           <td key={`${p.id}-${col}`} className={`${listSellasistTableBodyCellGrid} text-right text-sm tabular-nums text-slate-800`}>
@@ -1211,8 +1307,22 @@ export default function ProductList() {
             <LocationBadgeStack product={p} locations={physLocs} onOpenLocationOnMap={openProductLocationOnMap} />
           </td>
         );
-      default:
+      default: {
+        const whColId = parseWarehouseStockColumnId(col);
+        if (whColId != null) {
+          const snap = p.warehouse_stocks?.[String(whColId)] ?? p.warehouse_stocks?.[whColId];
+          const qty = snap?.physical_quantity ?? snap?.available_quantity ?? 0;
+          return (
+            <td
+              key={`${p.id}-${col}`}
+              className={`${listSellasistTableBodyCellGrid} text-right text-sm tabular-nums text-slate-800`}
+            >
+              {fmtStockQty(qty)}
+            </td>
+          );
+        }
         return null;
+      }
     }
   };
 
@@ -1689,7 +1799,7 @@ export default function ProductList() {
         open={columnPickerOpen}
         onClose={() => setColumnPickerOpen(false)}
         title="Wybór kolumn"
-        catalog={PRODUCT_LIST_TABLE_COLUMN_CATALOG}
+        catalog={productColumnCatalog}
         selectedOrder={productColumnOrder}
         onChange={persistProductColumns}
       />

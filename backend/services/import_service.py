@@ -1974,7 +1974,13 @@ class ImportService:
                 existing_order.country = country_val
                 existing_order.import_metadata_json = import_meta_json
                 existing_order.addresses_json = addresses_json_str
-                existing_order.warehouse_id = warehouse_id
+                from ..services.order_fulfillment_lifecycle_service import (
+                    maybe_advance_shipped_from_status,
+                    maybe_apply_import_warehouse_fields,
+                )
+
+                maybe_apply_import_warehouse_fields(existing_order, import_warehouse_id=warehouse_id)
+                maybe_advance_shipped_from_status(existing_order)
                 self.db.query(OrderItem).filter(OrderItem.order_id == existing_order.id).delete()
                 self.db.flush()
                 order = existing_order
@@ -2033,6 +2039,9 @@ class ImportService:
                 if created_new:
                     order.barcode = next_order_barcode(self.db, tenant_id)
                     assign_order_scan_code(order)
+                    from ..services.order_fulfillment_lifecycle_service import apply_initial_fulfillment_assignment
+
+                    apply_initial_fulfillment_assignment(self.db, order)
                     created_orders.append(order)
                 else:
                     order_warning_count += 1

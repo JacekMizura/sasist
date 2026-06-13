@@ -31,6 +31,13 @@ export function CarrierCard({ row, detailPath, navState }: Props) {
           <dd className="font-medium text-slate-800">{(row.carrier_group_code || "—").trim()}</dd>
         </div>
         <div>
+          <dt className="font-bold uppercase text-slate-400">Magazyn</dt>
+          <dd className="truncate text-slate-800">
+            {(row.current_warehouse_name || "").trim() ||
+              (row.current_warehouse_id != null ? `#${row.current_warehouse_id}` : "—")}
+          </dd>
+        </div>
+        <div>
           <dt className="font-bold uppercase text-slate-400">Lokalizacja</dt>
           <dd className="truncate font-mono text-slate-800">{(row.current_location_code || "").trim() || "—"}</dd>
         </div>
