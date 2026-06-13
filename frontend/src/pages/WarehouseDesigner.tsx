@@ -104,7 +104,7 @@ import { getPositionCmAlongWall, getSvgLayoutSizePx } from "./WarehouseDesigner/
 import { normalizeProductDims } from "../utils/productNormalizer";
 import { validateAndSanitizeLayoutPayload } from "../utils/layoutSavePayload";
 import { buildPathAvoidingRacks, buildPickingRoutePolyline, simplifyPath, type PathStop } from "./WarehouseDesigner/pathVisualizationUtils";
-import { fetchWarehouseOccupancyMetrics, type WarehouseOccupancyMetrics } from "../api/warehouseOccupancyApi";
+import type { WarehouseOccupancyMetrics } from "../api/warehouseOccupancyApi";
 import { fetchRoutePath } from "../api/routeApi";
 import { generateWarehouseGraph } from "../api/warehouseGraphApi";
 import { buildInventoryMaps, normalizeInventoryLocationUuid, type InventoryRow, type InventoryMaps } from "./WarehouseDesigner/inventoryMaps";
@@ -118,6 +118,7 @@ import {
   measureDesignerMemo,
   resetDesignerLoadPerf,
 } from "./WarehouseDesigner/designerLoadPerf";
+import { useDesignerDataLoading } from "./WarehouseDesigner/useDesignerDataLoading";
 
 /** Resolve slot UUID from an assigned_locations entry (API JSON may use location_uuid). */
 function assignedLocationEntryUuid(a: {
@@ -294,10 +295,9 @@ export default function WarehouseDesigner() {
   const { warehouse: activeWarehouse, warehouses, setWarehouse, refreshWarehouses, warehousesLoading } = useWarehouse();
   const designerPerfEnabled = isDesignerPerfEnabled();
   const loadLayoutCallRef = useRef(0);
-  const fetchProductsCallRef = useRef(0);
+  const layoutLoadInFlightRef = useRef<number | null>(null);
   const firstRenderMarkedRef = useRef(false);
   const fullReadyPrintedRef = useRef(false);
-  const occupancyFetchGenRef = useRef(0);
   const prevWarehousesLoadingRef = useRef<boolean | null>(null);
   const selectedWarehouseId = activeWarehouse?.id ?? null;
   const [layout, setLayout] = useState<LayoutState>({
@@ -638,13 +638,7 @@ export default function WarehouseDesigner() {
   /** Magazyn tab: selected location (level_index, segment_index) for inventory filter and highlight. */
   const [selectedLocationForProducts, setSelectedLocationForProducts] = useState<{ level_index: number; segment_index: number } | null>(null);
   /** Inventory products (Magazyn); drive bin occupancy and quantity display. */
-  const [products, setProducts] = useState<WarehouseProduct[]>(() =>
-    [
-      { id: "p1", name: "Paleta Euro 120x80", sku: "PAL-EUR-01", ean: "5901234123457", quantity: 4, volume_dm3: 240, location_id: null },
-      { id: "p2", name: "Karton 40x30x25", sku: "KAR-40-01", ean: "5901234123458", quantity: 12, volume_dm3: 36, location_id: null },
-      { id: "p3", name: "Opakowanie zbiorcze", sku: "OPZ-01", ean: "5901234123459", quantity: 2, volume_dm3: 80, location_id: null },
-    ]
-  );
+  const [products, setProducts] = useState<WarehouseProduct[]>([]);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [showAllProductsInSidebar, setShowAllProductsInSidebar] = useState(false);
   const [productSearchQuery, setProductSearchQuery] = useState("");
@@ -736,16 +730,29 @@ export default function WarehouseDesigner() {
   }, [mainView]);
   const svgRef = useRef<SVGSVGElement>(null);
   const isLiveView = mainView === "magazyn";
+
+  const { refreshMagazynStock, loadDesignerProducts, resetWarehouseDataRefs } = useDesignerDataLoading({
+    selectedWarehouseId,
+    mainView,
+    layout,
+    setInventoryRows,
+    setOccupancyMetrics,
+    setProducts,
+    onWarehouseDataReset: () => {
+      setInventoryRows([]);
+      setOccupancyMetrics(null);
+      setProducts([]);
+    },
+  });
+
   const designerPerf = designerPerfEnabled ? getDesignerLoadPerf(true) : null;
 
   useEffect(() => {
     if (!designerPerfEnabled || mainView !== "magazyn" || selectedWarehouseId == null) return;
     resetDesignerLoadPerf();
     loadLayoutCallRef.current = 0;
-    fetchProductsCallRef.current = 0;
     firstRenderMarkedRef.current = false;
     fullReadyPrintedRef.current = false;
-    occupancyFetchGenRef.current = 0;
     prevWarehousesLoadingRef.current = null;
     getDesignerLoadPerf(true)?.markSessionStart(`Magazyn WH=${selectedWarehouseId}`);
   }, [designerPerfEnabled, mainView, selectedWarehouseId]);
@@ -794,11 +801,6 @@ export default function WarehouseDesigner() {
     occupancyMetrics,
   ]);
 
-  const layoutOccupancyRefreshKey = useMemo(
-    () =>
-      `${layout.layout_id ?? "na"}:${layout.racks.length}:${layout.racks.reduce((n, r) => n + activeBinsForRack(r).length, 0)}`,
-    [layout.layout_id, layout.racks],
-  );
   useEffect(() => {
     if (mainView !== "magazyn") return;
     const prev = document.body.style.overflow;
@@ -807,32 +809,6 @@ export default function WarehouseDesigner() {
       document.body.style.overflow = prev;
     };
   }, [mainView]);
-  useEffect(() => {
-    if (mainView !== "magazyn" || selectedWarehouseId == null) {
-      setOccupancyMetrics(null);
-      return;
-    }
-    let cancelled = false;
-    const perf = getDesignerLoadPerf(isDesignerPerfEnabled());
-    const gen = ++occupancyFetchGenRef.current;
-    const stage = `GET /warehouse/occupancy-metrics #${gen}`;
-    (async () => {
-      perf?.start(stage);
-      const t0 = performance.now();
-      try {
-        const data = await fetchWarehouseOccupancyMetrics(TENANT_ID, selectedWarehouseId);
-        if (!cancelled) setOccupancyMetrics(data);
-      } catch {
-        if (!cancelled) setOccupancyMetrics(null);
-      } finally {
-        perf?.record("GET /warehouse/occupancy-metrics", performance.now() - t0);
-        perf?.end(stage);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [mainView, selectedWarehouseId, layoutOccupancyRefreshKey, inventoryRows.length]);
   /** Magazyn map column (`overflow-y-auto`): block wheel chaining at scroll extremes (non-passive). */
   const magazynMapScrollRef = useRef<HTMLDivElement>(null);
   /** Magazyn rack side view scroll wrapper: same wheel containment. */
@@ -1509,13 +1485,14 @@ export default function WarehouseDesigner() {
     }
   }, [layout.racks, layout.visual_elements, selectedRackIds, selectedVisualIds]);
 
-  const loadLayout = useCallback(async (warehouseId: number) => {
+  const loadLayout = useCallback(async (warehouseId: number, options?: { force?: boolean }) => {
+    if (layoutLoadInFlightRef.current === warehouseId && !options?.force) return;
+    layoutLoadInFlightRef.current = warehouseId;
     const perf = getDesignerLoadPerf(isDesignerPerfEnabled());
     const callN = ++loadLayoutCallRef.current;
     const rootStage = `loadLayout #${callN}`;
     perf?.start(rootStage);
     setLoading(true);
-    setInventoryRows([]);
     try {
       perf?.start(`GET /warehouse/layout (loadLayout #${callN})`);
       const layoutT0 = performance.now();
@@ -1653,60 +1630,11 @@ export default function WarehouseDesigner() {
       logLayoutRackHydrate(syncedLayout.racks);
       setLayout(syncedLayout);
       perf?.end(`loadLayout.hydrate #${callN}`);
-      const resolveLabel = (locationUUID: string): string | null =>
-        resolveLocationLabelByUuid(syncedLayout, locationUUID);
-      try {
-        perf?.start(`GET /products/ (loadLayout #${callN})`);
-        const productsT0 = performance.now();
-        const prodRes = await api.get("/products/", { params: { tenant_id: TENANT_ID, limit: 5000, warehouse_id: warehouseId } });
-        perf?.record("GET /products/", performance.now() - productsT0);
-        perf?.end(`GET /products/ (loadLayout #${callN})`);
-        const raw = prodRes.data?.items ?? (Array.isArray(prodRes.data) ? prodRes.data : []);
-        perf?.start(`loadLayout.productsMap #${callN}`);
-        const list: WarehouseProduct[] = raw.map((p: Record<string, unknown>) => {
-          const id = p.id != null ? String(p.id) : `p-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-          const assigned = (Array.isArray(p.assigned_locations) ? p.assigned_locations : Array.isArray(p.assignedLocations) ? p.assignedLocations : []) as Array<{ locationUUID: string; quantity: number }>;
-          const totalQty = assigned.reduce((s: number, a: { quantity?: unknown }) => s + safeQuantity(a.quantity), 0);
-          const vol = safeVolumeDm3(p.volume);
-          const firstLoc = assigned[0];
-          const firstLocUuid = firstLoc ? assignedLocationEntryUuid(firstLoc as { locationUUID?: string; location_uuid?: string }) : undefined;
-          const location_id = firstLocUuid ? resolveLabel(firstLocUuid) : null;
-          const weightKg = typeof p.weight_kg === "number" ? p.weight_kg : typeof p.weight === "number" ? p.weight : undefined;
-          const dims = normalizeProductDims(p);
-          return {
-            id,
-            name: String(p.name ?? ""),
-            sku: String(p.symbol ?? p.sku ?? ""),
-            ean: String(p.ean ?? ""),
-            quantity: totalQty || safeQuantity(p.quantity),
-            volume_dm3: vol,
-            location_id: location_id ?? null,
-            assignedLocations: assigned.length > 0 ? assigned : undefined,
-            weight_kg: weightKg,
-            image_url: typeof p.image_url === "string" ? p.image_url : undefined,
-            // Always set dimensions from normalizer (API: length/width/height or *_cm). Enables 3D slot capacity.
-            width_cm: dims.width_cm || undefined,
-            depth_cm: dims.depth_cm || undefined,
-            height_cm: dims.height_cm || undefined,
-            orientation_type: ["any", "upright", "no_stack"].includes(String((p as { orientation_type?: string }).orientation_type)) ? (p as { orientation_type: "any" | "upright" | "no_stack" }).orientation_type : "any",
-            shape_type: ["box", "cylinder"].includes(String((p as { shape_type?: string }).shape_type)) ? (p as { shape_type: "box" | "cylinder" }).shape_type : "box",
-            stack_compressible: (p as { stack_compressible?: boolean }).stack_compressible ?? false,
-            compressed_height_cm: (p as { compressed_height_cm?: number | null }).compressed_height_cm ?? null,
-            max_stack_weight: (p as { max_stack_weight?: number | null }).max_stack_weight ?? null,
-            stack_behavior: ["stackable", "no_stack"].includes(String((p as { stack_behavior?: string }).stack_behavior)) ? (p as { stack_behavior: "stackable" | "no_stack" }).stack_behavior : "stackable",
-            purchase_price:
-              typeof p.purchase_price === "number" && Number.isFinite(p.purchase_price) ? p.purchase_price : undefined,
-          };
-        });
-        perf?.end(`loadLayout.productsMap #${callN}`);
-        setProducts(list);
-      } catch {
-        // Keep existing products state on error (e.g. no products API)
-      }
     } catch {
       setSpecialLocations({ pick_start: null, packing: null, dock: null });
       setLayout((prev) => ({ ...prev, warehouse_id: warehouseId, warehouse_name: "", racks: [], aisles: [], visual_elements: prev.visual_elements ?? [] }));
     } finally {
+      if (layoutLoadInFlightRef.current === warehouseId) layoutLoadInFlightRef.current = null;
       setLoading(false);
       perf?.end(rootStage);
     }
@@ -1718,6 +1646,7 @@ export default function WarehouseDesigner() {
   }, [selectedWarehouseId, loadLayout]);
 
   const resetDesignerStateForWarehouseSwitch = useCallback(() => {
+    resetWarehouseDataRefs();
     setSelectedRackId(null);
     setPreviewRackId(null);
     setEditingRackId(null);
@@ -1729,9 +1658,6 @@ export default function WarehouseDesigner() {
     setPathError(null);
     setRouteRackIds([]);
     setIsRouteActive(false);
-    setInventoryRows([]);
-    setOccupancyMetrics(null);
-    setProducts([]);
     setEditingProductId(null);
     setSelectedBinForFilter(null);
     setShowElevationForRackId(null);
@@ -1748,7 +1674,7 @@ export default function WarehouseDesigner() {
     setSelectedVisualId(null);
     setSelectedVisualIds([]);
     setSelectedWallElementId(null);
-  }, []);
+  }, [resetWarehouseDataRefs]);
 
   const handleDesignerWarehouseSelect = useCallback(
     (w: Warehouse) => {
@@ -1771,116 +1697,32 @@ export default function WarehouseDesigner() {
   );
 
   useEffect(() => {
-    if (isLiveView && selectedWarehouseId != null) loadLayout(selectedWarehouseId);
-  }, [isLiveView, selectedWarehouseId, loadLayout]);
+    if (mainView !== "magazyn" || selectedWarehouseId == null || loading) return;
+    const q = productSearchQuery.trim();
+    const needsProductCatalog =
+      q.length >= 1 ||
+      showAllProductsInSidebar ||
+      editingProductId != null ||
+      selectedRackIdOnMap != null ||
+      selectedRackIdForSideView != null ||
+      selectedProductIdOnMap != null;
+    if (!needsProductCatalog) return;
+    void loadDesignerProducts(selectedWarehouseId, layout);
+  }, [
+    mainView,
+    selectedWarehouseId,
+    loading,
+    layout,
+    productSearchQuery,
+    showAllProductsInSidebar,
+    editingProductId,
+    selectedRackIdOnMap,
+    selectedRackIdForSideView,
+    selectedProductIdOnMap,
+    loadDesignerProducts,
+  ]);
 
-  /** When switching to Magazyn view, refresh products from API so assignments from Products tab are visible. */
-  const fetchProductsForMap = useCallback(async () => {
-    if (selectedWarehouseId == null) return;
-    const perf = getDesignerLoadPerf(isDesignerPerfEnabled());
-    const callN = ++fetchProductsCallRef.current;
-    const rootStage = `fetchProductsForMap #${callN}`;
-    perf?.start(rootStage);
-    try {
-      const fetchLayout = async () => {
-        const t0 = performance.now();
-        perf?.start(`GET /warehouse/layout (fetchProductsForMap #${callN})`);
-        try {
-          return await api.get("/warehouse/layout", { params: { tenant_id: TENANT_ID, warehouse_id: selectedWarehouseId } });
-        } finally {
-          perf?.record("GET /warehouse/layout", performance.now() - t0);
-          perf?.end(`GET /warehouse/layout (fetchProductsForMap #${callN})`);
-        }
-      };
-      const fetchProducts = async () => {
-        const t0 = performance.now();
-        perf?.start(`GET /products/ (fetchProductsForMap #${callN})`);
-        try {
-          return await api.get("/products/", { params: { tenant_id: TENANT_ID, limit: 5000, warehouse_id: selectedWarehouseId } });
-        } finally {
-          perf?.record("GET /products/", performance.now() - t0);
-          perf?.end(`GET /products/ (fetchProductsForMap #${callN})`);
-        }
-      };
-      const fetchInventory = async () => {
-        const t0 = performance.now();
-        perf?.start(`GET /inventory/ (fetchProductsForMap #${callN})`);
-        try {
-          return await api.get<InventoryRow[]>("/inventory/", {
-            params: { tenant_id: TENANT_ID, warehouse_id: selectedWarehouseId, hide_technical_locations: false },
-          });
-        } finally {
-          perf?.record("GET /inventory/", performance.now() - t0);
-          perf?.end(`GET /inventory/ (fetchProductsForMap #${callN})`);
-        }
-      };
-      const [layoutRes, prodRes, inventoryRes] = await Promise.all([fetchLayout(), fetchProducts(), fetchInventory()]);
-      const d = ((layoutRes.data as { layout?: Record<string, unknown> } | undefined)?.layout ?? layoutRes.data) as Record<string, unknown>;
-      const racksFromRes = (d?.racks || []) as Array<{ bins?: Array<{ locationUUID?: string; location_uuid?: string; label?: string; location_id?: string }> }>;
-      const resolveLabel = (locationUUID: string): string | null => {
-        for (const r of racksFromRes) {
-          for (const b of activeBinsForRack(r)) {
-            const uuid = b.locationUUID ?? b.location_uuid;
-            if (uuid === locationUUID) return (b.label ?? b.location_id ?? null) || null;
-          }
-        }
-        return null;
-      };
-      const raw = prodRes.data?.items ?? (Array.isArray(prodRes.data) ? prodRes.data : []);
-      perf?.start(`fetchProductsForMap.productsMap #${callN}`);
-      const list: WarehouseProduct[] = raw.map((p: Record<string, unknown>) => {
-        const id = p.id != null ? String(p.id) : `p-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-        const assigned = (Array.isArray(p.assigned_locations) ? p.assigned_locations : Array.isArray(p.assignedLocations) ? p.assignedLocations : []) as Array<{ locationUUID: string; quantity: number }>;
-        const totalQty = assigned.reduce((s: number, a: { quantity?: unknown }) => s + safeQuantity(a.quantity), 0);
-        const vol = safeVolumeDm3(p.volume);
-        const firstLoc = assigned[0];
-        const firstLocUuid = firstLoc ? assignedLocationEntryUuid(firstLoc as { locationUUID?: string; location_uuid?: string }) : undefined;
-        const location_id = firstLocUuid ? resolveLabel(firstLocUuid) : null;
-        const weightKg = typeof p.weight_kg === "number" ? p.weight_kg : typeof p.weight === "number" ? p.weight : undefined;
-        const dims = normalizeProductDims(p);
-        return {
-          id,
-          name: String(p.name ?? ""),
-          sku: String(p.symbol ?? p.sku ?? ""),
-          ean: String(p.ean ?? ""),
-          quantity: totalQty || safeQuantity(p.quantity),
-          volume_dm3: vol,
-          location_id: location_id ?? null,
-          assignedLocations: assigned.length > 0 ? assigned : undefined,
-          weight_kg: weightKg,
-          image_url: typeof p.image_url === "string" ? p.image_url : undefined,
-          // Always set dimensions from normalizer (API: length/width/height or *_cm). Enables 3D slot capacity in Magazyn.
-          width_cm: dims.width_cm || undefined,
-          depth_cm: dims.depth_cm || undefined,
-          height_cm: dims.height_cm || undefined,
-          orientation_type: ["any", "upright", "no_stack"].includes(String((p as { orientation_type?: string }).orientation_type)) ? (p as { orientation_type: "any" | "upright" | "no_stack" }).orientation_type : "any",
-          shape_type: ["box", "cylinder"].includes(String((p as { shape_type?: string }).shape_type)) ? (p as { shape_type: "box" | "cylinder" }).shape_type : "box",
-          stack_compressible: (p as { stack_compressible?: boolean }).stack_compressible ?? false,
-          compressed_height_cm: (p as { compressed_height_cm?: number | null }).compressed_height_cm ?? null,
-          max_stack_weight: (p as { max_stack_weight?: number | null }).max_stack_weight ?? null,
-          stack_behavior: ["stackable", "no_stack"].includes(String((p as { stack_behavior?: string }).stack_behavior)) ? (p as { stack_behavior: "stackable" | "no_stack" }).stack_behavior : "stackable",
-          purchase_price:
-            typeof p.purchase_price === "number" && Number.isFinite(p.purchase_price) ? p.purchase_price : undefined,
-        };
-      });
-      perf?.end(`fetchProductsForMap.productsMap #${callN}`);
-      setProducts(list);
-      setInventoryRows(Array.isArray(inventoryRes.data) ? inventoryRes.data : []);
-    } catch {
-      // Keep existing products
-      setInventoryRows([]);
-    } finally {
-      perf?.end(rootStage);
-    }
-  }, [selectedWarehouseId]);
-
-  /** Magazyn tab: inventory + slotting refresh when active warehouse changes (layout tab uses loadLayout products only). */
-  useEffect(() => {
-    if (selectedWarehouseId == null || mainView !== "magazyn") return;
-    void fetchProductsForMap();
-  }, [selectedWarehouseId, mainView, fetchProductsForMap]);
-
-  /** After WMS putaway (or similar), refetch layout + products + inventory so Magazyn badges match GET /inventory/. */
+  /** After WMS putaway — refresh inventory + occupancy only (no layout/products burst). */
   useEffect(() => {
     const onInventoryUpdated = (ev: Event) => {
       const ce = ev as CustomEvent<{ tenantId?: number; warehouseId?: number | null }>;
@@ -1888,11 +1730,11 @@ export default function WarehouseDesigner() {
       if (!d || d.tenantId !== TENANT_ID) return;
       if (d.warehouseId == null || selectedWarehouseId == null) return;
       if (d.warehouseId !== selectedWarehouseId) return;
-      void fetchProductsForMap();
+      void refreshMagazynStock(selectedWarehouseId);
     };
     window.addEventListener("wms:inventory-updated", onInventoryUpdated);
     return () => window.removeEventListener("wms:inventory-updated", onInventoryUpdated);
-  }, [selectedWarehouseId, fetchProductsForMap]);
+  }, [selectedWarehouseId, refreshMagazynStock]);
 
   /** Drop one assigned_locations slot without syncing Inventory (backend skip_inventory_sync). */
   const removeProductAssignmentAtLocation = useCallback(
@@ -1900,7 +1742,11 @@ export default function WarehouseDesigner() {
       const pid = Number(productId);
       if (!Number.isInteger(pid) || pid < 1 || selectedWarehouseId == null) return;
       const locUuid = locationUUID.trim();
-      const p = products.find((x) => x.id === productId);
+      let p = products.find((x) => x.id === productId);
+      if (!p?.assignedLocations?.length) {
+        const loaded = await loadDesignerProducts(selectedWarehouseId, layout);
+        p = loaded?.find((x) => x.id === productId);
+      }
       if (!p?.assignedLocations?.length) return;
       const nextAssigned = p.assignedLocations.filter((a) => assignedLocationEntryUuid(a) !== locUuid);
       if (nextAssigned.length === p.assignedLocations.length) return;
@@ -1923,9 +1769,10 @@ export default function WarehouseDesigner() {
 
       await putProductWarehouseSlotting(pid, selectedWarehouseId, enriched, TENANT_ID);
 
-      await fetchProductsForMap();
+      await refreshMagazynStock(selectedWarehouseId);
+      await loadDesignerProducts(selectedWarehouseId, layout, { force: true });
     },
-    [products, layout, fetchProductsForMap, selectedWarehouseId]
+    [products, layout, refreshMagazynStock, loadDesignerProducts, selectedWarehouseId]
   );
 
   const selectedRackHasBinUuids = useMemo(() => {
@@ -1969,11 +1816,13 @@ export default function WarehouseDesigner() {
     );
     if (binUuids.size === 0) return;
 
+    const catalog = (await loadDesignerProducts(selectedWarehouseId, layout)) ?? products;
+
     const positions = getAllPositionsFromRacks(layout.racks, layout);
     const posByUuid = new Map(positions.map((pos) => [pos.locationUUID, pos]));
 
     const patches: Promise<unknown>[] = [];
-    for (const p of products) {
+    for (const p of catalog) {
       if (!p.assignedLocations?.length) continue;
       const next = p.assignedLocations.filter((a) => {
         const u = assignedLocationEntryUuid(a);
@@ -2009,7 +1858,8 @@ export default function WarehouseDesigner() {
     setClearRackBusy(true);
     try {
       await Promise.all(patches);
-      await fetchProductsForMap();
+      await refreshMagazynStock(selectedWarehouseId);
+      await loadDesignerProducts(selectedWarehouseId, layout, { force: true });
       setClearRackConfirmOpen(false);
     } catch (e) {
       console.error(e);
@@ -2017,7 +1867,7 @@ export default function WarehouseDesigner() {
     } finally {
       setClearRackBusy(false);
     }
-  }, [clearRackTargetKey, selectedWarehouseId, layout, products, fetchProductsForMap]);
+  }, [clearRackTargetKey, selectedWarehouseId, layout, products, refreshMagazynStock, loadDesignerProducts]);
 
   const addSpecialLocation = useCallback(
     async (cell: { x: number; y: number }, type: "PICK_START" | "PACKING" | "DOCK") => {
@@ -2085,10 +1935,6 @@ export default function WarehouseDesigner() {
     },
     [selectedWarehouseId]
   );
-
-  useEffect(() => {
-    if (isLiveView && layout.racks.length > 0) fetchProductsForMap();
-  }, [isLiveView, layout.racks.length, fetchProductsForMap]);
 
   useEffect(() => {
     let cancelled = false;
@@ -2348,7 +2194,7 @@ export default function WarehouseDesigner() {
           logRackRename({ rack_id, old_name: name, new_name: name, persisted: true });
         }
       }
-      await loadLayout(whId);
+      await loadLayout(whId, { force: true });
     } catch (err: unknown) {
       console.error("Save layout:", err);
       const ax = err as { response?: { status?: number; data?: unknown } };
