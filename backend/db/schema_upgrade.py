@@ -24,6 +24,18 @@ from .schema_introspection import (
 )
 
 
+def _cols(engine: Engine, table: str) -> set[str]:
+    """Dialect-agnostic column names via SQLAlchemy Inspector."""
+    if not _table_exists(engine, table):
+        return set()
+    return _table_column_names(engine, table)
+
+
+def _timestamp_column_ddl(engine: Engine, table: str, column: str) -> str:
+    col_type = "TIMESTAMP" if engine.dialect.name == "postgresql" else "DATETIME"
+    return f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"
+
+
 
 def _migrate_panel_ui_status_colors_to_hex(conn, table: str) -> None:
     """Convert legacy color names to #RRGGBB on panel UI status tables."""
@@ -1623,23 +1635,28 @@ def ensure_bundles_tables_and_order_item_bundle_columns(engine: Engine) -> None:
             )
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_bundle_items_bundle_id ON bundle_items(bundle_id)"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_bundle_items_product_id ON bundle_items(product_id)"))
-        rows = conn.execute(text("PRAGMA table_info(order_items)")).fetchall()
-        cols = {row[1] for row in rows}
-        if "source_bundle_id" not in cols:
-            conn.execute(
-                text(
-                    "ALTER TABLE order_items ADD COLUMN source_bundle_id INTEGER REFERENCES bundles(id) ON DELETE SET NULL"
+        oi_cols = _cols(engine, "order_items")
+        if oi_cols:
+            if "source_bundle_id" not in oi_cols:
+                conn.execute(
+                    text(
+                        "ALTER TABLE order_items ADD COLUMN source_bundle_id INTEGER "
+                        "REFERENCES bundles(id) ON DELETE SET NULL"
+                    )
                 )
+            if "bundle_instance_id" not in oi_cols:
+                conn.execute(text("ALTER TABLE order_items ADD COLUMN bundle_instance_id VARCHAR(36)"))
+            conn.execute(
+                text("CREATE INDEX IF NOT EXISTS ix_order_items_source_bundle_id ON order_items(source_bundle_id)")
             )
-        if "bundle_instance_id" not in cols:
-            conn.execute(text("ALTER TABLE order_items ADD COLUMN bundle_instance_id VARCHAR(36)"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_order_items_source_bundle_id ON order_items(source_bundle_id)"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_order_items_bundle_instance_id ON order_items(bundle_instance_id)"))
+            conn.execute(
+                text("CREATE INDEX IF NOT EXISTS ix_order_items_bundle_instance_id ON order_items(bundle_instance_id)")
+            )
         # Optional image URL for bundle list / parity with products
-        b_cols = _table_column_names(conn, "bundles")
+        b_cols = _table_column_names(engine, "bundles") if _table_exists(engine, "bundles") else set()
         if "image_url" not in b_cols:
             conn.execute(text("ALTER TABLE bundles ADD COLUMN image_url VARCHAR"))
-        bi_cols = _table_column_names(conn, "bundle_items")
+        bi_cols = _table_column_names(engine, "bundle_items") if _table_exists(engine, "bundle_items") else set()
         if bi_cols and "metadata_json" not in bi_cols:
             conn.execute(text("ALTER TABLE bundle_items ADD COLUMN metadata_json VARCHAR"))
         conn.commit()
@@ -1647,14 +1664,13 @@ def ensure_bundles_tables_and_order_item_bundle_columns(engine: Engine) -> None:
 
 def ensure_order_items_packing_quantity_packed_column(engine: Engine) -> None:
     """WMS pakowanie: własna ilość spakowana per pozycja (bez Pick / zbierania)."""
-    with engine.connect() as conn:
-        rows = conn.execute(text("PRAGMA table_info(order_items)")).fetchall()
-        cols = {row[1] for row in rows}
-        if "packing_quantity_packed" not in cols:
-            conn.execute(
-                text("ALTER TABLE order_items ADD COLUMN packing_quantity_packed INTEGER NOT NULL DEFAULT 0")
-            )
-        conn.commit()
+    cols = _cols(engine, "order_items")
+    if "packing_quantity_packed" in cols:
+        return
+    with engine.begin() as conn:
+        conn.execute(
+            text("ALTER TABLE order_items ADD COLUMN packing_quantity_packed INTEGER NOT NULL DEFAULT 0")
+        )
 
 
 def ensure_direct_sales_settings_table(engine: Engine) -> None:
@@ -4035,18 +4051,17 @@ def ensure_sale_documents_table(engine: Engine) -> None:
 
 def ensure_orders_customer_id_column(engine: Engine) -> None:
     """Panel: optional link zamówienia do klienta (``customers``)."""
-    with engine.connect() as conn:
-        r = conn.execute(text("PRAGMA table_info(orders)"))
-        cols = {row[1] for row in r}
-        if "customer_id" not in cols:
-            conn.execute(
-                text(
-                    "ALTER TABLE orders ADD COLUMN customer_id INTEGER "
-                    "REFERENCES customers(id) ON DELETE SET NULL"
-                )
+    cols = _cols(engine, "orders")
+    if not cols or "customer_id" in cols:
+        return
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "ALTER TABLE orders ADD COLUMN customer_id INTEGER "
+                "REFERENCES customers(id) ON DELETE SET NULL"
             )
-            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_orders_customer_id ON orders(customer_id)"))
-        conn.commit()
+        )
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_orders_customer_id ON orders(customer_id)"))
 
 
 def ensure_order_issue_tasks_table(engine: Engine) -> None:
@@ -4222,72 +4237,70 @@ def ensure_wms_operational_tasks_table(engine: Engine) -> None:
 
 def ensure_orders_fulfillment_state_columns(engine: Engine) -> None:
     """WMS: ``fulfillment_state`` + ``picking_session_id`` na zamówieniach."""
-    with engine.connect() as conn:
-        r = conn.execute(text("PRAGMA table_info(orders)"))
-        cols = {row[1] for row in r}
+    cols = _cols(engine, "orders")
+    if not cols:
+        return
+    with engine.begin() as conn:
         if "fulfillment_state" not in cols:
             conn.execute(text("ALTER TABLE orders ADD COLUMN fulfillment_state VARCHAR(32)"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_orders_fulfillment_state ON orders(fulfillment_state)"))
         if "picking_session_id" not in cols:
             conn.execute(text("ALTER TABLE orders ADD COLUMN picking_session_id INTEGER"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_orders_picking_session_id ON orders(picking_session_id)"))
-        conn.commit()
 
 
 def ensure_orders_priority_color_column(engine: Engine) -> None:
     """Panel OMS: wizualna flaga priorytetu zamówienia (flame)."""
-    with engine.connect() as conn:
-        r = conn.execute(text("PRAGMA table_info(orders)"))
-        cols = {row[1] for row in r}
-        if "priority_color" not in cols:
-            conn.execute(text("ALTER TABLE orders ADD COLUMN priority_color VARCHAR(32)"))
-        conn.commit()
+    cols = _cols(engine, "orders")
+    if not cols or "priority_color" in cols:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE orders ADD COLUMN priority_color VARCHAR(32)"))
 
 
 def ensure_orders_discount_columns(engine: Engine) -> None:
     """Panel OMS: persisted order-level discount used in totals and margin."""
-    with engine.connect() as conn:
-        r = conn.execute(text("PRAGMA table_info(orders)"))
-        cols = {row[1] for row in r}
+    cols = _cols(engine, "orders")
+    if not cols:
+        return
+    with engine.begin() as conn:
         if "discount_type" not in cols:
             conn.execute(text("ALTER TABLE orders ADD COLUMN discount_type VARCHAR(16)"))
         if "discount_value" not in cols:
             conn.execute(text("ALTER TABLE orders ADD COLUMN discount_value REAL"))
-        conn.commit()
 
 
 def ensure_orders_wms_timeline_columns(engine: Engine) -> None:
     """WMS: znaczniki czasu zbierania / pakowania dla osi czasu OMS."""
-    with engine.connect() as conn:
-        r = conn.execute(text("PRAGMA table_info(orders)"))
-        cols = {row[1] for row in r}
+    cols = _cols(engine, "orders")
+    if not cols:
+        return
+    with engine.begin() as conn:
         if "picking_started_at" not in cols:
-            conn.execute(text("ALTER TABLE orders ADD COLUMN picking_started_at DATETIME"))
+            conn.execute(text(_timestamp_column_ddl(engine, "orders", "picking_started_at")))
         if "picked_at" not in cols:
-            conn.execute(text("ALTER TABLE orders ADD COLUMN picked_at DATETIME"))
+            conn.execute(text(_timestamp_column_ddl(engine, "orders", "picked_at")))
         if "packing_started_at" not in cols:
-            conn.execute(text("ALTER TABLE orders ADD COLUMN packing_started_at DATETIME"))
+            conn.execute(text(_timestamp_column_ddl(engine, "orders", "packing_started_at")))
         if "packed_at" not in cols:
-            conn.execute(text("ALTER TABLE orders ADD COLUMN packed_at DATETIME"))
+            conn.execute(text(_timestamp_column_ddl(engine, "orders", "packed_at")))
         if "picking_finished_at" not in cols:
-            conn.execute(text("ALTER TABLE orders ADD COLUMN picking_finished_at DATETIME"))
+            conn.execute(text(_timestamp_column_ddl(engine, "orders", "picking_finished_at")))
             conn.execute(
                 text(
                     "UPDATE orders SET picking_finished_at = picked_at "
                     "WHERE picking_finished_at IS NULL AND picked_at IS NOT NULL"
                 )
             )
-        conn.commit()
 
 
 def ensure_orders_wms_packing_automation_finished_at_column(engine: Engine) -> None:
     """WMS: koniec potoku pakowania (automatyka), nie równy ``packed_at``."""
-    with engine.connect() as conn:
-        r = conn.execute(text("PRAGMA table_info(orders)"))
-        cols = {row[1] for row in r}
-        if "wms_packing_automation_finished_at" not in cols:
-            conn.execute(text("ALTER TABLE orders ADD COLUMN wms_packing_automation_finished_at DATETIME"))
-        conn.commit()
+    cols = _cols(engine, "orders")
+    if not cols or "wms_packing_automation_finished_at" in cols:
+        return
+    with engine.begin() as conn:
+        conn.execute(text(_timestamp_column_ddl(engine, "orders", "wms_packing_automation_finished_at")))
 
 
 def ensure_wms_packing_sessions_automation_finished_at_column(engine: Engine) -> None:
@@ -4305,29 +4318,28 @@ def ensure_wms_packing_sessions_automation_finished_at_column(engine: Engine) ->
 
 def ensure_order_items_wms_picking_line_missing_qty(engine: Engine) -> None:
     """WMS: brak na linii (widok braków)."""
-    with engine.connect() as conn:
-        r = conn.execute(text("PRAGMA table_info(order_items)"))
-        cols = {row[1] for row in r}
-        if "wms_picking_line_missing_qty" not in cols:
-            conn.execute(text("ALTER TABLE order_items ADD COLUMN wms_picking_line_missing_qty REAL DEFAULT 0"))
-        conn.commit()
+    cols = _cols(engine, "order_items")
+    if not cols or "wms_picking_line_missing_qty" in cols:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE order_items ADD COLUMN wms_picking_line_missing_qty REAL DEFAULT 0"))
 
 
 def ensure_order_items_wms_picking_line_status(engine: Engine) -> None:
     """WMS: status linii zbierania (np. missing)."""
-    with engine.connect() as conn:
-        r = conn.execute(text("PRAGMA table_info(order_items)"))
-        cols = {row[1] for row in r}
-        if "wms_picking_line_status" not in cols:
-            conn.execute(text("ALTER TABLE order_items ADD COLUMN wms_picking_line_status VARCHAR(32)"))
-        conn.commit()
+    cols = _cols(engine, "order_items")
+    if not cols or "wms_picking_line_status" in cols:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE order_items ADD COLUMN wms_picking_line_status VARCHAR(32)"))
 
 
 def ensure_order_items_fulfillment_sync_columns(engine: Engine) -> None:
     """OMS/WMS: zgłoszony brak vs wyliczony, ślad zamiany, korekty braku."""
-    with engine.connect() as conn:
-        r = conn.execute(text("PRAGMA table_info(order_items)"))
-        cols = {row[1] for row in r}
+    cols = _cols(engine, "order_items")
+    if not cols:
+        return
+    with engine.begin() as conn:
         if "wms_shortage_declared_qty" not in cols:
             conn.execute(text("ALTER TABLE order_items ADD COLUMN wms_shortage_declared_qty REAL DEFAULT 0"))
         if "oms_removed_qty" not in cols:
@@ -4348,14 +4360,14 @@ def ensure_order_items_fulfillment_sync_columns(engine: Engine) -> None:
             )
         except Exception:
             pass
-        conn.commit()
 
 
 def ensure_order_items_bundle_hierarchy_columns(engine: Engine) -> None:
     """Zestawy OMS: nagłówek komercyjny + komponenty (FK do rodzica)."""
-    with engine.connect() as conn:
-        r = conn.execute(text("PRAGMA table_info(order_items)"))
-        cols = {row[1] for row in r}
+    cols = _cols(engine, "order_items")
+    if not cols:
+        return
+    with engine.begin() as conn:
         if "is_bundle_parent" not in cols:
             conn.execute(text("ALTER TABLE order_items ADD COLUMN is_bundle_parent INTEGER NOT NULL DEFAULT 0"))
         if "parent_bundle_order_item_id" not in cols:
@@ -4371,18 +4383,16 @@ def ensure_order_items_bundle_hierarchy_columns(engine: Engine) -> None:
                 "ON order_items(parent_bundle_order_item_id)"
             )
         )
-        conn.commit()
 
 
 def ensure_order_items_oms_line_status(engine: Engine) -> None:
     """OMS: status linii po zamianie produktu (REPLACED / TO_PICK)."""
-    with engine.connect() as conn:
-        r = conn.execute(text("PRAGMA table_info(order_items)"))
-        cols = {row[1] for row in r}
-        if "oms_line_status" not in cols:
-            conn.execute(text("ALTER TABLE order_items ADD COLUMN oms_line_status VARCHAR(32)"))
-            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_order_items_oms_line_status ON order_items(oms_line_status)"))
-        conn.commit()
+    cols = _cols(engine, "order_items")
+    if not cols or "oms_line_status" in cols:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE order_items ADD COLUMN oms_line_status VARCHAR(32)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_order_items_oms_line_status ON order_items(oms_line_status)"))
 
 
 def ensure_fulfillment_events_table(engine: Engine) -> None:
