@@ -14,10 +14,9 @@ import {
   cartsTableHeadClass,
   cartsTableWrapClass,
 } from "../../../modules/carts/cartsModuleTokens";
+import type { ConsolidationRack } from "../../../modules/consolidation-racks/consolidationRackTypes";
+import { rackOccupancyStats } from "../../../modules/consolidation-racks/rackLayoutUtils";
 import { DAMAGE_TENANT_ID } from "../../damage/damageShared";
-import { WMS_ROUTES } from "../wmsRoutes";
-import type { ConsolidationRack } from "./consolidationRackPanelUtils";
-import { rackOccupancyStats } from "./rackLayoutUtils";
 
 type RackRow = ConsolidationRack & {
   stats: ReturnType<typeof rackOccupancyStats>;
@@ -106,22 +105,14 @@ export default function ConsolidationRacksListPage() {
         title="Regały kompletacyjne"
         description={
           warehouse?.name
-            ? `Konfiguracja regałów w magazynie ${warehouse.name}. Status operacyjny: Control Tower / mapa regałów.`
-            : "Konfiguracja regałów kompletacyjnych."
+            ? `Konfiguracja OMS — magazyn ${warehouse.name}. Operacje WMS (staging, packing) korzystają z tych regałów.`
+            : "Konfiguracja regałów kompletacyjnych w OMS."
         }
         actions={
-          <div className="flex flex-wrap gap-2">
-            <Link
-              to={WMS_ROUTES.consolidationRacks}
-              className="inline-flex h-9 items-center rounded-md border border-slate-200 bg-white px-3 text-[13px] font-medium text-slate-700 hover:bg-slate-50"
-            >
-              Podgląd operacyjny
-            </Link>
-            <button type="button" className={cartsBtnPrimary} onClick={() => navigate("/carts/racks/new")}>
-              <Plus className="mr-1.5 inline h-4 w-4" />
-              Nowy regał kompletacyjny
-            </button>
-          </div>
+          <button type="button" className={cartsBtnPrimary} onClick={() => navigate("/carts/racks/new")}>
+            <Plus className="mr-1.5 inline h-4 w-4" />
+            Nowy regał kompletacyjny
+          </button>
         }
       />
 
@@ -141,12 +132,12 @@ export default function ConsolidationRacksListPage() {
           <table className={cartsTableClass}>
             <thead>
               <tr className={cartsTableHeadClass}>
-                <th className="px-3 py-2">Nazwa regału</th>
+                <th className="px-3 py-2">Nazwa</th>
+                <th className="px-3 py-2">Magazyn</th>
                 <th className="px-3 py-2 text-right">Segmentów</th>
                 <th className="px-3 py-2 text-right">Wolne</th>
                 <th className="px-3 py-2 text-right">Zajęte</th>
-                <th className="px-3 py-2 text-right">Wykorzystanie</th>
-                <th className="px-3 py-2">Magazyn</th>
+                <th className="px-3 py-2 text-right">Śr. wykorzystanie</th>
                 <th className="px-3 py-2 text-right">Akcje</th>
               </tr>
             </thead>
@@ -154,29 +145,27 @@ export default function ConsolidationRacksListPage() {
               {rows.map((rack) => (
                 <tr key={rack.id} className="border-t border-slate-100 hover:bg-slate-50/80">
                   <td className="px-3 py-2.5 font-mono font-semibold text-slate-900">{rack.name}</td>
+                  <td className="px-3 py-2.5 text-slate-700">{rack.warehouseName}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums">{rack.stats.total}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums text-emerald-800">{rack.stats.free}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums text-orange-800">{rack.stats.occupied}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums font-semibold">{rack.stats.utilizationPercent}%</td>
-                  <td className="px-3 py-2.5 text-slate-700">{rack.warehouseName}</td>
                   <td className="px-3 py-2.5">
                     <div className="flex justify-end gap-1">
                       <Link
-                        to={WMS_ROUTES.consolidationRacks}
+                        to={`/carts/racks/${rack.id}/preview`}
                         className="inline-flex h-8 items-center gap-1 rounded-md border border-slate-200 px-2 text-[12px] font-medium text-slate-700 hover:bg-white"
-                        title="Podgląd operacyjny (WMS)"
                       >
                         <Eye className="h-3.5 w-3.5" />
                         Podgląd
                       </Link>
-                      <button
-                        type="button"
-                        onClick={() => navigate(`/carts/racks/${rack.id}`)}
+                      <Link
+                        to={`/carts/racks/${rack.id}/edit`}
                         className="inline-flex h-8 items-center gap-1 rounded-md border border-violet-200 bg-violet-50 px-2 text-[12px] font-medium text-violet-900 hover:bg-violet-100"
                       >
                         <Pencil className="h-3.5 w-3.5" />
                         Edytuj
-                      </button>
+                      </Link>
                       <button
                         type="button"
                         disabled={deletingId === rack.id}

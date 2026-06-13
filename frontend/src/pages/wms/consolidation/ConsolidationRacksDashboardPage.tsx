@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, LayoutGrid, Loader2, RefreshCw, Settings, TowerControl } from "lucide-react";
+import { ArrowLeft, LayoutGrid, Loader2, RefreshCw, TowerControl } from "lucide-react";
 
 import {
   fetchConsolidationRacksDashboard,
@@ -8,11 +8,12 @@ import {
   type ConsolidationRackSegmentDashboard,
 } from "../../../api/wmsConsolidationApi";
 import { useWarehouse } from "../../../context/WarehouseContext";
+import ConsolidationRackGrid from "../../../modules/consolidation-racks/ConsolidationRackGrid";
+import ConsolidationRackSegmentModal from "../../../modules/consolidation-racks/ConsolidationRackSegmentModal";
+import type { SegmentModalData } from "../../../modules/consolidation-racks/consolidationRackTypes";
+import { rackOccupancyStats } from "../../../modules/consolidation-racks/rackLayoutUtils";
 import { DAMAGE_TENANT_ID } from "../../damage/damageShared";
 import { WMS_ROUTES } from "../wmsRoutes";
-import ConsolidationRackGrid from "./ConsolidationRackGrid";
-import ConsolidationRackSegmentPanel, { type SegmentPanelData } from "./ConsolidationRackSegmentPanel";
-import { rackOccupancyStats } from "./rackLayoutUtils";
 import { rackSegmentStateLabel } from "./consolidationRackDashboardUi";
 
 function SummaryTile({
@@ -42,7 +43,7 @@ export default function ConsolidationRacksDashboardPage() {
   const warehouseId = warehouse?.id ?? null;
   const [data, setData] = useState<ConsolidationRackDashboard | null>(null);
   const [loading, setLoading] = useState(true);
-  const [panel, setPanel] = useState<SegmentPanelData | null>(null);
+  const [modal, setModal] = useState<SegmentModalData | null>(null);
 
   const load = useCallback(async () => {
     if (warehouseId == null || warehouseId <= 0) {
@@ -90,13 +91,6 @@ export default function ConsolidationRacksDashboardPage() {
         </Link>
         <div className="flex flex-wrap items-center gap-2">
           <Link
-            to="/carts/racks"
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-          >
-            <Settings className="h-3.5 w-3.5" aria-hidden />
-            Konfiguracja
-          </Link>
-          <Link
             to={WMS_ROUTES.consolidationRacksControlTower}
             className="inline-flex items-center gap-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-900 hover:bg-violet-100"
           >
@@ -120,7 +114,9 @@ export default function ConsolidationRacksDashboardPage() {
           <LayoutGrid className="h-6 w-6 text-violet-600" aria-hidden />
           <div>
             <h1 className="text-xl font-bold text-slate-900">Regały kompletacyjne</h1>
-            <p className="text-sm text-slate-500">Podgląd zajętości — siatka półek jak na hali</p>
+            <p className="text-sm text-slate-500">
+              Widok operacyjny WMS — zajętość, statusy staging i packing. Konfiguracja regałów wyłącznie w OMS.
+            </p>
           </div>
         </div>
       </header>
@@ -160,10 +156,7 @@ export default function ConsolidationRacksDashboardPage() {
 
           {data.racks.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-12 text-center text-sm text-slate-500">
-              Brak skonfigurowanych regałów.{" "}
-              <Link to="/carts/racks" className="font-semibold text-violet-700 underline">
-                Dodaj regał
-              </Link>
+              Brak skonfigurowanych regałów. Skonfiguruj regały w module OMS (Wózki → Regały kompletacyjne).
             </div>
           ) : (
             data.racks.map((rack) => {
@@ -181,6 +174,12 @@ export default function ConsolidationRacksDashboardPage() {
                     order_id: s.order_id,
                     order_number: s.order_number,
                     fill_percent: s.fill_percent,
+                    capacity_dm3: s.capacity_dm3,
+                    order_volume_dm3: s.order_volume_dm3,
+                    utilization_percent: s.utilization_percent,
+                    capacity_overflow: s.capacity_overflow,
+                    dimension_estimated: s.dimension_estimated,
+                    estimated_items_count: s.estimated_items_count,
                   };
                 }),
               }));
@@ -215,7 +214,7 @@ export default function ConsolidationRacksDashboardPage() {
                     dashboardBySegmentId={dashboardBySegmentId}
                     onSegmentClick={(cell) => {
                       const dash = cell.segmentId != null ? dashboardBySegmentId.get(cell.segmentId) : undefined;
-                      setPanel({
+                      setModal({
                         segmentId: cell.segmentId,
                         rackName: rack.rack_name,
                         shelfLabel: dash?.shelf_label ?? cell.shelfLabel,
@@ -247,7 +246,7 @@ export default function ConsolidationRacksDashboardPage() {
         </div>
       )}
 
-      <ConsolidationRackSegmentPanel segment={panel} onClose={() => setPanel(null)} />
+      <ConsolidationRackSegmentModal segment={modal} onClose={() => setModal(null)} />
     </div>
   );
 }

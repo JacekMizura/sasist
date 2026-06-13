@@ -1,6 +1,15 @@
 # Current context
 
-## P5.10 — Refaktor UX regałów kompletacyjnych (lista + edytor) (2026-06-08)
+## P5.10 — Refaktor konfiguracji regałów kompletacyjnych OMS-only (2026-06-08)
+- **Frontend-only** — bez zmian DB / API / lifecycle / P5.3–P5.9
+- **OMS** (`/carts/racks/*`): lista tabeli, kreator/edycja (layout jak Twórca szablonu: lewa kolumna parametrów, prawa siatka), podgląd read-only (`/:id/preview`), edycja (`/:id/edit`)
+- **Wspólny profil wymiarowy regału** — domyślnie wszystkie segmenty dziedziczą L×W×H; nadpisanie per segment opcjonalne (modal + fioletowa kropka)
+- **Modal segmentu** zamiast panelu bocznego; przycisk „Przywróć ustawienia domyślne"
+- **WMS** (`/wms/consolidation-racks`): tylko operacyjny dashboard — bez linku konfiguracji, modal read-only
+- Moduł współdzielony: `frontend/src/modules/consolidation-racks/`; strony OMS: `pages/carts/consolidation-racks/`
+- Usunięto: `ConsolidationRackSegmentPanel`, stare strony OMS w `pages/wms/consolidation/`
+
+## P5.10 (poprzedni) — Refaktor UX regałów kompletacyjnych (lista + edytor) (2026-06-08)
 - **Frontend-only** — bez zmian DB / API / P5.3–P5.9
 - `/carts/racks` — lista tabeli (nazwa, segmenty, wolne/zajęte, %, magazyn; akcje Podgląd→WMS, Edytuj, Usuń)
 - `/carts/racks/new` — kreator dwukolumnowy (dane + układ + domyślne wymiary | siatka interaktywna)

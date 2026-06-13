@@ -1,5 +1,5 @@
-import type { ConsolidationRackSegmentDashboard } from "../../../api/wmsConsolidationApi";
-import { rackSegmentStateClass } from "./consolidationRackDashboardUi";
+import type { ConsolidationRackSegmentDashboard } from "../../api/wmsConsolidationApi";
+import { rackSegmentStateClass } from "../../pages/wms/consolidation/consolidationRackDashboardUi";
 import {
   configSegmentTone,
   levelsToGrid,
@@ -26,15 +26,19 @@ export type RackGridSegmentClick = {
   dimensionEstimated?: boolean;
   estimatedItemsCount?: number;
   state?: string;
+  isOverridden?: boolean;
 };
 
 type Props = {
   rackName: string;
   levels: RackGridLevel[];
-  /** Dashboard segments keyed by segment_id for operational colors */
   dashboardBySegmentId?: Map<number, ConsolidationRackSegmentDashboard>;
   onSegmentClick?: (cell: RackGridSegmentClick) => void;
   compact?: boolean;
+  /** segment_id → czy segment ma własny profil (advanced). */
+  overriddenSegmentIds?: Set<number>;
+  /** `${colIndex}-${rowIndex}` — nadpisania w kreatorze przed zapisem. */
+  overriddenCellKeys?: Set<string>;
 };
 
 function cellTone(
@@ -53,6 +57,8 @@ export default function ConsolidationRackGrid({
   dashboardBySegmentId,
   onSegmentClick,
   compact = false,
+  overriddenSegmentIds,
+  overriddenCellKeys,
 }: Props) {
   const { columnLetters, rowCount, cells } = levelsToGrid(levels);
   if (rowCount === 0 || columnLetters.length === 0) {
@@ -90,6 +96,9 @@ export default function ConsolidationRackGrid({
                 }
                 const dash = cell.id != null ? dashboardBySegmentId?.get(cell.id) : undefined;
                 const shelfLabel = `${rackName}/${cell.slotLabel}`;
+                const isOverridden =
+                  (cell.id != null && overriddenSegmentIds?.has(cell.id))
+                  || overriddenCellKeys?.has(`${colIdx}-${rowIdx}`);
                 return (
                   <td key={colIdx} className="p-1">
                     <button
@@ -115,10 +124,17 @@ export default function ConsolidationRackGrid({
                           dimensionEstimated: cell.dimension_estimated ?? dash?.dimension_estimated,
                           estimatedItemsCount: cell.estimated_items_count ?? dash?.estimated_items_count,
                           state: dash?.state,
+                          isOverridden,
                         })
                       }
-                      className={`flex min-h-[3.25rem] w-full flex-col items-center justify-center rounded-lg border px-1 py-1.5 transition ${cellTone(cell, dashboardBySegmentId)} ${compact ? "min-h-[2.75rem] text-[10px]" : "text-xs"}`}
+                      className={`relative flex min-h-[3.25rem] w-full flex-col items-center justify-center rounded-lg border px-1 py-1.5 transition ${cellTone(cell, dashboardBySegmentId)} ${compact ? "min-h-[2.75rem] text-[10px]" : "text-xs"}`}
                     >
+                      {isOverridden ? (
+                        <span
+                          className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-violet-600"
+                          title="Nadpisany profil segmentu"
+                        />
+                      ) : null}
                       <span className="font-mono font-bold leading-tight">{cell.slotLabel}</span>
                       {!compact && (
                         <span className="mt-0.5 font-mono text-[9px] opacity-70">{shelfLabel}</span>
@@ -129,7 +145,7 @@ export default function ConsolidationRackGrid({
                         </span>
                       ) : null}
                       {(cell.order_number ?? dash?.order_number) ? (
-                        <span className="mt-1 truncate max-w-full text-[10px] font-semibold">
+                        <span className="mt-1 max-w-full truncate text-[10px] font-semibold">
                           {cell.order_number ?? dash?.order_number}
                         </span>
                       ) : null}

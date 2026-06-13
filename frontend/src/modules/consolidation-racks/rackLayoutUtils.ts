@@ -1,10 +1,5 @@
 /**
- * P5.6A — mapowanie UX siatki (kolumny × rzędy) na model backendu
- * ConsolidationRackLevel + RackSegment (bez zmian API).
- *
- * Kolumny = poziomy (level.name = A, B, C…)
- * Rzędy   = segment_index + 1 w obrębie kolumny → etykiety A1, A2, B1, B2…
- * Skan    = RK-01/A2 (format_segment_label w backendzie)
+ * Mapowanie UX siatki (kolumny × rzędy) na model backendu ConsolidationRackLevel + RackSegment.
  */
 
 export type RackLevelPayload = {
@@ -29,7 +24,6 @@ export type SegmentDimensionDefaults = {
   slot_label?: string | null;
 };
 
-/** Draft overrides keyed by `${colIndex}-${segmentIndex}` before rack is saved. */
 export type DraftSegmentOverrides = Record<string, SegmentDimensionDefaults>;
 
 function draftSegmentKey(colIndex: number, segmentIndex: number): string {
@@ -40,7 +34,15 @@ export function columnLetter(colIndex: number): string {
   return String.fromCharCode(65 + colIndex);
 }
 
-/** Etykieta pola siatki (A1, B2, TV-01…) — zgodna z backend segment_slot_label. */
+export function computeCapacityDm3(
+  l: number | null | undefined,
+  w: number | null | undefined,
+  h: number | null | undefined,
+): number | null {
+  if (l == null || w == null || h == null || l <= 0 || w <= 0 || h <= 0) return null;
+  return Math.round((l * w * h) / 1_000_000 * 100) / 100;
+}
+
 export function computeSlotLabel(
   levelName: string | null | undefined,
   levelIndex: number,
@@ -68,7 +70,6 @@ export function computeShelfLabel(
   return `${rackName}/${computeSlotLabel(levelName, levelIndex, segmentIndex, isSegmented, customSlotLabel)}`;
 }
 
-/** Wizard: liczba kolumn × liczba rzędów → payload levels dla POST /racks/ */
 export function buildLevelsFromGrid(
   rowCount: number,
   colCount: number,
@@ -101,38 +102,6 @@ export function buildLevelsFromGrid(
   return levels;
 }
 
-export type GridCellPreview = {
-  levelIndex: number;
-  segmentIndex: number;
-  columnLetter: string;
-  rowNumber: number;
-  slotLabel: string;
-  shelfLabel: string;
-};
-
-export function buildGridPreview(rackName: string, rowCount: number, colCount: number): GridCellPreview[][] {
-  const rows = Math.max(1, Math.min(20, rowCount));
-  const cols = Math.max(1, Math.min(26, colCount));
-  const grid: GridCellPreview[][] = [];
-  for (let row = 0; row < rows; row += 1) {
-    const line: GridCellPreview[] = [];
-    for (let col = 0; col < cols; col += 1) {
-      const letter = columnLetter(col);
-      const isSegmented = rows > 1;
-      line.push({
-        levelIndex: col,
-        segmentIndex: row,
-        columnLetter: letter,
-        rowNumber: row + 1,
-        slotLabel: computeSlotLabel(letter, col, row, isSegmented),
-        shelfLabel: computeShelfLabel(rackName, letter, col, row, isSegmented),
-      });
-    }
-    grid.push(line);
-  }
-  return grid;
-}
-
 export type RackGridLevel = {
   id?: number;
   level_index: number;
@@ -158,7 +127,8 @@ export type RackGridLevel = {
   }>;
 };
 
-/** Podgląd siatki w kreatorze (bez id segmentów). */
+export type ApiSegment = RackGridLevel["segments"][number];
+
 export function buildPreviewLevelsFromGrid(
   rowCount: number,
   colCount: number,
@@ -176,17 +146,13 @@ export function buildPreviewLevelsFromGrid(
       length_mm: s.length_mm,
       width_mm: s.width_mm,
       height_mm: s.height_mm,
-      capacity_dm3:
-        s.length_mm && s.width_mm && s.height_mm
-          ? Math.round((s.length_mm * s.width_mm * s.height_mm) / 1_000_000 * 100) / 100
-          : null,
+      capacity_dm3: computeCapacityDm3(s.length_mm, s.width_mm, s.height_mm),
     })),
   }));
 }
 
 export { draftSegmentKey };
 
-/** Normalizuje levels API → siatka [row][col] (rzędy × kolumny). */
 export function levelsToGrid(levels: RackGridLevel[]): {
   colCount: number;
   rowCount: number;
@@ -245,8 +211,48 @@ export function rackOccupancyStats(levels: RackGridLevel[]): {
   return { total, free, occupied, utilizationPercent };
 }
 
-/** Kolory konfiguracji (tylko order_id — bez plan state). */
 export function configSegmentTone(orderId: number | null | undefined): string {
   if (orderId == null) return "border-emerald-400 bg-emerald-50 text-emerald-950 hover:bg-emerald-100";
   return "border-orange-400 bg-orange-50 text-orange-950 hover:bg-orange-100";
+}
+
+export function segmentDimsMatch(a: SegmentDimensionDefaults, b: SegmentDimensionDefaults): boolean {
+  return (a.length_mm ?? null) === (b.length_mm ?? null)
+    && (a.width_mm ?? null) === (b.width_mm ?? null)
+    && (a.height_mm ?? null) === (b.height_mm ?? null);
+}
+
+/** Najczęstszy profil wymiarów segmentów — domyślny profil regału. */
+export function inferRackDefaultDims(levels: RackGridLevel[]): SegmentDimensionDefaults {
+  const freq = new Map<string, { dims: SegmentDimensionDefaults; count: number }>();
+  for (const lv of levels) {
+    for (const seg of lv.segments ?? []) {
+      const dims: SegmentDimensionDefaults = {
+        length_mm: seg.length_mm ?? null,
+        width_mm: seg.width_mm ?? null,
+        height_mm: seg.height_mm ?? null,
+      };
+      const key = `${dims.length_mm}|${dims.width_mm}|${dims.height_mm}`;
+      const prev = freq.get(key);
+      if (prev) prev.count += 1;
+      else freq.set(key, { dims, count: 1 });
+    }
+  }
+  let best: SegmentDimensionDefaults = {};
+  let max = 0;
+  for (const { dims, count } of freq.values()) {
+    if (count > max) {
+      max = count;
+      best = dims;
+    }
+  }
+  return best;
+}
+
+export function segmentIsOverridden(seg: ApiSegment, rackDefaults: SegmentDimensionDefaults): boolean {
+  if ((seg.slot_label ?? "").trim()) return true;
+  return !segmentDimsMatch(
+    { length_mm: seg.length_mm, width_mm: seg.width_mm, height_mm: seg.height_mm },
+    rackDefaults,
+  );
 }
