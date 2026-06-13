@@ -4,8 +4,7 @@ import { ChevronLeft, ChevronRight, GripVertical, Pin, PinOff, type LucideIcon }
 import type { WmsTabId } from "../wmsTabConfig";
 import {
   STAT_CHIP_CLASS,
-  WMS_MODULE_ACCENTS,
-  type WmsModuleAccent,
+  resolveWmsModuleAccent,
   type WmsModuleTileMetrics,
 } from "./wmsLauncherTypes";
 
@@ -48,7 +47,7 @@ const WmsModuleTile = memo(
     },
     ref,
   ) {
-    const accent: WmsModuleAccent = WMS_MODULE_ACCENTS[moduleId];
+    const accent = resolveWmsModuleAccent(moduleId);
     const stats = metrics?.stats ?? [];
 
     return (

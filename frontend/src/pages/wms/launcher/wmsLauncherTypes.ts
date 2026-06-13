@@ -31,6 +31,19 @@ export type WmsModuleAccent = {
   hoverShadow: string;
 };
 
+/** Safe fallback when a new WmsTabId lacks an explicit accent entry. */
+export const WMS_MODULE_ACCENT_DEFAULT: WmsModuleAccent = {
+  iconBg: "bg-slate-100",
+  iconRing: "ring-slate-200/80",
+  iconText: "text-slate-600",
+  hoverBorder: "hover:border-slate-300",
+  hoverShadow: "hover:shadow-slate-200/80",
+};
+
+export function resolveWmsModuleAccent(moduleId: WmsTabId): WmsModuleAccent {
+  return WMS_MODULE_ACCENTS[moduleId] ?? WMS_MODULE_ACCENT_DEFAULT;
+}
+
 export const WMS_MODULE_ACCENTS: Record<WmsTabId, WmsModuleAccent> = {
   returns: {
     iconBg: "bg-violet-50",
@@ -59,6 +72,20 @@ export const WMS_MODULE_ACCENTS: Record<WmsTabId, WmsModuleAccent> = {
     iconText: "text-slate-600",
     hoverBorder: "hover:border-slate-300",
     hoverShadow: "hover:shadow-slate-200/80",
+  },
+  consolidations: {
+    iconBg: "bg-violet-50",
+    iconRing: "ring-violet-100",
+    iconText: "text-violet-600",
+    hoverBorder: "hover:border-violet-200",
+    hoverShadow: "hover:shadow-violet-100/80",
+  },
+  consolidation_racks: {
+    iconBg: "bg-purple-50",
+    iconRing: "ring-purple-100",
+    iconText: "text-purple-600",
+    hoverBorder: "hover:border-purple-200",
+    hoverShadow: "hover:shadow-purple-100/80",
   },
   picking: {
     iconBg: "bg-indigo-50",
