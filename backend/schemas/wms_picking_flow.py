@@ -10,7 +10,7 @@ from .order import OrderUiMainGroup
 from .picking_config import PickingConfigMode, PickingConfigOrderSort, PickingConfigPickUnit
 
 # Tryby zwracane do UI (mapowanie z DB: bulk/scanned/baskets/mobile)
-PickingFlowMode = Literal["cart_scan", "cart_no_scan", "baskets", "mobile"]
+PickingFlowMode = Literal["cart_scan", "cart_no_scan", "baskets", "mobile", "consolidation_rack"]
 PickingFlowStrategy = Literal["by_date", "by_location"]
 
 

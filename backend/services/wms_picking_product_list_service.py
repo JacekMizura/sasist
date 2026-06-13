@@ -1255,6 +1255,16 @@ def build_wms_picking_product_lines(
         db, order_ids, list(product_ids), tenant_id=tenant_id, cart_id=cart_id
     )
 
+    from .order_consolidation.consolidation_context import consolidation_shelf_labels_by_product
+
+    consolidation_shelves = consolidation_shelf_labels_by_product(
+        db,
+        order_ids=order_ids,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        source_status_id=int(source_status_id),
+    )
+
     lines: list[WmsPickingProductLine] = []
     for pid in sorted(
         product_ids,
@@ -1282,6 +1292,7 @@ def build_wms_picking_product_lines(
         picked_eff = min(picked_raw, max(0.0, float(tq) - miss_sum))
         rem_pick = max(0.0, float(tq) - picked_eff - miss_sum)
         scanner_active = bool(scan_by_pid.get(pid)) if cart_id is not None else (rem_pick > 1e-9)
+        shelf_label = consolidation_shelves.get(int(pid))
         lines.append(
             WmsPickingProductLine(
                 product_id=pid,
@@ -1297,6 +1308,8 @@ def build_wms_picking_product_lines(
                 extra_locations_count=extra_locs,
                 route_sort_key=loc if loc else "\uffff",
                 scanner_active=scanner_active,
+                consolidation_pick=shelf_label is not None,
+                consolidation_shelf_label=shelf_label,
             )
         )
 
@@ -1435,6 +1448,12 @@ def build_wms_picking_product_detail(
     )
     order_rows: list[WmsPickingProductOrderRow] = []
     cid = int(cart_id) if cart_id is not None else None
+    from .order_consolidation.consolidation_context import (
+        consolidation_rack_picking_active,
+        local_plan_item_for_product as _local_plan_item_for_product,
+    )
+    from .order_consolidation.staging_service import _shelf_info_for_order as _shelf_info_for_order_row
+
     if cid is not None:
         for o in orders_q.all():
             oc = o.cart_id
@@ -1453,6 +1472,20 @@ def build_wms_picking_product_detail(
                 decl_short = round(max(0.0, to_pick), 6)
                 basket = o.basket if o.basket_id is not None else None
                 sn, sl, _ = order_shipping_display(o)
+                order_shelf = None
+                order_cons_pick = False
+                if consolidation_rack_picking_active(
+                    db,
+                    tenant_id=int(tenant_id),
+                    warehouse_id=int(warehouse_id),
+                    source_status_id=int(source_status_id),
+                    order_id=int(o.id),
+                ):
+                    local_it = _local_plan_item_for_product(db, order_id=int(o.id), product_id=int(product_id))
+                    if local_it is not None and str(local_it.status).upper() not in ("CANCELLED", "STAGED"):
+                        sh = _shelf_info_for_order_row(db, int(o.id))
+                        order_shelf = sh["shelf_label"] if sh else None
+                        order_cons_pick = order_shelf is not None
                 order_rows.append(
                     WmsPickingProductOrderRow(
                         order_id=int(o.id),
@@ -1465,8 +1498,10 @@ def build_wms_picking_product_detail(
                         line_value=float(oi.total_price) if oi.total_price is not None else None,
                         shipping_method_name=sn,
                         shipping_method_logo_url=sl,
-                        basket_slot=_basket_slot_label(basket),
+                        basket_slot=_basket_slot_label(basket) if not order_cons_pick else None,
                         shortage_declarable_qty=round(decl_short, 6),
+                        consolidation_pick=order_cons_pick,
+                        consolidation_shelf_label=order_shelf,
                     )
                 )
 
@@ -1480,6 +1515,13 @@ def build_wms_picking_product_detail(
     put_to_basket_color_index = 0
 
     if cid is not None and active_fifo_order_id is not None:
+        skip_basket = consolidation_rack_picking_active(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            source_status_id=int(source_status_id),
+            order_id=int(active_fifo_order_id),
+        )
         cart_m = (
             db.query(Cart)
             .options(joinedload(Cart.baskets))
@@ -1490,7 +1532,7 @@ def build_wms_picking_product_detail(
             )
             .first()
         )
-        if cart_m is not None:
+        if cart_m is not None and not skip_basket:
             act_order = (
                 db.query(Order)
                 .options(joinedload(Order.items).joinedload(OrderItem.product))
@@ -1522,8 +1564,10 @@ def build_wms_picking_product_detail(
                             line_value=orow.line_value,
                             shipping_method_name=orow.shipping_method_name,
                             shipping_method_logo_url=orow.shipping_method_logo_url,
-                            basket_slot=_basket_slot_label(bask),
+                            basket_slot=_basket_slot_label(bask) if not orow.consolidation_pick else None,
                             shortage_declarable_qty=orow.shortage_declarable_qty,
+                            consolidation_pick=orow.consolidation_pick,
+                            consolidation_shelf_label=orow.consolidation_shelf_label,
                         )
                     )
                 order_rows = refreshed_rows
@@ -1552,12 +1596,18 @@ def build_wms_picking_product_detail(
     if active_fifo_order_id is not None:
         from .order_consolidation.consolidation_context import (
             active_consolidation_plan,
+            consolidation_rack_picking_active,
             local_plan_item_for_product,
-            order_in_consolidation_staging_pick,
         )
         from .order_consolidation.staging_service import _shelf_info_for_order
 
-        if order_in_consolidation_staging_pick(db, int(active_fifo_order_id)):
+        if consolidation_rack_picking_active(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            source_status_id=int(source_status_id),
+            order_id=int(active_fifo_order_id),
+        ):
             consolidation_active = True
             put_to_basket_label = None
             put_to_basket_color_index = 0
@@ -1573,6 +1623,22 @@ def build_wms_picking_product_detail(
             if local_item is not None:
                 consolidation_plan_item_id = int(local_item.id)
                 pending_shelf_deposit = str(local_item.status).upper() == "PICKED"
+            if consolidation_shelf_label:
+                locations = [
+                    WmsPickingProductLocationRow(
+                        location_id=lid,
+                        location_code=loc_code.get(lid, ""),
+                        quantity=round(loc_qty[lid], 6),
+                        stock_quantity=float(stock_by_lid.get(lid, 0.0)),
+                        put_hints=[
+                            WmsPickingProductPutHint(
+                                label=str(consolidation_shelf_label),
+                                quantity=round(loc_qty[lid], 6),
+                            )
+                        ],
+                    )
+                    for lid in lids_sorted
+                ]
 
     return WmsPickingProductDetailResponse(
         product_id=int(product_id),
@@ -1789,9 +1855,19 @@ def record_wms_quick_pick(
 
     for oid_touch in touched_order_ids:
         recompute_order_fulfillment(db, int(oid_touch), commit=False, session_cart_id=cid)
-        from .order_consolidation.consolidation_context import mark_local_plan_item_picked
+        from .order_consolidation.consolidation_context import (
+            consolidation_rack_picking_active,
+            mark_local_plan_item_picked,
+        )
 
-        mark_local_plan_item_picked(db, order_id=int(oid_touch), product_id=int(product_id))
+        if consolidation_rack_picking_active(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            source_status_id=int(source_status_id),
+            order_id=int(oid_touch),
+        ):
+            mark_local_plan_item_picked(db, order_id=int(oid_touch), product_id=int(product_id))
 
     return last_oid, last_oiid
 

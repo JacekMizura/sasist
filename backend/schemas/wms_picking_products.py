@@ -70,6 +70,14 @@ class WmsPickingProductLine(BaseModel):
         True,
         description="Czy skan EAN może otworzyć ten SKU: linia z ilością do pobrania z magazynu **lub** linia ze statusem braku (``missing``) z jawnym ``missing_quantity`` — SKU nie znika z aktywnej sesji po samym zgłoszeniu braku",
     )
+    consolidation_pick: bool = Field(
+        False,
+        description="P5.6 — lokalna pozycja konsolidacji (multi_mode=consolidation_rack)",
+    )
+    consolidation_shelf_label: Optional[str] = Field(
+        None,
+        description="Etykieta półki kompletacyjnej (np. RK-01/A2)",
+    )
 
 
 class WmsPickingProductLocationRow(BaseModel):
@@ -123,6 +131,14 @@ class WmsPickingProductOrderRow(BaseModel):
         0,
         ge=0,
         description="max(0, wymagane − zebrane na wózku − zgłoszony brak sesji) — ile można jeszcze zgłosić jako brak",
+    )
+    consolidation_pick: bool = Field(
+        False,
+        description="P5.6 — lokalna pozycja konsolidacji na regale kompletacyjnym",
+    )
+    consolidation_shelf_label: Optional[str] = Field(
+        None,
+        description="Półka docelowa (np. RK-01/A2)",
     )
 
 

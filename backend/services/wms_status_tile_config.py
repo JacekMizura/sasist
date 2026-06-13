@@ -21,6 +21,8 @@ def wms_tile_cart_config(single_mode: str | None, multi_mode: str | None) -> Tup
     def needs_cart(m: str) -> bool:
         return m in ("scanned", "baskets")
 
+    # consolidation_rack / bulk / mobile — bez skanu wózka na kafelku statusu
+
     require = needs_cart(sm) or needs_cart(mm)
     if not require:
         return False, None

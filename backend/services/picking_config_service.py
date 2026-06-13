@@ -64,6 +64,38 @@ def normalize_bulk_max_fields(
     return ms, mm
 
 
+def warehouse_has_consolidation_racks(db: Session, *, tenant_id: int, warehouse_id: int) -> bool:
+    from ..models.consolidation_rack import ConsolidationRack
+
+    row = (
+        db.query(ConsolidationRack.id)
+        .filter(
+            ConsolidationRack.tenant_id == int(tenant_id),
+            ConsolidationRack.warehouse_id == int(warehouse_id),
+        )
+        .first()
+    )
+    return row is not None
+
+
+def assert_consolidation_rack_modes_valid(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    single_mode: PickingConfigMode,
+    multi_mode: PickingConfigMode,
+) -> None:
+    if str(single_mode).strip().lower() == "consolidation_rack":
+        raise ValueError("Regał kompletacyjny jest dostępny tylko dla zamówień wieloelementowych.")
+    if str(multi_mode).strip().lower() == "consolidation_rack":
+        if not warehouse_has_consolidation_racks(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id)):
+            raise ValueError(
+                "Brak skonfigurowanych regałów kompletacyjnych w magazynie — "
+                "dodaj regał przed wyborem trybu „Regał kompletacyjny”."
+            )
+
+
 def assert_ui_status_belongs(
     db: Session,
     *,
@@ -114,6 +146,14 @@ def create_picking_config(db: Session, body: PickingConfigCreate) -> PickingConf
     if shortage_id is not None:
         assert_ui_status_belongs(db, tenant_id=body.tenant_id, warehouse_id=body.warehouse_id, status_id=int(shortage_id))
 
+    assert_consolidation_rack_modes_valid(
+        db,
+        tenant_id=int(body.tenant_id),
+        warehouse_id=int(body.warehouse_id),
+        single_mode=body.single_mode,
+        multi_mode=body.multi_mode,
+    )
+
     ms, mm = normalize_bulk_max_fields(
         body.single_mode,
         body.multi_mode,
@@ -156,6 +196,14 @@ def update_picking_config(
     shortage_id = getattr(body, "status_on_shortage_id", None)
     if shortage_id is not None:
         assert_ui_status_belongs(db, tenant_id=tenant_id, warehouse_id=warehouse_id, status_id=int(shortage_id))
+
+    assert_consolidation_rack_modes_valid(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        single_mode=body.single_mode,
+        multi_mode=body.multi_mode,
+    )
 
     ms, mm = normalize_bulk_max_fields(
         body.single_mode,
@@ -219,6 +267,13 @@ def replace_all_picking_configs_for_warehouse(
             assert_ui_status_belongs(
                 db, tenant_id=tenant_id, warehouse_id=warehouse_id, status_id=int(sid_short)
             )
+        assert_consolidation_rack_modes_valid(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            single_mode=i.single_mode,
+            multi_mode=i.multi_mode,
+        )
 
     db.query(PickingConfig).filter(
         PickingConfig.tenant_id == int(tenant_id),

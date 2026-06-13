@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Sequence
+
 from sqlalchemy.orm import Session
 
 from ...models.consolidation_rack import RackSegment
@@ -18,6 +20,47 @@ from .constants import (
 )
 from .progress_helpers import is_cross_warehouse_transfer
 from .staging_service import _shelf_info_for_order
+
+CONSOLIDATION_RACK_PICKING_MODE = "consolidation_rack"
+
+
+def multi_mode_is_consolidation_rack(mode: str | None) -> bool:
+    return (mode or "").strip().lower() == CONSOLIDATION_RACK_PICKING_MODE
+
+
+def picking_config_multi_mode(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    source_status_id: int,
+) -> str | None:
+    from ..picking_config_query import get_picking_config
+
+    pc = get_picking_config(db, int(tenant_id), int(warehouse_id), int(source_status_id))
+    if pc is None:
+        return None
+    return str(pc.multi_mode or "")
+
+
+def consolidation_rack_picking_active(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    source_status_id: int,
+    order_id: int,
+) -> bool:
+    """True when multi_mode=consolidation_rack and order has STAGING shelf assigned."""
+    mm = picking_config_multi_mode(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        source_status_id=int(source_status_id),
+    )
+    if not multi_mode_is_consolidation_rack(mm):
+        return False
+    return order_in_consolidation_staging_pick(db, int(order_id))
 
 
 def active_consolidation_plan(db: Session, order_id: int) -> OrderConsolidationPlan | None:
@@ -165,8 +208,25 @@ def deposit_progress_fields(db: Session, plan: OrderConsolidationPlan) -> dict:
     }
 
 
-def picking_detail_extras(db: Session, order_id: int) -> dict:
-    if not order_in_consolidation_staging_pick(db, int(order_id)):
+def picking_detail_extras(
+    db: Session,
+    order_id: int,
+    *,
+    tenant_id: int | None = None,
+    warehouse_id: int | None = None,
+    source_status_id: int | None = None,
+) -> dict:
+    if tenant_id is not None and warehouse_id is not None and source_status_id is not None:
+        active = consolidation_rack_picking_active(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            source_status_id=int(source_status_id),
+            order_id=int(order_id),
+        )
+    else:
+        active = order_in_consolidation_staging_pick(db, int(order_id))
+    if not active:
         return {
             "consolidation_active": False,
             "consolidation_shelf_label": None,
@@ -181,6 +241,49 @@ def picking_detail_extras(db: Session, order_id: int) -> dict:
         "consolidation_plan_id": int(plan.id) if plan else None,
         "pending_shelf_deposit": False,
     }
+
+
+def consolidation_shelf_labels_by_product(
+    db: Session,
+    *,
+    order_ids: Sequence[int],
+    tenant_id: int,
+    warehouse_id: int,
+    source_status_id: int,
+) -> dict[int, str]:
+    """Map product_id → shelf label for local consolidation lines in rack-pick mode."""
+    from ...models.order_consolidation_plan import OrderConsolidationPlanItem
+
+    out: dict[int, str] = {}
+    for oid in order_ids:
+        if not consolidation_rack_picking_active(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            source_status_id=int(source_status_id),
+            order_id=int(oid),
+        ):
+            continue
+        shelf = _shelf_info_for_order(db, int(oid))
+        label = shelf["shelf_label"] if shelf else None
+        if not label:
+            continue
+        plan = active_consolidation_plan(db, int(oid))
+        if plan is None:
+            continue
+        items = (
+            db.query(OrderConsolidationPlanItem)
+            .filter(OrderConsolidationPlanItem.plan_id == int(plan.id))
+            .all()
+        )
+        for it in items:
+            if is_cross_warehouse_transfer(it):
+                continue
+            st = str(it.status).upper()
+            if st in ("CANCELLED", "STAGED"):
+                continue
+            out[int(it.product_id)] = str(label)
+    return out
 
 
 def item_eligible_for_shelf_deposit(item: OrderConsolidationPlanItem) -> bool:

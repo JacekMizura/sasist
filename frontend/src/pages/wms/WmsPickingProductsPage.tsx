@@ -986,6 +986,16 @@ export default function WmsPickingProductsPage() {
                       }`}>
                         {r.name}
                       </h3>
+                      {r.consolidation_pick && r.consolidation_shelf_label ? (
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                          <span className="inline-flex rounded-md border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet-900">
+                            Konsolidacja
+                          </span>
+                          <span className="font-mono text-[11px] font-semibold text-violet-800">
+                            {r.consolidation_shelf_label}
+                          </span>
+                        </div>
+                      ) : null}
                     </div>
                   </div>
 

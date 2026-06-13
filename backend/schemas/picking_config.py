@@ -8,7 +8,7 @@ from typing import Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 PickingConfigStrategy = Literal["locations", "orders"]
-PickingConfigMode = Literal["bulk", "scanned", "baskets", "mobile"]
+PickingConfigMode = Literal["bulk", "scanned", "baskets", "mobile", "consolidation_rack"]
 PickingConfigPickUnit = Literal["orders", "products"]
 PickingConfigOrderSort = Literal["date", "location", "courier"]
 

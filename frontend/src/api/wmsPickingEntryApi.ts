@@ -2,7 +2,7 @@ import api from "./axios";
 import type { OrderUiMainGroup } from "../types/orderUiStatus";
 
 /** Tryby z API ``GET /wms/picking/config`` (mapowanie z DB). */
-export type PickingFlowMode = "cart_scan" | "cart_no_scan" | "baskets" | "mobile";
+export type PickingFlowMode = "cart_scan" | "cart_no_scan" | "baskets" | "mobile" | "consolidation_rack";
 export type PickingFlowStrategy = "by_date" | "by_location";
 
 /** Status panelu z rekordu ``picking_config`` — ``GET /wms/picking/configured-statuses`` */

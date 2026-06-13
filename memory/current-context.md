@@ -1,5 +1,14 @@
 # Current context
 
+## P5.6 — WMS picking config: consolidation rack mode (2026-06-08)
+- Nowy tryb **`consolidation_rack`** („Regał kompletacyjny”) — tylko **zamówienia wieloelementowe** w konfiguracji pickingu
+- Walidacja zapisu: wymaga co najmniej jednego regału kompletacyjnego w magazynie; zablokowany dla single-item
+- Gating SSOT: `consolidation_rack_picking_active()` = `multi_mode=consolidation_rack` + plan STAGING z przypisaną półką
+- Picking: odkład bez koszyka/wózka; kolejka produktów — badge **KONSOLIDACJA** + `shelf_label` (np. RK-01/A2); detail — „Odłóż na …”
+- `mark_local_plan_item_picked` tylko przy aktywnym trybie regału; READY_TO_PACK nadal wyłącznie po all items STAGED (P5.4/P5.5)
+- Enums: `PickingConfigMode`, `PickingFlowMode`; UI: `WmsSettingsPage` + typy API frontend
+- Tests: `test_picking_config_consolidation_rack.py` (5) + deposit suite bez regresji
+
 ## P5.8 — Consolidation rack control tower (2026-06-08)
 - Warstwa monitoringu dla kierownika/lidera — bez zmian w konsolidacji/MM/pick/pack
 - API: `GET /wms/consolidation-racks/control-tower` — zajęte półki + KPI + alerty + brakujące pozycje
@@ -14,7 +23,7 @@
 - Dashboard: `summary.remaining_percent` (wolne / łącznie); UI: Wolne półki / Zajęte / Pozostało X%
 - Tests: `test_consolidation_shelf_allocation.py` (7) + staging/rack dashboard zaktualizowane
 
-## P5.6 — Consolidation rack dashboard (2026-06-08)
+## Consolidation rack dashboard (prior)
 - Read-only mapa zajętości regałów kompletacyjnych (bez zmian w flow konsolidacji/MM/pick/pack)
 - API: `GET /wms/consolidation-racks/dashboard` — bulk load (racks + orders + plans + items, ≤5 SELECT)
 - Stany półki: FREE (zielony), STAGING (niebieski), READY_TO_PACK (pomarańczowy), EXCEPTION (czerwony)

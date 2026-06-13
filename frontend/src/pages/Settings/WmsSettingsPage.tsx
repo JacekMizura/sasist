@@ -599,7 +599,7 @@ const PickingShortageSettingsPanel = forwardRef<
 
 type PickingCollectionMethod = "orders" | "products";
 type PickingBatchType = "single" | "multi";
-type PickingContainers = "cart_no_scan" | "cart_scan" | "baskets" | "mobile_cart";
+type PickingContainers = "cart_no_scan" | "cart_scan" | "baskets" | "mobile_cart" | "consolidation_rack";
 type PickingOrderStrategy = "locations" | "oldest_date";
 
 type PickingMode = "by_orders" | "by_products";
@@ -610,6 +610,7 @@ const PICKING_WHERE_OPTIONS: Array<{ value: PickingContainers; label: string }> 
   { value: "cart_scan", label: "Wózek (ze skanowaniem)" },
   { value: "baskets", label: "Wózek z koszykami" },
   { value: "mobile_cart", label: "Wózek mobilny" },
+  { value: "consolidation_rack", label: "Regał kompletacyjny" },
 ];
 
 const PICKING_MODE_OPTIONS: Array<{ value: PickingMode; label: string; hint: string }> = [
@@ -761,6 +762,7 @@ function dbModeToContainers(m: PickingConfigModeDb): PickingContainers {
   if (m === "bulk") return "cart_no_scan";
   if (m === "scanned") return "cart_scan";
   if (m === "baskets") return "baskets";
+  if (m === "consolidation_rack") return "consolidation_rack";
   return "mobile_cart";
 }
 
@@ -802,6 +804,7 @@ function uiContainersToDbMode(c: PickingContainers): PickingConfigModeDb {
   if (c === "cart_no_scan") return "bulk";
   if (c === "cart_scan") return "scanned";
   if (c === "baskets") return "baskets";
+  if (c === "consolidation_rack") return "consolidation_rack";
   return "mobile";
 }
 
@@ -810,7 +813,10 @@ function validateSavedConfigForServer(cfg: SavedPickingConfiguration): string | 
     return `Reguła „${cfg.statusToPickName}”: status do zbierania i po zebraniu muszą się różnić.`;
   }
   if (cfg.pickingMode === "by_products" && cfg.blocks.multi_item.containers === "cart_no_scan") {
-    return `Reguła „${cfg.statusToPickName}”: przy zbieraniu po produktach (wieloelementowe) nie można użyć wózka bez skanowania — wybierz wózek z koszykami, wózek ze skanem lub wózek mobilny.`;
+    return `Reguła „${cfg.statusToPickName}”: przy zbieraniu po produktach (wieloelementowe) nie można użyć wózka bez skanowania — wybierz wózek z koszykami, wózek ze skanem, wózek mobilny lub regał kompletacyjny.`;
+  }
+  if (cfg.blocks.single_item.containers === "consolidation_rack") {
+    return `Reguła „${cfg.statusToPickName}”: regał kompletacyjny jest dostępny tylko dla zamówień wieloelementowych.`;
   }
   return null;
 }
@@ -906,6 +912,9 @@ function pickingFlowSummaryLine(config: SavedPickingConfiguration, orderTypeKey:
       ? "Trasa: lokalizacje · pick & pack (wiele zamówień — wg pojemności)"
       : "Trasa: lokalizacje · jedno zamówienie na przejście · pick & pack";
   }
+  if (block.containers === "consolidation_rack") {
+    return "Konsolidacja: lokalne pozycje odkładasz na przypisaną półkę regału (RK-xx/Ax)";
+  }
   return block.batchType === "multi"
     ? "Trasa: lokalizacje · zbiór wielu zamówień (wg koszyków / skanów / limitów)"
     : "Trasa: lokalizacje · jedno zamówienie na przejście";
@@ -987,22 +996,26 @@ function PickingConfiguratorFields({
   const isSingleItem = orderTypeKey === "single_item";
   const isMobile = value.containers === "mobile_cart";
   const isBaskets = value.containers === "baskets";
+  const isConsolidationRack = value.containers === "consolidation_rack";
   const byOrdersMode = pickingMode === "by_orders";
 
   const containerChoices = (() => {
-    if (byOrdersMode) return PICKING_WHERE_OPTIONS;
+    const base = PICKING_WHERE_OPTIONS.filter((o) =>
+      orderTypeKey === "single_item" ? o.value !== "consolidation_rack" : true,
+    );
+    if (byOrdersMode) return base;
     if (!isSingleItem && orderTypeKey === "multi_item") {
-      return PICKING_WHERE_OPTIONS.filter((o) => o.value !== "cart_no_scan");
+      return base.filter((o) => o.value !== "cart_no_scan");
     }
-    return PICKING_WHERE_OPTIONS;
+    return base;
   })();
 
   const containerFootnote =
     !byOrdersMode && !isSingleItem
-      ? "Zamówienia wielopozycyjne na trasie po lokalizacjach wymagają rozdzielenia (koszyki, skan slotów na wózku lub wózek mobilny). Wózek bez skanowania nie jest dostępny."
+      ? "Zamówienia wielopozycyjne na trasie po lokalizacjach wymagają rozdzielenia (koszyki, skan slotów, wózek mobilny lub regał kompletacyjny dla konsolidacji). Wózek bez skanowania nie jest dostępny."
       : undefined;
 
-  const showBatchSection = !byOrdersMode && !isMobile && !isSingleItem;
+  const showBatchSection = !byOrdersMode && !isMobile && !isConsolidationRack && !isSingleItem;
   const isBatchSizeContainerLimited = true;
 
   if (byOrdersMode) {
@@ -1025,13 +1038,22 @@ function PickingConfiguratorFields({
             </p>
           </div>
         ) : null}
+        {isConsolidationRack && orderTypeKey === "multi_item" ? (
+          <div className="rounded-lg border border-violet-100 bg-violet-50 px-4 py-3">
+            <p className="text-xs font-semibold text-violet-900">Regał kompletacyjny (konsolidacja)</p>
+            <p className="mt-1 text-xs leading-relaxed text-violet-800">
+              Lokalne pozycje planów konsolidacyjnych odkładasz na przypisaną półkę (np. RK-01/A2), nie do koszyka ani slotu wózka.
+              Wymaga skonfigurowanych regałów kompletacyjnych w magazynie.
+            </p>
+          </div>
+        ) : null}
       </div>
     );
   }
 
   let step = 1;
-  const tBatch = !isMobile && showBatchSection ? `${step++}. Typ zbioru` : null;
-  const tRoute = !isMobile ? `${step++}. Kolejność w magazynie` : null;
+  const tBatch = !isMobile && !isConsolidationRack && showBatchSection ? `${step++}. Typ zbioru` : null;
+  const tRoute = !isMobile && !isConsolidationRack ? `${step++}. Kolejność w magazynie` : null;
 
   return (
     <div className="space-y-5 px-4 pb-4 pt-1 sm:px-5 sm:pb-5">
@@ -1048,6 +1070,15 @@ function PickingConfiguratorFields({
           <p className="text-xs font-semibold text-blue-900">Pick & pack na wózku mobilnym</p>
           <p className="mt-1 text-xs leading-relaxed text-blue-800">
             Zbieranie i pakowanie odbywa się w jednym przejściu — trasa po lokalizacjach, bez osobnej konfiguracji koszyków.
+          </p>
+        </div>
+      ) : null}
+
+      {isConsolidationRack && orderTypeKey === "multi_item" ? (
+        <div className="rounded-lg border border-violet-100 bg-violet-50 px-4 py-3">
+          <p className="text-xs font-semibold text-violet-900">Regał kompletacyjny (konsolidacja)</p>
+          <p className="mt-1 text-xs leading-relaxed text-violet-800">
+            Dotyczy wyłącznie planów konsolidacyjnych ze statusem STAGING i przypisaną półką. Pozycje lokalne: TO_PICK → PICKED → odkład na półkę.
           </p>
         </div>
       ) : null}

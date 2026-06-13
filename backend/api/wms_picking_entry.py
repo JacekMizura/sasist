@@ -114,6 +114,8 @@ def _db_mode_to_flow_mode(raw: str | None) -> PickingFlowMode:
         return "baskets"
     if m == "mobile":
         return "mobile"
+    if m == "consolidation_rack":
+        return "consolidation_rack"
     logger.warning("Unknown picking_config mode %r — default cart_no_scan", raw)
     return "cart_no_scan"
 

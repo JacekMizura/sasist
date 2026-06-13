@@ -43,6 +43,8 @@ export type WmsPickingProductLineApi = {
   locations?: Array<{ location_id: number; location_code?: string | null }>;
   extra_locations_count?: number;
   route_sort_key: string;
+  consolidation_pick?: boolean;
+  consolidation_shelf_label?: string | null;
 };
 
 export type WmsPickingProductLinesResponseApi = {
@@ -81,6 +83,8 @@ export type WmsPickingProductOrderRowApi = {
   basket_slot: string | null;
   /** Ile szt. można jeszcze zgłosić jako brak sesji (zgodnie z backendem report-shortage). */
   shortage_declarable_qty?: number;
+  consolidation_pick?: boolean;
+  consolidation_shelf_label?: string | null;
 };
 
 export type WmsPickingProductDetailApi = {

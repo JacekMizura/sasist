@@ -3,7 +3,7 @@
  */
 import api from "./axios";
 
-export type PickingConfigModeDb = "bulk" | "scanned" | "baskets" | "mobile";
+export type PickingConfigModeDb = "bulk" | "scanned" | "baskets" | "mobile" | "consolidation_rack";
 export type PickingConfigStrategyDb = "locations" | "orders";
 export type PickingConfigPickUnitDb = "orders" | "products";
 export type PickingConfigOrderSortDb = "date" | "location" | "courier";
