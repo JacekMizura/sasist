@@ -16,6 +16,11 @@ export type SegmentPanelData = {
   widthMm?: number | null;
   heightMm?: number | null;
   capacityDm3?: number | null;
+  orderVolumeDm3?: number | null;
+  utilizationPercent?: number | null;
+  capacityOverflow?: boolean;
+  dimensionEstimated?: boolean;
+  estimatedItemsCount?: number;
   readOnly?: boolean;
 };
 
@@ -190,6 +195,41 @@ export default function ConsolidationRackSegmentPanel({ segment, onClose, onSave
             </p>
           </>
         )}
+
+        {segment.orderId != null &&
+        (segment.capacityDm3 != null || segment.orderVolumeDm3 != null) ? (
+          <section className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm">
+            <h3 className="text-xs font-bold uppercase tracking-wide text-slate-600">Pojemność</h3>
+            <dl className="space-y-1.5">
+              <div className="flex justify-between gap-2">
+                <dt className="text-slate-600">Pojemność półki</dt>
+                <dd className="font-mono font-semibold tabular-nums">
+                  {segment.capacityDm3 != null ? `${segment.capacityDm3.toFixed(1)} dm³` : "—"}
+                </dd>
+              </div>
+              <div className="flex justify-between gap-2">
+                <dt className="text-slate-600">Objętość zamówienia</dt>
+                <dd className="font-mono font-semibold tabular-nums">
+                  {segment.orderVolumeDm3 != null ? `${segment.orderVolumeDm3.toFixed(1)} dm³` : "—"}
+                </dd>
+              </div>
+              {segment.utilizationPercent != null ? (
+                <div className="flex justify-between gap-2">
+                  <dt className="text-slate-600">Wykorzystanie</dt>
+                  <dd className="font-mono font-semibold tabular-nums">{segment.utilizationPercent.toFixed(0)}%</dd>
+                </div>
+              ) : null}
+            </dl>
+            {segment.dimensionEstimated && (segment.estimatedItemsCount ?? 0) > 0 ? (
+              <p className="text-xs text-amber-800">
+                Brak wymiarów dla {segment.estimatedItemsCount} produktów (wartości szacowane)
+              </p>
+            ) : null}
+            {segment.capacityOverflow ? (
+              <p className="text-xs font-medium text-red-700">Objętość przekracza pojemność półki</p>
+            ) : null}
+          </section>
+        ) : null}
 
         <dl className="space-y-3 text-sm">
           <div>

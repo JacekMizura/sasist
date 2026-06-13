@@ -144,6 +144,13 @@ export default function ConsolidationControlTowerPage() {
             <KpiTile label="Gotowe do pack" value={summary.counts.READY_TO_PACK} tone="border-orange-200 bg-orange-50 text-orange-950" />
             <KpiTile label="Wyjątki" value={summary.counts.EXCEPTION} tone="border-red-200 bg-red-50 text-red-950" />
             <KpiTile label="Manual review" value={summary.counts.MANUAL_REVIEW_REQUIRED} tone="border-rose-200 bg-rose-50 text-rose-950" />
+            {(summary.capacity_warning_count ?? 0) > 0 ? (
+              <KpiTile
+                label="Ostrzeżenia pojemności"
+                value={summary.capacity_warning_count ?? 0}
+                tone="border-amber-300 bg-amber-50 text-amber-950"
+              />
+            ) : null}
           </section>
 
           <section className="grid gap-3 md:grid-cols-3">

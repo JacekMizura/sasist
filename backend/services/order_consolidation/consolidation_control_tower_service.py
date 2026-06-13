@@ -28,6 +28,7 @@ from .progress_helpers import (
     progress_fields_for_items,
 )
 from .rack_dashboard_service import _resolve_segment_state
+from .segment_capacity_service import build_segment_capacity_context
 
 # SLA thresholds (minutes)
 SLA_READY_FOR_STAGING_WARN = 30
@@ -284,6 +285,19 @@ def _ready_to_pack_row(data: _TowerData, plan: OrderConsolidationPlan, order: Or
     }
 
 
+def _plan_capacity_warning(
+    db: Session,
+    order_id: int,
+    segment_by_order: dict[int, tuple[RackSegment, ConsolidationRackLevel, ConsolidationRack]],
+) -> bool:
+    row = segment_by_order.get(int(order_id))
+    if row is None:
+        return False
+    seg, level, rack = row
+    ctx = build_segment_capacity_context(db, seg, level, rack, int(order_id))
+    return bool(ctx.get("capacity_overflow") or ctx.get("dimension_estimated"))
+
+
 def build_consolidation_tower_summary(db: Session, *, tenant_id: int, warehouse_id: int) -> dict:
     data = _load_tower_data(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id))
 
@@ -331,6 +345,8 @@ def build_consolidation_tower_summary(db: Session, *, tenant_id: int, warehouse_
 
     alert_warning = 0
     alert_critical = 0
+    capacity_warning_count = 0
+    warned_orders: set[int] = set()
     for plan, order in data.plans:
         st = str(plan.status).upper()
         wait = _minutes_since(plan.updated_at)
@@ -348,6 +364,11 @@ def build_consolidation_tower_summary(db: Session, *, tenant_id: int, warehouse_
                     alert_warning += 1
                 elif sev == "CRITICAL":
                     alert_critical += 1
+        if st in (PLAN_STATUS_STAGING, PLAN_STATUS_COMPLETED):
+            oid = int(order.id)
+            if oid not in warned_orders and _plan_capacity_warning(db, oid, data.segment_by_order):
+                capacity_warning_count += 1
+                warned_orders.add(oid)
 
     free = max(0, total_segments - occupied)
     occ_pct = round(100.0 * occupied / total_segments, 1) if total_segments > 0 else 0.0
@@ -367,6 +388,7 @@ def build_consolidation_tower_summary(db: Session, *, tenant_id: int, warehouse_
             "occupancy_percent": occ_pct,
         },
         "alert_counts": {"warning": alert_warning, "critical": alert_critical},
+        "capacity_warning_count": capacity_warning_count,
     }
 
 

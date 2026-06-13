@@ -6,6 +6,8 @@ from ...models.consolidation_rack import ConsolidationRack, ConsolidationRackLev
 from ..slotting.capacity_service import cm3_to_dm3
 from ..slotting.slotting_models import DEFAULT_WEIGHT_KG_PER_DM3, LocationCapacityProfile
 from .progress_helpers import format_segment_label
+from .order_footprint_service import OrderFootprintResult, calculate_order_footprint
+
 
 def segment_volume_capacity_dm3(
     length_mm: float | None,
@@ -33,6 +35,45 @@ def sync_segment_capacity_dm3(segment: RackSegment) -> float | None:
         return segment.capacity_dm3
     segment.capacity_dm3 = None
     return None
+
+
+def resolve_segment_capacity_dm3(segment: RackSegment) -> float:
+    stored = float(getattr(segment, "capacity_dm3", 0) or 0)
+    if stored > 0:
+        return stored
+    return segment_volume_capacity_dm3(
+        getattr(segment, "length_mm", None),
+        getattr(segment, "width_mm", None),
+        getattr(segment, "height_mm", None),
+    )
+
+
+def evaluate_capacity_match(
+    order_volume_dm3: float,
+    segment_capacity_dm3: float,
+) -> dict:
+    """Projection for UI / control tower — never blocks allocation."""
+    capacity_unknown = segment_capacity_dm3 <= 0
+    if capacity_unknown or order_volume_dm3 <= 0:
+        return {
+            "segment_capacity_dm3": segment_capacity_dm3 if segment_capacity_dm3 > 0 else None,
+            "order_volume_dm3": round(order_volume_dm3, 4) if order_volume_dm3 > 0 else None,
+            "utilization_percent": None,
+            "capacity_overflow": False,
+            "capacity_unknown": capacity_unknown,
+            "scoring_applied": False,
+        }
+
+    utilization = round(order_volume_dm3 / segment_capacity_dm3 * 100.0, 1)
+    overflow = order_volume_dm3 > segment_capacity_dm3
+    return {
+        "segment_capacity_dm3": round(segment_capacity_dm3, 4),
+        "order_volume_dm3": round(order_volume_dm3, 4),
+        "utilization_percent": utilization,
+        "capacity_overflow": overflow,
+        "capacity_unknown": False,
+        "scoring_applied": True,
+    }
 
 
 def segment_as_location_capacity_profile(
@@ -65,3 +106,23 @@ def segment_as_location_capacity_profile(
         operational_zone="consolidation_rack",
         location_type="consolidation_segment",
     )
+
+
+def build_segment_capacity_context(
+    db,
+    segment: RackSegment,
+    level: ConsolidationRackLevel,
+    rack: ConsolidationRack,
+    order_id: int,
+) -> dict:
+    """Read-only capacity projection for UI / control tower."""
+    cap = resolve_segment_capacity_dm3(segment)
+    footprint: OrderFootprintResult = calculate_order_footprint(db, int(order_id))
+    match = evaluate_capacity_match(footprint.volume_dm3, cap)
+    return {
+        **match,
+        "dimension_estimated": footprint.dimension_estimated,
+        "estimated_items_count": footprint.estimated_items_count,
+        "total_items_count": footprint.total_items_count,
+        "shelf_label": format_segment_label(str(rack.name), level, segment),
+    }

@@ -133,6 +133,11 @@ export default function RacksTab() {
                       widthMm: cell.widthMm,
                       heightMm: cell.heightMm,
                       capacityDm3: cell.capacityDm3,
+                      orderVolumeDm3: cell.orderVolumeDm3,
+                      utilizationPercent: cell.utilizationPercent,
+                      capacityOverflow: cell.capacityOverflow,
+                      dimensionEstimated: cell.dimensionEstimated,
+                      estimatedItemsCount: cell.estimatedItemsCount,
                       readOnly: false,
                     })
                   }

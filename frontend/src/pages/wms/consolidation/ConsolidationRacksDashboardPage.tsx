@@ -224,6 +224,12 @@ export default function ConsolidationRacksDashboardPage() {
                         orderId: cell.orderId,
                         orderNumber: cell.orderNumber,
                         fillPercent: cell.fillPercent,
+                        capacityDm3: cell.capacityDm3 ?? dash?.capacity_dm3,
+                        orderVolumeDm3: cell.orderVolumeDm3 ?? dash?.order_volume_dm3,
+                        utilizationPercent: cell.utilizationPercent ?? dash?.utilization_percent,
+                        capacityOverflow: cell.capacityOverflow ?? dash?.capacity_overflow,
+                        dimensionEstimated: cell.dimensionEstimated ?? dash?.dimension_estimated,
+                        estimatedItemsCount: cell.estimatedItemsCount ?? dash?.estimated_items_count,
                       });
                     }}
                   />

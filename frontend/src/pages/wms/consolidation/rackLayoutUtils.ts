@@ -115,6 +115,11 @@ export type RackGridLevel = {
     width_mm?: number | null;
     height_mm?: number | null;
     capacity_dm3?: number | null;
+    order_volume_dm3?: number | null;
+    utilization_percent?: number | null;
+    capacity_overflow?: boolean;
+    dimension_estimated?: boolean;
+    estimated_items_count?: number;
   }>;
 };
 

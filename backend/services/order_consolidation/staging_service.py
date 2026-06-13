@@ -100,10 +100,21 @@ def _segment_with_context(db: Session, segment_id: int) -> tuple[RackSegment, Co
     return row[0], row[1], row[2]
 
 
-def find_free_segment(db: Session, *, tenant_id: int, warehouse_id: int) -> RackSegment | None:
+def find_free_segment(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    order_id: int | None = None,
+) -> RackSegment | None:
     from .shelf_allocation_service import allocate_consolidation_shelf
 
-    return allocate_consolidation_shelf(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id))
+    return allocate_consolidation_shelf(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        order_id=order_id,
+    )
 
 
 def update_segment_fill_from_plan(db: Session, plan_id: int, order_id: int) -> None:
@@ -198,7 +209,12 @@ def start_consolidation_staging(db: Session, *, plan_id: int, tenant_id: int) ->
             "message": "Półka już przypisana do tego zamówienia.",
         }
 
-    seg = find_free_segment(db, tenant_id=int(tenant_id), warehouse_id=int(plan.target_warehouse_id))
+    seg = find_free_segment(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(plan.target_warehouse_id),
+        order_id=int(order.id),
+    )
     if seg is None:
         raise ConsolidationNoFreeShelfError()
 

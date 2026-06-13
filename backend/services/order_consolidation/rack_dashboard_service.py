@@ -16,6 +16,7 @@ from .constants import (
     PLAN_STATUS_STAGING,
 )
 from .progress_helpers import format_segment_label, is_cross_warehouse_transfer, segment_slot_label
+from .segment_capacity_service import build_segment_capacity_context
 
 SEGMENT_STATE_FREE = "FREE"
 SEGMENT_STATE_STAGING = "STAGING"
@@ -83,6 +84,7 @@ def _customer_name(order: Order | None) -> str | None:
 
 
 def _segment_payload(
+    db: Session,
     *,
     segment: RackSegment,
     level: ConsolidationRackLevel,
@@ -96,7 +98,7 @@ def _segment_payload(
     shelf_label = format_segment_label(str(rack.name), level, segment)
     slot_label = _short_slot_label(level, segment)
     packing_ready = state == SEGMENT_STATE_READY_TO_PACK
-    return {
+    payload = {
         "segment_id": int(segment.id),
         "slot_label": slot_label,
         "shelf_label": shelf_label,
@@ -114,7 +116,22 @@ def _segment_payload(
         "completion_percent": progress["completion_percent"] if progress else 0.0,
         "mm_staging_label": progress["mm_staging_label"] if progress else None,
         "local_staging_label": progress["local_staging_label"] if progress else None,
+        "length_mm": segment.length_mm,
+        "width_mm": segment.width_mm,
+        "height_mm": segment.height_mm,
+        "capacity_dm3": segment.capacity_dm3,
     }
+    if order is not None:
+        ctx = build_segment_capacity_context(db, segment, level, rack, int(order.id))
+        payload.update({
+            "order_volume_dm3": ctx.get("order_volume_dm3"),
+            "utilization_percent": ctx.get("utilization_percent"),
+            "capacity_overflow": ctx.get("capacity_overflow"),
+            "capacity_unknown": ctx.get("capacity_unknown"),
+            "dimension_estimated": ctx.get("dimension_estimated"),
+            "estimated_items_count": ctx.get("estimated_items_count"),
+        })
+    return payload
 
 
 def build_consolidation_rack_dashboard(
@@ -198,6 +215,7 @@ def build_consolidation_rack_dashboard(
                 plan = plans_by_order.get(int(seg.order_id)) if seg.order_id else None
                 items = items_by_plan.get(int(plan.id), []) if plan else []
                 seg_data = _segment_payload(
+                    db,
                     segment=seg,
                     level=level,
                     rack=rack,

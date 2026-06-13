@@ -20,6 +20,11 @@ export type RackGridSegmentClick = {
   widthMm?: number | null;
   heightMm?: number | null;
   capacityDm3?: number | null;
+  orderVolumeDm3?: number | null;
+  utilizationPercent?: number | null;
+  capacityOverflow?: boolean;
+  dimensionEstimated?: boolean;
+  estimatedItemsCount?: number;
   state?: string;
 };
 
@@ -103,7 +108,12 @@ export default function ConsolidationRackGrid({
                           lengthMm: cell.length_mm,
                           widthMm: cell.width_mm,
                           heightMm: cell.height_mm,
-                          capacityDm3: cell.capacity_dm3,
+                          capacityDm3: cell.capacity_dm3 ?? dash?.capacity_dm3,
+                          orderVolumeDm3: cell.order_volume_dm3 ?? dash?.order_volume_dm3,
+                          utilizationPercent: cell.utilization_percent ?? dash?.utilization_percent,
+                          capacityOverflow: cell.capacity_overflow ?? dash?.capacity_overflow,
+                          dimensionEstimated: cell.dimension_estimated ?? dash?.dimension_estimated,
+                          estimatedItemsCount: cell.estimated_items_count ?? dash?.estimated_items_count,
                           state: dash?.state,
                         })
                       }

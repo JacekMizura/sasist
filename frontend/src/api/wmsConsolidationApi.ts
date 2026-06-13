@@ -243,6 +243,15 @@ export type ConsolidationRackSegmentDashboard = {
   completion_percent: number;
   mm_staging_label: string | null;
   local_staging_label: string | null;
+  length_mm?: number | null;
+  width_mm?: number | null;
+  height_mm?: number | null;
+  capacity_dm3?: number | null;
+  order_volume_dm3?: number | null;
+  utilization_percent?: number | null;
+  capacity_overflow?: boolean;
+  dimension_estimated?: boolean;
+  estimated_items_count?: number;
 };
 
 export type ConsolidationRackDashboard = {
@@ -385,6 +394,7 @@ export type ConsolidationTowerSummary = {
     occupancy_percent: number;
   };
   alert_counts: { warning: number; critical: number };
+  capacity_warning_count?: number;
 };
 
 export type ConsolidationTowerQueues = {

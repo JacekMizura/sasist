@@ -1,5 +1,15 @@
 # Current context
 
+## P5.8C — Soft capacity-aware shelf allocation (2026-06-08)
+- **Bez twardych blokad** — NO_FREE tylko gdy brak wolnych półek (nie przez pojemność)
+- Flow: wolne segmenty → capacity score → P5.7 ranking → wybór
+- `order_footprint_service.py` — agregacja `ProductFootprint` (plan items / order lines); brak wymiarów → 1 cm³/szt, `dimension_estimated`
+- `capacity_scoring_service.py` + `segment_capacity_service.evaluate_capacity_match`
+- `allocate_consolidation_shelf(..., order_id=)` — best-fit gdy segment ma capacity; overflow = gorszy score, nie odrzucenie
+- UI panel półki: pojemność, objętość zamówienia, wykorzystanie, ostrzeżenia
+- Control Tower P5.9: `capacity_warning_count` (overflow + estimated dimensions)
+- Tests: `test_consolidation_capacity_allocation.py` (7/7); P5.7 suite bez regresji
+
 ## P5.8 prep — Segment profile (names + dimensions) (2026-06-08)
 - **Bez zmian P5.7** — alokacja nadal: pierwsza wolna półka wg istniejących reguł
 - Model `RackSegment`: `slot_label`, `length_mm`, `width_mm`, `height_mm`, `capacity_dm3` (auto L×W×H)

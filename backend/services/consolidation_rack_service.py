@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from ..models.consolidation_rack import ConsolidationRack, ConsolidationRackLevel, RackSegment
 from ..models.order import Order
 from ..services.order_consolidation.progress_helpers import segment_slot_label
-from ..services.order_consolidation.segment_capacity_service import sync_segment_capacity_dm3
+from ..services.order_consolidation.segment_capacity_service import build_segment_capacity_context, sync_segment_capacity_dm3
 
 _SLOT_LABEL_RE = re.compile(r"^[\w\-.]+$", re.UNICODE)
 
@@ -40,12 +40,12 @@ class ConsolidationRackService:
         )
         return [self._rack_to_read(r) for r in racks]
 
-    def _segment_to_read(self, seg: RackSegment, level: ConsolidationRackLevel):
+    def _segment_to_read(self, seg: RackSegment, level: ConsolidationRackLevel, rack: ConsolidationRack):
         order_number = None
         if seg.order_id:
             o = self.db.query(Order).filter(Order.id == seg.order_id).first()
             order_number = o.number if o else None
-        return {
+        out = {
             "id": seg.id,
             "level_id": seg.level_id,
             "segment_index": seg.segment_index,
@@ -59,13 +59,24 @@ class ConsolidationRackService:
             "height_mm": seg.height_mm,
             "capacity_dm3": seg.capacity_dm3,
         }
+        if seg.order_id is not None:
+            ctx = build_segment_capacity_context(self.db, seg, level, rack, int(seg.order_id))
+            out.update({
+                "order_volume_dm3": ctx.get("order_volume_dm3"),
+                "utilization_percent": ctx.get("utilization_percent"),
+                "capacity_overflow": ctx.get("capacity_overflow"),
+                "capacity_unknown": ctx.get("capacity_unknown"),
+                "dimension_estimated": ctx.get("dimension_estimated"),
+                "estimated_items_count": ctx.get("estimated_items_count"),
+            })
+        return out
 
     def _rack_to_read(self, rack: ConsolidationRack):
         levels_out = []
         for lev in sorted(rack.levels or [], key=lambda x: x.level_index):
             segments_out = []
             for seg in sorted(lev.segments or [], key=lambda x: x.segment_index):
-                segments_out.append(self._segment_to_read(seg, lev))
+                segments_out.append(self._segment_to_read(seg, lev, rack))
             levels_out.append({
                 "id": lev.id,
                 "rack_id": lev.rack_id,
@@ -221,7 +232,7 @@ class ConsolidationRackService:
         self.db.add(seg)
         self.db.commit()
         self.db.refresh(seg)
-        return self._segment_to_read(seg, level)
+        return self._segment_to_read(seg, level, rack)
 
     def assign_segment(self, segment_id: int, order_id: int, fill_percent: float = 100):
         seg = self.db.query(RackSegment).filter(RackSegment.id == segment_id).first()
