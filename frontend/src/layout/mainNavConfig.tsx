@@ -299,7 +299,19 @@ export const NAV_FLYOUT_CATEGORIES: NavCategoryConfig[] = [
         ],
       },
       {
-        items: [{ path: "/settings/printers", label: UI_STRINGS.navigation.printersNav, Icon: Printer }],
+        title: "Sprzedaż",
+        items: [
+          {
+            path: "/settings/sales/stock-pools",
+            label: "Pule stanów",
+            Icon: Layers,
+            permissionsAny: ["settings.users", "settings.company"],
+          },
+        ],
+      },
+      {
+        items: [
+          { path: "/settings/printers", label: UI_STRINGS.navigation.printersNav, Icon: Printer }],
       },
       {
         items: [

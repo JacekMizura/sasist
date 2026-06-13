@@ -11,6 +11,8 @@ export type ProductSalesOfferRead = {
   is_default: boolean;
   active: boolean;
   available_qty: number;
+  stock_pool_id: number | null;
+  stock_pool_name: string | null;
 };
 
 export type ProductSalesOffersListOut = {
@@ -56,7 +58,12 @@ export async function createOutletSalesOffer(params: {
 export async function patchProductSalesOffer(params: {
   tenantId: number;
   offerId: number;
-  body: { name?: string; sale_price_net?: number | null; active?: boolean };
+  body: {
+    name?: string;
+    sale_price_net?: number | null;
+    active?: boolean;
+    stock_pool_id?: number | null;
+  };
   warehouseId?: number | null;
 }): Promise<ProductSalesOfferRead> {
   const { data } = await api.patch<ProductSalesOfferRead>(`/sales-offers/${params.offerId}`, params.body, {

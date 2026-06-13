@@ -27,6 +27,12 @@ class ProductSalesOffer(Base):
     outlet_damage_reasons_json = Column(Text, nullable=True)
     outlet_description = Column(Text, nullable=True)
     deleted_at = Column(DateTime, nullable=True, index=True)
+    stock_pool_id = Column(
+        Integer,
+        ForeignKey("offer_stock_pools.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 

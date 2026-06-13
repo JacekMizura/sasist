@@ -1,5 +1,13 @@
 # Change log
 
+## 2026-06-08 — Offer Stock Pools MVP (Availability Sources)
+
+- **Model:** `offer_stock_pools`, `offer_stock_pool_warehouses`, `product_sales_offers.stock_pool_id`
+- **Serwis:** `offer_stock_availability_service.offer_pool_available_qty` — suma `offer_available_qty` po magazynach puli (filter `participates_in_network_stock`)
+- **API:** CRUD pul `/offer-stock-pools`; oferty: `stock_pool_id` w PATCH, `available_qty` z puli
+- **UI:** Ustawienia → Sprzedaż → Pule stanów; dropdown „Źródło stanu” w ofercie produktu
+- **Testy:** Pool A (W+P)=50, B (G)=40, C (all)=90
+
 ## 2026-06-08 — Z-PZ UI komplet + numeracja globalna bez zer
 
 - **Numeracja:** domyślne `padding_length=0` (model, schema, API); repair serii WAREHOUSE; RMZ bez `:05d`

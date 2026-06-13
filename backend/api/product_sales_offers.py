@@ -15,6 +15,7 @@ from ..schemas.product_sales_offer import (
     ProductSalesOfferSearchHit,
     ProductSalesOffersListOut,
 )
+from ..services.offer_stock_availability_service import offer_pool_available_qty
 from ..services.product_sales_offers import (
     ProductSalesOfferError,
     create_outlet_offer_preset,
@@ -38,15 +39,11 @@ def _read_offer(
     warehouse_id: int | None,
 ) -> ProductSalesOfferRead:
     product = load_product_for_offer(db, offer)
-    wid = int(warehouse_id) if warehouse_id is not None else None
-    avail = 0.0
-    if wid is not None and wid > 0:
-        avail = offer_available_qty(
-            db,
-            offer=offer,
-            tenant_id=int(offer.tenant_id),
-            warehouse_id=wid,
-        )
+    avail = offer_pool_available_qty(
+        db,
+        offer=offer,
+        tenant_id=int(offer.tenant_id),
+    )
     d = offer_to_read_dict(db, offer=offer, product=product, available_qty=avail)
     return ProductSalesOfferRead(**d)
 
@@ -126,6 +123,7 @@ def patch_sales_offer(
             name=body.name,
             sale_price_net=body.sale_price_net if "sale_price_net" in body.model_fields_set else ...,
             active=body.active,
+            stock_pool_id=body.stock_pool_id if "stock_pool_id" in body.model_fields_set else ...,
         )
         db.commit()
         db.refresh(offer)

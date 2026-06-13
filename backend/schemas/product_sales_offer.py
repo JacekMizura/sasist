@@ -21,6 +21,8 @@ class ProductSalesOfferRead(BaseModel):
     is_default: bool = False
     active: bool = True
     available_qty: float = 0.0
+    stock_pool_id: Optional[int] = None
+    stock_pool_name: Optional[str] = None
 
 
 class ProductSalesOffersListOut(BaseModel):
@@ -36,6 +38,10 @@ class ProductSalesOfferPatchBody(BaseModel):
         description="Set explicit price; send null to clear override and use product price",
     )
     active: Optional[bool] = None
+    stock_pool_id: Optional[int] = Field(
+        None,
+        description="Stock pool for availability; null = tenant default pool",
+    )
 
 
 class ProductSalesOfferSearchHit(BaseModel):

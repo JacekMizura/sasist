@@ -236,6 +236,7 @@ from .api.cartons import router as cartons_router
 from .api.packaging_materials import router as packaging_materials_router
 from .api.product import router as product_router
 from .api.product_sales_offers import router as product_sales_offers_router
+from .api.offer_stock_pool import router as offer_stock_pool_router
 from .api.product_warehouse_slotting import router as product_warehouse_slotting_router
 from .api.bundle import router as bundle_router
 from .api.compositions import router as compositions_router
@@ -1010,6 +1011,9 @@ try:
     ensure_inventory_stock_disposition_columns(engine)
     ensure_stock_disposition_stage2_columns(engine)
     ensure_product_sales_offers_schema(engine)
+    from .db.offer_stock_pool_schema import ensure_offer_stock_pool_schema
+
+    ensure_offer_stock_pool_schema(engine)
     ensure_inventory_management_policy_schema(engine)
     ensure_purchase_sales_block_schema(engine)
     ensure_tenant_warehouse_fulfillment_schema(engine)
@@ -1380,6 +1384,9 @@ def _upgrade_schema_background() -> None:
         ensure_inventory_stock_disposition_columns(engine)
         ensure_stock_disposition_stage2_columns(engine)
         ensure_product_sales_offers_schema(engine)
+        from .db.offer_stock_pool_schema import ensure_offer_stock_pool_schema
+
+        ensure_offer_stock_pool_schema(engine)
         ensure_inventory_management_policy_schema(engine)
         ensure_purchase_sales_block_schema(engine)
         ensure_tenant_warehouse_fulfillment_schema(engine)
@@ -1675,6 +1682,7 @@ _API_ROUTERS = (
     product_warehouse_slotting_router,
     product_router,
     product_sales_offers_router,
+    offer_stock_pool_router,
     bundle_router,
     compositions_router,
     production_router,

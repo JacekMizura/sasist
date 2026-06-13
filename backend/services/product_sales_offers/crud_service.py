@@ -85,6 +85,7 @@ def update_offer(
     name: str | None = None,
     sale_price_net: Any | None = ...,  # type: ignore[assignment]
     active: bool | None = None,
+    stock_pool_id: Any | None = ...,  # type: ignore[assignment]
 ) -> ProductSalesOffer:
     if name is not None:
         n = str(name).strip()
@@ -106,6 +107,25 @@ def update_offer(
         if offer.is_default and not active:
             raise ProductSalesOfferError("Nie można dezaktywować domyślnej oferty standardowej.")
         offer.active = bool(active)
+    if stock_pool_id is not ...:
+        pass
+    elif stock_pool_id is None:
+        offer.stock_pool_id = None
+    else:
+        from ...models.offer_stock_pool import OfferStockPool
+
+        pid = int(stock_pool_id)
+        pool = (
+            db.query(OfferStockPool)
+            .filter(
+                OfferStockPool.id == pid,
+                OfferStockPool.tenant_id == int(offer.tenant_id),
+            )
+            .first()
+        )
+        if pool is None:
+            raise ProductSalesOfferError("Nie znaleziono puli stanów dla tego tenantu.")
+        offer.stock_pool_id = pid
     offer.updated_at = datetime.utcnow()
     db.flush()
     return offer
@@ -127,6 +147,13 @@ def offer_to_read_dict(
     available_qty: float,
 ) -> dict[str, Any]:
     eff = effective_offer_sale_price_net(offer, product)
+    from ..offer_stock_pool_service import resolve_pool_for_offer
+
+    pool = resolve_pool_for_offer(
+        db,
+        tenant_id=int(offer.tenant_id),
+        stock_pool_id=getattr(offer, "stock_pool_id", None),
+    )
     return {
         "id": int(offer.id),
         "product_id": int(offer.product_id),
@@ -138,4 +165,6 @@ def offer_to_read_dict(
         "active": bool(offer.active),
         "available_qty": round(float(available_qty), 4),
         "uses_product_price": offer.sale_price_net is None,
+        "stock_pool_id": int(pool.id) if pool is not None else None,
+        "stock_pool_name": str(pool.name) if pool is not None else None,
     }
