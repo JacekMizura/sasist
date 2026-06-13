@@ -64,6 +64,7 @@ import { saleDocumentPdfUrl, stockDocumentPdfUrl } from "../../api/saleDocuments
 import { isStationarySaleOrder, printButtonLabelPl } from "../../components/directSales/directSalesTerminology";
 import { OrderDirectSalesBadge } from "../../components/orders/orderList/OrderDirectSalesBadge";
 import OrderFulfillmentWarehousePanel from "../../components/orders/OrderFulfillmentWarehousePanel";
+import OrderConsolidationPanel from "../../components/orders/OrderConsolidationPanel";
 import OrderFulfillmentAssignmentHistory from "../../components/orders/OrderFulfillmentAssignmentHistory";
 import type { FulfillmentAssignmentPhase } from "../../api/orderFulfillmentApi";
 import { formatMoney } from "../../utils/formatOrderMoney";
@@ -2014,6 +2015,10 @@ export default function OrderDetailPage() {
                     assignedByLabel={order.fulfillment_assigned_by_label}
                     assignmentReason={order.fulfillment_assignment_reason}
                     onAssigned={() => reloadOrderById(order.id)}
+                  />
+                  <OrderConsolidationPanel
+                    orderId={order.id}
+                    onChanged={() => reloadOrderById(order.id)}
                   />
                   <OrderFulfillmentAssignmentHistory orderId={order.id} />
                 </div>

@@ -14,6 +14,8 @@ from ..models.warehouse import Warehouse
 from .fulfillment_assignment.fulfillment_assignment_resolver import resolve_initial_fulfillment_warehouse
 from .fulfillment_assignment.phase_constants import (
     DEFAULT_FULFILLMENT_ASSIGNMENT_PHASE,
+    PHASE_CONSOLIDATION_REQUIRED,
+    PHASE_CONSOLIDATING,
     PHASE_FULFILLMENT_ASSIGNED,
     PHASE_PACKING,
     PHASE_PICKING,
@@ -107,7 +109,14 @@ def apply_initial_fulfillment_assignment(
 
 def assert_can_assign_fulfillment_warehouse(order: Order) -> None:
     phase = normalize_fulfillment_assignment_phase(getattr(order, "fulfillment_assignment_phase", None))
-    if phase in {PHASE_WAVE_CREATED, PHASE_PICKING, PHASE_PACKING, PHASE_SHIPPED}:
+    if phase in {
+        PHASE_CONSOLIDATION_REQUIRED,
+        PHASE_CONSOLIDATING,
+        PHASE_WAVE_CREATED,
+        PHASE_PICKING,
+        PHASE_PACKING,
+        PHASE_SHIPPED,
+    }:
         raise FulfillmentWarehouseAssignmentError(
             f"Nie można zmienić magazynu realizacji — faza {phase}."
         )

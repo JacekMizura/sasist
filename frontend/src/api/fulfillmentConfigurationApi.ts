@@ -9,10 +9,12 @@ export type FulfillmentAssignmentMode =
 export type FulfillmentConfigurationDto = {
   tenant_id: number;
   fulfillment_assignment_mode: FulfillmentAssignmentMode;
+  consolidation_warehouse_id: number | null;
 };
 
 export type FulfillmentConfigurationUpdatePayload = {
-  fulfillment_assignment_mode: FulfillmentAssignmentMode;
+  fulfillment_assignment_mode?: FulfillmentAssignmentMode;
+  consolidation_warehouse_id?: number | null;
 };
 
 export async function fetchFulfillmentConfiguration(tenantId: number): Promise<FulfillmentConfigurationDto> {

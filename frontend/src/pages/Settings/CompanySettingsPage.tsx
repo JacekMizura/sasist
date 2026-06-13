@@ -201,6 +201,8 @@ export default function CompanySettingsPage() {
   const [fulfillmentMode, setFulfillmentMode] = useState<FulfillmentAssignmentMode>("DEFAULT_WAREHOUSE");
   const [fulfillmentModeBaseline, setFulfillmentModeBaseline] =
     useState<FulfillmentAssignmentMode>("DEFAULT_WAREHOUSE");
+  const [consolidationWarehouseId, setConsolidationWarehouseId] = useState<number | "">("");
+  const [consolidationWarehouseBaseline, setConsolidationWarehouseBaseline] = useState<number | "">("");
   const [fulfillmentCfgLoading, setFulfillmentCfgLoading] = useState(false);
   const [fulfillmentCfgSaving, setFulfillmentCfgSaving] = useState(false);
 
@@ -240,6 +242,9 @@ export default function CompanySettingsPage() {
         setFulfillmentMode(fcRes.fulfillment_assignment_mode);
         setFulfillmentModeBaseline(fcRes.fulfillment_assignment_mode);
       }
+      const cw = fcRes?.consolidation_warehouse_id ?? null;
+      setConsolidationWarehouseId(cw != null && cw > 0 ? cw : "");
+      setConsolidationWarehouseBaseline(cw != null && cw > 0 ? cw : "");
     } catch {
       toast.error("Nie udało się wczytać magazynów lub firm.");
     } finally {
@@ -361,7 +366,18 @@ export default function CompanySettingsPage() {
   const defaultTenantsForWarehouse = (wid: number) =>
     assignments.filter((a) => a.warehouse_id === wid && a.is_default).map((a) => tenantById(a.tenant_id));
 
-  const fulfillmentModeDirty = fulfillmentMode !== fulfillmentModeBaseline;
+  const fulfillmentModeDirty =
+    fulfillmentMode !== fulfillmentModeBaseline ||
+    consolidationWarehouseId !== consolidationWarehouseBaseline;
+
+  const eligibleConsolidationWarehouses = useMemo(
+    () =>
+      assignments
+        .filter((a) => a.tenant_id === TENANT_ID && a.fulfillment_eligible !== false)
+        .map((a) => warehouses.find((w) => w.id === a.warehouse_id))
+        .filter((w): w is { id: number; name: string } => Boolean(w)),
+    [assignments, warehouses],
+  );
 
   const saveFulfillmentConfiguration = async () => {
     if (fulfillmentCfgSaving || !fulfillmentModeDirty) return;
@@ -369,9 +385,14 @@ export default function CompanySettingsPage() {
     try {
       const next = await patchFulfillmentConfiguration(TENANT_ID, {
         fulfillment_assignment_mode: fulfillmentMode,
+        consolidation_warehouse_id:
+          consolidationWarehouseId === "" ? null : Number(consolidationWarehouseId),
       });
       setFulfillmentMode(next.fulfillment_assignment_mode);
       setFulfillmentModeBaseline(next.fulfillment_assignment_mode);
+      const cw = next.consolidation_warehouse_id ?? null;
+      setConsolidationWarehouseId(cw != null && cw > 0 ? cw : "");
+      setConsolidationWarehouseBaseline(cw != null && cw > 0 ? cw : "");
       toast.success("Zapisano strategię realizacji zamówień.");
     } catch {
       toast.error("Nie udało się zapisać strategii realizacji.");
@@ -684,6 +705,28 @@ export default function CompanySettingsPage() {
                       </span>
                     </label>
                   ))}
+                  <div className="pt-2">
+                    <p className={lab}>Magazyn konsolidacyjny (opcjonalnie)</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Preferowany magazyn docelowy przy konsolidacji wielomagazynowej. Puste = magazyn z resolvera /
+                      najlepszy kandydat.
+                    </p>
+                    <select
+                      className="mt-2 w-full max-w-md rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                      value={consolidationWarehouseId === "" ? "" : String(consolidationWarehouseId)}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setConsolidationWarehouseId(v === "" ? "" : Number(v));
+                      }}
+                    >
+                      <option value="">— automatycznie (resolver) —</option>
+                      {eligibleConsolidationWarehouses.map((w) => (
+                        <option key={w.id} value={w.id}>
+                          {w.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                   <div className="flex justify-end pt-2">
                     <button
                       type="button"

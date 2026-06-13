@@ -19,7 +19,7 @@ from ..models.pick_task import PickTask
 from ..models.inventory import Inventory
 from ..models.stock_reservation import StockReservation
 from ..models.location import Location
-from .inventory_allocation_service import allocate_inventory_slices_fefo_pick_path
+from .fulfillment_assignment.phase_constants import CONSOLIDATION_WAVE_BLOCKED_PHASES
 from .inventory_lot_keys import NO_EXPIRY_SENTINEL
 from .commercial_availability_service import commercially_sellable_qty
 from .stock_disposition import (
@@ -227,6 +227,7 @@ def create_wave(
                 Order.warehouse_id == warehouse_id,
                 Order.status == READY_STATUS,
                 Order.wave_id == None,
+                Order.fulfillment_assignment_phase.notin_(tuple(CONSOLIDATION_WAVE_BLOCKED_PHASES)),
             )
             .order_by(Order.id)
         )
@@ -249,6 +250,7 @@ def create_wave(
                 Order.warehouse_id == warehouse_id,
                 Order.status == READY_STATUS,
                 Order.wave_id == None,
+                Order.fulfillment_assignment_phase.notin_(tuple(CONSOLIDATION_WAVE_BLOCKED_PHASES)),
             )
             .order_by(Order.id)
             .limit(wave_size)

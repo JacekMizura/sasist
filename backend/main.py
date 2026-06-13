@@ -327,6 +327,7 @@ from .api.auth import router as auth_router
 from .api.workforce_api import router as workforce_router
 from .api.company_profile import router as company_profile_router
 from .api.fulfillment_configuration import router as fulfillment_configuration_router
+from .api.order_consolidation import consolidation_plans_router, router as order_consolidation_router
 from .api.admin_users import router as admin_users_router
 from .api.uploads import router as uploads_router
 from .api.bdo_packaging import router as bdo_packaging_router
@@ -1033,6 +1034,9 @@ try:
     from .db.order_fulfillment_lifecycle_schema import ensure_order_fulfillment_lifecycle_schema
 
     ensure_order_fulfillment_lifecycle_schema(engine)
+    from .db.order_consolidation_schema import ensure_order_consolidation_schema
+
+    ensure_order_consolidation_schema(engine)
     from .db.product_warehouse_slotting_schema import (
         ensure_product_warehouse_slotting_schema,
         run_startup_slotting_backfill,
@@ -1415,6 +1419,9 @@ def _upgrade_schema_background() -> None:
         from .db.order_fulfillment_lifecycle_schema import ensure_order_fulfillment_lifecycle_schema
 
         ensure_order_fulfillment_lifecycle_schema(engine)
+    from .db.order_consolidation_schema import ensure_order_consolidation_schema
+
+    ensure_order_consolidation_schema(engine)
         from .db.product_warehouse_slotting_schema import (
             ensure_product_warehouse_slotting_schema,
             run_startup_slotting_backfill,
@@ -1699,6 +1706,8 @@ _API_ROUTERS = (
     workforce_router,
     company_profile_router,
     fulfillment_configuration_router,
+    order_consolidation_router,
+    consolidation_plans_router,
     admin_users_router,
     uploads_router,
     tenant_router,

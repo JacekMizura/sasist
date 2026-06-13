@@ -88,9 +88,11 @@ def get_or_create_fulfillment_configuration(db: Session, tenant_id: int) -> Tena
 
 
 def configuration_to_read(row: TenantFulfillmentConfiguration) -> FulfillmentConfigurationRead:
+    cw = getattr(row, "consolidation_warehouse_id", None)
     return FulfillmentConfigurationRead(
         tenant_id=int(row.tenant_id),
         fulfillment_assignment_mode=str(row.fulfillment_assignment_mode or DEFAULT_FULFILLMENT_ASSIGNMENT_MODE),
+        consolidation_warehouse_id=int(cw) if cw is not None and int(cw) > 0 else None,
     )
 
 
@@ -104,10 +106,30 @@ def update_fulfillment_configuration(
     tenant_id: int,
     body: FulfillmentConfigurationUpdate,
 ) -> FulfillmentConfigurationRead:
-    mode = normalize_fulfillment_assignment_mode(body.fulfillment_assignment_mode)
-    validate_fulfillment_assignment_mode(db, tenant_id, mode)
     row = get_or_create_fulfillment_configuration(db, tenant_id)
-    row.fulfillment_assignment_mode = mode
+    if body.fulfillment_assignment_mode is not None:
+        mode = normalize_fulfillment_assignment_mode(body.fulfillment_assignment_mode)
+        validate_fulfillment_assignment_mode(db, tenant_id, mode)
+        row.fulfillment_assignment_mode = mode
+    if body.consolidation_warehouse_id is not None:
+        cw = int(body.consolidation_warehouse_id)
+        if cw <= 0:
+            row.consolidation_warehouse_id = None
+        else:
+            tw = (
+                db.query(TenantWarehouse)
+                .filter(
+                    TenantWarehouse.tenant_id == int(tenant_id),
+                    TenantWarehouse.warehouse_id == cw,
+                    TenantWarehouse.fulfillment_eligible.is_(True),
+                )
+                .first()
+            )
+            if tw is None:
+                raise FulfillmentConfigurationError(
+                    "Magazyn konsolidacyjny musi należeć do tenanta i mieć flagę fulfillment_eligible."
+                )
+            row.consolidation_warehouse_id = cw
     db.add(row)
     db.commit()
     db.refresh(row)

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 PHASE_UNASSIGNED = "UNASSIGNED"
 PHASE_FULFILLMENT_ASSIGNED = "FULFILLMENT_ASSIGNED"
+PHASE_CONSOLIDATION_REQUIRED = "CONSOLIDATION_REQUIRED"
+PHASE_CONSOLIDATING = "CONSOLIDATING"
 PHASE_WAVE_CREATED = "WAVE_CREATED"
 PHASE_PICKING = "PICKING"
 PHASE_PACKING = "PACKING"
@@ -12,6 +14,8 @@ PHASE_SHIPPED = "SHIPPED"
 FULFILLMENT_ASSIGNMENT_PHASES = (
     PHASE_UNASSIGNED,
     PHASE_FULFILLMENT_ASSIGNED,
+    PHASE_CONSOLIDATION_REQUIRED,
+    PHASE_CONSOLIDATING,
     PHASE_WAVE_CREATED,
     PHASE_PICKING,
     PHASE_PACKING,
@@ -25,6 +29,8 @@ _PHASE_RANK: dict[str, int] = {p: i for i, p in enumerate(FULFILLMENT_ASSIGNMENT
 # Od WAVE_CREATED — brak zmiany magazynu realizacji (P3.5).
 WAREHOUSE_CHANGE_LOCKED_PHASES = frozenset(
     {
+        PHASE_CONSOLIDATION_REQUIRED,
+        PHASE_CONSOLIDATING,
         PHASE_WAVE_CREATED,
         PHASE_PICKING,
         PHASE_PACKING,
@@ -36,10 +42,20 @@ WAREHOUSE_CHANGE_LOCKED_PHASES = frozenset(
 IMPORT_WAREHOUSE_LOCKED_PHASES = frozenset(
     {
         PHASE_FULFILLMENT_ASSIGNED,
+        PHASE_CONSOLIDATION_REQUIRED,
+        PHASE_CONSOLIDATING,
         PHASE_WAVE_CREATED,
         PHASE_PICKING,
         PHASE_PACKING,
         PHASE_SHIPPED,
+    }
+)
+
+# P5 — fala kompletacji zablokowana do zakończenia konsolidacji.
+CONSOLIDATION_WAVE_BLOCKED_PHASES = frozenset(
+    {
+        PHASE_CONSOLIDATION_REQUIRED,
+        PHASE_CONSOLIDATING,
     }
 )
 
@@ -61,3 +77,7 @@ def is_warehouse_change_locked(phase: str | None) -> bool:
 
 def is_import_warehouse_locked(phase: str | None) -> bool:
     return normalize_fulfillment_assignment_phase(phase) in IMPORT_WAREHOUSE_LOCKED_PHASES
+
+
+def is_consolidation_wave_blocked(phase: str | None) -> bool:
+    return normalize_fulfillment_assignment_phase(phase) in CONSOLIDATION_WAVE_BLOCKED_PHASES

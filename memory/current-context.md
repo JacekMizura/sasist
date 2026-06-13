@@ -1,5 +1,16 @@
 # Current context
 
+## P5 — Consolidation fulfillment foundation (2026-06-08)
+- **`tenant_fulfillment_configurations.consolidation_warehouse_id`** (nullable) — preferowany magazyn konsolidacyjny
+- Tabele: **`order_consolidation_plans`**, **`order_consolidation_plan_items`**
+- Fazy: **`CONSOLIDATION_REQUIRED`**, **`CONSOLIDATING`** (między FULFILLMENT_ASSIGNED a WAVE_CREATED)
+- SSOT: `order_consolidation/feasibility_service.py`, `plan_service.py`
+- API: `POST /orders/{id}/generate-consolidation-plan`, `GET /orders/{id}/consolidation-plan`, `GET /orders/{id}/consolidation-feasibility`, `POST /consolidation-plans/{id}/generate-mm-drafts`
+- UI: `OrderConsolidationPanel` na karcie zamówienia; Ustawienia → magazyn konsolidacyjny
+- Fala: zamówienia w fazach konsolidacji wykluczone z `create_wave`
+- Tests: `backend/tests/order_consolidation/test_order_consolidation.py` (7/7)
+- **Bez zmian:** split shipment, auto-MM execution, ATP sourcing, network reservations
+
 ## P4 — Multi-warehouse UI (2026-06-08)
 - Karta produktu (Magazyn): sekcje Stany magazynowe + Plan rozmieszczenia (read-only)
 - Lista produktów: kolumna Stan sieciowy (domyślnie) + dynamiczne kolumny per magazyn (konfigurator)

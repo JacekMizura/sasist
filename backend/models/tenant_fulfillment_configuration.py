@@ -14,3 +14,7 @@ class TenantFulfillmentConfiguration(Base, BaseModelMixin):
 
     tenant_id = Column(Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
     fulfillment_assignment_mode = Column(String(32), nullable=False, default="DEFAULT_WAREHOUSE", index=True)
+    #: P5 — preferowany magazyn konsolidacyjny (NULL → resolver / best candidate).
+    consolidation_warehouse_id = Column(
+        Integer, ForeignKey("warehouses.id", ondelete="SET NULL"), nullable=True, index=True
+    )
