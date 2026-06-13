@@ -89,8 +89,10 @@ export const WMS_ROUTES = {
   consolidationDetail: (planId: number | string) => `/wms/consolidations/${planId}`,
   /** P5.6 — mapa zajętości regałów kompletacyjnych. */
   consolidationRacks: "/wms/consolidation-racks",
-  /** P5.8 — control tower dla kierownika / lidera zmiany. */
+  /** P5.8 — control tower dla kierownika / lidera zmiany (zajęte półki). */
   consolidationRacksControlTower: "/wms/consolidation-racks/control-tower",
+  /** P5.9 — control tower konsolidacji (kolejki, KPI, alerty). */
+  consolidationsControlTower: "/wms/consolidations/control-tower",
   putawayPz: (pzId: number | string) => `/wms/putaway/${pzId}`,
   /** Krok 2: produkt + sugerowane lokalizacje. */
   putawayItem: (pzId: number | string, itemId: number | string) => `/wms/putaway/${pzId}/item/${itemId}`,

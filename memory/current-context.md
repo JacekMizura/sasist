@@ -1,5 +1,15 @@
 # Current context
 
+## P5.9 — Consolidation control tower (2026-06-08)
+- Warstwa operacyjna dla brygadzisty — **read-only**, bez zmian lifecycle / pick / pack / MM
+- UI: `/wms/consolidations/control-tower` (link z kolejki konsolidacji)
+- API: `GET /wms/consolidation-control-tower/{summary,queues,racks,alerts}`
+- Kolejki: READY_FOR_STAGING, STAGING, READY_TO_PACK + TOP 20 bottlenecks
+- KPI: liczniki statusów, śr. czasy oczekiwania, zajętość regałów
+- SLA: RFS >30/>60, STAGING >4h/>8h, RTTP >30/>60 + alerty DB (P5.2)
+- Serwis: `consolidation_control_tower_service.py` (P5.8 rack tower: `control_tower_service.py` — bez zmian)
+- Tests: `test_consolidation_control_tower_p59.py` (5/5)
+
 ## P5.6 — WMS picking config: consolidation rack mode (2026-06-08)
 - Nowy tryb **`consolidation_rack`** („Regał kompletacyjny”) — tylko **zamówienia wieloelementowe** w konfiguracji pickingu
 - Walidacja zapisu: wymaga co najmniej jednego regału kompletacyjnego w magazynie; zablokowany dla single-item

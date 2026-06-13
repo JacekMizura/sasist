@@ -17,6 +17,10 @@ from ..schemas.order_consolidation import (
     ConsolidationPlanRead,
     ConsolidationRackDashboardOut,
     ConsolidationControlTowerOut,
+    ConsolidationTowerAlertsOut,
+    ConsolidationTowerQueuesOut,
+    ConsolidationTowerRacksOut,
+    ConsolidationTowerSummaryOut,
     ConsolidationStagingQueueOut,
     ConsolidationStagingQueueRow,
     ConsolidationSummaryOut,
@@ -25,6 +29,12 @@ from ..schemas.order_consolidation import (
     StartStagingResponse,
 )
 from ..services.order_consolidation.alert_service import list_consolidation_alerts
+from ..services.order_consolidation.consolidation_control_tower_service import (
+    build_consolidation_tower_alerts,
+    build_consolidation_tower_queues,
+    build_consolidation_tower_racks,
+    build_consolidation_tower_summary,
+)
 from ..services.order_consolidation.control_tower_service import build_consolidation_control_tower
 from ..services.order_consolidation.rack_dashboard_service import build_consolidation_rack_dashboard
 from ..services.order_consolidation.staging_service import (
@@ -165,6 +175,58 @@ def get_consolidation_racks_dashboard(
         warehouse_id=int(warehouse_id),
     )
     return ConsolidationRackDashboardOut(**payload)
+
+
+@router.get("/consolidation-control-tower/summary", response_model=ConsolidationTowerSummaryOut)
+def get_consolidation_control_tower_summary(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
+    db: Session = Depends(get_db),
+    _: AppUser = Depends(_wms_perm),
+):
+    """P5.9 — KPI and rack occupancy summary for consolidation supervisors."""
+    return ConsolidationTowerSummaryOut(
+        **build_consolidation_tower_summary(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id))
+    )
+
+
+@router.get("/consolidation-control-tower/queues", response_model=ConsolidationTowerQueuesOut)
+def get_consolidation_control_tower_queues(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
+    db: Session = Depends(get_db),
+    _: AppUser = Depends(_wms_perm),
+):
+    """P5.9 — operational queues: ready for staging, staging, ready to pack, bottlenecks."""
+    return ConsolidationTowerQueuesOut(
+        **build_consolidation_tower_queues(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id))
+    )
+
+
+@router.get("/consolidation-control-tower/racks", response_model=ConsolidationTowerRacksOut)
+def get_consolidation_control_tower_racks(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
+    db: Session = Depends(get_db),
+    _: AppUser = Depends(_wms_perm),
+):
+    """P5.9 — consolidation rack occupancy by segment."""
+    return ConsolidationTowerRacksOut(
+        **build_consolidation_tower_racks(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id))
+    )
+
+
+@router.get("/consolidation-control-tower/alerts", response_model=ConsolidationTowerAlertsOut)
+def get_consolidation_control_tower_alerts(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
+    db: Session = Depends(get_db),
+    _: AppUser = Depends(_wms_perm),
+):
+    """P5.9 — SLA and exception alerts for consolidation control tower."""
+    return ConsolidationTowerAlertsOut(
+        **build_consolidation_tower_alerts(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id))
+    )
 
 
 @router.get("/consolidation-racks/control-tower", response_model=ConsolidationControlTowerOut)

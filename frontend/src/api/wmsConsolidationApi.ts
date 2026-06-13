@@ -363,3 +363,150 @@ export async function fetchConsolidationRacksControlTower(
   });
   return data;
 }
+
+export type ConsolidationTowerSummary = {
+  warehouse_id: number;
+  counts: {
+    READY_FOR_STAGING: number;
+    STAGING: number;
+    READY_TO_PACK: number;
+    EXCEPTION: number;
+    MANUAL_REVIEW_REQUIRED: number;
+  };
+  avg_minutes: {
+    ready_for_staging_to_staging: number | null;
+    staging_to_completed: number | null;
+    completed_to_packing: number | null;
+  };
+  rack_summary: {
+    total_segments: number;
+    occupied_segments: number;
+    free_segments: number;
+    occupancy_percent: number;
+  };
+  alert_counts: { warning: number; critical: number };
+};
+
+export type ConsolidationTowerQueues = {
+  warehouse_id: number;
+  ready_for_staging: Array<{
+    plan_id: number;
+    order_id: number;
+    order_number: string;
+    target_warehouse_name: string | null;
+    item_count: number;
+    waiting_minutes: number | null;
+    waiting_label: string | null;
+    pending_source_warehouses: string[];
+    alerts: ConsolidationControlTowerAlert[];
+  }>;
+  staging: Array<{
+    plan_id: number;
+    order_id: number;
+    order_number: string;
+    shelf_label: string | null;
+    progress_percent: number;
+    staged_count: number;
+    pending_count: number;
+    waiting_minutes: number | null;
+    mm_progress_label: string | null;
+    local_progress_label: string | null;
+    last_activity_at: string | null;
+    last_operator_name: string | null;
+    alerts: ConsolidationControlTowerAlert[];
+  }>;
+  ready_to_pack: Array<{
+    plan_id: number;
+    order_id: number;
+    order_number: string;
+    shelf_label: string | null;
+    waiting_minutes: number | null;
+    last_activity_at: string | null;
+    last_operator_name: string | null;
+    alerts: ConsolidationControlTowerAlert[];
+  }>;
+  bottlenecks: Array<{
+    plan_id: number;
+    order_id: number;
+    order_number: string;
+    queue_status: string;
+    waiting_minutes: number | null;
+    waiting_label: string | null;
+    shelf_label: string | null;
+    alerts: ConsolidationControlTowerAlert[];
+  }>;
+};
+
+export type ConsolidationTowerRacks = {
+  warehouse_id: number;
+  racks: Array<{
+    rack_id: number;
+    rack_name: string;
+    total_segments: number;
+    occupied_segments: number;
+    free_segments: number;
+    occupancy_percent: number;
+    segments: Array<{
+      segment_id: number;
+      shelf_label: string;
+      order_number: string | null;
+      plan_status: string | null;
+      occupied_minutes: number | null;
+      state: string;
+    }>;
+  }>;
+};
+
+export type ConsolidationTowerAlerts = {
+  warehouse_id: number;
+  alerts: Array<
+    ConsolidationControlTowerAlert & {
+      plan_id: number;
+      order_id: number;
+      order_number: string | null;
+      queue_status: string | null;
+      shelf_label: string | null;
+      waiting_minutes: number | null;
+    }
+  >;
+};
+
+export async function fetchConsolidationTowerSummary(
+  tenantId: number,
+  warehouseId: number,
+): Promise<ConsolidationTowerSummary> {
+  const { data } = await api.get<ConsolidationTowerSummary>("/wms/consolidation-control-tower/summary", {
+    params: { tenant_id: tenantId, warehouse_id: warehouseId },
+  });
+  return data;
+}
+
+export async function fetchConsolidationTowerQueues(
+  tenantId: number,
+  warehouseId: number,
+): Promise<ConsolidationTowerQueues> {
+  const { data } = await api.get<ConsolidationTowerQueues>("/wms/consolidation-control-tower/queues", {
+    params: { tenant_id: tenantId, warehouse_id: warehouseId },
+  });
+  return data;
+}
+
+export async function fetchConsolidationTowerRacks(
+  tenantId: number,
+  warehouseId: number,
+): Promise<ConsolidationTowerRacks> {
+  const { data } = await api.get<ConsolidationTowerRacks>("/wms/consolidation-control-tower/racks", {
+    params: { tenant_id: tenantId, warehouse_id: warehouseId },
+  });
+  return data;
+}
+
+export async function fetchConsolidationTowerAlerts(
+  tenantId: number,
+  warehouseId: number,
+): Promise<ConsolidationTowerAlerts> {
+  const { data } = await api.get<ConsolidationTowerAlerts>("/wms/consolidation-control-tower/alerts", {
+    params: { tenant_id: tenantId, warehouse_id: warehouseId },
+  });
+  return data;
+}

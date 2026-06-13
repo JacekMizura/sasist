@@ -168,6 +168,7 @@ import ConsolidationQueuePage from "./pages/wms/consolidation/ConsolidationQueue
 import ConsolidationRacksDashboardPage from "./pages/wms/consolidation/ConsolidationRacksDashboardPage"
 import ConsolidationRacksControlTowerPage from "./pages/wms/consolidation/ConsolidationRacksControlTowerPage"
 import ConsolidationStagingPage from "./pages/wms/consolidation/ConsolidationStagingPage"
+import ConsolidationControlTowerPage from "./pages/wms/consolidation/ConsolidationControlTowerPage"
 import ConsolidationDetailPage from "./pages/wms/consolidation/ConsolidationDetailPage"
 import { WMS_ROUTES } from "./pages/wms/wmsRoutes"
 import WarehouseCarriersPage from "./pages/warehouse/WarehouseCarriersPage"
@@ -391,6 +392,7 @@ export const router = createBrowserRouter(
         <Route path="consolidation-racks/control-tower" element={<ConsolidationRacksControlTowerPage />} />
         <Route path="consolidation-racks" element={<ConsolidationRacksDashboardPage />} />
         <Route path="consolidations/staging" element={<ConsolidationStagingPage />} />
+        <Route path="consolidations/control-tower" element={<ConsolidationControlTowerPage />} />
         <Route path="consolidations" element={<ConsolidationQueuePage />} />
         <Route path="consolidations/:planId" element={<ConsolidationDetailPage />} />
         <Route path="replenishment/*" element={<Navigate to="/wms/mm" replace />} />

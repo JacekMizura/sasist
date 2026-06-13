@@ -298,3 +298,150 @@ class ConsolidationControlTowerOut(BaseModel):
     warehouse_id: int
     kpi: ConsolidationControlTowerKpi
     shelves: List[ConsolidationControlTowerShelfRow] = Field(default_factory=list)
+
+
+class ConsolidationTowerAlertRow(BaseModel):
+    plan_id: int
+    order_id: int
+    order_number: Optional[str] = None
+    queue_status: Optional[str] = None
+    shelf_label: Optional[str] = None
+    waiting_minutes: Optional[int] = None
+    code: str
+    severity: str
+    label: str
+    alert_id: Optional[int] = None
+
+
+class ConsolidationTowerCounts(BaseModel):
+    READY_FOR_STAGING: int = 0
+    STAGING: int = 0
+    READY_TO_PACK: int = 0
+    EXCEPTION: int = 0
+    MANUAL_REVIEW_REQUIRED: int = 0
+
+
+class ConsolidationTowerAvgMinutes(BaseModel):
+    ready_for_staging_to_staging: Optional[float] = None
+    staging_to_completed: Optional[float] = None
+    completed_to_packing: Optional[float] = None
+
+
+class ConsolidationTowerRackSummary(BaseModel):
+    total_segments: int = 0
+    occupied_segments: int = 0
+    free_segments: int = 0
+    occupancy_percent: float = 0.0
+
+
+class ConsolidationTowerAlertCounts(BaseModel):
+    warning: int = 0
+    critical: int = 0
+
+
+class ConsolidationTowerSummaryOut(BaseModel):
+    warehouse_id: int
+    counts: ConsolidationTowerCounts
+    avg_minutes: ConsolidationTowerAvgMinutes
+    rack_summary: ConsolidationTowerRackSummary
+    alert_counts: ConsolidationTowerAlertCounts
+
+
+class ConsolidationTowerReadyForStagingRow(BaseModel):
+    plan_id: int
+    order_id: int
+    order_number: str
+    target_warehouse_id: int
+    target_warehouse_name: Optional[str] = None
+    item_count: int = 0
+    waiting_minutes: Optional[int] = None
+    waiting_label: Optional[str] = None
+    pending_source_warehouses: List[str] = Field(default_factory=list)
+    plan_status: str
+    queue_status: str = "READY_FOR_STAGING"
+    alerts: List[ConsolidationControlTowerAlert] = Field(default_factory=list)
+
+
+class ConsolidationTowerStagingRow(BaseModel):
+    plan_id: int
+    order_id: int
+    order_number: str
+    shelf_label: Optional[str] = None
+    progress_percent: float = 0.0
+    staged_count: int = 0
+    pending_count: int = 0
+    item_count: int = 0
+    waiting_minutes: Optional[int] = None
+    waiting_label: Optional[str] = None
+    mm_progress_label: Optional[str] = None
+    local_progress_label: Optional[str] = None
+    last_activity_at: Optional[str] = None
+    last_operator_name: Optional[str] = None
+    plan_status: str
+    queue_status: str = "STAGING"
+    alerts: List[ConsolidationControlTowerAlert] = Field(default_factory=list)
+
+
+class ConsolidationTowerReadyToPackRow(BaseModel):
+    plan_id: int
+    order_id: int
+    order_number: str
+    shelf_label: Optional[str] = None
+    waiting_minutes: Optional[int] = None
+    waiting_label: Optional[str] = None
+    last_activity_at: Optional[str] = None
+    last_operator_name: Optional[str] = None
+    plan_status: str
+    fulfillment_state: str = ""
+    queue_status: str = "READY_TO_PACK"
+    alerts: List[ConsolidationControlTowerAlert] = Field(default_factory=list)
+
+
+class ConsolidationTowerBottleneckRow(BaseModel):
+    plan_id: int
+    order_id: int
+    order_number: str
+    queue_status: str
+    waiting_minutes: Optional[int] = None
+    waiting_label: Optional[str] = None
+    shelf_label: Optional[str] = None
+    alerts: List[ConsolidationControlTowerAlert] = Field(default_factory=list)
+
+
+class ConsolidationTowerQueuesOut(BaseModel):
+    warehouse_id: int
+    ready_for_staging: List[ConsolidationTowerReadyForStagingRow] = Field(default_factory=list)
+    staging: List[ConsolidationTowerStagingRow] = Field(default_factory=list)
+    ready_to_pack: List[ConsolidationTowerReadyToPackRow] = Field(default_factory=list)
+    bottlenecks: List[ConsolidationTowerBottleneckRow] = Field(default_factory=list)
+
+
+class ConsolidationTowerSegmentRow(BaseModel):
+    segment_id: int
+    shelf_label: str
+    order_id: Optional[int] = None
+    order_number: Optional[str] = None
+    plan_status: Optional[str] = None
+    occupied_minutes: Optional[int] = None
+    occupied_label: Optional[str] = None
+    state: str = "FREE"
+
+
+class ConsolidationTowerRackRow(BaseModel):
+    rack_id: int
+    rack_name: str
+    total_segments: int = 0
+    occupied_segments: int = 0
+    free_segments: int = 0
+    occupancy_percent: float = 0.0
+    segments: List[ConsolidationTowerSegmentRow] = Field(default_factory=list)
+
+
+class ConsolidationTowerRacksOut(BaseModel):
+    warehouse_id: int
+    racks: List[ConsolidationTowerRackRow] = Field(default_factory=list)
+
+
+class ConsolidationTowerAlertsOut(BaseModel):
+    warehouse_id: int
+    alerts: List[ConsolidationTowerAlertRow] = Field(default_factory=list)
