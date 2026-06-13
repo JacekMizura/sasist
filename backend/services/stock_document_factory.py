@@ -8,6 +8,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from ..models.stock_document import StockDocument
+from ..services.wms_warehouse_ownership_service import validate_new_stock_document_warehouse_id
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +58,11 @@ def create_stock_document(
         raise TypeError(
             f"Invalid StockDocument keyword argument(s) for {context}: {', '.join(invalid)}"
         )
+    wh = valid.get("warehouse_id")
+    if wh is not None:
+        validate_new_stock_document_warehouse_id(int(wh), context=context)
+    elif context not in ("stock_document_legacy_optional_wh",):
+        validate_new_stock_document_warehouse_id(None, context=context)
     doc = StockDocument(**valid)
     db.add(doc)
     if flush:

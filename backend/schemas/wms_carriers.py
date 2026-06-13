@@ -44,6 +44,7 @@ class WarehouseCarrierRead(BaseModel):
     carrier_group_code: Optional[str] = None
     current_location_id: Optional[int] = None
     current_location_code: Optional[str] = None
+    current_warehouse_id: Optional[int] = None
     status: str = "ACTIVE"
     is_mixed: bool = False
     weight: Optional[float] = None

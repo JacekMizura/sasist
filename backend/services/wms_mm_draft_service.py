@@ -98,6 +98,8 @@ def get_or_create_mm_draft_document(db: Session, tenant_id: int, warehouse_id: i
         supplier_id=sid,
         delivery_id=did,
         warehouse_id=int(warehouse_id),
+        source_warehouse_id=int(warehouse_id),
+        destination_warehouse_id=int(warehouse_id),
         location_id=None,
         mm_from_location_id=None,
         mm_to_location_id=None,

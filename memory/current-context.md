@@ -1,5 +1,15 @@
 # Current context
 
+## P2 — Warehouse ownership model (2026-06-08)
+- Schema: `backend/db/wms_warehouse_ownership_schema.py` — startup via `main.py`
+- **PickTask:** `warehouse_id` NOT NULL (model); DB column nullable + backfill location→order
+- **Carriers:** `current_warehouse_id` (mobile); sync on create/patch/move (`wms_carrier_service`)
+- **StockDocument:** `source_warehouse_id` / `destination_warehouse_id` (MM); ORM `before_insert` guard + factory validation
+- **CartBasket:** `warehouse_id` NOT NULL; backfill from cart
+- SSOT helpers: `wms_warehouse_ownership_service.py`
+- Tests: `backend/tests/wms/test_warehouse_ownership.py` (5/5)
+- **Bez zmian:** OMS, sourcing, split fulfillment, UI
+
 ## Multi-WH product slotting (2026-06-08)
 - SSOT: tabela **`product_warehouse_slotting`** `(product_id, warehouse_id, location_uuid)` UNIQUE
 - Backfill: `products.assigned_locations` → slotting (UUID → warehouse_id); startup + `python -m backend.scripts.backfill_product_warehouse_slotting`

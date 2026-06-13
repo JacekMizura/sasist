@@ -40,6 +40,12 @@ class PickTask(Base, BaseModelMixin):
         nullable=False,
         index=True,
     )
+    warehouse_id = Column(
+        Integer,
+        ForeignKey("warehouses.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     quantity = Column(Float, nullable=False)
     batch_number = Column(String(128), nullable=False, default="")
     expiry_date = Column(Date, nullable=False, default=date(9999, 12, 31))
@@ -56,6 +62,7 @@ class PickTask(Base, BaseModelMixin):
     order = relationship("Order", back_populates="pick_tasks")
     product = relationship("Product", back_populates="pick_tasks")
     location = relationship("Location", back_populates="pick_tasks")
+    warehouse = relationship("Warehouse", foreign_keys=[warehouse_id])
     cart = relationship("Cart", back_populates="pick_tasks")
     pick_wave_tasks = relationship(
         "PickWaveTask",

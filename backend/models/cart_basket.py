@@ -24,6 +24,8 @@ class CartBasket(Base):
     # =============================
 
     cart_id = Column(Integer, ForeignKey("carts.id"), nullable=False)
+    warehouse_id = Column(Integer, ForeignKey("warehouses.id", ondelete="CASCADE"), nullable=False, index=True)
+
     cart = relationship("Cart", back_populates="baskets")
 
     # =============================

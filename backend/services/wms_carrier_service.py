@@ -42,6 +42,7 @@ from ..schemas.wms_carriers import (
 )
 from ..utils.carrier_barcode import generate_carrier_barcode
 from .tenant_default_warehouse import list_tenant_warehouse_ids
+from .wms_warehouse_ownership_service import sync_carrier_current_warehouse
 
 
 _CARRIER_OP_LABELS: Dict[str, str] = {
@@ -322,6 +323,7 @@ def carrier_to_read(db: Session, c: WarehouseCarrier) -> WarehouseCarrierRead:
         carrier_group_code=gcode,
         current_location_id=int(c.current_location_id) if c.current_location_id else None,
         current_location_code=_loc_code(db, c.current_location_id),
+        current_warehouse_id=int(c.current_warehouse_id) if getattr(c, "current_warehouse_id", None) else None,
         status=str(c.status or "ACTIVE"),
         is_mixed=bool(getattr(c, "is_mixed", False)),
         weight=c.weight,
@@ -452,6 +454,8 @@ def create_carrier(db: Session, tenant_id: int, body: WarehouseCarrierCreate, us
     )
     db.add(c)
     db.flush()
+    sync_carrier_current_warehouse(c, db)
+    db.add(c)
     try:
         _log_carrier(
             db,
@@ -483,6 +487,7 @@ def patch_carrier(db: Session, tenant_id: int, carrier_id: int, body: WarehouseC
         c.status = body.status.strip()[:24]
     if body.current_location_id is not None:
         c.current_location_id = int(body.current_location_id)
+        sync_carrier_current_warehouse(c, db, location_id=int(body.current_location_id))
     if body.carrier_group_id is not None:
         c.carrier_group_id = int(body.carrier_group_id)
     if body.weight is not None:
@@ -544,6 +549,7 @@ def move_carrier(db: Session, tenant_id: int, carrier_id: int, body: WarehouseCa
     )
     if not inv_rows:
         c.current_location_id = int(body.to_location_id)
+        sync_carrier_current_warehouse(c, db, location_id=int(body.to_location_id))
         c.updated_at = datetime.utcnow()
         db.add(c)
         _log_carrier(
@@ -567,6 +573,7 @@ def move_carrier(db: Session, tenant_id: int, carrier_id: int, body: WarehouseCa
             inv.location_uuid = loc_uuid
         db.add(inv)
     c.current_location_id = int(body.to_location_id)
+    sync_carrier_current_warehouse(c, db, location_id=int(body.to_location_id))
     c.updated_at = datetime.utcnow()
     db.add(c)
     _sync_carrier_items_from_inventory(db, int(tenant_id), int(c.id))

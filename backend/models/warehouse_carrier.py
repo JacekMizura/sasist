@@ -43,6 +43,8 @@ class WarehouseCarrier(Base):
         index=True,
     )
     current_location_id = Column(Integer, ForeignKey("locations.id", ondelete="SET NULL"), nullable=True, index=True)
+    #: Bieżący magazyn (pozycja nośnika) — mobile; nie „właściciel” stały.
+    current_warehouse_id = Column(Integer, ForeignKey("warehouses.id", ondelete="SET NULL"), nullable=True, index=True)
     status = Column(String(24), nullable=False, default="ACTIVE", index=True)
     is_mixed = Column(Boolean, nullable=False, default=False, server_default=text("false"))
     weight = Column(Float, nullable=True)
@@ -59,6 +61,7 @@ class WarehouseCarrier(Base):
 
     carrier_group = relationship("WarehouseCarrierGroup", back_populates="carriers")
     current_location = relationship("Location", foreign_keys=[current_location_id])
+    current_warehouse = relationship("Warehouse", foreign_keys=[current_warehouse_id])
     items = relationship("WarehouseCarrierItem", back_populates="carrier", cascade="all, delete-orphan")
     logs = relationship("WarehouseCarrierLog", back_populates="carrier", cascade="all, delete-orphan")
 

@@ -207,6 +207,8 @@ def create_wms_mm_transfer(
         supplier_id=sid,
         delivery_id=did,
         warehouse_id=wh_id,
+        source_warehouse_id=wh_id,
+        destination_warehouse_id=wh_id,
         location_id=None,
         mm_from_location_id=from_id,
         mm_to_location_id=to_id,

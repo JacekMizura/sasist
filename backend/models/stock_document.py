@@ -59,6 +59,9 @@ class StockDocument(Base):
     # MM (internal transfer): source / target bins (header audit; lines + stock_operations carry lots).
     mm_from_location_id = Column(Integer, ForeignKey("locations.id", ondelete="SET NULL"), nullable=True, index=True)
     mm_to_location_id = Column(Integer, ForeignKey("locations.id", ondelete="SET NULL"), nullable=True, index=True)
+    #: MM multi-WH foundation — źródło / cel (nullable = ten sam magazyn co warehouse_id).
+    source_warehouse_id = Column(Integer, ForeignKey("warehouses.id", ondelete="RESTRICT"), nullable=True, index=True)
+    destination_warehouse_id = Column(Integer, ForeignKey("warehouses.id", ondelete="RESTRICT"), nullable=True, index=True)
     status = Column(String(32), nullable=False, default="draft")
     # WMS przyjęcie (workflow): NEW | IN_PROGRESS | DONE — operator closes receiving explicitly.
     receiving_status = Column(String(32), nullable=False, default="NEW", index=True)
@@ -89,6 +92,8 @@ class StockDocument(Base):
     supplier = relationship("Supplier", foreign_keys=[supplier_id])
     delivery = relationship("InboundDelivery", back_populates="stock_documents", foreign_keys=[delivery_id])
     warehouse = relationship("Warehouse", foreign_keys=[warehouse_id])
+    source_warehouse = relationship("Warehouse", foreign_keys=[source_warehouse_id])
+    destination_warehouse = relationship("Warehouse", foreign_keys=[destination_warehouse_id])
     location = relationship("Location", foreign_keys=[location_id])
     mm_from_location = relationship("Location", foreign_keys=[mm_from_location_id])
     mm_to_location = relationship("Location", foreign_keys=[mm_to_location_id])

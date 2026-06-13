@@ -321,6 +321,7 @@ class CartService:
 
             basket = CartBasket(
                 cart_id=cart.id,
+                warehouse_id=int(cart.warehouse_id),
                 name=get_val(b_info, 'name', f"S-{get_val(b_info, 'row', 0)}/{get_val(b_info, 'column', 0)}"),
                 row=get_val(b_info, 'row', 0),
                 column=get_val(b_info, 'column', 0),
@@ -1134,6 +1135,7 @@ class CartService:
 
                 basket = CartBasket(
                     cart_id=cart.id,
+                    warehouse_id=int(cart.warehouse_id),
                     name=b_data.get(
                         "name",
                         f"S-{b_data.get('row', 0)}/{b_data.get('column', 0)}",

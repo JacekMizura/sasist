@@ -350,6 +350,7 @@ def create_wave(
                 order_id=oi.order_id,
                 product_id=oi.product_id,
                 location_id=chosen.location_id,
+                warehouse_id=int(warehouse_id),
                 quantity=float(slice_qty),
                 status="waiting",
                 batch_number=bn,

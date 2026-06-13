@@ -1017,6 +1017,12 @@ try:
     from .db.user_warehouse_assignment_schema import ensure_user_warehouse_assignment_schema
 
     ensure_user_warehouse_assignment_schema(engine)
+    from .db.wms_warehouse_ownership_schema import ensure_wms_warehouse_ownership_schema
+
+    ensure_wms_warehouse_ownership_schema(engine)
+    from .services.wms_warehouse_ownership_service import register_stock_document_warehouse_guard
+
+    register_stock_document_warehouse_guard()
     ensure_inventory_management_policy_schema(engine)
     ensure_purchase_sales_block_schema(engine)
     ensure_tenant_warehouse_fulfillment_schema(engine)
