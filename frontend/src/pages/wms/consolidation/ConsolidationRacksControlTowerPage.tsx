@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { AlertTriangle, ArrowLeft, LayoutGrid, Loader2, RefreshCw, TowerControl } from "lucide-react";
+import { AlertTriangle, ArrowLeft, LayoutGrid, Loader2, RefreshCw } from "lucide-react";
 
 import {
   fetchConsolidationRacksControlTower,
@@ -87,7 +87,7 @@ function ShelfCard({ shelf }: { shelf: ConsolidationControlTowerShelf }) {
         </div>
         {isReady ? (
           <div className="sm:col-span-2">
-            <dt className="text-xs font-bold uppercase tracking-wide text-orange-800">READY_TO_PACK</dt>
+            <dt className="text-xs font-bold uppercase tracking-wide text-orange-800">Gotowe do pakowania</dt>
             <dd className="mt-0.5 text-base font-bold text-orange-950">
               Gotowe od: {shelf.ready_to_pack_label ?? "—"}
             </dd>
@@ -136,7 +136,7 @@ function ShelfCard({ shelf }: { shelf: ConsolidationControlTowerShelf }) {
           to={WMS_ROUTES.consolidationDetail(shelf.plan_id)}
           className="mt-4 inline-flex text-xs font-semibold text-sky-800 hover:underline"
         >
-          Szczegóły planu konsolidacji
+          Szczegóły zamówienia
         </Link>
       ) : null}
     </article>
@@ -171,46 +171,39 @@ export default function ConsolidationRacksControlTowerPage() {
   }, [load]);
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 p-4 md:p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <Link
-            to={WMS_ROUTES.consolidationRacks}
-            className="inline-flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900"
+    <div className="flex h-full min-h-0 w-full flex-col bg-white">
+      <div className="shrink-0 border-b border-slate-200 px-4 py-3 md:px-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <Link
+              to={WMS_ROUTES.consolidationRacks}
+              className="inline-flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Podgląd półek
+            </Link>
+            <Link
+              to={WMS_ROUTES.consolidations}
+              className="text-sm font-medium text-slate-500 hover:text-slate-800"
+            >
+              Do zrobienia
+            </Link>
+          </div>
+          <button
+            type="button"
+            onClick={() => void load()}
+            disabled={loading}
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
           >
-            <ArrowLeft className="h-4 w-4" aria-hidden />
-            Mapa regałów
-          </Link>
-          <Link
-            to={WMS_ROUTES.consolidations}
-            className="text-sm font-medium text-slate-500 hover:text-slate-800"
-          >
-            Konsolidacje
-          </Link>
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+            Odśwież
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={() => void load()}
-          disabled={loading}
-          className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-        >
-          <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} aria-hidden />
-          Odśwież
-        </button>
+        <h1 className="mt-2 text-lg font-bold text-slate-900">Monitor procesu — półki kompletacyjne</h1>
+        <p className="text-sm text-slate-600">Widok brygadzisty — KPI, SLA i alerty półek</p>
       </div>
 
-      <header className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex items-center gap-3">
-          <TowerControl className="h-6 w-6 text-violet-600" aria-hidden />
-          <div>
-            <h1 className="text-xl font-bold text-slate-900">Control Tower — regały kompletacyjne</h1>
-            <p className="text-sm text-slate-500">
-              Widok operacyjny dla kierownika i lidera zmiany
-              {warehouse?.name ? ` (${warehouse.name})` : ""}
-            </p>
-          </div>
-        </div>
-      </header>
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 md:px-6 md:py-5">
 
       {loading && !data ? (
         <div className="flex items-center gap-2 py-16 text-sm text-slate-500">
@@ -222,8 +215,8 @@ export default function ConsolidationRacksControlTowerPage() {
           <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
             <KpiTile label="Wolne półki" value={data.kpi.free_count} tone="border-emerald-200 bg-emerald-50/80" />
             <KpiTile label="Zajęte półki" value={data.kpi.occupied_count} tone="border-slate-200 bg-slate-50" />
-            <KpiTile label="Ready To Pack" value={data.kpi.ready_to_pack_count} tone="border-orange-200 bg-orange-50/80" />
-            <KpiTile label="Exception" value={data.kpi.exception_count} tone="border-red-200 bg-red-50/80" />
+            <KpiTile label="Gotowe do pakowania" value={data.kpi.ready_to_pack_count} tone="border-orange-200 bg-orange-50/80" />
+            <KpiTile label="Wyjątki" value={data.kpi.exception_count} tone="border-red-200 bg-red-50/80" />
             <KpiTile
               label="Średni czas zajęcia"
               value={`${data.kpi.avg_occupation_minutes} min`}
@@ -245,10 +238,9 @@ export default function ConsolidationRacksControlTowerPage() {
           )}
         </>
       ) : (
-        <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-12 text-center text-sm text-slate-500">
-          Nie udało się wczytać control tower.
-        </div>
+        <div className="py-16 text-center text-sm text-slate-500">Nie udało się wczytać monitora procesu.</div>
       )}
+      </div>
     </div>
   );
 }

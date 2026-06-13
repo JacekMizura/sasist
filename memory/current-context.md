@@ -1,5 +1,15 @@
 # Current context
 
+## P5.11 — Refaktor UX ekranów operacyjnych konsolidacji WMS (2026-06-08)
+- **Frontend-only** — bez zmian backend / API / workflow
+- Kolejka `/wms/consolidations` = ekran **Do zrobienia** (3 sekcje priorytetów z tower queues + supply plans)
+- Pełna szerokość, białe tło (`ConsolidationOperatorPage`), bez `max-w-*` na ekranach operatora
+- Usunięto KPI z ekranu regałów; podgląd półek = siatka + legenda kolorów
+- Nazewnictwo operacyjne: „Kompletacja międzymagazynowa”, „Rozkładanie na półki”, „Monitor procesu”, „Podgląd półek”
+- Regały: `dashboard: false` w WMS menu (narzędzie pomocnicze, nie kafelek startowy)
+- KPI/SLA/wykorzystanie tylko w Monitor procesu (Control Tower)
+- Pliki: `consolidationOperatorUi.tsx`, refactor queue/racks/staging/detail/tower pages, `wmsTabConfig.ts`
+
 ## P5.10 — Refaktor konfiguracji regałów kompletacyjnych OMS-only (2026-06-08)
 - **Frontend-only** — bez zmian DB / API / lifecycle / P5.3–P5.9
 - **OMS** (`/carts/racks/*`): lista tabeli, kreator/edycja (layout jak Twórca szablonu: lewa kolumna parametrów, prawa siatka), podgląd read-only (`/:id/preview`), edycja (`/:id/edit`)

@@ -19,6 +19,7 @@ import {
   consolidationPlanStatusClass,
   consolidationPlanStatusLabel,
 } from "./consolidationStatusUi";
+import { ConsolidationOperatorPage, WMS_CONSOLIDATION_LABELS } from "./consolidationOperatorUi";
 
 export default function ConsolidationDetailPage() {
   const { planId } = useParams<{ planId: string }>();
@@ -121,13 +122,13 @@ export default function ConsolidationDetailPage() {
   const isStaging = plan?.status.toUpperCase() === "STAGING";
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 p-4 md:p-6">
+    <ConsolidationOperatorPage>
       <Link
         to={WMS_ROUTES.consolidations}
-        className="inline-flex w-fit items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900"
+        className="mb-4 inline-flex w-fit items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900"
       >
         <ArrowLeft className="h-4 w-4" aria-hidden />
-        Wróć do listy
+        {WMS_CONSOLIDATION_LABELS.backToTodo}
       </Link>
 
       {loading ? (
@@ -137,8 +138,8 @@ export default function ConsolidationDetailPage() {
         </div>
       ) : plan ? (
         <>
-          <header className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h1 className="text-xl font-bold text-slate-900">Konsolidacja {orderLabel}</h1>
+          <header className="border border-slate-200 bg-white p-5">
+            <h1 className="text-xl font-bold text-slate-900">Zamówienie {orderLabel}</h1>
             <dl className="mt-4 grid gap-3 sm:grid-cols-2">
               <div>
                 <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Magazyn docelowy</dt>
@@ -333,6 +334,6 @@ export default function ConsolidationDetailPage() {
           Nie znaleziono planu konsolidacji.
         </div>
       )}
-    </div>
+    </ConsolidationOperatorPage>
   );
 }

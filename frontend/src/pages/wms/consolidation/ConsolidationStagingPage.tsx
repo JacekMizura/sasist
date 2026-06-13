@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, Layers, Loader2, Play } from "lucide-react";
+import { ArrowLeft, Layers, Loader2 } from "lucide-react";
 
 import {
   fetchConsolidationStagingQueue,
@@ -12,6 +12,11 @@ import { useWarehouse } from "../../../context/WarehouseContext";
 import { DAMAGE_TENANT_ID } from "../../damage/damageShared";
 import { WMS_ROUTES } from "../wmsRoutes";
 import { consolidationPlanStatusClass, consolidationPlanStatusLabel } from "./consolidationStatusUi";
+import {
+  ConsolidationOperatorPage,
+  OperatorPrimaryButton,
+  WMS_CONSOLIDATION_LABELS,
+} from "./consolidationOperatorUi";
 
 export default function ConsolidationStagingPage() {
   const { warehouse } = useWarehouse();
@@ -59,23 +64,26 @@ export default function ConsolidationStagingPage() {
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 p-4 md:p-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900">Rozkładanie</h1>
-          <p className="mt-1 text-sm text-slate-600">
-            Konsolidacja na półkach kompletacyjnych
-            {warehouse?.name ? ` (${warehouse.name})` : ""}.
-          </p>
+    <ConsolidationOperatorPage
+      toolbar={
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-lg font-bold text-slate-900">Rozkładanie na półki</h1>
+            <p className="text-sm text-slate-600">
+              Przypisz zamówienie do półki i rozpocznij odkładanie
+              {warehouse?.name ? ` · ${warehouse.name}` : ""}
+            </p>
+          </div>
+          <Link
+            to={WMS_ROUTES.consolidations}
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-slate-900"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            {WMS_CONSOLIDATION_LABELS.backToTodo}
+          </Link>
         </div>
-        <Link
-          to={WMS_ROUTES.consolidations}
-          className="inline-flex items-center gap-1 text-sm font-medium text-sky-700 hover:text-sky-900"
-        >
-          Kolejka konsolidacji
-          <ArrowRight className="h-4 w-4" />
-        </Link>
-      </div>
+      }
+    >
 
       {error ? (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
@@ -89,12 +97,12 @@ export default function ConsolidationStagingPage() {
           Wczytywanie…
         </div>
       ) : rows.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-6 py-12 text-center">
-          <Layers className="mx-auto h-8 w-8 text-slate-400" />
-          <p className="mt-3 text-sm text-slate-600">Brak planów do rozkładania.</p>
+        <div className="py-12 text-center">
+          <Layers className="mx-auto h-8 w-8 text-slate-300" />
+          <p className="mt-3 text-sm text-slate-600">Brak zamówień do rozkładania.</p>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="overflow-x-auto border border-slate-200">
           <table className="min-w-full divide-y divide-slate-200 text-sm">
             <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
               <tr>
@@ -129,19 +137,12 @@ export default function ConsolidationStagingPage() {
                   </td>
                   <td className="px-4 py-3">
                     {row.can_start_staging ? (
-                      <button
-                        type="button"
+                      <OperatorPrimaryButton
                         disabled={busyPlanId === row.id}
                         onClick={() => void handleStart(row.id)}
-                        className="inline-flex items-center gap-1 rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-sky-700 disabled:opacity-60"
                       >
-                        {busyPlanId === row.id ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <Play className="h-3.5 w-3.5" />
-                        )}
-                        Rozpocznij rozkładanie
-                      </button>
+                        {busyPlanId === row.id ? "Start…" : "Rozpocznij rozkładanie"}
+                      </OperatorPrimaryButton>
                     ) : row.status === "STAGING" ? (
                       <Link
                         to={WMS_ROUTES.consolidationDetail(row.id)}
@@ -159,6 +160,6 @@ export default function ConsolidationStagingPage() {
           </table>
         </div>
       )}
-    </div>
+    </ConsolidationOperatorPage>
   );
 }

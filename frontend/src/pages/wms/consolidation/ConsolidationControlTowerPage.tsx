@@ -96,36 +96,40 @@ export default function ConsolidationControlTowerPage() {
   }, [load]);
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 md:p-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2 text-violet-800">
-            <TowerControl className="h-6 w-6" aria-hidden />
-            <h1 className="text-xl font-bold text-slate-900">Control Tower — Konsolidacja</h1>
+    <div className="flex h-full min-h-0 w-full flex-col bg-white">
+      <div className="shrink-0 border-b border-slate-200 px-4 py-3 md:px-6">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2 text-violet-800">
+              <TowerControl className="h-5 w-5" aria-hidden />
+              <h1 className="text-lg font-bold text-slate-900">Monitor procesu — kompletacja</h1>
+            </div>
+            <p className="mt-0.5 text-sm text-slate-600">
+              Widok brygadzisty — KPI, SLA, alerty, wykorzystanie półek
+              {warehouse?.name ? ` · ${warehouse.name}` : ""}
+            </p>
           </div>
-          <p className="mt-1 text-sm text-slate-600">
-            Monitoring operacyjny dla brygadzisty
-            {warehouse?.name ? ` (${warehouse.name})` : ""}.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => void load()}
-            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-          >
-            <RefreshCw className="h-4 w-4" />
-            Odśwież
-          </button>
-          <Link
-            to={WMS_ROUTES.consolidations}
-            className="inline-flex items-center gap-1 text-sm font-medium text-sky-700 hover:text-sky-900"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Konsolidacje
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void load()}
+              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Odśwież
+            </button>
+            <Link
+              to={WMS_ROUTES.consolidations}
+              className="inline-flex items-center gap-1 text-sm font-medium text-slate-600 hover:text-slate-900"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Do zrobienia
+            </Link>
+          </div>
         </div>
       </div>
+
+      <div className="flex flex-col gap-6 min-h-0 flex-1 overflow-y-auto px-4 py-4 md:px-6 md:py-5">
 
       {error ? (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">{error}</div>
@@ -141,9 +145,9 @@ export default function ConsolidationControlTowerPage() {
           <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <KpiTile label="Do rozłożenia" value={summary.counts.READY_FOR_STAGING} tone="border-sky-200 bg-sky-50 text-sky-950" />
             <KpiTile label="Rozkładanie" value={summary.counts.STAGING} tone="border-blue-200 bg-blue-50 text-blue-950" />
-            <KpiTile label="Gotowe do pack" value={summary.counts.READY_TO_PACK} tone="border-orange-200 bg-orange-50 text-orange-950" />
+            <KpiTile label="Gotowe do pakowania" value={summary.counts.READY_TO_PACK} tone="border-orange-200 bg-orange-50 text-orange-950" />
             <KpiTile label="Wyjątki" value={summary.counts.EXCEPTION} tone="border-red-200 bg-red-50 text-red-950" />
-            <KpiTile label="Manual review" value={summary.counts.MANUAL_REVIEW_REQUIRED} tone="border-rose-200 bg-rose-50 text-rose-950" />
+            <KpiTile label="Wymaga decyzji" value={summary.counts.MANUAL_REVIEW_REQUIRED} tone="border-rose-200 bg-rose-50 text-rose-950" />
             {(summary.capacity_warning_count ?? 0) > 0 ? (
               <KpiTile
                 label="Ostrzeżenia pojemności"
@@ -288,6 +292,7 @@ export default function ConsolidationControlTowerPage() {
           ) : null}
         </>
       ) : null}
+      </div>
     </div>
   );
 }
