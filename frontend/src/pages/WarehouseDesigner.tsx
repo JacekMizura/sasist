@@ -109,7 +109,8 @@ import { fetchRoutePath } from "../api/routeApi";
 import { generateWarehouseGraph } from "../api/warehouseGraphApi";
 import { buildInventoryMaps, normalizeInventoryLocationUuid, type InventoryRow, type InventoryMaps } from "./WarehouseDesigner/inventoryMaps";
 import type { DamageCandidate } from "../types/damageReport";
-import { useWarehouse } from "../context/WarehouseContext";
+import { useWarehouse, type Warehouse } from "../context/WarehouseContext";
+import { DesignerWarehouseSelect } from "./WarehouseDesigner/DesignerWarehouseSelect";
 
 /** Resolve slot UUID from an assigned_locations entry (API JSON may use location_uuid). */
 function assignedLocationEntryUuid(a: {
@@ -282,7 +283,7 @@ function buildVariantTemplate(
 }
 
 export default function WarehouseDesigner() {
-  const { warehouse: activeWarehouse, warehouses, setWarehouse, refreshWarehouses } = useWarehouse();
+  const { warehouse: activeWarehouse, warehouses, setWarehouse, refreshWarehouses, warehousesLoading } = useWarehouse();
   const selectedWarehouseId = activeWarehouse?.id ?? null;
   const [layout, setLayout] = useState<LayoutState>({
     layout_id: null,
@@ -1612,6 +1613,59 @@ export default function WarehouseDesigner() {
     else setSpecialLocations({ pick_start: null, packing: null, dock: null });
   }, [selectedWarehouseId, loadLayout]);
 
+  const resetDesignerStateForWarehouseSwitch = useCallback(() => {
+    setSelectedRackId(null);
+    setPreviewRackId(null);
+    setEditingRackId(null);
+    setPathPoints(null);
+    setPathSegments(null);
+    setPathMarkers(null);
+    setHighlightedStopIndex(null);
+    setCurrentStopIndex(null);
+    setPathError(null);
+    setRouteRackIds([]);
+    setIsRouteActive(false);
+    setInventoryRows([]);
+    setOccupancyMetrics(null);
+    setProducts([]);
+    setEditingProductId(null);
+    setSelectedBinForFilter(null);
+    setShowElevationForRackId(null);
+    setSelectedRackIdForSideView(null);
+    setSelectedRackIdOnMap(null);
+    setSelectedProductIdOnMap(null);
+    setSelectedProductId(null);
+    setSelectedLocationForProducts(null);
+    setInternalLayoutRackId(null);
+    setLastSavedAt(null);
+    setClearRackConfirmOpen(false);
+    setSelectedRackIds([]);
+    setSelectedAisleIndex(null);
+    setSelectedVisualId(null);
+    setSelectedVisualIds([]);
+    setSelectedWallElementId(null);
+  }, []);
+
+  const handleDesignerWarehouseSelect = useCallback(
+    (w: Warehouse) => {
+      if (w.id === selectedWarehouseId) return;
+      const hasLayoutContent =
+        layout.racks.length > 0 ||
+        (layout.aisles?.length ?? 0) > 0 ||
+        (layout.visual_elements?.length ?? 0) > 0;
+      const unsaved = lastSavedAt == null && hasLayoutContent;
+      if (
+        unsaved &&
+        !window.confirm("Masz niezapisane zmiany układu magazynu. Przełączyć magazyn bez zapisu?")
+      ) {
+        return;
+      }
+      resetDesignerStateForWarehouseSwitch();
+      setWarehouse(w);
+    },
+    [selectedWarehouseId, lastSavedAt, layout, resetDesignerStateForWarehouseSwitch, setWarehouse],
+  );
+
   useEffect(() => {
     if (isLiveView && selectedWarehouseId != null) loadLayout(selectedWarehouseId);
   }, [isLiveView, selectedWarehouseId, loadLayout]);
@@ -1681,6 +1735,12 @@ export default function WarehouseDesigner() {
       setInventoryRows([]);
     }
   }, [selectedWarehouseId]);
+
+  /** Magazyn tab: inventory + slotting refresh when active warehouse changes (layout tab uses loadLayout products only). */
+  useEffect(() => {
+    if (selectedWarehouseId == null || mainView !== "magazyn") return;
+    void fetchProductsForMap();
+  }, [selectedWarehouseId, mainView, fetchProductsForMap]);
 
   /** After WMS putaway (or similar), refetch layout + products + inventory so Magazyn badges match GET /inventory/. */
   useEffect(() => {
@@ -3465,7 +3525,15 @@ export default function WarehouseDesigner() {
     >
       <div className="flex shrink-0 flex-col gap-0">
         <div className="mb-3 flex flex-wrap items-start justify-between gap-2.5">
-          <h1 className="m-0 text-lg font-semibold tracking-tight text-slate-900 sm:text-xl">{UI_STRINGS.warehouse.title}</h1>
+          <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
+            <h1 className="m-0 text-lg font-semibold tracking-tight text-slate-900 sm:text-xl">{UI_STRINGS.warehouse.title}</h1>
+            <DesignerWarehouseSelect
+              warehouseId={selectedWarehouseId}
+              warehouses={warehouses}
+              loading={warehousesLoading}
+              onSelect={handleDesignerWarehouseSelect}
+            />
+          </div>
           <DesignerToolbar
             mainView={mainView}
             lastSavedAt={lastSavedAt}
