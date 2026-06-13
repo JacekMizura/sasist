@@ -25,9 +25,8 @@ from ..models.product import Product
 from .product_disposition_snapshot_service import (
     disposition_snapshots_for_products,
     empty_disposition_stock_dict,
-    get_product_disposition_stock,
 )
-from .commercial_availability_service import commercial_snapshots_for_products, empty_commercial_snapshot, get_commercial_availability_snapshot
+from .commercial_availability_service import commercial_snapshots_for_products, empty_commercial_snapshot
 from .product_inventory_snapshot_service import inventory_snapshots_for_products, visible_on_hand_by_product
 
 logger = logging.getLogger(__name__)
@@ -47,24 +46,6 @@ def _allocated_quantity_from_rows(
             continue
         total += float(row.get("quantity") or 0)
     return int(round(total))
-
-
-def _inventory_operational_metrics(
-    db: Session,
-    *,
-    tenant_id: int,
-    product_id: int,
-    warehouse_id: Optional[int],
-    on_hand: int,
-) -> dict[str, int]:
-    snaps = inventory_snapshots_for_products(db, tenant_id, warehouse_id, [int(product_id)])
-    ops = snaps.get(int(product_id), {})
-    reserved = int(round(float(ops.get("reserved") or 0)))
-    available = int(round(float(ops.get("available") or max(0, on_hand - reserved))))
-    return {
-        "reserved_quantity": reserved,
-        "available_quantity": available,
-    }
 
 
 def log_product_inventory_compare(
@@ -195,52 +176,173 @@ def get_product_inventory_display_snapshot(
         .first()
     )
     if product is None:
-        return {
-            "stock_quantity": 0,
-            "location_allocated_quantity": 0,
-            "unallocated_quantity": 0,
-            "reserved_quantity": 0,
-            "available_quantity": 0,
-            "disposition_stock": empty_disposition_stock_dict(),
-            "commercially_sellable_qty": 0.0,
-            "sales_blocked_qty": 0.0,
-            "locations": [],
-            "inventory": [],
-            "locations_load_incomplete": False,
-        }
+        return dict(_EMPTY_DISPLAY_SNAPSHOT)
 
-    stock_map, loc_map, inv_map = inventory_display_maps_for_products(
-        db, [product], warehouse_id=warehouse_id
+    out: dict[str, Any] = {}
+    attach_inventory_display_to_product_dicts(
+        db,
+        products=[product],
+        product_dicts=[out],
+        warehouse_id=warehouse_id,
+        locations_data_failed=locations_data_failed,
+        include_disposition_stock=True,
     )
-    pid = int(product.id)
-    tid = int(product.tenant_id)
-    stock = int(stock_map.get((pid, tid), 0))
-    locations = list(loc_map.get(pid, []))
-    inventory = list(inv_map.get(pid, []))
-    allocated = _allocated_quantity_from_rows(locations, inventory)
-    unallocated = max(0, stock - allocated)
-    ops = _inventory_operational_metrics(db, tenant_id=tid, product_id=pid, warehouse_id=warehouse_id, on_hand=stock)
-    disposition = get_product_disposition_stock(
-        db, product_id=pid, tenant_id=tid, warehouse_id=warehouse_id
-    )
-    commercial = empty_commercial_snapshot()
-    if warehouse_id is not None:
-        commercial = get_commercial_availability_snapshot(
-            db, tenant_id=tid, warehouse_id=int(warehouse_id), product_id=pid
-        )
     return {
-        "stock_quantity": stock,
-        "location_allocated_quantity": allocated,
-        "unallocated_quantity": unallocated,
-        "reserved_quantity": ops["reserved_quantity"],
-        "available_quantity": ops["available_quantity"],
-        "disposition_stock": disposition,
-        "commercially_sellable_qty": float(commercial.get("commercially_sellable_qty") or 0.0),
-        "sales_blocked_qty": float(commercial.get("sales_blocked_qty") or 0.0),
-        "locations": locations,
-        "inventory": inventory,
+        "stock_quantity": int(out.get("stock_quantity") or 0),
+        "location_allocated_quantity": int(out.get("location_allocated_quantity") or 0),
+        "unallocated_quantity": int(out.get("unallocated_quantity") or 0),
+        "reserved_quantity": int(out.get("reserved_quantity") or 0),
+        "available_quantity": int(out.get("available_quantity") or 0),
+        "disposition_stock": out.get("disposition_stock") or empty_disposition_stock_dict(),
+        "commercially_sellable_qty": float(out.get("commercially_sellable_qty") or 0.0),
+        "sales_blocked_qty": float(out.get("sales_blocked_qty") or 0.0),
+        "locations": list(out.get("locations") or []),
+        "inventory": list(out.get("inventory") or []),
         "locations_load_incomplete": bool(locations_data_failed),
     }
+
+
+_EMPTY_DISPLAY_SNAPSHOT: Dict[str, Any] = {
+    "stock_quantity": 0,
+    "location_allocated_quantity": 0,
+    "unallocated_quantity": 0,
+    "reserved_quantity": 0,
+    "available_quantity": 0,
+    "disposition_stock": empty_disposition_stock_dict(),
+    "commercially_sellable_qty": 0.0,
+    "sales_blocked_qty": 0.0,
+    "locations": [],
+    "inventory": [],
+    "locations_load_incomplete": False,
+}
+
+
+def _apply_display_fields_to_dict(
+    out: dict[str, Any],
+    *,
+    product_id: int,
+    tenant_id: int,
+    stock: int,
+    locations: List[dict],
+    inventory: List[dict],
+    reserved_quantity: int,
+    available_quantity: int,
+    disposition: Optional[dict[str, Any]] = None,
+    commercial: Optional[dict[str, Any]] = None,
+    locations_data_failed: bool = False,
+    include_disposition_stock: bool = True,
+) -> None:
+    allocated = _allocated_quantity_from_rows(locations, inventory)
+    unallocated = max(0, stock - allocated)
+    out["stock_quantity"] = stock
+    out["location_allocated_quantity"] = allocated
+    out["unallocated_quantity"] = unallocated
+    out["reserved_quantity"] = reserved_quantity
+    out["available_quantity"] = available_quantity
+    if include_disposition_stock:
+        out["disposition_stock"] = disposition or empty_disposition_stock_dict()
+    comm = commercial or empty_commercial_snapshot()
+    out["commercially_sellable_qty"] = float(comm.get("commercially_sellable_qty") or 0.0)
+    out["sales_blocked_qty"] = float(comm.get("sales_blocked_qty") or 0.0)
+    out["locations"] = locations
+    out["inventory"] = inventory
+    if locations_data_failed:
+        out["locations_load_incomplete"] = True
+
+
+def attach_inventory_display_to_product_dicts(
+    db: Session,
+    *,
+    products: Sequence[Product],
+    product_dicts: Sequence[dict[str, Any]],
+    warehouse_id: Optional[int] = None,
+    log_tag: Optional[str] = None,
+    locations_data_failed: bool = False,
+    include_disposition_stock: bool = True,
+) -> None:
+    """
+    Batch attach stock + locations + inventory (+ optional disposition/commercial) to list/detail dicts.
+
+    Replaces per-row ``apply_inventory_display_to_dict`` in product list (avoids N+1 SQL).
+    """
+    if not products or not product_dicts:
+        return
+    if len(products) != len(product_dicts):
+        raise ValueError("products and product_dicts must have the same length")
+
+    stock_map, loc_map, inv_map = inventory_display_maps_for_products(
+        db, products, warehouse_id=warehouse_id
+    )
+
+    by_tid: Dict[int, List[int]] = defaultdict(list)
+    for p in products:
+        by_tid[int(p.tenant_id)].append(int(p.id))
+
+    ops_by_pid: Dict[int, Dict[str, float]] = {}
+    for tid, pids in by_tid.items():
+        ops_by_pid.update(
+            inventory_snapshots_for_products(db, tid, warehouse_id, pids)
+        )
+
+    disp_by_pid: Dict[int, dict[str, Any]] = {}
+    commercial_by_pid: Dict[int, dict[str, Any]] = {}
+    if include_disposition_stock:
+        empty_disp = empty_disposition_stock_dict()
+        empty_comm = empty_commercial_snapshot()
+        for tid, pids in by_tid.items():
+            disp_by_pid.update(
+                disposition_snapshots_for_products(db, tid, warehouse_id, pids)
+            )
+            if warehouse_id is not None:
+                commercial_by_pid.update(
+                    commercial_snapshots_for_products(
+                        db,
+                        tenant_id=tid,
+                        warehouse_id=int(warehouse_id),
+                        product_ids=pids,
+                    )
+                )
+            else:
+                for pid in pids:
+                    commercial_by_pid.setdefault(int(pid), empty_comm)
+        for pid in (int(p.id) for p in products):
+            disp_by_pid.setdefault(pid, empty_disp)
+
+    empty_comm = empty_commercial_snapshot()
+    for product, out in zip(products, product_dicts):
+        pid = int(product.id)
+        tid = int(product.tenant_id)
+        stock = int(stock_map.get((pid, tid), 0))
+        locations = list(loc_map.get(pid, []))
+        inventory = list(inv_map.get(pid, []))
+        ops = ops_by_pid.get(pid, {})
+        reserved = int(round(float(ops.get("reserved") or 0)))
+        available = int(round(float(ops.get("available") or max(0, stock - reserved))))
+        _apply_display_fields_to_dict(
+            out,
+            product_id=pid,
+            tenant_id=tid,
+            stock=stock,
+            locations=locations,
+            inventory=inventory,
+            reserved_quantity=reserved,
+            available_quantity=available,
+            disposition=disp_by_pid.get(pid) if include_disposition_stock else None,
+            commercial=commercial_by_pid.get(pid, empty_comm) if include_disposition_stock else None,
+            locations_data_failed=locations_data_failed,
+            include_disposition_stock=include_disposition_stock,
+        )
+        if log_tag:
+            _log_stock_event(
+                log_tag,
+                product_id=pid,
+                tenant_id=tid,
+                warehouse_id=warehouse_id,
+                total_stock=stock,
+                locations=locations,
+                allocated=int(out.get("location_allocated_quantity") or 0),
+                unallocated=int(out.get("unallocated_quantity") or 0),
+            )
 
 
 def attach_disposition_stock_to_product_dicts(
@@ -283,37 +385,15 @@ def apply_inventory_display_to_dict(
     include_disposition_stock: bool = True,
 ) -> None:
     """Mutates *out* with stock_quantity, locations, inventory from shared snapshot."""
-    snap = get_product_inventory_display_snapshot(
+    attach_inventory_display_to_product_dicts(
         db,
-        product_id=int(product.id),
-        tenant_id=int(product.tenant_id),
+        products=[product],
+        product_dicts=[out],
         warehouse_id=warehouse_id,
+        log_tag=log_tag,
         locations_data_failed=locations_data_failed,
+        include_disposition_stock=include_disposition_stock,
     )
-    out["stock_quantity"] = snap["stock_quantity"]
-    out["location_allocated_quantity"] = snap["location_allocated_quantity"]
-    out["unallocated_quantity"] = snap["unallocated_quantity"]
-    out["reserved_quantity"] = snap["reserved_quantity"]
-    out["available_quantity"] = snap["available_quantity"]
-    if include_disposition_stock:
-        out["disposition_stock"] = snap.get("disposition_stock") or empty_disposition_stock_dict()
-    out["commercially_sellable_qty"] = float(snap.get("commercially_sellable_qty") or 0.0)
-    out["sales_blocked_qty"] = float(snap.get("sales_blocked_qty") or 0.0)
-    out["locations"] = snap["locations"]
-    out["inventory"] = snap["inventory"]
-    if snap.get("locations_load_incomplete"):
-        out["locations_load_incomplete"] = True
-    if log_tag:
-        _log_stock_event(
-            log_tag,
-            product_id=int(product.id),
-            tenant_id=int(product.tenant_id),
-            warehouse_id=warehouse_id,
-            total_stock=int(snap["stock_quantity"]),
-            locations=snap["locations"],
-            allocated=int(snap.get("location_allocated_quantity") or 0),
-            unallocated=int(snap.get("unallocated_quantity") or 0),
-        )
 
 
 # Spec alias: display snapshot (stock + locations) for list/detail parity.

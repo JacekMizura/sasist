@@ -1881,7 +1881,7 @@ def get_products(
         q = q.limit(limit)
     rows = q.all()
 
-    from ..services.product_inventory_display_service import apply_inventory_display_to_dict
+    from ..services.product_inventory_display_service import attach_inventory_display_to_product_dicts
 
     sales_map = {}  # product_id -> (sales_30d: int, rotation_30d: float)
     if rows:
@@ -1920,14 +1920,19 @@ def get_products(
         _enrich_product_manufacturer(db, d, p)
         _enrich_product_default_supplier(db, d, p)
         _enrich_product_last_supplier(db, d, p)
-        apply_inventory_display_to_dict(
+        items.append(d)
+
+    if rows:
+        attach_inventory_display_to_product_dicts(
             db,
-            d,
-            p,
+            products=rows,
+            product_dicts=items,
             warehouse_id=warehouse_id,
             log_tag="product.list.stock",
             include_disposition_stock=False,
         )
+
+    for p, d in zip(rows, items):
         stock_qty = int(d.get("stock_quantity") or 0)
         avg = avg_map.get(p.id)
         d["average_purchase_price"] = avg
@@ -1944,7 +1949,6 @@ def get_products(
             d["days_of_stock"] = int(round(stock_qty / rot))
         else:
             d["days_of_stock"] = None
-        items.append(d)
 
     if items and tenant_id is not None:
         from ..services.product_inventory_display_service import attach_disposition_stock_to_product_dicts

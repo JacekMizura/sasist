@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef, useMemo, type MouseEvent } from "react";
+import { useState, useCallback, useEffect, useLayoutEffect, useRef, useMemo, type MouseEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import api from "../api/axios";
 import { putProductWarehouseSlotting } from "../api/productSlottingApi";
@@ -111,6 +111,13 @@ import { buildInventoryMaps, normalizeInventoryLocationUuid, type InventoryRow, 
 import type { DamageCandidate } from "../types/damageReport";
 import { useWarehouse, type Warehouse } from "../context/WarehouseContext";
 import { DesignerWarehouseSelect } from "./WarehouseDesigner/DesignerWarehouseSelect";
+import {
+  getDesignerLoadPerf,
+  isDesignerPerfEnabled,
+  logDesignerPerfHint,
+  measureDesignerMemo,
+  resetDesignerLoadPerf,
+} from "./WarehouseDesigner/designerLoadPerf";
 
 /** Resolve slot UUID from an assigned_locations entry (API JSON may use location_uuid). */
 function assignedLocationEntryUuid(a: {
@@ -283,7 +290,15 @@ function buildVariantTemplate(
 }
 
 export default function WarehouseDesigner() {
+  logDesignerPerfHint();
   const { warehouse: activeWarehouse, warehouses, setWarehouse, refreshWarehouses, warehousesLoading } = useWarehouse();
+  const designerPerfEnabled = isDesignerPerfEnabled();
+  const loadLayoutCallRef = useRef(0);
+  const fetchProductsCallRef = useRef(0);
+  const firstRenderMarkedRef = useRef(false);
+  const fullReadyPrintedRef = useRef(false);
+  const occupancyFetchGenRef = useRef(0);
+  const prevWarehousesLoadingRef = useRef<boolean | null>(null);
   const selectedWarehouseId = activeWarehouse?.id ?? null;
   const [layout, setLayout] = useState<LayoutState>({
     layout_id: null,
@@ -721,6 +736,64 @@ export default function WarehouseDesigner() {
   }, [mainView]);
   const svgRef = useRef<SVGSVGElement>(null);
   const isLiveView = mainView === "magazyn";
+  const designerPerf = designerPerfEnabled ? getDesignerLoadPerf(true) : null;
+
+  useEffect(() => {
+    if (!designerPerfEnabled || mainView !== "magazyn" || selectedWarehouseId == null) return;
+    resetDesignerLoadPerf();
+    loadLayoutCallRef.current = 0;
+    fetchProductsCallRef.current = 0;
+    firstRenderMarkedRef.current = false;
+    fullReadyPrintedRef.current = false;
+    occupancyFetchGenRef.current = 0;
+    prevWarehousesLoadingRef.current = null;
+    getDesignerLoadPerf(true)?.markSessionStart(`Magazyn WH=${selectedWarehouseId}`);
+  }, [designerPerfEnabled, mainView, selectedWarehouseId]);
+
+  useEffect(() => {
+    if (!designerPerfEnabled) return;
+    const perf = getDesignerLoadPerf();
+    if (!perf) return;
+    if (prevWarehousesLoadingRef.current === null) {
+      prevWarehousesLoadingRef.current = warehousesLoading;
+      if (warehousesLoading) perf.start("WarehouseContext warehousesLoading");
+      return;
+    }
+    if (prevWarehousesLoadingRef.current && !warehousesLoading) {
+      perf.end("WarehouseContext warehousesLoading");
+    }
+    prevWarehousesLoadingRef.current = warehousesLoading;
+  }, [designerPerfEnabled, warehousesLoading]);
+
+  useLayoutEffect(() => {
+    if (!designerPerfEnabled || mainView !== "magazyn" || firstRenderMarkedRef.current) return;
+    firstRenderMarkedRef.current = true;
+    const perf = getDesignerLoadPerf();
+    if (!perf) return;
+    perf.record("pierwszy render (useLayoutEffect)", perf.elapsedSinceSessionStart());
+  }, [designerPerfEnabled, mainView, loading, products.length, layout.racks.length, inventoryRows.length]);
+
+  useEffect(() => {
+    if (!designerPerfEnabled || mainView !== "magazyn" || fullReadyPrintedRef.current) return;
+    if (loading || warehousesLoading || selectedWarehouseId == null) return;
+    const timer = window.setTimeout(() => {
+      if (fullReadyPrintedRef.current) return;
+      fullReadyPrintedRef.current = true;
+      getDesignerLoadPerf()?.printSummary("PEŁNA GOTOWOŚĆ widoku Magazyn");
+    }, 600);
+    return () => window.clearTimeout(timer);
+  }, [
+    designerPerfEnabled,
+    mainView,
+    loading,
+    warehousesLoading,
+    selectedWarehouseId,
+    products.length,
+    layout.racks.length,
+    inventoryRows.length,
+    occupancyMetrics,
+  ]);
+
   const layoutOccupancyRefreshKey = useMemo(
     () =>
       `${layout.layout_id ?? "na"}:${layout.racks.length}:${layout.racks.reduce((n, r) => n + activeBinsForRack(r).length, 0)}`,
@@ -740,12 +813,20 @@ export default function WarehouseDesigner() {
       return;
     }
     let cancelled = false;
+    const perf = getDesignerLoadPerf(isDesignerPerfEnabled());
+    const gen = ++occupancyFetchGenRef.current;
+    const stage = `GET /warehouse/occupancy-metrics #${gen}`;
     (async () => {
+      perf?.start(stage);
+      const t0 = performance.now();
       try {
         const data = await fetchWarehouseOccupancyMetrics(TENANT_ID, selectedWarehouseId);
         if (!cancelled) setOccupancyMetrics(data);
       } catch {
         if (!cancelled) setOccupancyMetrics(null);
+      } finally {
+        perf?.record("GET /warehouse/occupancy-metrics", performance.now() - t0);
+        perf?.end(stage);
       }
     })();
     return () => {
@@ -863,9 +944,11 @@ export default function WarehouseDesigner() {
   }, [selectedObjectIdDerived]);
 
   const inventoryMaps = useMemo(() => {
-    if (inventoryRows.length === 0) return null;
-    return buildInventoryMaps(inventoryRows, layout);
-  }, [inventoryRows, layout]);
+    return measureDesignerMemo(designerPerf, "React: buildInventoryMaps", () => {
+      if (inventoryRows.length === 0) return null;
+      return buildInventoryMaps(inventoryRows, layout);
+    });
+  }, [designerPerf, inventoryRows, layout]);
 
   const damageCandidates = useMemo<DamageCandidate[]>(() => {
     if (!inventoryMaps) return [];
@@ -1040,33 +1123,35 @@ export default function WarehouseDesigner() {
 
   /** Map product id → Set of rack ids that contain that product. Merges Stock (inventoryMaps) and assigned_locations (uuidToRackId). */
   const productToRackIds = useMemo(() => {
-    const map = new Map<string, Set<string>>();
-    products.forEach((p) => {
-      map.set(p.id, new Set<string>());
-    });
-    if (inventoryMaps && inventoryRows.length > 0) {
-      for (const [rackId, rows] of inventoryMaps.byRackId.entries()) {
-        for (const inv of rows) {
-          const qty = safeQuantity(inv.quantity);
-          if (qty <= 0) continue;
-          const pid = String(inv.product_id);
-          if (!map.has(pid)) map.set(pid, new Set<string>());
-          map.get(pid)!.add(rackId);
+    return measureDesignerMemo(designerPerf, "React: productToRackIds", () => {
+      const map = new Map<string, Set<string>>();
+      products.forEach((p) => {
+        map.set(p.id, new Set<string>());
+      });
+      if (inventoryMaps && inventoryRows.length > 0) {
+        for (const [rackId, rows] of inventoryMaps.byRackId.entries()) {
+          for (const inv of rows) {
+            const qty = safeQuantity(inv.quantity);
+            if (qty <= 0) continue;
+            const pid = String(inv.product_id);
+            if (!map.has(pid)) map.set(pid, new Set<string>());
+            map.get(pid)!.add(rackId);
+          }
         }
       }
-    }
-    products.forEach((p) => {
-      const racks = map.get(p.id);
-      if (!racks) return;
-      p.assignedLocations?.forEach((a) => {
-        const locUuid = assignedLocationEntryUuid(a);
-        if (!locUuid) return;
-        const rackId = uuidToRackId.get(locUuid);
-        if (rackId) racks.add(rackId);
+      products.forEach((p) => {
+        const racks = map.get(p.id);
+        if (!racks) return;
+        p.assignedLocations?.forEach((a) => {
+          const locUuid = assignedLocationEntryUuid(a);
+          if (!locUuid) return;
+          const rackId = uuidToRackId.get(locUuid);
+          if (rackId) racks.add(rackId);
+        });
       });
+      return map;
     });
-    return map;
-  }, [inventoryMaps, inventoryRows.length, products, uuidToRackId]);
+  }, [designerPerf, inventoryMaps, inventoryRows.length, products, uuidToRackId]);
 
   /** Rack ids to highlight when a product is selected on the map (global locator). */
   const activeProductIdOnMap = hoveredProductIdOnMap ?? selectedProductIdOnMap;
@@ -1265,17 +1350,19 @@ export default function WarehouseDesigner() {
 
   /** Map sidebar: products with stock or assignments on this layout only; qty/volume from locations (not global product.quantity). */
   const sortedProductsByVolume = useMemo(() => {
-    const hasInv = inventoryMaps != null && inventoryRows.length > 0;
-    const out: { product: WarehouseProduct; quantityAssigned: number; volumeAssignedDm3: number }[] = [];
-    for (const p of products) {
-      if (!productHasAssignmentOrInventoryInLayout(p, validLayoutLocationUUIDs, inventoryMaps, hasInv, layout.racks)) continue;
-      const quantityAssigned = quantityAssignedInLayoutBins(p, validLayoutLocationUUIDs, inventoryMaps, hasInv, layout.racks);
-      if (quantityAssigned <= 0) continue;
-      const vol = safeVolumeDm3(p.volume_dm3);
-      out.push({ product: p, quantityAssigned, volumeAssignedDm3: quantityAssigned * vol });
-    }
-    return out.sort((a, b) => b.volumeAssignedDm3 - a.volumeAssignedDm3);
-  }, [products, inventoryMaps, inventoryRows.length, validLayoutLocationUUIDs, layout.racks]);
+    return measureDesignerMemo(designerPerf, "React: sortedProductsByVolume", () => {
+      const hasInv = inventoryMaps != null && inventoryRows.length > 0;
+      const out: { product: WarehouseProduct; quantityAssigned: number; volumeAssignedDm3: number }[] = [];
+      for (const p of products) {
+        if (!productHasAssignmentOrInventoryInLayout(p, validLayoutLocationUUIDs, inventoryMaps, hasInv, layout.racks)) continue;
+        const quantityAssigned = quantityAssignedInLayoutBins(p, validLayoutLocationUUIDs, inventoryMaps, hasInv, layout.racks);
+        if (quantityAssigned <= 0) continue;
+        const vol = safeVolumeDm3(p.volume_dm3);
+        out.push({ product: p, quantityAssigned, volumeAssignedDm3: quantityAssigned * vol });
+      }
+      return out.sort((a, b) => b.volumeAssignedDm3 - a.volumeAssignedDm3);
+    });
+  }, [designerPerf, products, inventoryMaps, inventoryRows.length, validLayoutLocationUUIDs, layout.racks]);
 
   /** When a rack is selected on the full map (single click): rack ref and products in that rack (sorted, with quantity breakdown). */
   const mapRackState = useMemo(() => {
@@ -1423,15 +1510,24 @@ export default function WarehouseDesigner() {
   }, [layout.racks, layout.visual_elements, selectedRackIds, selectedVisualIds]);
 
   const loadLayout = useCallback(async (warehouseId: number) => {
+    const perf = getDesignerLoadPerf(isDesignerPerfEnabled());
+    const callN = ++loadLayoutCallRef.current;
+    const rootStage = `loadLayout #${callN}`;
+    perf?.start(rootStage);
     setLoading(true);
     setInventoryRows([]);
     try {
+      perf?.start(`GET /warehouse/layout (loadLayout #${callN})`);
+      const layoutT0 = performance.now();
       const res = await api.get("/warehouse/layout", {
         params: { tenant_id: TENANT_ID, warehouse_id: warehouseId },
       });
+      perf?.record("GET /warehouse/layout", performance.now() - layoutT0);
+      perf?.end(`GET /warehouse/layout (loadLayout #${callN})`);
       const payload = res.data as { layout?: Record<string, unknown>; special_locations?: SpecialLocationsState } | undefined;
       const d = (payload?.layout ?? payload ?? {}) as Record<string, unknown>;
       setSpecialLocations(payload?.special_locations ?? { pick_start: null, packing: null, dock: null });
+      perf?.start(`loadLayout.hydrate #${callN}`);
       const rawGridCols = (d.grid_cols ?? 24) <= 24 ? (d.grid_cols ?? 24) * CELLS_PER_METER : (d.grid_cols ?? GRID_COLS);
       const rawGridRows = (d.grid_rows ?? 16) <= 16 ? (d.grid_rows ?? 16) * CELLS_PER_METER : (d.grid_rows ?? GRID_ROWS);
       const building_width_m = d.building_width_m != null && Number(d.building_width_m) > 0 ? Number(d.building_width_m) : undefined;
@@ -1556,11 +1652,17 @@ export default function WarehouseDesigner() {
       const syncedLayout = syncLayoutDisplayFields(nextLayout);
       logLayoutRackHydrate(syncedLayout.racks);
       setLayout(syncedLayout);
+      perf?.end(`loadLayout.hydrate #${callN}`);
       const resolveLabel = (locationUUID: string): string | null =>
         resolveLocationLabelByUuid(syncedLayout, locationUUID);
       try {
+        perf?.start(`GET /products/ (loadLayout #${callN})`);
+        const productsT0 = performance.now();
         const prodRes = await api.get("/products/", { params: { tenant_id: TENANT_ID, limit: 5000, warehouse_id: warehouseId } });
+        perf?.record("GET /products/", performance.now() - productsT0);
+        perf?.end(`GET /products/ (loadLayout #${callN})`);
         const raw = prodRes.data?.items ?? (Array.isArray(prodRes.data) ? prodRes.data : []);
+        perf?.start(`loadLayout.productsMap #${callN}`);
         const list: WarehouseProduct[] = raw.map((p: Record<string, unknown>) => {
           const id = p.id != null ? String(p.id) : `p-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
           const assigned = (Array.isArray(p.assigned_locations) ? p.assigned_locations : Array.isArray(p.assignedLocations) ? p.assignedLocations : []) as Array<{ locationUUID: string; quantity: number }>;
@@ -1596,6 +1698,7 @@ export default function WarehouseDesigner() {
               typeof p.purchase_price === "number" && Number.isFinite(p.purchase_price) ? p.purchase_price : undefined,
           };
         });
+        perf?.end(`loadLayout.productsMap #${callN}`);
         setProducts(list);
       } catch {
         // Keep existing products state on error (e.g. no products API)
@@ -1605,6 +1708,7 @@ export default function WarehouseDesigner() {
       setLayout((prev) => ({ ...prev, warehouse_id: warehouseId, warehouse_name: "", racks: [], aisles: [], visual_elements: prev.visual_elements ?? [] }));
     } finally {
       setLoading(false);
+      perf?.end(rootStage);
     }
   }, []);
 
@@ -1673,14 +1777,44 @@ export default function WarehouseDesigner() {
   /** When switching to Magazyn view, refresh products from API so assignments from Products tab are visible. */
   const fetchProductsForMap = useCallback(async () => {
     if (selectedWarehouseId == null) return;
+    const perf = getDesignerLoadPerf(isDesignerPerfEnabled());
+    const callN = ++fetchProductsCallRef.current;
+    const rootStage = `fetchProductsForMap #${callN}`;
+    perf?.start(rootStage);
     try {
-      const [layoutRes, prodRes, inventoryRes] = await Promise.all([
-        api.get("/warehouse/layout", { params: { tenant_id: TENANT_ID, warehouse_id: selectedWarehouseId } }),
-        api.get("/products/", { params: { tenant_id: TENANT_ID, limit: 5000, warehouse_id: selectedWarehouseId } }),
-        api.get<InventoryRow[]>("/inventory/", {
-          params: { tenant_id: TENANT_ID, warehouse_id: selectedWarehouseId, hide_technical_locations: false },
-        }),
-      ]);
+      const fetchLayout = async () => {
+        const t0 = performance.now();
+        perf?.start(`GET /warehouse/layout (fetchProductsForMap #${callN})`);
+        try {
+          return await api.get("/warehouse/layout", { params: { tenant_id: TENANT_ID, warehouse_id: selectedWarehouseId } });
+        } finally {
+          perf?.record("GET /warehouse/layout", performance.now() - t0);
+          perf?.end(`GET /warehouse/layout (fetchProductsForMap #${callN})`);
+        }
+      };
+      const fetchProducts = async () => {
+        const t0 = performance.now();
+        perf?.start(`GET /products/ (fetchProductsForMap #${callN})`);
+        try {
+          return await api.get("/products/", { params: { tenant_id: TENANT_ID, limit: 5000, warehouse_id: selectedWarehouseId } });
+        } finally {
+          perf?.record("GET /products/", performance.now() - t0);
+          perf?.end(`GET /products/ (fetchProductsForMap #${callN})`);
+        }
+      };
+      const fetchInventory = async () => {
+        const t0 = performance.now();
+        perf?.start(`GET /inventory/ (fetchProductsForMap #${callN})`);
+        try {
+          return await api.get<InventoryRow[]>("/inventory/", {
+            params: { tenant_id: TENANT_ID, warehouse_id: selectedWarehouseId, hide_technical_locations: false },
+          });
+        } finally {
+          perf?.record("GET /inventory/", performance.now() - t0);
+          perf?.end(`GET /inventory/ (fetchProductsForMap #${callN})`);
+        }
+      };
+      const [layoutRes, prodRes, inventoryRes] = await Promise.all([fetchLayout(), fetchProducts(), fetchInventory()]);
       const d = ((layoutRes.data as { layout?: Record<string, unknown> } | undefined)?.layout ?? layoutRes.data) as Record<string, unknown>;
       const racksFromRes = (d?.racks || []) as Array<{ bins?: Array<{ locationUUID?: string; location_uuid?: string; label?: string; location_id?: string }> }>;
       const resolveLabel = (locationUUID: string): string | null => {
@@ -1693,6 +1827,7 @@ export default function WarehouseDesigner() {
         return null;
       };
       const raw = prodRes.data?.items ?? (Array.isArray(prodRes.data) ? prodRes.data : []);
+      perf?.start(`fetchProductsForMap.productsMap #${callN}`);
       const list: WarehouseProduct[] = raw.map((p: Record<string, unknown>) => {
         const id = p.id != null ? String(p.id) : `p-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
         const assigned = (Array.isArray(p.assigned_locations) ? p.assigned_locations : Array.isArray(p.assignedLocations) ? p.assignedLocations : []) as Array<{ locationUUID: string; quantity: number }>;
@@ -1728,11 +1863,14 @@ export default function WarehouseDesigner() {
             typeof p.purchase_price === "number" && Number.isFinite(p.purchase_price) ? p.purchase_price : undefined,
         };
       });
+      perf?.end(`fetchProductsForMap.productsMap #${callN}`);
       setProducts(list);
       setInventoryRows(Array.isArray(inventoryRes.data) ? inventoryRes.data : []);
     } catch {
       // Keep existing products
       setInventoryRows([]);
+    } finally {
+      perf?.end(rootStage);
     }
   }, [selectedWarehouseId]);
 
@@ -1954,7 +2092,10 @@ export default function WarehouseDesigner() {
 
   useEffect(() => {
     let cancelled = false;
+    const perf = getDesignerLoadPerf(isDesignerPerfEnabled());
     (async () => {
+      const t0 = performance.now();
+      perf?.start("GET /warehouse/templates/");
       try {
         const { data } = await api.get<CustomRackTemplate[]>("/warehouse/templates/", {
           params: { tenant_id: TENANT_ID },
@@ -1969,6 +2110,9 @@ export default function WarehouseDesigner() {
         }
       } catch {
         if (!cancelled) setCustomTemplates([]);
+      } finally {
+        perf?.record("GET /warehouse/templates/", performance.now() - t0);
+        perf?.end("GET /warehouse/templates/");
       }
     })();
     return () => { cancelled = true; };
@@ -2893,34 +3037,36 @@ export default function WarehouseDesigner() {
    * Fallback: distinct bin slot load from usedVolumeAtBin when /warehouse/occupancy-metrics is unavailable.
    */
   const binOccupancyVolumes = useMemo(() => {
-    let total = 0;
-    let primary = 0;
-    let reserve = 0;
-    let damaged = 0;
-    const seen = new Set<string>();
-    for (const r of layout.racks) {
-      const rid = String(r.id ?? r.rack_index);
-      for (const b of activeBinsForRack(r)) {
-        const used = usedVolumeAtBin(b);
-        if (used <= 0) continue;
-        const uuid = binLocationUuidFromBin(b);
-        const key = uuid || `${rid}-${b.level_index}-${b.segment_index}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        total += used;
-        const t = normalizeStorageType(b.storage_type);
-        if (t === "reserve") reserve += used;
-        else if (t === "damaged") damaged += used;
-        else primary += used;
+    return measureDesignerMemo(designerPerf, "React: binOccupancyVolumes", () => {
+      let total = 0;
+      let primary = 0;
+      let reserve = 0;
+      let damaged = 0;
+      const seen = new Set<string>();
+      for (const r of layout.racks) {
+        const rid = String(r.id ?? r.rack_index);
+        for (const b of activeBinsForRack(r)) {
+          const used = usedVolumeAtBin(b);
+          if (used <= 0) continue;
+          const uuid = binLocationUuidFromBin(b);
+          const key = uuid || `${rid}-${b.level_index}-${b.segment_index}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          total += used;
+          const t = normalizeStorageType(b.storage_type);
+          if (t === "reserve") reserve += used;
+          else if (t === "damaged") damaged += used;
+          else primary += used;
+        }
       }
-    }
-    return {
-      productsAssignedVolumeDm3: total,
-      primaryUsedDm3: primary,
-      reserveUsedDm3: reserve,
-      damagedUsedDm3: damaged,
-    };
-  }, [layout.racks, usedVolumeAtBin]);
+      return {
+        productsAssignedVolumeDm3: total,
+        primaryUsedDm3: primary,
+        reserveUsedDm3: reserve,
+        damagedUsedDm3: damaged,
+      };
+    });
+  }, [designerPerf, layout.racks, usedVolumeAtBin]);
 
   const { productsAssignedVolumeDm3, primaryUsedDm3, reserveUsedDm3, damagedUsedDm3 } = useMemo(() => {
     if (occupancyMetrics) {
@@ -3046,19 +3192,21 @@ export default function WarehouseDesigner() {
 
   /** Per-rack occupancy % for full map coloring (green / yellow / red). */
   const rackOccupancyPct = useMemo(() => {
-    const out: Record<string, number> = {};
-    for (const r of layout.racks) {
-      let used = 0;
-      let total = 0;
-      for (const b of activeBinsForRack(r)) {
-        used += usedVolumeAtBin(b);
-        total += binVolumeDm3(b, r);
+    return measureDesignerMemo(designerPerf, "React: rackOccupancyPct", () => {
+      const out: Record<string, number> = {};
+      for (const r of layout.racks) {
+        let used = 0;
+        let total = 0;
+        for (const b of activeBinsForRack(r)) {
+          used += usedVolumeAtBin(b);
+          total += binVolumeDm3(b, r);
+        }
+        const rid = String(r.id ?? r.rack_index);
+        out[rid] = total > 0 ? Math.min(100, (used / total) * 100) : 0;
       }
-      const rid = String(r.id ?? r.rack_index);
-      out[rid] = total > 0 ? Math.min(100, (used / total) * 100) : 0;
-    }
-    return out;
-  }, [layout.racks, usedVolumeAtBin]);
+      return out;
+    });
+  }, [designerPerf, layout.racks, usedVolumeAtBin]);
 
   const cellPx = BASE_PX_PER_CELL;
   const width = layout.grid_cols * cellPx;

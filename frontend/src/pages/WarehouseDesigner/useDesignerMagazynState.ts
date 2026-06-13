@@ -8,6 +8,7 @@ import {
   type PackingLayoutResult,
 } from "../../components/warehouse/warehouseUtils";
 import { normalizeInventoryLocationUuid, type InventoryMaps, type InventoryRow } from "./inventoryMaps";
+import { getDesignerLoadPerf, isDesignerPerfEnabled } from "./designerLoadPerf";
 
 /** API / state may expose `location_uuid` (snake) or `locationUUID` (camel). */
 function binLocationUuid(bin: BinState): string | undefined {
@@ -247,6 +248,8 @@ export function useDesignerMagazynState(params: UseDesignerMagazynStateParams) {
   /** Helper: used volume (dm³) at a bin — Stock + assigned_locations; skip assigned when same product already has Stock at this bin. */
   const usedVolumeAtBin = useCallback(
     (bin: BinState) => {
+      const perf = getDesignerLoadPerf(isDesignerPerfEnabled());
+      const t0 = perf ? performance.now() : 0;
       let used = 0;
       const uuid = binLocationUuid(bin);
       const stockByPid = stockQtyByProductIdAtBin(getInventoryRowsForBin(uuid));
@@ -261,6 +264,7 @@ export function useDesignerMagazynState(params: UseDesignerMagazynStateParams) {
         if (stockByPid.has(p.id)) continue;
         used += aQty * safeVolumeDm3(p.volume_dm3);
       }
+      if (perf) perf.accumulate("usedVolumeAtBin (suma wywołań)", performance.now() - t0);
       return used;
     },
     [products, productsById, getInventoryRowsForBin]
