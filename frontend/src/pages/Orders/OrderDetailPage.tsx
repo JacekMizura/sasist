@@ -82,7 +82,6 @@ import { OrderEventTypeLabel } from "../../components/orders/OrderEventTypeLabel
 import { getOrderEventLabel } from "../../utils/orderEventLabels";
 import { getShippingMethods } from "../../api/shippingMethodsApi";
 import { getOrderPanelSubgroups, getOrderUiStatusSummary, patchOrderUiStatus } from "../../api/orderUiStatusApi";
-import { useWarehouse } from "../../context/WarehouseContext";
 import type { OrderUiPanelSubgroupRead, OrderUiStatusBrief, OrderUiStatusPanelSummary } from "../../types/orderUiStatus";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { OrderCustomerLinkPanel } from "../../components/customers/OrderCustomerLinkPanel";
@@ -163,6 +162,7 @@ type OrderItemRow = {
 type OrderDetail = {
   id: number;
   tenant_id?: number;
+  warehouse_id?: number;
   number?: string | null;
   status?: string | null;
   scan_code?: string | null;
@@ -840,8 +840,6 @@ export default function OrderDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const { warehouse } = useWarehouse();
-  const warehouseId = warehouse?.id ?? null;
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -924,6 +922,13 @@ export default function OrderDetailPage() {
   const [orderRabatDraft, setOrderRabatDraft] = useState("");
   const [orderRabatSaving, setOrderRabatSaving] = useState(false);
 
+  const orderFulfillmentWhId = useMemo(() => {
+    const raw = order?.warehouse_id;
+    if (raw == null) return null;
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
+  }, [order?.warehouse_id]);
+
   const reloadOrderById = useCallback(async (oid: number) => {
     const res = await api.get<OrderDetail>(`/orders/${oid}/`);
     setOrder(res.data);
@@ -939,14 +944,14 @@ export default function OrderDetailPage() {
   }, []);
 
   const loadPanelSummary = useCallback(async () => {
-    if (warehouseId == null) {
+    if (orderFulfillmentWhId == null) {
       setPanelSummary(null);
       return;
     }
     try {
       const [s, sg] = await Promise.all([
-        getOrderUiStatusSummary(DAMAGE_TENANT_ID, warehouseId),
-        getOrderPanelSubgroups(DAMAGE_TENANT_ID, warehouseId),
+        getOrderUiStatusSummary(DAMAGE_TENANT_ID, orderFulfillmentWhId),
+        getOrderPanelSubgroups(DAMAGE_TENANT_ID, orderFulfillmentWhId),
       ]);
       setPanelSummary(s);
       setPanelSubgroups(sg);
@@ -954,7 +959,7 @@ export default function OrderDetailPage() {
       setPanelSummary(null);
       setPanelSubgroups(null);
     }
-  }, [warehouseId]);
+  }, [orderFulfillmentWhId]);
 
   useEffect(() => {
     void loadPanelSummary();
@@ -971,20 +976,20 @@ export default function OrderDetailPage() {
   }, [order, orderRabatSaving]);
 
   useEffect(() => {
-    if (warehouseId == null) {
+    if (orderFulfillmentWhId == null) {
       setShippingMethods([]);
       return;
     }
     void getShippingMethods({
       tenant_id: DAMAGE_TENANT_ID,
-      warehouse_id: warehouseId,
+      warehouse_id: orderFulfillmentWhId,
       active_only: false,
     })
       .then((list) =>
         setShippingMethods(list.map((x) => ({ id: x.id, name: x.name, is_active: x.is_active }))),
       )
       .catch(() => setShippingMethods([]));
-  }, [warehouseId]);
+  }, [orderFulfillmentWhId]);
 
   useEffect(() => {
     if (!order?.id) {
@@ -1916,7 +1921,7 @@ export default function OrderDetailPage() {
          
          <div className="flex-1 overflow-y-auto pb-4">
            <OrderStatusSidebar
-              warehouseId={warehouseId}
+              warehouseId={orderFulfillmentWhId}
               panelSummary={panelSummary}
               panelSubgroups={panelSubgroups}
               panelFilter={sidebarFilter}
@@ -1988,8 +1993,8 @@ export default function OrderDetailPage() {
 
                 <div className="flex flex-wrap items-center gap-4 border-t border-slate-100 pt-4 pb-2">
                   <div className="flex items-center min-w-max shrink-0">
-                    {warehouseId != null ? (
-                      <OrderDetailPrimaryStatusDropdown variant="compact" currentStatus={order.order_ui_status ?? null} panelSummary={panelSummary} panelSubgroups={panelSubgroups} saving={panelSaving} onSelectStatus={async (subStatusId) => { setPanelSaving(true); try { const updated = await patchOrderUiStatus(order.id, DAMAGE_TENANT_ID, warehouseId, subStatusId); setOrder((prev) => prev ? { ...prev, order_ui_status: updated.order_ui_status ?? null } : prev); await loadPanelSummary(); } finally { setPanelSaving(false); } }} />
+                    {orderFulfillmentWhId != null ? (
+                      <OrderDetailPrimaryStatusDropdown variant="compact" currentStatus={order.order_ui_status ?? null} panelSummary={panelSummary} panelSubgroups={panelSubgroups} saving={panelSaving} onSelectStatus={async (subStatusId) => { setPanelSaving(true); try { const updated = await patchOrderUiStatus(order.id, DAMAGE_TENANT_ID, orderFulfillmentWhId, subStatusId); setOrder((prev) => prev ? { ...prev, order_ui_status: updated.order_ui_status ?? null } : prev); await loadPanelSummary(); } finally { setPanelSaving(false); } }} />
                     ) : panelOrderStatusBrief ? (
                       <OrderUiStatusConfigRowPresent status={panelOrderStatusBrief} variant="compact" />
                     ) : (
@@ -2048,12 +2053,12 @@ export default function OrderDetailPage() {
                       {!isStationarySale ? (
                         <label className="flex flex-col gap-1.5 border-b border-slate-100 py-2.5 text-sm text-slate-500 last:border-b-0 font-medium">
                           <span className="flex items-center gap-2"><Truck className="h-4 w-4" /> Sposób wysyłki</span>
-                          <select className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm font-bold text-orange-600 outline-none focus:border-orange-500" value={shipDraft} disabled={warehouseId == null} onChange={(e) => setShipDraft(e.target.value)}><option value="">— brak —</option>{shippingMethods.map((m) => (<option key={m.id} value={m.id}>{m.name}</option>))}</select>
+                          <select className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm font-bold text-orange-600 outline-none focus:border-orange-500" value={shipDraft} disabled={orderFulfillmentWhId == null} onChange={(e) => setShipDraft(e.target.value)}><option value="">— brak —</option>{shippingMethods.map((m) => (<option key={m.id} value={m.id}>{m.name}</option>))}</select>
                         </label>
                       ) : (
                         <SummaryCompactRow label="Odbiór" value={order.shipping_method ?? "Odbiór osobisty"} />
                       )}
-                      {warehouseId != null && (
+                      {orderFulfillmentWhId != null && (
                         <div className="mt-3 flex justify-end gap-2">
                           <button type="button" className="rounded-md border border-slate-300 bg-white px-4 py-1.5 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-50" onClick={() => { setShipDraft(order.shipping_method_id?.trim() ?? ""); setPayMethodDraft((order.panel_payment_method ?? "").trim()); setPayStatusDraft((order.panel_payment_status ?? "").trim()); }}>Anuluj</button>
                           <button type="button" disabled={shipPaySaving} onClick={() => { setShipPaySaving(true); void patchOrder(order.id, { shipping_method_id: shipDraft.trim() || null, payment_method: payMethodDraft.trim() || null, payment_status: payStatusDraft.trim() || null }).then(() => reloadOrderById(order.id)).finally(() => setShipPaySaving(false)); }} className="rounded-md bg-slate-800 px-4 py-1.5 text-xs font-bold text-white transition-colors hover:bg-slate-900 disabled:opacity-50">{shipPaySaving ? "..." : "Zapisz"}</button>
@@ -2064,7 +2069,7 @@ export default function OrderDetailPage() {
                     <SummaryDashboardCard
                       className={SUMMARY_TOP_CARD_SHELL}
                       title="Adres dostawy"
-                      right={warehouseId != null && !addressEditing ? <button onClick={() => { setAddrDraft(shippingFromOrderJson(order.addresses_json)); setAddressEditing(true); }} className="text-slate-400 hover:text-slate-800 transition-colors"><Pencil className="h-4 w-4" strokeWidth={2}/></button> : null}
+                      right={orderFulfillmentWhId != null && !addressEditing ? <button onClick={() => { setAddrDraft(shippingFromOrderJson(order.addresses_json)); setAddressEditing(true); }} className="text-slate-400 hover:text-slate-800 transition-colors"><Pencil className="h-4 w-4" strokeWidth={2}/></button> : null}
                     >
                       {addressEditing ? (
                         <div className="space-y-2 text-sm font-medium">
@@ -2077,7 +2082,7 @@ export default function OrderDetailPage() {
                           <label className="flex flex-col text-slate-600">Kraj<input className={inpSm} value={addrDraft.country} onChange={(e) => setAddrDraft((d) => ({ ...d, country: e.target.value }))} /></label>
                           <div className="flex justify-end gap-2 pt-3">
                             <button className="rounded-md border border-slate-300 bg-white px-4 py-1.5 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-50" onClick={() => { setAddrDraft(shippingFromOrderJson(order.addresses_json)); setAddressEditing(false); }}>Anuluj</button>
-                            <button disabled={addressSaving || warehouseId == null} className="rounded-md bg-slate-800 px-4 py-1.5 text-xs font-bold text-white transition-colors hover:bg-slate-900 disabled:opacity-50" onClick={() => { setAddressSaving(true); void patchOrder(order.id, { shipping_name: addrDraft.name.trim() || null, shipping_street: addrDraft.street.trim() || null, shipping_city: addrDraft.city.trim() || null, shipping_postal_code: addrDraft.postal.trim() || null, shipping_country: addrDraft.country.trim() || null }).then(() => reloadOrderById(order.id)).finally(() => { setAddressSaving(false); setAddressEditing(false); }); }}>{addressSaving ? "..." : "Zapisz"}</button>
+                            <button disabled={addressSaving || orderFulfillmentWhId == null} className="rounded-md bg-slate-800 px-4 py-1.5 text-xs font-bold text-white transition-colors hover:bg-slate-900 disabled:opacity-50" onClick={() => { setAddressSaving(true); void patchOrder(order.id, { shipping_name: addrDraft.name.trim() || null, shipping_street: addrDraft.street.trim() || null, shipping_city: addrDraft.city.trim() || null, shipping_postal_code: addrDraft.postal.trim() || null, shipping_country: addrDraft.country.trim() || null }).then(() => reloadOrderById(order.id)).finally(() => { setAddressSaving(false); setAddressEditing(false); }); }}>{addressSaving ? "..." : "Zapisz"}</button>
                           </div>
                         </div>
                       ) : (
@@ -2098,7 +2103,7 @@ export default function OrderDetailPage() {
                     <SummaryDashboardCard
                       className={SUMMARY_TOP_CARD_SHELL}
                       title={summaryDocEditing ? (docDraft.document_type === "INVOICE" ? "Faktura" : "Paragon") : panelDocumentLabel}
-                      right={warehouseId != null && !summaryDocEditing ? <button onClick={() => { const inv = parseBillingInvoice(order.addresses_json); const t = (order.panel_document_type ?? "").trim().toUpperCase(); setDocDraft({ document_type: t === "INVOICE" ? "INVOICE" : "PARAGON", sales_document_number: (order.sales_document_number ?? "").trim(), company_name: inv.companyName, nip: inv.nip, billing_email: inv.email }); setSummaryDocEditing(true); }} className="text-slate-400 hover:text-slate-800 transition-colors"><Pencil className="h-4 w-4" strokeWidth={2}/></button> : null}
+                      right={orderFulfillmentWhId != null && !summaryDocEditing ? <button onClick={() => { const inv = parseBillingInvoice(order.addresses_json); const t = (order.panel_document_type ?? "").trim().toUpperCase(); setDocDraft({ document_type: t === "INVOICE" ? "INVOICE" : "PARAGON", sales_document_number: (order.sales_document_number ?? "").trim(), company_name: inv.companyName, nip: inv.nip, billing_email: inv.email }); setSummaryDocEditing(true); }} className="text-slate-400 hover:text-slate-800 transition-colors"><Pencil className="h-4 w-4" strokeWidth={2}/></button> : null}
                     >
                       {summaryDocEditing ? (
                         <div className="space-y-2 text-sm font-medium">
@@ -2113,7 +2118,7 @@ export default function OrderDetailPage() {
                           )}
                           <div className="flex justify-end gap-2 pt-3">
                             <button className="rounded-md border border-slate-300 bg-white px-4 py-1.5 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-50" onClick={() => { const inv = parseBillingInvoice(order.addresses_json); const t = (order.panel_document_type ?? "").trim().toUpperCase(); setDocDraft({ document_type: t === "INVOICE" ? "INVOICE" : "PARAGON", sales_document_number: (order.sales_document_number ?? "").trim(), company_name: inv.companyName, nip: inv.nip, billing_email: inv.email }); setSummaryDocEditing(false); }}>Anuluj</button>
-                            <button disabled={docSaving || warehouseId == null} className="rounded-md bg-slate-800 px-4 py-1.5 text-xs font-bold text-white transition-colors hover:bg-slate-900 disabled:opacity-50" onClick={() => { setDocSaving(true); const isInv = docDraft.document_type === "INVOICE"; void patchOrder(order.id, { document_type: docDraft.document_type, sales_document_number: docDraft.sales_document_number.trim() || null, company_name: isInv ? docDraft.company_name.trim() || null : null, nip: isInv ? docDraft.nip.trim() || null : null, email: isInv ? docDraft.billing_email.trim() || null : null }).then(() => reloadOrderById(order.id)).finally(() => { setDocSaving(false); setSummaryDocEditing(false); }); }}>{docSaving ? "..." : "Zapisz"}</button>
+                            <button disabled={docSaving || orderFulfillmentWhId == null} className="rounded-md bg-slate-800 px-4 py-1.5 text-xs font-bold text-white transition-colors hover:bg-slate-900 disabled:opacity-50" onClick={() => { setDocSaving(true); const isInv = docDraft.document_type === "INVOICE"; void patchOrder(order.id, { document_type: docDraft.document_type, sales_document_number: docDraft.sales_document_number.trim() || null, company_name: isInv ? docDraft.company_name.trim() || null : null, nip: isInv ? docDraft.nip.trim() || null : null, email: isInv ? docDraft.billing_email.trim() || null : null }).then(() => reloadOrderById(order.id)).finally(() => { setDocSaving(false); setSummaryDocEditing(false); }); }}>{docSaving ? "..." : "Zapisz"}</button>
                           </div>
                         </div>
                       ) : (
@@ -2341,7 +2346,7 @@ export default function OrderDetailPage() {
                 <div className="min-w-0 flex flex-col">
                   <div className="space-y-6">
                     {wmsErr && <p className="bg-amber-50 border border-amber-200 text-amber-900 p-4 rounded-md text-sm font-medium shadow-sm">{wmsErr}</p>}
-                    {warehouseId != null && <OrderMissingProductsSection tenantId={DAMAGE_TENANT_ID} orderId={order.id} lines={wmsFulfillment?.lines ?? []} itemWaitingById={itemWaitingById} onRefreshOrder={() => void reloadOrderById(order.id)} onRefreshWms={() => void loadWmsFulfillment()} sectionDomId="wms-braki-sekcja" />}
+                    {orderFulfillmentWhId != null && <OrderMissingProductsSection tenantId={DAMAGE_TENANT_ID} orderId={order.id} lines={wmsFulfillment?.lines ?? []} itemWaitingById={itemWaitingById} onRefreshOrder={() => void reloadOrderById(order.id)} onRefreshWms={() => void loadWmsFulfillment()} sectionDomId="wms-braki-sekcja" />}
                     
                     <div className="flex justify-between items-center mb-2">
                       <div className="flex gap-4 items-center">
@@ -2479,7 +2484,7 @@ export default function OrderDetailPage() {
       <OrderAddBundleModal open={addBundleOpen} onClose={() => setAddBundleOpen(false)} tenantId={order.tenant_id ?? DAMAGE_TENANT_ID} orderId={order.id} currency={(order.currency ?? "PLN").trim() || "PLN"} onAdded={() => { void reloadOrderById(order.id); void loadWmsFulfillment(); dispatchWmsShortagesUpdated(); }}/>
       
       {tableReplaceOpen && tableReplaceItemId != null && tableReplaceContext && (
-        <OrderReplaceProductModal open onClose={() => { setTableReplaceOpen(false); setTableReplaceItemId(null); }} orderId={order.id} tenantId={DAMAGE_TENANT_ID} orderItemId={tableReplaceItemId} sourceProductId={tableReplaceContext.sourceProductId} sourceProductName={tableReplaceContext.sourceProductName} missingQuantity={tableReplaceContext.missingQuantity} warehouseId={warehouseId} onReplaced={() => { void reloadOrderById(order.id); void loadWmsFulfillment(); dispatchWmsShortagesUpdated(); setTableReplaceOpen(false); setTableReplaceItemId(null); }} />
+        <OrderReplaceProductModal open onClose={() => { setTableReplaceOpen(false); setTableReplaceItemId(null); }} orderId={order.id} tenantId={DAMAGE_TENANT_ID} orderItemId={tableReplaceItemId} sourceProductId={tableReplaceContext.sourceProductId} sourceProductName={tableReplaceContext.sourceProductName} missingQuantity={tableReplaceContext.missingQuantity} warehouseId={orderFulfillmentWhId} onReplaced={() => { void reloadOrderById(order.id); void loadWmsFulfillment(); dispatchWmsShortagesUpdated(); setTableReplaceOpen(false); setTableReplaceItemId(null); }} />
       )}
 
       <OrderEditProductModal open={editProductItem != null} onClose={() => { setEditProductItem(null); setEditProductModalFocus("main"); }} orderId={order.id} item={editProductItem} focusSection={editProductModalFocus} currency={(order.currency ?? "PLN").trim() || "PLN"} onSaved={() => { void reloadOrderById(order.id); void loadWmsFulfillment(); }} />
@@ -2488,12 +2493,12 @@ export default function OrderDetailPage() {
         <ConfirmModal title="Usunąć pozycję?" message={<>Czy na pewno usunąć pozycję z zamówienia?</>} confirmLabel="Usuń" pending={summaryLineRemovePending} onCancel={() => { if (!summaryLineRemovePending) setSummaryLineRemoveItemId(null); }} onConfirm={async () => { const id = summaryLineRemoveItemId; if (id == null) return; setSummaryLineRemovePending(true); try { await deleteOrderItemLine(order.id, id); await reloadOrderById(order.id); await loadWmsFulfillment(); dispatchWmsShortagesUpdated(); setSummaryLineRemoveItemId(null); } catch (e: unknown) { console.error("[order.item.delete]", e); toast.error(extractApiErrorMessage(e, "Nie udało się usunąć produktu z zamówienia.")); } finally { setSummaryLineRemovePending(false); } }} />
       )}
 
-      {warehouseId != null && (
-        <NewComplaintWizard open={complaintWizardOpen} onClose={() => { setComplaintWizardOpen(false); setComplaintPrefillItemIds(undefined); }} warehouseId={warehouseId} initialOrderId={order?.id ?? null} initialOrderItemIds={complaintPrefillItemIds} onCreated={(cid) => navigate(`/orders/complaints/${cid}`)} />
+      {orderFulfillmentWhId != null && (
+        <NewComplaintWizard open={complaintWizardOpen} onClose={() => { setComplaintWizardOpen(false); setComplaintPrefillItemIds(undefined); }} warehouseId={orderFulfillmentWhId} initialOrderId={order?.id ?? null} initialOrderItemIds={complaintPrefillItemIds} onCreated={(cid) => navigate(`/orders/complaints/${cid}`)} />
       )}
 
       {order && (
-        <EditBuyerModal open={editBuyerModalOpen} onClose={() => setEditBuyerModalOpen(false)} orderId={order.id} initialFirstName={(order.first_name ?? "").trim()} initialLastName={(order.last_name ?? "").trim()} initialPhone={contact.phone === "—" ? "" : contact.phone} initialEmail={contact.email === "—" ? "" : contact.email} canSave={warehouseId != null} onSaved={() => void reloadOrderById(order.id)} />
+        <EditBuyerModal open={editBuyerModalOpen} onClose={() => setEditBuyerModalOpen(false)} orderId={order.id} initialFirstName={(order.first_name ?? "").trim()} initialLastName={(order.last_name ?? "").trim()} initialPhone={contact.phone === "—" ? "" : contact.phone} initialEmail={contact.email === "—" ? "" : contact.email} canSave={order != null} onSaved={() => void reloadOrderById(order.id)} />
       )}
     </div>
   );

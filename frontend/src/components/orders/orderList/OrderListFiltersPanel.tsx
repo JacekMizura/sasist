@@ -69,7 +69,7 @@ const ORDER_LIST_FILTER_CATALOG: FilterFieldCatalogItem[] = [
   { id: "shipping_method", label: "Metoda dostawy" },
   { id: "panel_status_multi", label: "Status panelu" },
   { id: "date_range", label: "Data zamówienia" },
-  { id: "warehouse", label: "Magazyn" },
+  { id: "warehouse", label: "Magazyn realizacji" },
   { id: "source", label: "Źródło" },
   { id: "value_range", label: "Wartość zamówienia (PLN)" },
   { id: "order_type", label: "Typ zamówienia" },
@@ -209,7 +209,7 @@ export function OrderListFiltersPanel({
         );
       case "warehouse":
         return (
-          <FilterField key={fieldId} label="Magazyn">
+          <FilterField key={fieldId} label="Magazyn realizacji">
             <select
               className={filterSelectClass}
               value={draft.warehouseIdOverride ?? ""}
@@ -219,7 +219,7 @@ export function OrderListFiltersPanel({
                 })
               }
             >
-              <option value="">Jak w nagłówku</option>
+              <option value="">Wszystkie</option>
               {warehouses.map((w) => (
                 <option key={w.id} value={w.id}>
                   {w.name}

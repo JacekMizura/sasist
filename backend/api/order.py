@@ -1142,7 +1142,11 @@ def get_pending_order_stats(
 @router.get("/office-dashboard-kpis/", response_model=OfficeDashboardKpiOut)
 def get_office_dashboard_kpis(
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: Optional[int] = Query(
+        None,
+        ge=1,
+        description="Opcjonalny magazyn realizacji; bez parametru — KPI dla całego tenanta",
+    ),
     db: Session = Depends(get_db),
 ):
     """Orders KPI for main panel: today vs yesterday (UTC calendar day), revenue from ``order.value``."""
@@ -1153,18 +1157,20 @@ def get_office_dashboard_kpis(
     eff = func.coalesce(Order.created_at, Order.order_date)
 
     def bucket(start: datetime, end: datetime) -> tuple[int, float]:
+        filters = [
+            Order.tenant_id == tenant_id,
+            Order.deleted_at.is_(None),
+            eff >= start,
+            eff < end,
+        ]
+        if warehouse_id is not None:
+            filters.append(Order.warehouse_id == warehouse_id)
         r = (
             db.query(
                 func.count(Order.id),
                 func.coalesce(func.sum(Order.value), 0.0),
             )
-            .filter(
-                Order.tenant_id == tenant_id,
-                Order.warehouse_id == warehouse_id,
-                Order.deleted_at.is_(None),
-                eff >= start,
-                eff < end,
-            )
+            .filter(*filters)
             .one()
         )
         return int(r[0] or 0), float(r[1] or 0.0)

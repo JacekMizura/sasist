@@ -131,21 +131,17 @@ export default function Dashboard() {
   const [err, setErr] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    if (warehouseId == null) {
-      setKpi(null);
-      setWms(null);
-      setLoading(false);
-      return;
-    }
     setLoading(true);
     setErr(null);
     try {
-      const [k, w] = await Promise.all([
-        getOfficeDashboardKpis(DAMAGE_TENANT_ID, warehouseId),
-        getWmsDashboardSummary(DAMAGE_TENANT_ID, warehouseId),
-      ]);
+      const k = await getOfficeDashboardKpis(DAMAGE_TENANT_ID);
       setKpi(k);
-      setWms(w);
+      if (warehouseId != null) {
+        const w = await getWmsDashboardSummary(DAMAGE_TENANT_ID, warehouseId);
+        setWms(w);
+      } else {
+        setWms(null);
+      }
     } catch {
       setErr("Nie udało się wczytać pulpitu.");
       setKpi(null);
@@ -194,24 +190,20 @@ export default function Dashboard() {
   return (
     <div className="-mx-4 -mt-4 min-h-0 min-w-0 flex-1 bg-white sm:-mx-6">
       <div className="w-full px-4 py-6 sm:px-6 sm:py-8">
-        {warehouseId == null ? (
-          <p className="text-sm font-medium text-slate-600">Wybierz magazyn w pasku u góry.</p>
-        ) : null}
-
         {err ? (
           <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-900">
             {err}
           </div>
         ) : null}
 
-        {loading && warehouseId != null ? (
+        {loading ? (
           <div className="flex items-center gap-2 text-sm text-slate-600">
             <Loader2 className="h-4 w-4 animate-spin text-slate-500" aria-hidden />
             Ładowanie…
           </div>
         ) : null}
 
-        {kpi && wms && warehouseId != null ? (
+        {kpi ? (
           <>
             {/* ——— Business KPIs (first) ——— */}
             <section className="mb-8">
@@ -241,8 +233,16 @@ export default function Dashboard() {
                 </div>
               </div>
             </section>
+          </>
+        ) : null}
 
-            {/* ——— Warehouse operations ——— */}
+        {warehouseId == null && !loading ? (
+          <p className="mt-6 text-sm text-slate-600">
+            Wybierz magazyn w pasku u góry, aby zobaczyć metryki operacyjne magazynu.
+          </p>
+        ) : null}
+
+        {wms && warehouseId != null ? (
             <div className="mb-6 border-t border-slate-100 pt-8">
               <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Magazyn</p>
               <header className={`${surfaceCard} mb-8 p-5 sm:p-6`}>
@@ -617,7 +617,6 @@ export default function Dashboard() {
                 </div>
               </section>
             </div>
-          </>
         ) : null}
       </div>
     </div>

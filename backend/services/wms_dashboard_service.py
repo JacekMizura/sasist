@@ -20,6 +20,7 @@ from ..schemas.wms_dashboard import (
     WmsDashboardAlert,
     WmsDashboardSummaryOut,
     WmsDashboardTopProduct,
+    WmsTenantPanelCountersOut,
 )
 from .wms_packing_service import _sum_inventory_for_product
 
@@ -365,3 +366,29 @@ def build_wms_dashboard_summary(db: Session, *, tenant_id: int, warehouse_id: in
         last_activity_at=last_activity_at,
         operational_health=operational_health,
     )
+
+
+def _tenant_warehouse_ids(db: Session, tenant_id: int) -> list[int]:
+    from ..models.tenant_warehouse import TenantWarehouse
+    from ..models.warehouse import Warehouse
+
+    rows = (
+        db.query(TenantWarehouse.warehouse_id)
+        .filter(TenantWarehouse.tenant_id == int(tenant_id))
+        .order_by(TenantWarehouse.warehouse_id.asc())
+        .all()
+    )
+    if rows:
+        return [int(r[0]) for r in rows]
+    return [int(r[0]) for r in db.query(Warehouse.id).order_by(Warehouse.id.asc()).all()]
+
+
+def build_tenant_wms_panel_counters(db: Session, *, tenant_id: int) -> WmsTenantPanelCountersOut:
+    """Sum Pilne/Opóźnione counters across all tenant warehouses (ERP top bar)."""
+    delayed = 0
+    braki = 0
+    for wid in _tenant_warehouse_ids(db, tenant_id):
+        summary = build_wms_dashboard_summary(db, tenant_id=int(tenant_id), warehouse_id=wid)
+        delayed += int(summary.orders_delayed or 0)
+        braki += int(summary.packing_braki or 0)
+    return WmsTenantPanelCountersOut(orders_delayed=delayed, packing_braki=braki)

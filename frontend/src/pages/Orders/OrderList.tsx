@@ -169,8 +169,7 @@ type SortKey =
 export default function OrderList() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { warehouse, warehouses } = useWarehouse();
-  const warehouseId = warehouse?.id ?? null;
+  const { warehouses } = useWarehouse();
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [totalCount, setTotalCount] = useState(0);
@@ -224,22 +223,17 @@ export default function OrderList() {
   const [panelSubgroups, setPanelSubgroups] = useState<OrderUiPanelSubgroupRead[] | null>(null);
   const [panelFilter, setPanelFilter] = useState<OrderPanelFilter>("all");
 
-  const effectiveWarehouseId = useMemo(
-    () => appliedFilters.warehouseIdOverride ?? warehouseId ?? null,
-    [appliedFilters.warehouseIdOverride, warehouseId],
-  );
+  /** Optional user filter — never derived from global WMS warehouse selector. */
+  const fulfillmentWarehouseFilter = appliedFilters.warehouseIdOverride;
 
   const appliedFiltersKey = useMemo(() => JSON.stringify(appliedFilters), [appliedFilters]);
 
   const loadPanelSummary = useCallback(async () => {
-    if (effectiveWarehouseId == null) {
-      setPanelSummary(null);
-      return;
-    }
     try {
+      const wh = fulfillmentWarehouseFilter;
       const [s, sg] = await Promise.all([
-        getOrderUiStatusSummary(DAMAGE_TENANT_ID, effectiveWarehouseId),
-        getOrderPanelSubgroups(DAMAGE_TENANT_ID, effectiveWarehouseId),
+        getOrderUiStatusSummary(DAMAGE_TENANT_ID, wh),
+        wh != null ? getOrderPanelSubgroups(DAMAGE_TENANT_ID, wh) : Promise.resolve(null),
       ]);
       setPanelSummary(s);
       setPanelSubgroups(sg);
@@ -247,7 +241,7 @@ export default function OrderList() {
       setPanelSummary(null);
       setPanelSubgroups(null);
     }
-  }, [effectiveWarehouseId]);
+  }, [fulfillmentWarehouseFilter]);
 
   useEffect(() => {
     void loadPanelSummary();
@@ -261,15 +255,37 @@ export default function OrderList() {
   }, [panelFilter, panelSummary]);
 
   useEffect(() => {
-    const wh = appliedFilters.warehouseIdOverride ?? warehouseId;
-    if (wh == null) {
+    const wh = appliedFilters.warehouseIdOverride;
+    if (wh != null) {
+      void getShippingMethods({ tenant_id: DAMAGE_TENANT_ID, warehouse_id: wh, active_only: true })
+        .then(setShippingMethods)
+        .catch(() => setShippingMethods([]));
+      return;
+    }
+    if (warehouses.length === 0) {
       setShippingMethods([]);
       return;
     }
-    void getShippingMethods({ tenant_id: DAMAGE_TENANT_ID, warehouse_id: wh, active_only: true })
-      .then(setShippingMethods)
+    void Promise.all(
+      warehouses.map((w) =>
+        getShippingMethods({ tenant_id: DAMAGE_TENANT_ID, warehouse_id: w.id, active_only: true }).catch(() => []),
+      ),
+    )
+      .then((arrays) => {
+        const seen = new Set<string>();
+        const merged: ShippingMethodDto[] = [];
+        for (const arr of arrays) {
+          for (const m of arr) {
+            if (!seen.has(m.id)) {
+              seen.add(m.id);
+              merged.push(m);
+            }
+          }
+        }
+        setShippingMethods(merged);
+      })
       .catch(() => setShippingMethods([]));
-  }, [warehouseId, appliedFilters.warehouseIdOverride]);
+  }, [appliedFilters.warehouseIdOverride, warehouses]);
 
   useEffect(() => {
     setPage(1);
@@ -305,7 +321,7 @@ export default function OrderList() {
     isRowSelected,
   } = usePanelListBulkSelection({
     visibleIds: visibleOrderIds,
-    clearOnDeps: [page, panelFilter, warehouseId, rowsPerPage, appliedFiltersKey, sortBy, sortDir],
+    clearOnDeps: [page, panelFilter, fulfillmentWarehouseFilter, rowsPerPage, appliedFiltersKey, sortBy, sortDir],
     serverFilteredTotal: totalCount,
   });
 
@@ -333,23 +349,18 @@ export default function OrderList() {
   }, [toast]);
 
   const fetchOrders = useCallback(() => {
-    if (effectiveWarehouseId == null) {
-      setLoading(false);
-      setOrders([]);
-      setTotalCount(0);
-      setFetchError(null);
-      return;
-    }
     setLoading(true);
     setFetchError(null);
     const params = new URLSearchParams({
       tenant_id: String(DAMAGE_TENANT_ID),
-      warehouse_id: String(effectiveWarehouseId),
       limit: String(rowsPerPage),
       offset: String((page - 1) * rowsPerPage),
       sort_by: sortBy,
       sort_dir: sortDir,
     });
+    if (fulfillmentWarehouseFilter != null) {
+      params.set("warehouse_id", String(fulfillmentWarehouseFilter));
+    }
 
     const af = appliedFilters;
     if (af.search.trim()) params.set("search", af.search.trim());
@@ -399,7 +410,7 @@ export default function OrderList() {
       })
       .finally(() => setLoading(false));
   }, [
-    effectiveWarehouseId,
+    fulfillmentWarehouseFilter,
     page,
     rowsPerPage,
     appliedFilters,
@@ -426,7 +437,9 @@ export default function OrderList() {
   };
 
   const bulkDelete = async () => {
-    if (effectiveSelectionCount === 0 || effectiveWarehouseId == null) return;
+    if (effectiveSelectionCount === 0) return;
+    const bulkWh = requireFulfillmentWarehouseForBulk();
+    if (bulkWh == null) return;
     const n = effectiveSelectionCount;
     setDeleting(true);
     try {
@@ -434,7 +447,7 @@ export default function OrderList() {
       if (bulkSelectionMode === "filtered_all") {
         summary = await postOrdersBulkDelete({
           tenant_id: DAMAGE_TENANT_ID,
-          warehouse_id: effectiveWarehouseId,
+          warehouse_id: bulkWh,
           selection: { mode: "filtered_query", filters: orderBulkFiltersPayload },
         });
       } else {
@@ -444,7 +457,7 @@ export default function OrderList() {
           return;
         }
         const res = await axios.delete<OrdersBulkDeleteResult>(
-          `${String(baseURL).replace(/\/$/, "")}/orders/bulk?tenant_id=${DAMAGE_TENANT_ID}&warehouse_id=${effectiveWarehouseId}&ids=${selectedIds.join(",")}`
+          `${String(baseURL).replace(/\/$/, "")}/orders/bulk?tenant_id=${DAMAGE_TENANT_ID}&warehouse_id=${bulkWh}&ids=${selectedIds.join(",")}`
         );
         summary = res.data;
       }
@@ -544,13 +557,15 @@ export default function OrderList() {
   const rowId = () => `quick-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
   const handleQuickChangeStatus = async (statusId: string) => {
-    if (effectiveWarehouseId == null || effectiveSelectionCount === 0) return;
+    if (effectiveSelectionCount === 0) return;
+    const bulkWh = requireFulfillmentWarehouseForBulk();
+    if (bulkWh == null) return;
     setQuickBusy(true);
     setFetchError(null);
     try {
       const { errors } = await executeOrderBulkActions({
         tenantId: DAMAGE_TENANT_ID,
-        warehouseId: effectiveWarehouseId,
+        warehouseId: bulkWh,
         selection: orderListBulkSelectionArg(),
         rows: [{ id: rowId(), kind: "change_status", expanded: true }],
         config: { change_status: { statusId } },
@@ -574,13 +589,15 @@ export default function OrderList() {
   };
 
   const handleQuickIssueDocument = async (documentType: "INVOICE" | "PARAGON") => {
-    if (effectiveWarehouseId == null || effectiveSelectionCount === 0) return;
+    if (effectiveSelectionCount === 0) return;
+    const bulkWh = requireFulfillmentWarehouseForBulk();
+    if (bulkWh == null) return;
     setQuickBusy(true);
     setFetchError(null);
     try {
       const { errors } = await executeOrderBulkActions({
         tenantId: DAMAGE_TENANT_ID,
-        warehouseId: effectiveWarehouseId,
+        warehouseId: bulkWh,
         selection: orderListBulkSelectionArg(),
         rows: [{ id: rowId(), kind: "issue_document", expanded: true }],
         config: { issue_document: { documentType } },
@@ -606,13 +623,15 @@ export default function OrderList() {
   const handleQuickSetPriority = async (
     priorityColor: "gray" | "blue" | "green" | "yellow" | "orange" | "red" | null,
   ) => {
-    if (effectiveWarehouseId == null || effectiveSelectionCount === 0) return;
+    if (effectiveSelectionCount === 0) return;
+    const bulkWh = requireFulfillmentWarehouseForBulk();
+    if (bulkWh == null) return;
     setQuickBusy(true);
     setFetchError(null);
     try {
       const { errors } = await executeOrderBulkActions({
         tenantId: DAMAGE_TENANT_ID,
-        warehouseId: effectiveWarehouseId,
+        warehouseId: bulkWh,
         selection: orderListBulkSelectionArg(),
         rows: [{ id: rowId(), kind: "set_priority", expanded: true }],
         config: { set_priority: { priorityColor } },
@@ -636,7 +655,9 @@ export default function OrderList() {
   };
 
   const handleQuickAddNote = async (text: string) => {
-    if (effectiveWarehouseId == null || effectiveSelectionCount === 0) return;
+    if (effectiveSelectionCount === 0) return;
+    const bulkWh = requireFulfillmentWarehouseForBulk();
+    if (bulkWh == null) return;
     const tx = text.trim();
     if (!tx) return;
     setQuickBusy(true);
@@ -644,7 +665,7 @@ export default function OrderList() {
     try {
       const { errors } = await executeOrderBulkActions({
         tenantId: DAMAGE_TENANT_ID,
-        warehouseId: effectiveWarehouseId,
+        warehouseId: bulkWh,
         selection: orderListBulkSelectionArg(),
         rows: [{ id: rowId(), kind: "add_note", expanded: true }],
         config: { add_note: { text: tx } },
@@ -668,7 +689,9 @@ export default function OrderList() {
   };
 
   const handleQuickPaymentStatus = async (paymentStatus: string | null) => {
-    if (effectiveWarehouseId == null || effectiveSelectionCount === 0) return;
+    if (effectiveSelectionCount === 0) return;
+    const bulkWh = requireFulfillmentWarehouseForBulk();
+    if (bulkWh == null) return;
     const sel = toBulkSelectionDto();
     if (!sel) return;
     setQuickBusy(true);
@@ -676,7 +699,7 @@ export default function OrderList() {
     try {
       await postOrdersBulkPatch({
         tenant_id: DAMAGE_TENANT_ID,
-        warehouse_id: effectiveWarehouseId,
+        warehouse_id: bulkWh,
         selection: sel,
         payment_status: paymentStatus === null ? "" : paymentStatus,
       });
@@ -712,13 +735,15 @@ export default function OrderList() {
     audience: QuickNoteAudience;
     text: string;
   }) => {
-    if (effectiveWarehouseId == null || quickNoteSelection == null) return;
+    if (quickNoteSelection == null) return;
+    const bulkWh = requireFulfillmentWarehouseForBulk();
+    if (bulkWh == null) return;
     setQuickNoteBusy(true);
     setFetchError(null);
     try {
       const base = {
         tenant_id: DAMAGE_TENANT_ID,
-        warehouse_id: effectiveWarehouseId,
+        warehouse_id: bulkWh,
         selection: quickNoteSelection,
       };
       if (audience === "internal") {
@@ -760,11 +785,15 @@ export default function OrderList() {
   }, [page, totalPages]);
 
   const bulkBusy = multiBusy || quickBusy || deleting || quickNoteBusy;
-  const bulkToolbarDisabled =
-    bulkBusy || effectiveWarehouseId == null || effectiveSelectionCount === 0;
+  const bulkToolbarDisabled = bulkBusy || effectiveSelectionCount === 0;
+
+  const requireFulfillmentWarehouseForBulk = (): number | null => {
+    if (fulfillmentWarehouseFilter != null) return fulfillmentWarehouseFilter;
+    setToast("Wybierz magazyn realizacji w filtrach, aby wykonać operacje masowe.");
+    return null;
+  };
 
   const handleMultiMenu = (id: MultiMenuActionId) => {
-    if (effectiveWarehouseId == null) return;
     const allowWithoutSelection =
       id === "packing_queue" || id === "export" || id === "print";
     if (!allowWithoutSelection && effectiveSelectionCount === 0) {
@@ -813,6 +842,7 @@ export default function OrderList() {
           setToast("Ta akcja wymaga zaznaczenia rekordów na stronie (nie „wszystkie z filtra”).");
           return;
         }
+        if (requireFulfillmentWarehouseForBulk() == null) return;
         setCustomFieldModalOpen(true);
         break;
       case "delete":
@@ -827,7 +857,9 @@ export default function OrderList() {
   };
 
   const handleMultiExecute = async (payload: { rows: BulkActionRow[]; config: BulkActionConfig }) => {
-    if (effectiveWarehouseId == null || effectiveSelectionCount === 0) return;
+    if (effectiveSelectionCount === 0) return;
+    const bulkWh = requireFulfillmentWarehouseForBulk();
+    if (bulkWh == null) return;
     for (const row of payload.rows) {
       if (row.kind === "change_status") {
         const sid = (payload.config.change_status?.statusId ?? "").trim();
@@ -856,7 +888,7 @@ export default function OrderList() {
     try {
       const { errors } = await executeOrderBulkActions({
         tenantId: DAMAGE_TENANT_ID,
-        warehouseId: effectiveWarehouseId,
+        warehouseId: bulkWh,
         selection: orderListBulkSelectionArg(),
         rows: payload.rows,
         config: payload.config,
@@ -898,8 +930,7 @@ export default function OrderList() {
         </nav>
 
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
-            {effectiveWarehouseId != null ? (
-              <>
+            <>
                 <button
                   type="button"
                   className="flex shrink-0 items-center justify-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-100 lg:hidden"
@@ -919,7 +950,7 @@ export default function OrderList() {
                     <ChevronLeft className={`h-4 w-4 transition-transform ${isStatusPanelCollapsed ? "rotate-180" : ""}`} />
                   </button>
                   <OrderStatusSidebar
-                    warehouseId={effectiveWarehouseId}
+                    warehouseId={fulfillmentWarehouseFilter}
                     panelSummary={panelSummary}
                     panelSubgroups={panelSubgroups}
                     panelFilter={panelFilter}
@@ -939,7 +970,7 @@ export default function OrderList() {
                     />
                     <div className="relative w-[min(20rem,92vw)] overflow-y-auto border-r border-slate-200 bg-white p-2">
                       <OrderStatusSidebar
-                        warehouseId={effectiveWarehouseId}
+                        warehouseId={fulfillmentWarehouseFilter}
                         panelSummary={panelSummary}
                         panelSubgroups={panelSubgroups}
                         panelFilter={panelFilter}
@@ -953,7 +984,6 @@ export default function OrderList() {
                   </div>
                 ) : null}
               </>
-            ) : null}
 
             <div className="flex min-w-0 flex-1 flex-col space-y-3">
               <div className="flex min-h-9 flex-nowrap items-center gap-2">
@@ -970,12 +1000,6 @@ export default function OrderList() {
                   <Plus className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
                 </Link>
               </div>
-
-              {effectiveWarehouseId == null && (
-                <div className="rounded-md border border-amber-200/90 bg-amber-50 px-3 py-2 text-sm text-amber-950">
-                  Wybierz magazyn w nagłówku lub w filtrach, aby wczytać zamówienia.
-                </div>
-              )}
 
               {fetchError && (
                 <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">{fetchError}</div>
@@ -995,7 +1019,7 @@ export default function OrderList() {
                 openFilterFieldsRef={openFilterFieldsRef}
               />
 
-              {bulkSelectionMode === "filtered_all" && effectiveWarehouseId != null && (
+              {bulkSelectionMode === "filtered_all" && (
                 <div className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-950">
                   Zaznaczono {effectiveSelectionCount} rekordów pasujących do filtrów.{" "}
                   <button
@@ -1017,7 +1041,7 @@ export default function OrderList() {
                 </div>
               ) : (
                 <div className="min-w-0 overflow-hidden">
-                  {!loading && effectiveWarehouseId != null ? (
+                  {!loading ? (
                     <div className="flex flex-wrap items-end gap-x-3 gap-y-2 border-b border-slate-100 pb-2 pt-0.5">
                       <div className="flex min-w-0 flex-[1.2] flex-wrap items-center gap-2">
                         <select
@@ -1051,7 +1075,7 @@ export default function OrderList() {
                             : null}
                         </span>
                         <OrderListMultiActionsMenu
-                          disabled={bulkBusy || effectiveWarehouseId == null}
+                          disabled={bulkBusy}
                           onSelect={handleMultiMenu}
                         />
                       </div>
@@ -1353,10 +1377,10 @@ export default function OrderList() {
         onSubmit={submitQuickNote}
       />
 
-      {effectiveWarehouseId != null ? (
+      {fulfillmentWarehouseFilter != null ? (
         <OrderBulkCustomFieldModal
           open={customFieldModalOpen}
-          warehouseId={effectiveWarehouseId}
+          warehouseId={fulfillmentWarehouseFilter}
           orderIds={selectedIds.map((s) => Number(s)).filter((n) => Number.isFinite(n))}
           onClose={() => setCustomFieldModalOpen(false)}
           onApplied={onBulkCustomFieldApplied}

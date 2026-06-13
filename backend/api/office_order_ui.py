@@ -5,7 +5,7 @@ Does not modify Order.status (system / workflow).
 """
 
 import logging
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy import func
@@ -31,6 +31,7 @@ from ..schemas.order import (
 )
 from ..services.order_ui_status_panel import (
     build_order_ui_status_panel_summary,
+    build_tenant_order_ui_status_panel_summary,
     norm_order_ui_main_group,
     order_ui_status_row_to_read,
 )
@@ -47,7 +48,11 @@ logger = logging.getLogger(__name__)
 @router.get("/summary", response_model=OrderUiStatusPanelSummary)
 def panel_summary(
     tenant_id: int = Query(...),
-    warehouse_id: int = Query(...),
+    warehouse_id: Optional[int] = Query(
+        None,
+        ge=1,
+        description="Opcjonalny magazyn realizacji; bez parametru — suma tenant-wide",
+    ),
     include_inactive: bool = Query(False, description="Ustawienia: pokaż także nieaktywne statusy"),
     include_archived_orders: bool = Query(
         False,
@@ -56,6 +61,13 @@ def panel_summary(
     db: Session = Depends(get_db),
 ):
     try:
+        if warehouse_id is None:
+            return build_tenant_order_ui_status_panel_summary(
+                db,
+                tenant_id,
+                include_inactive=include_inactive,
+                include_archived_orders=include_archived_orders,
+            )
         return build_order_ui_status_panel_summary(
             db,
             tenant_id,
@@ -65,6 +77,13 @@ def panel_summary(
         )
     except SQLAlchemyError:
         logger.exception("panel_summary: database error (order UI statuses)")
+        if warehouse_id is None:
+            return build_tenant_order_ui_status_panel_summary(
+                db,
+                tenant_id,
+                include_inactive=include_inactive,
+                include_archived_orders=include_archived_orders,
+            )
         return build_order_ui_status_panel_summary(
             db,
             tenant_id,

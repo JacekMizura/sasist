@@ -45,3 +45,10 @@ class WmsDashboardSummaryOut(BaseModel):
         None, description="ISO8601 UTC — ostatnie zdarzenie operacyjne w magazynie (heurystyka)"
     )
     operational_health: OperationalHealth = "nominal"
+
+
+class WmsTenantPanelCountersOut(BaseModel):
+    """Tenant-wide ERP top-bar counters (sum across all warehouses)."""
+
+    orders_delayed: int = Field(0, ge=0)
+    packing_braki: int = Field(0, ge=0)

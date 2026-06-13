@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { getOrderUiStatusSummary } from "../../api/orderUiStatusApi";
-import { getWmsDashboardSummary, type WmsDashboardSummary } from "../../api/wmsDashboardApi";
+import { getTenantWmsPanelCounters } from "../../api/wmsDashboardApi";
 import { useAuth } from "../../context/AuthContext";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { DAMAGE_TENANT_ID } from "../../pages/damage/damageShared";
@@ -25,41 +25,38 @@ type UsePanelOrderKpisOpts = {
   enabled?: boolean;
 };
 
-/** Dane do paska KPI w szkielecie ERP (nie używać w layoucie WMS). */
+/** Dane do paska KPI w szkielecie ERP (nie używać w layoucie WMS). Tenant-wide — niezależne od aktywnego magazynu WMS. */
 export function usePanelOrderKpis(opts?: UsePanelOrderKpisOpts) {
   const enabled = opts?.enabled !== false;
   const { user } = useAuth();
-  const { warehouse, showWarehouseSelector } = useWarehouse();
-  const warehouseId = warehouse?.id ?? null;
+  const { showWarehouseSelector } = useWarehouse();
 
   const [panelSummary, setPanelSummary] = useState<OrderUiStatusPanelSummary | null>(null);
-  const [wmsSummary, setWmsSummary] = useState<WmsDashboardSummary | null>(null);
+  const [ordersDelayed, setOrdersDelayed] = useState(0);
+  const [packingBraki, setPackingBraki] = useState(0);
   const [loading, setLoading] = useState(false);
 
   const load = useCallback(async () => {
     if (!enabled) {
       setPanelSummary(null);
-      setWmsSummary(null);
+      setOrdersDelayed(0);
+      setPackingBraki(0);
       setLoading(false);
-      return;
-    }
-    if (warehouseId == null) {
-      setPanelSummary(null);
-      setWmsSummary(null);
       return;
     }
     setLoading(true);
     try {
-      const [summary, wms] = await Promise.all([
-        getOrderUiStatusSummary(DAMAGE_TENANT_ID, warehouseId).catch(() => null),
-        getWmsDashboardSummary(DAMAGE_TENANT_ID, warehouseId).catch(() => null),
+      const [summary, wmsCounters] = await Promise.all([
+        getOrderUiStatusSummary(DAMAGE_TENANT_ID).catch(() => null),
+        getTenantWmsPanelCounters(DAMAGE_TENANT_ID).catch(() => null),
       ]);
       setPanelSummary(summary);
-      setWmsSummary(wms);
+      setOrdersDelayed(wmsCounters != null ? Number(wmsCounters.orders_delayed) || 0 : 0);
+      setPackingBraki(wmsCounters != null ? Number(wmsCounters.packing_braki) || 0 : 0);
     } finally {
       setLoading(false);
     }
-  }, [enabled, warehouseId]);
+  }, [enabled]);
 
   useEffect(() => {
     void load();
@@ -77,23 +74,20 @@ export function usePanelOrderKpis(opts?: UsePanelOrderKpisOpts) {
   }, [enabled, load]);
 
   const { nowe, wRealizacji } = useMemo(() => aggregateOrderBuckets(panelSummary), [panelSummary]);
-  const opoznione = wmsSummary != null ? Number(wmsSummary.orders_delayed) || 0 : 0;
-  const pilne = wmsSummary != null ? Number(wmsSummary.packing_braki) || 0 : 0;
-  const countsDisabled = warehouseId == null || loading;
-  const alertCount = wmsSummary?.alerts?.length ?? 0;
+  const opoznione = ordersDelayed;
+  const pilne = packingBraki;
+  const countsDisabled = loading;
+  const alertCount = 0;
 
   return {
     user,
-    warehouse,
     showWarehouseSelector,
-    warehouseId,
     nowe,
     wRealizacji,
     pilne,
     opoznione,
     countsDisabled,
     alertCount,
-    wmsSummary,
     loading,
   };
 }

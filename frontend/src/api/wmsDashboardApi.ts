@@ -40,3 +40,15 @@ export async function getWmsDashboardSummary(tenantId: number, warehouseId: numb
   });
   return res.data;
 }
+
+export type WmsTenantPanelCounters = {
+  orders_delayed: number;
+  packing_braki: number;
+};
+
+export async function getTenantWmsPanelCounters(tenantId: number): Promise<WmsTenantPanelCounters> {
+  const res = await api.get<WmsTenantPanelCounters>("/wms/dashboard/tenant-panel-counters", {
+    params: { tenant_id: tenantId },
+  });
+  return res.data;
+}

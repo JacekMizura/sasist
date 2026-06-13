@@ -6,7 +6,7 @@ export type AppliedOrderListFilters = {
   shippingMethodId: string;
   dateFrom: string;
   dateTo: string;
-  /** When set, overrides header warehouse for this list request. */
+  /** Explicit user filter: fulfillment warehouse (never from global WMS selector). */
   warehouseIdOverride: number | null;
   sourceContains: string;
   valueMin: string;

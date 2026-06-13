@@ -77,13 +77,13 @@ export async function reorderOrderPanelSubgroups(
 
 export async function getOrderUiStatusSummary(
   tenantId: number,
-  warehouseId: number,
+  warehouseId?: number | null,
   opts?: { includeInactive?: boolean },
 ): Promise<OrderUiStatusPanelSummary> {
   const res = await api.get<OrderUiStatusPanelSummary>("office/order-ui/summary", {
     params: {
       tenant_id: tenantId,
-      warehouse_id: warehouseId,
+      ...(warehouseId != null && warehouseId > 0 ? { warehouse_id: warehouseId } : {}),
       include_inactive: opts?.includeInactive === true ? true : undefined,
     },
   });

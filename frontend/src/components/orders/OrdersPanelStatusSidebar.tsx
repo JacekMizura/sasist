@@ -53,7 +53,7 @@ function cleanSubgroupName(name: string): string {
 }
 
 type OrdersPanelStatusSidebarProps = {
-  warehouseId: number;
+  warehouseId?: number | null;
   panelSummary: OrderUiStatusPanelSummary | null;
   panelSubgroups?: OrderUiPanelSubgroupRead[] | null;
   panelFilter: OrderPanelFilter;
@@ -383,7 +383,7 @@ export function OrdersPanelStatusSidebar({
                     return (
                       <div key={sec.key} className="mt-2 mb-1">
                         <PanelSidebarSubgroupCollapsible
-                          storageKey={`panel-sg:orders:${warehouseId}:${block.main_group}:${sec.key}`}
+                          storageKey={`panel-sg:orders:${warehouseId ?? "tenant"}:${block.main_group}:${sec.key}`}
                           title={
                             <div className="flex items-center gap-2 w-full pt-1 pb-1 opacity-80 hover:opacity-100 transition-opacity">
                               <div className="h-px bg-slate-200 flex-1"></div>

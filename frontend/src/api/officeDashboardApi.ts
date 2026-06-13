@@ -12,9 +12,15 @@ export type OfficeDashboardKpi = {
   revenue_change_pct: number | null;
 };
 
-export async function getOfficeDashboardKpis(tenantId: number, warehouseId: number): Promise<OfficeDashboardKpi> {
+export async function getOfficeDashboardKpis(
+  tenantId: number,
+  warehouseId?: number | null,
+): Promise<OfficeDashboardKpi> {
   const res = await api.get<OfficeDashboardKpi>("/orders/office-dashboard-kpis/", {
-    params: { tenant_id: tenantId, warehouse_id: warehouseId },
+    params: {
+      tenant_id: tenantId,
+      ...(warehouseId != null && warehouseId > 0 ? { warehouse_id: warehouseId } : {}),
+    },
   });
   return res.data;
 }

@@ -9,8 +9,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..schemas.wms_dashboard import WmsDashboardSummaryOut
-from ..services.wms_dashboard_service import build_wms_dashboard_summary
+from ..schemas.wms_dashboard import WmsDashboardSummaryOut, WmsTenantPanelCountersOut
+from ..services.wms_dashboard_service import build_tenant_wms_panel_counters, build_wms_dashboard_summary
 
 router = APIRouter(prefix="/wms", tags=["WMS dashboard"])
 logger = logging.getLogger(__name__)
@@ -40,3 +40,16 @@ def get_wms_dashboard_summary(
             alerts=[],
             top_picked_products=[],
         )
+
+
+@router.get("/dashboard/tenant-panel-counters", response_model=WmsTenantPanelCountersOut)
+def get_tenant_wms_panel_counters(
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    """Tenant-wide Pilne/Opóźnione for ERP top bar (sum across warehouses)."""
+    try:
+        return build_tenant_wms_panel_counters(db, tenant_id=tenant_id)
+    except SQLAlchemyError:
+        logger.exception("get_tenant_wms_panel_counters")
+        return WmsTenantPanelCountersOut(orders_delayed=0, packing_braki=0)
