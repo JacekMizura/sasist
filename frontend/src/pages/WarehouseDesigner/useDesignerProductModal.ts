@@ -1,6 +1,6 @@
 import { useMemo } from "react";
-import api from "../../api/axios";
 import { alertFailedRequest } from "../../utils/apiError";
+import { putProductWarehouseSlotting } from "../../api/productSlottingApi";
 import type { LayoutState, WarehouseProduct } from "../../types/warehouse";
 import type { EditProductModalProps } from "../../components/warehouse/EditProductModal";
 import { TENANT_ID, safeQuantity, safeVolumeDm3 } from "./DesignerRackPlacement";
@@ -10,6 +10,7 @@ export interface UseDesignerProductModalParams {
   mainView: "magazyn" | "layout";
   editingProductId: string | null;
   showElevationForRackId: number | string | null;
+  selectedWarehouseId: number | null;
   layout: LayoutState;
   products: WarehouseProduct[];
   setProducts: React.Dispatch<React.SetStateAction<WarehouseProduct[]>>;
@@ -25,6 +26,7 @@ export function useDesignerProductModal(params: UseDesignerProductModalParams) {
     mainView,
     editingProductId,
     showElevationForRackId,
+    selectedWarehouseId,
     layout,
     products,
     setProducts,
@@ -121,15 +123,14 @@ export function useDesignerProductModal(params: UseDesignerProductModalParams) {
         if (editingProductId !== "new" && editingProductId != null) {
           setProducts((prev) => prev.map((q) => (q.id === editingProductId ? { ...q, ...next } : q)));
           const numericId = Number(editingProductId);
-          if (Number.isInteger(numericId) && numericId > 0) {
-            api.put(`/products/${numericId}/`, {
-              name: next.name,
-              ean: next.ean ?? "",
-              symbol: next.sku ?? "",
-              assigned_locations: next.assignedLocations ?? [],
-              tenant_id: TENANT_ID,
-            }, { params: { tenant_id: TENANT_ID } }).catch((err: unknown) => {
-              alertFailedRequest("useDesignerProductModal", err, "Failed to update product");
+          if (Number.isInteger(numericId) && numericId > 0 && selectedWarehouseId != null) {
+            putProductWarehouseSlotting(
+              numericId,
+              selectedWarehouseId,
+              next.assignedLocations ?? [],
+              TENANT_ID,
+            ).catch((err: unknown) => {
+              alertFailedRequest("useDesignerProductModal", err, "Failed to update product slotting");
             });
           }
         } else {
@@ -145,6 +146,7 @@ export function useDesignerProductModal(params: UseDesignerProductModalParams) {
     mainView,
     editingProductId,
     showElevationForRackId,
+    selectedWarehouseId,
     layout.racks,
     products,
     safeQuantity,

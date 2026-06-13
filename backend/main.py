@@ -236,6 +236,7 @@ from .api.cartons import router as cartons_router
 from .api.packaging_materials import router as packaging_materials_router
 from .api.product import router as product_router
 from .api.product_sales_offers import router as product_sales_offers_router
+from .api.product_warehouse_slotting import router as product_warehouse_slotting_router
 from .api.bundle import router as bundle_router
 from .api.compositions import router as compositions_router
 from .api.production import router as production_router
@@ -1012,6 +1013,13 @@ try:
     ensure_inventory_management_policy_schema(engine)
     ensure_purchase_sales_block_schema(engine)
     ensure_tenant_warehouse_fulfillment_schema(engine)
+    from .db.product_warehouse_slotting_schema import (
+        ensure_product_warehouse_slotting_schema,
+        run_startup_slotting_backfill,
+    )
+
+    ensure_product_warehouse_slotting_schema(engine)
+    run_startup_slotting_backfill(engine)
     ensure_warehouse_sqlite_schema_stabilization(engine)
 except Exception:
     logging.getLogger(__name__).exception("ensure_stock_lot_and_inventory_sqlite failed at import")
@@ -1375,6 +1383,13 @@ def _upgrade_schema_background() -> None:
         ensure_inventory_management_policy_schema(engine)
         ensure_purchase_sales_block_schema(engine)
         ensure_tenant_warehouse_fulfillment_schema(engine)
+        from .db.product_warehouse_slotting_schema import (
+            ensure_product_warehouse_slotting_schema,
+            run_startup_slotting_backfill,
+        )
+
+        ensure_product_warehouse_slotting_schema(engine)
+        run_startup_slotting_backfill(engine)
         ensure_stock_reservation_lot_columns(engine)
         ensure_pick_task_lot_columns(engine)
         ensure_pick_lot_columns(engine)
@@ -1657,6 +1672,7 @@ _API_ROUTERS = (
     warehouse_router,
     warehouses_router,
     tenant_warehouse_router,
+    product_warehouse_slotting_router,
     product_router,
     product_sales_offers_router,
     bundle_router,

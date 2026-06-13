@@ -251,6 +251,26 @@ def build_product_detail_payload(
         out["locations_load_incomplete"] = True
         degraded_reason = degraded_reason or "inventory_display"
 
+    if warehouse_id is not None:
+
+        def _attach_wh_slotting() -> None:
+            from ..services.product_warehouse_slotting_service import get_product_slotting_entries
+
+            out["assigned_locations"] = get_product_slotting_entries(
+                db,
+                tenant_id=tid,
+                product_id=pid,
+                warehouse_id=int(warehouse_id),
+            )
+
+        if not _run_detail_stage(
+            product_id=pid,
+            tenant_id=tid,
+            stage="warehouse_slotting",
+            fn=_attach_wh_slotting,
+        ):
+            degraded_reason = degraded_reason or "warehouse_slotting"
+
     def _attach_network_atp() -> None:
         from ..services.network_commercial_availability_service import network_commercially_sellable_qty
 

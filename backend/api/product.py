@@ -1953,6 +1953,16 @@ def get_products(
             db, tenant_id=int(tenant_id), warehouse_id=warehouse_id, product_dicts=items
         )
 
+    if items and tenant_id is not None and warehouse_id is not None:
+        from ..services.product_warehouse_slotting_service import apply_slotting_to_product_dicts
+
+        apply_slotting_to_product_dicts(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            product_dicts=items,
+        )
+
     if default_supplier_id is not None and items:
         _attach_supplier_offers_to_product_dicts(db, items, rows, default_supplier_id)
 

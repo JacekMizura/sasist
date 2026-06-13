@@ -93,7 +93,7 @@ class Product(Base):
 
     image_url = Column(String)
 
-    # Przypisania do lokalizacji magazynowych (JSON: [{"locationUUID": "...", "quantity": n}, ...])
+    # Przypisania do lokalizacji magazynowych (JSON legacy — SSOT: product_warehouse_slotting)
     assigned_locations = Column(Text, nullable=True)
 
     # Orientacja przy pakowaniu: any | upright | no_stack
@@ -172,6 +172,12 @@ class Product(Base):
 
     sales_offers = relationship(
         "ProductSalesOffer",
+        back_populates="product",
+        cascade="all, delete-orphan",
+    )
+
+    warehouse_slotting = relationship(
+        "ProductWarehouseSlotting",
         back_populates="product",
         cascade="all, delete-orphan",
     )

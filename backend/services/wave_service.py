@@ -6,11 +6,10 @@ Wave Service
 - list_waves, get_wave: list/get waves with metrics (locations_count, estimated_distance, estimated_picking_time).
 """
 
-import json
 import logging
 import re
-from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func, or_
+from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from ..models.wave import Wave
 from ..models.order import Order
@@ -19,10 +18,7 @@ from ..models.pick_wave import PickWave, PickWaveTask
 from ..models.pick_task import PickTask
 from ..models.inventory import Inventory
 from ..models.stock_reservation import StockReservation
-from ..models.product import Product
 from ..models.location import Location
-from ..models.warehouse import Bin
-from ..storage_types import NON_PICKABLE_STORAGE_TYPE_ALIASES, get_storage_priority, is_pickable
 from .inventory_allocation_service import allocate_inventory_slices_fefo_pick_path
 from .inventory_lot_keys import NO_EXPIRY_SENTINEL
 from .commercial_availability_service import commercially_sellable_qty
@@ -42,19 +38,22 @@ WALKING_SPEED_M_PER_S = 1.4
 PICK_TIME_PER_ITEM_SEC = 4.0
 
 
-def _parse_assigned_locations(raw) -> list:
-    """Parse product.assigned_locations JSON to list of dicts."""
-    if raw is None:
-        return []
-    if isinstance(raw, list):
-        return raw
-    if isinstance(raw, str) and raw.strip():
-        try:
-            out = json.loads(raw)
-            return out if isinstance(out, list) else []
-        except (json.JSONDecodeError, TypeError):
-            return []
-    return []
+def _get_order_locations_sets(
+    db: Session,
+    order_ids: list[int],
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+) -> dict[int, set[str]]:
+    """Per order: pickable location keys from product_warehouse_slotting (warehouse-scoped SSOT)."""
+    from .product_warehouse_slotting_service import get_wave_cluster_order_location_sets
+
+    return get_wave_cluster_order_location_sets(
+        db,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        order_ids=order_ids,
+    )
 
 
 def _rack_str_to_num(rack_str: str) -> int:
@@ -128,38 +127,6 @@ EFFECTIVE_SEQ_UNSEQUENCED = 999999
 def _effective_pick_sequence(pick_sequence: int | None) -> int:
     """Return effective sequence for ordering; unsequenced locations sort after all sequenced."""
     return pick_sequence if pick_sequence is not None else EFFECTIVE_SEQ_UNSEQUENCED
-
-
-def _get_order_locations_sets(
-    db: Session,
-    order_ids: list[int],
-) -> dict[int, set[str]]:
-    """For each order_id return set of location labels (from Product.assigned_locations first location per product)."""
-    items = db.query(OrderItem.order_id, OrderItem.product_id).filter(OrderItem.order_id.in_(order_ids)).all()
-    product_ids = list({i.product_id for i in items})
-    products = {p.id: p for p in db.query(Product).filter(Product.id.in_(product_ids)).all()}
-
-    def first_location(p) -> str:
-        locs = _parse_assigned_locations(getattr(p, "assigned_locations", None))
-        if not locs:
-            return ""
-        for loc in locs:
-            if not isinstance(loc, dict):
-                continue
-            if not is_pickable(loc.get("storageType") or loc.get("storage_type")):
-                continue
-            return (loc.get("locationUUID") or loc.get("locationAddress") or loc.get("label") or "").strip()
-        return ""
-
-    order_locs: dict[int, set[str]] = {}
-    for oid in order_ids:
-        order_locs[oid] = set()
-    for oid, pid in items:
-        p = products.get(pid)
-        label = first_location(p) if p else ""
-        if label:
-            order_locs[oid].add(label)
-    return order_locs
 
 
 def _build_wave_order_ids_clustering(
@@ -268,7 +235,9 @@ def create_wave(
             from fastapi import HTTPException
             raise HTTPException(status_code=400, detail="No orders ready for wave assignment")
         order_ids = [o.id for o in orders_all]
-        order_locations = _get_order_locations_sets(db, order_ids)
+        order_locations = _get_order_locations_sets(
+            db, order_ids, tenant_id=tenant_id, warehouse_id=warehouse_id
+        )
         wave_order_ids = _build_wave_order_ids_clustering(order_ids, order_locations, max_n)
         orders_ready = [o for o in orders_all if o.id in wave_order_ids]
         orders_ready.sort(key=lambda x: wave_order_ids.index(x.id))

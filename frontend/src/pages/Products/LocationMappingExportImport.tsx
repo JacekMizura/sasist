@@ -6,6 +6,7 @@
 
 import { useState, useCallback } from "react";
 import api from "../../api/axios";
+import { putProductWarehouseSlotting } from "../../api/productSlottingApi";
 import { useWarehouse } from "../../context/WarehouseContext";
 import type { AssignedLocation, LayoutState, StorageType } from "../../types/warehouse";
 import {
@@ -114,7 +115,7 @@ export function LocationMappingExportImport({ onExportComplete, onImportComplete
     try {
       const [layoutRes, productsRes] = await Promise.all([
         api.get("/warehouse/layout", { params: { tenant_id: TENANT_ID, warehouse_id: warehouse.id } }),
-        api.get("/products/", { params: { tenant_id: TENANT_ID, limit: 5000 } }),
+        api.get("/products/", { params: { tenant_id: TENANT_ID, limit: 5000, warehouse_id: warehouse.id } }),
       ]);
       const layoutData = layoutRes.data?.layout ?? layoutRes.data;
       const racks = layoutData?.racks ?? [];
@@ -309,7 +310,7 @@ function LocationMappingImportModal({
     try {
       const [layoutRes, productsRes] = await Promise.all([
         api.get("/warehouse/layout", { params: { tenant_id: TENANT_ID, warehouse_id: warehouseId } }),
-        api.get("/products/", { params: { tenant_id: TENANT_ID, limit: 5000 } }),
+        api.get("/products/", { params: { tenant_id: TENANT_ID, limit: 5000, warehouse_id: warehouseId } }),
       ]);
       const layoutData = layoutRes.data?.layout ?? layoutRes.data;
       const rawRacks = layoutData?.racks ?? [];
@@ -426,25 +427,8 @@ function LocationMappingImportModal({
         }
       }
       for (const productId of productIdsToUpdate) {
-        const p = allProducts.find((x) => x.id === productId);
-        if (!p) continue;
         const assignments = productAssignments.get(productId) ?? [];
-        await api.put(
-          `/products/${productId}/`,
-          {
-            name: p.name,
-            ean: p.ean ?? "",
-            symbol: p.symbol ?? "",
-            length: p.length,
-            width: p.width,
-            height: p.height,
-            weight: p.weight,
-            volume: p.volume,
-            assigned_locations: assignments,
-            tenant_id: TENANT_ID,
-          },
-          { params: { tenant_id: TENANT_ID } }
-        );
+        await putProductWarehouseSlotting(productId, warehouseId, assignments, TENANT_ID);
       }
       onSuccess();
     } catch (e) {

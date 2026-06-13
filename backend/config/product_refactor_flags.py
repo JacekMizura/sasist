@@ -31,3 +31,9 @@ disable_stock_quantity_inventory_write: bool = _env_bool(
 enable_legacy_bridge_apply_plan: bool = _env_bool(
     "ENABLE_LEGACY_BRIDGE_APPLY_PLAN", default=False
 )
+
+# When True: wave location_clustering may read products.assigned_locations only when
+# product_warehouse_slotting has no rows for that product+warehouse (pre-backfill safety).
+wave_clustering_legacy_assigned_locations_fallback: bool = _env_bool(
+    "WAVE_CLUSTERING_LEGACY_ASSIGNED_LOCATIONS_FALLBACK", default=True
+)

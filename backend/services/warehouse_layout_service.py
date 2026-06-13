@@ -1505,6 +1505,21 @@ class WarehouseLayoutService:
             self._cleanup_product_assigned_locations_after_layout_save(
                 tenant_id, layout.id, warehouse_id
             )
+            from ..services.product_warehouse_slotting_service import cleanup_slotting_after_layout_save
+
+            removed_slotting = cleanup_slotting_after_layout_save(
+                self.db,
+                tenant_id=tenant_id,
+                warehouse_id=warehouse_id,
+                layout_id=layout.id,
+            )
+            if removed_slotting:
+                logger.info(
+                    "Layout save: removed %s product_warehouse_slotting row(s) for warehouse_id=%s layout_id=%s",
+                    removed_slotting,
+                    warehouse_id,
+                    layout.id,
+                )
             self.db.commit()
             self.db.refresh(layout)
             # Regenerate warehouse navigation graph after any layout change (graph generation pipeline only).

@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef, useMemo, type MouseEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import api from "../api/axios";
+import { putProductWarehouseSlotting } from "../api/productSlottingApi";
 import { warn } from "../utils/logger";
 import type { RackState, BinState, InternalStructure, LayoutState, RackTemplate, CustomRackTemplate, LevelConfigItem, CatalogItem, VisualElementType, VisualElementState, ColumnShape, DoorStyle, ZoneType, WarehouseProduct, RowContainer, EmptyRowSlot, WallElement, WallSide, RackType, StorageType } from "../types/warehouse";
 import { GRID_UNIT_CM } from "../types/warehouse";
@@ -1557,7 +1558,7 @@ export default function WarehouseDesigner() {
       const resolveLabel = (locationUUID: string): string | null =>
         resolveLocationLabelByUuid(syncedLayout, locationUUID);
       try {
-        const prodRes = await api.get("/products/", { params: { tenant_id: TENANT_ID, limit: 5000 } });
+        const prodRes = await api.get("/products/", { params: { tenant_id: TENANT_ID, limit: 5000, warehouse_id: warehouseId } });
         const raw = prodRes.data?.items ?? (Array.isArray(prodRes.data) ? prodRes.data : []);
         const list: WarehouseProduct[] = raw.map((p: Record<string, unknown>) => {
           const id = p.id != null ? String(p.id) : `p-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -1621,7 +1622,7 @@ export default function WarehouseDesigner() {
     try {
       const [layoutRes, prodRes, inventoryRes] = await Promise.all([
         api.get("/warehouse/layout", { params: { tenant_id: TENANT_ID, warehouse_id: selectedWarehouseId } }),
-        api.get("/products/", { params: { tenant_id: TENANT_ID, limit: 5000 } }),
+        api.get("/products/", { params: { tenant_id: TENANT_ID, limit: 5000, warehouse_id: selectedWarehouseId } }),
         api.get<InventoryRow[]>("/inventory/", {
           params: { tenant_id: TENANT_ID, warehouse_id: selectedWarehouseId, hide_technical_locations: false },
         }),
@@ -1699,7 +1700,7 @@ export default function WarehouseDesigner() {
   const removeProductAssignmentAtLocation = useCallback(
     async (productId: string, locationUUID: string) => {
       const pid = Number(productId);
-      if (!Number.isInteger(pid) || pid < 1) return;
+      if (!Number.isInteger(pid) || pid < 1 || selectedWarehouseId == null) return;
       const locUuid = locationUUID.trim();
       const p = products.find((x) => x.id === productId);
       if (!p?.assignedLocations?.length) return;
@@ -1722,14 +1723,11 @@ export default function WarehouseDesigner() {
         })
         .filter((row): row is NonNullable<typeof row> => row != null);
 
-      await api.patch(`/products/${pid}/`, {
-        assigned_locations: enriched,
-        skip_inventory_sync: true,
-      }, { params: { tenant_id: TENANT_ID } });
+      await putProductWarehouseSlotting(pid, selectedWarehouseId, enriched, TENANT_ID);
 
       await fetchProductsForMap();
     },
-    [products, layout, fetchProductsForMap]
+    [products, layout, fetchProductsForMap, selectedWarehouseId]
   );
 
   const selectedRackHasBinUuids = useMemo(() => {
@@ -1765,7 +1763,7 @@ export default function WarehouseDesigner() {
 
   /** Remove all assigned_locations entries pointing at bins of the selected rack (Inventory unchanged via skip_inventory_sync). */
   const clearAssignmentsOnSelectedRack = useCallback(async () => {
-    if (clearRackTargetKey == null) return;
+    if (clearRackTargetKey == null || selectedWarehouseId == null) return;
     const rack = layout.racks.find((r) => String(r.id ?? r.rack_index) === clearRackTargetKey);
     if (!rack) return;
     const binUuids = new Set(
@@ -1800,10 +1798,7 @@ export default function WarehouseDesigner() {
       });
 
       patches.push(
-        api.patch(`/products/${pid}/`, {
-          assigned_locations: enriched,
-          skip_inventory_sync: true,
-        }, { params: { tenant_id: TENANT_ID } })
+        putProductWarehouseSlotting(pid, selectedWarehouseId, enriched, TENANT_ID)
       );
     }
 
@@ -1824,7 +1819,7 @@ export default function WarehouseDesigner() {
     } finally {
       setClearRackBusy(false);
     }
-  }, [clearRackTargetKey, layout, products, fetchProductsForMap]);
+  }, [clearRackTargetKey, selectedWarehouseId, layout, products, fetchProductsForMap]);
 
   const addSpecialLocation = useCallback(
     async (cell: { x: number; y: number }, type: "PICK_START" | "PACKING" | "DOCK") => {
@@ -3451,6 +3446,7 @@ export default function WarehouseDesigner() {
     mainView,
     editingProductId,
     showElevationForRackId,
+    selectedWarehouseId,
     layout,
     products,
     setProducts,

@@ -1,5 +1,17 @@
 # Current context
 
+## Multi-WH product slotting (2026-06-08)
+- SSOT: tabela **`product_warehouse_slotting`** `(product_id, warehouse_id, location_uuid)` UNIQUE
+- Backfill: `products.assigned_locations` → slotting (UUID → warehouse_id); startup + `python -m backend.scripts.backfill_product_warehouse_slotting`
+- API: `GET/PUT /products/{id}/slotting?warehouse_id=`; bulk `GET /products/slotting?warehouse_id=`
+- Lista produktów z `warehouse_id` → `assigned_locations` z tabeli (slice per magazyn)
+- Designer + import/export CSV → PUT slotting per magazyn (nie nadpisuje innych WH)
+- Schema: `product_warehouse_slotting_schema.ensure_product_warehouse_slotting_schema`
+- Tests: `backend/tests/product_warehouse_slotting/test_product_warehouse_slotting.py`
+- **Wave location_clustering (2026-06-08):** `_get_order_locations_sets` → `product_warehouse_slotting` scoped by `wave.warehouse_id`; legacy JSON fallback tylko gdy brak wierszy slottingu dla (product, WH) i flaga `WAVE_CLUSTERING_LEGACY_ASSIGNED_LOCATIONS_FALLBACK=true` (default)
+- Tests wave: `backend/tests/wave/test_wave_location_clustering_slotting.py`
+- **Bez zmian:** inventory sync, Pick task allocation (inventory FEFO), WZ, OMS, sourcing
+
 ## Multi-WH foundation — network ATP + fulfillment flags (2026-06-08)
 - Pola na **`TenantWarehouse`** (per tenant+magazyn): `participates_in_network_stock`, `fulfillment_eligible`, `fulfillment_priority` (default 100)
 - SSOT ATP sieci: `network_commercial_availability_service.py` → `network_commercially_sellable_qty` = suma `commercially_sellable_qty` po WH z flagą sieciową
