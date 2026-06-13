@@ -13,6 +13,8 @@ from .constants import (
     PLAN_STATUS_IN_PROGRESS,
     PLAN_STATUS_MANUAL_REVIEW_REQUIRED,
     PLAN_STATUS_READY,
+    PLAN_STATUS_READY_FOR_STAGING,
+    PLAN_STATUS_STAGING,
 )
 from .alert_service import count_alert_summary
 from .plan_service import _build_plan_payload, refresh_consolidation_plan_progress
@@ -133,6 +135,8 @@ def build_wms_consolidation_summary(
         if st in (PLAN_STATUS_DRAFT, PLAN_STATUS_READY):
             pending += 1
         elif st == PLAN_STATUS_IN_PROGRESS:
+            in_progress += 1
+        elif st in (PLAN_STATUS_READY_FOR_STAGING, PLAN_STATUS_STAGING):
             in_progress += 1
         elif st == PLAN_STATUS_COMPLETED:
             completed += 1

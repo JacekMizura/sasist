@@ -1706,7 +1706,7 @@ def packing_finish_order(
     order.wms_packing_automation_finished_at = finished_now
     from .order_fulfillment_lifecycle_service import on_order_shipped
 
-    on_order_shipped(order)
+    on_order_shipped(order, db)
     db.flush()
     step_rows = [
         {

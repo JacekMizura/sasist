@@ -8,6 +8,7 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from backend.models.consolidation_rack import ConsolidationRack, ConsolidationRackLevel, RackSegment
 from backend.models.order import Order
 from backend.models.order_consolidation_alert import OrderConsolidationAlert
 from backend.models.order_consolidation_plan import OrderConsolidationPlan, OrderConsolidationPlanItem
@@ -29,10 +30,15 @@ from backend.services.order_consolidation.constants import (
     ITEM_STATUS_WAITING,
     PLAN_STATUS_COMPLETED,
     PLAN_STATUS_IN_PROGRESS,
+    PLAN_STATUS_READY_FOR_STAGING,
 )
 from backend.services.order_consolidation.plan_service import (
     generate_consolidation_plan,
     refresh_consolidation_plan_progress,
+)
+from backend.services.order_consolidation.staging_service import (
+    stage_plan_item,
+    start_consolidation_staging,
 )
 from backend.services.order_consolidation.wms_operations_service import (
     WmsConsolidationAccessError,
@@ -60,6 +66,9 @@ def wms_consolidation_db():
         OrderConsolidationAlert,
         StockDocument,
         StockDocumentItem,
+        ConsolidationRack,
+        ConsolidationRackLevel,
+        RackSegment,
     ):
         model.__table__.create(engine, checkfirst=True)
 
@@ -89,6 +98,13 @@ def wms_consolidation_db():
     )
     for pid, name in [(101, "A"), (102, "B"), (103, "C")]:
         db.add(Product(id=pid, tenant_id=1, name=name, sku=f"S{pid}"))
+    rack = ConsolidationRack(id=1, tenant_id=1, warehouse_id=2, name="RK-01")
+    db.add(rack)
+    db.flush()
+    level = ConsolidationRackLevel(id=1, rack_id=1, level_index=1, name="A", is_segmented=True)
+    db.add(level)
+    db.flush()
+    db.add(RackSegment(id=1, level_id=1, segment_index=1, order_id=None, fill_percent=0.0))
     db.commit()
     try:
         yield db
@@ -203,6 +219,17 @@ def test_all_transfers_completed(mock_commercial, wms_consolidation_db):
     db.commit()
 
     refresh_consolidation_plan_progress(db, int(plan.id))
+    db.commit()
+    db.refresh(plan)
+    db.refresh(order)
+
+    assert plan.status == PLAN_STATUS_READY_FOR_STAGING
+
+    start_consolidation_staging(db, plan_id=int(plan.id), tenant_id=1)
+    db.commit()
+    for it in db.query(OrderConsolidationPlanItem).filter_by(plan_id=int(plan.id)).all():
+        if str(it.status).upper() == ITEM_STATUS_RECEIVED:
+            stage_plan_item(db, plan_id=int(plan.id), plan_item_id=int(it.id), tenant_id=1)
     db.commit()
     db.refresh(plan)
     db.refresh(order)

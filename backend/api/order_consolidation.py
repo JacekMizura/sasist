@@ -20,6 +20,8 @@ from ..schemas.order_consolidation import (
     GenerateConsolidationPlanResponse,
     GenerateMmDraftsResponse,
     RecoveryActionRequest,
+    StageItemResponse,
+    StartStagingResponse,
     WarehouseFeasibilityRead,
 )
 from ..services.order_consolidation.alert_service import (
@@ -37,6 +39,11 @@ from ..services.order_consolidation.plan_service import (
     generate_consolidation_plan,
     generate_mm_drafts_for_plan,
     get_order_consolidation_plan_read,
+)
+from ..services.order_consolidation.staging_service import (
+    ConsolidationStagingError,
+    stage_plan_item,
+    start_consolidation_staging,
 )
 from ..models.order_consolidation_plan import OrderConsolidationPlan
 
@@ -220,3 +227,44 @@ def post_recovery_action(
         status=str(plan.status) if plan else "UNKNOWN",
         message=str(alert.message),
     )
+
+
+@consolidation_plans_router.post("/{plan_id}/start-staging", response_model=StartStagingResponse)
+def post_start_consolidation_staging(
+    plan_id: int,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    _: AppUser = Depends(_orders_perm),
+):
+    try:
+        payload = start_consolidation_staging(db, plan_id=int(plan_id), tenant_id=int(tenant_id))
+        db.commit()
+    except ConsolidationStagingError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return StartStagingResponse(**payload)
+
+
+@consolidation_plans_router.post(
+    "/{plan_id}/items/{plan_item_id}/stage",
+    response_model=StageItemResponse,
+)
+def post_stage_consolidation_item(
+    plan_id: int,
+    plan_item_id: int,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    _: AppUser = Depends(_orders_perm),
+):
+    try:
+        payload = stage_plan_item(
+            db,
+            plan_id=int(plan_id),
+            plan_item_id=int(plan_item_id),
+            tenant_id=int(tenant_id),
+        )
+        db.commit()
+    except ConsolidationStagingError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return StageItemResponse(**payload)

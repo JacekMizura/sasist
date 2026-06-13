@@ -32,6 +32,7 @@ from .constants import (
     ITEM_STATUS_IN_TRANSIT,
     ITEM_STATUS_MM_CREATED,
     ITEM_STATUS_RECEIVED,
+    ITEM_STATUS_STAGED,
     ITEM_STATUS_WAITING,
     MM_CREATION_SOURCE_CONSOLIDATION,
     PLAN_STATUS_CANCELLED,
@@ -42,6 +43,8 @@ from .constants import (
     PLAN_STATUS_MANUAL_REVIEW_REQUIRED,
     PLAN_STATUS_OPEN,
     PLAN_STATUS_READY,
+    PLAN_STATUS_READY_FOR_STAGING,
+    PLAN_STATUS_STAGING,
     RESULT_CONSOLIDATION_NOT_REQUIRED,
     RESULT_MANUAL_REVIEW_REQUIRED,
     RESULT_PLAN_CREATED,
@@ -49,6 +52,7 @@ from .constants import (
 from .mm_receipt_sync import sync_plan_item_from_mm
 from .progress_helpers import progress_fields_for_items
 from .alert_service import recompute_plan_exception_status
+from .staging_service import recompute_plan_staging_readiness, try_complete_staging
 from .feasibility_service import (
     OrderLineDemand,
     _avail_at,
@@ -382,7 +386,7 @@ def refresh_consolidation_plan_progress(db: Session, plan_id: int) -> bool:
     changed = False
     for it in items:
         st = str(it.status).upper()
-        if st in (ITEM_STATUS_RECEIVED, ITEM_STATUS_CANCELLED) or st in ITEM_STATUS_EXCEPTION:
+        if st in (ITEM_STATUS_RECEIVED, ITEM_STATUS_STAGED, ITEM_STATUS_CANCELLED) or st in ITEM_STATUS_EXCEPTION:
             continue
         if int(it.source_warehouse_id) == int(it.target_warehouse_id):
             if st != ITEM_STATUS_RECEIVED:
@@ -396,39 +400,39 @@ def refresh_consolidation_plan_progress(db: Session, plan_id: int) -> bool:
     recompute_plan_exception_status(db, plan)
 
     active_items = [it for it in items if str(it.status).upper() != ITEM_STATUS_CANCELLED]
-    terminal_ok = {ITEM_STATUS_RECEIVED}
-    if active_items and all(str(it.status).upper() in terminal_ok for it in active_items):
-        if str(plan.status).upper() not in (
-            PLAN_STATUS_EXCEPTION,
-            PLAN_STATUS_MANUAL_REVIEW_REQUIRED,
-            PLAN_STATUS_CANCELLED,
-        ):
-            if plan.status != PLAN_STATUS_COMPLETED:
-                plan.status = PLAN_STATUS_COMPLETED
-                changed = True
-                db.add(plan)
-                order = db.query(Order).filter(Order.id == int(plan.order_id)).first()
-                if order is not None:
-                    order.fulfillment_assignment_phase = PHASE_FULFILLMENT_ASSIGNED
-                    order.warehouse_id = int(plan.target_warehouse_id)
-                    db.add(order)
-    elif any(str(it.status).upper() in (ITEM_STATUS_MM_CREATED, ITEM_STATUS_IN_TRANSIT) for it in active_items):
-        if str(plan.status).upper() not in (
-            PLAN_STATUS_EXCEPTION,
-            PLAN_STATUS_MANUAL_REVIEW_REQUIRED,
-            PLAN_STATUS_COMPLETED,
-            PLAN_STATUS_CANCELLED,
-        ):
+    plan_st = str(plan.status).upper()
+
+    if plan_st not in (
+        PLAN_STATUS_CANCELLED,
+        PLAN_STATUS_COMPLETED,
+        PLAN_STATUS_EXCEPTION,
+        PLAN_STATUS_MANUAL_REVIEW_REQUIRED,
+        PLAN_STATUS_STAGING,
+        PLAN_STATUS_READY_FOR_STAGING,
+    ):
+        if any(str(it.status).upper() in (ITEM_STATUS_MM_CREATED, ITEM_STATUS_IN_TRANSIT) for it in active_items):
             if plan.status != PLAN_STATUS_IN_PROGRESS:
                 plan.status = PLAN_STATUS_IN_PROGRESS
                 changed = True
                 db.add(plan)
-    elif plan.status == PLAN_STATUS_DRAFT and any(
-        str(it.status).upper() in (ITEM_STATUS_MM_CREATED, ITEM_STATUS_RECEIVED) for it in items
-    ):
-        plan.status = PLAN_STATUS_READY
-        changed = True
-        db.add(plan)
+        elif plan.status == PLAN_STATUS_DRAFT and any(
+            str(it.status).upper() in (ITEM_STATUS_MM_CREATED, ITEM_STATUS_RECEIVED) for it in items
+        ):
+            plan.status = PLAN_STATUS_READY
+            changed = True
+            db.add(plan)
+
+    recompute_plan_staging_readiness(db, plan)
+    db.refresh(plan)
+    plan_st = str(plan.status).upper()
+
+    if plan_st == PLAN_STATUS_STAGING and active_items:
+        if all(str(it.status).upper() == ITEM_STATUS_STAGED for it in active_items):
+            if not any(str(it.status).upper() in ITEM_STATUS_EXCEPTION for it in active_items):
+                order = db.query(Order).filter(Order.id == int(plan.order_id)).first()
+                if order is not None:
+                    try_complete_staging(db, plan, order)
+                    changed = True
 
     if changed:
         db.flush()
@@ -463,6 +467,9 @@ def _build_plan_payload(
     names = _warehouse_name_map(db, list(wh_ids))
     product_names = _product_name_map(db, list(product_ids))
     progress = progress_fields_for_items(items, names)
+    from .staging_service import _shelf_info_for_order
+
+    shelf = _shelf_info_for_order(db, int(plan.order_id))
     return {
         "id": int(plan.id),
         "order_id": int(plan.order_id),
@@ -471,6 +478,8 @@ def _build_plan_payload(
         "target_warehouse_name": names.get(int(plan.target_warehouse_id)),
         "status": str(plan.status),
         "created_at": plan.created_at.isoformat() if plan.created_at else None,
+        "shelf_label": shelf["shelf_label"] if shelf else None,
+        "segment_id": shelf["segment_id"] if shelf else None,
         **progress,
         "items": [
             {

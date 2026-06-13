@@ -7,6 +7,8 @@ import {
   postCancelConsolidationPlan,
   postChangeConsolidationTargetWarehouse,
   postConsolidationRecoveryAction,
+  postStageConsolidationItem,
+  postStartConsolidationStaging,
   type ConsolidationPlanDetail,
 } from "../../../api/wmsConsolidationApi";
 import { consolidationItemStatusLabel } from "../../../api/orderConsolidationApi";
@@ -86,8 +88,32 @@ export default function ConsolidationDetailPage() {
     }
   };
 
+  const handleStartStaging = async () => {
+    if (!plan) return;
+    setActionBusy(true);
+    try {
+      await postStartConsolidationStaging(plan.id, DAMAGE_TENANT_ID);
+      await load();
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  const handleStageItem = async (itemId: number) => {
+    if (!plan) return;
+    setActionBusy(true);
+    try {
+      await postStageConsolidationItem(plan.id, itemId, DAMAGE_TENANT_ID);
+      await load();
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
   const orderLabel = plan?.order_number ?? (plan ? `#${plan.order_id}` : "—");
   const canMutate = plan && !["COMPLETED", "CANCELLED"].includes(plan.status.toUpperCase());
+  const canStartStaging = plan?.status.toUpperCase() === "READY_FOR_STAGING";
+  const isStaging = plan?.status.toUpperCase() === "STAGING";
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 p-4 md:p-6">
@@ -129,7 +155,23 @@ export default function ConsolidationDetailPage() {
                 <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Postęp transferów</dt>
                 <dd className="mt-0.5 text-sm font-semibold tabular-nums text-slate-900">{plan.progress_label}</dd>
               </div>
+              {plan.shelf_label ? (
+                <div className="sm:col-span-2">
+                  <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Półka kompletacyjna</dt>
+                  <dd className="mt-0.5 font-mono text-sm font-semibold text-slate-900">{plan.shelf_label}</dd>
+                </div>
+              ) : null}
             </dl>
+            {canStartStaging ? (
+              <button
+                type="button"
+                disabled={actionBusy}
+                onClick={() => void handleStartStaging()}
+                className="mt-4 rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700 disabled:opacity-50"
+              >
+                Rozpocznij rozkładanie
+              </button>
+            ) : null}
           </header>
 
           {canMutate ? (
@@ -198,6 +240,16 @@ export default function ConsolidationDetailPage() {
                 <p className="mt-2 text-xs font-medium text-slate-500">
                   Status: {consolidationItemStatusLabel(it.status)}
                 </p>
+                {isStaging && it.status.toUpperCase() === "RECEIVED" ? (
+                  <button
+                    type="button"
+                    disabled={actionBusy}
+                    onClick={() => void handleStageItem(it.id)}
+                    className="mt-3 rounded-lg bg-violet-700 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                  >
+                    Odłożono na półkę
+                  </button>
+                ) : null}
                 {canMutate && it.status.toUpperCase() === "SHORTAGE" ? (
                   <button
                     type="button"

@@ -137,7 +137,7 @@ def create_order_from_session(
     )
 
     apply_initial_fulfillment_assignment(db, order)
-    on_order_shipped(order)
+    on_order_shipped(order, db)
 
     panel_status_id: int | None = None
     try:

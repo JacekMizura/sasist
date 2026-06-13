@@ -8,6 +8,7 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from backend.models.consolidation_rack import ConsolidationRack, ConsolidationRackLevel, RackSegment
 from backend.models.order import Order
 from backend.models.order_consolidation_alert import OrderConsolidationAlert
 from backend.models.order_consolidation_plan import OrderConsolidationPlan, OrderConsolidationPlanItem
@@ -67,6 +68,9 @@ def exceptions_db():
         OrderConsolidationAlert,
         StockDocument,
         StockDocumentItem,
+        ConsolidationRack,
+        ConsolidationRackLevel,
+        RackSegment,
     ):
         model.__table__.create(engine, checkfirst=True)
 

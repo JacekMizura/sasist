@@ -58,6 +58,8 @@ class ConsolidationPlanRead(BaseModel):
     target_warehouse_name: Optional[str] = None
     status: str
     created_at: Optional[str] = None
+    shelf_label: Optional[str] = None
+    segment_id: Optional[int] = None
     transfers_received: int = 0
     transfers_total: int = 0
     progress_label: str = "—"
@@ -137,3 +139,46 @@ class GenerateMmDraftsResponse(BaseModel):
     plan_id: int
     documents_created: int
     items_updated: int
+
+
+class ConsolidationStagingQueueRow(BaseModel):
+    id: int
+    order_id: int
+    order_number: str
+    status: str
+    transfers_received: int = 0
+    transfers_total: int = 0
+    progress_label: str = "—"
+    staged_count: int = 0
+    staging_total: int = 0
+    staging_label: str = "—"
+    shelf_label: Optional[str] = None
+    segment_id: Optional[int] = None
+    can_start_staging: bool = False
+
+
+class ConsolidationStagingQueueOut(BaseModel):
+    plans: List[ConsolidationStagingQueueRow] = Field(default_factory=list)
+
+
+class StartStagingResponse(BaseModel):
+    plan_id: int
+    status: str
+    segment_id: int
+    shelf_label: str
+    message: Optional[str] = None
+
+
+class StageItemResponse(BaseModel):
+    plan_id: int
+    plan_item_id: int
+    status: str
+    completed: bool = False
+    plan_status: Optional[str] = None
+
+
+class ResolveShelfResponse(BaseModel):
+    segment_id: int
+    shelf_label: str
+    order_id: int
+    order_number: Optional[str] = None

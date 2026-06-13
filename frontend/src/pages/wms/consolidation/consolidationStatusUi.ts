@@ -4,6 +4,8 @@ export type ConsolidationPlanStatus =
   | "DRAFT"
   | "READY"
   | "IN_PROGRESS"
+  | "READY_FOR_STAGING"
+  | "STAGING"
   | "COMPLETED"
   | "CANCELLED"
   | "EXCEPTION"
@@ -13,6 +15,8 @@ export const CONSOLIDATION_PLAN_STATUS_LABELS: Record<ConsolidationPlanStatus, s
   DRAFT: "Szkic",
   READY: "Gotowy",
   IN_PROGRESS: "W toku",
+  READY_FOR_STAGING: "Gotowy do rozkładania",
+  STAGING: "Rozkładanie",
   COMPLETED: "Zakończony",
   CANCELLED: "Anulowany",
   EXCEPTION: "Wyjątek",
@@ -23,6 +27,8 @@ export const CONSOLIDATION_PLAN_STATUS_CLASS: Record<ConsolidationPlanStatus, st
   DRAFT: "border-slate-200 bg-slate-100 text-slate-700",
   READY: "border-sky-200 bg-sky-50 text-sky-900",
   IN_PROGRESS: "border-amber-200 bg-amber-50 text-amber-950",
+  READY_FOR_STAGING: "border-indigo-200 bg-indigo-50 text-indigo-950",
+  STAGING: "border-violet-200 bg-violet-50 text-violet-950",
   COMPLETED: "border-emerald-200 bg-emerald-50 text-emerald-900",
   CANCELLED: "border-red-200 bg-red-50 text-red-900",
   EXCEPTION: "border-orange-200 bg-orange-50 text-orange-950",

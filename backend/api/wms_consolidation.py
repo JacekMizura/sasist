@@ -15,9 +15,21 @@ from ..schemas.order_consolidation import (
     ConsolidationPlanListOut,
     ConsolidationPlanListRow,
     ConsolidationPlanRead,
+    ConsolidationStagingQueueOut,
+    ConsolidationStagingQueueRow,
     ConsolidationSummaryOut,
+    ResolveShelfResponse,
+    StageItemResponse,
+    StartStagingResponse,
 )
 from ..services.order_consolidation.alert_service import list_consolidation_alerts
+from ..services.order_consolidation.staging_service import (
+    ConsolidationStagingError,
+    list_staging_queue,
+    resolve_segment_by_label,
+    stage_plan_item,
+    start_consolidation_staging,
+)
 from ..services.order_consolidation.wms_operations_service import (
     WmsConsolidationAccessError,
     build_wms_consolidation_summary,
@@ -95,3 +107,41 @@ def list_wms_consolidation_alerts(
     )
     db.commit()
     return ConsolidationAlertListOut(alerts=[ConsolidationAlertRead(**r) for r in rows])
+
+
+@router.get("/consolidation-staging/queue", response_model=ConsolidationStagingQueueOut)
+def list_consolidation_staging_queue(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
+    db: Session = Depends(get_db),
+    _: AppUser = Depends(_wms_perm),
+):
+    rows = list_staging_queue(
+        db,
+        tenant_id=int(tenant_id),
+        target_warehouse_id=int(warehouse_id),
+    )
+    db.commit()
+    return ConsolidationStagingQueueOut(plans=[ConsolidationStagingQueueRow(**r) for r in rows])
+
+
+@router.get("/consolidation-staging/resolve", response_model=ResolveShelfResponse)
+def resolve_consolidation_shelf(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
+    code: str = Query(..., min_length=1),
+    db: Session = Depends(get_db),
+    _: AppUser = Depends(_wms_perm),
+):
+    try:
+        payload = resolve_segment_by_label(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            code=code,
+        )
+        db.commit()
+    except ConsolidationStagingError as exc:
+        db.rollback()
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return ResolveShelfResponse(**payload)

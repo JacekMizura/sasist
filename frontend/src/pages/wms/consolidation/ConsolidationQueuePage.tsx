@@ -62,7 +62,15 @@ export default function ConsolidationQueuePage() {
           </p>
         </div>
         {tab === "queue" ? (
-          <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+          <div className="flex flex-wrap items-center gap-3">
+            <Link
+              to={WMS_ROUTES.consolidationStaging}
+              className="inline-flex items-center gap-1 rounded-lg border border-sky-200 bg-sky-50 px-3 py-1.5 text-sm font-semibold text-sky-900 hover:bg-sky-100"
+            >
+              Rozkładanie
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+            <label className="inline-flex items-center gap-2 text-sm text-slate-700">
             <input
               type="checkbox"
               className="h-4 w-4 rounded border-slate-300"
@@ -71,6 +79,7 @@ export default function ConsolidationQueuePage() {
             />
             Pokaż zakończone
           </label>
+          </div>
         ) : null}
       </div>
 

@@ -191,12 +191,26 @@ def on_picking_started(order: Order) -> None:
     advance_fulfillment_assignment_phase(order, PHASE_PICKING)
 
 
-def on_packing_started(order: Order) -> None:
+def _release_consolidation_shelf(order: Order, db: Session | None = None) -> None:
+    if db is None:
+        from sqlalchemy.orm import object_session
+
+        db = object_session(order)
+    if db is None:
+        return
+    from .order_consolidation.staging_service import release_rack_segments_for_order
+
+    release_rack_segments_for_order(db, int(order.id))
+
+
+def on_packing_started(order: Order, db: Session | None = None) -> None:
     advance_fulfillment_assignment_phase(order, PHASE_PACKING)
+    _release_consolidation_shelf(order, db)
 
 
-def on_order_shipped(order: Order) -> None:
+def on_order_shipped(order: Order, db: Session | None = None) -> None:
     advance_fulfillment_assignment_phase(order, PHASE_SHIPPED)
+    _release_consolidation_shelf(order, db)
 
 
 def maybe_advance_shipped_from_status(order: Order) -> None:

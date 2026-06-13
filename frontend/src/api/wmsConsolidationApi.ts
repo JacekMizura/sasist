@@ -48,6 +48,8 @@ export type ConsolidationPlanDetail = {
   target_warehouse_name: string | null;
   status: string;
   created_at: string | null;
+  shelf_label: string | null;
+  segment_id: number | null;
   transfers_received: number;
   transfers_total: number;
   progress_label: string;
@@ -146,5 +148,68 @@ export async function postChangeConsolidationTargetWarehouse(
     { warehouse_id: warehouseId, reason },
     { params: { tenant_id: tenantId } },
   );
+  return data;
+}
+
+export type ConsolidationStagingQueueRow = {
+  id: number;
+  order_id: number;
+  order_number: string;
+  status: string;
+  transfers_received: number;
+  transfers_total: number;
+  progress_label: string;
+  staged_count: number;
+  staging_total: number;
+  staging_label: string;
+  shelf_label: string | null;
+  segment_id: number | null;
+  can_start_staging: boolean;
+};
+
+export async function fetchConsolidationStagingQueue(
+  tenantId: number,
+  warehouseId: number,
+): Promise<ConsolidationStagingQueueRow[]> {
+  const { data } = await api.get<{ plans: ConsolidationStagingQueueRow[] }>(
+    "/wms/consolidation-staging/queue",
+    { params: { tenant_id: tenantId, warehouse_id: warehouseId } },
+  );
+  return data.plans ?? [];
+}
+
+export async function postStartConsolidationStaging(
+  planId: number,
+  tenantId: number,
+): Promise<{ plan_id: number; status: string; segment_id: number; shelf_label: string; message: string | null }> {
+  const { data } = await api.post(
+    `/consolidation-plans/${planId}/start-staging`,
+    {},
+    { params: { tenant_id: tenantId } },
+  );
+  return data;
+}
+
+export async function postStageConsolidationItem(
+  planId: number,
+  planItemId: number,
+  tenantId: number,
+): Promise<{ plan_id: number; plan_item_id: number; status: string; completed: boolean; plan_status: string | null }> {
+  const { data } = await api.post(
+    `/consolidation-plans/${planId}/items/${planItemId}/stage`,
+    {},
+    { params: { tenant_id: tenantId } },
+  );
+  return data;
+}
+
+export async function resolveConsolidationShelf(
+  tenantId: number,
+  warehouseId: number,
+  code: string,
+): Promise<{ segment_id: number; shelf_label: string; order_id: number; order_number: string | null }> {
+  const { data } = await api.get("/wms/consolidation-staging/resolve", {
+    params: { tenant_id: tenantId, warehouse_id: warehouseId, code },
+  });
   return data;
 }

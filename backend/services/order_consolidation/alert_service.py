@@ -28,6 +28,7 @@ from .constants import (
     ITEM_STATUS_LOST,
     ITEM_STATUS_RECEIVED,
     ITEM_STATUS_SHORTAGE,
+    ITEM_STATUS_STAGED,
     PLAN_STATUS_CANCELLED,
     PLAN_STATUS_COMPLETED,
     PLAN_STATUS_EXCEPTION,
@@ -232,7 +233,7 @@ def cancel_consolidation_plan(
     db.add(plan)
     items = db.query(OrderConsolidationPlanItem).filter(OrderConsolidationPlanItem.plan_id == int(plan.id)).all()
     for it in items:
-        if str(it.status).upper() not in (ITEM_STATUS_RECEIVED, ITEM_STATUS_CANCELLED):
+        if str(it.status).upper() not in (ITEM_STATUS_RECEIVED, ITEM_STATUS_STAGED, ITEM_STATUS_CANCELLED):
             it.status = ITEM_STATUS_CANCELLED
             db.add(it)
     order.fulfillment_assignment_phase = PHASE_MANUAL_REVIEW_REQUIRED
@@ -244,6 +245,9 @@ def cancel_consolidation_plan(
         message=f"Anulowano konsolidację. Powód: {reason}",
         severity=ALERT_SEVERITY_CRITICAL,
     )
+    from .staging_service import release_rack_segments_for_order
+
+    release_rack_segments_for_order(db, int(order.id))
     db.flush()
     return plan
 

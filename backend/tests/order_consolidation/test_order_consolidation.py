@@ -9,6 +9,7 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from backend.models.consolidation_rack import ConsolidationRack, ConsolidationRackLevel, RackSegment
 from backend.models.order import Order
 from backend.models.order_consolidation_plan import OrderConsolidationPlan, OrderConsolidationPlanItem
 from backend.models.order_consolidation_alert import OrderConsolidationAlert
@@ -29,9 +30,11 @@ from backend.services.order_consolidation.constants import (
     ITEM_STATUS_IN_TRANSIT,
     ITEM_STATUS_MM_CREATED,
     ITEM_STATUS_RECEIVED,
+    ITEM_STATUS_STAGED,
     ITEM_STATUS_WAITING,
     PLAN_STATUS_COMPLETED,
     PLAN_STATUS_IN_PROGRESS,
+    PLAN_STATUS_READY_FOR_STAGING,
     RESULT_CONSOLIDATION_NOT_REQUIRED,
     RESULT_PLAN_CREATED,
 )
@@ -43,6 +46,10 @@ from backend.services.order_consolidation.plan_service import (
     generate_consolidation_plan,
     generate_mm_drafts_for_plan,
     refresh_consolidation_plan_progress,
+)
+from backend.services.order_consolidation.staging_service import (
+    stage_plan_item,
+    start_consolidation_staging,
 )
 from backend.services.wave_service import CONSOLIDATION_WAVE_BLOCKED_PHASES
 
@@ -63,6 +70,9 @@ def consolidation_db():
     OrderConsolidationAlert.__table__.create(engine, checkfirst=True)
     StockDocument.__table__.create(engine, checkfirst=True)
     StockDocumentItem.__table__.create(engine, checkfirst=True)
+    ConsolidationRack.__table__.create(engine, checkfirst=True)
+    ConsolidationRackLevel.__table__.create(engine, checkfirst=True)
+    RackSegment.__table__.create(engine, checkfirst=True)
 
     Session = sessionmaker(bind=engine)
     db = Session()
@@ -96,6 +106,13 @@ def consolidation_db():
     )
     for pid, name in [(101, "Produkt A"), (102, "Produkt B"), (103, "Produkt C"), (104, "Produkt D")]:
         db.add(Product(id=pid, tenant_id=1, name=name, sku=f"SKU-{pid}"))
+    rack = ConsolidationRack(id=1, tenant_id=1, warehouse_id=2, name="RK-01")
+    db.add(rack)
+    db.flush()
+    level = ConsolidationRackLevel(id=1, rack_id=1, level_index=1, name="A", is_segmented=True)
+    db.add(level)
+    db.flush()
+    db.add(RackSegment(id=1, level_id=1, segment_index=1, order_id=None, fill_percent=0.0))
     db.commit()
 
     try:
@@ -286,6 +303,19 @@ def test_consolidation_completion(mock_commercial, consolidation_db):
     db.commit()
 
     refresh_consolidation_plan_progress(db, int(plan.id))
+    db.commit()
+    db.refresh(plan)
+    db.refresh(order)
+
+    assert plan.status == PLAN_STATUS_READY_FOR_STAGING
+    assert order.fulfillment_assignment_phase != PHASE_FULFILLMENT_ASSIGNED
+
+    start_consolidation_staging(db, plan_id=int(plan.id), tenant_id=1)
+    db.commit()
+    items = db.query(OrderConsolidationPlanItem).filter_by(plan_id=int(plan.id)).all()
+    for it in items:
+        if str(it.status).upper() == ITEM_STATUS_RECEIVED:
+            stage_plan_item(db, plan_id=int(plan.id), plan_item_id=int(it.id), tenant_id=1)
     db.commit()
     db.refresh(plan)
     db.refresh(order)
