@@ -1,5 +1,12 @@
 # Current context
 
+## P5.6A — Consolidation rack UX refactor (2026-06-08)
+- Frontend-only: kreator regału (kolumny × rzędy), siatka A1/B2, panel półki, dashboard zajętości
+- Mapowanie UX→API: kolumny=ConsolidationRackLevel (name A,B,C), rzędy=RackSegment (segment_index)
+- Etykiety zgodne z backend `format_segment_label`: RK-01/A2
+- Pliki: `rackLayoutUtils.ts`, `ConsolidationRackGrid`, `ConsolidationRackSegmentPanel`; refactor `RackConfigurator`, `RacksTab`, `ConsolidationRacksDashboardPage`
+- Bez migracji DB / bez zmian API / lifecycle bez zmian
+
 ## P5.9 — Consolidation control tower (2026-06-08)
 - Warstwa operacyjna dla brygadzisty — **read-only**, bez zmian lifecycle / pick / pack / MM
 - UI: `/wms/consolidations/control-tower` (link z kolejki konsolidacji)

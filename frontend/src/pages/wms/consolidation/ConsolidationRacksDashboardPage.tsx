@@ -1,21 +1,19 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, LayoutGrid, Loader2, RefreshCw, TowerControl } from "lucide-react";
+import { ArrowLeft, LayoutGrid, Loader2, RefreshCw, Settings, TowerControl } from "lucide-react";
 
 import {
   fetchConsolidationRacksDashboard,
   type ConsolidationRackDashboard,
   type ConsolidationRackSegmentDashboard,
 } from "../../../api/wmsConsolidationApi";
-import { consolidationPlanStatusLabel } from "../../../api/orderConsolidationApi";
 import { useWarehouse } from "../../../context/WarehouseContext";
 import { DAMAGE_TENANT_ID } from "../../damage/damageShared";
 import { WMS_ROUTES } from "../wmsRoutes";
-import {
-  rackSegmentHeadline,
-  rackSegmentStateClass,
-  rackSegmentStateLabel,
-} from "./consolidationRackDashboardUi";
+import ConsolidationRackGrid from "./ConsolidationRackGrid";
+import ConsolidationRackSegmentPanel, { type SegmentPanelData } from "./ConsolidationRackSegmentPanel";
+import { rackOccupancyStats } from "./rackLayoutUtils";
+import { rackSegmentStateLabel } from "./consolidationRackDashboardUi";
 
 function SummaryTile({
   label,
@@ -39,82 +37,12 @@ function SummaryTile({
   );
 }
 
-function SegmentCard({ seg }: { seg: ConsolidationRackSegmentDashboard }) {
-  const occupied = seg.state !== "FREE";
-  return (
-    <article
-      className={`rounded-xl border p-4 shadow-sm transition ${rackSegmentStateClass(seg.state)}`}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="font-mono text-lg font-bold">{seg.slot_label}</div>
-          <div className="mt-1 text-sm font-semibold">{rackSegmentHeadline(seg)}</div>
-        </div>
-        <span className="shrink-0 rounded-full border border-current/20 bg-white/60 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
-          {rackSegmentStateLabel(seg.state)}
-        </span>
-      </div>
-
-      {occupied ? (
-        <dl className="mt-4 space-y-1.5 text-xs">
-          {seg.customer_name ? (
-            <div className="flex justify-between gap-2">
-              <dt className="text-slate-500">Klient</dt>
-              <dd className="font-medium text-right">{seg.customer_name}</dd>
-            </div>
-          ) : null}
-          {seg.plan_status ? (
-            <div className="flex justify-between gap-2">
-              <dt className="text-slate-500">Plan</dt>
-              <dd className="font-medium">{consolidationPlanStatusLabel(seg.plan_status)}</dd>
-            </div>
-          ) : null}
-          {seg.order_status ? (
-            <div className="flex justify-between gap-2">
-              <dt className="text-slate-500">Status zam.</dt>
-              <dd className="font-medium">{seg.order_status}</dd>
-            </div>
-          ) : null}
-          {seg.mm_staging_label && seg.mm_staging_label !== "—" ? (
-            <div className="flex justify-between gap-2">
-              <dt className="text-slate-500">MM</dt>
-              <dd className="font-mono font-semibold tabular-nums">{seg.mm_staging_label}</dd>
-            </div>
-          ) : null}
-          {seg.local_staging_label && seg.local_staging_label !== "—" ? (
-            <div className="flex justify-between gap-2">
-              <dt className="text-slate-500">Lokalne</dt>
-              <dd className="font-mono font-semibold tabular-nums">{seg.local_staging_label}</dd>
-            </div>
-          ) : null}
-          <div className="flex justify-between gap-2">
-            <dt className="text-slate-500">Ukończenie</dt>
-            <dd className="font-mono font-semibold tabular-nums">{seg.completion_percent.toFixed(0)}%</dd>
-          </div>
-          {seg.packing_ready ? (
-            <div className="mt-2 rounded-lg bg-white/70 px-2 py-1 text-center text-[11px] font-bold uppercase tracking-wide text-orange-800">
-              READY_TO_PACK
-            </div>
-          ) : null}
-          {seg.plan_id ? (
-            <Link
-              to={WMS_ROUTES.consolidationDetail(seg.plan_id)}
-              className="mt-3 inline-flex text-xs font-semibold underline underline-offset-2"
-            >
-              Szczegóły planu
-            </Link>
-          ) : null}
-        </dl>
-      ) : null}
-    </article>
-  );
-}
-
 export default function ConsolidationRacksDashboardPage() {
   const { warehouse } = useWarehouse();
   const warehouseId = warehouse?.id ?? null;
   const [data, setData] = useState<ConsolidationRackDashboard | null>(null);
   const [loading, setLoading] = useState(true);
+  const [panel, setPanel] = useState<SegmentPanelData | null>(null);
 
   const load = useCallback(async () => {
     if (warehouseId == null || warehouseId <= 0) {
@@ -137,8 +65,21 @@ export default function ConsolidationRacksDashboardPage() {
     void load();
   }, [load]);
 
+  const dashboardBySegmentId = useMemo(() => {
+    const map = new Map<number, ConsolidationRackSegmentDashboard>();
+    if (!data) return map;
+    for (const rack of data.racks) {
+      for (const level of rack.levels) {
+        for (const seg of level.segments) {
+          map.set(seg.segment_id, seg);
+        }
+      }
+    }
+    return map;
+  }, [data]);
+
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 p-4 md:p-6">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 p-4 md:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Link
           to={WMS_ROUTES.consolidations}
@@ -148,6 +89,13 @@ export default function ConsolidationRacksDashboardPage() {
           Konsolidacje
         </Link>
         <div className="flex flex-wrap items-center gap-2">
+          <Link
+            to="/carts/racks"
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            <Settings className="h-3.5 w-3.5" aria-hidden />
+            Konfiguracja
+          </Link>
           <Link
             to={WMS_ROUTES.consolidationRacksControlTower}
             className="inline-flex items-center gap-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-900 hover:bg-violet-100"
@@ -172,7 +120,7 @@ export default function ConsolidationRacksDashboardPage() {
           <LayoutGrid className="h-6 w-6 text-violet-600" aria-hidden />
           <div>
             <h1 className="text-xl font-bold text-slate-900">Regały kompletacyjne</h1>
-            <p className="text-sm text-slate-500">Zajętość półek w magazynie docelowym konsolidacji</p>
+            <p className="text-sm text-slate-500">Podgląd zajętości — siatka półek jak na hali</p>
           </div>
         </div>
       </header>
@@ -195,44 +143,93 @@ export default function ConsolidationRacksDashboardPage() {
             />
           </section>
 
-          <section className="grid grid-cols-2 gap-3 sm:grid-cols-2">
-            <SummaryTile
-              label="Ready to pack"
-              value={data.summary.ready_to_pack_count}
-              tone="border-orange-200 bg-orange-50/80"
-            />
-            <SummaryTile label="Wyjątki" value={data.summary.exception_count} tone="border-red-200 bg-red-50/80" />
-          </section>
+          <div className="flex flex-wrap gap-3 text-[11px] text-slate-600">
+            <span className="inline-flex items-center gap-1">
+              <span className="h-3 w-3 rounded border border-emerald-300 bg-emerald-50" /> Wolny
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="h-3 w-3 rounded border border-sky-300 bg-sky-50" /> Rozkładanie
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="h-3 w-3 rounded border border-orange-300 bg-orange-50" /> Gotowe do pakowania
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="h-3 w-3 rounded border border-red-300 bg-red-50" /> Wyjątek
+            </span>
+          </div>
 
           {data.racks.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-12 text-center text-sm text-slate-500">
-              Brak skonfigurowanych regałów kompletacyjnych w tym magazynie.
+              Brak skonfigurowanych regałów.{" "}
+              <Link to="/carts/racks" className="font-semibold text-violet-700 underline">
+                Dodaj regał
+              </Link>
             </div>
           ) : (
-            data.racks.map((rack) => (
-              <section key={rack.rack_id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                <h2 className="font-mono text-lg font-bold text-slate-900">{rack.rack_name}</h2>
-                <div className="mt-4 space-y-6">
-                  {rack.levels.map((level) => (
-                    <div key={level.level_id}>
-                      {level.is_segmented ? (
-                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                          {level.segments.map((seg) => (
-                            <SegmentCard key={seg.segment_id} seg={seg} />
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="grid gap-3">
-                          {level.segments.map((seg) => (
-                            <SegmentCard key={seg.segment_id} seg={seg} />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </section>
-            ))
+            data.racks.map((rack) => {
+              const fixedLevels = rack.levels.map((lv) => ({
+                id: lv.level_id,
+                level_index: lv.level_index,
+                name: lv.level_name,
+                is_segmented: lv.is_segmented,
+                segments: lv.segments.map((s) => {
+                  const rowMatch = s.slot_label.match(/(\d+)$/);
+                  const segmentIndex = rowMatch ? Math.max(0, parseInt(rowMatch[1], 10) - 1) : 0;
+                  return {
+                    id: s.segment_id,
+                    segment_index: segmentIndex,
+                    order_id: s.order_id,
+                    order_number: s.order_number,
+                    fill_percent: s.fill_percent,
+                  };
+                }),
+              }));
+              const stats = rackOccupancyStats(fixedLevels);
+
+              return (
+                <section key={rack.rack_id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <header className="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-4">
+                    <h2 className="font-mono text-lg font-bold text-slate-900">{rack.rack_name}</h2>
+                    <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:grid-cols-4">
+                      <div>
+                        <dt className="text-[10px] font-bold uppercase text-slate-400">Segmentów</dt>
+                        <dd className="font-bold tabular-nums">{stats.total}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-[10px] font-bold uppercase text-emerald-600">Wolnych</dt>
+                        <dd className="font-bold tabular-nums">{stats.free}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-[10px] font-bold uppercase text-orange-600">Zajętych</dt>
+                        <dd className="font-bold tabular-nums">{stats.occupied}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-[10px] font-bold uppercase text-violet-600">Wykorzystanie</dt>
+                        <dd className="font-bold tabular-nums">{stats.utilizationPercent}%</dd>
+                      </div>
+                    </dl>
+                  </header>
+                  <ConsolidationRackGrid
+                    rackName={rack.rack_name}
+                    levels={fixedLevels}
+                    dashboardBySegmentId={dashboardBySegmentId}
+                    onSegmentClick={(cell) => {
+                      const dash = cell.segmentId != null ? dashboardBySegmentId.get(cell.segmentId) : undefined;
+                      setPanel({
+                        shelfLabel: dash?.shelf_label ?? cell.shelfLabel,
+                        slotLabel: dash?.slot_label ?? cell.slotLabel,
+                        columnName: cell.columnName,
+                        rowNumber: cell.rowNumber,
+                        statusLabel: dash ? rackSegmentStateLabel(dash.state) : cell.orderId ? "Zajęty" : "Wolny",
+                        orderId: cell.orderId,
+                        orderNumber: cell.orderNumber,
+                        fillPercent: cell.fillPercent,
+                      });
+                    }}
+                  />
+                </section>
+              );
+            })
           )}
         </>
       ) : (
@@ -240,6 +237,8 @@ export default function ConsolidationRacksDashboardPage() {
           Nie udało się wczytać mapy regałów.
         </div>
       )}
+
+      <ConsolidationRackSegmentPanel segment={panel} onClose={() => setPanel(null)} />
     </div>
   );
 }
