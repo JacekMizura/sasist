@@ -27,7 +27,7 @@ export function ConsolidationRackFormShell({
   footer,
 }: Props) {
   return (
-    <div className="flex min-h-[calc(100vh-8rem)] flex-col overflow-hidden rounded-2xl border border-slate-200/60 bg-white shadow-sm">
+    <div className="flex flex-col overflow-hidden rounded-2xl border border-slate-200/60 bg-white shadow-sm">
       <div className="shrink-0 border-b border-slate-200/50 bg-slate-50/40 px-5 py-3.5">
         <Link
           to={backTo}
@@ -49,13 +49,13 @@ export function ConsolidationRackFormShell({
         <div className="w-full shrink-0 overflow-y-auto border-b border-slate-200/45 bg-slate-50/25 px-4 py-4 lg:w-[38%] lg:min-w-[300px] lg:max-w-[420px] lg:border-b-0 lg:border-r">
           {sidebar}
         </div>
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-hidden bg-white px-4 py-4">
+        <div className="flex min-w-0 flex-1 flex-col gap-3 overflow-hidden bg-white px-4 py-4 lg:min-h-0">
           {summaryBar ? (
             <div className="shrink-0 rounded-xl border border-slate-200/55 bg-slate-50/40 px-3 py-2.5 text-sm text-slate-700 shadow-sm">
               {summaryBar}
             </div>
           ) : null}
-          <div className="min-h-0 flex-1 overflow-auto rounded-xl border border-slate-200/55 bg-white p-3 shadow-sm">
+          <div className="shrink-0 overflow-hidden rounded-xl border border-slate-200/55 bg-white p-3 shadow-sm">
             {preview}
           </div>
         </div>

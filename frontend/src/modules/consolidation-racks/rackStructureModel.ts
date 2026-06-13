@@ -170,6 +170,42 @@ export function removeSegment(
   };
 }
 
+/** Ustaw liczbę segmentów na poziomie — równy podział szerokości regału (jak „lokacje na poziom” w szablonie). */
+export function setLevelSegmentCount(
+  draft: RackStructureDraft,
+  levelClientId: string,
+  count: number,
+): RackStructureDraft {
+  const n = Math.max(1, Math.min(50, Math.round(count) || 1));
+  const totalW = draft.totalWidthMm ?? 2000;
+  const baseWidth = Math.floor(totalW / n);
+  const lastWidth = totalW - baseWidth * (n - 1);
+
+  return {
+    ...draft,
+    levels: draft.levels.map((lv) => {
+      if (lv.clientId !== levelClientId) return lv;
+      const existing = lv.segments;
+      const segments: SegmentDraft[] = Array.from({ length: n }, (_, i) => {
+        const widthMm = i === n - 1 ? lastWidth : baseWidth;
+        if (i < existing.length) {
+          return {
+            ...existing[i]!,
+            segmentIndex: i,
+            widthMm,
+          };
+        }
+        return createEmptySegment(i, {
+          widthMm,
+          depthMm: draft.totalDepthMm,
+          heightMm: lv.levelHeightMm,
+        });
+      });
+      return { ...lv, segments };
+    }),
+  };
+}
+
 /** UI draft → POST /racks/ payload */
 export function draftToApiPayload(draft: RackStructureDraft): RackLevelPayload[] {
   return draft.levels.map((lv, levelIndex) => {

@@ -1,5 +1,12 @@
 # Current context
 
+## P5.12A — Poprawki UX konfiguratora regałów OMS (2026-06-08)
+- Tab **Regały** aktywny na całej ścieżce `/carts/racks/*` (`end: false` w `cartsTabs.ts`)
+- **Liczba segmentów na poziomie** — `setLevelSegmentCount()` równy podział szerokości (jak „lokacje na poziom” w szablonie)
+- Podgląd: poziomy z etykietą + segmenty (nazwa, SZ·GŁ·WYS, dm³), kolory jak `RackPreview` (#eff6ff/#bfdbfe)
+- Skala podglądu: max 640px, flex proporcjonalny szerokości; wysokość pasa ≠ mm 1:1
+- `ConsolidationRackFormShell` — preview nie rozciąga się na cały viewport
+
 ## P5.12 — Przebudowa konfiguratora regałów kompletacyjnych (poziomy × segmenty) (2026-06-08)
 - **Frontend-only UX** — bez zmian `ConsolidationRack` / `ConsolidationRackLevel` / `RackSegment`, API, P5.7–P5.9
 - Zastąpiono model „liczba rzędów × kolumn” → **poziomy z własną wysokością + segmenty o zmiennej szerokości**

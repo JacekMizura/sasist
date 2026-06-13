@@ -7,11 +7,10 @@ import {
 import { computeCapacityDm3, MAX_RACK_DIM, parseOptionalDim } from "./rackLayoutUtils";
 import {
   addLevel,
-  addSegment,
   countSegments,
   levelSegmentsWidthSum,
   removeLevel,
-  removeSegment,
+  setLevelSegmentCount,
   type LevelDraft,
   type RackStructureDraft,
   type SegmentDraft,
@@ -66,34 +65,20 @@ function SegmentFields({
   seg,
   lv,
   readOnly,
-  structureLocked,
   onUpdate,
-  onRemove,
 }: {
   seg: SegmentDraft;
   lv: LevelDraft;
   readOnly?: boolean;
-  structureLocked?: boolean;
   onUpdate: (patch: Partial<SegmentDraft>) => void;
-  onRemove: () => void;
 }) {
   const cap = computeCapacityDm3(seg.depthMm, seg.widthMm, seg.heightMm ?? lv.levelHeightMm);
   return (
     <div className="rounded-lg border border-slate-200/80 bg-white p-3">
-      <div className="mb-2 flex items-center justify-between gap-2">
+      <div className="mb-2">
         <span className="text-xs font-bold uppercase tracking-wide text-slate-500">
           Segment {seg.segmentIndex + 1}
         </span>
-        {!readOnly && !structureLocked && lv.segments.length > 1 ? (
-          <button
-            type="button"
-            onClick={onRemove}
-            className="inline-flex h-7 items-center gap-1 rounded border border-red-200 px-2 text-[11px] font-medium text-red-700 hover:bg-red-50"
-          >
-            <Trash2 className="h-3 w-3" />
-            Usuń
-          </button>
-        ) : null}
       </div>
       <div className="space-y-2">
         <label className="block">
@@ -291,6 +276,28 @@ export default function ConsolidationRackStructureEditor({
                       />
                     </div>
 
+                    <label className="block">
+                      <span className={cartsFieldLabelClass}>Liczba segmentów na poziomie</span>
+                      {readOnly || structureLocked ? (
+                        <div className="mt-1 tabular-nums text-sm font-medium text-slate-800">{lv.segments.length}</div>
+                      ) : (
+                        <div className="mt-1 flex items-center gap-2">
+                          <input
+                            type="number"
+                            min={1}
+                            max={50}
+                            value={lv.segments.length}
+                            onChange={(e) => {
+                              const n = Math.max(1, Math.min(50, Number(e.target.value) || 1));
+                              onChange(setLevelSegmentCount(draft, lv.clientId, n));
+                            }}
+                            className={`${cartsAppInputClass} w-24 tabular-nums`}
+                          />
+                          <span className="text-xs text-slate-500">segmentów — równy podział szerokości regału</span>
+                        </div>
+                      )}
+                    </label>
+
                     <div className="space-y-2">
                       {lv.segments.map((seg) => (
                         <SegmentFields
@@ -298,23 +305,10 @@ export default function ConsolidationRackStructureEditor({
                           seg={seg}
                           lv={lv}
                           readOnly={readOnly}
-                          structureLocked={structureLocked}
                           onUpdate={(patch) => updateSegment(lv.clientId, seg.clientId, patch)}
-                          onRemove={() => onChange(removeSegment(draft, lv.clientId, seg.clientId))}
                         />
                       ))}
                     </div>
-
-                    {!readOnly && !structureLocked ? (
-                      <button
-                        type="button"
-                        onClick={() => onChange(addSegment(draft, lv.clientId))}
-                        className="inline-flex h-8 w-full items-center justify-center gap-1 rounded-md border border-dashed border-slate-300 text-xs font-medium text-slate-600 hover:border-violet-300 hover:bg-violet-50/40 hover:text-violet-800"
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                        Dodaj segment
-                      </button>
-                    ) : null}
                   </div>
                 ) : null}
               </div>

@@ -1,11 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-
-import { computeCapacityDm3, computeSlotLabel } from "./rackLayoutUtils";
 import type { RackStructureDraft } from "./rackStructureModel";
-
-const UPRIGHT = "#2563eb";
-const SHELF = "#ea580c";
-const CELL_STROKE = "#cbd5e1";
+import {
+  buildConsolidationPreviewRows,
+  CONSOLIDATION_PREVIEW_CELL,
+  CONSOLIDATION_PREVIEW_MAX_HEIGHT_PX,
+} from "./consolidationRackPreviewLayout";
 
 type Props = {
   draft: RackStructureDraft;
@@ -14,191 +12,98 @@ type Props = {
   occupancyBySegmentId?: Map<number, { orderNumber?: string | null; tone?: string }>;
 };
 
+/**
+ * Podgląd regału kompletacyjnego — wzorowany na `RackPreview` z Twórcy szablonu:
+ * poziomy z etykietą, segmenty z nazwą + wymiary + pojemność, fit-to-view (max ~640px).
+ */
 export default function ConsolidationRackStructurePreview({
   draft,
   className = "",
   showOccupancy = false,
   occupancyBySegmentId,
 }: Props) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [containerHeight, setContainerHeight] = useState(420);
+  const rows = buildConsolidationPreviewRows(draft);
 
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver((entries) => {
-      const h = entries[0]?.contentRect.height ?? 420;
-      setContainerHeight(Math.max(240, h));
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
-  const layout = useMemo(() => buildLayout(draft, containerHeight), [draft, containerHeight]);
-
-  if (draft.levels.length === 0) {
+  if (rows.length === 0) {
     return (
-      <div className="flex min-h-[240px] items-center justify-center rounded-xl border border-dashed border-slate-200 text-sm text-slate-500">
+      <div className="flex min-h-[200px] items-center justify-center rounded-xl border border-dashed border-slate-200 text-sm text-slate-500">
         Dodaj poziom regału.
       </div>
     );
   }
 
   return (
-    <div className={`flex min-h-0 flex-1 flex-col ${className}`}>
+    <div className={`flex flex-col ${className}`}>
       <h4 className="shrink-0 px-1 pb-2 text-sm font-bold text-slate-600">Podgląd regału — na żywo</h4>
       <div
-        ref={containerRef}
-        className="min-h-[280px] flex-1 overflow-hidden rounded-xl border border-slate-200/60 bg-slate-50/30"
+        className="overflow-y-auto rounded-xl border border-slate-200/35 bg-slate-50/20 p-3"
+        style={{ maxHeight: CONSOLIDATION_PREVIEW_MAX_HEIGHT_PX }}
       >
-        <svg
-          viewBox={`0 0 ${layout.viewBoxW} ${layout.viewBoxH}`}
-          preserveAspectRatio="xMidYMid meet"
-          className="h-full w-full"
-        >
-          <rect x={layout.margin} y={layout.margin} width={layout.beamW} height={layout.uprightH} fill={UPRIGHT} rx={2} />
-          <rect
-            x={layout.margin + layout.beamW + layout.contentW}
-            y={layout.margin}
-            width={layout.beamW}
-            height={layout.uprightH}
-            fill={UPRIGHT}
-            rx={2}
-          />
-          {layout.shelfLines.map((y, i) => (
-            <line
-              key={`shelf-${i}`}
-              x1={layout.ox}
-              y1={y}
-              x2={layout.ox + layout.contentW}
-              y2={y}
-              stroke={SHELF}
-              strokeWidth={2}
-              strokeOpacity={0.5}
-            />
+        <div className="space-y-4">
+          {rows.map((row) => (
+            <section key={row.key}>
+              <div className="mb-1.5 flex items-baseline justify-between gap-2">
+                <h5 className="text-xs font-bold uppercase tracking-wide text-slate-600">{row.levelLabel}</h5>
+                <span className="text-[11px] tabular-nums text-slate-500">WYS {Math.round(row.levelHeightMm)} mm</span>
+              </div>
+              <div
+                className="flex min-h-[88px] gap-1 rounded-lg border border-slate-200/80 bg-white p-1 shadow-sm"
+                role="img"
+                aria-label={`${row.levelLabel}, ${row.segments.length} segmentów`}
+              >
+                {row.segments.map((cell) => {
+                  const occ = cell.segmentId != null ? occupancyBySegmentId?.get(cell.segmentId) : undefined;
+                  const isOccupied = Boolean(occ?.orderNumber);
+                  const fill = isOccupied ? CONSOLIDATION_PREVIEW_CELL.occupiedBg : CONSOLIDATION_PREVIEW_CELL.bg;
+                  const stroke = isOccupied ? CONSOLIDATION_PREVIEW_CELL.occupiedBorder : CONSOLIDATION_PREVIEW_CELL.border;
+                  const isCompact = cell.flexGrow < 0.12;
+                  const volStr =
+                    cell.capacityDm3 != null ? `${cell.capacityDm3.toFixed(0)} dm³` : "— dm³";
+                  const dimsLine = `SZ ${Math.round(cell.widthMm)} · GŁ ${Math.round(cell.depthMm)} · WYS ${Math.round(cell.heightMm)}`;
+
+                  return (
+                    <div
+                      key={cell.key}
+                      className="flex min-w-[52px] flex-col items-center justify-center rounded-md px-1 py-2 text-center transition-colors"
+                      style={{
+                        flex: `${cell.flexGrow} 1 0`,
+                        backgroundColor: fill,
+                        border: `1.5px solid ${stroke}`,
+                      }}
+                      title={`${cell.label}\n${dimsLine}\n${volStr}`}
+                    >
+                      <span className="font-sans text-base font-extrabold leading-tight text-slate-900 sm:text-lg">
+                        {cell.label}
+                      </span>
+                      {!isCompact ? (
+                        <>
+                          <span className="mt-1 font-sans text-[11px] leading-snug text-slate-600 sm:text-xs">
+                            {dimsLine}
+                          </span>
+                          <span className="mt-0.5 font-sans text-[10px] text-slate-500 sm:text-[11px]">
+                            {volStr}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="mt-0.5 font-sans text-[9px] text-slate-500">{volStr}</span>
+                      )}
+                      {showOccupancy && occ?.orderNumber ? (
+                        <span className="mt-1 max-w-full truncate font-sans text-[9px] font-semibold text-orange-900">
+                          {occ.orderNumber}
+                        </span>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
           ))}
-          {layout.cells.map((cell) => {
-            const occ = cell.segmentId != null ? occupancyBySegmentId?.get(cell.segmentId) : undefined;
-            const fill = occ?.tone ?? "#ecfdf5";
-            const stroke = occ ? "#059669" : CELL_STROKE;
-            return (
-              <g key={cell.key}>
-                <rect
-                  x={cell.x}
-                  y={cell.y}
-                  width={cell.w}
-                  height={cell.h}
-                  fill={fill}
-                  stroke={stroke}
-                  strokeWidth={1.5}
-                  rx={3}
-                />
-                <text
-                  x={cell.x + cell.w / 2}
-                  y={cell.y + cell.h / 2 - (cell.capacity ? 8 : 0)}
-                  textAnchor="middle"
-                  dominantBaseline="middle"
-                  className="fill-slate-900"
-                  fontSize={Math.min(22, Math.max(11, cell.w / 8))}
-                  fontWeight={700}
-                  fontFamily="ui-monospace, monospace"
-                >
-                  {cell.label}
-                </text>
-                {cell.capacity != null ? (
-                  <text
-                    x={cell.x + cell.w / 2}
-                    y={cell.y + cell.h / 2 + 14}
-                    textAnchor="middle"
-                    fontSize={10}
-                    fill="#64748b"
-                    fontFamily="ui-monospace, monospace"
-                  >
-                    {cell.capacity.toFixed(0)} dm³
-                  </text>
-                ) : null}
-                {showOccupancy && occ?.orderNumber ? (
-                  <text
-                    x={cell.x + cell.w / 2}
-                    y={cell.y + cell.h - 8}
-                    textAnchor="middle"
-                    fontSize={9}
-                    fill="#334155"
-                    fontWeight={600}
-                  >
-                    {occ.orderNumber}
-                  </text>
-                ) : null}
-              </g>
-            );
-          })}
-        </svg>
+        </div>
       </div>
       <p className="mt-2 shrink-0 px-1 text-[11px] text-slate-500">
-        Szerokości segmentów i wysokości poziomów odzwierciedlają wymiary mm. Suma szerokości w poziomie powinna
-        odpowiadać szerokości regału ({draft.totalWidthMm ?? "—"} mm).
+        Podgląd skalowany do czytelności (max {CONSOLIDATION_PREVIEW_MAX_HEIGHT_PX}px). Szerokości segmentów są
+        proporcjonalne; wysokość pasa poziomu nie odwzorowuje mm 1:1.
       </p>
     </div>
   );
-}
-
-function buildLayout(draft: RackStructureDraft, containerHeight: number) {
-  const margin = 12;
-  const beamW = 10;
-  const viewBoxW = 1000;
-  const viewBoxH = containerHeight;
-  const contentW = viewBoxW - 2 * margin - 2 * beamW;
-  const ox = margin + beamW;
-
-  const levels = draft.levels;
-  const levelHeightsMm = levels.map((lv) => {
-    const fromSegs = lv.segments.map((s) => s.heightMm ?? lv.levelHeightMm ?? 500);
-    return Math.max(1, ...fromSegs.map((h) => h ?? 500));
-  });
-  const totalH = levelHeightsMm.reduce((a, b) => a + b, 0);
-  const contentAreaH = viewBoxH - 2 * margin;
-
-  let yCursor = margin + contentAreaH;
-  const cells: Array<{
-    key: string;
-    x: number;
-    y: number;
-    w: number;
-    h: number;
-    label: string;
-    capacity: number | null;
-    segmentId?: number;
-  }> = [];
-  const shelfLines: number[] = [];
-
-  levels.forEach((lv, li) => {
-    const bandH = (levelHeightsMm[li]! / totalH) * contentAreaH;
-    yCursor -= bandH;
-    const levelName = lv.name.trim() || String.fromCharCode(65 + li);
-    const isSegmented = lv.segments.length > 1;
-    const widthSum = lv.segments.reduce((s, seg) => s + Math.max(1, seg.widthMm ?? 1), 0);
-    let xCursor = ox;
-
-    lv.segments.forEach((seg, si) => {
-      const segW = ((seg.widthMm ?? 1) / widthSum) * contentW;
-      const slot = computeSlotLabel(levelName, li, si, isSegmented, seg.slotLabel || null);
-      const cap = computeCapacityDm3(seg.depthMm, seg.widthMm, seg.heightMm ?? lv.levelHeightMm);
-      cells.push({
-        key: seg.clientId,
-        x: xCursor,
-        y: yCursor,
-        w: segW,
-        h: bandH,
-        label: slot,
-        capacity: cap,
-        segmentId: seg.segmentId,
-      });
-      xCursor += segW;
-    });
-
-    if (li > 0) shelfLines.push(yCursor);
-  });
-
-  const uprightH = contentAreaH;
-  return { viewBoxW, viewBoxH, margin, beamW, contentW, ox, uprightH, shelfLines, cells };
 }
