@@ -326,6 +326,7 @@ from .api.wms_photo_upload import router as wms_photo_upload_router
 from .api.auth import router as auth_router
 from .api.workforce_api import router as workforce_router
 from .api.company_profile import router as company_profile_router
+from .api.fulfillment_configuration import router as fulfillment_configuration_router
 from .api.admin_users import router as admin_users_router
 from .api.uploads import router as uploads_router
 from .api.bdo_packaging import router as bdo_packaging_router
@@ -1026,6 +1027,9 @@ try:
     ensure_inventory_management_policy_schema(engine)
     ensure_purchase_sales_block_schema(engine)
     ensure_tenant_warehouse_fulfillment_schema(engine)
+    from .db.tenant_fulfillment_configuration_schema import ensure_tenant_fulfillment_configuration_schema
+
+    ensure_tenant_fulfillment_configuration_schema(engine)
     from .db.product_warehouse_slotting_schema import (
         ensure_product_warehouse_slotting_schema,
         run_startup_slotting_backfill,
@@ -1402,6 +1406,9 @@ def _upgrade_schema_background() -> None:
         ensure_inventory_management_policy_schema(engine)
         ensure_purchase_sales_block_schema(engine)
         ensure_tenant_warehouse_fulfillment_schema(engine)
+        from .db.tenant_fulfillment_configuration_schema import ensure_tenant_fulfillment_configuration_schema
+
+        ensure_tenant_fulfillment_configuration_schema(engine)
         from .db.product_warehouse_slotting_schema import (
             ensure_product_warehouse_slotting_schema,
             run_startup_slotting_backfill,
@@ -1685,6 +1692,7 @@ _API_ROUTERS = (
     auth_router,
     workforce_router,
     company_profile_router,
+    fulfillment_configuration_router,
     admin_users_router,
     uploads_router,
     tenant_router,

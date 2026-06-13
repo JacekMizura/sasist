@@ -1,5 +1,6 @@
 from .tenant import Tenant
 from .tenant_warehouse import TenantWarehouse  # noqa: F401 - register for relationships
+from .tenant_fulfillment_configuration import TenantFulfillmentConfiguration  # noqa: F401
 from .warehouse import (  # noqa: F401 - layout rack/bin/aisle tables required for create_all
     Warehouse,
     WarehouseLayout,

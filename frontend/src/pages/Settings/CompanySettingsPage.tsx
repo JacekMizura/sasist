@@ -18,6 +18,12 @@ import { isSuperRole } from "../../auth/isSuperRole";
 import { useAuth } from "../../context/AuthContext";
 import { DAMAGE_TENANT_ID } from "../../constants/panelTenant";
 import {
+  fetchFulfillmentConfiguration,
+  FULFILLMENT_ASSIGNMENT_MODE_OPTIONS,
+  patchFulfillmentConfiguration,
+  type FulfillmentAssignmentMode,
+} from "../../api/fulfillmentConfigurationApi";
+import {
   ASSIGNMENT_ROLE_LABELS,
   warehouseService,
   type TenantDto,
@@ -192,6 +198,12 @@ export default function CompanySettingsPage() {
   const [editFulfillmentPriority, setEditFulfillmentPriority] = useState(100);
   const [editWhSaving, setEditWhSaving] = useState(false);
 
+  const [fulfillmentMode, setFulfillmentMode] = useState<FulfillmentAssignmentMode>("DEFAULT_WAREHOUSE");
+  const [fulfillmentModeBaseline, setFulfillmentModeBaseline] =
+    useState<FulfillmentAssignmentMode>("DEFAULT_WAREHOUSE");
+  const [fulfillmentCfgLoading, setFulfillmentCfgLoading] = useState(false);
+  const [fulfillmentCfgSaving, setFulfillmentCfgSaving] = useState(false);
+
   const loadProfile = useCallback(async () => {
     setErr(null);
     setLoading(true);
@@ -213,19 +225,26 @@ export default function CompanySettingsPage() {
 
   const loadStructure = useCallback(async () => {
     setStructLoading(true);
+    setFulfillmentCfgLoading(true);
     try {
-      const [wRes, tRes, aRes] = await Promise.all([
+      const [wRes, tRes, aRes, fcRes] = await Promise.all([
         warehouseService.getAllWarehouses(),
         warehouseService.listTenants(),
         warehouseService.getAssignments(),
+        fetchFulfillmentConfiguration(TENANT_ID).catch(() => null),
       ]);
       setWarehouses(Array.isArray(wRes.data) ? wRes.data : []);
       setTenants(Array.isArray(tRes.data) ? tRes.data : []);
       setAssignments(Array.isArray(aRes.data) ? aRes.data : []);
+      if (fcRes?.fulfillment_assignment_mode) {
+        setFulfillmentMode(fcRes.fulfillment_assignment_mode);
+        setFulfillmentModeBaseline(fcRes.fulfillment_assignment_mode);
+      }
     } catch {
       toast.error("Nie udało się wczytać magazynów lub firm.");
     } finally {
       setStructLoading(false);
+      setFulfillmentCfgLoading(false);
     }
   }, []);
 
@@ -341,6 +360,25 @@ export default function CompanySettingsPage() {
 
   const defaultTenantsForWarehouse = (wid: number) =>
     assignments.filter((a) => a.warehouse_id === wid && a.is_default).map((a) => tenantById(a.tenant_id));
+
+  const fulfillmentModeDirty = fulfillmentMode !== fulfillmentModeBaseline;
+
+  const saveFulfillmentConfiguration = async () => {
+    if (fulfillmentCfgSaving || !fulfillmentModeDirty) return;
+    setFulfillmentCfgSaving(true);
+    try {
+      const next = await patchFulfillmentConfiguration(TENANT_ID, {
+        fulfillment_assignment_mode: fulfillmentMode,
+      });
+      setFulfillmentMode(next.fulfillment_assignment_mode);
+      setFulfillmentModeBaseline(next.fulfillment_assignment_mode);
+      toast.success("Zapisano strategię realizacji zamówień.");
+    } catch {
+      toast.error("Nie udało się zapisać strategii realizacji.");
+    } finally {
+      setFulfillmentCfgSaving(false);
+    }
+  };
 
   const createWarehouse = async () => {
     const nm = newWarehouseName.trim();
@@ -604,6 +642,61 @@ export default function CompanySettingsPage() {
                   Dodaj magazyn
                 </button>
               </div>
+            </section>
+
+            <section className={card}>
+              <h2 className={cardTitle}>Realizacja zamówień</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Strategia przypisania magazynu realizacji dla nowych zamówień. Szczegóły per magazyn (priorytet, flaga
+                realizacji) edytujesz przy karcie magazynu poniżej.
+              </p>
+              {fulfillmentCfgLoading ? (
+                <div className="mt-6 flex justify-center py-6 text-slate-500">
+                  <Loader2 className="h-6 w-6 animate-spin" aria-hidden />
+                </div>
+              ) : (
+                <div className="mt-6 space-y-3">
+                  <p className={lab}>Strategia przypisania magazynu</p>
+                  {FULFILLMENT_ASSIGNMENT_MODE_OPTIONS.map((opt) => (
+                    <label
+                      key={opt.value}
+                      className={`flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 transition ${
+                        fulfillmentMode === opt.value
+                          ? "border-cyan-300 bg-cyan-50/60"
+                          : "border-slate-200 bg-white hover:border-slate-300"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="fulfillment-assignment-mode"
+                        className="mt-1 h-4 w-4 border-slate-300 text-cyan-600"
+                        checked={fulfillmentMode === opt.value}
+                        onChange={() => setFulfillmentMode(opt.value)}
+                      />
+                      <span className="min-w-0">
+                        <span className="block text-sm font-semibold text-slate-900">{opt.label}</span>
+                        <span className="mt-0.5 block text-xs text-slate-500">{opt.description}</span>
+                        {opt.value === "AUTO_ATP_FUTURE" ? (
+                          <span className="mt-1 block text-xs font-medium text-amber-800">
+                            Funkcja zostanie aktywowana w późniejszym etapie wdrożenia.
+                          </span>
+                        ) : null}
+                      </span>
+                    </label>
+                  ))}
+                  <div className="flex justify-end pt-2">
+                    <button
+                      type="button"
+                      onClick={() => void saveFulfillmentConfiguration()}
+                      disabled={!fulfillmentModeDirty || fulfillmentCfgSaving}
+                      className="inline-flex items-center gap-2 rounded-xl bg-cyan-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-cyan-700 disabled:opacity-50"
+                    >
+                      {fulfillmentCfgSaving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
+                      Zapisz strategię
+                    </button>
+                  </div>
+                </div>
+              )}
             </section>
 
             {structLoading ? (

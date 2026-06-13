@@ -1,5 +1,13 @@
 # Current context
 
+## P2.5 — Fulfillment assignment configuration (2026-06-08)
+- Tabela **`tenant_fulfillment_configurations`**: `fulfillment_assignment_mode` (MANUAL | DEFAULT_WAREHOUSE | FULFILLMENT_PRIORITY | AUTO_ATP_FUTURE)
+- SSOT resolver: `fulfillment_assignment_resolver.resolve_initial_fulfillment_warehouse()` — bez ATP
+- API: `GET/PATCH /company/fulfillment-configuration?tenant_id=`
+- UI: Ustawienia → Firma → Magazyny → Realizacja zamówień
+- Tests: `backend/tests/fulfillment_configuration/test_fulfillment_assignment.py` (5/5)
+- **Bez zmian:** Order lifecycle, Wave, audit P3, auto-sourcing
+
 ## P2 — Warehouse ownership model (2026-06-08)
 - Schema: `backend/db/wms_warehouse_ownership_schema.py` — startup via `main.py`
 - **PickTask:** `warehouse_id` NOT NULL (model); DB column nullable + backfill location→order
