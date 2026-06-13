@@ -224,3 +224,76 @@ export async function resolveConsolidationShelf(
   });
   return data;
 }
+
+export type ConsolidationRackSegmentDashboard = {
+  segment_id: number;
+  slot_label: string;
+  shelf_label: string;
+  state: "FREE" | "STAGING" | "READY_TO_PACK" | "EXCEPTION" | string;
+  fill_percent: number;
+  order_id: number | null;
+  order_number: string | null;
+  customer_name: string | null;
+  order_status: string | null;
+  plan_id: number | null;
+  plan_status: string | null;
+  fulfillment_state: string | null;
+  packing_ready: boolean;
+  packing_ready_label: string | null;
+  completion_percent: number;
+  mm_staging_label: string | null;
+  local_staging_label: string | null;
+};
+
+export type ConsolidationRackDashboard = {
+  warehouse_id: number;
+  racks: {
+    rack_id: number;
+    rack_name: string;
+    levels: {
+      level_id: number;
+      level_index: number;
+      level_name: string | null;
+      is_segmented: boolean;
+      segments: ConsolidationRackSegmentDashboard[];
+    }[];
+  }[];
+  summary: {
+    total_segments: number;
+    free_count: number;
+    occupied_count: number;
+    ready_to_pack_count: number;
+    exception_count: number;
+    remaining_percent: number;
+  };
+};
+
+export function consolidationStagingErrorMessage(e: unknown, fallback: string): string {
+  const detail =
+    e && typeof e === "object" && "response" in e
+      ? (e as { response?: { data?: { detail?: unknown } } }).response?.data?.detail
+      : null;
+  if (detail && typeof detail === "object" && detail !== null && "code" in detail) {
+    const row = detail as { code?: string; error?: string };
+    if (row.code === "NO_FREE_CONSOLIDATION_SHELF") {
+      return "Brak wolnych półek kompletacyjnych. Plan pozostaje gotowy do rozkładania.";
+    }
+    if (typeof row.error === "string" && row.error.trim()) {
+      return row.error;
+    }
+  }
+  if (typeof detail === "string" && detail.trim()) {
+    return detail;
+  }
+  return fallback;
+}
+
+export async function fetchConsolidationRacksDashboard(
+  tenantId: number,
+  warehouseId: number,
+): Promise<ConsolidationRackDashboard> {
+  const { data } = await api.get<ConsolidationRackDashboard>("/wms/consolidation-racks/dashboard", {
+    params: { tenant_id: tenantId, warehouse_id: warehouseId },
+  });
+  return data;
+}

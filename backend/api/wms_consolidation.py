@@ -15,6 +15,7 @@ from ..schemas.order_consolidation import (
     ConsolidationPlanListOut,
     ConsolidationPlanListRow,
     ConsolidationPlanRead,
+    ConsolidationRackDashboardOut,
     ConsolidationStagingQueueOut,
     ConsolidationStagingQueueRow,
     ConsolidationSummaryOut,
@@ -23,6 +24,7 @@ from ..schemas.order_consolidation import (
     StartStagingResponse,
 )
 from ..services.order_consolidation.alert_service import list_consolidation_alerts
+from ..services.order_consolidation.rack_dashboard_service import build_consolidation_rack_dashboard
 from ..services.order_consolidation.staging_service import (
     ConsolidationStagingError,
     list_staging_queue,
@@ -145,3 +147,19 @@ def resolve_consolidation_shelf(
         db.rollback()
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return ResolveShelfResponse(**payload)
+
+
+@router.get("/consolidation-racks/dashboard", response_model=ConsolidationRackDashboardOut)
+def get_consolidation_racks_dashboard(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
+    db: Session = Depends(get_db),
+    _: AppUser = Depends(_wms_perm),
+):
+    """P5.6 — occupancy map of consolidation racks (read-only, bulk-loaded)."""
+    payload = build_consolidation_rack_dashboard(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+    )
+    return ConsolidationRackDashboardOut(**payload)

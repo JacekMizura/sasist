@@ -1,5 +1,19 @@
 # Current context
 
+## P5.7 — Smart consolidation shelf allocation (2026-06-08)
+- Operator nie wybiera półki — `start_consolidation_staging` wywołuje `allocate_consolidation_shelf()` (P5.3–P5.5 bez zmian)
+- Kolejność: wolne segmenty → magazyn docelowy planu → regał z aktywnym STAGING → najniższy poziom → opcj. `packing_proximity_rank`/`sort_order` na regale → segment_index
+- Brak wolnych: `ConsolidationNoFreeShelfError` / HTTP 409 `{ code: NO_FREE_CONSOLIDATION_SHELF }`; plan pozostaje `READY_FOR_STAGING`
+- Dashboard: `summary.remaining_percent` (wolne / łącznie); UI: Wolne półki / Zajęte / Pozostało X%
+- Tests: `test_consolidation_shelf_allocation.py` (7) + staging/rack dashboard zaktualizowane
+
+## P5.6 — Consolidation rack dashboard (2026-06-08)
+- Read-only mapa zajętości regałów kompletacyjnych (bez zmian w flow konsolidacji/MM/pick/pack)
+- API: `GET /wms/consolidation-racks/dashboard` — bulk load (racks + orders + plans + items, ≤5 SELECT)
+- Stany półki: FREE (zielony), STAGING (niebieski), READY_TO_PACK (pomarańczowy), EXCEPTION (czerwony)
+- UI: `/wms/consolidation-racks` — kafel WMS + link z listy konsolidacji
+- Tests: `test_consolidation_rack_dashboard.py` (6/6)
+
 ## P5.5 — Consolidation shelf packing entry (2026-06-08)
 - Wejście do pakowania po skanie półki (np. `RK-01/A2`) — jak koszyk / EAN, bez osobnego flow
 - API: `GET /wms/packing/resolve-shelf` → `order_id` + weryfikacja `fulfillment_state == READY_TO_PACK`

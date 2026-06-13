@@ -5,6 +5,7 @@ import { ArrowRight, Layers, Loader2, Play } from "lucide-react";
 import {
   fetchConsolidationStagingQueue,
   postStartConsolidationStaging,
+  consolidationStagingErrorMessage,
   type ConsolidationStagingQueueRow,
 } from "../../../api/wmsConsolidationApi";
 import { useWarehouse } from "../../../context/WarehouseContext";
@@ -51,10 +52,7 @@ export default function ConsolidationStagingPage() {
       await postStartConsolidationStaging(planId, DAMAGE_TENANT_ID);
       await load();
     } catch (e: unknown) {
-      const msg = e && typeof e === "object" && "response" in e
-        ? (e as { response?: { data?: { detail?: string } } }).response?.data?.detail
-        : null;
-      setError(typeof msg === "string" ? msg : "Nie udało się rozpocząć rozkładania.");
+      setError(consolidationStagingErrorMessage(e, "Nie udało się rozpocząć rozkładania."));
     } finally {
       setBusyPlanId(null);
     }

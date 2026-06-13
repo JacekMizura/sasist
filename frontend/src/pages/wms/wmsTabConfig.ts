@@ -11,6 +11,7 @@ import {
   ClipboardList,
   Factory,
   Inbox,
+  LayoutGrid,
   ListChecks,
   Package,
   PackageCheck,
@@ -26,6 +27,7 @@ export type WmsTabId =
   | "putaway"
   | "mm"
   | "consolidations"
+  | "consolidation_racks"
   | "picking"
   | "product_preview"
   | "packing"
@@ -102,6 +104,15 @@ export const WMS_MODULES: WmsModuleDefinition[] = [
     sortOrder: 45,
     dashboard: true,
     shortDescription: "Ściąganie towaru z innych magazynów przed kompletacją",
+  },
+  {
+    id: "consolidation_racks",
+    path: "/wms/consolidation-racks",
+    label: "Regały kompletacyjne",
+    icon: LayoutGrid,
+    sortOrder: 46,
+    dashboard: true,
+    shortDescription: "Zajętość półek kompletacyjnych w magazynie docelowym",
   },
   {
     id: "picking",
@@ -205,6 +216,9 @@ export function isWmsTabPathActive(pathname: string, tab: WmsTabConfigItem): boo
   }
   if (tab.id === "consolidations") {
     return p.startsWith("/wms/consolidations");
+  }
+  if (tab.id === "consolidation_racks") {
+    return p.startsWith("/wms/consolidation-racks");
   }
   return p === tab.path || p.startsWith(`${tab.path}/`);
 }

@@ -64,6 +64,13 @@ export default function ConsolidationQueuePage() {
         {tab === "queue" ? (
           <div className="flex flex-wrap items-center gap-3">
             <Link
+              to={WMS_ROUTES.consolidationRacks}
+              className="inline-flex items-center gap-1 rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5 text-sm font-semibold text-violet-900 hover:bg-violet-100"
+            >
+              Regały
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+            <Link
               to={WMS_ROUTES.consolidationStaging}
               className="inline-flex items-center gap-1 rounded-lg border border-sky-200 bg-sky-50 px-3 py-1.5 text-sm font-semibold text-sky-900 hover:bg-sky-100"
             >

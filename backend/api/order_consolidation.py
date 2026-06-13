@@ -41,6 +41,7 @@ from ..services.order_consolidation.plan_service import (
     get_order_consolidation_plan_read,
 )
 from ..services.order_consolidation.staging_service import (
+    ConsolidationNoFreeShelfError,
     ConsolidationStagingError,
     stage_plan_item,
     start_consolidation_staging,
@@ -239,6 +240,12 @@ def post_start_consolidation_staging(
     try:
         payload = start_consolidation_staging(db, plan_id=int(plan_id), tenant_id=int(tenant_id))
         db.commit()
+    except ConsolidationNoFreeShelfError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail={"code": exc.code, "error": str(exc)},
+        ) from exc
     except ConsolidationStagingError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(exc)) from exc

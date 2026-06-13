@@ -36,6 +36,7 @@ from backend.services.order_consolidation.plan_service import (
     refresh_consolidation_plan_progress,
 )
 from backend.services.order_consolidation.staging_service import (
+    ConsolidationNoFreeShelfError,
     ConsolidationStagingError,
     find_free_segment,
     list_staging_queue,
@@ -245,8 +246,10 @@ def test_no_free_segments_blocks_start(mock_commercial, staging_db):
     plan = db.query(OrderConsolidationPlan).filter_by(order_id=int(order.id)).first()
     _receive_all_transfers(db, plan)
 
-    with pytest.raises(ConsolidationStagingError, match="Brak wolnych"):
+    with pytest.raises(ConsolidationNoFreeShelfError):
         start_consolidation_staging(db, plan_id=int(plan.id), tenant_id=1)
+    db.refresh(plan)
+    assert plan.status == PLAN_STATUS_READY_FOR_STAGING
 
 
 @patch("backend.services.order_consolidation.feasibility_service.commercially_sellable_qty")

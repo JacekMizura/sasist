@@ -191,3 +191,52 @@ class ResolveShelfResponse(BaseModel):
     order_id: int
     order_number: Optional[str] = None
     packing_ready: bool = False
+
+
+class ConsolidationRackSegmentDashboardRow(BaseModel):
+    segment_id: int
+    slot_label: str
+    shelf_label: str
+    state: str
+    fill_percent: float = 0.0
+    order_id: Optional[int] = None
+    order_number: Optional[str] = None
+    customer_name: Optional[str] = None
+    order_status: Optional[str] = None
+    plan_id: Optional[int] = None
+    plan_status: Optional[str] = None
+    fulfillment_state: Optional[str] = None
+    packing_ready: bool = False
+    packing_ready_label: Optional[str] = None
+    completion_percent: float = 0.0
+    mm_staging_label: Optional[str] = None
+    local_staging_label: Optional[str] = None
+
+
+class ConsolidationRackLevelDashboardRow(BaseModel):
+    level_id: int
+    level_index: int
+    level_name: Optional[str] = None
+    is_segmented: bool = False
+    segments: List[ConsolidationRackSegmentDashboardRow] = Field(default_factory=list)
+
+
+class ConsolidationRackDashboardRow(BaseModel):
+    rack_id: int
+    rack_name: str
+    levels: List[ConsolidationRackLevelDashboardRow] = Field(default_factory=list)
+
+
+class ConsolidationRackDashboardSummary(BaseModel):
+    total_segments: int = 0
+    free_count: int = 0
+    occupied_count: int = 0
+    ready_to_pack_count: int = 0
+    exception_count: int = 0
+    remaining_percent: float = 0.0
+
+
+class ConsolidationRackDashboardOut(BaseModel):
+    warehouse_id: int
+    racks: List[ConsolidationRackDashboardRow] = Field(default_factory=list)
+    summary: ConsolidationRackDashboardSummary

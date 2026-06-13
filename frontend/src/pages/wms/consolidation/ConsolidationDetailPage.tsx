@@ -9,6 +9,7 @@ import {
   postConsolidationRecoveryAction,
   postStageConsolidationItem,
   postStartConsolidationStaging,
+  consolidationStagingErrorMessage,
   type ConsolidationPlanDetail,
 } from "../../../api/wmsConsolidationApi";
 import { consolidationItemStatusLabel } from "../../../api/orderConsolidationApi";
@@ -28,6 +29,7 @@ export default function ConsolidationDetailPage() {
   const [cancelReason, setCancelReason] = useState("");
   const [changeWhId, setChangeWhId] = useState("");
   const [changeReason, setChangeReason] = useState("");
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!Number.isFinite(pid) || pid <= 0) {
@@ -91,9 +93,12 @@ export default function ConsolidationDetailPage() {
   const handleStartStaging = async () => {
     if (!plan) return;
     setActionBusy(true);
+    setActionError(null);
     try {
       await postStartConsolidationStaging(plan.id, DAMAGE_TENANT_ID);
       await load();
+    } catch (e: unknown) {
+      setActionError(consolidationStagingErrorMessage(e, "Nie udało się rozpocząć rozkładania."));
     } finally {
       setActionBusy(false);
     }
@@ -195,14 +200,21 @@ export default function ConsolidationDetailPage() {
               ) : null}
             </dl>
             {canStartStaging ? (
-              <button
-                type="button"
-                disabled={actionBusy}
-                onClick={() => void handleStartStaging()}
-                className="mt-4 rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700 disabled:opacity-50"
-              >
-                Rozpocznij rozkładanie
-              </button>
+              <div className="mt-4 space-y-2">
+                {actionError ? (
+                  <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900">
+                    {actionError}
+                  </div>
+                ) : null}
+                <button
+                  type="button"
+                  disabled={actionBusy}
+                  onClick={() => void handleStartStaging()}
+                  className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700 disabled:opacity-50"
+                >
+                  Rozpocznij rozkładanie
+                </button>
+              </div>
             ) : null}
           </header>
 

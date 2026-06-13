@@ -37,6 +37,15 @@ class ConsolidationStagingError(ValueError):
     """Invalid staging or rack segment operation."""
 
 
+class ConsolidationNoFreeShelfError(ConsolidationStagingError):
+    """No free consolidation shelf in target warehouse — plan stays READY_FOR_STAGING."""
+
+    code = "NO_FREE_CONSOLIDATION_SHELF"
+
+    def __init__(self) -> None:
+        super().__init__("Brak wolnych półek kompletacyjnych w magazynie docelowym.")
+
+
 def release_rack_segments_for_order(db: Session, order_id: int) -> int:
     """Clear all consolidation shelf slots for an order. Returns count cleared."""
     rows = db.query(RackSegment).filter(RackSegment.order_id == int(order_id)).all()
@@ -92,18 +101,9 @@ def _segment_with_context(db: Session, segment_id: int) -> tuple[RackSegment, Co
 
 
 def find_free_segment(db: Session, *, tenant_id: int, warehouse_id: int) -> RackSegment | None:
-    return (
-        db.query(RackSegment)
-        .join(ConsolidationRackLevel, ConsolidationRackLevel.id == RackSegment.level_id)
-        .join(ConsolidationRack, ConsolidationRack.id == ConsolidationRackLevel.rack_id)
-        .filter(
-            ConsolidationRack.tenant_id == int(tenant_id),
-            ConsolidationRack.warehouse_id == int(warehouse_id),
-            RackSegment.order_id.is_(None),
-        )
-        .order_by(ConsolidationRack.id, ConsolidationRackLevel.level_index, RackSegment.segment_index)
-        .first()
-    )
+    from .shelf_allocation_service import allocate_consolidation_shelf
+
+    return allocate_consolidation_shelf(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id))
 
 
 def update_segment_fill_from_plan(db: Session, plan_id: int, order_id: int) -> None:
@@ -200,7 +200,7 @@ def start_consolidation_staging(db: Session, *, plan_id: int, tenant_id: int) ->
 
     seg = find_free_segment(db, tenant_id=int(tenant_id), warehouse_id=int(plan.target_warehouse_id))
     if seg is None:
-        raise ConsolidationStagingError("Brak wolnych półek kompletacyjnych w magazynie docelowym.")
+        raise ConsolidationNoFreeShelfError()
 
     seg.order_id = int(order.id)
     seg.fill_percent = 0.0

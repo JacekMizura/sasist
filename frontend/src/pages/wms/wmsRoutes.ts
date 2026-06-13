@@ -87,6 +87,8 @@ export const WMS_ROUTES = {
   consolidations: "/wms/consolidations",
   consolidationStaging: "/wms/consolidations/staging",
   consolidationDetail: (planId: number | string) => `/wms/consolidations/${planId}`,
+  /** P5.6 — mapa zajętości regałów kompletacyjnych. */
+  consolidationRacks: "/wms/consolidation-racks",
   putawayPz: (pzId: number | string) => `/wms/putaway/${pzId}`,
   /** Krok 2: produkt + sugerowane lokalizacje. */
   putawayItem: (pzId: number | string, itemId: number | string) => `/wms/putaway/${pzId}/item/${itemId}`,
