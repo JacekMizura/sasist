@@ -29,6 +29,7 @@ from ..schemas.wms_packing import (
     WmsPackingOrderCard,
     WmsPackingOrderDetailOut,
     WmsPackingResolveEanOut,
+    WmsPackingShelfOrderOut,
     WmsPackingScanBody,
     WmsPackingScanOut,
     WmsPackingTargetStatusItem,
@@ -37,6 +38,7 @@ from ..services.wms_audit_service import emit_wms_packing_paused, emit_wms_packi
 from ..services.wms_packing_service import (
     PackingScanError,
     find_first_packing_order_id_for_ean,
+    resolve_packing_order_for_shelf_scan,
     get_packing_order_detail_for_queue,
     list_packing_orders,
     list_packing_target_statuses,
@@ -134,8 +136,10 @@ def _packing_scan_http_exception(exc: PackingScanError) -> HTTPException:
         return HTTPException(status_code=404, detail=detail)
     if code == "ORDER_NOT_IN_QUEUE":
         return HTTPException(status_code=404, detail=detail)
-    if code in ("BASKET_NOT_FOUND", "BASKET_EMPTY", "BASKET_ORDER_NOT_IN_QUEUE"):
+    if code in ("BASKET_NOT_FOUND", "BASKET_EMPTY", "BASKET_ORDER_NOT_IN_QUEUE", "SHELF_NOT_FOUND", "SHELF_ORDER_NOT_IN_QUEUE"):
         return HTTPException(status_code=404, detail=detail)
+    if code == "SHELF_ORDER_NOT_READY":
+        return HTTPException(status_code=400, detail=detail)
     if code in (
         "WRONG_PRODUCT",
         "ALREADY_PACKED",
@@ -149,6 +153,36 @@ def _packing_scan_http_exception(exc: PackingScanError) -> HTTPException:
     if code == "FORBIDDEN_FINISH_WITHOUT_CARTON":
         return HTTPException(status_code=403, detail=detail)
     return HTTPException(status_code=400, detail=detail)
+
+
+@router.get("/packing/resolve-shelf", response_model=WmsPackingShelfOrderOut)
+def get_packing_resolve_shelf(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
+    status: int = Query(..., ge=1, description="order_ui_status_id — jak w GET /wms/packing/orders"),
+    mode: str = Query(..., description="no_cart | bulk | baskets"),
+    cart_id: int | None = Query(default=None, ge=1),
+    code: str = Query(..., min_length=1, description="Etykieta półki kompletacyjnej, np. RK-01/A2"),
+    db: Session = Depends(get_db),
+):
+    """Wejście do pakowania po skanie półki kompletacyjnej — jak koszyk / EAN."""
+    try:
+        return resolve_packing_order_for_shelf_scan(
+            db,
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+            shelf_scan=code,
+            status_id=status,
+            mode=mode,
+            cart_id=cart_id,
+        )
+    except PackingScanError as e:
+        raise _packing_scan_http_exception(e) from e
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except SQLAlchemyError:
+        logger.exception("get_packing_resolve_shelf")
+        raise HTTPException(status_code=500, detail="Database error") from None
 
 
 @router.get("/packing/resolve-ean", response_model=WmsPackingResolveEanOut)

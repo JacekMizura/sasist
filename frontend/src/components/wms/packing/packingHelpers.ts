@@ -57,6 +57,10 @@ export function scanErrorMessage(code: string | null): string {
       return "Nieprawidłowa ilość";
     case "ORDER_NOT_IN_QUEUE":
       return "Zamówienie poza kolejką";
+    case "SHELF_ORDER_NOT_READY":
+      return "Zamówienie nie jest jeszcze kompletne.";
+    case "SHELF_ORDER_NOT_IN_QUEUE":
+      return "Zamówienie z tej półki nie jest w tej kolejce pakowania.";
     case "ORDER_NOT_FULLY_PACKED":
     case "LINE_NOT_FULLY_PACKED":
       return "Nie można domknąć — zamówienie nie jest w pełni spakowane";

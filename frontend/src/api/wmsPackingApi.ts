@@ -200,6 +200,11 @@ export type WmsPackingBasketOrderOutApi = {
   basket_code: string;
 };
 
+export type WmsPackingShelfOrderOutApi = {
+  order_id: number;
+  shelf_label: string;
+};
+
 export type WmsPackingOrderDetailApi = WmsPackingOrderCardApi & {
   customer_name: string;
   shipping_address?: string;
@@ -380,6 +385,27 @@ export async function getWmsPackingResolveEan(
   };
   if (cartId != null) params.cart_id = cartId;
   const res = await api.get<WmsPackingResolveEanApi>("/wms/packing/resolve-ean", { params });
+  return res.data;
+}
+
+/** P5.5 — wejście do pakowania po skanie półki kompletacyjnej (np. RK-01/A2). */
+export async function getWmsPackingResolveShelf(
+  tenantId: number,
+  warehouseId: number,
+  statusId: number,
+  mode: WmsPackingModeParam,
+  code: string,
+  cartId?: number | null,
+): Promise<WmsPackingShelfOrderOutApi> {
+  const params: Record<string, string | number> = {
+    tenant_id: tenantId,
+    warehouse_id: warehouseId,
+    status: statusId,
+    mode,
+    code,
+  };
+  if (cartId != null) params.cart_id = cartId;
+  const res = await api.get<WmsPackingShelfOrderOutApi>("/wms/packing/resolve-shelf", { params });
   return res.data;
 }
 

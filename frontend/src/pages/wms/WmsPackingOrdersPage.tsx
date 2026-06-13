@@ -9,10 +9,11 @@ import {
   getWmsCartPackingOrdersByCode,
   getWmsPackingOrders,
   getWmsPackingResolveEan,
+  getWmsPackingResolveShelf,
   wmsPackingApiErrorCode,
+  wmsPackingApiErrorMessage,
 } from "../../api/wmsPackingApi";
 import { getWmsPickingResolveCart } from "../../api/wmsPickingProductsApi";
-import { resolveConsolidationShelf } from "../../api/wmsConsolidationApi";
 import { OrdersListView } from "../../components/wms/packing/ordersList/OrdersListView";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { useWmsScanner } from "../../context/WmsScannerContext";
@@ -24,7 +25,31 @@ import { formatOperationalDurationSince } from "../../utils/formatOperationalDur
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { clearActivePriorityTask, loadActivePriorityTask, priorityTaskAppliesTo, priorityTaskOrderIds, type ActivePriorityTask } from "./activePriorityTask";
 import { cartTypeMatchesPackingMode, loadWmsPackingSession, patchWmsPackingSession, type WmsPackingSessionState } from "./wmsPackingSession";
+import { scanErrorMessage } from "../../components/wms/packing/packingHelpers";
 import { WMS_ROUTES } from "./wmsRoutes";
+
+async function tryPackingShelfEntry(
+  scan: string,
+  warehouseId: number,
+  session: WmsPackingSessionState,
+): Promise<{ ok: true; order_id: number } | { ok: false; notFound: true } | { ok: false; message: string }> {
+  try {
+    const r = await getWmsPackingResolveShelf(
+      DAMAGE_TENANT_ID,
+      warehouseId,
+      session.statusId,
+      session.mode,
+      scan,
+      session.mode === "no_cart" ? undefined : session.cartId,
+    );
+    return { ok: true, order_id: r.order_id };
+  } catch (e) {
+    const code = wmsPackingApiErrorCode(e);
+    if (code === "SHELF_NOT_FOUND") return { ok: false, notFound: true };
+    const msg = wmsPackingApiErrorMessage(e) || scanErrorMessage(code);
+    return { ok: false, message: msg || "Błąd skanowania półki." };
+  }
+}
 
 function PriorityTaskHeader({
   task,
@@ -259,28 +284,6 @@ export default function WmsPackingOrdersPage() {
       let tryCart = false;
       try {
         try {
-          const shelfResolved = await resolveConsolidationShelf(DAMAGE_TENANT_ID, warehouseId, scan);
-          if (shelfResolved.packing_ready && shelfResolved.order_id > 0) {
-            playScanBeep();
-            appendScanToHistory(scan);
-            if (activePriorityTask && assignedOrderIds.length > 0 && !assignedOrderSet.has(shelfResolved.order_id)) {
-              showScannerToast("To zamówienie jest poza aktywnym zadaniem kierownika.");
-              return;
-            }
-            navigate(WMS_ROUTES.packingOrder(shelfResolved.order_id));
-            return;
-          }
-        } catch (se) {
-          const isShelf404 = axios.isAxiosError(se) && se.response?.status === 404;
-          if (!isShelf404 && axios.isAxiosError(se) && se.response?.status !== 400) {
-            const shelfMsg = extractApiErrorMessage(se, "");
-            if (shelfMsg && !shelfMsg.toLowerCase().includes("nie znaleziono")) {
-              showScannerToast(shelfMsg);
-              return;
-            }
-          }
-        }
-        try {
           const r = await getWmsPackingResolveEan(
             DAMAGE_TENANT_ID,
             warehouseId,
@@ -379,6 +382,21 @@ export default function WmsPackingOrdersPage() {
                   return;
                 }
               }
+            }
+            const shelfHit = await tryPackingShelfEntry(scan, warehouseId, s);
+            if (shelfHit.ok) {
+              playScanBeep();
+              appendScanToHistory(scan);
+              if (activePriorityTask && assignedOrderIds.length > 0 && !assignedOrderSet.has(shelfHit.order_id)) {
+                showScannerToast("To zamówienie jest poza aktywnym zadaniem kierownika.");
+                return;
+              }
+              navigate(WMS_ROUTES.packingOrder(shelfHit.order_id));
+              return;
+            }
+            if (!("notFound" in shelfHit)) {
+              showScannerToast(shelfHit.message);
+              return;
             }
             tryCart = s.mode === "bulk" || s.mode === "baskets";
             if (!tryCart) {

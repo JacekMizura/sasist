@@ -38,6 +38,7 @@ from ..schemas.wms_packing import (
     WmsLinePickedLocationRow,
     WmsOperationalNoteBrief,
     WmsPackingBasketOrderOut,
+    WmsPackingShelfOrderOut,
     WmsPackingCartOrdersOut,
     WmsPackingOrderCard,
     WmsPackingOrderDetailOut,
@@ -2171,6 +2172,67 @@ def _basket_scan_matches(b: CartBasket, scan: str) -> bool:
     if s == slot.upper():
         return True
     return False
+
+
+def resolve_packing_order_for_shelf_scan(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    shelf_scan: str,
+    status_id: int,
+    mode: str,
+    cart_id: int | None,
+) -> WmsPackingShelfOrderOut:
+    """P5.5 — wejście do pakowania po skanie półki kompletacyjnej (jak koszyk / EAN)."""
+    from .order_consolidation.staging_service import lookup_shelf_assignment
+
+    assignment = lookup_shelf_assignment(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        code=shelf_scan,
+    )
+    if assignment is None:
+        raise PackingScanError("SHELF_NOT_FOUND")
+
+    oid = int(assignment["order_id"])
+    order = (
+        db.query(Order)
+        .filter(
+            Order.id == oid,
+            Order.tenant_id == int(tenant_id),
+            Order.warehouse_id == int(warehouse_id),
+        )
+        .first()
+    )
+    if order is None:
+        raise PackingScanError("SHELF_NOT_FOUND")
+
+    fs = (getattr(order, "fulfillment_state", None) or "").strip().upper()
+    if fs != "READY_TO_PACK":
+        raise PackingScanError(
+            "SHELF_ORDER_NOT_READY",
+            message="Zamówienie nie jest jeszcze kompletne.",
+        )
+
+    m = (mode or "").strip().lower()
+    in_queue = get_packing_order_detail_for_queue(
+        db,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        status_id=status_id,
+        mode=m,
+        cart_id=int(cart_id) if cart_id is not None else None,
+        order_id=oid,
+    )
+    if in_queue is None:
+        raise PackingScanError("SHELF_ORDER_NOT_IN_QUEUE")
+
+    return WmsPackingShelfOrderOut(
+        order_id=oid,
+        shelf_label=str(assignment["shelf_label"]),
+    )
 
 
 def resolve_packing_order_for_basket_scan(

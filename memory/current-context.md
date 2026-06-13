@@ -1,5 +1,12 @@
 # Current context
 
+## P5.5 — Consolidation shelf packing entry (2026-06-08)
+- Wejście do pakowania po skanie półki (np. `RK-01/A2`) — jak koszyk / EAN, bez osobnego flow
+- API: `GET /wms/packing/resolve-shelf` → `order_id` + weryfikacja `fulfillment_state == READY_TO_PACK`
+- Błąd `SHELF_ORDER_NOT_READY`: „Zamówienie nie jest jeszcze kompletne.”
+- UI: fallback po `PRODUCT_NOT_FOUND` na liście zamówień i ekranie pakowania
+- Tests: `test_wms_packing_shelf_entry.py` (3)
+
 ## P5.4 — Consolidation shelf deposits & packing readiness (2026-06-08)
 - **Zasada:** `RECEIVED ≠ STAGED`, `PICKED ≠ STAGED` — odkładanie na półkę tylko po explicit confirm (`stage_plan_item`)
 - Nowe statusy pozycji planu: `TO_PICK` (lokalne), `PICKED` (po WMS pick, przed półką); MM bez zmian do `RECEIVED`

@@ -1,7 +1,7 @@
 import axios from "axios";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { getWmsPackingResolveEan, wmsPackingApiErrorCode } from "../../api/wmsPackingApi";
+import { getWmsPackingResolveEan, getWmsPackingResolveShelf, wmsPackingApiErrorCode, wmsPackingApiErrorMessage } from "../../api/wmsPackingApi";
 import { AutoActionsView } from "../../components/wms/packing/postComplete/AutoActionsView";
 import { PackingCartonGateModal } from "../../components/wms/packing/PackingCartonGateModal";
 import { PackingFinalizationView } from "../../components/wms/packing/PackingFinalizationView";
@@ -88,6 +88,30 @@ export default function WmsPackingOrderPage() {
       } catch (e) {
         const code = wmsPackingApiErrorCode(e);
         if (axios.isAxiosError(e) && e.response?.status === 404 && code === "PRODUCT_NOT_FOUND") {
+          try {
+            const shelf = await getWmsPackingResolveShelf(
+              DAMAGE_TENANT_ID,
+              ctrl.warehouseId,
+              s.statusId,
+              s.mode,
+              ean,
+              s.mode === "no_cart" ? undefined : s.cartId,
+            );
+            playScanBeep();
+            appendScanToHistory(ean);
+            if (activePackingTask && activeOrderIds.length > 0 && !activeOrderIds.includes(shelf.order_id)) {
+              showScannerToast("To zamówienie jest poza aktywnym zadaniem kierownika.");
+              return;
+            }
+            navigate(WMS_ROUTES.packingOrder(shelf.order_id), { replace: true });
+            return;
+          } catch (se) {
+            const shelfCode = wmsPackingApiErrorCode(se);
+            if (shelfCode !== "SHELF_NOT_FOUND") {
+              showScannerToast(wmsPackingApiErrorMessage(se) || scanErrorMessage(shelfCode));
+              return;
+            }
+          }
           showScannerToast("Nie znaleziono zamówienia z tym produktem w kolejce.");
         } else {
           showScannerToast(scanErrorMessage(code));

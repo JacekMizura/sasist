@@ -267,6 +267,13 @@ class WmsPackingBasketOrderOut(BaseModel):
     basket_code: str = Field(..., description="Kod wyświetlany jak na liście (nazwa lub S-r-k)")
 
 
+class WmsPackingShelfOrderOut(BaseModel):
+    """Odpowiedź GET /wms/packing/resolve-shelf — zamówienie przypisane do półki kompletacyjnej."""
+
+    order_id: int = Field(..., ge=1)
+    shelf_label: str = Field(..., description="Etykieta półki, np. RK-01/A2")
+
+
 class WmsPackingRecommendedCarton(BaseModel):
     """Karton z słownika magazynu — propozycja lub aktualny wybór na pakowaniu."""
 

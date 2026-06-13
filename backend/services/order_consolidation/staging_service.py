@@ -260,17 +260,17 @@ def stage_plan_item(db: Session, *, plan_id: int, plan_item_id: int, tenant_id: 
     }
 
 
-def resolve_segment_by_label(
+def lookup_shelf_assignment(
     db: Session,
     *,
     tenant_id: int,
     warehouse_id: int,
     code: str,
-) -> dict:
-    """Resolve scan like RK-01/A2 to order for packing."""
+) -> dict | None:
+    """Map scan like RK-01/A2 → order on assigned RackSegment (no readiness gate)."""
     needle = (code or "").strip().upper().replace(" ", "")
     if not needle:
-        raise ConsolidationStagingError("Kod półki jest wymagany.")
+        return None
 
     segments = (
         db.query(RackSegment, ConsolidationRackLevel, ConsolidationRack)
@@ -289,20 +289,43 @@ def resolve_segment_by_label(
             order = db.query(Order).filter(Order.id == int(seg.order_id)).first()
             if order is None:
                 continue
-            from .consolidation_context import consolidation_packing_ready
-
-            if not consolidation_packing_ready(db, int(seg.order_id)):
-                raise ConsolidationStagingError(
-                    "Zamówienie nie jest gotowe do pakowania — ukończ odkładanie wszystkich pozycji na półkę."
-                )
             return {
                 "segment_id": int(seg.id),
                 "shelf_label": format_segment_label(rack.name, level, seg),
                 "order_id": int(seg.order_id),
                 "order_number": str(order.number) if order and order.number else None,
-                "packing_ready": True,
             }
-    raise ConsolidationStagingError("Nie znaleziono zamówienia dla podanej półki kompletacyjnej.")
+    return None
+
+
+def resolve_segment_by_label(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    code: str,
+) -> dict:
+    """Resolve scan like RK-01/A2 to order for packing."""
+    needle = (code or "").strip().upper().replace(" ", "")
+    if not needle:
+        raise ConsolidationStagingError("Kod półki jest wymagany.")
+
+    assignment = lookup_shelf_assignment(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        code=code,
+    )
+    if assignment is None:
+        raise ConsolidationStagingError("Nie znaleziono zamówienia dla podanej półki kompletacyjnej.")
+
+    from .consolidation_context import consolidation_packing_ready
+
+    if not consolidation_packing_ready(db, int(assignment["order_id"])):
+        raise ConsolidationStagingError(
+            "Zamówienie nie jest gotowe do pakowania — ukończ odkładanie wszystkich pozycji na półkę."
+        )
+    return {**assignment, "packing_ready": True}
 
 
 def _shelf_info_for_order(db: Session, order_id: int) -> dict | None:
