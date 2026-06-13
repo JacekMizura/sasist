@@ -58,6 +58,7 @@ class UserWmsProfile(Base, BaseModelMixin):
     barcode_login_code = Column(String(128), nullable=True, index=True)
     language = Column(String(16), nullable=False, default="pl")
     default_warehouse_id = Column(Integer, ForeignKey("warehouses.id", ondelete="SET NULL"), nullable=True)
+    active_warehouse_id = Column(Integer, ForeignKey("warehouses.id", ondelete="SET NULL"), nullable=True)
 
     require_scan_every_product = Column(Boolean, nullable=False, default=False)
     can_edit_products_preview = Column(Boolean, nullable=False, default=False)

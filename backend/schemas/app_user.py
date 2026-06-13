@@ -72,6 +72,7 @@ class WmsProfileResponse(BaseModel):
     barcode_login_code: str | None = None
     language: str = "pl"
     default_warehouse_id: int | None = None
+    active_warehouse_id: int | None = None
     warehouse_ids: list[int] = Field(default_factory=list)
     require_scan_every_product: bool = False
     can_edit_products_preview: bool = False
@@ -120,6 +121,7 @@ class MeResponse(BaseModel):
     wms_language: str | None = None
     barcode_login_code: str | None = None
     default_warehouse_id: int | None = None
+    active_warehouse_id: int | None = None
     warehouse_ids: list[int] = Field(default_factory=list)
     primary_workforce_group_id: int | None = None
     primary_workforce_group: PrimaryWorkforceGroupBadge | None = None

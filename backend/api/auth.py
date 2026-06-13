@@ -54,6 +54,12 @@ from ..services.app_user_admin_service import (
     update_user_transaction,
     wms_profile_response,
 )
+from ..schemas.user_warehouse_context import SetActiveWarehouseBody, WarehouseContextResponse
+from ..services.user_warehouse_context_service import (
+    ensure_active_warehouse_on_login,
+    set_active_warehouse,
+    warehouse_context_payload,
+)
 from ..services.audit_service import log_audit_entry
 from ..services.user_activity_service import log_user_activity
 
@@ -98,6 +104,7 @@ def _me_response(db: Session, user: AppUser) -> MeResponse:
         barcode_login_code=wp.get("barcode_login_code"),
         default_warehouse_id=wp.get("default_warehouse_id"),
         warehouse_ids=wp.get("warehouse_ids") or [],
+        active_warehouse_id=wp.get("active_warehouse_id"),
         primary_workforce_group_id=gid,
         primary_workforce_group=grp,
     )
@@ -125,6 +132,7 @@ def login(body: LoginRequest, db: Session = Depends(get_db)):
         module="auth",
         metadata={"login": user.login},
     )
+    ensure_active_warehouse_on_login(db, user)
     db.commit()
 
     return TokenResponse(access_token=create_access_token(user.id), refresh_token=raw_refresh)
@@ -165,7 +173,34 @@ def logout(body: RefreshRequest, db: Session = Depends(get_db)):
 
 @router.get("/me", response_model=MeResponse)
 def me(current: AppUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    ensure_active_warehouse_on_login(db, current)
+    db.commit()
     return _me_response(db, current)
+
+
+@router.get("/me/warehouse-context", response_model=WarehouseContextResponse)
+def me_warehouse_context(current: AppUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    payload = warehouse_context_payload(db, current)
+    db.commit()
+    return WarehouseContextResponse(**payload)
+
+
+@router.put("/me/active-warehouse", response_model=WarehouseContextResponse)
+def me_set_active_warehouse(
+    body: SetActiveWarehouseBody,
+    current: AppUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    set_active_warehouse(db, current, int(body.warehouse_id))
+    log_audit_entry(
+        db,
+        user_id=current.id,
+        action="auth.active_warehouse",
+        detail={"warehouse_id": int(body.warehouse_id)},
+    )
+    payload = warehouse_context_payload(db, current)
+    db.commit()
+    return WarehouseContextResponse(**payload)
 
 
 @router.post("/change-password")
@@ -544,6 +579,9 @@ def delete_user(
 
     db.query(UserSession).filter(UserSession.user_id == u.id).delete()
     db.query(AppUserWarehouse).filter(AppUserWarehouse.user_id == u.id).delete()
+    from ..models.user_warehouse_assignment import UserWarehouseAssignment
+
+    db.query(UserWarehouseAssignment).filter(UserWarehouseAssignment.user_id == u.id).delete()
     db.query(UserPermission).filter(UserPermission.user_id == u.id).delete()
     log_audit_entry(
         db,

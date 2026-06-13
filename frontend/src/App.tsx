@@ -294,8 +294,8 @@ function WmsProductionBatchRedirect() {
 function AppRootLayout() {
   console.log("[APP] render")
   return (
-    <WarehouseProvider>
-      <AuthProvider>
+    <AuthProvider>
+      <WarehouseProvider>
         <CartsRefreshProvider>
           <RouterMountLogger />
           <RoutePathLogger />
@@ -305,8 +305,8 @@ function AppRootLayout() {
             <Outlet />
           </ErrorBoundary>
         </CartsRefreshProvider>
-      </AuthProvider>
-    </WarehouseProvider>
+      </WarehouseProvider>
+    </AuthProvider>
   )
 }
 

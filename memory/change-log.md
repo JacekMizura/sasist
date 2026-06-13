@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-06-08 — User warehouse assignments + active warehouse context
+
+- **Model:** `user_warehouse_assignments` (backfill z `app_user_warehouses`); `user_wms_profiles.active_warehouse_id`
+- **API:** `GET /auth/me/warehouse-context`, `PUT /auth/me/active-warehouse`; login ustawia domyślny magazyn
+- **Frontend:** `WarehouseContext` z kontekstu serwera; globalny przełącznik „Magazyn:” w headerze
+- **Backward compat:** brak przypisań → dostęp do wszystkich magazynów (jak dotąd); 1 magazyn → bez selektora
+
 ## 2026-06-08 — Offer Stock Pools MVP (Availability Sources)
 
 - **Model:** `offer_stock_pools`, `offer_stock_pool_warehouses`, `product_sales_offers.stock_pool_id`

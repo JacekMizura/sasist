@@ -1014,6 +1014,9 @@ try:
     from .db.offer_stock_pool_schema import ensure_offer_stock_pool_schema
 
     ensure_offer_stock_pool_schema(engine)
+    from .db.user_warehouse_assignment_schema import ensure_user_warehouse_assignment_schema
+
+    ensure_user_warehouse_assignment_schema(engine)
     ensure_inventory_management_policy_schema(engine)
     ensure_purchase_sales_block_schema(engine)
     ensure_tenant_warehouse_fulfillment_schema(engine)
@@ -1387,6 +1390,9 @@ def _upgrade_schema_background() -> None:
         from .db.offer_stock_pool_schema import ensure_offer_stock_pool_schema
 
         ensure_offer_stock_pool_schema(engine)
+        from .db.user_warehouse_assignment_schema import ensure_user_warehouse_assignment_schema
+
+        ensure_user_warehouse_assignment_schema(engine)
         ensure_inventory_management_policy_schema(engine)
         ensure_purchase_sales_block_schema(engine)
         ensure_tenant_warehouse_fulfillment_schema(engine)

@@ -139,6 +139,7 @@ from .wms_refund import WmsRefund  # noqa: F401
 from .replenishment_task import ReplenishmentTask  # noqa: F401
 from .wms_product_warehouse_operation import WmsProductWarehouseOperation  # noqa: F401
 from .workforce_user_group import WorkforceUserGroup, WorkforceUserStatusAccess  # noqa: F401 — before AppUser (FK)
+from .user_warehouse_assignment import UserWarehouseAssignment  # noqa: F401
 from .app_user import AppUser, AppUserWarehouse, AuditLog, UserPermission, UserSession, UserWmsProfile  # noqa: F401
 from .user_activity_log import UserActivityLog  # noqa: F401
 from .employee_cost_profile import EmployeeCostProfile  # noqa: F401

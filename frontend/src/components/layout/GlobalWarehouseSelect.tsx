@@ -1,4 +1,7 @@
+import { useState } from "react";
+
 import { useWarehouse } from "../../context/WarehouseContext";
+import { extractApiErrorMessage } from "../../api/apiErrorMessage";
 
 type Props = {
   /** Use on dark headers (e.g. legacy WMS). `topbar` = compact light row (Sellasist-style WMS header). */
@@ -7,11 +10,13 @@ type Props = {
 };
 
 /**
- * Shown in the app header when {@link useWarehouse.showWarehouseSelector} is true.
- * Single-warehouse tenants get no control — context auto-selects that warehouse.
+ * Global warehouse switcher — visible when user has access to more than one warehouse.
+ * Persists active warehouse on the server (`user_wms_profiles.active_warehouse_id`).
  */
 export default function GlobalWarehouseSelect({ variant = "light", className }: Props) {
   const { warehouse, setWarehouse, warehouses, showWarehouseSelector } = useWarehouse();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   if (!showWarehouseSelector) {
     return null;
@@ -24,22 +29,37 @@ export default function GlobalWarehouseSelect({ variant = "light", className }: 
         ? "h-9 min-w-[8.5rem] max-w-[14rem] rounded-lg border border-slate-200/90 bg-slate-50/60 px-2.5 py-1 text-xs font-semibold text-slate-800 shadow-sm focus:border-cyan-400/70 focus:bg-white focus:outline-none focus:ring-2 focus:ring-cyan-500/20"
         : "min-w-[10rem] max-w-[16rem] rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-800 shadow-sm focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-500/30";
 
+  const labelCls =
+    variant === "topbar"
+      ? "hidden text-[11px] font-semibold text-slate-500 sm:inline"
+      : "text-sm font-medium text-slate-600";
+
   return (
-    <select
-      aria-label="Magazyn"
-      value={warehouse?.id ?? ""}
-      onChange={(e) => {
-        const id = Number(e.target.value);
-        const w = warehouses.find((x) => x.id === id);
-        if (w) setWarehouse(w);
-      }}
-      className={[selectCls, className].filter(Boolean).join(" ")}
-    >
-      {warehouses.map((w) => (
-        <option key={w.id} value={w.id}>
-          {w.name}
-        </option>
-      ))}
-    </select>
+    <div className="flex items-center gap-2">
+      <span className={labelCls}>Magazyn:</span>
+      <select
+        aria-label="Magazyn"
+        value={warehouse?.id ?? ""}
+        disabled={busy}
+        onChange={(e) => {
+          const id = Number(e.target.value);
+          const w = warehouses.find((x) => x.id === id);
+          if (!w) return;
+          setBusy(true);
+          setError(null);
+          void setWarehouse(w)
+            .catch((err) => setError(extractApiErrorMessage(err)))
+            .finally(() => setBusy(false));
+        }}
+        className={[selectCls, className].filter(Boolean).join(" ")}
+      >
+        {warehouses.map((w) => (
+          <option key={w.id} value={w.id}>
+            {w.name}
+          </option>
+        ))}
+      </select>
+      {error ? <span className="sr-only">{error}</span> : null}
+    </div>
   );
 }

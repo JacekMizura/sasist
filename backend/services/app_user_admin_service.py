@@ -13,6 +13,7 @@ from ..auth.deps import explicit_permission_keys, normalize_stored_permission_ke
 from ..auth.permission_catalog import PERMISSION_KEYS
 from ..auth.roles import is_super_role, normalize_role_for_storage
 from ..models.app_user import AppUser, AppUserWarehouse, UserPermission, UserWmsProfile
+from ..models.user_warehouse_assignment import UserWarehouseAssignment
 from ..models.warehouse import Warehouse
 from ..models.workforce_user_group import WorkforceUserGroup
 from ..schemas.app_user import (
@@ -71,7 +72,16 @@ def _resolve_supervisor_user_id(db: Session, supervisor_id: int | None) -> int |
     return sid
 
 
-def sync_warehouse_assignments(db: Session, user_id: int, warehouse_ids: list[int]) -> None:
+def sync_warehouse_assignments(db: Session, user_id: int, warehouse_ids: list[int], *, default_warehouse_id: int | None = None) -> None:
+    from .user_warehouse_context_service import sync_user_warehouse_assignments
+
+    sync_user_warehouse_assignments(
+        db,
+        user_id=user_id,
+        warehouse_ids=warehouse_ids,
+        default_warehouse_id=default_warehouse_id,
+    )
+    # Legacy mirror — keep until app_user_warehouses is removed.
     db.query(AppUserWarehouse).filter(AppUserWarehouse.user_id == user_id).delete()
     seen: set[int] = set()
     for wid in warehouse_ids:
@@ -113,7 +123,7 @@ def apply_wms_profile_create(db: Session, user_id: int, wms: WmsProfileInput) ->
     dw = wms.default_warehouse_id
     if dw is not None and db.query(Warehouse).filter(Warehouse.id == dw).first() is not None:
         ids = list(dict.fromkeys([*ids, dw]))
-    sync_warehouse_assignments(db, user_id, ids)
+    sync_warehouse_assignments(db, user_id, ids, default_warehouse_id=dw)
 
 
 def apply_wms_profile_update(db: Session, user_id: int, wms: WmsProfileUpdate) -> None:
@@ -173,7 +183,7 @@ def apply_wms_profile_update(db: Session, user_id: int, wms: WmsProfileUpdate) -
         dw = p.default_warehouse_id
         if dw is not None and db.query(Warehouse).filter(Warehouse.id == dw).first() is not None:
             ids = list(dict.fromkeys([*ids, dw]))
-        sync_warehouse_assignments(db, user_id, ids)
+        sync_warehouse_assignments(db, user_id, ids, default_warehouse_id=dw)
 
 
 def create_user_transaction(
@@ -321,6 +331,13 @@ def parse_json_int_list(raw: str | None) -> list[int]:
 
 
 def _warehouse_ids(db: Session, user_id: int) -> list[int]:
+    rows = (
+        db.query(UserWarehouseAssignment.warehouse_id)
+        .filter(UserWarehouseAssignment.user_id == user_id, UserWarehouseAssignment.can_operate.is_(True))
+        .all()
+    )
+    if rows:
+        return sorted({int(r[0]) for r in rows})
     rows = db.query(AppUserWarehouse.warehouse_id).filter(AppUserWarehouse.user_id == user_id).all()
     return sorted({int(r[0]) for r in rows})
 
@@ -347,6 +364,7 @@ def wms_profile_response(db: Session, user_id: int) -> dict[str, Any]:
             "barcode_login_code": None,
             "language": "pl",
             "default_warehouse_id": None,
+            "active_warehouse_id": None,
             "warehouse_ids": wh_ids,
             "require_scan_every_product": False,
             "can_edit_products_preview": False,
@@ -366,10 +384,12 @@ def wms_profile_response(db: Session, user_id: int) -> dict[str, Any]:
         }
     modes_raw = parse_json_list(getattr(p, "wms_operational_modes_json", None) or None) or []
     modes = [m for m in modes_raw if is_valid_wms_mode(str(m))]
+    active_id = p.active_warehouse_id if p is not None else None
     return {
         "barcode_login_code": p.barcode_login_code,
         "language": p.language,
         "default_warehouse_id": p.default_warehouse_id,
+        "active_warehouse_id": active_id,
         "warehouse_ids": wh_ids,
         "require_scan_every_product": bool(p.require_scan_every_product),
         "can_edit_products_preview": bool(p.can_edit_products_preview),

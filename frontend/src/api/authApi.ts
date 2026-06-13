@@ -28,6 +28,7 @@ export type WmsProfileResponse = {
   barcode_login_code?: string | null;
   language: string;
   default_warehouse_id?: number | null;
+  active_warehouse_id?: number | null;
   warehouse_ids: number[];
   require_scan_every_product: boolean;
   can_edit_products_preview: boolean;
@@ -77,6 +78,7 @@ export type MeResponse = {
   wms_language?: string | null;
   barcode_login_code?: string | null;
   default_warehouse_id?: number | null;
+  active_warehouse_id?: number | null;
   warehouse_ids?: number[];
   primary_workforce_group_id?: number | null;
   primary_workforce_group?: PrimaryWorkforceGroupBadge | null;
@@ -143,6 +145,31 @@ export async function logoutRequest(refresh_token: string) {
 
 export async function fetchMe(): Promise<MeResponse> {
   const res = await api.get<MeResponse>("/auth/me");
+  return res.data;
+}
+
+export type WarehouseBrief = {
+  id: number;
+  name: string;
+};
+
+export type WarehouseContextResponse = {
+  active_warehouse_id: number | null;
+  warehouses: WarehouseBrief[];
+  show_warehouse_selector: boolean;
+  assignments: Array<{ warehouse_id: number; is_default: boolean; can_operate: boolean }>;
+  uses_legacy_all_warehouses: boolean;
+};
+
+export async function fetchWarehouseContext(): Promise<WarehouseContextResponse> {
+  const res = await api.get<WarehouseContextResponse>("/auth/me/warehouse-context");
+  return res.data;
+}
+
+export async function setActiveWarehouse(warehouseId: number): Promise<WarehouseContextResponse> {
+  const res = await api.put<WarehouseContextResponse>("/auth/me/active-warehouse", {
+    warehouse_id: warehouseId,
+  });
   return res.data;
 }
 
