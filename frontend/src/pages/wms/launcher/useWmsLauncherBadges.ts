@@ -83,14 +83,26 @@ export function useWmsLauncherBadges(warehouseId: number | null) {
 
       if (consolidationSummary) {
         const consStats: WmsModuleStatChip[] = [];
+        if (consolidationSummary.problem_plan_count > 0) {
+          consStats.push(
+            stat(`${consolidationSummary.problem_plan_count} z problemami`, "critical"),
+          );
+        }
+        if (consolidationSummary.manual_review_count > 0) {
+          consStats.push(
+            stat(`${consolidationSummary.manual_review_count} decyzji`, "warning"),
+          );
+        }
+        if (consolidationSummary.critical_alert_count > 0) {
+          consStats.push(
+            stat(`${consolidationSummary.critical_alert_count} krytycznych`, "critical"),
+          );
+        }
         if (consolidationSummary.pending_count > 0) {
           consStats.push(stat(`${consolidationSummary.pending_count} oczekujących`, "warning"));
         }
         if (consolidationSummary.in_progress_count > 0) {
           consStats.push(stat(`${consolidationSummary.in_progress_count} w toku`, "info"));
-        }
-        if (consolidationSummary.completed_count > 0) {
-          consStats.push(stat(`${consolidationSummary.completed_count} gotowych`, "neutral"));
         }
         setMetrics(next, "consolidations", consStats);
       }

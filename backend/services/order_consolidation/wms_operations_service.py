@@ -9,9 +9,12 @@ from ...models.order_consolidation_plan import OrderConsolidationPlan
 from .constants import (
     PLAN_STATUS_COMPLETED,
     PLAN_STATUS_DRAFT,
+    PLAN_STATUS_EXCEPTION,
     PLAN_STATUS_IN_PROGRESS,
+    PLAN_STATUS_MANUAL_REVIEW_REQUIRED,
     PLAN_STATUS_READY,
 )
+from .alert_service import count_alert_summary
 from .plan_service import _build_plan_payload, refresh_consolidation_plan_progress
 from .progress_helpers import progress_fields_for_items
 
@@ -123,6 +126,8 @@ def build_wms_consolidation_summary(
     pending = 0
     in_progress = 0
     completed = 0
+    exception_count = 0
+    manual_review_count = 0
     for plan, _order in rows:
         st = str(plan.status).upper()
         if st in (PLAN_STATUS_DRAFT, PLAN_STATUS_READY):
@@ -131,11 +136,25 @@ def build_wms_consolidation_summary(
             in_progress += 1
         elif st == PLAN_STATUS_COMPLETED:
             completed += 1
+        elif st == PLAN_STATUS_EXCEPTION:
+            exception_count += 1
+        elif st == PLAN_STATUS_MANUAL_REVIEW_REQUIRED:
+            manual_review_count += 1
 
-    active = pending + in_progress
+    active = pending + in_progress + exception_count + manual_review_count
+    alert_stats = count_alert_summary(
+        db,
+        tenant_id=int(tenant_id),
+        target_warehouse_id=target_warehouse_id,
+    )
     return {
         "pending_count": pending,
         "in_progress_count": in_progress,
         "completed_count": completed,
         "active_count": active,
+        "exception_count": exception_count,
+        "manual_review_count": manual_review_count,
+        "problem_plan_count": exception_count + manual_review_count,
+        "critical_alert_count": alert_stats["critical_alert_count"],
+        "unresolved_alert_count": alert_stats["unresolved_alert_count"],
     }

@@ -88,6 +88,49 @@ class ConsolidationSummaryOut(BaseModel):
     in_progress_count: int = 0
     completed_count: int = 0
     active_count: int = 0
+    exception_count: int = 0
+    manual_review_count: int = 0
+    problem_plan_count: int = 0
+    critical_alert_count: int = 0
+    unresolved_alert_count: int = 0
+
+
+class ChangeTargetWarehouseRequest(BaseModel):
+    warehouse_id: int = Field(..., ge=1)
+    reason: str = Field(..., min_length=1)
+
+
+class CancelConsolidationRequest(BaseModel):
+    reason: str = Field(..., min_length=1)
+
+
+class RecoveryActionRequest(BaseModel):
+    action: str = Field(..., min_length=1)
+    note: str | None = None
+
+
+class ConsolidationAlertRead(BaseModel):
+    id: int
+    plan_id: int
+    plan_item_id: int | None = None
+    order_id: int
+    order_number: str
+    plan_status: str
+    severity: str
+    code: str
+    message: str
+    resolved: bool
+    created_at: str | None = None
+
+
+class ConsolidationAlertListOut(BaseModel):
+    alerts: List[ConsolidationAlertRead] = Field(default_factory=list)
+
+
+class ConsolidationActionResponse(BaseModel):
+    plan_id: int
+    status: str
+    message: str | None = None
 
 
 class GenerateMmDraftsResponse(BaseModel):

@@ -10,9 +10,14 @@ import { WMS_ROUTES } from "../../../pages/wms/wmsRoutes";
 export function WmsConsolidationDashboardLink() {
   const { warehouse } = useWarehouse();
   const warehouseId = warehouse?.id ?? null;
-  const [summary, setSummary] = useState<{ pending: number; inProgress: number; completed: number } | null>(
-    null,
-  );
+  const [summary, setSummary] = useState<{
+    pending: number;
+    inProgress: number;
+    completed: number;
+    problems: number;
+    decisions: number;
+    criticalAlerts: number;
+  } | null>(null);
 
   useEffect(() => {
     if (warehouseId == null || warehouseId <= 0) {
@@ -25,12 +30,15 @@ export function WmsConsolidationDashboardLink() {
           pending: data.pending_count,
           inProgress: data.in_progress_count,
           completed: data.completed_count,
+          problems: data.problem_plan_count,
+          decisions: data.manual_review_count,
+          criticalAlerts: data.critical_alert_count,
         }),
       )
       .catch(() => setSummary(null));
   }, [warehouseId]);
 
-  if (summary == null || summary.pending + summary.inProgress + summary.completed === 0) {
+  if (summary == null || summary.pending + summary.inProgress + summary.completed + summary.problems === 0) {
     return null;
   }
 
@@ -46,6 +54,11 @@ export function WmsConsolidationDashboardLink() {
       <div className="flex flex-wrap gap-3 text-xs font-medium text-cyan-900">
         <span>Oczekujące: {summary.pending}</span>
         <span>W toku: {summary.inProgress}</span>
+        {summary.problems > 0 ? <span className="text-orange-900">Z problemami: {summary.problems}</span> : null}
+        {summary.decisions > 0 ? <span className="text-violet-900">Decyzje: {summary.decisions}</span> : null}
+        {summary.criticalAlerts > 0 ? (
+          <span className="text-red-900">Krytyczne alerty: {summary.criticalAlerts}</span>
+        ) : null}
         <span>Gotowe: {summary.completed}</span>
       </div>
     </Link>

@@ -49,6 +49,8 @@ const PLAN_STATUS_LABELS: Record<string, string> = {
   IN_PROGRESS: "W toku",
   COMPLETED: "Zakończony",
   CANCELLED: "Anulowany",
+  EXCEPTION: "Wyjątek",
+  MANUAL_REVIEW_REQUIRED: "Wymaga decyzji",
 };
 
 const ITEM_STATUS_LABELS: Record<string, string> = {
@@ -57,6 +59,10 @@ const ITEM_STATUS_LABELS: Record<string, string> = {
   IN_TRANSIT: "W drodze",
   RECEIVED: "Przyjęte",
   CANCELLED: "Anulowane",
+  SHORTAGE: "Brak",
+  DAMAGED: "Uszkodzone",
+  LOST: "Zaginione",
+  BLOCKED: "Zablokowane",
 };
 
 export function consolidationPlanStatusLabel(status: string): string {

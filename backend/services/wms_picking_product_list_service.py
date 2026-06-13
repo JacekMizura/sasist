@@ -349,6 +349,7 @@ def _picking_queue_eligibility_clauses(
     """Zamówienia operacyjnie otwarte na zbieranie (SSOT dla kohorty / workload)."""
     from .wms_queue_eligibility import (
         wms_queue_consolidation_phase_clauses,
+        wms_queue_consolidation_plan_clauses,
         wms_queue_fulfillment_mode_clauses,
     )
 
@@ -366,6 +367,7 @@ def _picking_queue_eligibility_clauses(
             queue_name="picking",
         ),
         *wms_queue_consolidation_phase_clauses(),
+        *wms_queue_consolidation_plan_clauses(),
     )
 
 

@@ -28,20 +28,27 @@ from ..relocation_document_series_service import assert_relocation_document_seri
 from ..wms_mm_internal_placeholder import get_or_create_mm_placeholder_fks
 from .constants import (
     ITEM_STATUS_CANCELLED,
+    ITEM_STATUS_EXCEPTION,
     ITEM_STATUS_IN_TRANSIT,
     ITEM_STATUS_MM_CREATED,
     ITEM_STATUS_RECEIVED,
     ITEM_STATUS_WAITING,
     MM_CREATION_SOURCE_CONSOLIDATION,
+    PLAN_STATUS_CANCELLED,
     PLAN_STATUS_COMPLETED,
     PLAN_STATUS_DRAFT,
+    PLAN_STATUS_EXCEPTION,
     PLAN_STATUS_IN_PROGRESS,
+    PLAN_STATUS_MANUAL_REVIEW_REQUIRED,
+    PLAN_STATUS_OPEN,
     PLAN_STATUS_READY,
     RESULT_CONSOLIDATION_NOT_REQUIRED,
     RESULT_MANUAL_REVIEW_REQUIRED,
     RESULT_PLAN_CREATED,
 )
+from .mm_receipt_sync import sync_plan_item_from_mm
 from .progress_helpers import progress_fields_for_items
+from .alert_service import recompute_plan_exception_status
 from .feasibility_service import (
     OrderLineDemand,
     _avail_at,
@@ -109,7 +116,22 @@ def _active_plan(db: Session, order_id: int) -> OrderConsolidationPlan | None:
         db.query(OrderConsolidationPlan)
         .filter(
             OrderConsolidationPlan.order_id == int(order_id),
-            OrderConsolidationPlan.status.in_((PLAN_STATUS_DRAFT, PLAN_STATUS_READY, PLAN_STATUS_IN_PROGRESS)),
+            OrderConsolidationPlan.status.in_(tuple(PLAN_STATUS_OPEN)),
+        )
+        .order_by(OrderConsolidationPlan.id.desc())
+        .first()
+    )
+
+
+def _visible_plan(db: Session, order_id: int) -> OrderConsolidationPlan | None:
+    plan = _active_plan(db, int(order_id))
+    if plan is not None:
+        return plan
+    return (
+        db.query(OrderConsolidationPlan)
+        .filter(
+            OrderConsolidationPlan.order_id == int(order_id),
+            OrderConsolidationPlan.status == PLAN_STATUS_COMPLETED,
         )
         .order_by(OrderConsolidationPlan.id.desc())
         .first()
@@ -353,55 +375,56 @@ def refresh_consolidation_plan_progress(db: Session, plan_id: int) -> bool:
     if plan is None:
         return False
 
+    if str(plan.status).upper() in (PLAN_STATUS_CANCELLED,):
+        return False
+
     items = db.query(OrderConsolidationPlanItem).filter(OrderConsolidationPlanItem.plan_id == int(plan.id)).all()
     changed = False
     for it in items:
-        if it.status in (ITEM_STATUS_RECEIVED, ITEM_STATUS_CANCELLED):
+        st = str(it.status).upper()
+        if st in (ITEM_STATUS_RECEIVED, ITEM_STATUS_CANCELLED) or st in ITEM_STATUS_EXCEPTION:
             continue
         if int(it.source_warehouse_id) == int(it.target_warehouse_id):
-            it.status = ITEM_STATUS_RECEIVED
-            changed = True
-            db.add(it)
-            continue
-        if it.stock_document_id is None:
-            continue
-        doc = db.query(StockDocument).filter(StockDocument.id == int(it.stock_document_id)).first()
-        if doc is None:
-            continue
-        recv = str(getattr(doc, "receiving_status", "") or "").strip().upper()
-        if recv == "DONE":
-            if it.status != ITEM_STATUS_RECEIVED:
+            if st != ITEM_STATUS_RECEIVED:
                 it.status = ITEM_STATUS_RECEIVED
                 changed = True
                 db.add(it)
-        elif recv in ("NEW", "IN_PROGRESS") and it.status in (
-            ITEM_STATUS_MM_CREATED,
-            ITEM_STATUS_WAITING,
-            ITEM_STATUS_IN_TRANSIT,
-        ):
-            if it.status != ITEM_STATUS_IN_TRANSIT:
-                it.status = ITEM_STATUS_IN_TRANSIT
-                changed = True
-                db.add(it)
+            continue
+        if sync_plan_item_from_mm(db, it, plan):
+            changed = True
 
-    active_items = [it for it in items if it.status != ITEM_STATUS_CANCELLED]
-    if active_items and all(it.status == ITEM_STATUS_RECEIVED for it in active_items):
-        if plan.status != PLAN_STATUS_COMPLETED:
-            plan.status = PLAN_STATUS_COMPLETED
-            changed = True
-            db.add(plan)
-            order = db.query(Order).filter(Order.id == int(plan.order_id)).first()
-            if order is not None:
-                order.fulfillment_assignment_phase = PHASE_FULFILLMENT_ASSIGNED
-                order.warehouse_id = int(plan.target_warehouse_id)
-                db.add(order)
-    elif any(it.status in (ITEM_STATUS_MM_CREATED, ITEM_STATUS_IN_TRANSIT) for it in active_items):
-        if plan.status not in (PLAN_STATUS_IN_PROGRESS, PLAN_STATUS_COMPLETED):
-            plan.status = PLAN_STATUS_IN_PROGRESS
-            changed = True
-            db.add(plan)
+    recompute_plan_exception_status(db, plan)
+
+    active_items = [it for it in items if str(it.status).upper() != ITEM_STATUS_CANCELLED]
+    terminal_ok = {ITEM_STATUS_RECEIVED}
+    if active_items and all(str(it.status).upper() in terminal_ok for it in active_items):
+        if str(plan.status).upper() not in (
+            PLAN_STATUS_EXCEPTION,
+            PLAN_STATUS_MANUAL_REVIEW_REQUIRED,
+            PLAN_STATUS_CANCELLED,
+        ):
+            if plan.status != PLAN_STATUS_COMPLETED:
+                plan.status = PLAN_STATUS_COMPLETED
+                changed = True
+                db.add(plan)
+                order = db.query(Order).filter(Order.id == int(plan.order_id)).first()
+                if order is not None:
+                    order.fulfillment_assignment_phase = PHASE_FULFILLMENT_ASSIGNED
+                    order.warehouse_id = int(plan.target_warehouse_id)
+                    db.add(order)
+    elif any(str(it.status).upper() in (ITEM_STATUS_MM_CREATED, ITEM_STATUS_IN_TRANSIT) for it in active_items):
+        if str(plan.status).upper() not in (
+            PLAN_STATUS_EXCEPTION,
+            PLAN_STATUS_MANUAL_REVIEW_REQUIRED,
+            PLAN_STATUS_COMPLETED,
+            PLAN_STATUS_CANCELLED,
+        ):
+            if plan.status != PLAN_STATUS_IN_PROGRESS:
+                plan.status = PLAN_STATUS_IN_PROGRESS
+                changed = True
+                db.add(plan)
     elif plan.status == PLAN_STATUS_DRAFT and any(
-        it.status in (ITEM_STATUS_MM_CREATED, ITEM_STATUS_RECEIVED) for it in items
+        str(it.status).upper() in (ITEM_STATUS_MM_CREATED, ITEM_STATUS_RECEIVED) for it in items
     ):
         plan.status = PLAN_STATUS_READY
         changed = True
@@ -468,18 +491,7 @@ def _build_plan_payload(
 
 
 def get_order_consolidation_plan_read(db: Session, order_id: int) -> dict | None:
-    plan = _active_plan(db, int(order_id))
-    if plan is None:
-        completed = (
-            db.query(OrderConsolidationPlan)
-            .filter(
-                OrderConsolidationPlan.order_id == int(order_id),
-                OrderConsolidationPlan.status == PLAN_STATUS_COMPLETED,
-            )
-            .order_by(OrderConsolidationPlan.id.desc())
-            .first()
-        )
-        plan = completed
+    plan = _visible_plan(db, int(order_id))
     if plan is None:
         return None
 
@@ -490,8 +502,22 @@ def get_order_consolidation_plan_read(db: Session, order_id: int) -> dict | None
     return _build_plan_payload(db, plan, order_number=order_number)
 
 
-def assert_order_eligible_for_wave(order: Order) -> None:
+def assert_order_eligible_for_wave(db: Session, order: Order) -> None:
+    from .constants import PLAN_STATUS_BLOCKS_FULFILLMENT
+
     if is_consolidation_wave_blocked(getattr(order, "fulfillment_assignment_phase", None)):
         raise OrderConsolidationPlanError(
             "Zamówienie oczekuje na konsolidację — nie można utworzyć fali kompletacji."
+        )
+    blocking = (
+        db.query(OrderConsolidationPlan)
+        .filter(
+            OrderConsolidationPlan.order_id == int(order.id),
+            OrderConsolidationPlan.status.in_(tuple(PLAN_STATUS_BLOCKS_FULFILLMENT)),
+        )
+        .first()
+    )
+    if blocking is not None:
+        raise OrderConsolidationPlanError(
+            f"Plan konsolidacji w statusie {blocking.status} — fala kompletacji zablokowana."
         )

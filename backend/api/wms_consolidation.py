@@ -10,11 +10,14 @@ from ..auth.warehouse_deps import require_operable_warehouse
 from ..database import get_db
 from ..models.app_user import AppUser
 from ..schemas.order_consolidation import (
+    ConsolidationAlertListOut,
+    ConsolidationAlertRead,
     ConsolidationPlanListOut,
     ConsolidationPlanListRow,
     ConsolidationPlanRead,
     ConsolidationSummaryOut,
 )
+from ..services.order_consolidation.alert_service import list_consolidation_alerts
 from ..services.order_consolidation.wms_operations_service import (
     WmsConsolidationAccessError,
     build_wms_consolidation_summary,
@@ -74,3 +77,21 @@ def get_wms_consolidation_plan_endpoint(
     except WmsConsolidationAccessError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return ConsolidationPlanRead(**payload)
+
+
+@router.get("/consolidation-alerts", response_model=ConsolidationAlertListOut)
+def list_wms_consolidation_alerts(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
+    unresolved_only: bool = Query(True),
+    db: Session = Depends(get_db),
+    _: AppUser = Depends(_wms_perm),
+):
+    rows = list_consolidation_alerts(
+        db,
+        tenant_id=int(tenant_id),
+        target_warehouse_id=int(warehouse_id),
+        unresolved_only=unresolved_only,
+    )
+    db.commit()
+    return ConsolidationAlertListOut(alerts=[ConsolidationAlertRead(**r) for r in rows])

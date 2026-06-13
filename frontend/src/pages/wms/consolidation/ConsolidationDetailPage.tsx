@@ -4,22 +4,28 @@ import { ArrowLeft, ArrowRight, Loader2 } from "lucide-react";
 
 import {
   fetchWmsConsolidationPlanDetail,
+  postCancelConsolidationPlan,
+  postChangeConsolidationTargetWarehouse,
+  postConsolidationRecoveryAction,
   type ConsolidationPlanDetail,
 } from "../../../api/wmsConsolidationApi";
-import { useWarehouse } from "../../../context/WarehouseContext";
+import { consolidationItemStatusLabel } from "../../../api/orderConsolidationApi";
 import { DAMAGE_TENANT_ID } from "../../damage/damageShared";
 import { WMS_ROUTES } from "../wmsRoutes";
 import {
   consolidationPlanStatusClass,
   consolidationPlanStatusLabel,
 } from "./consolidationStatusUi";
-import { consolidationItemStatusLabel } from "../../../api/orderConsolidationApi";
 
 export default function ConsolidationDetailPage() {
   const { planId } = useParams<{ planId: string }>();
   const pid = Number(planId);
   const [plan, setPlan] = useState<ConsolidationPlanDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [actionBusy, setActionBusy] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [changeWhId, setChangeWhId] = useState("");
+  const [changeReason, setChangeReason] = useState("");
 
   const load = useCallback(async () => {
     if (!Number.isFinite(pid) || pid <= 0) {
@@ -42,7 +48,46 @@ export default function ConsolidationDetailPage() {
     void load();
   }, [load]);
 
+  const runRecovery = async (
+    itemId: number,
+    action: "ADDITIONAL_MM" | "OPERATOR_DECISION" | "LOST_ESCALATION",
+  ) => {
+    if (!plan) return;
+    setActionBusy(true);
+    try {
+      await postConsolidationRecoveryAction(plan.id, itemId, DAMAGE_TENANT_ID, action);
+      await load();
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  const handleCancel = async () => {
+    if (!plan || !cancelReason.trim()) return;
+    setActionBusy(true);
+    try {
+      await postCancelConsolidationPlan(plan.id, DAMAGE_TENANT_ID, cancelReason.trim());
+      await load();
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  const handleChangeWarehouse = async () => {
+    if (!plan || !changeReason.trim()) return;
+    const wid = Number(changeWhId);
+    if (!Number.isFinite(wid) || wid <= 0) return;
+    setActionBusy(true);
+    try {
+      await postChangeConsolidationTargetWarehouse(plan.id, DAMAGE_TENANT_ID, wid, changeReason.trim());
+      await load();
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
   const orderLabel = plan?.order_number ?? (plan ? `#${plan.order_id}` : "—");
+  const canMutate = plan && !["COMPLETED", "CANCELLED"].includes(plan.status.toUpperCase());
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 p-4 md:p-6">
@@ -87,6 +132,57 @@ export default function ConsolidationDetailPage() {
             </dl>
           </header>
 
+          {canMutate ? (
+            <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <h2 className="text-sm font-semibold text-slate-900">Operacje planu</h2>
+              <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <label className="block text-xs font-medium text-slate-600">Zmiana magazynu docelowego (ID)</label>
+                  <input
+                    type="number"
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                    value={changeWhId}
+                    onChange={(e) => setChangeWhId(e.target.value)}
+                    placeholder="np. 3"
+                  />
+                  <input
+                    type="text"
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                    value={changeReason}
+                    onChange={(e) => setChangeReason(e.target.value)}
+                    placeholder="Powód zmiany"
+                  />
+                  <button
+                    type="button"
+                    disabled={actionBusy}
+                    onClick={() => void handleChangeWarehouse()}
+                    className="rounded-lg bg-slate-800 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                  >
+                    Zmień magazyn docelowy
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-xs font-medium text-slate-600">Anulowanie konsolidacji</label>
+                  <input
+                    type="text"
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                    value={cancelReason}
+                    onChange={(e) => setCancelReason(e.target.value)}
+                    placeholder="Powód anulowania (wymagany)"
+                  />
+                  <button
+                    type="button"
+                    disabled={actionBusy || !cancelReason.trim()}
+                    onClick={() => void handleCancel()}
+                    className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm font-semibold text-red-900 disabled:opacity-50"
+                  >
+                    Anuluj konsolidację
+                  </button>
+                </div>
+              </div>
+            </section>
+          ) : null}
+
           <section className="space-y-3">
             {plan.items.map((it) => (
               <article key={it.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -102,6 +198,36 @@ export default function ConsolidationDetailPage() {
                 <p className="mt-2 text-xs font-medium text-slate-500">
                   Status: {consolidationItemStatusLabel(it.status)}
                 </p>
+                {canMutate && it.status.toUpperCase() === "SHORTAGE" ? (
+                  <button
+                    type="button"
+                    disabled={actionBusy}
+                    onClick={() => void runRecovery(it.id, "ADDITIONAL_MM")}
+                    className="mt-3 rounded-lg bg-cyan-700 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                  >
+                    Utwórz dodatkowe MM
+                  </button>
+                ) : null}
+                {canMutate && it.status.toUpperCase() === "DAMAGED" ? (
+                  <button
+                    type="button"
+                    disabled={actionBusy}
+                    onClick={() => void runRecovery(it.id, "OPERATOR_DECISION")}
+                    className="mt-3 rounded-lg bg-violet-700 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                  >
+                    Oznacz do decyzji operatora
+                  </button>
+                ) : null}
+                {canMutate && (it.status.toUpperCase() === "LOST" || it.status.toUpperCase() === "SHORTAGE") ? (
+                  <button
+                    type="button"
+                    disabled={actionBusy}
+                    onClick={() => void runRecovery(it.id, "LOST_ESCALATION")}
+                    className="mt-2 ml-0 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-800 disabled:opacity-50 sm:ml-2 sm:mt-3 sm:inline-block"
+                  >
+                    Przekaż do wyjaśnienia
+                  </button>
+                ) : null}
               </article>
             ))}
           </section>

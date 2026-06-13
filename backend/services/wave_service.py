@@ -20,6 +20,7 @@ from ..models.inventory import Inventory
 from ..models.stock_reservation import StockReservation
 from ..models.location import Location
 from .fulfillment_assignment.phase_constants import CONSOLIDATION_WAVE_BLOCKED_PHASES
+from .wms_queue_eligibility import wms_queue_consolidation_plan_clauses
 from .inventory_lot_keys import NO_EXPIRY_SENTINEL
 from .commercial_availability_service import commercially_sellable_qty
 from .stock_disposition import (
@@ -228,6 +229,7 @@ def create_wave(
                 Order.status == READY_STATUS,
                 Order.wave_id == None,
                 Order.fulfillment_assignment_phase.notin_(tuple(CONSOLIDATION_WAVE_BLOCKED_PHASES)),
+                *wms_queue_consolidation_plan_clauses(),
             )
             .order_by(Order.id)
         )
@@ -251,6 +253,7 @@ def create_wave(
                 Order.status == READY_STATUS,
                 Order.wave_id == None,
                 Order.fulfillment_assignment_phase.notin_(tuple(CONSOLIDATION_WAVE_BLOCKED_PHASES)),
+                *wms_queue_consolidation_plan_clauses(),
             )
             .order_by(Order.id)
             .limit(wave_size)

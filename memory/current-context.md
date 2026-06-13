@@ -1,5 +1,15 @@
 # Current context
 
+## P5.2 — Consolidation exceptions & recovery (2026-06-08)
+- Statusy pozycji: SHORTAGE, DAMAGED, LOST, BLOCKED
+- Statusy planu: EXCEPTION, MANUAL_REVIEW_REQUIRED (+ istniejące)
+- Tabela: `order_consolidation_alerts` (severity, code, message, resolved)
+- Auto-sync MM przyjęcia: brak → SHORTAGE + alert; uszkodzenie (`stock_disposition` / DAMAGED) → DAMAGED + plan EXCEPTION
+- API: `POST /consolidation-plans/{id}/change-target-warehouse`, `/cancel`, `/items/{id}/recovery`; `GET /wms/consolidation-alerts`
+- Faza zamówienia: `MANUAL_REVIEW_REQUIRED` po anulowaniu; blokada wave/pick/pack przez fazę + status planu (EXCEPTION/MANUAL_REVIEW/CANCELLED)
+- UI: zakładka Alerty w Konsolidacjach, recovery na szczególe, liczniki problemów na pulpicie/launcherze
+- Tests: `test_consolidation_exceptions.py` (9) + P5/P5.1 = **21/21**
+
 ## P5.1 — WMS consolidation operations (2026-06-08)
 - WMS moduł **Konsolidacje** (`/wms/consolidations`) — lista + szczegół planu (magazyn docelowy)
 - API: `GET /wms/consolidation-plans`, `GET /wms/consolidation-plans/{id}`, `GET /wms/consolidation-plans/summary`

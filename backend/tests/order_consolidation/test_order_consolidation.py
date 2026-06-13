@@ -11,6 +11,7 @@ from sqlalchemy.orm import sessionmaker
 
 from backend.models.order import Order
 from backend.models.order_consolidation_plan import OrderConsolidationPlan, OrderConsolidationPlanItem
+from backend.models.order_consolidation_alert import OrderConsolidationAlert
 from backend.models.order_item import OrderItem
 from backend.models.product import Product
 from backend.models.stock_document import StockDocument, StockDocumentItem
@@ -59,6 +60,7 @@ def consolidation_db():
     OrderItem.__table__.create(engine, checkfirst=True)
     OrderConsolidationPlan.__table__.create(engine, checkfirst=True)
     OrderConsolidationPlanItem.__table__.create(engine, checkfirst=True)
+    OrderConsolidationAlert.__table__.create(engine, checkfirst=True)
     StockDocument.__table__.create(engine, checkfirst=True)
     StockDocumentItem.__table__.create(engine, checkfirst=True)
 

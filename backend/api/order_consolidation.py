@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from ..auth.deps import require_any_permission
@@ -10,11 +10,23 @@ from ..database import get_db
 from ..models.app_user import AppUser
 from ..models.order import Order
 from ..schemas.order_consolidation import (
+    CancelConsolidationRequest,
+    ChangeTargetWarehouseRequest,
+    ConsolidationActionResponse,
+    ConsolidationAlertListOut,
+    ConsolidationAlertRead,
     ConsolidationFeasibilityRead,
     ConsolidationPlanRead,
     GenerateConsolidationPlanResponse,
     GenerateMmDraftsResponse,
+    RecoveryActionRequest,
     WarehouseFeasibilityRead,
+)
+from ..services.order_consolidation.alert_service import (
+    ConsolidationAlertError,
+    apply_recovery_action,
+    cancel_consolidation_plan,
+    change_consolidation_target_warehouse,
 )
 from ..services.order_consolidation.feasibility_service import (
     OrderConsolidationFeasibilityError,
@@ -26,6 +38,7 @@ from ..services.order_consolidation.plan_service import (
     generate_mm_drafts_for_plan,
     get_order_consolidation_plan_read,
 )
+from ..models.order_consolidation_plan import OrderConsolidationPlan
 
 router = APIRouter(tags=["Order consolidation"])
 
@@ -120,4 +133,90 @@ def post_generate_mm_drafts(
         plan_id=result.plan_id,
         documents_created=result.documents_created,
         items_updated=result.items_updated,
+    )
+
+
+@consolidation_plans_router.post("/{plan_id}/change-target-warehouse", response_model=ConsolidationActionResponse)
+def post_change_target_warehouse(
+    plan_id: int,
+    body: ChangeTargetWarehouseRequest,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    _: AppUser = Depends(_orders_perm),
+):
+    try:
+        plan = change_consolidation_target_warehouse(
+            db,
+            plan_id=int(plan_id),
+            tenant_id=int(tenant_id),
+            warehouse_id=int(body.warehouse_id),
+            reason=body.reason,
+        )
+        db.commit()
+    except ConsolidationAlertError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return ConsolidationActionResponse(
+        plan_id=int(plan.id),
+        status=str(plan.status),
+        message="Zmieniono magazyn docelowy.",
+    )
+
+
+@consolidation_plans_router.post("/{plan_id}/cancel", response_model=ConsolidationActionResponse)
+def post_cancel_consolidation(
+    plan_id: int,
+    body: CancelConsolidationRequest,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    _: AppUser = Depends(_orders_perm),
+):
+    try:
+        plan = cancel_consolidation_plan(
+            db,
+            plan_id=int(plan_id),
+            tenant_id=int(tenant_id),
+            reason=body.reason,
+        )
+        db.commit()
+    except ConsolidationAlertError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return ConsolidationActionResponse(
+        plan_id=int(plan.id),
+        status=str(plan.status),
+        message="Anulowano plan konsolidacji.",
+    )
+
+
+@consolidation_plans_router.post(
+    "/{plan_id}/items/{plan_item_id}/recovery",
+    response_model=ConsolidationActionResponse,
+)
+def post_recovery_action(
+    plan_id: int,
+    plan_item_id: int,
+    body: RecoveryActionRequest,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    _: AppUser = Depends(_orders_perm),
+):
+    try:
+        alert = apply_recovery_action(
+            db,
+            plan_id=int(plan_id),
+            plan_item_id=int(plan_item_id),
+            tenant_id=int(tenant_id),
+            action=body.action,
+            note=body.note,
+        )
+        plan = db.query(OrderConsolidationPlan).filter(OrderConsolidationPlan.id == int(plan_id)).first()
+        db.commit()
+    except ConsolidationAlertError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return ConsolidationActionResponse(
+        plan_id=int(plan_id),
+        status=str(plan.status) if plan else "UNKNOWN",
+        message=str(alert.message),
     )

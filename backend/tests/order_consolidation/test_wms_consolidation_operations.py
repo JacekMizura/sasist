@@ -9,10 +9,11 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from backend.models.order import Order
+from backend.models.order_consolidation_alert import OrderConsolidationAlert
 from backend.models.order_consolidation_plan import OrderConsolidationPlan, OrderConsolidationPlanItem
 from backend.models.order_item import OrderItem
 from backend.models.product import Product
-from backend.models.stock_document import StockDocument
+from backend.models.stock_document import StockDocument, StockDocumentItem
 from backend.models.tenant import Tenant
 from backend.models.tenant_fulfillment_configuration import TenantFulfillmentConfiguration
 from backend.models.tenant_warehouse import TenantWarehouse
@@ -56,7 +57,9 @@ def wms_consolidation_db():
         OrderItem,
         OrderConsolidationPlan,
         OrderConsolidationPlanItem,
+        OrderConsolidationAlert,
         StockDocument,
+        StockDocumentItem,
     ):
         model.__table__.create(engine, checkfirst=True)
 

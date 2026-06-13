@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, Iterable, Sequence
 
 from ...models.order_consolidation_plan import OrderConsolidationPlanItem
-from .constants import ITEM_STATUS_RECEIVED
+from .constants import ITEM_STATUS_RECEIVED, ITEM_STATUS_EXCEPTION
 
 
 def is_cross_warehouse_transfer(item: OrderConsolidationPlanItem) -> bool:
@@ -19,7 +19,12 @@ def transfer_items(items: Sequence[OrderConsolidationPlanItem]) -> list[OrderCon
 def compute_transfer_progress(items: Sequence[OrderConsolidationPlanItem]) -> tuple[int, int]:
     transfers = transfer_items(items)
     total = len(transfers)
-    received = sum(1 for it in transfers if str(it.status).upper() == ITEM_STATUS_RECEIVED)
+    received = sum(
+        1
+        for it in transfers
+        if str(it.status).upper() == ITEM_STATUS_RECEIVED
+        and str(it.status).upper() not in ITEM_STATUS_EXCEPTION
+    )
     return received, total
 
 
