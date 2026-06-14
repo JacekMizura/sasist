@@ -20,6 +20,8 @@ export const CONSOLIDATION_PREVIEW_SELECT = {
   segmentBorderWidth: 3,
 } as const;
 
+export type PreviewDisplayMode = "layout" | "dimensions" | "capacity";
+
 export type SegmentOccupancyInfo = {
   isOccupied: boolean;
   orderNumber?: string | null;

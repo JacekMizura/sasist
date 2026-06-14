@@ -1,19 +1,16 @@
-import { ChevronDown, ChevronRight, Plus, Trash2 } from "lucide-react";
+import { Plus } from "lucide-react";
 
 import {
   cartsAppInputClass,
   cartsFieldLabelClass,
 } from "../carts/cartsModuleTokens";
-import LevelSegmentTable from "./LevelSegmentTable";
+import RackStructureTree from "./RackStructureTree";
 import { MAX_RACK_DIM, parseOptionalDim } from "./rackLayoutUtils";
 import {
   addLevel,
   applyRackPreset,
   countSegments,
-  levelWidthUsage,
-  removeLevel,
-  setLevelSegmentCount,
-  type LevelDraft,
+  RACK_PRESET_LABELS,
   type RackPresetId,
   type RackStructureDraft,
   type SegmentSelection,
@@ -27,12 +24,15 @@ type Props = {
   showWarehouseSelect: boolean;
   structureLocked?: boolean;
   readOnly?: boolean;
-  /** Accordion — tylko jeden rozwinięty poziom */
-  expandedLevelId: string | null;
-  onExpandLevel: (levelClientId: string | null) => void;
+  focusedLevelId: string | null;
+  onSelectLevel: (levelClientId: string) => void;
   selection: SegmentSelection;
   onSelectSegment: (levelClientId: string, segmentClientId: string) => void;
-  showPresets?: boolean;
+  /** Tworzenie — preset wybrany / picker */
+  appliedPreset?: RackPresetId | null;
+  presetPickerOpen?: boolean;
+  onApplyPreset?: (preset: RackPresetId) => void;
+  onChangePreset?: () => void;
 };
 
 function DimInput({
@@ -69,6 +69,13 @@ function DimInput({
   );
 }
 
+const PRESETS: Array<{ id: RackPresetId; hint: string }> = [
+  { id: "4x4", hint: "4 poziomy × 4 segmenty" },
+  { id: "3x6", hint: "3 poziomy × 6 segmentów" },
+  { id: "2x8", hint: "2 poziomy × 8 segmentów" },
+  { id: "empty", hint: "1 poziom, 1 segment" },
+];
+
 export default function ConsolidationRackStructureEditor({
   draft,
   onChange,
@@ -77,33 +84,18 @@ export default function ConsolidationRackStructureEditor({
   showWarehouseSelect,
   structureLocked = false,
   readOnly = false,
-  expandedLevelId,
-  onExpandLevel,
+  focusedLevelId,
+  onSelectLevel,
   selection,
   onSelectSegment,
-  showPresets = false,
+  appliedPreset = null,
+  presetPickerOpen = false,
+  onApplyPreset,
+  onChangePreset,
 }: Props) {
   const updateDraft = (patch: Partial<RackStructureDraft>) => onChange({ ...draft, ...patch });
-
-  const updateLevel = (clientId: string, patch: Partial<LevelDraft>) => {
-    onChange({
-      ...draft,
-      levels: draft.levels.map((lv) => (lv.clientId === clientId ? { ...lv, ...patch } : lv)),
-    });
-  };
-
   const totalSegments = countSegments(draft);
-
-  const PRESETS: Array<{ id: RackPresetId; label: string; hint: string }> = [
-    { id: "4x4", label: "4×4", hint: "4 poziomy × 4 segmenty" },
-    { id: "3x6", label: "3×6", hint: "3 poziomy × 6 segmentów" },
-    { id: "2x8", label: "2×8", hint: "2 poziomy × 8 segmentów" },
-    { id: "empty", label: "Pusty regał", hint: "1 poziom, 1 segment" },
-  ];
-
-  const toggleLevel = (clientId: string) => {
-    onExpandLevel(expandedLevelId === clientId ? null : clientId);
-  };
+  const showPresetSection = !readOnly && onApplyPreset;
 
   return (
     <div className="space-y-4">
@@ -159,147 +151,73 @@ export default function ConsolidationRackStructureEditor({
         </div>
       </section>
 
-      {showPresets && !readOnly ? (
+      {showPresetSection ? (
         <section>
-          <h2 className="text-xs font-bold uppercase tracking-wide text-slate-600">Szybki preset</h2>
-          <div className="mt-2 grid grid-cols-2 gap-1.5">
-            {PRESETS.map((p) => (
+          {presetPickerOpen || !appliedPreset ? (
+            <>
+              <h2 className="text-xs font-bold uppercase tracking-wide text-slate-600">Szybki preset</h2>
+              <div className="mt-2 grid grid-cols-2 gap-1.5">
+                {PRESETS.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    title={p.hint}
+                    onClick={() => onApplyPreset?.(p.id)}
+                    className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-left text-xs font-medium text-slate-800 hover:border-violet-300 hover:bg-violet-50/50"
+                  >
+                    {RACK_PRESET_LABELS[p.id]}
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs">
+              <span className="text-slate-600">
+                Preset: <span className="font-semibold text-slate-900">{RACK_PRESET_LABELS[appliedPreset]}</span>
+              </span>
               <button
-                key={p.id}
                 type="button"
-                title={p.hint}
-                onClick={() => onChange(applyRackPreset(p.id, draft.warehouseId))}
-                className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-left text-xs font-medium text-slate-800 hover:border-violet-300 hover:bg-violet-50/50"
+                onClick={() => onChangePreset?.()}
+                className="rounded border border-violet-200 px-2 py-0.5 font-medium text-violet-900 hover:bg-violet-50/60"
               >
-                {p.label}
+                Zmień preset
               </button>
-            ))}
-          </div>
+            </div>
+          )}
         </section>
       ) : null}
 
       <section>
         <div className="flex items-center justify-between gap-2">
-          <h2 className="text-xs font-bold uppercase tracking-wide text-slate-600">Poziomy</h2>
-          <span className="text-[11px] tabular-nums text-slate-500">{draft.levels.length} · {totalSegments} seg.</span>
+          <h2 className="text-xs font-bold uppercase tracking-wide text-slate-600">Struktura regału</h2>
+          <span className="text-[11px] tabular-nums text-slate-500">{draft.levels.length} poz. · {totalSegments} seg.</span>
         </div>
 
-        <div className="mt-2 space-y-1.5">
-          {draft.levels.map((lv) => {
-            const expanded = expandedLevelId === lv.clientId;
-            const usage = levelWidthUsage(lv, draft.totalWidthMm);
-            const levelTitle = lv.name.trim() || String.fromCharCode(65 + lv.levelIndex);
-            return (
-              <div key={lv.clientId} className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-                <div className="flex items-center gap-1 px-2 py-2">
-                  <button
-                    type="button"
-                    className="flex min-w-0 flex-1 items-center gap-1.5 text-left hover:opacity-80"
-                    onClick={() => toggleLevel(lv.clientId)}
-                  >
-                    {expanded ? (
-                      <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-500" />
-                    ) : (
-                      <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-500" />
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <div className="text-sm font-semibold text-slate-800">Poziom {levelTitle}</div>
-                      <div className="text-[10px] tabular-nums text-slate-500">
-                        {lv.segments.length} seg. · {usage.usedMm}/{usage.targetMm || "—"} mm
-                      </div>
-                    </div>
-                  </button>
-                  {!readOnly && !structureLocked && draft.levels.length > 1 ? (
-                    <button
-                      type="button"
-                      onClick={() => onChange(removeLevel(draft, lv.clientId))}
-                      className="inline-flex h-6 shrink-0 items-center rounded border border-red-200 px-1.5 text-red-700 hover:bg-red-50"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </button>
-                  ) : null}
-                </div>
-
-                {expanded ? (
-                  <div className="space-y-2 border-t border-slate-200/60 bg-white px-2 py-2">
-                    <div className="grid grid-cols-2 gap-2">
-                      <label className="block">
-                        <span className={cartsFieldLabelClass}>Nazwa</span>
-                        {readOnly ? (
-                          <div className="mt-0.5 text-sm text-slate-800">{lv.name || "—"}</div>
-                        ) : (
-                          <input
-                            type="text"
-                            value={lv.name}
-                            onChange={(e) => updateLevel(lv.clientId, { name: e.target.value })}
-                            className={`${cartsAppInputClass} mt-0.5 font-mono text-sm`}
-                          />
-                        )}
-                      </label>
-                      <DimInput
-                        label="Wysokość (mm)"
-                        value={lv.levelHeightMm}
-                        onChange={(v) => updateLevel(lv.clientId, { levelHeightMm: v })}
-                        readOnly={readOnly}
-                      />
-                    </div>
-
-                    <label className="block">
-                      <span className={cartsFieldLabelClass}>Liczba segmentów</span>
-                      {readOnly || structureLocked ? (
-                        <div className="mt-0.5 tabular-nums text-sm font-medium">{lv.segments.length}</div>
-                      ) : (
-                        <input
-                          type="number"
-                          min={1}
-                          max={50}
-                          value={lv.segments.length}
-                          onChange={(e) => {
-                            const n = Math.max(1, Math.min(50, Number(e.target.value) || 1));
-                            onChange(setLevelSegmentCount(draft, lv.clientId, n));
-                          }}
-                          className={`${cartsAppInputClass} mt-0.5 w-20 tabular-nums text-sm`}
-                        />
-                      )}
-                    </label>
-
-                    <LevelSegmentTable
-                      draft={draft}
-                      level={lv}
-                      readOnly={readOnly}
-                      selection={selection}
-                      onChange={onChange}
-                      onSelectSegment={onSelectSegment}
-                    />
-
-                    <div
-                      className={`rounded border px-2 py-1 text-[10px] tabular-nums ${
-                        usage.valid
-                          ? "border-emerald-200 bg-white text-emerald-900"
-                          : "border-red-200 bg-white font-medium text-red-900"
-                      }`}
-                    >
-                      Wykorzystano {usage.usedMm} / {usage.targetMm || "—"} mm
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            );
-          })}
+        <div className="mt-2">
+          <RackStructureTree
+            draft={draft}
+            readOnly={readOnly}
+            structureLocked={structureLocked}
+            focusedLevelId={focusedLevelId}
+            selection={selection}
+            onChange={onChange}
+            onSelectLevel={onSelectLevel}
+            onSelectSegment={onSelectSegment}
+          />
         </div>
 
         {!readOnly && !structureLocked ? (
           <button
             type="button"
             onClick={() => onChange(addLevel(draft))}
-            className="mt-2 inline-flex h-8 w-full items-center justify-center gap-1 rounded-lg border border-violet-200 bg-white text-xs font-medium text-violet-900 hover:bg-violet-50"
+            className="mt-2 inline-flex h-8 w-full items-center justify-center gap-1 rounded-lg border border-violet-200 bg-white text-xs font-medium text-violet-900 hover:bg-violet-50/60"
           >
             <Plus className="h-3.5 w-3.5" />
             Dodaj poziom
           </button>
         ) : structureLocked ? (
           <p className="mt-2 text-[11px] text-slate-500">
-            Kliknij segment na liście lub w podglądzie, aby edytować wymiary.
+            Kliknij segment w drzewie lub podglądzie, aby edytować wymiary.
           </p>
         ) : null}
       </section>

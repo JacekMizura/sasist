@@ -27,7 +27,7 @@ export default function ConsolidationRackPreviewPage() {
   const [error, setError] = useState<string | null>(null);
   const [rack, setRack] = useState<ConsolidationRack | null>(null);
   const [draft, setDraft] = useState<RackStructureDraft | null>(null);
-  const [expandedLevelId, setExpandedLevelId] = useState<string | null>(null);
+  const [focusedLevelId, setFocusedLevelId] = useState<string | null>(null);
   const [selection, setSelection] = useState<SegmentSelection>(null);
 
   const loadRack = useCallback(async (id: number) => {
@@ -38,7 +38,7 @@ export default function ConsolidationRackPreviewPage() {
       setRack(data);
       const nextDraft = apiRackToDraft(data);
       setDraft(nextDraft);
-      setExpandedLevelId(nextDraft.levels[0]?.clientId ?? null);
+      setFocusedLevelId(nextDraft.levels[0]?.clientId ?? null);
       setSelection(null);
     } catch (err: unknown) {
       console.error("[ConsolidationRackPreview] load error:", err);
@@ -63,8 +63,13 @@ export default function ConsolidationRackPreviewPage() {
     ?? warehouse?.name
     ?? "—";
 
+  const selectLevel = useCallback((levelClientId: string) => {
+    setFocusedLevelId(levelClientId);
+    setSelection(null);
+  }, []);
+
   const selectSegment = useCallback((levelClientId: string, segmentClientId: string) => {
-    setExpandedLevelId(levelClientId);
+    setFocusedLevelId(levelClientId);
     setSelection({ levelClientId, segmentClientId });
   }, []);
 
@@ -109,7 +114,7 @@ export default function ConsolidationRackPreviewPage() {
         headerActions={
           <Link
             to={`/carts/racks/${rack.id}/edit`}
-            className="inline-flex h-9 items-center gap-1.5 rounded-md border border-violet-200 bg-violet-50 px-3 text-[13px] font-medium text-violet-900 hover:bg-violet-100"
+            className="inline-flex h-9 items-center gap-1.5 rounded-md border border-violet-200 bg-white px-3 text-[13px] font-medium text-violet-900 hover:bg-violet-50/60"
           >
             <Pencil className="h-4 w-4" />
             Edytuj
@@ -135,8 +140,8 @@ export default function ConsolidationRackPreviewPage() {
             showWarehouseSelect={false}
             structureLocked
             readOnly
-            expandedLevelId={expandedLevelId}
-            onExpandLevel={setExpandedLevelId}
+            focusedLevelId={focusedLevelId}
+            onSelectLevel={selectLevel}
             selection={selection}
             onSelectSegment={selectSegment}
           />
@@ -149,6 +154,7 @@ export default function ConsolidationRackPreviewPage() {
                 showOccupancy
                 occupancyBySegmentId={occupancyBySegmentId}
                 selection={selection}
+                focusedLevelId={focusedLevelId}
                 interactive
                 onSegmentClick={selectSegment}
               />

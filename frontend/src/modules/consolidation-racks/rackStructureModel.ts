@@ -124,23 +124,34 @@ export function addSegment(draft: RackStructureDraft, levelClientId: string): Ra
     ...draft,
     levels: draft.levels.map((lv) => {
       if (lv.clientId !== levelClientId) return lv;
-      const idx = lv.segments.length;
-      const used = lv.segments.reduce((s, seg) => s + (seg.widthMm ?? 0), 0);
-      const remaining =
-        draft.totalWidthMm != null ? Math.max(100, draft.totalWidthMm - used) : 500;
-      return {
-        ...lv,
-        segments: [
-          ...lv.segments,
-          createEmptySegment(idx, {
-            widthMm: remaining,
-            depthMm: draft.totalDepthMm,
-            heightMm: lv.levelHeightMm,
-          }),
-        ],
-      };
+      const src = lv.segments[0];
+      const next = [
+        ...lv.segments,
+        createEmptySegment(lv.segments.length, {
+          widthMm: null,
+          depthMm: src?.depthMm ?? draft.totalDepthMm,
+          heightMm: src?.heightMm ?? lv.levelHeightMm,
+        }),
+      ];
+      return { ...lv, segments: redistributeSegmentWidths(next, draft.totalWidthMm) };
     }),
   };
+}
+
+function redistributeSegmentWidths(
+  segments: SegmentDraft[],
+  totalWidthMm: number | null,
+): SegmentDraft[] {
+  const n = segments.length;
+  if (n === 0) return segments;
+  const totalW = totalWidthMm ?? 2000;
+  const baseWidth = Math.floor(totalW / n);
+  const lastWidth = totalW - baseWidth * (n - 1);
+  return segments.map((s, i) => ({
+    ...s,
+    segmentIndex: i,
+    widthMm: i === n - 1 ? lastWidth : baseWidth,
+  }));
 }
 
 export function removeSegment(
@@ -152,22 +163,51 @@ export function removeSegment(
     ...draft,
     levels: draft.levels.map((lv) => {
       if (lv.clientId !== levelClientId) return lv;
-      const next = lv.segments.filter((s) => s.clientId !== segmentClientId);
+      const filtered = lv.segments.filter((s) => s.clientId !== segmentClientId);
+      const next =
+        filtered.length > 0
+          ? filtered
+          : [
+              createEmptySegment(0, {
+                widthMm: draft.totalWidthMm,
+                depthMm: draft.totalDepthMm,
+                heightMm: lv.levelHeightMm,
+              }),
+            ];
       return {
         ...lv,
-        segments:
-          next.length > 0
-            ? next
-            : [
-                createEmptySegment(0, {
-                  widthMm: draft.totalWidthMm,
-                  depthMm: draft.totalDepthMm,
-                  heightMm: lv.levelHeightMm,
-                }),
-              ],
+        segments: redistributeSegmentWidths(next, draft.totalWidthMm),
       };
     }),
   };
+}
+
+/** Kopiuje poziom (wysokość, segmenty, wymiary, nazwy) — wstawia tuż pod źródłem. */
+export function duplicateLevel(
+  draft: RackStructureDraft,
+  levelClientId: string,
+  options?: { resetNames?: boolean },
+): RackStructureDraft {
+  const srcIdx = draft.levels.findIndex((l) => l.clientId === levelClientId);
+  if (srcIdx < 0) return draft;
+  const src = draft.levels[srcIdx]!;
+  const duplicated: LevelDraft = {
+    clientId: newClientId("lv"),
+    levelIndex: srcIdx + 1,
+    name: columnLetter(draft.levels.length),
+    levelHeightMm: src.levelHeightMm,
+    segments: src.segments.map((seg, si) => ({
+      clientId: newClientId("seg"),
+      segmentIndex: si,
+      slotLabel: options?.resetNames ? "" : seg.slotLabel,
+      depthMm: seg.depthMm,
+      widthMm: seg.widthMm,
+      heightMm: seg.heightMm,
+    })),
+  };
+  const levels = [...draft.levels];
+  levels.splice(srcIdx + 1, 0, duplicated);
+  return { ...draft, levels: reindexLevels(levels) };
 }
 
 /** Ustaw liczbę segmentów na poziomie — równy podział szerokości regału (jak „lokacje na poziom” w szablonie). */
@@ -439,6 +479,13 @@ export function levelWidthUsage(lv: LevelDraft, targetMm: number | null): { used
 }
 
 export type RackPresetId = "4x4" | "3x6" | "2x8" | "empty";
+
+export const RACK_PRESET_LABELS: Record<RackPresetId, string> = {
+  "4x4": "4×4",
+  "3x6": "3×6",
+  "2x8": "2×8",
+  empty: "Pusty regał",
+};
 
 function buildPresetLevels(
   levelCount: number,

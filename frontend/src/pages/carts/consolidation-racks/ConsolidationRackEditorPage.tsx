@@ -13,6 +13,7 @@ import type { ConsolidationRack } from "../../../modules/consolidation-racks/con
 import { rackOccupancyStats } from "../../../modules/consolidation-racks/rackLayoutUtils";
 import {
   apiRackToDraft,
+  applyRackPreset,
   buildSegmentOccupancyMap,
   createDefaultRackDraft,
   draftToApiPayload,
@@ -21,6 +22,7 @@ import {
   segmentDisplayLabel,
   segmentDraftPayload,
   validateRackDraft,
+  type RackPresetId,
   type RackStructureDraft,
   type SegmentDraft,
   type SegmentSelection,
@@ -38,25 +40,27 @@ export default function ConsolidationRackEditorPage() {
   const [error, setError] = useState<string | null>(null);
   const [rack, setRack] = useState<ConsolidationRack | null>(null);
   const [draft, setDraft] = useState<RackStructureDraft>(() => createDefaultRackDraft(warehouse?.id ?? 1));
-  const [expandedLevelId, setExpandedLevelId] = useState<string | null>(null);
+  const [focusedLevelId, setFocusedLevelId] = useState<string | null>(null);
   const [selection, setSelection] = useState<SegmentSelection>(null);
+  const [appliedPreset, setAppliedPreset] = useState<RackPresetId | null>(null);
+  const [presetPickerOpen, setPresetPickerOpen] = useState(true);
 
   const initNavigation = useCallback((nextDraft: RackStructureDraft) => {
     const firstLevel = nextDraft.levels[0];
     if (!firstLevel) {
-      setExpandedLevelId(null);
+      setFocusedLevelId(null);
       setSelection(null);
       return;
     }
-    setExpandedLevelId(firstLevel.clientId);
+    setFocusedLevelId(firstLevel.clientId);
     setSelection(null);
   }, []);
 
   useEffect(() => {
-    if (expandedLevelId == null && draft.levels[0]) {
-      setExpandedLevelId(draft.levels[0].clientId);
+    if (focusedLevelId == null && draft.levels[0]) {
+      setFocusedLevelId(draft.levels[0].clientId);
     }
-  }, [draft.levels, expandedLevelId]);
+  }, [draft.levels, focusedLevelId]);
 
   const handleDraftChange = useCallback((next: RackStructureDraft) => {
     setDraft(next);
@@ -65,16 +69,32 @@ export default function ConsolidationRackEditorPage() {
       const hit = findSegmentInDraft(next, sel.levelClientId, sel.segmentClientId);
       return hit ? sel : null;
     });
-    setExpandedLevelId((exp) => {
-      if (exp && next.levels.some((l) => l.clientId === exp)) return exp;
+    setFocusedLevelId((focused) => {
+      if (focused && next.levels.some((l) => l.clientId === focused)) return focused;
       return next.levels[0]?.clientId ?? null;
     });
   }, []);
 
+  const selectLevel = useCallback((levelClientId: string) => {
+    setFocusedLevelId(levelClientId);
+    setSelection(null);
+  }, []);
+
   const selectSegment = useCallback((levelClientId: string, segmentClientId: string) => {
-    setExpandedLevelId(levelClientId);
+    setFocusedLevelId(levelClientId);
     setSelection({ levelClientId, segmentClientId });
   }, []);
+
+  const handleApplyPreset = useCallback(
+    (preset: RackPresetId) => {
+      const next = applyRackPreset(preset, draft.warehouseId);
+      handleDraftChange(next);
+      setAppliedPreset(preset);
+      setPresetPickerOpen(false);
+      initNavigation(next);
+    },
+    [draft.warehouseId, handleDraftChange, initNavigation],
+  );
 
   const loadRack = useCallback(async (id: number) => {
     setLoading(true);
@@ -229,13 +249,13 @@ export default function ConsolidationRackEditorPage() {
 
       <ConsolidationRackFormShell
         title={isCreate ? "Nowy regał kompletacyjny" : "Edycja regału"}
-        subtitle="Podgląd regału + edycja pojedynczego segmentu — skaluje się do dużych układów"
+        subtitle="Buduj regał poziom po poziomie — drzewo struktury, podgląd na żywo, edycja jednego segmentu"
         backTo="/carts/racks"
         headerActions={
           !isCreate ? (
             <Link
               to={`/carts/racks/${rackId}/preview`}
-              className="inline-flex h-9 items-center rounded-md border border-slate-200 bg-white px-3 text-[13px] font-medium text-slate-700 hover:bg-slate-50"
+              className="inline-flex h-9 items-center rounded-md border border-slate-200 bg-white px-3 text-[13px] font-medium text-slate-700 hover:bg-violet-50/40"
             >
               Podgląd
             </Link>
@@ -262,9 +282,12 @@ export default function ConsolidationRackEditorPage() {
             warehouses={warehouses}
             showWarehouseSelect={isCreate && showWarehouseSelector}
             structureLocked={!isCreate}
-            showPresets={isCreate}
-            expandedLevelId={expandedLevelId}
-            onExpandLevel={setExpandedLevelId}
+            appliedPreset={appliedPreset}
+            presetPickerOpen={presetPickerOpen}
+            onApplyPreset={isCreate ? handleApplyPreset : undefined}
+            onChangePreset={() => setPresetPickerOpen(true)}
+            focusedLevelId={focusedLevelId}
+            onSelectLevel={selectLevel}
             selection={selection}
             onSelectSegment={selectSegment}
           />
@@ -277,6 +300,7 @@ export default function ConsolidationRackEditorPage() {
                 showOccupancy={!isCreate}
                 occupancyBySegmentId={occupancyBySegmentId}
                 selection={selection}
+                focusedLevelId={focusedLevelId}
                 interactive
                 onSegmentClick={selectSegment}
               />
@@ -295,7 +319,7 @@ export default function ConsolidationRackEditorPage() {
               </div>
             ) : (
               <div className="hidden w-[260px] shrink-0 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white px-4 py-8 text-center text-xs text-slate-500 lg:flex">
-                Kliknij segment w podglądzie lub na liście po lewej, aby edytować wymiary.
+                Kliknij segment w drzewie lub podglądzie, aby edytować wymiary.
               </div>
             )}
           </div>

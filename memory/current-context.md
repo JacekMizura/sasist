@@ -1,5 +1,13 @@
 # Current context
 
+## P5.12D — Refaktor UX kreatora (wersja magazynowa) (2026-06-08)
+- Lewa kolumna: drzewo poziomów/segmentów (`RackStructureTree`) zamiast tabeli inline
+- Klik poziomu → zaznaczenie + edycja wys./nazwy; klik segmentu → panel po prawej
+- `+ Dodaj segment` / usuń segment (równy podział szerokości); `Duplikuj poziom` (`duplicateLevel`)
+- Presety: widoczne do wyboru, potem „Preset: 4×4” + [Zmień preset]
+- Podgląd: przełącznik Układ | Wymiary | Pojemność (jeden tryb naraz)
+- Usunięto `LevelSegmentTable`; skaluje się do dużych regałów (drzewo scroll + 1 formularz)
+
 ## P5.12E — Usprawnienie konfiguracji segmentów (2026-06-08)
 - Podgląd segmentu: nazwa + SZ/GŁ/WYS (lub `W×D×H` w kompaktowych komórkach) + dm³ — bez samotnego „500 mm”
 - Rozwinięty poziom: tabela segmentów (`LevelSegmentTable`) — Seg, SZ, GŁ, WYS, Nazwa + operacje masowe
