@@ -1,5 +1,15 @@
 # Current context
 
+## P4.8 — Ujednolicenie modułu Zestawów z Produktami (2026-06-08)
+- Zestaw używa tego samego `ProductLikePageLayout` co produkt: stat cards, SKU/EAN pod tytułem, save w headerze, `hideVerticalRail`, ikony w tabs
+- Usunięto prawy pionowy navigator; pełna szerokość na treść
+- Zakładki: Podstawowe, Produkty, Magazyn, **Zdjęcia**, Historia, Logi, Powiązania, **Etykieta**
+- **`CatalogEntityGallerySection`** + **`useCatalogEntityGallery`** — wspólna galeria (produkt może migrować później)
+- Tab Produkty: tabela (Zdjęcie, Produkt, SKU, EAN, Ilość, Akcje) + bogata wyszukiwarka z miniaturą
+- Składniki: czytelne „Stan magazynowy / Ilość w zestawie / Maks. liczba zestawów”
+- Wymiary opakowania zestawu (mm/kg) w Podstawowych + backend `length_mm`, `width_mm`, `height_mm`, `weight_kg`, `metadata_json`
+- Tab Magazyn: dostępność ze składników + tabela per produkt
+
 ## P5.12J — Ujednolicenie OMS i WMS dla regałów kompletacyjnych (2026-06-08)
 - OMS = źródło prawdy struktury; WMS = ten sam układ fizyczny + nakładka operacyjna
 - **`ConsolidationRackRenderer`** — wspólna geometria (poziomy, segmenty, proporcje); bez logiki modułu

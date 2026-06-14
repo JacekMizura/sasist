@@ -1662,6 +1662,24 @@ def ensure_bundles_tables_and_order_item_bundle_columns(engine: Engine) -> None:
         conn.commit()
 
 
+def ensure_bundles_logistics_and_metadata_columns(engine: Engine) -> None:
+    """Packaging dimensions (mm/kg) and metadata_json for bundle gallery."""
+    if not _table_exists(engine, "bundles"):
+        return
+    cols = _table_column_names(engine, "bundles")
+    with engine.begin() as conn:
+        if "length_mm" not in cols:
+            conn.execute(text("ALTER TABLE bundles ADD COLUMN length_mm FLOAT"))
+        if "width_mm" not in cols:
+            conn.execute(text("ALTER TABLE bundles ADD COLUMN width_mm FLOAT"))
+        if "height_mm" not in cols:
+            conn.execute(text("ALTER TABLE bundles ADD COLUMN height_mm FLOAT"))
+        if "weight_kg" not in cols:
+            conn.execute(text("ALTER TABLE bundles ADD COLUMN weight_kg FLOAT"))
+        if "metadata_json" not in cols:
+            conn.execute(text("ALTER TABLE bundles ADD COLUMN metadata_json TEXT"))
+
+
 def ensure_order_items_packing_quantity_packed_column(engine: Engine) -> None:
     """WMS pakowanie: własna ilość spakowana per pozycja (bez Pick / zbierania)."""
     cols = _cols(engine, "order_items")

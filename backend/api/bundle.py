@@ -78,6 +78,8 @@ def _serialize_bundle(b: Bundle, stock_map: Dict[int, int]) -> BundleRead:
         )
     calc = _compute_calculated_stock(raw_items, stock_map)
     img = (getattr(b, "image_url", None) or "").strip() or None
+    meta_raw = getattr(b, "metadata_json", None)
+    meta_s = str(meta_raw).strip() if meta_raw is not None and str(meta_raw).strip() else None
     return BundleRead(
         id=b.id,
         tenant_id=b.tenant_id,
@@ -87,6 +89,11 @@ def _serialize_bundle(b: Bundle, stock_map: Dict[int, int]) -> BundleRead:
         sale_price=float(b.sale_price) if b.sale_price is not None else None,
         active=bool(b.active),
         image_url=img,
+        length_mm=float(b.length_mm) if getattr(b, "length_mm", None) is not None else None,
+        width_mm=float(b.width_mm) if getattr(b, "width_mm", None) is not None else None,
+        height_mm=float(b.height_mm) if getattr(b, "height_mm", None) is not None else None,
+        weight_kg=float(b.weight_kg) if getattr(b, "weight_kg", None) is not None else None,
+        metadata_json=meta_s,
         calculated_stock=calc,
         items=items_out,
     )
@@ -257,6 +264,7 @@ def create_bundle(body: BundleCreateBody, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Bundle must have at least one component")
     _validate_bundle_items(db, body.tenant_id, body.items)
     img = (body.image_url or "").strip() or None if body.image_url is not None else None
+    meta = (body.metadata_json or "").strip() or None if body.metadata_json is not None else None
     b = Bundle(
         tenant_id=body.tenant_id,
         name=body.name.strip(),
@@ -265,6 +273,11 @@ def create_bundle(body: BundleCreateBody, db: Session = Depends(get_db)):
         sale_price=body.sale_price,
         active=bool(body.active),
         image_url=img,
+        length_mm=body.length_mm,
+        width_mm=body.width_mm,
+        height_mm=body.height_mm,
+        weight_kg=body.weight_kg,
+        metadata_json=meta,
     )
     db.add(b)
     db.flush()
@@ -311,6 +324,12 @@ def update_bundle(
     b.active = bool(body.active)
     if body.image_url is not None:
         b.image_url = (body.image_url or "").strip() or None
+    b.length_mm = body.length_mm
+    b.width_mm = body.width_mm
+    b.height_mm = body.height_mm
+    b.weight_kg = body.weight_kg
+    if body.metadata_json is not None:
+        b.metadata_json = (body.metadata_json or "").strip() or None
     db.query(BundleItem).filter(BundleItem.bundle_id == b.id).delete(synchronize_session=False)
     for it in body.items:
         db.add(

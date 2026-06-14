@@ -23,6 +23,11 @@ export type BundleRead = {
   sale_price?: number | null;
   active: boolean;
   image_url?: string | null;
+  length_mm?: number | null;
+  width_mm?: number | null;
+  height_mm?: number | null;
+  weight_kg?: number | null;
+  metadata_json?: string | null;
   /** min(floor(stock/qty)) over components */
   calculated_stock?: number | null;
   items: BundleItemRead[];
@@ -42,6 +47,11 @@ export type BundleCreatePayload = {
   sale_price?: number | null;
   active?: boolean;
   image_url?: string | null;
+  length_mm?: number | null;
+  width_mm?: number | null;
+  height_mm?: number | null;
+  weight_kg?: number | null;
+  metadata_json?: string | null;
   items: BundleItemWrite[];
 };
 
@@ -52,6 +62,11 @@ export type BundleUpdatePayload = {
   sale_price?: number | null;
   active?: boolean;
   image_url?: string | null;
+  length_mm?: number | null;
+  width_mm?: number | null;
+  height_mm?: number | null;
+  weight_kg?: number | null;
+  metadata_json?: string | null;
   items: BundleItemWrite[];
 };
 

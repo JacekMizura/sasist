@@ -17,6 +17,13 @@ class Bundle(Base):
     sale_price = Column(Float, nullable=True)
     active = Column(Boolean, nullable=False, default=True)
     image_url = Column(String, nullable=True)
+    #: Wymiary gotowego opakowania zestawu (mm / kg) — nie składników.
+    length_mm = Column(Float, nullable=True)
+    width_mm = Column(Float, nullable=True)
+    height_mm = Column(Float, nullable=True)
+    weight_kg = Column(Float, nullable=True)
+    #: Galeria zdjęć, etykieta itp. (JSON).
+    metadata_json = Column(Text, nullable=True)
     #: Archiwizacja — ukrycie z listy; pozycje z source_bundle_id zachowują odniesienie.
     deleted_at = Column(DateTime, nullable=True, index=True)
 

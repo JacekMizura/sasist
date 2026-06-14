@@ -1,17 +1,27 @@
 import type { LucideIcon } from "lucide-react";
-import { History, LayoutList, Link2, Package, ScrollText, Warehouse } from "lucide-react";
+import { History, ImageIcon, LayoutList, Link2, Package, Printer, ScrollText, Warehouse } from "lucide-react";
 
 import type { BundleItemWrite } from "../../api/bundlesApi";
 
-export type BundleEditTabId = "basic" | "products" | "warehouse" | "history" | "logs" | "relations";
+export type BundleEditTabId =
+  | "basic"
+  | "products"
+  | "warehouse"
+  | "images"
+  | "history"
+  | "logs"
+  | "relations"
+  | "labelSheet";
 
 export const BUNDLE_EDIT_TABS: { id: BundleEditTabId; label: string; icon: LucideIcon }[] = [
   { id: "basic", label: "Podstawowe", icon: LayoutList },
   { id: "products", label: "Produkty", icon: Package },
   { id: "warehouse", label: "Magazyn", icon: Warehouse },
+  { id: "images", label: "Zdjęcia", icon: ImageIcon },
   { id: "history", label: "Historia", icon: History },
   { id: "logs", label: "Logi", icon: ScrollText },
   { id: "relations", label: "Powiązania", icon: Link2 },
+  { id: "labelSheet", label: "Etykieta", icon: Printer },
 ];
 
 export type CatalogProduct = {
@@ -21,6 +31,7 @@ export type CatalogProduct = {
   symbol?: string | null;
   sku?: string | null;
   stock_quantity?: number;
+  image_url?: string | null;
 };
 
 export type ProductSummary = {
@@ -28,6 +39,7 @@ export type ProductSummary = {
   sku: string;
   ean: string | null;
   stock: number;
+  imageUrl: string | null;
 };
 
 export type BundleComponentRow = {

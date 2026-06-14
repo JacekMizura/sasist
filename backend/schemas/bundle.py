@@ -38,6 +38,11 @@ class BundleRead(BaseModel):
     sale_price: Optional[float] = None
     active: bool = True
     image_url: Optional[str] = None
+    length_mm: Optional[float] = None
+    width_mm: Optional[float] = None
+    height_mm: Optional[float] = None
+    weight_kg: Optional[float] = None
+    metadata_json: Optional[str] = None
     """min(floor(product_stock / required_qty)) over components; None if bundle has no lines."""
     calculated_stock: Optional[int] = None
     items: List[BundleItemRead] = Field(default_factory=list)
@@ -60,6 +65,11 @@ class BundleCreateBody(BaseModel):
     sale_price: Optional[float] = None
     active: bool = True
     image_url: Optional[str] = None
+    length_mm: Optional[float] = None
+    width_mm: Optional[float] = None
+    height_mm: Optional[float] = None
+    weight_kg: Optional[float] = None
+    metadata_json: Optional[str] = None
     items: List[BundleItemWrite] = Field(default_factory=list)
 
     @field_validator("name")
@@ -78,6 +88,11 @@ class BundleUpdateBody(BaseModel):
     sale_price: Optional[float] = None
     active: bool = True
     image_url: Optional[str] = None
+    length_mm: Optional[float] = None
+    width_mm: Optional[float] = None
+    height_mm: Optional[float] = None
+    weight_kg: Optional[float] = None
+    metadata_json: Optional[str] = None
     items: List[BundleItemWrite] = Field(default_factory=list)
 
     @field_validator("name")
