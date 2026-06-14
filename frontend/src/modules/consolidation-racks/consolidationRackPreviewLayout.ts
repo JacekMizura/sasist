@@ -1,4 +1,4 @@
-import { computeCapacityDm3, computeSlotLabel } from "./rackLayoutUtils";
+import { computeCapacityDm3, computeSlotLabel, type RackGridLevel } from "./rackLayoutUtils";
 import type { LevelDraft, RackStructureDraft, SegmentDraft } from "./rackStructureModel";
 
 /** Wizualne tokeny zgodne z `TemplateCreator` / `RackPreview`. */
@@ -135,9 +135,11 @@ export function formatPreviewDimsMultiline(w: number, d: number, h: number): [st
   return [`SZ ${Math.round(w)}`, `GŁ ${Math.round(d)}`, `WYS ${Math.round(h)}`];
 }
 
-export type OmsPreviewCell = {
+/** Kanoniczna komórka układu regału (OMS + WMS). */
+export type RackLayoutCell = {
   key: string;
   levelClientId: string;
+  segmentId?: number;
   label: string;
   widthMm: number;
   depthMm: number;
@@ -147,67 +149,38 @@ export type OmsPreviewCell = {
   widthFraction: number;
 };
 
-export type OmsPreviewRow = {
+/** Kanoniczny wiersz = jeden poziom regału. */
+export type RackLayoutRow = {
   key: string;
   levelClientId: string;
   levelLabel: string;
   levelHeightMm: number;
   bandHeightPx: number;
-  cells: OmsPreviewCell[];
+  cells: RackLayoutCell[];
 };
 
-export function buildOmsPreviewRows(
-  draft: import("./rackStructureModel").RackStructureDraft,
+export type OmsPreviewCell = RackLayoutCell;
+export type OmsPreviewRow = RackLayoutRow;
+
+type RackLayoutRowDraft = Omit<RackLayoutRow, "bandHeightPx">;
+
+function normalizeCellWidthFractions(
+  cells: Omit<RackLayoutCell, "widthFraction">[],
+): RackLayoutCell[] {
+  const widthSum = cells.reduce((s, c) => s + Math.max(0, c.widthMm), 0);
+  const n = cells.length;
+  return cells.map((c) => ({
+    ...c,
+    widthFraction:
+      widthSum > 0 ? Math.max(0, c.widthMm) / widthSum : n > 0 ? 1 / n : 1,
+  }));
+}
+
+function applyRackLayoutBandHeights(
+  raw: RackLayoutRowDraft[],
   viewportHeightPx: number,
-): OmsPreviewRow[] {
-  const raw = draft.levels.map((lv) => {
-    const levelName = lv.name.trim() || String.fromCharCode(65 + lv.levelIndex);
-    const isSegmented = lv.segments.length > 1;
-    const levelHeightMm = Math.max(
-      1,
-      lv.levelHeightMm ?? 500,
-      ...lv.segments.map((s) => s.heightMm ?? lv.levelHeightMm ?? 500),
-    );
-    const cellsRaw = lv.segments.map((seg) => {
-      const widthMm = seg.widthMm ?? 0;
-      const depthMm = seg.depthMm ?? 0;
-      const heightMm = seg.heightMm ?? lv.levelHeightMm ?? 0;
-      return {
-        key: seg.clientId,
-        levelClientId: lv.clientId,
-        label: computeSlotLabel(
-          levelName,
-          lv.levelIndex,
-          seg.segmentIndex,
-          isSegmented,
-          seg.slotLabel || null,
-        ),
-        widthMm,
-        depthMm,
-        heightMm,
-        capacityDm3: computeCapacityDm3(seg.depthMm, seg.widthMm, heightMm),
-        widthFraction: 0,
-      };
-    });
-    const widthSum = cellsRaw.reduce((s, c) => s + Math.max(0, c.widthMm), 0);
-    const n = cellsRaw.length;
-    const cells = cellsRaw.map((c) => ({
-      ...c,
-      widthFraction:
-        widthSum > 0
-          ? Math.max(0, c.widthMm) / widthSum
-          : n > 0
-            ? 1 / n
-            : 1,
-    }));
-    return {
-      key: lv.clientId,
-      levelClientId: lv.clientId,
-      levelLabel: levelName,
-      levelHeightMm,
-      cells,
-    };
-  });
+): RackLayoutRow[] {
+  if (raw.length === 0) return [];
 
   const levelCount = raw.length;
   const minBand =
@@ -227,6 +200,120 @@ export function buildOmsPreviewRows(
   }
 
   return raw.map((row) => ({ ...row, bandHeightPx: minBand }));
+}
+
+export function buildRackLayoutRowsFromDraft(
+  draft: RackStructureDraft,
+  viewportHeightPx: number,
+): RackLayoutRow[] {
+  const raw: RackLayoutRowDraft[] = draft.levels.map((lv) => {
+    const levelName = lv.name.trim() || String.fromCharCode(65 + lv.levelIndex);
+    const isSegmented = lv.segments.length > 1;
+    const levelHeightMm = Math.max(
+      1,
+      lv.levelHeightMm ?? 500,
+      ...lv.segments.map((s) => s.heightMm ?? lv.levelHeightMm ?? 500),
+    );
+    const cellsRaw = lv.segments.map((seg) => {
+      const widthMm = seg.widthMm ?? 0;
+      const depthMm = seg.depthMm ?? 0;
+      const heightMm = seg.heightMm ?? lv.levelHeightMm ?? 0;
+      return {
+        key: seg.clientId,
+        levelClientId: lv.clientId,
+        segmentId: seg.segmentId,
+        label: computeSlotLabel(
+          levelName,
+          lv.levelIndex,
+          seg.segmentIndex,
+          isSegmented,
+          seg.slotLabel || null,
+        ),
+        widthMm,
+        depthMm,
+        heightMm,
+        capacityDm3: computeCapacityDm3(seg.depthMm, seg.widthMm, heightMm),
+        widthFraction: 0,
+      };
+    });
+    return {
+      key: lv.clientId,
+      levelClientId: lv.clientId,
+      levelLabel: levelName,
+      levelHeightMm,
+      cells: normalizeCellWidthFractions(cellsRaw),
+    };
+  });
+
+  return applyRackLayoutBandHeights(raw, viewportHeightPx);
+}
+
+export function buildRackLayoutRowsFromGridLevels(
+  levels: RackGridLevel[],
+  viewportHeightPx: number,
+): RackLayoutRow[] {
+  const sorted = [...levels].sort((a, b) => a.level_index - b.level_index);
+  const raw: RackLayoutRowDraft[] = sorted.map((lv, levelIndex) => {
+    const levelName = (lv.name ?? "").trim() || String.fromCharCode(65 + levelIndex);
+    const isSegmented = lv.is_segmented || (lv.segments?.length ?? 0) > 1;
+    const segs = [...(lv.segments ?? [])].sort((a, b) => a.segment_index - b.segment_index);
+    const levelHeightMm = Math.max(
+      1,
+      500,
+      ...segs.map((s) => s.height_mm ?? 500),
+    );
+    const cellsRaw = segs.map((seg) => {
+      const widthMm = seg.width_mm ?? 0;
+      const depthMm = seg.length_mm ?? 0;
+      const heightMm = seg.height_mm ?? 500;
+      const customLabel = (seg.effective_slot_label ?? seg.slot_label ?? "").trim();
+      const label =
+        customLabel
+        || computeSlotLabel(
+          levelName,
+          lv.level_index,
+          seg.segment_index,
+          isSegmented,
+          seg.slot_label ?? null,
+        );
+      return {
+        key: seg.id != null ? String(seg.id) : `${lv.level_index}-${seg.segment_index}`,
+        levelClientId: String(lv.id ?? lv.level_index),
+        segmentId: seg.id,
+        label,
+        widthMm,
+        depthMm,
+        heightMm,
+        capacityDm3: seg.capacity_dm3 ?? computeCapacityDm3(depthMm, widthMm, heightMm),
+        widthFraction: 0,
+      };
+    });
+    return {
+      key: String(lv.id ?? lv.level_index),
+      levelClientId: String(lv.id ?? lv.level_index),
+      levelLabel: levelName,
+      levelHeightMm,
+      cells: normalizeCellWidthFractions(cellsRaw),
+    };
+  });
+
+  return applyRackLayoutBandHeights(raw, viewportHeightPx);
+}
+
+export function buildOmsPreviewRows(
+  draft: RackStructureDraft,
+  viewportHeightPx: number,
+): RackLayoutRow[] {
+  return buildRackLayoutRowsFromDraft(draft, viewportHeightPx);
+}
+
+export function inferRackWidthMmFromLevels(levels: RackGridLevel[]): number {
+  const sorted = [...levels].sort((a, b) => a.level_index - b.level_index);
+  const sums = sorted.map((lv) =>
+    [...(lv.segments ?? [])].reduce((s, seg) => s + Math.max(0, seg.width_mm ?? 0), 0),
+  );
+  const max = Math.max(0, ...sums);
+  return max > 0 ? max : 2000;
 }
 
 export function formatPreviewDimsCompact(w: number, d: number, h: number): string {

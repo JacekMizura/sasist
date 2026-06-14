@@ -104,17 +104,24 @@ export default function ConsolidationRacksDashboardPage() {
               level_index: lv.level_index,
               name: lv.level_name,
               is_segmented: lv.is_segmented,
-              segments: lv.segments.map((s) => {
-                const rowMatch = s.slot_label.match(/(\d+)$/);
-                const segmentIndex = rowMatch ? Math.max(0, parseInt(rowMatch[1], 10) - 1) : 0;
-                return {
-                  id: s.segment_id,
-                  segment_index: segmentIndex,
-                  order_id: s.order_id,
-                  order_number: s.order_number,
-                  fill_percent: s.fill_percent,
-                };
-              }),
+              segments: lv.segments.map((s, idx) => ({
+                id: s.segment_id,
+                segment_index: idx,
+                slot_label: s.slot_label,
+                effective_slot_label: s.slot_label,
+                order_id: s.order_id,
+                order_number: s.order_number,
+                fill_percent: s.fill_percent,
+                length_mm: s.length_mm,
+                width_mm: s.width_mm,
+                height_mm: s.height_mm,
+                capacity_dm3: s.capacity_dm3,
+                order_volume_dm3: s.order_volume_dm3,
+                utilization_percent: s.utilization_percent,
+                capacity_overflow: s.capacity_overflow,
+                dimension_estimated: s.dimension_estimated,
+                estimated_items_count: s.estimated_items_count,
+              })),
             }));
 
             return (
