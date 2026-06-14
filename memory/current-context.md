@@ -1,5 +1,15 @@
 # Current context
 
+## P4.17 — Bundle Logistic Unit & EAN Automation (2026-06-08)
+- **Raport:** `memory/bundle-logistic-unit-report.md`
+- **Werdykt:** **READY FOR P4.18** (Warehouse Intelligence)
+- `resolve_bundle_barcode()` — EAN produktu/bundle, SKU, kod wewnętrzny
+- Scan: pick/pack/returns/complaints; ON_DEMAND vs STOCK; bulk STOCK scan
+- Model `BundleLogisticUnit` + RK view + wave aggregation helpers
+- API: `/bundles/logistics/*`; frontend: `bundlesLogisticsApi.ts`
+- Testy: `test_bundle_logistics.py` (42); pakiet bundle 178 passed
+- **Następny:** P4.18 slotting, replenishment, forecasting, analytics
+
 ## P4.16 — Bundle Traceability & Lot Tracking (2026-06-08)
 - **Raport:** `memory/bundle-traceability-report.md`
 - Tabela `order_line_bundle_component_lots` — zapis po finalize pick / WZ issue

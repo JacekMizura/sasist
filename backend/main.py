@@ -62,6 +62,7 @@ from .db.schema_upgrade import (
     ensure_return_line_bundle_components_table,
     ensure_rmz_line_bundle_return_columns,
     ensure_order_line_bundle_component_lots_table,
+    ensure_bundle_logistic_units_table,
     ensure_wms_order_returns_deleted_at_column,
     ensure_inventory_location_uuid_columns,
     ensure_damage_report_columns,
@@ -249,6 +250,7 @@ from .api.offer_stock_pool import router as offer_stock_pool_router
 from .api.product_warehouse_slotting import router as product_warehouse_slotting_router
 from .api.bundle import router as bundle_router
 from .api.bundle_traceability import router as bundle_traceability_router
+from .api.bundle_logistics import router as bundle_logistics_router
 from .api.compositions import router as compositions_router
 from .api.production import router as production_router
 from .api.manufacturer import router as manufacturer_router
@@ -1140,6 +1142,7 @@ def _upgrade_schema_background() -> None:
     ensure_return_line_bundle_components_table(engine)
     ensure_rmz_line_bundle_return_columns(engine)
     ensure_order_line_bundle_component_lots_table(engine)
+    ensure_bundle_logistic_units_table(engine)
     ensure_damage_report_columns(engine)
     ensure_wms_refunds_columns(engine)
     try:
@@ -1741,6 +1744,7 @@ _API_ROUTERS = (
     offer_stock_pool_router,
     bundle_router,
     bundle_traceability_router,
+    bundle_logistics_router,
     compositions_router,
     production_router,
     manufacturer_router,

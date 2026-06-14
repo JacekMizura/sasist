@@ -1932,6 +1932,41 @@ def ensure_order_line_bundle_component_lots_table(engine: Engine) -> None:
         conn.commit()
 
 
+def ensure_bundle_logistic_units_table(engine: Engine) -> None:
+    """P4.17 — STOCK bundle logistic unit placements."""
+    with engine.connect() as conn:
+        if not _table_exists(conn, "bundle_logistic_units"):
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE bundle_logistic_units (
+                        id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+                        warehouse_id INTEGER NOT NULL REFERENCES warehouses(id) ON DELETE CASCADE,
+                        bundle_id INTEGER NOT NULL REFERENCES bundles(id) ON DELETE CASCADE,
+                        linked_product_id INTEGER REFERENCES products(id) ON DELETE SET NULL,
+                        order_id INTEGER REFERENCES orders(id) ON DELETE SET NULL,
+                        status VARCHAR(32) NOT NULL DEFAULT 'bundle_logistic_unit',
+                        placement_type VARCHAR(16) NOT NULL,
+                        cart_id INTEGER REFERENCES carts(id) ON DELETE SET NULL,
+                        carrier_id INTEGER REFERENCES warehouse_carriers(id) ON DELETE SET NULL,
+                        location_id INTEGER REFERENCES locations(id) ON DELETE SET NULL,
+                        quantity REAL NOT NULL DEFAULT 1,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_bundle_logistic_units_wh "
+                    "ON bundle_logistic_units(warehouse_id, bundle_id)"
+                )
+            )
+        conn.commit()
+
+
 def ensure_order_items_packing_quantity_packed_column(engine: Engine) -> None:
     """WMS pakowanie: własna ilość spakowana per pozycja (bez Pick / zbierania)."""
     cols = _cols(engine, "order_items")

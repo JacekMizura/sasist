@@ -1,5 +1,15 @@
 # Change log
 
+## 2026-06-08 — P4.17 Bundle Logistic Unit & EAN Automation
+
+- `resolve_bundle_barcode()` — EAN produktu/bundle, SKU, kod wewnętrzny
+- Scan orchestration: pick/pack/returns/complaints (ON_DEMAND vs STOCK)
+- Model `BundleLogisticUnit` + migracja `bundle_logistic_units`
+- API `/bundles/logistics/*`; bulk STOCK scan; RK view; wave aggregation helpers
+- Frontend: `bundlesLogisticsApi.ts`
+- Testy: 42 w `test_bundle_logistics.py`; pakiet bundle 178 passed
+- Raport: `bundle-logistic-unit-report.md` — **READY FOR P4.18**
+
 ## 2026-06-08 — P4.16 Bundle Traceability & Lot Tracking
 
 - Model `order_line_bundle_component_lots` + migracja schema
