@@ -14,6 +14,12 @@ import { postStageConsolidationItem } from "../../api/wmsConsolidationApi";
 import { useMergedPickingSession, useWmsPickingCart } from "../../context/WmsPickingCartContext";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { BundlePickingOrderTree } from "../../components/wms/picking/BundlePickingOrderTree";
+import { BundlePickingScanCard } from "../../components/wms/bundle/BundlePickingScanCard";
+import { BundleConsolidationRackCard } from "../../components/wms/bundle/BundleConsolidationRackCard";
+import type { BundleScanOut, ConsolidationRackBundleRowOut } from "../../api/bundlesLogisticsApi";
+import { getConsolidationRackBundleView } from "../../api/bundlesLogisticsApi";
+import { tryPickingBundleScan } from "../../services/bundleScannerIntegration";
+import { buildPickingBundleDisplay } from "../../utils/bundleScanFlow";
 import { WmsOperationalPageBody, WmsOperationalPageShell } from "../../components/wms/execution/WmsOperationalPageShell";
 import { useWmsScanner } from "../../context/WmsScannerContext";
 import { playScanBeep } from "../../utils/playScanBeep";
@@ -141,6 +147,8 @@ export default function WmsPickingProductDetailPage() {
   const [shortageErr, setShortageErr] = useState<string | null>(null);
   const [shortageQtyInput, setShortageQtyInput] = useState(1);
   const [depositBusy, setDepositBusy] = useState(false);
+  const [bundlePickScan, setBundlePickScan] = useState<BundleScanOut | null>(null);
+  const [consolidationRackRows, setConsolidationRackRows] = useState<ConsolidationRackBundleRowOut[]>([]);
 
   const detailLoadSeqRef = useRef(0);
 
@@ -265,10 +273,52 @@ export default function WmsPickingProductDetailPage() {
       return;
     }
     const handler = (raw: string) => {
+      void (async () => {
       const scan = normalizeScanEan(raw);
       if (!scan) return;
       const locs = detail.locations;
       if (locs.length === 0) return;
+
+      const shelfLabel = (detail.consolidation_shelf_label ?? "").trim();
+      if (detail.consolidation_active && shelfLabel && scan.toUpperCase() === normalizeScanEan(shelfLabel).toUpperCase()) {
+        const oid = detail.active_fifo_order_id ?? detail.orders?.[0]?.order_id;
+        if (oid != null && oid > 0) {
+          try {
+            const rows = await getConsolidationRackBundleView(oid, shelfLabel);
+            setConsolidationRackRows(rows);
+            playScanBeep();
+            appendScanToHistory(scan);
+            showScannerToast(shelfLabel);
+          } catch {
+            showScannerToast("Nie udało się wczytać widoku RK.");
+          }
+        }
+        return;
+      }
+
+      if (pickingSession.cartId != null && pickingSession.cartId > 0) {
+        try {
+          const locId = selectedLocation?.location_id ?? locs[0]?.location_id ?? null;
+          const bundle = await tryPickingBundleScan({
+            tenantId: pickingTenantId,
+            barcode: scan,
+            cartId: pickingSession.cartId,
+            sourceStatusId: pickingSession.orderUiStatusId,
+            orderType,
+            locationId: locId,
+          });
+          if (bundle.handled) {
+            playScanBeep();
+            appendScanToHistory(scan);
+            if (bundle.scan) setBundlePickScan(bundle.scan);
+            if (bundle.toast) showScannerToast(bundle.toast);
+            if (bundle.refresh) await load();
+            return;
+          }
+        } catch {
+          /* product scan fallback */
+        }
+      }
 
       // Obsługa skanowania lokalizacji
       if (locs.length > 1) {
@@ -287,10 +337,11 @@ export default function WmsPickingProductDetailPage() {
         void confirm_pick(1, selectedLocation.location_id);
         return;
       }
+      })();
     };
     registerScanHandler(handler);
     return () => registerScanHandler(null);
-  }, [detail, pickingSession, activeLocationId, registerScanHandler, appendScanToHistory, pickQueueDone, selectedLocation]);
+  }, [detail, pickingSession, activeLocationId, registerScanHandler, appendScanToHistory, pickQueueDone, selectedLocation, pickingTenantId, orderType, showScannerToast, load]);
 
   const goBackToList = useCallback(
     (refreshList = false) => {
@@ -588,6 +639,17 @@ export default function WmsPickingProductDetailPage() {
                   ))}
                 </ul>
               )}
+              {(() => {
+                const bundleDisplay = bundlePickScan ? buildPickingBundleDisplay(bundlePickScan) : null;
+                return bundleDisplay ? <BundlePickingScanCard display={bundleDisplay} className="mt-4" /> : null;
+              })()}
+              {consolidationRackRows.length > 0 ? (
+                <BundleConsolidationRackCard
+                  rows={consolidationRackRows}
+                  shelfLabel={detail.consolidation_shelf_label}
+                  className="mt-4"
+                />
+              ) : null}
             </div>
           </div>
         </div>

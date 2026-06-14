@@ -129,3 +129,32 @@ export async function getConsolidationRackBundleView(
   );
   return res.data;
 }
+
+export type BundleBulkStockScanBody = {
+  barcode: string;
+  scan_count: number;
+};
+
+export type BundleBulkStockScanOut = {
+  scans: BundleScanOut[];
+  lines_complete: number;
+  target_scans: number;
+};
+
+export async function postBulkStockBundleScan(
+  tenantId: number,
+  body: BundleBulkStockScanBody,
+): Promise<BundleBulkStockScanOut> {
+  const res = await api.post<BundleBulkStockScanOut>("/bundles/logistics/picking/bulk-stock-scan", body, {
+    params: { tenant_id: tenantId },
+  });
+  return res.data;
+}
+
+export async function postSingleBulkStockScan(
+  tenantId: number,
+  barcode: string,
+): Promise<BundleScanOut> {
+  const out = await postBulkStockBundleScan(tenantId, { barcode, scan_count: 1 });
+  return out.scans[0] ?? { found: false, domain: "picking", barcode, quantity: 0, missing_components: [], bundle_verified: false, traceability_links: {}, return_tree_order_ids: [] };
+}

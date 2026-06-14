@@ -277,6 +277,7 @@ export default function WmsPackingOrderPage() {
         interfaceDisplay={ctrl.packingInterfaceDisplay}
         packerDisplayName={packerDisplayName}
         packingActionsLocked={ctrl.awaitingPostPackCarton}
+        bundlePackScan={ctrl.bundlePackScan}
         showHeaderCartonPicker={false}
       />
     </>

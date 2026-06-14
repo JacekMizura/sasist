@@ -39,6 +39,7 @@ export const ANALYTICS_TOP_TABS: AnalyticsTab[] = [
       "/analytics/picking-analysis",
       "/analytics/sales-forecast",
       "/analytics/batch-picking",
+      "/analytics/bundle-intelligence",
     ],
   },
   {
@@ -83,6 +84,7 @@ export const ANALITYKA_SUB_NAV: SubNavItem[] = [
   { path: "/analytics/picking-analysis", label: "Picking Analysis" },
   { path: "/analytics/sales-forecast", label: "Prognoza sprzedaży" },
   { path: "/analytics/batch-picking", label: "Batch picking" },
+  { path: "/analytics/bundle-intelligence", label: "Bundle Intelligence" },
 ];
 
 export const SYMULACJE_SUB_NAV: SubNavItem[] = [

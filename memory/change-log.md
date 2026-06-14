@@ -1,5 +1,21 @@
 # Change log
 
+## 2026-06-08 — P4.18 Bundle Warehouse Intelligence
+
+- Serwisy read-only: analytics, slotting, replenishment, capacity (`backend/services/bundles/intelligence/`)
+- API `/bundles/intelligence/*` — dashboard, slotting, replenishment, capacity
+- Frontend: `/analytics/bundle-intelligence` (4 zakładki raportu)
+- Testy: `test_bundle_intelligence.py` (25+)
+- Raport: `bundle-warehouse-intelligence-report.md` — rekomendacje only, bez automatyzacji
+
+## 2026-06-08 — P4.17A Bundle Scanner UX Integration
+
+- Picking/packing/returns/bulk scan — integracja `bundleScannerIntegration` z globalnym skanerem WMS
+- Komponenty: `BundlePickingScanCard`, `BundleVerifiedBadge`, `BundleTraceabilityStrip`, RK/RMZ/reklamacje
+- Ekran `WmsBundleBulkScanPage` (`/wms/picking/bundle-bulk-scan`)
+- Testy frontend: 22 w `bundleScanFlow.test.ts`
+- Raport: `bundle-scanner-ux-report.md` — **READY FOR P4.18**
+
 ## 2026-06-08 — P4.17 Bundle Logistic Unit & EAN Automation
 
 - `resolve_bundle_barcode()` — EAN produktu/bundle, SKU, kod wewnętrzny

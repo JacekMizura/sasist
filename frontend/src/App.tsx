@@ -124,12 +124,14 @@ import LayoutOptimization from "./pages/analytics/LayoutOptimization"
 import WarehouseThroughput from "./pages/analytics/WarehouseThroughput"
 import WarehouseMap from "./pages/analytics/WarehouseMap"
 import PickingIssuesDeadStock from "./pages/analytics/PickingIssuesDeadStock"
+import BundleIntelligence from "./pages/analytics/BundleIntelligence"
 import AnalyticsLayout from "./pages/analytics/AnalyticsLayout"
 import WarehouseStructureReportPage from "./reports/WarehouseStructureReportPage"
 import ProductLocationReportPage from "./reports/ProductLocationReportPage"
 import WmsPickingPage from "./pages/wms/WmsPickingPage"
 import WmsPickingProductDetailPage from "./pages/wms/WmsPickingProductDetailPage"
 import WmsPickingProductsPage from "./pages/wms/WmsPickingProductsPage"
+import WmsBundleBulkScanPage from "./pages/wms/WmsBundleBulkScanPage"
 import WmsRecoveryBatchPage from "./pages/wms/WmsRecoveryBatchPage"
 import WmsPickingStatusPage from "./pages/wms/WmsPickingStatusPage"
 import WmsOrderIssuesHub from "./pages/wms/WmsOrderIssuesHub"
@@ -404,6 +406,7 @@ export const router = createBrowserRouter(
           <Route path="cart" element={<WmsPickingCartScanPage />} />
           <Route path="products/:productId" element={<WmsPickingProductDetailPage />} />
           <Route path="products" element={<WmsPickingProductsPage />} />
+          <Route path="bundle-bulk-scan" element={<WmsBundleBulkScanPage />} />
           <Route path="recovery/batch/:batchId" element={<WmsRecoveryBatchPage />} />
           <Route path="recovery/:orderId" element={<WmsPickingProductsPage />} />
           <Route path="locations" element={<WmsPickingPage />} />
@@ -787,6 +790,7 @@ export const router = createBrowserRouter(
                   <Route path="picking-analysis" element={<PickingAnalysis />} />
                   <Route path="sales-forecast" element={<SalesForecastAnalytics />} />
                   <Route path="batch-picking" element={<BatchPicking />} />
+                  <Route path="bundle-intelligence" element={<BundleIntelligence />} />
                   <Route path="pick-path-simulation" element={<PickPathSimulation />} />
                   <Route path="warehouse-day-simulation" element={<WarehouseDaySimulation />} />
                   <Route path="pick-time-simulation" element={<PickTimeSimulation />} />
@@ -815,6 +819,7 @@ export const router = createBrowserRouter(
                 <Route path="analysis/picking-analysis" element={<Navigate to="/analytics/picking-analysis" replace />} />
                 <Route path="analysis/sales-forecast" element={<Navigate to="/analytics/sales-forecast" replace />} />
                 <Route path="analysis/batch-picking" element={<Navigate to="/analytics/batch-picking" replace />} />
+                <Route path="analysis/bundle-intelligence" element={<Navigate to="/analytics/bundle-intelligence" replace />} />
                 <Route path="analysis/pick-path-simulation" element={<Navigate to="/analytics/pick-path-simulation" replace />} />
                 <Route path="analysis/warehouse-day-simulation" element={<Navigate to="/analytics/warehouse-day-simulation" replace />} />
                 <Route path="analysis/pick-time-simulation" element={<Navigate to="/analytics/pick-time-simulation" replace />} />

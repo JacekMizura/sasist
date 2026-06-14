@@ -23,6 +23,11 @@ import { displayWarehouseDocumentNumber } from "../../utils/warehouseDocumentNum
 import { formatWmsListDate } from "./wmsListFormatters";
 import { WMS_ROUTES } from "./wmsRoutes";
 import { WmsActiveZPzPanel } from "./WmsActiveZPzPanel";
+import type { BundleScanOut } from "../../api/bundlesLogisticsApi";
+import { BundleReturnScanBanner } from "../../components/wms/bundle/BundleReturnScanBanner";
+import { BundleComplaintScanPanel } from "../../components/wms/bundle/BundleComplaintScanPanel";
+import { tryComplaintsBundleScan, tryReturnsBundleScan } from "../../services/bundleScannerIntegration";
+import { returnsBundleOrderIds } from "../../utils/bundleScanFlow";
 import {
   WmsReturnsAdvancedSearchPanel,
   type WmsReturnsOrderSearchPreview,
@@ -597,6 +602,8 @@ export default function WmsReturnsEntryPage() {
   const [creatingReturn, setCreatingReturn] = useState(false);
   const [savedReturnFlash, setSavedReturnFlash] = useState<string | null>(null);
   const [activeZPzRefreshKey, setActiveZPzRefreshKey] = useState(0);
+  const [bundleReturnScan, setBundleReturnScan] = useState<BundleScanOut | null>(null);
+  const [bundleComplaintScan, setBundleComplaintScan] = useState<BundleScanOut | null>(null);
 
   const preselectSig = useRef<string | null>(null);
   const searchRef = useRef<(overrideQ?: string) => Promise<void>>(async () => {});
@@ -605,20 +612,7 @@ export default function WmsReturnsEntryPage() {
   const firstQueueTileRef = useRef<HTMLButtonElement | null>(null);
 
   const { registerScanHandler, setActiveDocument } = useWmsScanner();
-  
-  useEffect(() => {
-    setActiveDocument({ kind: "custom", label: "Zwroty WMS" });
-    registerScanHandler((ean) => {
-      const code = ean.trim();
-      if (!code) return;
-      setTrackingQ(code);
-      void searchRef.current(code);
-    });
-    return () => {
-      registerScanHandler(null);
-      setActiveDocument(null);
-    };
-  }, [registerScanHandler, setActiveDocument]);
+  const loadOrderByIdRef = useRef<(orderId: number) => Promise<void>>(async () => {});
 
   const loadReturnsForOrder = useCallback(async (orderId: number) => {
     setOrderReturnsLoading(true);
@@ -697,6 +691,46 @@ export default function WmsReturnsEntryPage() {
     },
     [applyOrderData, loadReturnsForOrder, loadComplaintsForOrder],
   );
+
+  loadOrderByIdRef.current = loadOrderById;
+
+  useEffect(() => {
+    setActiveDocument({ kind: "custom", label: "Zwroty WMS" });
+    registerScanHandler((ean) => {
+      void (async () => {
+        const code = ean.trim();
+        if (!code) return;
+        try {
+          const ret = await tryReturnsBundleScan(DAMAGE_TENANT_ID, code);
+          if (ret.handled && ret.scan) {
+            setBundleReturnScan(ret.scan);
+            setBundleComplaintScan(null);
+            const ids = returnsBundleOrderIds(ret.scan);
+            if (ids[0]) await loadOrderByIdRef.current(ids[0]);
+            return;
+          }
+          const cmp = await tryComplaintsBundleScan(DAMAGE_TENANT_ID, code);
+          if (cmp.handled && cmp.scan) {
+            setBundleComplaintScan(cmp.scan);
+            setBundleReturnScan(null);
+            const ids = returnsBundleOrderIds(cmp.scan);
+            if (ids[0]) await loadOrderByIdRef.current(ids[0]);
+            return;
+          }
+        } catch {
+          /* fallback tracking search */
+        }
+        setBundleReturnScan(null);
+        setBundleComplaintScan(null);
+        setTrackingQ(code);
+        void searchRef.current(code);
+      })();
+    });
+    return () => {
+      registerScanHandler(null);
+      setActiveDocument(null);
+    };
+  }, [registerScanHandler, setActiveDocument]);
 
   useEffect(() => {
     const st = location.state as { preselectOrderId?: number; highlightReturnId?: number } | null;
@@ -1134,6 +1168,14 @@ export default function WmsReturnsEntryPage() {
               >
                 ← Wróć do wyszukiwania
               </button>
+
+              {bundleReturnScan ? (
+                <BundleReturnScanBanner
+                  scan={bundleReturnScan}
+                  onOpenOrder={(oid) => void loadOrderById(oid)}
+                />
+              ) : null}
+              {bundleComplaintScan ? <BundleComplaintScanPanel scan={bundleComplaintScan} /> : null}
 
               <div className="flex w-full flex-col gap-4 rounded-xl border-2 border-slate-200/90 bg-white p-4 shadow-md sm:flex-row sm:items-center sm:gap-0">
                     <div className="flex shrink-0 flex-col text-left">

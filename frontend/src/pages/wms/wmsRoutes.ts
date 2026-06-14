@@ -18,6 +18,8 @@ export const WMS_ROUTES = {
   pickingRecovery: (orderId: number | string) => `/wms/picking/recovery/${orderId}`,
   pickingRecoveryBatch: (batchId: number | string) => `/wms/picking/recovery/batch/${batchId}`,
   pickingProduct: (productId: number | string) => `/wms/picking/products/${productId}`,
+  /** P4.17A — bulk STOCK bundle scan (dedykowany ekran). */
+  bundleBulkScan: "/wms/picking/bundle-bulk-scan",
   /** Hub: skan / przejście do produktu. */
   productPreviewRoot: "/wms/product-preview",
   /** Podgląd operacyjny produktu (bez cen i zamówień). */

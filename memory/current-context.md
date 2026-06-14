@@ -1,5 +1,22 @@
 # Current context
 
+## P4.18 — Bundle Warehouse Intelligence (2026-06-08)
+- **Raport:** `memory/bundle-warehouse-intelligence-report.md`
+- **Werdykt:** **READY** (rekomendacje only — bez automatyzacji)
+- Serwisy: analytics, slotting, replenishment, capacity w `backend/services/bundles/intelligence/`
+- API: `/bundles/intelligence/*` (dashboard, slotting, replenishment, capacity)
+- Frontend: `/analytics/bundle-intelligence` — zakładki Analytics | Slotting | Replenishment | Capacity
+- Testy: `test_bundle_intelligence.py`
+
+## P4.17A — Bundle Scanner UX Integration (2026-06-08)
+- **Raport:** `memory/bundle-scanner-ux-report.md`
+- **Werdykt:** **READY FOR P4.18**
+- Pick/pack/returns/complaints/bulk/RK spięte z `bundlesLogisticsApi` + `bundleScannerIntegration`
+- UI: `BundlePickingScanCard`, `BundleVerifiedBadge`, `BundleTraceabilityStrip`, RMZ/reklamacje bannery
+- Ekran bulk: `/wms/picking/bundle-bulk-scan`
+- Testy frontend: `bundleScanFlow.test.ts` (22)
+- **Następny:** P4.18 Warehouse Intelligence
+
 ## P4.17 — Bundle Logistic Unit & EAN Automation (2026-06-08)
 - **Raport:** `memory/bundle-logistic-unit-report.md`
 - **Werdykt:** **READY FOR P4.18** (Warehouse Intelligence)

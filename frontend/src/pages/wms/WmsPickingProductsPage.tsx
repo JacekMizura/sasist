@@ -41,6 +41,10 @@ import { useWmsShortagesRefresh } from "../../hooks/useWmsShortagesRefresh";
 import { WMS_ROUTES } from "./wmsRoutes";
 import { dispatchWmsShortagesUpdated } from "../../utils/wmsRefresh";
 import { Image as ImageIcon, MapPin, AlertTriangle, Check, Loader2 } from "lucide-react";
+import type { BundleScanOut } from "../../api/bundlesLogisticsApi";
+import { BundlePickingScanCard } from "../../components/wms/bundle/BundlePickingScanCard";
+import { tryPickingBundleScan } from "../../services/bundleScannerIntegration";
+import { buildPickingBundleDisplay } from "../../utils/bundleScanFlow";
 
 function fmtQty(n: number): string {
   return new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 2 }).format(n);
@@ -142,6 +146,7 @@ export default function WmsPickingProductsPage() {
   }, [sessionFingerprint]);
 
   const [rows, setRows] = useState<WmsPickingProductLineApi[]>([]);
+  const [bundlePickScan, setBundlePickScan] = useState<BundleScanOut | null>(null);
   const [cohortOrderCount, setCohortOrderCount] = useState(0);
   const [cohortMissingLines, setCohortMissingLines] = useState<WmsPickingCohortMissingLineApi[]>([]);
   const [allowContinueAfterShortage, setAllowContinueAfterShortage] = useState(true);
@@ -465,6 +470,34 @@ export default function WmsPickingProductsPage() {
     const handler = async (ean: string) => {
       const scan = normalizeScanEan(ean);
       if (!scan || rows.length === 0 || !mergedSession || warehouseId == null) return;
+
+      if (mergedSession.cartId != null && mergedSession.cartId > 0) {
+        const stockRow = rows.find((r) => {
+          const e = normalizeScanEan(r.ean ?? "").toUpperCase();
+          const s = scan.toUpperCase();
+          return e === s || String(r.product_id) === s;
+        });
+        try {
+          const bundle = await tryPickingBundleScan({
+            tenantId: DAMAGE_TENANT_ID,
+            barcode: scan,
+            cartId: mergedSession.cartId,
+            sourceStatusId: mergedSession.orderUiStatusId,
+            orderType,
+            locationId: stockRow?.primary_location_id ?? stockRow?.locations?.[0]?.location_id ?? null,
+          });
+          if (bundle.handled) {
+            playScanBeep();
+            appendScanToHistory(scan);
+            if (bundle.scan) setBundlePickScan(bundle.scan);
+            if (bundle.toast) showScannerToast(bundle.toast);
+            if (bundle.refresh) void load();
+            return;
+          }
+        } catch {
+          /* fall through to product scan */
+        }
+      }
       
       const matches = rows.filter((r) => productLineMatchesScan(r, scan));
       const hit = matches.find((r) => rowScannerEligible(r));
@@ -895,6 +928,10 @@ export default function WmsPickingProductsPage() {
             Zgłoszono brak — dokończ tylko dotknięte linie (SKU z brakiem). Pozostałe produkty są zablokowane.
           </p>
         )}
+        {(() => {
+          const bundleDisplay = bundlePickScan ? buildPickingBundleDisplay(bundlePickScan) : null;
+          return bundleDisplay ? <BundlePickingScanCard display={bundleDisplay} /> : null;
+        })()}
         {warnings.length > 0 && (
           <ul className="list-disc space-y-1 pl-5 text-xs text-amber-900 bg-amber-50/60 p-4 rounded-xl border border-amber-200/50">
             {warnings.map((w) => <li key={w} className="font-semibold">{w}</li>)}

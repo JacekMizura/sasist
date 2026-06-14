@@ -251,6 +251,8 @@ from .api.product_warehouse_slotting import router as product_warehouse_slotting
 from .api.bundle import router as bundle_router
 from .api.bundle_traceability import router as bundle_traceability_router
 from .api.bundle_logistics import router as bundle_logistics_router
+from .api.bundle_intelligence import router as bundle_intelligence_router
+from .api.bundle_intelligence import router as bundle_intelligence_router
 from .api.compositions import router as compositions_router
 from .api.production import router as production_router
 from .api.manufacturer import router as manufacturer_router
@@ -1745,6 +1747,7 @@ _API_ROUTERS = (
     bundle_router,
     bundle_traceability_router,
     bundle_logistics_router,
+    bundle_intelligence_router,
     compositions_router,
     production_router,
     manufacturer_router,

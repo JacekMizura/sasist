@@ -24,6 +24,8 @@ import { useWmsScanner } from "../../../context/WmsScannerContext";
 import { playScanBeep } from "../../../utils/playScanBeep";
 import { normalizeScanEan } from "../../../utils/wmsScanNormalize";
 import { DAMAGE_TENANT_ID } from "../../../pages/damage/damageShared";
+import { tryPackingBundleScan } from "../../../services/bundleScannerIntegration";
+import type { BundleScanOut } from "../../../api/bundlesLogisticsApi";
 import { loadWmsPackingSession, type WmsPackingSessionState } from "../../../pages/wms/wmsPackingSession";
 import { WMS_ROUTES } from "../../../pages/wms/wmsRoutes";
 import {
@@ -72,6 +74,7 @@ export function usePackingOrderController(
   const [packingInterfaceDisplay, setPackingInterfaceDisplay] = useState<WmsPackingInterfaceDisplay>(
     DEFAULT_WMS_PACKING_INTERFACE_DISPLAY,
   );
+  const [bundlePackScan, setBundlePackScan] = useState<BundleScanOut | null>(null);
 
   const refreshSession = useCallback(() => {
     setSession(loadWmsPackingSession());
@@ -131,6 +134,7 @@ export function usePackingOrderController(
     setAwaitingPostPackCarton(false);
     setAwaitingFinalizationRun(false);
     setSelectedPackagingIds([]);
+    setBundlePackScan(null);
     pendingFinishAfterCartonRef.current = false;
   }, [orderId, finishWithoutCartonRef]);
 
@@ -314,6 +318,28 @@ export function usePackingOrderController(
       scanBusyRef.current = true;
       setScanBusy(true);
       try {
+        const bundle = await tryPackingBundleScan(DAMAGE_TENANT_ID, orderId, ean);
+        if (bundle.handled && bundle.scan) {
+          setBundlePackScan(bundle.scan);
+          playScanBeep();
+          appendScanToHistory(ean);
+          if (bundle.packLine) {
+            const out = await postWmsPackingLinePack(
+              DAMAGE_TENANT_ID,
+              warehouseId,
+              s.statusId,
+              s.mode,
+              orderId,
+              bundle.packLine.orderItemId,
+              bundle.packLine.qty,
+              s.mode === "no_cart" ? undefined : s.cartId,
+            );
+            applyPackingResult(out);
+          }
+          if (bundle.toast) showScannerToast(bundle.toast);
+          if (bundle.packLine) return;
+        }
+
         const out = await postWmsPackingOrderScan(
           DAMAGE_TENANT_ID,
           warehouseId,
@@ -498,5 +524,6 @@ export function usePackingOrderController(
     proceedToFinalization,
     continueWithoutCartonToFinalization,
     runPostPackFinish,
+    bundlePackScan,
   };
 }

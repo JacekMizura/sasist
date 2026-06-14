@@ -72,6 +72,7 @@ export function deriveWmsScannerMode(pathname: string): WmsScannerMode {
     p === "/wms/picking/locations" ||
     p === "/wms/picking/products" ||
     /^\/wms\/picking\/products\/\d+$/.test(p) ||
+    p === "/wms/picking/bundle-bulk-scan" ||
     /^\/wms\/picking\/recovery\/\d+$/.test(p)
   )
     return "picking";

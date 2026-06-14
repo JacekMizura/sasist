@@ -9,6 +9,10 @@ import { useWmsScanner } from "../../../context/WmsScannerContext";
 import type { WmsPackingInterfaceDisplay } from "../../../types/wmsPackingSettings";
 import { WMS_ROUTES } from "../../../pages/wms/wmsRoutes";
 import { BundlePackingTree } from "./BundlePackingTree";
+import { BundleVerifiedBadge } from "../bundle/BundleVerifiedBadge";
+import { BundleTraceabilityStrip } from "../bundle/BundleTraceabilityStrip";
+import type { BundleScanOut } from "../../../api/bundlesLogisticsApi";
+import { shouldShowBundleVerifiedBadge } from "../../../utils/bundleScanFlow";
 import { CourierBadge } from "./CourierBadge";
 import {
   isPackingOrderCompleted,
@@ -101,6 +105,7 @@ type PackingViewProps = {
   packingActionsLocked?: boolean;
   /** Lista kartonów w nagłówku — domyślnie wyłączona (propozycja tylko w sidebarze). */
   showHeaderCartonPicker?: boolean;
+  bundlePackScan?: BundleScanOut | null;
 };
 
 export function PackingView({
@@ -127,6 +132,7 @@ export function PackingView({
   packerDisplayName,
   packingActionsLocked = false,
   showHeaderCartonPicker = false,
+  bundlePackScan = null,
 }: PackingViewProps) {
   const { setScannerInputPlaceholder } = useWmsScanner();
   const wedgeRef = useRef<HTMLInputElement>(null);
@@ -413,6 +419,12 @@ export function PackingView({
               <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-500">Zestawy</p>
               <BundlePackingTree trees={detail.bundle_trees} />
             </div>
+          ) : null}
+          {bundlePackScan && shouldShowBundleVerifiedBadge(bundlePackScan) ? (
+            <BundleVerifiedBadge bundleName={bundlePackScan.bundle_name} className="mb-4" />
+          ) : null}
+          {bundlePackScan?.traceability_links ? (
+            <BundleTraceabilityStrip links={bundlePackScan.traceability_links} className="mb-4" />
           ) : null}
           {wszystkoSpakowane ? (
             <p className="mb-3 text-center text-base font-semibold text-emerald-800">Zamówienie spakowane.</p>
