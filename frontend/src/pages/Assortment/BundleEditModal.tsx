@@ -155,7 +155,7 @@ export function BundleEditModal({
         sku: (p.sku || p.symbol || "").trim(),
         ean: p.ean != null ? String(p.ean) : null,
         stock,
-        imageUrl: (p.image_url ?? "").trim() || null,
+        imageUrl: typeof p.image_url === "string" && p.image_url.trim() ? p.image_url.trim() : null,
       },
     }));
   }, []);
@@ -243,7 +243,7 @@ export function BundleEditModal({
           resetGallery(imgs);
         } else if ((b.image_url ?? "").trim()) {
           resetGallery([
-            { id: "legacy-main", image_url: b.image_url!.trim(), is_main: true, sort_order: 0 },
+            { id: "legacy-main", image_url: (b.image_url ?? "").trim(), is_main: true, sort_order: 0 },
           ]);
         } else {
           resetGallery([]);
@@ -348,7 +348,7 @@ export function BundleEditModal({
       return;
     }
     const sp = salePrice === "" ? null : typeof salePrice === "number" ? salePrice : Number(salePrice);
-    const mainImage = pickMainImageUrl(ensureSingleMainImage(galleryImages), null);
+    const mainImage = pickMainImageUrl(ensureSingleMainImage(galleryImages)) ?? "";
     const metaStr = buildBundleMetadataJson(metadataJson, galleryImages);
     const dim = (v: number | "") => (v === "" ? null : typeof v === "number" && Number.isFinite(v) ? v : null);
 
@@ -396,7 +396,7 @@ export function BundleEditModal({
   if (!isPage && !open) return null;
 
   const salePriceNum = salePrice === "" ? null : typeof salePrice === "number" ? salePrice : Number(salePrice);
-  const headerPreviewUrl = pickMainImageUrl(ensureSingleMainImage(galleryImages), null);
+  const headerPreviewUrl = pickMainImageUrl(ensureSingleMainImage(galleryImages));
 
   const statCards: ProductLikeStatCard[] = [
     {

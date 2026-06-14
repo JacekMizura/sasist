@@ -138,7 +138,7 @@ export function buildProductMetadataJson(
   if (imgsNorm.length > 0) {
     root.product_images = imgsNorm.map((img, i) => ({
       id: img.id,
-      image_url: img.image_url.trim(),
+      image_url: normalizeImageUrl(img.image_url) ?? "",
       is_main: Boolean(img.is_main),
       sort_order: i,
     }));
@@ -161,11 +161,19 @@ export function manufacturerLabelBlock(m: ManufacturerRead | undefined): { name:
   return { name, address: addrParts.join("\n") };
 }
 
-export function pickMainImageUrl(images: ProductImageEntry[], fallbackUrl: string): string | undefined {
+function normalizeImageUrl(url: string | null | undefined): string | undefined {
+  if (url == null || typeof url !== "string") return undefined;
+  const trimmed = url.trim();
+  return trimmed || undefined;
+}
+
+export function pickMainImageUrl(
+  images: ProductImageEntry[],
+  fallbackUrl?: string | null,
+): string | undefined {
   const sorted = ensureSingleMainImage(images);
   const main = sorted.find((i) => i.is_main) ?? sorted[0];
-  const u = main?.image_url?.trim();
-  if (u) return u;
-  const f = fallbackUrl.trim();
-  return f || undefined;
+  const fromGallery = normalizeImageUrl(main?.image_url);
+  if (fromGallery) return fromGallery;
+  return normalizeImageUrl(fallbackUrl);
 }
