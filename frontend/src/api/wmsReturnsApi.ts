@@ -499,3 +499,34 @@ export async function closeActiveCollectiveZPz(opts: {
   });
   return res.data;
 }
+
+export async function getOrderBundleReturnTree(
+  orderId: number,
+  tenantId: number,
+  warehouseId: number,
+): Promise<import("../types/wmsReturn").WmsReturnBundleTreeNodeRead[]> {
+  const res = await api.get<import("../types/wmsReturn").WmsReturnBundleTreeNodeRead[]>(
+    `wms/returns/orders/${orderId}/bundle-return-tree`,
+    { params: { tenant_id: tenantId, warehouse_id: warehouseId } },
+  );
+  return Array.isArray(res.data) ? res.data : [];
+}
+
+export async function updateWmsReturnBundleComponents(
+  returnId: number,
+  lineId: number,
+  tenantId: number,
+  body: import("../types/wmsReturn").WmsReturnBundleComponentsUpdate,
+  warehouseId?: number | null,
+): Promise<WmsReturnRead> {
+  const params: Record<string, string | number> = { tenant_id: tenantId };
+  if (warehouseId != null && Number.isFinite(Number(warehouseId)) && Number(warehouseId) > 0) {
+    params.warehouse_id = Number(warehouseId);
+  }
+  const res = await api.put<WmsReturnRead>(
+    `wms/returns/id/${returnId}/lines/${lineId}/bundle-components`,
+    body,
+    { params },
+  );
+  return res.data;
+}

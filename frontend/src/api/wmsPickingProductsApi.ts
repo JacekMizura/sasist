@@ -9,6 +9,15 @@ const pickingProductDetailDeduper = createRequestDeduper();
 /** Zgodne z ``WmsPickingOrderTypeChoice`` w flow WMS. */
 export type WmsPickingOrderTypeQuery = "single" | "multi" | "all";
 
+export type WmsPickingProductBundleBreakdownRowApi = {
+  order_id: number;
+  order_number: string;
+  bundle_id?: number | null;
+  bundle_name?: string | null;
+  bundle_mode?: string | null;
+  quantity: number;
+};
+
 export type WmsPickingProductPutHintApi = {
   label: string;
   quantity: number;
@@ -45,6 +54,8 @@ export type WmsPickingProductLineApi = {
   route_sort_key: string;
   consolidation_pick?: boolean;
   consolidation_shelf_label?: string | null;
+  /** Rozbicie multi-order / multi-bundle dla tego SKU (P4.15B) */
+  bundle_breakdown?: WmsPickingProductBundleBreakdownRowApi[];
 };
 
 export type WmsPickingProductLinesResponseApi = {
@@ -85,6 +96,37 @@ export type WmsPickingProductOrderRowApi = {
   shortage_declarable_qty?: number;
   consolidation_pick?: boolean;
   consolidation_shelf_label?: string | null;
+  bundle_id?: number | null;
+  bundle_name?: string | null;
+  bundle_mode?: string | null;
+  bundle_component_index?: number | null;
+  bundle_component_count?: number | null;
+  is_bundle_component?: boolean;
+  parent_bundle_order_line_id?: number | null;
+};
+
+export type WmsPickingBundleComponentStatusApi = {
+  order_item_id: number;
+  product_id: number;
+  product_name: string;
+  quantity: number;
+  picked_quantity: number;
+  quantity_to_pick: number;
+  bundle_component_index: number;
+  is_current_product: boolean;
+  pick_done: boolean;
+};
+
+export type WmsPickingOrderBundleTreeApi = {
+  order_id: number;
+  order_number: string;
+  bundle_id: number;
+  bundle_name: string;
+  bundle_mode: string;
+  parent_order_line_id: number;
+  components_total: number;
+  components_done: number;
+  components: WmsPickingBundleComponentStatusApi[];
 };
 
 export type WmsPickingProductDetailApi = {
@@ -113,6 +155,8 @@ export type WmsPickingProductDetailApi = {
   consolidation_plan_id?: number | null;
   consolidation_plan_item_id?: number | null;
   pending_shelf_deposit?: boolean;
+  /** Drzewo bundle w kohortcie dla bieżącego SKU (P4.15B) */
+  order_bundle_trees?: WmsPickingOrderBundleTreeApi[];
 };
 
 export async function getWmsPickingProductLines(

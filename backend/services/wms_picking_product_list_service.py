@@ -85,14 +85,21 @@ from .order_issue_task_service import (
 from .wms_picking_shortage_settings_service import get_or_create_wms_picking_shortage_settings
 from ..schemas.picking_routing import PickListRow
 from ..schemas.wms_picking_products import (
+    WmsPickingBundleComponentStatus,
     WmsPickingCohortMissingLineRow,
+    WmsPickingOrderBundleTree,
     WmsPickingOrderTypeFilter,
+    WmsPickingProductBundleBreakdownRow,
     WmsPickingProductDetailResponse,
     WmsPickingProductLine,
     WmsPickingProductLinesResponse,
     WmsPickingProductLocationRow,
     WmsPickingProductOrderRow,
     WmsPickingProductPutHint,
+)
+from .bundles.bundle_operational_ux_service import (
+    build_bundle_ux_index_for_orders,
+    build_picking_bundle_trees_for_orders,
 )
 from .picking_assignment_service import ensure_order_basket_for_wms_pick, format_cart_basket_label
 from .picking_routing_service import PickingRoutingService
@@ -401,6 +408,10 @@ def _query_order_ids_for_status(
 
     line_counts = (
         db.query(OrderItem.order_id, func.count(OrderItem.id).label("cnt"))
+        .filter(
+            sqlalchemy_operational_picking_order_item_clause(OrderItem),
+            _order_item_not_replaced_clause(),
+        )
         .group_by(OrderItem.order_id)
         .subquery()
     )
@@ -482,6 +493,68 @@ def _filter_fixed_order_ids_to_picking_queue(
         )
     )
     return [int(x) for x in order_ids if int(x) in eligible]
+
+
+def _bundle_breakdown_for_product(
+    db: Session,
+    *,
+    order_ids: list[int],
+    product_id: int,
+    ux_index: dict,
+) -> list[WmsPickingProductBundleBreakdownRow]:
+    if not order_ids:
+        return []
+    rows: list[WmsPickingProductBundleBreakdownRow] = []
+    orders = (
+        db.query(Order)
+        .options(joinedload(Order.items))
+        .filter(Order.id.in_([int(x) for x in order_ids]))
+        .order_by(Order.id.asc())
+        .all()
+    )
+    pid = int(product_id)
+    for order in orders:
+        for oi in order.items or []:
+            if int(oi.product_id) != pid:
+                continue
+            if order_item_is_replaced_line(oi):
+                continue
+            if order_item_skip_bundle_commercial_header_for_ops(oi):
+                continue
+            meta = ux_index.get(int(oi.id))
+            rows.append(
+                WmsPickingProductBundleBreakdownRow(
+                    order_id=int(order.id),
+                    order_number=str(order.number or f"#{order.id}"),
+                    bundle_id=int(meta.bundle_id) if meta and meta.bundle_id is not None else None,
+                    bundle_name=str(meta.bundle_name) if meta and meta.bundle_name else None,
+                    bundle_mode=str(meta.bundle_mode) if meta and meta.bundle_mode else None,
+                    quantity=float(oi.quantity or 0),
+                )
+            )
+    return rows
+
+
+def _apply_bundle_ux_to_order_row(
+    row: WmsPickingProductOrderRow,
+    *,
+    ux_index: dict,
+    order_item_id: int,
+) -> WmsPickingProductOrderRow:
+    meta = ux_index.get(int(order_item_id))
+    if meta is None:
+        return row
+    return row.model_copy(
+        update={
+            "bundle_id": meta.bundle_id,
+            "bundle_name": meta.bundle_name,
+            "bundle_mode": meta.bundle_mode,
+            "bundle_component_index": meta.bundle_component_index,
+            "bundle_component_count": meta.bundle_component_count,
+            "is_bundle_component": bool(meta.is_bundle_component),
+            "parent_bundle_order_line_id": meta.parent_bundle_order_line_id,
+        }
+    )
 
 
 def _picking_product_line_still_active(line: WmsPickingProductLine) -> bool:
@@ -1267,6 +1340,8 @@ def build_wms_picking_product_lines(
         source_status_id=int(source_status_id),
     )
 
+    ux_index = build_bundle_ux_index_for_orders(db, order_ids)
+
     lines: list[WmsPickingProductLine] = []
     for pid in sorted(
         product_ids,
@@ -1295,6 +1370,9 @@ def build_wms_picking_product_lines(
         rem_pick = max(0.0, float(tq) - picked_eff - miss_sum)
         scanner_active = bool(scan_by_pid.get(pid)) if cart_id is not None else (rem_pick > 1e-9)
         shelf_label = consolidation_shelves.get(int(pid))
+        breakdown = _bundle_breakdown_for_product(
+            db, order_ids=order_ids, product_id=int(pid), ux_index=ux_index
+        )
         lines.append(
             WmsPickingProductLine(
                 product_id=pid,
@@ -1312,6 +1390,7 @@ def build_wms_picking_product_lines(
                 scanner_active=scanner_active,
                 consolidation_pick=shelf_label is not None,
                 consolidation_shelf_label=shelf_label,
+                bundle_breakdown=breakdown,
             )
         )
 
@@ -1450,6 +1529,7 @@ def build_wms_picking_product_detail(
     )
     order_rows: list[WmsPickingProductOrderRow] = []
     cid = int(cart_id) if cart_id is not None else None
+    ux_index = build_bundle_ux_index_for_orders(db, order_ids)
     from .order_consolidation.consolidation_context import (
         consolidation_rack_picking_active,
         local_plan_item_for_product as _local_plan_item_for_product,
@@ -1491,21 +1571,25 @@ def build_wms_picking_product_detail(
                         order_shelf = sh["shelf_label"] if sh else None
                         order_cons_pick = order_shelf is not None
                 order_rows.append(
-                    WmsPickingProductOrderRow(
-                        order_id=int(o.id),
+                    _apply_bundle_ux_to_order_row(
+                        WmsPickingProductOrderRow(
+                            order_id=int(o.id),
+                            order_item_id=int(oi.id),
+                            order_number=str(o.number or f"#{o.id}"),
+                            quantity=qty,
+                            picked_quantity=round(picked_row, 6),
+                            missing_quantity=round(miss_ln, 6),
+                            quantity_to_pick=round(to_pick, 6),
+                            line_value=float(oi.total_price) if oi.total_price is not None else None,
+                            shipping_method_name=sn,
+                            shipping_method_logo_url=sl,
+                            basket_slot=_basket_slot_label(basket) if not order_cons_pick else None,
+                            shortage_declarable_qty=round(decl_short, 6),
+                            consolidation_pick=order_cons_pick,
+                            consolidation_shelf_label=order_shelf,
+                        ),
+                        ux_index=ux_index,
                         order_item_id=int(oi.id),
-                        order_number=str(o.number or f"#{o.id}"),
-                        quantity=qty,
-                        picked_quantity=round(picked_row, 6),
-                        missing_quantity=round(miss_ln, 6),
-                        quantity_to_pick=round(to_pick, 6),
-                        line_value=float(oi.total_price) if oi.total_price is not None else None,
-                        shipping_method_name=sn,
-                        shipping_method_logo_url=sl,
-                        basket_slot=_basket_slot_label(basket) if not order_cons_pick else None,
-                        shortage_declarable_qty=round(decl_short, 6),
-                        consolidation_pick=order_cons_pick,
-                        consolidation_shelf_label=order_shelf,
                     )
                 )
 
@@ -1644,6 +1728,43 @@ def build_wms_picking_product_detail(
                     for lid in lids_sorted
                 ]
 
+    orders_for_trees = orders_q.all() if cid is not None else []
+    raw_trees = build_picking_bundle_trees_for_orders(
+        db,
+        orders=orders_for_trees,
+        product_id=int(product_id),
+        cart_id=cid,
+        ux_index=ux_index,
+        sum_pick_fn=sum_pick_events_for_line_cart,
+    )
+    order_bundle_trees = [
+        WmsPickingOrderBundleTree(
+            order_id=int(t["order_id"]),
+            order_number=str(t["order_number"]),
+            bundle_id=int(t["bundle_id"]),
+            bundle_name=str(t["bundle_name"]),
+            bundle_mode=str(t["bundle_mode"]),
+            parent_order_line_id=int(t["parent_order_line_id"]),
+            components_total=int(t["components_total"]),
+            components_done=int(t["components_done"]),
+            components=[
+                WmsPickingBundleComponentStatus(
+                    order_item_id=int(c.order_item_id),
+                    product_id=int(c.product_id),
+                    product_name=str(c.product_name),
+                    quantity=float(c.quantity),
+                    picked_quantity=float(c.picked_quantity),
+                    quantity_to_pick=float(c.quantity_to_pick),
+                    bundle_component_index=int(c.bundle_component_index),
+                    is_current_product=bool(c.is_current_product),
+                    pick_done=bool(c.pick_done),
+                )
+                for c in t["components"]
+            ],
+        )
+        for t in raw_trees
+    ]
+
     return WmsPickingProductDetailResponse(
         product_id=int(product_id),
         name=pr.name if pr and pr.name else row.name,
@@ -1665,6 +1786,7 @@ def build_wms_picking_product_detail(
         consolidation_plan_id=consolidation_plan_id,
         consolidation_plan_item_id=consolidation_plan_item_id,
         pending_shelf_deposit=pending_shelf_deposit,
+        order_bundle_trees=order_bundle_trees,
     )
 
 
@@ -2759,6 +2881,9 @@ def finalize_wms_picking_cart(
                 row.status = "done"
                 finalized_ids.append(int(row.id))
         mark_pick_events_finalized_for_pick_ids(db, finalized_ids)
+        from .bundles.bundle_lot_snapshot_service import persist_bundle_lot_snapshots_for_picks
+
+        persist_bundle_lot_snapshots_for_picks(db, finalized_ids)
         logger.info(
             "[picking.finalize.finish] cart_id=%s source_status_id=%s step=inventory picks_finalized=%s",
             cid,
@@ -3204,6 +3329,9 @@ def finalize_wms_recovery_picking_cart(
             row.status = "done"
             finalized_ids.append(int(row.id))
     mark_pick_events_finalized_for_pick_ids(db, finalized_ids)
+    from .bundles.bundle_lot_snapshot_service import persist_bundle_lot_snapshots_for_picks
+
+    persist_bundle_lot_snapshots_for_picks(db, finalized_ids)
 
     from .recovery_workflow_service import apply_fulfillment_state_from_resolver
 

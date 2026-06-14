@@ -122,10 +122,8 @@ from ..services.bundle_explosion import (
     vat_percent_from_product,
 )
 from ..services.order_bundle_persistence import persist_resolved_bundle_lines
-from ..services.bundle_order_snapshot_service import (
-    load_snapshots_for_order_line_ids,
-    snapshot_purchase_cost_total_net,
-)
+from ..services.bundle_order_snapshot_service import load_snapshots_for_order_line_ids
+from ..services.bundles import bundle_line_resolver, margin_from_context
 from ..services.bundle_order_item_ops import (
     bundle_fulfillment_mode_from_order_item,
     order_item_is_operational_picking_line,
@@ -1604,6 +1602,9 @@ def build_order_read(db: Session, order: Order) -> OrderRead:
         if bool(getattr(item, "is_bundle_parent", False)) and int(item.quantity or 0) > 0
     ]
     snapshots_by_parent = load_snapshots_for_order_line_ids(db, bundle_parent_ids)
+    bundle_ctx_by_parent = {
+        ctx.order_line_id: ctx for ctx in bundle_line_resolver.resolve_for_order(db, int(order.id))
+    }
 
     sum_line_net_active = 0.0
     sum_purchase_active = 0.0
@@ -1660,19 +1661,24 @@ def build_order_read(db: Session, order: Order) -> OrderRead:
                     if c.purchase_price_net_snapshot is not None
                     else None
                 ),
+                unit_price_net_snapshot=(
+                    float(c.unit_price_net_snapshot)
+                    if getattr(c, "unit_price_net_snapshot", None) is not None
+                    else None
+                ),
             )
             for c in comp_rows
         ]
-        if is_bp and comp_rows:
-            snap_cost = snapshot_purchase_cost_total_net(comp_rows)
-            line_net = fin.get("line_net_total")
-            if snap_cost is not None and line_net is not None:
-                fin = dict(fin)
-                fin["line_purchase_total_net"] = snap_cost
-                margin_amt = round(float(line_net) - snap_cost, 2)
-                fin["line_margin_amount"] = margin_amt
-                if float(line_net) > 1e-9:
-                    fin["line_margin_percent"] = round(margin_amt / float(line_net) * 100.0, 2)
+        if is_bp:
+            ctx = bundle_ctx_by_parent.get(int(item.id))
+            if ctx is not None:
+                margin = margin_from_context(ctx)
+                line_net = fin.get("line_net_total")
+                if margin.cost_net is not None and line_net is not None:
+                    fin = dict(fin)
+                    fin["line_purchase_total_net"] = margin.cost_net
+                    fin["line_margin_amount"] = margin.margin_amount
+                    fin["line_margin_percent"] = margin.margin_percent
         if _order_item_active_for_financial_totals(item):
             ln = fin.get("line_net_total")
             if ln is not None:

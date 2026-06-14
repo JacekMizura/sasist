@@ -79,7 +79,12 @@ def persist_resolved_bundle_lines(
                 inst_to_parent_item_id[inst_key] = int(oi.id)
                 snaps = snapshots_by_instance.get(inst_key) or []
                 if snaps:
-                    persist_order_line_bundle_snapshots(db, order_line_id=int(oi.id), snapshots=snaps)
+                    persist_order_line_bundle_snapshots(
+                        db,
+                        order_line_id=int(oi.id),
+                        order_id=int(order_id),
+                        snapshots=snaps,
+                    )
             continue
         pb_id = inst_to_parent_item_id.get(str(r.bundle_instance_id)) if r.bundle_instance_id else None
         oi = OrderItem(

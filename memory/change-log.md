@@ -1,5 +1,54 @@
 # Change log
 
+## 2026-06-08 — P4.16 Bundle Traceability & Lot Tracking
+
+- Model `order_line_bundle_component_lots` + migracja schema
+- `bundle_lot_snapshot_service` — persist po finalize pick / WZ issue
+- Traceability API A–D, recall report, lot-trace + bundle-lots reports
+- Rozszerzenie drzew zwrotów/reklamacji o `lots[]`; UI partii w RMZ panelu
+- Testy: 25 w `test_bundle_traceability.py`; raport `bundle-traceability-report.md`
+
+## 2026-06-08 — P4.15B Bundle Operational UX Layer
+
+- Projekcje UX: `bundle_operational_ux_service`, rozszerzone `picking_lines()` metadata
+- Picking API: `bundle_breakdown`, `order_bundle_trees`, bundle fields on order rows
+- Packing API: `bundle_trees` + line bundle fields
+- UI: drzewo bundle w pickingu i pakowaniu; breakdown SKU multi-order
+- Single/multi filter + cart volume fix (operational lines only)
+- Testy: `test_bundle_operational_ux.py`; raport `bundle-operational-ux-report.md` — **READY FOR TRACEABILITY**
+
+## 2026-06-08 — P4.15A Bundle operational execution review
+
+- Przegląd WMS: picking, EAN, regały, nośniki, pakowanie, cross-dock, multi-order/fala
+- Werdykt: **CHANGES REQUIRED** — raport `bundle-operational-readiness-report.md`
+- Proponowany P4.15B (UX pick/pack + agregacja) przed P4.16 lot snapshot
+- Bez implementacji lot snapshot / recall / EAN bundle
+
+## 2026-06-08 — P4.15 Bundle returns, complaints & corrections
+
+- Model `return_line_bundle_components`; RMZ `bundle_return_scenario` / `bundle_return_status`
+- Refund engine ze snapshotu; PZ per składnik (ON_DEMAND) / SKU (STOCK)
+- API: `/orders/{id}/bundle-return-tree`, PUT bundle-components, raporty
+- UI: `BundleReturnLinePanel` (checkboxy składników, preview refundu)
+- Testy: 38 w `test_bundle_returns_complaints.py`; raport `bundle-returns-complaints-report.md`
+- Poza scope: EAN bundle scan, lot snapshot, recall, OrderCancellationService
+
+## 2026-06-08 — P4.14A Bundle warehouse documents layer
+
+- `warehouse_document_lines()` / `warehouse_receipt_lines()` — projekcje COMMERCIAL vs WAREHOUSE
+- `bundle_warehouse_document_service` — SSOT linii dokumentów dla zamówień z bundle
+- Integracja: `stock_document_service`, walidacja WZ w `direct_sale/wz_service`
+- Testy: 20 + raport `bundle-warehouse-documents-report.md`
+
+## 2026-06-08 — P4.14 BundleLineResolver (SSOT)
+
+- Pakiet `backend/services/bundles/`: `BundleLineContext`, `BundleLineResolver`, projekcje (commercial, picking, reservation, warehouse_issue, margin, return, complaint)
+- Snapshot: `order_id`, `unit_price_net_snapshot` na `order_line_bundle_components` + migracja P414
+- Marża OMS order read → `margin_from_context()` z resolvera
+- Eksplozja ON_DEMAND wzbogaca snapshot o ceny składników
+- Testy: `test_bundle_line_resolver.py` (23); raport: `bundle-line-resolver-report.md`
+- Bez: RMZ/reklamacje/korekty bundle UI, nowych endpointów HTTP
+
 ## 2026-06-08 — P4.13B Bundle P0 stabilization (pre–BundleLineResolver)
 
 - **SSOT:** `bundle_order_item_ops.sqlalchemy_operational_picking_order_item_clause()` — zastąpienie lokalnych `is_bundle_parent=False` w falach, dashboardach, konsolidacji, symulacji, routingu, recovery

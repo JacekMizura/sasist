@@ -1,5 +1,58 @@
 # Current context
 
+## P4.16 — Bundle Traceability & Lot Tracking (2026-06-08)
+- **Raport:** `memory/bundle-traceability-report.md`
+- Tabela `order_line_bundle_component_lots` — zapis po finalize pick / WZ issue
+- Serwisy: lot snapshot, traceability A–D, recall (report only), reports
+- API: `/bundles/traceability/*`
+- RMZ/reklamacje: `lots[]` na składnikach; UI partia w `BundleReturnLinePanel`
+- Testy: `test_bundle_traceability.py` (30) + pakiet bundle 102 passed
+- **Następny:** P4.17 Bundle EAN Scan & Advanced Warehouse Automation
+
+## P4.15B — Bundle Operational UX Layer (2026-06-08)
+- **Raport:** `memory/bundle-operational-ux-report.md`
+- **Werdykt:** **READY FOR TRACEABILITY** → P4.16 lot tracking
+- API: `picking_lines()` metadata, `bundle_breakdown`, `order_bundle_trees`, packing `bundle_trees`
+- UI: `BundlePickingOrderTree`, `BundlePackingTree`, list breakdown multi-order
+- Single/multi: liczy linie operacyjne; cart volume bez parent ON_DEMAND
+- Testy: `test_bundle_operational_ux.py` (12) + resolver — 34 passed
+
+## P4.15A — Bundle operational execution review (2026-06-08)
+- **Raport:** `memory/bundle-operational-readiness-report.md`
+- **Werdykt:** **CHANGES REQUIRED** przed P4.16
+- Backend pick (ON_DEMAND=składniki, STOCK=linked SKU) ✅; UI pickingu bez kontekstu bundle ❌
+- EAN bundle nie w scan path; regały/nośniki/cross-dock OK z zastrzeżeniami (volume fallback)
+- **Proponowany:** P4.15B operational UX hardening → potem P4.16 lot tracking
+
+## P4.15 — Bundle returns, complaints & corrections (2026-06-08)
+- **Raport:** `memory/bundle-returns-complaints-report.md`
+- Model `return_line_bundle_components` + kolumny `bundle_return_*` na `rmz_lines`
+- Serwisy: `bundle_return_service`, `bundle_rmz_receipt_integration`, `bundle_complaint_service`, `bundle_return_reports_service`
+- PZ zwrotu: rozwinięcie składników ON_DEMAND via `warehouse_receipt_lines()` (integracja `rmz_return_receipt_service`)
+- Refund wyłącznie ze `unit_price_net_snapshot`
+- API: drzewo zwrotu, PUT składników, raporty; UI: `BundleReturnLinePanel` w WmsReturnsPage
+- Testy: `test_bundle_returns_complaints.py` (38); pakiet bundle 91+ passed
+- **Następny:** P4.16 Bundle Traceability & Lot Tracking
+
+## P4.14A — Bundle warehouse documents layer (2026-06-08)
+- **Raport:** `memory/bundle-warehouse-documents-report.md`
+- Projekcja `warehouse_document_lines()` + `warehouse_receipt_lines()` (PZ)
+- Serwis `bundle_warehouse_document_service` — SSOT linii WZ/RW/PW/PZ/MM/RW_WMS
+- Facade: `stock_document_service.warehouse_document_lines_for_order()`
+- WZ direct sale: walidacja alokacji vs resolver
+- Testy: `test_bundle_warehouse_documents.py` (20) + resolver (43 łącznie)
+- **Następny:** P4.15 zwroty i reklamacje bundle
+
+## P4.14 — BundleLineResolver SSOT (2026-06-08)
+- **Raport:** `memory/bundle-line-resolver-report.md`
+- Pakiet `backend/services/bundles/` — jedyny silnik interpretacji linii zestawu
+- Projekcje: `commercial_lines`, `picking_lines`, `reservation_lines`, `warehouse_issue_lines`, `margin_lines`, `return_lines`, `complaint_lines`
+- Snapshot rozszerzony: `order_id`, `unit_price_net_snapshot` (korekty częściowe — P4.15)
+- OMS marża: `margin_from_context()` w order read API
+- Singleton: `from backend.services.bundles import bundle_line_resolver`
+- Testy: 23 + P0/architektura = 37 passed
+- **Następny:** P4.15 zwroty i korekty bundle
+
 ## P4.13B — Bundle P0 stabilization (2026-06-08)
 - **Raport:** `memory/bundle-stabilization-report.md` — **READY FOR BUNDLELINERESOLVER**
 - SSOT linii operacyjnych: `bundle_order_item_ops.py` (`sqlalchemy_operational_picking_order_item_clause`, `filter_operational_order_items`)

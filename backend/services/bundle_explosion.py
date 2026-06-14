@@ -23,6 +23,7 @@ from .bundle_operational_mode import (
 from .bundle_order_snapshot_service import (
     BundleComponentSnapshotDraft,
     build_component_snapshots_from_bundle,
+    enrich_snapshot_drafts_with_pricing,
 )
 from .stock_disposition import (
     DEFAULT_STOCK_DISPOSITION,
@@ -465,6 +466,7 @@ def explode_bundle_line(
             required_stock_disposition=required_stock_disposition,
             instance_id=instance_id,
         )
+        snapshots = enrich_snapshot_drafts_with_pricing(snapshots, child_lines=lines)
 
     return BundleExplosionOutput(
         lines=lines,

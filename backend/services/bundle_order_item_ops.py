@@ -1,4 +1,8 @@
-"""Bundle order line eligibility — picking, packing, reservation (P4.13 / P0 SSOT)."""
+"""Bundle order line eligibility — delegates bundle rules to BundleLineResolver (P4.14).
+
+Non-bundle lines: local helpers below.
+Bundle lines: use ``backend.services.bundles`` projections via resolver.
+"""
 
 from __future__ import annotations
 

@@ -996,6 +996,19 @@ export default function WmsPickingProductsPage() {
                           </span>
                         </div>
                       ) : null}
+                      {r.bundle_breakdown && r.bundle_breakdown.length > 1 ? (
+                        <ul className="mt-2 space-y-0.5 border-l-2 border-indigo-200 pl-2">
+                          {r.bundle_breakdown.map((b) => (
+                            <li key={`${b.order_id}-${b.bundle_id ?? "x"}`} className="text-[10px] font-semibold text-slate-500 leading-snug">
+                              <span className="text-slate-700">#{b.order_number}</span>
+                              {b.bundle_name ? (
+                                <span className="text-indigo-700"> · {b.bundle_name}</span>
+                              ) : null}
+                              <span className="tabular-nums"> · ×{fmtQty(b.quantity)}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
                     </div>
                   </div>
 

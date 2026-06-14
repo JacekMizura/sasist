@@ -13,6 +13,7 @@ import {
 import { postStageConsolidationItem } from "../../api/wmsConsolidationApi";
 import { useMergedPickingSession, useWmsPickingCart } from "../../context/WmsPickingCartContext";
 import { useWarehouse } from "../../context/WarehouseContext";
+import { BundlePickingOrderTree } from "../../components/wms/picking/BundlePickingOrderTree";
 import { WmsOperationalPageBody, WmsOperationalPageShell } from "../../components/wms/execution/WmsOperationalPageShell";
 import { useWmsScanner } from "../../context/WmsScannerContext";
 import { playScanBeep } from "../../utils/playScanBeep";
@@ -560,17 +561,33 @@ export default function WmsPickingProductDetailPage() {
               </ul>
             </div>
 
-            {/* ZAMÓWIENIA POWIĄZANE */}
-            <div className="border border-slate-100 rounded-2xl p-5 bg-slate-50/40">
-              <h4 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-3">Zamówienia i koszyki</h4>
-              <ul className="space-y-2">
-                {detail.orders.map((o, idx) => (
-                  <li key={idx} className="p-3 bg-white rounded-xl border border-slate-200 flex justify-between items-center text-xs">
-                    <span className="font-bold text-slate-900">#{o.order_number}</span>
-                    {o.basket_slot && <span className="font-black text-[#5a4fcf] bg-indigo-50 border border-indigo-100 px-2 py-1 rounded-lg">Koszyk: {o.basket_slot}</span>}
-                  </li>
-                ))}
-              </ul>
+            {/* KONTEKST BUNDLE + ZAMÓWIENIA */}
+            <div className="md:col-span-2 border border-slate-100 rounded-2xl p-5 bg-slate-50/40">
+              <h4 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-3">Kontekst zestawów</h4>
+              {detail.order_bundle_trees && detail.order_bundle_trees.length > 0 ? (
+                <BundlePickingOrderTree trees={detail.order_bundle_trees} />
+              ) : (
+                <ul className="space-y-2">
+                  {detail.orders.map((o, idx) => (
+                    <li key={idx} className="p-3 bg-white rounded-xl border border-slate-200 flex flex-wrap justify-between items-center gap-2 text-xs">
+                      <span className="font-bold text-slate-900">#{o.order_number}</span>
+                      {o.bundle_name ? (
+                        <span className="font-semibold text-indigo-700">
+                          {o.bundle_name}
+                          {o.is_bundle_component && o.bundle_component_index != null && o.bundle_component_count != null
+                            ? ` (${o.bundle_component_index}/${o.bundle_component_count})`
+                            : null}
+                        </span>
+                      ) : null}
+                      {o.basket_slot ? (
+                        <span className="font-black text-[#5a4fcf] bg-indigo-50 border border-indigo-100 px-2 py-1 rounded-lg">
+                          Koszyk: {o.basket_slot}
+                        </span>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </div>
         </div>

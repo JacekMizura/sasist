@@ -279,6 +279,25 @@ def create_and_post_wz_for_direct_sale(
     tenant_id = int(order.tenant_id)
     warehouse_id = int(order.warehouse_id)
 
+    from ..bundles.bundle_warehouse_document_service import expected_warehouse_product_quantities
+
+    expected_wh = expected_warehouse_product_quantities(db, order, document_type="WZ")
+    if expected_wh:
+        actual_wh: dict[int, float] = {}
+        for alloc in allocations:
+            pid = int(alloc.product_id)
+            actual_wh[pid] = actual_wh.get(pid, 0.0) + float(alloc.quantity)
+        for pid, exp_qty in expected_wh.items():
+            act = actual_wh.get(int(pid), 0.0)
+            if abs(act - exp_qty) > 0.01:
+                logger.warning(
+                    "WZ allocation mismatch vs BundleLineResolver order_id=%s product_id=%s expected=%s actual=%s",
+                    order_id,
+                    pid,
+                    exp_qty,
+                    act,
+                )
+
     existing = load_wz_for_sale_document(db, sale_document_id=sale_doc_id)
     if existing is not None:
         label = str(getattr(existing, "document_number", None) or "")
@@ -388,6 +407,10 @@ def create_and_post_wz_for_direct_sale(
     )
     db.add(link)
     db.flush()
+
+    from ..bundles.bundle_lot_snapshot_service import persist_bundle_lot_snapshots_for_order_allocations
+
+    persist_bundle_lot_snapshots_for_order_allocations(db, int(order.id))
 
     emit_operational_sales_event(
         db,

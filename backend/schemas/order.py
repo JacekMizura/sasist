@@ -93,6 +93,7 @@ class OrderLineBundleComponentRead(BaseModel):
     quantity_per_bundle: int
     quantity_total: int
     purchase_price_net_snapshot: Optional[float] = None
+    unit_price_net_snapshot: Optional[float] = None
 
     class Config:
         from_attributes = True

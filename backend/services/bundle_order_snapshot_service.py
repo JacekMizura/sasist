@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Iterable, Optional, Sequence
+import json
+from dataclasses import dataclass, replace
+from typing import Any, Iterable, Optional, Sequence
 
 from sqlalchemy.orm import Session, joinedload
 
@@ -22,6 +23,8 @@ class BundleComponentSnapshotDraft:
     quantity_per_bundle: int
     quantity_total: int
     purchase_price_net_snapshot: Optional[float]
+    unit_price_net_snapshot: Optional[float] = None
+    order_id: Optional[int] = None
 
 
 def _product_sku_snapshot(product: Product) -> Optional[str]:
@@ -68,6 +71,48 @@ def build_component_snapshots_from_bundle(
     return out
 
 
+def _display_unit_price_from_line_metadata(metadata_json: Optional[str]) -> Optional[float]:
+    if not metadata_json or not str(metadata_json).strip():
+        return None
+    try:
+        meta = json.loads(metadata_json)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(meta, dict):
+        return None
+    raw = meta.get("bundle_display_unit_price")
+    if raw is None:
+        return None
+    try:
+        return round(float(raw), 4)
+    except (TypeError, ValueError):
+        return None
+
+
+def enrich_snapshot_drafts_with_pricing(
+    snapshots: list[BundleComponentSnapshotDraft],
+    *,
+    child_lines: Sequence[Any],
+) -> list[BundleComponentSnapshotDraft]:
+    """Attach unit_price_net_snapshot from exploded component line metadata (ON_DEMAND)."""
+    price_by_pid: dict[int, float] = {}
+    for line in child_lines:
+        if getattr(line, "is_bundle_parent", False):
+            continue
+        px = _display_unit_price_from_line_metadata(getattr(line, "metadata_json", None))
+        if px is not None:
+            price_by_pid[int(line.product_id)] = px
+    if not price_by_pid:
+        return snapshots
+    return [
+        replace(
+            snap,
+            unit_price_net_snapshot=price_by_pid.get(int(snap.product_id), snap.unit_price_net_snapshot),
+        )
+        for snap in snapshots
+    ]
+
+
 def build_component_snapshots(
     db: Session,
     *,
@@ -90,12 +135,14 @@ def persist_order_line_bundle_snapshots(
     db: Session,
     *,
     order_line_id: int,
+    order_id: Optional[int] = None,
     snapshots: Sequence[BundleComponentSnapshotDraft],
 ) -> None:
     for snap in snapshots:
         db.add(
             OrderLineBundleComponent(
                 order_line_id=int(order_line_id),
+                order_id=int(order_id) if order_id is not None else snap.order_id,
                 bundle_id=int(snap.bundle_id),
                 product_id=int(snap.product_id),
                 product_name_snapshot=snap.product_name_snapshot,
@@ -104,6 +151,7 @@ def persist_order_line_bundle_snapshots(
                 quantity_per_bundle=int(snap.quantity_per_bundle),
                 quantity_total=int(snap.quantity_total),
                 purchase_price_net_snapshot=snap.purchase_price_net_snapshot,
+                unit_price_net_snapshot=snap.unit_price_net_snapshot,
             )
         )
 

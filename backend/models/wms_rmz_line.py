@@ -5,6 +5,7 @@ RMZ line (return line) stored as normalized rows.
 from datetime import datetime
 
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text, Float, UniqueConstraint
+from sqlalchemy.orm import relationship
 
 from ..database import Base
 
@@ -38,4 +39,14 @@ class RMZLine(Base):
     damage_entries_json = Column(Text, nullable=True)
 
     created_at = Column(DateTime, nullable=True, default=datetime.utcnow)
+    #: FULL_BUNDLE | PARTIAL_BUNDLE | SINGLE_COMPONENT | INCOMPLETE | DAMAGED — P4.15 bundle return scenario
+    bundle_return_scenario = Column(String(32), nullable=True)
+    #: PARTIAL_BUNDLE_RETURN when accepted qty < expected snapshot qty across components
+    bundle_return_status = Column(String(32), nullable=True)
+
+    bundle_component_returns = relationship(
+        "ReturnLineBundleComponent",
+        back_populates="return_line",
+        cascade="all, delete-orphan",
+    )
 

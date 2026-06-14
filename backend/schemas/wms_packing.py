@@ -148,6 +148,12 @@ class WmsPackingOrderLine(BaseModel):
     catalog_number: Optional[str] = None
     product_symbol: Optional[str] = Field(default=None, description="Symbol produktu (osobno od SKU)")
     bundle_name: Optional[str] = None
+    bundle_id: Optional[int] = Field(default=None, description="Bundle catalog id (P4.15B)")
+    bundle_mode: Optional[str] = None
+    bundle_component_index: Optional[int] = Field(default=None, ge=1)
+    bundle_component_count: Optional[int] = Field(default=None, ge=1)
+    is_bundle_component: bool = False
+    parent_bundle_order_line_id: Optional[int] = None
     #: Ostatnia zarejestrowana zbiórka (audyt WMS) — kto, skąd, na jaki wózek.
     last_pick_audit_summary: Optional[str] = Field(default=None, max_length=512)
     #: Ostatnie pakowanie linii (audyt WMS) — operator, karton.
@@ -165,6 +171,27 @@ class WmsOperationalNoteBrief(BaseModel):
     show_in_packing: bool = False
     show_in_returns: bool = False
     show_in_complaints: bool = False
+
+
+class WmsPackingBundleComponentNode(BaseModel):
+    order_item_id: int
+    product_id: int
+    product_name: str
+    quantity_required: int = Field(..., ge=0)
+    quantity_packed: int = Field(..., ge=0)
+    bundle_component_index: int = Field(..., ge=1)
+    is_packed: bool = False
+
+
+class WmsPackingBundleTreeNode(BaseModel):
+    bundle_id: int
+    bundle_name: str
+    bundle_mode: str
+    parent_order_line_id: int
+    components_total: int = Field(..., ge=0)
+    components_packed: int = Field(0, ge=0)
+    is_complete: bool = False
+    components: list[WmsPackingBundleComponentNode] = Field(default_factory=list)
 
 
 class WmsPackingOrderCard(BaseModel):
@@ -186,6 +213,10 @@ class WmsPackingOrderCard(BaseModel):
         description="UUID metody dostawy — m.in. do podpowiedzi kartonów na pakowaniu",
     )
     lines: list[WmsPackingOrderLine] = Field(default_factory=list)
+    bundle_trees: list[WmsPackingBundleTreeNode] = Field(
+        default_factory=list,
+        description="Drzewo postępu bundle (P4.15B)",
+    )
     basket_code: Optional[str] = Field(
         default=None,
         description="Etykieta koszyka (tryb baskets) — np. S-1-2 lub nazwa; null w bulk / no_cart",

@@ -34,8 +34,16 @@ class OrderLineBundleComponent(Base):
     quantity_per_bundle = Column(Integer, nullable=False)
     quantity_total = Column(Integer, nullable=False)
     purchase_price_net_snapshot = Column(Float, nullable=True)
+    unit_price_net_snapshot = Column(Float, nullable=True)
+    order_id = Column(
+        Integer,
+        ForeignKey("orders.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     order_line = relationship("OrderItem", back_populates="bundle_component_snapshots")
+    order = relationship("Order", foreign_keys=[order_id])
     bundle = relationship("Bundle", foreign_keys=[bundle_id])
     product = relationship("Product", foreign_keys=[product_id])

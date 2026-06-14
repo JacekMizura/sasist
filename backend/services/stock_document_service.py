@@ -1207,6 +1207,32 @@ def _wms_extra_pz_line(row: StockDocumentItem, doc: StockDocument, eps: float = 
     return True
 
 
+def warehouse_document_lines_for_order(
+    db: Session,
+    order_id: int,
+    *,
+    document_type: str = "WZ",
+    document_view: str = "WAREHOUSE",
+):
+    """
+    P4.14A — projekcje linii dokumentu magazynowego z BundleLineResolver (SSOT).
+
+    Używać zamiast lokalnego filtrowania ``is_bundle_parent`` przy WZ/RW/MM/PZ.
+    """
+    from ..models.order import Order
+    from .bundles.bundle_warehouse_document_service import document_lines_for_order
+
+    order = db.query(Order).filter(Order.id == int(order_id)).first()
+    if order is None:
+        return []
+    return document_lines_for_order(
+        db,
+        order,
+        document_type=document_type,  # type: ignore[arg-type]
+        document_view=document_view,  # type: ignore[arg-type]
+    )
+
+
 def build_stock_document_read(
     db: Session,
     doc: StockDocument,

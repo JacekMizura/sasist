@@ -72,6 +72,8 @@ from .order_refund_draft import OrderRefundDraft, OrderRefundDraftLine  # noqa: 
 from .order_document_type_enum import OrderDocumentType, ORDER_DOCUMENT_TYPE_VALUES  # noqa: F401
 from .order_item import OrderItem
 from .order_line_bundle_component import OrderLineBundleComponent  # noqa: F401
+from .order_line_bundle_component_lot import OrderLineBundleComponentLot  # noqa: F401
+from .return_line_bundle_component import ReturnLineBundleComponent  # noqa: F401
 from .shipping_method import ShippingMethod  # noqa: F401
 from .carton import Carton, carton_shipping_method_links  # noqa: F401
 from .packaging_material import PackagingMaterial  # noqa: F401

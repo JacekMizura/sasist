@@ -92,6 +92,12 @@ export type WmsPackingOrderLineApi = {
   catalog_number?: string | null;
   product_symbol?: string | null;
   bundle_name?: string | null;
+  bundle_id?: number | null;
+  bundle_mode?: string | null;
+  bundle_component_index?: number | null;
+  bundle_component_count?: number | null;
+  is_bundle_component?: boolean;
+  parent_bundle_order_line_id?: number | null;
   /** shortage | waiting | resolved | none — z backendu ``WmsPackingOrderLine``. */
   shortage_display_kind?: string | null;
   replaced_from_order_item_id?: number | null;
@@ -142,6 +148,27 @@ export type WmsOperationTimesApi = {
   warehouse_flow_seconds?: number | null;
 };
 
+export type WmsPackingBundleComponentNodeApi = {
+  order_item_id: number;
+  product_id: number;
+  product_name: string;
+  quantity_required: number;
+  quantity_packed: number;
+  bundle_component_index: number;
+  is_packed: boolean;
+};
+
+export type WmsPackingBundleTreeNodeApi = {
+  bundle_id: number;
+  bundle_name: string;
+  bundle_mode: string;
+  parent_order_line_id: number;
+  components_total: number;
+  components_packed: number;
+  is_complete: boolean;
+  components: WmsPackingBundleComponentNodeApi[];
+};
+
 export type WmsPackingOrderCardApi = {
   order_id: number;
   number: string;
@@ -154,6 +181,8 @@ export type WmsPackingOrderCardApi = {
   shipping_method_id?: string | null;
   shipping_method_logo_url?: string | null;
   lines: WmsPackingOrderLineApi[];
+  /** Drzewo postępu bundle (P4.15B) */
+  bundle_trees?: WmsPackingBundleTreeNodeApi[];
   /** Tylko gdy backend zwraca (tryb baskets). */
   basket_code?: string | null;
   customer_comment?: string | null;

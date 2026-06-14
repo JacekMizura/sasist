@@ -1765,6 +1765,8 @@ def ensure_order_line_bundle_components_table(engine: Engine) -> None:
                         quantity_per_bundle INTEGER NOT NULL,
                         quantity_total INTEGER NOT NULL,
                         purchase_price_net_snapshot FLOAT,
+                        unit_price_net_snapshot FLOAT,
+                        order_id INTEGER REFERENCES orders(id) ON DELETE CASCADE,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
                     )
                     """
@@ -1786,6 +1788,145 @@ def ensure_order_line_bundle_components_table(engine: Engine) -> None:
                 text(
                     "CREATE INDEX IF NOT EXISTS ix_order_line_bundle_components_product_id "
                     "ON order_line_bundle_components(product_id)"
+                )
+            )
+        conn.commit()
+
+
+def ensure_order_line_bundle_components_p414_columns(engine: Engine) -> None:
+    """P4.14 — order_id + unit_price_net_snapshot on bundle component snapshot."""
+    if not _table_exists(engine, "order_line_bundle_components"):
+        return
+    cols = _cols(engine, "order_line_bundle_components")
+    with engine.begin() as conn:
+        if "order_id" not in cols:
+            conn.execute(
+                text(
+                    "ALTER TABLE order_line_bundle_components "
+                    "ADD COLUMN order_id INTEGER REFERENCES orders(id) ON DELETE CASCADE"
+                )
+            )
+            conn.execute(
+                text(
+                    """
+                    UPDATE order_line_bundle_components
+                    SET order_id = (
+                        SELECT order_id FROM order_items
+                        WHERE order_items.id = order_line_bundle_components.order_line_id
+                    )
+                    WHERE order_id IS NULL
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_order_line_bundle_components_order_id "
+                    "ON order_line_bundle_components(order_id)"
+                )
+            )
+        if "unit_price_net_snapshot" not in cols:
+            conn.execute(
+                text("ALTER TABLE order_line_bundle_components ADD COLUMN unit_price_net_snapshot FLOAT")
+            )
+
+
+def ensure_return_line_bundle_components_table(engine: Engine) -> None:
+    """P4.15 — RMZ bundle component returns linked to order snapshot."""
+    with engine.connect() as conn:
+        if not _table_exists(conn, "return_line_bundle_components"):
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE return_line_bundle_components (
+                        id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        return_line_id INTEGER NOT NULL REFERENCES rmz_lines(id) ON DELETE CASCADE,
+                        order_line_bundle_component_id INTEGER REFERENCES order_line_bundle_components(id) ON DELETE SET NULL,
+                        component_product_id INTEGER REFERENCES products(id) ON DELETE SET NULL,
+                        returned_qty INTEGER NOT NULL DEFAULT 0,
+                        accepted_qty INTEGER NOT NULL DEFAULT 0,
+                        refund_amount FLOAT,
+                        decision VARCHAR(24),
+                        lot_trace_json VARCHAR(512)
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_return_line_bundle_components_return_line_id "
+                    "ON return_line_bundle_components(return_line_id)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_return_line_bundle_components_snapshot_id "
+                    "ON return_line_bundle_components(order_line_bundle_component_id)"
+                )
+            )
+        conn.commit()
+
+
+def ensure_rmz_line_bundle_return_columns(engine: Engine) -> None:
+    """P4.15 — bundle return scenario/status on RMZ lines."""
+    if not _table_exists(engine, "rmz_lines"):
+        return
+    cols = _cols(engine, "rmz_lines")
+    with engine.begin() as conn:
+        if "bundle_return_scenario" not in cols:
+            conn.execute(text("ALTER TABLE rmz_lines ADD COLUMN bundle_return_scenario VARCHAR(32)"))
+        if "bundle_return_status" not in cols:
+            conn.execute(text("ALTER TABLE rmz_lines ADD COLUMN bundle_return_status VARCHAR(32)"))
+
+
+def ensure_order_line_bundle_component_lots_table(engine: Engine) -> None:
+    """P4.16 — lot traceability snapshots for bundle components (pick/issue time)."""
+    with engine.connect() as conn:
+        if not _table_exists(conn, "order_line_bundle_component_lots"):
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE order_line_bundle_component_lots (
+                        id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+                        order_line_id INTEGER NOT NULL REFERENCES order_items(id) ON DELETE CASCADE,
+                        bundle_component_snapshot_id INTEGER NOT NULL
+                            REFERENCES order_line_bundle_components(id) ON DELETE CASCADE,
+                        product_id INTEGER REFERENCES products(id) ON DELETE SET NULL,
+                        lot_id INTEGER,
+                        lot_number VARCHAR(128) NOT NULL DEFAULT '',
+                        expiry_date DATE,
+                        picked_qty REAL NOT NULL,
+                        picked_at DATETIME NOT NULL,
+                        pick_task_id INTEGER REFERENCES pick_tasks(id) ON DELETE SET NULL,
+                        warehouse_id INTEGER NOT NULL REFERENCES warehouses(id) ON DELETE CASCADE,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_olbc_lots_order_id "
+                    "ON order_line_bundle_component_lots(order_id)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_olbc_lots_snapshot_id "
+                    "ON order_line_bundle_component_lots(bundle_component_snapshot_id)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_olbc_lots_lot_number "
+                    "ON order_line_bundle_component_lots(lot_number)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_olbc_lots_product_id "
+                    "ON order_line_bundle_component_lots(product_id)"
                 )
             )
         conn.commit()

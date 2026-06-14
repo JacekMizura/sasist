@@ -37,6 +37,8 @@ from ..schemas.wms_packing import (
     WmsLineAvailableLocationRow,
     WmsLinePickedLocationRow,
     WmsOperationalNoteBrief,
+    WmsPackingBundleComponentNode,
+    WmsPackingBundleTreeNode,
     WmsPackingBasketOrderOut,
     WmsPackingShelfOrderOut,
     WmsPackingCartOrdersOut,
@@ -723,6 +725,26 @@ def _packing_line_from_item(
     catalog_number: Optional[str] = None
     product_symbol: Optional[str] = None
     bundle_name: Optional[str] = None
+    bundle_id: Optional[int] = None
+    bundle_mode: Optional[str] = None
+    bundle_component_index: Optional[int] = None
+    bundle_component_count: Optional[int] = None
+    is_bundle_component: bool = False
+    parent_bundle_order_line_id: Optional[int] = None
+
+    if enrich and db is not None:
+        from .bundles.bundle_operational_ux_service import bundle_ux_for_order_item
+
+        ux = bundle_ux_for_order_item(db, it)
+        if ux is not None:
+            bundle_id = ux.bundle_id
+            bundle_mode = ux.bundle_mode
+            bundle_component_index = ux.bundle_component_index
+            bundle_component_count = ux.bundle_component_count
+            is_bundle_component = bool(ux.is_bundle_component)
+            parent_bundle_order_line_id = ux.parent_bundle_order_line_id
+            if ux.bundle_name and not bundle_name:
+                bundle_name = str(ux.bundle_name)
 
     if p is not None:
         color_name = _product_meta_color(p)
@@ -853,6 +875,12 @@ def _packing_line_from_item(
         catalog_number=catalog_number,
         product_symbol=product_symbol,
         bundle_name=bundle_name,
+        bundle_id=bundle_id,
+        bundle_mode=bundle_mode,
+        bundle_component_index=bundle_component_index,
+        bundle_component_count=bundle_component_count,
+        is_bundle_component=is_bundle_component,
+        parent_bundle_order_line_id=parent_bundle_order_line_id,
         last_pick_audit_summary=last_pick_audit_summary,
         last_pack_audit_summary=last_pack_audit_summary,
     )
@@ -985,6 +1013,34 @@ def _build_packing_order_card(
             for n in pack_notes
         ]
         alert_title = "UWAGA PAKOWANIE" if operational_notes_brief else None
+    bundle_trees_out: List[WmsPackingBundleTreeNode] = []
+    if enrich and db is not None:
+        from .bundles.bundle_operational_ux_service import build_packing_bundle_trees
+
+        for raw in build_packing_bundle_trees(db, order=order, active_lines=lines_out):
+            bundle_trees_out.append(
+                WmsPackingBundleTreeNode(
+                    bundle_id=int(raw["bundle_id"]),
+                    bundle_name=str(raw["bundle_name"]),
+                    bundle_mode=str(raw["bundle_mode"]),
+                    parent_order_line_id=int(raw["parent_order_line_id"]),
+                    components_total=int(raw["components_total"]),
+                    components_packed=int(raw["components_packed"]),
+                    is_complete=bool(raw["is_complete"]),
+                    components=[
+                        WmsPackingBundleComponentNode(
+                            order_item_id=int(c["order_item_id"]),
+                            product_id=int(c["product_id"]),
+                            product_name=str(c["product_name"]),
+                            quantity_required=int(c["quantity_required"]),
+                            quantity_packed=int(c["quantity_packed"]),
+                            bundle_component_index=int(c["bundle_component_index"]),
+                            is_packed=bool(c["is_packed"]),
+                        )
+                        for c in raw["components"]
+                    ],
+                )
+            )
     return WmsPackingOrderCard(
         order_id=int(order.id),
         number=num,
@@ -996,6 +1052,7 @@ def _build_packing_order_card(
         shipping_method_logo_url=ship_logo,
         shipping_method_id=ship_id_out,
         lines=lines_out,
+        bundle_trees=bundle_trees_out,
         basket_code=basket_code,
         wms_timeline=wms_timeline,
         wms_operation_times=wms_operation_times,

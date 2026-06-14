@@ -292,6 +292,65 @@ class WmsReturnLineRead(BaseModel):
     photo_urls: Optional[List[str]] = None
     """Niezależne wpisy uszkodzeń (źródło prawdy dla szczegółów); puste = tylko legacy B/C."""
     damage_entries: List[WmsReturnLineDamageEntryRead] = Field(default_factory=list)
+    is_bundle_parent: bool = False
+    bundle_name: Optional[str] = None
+    bundle_return_scenario: Optional[str] = None
+    bundle_return_status: Optional[str] = None
+    bundle_components: List["WmsReturnBundleComponentRead"] = Field(default_factory=list)
+    refund_amount_snapshot: Optional[float] = None
+
+
+class WmsReturnBundleComponentRead(BaseModel):
+    id: Optional[int] = None
+    snapshot_id: int
+    component_product_id: Optional[int] = None
+    component_name: Optional[str] = None
+    sku: Optional[str] = None
+    sold_qty: int = 0
+    returned_qty: int = 0
+    accepted_qty: int = 0
+    unit_price_snapshot: float = 0.0
+    refund_amount: float = 0.0
+    decision: Optional[str] = None
+    max_returnable_qty: int = 0
+
+
+class WmsReturnBundleComponentIn(BaseModel):
+    snapshot_id: int
+    returned_qty: int = Field(ge=0)
+    accepted_qty: int = Field(default=0, ge=0)
+    decision: Optional[str] = None
+    lot_trace_json: Optional[str] = None
+
+
+class WmsReturnBundleComponentsUpdate(BaseModel):
+    components: List[WmsReturnBundleComponentIn] = Field(default_factory=list)
+    has_damage: bool = False
+
+
+class WmsReturnBundleTreeComponentRead(BaseModel):
+    snapshot_id: int
+    order_line_id: int
+    component_product_id: int
+    component_name: str
+    sku: Optional[str] = None
+    sold_qty: int
+    unit_price_snapshot: float
+    already_returned_qty: int
+    max_returnable_qty: int
+    line_role: str
+    lots: List[dict] = Field(default_factory=list, description="P4.16 — znane partie wydane przy pick/issue")
+
+
+class WmsReturnBundleTreeNodeRead(BaseModel):
+    order_line_id: int
+    bundle_id: int
+    bundle_name: str
+    fulfillment_mode: str
+    bundle_qty: int
+    unit_price_net: float
+    is_stock_sku: bool
+    components: List[WmsReturnBundleTreeComponentRead] = Field(default_factory=list)
 
 
 class WmsReturnLineListPreview(BaseModel):

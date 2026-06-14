@@ -41,6 +41,10 @@ from ..schemas.wms_return import (
     WmsReturnLineListPreview,
     WmsReturnRead,
     WmsReturnLineRead,
+    WmsReturnBundleComponentsUpdate,
+    WmsReturnBundleComponentRead,
+    WmsReturnBundleTreeNodeRead,
+    WmsReturnBundleTreeComponentRead,
     WmsReturnLineDamageEntryRead,
     WmsReturnLineProcess,
     WmsReturnLineSplitProcess,
@@ -68,6 +72,21 @@ from ..services.rmz_return_receipt_service import (
 from ..services.returns.errors import RmzFinalizeError
 from ..services.returns.rmz_finalize_service import finalize_rmz_return
 from ..services.returns.rmz_line_split_service import assert_rmz_editable
+from ..services.bundles.bundle_return_service import (
+    BundleComponentReturnIn,
+    apply_bundle_return_metadata,
+    build_bundle_return_tree,
+    compute_rmz_line_refund_from_snapshot,
+    bundle_component_returns_for_line,
+)
+from ..services.bundles.bundle_return_reports_service import (
+    bundle_component_returns_report,
+    bundle_returns_report,
+    margin_after_bundle_returns,
+)
+from ..services.bundles.bundle_line_resolver import bundle_line_resolver
+from ..models.order_line_bundle_component import OrderLineBundleComponent
+from ..models.return_line_bundle_component import ReturnLineBundleComponent
 from ..services.return_status_service import get_by_transition_key, seed_default_statuses_session
 from ..services.tenant_default_warehouse import resolve_tenant_default_warehouse_id
 from ..utils.panel_ui_status_tokens import resolve_panel_status_tokens
@@ -1155,6 +1174,71 @@ def _raise_if_rmz_not_editable(row: WmsOrderReturn) -> None:
         raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
 
 
+def _bundle_component_reads_for_rmz_line(db: Session, ln: RMZLine, order_id: int) -> List[WmsReturnBundleComponentRead]:
+    tree = build_bundle_return_tree(db, order_id)
+    node = next((n for n in tree if n.order_line_id == int(ln.order_item_id)), None)
+    sold_by_snap = {c.snapshot_id: c for c in (node.components if node else ())}
+    rows = bundle_component_returns_for_line(db, int(ln.id))
+    out: List[WmsReturnBundleComponentRead] = []
+    for cr in rows:
+        snap_id = int(cr.order_line_bundle_component_id or 0)
+        sold = sold_by_snap.get(snap_id)
+        snap = db.query(OrderLineBundleComponent).filter(OrderLineBundleComponent.id == snap_id).first()
+        out.append(
+            WmsReturnBundleComponentRead(
+                id=int(cr.id),
+                snapshot_id=snap_id,
+                component_product_id=int(cr.component_product_id) if cr.component_product_id else None,
+                component_name=str(snap.product_name_snapshot) if snap else None,
+                sku=str(snap.sku_snapshot) if snap and snap.sku_snapshot else None,
+                sold_qty=int(sold.sold_qty) if sold else 0,
+                returned_qty=int(cr.returned_qty or 0),
+                accepted_qty=int(cr.accepted_qty or 0),
+                unit_price_snapshot=float(snap.unit_price_net_snapshot or 0) if snap else 0.0,
+                refund_amount=float(cr.refund_amount or 0),
+                decision=cr.decision,
+                max_returnable_qty=int(sold.max_returnable_qty) if sold else 0,
+            )
+        )
+    return out
+
+
+def _rmz_line_to_read(db: Session, ln: RMZLine, order_id: int) -> WmsReturnLineRead:
+    aq, dq, dbq, dcq, rq = _wms_return_line_qty_fields_from_rmz_row(ln)
+    oi = db.query(OrderItem).filter(OrderItem.id == int(ln.order_item_id)).first()
+    is_parent = bool(oi and getattr(oi, "is_bundle_parent", False))
+    bundle_name = None
+    if is_parent:
+        ctx = bundle_line_resolver.resolve_parent_line(db, int(ln.order_item_id))
+        bundle_name = str(ctx.bundle_name) if ctx else None
+    comp_reads = _bundle_component_reads_for_rmz_line(db, ln, order_id) if is_parent else []
+    refund_snap = compute_rmz_line_refund_from_snapshot(db, ln) if is_parent else None
+    return WmsReturnLineRead(
+        id=int(ln.id),
+        order_item_id=int(ln.order_item_id),
+        product_id=int(ln.product_id),
+        quantity=int(ln.quantity),
+        accepted_qty=aq,
+        damaged_qty=dq,
+        damaged_b_qty=dbq,
+        damaged_c_qty=dcq,
+        rejected_qty=rq,
+        decision=ln.decision,
+        condition=ln.condition,
+        final_disposition=ln.final_disposition,  # type: ignore[arg-type]
+        processed_at=ln.processed_at,
+        damage_type=(str(ln.damage_type).strip() if getattr(ln, "damage_type", None) else None) or None,
+        photo_urls=_photo_urls_list_from_cell(getattr(ln, "photo_urls", None)) or None,
+        damage_entries=_damage_entry_reads_from_rmz_line(ln),
+        is_bundle_parent=is_parent,
+        bundle_name=bundle_name,
+        bundle_return_scenario=getattr(ln, "bundle_return_scenario", None),
+        bundle_return_status=getattr(ln, "bundle_return_status", None),
+        bundle_components=comp_reads,
+        refund_amount_snapshot=refund_snap,
+    )
+
+
 def _serialize_return_read(db: Session, row: WmsOrderReturn) -> WmsReturnRead:
     _normalize_unset_decision_line_quantities(db)
     rmz_lines = (
@@ -1166,27 +1250,7 @@ def _serialize_return_read(db: Session, row: WmsOrderReturn) -> WmsReturnRead:
     refund_row = db.query(WmsRefund).filter(WmsRefund.rmz_id == row.id).first()
     lines_out = []
     for ln in rmz_lines:
-        aq, dq, dbq, dcq, rq = _wms_return_line_qty_fields_from_rmz_row(ln)
-        lines_out.append(
-            WmsReturnLineRead(
-                id=int(ln.id),
-                order_item_id=int(ln.order_item_id),
-                product_id=int(ln.product_id),
-                quantity=int(ln.quantity),
-                accepted_qty=aq,
-                damaged_qty=dq,
-                damaged_b_qty=dbq,
-                damaged_c_qty=dcq,
-                rejected_qty=rq,
-                decision=ln.decision,
-                condition=ln.condition,
-                final_disposition=ln.final_disposition,  # type: ignore[arg-type]
-                processed_at=ln.processed_at,
-                damage_type=(str(ln.damage_type).strip() if getattr(ln, "damage_type", None) else None) or None,
-                photo_urls=_photo_urls_list_from_cell(getattr(ln, "photo_urls", None)) or None,
-                damage_entries=_damage_entry_reads_from_rmz_line(ln),
-            )
-        )
+        lines_out.append(_rmz_line_to_read(db, ln, int(row.order_id)))
     rs = row.return_status
     if rs is None:
         rs = db.query(ReturnStatus).filter(ReturnStatus.id == row.status_id).first()
@@ -3114,6 +3178,110 @@ def archive_single_wms_return(
     else:
         db.commit()
     return entity_bulk_delete_result_from_service_dict(result)
+
+
+@returns_id_router.put("/{return_id:int}/lines/{line_id:int}/bundle-components", response_model=WmsReturnRead)
+def update_wms_return_bundle_components(
+    return_id: int,
+    line_id: int,
+    body: WmsReturnBundleComponentsUpdate,
+    tenant_id: int = Query(...),
+    warehouse_id: Optional[int] = Query(None, ge=1),
+    db: Session = Depends(get_db),
+) -> WmsReturnRead:
+    """Zapis wyboru składników bundle na linii RMZ (snapshot-only refund)."""
+    wh_id = _warehouse_id_for_return_mutation(db, return_id, tenant_id, warehouse_id)
+    row = _load_rmz(db, return_id, tenant_id, wh_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Return not found")
+    _raise_if_rmz_not_editable(row)
+    ln = db.query(RMZLine).filter(RMZLine.id == int(line_id), RMZLine.rmz_id == int(row.id)).first()
+    if ln is None:
+        raise HTTPException(status_code=404, detail="Return line not found")
+    oi = db.query(OrderItem).filter(OrderItem.id == int(ln.order_item_id)).first()
+    if oi is None or not bool(getattr(oi, "is_bundle_parent", False)):
+        raise HTTPException(status_code=400, detail="Line is not a bundle parent")
+    selections = [
+        BundleComponentReturnIn(
+            snapshot_id=int(c.snapshot_id),
+            returned_qty=int(c.returned_qty),
+            accepted_qty=int(c.accepted_qty),
+            decision=c.decision,
+            lot_trace_json=c.lot_trace_json,
+        )
+        for c in body.components
+    ]
+    apply_bundle_return_metadata(
+        db,
+        rmz_line=ln,
+        order_id=int(row.order_id),
+        selections=selections,
+        has_damage=bool(body.has_damage),
+    )
+    db.commit()
+    return _serialize_return_read(db, row)
+
+
+@router.get("/orders/{order_id:int}/bundle-return-tree", response_model=List[WmsReturnBundleTreeNodeRead])
+def get_order_bundle_return_tree(
+    order_id: int,
+    tenant_id: int = Query(...),
+    warehouse_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+) -> List[WmsReturnBundleTreeNodeRead]:
+    order = (
+        db.query(Order)
+        .filter(Order.id == int(order_id), Order.tenant_id == int(tenant_id), Order.warehouse_id == int(warehouse_id))
+        .first()
+    )
+    if order is None:
+        raise HTTPException(status_code=404, detail="Order not found")
+    tree = build_bundle_return_tree(db, int(order_id))
+    return [
+        WmsReturnBundleTreeNodeRead(
+            order_line_id=n.order_line_id,
+            bundle_id=n.bundle_id,
+            bundle_name=n.bundle_name,
+            fulfillment_mode=n.fulfillment_mode,
+            bundle_qty=n.bundle_qty,
+            unit_price_net=n.unit_price_net,
+            is_stock_sku=n.is_stock_sku,
+            components=[
+                WmsReturnBundleTreeComponentRead(
+                    snapshot_id=c.snapshot_id,
+                    order_line_id=c.order_line_id,
+                    component_product_id=c.component_product_id,
+                    component_name=c.component_name,
+                    sku=c.sku,
+                    sold_qty=c.sold_qty,
+                    unit_price_snapshot=c.unit_price_snapshot,
+                    already_returned_qty=c.already_returned_qty,
+                    max_returnable_qty=c.max_returnable_qty,
+                    line_role=c.line_role,
+                    lots=list(c.lots),
+                )
+                for c in n.components
+            ],
+        )
+        for n in tree
+    ]
+
+
+@router.get("/reports/bundle-returns")
+def get_bundle_returns_report(
+    tenant_id: int = Query(...),
+    warehouse_id: int = Query(..., ge=1),
+    order_id: Optional[int] = Query(None, ge=1),
+    db: Session = Depends(get_db),
+):
+    rows = bundle_returns_report(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id), order_id=order_id)
+    comp_rows = bundle_component_returns_report(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id))
+    margin_rows = margin_after_bundle_returns(db, int(order_id)) if order_id else []
+    return {
+        "bundle_returns": [r.__dict__ for r in rows],
+        "component_returns": [r.__dict__ for r in comp_rows],
+        "margin_after_returns": [r.__dict__ for r in margin_rows],
+    }
 
 
 def _finalize_wms_returns_route_order() -> None:

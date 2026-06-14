@@ -159,6 +159,65 @@ export type WmsReturnLineRead = {
   photo_urls?: string[] | null;
   /** Niezależne partie uszkodzone — źródło prawdy po stronie API (JSON na rmz_lines). */
   damage_entries?: WmsReturnLineDamageEntryRead[] | null;
+  is_bundle_parent?: boolean;
+  bundle_name?: string | null;
+  bundle_return_scenario?: string | null;
+  bundle_return_status?: string | null;
+  bundle_components?: WmsReturnBundleComponentRead[];
+  refund_amount_snapshot?: number | null;
+};
+
+export type WmsReturnBundleComponentRead = {
+  id?: number | null;
+  snapshot_id: number;
+  component_product_id?: number | null;
+  component_name?: string | null;
+  sku?: string | null;
+  sold_qty?: number;
+  returned_qty?: number;
+  accepted_qty?: number;
+  unit_price_snapshot?: number;
+  refund_amount?: number;
+  decision?: string | null;
+  max_returnable_qty?: number;
+};
+
+export type WmsReturnBundleComponentIn = {
+  snapshot_id: number;
+  returned_qty: number;
+  accepted_qty?: number;
+  decision?: string | null;
+  lot_trace_json?: string | null;
+};
+
+export type WmsReturnBundleComponentsUpdate = {
+  components: WmsReturnBundleComponentIn[];
+  has_damage?: boolean;
+};
+
+export type WmsReturnBundleTreeComponentRead = {
+  snapshot_id: number;
+  order_line_id: number;
+  component_product_id: number;
+  component_name: string;
+  sku?: string | null;
+  sold_qty: number;
+  unit_price_snapshot: number;
+  already_returned_qty: number;
+  max_returnable_qty: number;
+  line_role: string;
+  lots?: Array<{ lot_number: string; lot_id?: number | null; expiry_date?: string | null; picked_qty?: number }>;
+};
+
+export type WmsReturnBundleTreeNodeRead = {
+  order_line_id: number;
+  bundle_id: number;
+  bundle_name: string;
+  fulfillment_mode: string;
+  bundle_qty: number;
+  unit_price_net: number;
+  is_stock_sku: boolean;
+  components: WmsReturnBundleTreeComponentRead[];
 };
 
 export type WmsReturnRead = {

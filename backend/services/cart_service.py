@@ -64,9 +64,13 @@ def _wms_pick_stats_for_cart(db: Session, cart_id: int) -> dict:
 
 
 def _order_used_volume_dm3_from_items(order) -> float:
-    """Sum of (volume_dm3 * quantity) per item; uses product.volume or item.total_volume or L×W×H/1000 or fallback."""
+    """Sum of (volume_dm3 * quantity) per operational line only (P4.15B — skip ON_DEMAND parent)."""
+    from .bundle_order_item_ops import order_item_is_operational_picking_line
+
     total = 0.0
     for item in getattr(order, "items", []) or []:
+        if not order_item_is_operational_picking_line(item):
+            continue
         product = getattr(item, "product", None)
         qty = int(item.quantity or 0)
         if qty <= 0:

@@ -11,6 +11,17 @@ from .picking_routing import PickListRow, PickingRoutingAllocationShortfall
 WmsPickingOrderTypeFilter = Literal["single", "multi", "all"]
 
 
+class WmsPickingProductBundleBreakdownRow(BaseModel):
+    """Rozbicie zagregowanego SKU per zamówienie + bundle (P4.15B)."""
+
+    order_id: int
+    order_number: str
+    bundle_id: Optional[int] = None
+    bundle_name: Optional[str] = None
+    bundle_mode: Optional[str] = None
+    quantity: float = Field(..., ge=0)
+
+
 class WmsPickingProductPutHint(BaseModel):
     """Gdzie odłożyć skompletowaną ilość (z alokacji koszyków / wózka)."""
 
@@ -78,6 +89,10 @@ class WmsPickingProductLine(BaseModel):
         None,
         description="Etykieta półki kompletacyjnej (np. RK-01/A2)",
     )
+    bundle_breakdown: list[WmsPickingProductBundleBreakdownRow] = Field(
+        default_factory=list,
+        description="Rozbicie ilości per zamówienie/bundle gdy SKU występuje w wielu kontekstach",
+    )
 
 
 class WmsPickingProductLocationRow(BaseModel):
@@ -140,6 +155,37 @@ class WmsPickingProductOrderRow(BaseModel):
         None,
         description="Półka docelowa (np. RK-01/A2)",
     )
+    bundle_id: Optional[int] = Field(None, description="Bundle catalog id (P4.15B)")
+    bundle_name: Optional[str] = None
+    bundle_mode: Optional[str] = Field(None, description="ON_DEMAND_ASSEMBLY | STOCK_PRODUCTION")
+    bundle_component_index: Optional[int] = Field(None, ge=1)
+    bundle_component_count: Optional[int] = Field(None, ge=1)
+    is_bundle_component: bool = False
+    parent_bundle_order_line_id: Optional[int] = None
+
+
+class WmsPickingBundleComponentStatus(BaseModel):
+    order_item_id: int
+    product_id: int
+    product_name: str
+    quantity: float = Field(..., ge=0)
+    picked_quantity: float = Field(0, ge=0)
+    quantity_to_pick: float = Field(0, ge=0)
+    bundle_component_index: int = Field(..., ge=1)
+    is_current_product: bool = False
+    pick_done: bool = False
+
+
+class WmsPickingOrderBundleTree(BaseModel):
+    order_id: int
+    order_number: str
+    bundle_id: int
+    bundle_name: str
+    bundle_mode: str
+    parent_order_line_id: int
+    components_total: int = Field(..., ge=0)
+    components_done: int = Field(0, ge=0)
+    components: list[WmsPickingBundleComponentStatus] = Field(default_factory=list)
 
 
 class WmsPickingProductLinesResponse(BaseModel):
@@ -221,6 +267,10 @@ class WmsPickingProductDetailResponse(BaseModel):
     pending_shelf_deposit: bool = Field(
         False,
         description="True gdy lokalna pozycja planu ma status PICKED i czeka na potwierdzenie odłożenia.",
+    )
+    order_bundle_trees: list[WmsPickingOrderBundleTree] = Field(
+        default_factory=list,
+        description="Drzewo bundle per zamówienie w kohortcie (P4.15B)",
     )
 
 

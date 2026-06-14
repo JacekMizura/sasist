@@ -8,6 +8,7 @@ import type {
 import { useWmsScanner } from "../../../context/WmsScannerContext";
 import type { WmsPackingInterfaceDisplay } from "../../../types/wmsPackingSettings";
 import { WMS_ROUTES } from "../../../pages/wms/wmsRoutes";
+import { BundlePackingTree } from "./BundlePackingTree";
 import { CourierBadge } from "./CourierBadge";
 import {
   isPackingOrderCompleted,
@@ -407,6 +408,12 @@ export function PackingView({
         </header>
 
         <section className="min-h-0 flex-1 overflow-y-auto px-3 pb-4 pt-2" aria-label="Produkty">
+          {detail.bundle_trees && detail.bundle_trees.length > 0 ? (
+            <div className="mb-4">
+              <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-500">Zestawy</p>
+              <BundlePackingTree trees={detail.bundle_trees} />
+            </div>
+          ) : null}
           {wszystkoSpakowane ? (
             <p className="mb-3 text-center text-base font-semibold text-emerald-800">Zamówienie spakowane.</p>
           ) : null}

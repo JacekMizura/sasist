@@ -136,6 +136,7 @@ import {
 } from "./rmzDamageTypes";
 import { WMS_REJECT_OTHER_ID, wmsRejectReasonSelectOptions } from "./wmsRejectReasons";
 import { RmzProcessLineSidebar } from "./rmzProcessLineSidebar";
+import { BundleReturnLinePanel } from "../../components/returns/BundleReturnLinePanel";
 import { RmzPendingItemsPanel, type RmzPendingAddItem } from "./rmzPendingItemsPanel";
 import { resolveRmzLineSidebarStatus } from "./rmzLineSidebarStatus";
 
@@ -4578,6 +4579,35 @@ export default function WmsReturnsPage() {
                               </div>
                               <div className="min-w-0 flex-1">
                                 <h3 className="text-base font-bold leading-snug text-slate-900 lg:text-lg">{c.productName}</h3>
+                                {(() => {
+                                  const rmzLn = wmsReturn?.lines.find(
+                                    (l) => l.id != null && l.id === returnLineIdForPrint,
+                                  );
+                                  if (
+                                    !wmsReturn ||
+                                    !rmzLn?.is_bundle_parent ||
+                                    returnLineIdForPrint == null
+                                  ) {
+                                    return null;
+                                  }
+                                  return (
+                                    <BundleReturnLinePanel
+                                      tenantId={wmsReturn.tenant_id}
+                                      warehouseId={wmsReturn.warehouse_id}
+                                      returnId={wmsReturn.id}
+                                      rmzLineId={returnLineIdForPrint}
+                                      orderId={wmsReturn.order_id}
+                                      orderLineId={rmzLn.order_item_id}
+                                      bundleName={rmzLn.bundle_name}
+                                      initialComponents={rmzLn.bundle_components}
+                                      disabled={isFinished}
+                                      onSaved={() => {
+                                        if (selectedReturnDbId == null) return;
+                                        void getWmsReturn(selectedReturnDbId, DAMAGE_TENANT_ID).then(setWmsReturn);
+                                      }}
+                                    />
+                                  );
+                                })()}
                                 <p className="mt-1 text-sm text-slate-600">
                                   EAN: <span className="font-medium tabular-nums">{ean}</span>
                                   <span className="mx-1.5 text-slate-300" aria-hidden>
