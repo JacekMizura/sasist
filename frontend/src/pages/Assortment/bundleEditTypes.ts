@@ -27,7 +27,7 @@ const BUNDLE_TABS_BASE: { id: Exclude<BundleEditTabId, "production">; label: str
   { id: "labelSheet", label: "Etykieta", icon: Printer },
 ];
 
-/** Zakładki edycji zestawu — Produkcja tylko dla STOCK_PRODUCTION (istniejący zestaw). */
+/** Zakładki edycji zestawu — Produkcja po Produkty, tylko STOCK_PRODUCTION (istniejący zestaw). */
 export function buildBundleEditTabs(
   isNew: boolean,
   operationalMode?: "ON_DEMAND_ASSEMBLY" | "STOCK_PRODUCTION",
@@ -36,7 +36,7 @@ export function buildBundleEditTabs(
   const tabs: { id: BundleEditTabId; label: string; icon: LucideIcon }[] = [];
   for (const t of BUNDLE_TABS_BASE) {
     tabs.push(t);
-    if (t.id === "warehouse" && operationalMode === "STOCK_PRODUCTION") {
+    if (t.id === "products" && operationalMode === "STOCK_PRODUCTION") {
       tabs.push({ id: "production", label: "Produkcja", icon: Factory });
     }
   }

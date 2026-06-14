@@ -9,7 +9,8 @@
 - **`BundleFulfillmentTypeSection`** — radio „Typ realizacji zestawu” w Podstawowych
 - Magazyn ON_DEMAND: tylko dostępność kompletacji + tabela składników
 - Magazyn STOCK: **`BundleStockProductionWarehousePanel`** (jak produkt, via `linked_product_id`)
-- Zakładka Produkcja tylko dla STOCK_PRODUCTION → `ProductManufacturingPanel`
+- Zakładka Produkcja tylko dla STOCK_PRODUCTION — **po Produkty, przed Magazyn** (P4.12)
+- **`BundleProductionPanel`**: receptura (tabela ze składników), utwórz zlecenie (ERP recipe + `createProductionOrder`), historia zleceń
 
 ## P4.10 — Ceny zestawów (pełna obsługa handlowa) (2026-06-08)
 - Zakładka **Ceny** (Tag, po Podstawowych — jak produkt)

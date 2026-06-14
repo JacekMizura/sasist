@@ -862,6 +862,8 @@ export function BundleEditModal({
           bundleName={name.trim() || "Zestaw"}
           operationalMode={operationalMode}
           linkedProductId={linkedProductId}
+          rows={rows}
+          productCache={productCache}
         />
       )}
 

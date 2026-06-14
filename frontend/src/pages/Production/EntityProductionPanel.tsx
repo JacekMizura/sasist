@@ -1,7 +1,7 @@
-import { ProductLikeSection } from "../../components/catalog";
 import type { BundleComponentRow, ProductSummary } from "../Assortment/bundleEditTypes";
 import { isStockProduction, type BundleOperationalMode } from "./bundleOperationalTypes";
 import { ProductManufacturingPanel } from "./ProductManufacturingPanel";
+import { BundleProductionPanel } from "../Assortment/components/BundleProductionPanel";
 
 type ProductProps = {
   entityType: "product";
@@ -18,12 +18,14 @@ type BundleProps = {
   bundleName: string;
   operationalMode: BundleOperationalMode;
   linkedProductId: number | null;
+  rows: BundleComponentRow[];
+  productCache: Record<number, ProductSummary>;
 };
 
 export type EntityProductionPanelProps = ProductProps | BundleProps;
 
 /**
- * Wspólny panel Produkcja — produkt (receptura) lub zestaw produkowany na magazyn.
+ * Wspólny panel Produkcja — produkt (pełny BOM ERP) lub zestaw produkowany na magazyn.
  */
 export function EntityProductionPanel(props: EntityProductionPanelProps) {
   if (props.entityType === "product") {
@@ -37,49 +39,25 @@ export function EntityProductionPanel(props: EntityProductionPanelProps) {
     );
   }
 
-  const { tenantId, isNew, bundleName, operationalMode, linkedProductId } = props;
+  const { tenantId, isNew, bundleName, operationalMode, linkedProductId, rows, productCache } = props;
 
   if (isNew) {
     return (
-      <p className="text-sm text-slate-500">
-        Zapisz zestaw, aby skonfigurować produkcję i recepturę.
-      </p>
+      <p className="text-sm text-slate-500">Zapisz zestaw, aby skonfigurować produkcję.</p>
     );
   }
 
   if (!isStockProduction(operationalMode)) {
-    return (
-      <ProductLikeSection title="Produkcja">
-        <p className="text-sm text-slate-600">
-          Zakładka Produkcja dotyczy zestawów typu „Produkowany / konfekcjonowany na magazyn”. Zestawy kompletowane na
-          zamówienie nie wymagają zleceń produkcyjnych — składniki pobierane są przy kompletacji.
-        </p>
-      </ProductLikeSection>
-    );
-  }
-
-  if (linkedProductId != null && linkedProductId > 0) {
-    return (
-      <div className="w-full max-w-5xl space-y-6">
-        <p className="text-sm text-slate-600">
-          Zlecenia produkcyjne, receptura BOM, zużycie składników i historia produkcji — jak dla powiązanego produktu
-          magazynowego.
-        </p>
-        <ProductManufacturingPanel
-          tenantId={tenantId}
-          productId={linkedProductId}
-          productName={bundleName.trim() || "Zestaw"}
-        />
-      </div>
-    );
+    return null;
   }
 
   return (
-    <ProductLikeSection title="Produkcja">
-      <p className="text-sm text-slate-600">
-        Ustaw powiązany produkt magazynowy w sekcji „Typ realizacji zestawu”, aby korzystać z modułu produkcji (zlecenia,
-        receptura, historia).
-      </p>
-    </ProductLikeSection>
+    <BundleProductionPanel
+      tenantId={tenantId}
+      bundleName={bundleName}
+      linkedProductId={linkedProductId}
+      rows={rows}
+      productCache={productCache}
+    />
   );
 }
