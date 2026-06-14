@@ -6,17 +6,24 @@ import api from "../../../api/axios";
 import { useWarehouse } from "../../../context/WarehouseContext";
 import { cartsBtnPrimary, cartsPageShellClass } from "../../../modules/carts/cartsModuleTokens";
 import { ConsolidationRackFormShell } from "../../../modules/consolidation-racks/ConsolidationRackFormShell";
+import ConsolidationRackSegmentEditPanel from "../../../modules/consolidation-racks/ConsolidationRackSegmentEditPanel";
 import ConsolidationRackStructureEditor from "../../../modules/consolidation-racks/ConsolidationRackStructureEditor";
 import ConsolidationRackStructurePreview from "../../../modules/consolidation-racks/ConsolidationRackStructurePreview";
 import type { ConsolidationRack } from "../../../modules/consolidation-racks/consolidationRackTypes";
 import { rackOccupancyStats } from "../../../modules/consolidation-racks/rackLayoutUtils";
 import {
   apiRackToDraft,
+  buildSegmentOccupancyMap,
   createDefaultRackDraft,
   draftToApiPayload,
   draftToGridLevels,
+  findSegmentInDraft,
+  segmentDisplayLabel,
   segmentDraftPayload,
+  validateRackDraft,
   type RackStructureDraft,
+  type SegmentDraft,
+  type SegmentSelection,
 } from "../../../modules/consolidation-racks/rackStructureModel";
 import { DAMAGE_TENANT_ID } from "../../damage/damageShared";
 
@@ -31,38 +38,42 @@ export default function ConsolidationRackEditorPage() {
   const [error, setError] = useState<string | null>(null);
   const [rack, setRack] = useState<ConsolidationRack | null>(null);
   const [draft, setDraft] = useState<RackStructureDraft>(() => createDefaultRackDraft(warehouse?.id ?? 1));
-  const [expandedLevels, setExpandedLevels] = useState<Set<string>>(() => new Set());
+  const [expandedLevelId, setExpandedLevelId] = useState<string | null>(null);
+  const [selection, setSelection] = useState<SegmentSelection>(null);
+
+  const initNavigation = useCallback((nextDraft: RackStructureDraft) => {
+    const firstLevel = nextDraft.levels[0];
+    if (!firstLevel) {
+      setExpandedLevelId(null);
+      setSelection(null);
+      return;
+    }
+    setExpandedLevelId(firstLevel.clientId);
+    setSelection(null);
+  }, []);
 
   useEffect(() => {
-    setExpandedLevels((prev) => {
-      if (prev.size > 0) return prev;
-      return new Set(draft.levels.map((l) => l.clientId));
-    });
-  }, [draft.levels]);
+    if (expandedLevelId == null && draft.levels[0]) {
+      setExpandedLevelId(draft.levels[0].clientId);
+    }
+  }, [draft.levels, expandedLevelId]);
 
   const handleDraftChange = useCallback((next: RackStructureDraft) => {
-    setDraft((prev) => {
-      const addedLevels = next.levels.filter(
-        (l) => !prev.levels.some((p) => p.clientId === l.clientId),
-      );
-      if (addedLevels.length) {
-        setExpandedLevels((exp) => {
-          const n = new Set(exp);
-          for (const l of addedLevels) n.add(l.clientId);
-          return n;
-        });
-      }
-      return next;
+    setDraft(next);
+    setSelection((sel) => {
+      if (!sel) return sel;
+      const hit = findSegmentInDraft(next, sel.levelClientId, sel.segmentClientId);
+      return hit ? sel : null;
+    });
+    setExpandedLevelId((exp) => {
+      if (exp && next.levels.some((l) => l.clientId === exp)) return exp;
+      return next.levels[0]?.clientId ?? null;
     });
   }, []);
 
-  const toggleLevel = useCallback((clientId: string) => {
-    setExpandedLevels((prev) => {
-      const next = new Set(prev);
-      if (next.has(clientId)) next.delete(clientId);
-      else next.add(clientId);
-      return next;
-    });
+  const selectSegment = useCallback((levelClientId: string, segmentClientId: string) => {
+    setExpandedLevelId(levelClientId);
+    setSelection({ levelClientId, segmentClientId });
   }, []);
 
   const loadRack = useCallback(async (id: number) => {
@@ -73,14 +84,14 @@ export default function ConsolidationRackEditorPage() {
       setRack(data);
       const nextDraft = apiRackToDraft(data);
       setDraft(nextDraft);
-      setExpandedLevels(new Set(nextDraft.levels.map((l) => l.clientId)));
+      initNavigation(nextDraft);
     } catch (err: unknown) {
       console.error("[ConsolidationRackEditor] load error:", err);
       setError("Nie udało się wczytać regału.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [initNavigation]);
 
   useEffect(() => {
     if (!isCreate && rackId) void loadRack(Number(rackId));
@@ -92,29 +103,52 @@ export default function ConsolidationRackEditorPage() {
     }
   }, [isCreate, warehouse?.id]);
 
-  const previewLevels = useMemo(
-    () => draftToGridLevels(draft, rack),
-    [draft, rack],
-  );
+  const previewLevels = useMemo(() => draftToGridLevels(draft, rack), [draft, rack]);
   const stats = useMemo(() => rackOccupancyStats(previewLevels), [previewLevels]);
+  const validation = useMemo(() => validateRackDraft(draft), [draft]);
+  const occupancyBySegmentId = useMemo(() => buildSegmentOccupancyMap(previewLevels), [previewLevels]);
 
-  const occupancyBySegmentId = useMemo(() => {
-    const map = new Map<number, { orderNumber?: string | null; tone?: string }>();
-    for (const lv of previewLevels) {
-      for (const seg of lv.segments ?? []) {
-        if (seg.id == null) continue;
-        map.set(seg.id, {
-          orderNumber: seg.order_number,
-          tone: seg.order_id != null ? "#fff7ed" : undefined,
-        });
-      }
-    }
-    return map;
-  }, [previewLevels]);
+  const selectedHit = useMemo(() => {
+    if (!selection) return null;
+    return findSegmentInDraft(draft, selection.levelClientId, selection.segmentClientId);
+  }, [draft, selection]);
+
+  const selectedLabel = selectedHit
+    ? segmentDisplayLabel(selectedHit.level, selectedHit.segment)
+    : "";
+
+  const selectedOccupancy = useMemo(() => {
+    const segId = selectedHit?.segment.segmentId;
+    if (segId == null) return undefined;
+    return occupancyBySegmentId.get(segId);
+  }, [selectedHit, occupancyBySegmentId]);
+
+  const updateSelectedSegment = useCallback((patch: Partial<SegmentDraft>) => {
+    if (!selection) return;
+    setDraft((prev) => ({
+      ...prev,
+      levels: prev.levels.map((lv) => {
+        if (lv.clientId !== selection.levelClientId) return lv;
+        return {
+          ...lv,
+          segments: lv.segments.map((s) =>
+            s.clientId === selection.segmentClientId ? { ...s, ...patch } : s,
+          ),
+        };
+      }),
+    }));
+  }, [selection]);
 
   const handleCreate = async () => {
     if (!draft.rackName.trim()) {
       setError("Podaj nazwę regału.");
+      return;
+    }
+    if (!validation.valid) {
+      setError(
+        validation.globalError
+          ?? validation.levelErrors.map((e) => `Poziom ${e.levelName}: ${e.usedMm}/${e.targetMm} mm`).join(" · "),
+      );
       return;
     }
     setSaving(true);
@@ -137,6 +171,13 @@ export default function ConsolidationRackEditorPage() {
 
   const handleSaveEdit = async () => {
     if (!rack || !draft.rackName.trim()) return;
+    if (!validation.valid) {
+      setError(
+        validation.globalError
+          ?? validation.levelErrors.map((e) => `Poziom ${e.levelName}: ${e.usedMm}/${e.targetMm} mm`).join(" · "),
+      );
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -175,10 +216,20 @@ export default function ConsolidationRackEditorPage() {
       {error ? (
         <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div>
       ) : null}
+      {!validation.valid && !error ? (
+        <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+          {validation.globalError ?? (
+            <>
+              Suma szerokości segmentów musi być równa szerokości regału ({draft.totalWidthMm ?? "—"} mm):{" "}
+              {validation.levelErrors.map((e) => `Poziom ${e.levelName} ${e.usedMm}/${e.targetMm} mm`).join("; ")}
+            </>
+          )}
+        </div>
+      ) : null}
 
       <ConsolidationRackFormShell
         title={isCreate ? "Nowy regał kompletacyjny" : "Edycja regału"}
-        subtitle="Konfiguracja OMS — poziomy z własną wysokością i segmentami o zmiennej szerokości"
+        subtitle="Podgląd regału + edycja pojedynczego segmentu — skaluje się do dużych układów"
         backTo="/carts/racks"
         headerActions={
           !isCreate ? (
@@ -211,27 +262,52 @@ export default function ConsolidationRackEditorPage() {
             warehouses={warehouses}
             showWarehouseSelect={isCreate && showWarehouseSelector}
             structureLocked={!isCreate}
-            expandedLevels={expandedLevels}
-            onToggleLevel={toggleLevel}
+            showPresets={isCreate}
+            expandedLevelId={expandedLevelId}
+            onExpandLevel={setExpandedLevelId}
+            selection={selection}
+            onSelectSegment={selectSegment}
           />
         }
-        preview={
-          <ConsolidationRackStructurePreview
-            draft={draft}
-            showOccupancy={!isCreate}
-            occupancyBySegmentId={occupancyBySegmentId}
-          />
+        workspace={
+          <div className="flex h-full min-h-0 flex-col gap-2 lg:flex-row">
+            <div className="min-h-0 min-w-0 flex-1 overflow-hidden rounded-xl border border-slate-200/55 bg-white p-2 shadow-sm">
+              <ConsolidationRackStructurePreview
+                draft={draft}
+                showOccupancy={!isCreate}
+                occupancyBySegmentId={occupancyBySegmentId}
+                selection={selection}
+                interactive
+                onSegmentClick={selectSegment}
+              />
+            </div>
+            {selectedHit ? (
+              <div className="w-full shrink-0 lg:w-[min(100%,260px)]">
+                <ConsolidationRackSegmentEditPanel
+                  segmentLabel={selectedLabel}
+                  level={selectedHit.level}
+                  segment={selectedHit.segment}
+                  readOnly={false}
+                  onUpdate={updateSelectedSegment}
+                  onClose={() => setSelection(null)}
+                  occupancy={!isCreate ? selectedOccupancy : undefined}
+                />
+              </div>
+            ) : (
+              <div className="hidden w-[260px] shrink-0 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/50 px-4 py-8 text-center text-xs text-slate-500 lg:flex">
+                Kliknij segment w podglądzie lub na liście po lewej, aby edytować wymiary.
+              </div>
+            )}
+          </div>
         }
         footer={
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-xs text-slate-500">
-              {isCreate
-                ? "Dodaj poziomy i segmenty po lewej — podgląd odzwierciedla rzeczywisty układ."
-                : "Edytuj segmenty bezpośrednio w strukturze poziomu. Układ poziomów jest stały."}
+              Edytujesz jeden segment naraz — podgląd pokazuje cały regał.
             </p>
             <button
               type="button"
-              disabled={saving}
+              disabled={saving || !validation.valid}
               className={cartsBtnPrimary}
               onClick={() => void (isCreate ? handleCreate() : handleSaveEdit())}
             >

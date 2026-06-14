@@ -343,6 +343,35 @@ export function countSegments(draft: RackStructureDraft): number {
   return draft.levels.reduce((s, lv) => s + lv.segments.length, 0);
 }
 
+export type SegmentSelection = {
+  levelClientId: string;
+  segmentClientId: string;
+} | null;
+
+export function findSegmentInDraft(
+  draft: RackStructureDraft,
+  levelClientId: string,
+  segmentClientId: string,
+): { level: LevelDraft; segment: SegmentDraft } | null {
+  const level = draft.levels.find((l) => l.clientId === levelClientId);
+  if (!level) return null;
+  const segment = level.segments.find((s) => s.clientId === segmentClientId);
+  if (!segment) return null;
+  return { level, segment };
+}
+
+export function segmentDisplayLabel(level: LevelDraft, segment: SegmentDraft): string {
+  const levelName = level.name.trim() || columnLetter(level.levelIndex);
+  const isSegmented = level.segments.length > 1;
+  return computeSlotLabel(
+    levelName,
+    level.levelIndex,
+    segment.segmentIndex,
+    isSegmented,
+    segment.slotLabel || null,
+  );
+}
+
 export function segmentDraftPayload(seg: SegmentDraft, lv: LevelDraft) {
   const levelName = lv.name.trim() || columnLetter(lv.levelIndex);
   const isSegmented = lv.segments.length > 1;
@@ -355,4 +384,145 @@ export function segmentDraftPayload(seg: SegmentDraft, lv: LevelDraft) {
     width_mm: seg.widthMm,
     height_mm: height,
   };
+}
+
+/** Tolerancja zaokrągleń mm przy walidacji sumy szerokości segmentów. */
+export const RACK_WIDTH_TOLERANCE_MM = 1;
+
+export type LevelWidthValidation = {
+  levelIndex: number;
+  levelName: string;
+  usedMm: number;
+  targetMm: number;
+};
+
+export type RackDraftValidation = {
+  valid: boolean;
+  levelErrors: LevelWidthValidation[];
+  globalError?: string;
+};
+
+export function validateRackDraft(draft: RackStructureDraft): RackDraftValidation {
+  const target = draft.totalWidthMm;
+  if (target == null || target <= 0) {
+    return {
+      valid: false,
+      levelErrors: [],
+      globalError: "Podaj prawidłową szerokość regału (mm).",
+    };
+  }
+
+  const levelErrors: LevelWidthValidation[] = [];
+  for (const lv of draft.levels) {
+    const used = levelSegmentsWidthSum(lv);
+    if (Math.abs(used - target) > RACK_WIDTH_TOLERANCE_MM) {
+      levelErrors.push({
+        levelIndex: lv.levelIndex,
+        levelName: lv.name.trim() || columnLetter(lv.levelIndex),
+        usedMm: used,
+        targetMm: target,
+      });
+    }
+  }
+
+  return { valid: levelErrors.length === 0, levelErrors };
+}
+
+export function levelWidthUsage(lv: LevelDraft, targetMm: number | null): { usedMm: number; targetMm: number; valid: boolean } {
+  const usedMm = levelSegmentsWidthSum(lv);
+  const target = targetMm ?? 0;
+  return {
+    usedMm,
+    targetMm: target,
+    valid: target > 0 && Math.abs(usedMm - target) <= RACK_WIDTH_TOLERANCE_MM,
+  };
+}
+
+export type RackPresetId = "4x4" | "3x6" | "2x8" | "empty";
+
+function buildPresetLevels(
+  levelCount: number,
+  segCount: number,
+  totalWidthMm: number,
+  totalDepthMm: number,
+  levelHeightMm: number,
+): LevelDraft[] {
+  const baseWidth = Math.floor(totalWidthMm / segCount);
+  const lastWidth = totalWidthMm - baseWidth * (segCount - 1);
+  return Array.from({ length: levelCount }, (_, li) => ({
+    clientId: newClientId("lv"),
+    levelIndex: li,
+    name: columnLetter(li),
+    levelHeightMm,
+    segments: Array.from({ length: segCount }, (_, si) =>
+      createEmptySegment(si, {
+        widthMm: si === segCount - 1 ? lastWidth : baseWidth,
+        depthMm: totalDepthMm,
+        heightMm: levelHeightMm,
+      }),
+    ),
+  }));
+}
+
+/** Szybkie presety układu poziomów × segmentów (tylko tworzenie). */
+export function applyRackPreset(preset: RackPresetId, warehouseId = 1): RackStructureDraft {
+  if (preset === "empty") {
+    return createDefaultRackDraft(warehouseId);
+  }
+
+  const configs: Record<Exclude<RackPresetId, "empty">, [number, number]> = {
+    "4x4": [4, 4],
+    "3x6": [3, 6],
+    "2x8": [2, 8],
+  };
+  const [levelCount, segCount] = configs[preset];
+  const totalWidthMm = 2000;
+  const totalDepthMm = 800;
+  const levelHeightMm = 500;
+
+  return {
+    rackName: "RK-01",
+    warehouseId,
+    totalWidthMm,
+    totalDepthMm,
+    levels: buildPresetLevels(levelCount, segCount, totalWidthMm, totalDepthMm, levelHeightMm),
+  };
+}
+
+/** Mapa zajętości segmentów z poziomów siatki (edycja / podgląd istniejącego regału). */
+export function buildSegmentOccupancyMap(
+  levels: RackGridLevel[],
+): Map<
+  number,
+  {
+    isOccupied: boolean;
+    orderNumber?: string | null;
+    utilizationPercent?: number | null;
+    orderVolumeDm3?: number | null;
+    capacityDm3?: number | null;
+  }
+> {
+  const map = new Map<
+    number,
+    {
+      isOccupied: boolean;
+      orderNumber?: string | null;
+      utilizationPercent?: number | null;
+      orderVolumeDm3?: number | null;
+      capacityDm3?: number | null;
+    }
+  >();
+  for (const lv of levels) {
+    for (const seg of lv.segments ?? []) {
+      if (seg.id == null) continue;
+      map.set(seg.id, {
+        isOccupied: seg.order_id != null,
+        orderNumber: seg.order_number,
+        utilizationPercent: seg.utilization_percent,
+        orderVolumeDm3: seg.order_volume_dm3,
+        capacityDm3: seg.capacity_dm3,
+      });
+    }
+  }
+  return map;
 }

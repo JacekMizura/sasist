@@ -6,11 +6,19 @@ import api from "../../../api/axios";
 import { useWarehouse } from "../../../context/WarehouseContext";
 import { cartsPageShellClass } from "../../../modules/carts/cartsModuleTokens";
 import { ConsolidationRackFormShell } from "../../../modules/consolidation-racks/ConsolidationRackFormShell";
+import ConsolidationRackSegmentEditPanel from "../../../modules/consolidation-racks/ConsolidationRackSegmentEditPanel";
 import ConsolidationRackStructureEditor from "../../../modules/consolidation-racks/ConsolidationRackStructureEditor";
 import ConsolidationRackStructurePreview from "../../../modules/consolidation-racks/ConsolidationRackStructurePreview";
 import type { ConsolidationRack } from "../../../modules/consolidation-racks/consolidationRackTypes";
 import { rackOccupancyStats } from "../../../modules/consolidation-racks/rackLayoutUtils";
-import { apiRackToDraft, type RackStructureDraft } from "../../../modules/consolidation-racks/rackStructureModel";
+import {
+  apiRackToDraft,
+  buildSegmentOccupancyMap,
+  findSegmentInDraft,
+  segmentDisplayLabel,
+  type RackStructureDraft,
+  type SegmentSelection,
+} from "../../../modules/consolidation-racks/rackStructureModel";
 
 export default function ConsolidationRackPreviewPage() {
   const { rackId } = useParams<{ rackId: string }>();
@@ -19,7 +27,8 @@ export default function ConsolidationRackPreviewPage() {
   const [error, setError] = useState<string | null>(null);
   const [rack, setRack] = useState<ConsolidationRack | null>(null);
   const [draft, setDraft] = useState<RackStructureDraft | null>(null);
-  const [expandedLevels, setExpandedLevels] = useState<Set<string>>(() => new Set());
+  const [expandedLevelId, setExpandedLevelId] = useState<string | null>(null);
+  const [selection, setSelection] = useState<SegmentSelection>(null);
 
   const loadRack = useCallback(async (id: number) => {
     setLoading(true);
@@ -29,7 +38,8 @@ export default function ConsolidationRackPreviewPage() {
       setRack(data);
       const nextDraft = apiRackToDraft(data);
       setDraft(nextDraft);
-      setExpandedLevels(new Set(nextDraft.levels.map((l) => l.clientId)));
+      setExpandedLevelId(nextDraft.levels[0]?.clientId ?? null);
+      setSelection(null);
     } catch (err: unknown) {
       console.error("[ConsolidationRackPreview] load error:", err);
       setError("Nie udało się wczytać regału.");
@@ -43,34 +53,35 @@ export default function ConsolidationRackPreviewPage() {
   }, [rackId, loadRack]);
 
   const stats = useMemo(() => rackOccupancyStats(rack?.levels ?? []), [rack]);
-
-  const occupancyBySegmentId = useMemo(() => {
-    const map = new Map<number, { orderNumber?: string | null; tone?: string }>();
-    for (const lv of rack?.levels ?? []) {
-      for (const seg of lv.segments ?? []) {
-        if (seg.id == null) continue;
-        map.set(seg.id, {
-          orderNumber: seg.order_number,
-          tone: seg.order_id != null ? "#fff7ed" : undefined,
-        });
-      }
-    }
-    return map;
-  }, [rack]);
+  const occupancyBySegmentId = useMemo(
+    () => buildSegmentOccupancyMap(rack?.levels ?? []),
+    [rack],
+  );
 
   const warehouseLabel =
     warehouses.find((w) => w.id === (rack?.warehouse_id ?? warehouse?.id))?.name
     ?? warehouse?.name
     ?? "—";
 
-  const toggleLevel = useCallback((clientId: string) => {
-    setExpandedLevels((prev) => {
-      const next = new Set(prev);
-      if (next.has(clientId)) next.delete(clientId);
-      else next.add(clientId);
-      return next;
-    });
+  const selectSegment = useCallback((levelClientId: string, segmentClientId: string) => {
+    setExpandedLevelId(levelClientId);
+    setSelection({ levelClientId, segmentClientId });
   }, []);
+
+  const selectedHit = useMemo(() => {
+    if (!draft || !selection) return null;
+    return findSegmentInDraft(draft, selection.levelClientId, selection.segmentClientId);
+  }, [draft, selection]);
+
+  const selectedLabel = selectedHit
+    ? segmentDisplayLabel(selectedHit.level, selectedHit.segment)
+    : "";
+
+  const selectedOccupancy = useMemo(() => {
+    const segId = selectedHit?.segment.segmentId;
+    if (segId == null) return undefined;
+    return occupancyBySegmentId.get(segId);
+  }, [selectedHit, occupancyBySegmentId]);
 
   if (loading) {
     return (
@@ -93,7 +104,7 @@ export default function ConsolidationRackPreviewPage() {
     <div className={cartsPageShellClass}>
       <ConsolidationRackFormShell
         title={`Podgląd: ${rack.name}`}
-        subtitle="Tylko odczyt — wizualizacja regału i wykorzystania segmentów"
+        subtitle="Kliknij segment w podglądzie, aby zobaczyć szczegóły zajętości"
         backTo="/carts/racks"
         headerActions={
           <Link
@@ -124,16 +135,38 @@ export default function ConsolidationRackPreviewPage() {
             showWarehouseSelect={false}
             structureLocked
             readOnly
-            expandedLevels={expandedLevels}
-            onToggleLevel={toggleLevel}
+            expandedLevelId={expandedLevelId}
+            onExpandLevel={setExpandedLevelId}
+            selection={selection}
+            onSelectSegment={selectSegment}
           />
         }
-        preview={
-          <ConsolidationRackStructurePreview
-            draft={draft}
-            showOccupancy
-            occupancyBySegmentId={occupancyBySegmentId}
-          />
+        workspace={
+          <div className="flex h-full min-h-0 flex-col gap-2 lg:flex-row">
+            <div className="min-h-0 min-w-0 flex-1 overflow-hidden rounded-xl border border-slate-200/55 bg-white p-2 shadow-sm">
+              <ConsolidationRackStructurePreview
+                draft={draft}
+                showOccupancy
+                occupancyBySegmentId={occupancyBySegmentId}
+                selection={selection}
+                interactive
+                onSegmentClick={selectSegment}
+              />
+            </div>
+            {selectedHit ? (
+              <div className="w-full shrink-0 lg:w-[min(100%,260px)]">
+                <ConsolidationRackSegmentEditPanel
+                  segmentLabel={selectedLabel}
+                  level={selectedHit.level}
+                  segment={selectedHit.segment}
+                  readOnly
+                  onUpdate={() => {}}
+                  onClose={() => setSelection(null)}
+                  occupancy={selectedOccupancy}
+                />
+              </div>
+            ) : null}
+          </div>
         }
       />
     </div>

@@ -10,11 +10,13 @@ type Props = {
   headerActions?: ReactNode;
   summaryBar?: ReactNode;
   sidebar: ReactNode;
-  preview: ReactNode;
+  workspace: ReactNode;
   footer?: ReactNode;
 };
 
-/** Układ wzorowany na Twórcy szablonu regału magazynowego — lewa kolumna parametrów, prawa wizualizacja. */
+/**
+ * Layout CAD-style: wąska nawigacja (lewo) + obszar roboczy (podgląd + panel segmentu).
+ */
 export function ConsolidationRackFormShell({
   title,
   subtitle,
@@ -23,7 +25,7 @@ export function ConsolidationRackFormShell({
   headerActions,
   summaryBar,
   sidebar,
-  preview,
+  workspace,
   footer,
 }: Props) {
   return (
@@ -45,19 +47,17 @@ export function ConsolidationRackFormShell({
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
-        <div className="w-full shrink-0 overflow-y-auto border-b border-slate-200/45 bg-slate-50/25 px-4 py-4 lg:w-[38%] lg:min-w-[300px] lg:max-w-[420px] lg:border-b-0 lg:border-r">
+      <div className="flex min-h-0 flex-col overflow-hidden lg:flex-row lg:items-stretch">
+        <div className="w-full shrink-0 overflow-y-auto border-b border-slate-200/45 bg-slate-50/25 px-3 py-3 lg:w-[min(100%,280px)] lg:border-b-0 lg:border-r">
           {sidebar}
         </div>
-        <div className="flex min-w-0 flex-1 flex-col gap-3 overflow-hidden bg-white px-4 py-4 lg:min-h-0">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden bg-white px-3 py-3 lg:px-4">
           {summaryBar ? (
-            <div className="shrink-0 rounded-xl border border-slate-200/55 bg-slate-50/40 px-3 py-2.5 text-sm text-slate-700 shadow-sm">
+            <div className="shrink-0 rounded-xl border border-slate-200/55 bg-slate-50/40 px-3 py-2 text-sm text-slate-700 shadow-sm">
               {summaryBar}
             </div>
           ) : null}
-          <div className="shrink-0 overflow-hidden rounded-xl border border-slate-200/55 bg-white p-3 shadow-sm">
-            {preview}
-          </div>
+          <div className="min-h-0 flex-1 overflow-hidden">{workspace}</div>
         </div>
       </div>
 

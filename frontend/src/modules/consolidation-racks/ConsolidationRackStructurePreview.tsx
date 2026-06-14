@@ -1,28 +1,35 @@
 import type { RackStructureDraft } from "./rackStructureModel";
+import type { SegmentSelection } from "./rackStructureModel";
 import {
   buildConsolidationPreviewRows,
   CONSOLIDATION_PREVIEW_CELL,
   CONSOLIDATION_PREVIEW_MAX_HEIGHT_PX,
+  CONSOLIDATION_PREVIEW_SELECT,
+  type SegmentOccupancyInfo,
 } from "./consolidationRackPreviewLayout";
 
 type Props = {
   draft: RackStructureDraft;
   className?: string;
   showOccupancy?: boolean;
-  occupancyBySegmentId?: Map<number, { orderNumber?: string | null; tone?: string }>;
+  occupancyBySegmentId?: Map<number, SegmentOccupancyInfo>;
+  selection?: SegmentSelection;
+  onSegmentClick?: (levelClientId: string, segmentClientId: string) => void;
+  interactive?: boolean;
 };
 
-/**
- * Podgląd regału kompletacyjnego — wzorowany na `RackPreview` z Twórcy szablonu:
- * poziomy z etykietą, segmenty z nazwą + wymiary + pojemność, fit-to-view (max ~640px).
- */
 export default function ConsolidationRackStructurePreview({
   draft,
   className = "",
   showOccupancy = false,
   occupancyBySegmentId,
+  selection = null,
+  onSegmentClick,
+  interactive = false,
 }: Props) {
   const rows = buildConsolidationPreviewRows(draft);
+  const rackWidth = draft.totalWidthMm ?? 2000;
+  const clickable = interactive && Boolean(onSegmentClick);
 
   if (rows.length === 0) {
     return (
@@ -33,76 +40,129 @@ export default function ConsolidationRackStructurePreview({
   }
 
   return (
-    <div className={`flex flex-col ${className}`}>
+    <div className={`flex min-h-0 flex-col ${className}`}>
       <h4 className="shrink-0 px-1 pb-2 text-sm font-bold text-slate-600">Podgląd regału — na żywo</h4>
       <div
-        className="overflow-y-auto rounded-xl border border-slate-200/35 bg-slate-50/20 p-3"
+        className="min-h-0 overflow-y-auto rounded-xl border border-slate-200/35 bg-slate-50/20 p-3"
         style={{ maxHeight: CONSOLIDATION_PREVIEW_MAX_HEIGHT_PX }}
       >
-        <div className="space-y-4">
-          {rows.map((row) => (
-            <section key={row.key}>
-              <div className="mb-1.5 flex items-baseline justify-between gap-2">
-                <h5 className="text-xs font-bold uppercase tracking-wide text-slate-600">{row.levelLabel}</h5>
-                <span className="text-[11px] tabular-nums text-slate-500">WYS {Math.round(row.levelHeightMm)} mm</span>
-              </div>
-              <div
-                className="flex min-h-[88px] gap-1 rounded-lg border border-slate-200/80 bg-white p-1 shadow-sm"
-                role="img"
-                aria-label={`${row.levelLabel}, ${row.segments.length} segmentów`}
+        <div className="space-y-3">
+          {rows.map((row) => {
+            const levelActive = selection?.levelClientId === row.key;
+            return (
+              <section
+                key={row.key}
+                className={`rounded-lg transition-shadow ${levelActive ? CONSOLIDATION_PREVIEW_SELECT.levelRing : ""}`}
               >
-                {row.segments.map((cell) => {
-                  const occ = cell.segmentId != null ? occupancyBySegmentId?.get(cell.segmentId) : undefined;
-                  const isOccupied = Boolean(occ?.orderNumber);
-                  const fill = isOccupied ? CONSOLIDATION_PREVIEW_CELL.occupiedBg : CONSOLIDATION_PREVIEW_CELL.bg;
-                  const stroke = isOccupied ? CONSOLIDATION_PREVIEW_CELL.occupiedBorder : CONSOLIDATION_PREVIEW_CELL.border;
-                  const isCompact = cell.flexGrow < 0.12;
-                  const volStr =
-                    cell.capacityDm3 != null ? `${cell.capacityDm3.toFixed(0)} dm³` : "— dm³";
-                  const dimsLine = `SZ ${Math.round(cell.widthMm)} · GŁ ${Math.round(cell.depthMm)} · WYS ${Math.round(cell.heightMm)}`;
+                <div className="mb-1.5 flex items-baseline justify-between gap-2 px-0.5">
+                  <h5 className="text-xs font-bold uppercase tracking-wide text-slate-600">{row.levelLabel}</h5>
+                  <span className="text-[11px] tabular-nums text-slate-500">WYS {Math.round(row.levelHeightMm)} mm</span>
+                </div>
+                <div
+                  className={`flex gap-0.5 rounded-lg border bg-white p-1 shadow-sm ${
+                    levelActive ? "border-orange-300 bg-orange-50/20" : "border-slate-200/80"
+                  }`}
+                  style={{ height: row.bandHeightPx, minHeight: row.bandHeightPx }}
+                  role="img"
+                  aria-label={`${row.levelLabel}, ${row.segments.length} segmentów`}
+                >
+                  {row.segments.map((cell) => {
+                    const occ = cell.segmentId != null ? occupancyBySegmentId?.get(cell.segmentId) : undefined;
+                    const isOccupied = showOccupancy && (occ?.isOccupied ?? false);
+                    const isSelected =
+                      selection?.levelClientId === row.key && selection.segmentClientId === cell.key;
+                    const fill = isOccupied
+                      ? CONSOLIDATION_PREVIEW_CELL.occupiedBg
+                      : showOccupancy
+                        ? CONSOLIDATION_PREVIEW_CELL.freeBg
+                        : CONSOLIDATION_PREVIEW_CELL.bg;
+                    let stroke = isOccupied
+                      ? CONSOLIDATION_PREVIEW_CELL.occupiedBorder
+                      : showOccupancy
+                        ? CONSOLIDATION_PREVIEW_CELL.freeBorder
+                        : CONSOLIDATION_PREVIEW_CELL.border;
+                    let borderWidth = 1.5;
+                    if (isSelected) {
+                      stroke = CONSOLIDATION_PREVIEW_SELECT.segmentBorder;
+                      borderWidth = CONSOLIDATION_PREVIEW_SELECT.segmentBorderWidth;
+                    }
+                    const pctWidth = Math.max(0.04, cell.widthFraction);
+                    const isCompact = pctWidth < 0.08 || row.bandHeightPx < 64;
+                    const volStr =
+                      cell.capacityDm3 != null ? `${cell.capacityDm3.toFixed(0)} dm³` : "— dm³";
 
-                  return (
-                    <div
-                      key={cell.key}
-                      className="flex min-w-[52px] flex-col items-center justify-center rounded-md px-1 py-2 text-center transition-colors"
-                      style={{
-                        flex: `${cell.flexGrow} 1 0`,
-                        backgroundColor: fill,
-                        border: `1.5px solid ${stroke}`,
-                      }}
-                      title={`${cell.label}\n${dimsLine}\n${volStr}`}
-                    >
-                      <span className="font-sans text-base font-extrabold leading-tight text-slate-900 sm:text-lg">
-                        {cell.label}
-                      </span>
-                      {!isCompact ? (
-                        <>
-                          <span className="mt-1 font-sans text-[11px] leading-snug text-slate-600 sm:text-xs">
-                            {dimsLine}
-                          </span>
-                          <span className="mt-0.5 font-sans text-[10px] text-slate-500 sm:text-[11px]">
-                            {volStr}
-                          </span>
-                        </>
-                      ) : (
-                        <span className="mt-0.5 font-sans text-[9px] text-slate-500">{volStr}</span>
-                      )}
-                      {showOccupancy && occ?.orderNumber ? (
-                        <span className="mt-1 max-w-full truncate font-sans text-[9px] font-semibold text-orange-900">
-                          {occ.orderNumber}
+                    return (
+                      <div
+                        key={cell.key}
+                        role={clickable ? "button" : undefined}
+                        tabIndex={clickable ? 0 : undefined}
+                        onClick={clickable ? () => onSegmentClick?.(row.key, cell.key) : undefined}
+                        onKeyDown={
+                          clickable
+                            ? (e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  e.preventDefault();
+                                  onSegmentClick?.(row.key, cell.key);
+                                }
+                              }
+                            : undefined
+                        }
+                        className={`flex min-w-[28px] flex-col items-center justify-center overflow-hidden rounded-md px-0.5 py-0.5 text-center ${
+                          clickable ? "cursor-pointer hover:brightness-[0.97]" : ""
+                        }`}
+                        style={{
+                          flex: `${Math.max(0.02, cell.widthFraction)} 0 0`,
+                          backgroundColor: fill,
+                          border: `${borderWidth}px solid ${stroke}`,
+                        }}
+                        title={`${cell.label}\nSZ ${Math.round(cell.widthMm)} mm · WYS ${Math.round(cell.heightMm)} mm\n${volStr}`}
+                      >
+                        <span className="w-full truncate font-sans text-xs font-extrabold leading-tight text-slate-900 sm:text-sm">
+                          {cell.label}
                         </span>
-                      ) : null}
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-          ))}
+                        {!isCompact ? (
+                          <>
+                            <span className="mt-0.5 font-sans text-[9px] tabular-nums text-slate-600 sm:text-[10px]">
+                              {Math.round(cell.widthMm)} mm
+                            </span>
+                            <span className="font-sans text-[9px] tabular-nums text-slate-600 sm:text-[10px]">
+                              WYS {Math.round(cell.heightMm)}
+                            </span>
+                            <span className="mt-0.5 font-sans text-[9px] font-medium tabular-nums text-slate-500">
+                              {volStr}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="mt-0.5 font-sans text-[8px] tabular-nums text-slate-500">{volStr}</span>
+                        )}
+                        {showOccupancy ? (
+                          <div className="mt-0.5 flex w-full flex-col items-center gap-0.5">
+                            <span
+                              className={`rounded px-0.5 py-px text-[8px] font-bold uppercase ${
+                                isOccupied ? "bg-orange-100 text-orange-900" : "bg-emerald-100 text-emerald-900"
+                              }`}
+                            >
+                              {isOccupied ? "Zaj." : "Wol."}
+                            </span>
+                            {isOccupied && occ?.orderNumber && !isCompact ? (
+                              <span className="max-w-full truncate font-sans text-[8px] font-semibold text-orange-950">
+                                {occ.orderNumber}
+                              </span>
+                            ) : null}
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            );
+          })}
         </div>
       </div>
       <p className="mt-2 shrink-0 px-1 text-[11px] text-slate-500">
-        Podgląd skalowany do czytelności (max {CONSOLIDATION_PREVIEW_MAX_HEIGHT_PX}px). Szerokości segmentów są
-        proporcjonalne; wysokość pasa poziomu nie odwzorowuje mm 1:1.
+        {clickable ? "Kliknij segment w podglądzie, aby go edytować. " : null}
+        Skala proporcjonalna (max {CONSOLIDATION_PREVIEW_MAX_HEIGHT_PX}px, przewijanie wewnętrzne). Szer. regału: {rackWidth} mm.
       </p>
     </div>
   );

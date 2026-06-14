@@ -1,5 +1,20 @@
 # Current context
 
+## P5.12C — Refaktor UX pod duże regały (CAD-style editor) (2026-06-08)
+- Accordion poziomów — tylko jeden rozwinięty; segmenty jako małe chipy (max scroll 120px)
+- Edycja segmentu: `ConsolidationRackSegmentEditPanel` — zawsze jeden formularz (panel po prawej)
+- Podgląd = główny obszar roboczy; klik segmentu → edycja; highlight poziomu + segmentu (orange)
+- Layout: nawigacja ~280px | podgląd flex-1 | panel segmentu 260px
+- Podgląd max 700px, scroll wewnętrzny; min band 28px przy ≥10 poziomach
+
+## P5.12B — Ostatnie poprawki konfiguratora regałów OMS (2026-06-08)
+- Podgląd: wysokość pasa poziomu ∝ `levelHeightMm` (max 640px, min 56px/poziom)
+- Szerokości segmentów: flex ∝ `width_mm / totalWidthMm`
+- Walidacja Σ szer. = szer. regału (±1 mm); zapis zablokowany + banner
+- Wskaźnik: „Wykorzystano X / Y mm szerokości poziomu”
+- Presety: 4×4, 3×6, 2×8, pusty regał
+- Podgląd zajętości: Wolny/Zajęty, nr zamówienia, % pojemności
+
 ## P5.12A — Poprawki UX konfiguratora regałów OMS (2026-06-08)
 - Tab **Regały** aktywny na całej ścieżce `/carts/racks/*` (`end: false` w `cartsTabs.ts`)
 - **Liczba segmentów na poziomie** — `setLevelSegmentCount()` równy podział szerokości (jak „lokacje na poziom” w szablonie)

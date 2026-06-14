@@ -5,51 +5,93 @@ import type { LevelDraft, RackStructureDraft, SegmentDraft } from "./rackStructu
 export const CONSOLIDATION_PREVIEW_CELL = {
   bg: "#eff6ff",
   border: "#bfdbfe",
+  freeBg: "#ecfdf5",
+  freeBorder: "#6ee7b7",
   occupiedBg: "#fff7ed",
   occupiedBorder: "#fdba74",
 } as const;
 
-export const CONSOLIDATION_PREVIEW_MAX_HEIGHT_PX = 640;
+export const CONSOLIDATION_PREVIEW_MAX_HEIGHT_PX = 700;
+export const CONSOLIDATION_PREVIEW_MIN_LEVEL_BAND_PX = 56;
+
+export const CONSOLIDATION_PREVIEW_SELECT = {
+  levelRing: "ring-2 ring-orange-400/70 ring-offset-1",
+  segmentBorder: "#ea580c",
+  segmentBorderWidth: 3,
+} as const;
+
+export type SegmentOccupancyInfo = {
+  isOccupied: boolean;
+  orderNumber?: string | null;
+  utilizationPercent?: number | null;
+  orderVolumeDm3?: number | null;
+  capacityDm3?: number | null;
+};
 
 export type PreviewSegmentCell = {
   key: string;
   label: string;
   widthMm: number;
-  depthMm: number;
   heightMm: number;
   capacityDm3: number | null;
   segmentId?: number;
-  flexGrow: number;
+  /** Ułamek szerokości regału (width_mm / totalWidthMm) */
+  widthFraction: number;
 };
 
 export type PreviewLevelRow = {
   key: string;
   levelLabel: string;
   levelHeightMm: number;
+  /** Wysokość pasa w px — proporcjonalna do levelHeightMm */
+  bandHeightPx: number;
   segments: PreviewSegmentCell[];
 };
 
 export function buildConsolidationPreviewRows(draft: RackStructureDraft): PreviewLevelRow[] {
-  return draft.levels.map((lv, levelIndex) => {
+  const rackWidth = Math.max(1, draft.totalWidthMm ?? 2000);
+  const rawRows = draft.levels.map((lv, levelIndex) => {
     const levelName = lv.name.trim() || String.fromCharCode(65 + levelIndex);
     const isSegmented = lv.segments.length > 1;
-    const widthSum = Math.max(
+    const levelHeightMm = Math.max(
       1,
-      lv.segments.reduce((s, seg) => s + Math.max(1, seg.widthMm ?? 1), 0),
+      lv.levelHeightMm ?? 500,
+      ...lv.segments.map((s) => s.heightMm ?? lv.levelHeightMm ?? 500),
     );
 
     return {
       key: lv.clientId,
       levelLabel: `Poziom ${levelName}`,
-      levelHeightMm: Math.max(
-        1,
-        ...lv.segments.map((s) => s.heightMm ?? lv.levelHeightMm ?? 500),
-      ),
-      segments: lv.segments.map((seg, segmentIndex) =>
-        segmentToPreviewCell(lv, seg, levelIndex, levelName, isSegmented, widthSum),
+      levelHeightMm,
+      segments: lv.segments.map((seg) =>
+        segmentToPreviewCell(lv, seg, levelIndex, levelName, isSegmented, rackWidth),
       ),
     };
   });
+
+  const totalHeightMm = rawRows.reduce((s, r) => s + r.levelHeightMm, 0);
+  const innerPx = CONSOLIDATION_PREVIEW_MAX_HEIGHT_PX - 24;
+  const levelCount = rawRows.length;
+  const minBandPx =
+    levelCount >= 10 ? 28 : levelCount >= 6 ? 36 : CONSOLIDATION_PREVIEW_MIN_LEVEL_BAND_PX;
+  let bands = rawRows.map((row) => ({
+    ...row,
+    bandHeightPx: Math.max(
+      minBandPx,
+      (row.levelHeightMm / totalHeightMm) * innerPx,
+    ),
+  }));
+
+  const bandSum = bands.reduce((s, r) => s + r.bandHeightPx, 0);
+  if (bandSum > innerPx && bandSum > 0) {
+    const scale = innerPx / bandSum;
+    bands = bands.map((row) => ({
+      ...row,
+      bandHeightPx: Math.max(minBandPx - 8, Math.round(row.bandHeightPx * scale)),
+    }));
+  }
+
+  return bands;
 }
 
 function segmentToPreviewCell(
@@ -58,20 +100,18 @@ function segmentToPreviewCell(
   levelIndex: number,
   levelName: string,
   isSegmented: boolean,
-  widthSum: number,
+  rackWidthMm: number,
 ): PreviewSegmentCell {
-  const widthMm = seg.widthMm ?? 1;
-  const depthMm = seg.depthMm ?? 0;
+  const widthMm = seg.widthMm ?? 0;
   const heightMm = seg.heightMm ?? lv.levelHeightMm ?? 0;
   const label = computeSlotLabel(levelName, levelIndex, seg.segmentIndex, isSegmented, seg.slotLabel || null);
   return {
     key: seg.clientId,
     label,
     widthMm,
-    depthMm,
     heightMm,
     capacityDm3: computeCapacityDm3(seg.depthMm, seg.widthMm, heightMm),
     segmentId: seg.segmentId,
-    flexGrow: widthMm / widthSum,
+    widthFraction: widthMm / rackWidthMm,
   };
 }
