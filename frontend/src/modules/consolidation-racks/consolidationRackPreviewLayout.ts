@@ -53,7 +53,8 @@ export type PreviewLevelRow = {
 
 export function buildConsolidationPreviewRows(draft: RackStructureDraft): PreviewLevelRow[] {
   const rackWidth = Math.max(1, draft.totalWidthMm ?? 2000);
-  const rawRows = draft.levels.map((lv, levelIndex) => {
+  const levels = draft.bays.flatMap((b) => b.levels);
+  const rawRows = levels.map((lv, levelIndex) => {
     const levelName = lv.name.trim() || String.fromCharCode(65 + levelIndex);
     const isSegmented = lv.segments.length > 1;
     const levelHeightMm = Math.max(
@@ -132,4 +133,85 @@ export function formatPreviewDimsLine(w: number, d: number, h: number, compact: 
 
 export function formatPreviewDimsMultiline(w: number, d: number, h: number): [string, string, string] {
   return [`SZ ${Math.round(w)}`, `GŁ ${Math.round(d)}`, `WYS ${Math.round(h)}`];
+}
+
+export type OmsPreviewCell = {
+  key: string;
+  levelClientId: string;
+  label: string;
+  widthMm: number;
+  depthMm: number;
+  heightMm: number;
+  capacityDm3: number | null;
+  widthFraction: number;
+};
+
+export type OmsPreviewRow = {
+  key: string;
+  levelClientId: string;
+  levelLabel: string;
+  levelHeightMm: number;
+  bandHeightPx: number;
+  cells: OmsPreviewCell[];
+};
+
+export function buildOmsBayPreviewRows(
+  bay: import("./rackStructureModel").BayDraft,
+  draft: import("./rackStructureModel").RackStructureDraft,
+  maxHeightPx: number,
+): OmsPreviewRow[] {
+  const rackWidth = Math.max(1, draft.totalWidthMm ?? 2000);
+  const raw = bay.levels.map((lv) => {
+    const levelName = lv.name.trim() || String.fromCharCode(65 + lv.levelIndex);
+    const isSegmented = lv.segments.length > 1;
+    const levelHeightMm = Math.max(
+      1,
+      lv.levelHeightMm ?? 500,
+      ...lv.segments.map((s) => s.heightMm ?? lv.levelHeightMm ?? 500),
+    );
+    return {
+      key: lv.clientId,
+      levelClientId: lv.clientId,
+      levelLabel: levelName,
+      levelHeightMm,
+      cells: lv.segments.map((seg) => {
+        const widthMm = seg.widthMm ?? 0;
+        const depthMm = seg.depthMm ?? 0;
+        const heightMm = seg.heightMm ?? lv.levelHeightMm ?? 0;
+        return {
+          key: seg.clientId,
+          levelClientId: lv.clientId,
+          label: computeSlotLabel(
+            levelName,
+            lv.levelIndex,
+            seg.segmentIndex,
+            isSegmented,
+            seg.slotLabel || null,
+          ),
+          widthMm,
+          depthMm,
+          heightMm,
+          capacityDm3: computeCapacityDm3(seg.depthMm, seg.widthMm, heightMm),
+          widthFraction: widthMm / rackWidth,
+        };
+      }),
+    };
+  });
+
+  const totalHeightMm = raw.reduce((s, r) => s + r.levelHeightMm, 0);
+  const innerPx = maxHeightPx - 32;
+  const minBand = raw.length >= 10 ? 28 : raw.length >= 6 ? 36 : 48;
+  let rows: OmsPreviewRow[] = raw.map((row) => ({
+    ...row,
+    bandHeightPx: Math.max(minBand, (row.levelHeightMm / totalHeightMm) * innerPx),
+  }));
+  const sum = rows.reduce((s, r) => s + r.bandHeightPx, 0);
+  if (sum > innerPx && sum > 0) {
+    const scale = innerPx / sum;
+    rows = rows.map((row) => ({
+      ...row,
+      bandHeightPx: Math.max(minBand - 8, Math.round(row.bandHeightPx * scale)),
+    }));
+  }
+  return rows;
 }

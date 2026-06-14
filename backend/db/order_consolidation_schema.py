@@ -159,8 +159,24 @@ def ensure_order_consolidation_schema(engine: Engine) -> None:
                 )
 
         _ensure_rack_segment_profile_columns(conn, engine)
+        _ensure_rack_level_unit_columns(conn, engine)
 
     logger.info("[order_consolidation] schema ok version=%s", ORDER_CONSOLIDATION_SCHEMA_VERSION)
+
+
+def _ensure_rack_level_unit_columns(conn, engine: Engine) -> None:
+    """P5.12E — fizyczne racki (units) w regale kompletacyjnym."""
+    if not has_table(engine, "consolidation_rack_levels"):
+        return
+    cols = get_table_column_names(engine, "consolidation_rack_levels")
+    additions: list[tuple[str, str]] = [
+        ("unit_name", "VARCHAR(64)"),
+        ("unit_sort_order", "INTEGER"),
+        ("unit_description", "VARCHAR(512)"),
+    ]
+    for col_name, col_type in additions:
+        if col_name not in cols:
+            conn.execute(text(f"ALTER TABLE consolidation_rack_levels ADD COLUMN {col_name} {col_type} NULL"))
 
 
 def _ensure_rack_segment_profile_columns(conn, engine: Engine) -> None:

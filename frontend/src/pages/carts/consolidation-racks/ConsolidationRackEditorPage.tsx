@@ -6,18 +6,18 @@ import api from "../../../api/axios";
 import { useWarehouse } from "../../../context/WarehouseContext";
 import { cartsBtnPrimary, cartsPageShellClass } from "../../../modules/carts/cartsModuleTokens";
 import { ConsolidationRackFormShell } from "../../../modules/consolidation-racks/ConsolidationRackFormShell";
+import ConsolidationRackOmsPreview from "../../../modules/consolidation-racks/ConsolidationRackOmsPreview";
 import ConsolidationRackSegmentEditPanel from "../../../modules/consolidation-racks/ConsolidationRackSegmentEditPanel";
 import ConsolidationRackStructureEditor from "../../../modules/consolidation-racks/ConsolidationRackStructureEditor";
-import ConsolidationRackStructurePreview from "../../../modules/consolidation-racks/ConsolidationRackStructurePreview";
 import type { ConsolidationRack } from "../../../modules/consolidation-racks/consolidationRackTypes";
-import { rackOccupancyStats } from "../../../modules/consolidation-racks/rackLayoutUtils";
 import {
+  allLevels,
   apiRackToDraft,
   applyRackPreset,
-  buildSegmentOccupancyMap,
+  countSegments,
   createDefaultRackDraft,
   draftToApiPayload,
-  draftToGridLevels,
+  findBay,
   findSegmentInDraft,
   segmentDisplayLabel,
   segmentDraftPayload,
@@ -40,49 +40,59 @@ export default function ConsolidationRackEditorPage() {
   const [error, setError] = useState<string | null>(null);
   const [rack, setRack] = useState<ConsolidationRack | null>(null);
   const [draft, setDraft] = useState<RackStructureDraft>(() => createDefaultRackDraft(warehouse?.id ?? 1));
+  const [focusedBayId, setFocusedBayId] = useState<string | null>(null);
   const [focusedLevelId, setFocusedLevelId] = useState<string | null>(null);
   const [selection, setSelection] = useState<SegmentSelection>(null);
   const [appliedPreset, setAppliedPreset] = useState<RackPresetId | null>(null);
   const [presetPickerOpen, setPresetPickerOpen] = useState(true);
 
   const initNavigation = useCallback((nextDraft: RackStructureDraft) => {
-    const firstLevel = nextDraft.levels[0];
-    if (!firstLevel) {
-      setFocusedLevelId(null);
-      setSelection(null);
-      return;
-    }
-    setFocusedLevelId(firstLevel.clientId);
+    const firstBay = nextDraft.bays[0];
+    const firstLevel = firstBay?.levels[0];
+    setFocusedBayId(firstBay?.clientId ?? null);
+    setFocusedLevelId(firstLevel?.clientId ?? null);
     setSelection(null);
   }, []);
 
   useEffect(() => {
-    if (focusedLevelId == null && draft.levels[0]) {
-      setFocusedLevelId(draft.levels[0].clientId);
+    if (focusedBayId == null && draft.bays[0]) {
+      setFocusedBayId(draft.bays[0].clientId);
+      setFocusedLevelId(draft.bays[0].levels[0]?.clientId ?? null);
     }
-  }, [draft.levels, focusedLevelId]);
+  }, [draft.bays, focusedBayId]);
 
   const handleDraftChange = useCallback((next: RackStructureDraft) => {
     setDraft(next);
     setSelection((sel) => {
       if (!sel) return sel;
-      const hit = findSegmentInDraft(next, sel.levelClientId, sel.segmentClientId);
+      const hit = findSegmentInDraft(next, sel.bayClientId, sel.levelClientId, sel.segmentClientId);
       return hit ? sel : null;
     });
-    setFocusedLevelId((focused) => {
-      if (focused && next.levels.some((l) => l.clientId === focused)) return focused;
-      return next.levels[0]?.clientId ?? null;
+    setFocusedBayId((bayId) => {
+      if (bayId && next.bays.some((b) => b.clientId === bayId)) return bayId;
+      return next.bays[0]?.clientId ?? null;
+    });
+    setFocusedLevelId((levelId) => {
+      if (levelId && allLevels(next).some((l) => l.clientId === levelId)) return levelId;
+      return next.bays[0]?.levels[0]?.clientId ?? null;
     });
   }, []);
 
-  const selectLevel = useCallback((levelClientId: string) => {
+  const selectBay = useCallback((bayClientId: string) => {
+    setFocusedBayId(bayClientId);
+    setSelection(null);
+  }, []);
+
+  const selectLevel = useCallback((bayClientId: string, levelClientId: string) => {
+    setFocusedBayId(bayClientId);
     setFocusedLevelId(levelClientId);
     setSelection(null);
   }, []);
 
-  const selectSegment = useCallback((levelClientId: string, segmentClientId: string) => {
+  const selectSegment = useCallback((bayClientId: string, levelClientId: string, segmentClientId: string) => {
+    setFocusedBayId(bayClientId);
     setFocusedLevelId(levelClientId);
-    setSelection({ levelClientId, segmentClientId });
+    setSelection({ bayClientId, levelClientId, segmentClientId });
   }, []);
 
   const handleApplyPreset = useCallback(
@@ -123,37 +133,39 @@ export default function ConsolidationRackEditorPage() {
     }
   }, [isCreate, warehouse?.id]);
 
-  const previewLevels = useMemo(() => draftToGridLevels(draft, rack), [draft, rack]);
-  const stats = useMemo(() => rackOccupancyStats(previewLevels), [previewLevels]);
   const validation = useMemo(() => validateRackDraft(draft), [draft]);
-  const occupancyBySegmentId = useMemo(() => buildSegmentOccupancyMap(previewLevels), [previewLevels]);
+  const totalSegments = useMemo(() => countSegments(draft), [draft]);
+  const focusedBay = useMemo(
+    () => (focusedBayId ? findBay(draft, focusedBayId) ?? null : draft.bays[0] ?? null),
+    [draft, focusedBayId],
+  );
 
   const selectedHit = useMemo(() => {
     if (!selection) return null;
-    return findSegmentInDraft(draft, selection.levelClientId, selection.segmentClientId);
+    return findSegmentInDraft(draft, selection.bayClientId, selection.levelClientId, selection.segmentClientId);
   }, [draft, selection]);
 
   const selectedLabel = selectedHit
     ? segmentDisplayLabel(selectedHit.level, selectedHit.segment)
     : "";
 
-  const selectedOccupancy = useMemo(() => {
-    const segId = selectedHit?.segment.segmentId;
-    if (segId == null) return undefined;
-    return occupancyBySegmentId.get(segId);
-  }, [selectedHit, occupancyBySegmentId]);
-
   const updateSelectedSegment = useCallback((patch: Partial<SegmentDraft>) => {
     if (!selection) return;
     setDraft((prev) => ({
       ...prev,
-      levels: prev.levels.map((lv) => {
-        if (lv.clientId !== selection.levelClientId) return lv;
+      bays: prev.bays.map((bay) => {
+        if (bay.clientId !== selection.bayClientId) return bay;
         return {
-          ...lv,
-          segments: lv.segments.map((s) =>
-            s.clientId === selection.segmentClientId ? { ...s, ...patch } : s,
-          ),
+          ...bay,
+          levels: bay.levels.map((lv) => {
+            if (lv.clientId !== selection.levelClientId) return lv;
+            return {
+              ...lv,
+              segments: lv.segments.map((s) =>
+                s.clientId === selection.segmentClientId ? { ...s, ...patch } : s,
+              ),
+            };
+          }),
         };
       }),
     }));
@@ -202,7 +214,7 @@ export default function ConsolidationRackEditorPage() {
     setError(null);
     try {
       await api.put(`/racks/${rack.id}/`, { name: draft.rackName.trim() });
-      for (const lv of draft.levels) {
+      for (const lv of allLevels(draft)) {
         for (const seg of lv.segments) {
           if (seg.segmentId == null) continue;
           await api.patch(`/racks/segments/${seg.segmentId}/`, segmentDraftPayload(seg, lv));
@@ -220,7 +232,10 @@ export default function ConsolidationRackEditorPage() {
   const warehouseLabel =
     warehouses.find((w) => w.id === draft.warehouseId)?.name ?? warehouse?.name ?? `#${draft.warehouseId}`;
 
-  const firstSlotLabel = previewLevels[0]?.segments?.[0]?.effective_slot_label ?? "A";
+  const firstSlotLabel =
+    focusedBay?.levels[0]?.segments[0]
+      ? segmentDisplayLabel(focusedBay.levels[0], focusedBay.levels[0].segments[0])
+      : "A";
 
   if (loading) {
     return (
@@ -249,7 +264,7 @@ export default function ConsolidationRackEditorPage() {
 
       <ConsolidationRackFormShell
         title={isCreate ? "Nowy regał kompletacyjny" : "Edycja regału"}
-        subtitle="Buduj regał poziom po poziomie — drzewo struktury, podgląd na żywo, edycja jednego segmentu"
+        subtitle="Konfiguracja regału — racki, poziomy, segmenty; podgląd fizyczny bez statusów magazynowych"
         backTo="/carts/racks"
         headerActions={
           !isCreate ? (
@@ -263,11 +278,9 @@ export default function ConsolidationRackEditorPage() {
         }
         summaryBar={
           <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-            <span className="font-semibold tabular-nums text-slate-800">{stats.total} segmentów</span>
+            <span className="font-semibold tabular-nums text-slate-800">{totalSegments} segmentów</span>
             <span className="text-slate-500">·</span>
-            <span className="tabular-nums">Wolne: {stats.free}</span>
-            <span className="text-slate-500">·</span>
-            <span className="tabular-nums">Zajęte: {stats.occupied}</span>
+            <span className="tabular-nums">{draft.bays.length} racków</span>
             <span className="text-slate-500">·</span>
             <span>
               Skan: <span className="font-mono font-semibold">{draft.rackName.trim() || "RK-XX"}/{firstSlotLabel}</span>
@@ -286,42 +299,35 @@ export default function ConsolidationRackEditorPage() {
             presetPickerOpen={presetPickerOpen}
             onApplyPreset={isCreate ? handleApplyPreset : undefined}
             onChangePreset={() => setPresetPickerOpen(true)}
+            focusedBayId={focusedBayId}
             focusedLevelId={focusedLevelId}
+            onSelectBay={selectBay}
             onSelectLevel={selectLevel}
             selection={selection}
             onSelectSegment={selectSegment}
           />
         }
         workspace={
-          <div className="flex h-full min-h-0 flex-col gap-2 lg:flex-row">
-            <div className="min-h-0 min-w-0 flex-1 overflow-hidden rounded-xl border border-slate-200/55 bg-white p-2 shadow-sm">
-              <ConsolidationRackStructurePreview
+          <div className="flex h-full min-h-0 gap-2">
+            <div className="min-h-0 min-w-0 flex-1 overflow-hidden rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
+              <ConsolidationRackOmsPreview
                 draft={draft}
-                showOccupancy={!isCreate}
-                occupancyBySegmentId={occupancyBySegmentId}
+                bay={focusedBay}
                 selection={selection}
-                focusedLevelId={focusedLevelId}
-                interactive
                 onSegmentClick={selectSegment}
               />
             </div>
-            {selectedHit ? (
-              <div className="w-full shrink-0 lg:w-[min(100%,260px)]">
-                <ConsolidationRackSegmentEditPanel
-                  segmentLabel={selectedLabel}
-                  level={selectedHit.level}
-                  segment={selectedHit.segment}
-                  readOnly={false}
-                  onUpdate={updateSelectedSegment}
-                  onClose={() => setSelection(null)}
-                  occupancy={!isCreate ? selectedOccupancy : undefined}
-                />
-              </div>
-            ) : (
-              <div className="hidden w-[260px] shrink-0 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white px-4 py-8 text-center text-xs text-slate-500 lg:flex">
-                Kliknij segment w drzewie lub podglądzie, aby edytować wymiary.
-              </div>
-            )}
+            <div className="hidden w-[260px] shrink-0 lg:block">
+              <ConsolidationRackSegmentEditPanel
+                empty={!selectedHit}
+                segmentLabel={selectedLabel}
+                level={selectedHit?.level}
+                segment={selectedHit?.segment}
+                readOnly={false}
+                onUpdate={updateSelectedSegment}
+                onClose={() => setSelection(null)}
+              />
+            </div>
           </div>
         }
         footer={

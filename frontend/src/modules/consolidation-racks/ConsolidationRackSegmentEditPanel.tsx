@@ -8,9 +8,9 @@ import { computeCapacityDm3, MAX_RACK_DIM, parseOptionalDim } from "./rackLayout
 import type { LevelDraft, SegmentDraft } from "./rackStructureModel";
 
 type Props = {
-  segmentLabel: string;
-  level: LevelDraft;
-  segment: SegmentDraft;
+  segmentLabel?: string;
+  level?: LevelDraft;
+  segment?: SegmentDraft;
   readOnly?: boolean;
   onUpdate: (patch: Partial<SegmentDraft>) => void;
   onClose?: () => void;
@@ -20,6 +20,8 @@ type Props = {
     utilizationPercent?: number | null;
     capacityDm3?: number | null;
   };
+  /** OMS — panel zawsze widoczny; pusty stan gdy brak wyboru. */
+  empty?: boolean;
 };
 
 function DimInput({
@@ -58,14 +60,29 @@ function DimInput({
 
 /** Panel edycji pojedynczego segmentu — zawsze max. jeden formularz na ekranie. */
 export default function ConsolidationRackSegmentEditPanel({
-  segmentLabel,
+  segmentLabel = "",
   level,
   segment,
   readOnly = false,
   onUpdate,
   onClose,
   occupancy,
+  empty = false,
 }: Props) {
+  if (empty || !level || !segment) {
+    return (
+      <div className="flex h-full min-h-[280px] flex-col rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-200 px-3 py-2.5">
+          <div className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Segment</div>
+          <div className="text-sm font-medium text-slate-500">Wybierz segment</div>
+        </div>
+        <div className="flex flex-1 items-center justify-center px-4 text-center text-xs text-slate-400">
+          Kliknij segment w drzewie lub podglądzie racka, aby edytować wymiary i nazwę.
+        </div>
+      </div>
+    );
+  }
+
   const height = segment.heightMm ?? level.levelHeightMm;
   const cap = computeCapacityDm3(segment.depthMm, segment.widthMm, height);
 

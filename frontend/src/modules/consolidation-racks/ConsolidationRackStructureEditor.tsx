@@ -8,6 +8,7 @@ import RackStructureTree from "./RackStructureTree";
 import { MAX_RACK_DIM, parseOptionalDim } from "./rackLayoutUtils";
 import {
   addLevel,
+  addBay,
   applyRackPreset,
   countSegments,
   RACK_PRESET_LABELS,
@@ -24,10 +25,12 @@ type Props = {
   showWarehouseSelect: boolean;
   structureLocked?: boolean;
   readOnly?: boolean;
+  focusedBayId: string | null;
   focusedLevelId: string | null;
-  onSelectLevel: (levelClientId: string) => void;
+  onSelectBay: (bayClientId: string) => void;
+  onSelectLevel: (bayClientId: string, levelClientId: string) => void;
   selection: SegmentSelection;
-  onSelectSegment: (levelClientId: string, segmentClientId: string) => void;
+  onSelectSegment: (bayClientId: string, levelClientId: string, segmentClientId: string) => void;
   /** Tworzenie — preset wybrany / picker */
   appliedPreset?: RackPresetId | null;
   presetPickerOpen?: boolean;
@@ -84,7 +87,9 @@ export default function ConsolidationRackStructureEditor({
   showWarehouseSelect,
   structureLocked = false,
   readOnly = false,
+  focusedBayId,
   focusedLevelId,
+  onSelectBay,
   onSelectLevel,
   selection,
   onSelectSegment,
@@ -190,7 +195,9 @@ export default function ConsolidationRackStructureEditor({
       <section>
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-xs font-bold uppercase tracking-wide text-slate-600">Struktura regału</h2>
-          <span className="text-[11px] tabular-nums text-slate-500">{draft.levels.length} poz. · {totalSegments} seg.</span>
+          <span className="text-[11px] tabular-nums text-slate-500">
+            {draft.bays.length} rack · {totalSegments} seg.
+          </span>
         </div>
 
         <div className="mt-2">
@@ -198,9 +205,11 @@ export default function ConsolidationRackStructureEditor({
             draft={draft}
             readOnly={readOnly}
             structureLocked={structureLocked}
+            focusedBayId={focusedBayId}
             focusedLevelId={focusedLevelId}
             selection={selection}
             onChange={onChange}
+            onSelectBay={onSelectBay}
             onSelectLevel={onSelectLevel}
             onSelectSegment={onSelectSegment}
           />
@@ -209,11 +218,11 @@ export default function ConsolidationRackStructureEditor({
         {!readOnly && !structureLocked ? (
           <button
             type="button"
-            onClick={() => onChange(addLevel(draft))}
+            onClick={() => onChange(addBay(draft))}
             className="mt-2 inline-flex h-8 w-full items-center justify-center gap-1 rounded-lg border border-violet-200 bg-white text-xs font-medium text-violet-900 hover:bg-violet-50/60"
           >
             <Plus className="h-3.5 w-3.5" />
-            Dodaj poziom
+            Dodaj rack
           </button>
         ) : structureLocked ? (
           <p className="mt-2 text-[11px] text-slate-500">

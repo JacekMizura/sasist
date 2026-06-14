@@ -16,6 +16,9 @@ export type RackLevelPayload = {
   level_index: number;
   name: string;
   is_segmented: boolean;
+  unit_name?: string | null;
+  unit_sort_order?: number | null;
+  unit_description?: string | null;
   segments: Array<{
     segment_index: number;
     order_id: null;
@@ -117,6 +120,9 @@ export type RackGridLevel = {
   level_index: number;
   name: string | null;
   is_segmented: boolean;
+  unit_name?: string | null;
+  unit_sort_order?: number | null;
+  unit_description?: string | null;
   segments: Array<{
     id?: number;
     segment_index: number;

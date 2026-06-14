@@ -16,6 +16,9 @@ class RackLevelCreate(BaseModel):
     level_index: int
     name: Optional[str] = None
     is_segmented: bool = False
+    unit_name: Optional[str] = Field(None, max_length=64)
+    unit_sort_order: Optional[int] = None
+    unit_description: Optional[str] = Field(None, max_length=512)
     segments: List[RackSegmentCreate] = []
 
 
@@ -61,6 +64,9 @@ class RackLevelRead(BaseModel):
     level_index: int
     name: Optional[str] = None
     is_segmented: bool
+    unit_name: Optional[str] = None
+    unit_sort_order: Optional[int] = None
+    unit_description: Optional[str] = None
     segments: List[RackSegmentRead] = []
 
     class Config:

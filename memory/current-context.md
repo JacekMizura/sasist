@@ -1,5 +1,14 @@
 # Current context
 
+## P5.12E v2 — Regały kompletacyjne: racki + podgląd fizyczny (2026-06-08)
+- Hierarchia: Regał (RK-01) → **Rack** (unit) → Poziomy → Segmenty (`BayDraft` w `rackStructureModel.ts`)
+- Backend: `unit_name`, `unit_sort_order`, `unit_description` na `ConsolidationRackLevel` + schema upgrade
+- Podgląd OMS: `ConsolidationRackOmsPreview` — jeden SVG obrys na rack (półki wewnątrz, wzór TemplateCreator)
+- Panel segmentu **zawsze** 260px po prawej; pusty stan „Wybierz segment” — layout się nie przesuwa
+- OMS create/edit: bez wolnych/zajętych/%; tylko konfiguracja (segmenty, racki, wymiary)
+- WMS: nadal `ConsolidationRackGrid` + dashboard (osobny renderer operacyjny)
+- Drzewo: `RackStructureTree` — 3 poziomy (rack → poziom → segment)
+
 ## P5.12D — Refaktor UX kreatora (wersja magazynowa) (2026-06-08)
 - Lewa kolumna: drzewo poziomów/segmentów (`RackStructureTree`) zamiast tabeli inline
 - Klik poziomu → zaznaczenie + edycja wys./nazwy; klik segmentu → panel po prawej

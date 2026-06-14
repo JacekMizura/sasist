@@ -83,6 +83,9 @@ class ConsolidationRackService:
                 "level_index": lev.level_index,
                 "name": lev.name,
                 "is_segmented": lev.is_segmented or False,
+                "unit_name": getattr(lev, "unit_name", None),
+                "unit_sort_order": getattr(lev, "unit_sort_order", None),
+                "unit_description": getattr(lev, "unit_description", None),
                 "segments": segments_out,
             })
         return {
@@ -110,6 +113,9 @@ class ConsolidationRackService:
                 level_index=level_index,
                 name=lv.get("name"),
                 is_segmented=is_segmented,
+                unit_name=(lv.get("unit_name") or "").strip() or None,
+                unit_sort_order=lv.get("unit_sort_order"),
+                unit_description=(lv.get("unit_description") or "").strip() or None,
             )
             self.db.add(level)
             self.db.flush()

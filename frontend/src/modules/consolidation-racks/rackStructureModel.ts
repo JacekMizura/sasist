@@ -34,6 +34,14 @@ export type LevelDraft = {
   segments: SegmentDraft[];
 };
 
+export type BayDraft = {
+  clientId: string;
+  name: string;
+  sortOrder: number;
+  description: string;
+  levels: LevelDraft[];
+};
+
 export type RackStructureDraft = {
   rackName: string;
   warehouseId: number;
@@ -41,8 +49,48 @@ export type RackStructureDraft = {
   totalWidthMm: number | null;
   /** Głębokość regału (mm) — domyślna głębokość segmentu */
   totalDepthMm: number | null;
-  levels: LevelDraft[];
+  bays: BayDraft[];
 };
+
+export function allLevels(draft: RackStructureDraft): LevelDraft[] {
+  return draft.bays.flatMap((b) => b.levels);
+}
+
+export function findBay(draft: RackStructureDraft, bayClientId: string): BayDraft | undefined {
+  return draft.bays.find((b) => b.clientId === bayClientId);
+}
+
+export function findLevelContext(
+  draft: RackStructureDraft,
+  levelClientId: string,
+): { bay: BayDraft; level: LevelDraft } | null {
+  for (const bay of draft.bays) {
+    const level = bay.levels.find((l) => l.clientId === levelClientId);
+    if (level) return { bay, level };
+  }
+  return null;
+}
+
+function reindexBays(bays: BayDraft[]): BayDraft[] {
+  return bays.map((bay, bi) => ({
+    ...bay,
+    sortOrder: bi,
+    levels: reindexLevels(bay.levels),
+  }));
+}
+
+export function createEmptyBay(
+  index: number,
+  defaults: { widthMm?: number | null; depthMm?: number | null; heightMm?: number | null },
+): BayDraft {
+  return {
+    clientId: newClientId("bay"),
+    name: columnLetter(index),
+    sortOrder: index,
+    description: "",
+    levels: [createEmptyLevel(0, defaults)],
+  };
+}
 
 let _uid = 0;
 export function newClientId(prefix: string): string {
@@ -83,8 +131,81 @@ export function createDefaultRackDraft(warehouseId = 1): RackStructureDraft {
     warehouseId,
     totalWidthMm: 2000,
     totalDepthMm: 800,
-    levels: [createEmptyLevel(0, { widthMm: 2000, depthMm: 800, heightMm: 500 })],
+    bays: [createEmptyBay(0, { widthMm: 2000, depthMm: 800, heightMm: 500 })],
   };
+}
+
+function mapBayLevels(
+  draft: RackStructureDraft,
+  bayClientId: string,
+  mapper: (levels: LevelDraft[]) => LevelDraft[],
+): RackStructureDraft {
+  return {
+    ...draft,
+    bays: draft.bays.map((bay) =>
+      bay.clientId === bayClientId ? { ...bay, levels: mapper(bay.levels) } : bay,
+    ),
+  };
+}
+
+function mapLevelInDraft(
+  draft: RackStructureDraft,
+  levelClientId: string,
+  mapper: (lv: LevelDraft) => LevelDraft,
+): RackStructureDraft {
+  return {
+    ...draft,
+    bays: draft.bays.map((bay) => ({
+      ...bay,
+      levels: bay.levels.map((lv) => (lv.clientId === levelClientId ? mapper(lv) : lv)),
+    })),
+  };
+}
+
+export function addBay(draft: RackStructureDraft): RackStructureDraft {
+  const idx = draft.bays.length;
+  const segWidth = draft.totalWidthMm ?? 2000;
+  return {
+    ...draft,
+    bays: reindexBays([
+      ...draft.bays,
+      createEmptyBay(idx, { widthMm: segWidth, depthMm: draft.totalDepthMm, heightMm: 500 }),
+    ]),
+  };
+}
+
+export function removeBay(draft: RackStructureDraft, bayClientId: string): RackStructureDraft {
+  if (draft.bays.length <= 1) return draft;
+  return { ...draft, bays: reindexBays(draft.bays.filter((b) => b.clientId !== bayClientId)) };
+}
+
+export function duplicateBay(draft: RackStructureDraft, bayClientId: string): RackStructureDraft {
+  const srcIdx = draft.bays.findIndex((b) => b.clientId === bayClientId);
+  if (srcIdx < 0) return draft;
+  const src = draft.bays[srcIdx]!;
+  const copy: BayDraft = {
+    clientId: newClientId("bay"),
+    name: columnLetter(draft.bays.length),
+    sortOrder: srcIdx + 1,
+    description: src.description,
+    levels: src.levels.map((lv, li) => ({
+      clientId: newClientId("lv"),
+      levelIndex: li,
+      name: lv.name,
+      levelHeightMm: lv.levelHeightMm,
+      segments: lv.segments.map((seg, si) => ({
+        clientId: newClientId("seg"),
+        segmentIndex: si,
+        slotLabel: seg.slotLabel,
+        depthMm: seg.depthMm,
+        widthMm: seg.widthMm,
+        heightMm: seg.heightMm,
+      })),
+    })),
+  };
+  const bays = [...draft.bays];
+  bays.splice(srcIdx + 1, 0, copy);
+  return { ...draft, bays: reindexBays(bays) };
 }
 
 function reindexLevels(levels: LevelDraft[]): LevelDraft[] {
@@ -95,47 +216,49 @@ function reindexLevels(levels: LevelDraft[]): LevelDraft[] {
   }));
 }
 
-export function addLevel(draft: RackStructureDraft): RackStructureDraft {
-  const idx = draft.levels.length;
-  const segWidth = draft.totalWidthMm != null ? Math.round(draft.totalWidthMm / 2) : 1000;
-  return {
-    ...draft,
-    levels: reindexLevels([
-      ...draft.levels,
+export function addLevel(draft: RackStructureDraft, bayClientId: string): RackStructureDraft {
+  return mapBayLevels(draft, bayClientId, (levels) => {
+    const idx = levels.length;
+    const segWidth = draft.totalWidthMm != null ? Math.round(draft.totalWidthMm / 2) : 1000;
+    return reindexLevels([
+      ...levels,
       createEmptyLevel(idx, {
         widthMm: segWidth,
         depthMm: draft.totalDepthMm,
         heightMm: 500,
       }),
-    ]),
-  };
+    ]);
+  });
 }
 
-export function removeLevel(draft: RackStructureDraft, levelClientId: string): RackStructureDraft {
-  if (draft.levels.length <= 1) return draft;
-  return {
-    ...draft,
-    levels: reindexLevels(draft.levels.filter((l) => l.clientId !== levelClientId)),
-  };
+export function removeLevel(
+  draft: RackStructureDraft,
+  bayClientId: string,
+  levelClientId: string,
+): RackStructureDraft {
+  return mapBayLevels(draft, bayClientId, (levels) => {
+    if (levels.length <= 1) return levels;
+    return reindexLevels(levels.filter((l) => l.clientId !== levelClientId));
+  });
 }
 
-export function addSegment(draft: RackStructureDraft, levelClientId: string): RackStructureDraft {
-  return {
-    ...draft,
-    levels: draft.levels.map((lv) => {
-      if (lv.clientId !== levelClientId) return lv;
-      const src = lv.segments[0];
-      const next = [
-        ...lv.segments,
-        createEmptySegment(lv.segments.length, {
-          widthMm: null,
-          depthMm: src?.depthMm ?? draft.totalDepthMm,
-          heightMm: src?.heightMm ?? lv.levelHeightMm,
-        }),
-      ];
-      return { ...lv, segments: redistributeSegmentWidths(next, draft.totalWidthMm) };
-    }),
-  };
+export function addSegment(
+  draft: RackStructureDraft,
+  bayClientId: string,
+  levelClientId: string,
+): RackStructureDraft {
+  return mapLevelInDraft(draft, levelClientId, (lv) => {
+    const src = lv.segments[0];
+    const next = [
+      ...lv.segments,
+      createEmptySegment(lv.segments.length, {
+        widthMm: null,
+        depthMm: src?.depthMm ?? draft.totalDepthMm,
+        heightMm: src?.heightMm ?? lv.levelHeightMm,
+      }),
+    ];
+    return { ...lv, segments: redistributeSegmentWidths(next, draft.totalWidthMm) };
+  });
 }
 
 function redistributeSegmentWidths(
@@ -156,58 +279,55 @@ function redistributeSegmentWidths(
 
 export function removeSegment(
   draft: RackStructureDraft,
+  _bayClientId: string,
   levelClientId: string,
   segmentClientId: string,
 ): RackStructureDraft {
-  return {
-    ...draft,
-    levels: draft.levels.map((lv) => {
-      if (lv.clientId !== levelClientId) return lv;
-      const filtered = lv.segments.filter((s) => s.clientId !== segmentClientId);
-      const next =
-        filtered.length > 0
-          ? filtered
-          : [
-              createEmptySegment(0, {
-                widthMm: draft.totalWidthMm,
-                depthMm: draft.totalDepthMm,
-                heightMm: lv.levelHeightMm,
-              }),
-            ];
-      return {
-        ...lv,
-        segments: redistributeSegmentWidths(next, draft.totalWidthMm),
-      };
-    }),
-  };
+  return mapLevelInDraft(draft, levelClientId, (lv) => {
+    const filtered = lv.segments.filter((s) => s.clientId !== segmentClientId);
+    const next =
+      filtered.length > 0
+        ? filtered
+        : [
+            createEmptySegment(0, {
+              widthMm: draft.totalWidthMm,
+              depthMm: draft.totalDepthMm,
+              heightMm: lv.levelHeightMm,
+            }),
+          ];
+    return { ...lv, segments: redistributeSegmentWidths(next, draft.totalWidthMm) };
+  });
 }
 
 /** Kopiuje poziom (wysokość, segmenty, wymiary, nazwy) — wstawia tuż pod źródłem. */
 export function duplicateLevel(
   draft: RackStructureDraft,
+  bayClientId: string,
   levelClientId: string,
   options?: { resetNames?: boolean },
 ): RackStructureDraft {
-  const srcIdx = draft.levels.findIndex((l) => l.clientId === levelClientId);
-  if (srcIdx < 0) return draft;
-  const src = draft.levels[srcIdx]!;
-  const duplicated: LevelDraft = {
-    clientId: newClientId("lv"),
-    levelIndex: srcIdx + 1,
-    name: columnLetter(draft.levels.length),
-    levelHeightMm: src.levelHeightMm,
-    segments: src.segments.map((seg, si) => ({
-      clientId: newClientId("seg"),
-      segmentIndex: si,
-      slotLabel: options?.resetNames ? "" : seg.slotLabel,
-      depthMm: seg.depthMm,
-      widthMm: seg.widthMm,
-      heightMm: seg.heightMm,
-    })),
-  };
-  const levels = [...draft.levels];
-  levels.splice(srcIdx + 1, 0, duplicated);
-  return { ...draft, levels: reindexLevels(levels) };
+  return mapBayLevels(draft, bayClientId, (levels) => {
+    const srcIdx = levels.findIndex((l) => l.clientId === levelClientId);
+    if (srcIdx < 0) return levels;
+    const src = levels[srcIdx]!;
+    const duplicated: LevelDraft = {
+      clientId: newClientId("lv"),
+      levelIndex: srcIdx + 1,
+      name: columnLetter(levels.length),
+      levelHeightMm: src.levelHeightMm,
+      segments: src.segments.map((seg, si) => ({
+        clientId: newClientId("seg"),
+        segmentIndex: si,
+        slotLabel: options?.resetNames ? "" : seg.slotLabel,
+        depthMm: seg.depthMm,
+        widthMm: seg.widthMm,
+        heightMm: seg.heightMm,
+      })),
+    };
+    const next = [...levels];
+    next.splice(srcIdx + 1, 0, duplicated);
+    return reindexLevels(next);
+  });
 }
 
 /** Ustaw liczbę segmentów na poziomie — równy podział szerokości regału (jak „lokacje na poziom” w szablonie). */
@@ -221,56 +341,83 @@ export function setLevelSegmentCount(
   const baseWidth = Math.floor(totalW / n);
   const lastWidth = totalW - baseWidth * (n - 1);
 
-  return {
-    ...draft,
-    levels: draft.levels.map((lv) => {
-      if (lv.clientId !== levelClientId) return lv;
-      const existing = lv.segments;
-      const segments: SegmentDraft[] = Array.from({ length: n }, (_, i) => {
-        const widthMm = i === n - 1 ? lastWidth : baseWidth;
-        if (i < existing.length) {
-          return {
-            ...existing[i]!,
-            segmentIndex: i,
-            widthMm,
-          };
-        }
-        return createEmptySegment(i, {
-          widthMm,
-          depthMm: draft.totalDepthMm,
-          heightMm: lv.levelHeightMm,
-        });
+  return mapLevelInDraft(draft, levelClientId, (lv) => {
+    const existing = lv.segments;
+    const segments: SegmentDraft[] = Array.from({ length: n }, (_, i) => {
+      const widthMm = i === n - 1 ? lastWidth : baseWidth;
+      if (i < existing.length) {
+        return { ...existing[i]!, segmentIndex: i, widthMm };
+      }
+      return createEmptySegment(i, {
+        widthMm,
+        depthMm: draft.totalDepthMm,
+        heightMm: lv.levelHeightMm,
       });
-      return { ...lv, segments };
-    }),
-  };
+    });
+    return { ...lv, segments };
+  });
+}
+
+function groupLevelsIntoBays(levels: LevelDraft[], rack?: ConsolidationRack | null): BayDraft[] {
+  if (!levels.length) return [createEmptyBay(0, {})];
+  type Group = { name: string; sortOrder: number; description: string; levels: LevelDraft[] };
+  const groups = new Map<string, Group>();
+  levels.forEach((lv, flatIdx) => {
+    const apiLevel = rack?.levels?.[flatIdx];
+    const unitName = apiLevel?.unit_name?.trim() || "A";
+    const sortOrder = apiLevel?.unit_sort_order ?? 0;
+    const description = apiLevel?.unit_description?.trim() || "";
+    const key = `${sortOrder}:${unitName}`;
+    const g = groups.get(key) ?? { name: unitName, sortOrder, description, levels: [] };
+    g.levels.push(lv);
+    groups.set(key, g);
+  });
+  return [...groups.values()]
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))
+    .map((g, bi) => ({
+      clientId: newClientId("bay"),
+      name: g.name,
+      sortOrder: bi,
+      description: g.description,
+      levels: g.levels.map((lv, li) => ({ ...lv, levelIndex: li })),
+    }));
 }
 
 /** UI draft → POST /racks/ payload */
 export function draftToApiPayload(draft: RackStructureDraft): RackLevelPayload[] {
-  return draft.levels.map((lv, levelIndex) => {
-    const levelName = lv.name.trim() || columnLetter(levelIndex);
-    const isSegmented = lv.segments.length > 1;
-    return {
-      level_index: levelIndex,
-      name: levelName,
-      is_segmented: isSegmented,
-      segments: lv.segments.map((seg, segmentIndex) => {
-        const height = seg.heightMm ?? lv.levelHeightMm;
-        const custom = seg.slotLabel.trim();
-        const autoLabel = computeSlotLabel(levelName, levelIndex, segmentIndex, isSegmented, null);
-        return {
-          segment_index: segmentIndex,
-          order_id: null,
-          fill_percent: 0,
-          slot_label: custom && custom !== autoLabel ? custom : null,
-          length_mm: seg.depthMm,
-          width_mm: seg.widthMm,
-          height_mm: height,
-        };
-      }),
-    };
-  });
+  let globalIndex = 0;
+  const out: RackLevelPayload[] = [];
+  const sortedBays = [...draft.bays].sort((a, b) => a.sortOrder - b.sortOrder);
+  for (const bay of sortedBays) {
+    for (const lv of bay.levels) {
+      const levelName = lv.name.trim() || columnLetter(lv.levelIndex);
+      const isSegmented = lv.segments.length > 1;
+      out.push({
+        level_index: globalIndex,
+        name: levelName,
+        is_segmented: isSegmented,
+        unit_name: bay.name.trim() || columnLetter(bay.sortOrder),
+        unit_sort_order: bay.sortOrder,
+        unit_description: bay.description.trim() || null,
+        segments: lv.segments.map((seg, segmentIndex) => {
+          const height = seg.heightMm ?? lv.levelHeightMm;
+          const custom = seg.slotLabel.trim();
+          const autoLabel = computeSlotLabel(levelName, globalIndex, segmentIndex, isSegmented, null);
+          return {
+            segment_index: segmentIndex,
+            order_id: null,
+            fill_percent: 0,
+            slot_label: custom && custom !== autoLabel ? custom : null,
+            length_mm: seg.depthMm,
+            width_mm: seg.widthMm,
+            height_mm: height,
+          };
+        }),
+      });
+      globalIndex += 1;
+    }
+  }
+  return out;
 }
 
 /** GET /racks/{id} → UI draft */
@@ -309,7 +456,10 @@ export function apiRackToDraft(rack: ConsolidationRack): RackStructureDraft {
     warehouseId: rack.warehouse_id ?? 1,
     totalWidthMm: maxLevelWidth > 0 ? maxLevelWidth : 2000,
     totalDepthMm: depths[0] ?? 800,
-    levels: levels.length ? levels : [createEmptyLevel(0, {})],
+    bays: groupLevelsIntoBays(
+      levels.length ? levels : [createEmptyLevel(0, {})],
+      rack,
+    ),
   };
 }
 
@@ -327,7 +477,7 @@ export function draftToGridLevels(
     }
   }
 
-  return draft.levels.map((lv, levelIndex) => {
+  return allLevels(draft).map((lv, levelIndex) => {
     const levelName = lv.name.trim() || columnLetter(levelIndex);
     const isSegmented = lv.segments.length > 1;
     return {
@@ -380,24 +530,28 @@ export function levelSegmentsWidthSum(lv: LevelDraft): number {
 }
 
 export function countSegments(draft: RackStructureDraft): number {
-  return draft.levels.reduce((s, lv) => s + lv.segments.length, 0);
+  return allLevels(draft).reduce((s, lv) => s + lv.segments.length, 0);
 }
 
 export type SegmentSelection = {
+  bayClientId: string;
   levelClientId: string;
   segmentClientId: string;
 } | null;
 
 export function findSegmentInDraft(
   draft: RackStructureDraft,
+  bayClientId: string,
   levelClientId: string,
   segmentClientId: string,
-): { level: LevelDraft; segment: SegmentDraft } | null {
-  const level = draft.levels.find((l) => l.clientId === levelClientId);
+): { bay: BayDraft; level: LevelDraft; segment: SegmentDraft } | null {
+  const bay = findBay(draft, bayClientId);
+  if (!bay) return null;
+  const level = bay.levels.find((l) => l.clientId === levelClientId);
   if (!level) return null;
   const segment = level.segments.find((s) => s.clientId === segmentClientId);
   if (!segment) return null;
-  return { level, segment };
+  return { bay, level, segment };
 }
 
 export function segmentDisplayLabel(level: LevelDraft, segment: SegmentDraft): string {
@@ -453,7 +607,7 @@ export function validateRackDraft(draft: RackStructureDraft): RackDraftValidatio
   }
 
   const levelErrors: LevelWidthValidation[] = [];
-  for (const lv of draft.levels) {
+  for (const lv of allLevels(draft)) {
     const used = levelSegmentsWidthSum(lv);
     if (Math.abs(used - target) > RACK_WIDTH_TOLERANCE_MM) {
       levelErrors.push({
@@ -532,7 +686,15 @@ export function applyRackPreset(preset: RackPresetId, warehouseId = 1): RackStru
     warehouseId,
     totalWidthMm,
     totalDepthMm,
-    levels: buildPresetLevels(levelCount, segCount, totalWidthMm, totalDepthMm, levelHeightMm),
+    bays: [
+      {
+        clientId: newClientId("bay"),
+        name: "A",
+        sortOrder: 0,
+        description: "",
+        levels: buildPresetLevels(levelCount, segCount, totalWidthMm, totalDepthMm, levelHeightMm),
+      },
+    ],
   };
 }
 
@@ -579,13 +741,10 @@ function updateLevelSegments(
   levelClientId: string,
   mapper: (seg: SegmentDraft, index: number) => SegmentDraft,
 ): RackStructureDraft {
-  return {
-    ...draft,
-    levels: draft.levels.map((lv) => {
-      if (lv.clientId !== levelClientId) return lv;
-      return { ...lv, segments: lv.segments.map(mapper) };
-    }),
-  };
+  return mapLevelInDraft(draft, levelClientId, (lv) => ({
+    ...lv,
+    segments: lv.segments.map(mapper),
+  }));
 }
 
 /** Kopiuje SZ/GŁ/WYS z pierwszego segmentu poziomu na pozostałe. */
@@ -593,7 +752,8 @@ export function copyFirstSegmentDimensionsToLevel(
   draft: RackStructureDraft,
   levelClientId: string,
 ): RackStructureDraft {
-  const lv = draft.levels.find((l) => l.clientId === levelClientId);
+  const ctx = findLevelContext(draft, levelClientId);
+  const lv = ctx?.level;
   const src = lv?.segments[0];
   if (!src) return draft;
   const w = src.widthMm;
@@ -610,7 +770,8 @@ export function copyDepthToAllSegmentsInLevel(
   levelClientId: string,
   depthMm?: number | null,
 ): RackStructureDraft {
-  const lv = draft.levels.find((l) => l.clientId === levelClientId);
+  const ctx = findLevelContext(draft, levelClientId);
+  const lv = ctx?.level;
   const depth = depthMm ?? lv?.segments[0]?.depthMm ?? draft.totalDepthMm;
   return updateLevelSegments(draft, levelClientId, (seg) => ({ ...seg, depthMm: depth }));
 }
@@ -621,7 +782,8 @@ export function copyHeightToAllSegmentsInLevel(
   levelClientId: string,
   heightMm?: number | null,
 ): RackStructureDraft {
-  const lv = draft.levels.find((l) => l.clientId === levelClientId);
+  const ctx = findLevelContext(draft, levelClientId);
+  const lv = ctx?.level;
   const height = heightMm ?? lv?.segments[0]?.heightMm ?? lv?.levelHeightMm;
   return updateLevelSegments(draft, levelClientId, (seg) => ({ ...seg, heightMm: height }));
 }
@@ -634,7 +796,8 @@ export function applySegmentNameNumbering(
 ): RackStructureDraft {
   const trimmed = prefix.trim();
   if (!trimmed) return draft;
-  const lv = draft.levels.find((l) => l.clientId === levelClientId);
+  const ctx = findLevelContext(draft, levelClientId);
+  const lv = ctx?.level;
   const count = lv?.segments.length ?? 0;
   const pad = count >= 100 ? 3 : count >= 10 ? 2 : 2;
   return updateLevelSegments(draft, levelClientId, (seg, i) => ({

@@ -27,6 +27,10 @@ class ConsolidationRackLevel(Base):
     level_index = Column(Integer, nullable=False)
     name = Column(String, nullable=True)
     is_segmented = Column(Boolean, default=False)  # True = poziom podzielony na segmenty
+    # P5.12E — fizyczny rack (unit/bay) w ramach regału kompletacyjnego
+    unit_name = Column(String(64), nullable=True)
+    unit_sort_order = Column(Integer, nullable=True)
+    unit_description = Column(String(512), nullable=True)
 
     rack = relationship("ConsolidationRack", back_populates="levels")
     segments = relationship("RackSegment", back_populates="level", cascade="all, delete-orphan")
