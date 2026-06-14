@@ -149,8 +149,8 @@ export default function ConsolidationRackPreviewPage() {
           />
         }
         workspace={
-          <div className="flex h-full min-h-0 gap-2">
-            <div className="min-h-0 min-w-0 flex-1 overflow-hidden rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
+          <div className="flex h-full min-h-0 w-full gap-2">
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
               <ConsolidationRackOmsPreview
                 draft={draft}
                 bay={focusedBay}

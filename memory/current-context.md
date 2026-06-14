@@ -1,5 +1,13 @@
 # Current context
 
+## P5.12F — Naprawa renderera podglądu OMS (2026-06-08)
+- Segmenty: normalizacja `widthFraction` **per poziom** (suma = 100% szerokości wiersza)
+- Renderer: CSS flex zamiast SVG viewBox (pełna szerokość kontenera, bez letterboxingu)
+- Jedna obudowa regału + słupki + półki między poziomami; 4×4 = 16 widocznych lokalizacji
+- Etykieta: nazwa + `500×800×500` (bez pojemności jako głównego elementu)
+- Duże regały: scroll wewnątrz podglądu (min wys. pasa), bez rozciągania strony
+- Layout: podgląd `flex-1` między sidebarami, panel 260px stały
+
 ## P5.12E v2 — Regały kompletacyjne: racki + podgląd fizyczny (2026-06-08)
 - Hierarchia: Regał (RK-01) → **Rack** (unit) → Poziomy → Segmenty (`BayDraft` w `rackStructureModel.ts`)
 - Backend: `unit_name`, `unit_sort_order`, `unit_description` na `ConsolidationRackLevel` + schema upgrade
