@@ -1,5 +1,6 @@
-import { productLikeInputClass } from "./productLikeTokens";
+import type { ProductImageEntry } from "../../types/productLabel";
 import { ensureSingleMainImage } from "../../utils/productLabelMetadata";
+import { productLikeFieldLabelClass, productLikeInputClass } from "./productLikeTokens";
 
 type Props = {
   title?: string;
@@ -42,7 +43,7 @@ export function CatalogEntityGallerySection({
         <div className="space-y-6">
           <div className="flex flex-wrap items-end gap-3 rounded border border-slate-200 bg-slate-50 p-5 shadow-sm">
             <div className="min-w-[200px] flex-1">
-              <label className="mb-2 block text-sm font-medium text-slate-700">Dodaj zdjęcie z adresu URL</label>
+              <label className={fieldLabel}>Dodaj zdjęcie z adresu URL</label>
               <input
                 type="url"
                 className={inputClass}

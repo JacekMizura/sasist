@@ -5,7 +5,15 @@ export const productLikeFieldLabelClass = "mb-1.5 block text-sm font-medium text
 export const productLikeInputClass =
   "w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm leading-tight text-slate-900 shadow-sm transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
 
+/** Text/numeric field bez natywnych spinnerów (receptury, ilości wpisywane z klawiatury). */
+export const productLikeNumericInputNoSpinnerClass =
+  "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
+
 export const productLikeTabPanelPaddingClass = "w-full px-4 py-6 sm:px-6 sm:py-8 lg:px-8";
+
+/** Odstęp między hero nagłówka a poziomym paskiem zakładek (16–24px). */
+export const productLikeTabsNavClass =
+  "flex gap-1 overflow-x-auto border-t border-slate-100 px-4 pt-4 pb-2 sm:px-6 sm:pt-5 lg:px-8 lg:pt-6 [-webkit-overflow-scrolling:touch]";
 
 export const productLikeSectionTitleClass = "mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2";
 

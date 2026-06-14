@@ -14,6 +14,7 @@ import {
   productLikeStatCardValueClass,
   productLikeTabBtnClass,
   productLikeTabPanelPaddingClass,
+  productLikeTabsNavClass,
 } from "./productLikeTokens";
 
 export type ProductLikeMetaChip = {
@@ -312,7 +313,7 @@ export function ProductLikePageLayout<T extends string>({
         </div>
 
         {!hideTabs ? (
-          <div className="flex gap-1 overflow-x-auto border-t border-slate-100 px-4 sm:px-6 lg:px-8 [-webkit-overflow-scrolling:touch]">
+          <div className={productLikeTabsNavClass} role="tablist">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               const active = activeTab === tab.id;

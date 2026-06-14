@@ -1,4 +1,4 @@
-import { ProductLikeSection } from "../../components/catalog";
+import { ProductLikeSection, productLikeNumericInputNoSpinnerClass } from "../../components/catalog";
 import { BundleProductSearch } from "./BundleProductSearch";
 import type { BundleComponentRow, CatalogProduct, ProductSummary } from "./bundleEditTypes";
 
@@ -89,13 +89,21 @@ export function BundleProductsTab({
                       <td className="px-4 py-3.5 font-mono text-slate-800">{c?.ean || "—"}</td>
                       <td className="px-4 py-3.5 text-right">
                         <input
-                          type="number"
-                          min={1}
-                          step={1}
-                          className="h-8 w-16 rounded-md border border-slate-200 px-2 text-right text-[13px]"
+                          type="text"
+                          inputMode="numeric"
+                          autoComplete="off"
+                          aria-label="Ilość w zestawie"
+                          className={`h-8 w-16 rounded-md border border-slate-200 px-2 text-right text-[13px] tabular-nums focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 ${productLikeNumericInputNoSpinnerClass}`}
                           value={row.quantity}
                           onChange={(e) => {
-                            const n = parseInt(e.target.value, 10);
+                            const digits = e.target.value.replace(/\D/g, "");
+                            if (digits === "") return;
+                            const n = parseInt(digits, 10);
+                            onQuantity(index, Number.isFinite(n) && n >= 1 ? n : 1);
+                          }}
+                          onBlur={(e) => {
+                            const digits = e.target.value.replace(/\D/g, "");
+                            const n = parseInt(digits, 10);
                             onQuantity(index, Number.isFinite(n) && n >= 1 ? n : 1);
                           }}
                         />
