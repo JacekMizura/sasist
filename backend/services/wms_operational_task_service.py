@@ -951,7 +951,9 @@ def recompute_waiting_supply_for_product(
         for oi in order.items or []:
             if int(oi.product_id) != pid:
                 continue
-            if getattr(oi, "parent_bundle_order_item_id", None) is not None:
+            from .bundle_order_item_ops import order_item_skip_bundle_commercial_header_for_ops
+
+            if order_item_skip_bundle_commercial_header_for_ops(oi):
                 continue
             if not _oms_waiting_for_stock(oi):
                 continue
@@ -1009,7 +1011,9 @@ def sync_operational_tasks_for_order(db: Session, order: Order) -> set[str]:
     waiting_products: set[int] = set()
 
     for oi in sorted(order.items or [], key=lambda x: int(x.id)):
-        if getattr(oi, "parent_bundle_order_item_id", None) is not None:
+        from .bundle_order_item_ops import order_item_skip_bundle_commercial_header_for_ops
+
+        if order_item_skip_bundle_commercial_header_for_ops(oi):
             continue
         oi_id = int(oi.id)
         pid = int(oi.product_id)

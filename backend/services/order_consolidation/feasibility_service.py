@@ -9,6 +9,10 @@ from sqlalchemy.orm import Session
 
 from ...models.order import Order
 from ...models.order_item import OrderItem, order_item_is_replaced_line
+from ..bundle_order_item_ops import (
+    order_item_is_operational_picking_line,
+    sqlalchemy_operational_picking_order_item_clause,
+)
 from ...models.tenant_warehouse import TenantWarehouse
 from ...models.warehouse import Warehouse
 from ..commercial_availability_service import commercially_sellable_qty
@@ -66,7 +70,7 @@ def _order_line_demands(db: Session, order_id: int) -> List[OrderLineDemand]:
         db.query(OrderItem)
         .filter(
             OrderItem.order_id == int(order_id),
-            OrderItem.is_bundle_parent.is_(False),
+            sqlalchemy_operational_picking_order_item_clause(OrderItem),
         )
         .all()
     )

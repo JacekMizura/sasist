@@ -596,8 +596,6 @@ def _issue_detail_include_line(
     rep_oid = getattr(oi, "replaced_from_order_item_id", None)
     if rep_oid is not None and int(rep_oid) > 0:
         return True
-    if getattr(oi, "is_bundle_parent", False):
-        return True
     return False
 
 
@@ -619,6 +617,7 @@ def build_order_issue_detail_context(
         order_item_needs_substitute_pick_completion,
     )
     from ..services.wms_audit_service import last_pick_audit_summaries_for_order_lines
+    from .bundle_order_item_ops import order_item_skip_bundle_commercial_header_for_ops
 
     collected: list[dict[str, Any]] = []
     remaining_pick: list[dict[str, Any]] = []
@@ -628,7 +627,7 @@ def build_order_issue_detail_context(
     pick_summaries = last_pick_audit_summaries_for_order_lines(db, int(order.id), oi_ids)
 
     for oi in items:
-        if getattr(oi, "parent_bundle_order_item_id", None) is not None:
+        if order_item_skip_bundle_commercial_header_for_ops(oi):
             continue
         pid = int(oi.product_id)
         pr = db.query(Product).filter(Product.id == pid).first()

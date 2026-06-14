@@ -1,5 +1,14 @@
 # Current context
 
+## P4.13B — Bundle P0 stabilization (2026-06-08)
+- **Raport:** `memory/bundle-stabilization-report.md` — **READY FOR BUNDLELINERESOLVER**
+- SSOT linii operacyjnych: `bundle_order_item_ops.py` (`sqlalchemy_operational_picking_order_item_clause`, `filter_operational_order_items`)
+- P0-1…P0-5: fale, dashboardy, konsolidacja, routing/quick-pick, recovery/braki, footprint — jeden filtr zamiast `is_bundle_parent=False`
+- P0-6 analiza: `memory/bundle-order-cancellation-analysis.md` (scenariusze A–E, bez implementacji)
+- P0-7 audyt: `memory/bundle-traceability-audit.md` (pick/allocation → partia → zamówienie)
+- Testy: `backend/tests/test_bundle_p0_stabilization.py` (14 passed z architekturą)
+- **Nie wdrożono:** BundleLineResolver, zwroty/reklamacje/korekty bundle, unit_price_snapshot (P1)
+
 ## P4.13 — Architektura zestawów w zamówieniach / WMS / produkcji (2026-06-08)
 - **Spec SSOT:** `memory/bundle-system-architecture.md` — pełny projekt (zwroty, korekty, RW-WMS, raporty)
 - Tabela **`order_line_bundle_components`** — snapshot składników przy utworzeniu linii zestawu (nazwa/SKU/EAN/qty + `purchase_price_net_snapshot` pod marżę)

@@ -164,7 +164,9 @@ def _packing_finish_validation_snapshot(db: Session, order: Order, *, log: bool 
     unresolved_lines: list[dict] = []
 
     for it in items:
-        if getattr(it, "parent_bundle_order_item_id", None) is not None:
+        from .bundle_order_item_ops import order_item_skip_bundle_commercial_header_for_ops
+
+        if order_item_skip_bundle_commercial_header_for_ops(it):
             continue
         meta_removed = False
         raw_meta = getattr(it, "metadata_json", None)

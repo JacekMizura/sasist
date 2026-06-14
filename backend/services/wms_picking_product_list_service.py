@@ -1466,6 +1466,8 @@ def build_wms_picking_product_detail(
                     continue
                 if order_item_is_replaced_line(oi):
                     continue
+                if order_item_skip_bundle_commercial_header_for_ops(oi):
+                    continue
                 pq_f = sum_pick_events_for_line_cart(db, int(oi.id), cid)
                 qty = float(oi.quantity)
                 miss_ln = float(oi.wms_picking_line_missing_qty or 0)
@@ -1776,6 +1778,8 @@ def record_wms_quick_pick(
                     continue
                 if order_item_is_replaced_line(oi):
                     continue
+                if order_item_skip_bundle_commercial_header_for_ops(oi):
+                    continue
                 st_oi = (getattr(oi, "wms_picking_line_status", None) or "").strip().lower()
                 if st_oi in ("picked", "missing"):
                     continue
@@ -1917,8 +1921,8 @@ def _line_shortage_report_quantities(
 
 def _line_eligible_for_shortage_report(oi: OrderItem) -> tuple[bool, str]:
     """Czy można zgłosić brak na tej linii (zamiennik / TO_PICK / aktywna — nie archiwum REPLACED)."""
-    if getattr(oi, "parent_bundle_order_item_id", None) is not None:
-        return False, "bundle_component_line"
+    if order_item_skip_bundle_commercial_header_for_ops(oi):
+        return False, "bundle_commercial_header"
     if order_item_is_replaced_line(oi):
         return False, "archived_replaced_line"
     qty = float(oi.quantity or 0)

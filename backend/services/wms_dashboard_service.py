@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session, joinedload
 from ..models.inventory import Inventory
 from ..models.order import Order
 from ..models.order_item import OrderItem
+from .bundle_order_item_ops import sqlalchemy_operational_picking_order_item_clause
 from ..models.order_ui_status import OrderUiStatus
 from ..models.pick import Pick
 from ..models.picking_config import PickingConfig
@@ -101,7 +102,7 @@ def build_wms_dashboard_summary(db: Session, *, tenant_id: int, warehouse_id: in
                 db.query(OrderItem)
                 .filter(
                     OrderItem.order_id.in_(src_order_ids),
-                    OrderItem.is_bundle_parent.is_(False),
+                    sqlalchemy_operational_picking_order_item_clause(OrderItem),
                 )
                 .options(joinedload(OrderItem.product))
                 .all()

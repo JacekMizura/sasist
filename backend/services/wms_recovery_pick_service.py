@@ -74,9 +74,9 @@ def braki_queue_bucket(db: Session, order: Order, *, u_short: int, r_pend: int) 
 
 
 def _line_skipped_for_recovery(oi: OrderItem) -> bool:
-    if getattr(oi, "parent_bundle_order_item_id", None) is not None:
-        return True
-    if bool(getattr(oi, "is_bundle_parent", False)):
+    from .bundle_order_item_ops import order_item_skip_bundle_commercial_header_for_ops
+
+    if order_item_skip_bundle_commercial_header_for_ops(oi):
         return True
     if order_item_is_replaced_line(oi):
         return True

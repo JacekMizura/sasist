@@ -20,6 +20,7 @@ from ..models.inventory import Inventory
 from ..models.location import Location
 from ..models.order import Order
 from ..models.order_item import OrderItem, order_item_is_replaced_line
+from .bundle_order_item_ops import order_item_skip_bundle_commercial_header_for_ops
 from ..schemas.picking_routing import (
     PickingRoutingAllocationShortfall,
     PickingRoutingResult,
@@ -85,6 +86,10 @@ class PickingRoutingService:
         wh_product_pairs: set[tuple[int, int]] = set()
         for o in orders:
             for oi in o.items or []:
+                if order_item_is_replaced_line(oi):
+                    continue
+                if order_item_skip_bundle_commercial_header_for_ops(oi):
+                    continue
                 wh_product_pairs.add((int(o.warehouse_id), int(oi.product_id)))
 
         inv_by_wh_product = self._load_inventory_by_warehouse_product(wh_product_pairs)
@@ -117,6 +122,8 @@ class PickingRoutingService:
             basket_id = order.basket_id  # None w trybie BULK
             for oi in order.items or []:
                 if order_item_is_replaced_line(oi):
+                    continue
+                if order_item_skip_bundle_commercial_header_for_ops(oi):
                     continue
                 pid = int(oi.product_id)
                 need = float(oi.quantity)

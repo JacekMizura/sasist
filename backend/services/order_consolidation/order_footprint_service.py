@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from ...models.order import Order
 from ...models.order_consolidation_plan import OrderConsolidationPlan, OrderConsolidationPlanItem
 from ...models.order_item import OrderItem
+from ..bundle_order_item_ops import order_item_is_operational_picking_line
 from ...models.product import Product
 from ..slotting.capacity_service import product_footprint_from_orm
 from .constants import ITEM_STATUS_CANCELLED
@@ -108,5 +109,9 @@ def calculate_order_footprint(db: Session, order_id: int) -> OrderFootprintResul
         .filter(OrderItem.order_id == int(order_id))
         .all()
     )
-    lines = [(product, float(it.quantity or 0)) for it, product in rows]
+    lines = [
+        (product, float(it.quantity or 0))
+        for it, product in rows
+        if order_item_is_operational_picking_line(it)
+    ]
     return _aggregate_lines(lines)

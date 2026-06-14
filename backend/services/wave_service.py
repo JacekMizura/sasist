@@ -14,6 +14,7 @@ from sqlalchemy import func
 from ..models.wave import Wave
 from ..models.order import Order
 from ..models.order_item import OrderItem
+from .bundle_order_item_ops import sqlalchemy_operational_picking_order_item_clause
 from ..models.pick_wave import PickWave, PickWaveTask
 from ..models.pick_task import PickTask
 from ..models.inventory import Inventory
@@ -294,7 +295,7 @@ def create_wave(
         db.query(OrderItem)
         .filter(
             OrderItem.order_id.in_(order_ids),
-            OrderItem.is_bundle_parent.is_(False),
+            sqlalchemy_operational_picking_order_item_clause(OrderItem),
         )
         .all()
     )

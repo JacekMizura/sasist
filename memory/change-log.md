@@ -1,5 +1,14 @@
 # Change log
 
+## 2026-06-08 — P4.13B Bundle P0 stabilization (pre–BundleLineResolver)
+
+- **SSOT:** `bundle_order_item_ops.sqlalchemy_operational_picking_order_item_clause()` — zastąpienie lokalnych `is_bundle_parent=False` w falach, dashboardach, konsolidacji, symulacji, routingu, recovery
+- **STOCK_PRODUCTION:** parent traktowany jak normalny SKU; **ON_DEMAND:** pick/braki tylko na składnikach
+- **Footprint:** `order_footprint_service` liczy wyłącznie linie operacyjne
+- **Testy:** `test_bundle_p0_stabilization.py` (14 passed z architekturą)
+- **Docs:** `bundle-stabilization-report.md`, `bundle-order-cancellation-analysis.md`, `bundle-traceability-audit.md`
+- **Werdykt:** READY FOR BUNDLELINERESOLVER
+
 ## 2026-06-08 — User warehouse assignments + active warehouse context
 
 - **Model:** `user_warehouse_assignments` (backfill z `app_user_warehouses`); `user_wms_profiles.active_warehouse_id`

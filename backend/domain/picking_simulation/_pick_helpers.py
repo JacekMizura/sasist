@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from ...models.order_item import OrderItem
 from ...models.inventory import Inventory
+from ...services.bundle_order_item_ops import sqlalchemy_operational_picking_order_item_clause
 from ...models.location import Location
 from ...models.warehouse import Bin
 from ...models.warehouse_graph import WarehouseNode
@@ -83,7 +84,10 @@ def get_order_pick_locations(
     """
     items = (
         db.query(OrderItem)
-        .filter(OrderItem.order_id == order_id, OrderItem.is_bundle_parent.is_(False))
+        .filter(
+            OrderItem.order_id == order_id,
+            sqlalchemy_operational_picking_order_item_clause(OrderItem),
+        )
         .all()
     )
     if not items:

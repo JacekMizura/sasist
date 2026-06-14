@@ -51,8 +51,9 @@ def order_line_pick_still_possible(db: Session, order: Order, oi: OrderItem) -> 
         order_item_needs_substitute_pick_completion,
     )
     from .wms_operational_task_service import _line_remaining_qty
+    from .bundle_order_item_ops import order_item_skip_bundle_commercial_header_for_ops
 
-    if getattr(oi, "parent_bundle_order_item_id", None) is not None:
+    if order_item_skip_bundle_commercial_header_for_ops(oi):
         return False
     if order_item_is_replaced_line(oi):
         return False
@@ -79,8 +80,9 @@ def order_line_requires_oms_decision(db: Session, order: Order, oi: OrderItem) -
     Samo ``missing_qty > 0`` przy możliwej dogrywce NIE wystarcza.
     """
     from .order_fulfillment_recompute import _oms_waiting_for_stock, compute_line_missing_qty
+    from .bundle_order_item_ops import order_item_skip_bundle_commercial_header_for_ops
 
-    if getattr(oi, "parent_bundle_order_item_id", None) is not None:
+    if order_item_skip_bundle_commercial_header_for_ops(oi):
         return False
     if order_item_is_replaced_line(oi):
         return False
@@ -225,7 +227,9 @@ def order_fully_packed(db: Session, order: Order) -> bool:
     from .wms_packing_service import order_item_required_pack_qty
 
     for oi in sorted(order.items or [], key=lambda x: int(x.id)):
-        if getattr(oi, "parent_bundle_order_item_id", None) is not None:
+        from .bundle_order_item_ops import order_item_skip_bundle_commercial_header_for_ops
+
+        if order_item_skip_bundle_commercial_header_for_ops(oi):
             continue
         if order_item_is_replaced_line(oi) and float(oi.quantity or 0) <= 1e-9:
             continue

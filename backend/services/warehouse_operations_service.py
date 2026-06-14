@@ -16,6 +16,7 @@ from ..models.cart import Cart
 from ..models.location import Location
 from ..models.order import Order
 from ..models.order_item import OrderItem
+from .bundle_order_item_ops import sqlalchemy_operational_picking_order_item_clause
 from ..models.order_issue_task import OrderIssueTask
 from ..models.pick import Pick
 from ..models.receiving_scan_log import ReceivingScanLog
@@ -690,7 +691,7 @@ def _collect_packing_session_events(
                 func.coalesce(func.sum(OrderItem.quantity), 0),
                 func.coalesce(func.sum(OrderItem.packing_quantity_packed), 0),
             )
-            .filter(OrderItem.order_id.in_(list(order_ids)), OrderItem.is_bundle_parent.is_(False))
+            .filter(OrderItem.order_id.in_(list(order_ids)), sqlalchemy_operational_picking_order_item_clause(OrderItem))
             .group_by(OrderItem.order_id)
             .all()
         ):
@@ -975,7 +976,7 @@ def _order_progress_for_user(
         db.query(OrderItem.order_id, func.coalesce(func.sum(OrderItem.quantity), 0))
         .filter(
             OrderItem.order_id.in_(order_ids),
-            OrderItem.is_bundle_parent.is_(False),
+            sqlalchemy_operational_picking_order_item_clause(OrderItem),
             func.upper(func.coalesce(OrderItem.oms_line_status, "")) != "REPLACED",
         )
         .group_by(OrderItem.order_id)
@@ -990,7 +991,7 @@ def _order_progress_for_user(
             db.query(OrderItem.order_id, func.coalesce(func.sum(OrderItem.packing_quantity_packed), 0))
             .filter(
                 OrderItem.order_id.in_(order_ids),
-                OrderItem.is_bundle_parent.is_(False),
+                sqlalchemy_operational_picking_order_item_clause(OrderItem),
                 func.upper(func.coalesce(OrderItem.oms_line_status, "")) != "REPLACED",
             )
             .group_by(OrderItem.order_id)

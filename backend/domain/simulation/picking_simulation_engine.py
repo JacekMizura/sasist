@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from ...models.order import Order
 from ...models.order_item import OrderItem
 from ...models.pick import Pick
+from ...services.bundle_order_item_ops import sqlalchemy_operational_picking_order_item_clause
 from ...models.location import Location
 from ...models.warehouse_graph import WarehouseNode
 from ..picking_simulation._pick_helpers import resolve_product_to_location
@@ -109,7 +110,10 @@ def simulate_single_order(
 
     items = (
         db.query(OrderItem)
-        .filter(OrderItem.order_id == order.id, OrderItem.is_bundle_parent.is_(False))
+        .filter(
+            OrderItem.order_id == order.id,
+            sqlalchemy_operational_picking_order_item_clause(OrderItem),
+        )
         .all()
     )
     product_ids = [i.product_id for i in items]
