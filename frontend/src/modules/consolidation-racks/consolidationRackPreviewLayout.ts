@@ -53,7 +53,7 @@ export type PreviewLevelRow = {
 
 export function buildConsolidationPreviewRows(draft: RackStructureDraft): PreviewLevelRow[] {
   const rackWidth = Math.max(1, draft.totalWidthMm ?? 2000);
-  const levels = draft.bays.flatMap((b) => b.levels);
+  const levels = draft.levels;
   const rawRows = levels.map((lv, levelIndex) => {
     const levelName = lv.name.trim() || String.fromCharCode(65 + levelIndex);
     const isSegmented = lv.segments.length > 1;
@@ -156,12 +156,11 @@ export type OmsPreviewRow = {
   cells: OmsPreviewCell[];
 };
 
-export function buildOmsBayPreviewRows(
-  bay: import("./rackStructureModel").BayDraft,
+export function buildOmsPreviewRows(
   draft: import("./rackStructureModel").RackStructureDraft,
   viewportHeightPx: number,
 ): OmsPreviewRow[] {
-  const raw = bay.levels.map((lv) => {
+  const raw = draft.levels.map((lv) => {
     const levelName = lv.name.trim() || String.fromCharCode(65 + lv.levelIndex);
     const isSegmented = lv.segments.length > 1;
     const levelHeightMm = Math.max(

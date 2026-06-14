@@ -6,13 +6,15 @@ import api from "../../../api/axios";
 import { useWarehouse } from "../../../context/WarehouseContext";
 import { cartsPageShellClass } from "../../../modules/carts/cartsModuleTokens";
 import { ConsolidationRackFormShell } from "../../../modules/consolidation-racks/ConsolidationRackFormShell";
+import ConsolidationRackOmsPreview from "../../../modules/consolidation-racks/ConsolidationRackOmsPreview";
+import ConsolidationRackSegmentEditPanel from "../../../modules/consolidation-racks/ConsolidationRackSegmentEditPanel";
 import ConsolidationRackStructureEditor from "../../../modules/consolidation-racks/ConsolidationRackStructureEditor";
-import ConsolidationRackVisualEditor from "../../../modules/consolidation-racks/ConsolidationRackVisualEditor";
 import type { ConsolidationRack } from "../../../modules/consolidation-racks/consolidationRackTypes";
 import {
   apiRackToDraft,
   countSegments,
-  findBay,
+  findSegmentInDraft,
+  segmentDisplayLabel,
   type RackStructureDraft,
   type SegmentSelection,
 } from "../../../modules/consolidation-racks/rackStructureModel";
@@ -24,7 +26,6 @@ export default function ConsolidationRackPreviewPage() {
   const [error, setError] = useState<string | null>(null);
   const [rack, setRack] = useState<ConsolidationRack | null>(null);
   const [draft, setDraft] = useState<RackStructureDraft | null>(null);
-  const [focusedBayId, setFocusedBayId] = useState<string | null>(null);
   const [selection, setSelection] = useState<SegmentSelection>(null);
 
   const loadRack = useCallback(async (id: number) => {
@@ -35,7 +36,6 @@ export default function ConsolidationRackPreviewPage() {
       setRack(data);
       const nextDraft = apiRackToDraft(data);
       setDraft(nextDraft);
-      setFocusedBayId(nextDraft.bays[0]?.clientId ?? null);
       setSelection(null);
     } catch (err: unknown) {
       console.error("[ConsolidationRackPreview] load error:", err);
@@ -54,20 +54,18 @@ export default function ConsolidationRackPreviewPage() {
     ?? warehouse?.name
     ?? "—";
 
-  const selectBay = useCallback((bayClientId: string) => {
-    setFocusedBayId(bayClientId);
-    setSelection(null);
+  const selectSegment = useCallback((levelClientId: string, segmentClientId: string) => {
+    setSelection({ levelClientId, segmentClientId });
   }, []);
 
-  const selectSegment = useCallback((bayClientId: string, levelClientId: string, segmentClientId: string) => {
-    setFocusedBayId(bayClientId);
-    setSelection({ bayClientId, levelClientId, segmentClientId });
-  }, []);
+  const selectedHit = useMemo(() => {
+    if (!draft || !selection) return null;
+    return findSegmentInDraft(draft, selection.levelClientId, selection.segmentClientId);
+  }, [draft, selection]);
 
-  const focusedBay = useMemo(() => {
-    if (!draft) return null;
-    return focusedBayId ? findBay(draft, focusedBayId) ?? draft.bays[0] ?? null : draft.bays[0] ?? null;
-  }, [draft, focusedBayId]);
+  const selectedLabel = selectedHit
+    ? segmentDisplayLabel(selectedHit.level, selectedHit.segment)
+    : "";
 
   const totalSegments = draft ? countSegments(draft) : 0;
 
@@ -107,7 +105,7 @@ export default function ConsolidationRackPreviewPage() {
           <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
             <span className="font-semibold tabular-nums">{totalSegments} segmentów</span>
             <span className="text-slate-500">·</span>
-            <span className="tabular-nums">{draft.totalWidthMm ?? "—"} mm</span>
+            <span className="tabular-nums">{draft.levels.length} poziomów</span>
           </div>
         }
         sidebar={
@@ -119,22 +117,31 @@ export default function ConsolidationRackPreviewPage() {
             showWarehouseSelect={false}
             structureLocked
             readOnly
-            focusedBayId={focusedBayId}
           />
         }
         workspace={
-          <ConsolidationRackVisualEditor
-            draft={draft}
-            bay={focusedBay}
-            focusedBayId={focusedBayId}
-            selection={selection}
-            readOnly
-            structureLocked
-            onChange={() => {}}
-            onSelectBay={selectBay}
-            onSelectSegment={selectSegment}
-            onClearSelection={() => setSelection(null)}
-          />
+          <div className="flex h-full min-h-0 w-full gap-2">
+            <div className="min-h-0 min-w-0 flex-1">
+              <ConsolidationRackOmsPreview
+                draft={draft}
+                selection={selection}
+                readOnly
+                structureLocked
+                onSegmentClick={selectSegment}
+              />
+            </div>
+            <div className="hidden w-[260px] shrink-0 lg:block">
+              <ConsolidationRackSegmentEditPanel
+                empty={!selectedHit}
+                segmentLabel={selectedLabel}
+                level={selectedHit?.level}
+                segment={selectedHit?.segment}
+                readOnly
+                onUpdate={() => {}}
+                onClose={() => setSelection(null)}
+              />
+            </div>
+          </div>
         }
       />
     </div>

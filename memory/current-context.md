@@ -1,5 +1,13 @@
 # Current context
 
+## P5.12I — Spłaszczenie modelu regałów kompletacyjnych (2026-06-08)
+- Usunięto pojęcie Rack A/B/C z UX i draftu — model: **Regał → Poziomy → Segmenty** (`draft.levels[]`)
+- API: `unit_name: "A"`, `unit_sort_order: 0` (techniczne mapowanie); wczytanie spłaszcza wszystkie poziomy
+- Widok główny: `ConsolidationRackOmsPreview` — siatka regału (jak RackPreview), pełna szerokość
+- Klik segment → panel boczny 260px (`ConsolidationRackSegmentEditPanel`), bez kart i przycisku „Edytuj”
+- Usunięto: `ConsolidationRackVisualEditor`, `ConsolidationRackSegmentDrawer`, `BayDraft` z UI
+- Nazewnictwo UI: Regał / Poziom / Segment (bez Rack, Unit, Bay)
+
 ## P5.12H — Rezygnacja z dedykowanego edytora (2026-06-08)
 - Usunięto drzewo struktury, tabelę segmentów i panel 260px
 - Jeden widok: `ConsolidationRackVisualEditor` (wzór `CartSectionGrid` + drawer jak koszyki)

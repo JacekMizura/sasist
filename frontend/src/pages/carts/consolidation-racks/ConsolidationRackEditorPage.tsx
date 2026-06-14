@@ -6,23 +6,25 @@ import api from "../../../api/axios";
 import { useWarehouse } from "../../../context/WarehouseContext";
 import { cartsBtnPrimary, cartsPageShellClass } from "../../../modules/carts/cartsModuleTokens";
 import { ConsolidationRackFormShell } from "../../../modules/consolidation-racks/ConsolidationRackFormShell";
+import ConsolidationRackOmsPreview from "../../../modules/consolidation-racks/ConsolidationRackOmsPreview";
+import ConsolidationRackSegmentEditPanel from "../../../modules/consolidation-racks/ConsolidationRackSegmentEditPanel";
 import ConsolidationRackStructureEditor from "../../../modules/consolidation-racks/ConsolidationRackStructureEditor";
-import ConsolidationRackVisualEditor from "../../../modules/consolidation-racks/ConsolidationRackVisualEditor";
 import type { ConsolidationRack } from "../../../modules/consolidation-racks/consolidationRackTypes";
 import {
+  addLevel,
   allLevels,
   apiRackToDraft,
   applyRackPreset,
   countSegments,
   createDefaultRackDraft,
   draftToApiPayload,
-  findBay,
   findSegmentInDraft,
   segmentDisplayLabel,
   segmentDraftPayload,
   validateRackDraft,
   type RackPresetId,
   type RackStructureDraft,
+  type SegmentDraft,
   type SegmentSelection,
 } from "../../../modules/consolidation-racks/rackStructureModel";
 import { DAMAGE_TENANT_ID } from "../../damage/damageShared";
@@ -38,37 +40,20 @@ export default function ConsolidationRackEditorPage() {
   const [error, setError] = useState<string | null>(null);
   const [rack, setRack] = useState<ConsolidationRack | null>(null);
   const [draft, setDraft] = useState<RackStructureDraft>(() => createDefaultRackDraft(warehouse?.id ?? 1));
-  const [focusedBayId, setFocusedBayId] = useState<string | null>(null);
   const [selection, setSelection] = useState<SegmentSelection>(null);
   const [appliedPreset, setAppliedPreset] = useState<RackPresetId | null>(null);
   const [presetPickerOpen, setPresetPickerOpen] = useState(true);
-
-  useEffect(() => {
-    if (focusedBayId == null && draft.bays[0]) {
-      setFocusedBayId(draft.bays[0].clientId);
-    }
-  }, [draft.bays, focusedBayId]);
 
   const handleDraftChange = useCallback((next: RackStructureDraft) => {
     setDraft(next);
     setSelection((sel) => {
       if (!sel) return sel;
-      return findSegmentInDraft(next, sel.bayClientId, sel.levelClientId, sel.segmentClientId) ? sel : null;
-    });
-    setFocusedBayId((bayId) => {
-      if (bayId && next.bays.some((b) => b.clientId === bayId)) return bayId;
-      return next.bays[0]?.clientId ?? null;
+      return findSegmentInDraft(next, sel.levelClientId, sel.segmentClientId) ? sel : null;
     });
   }, []);
 
-  const selectBay = useCallback((bayClientId: string) => {
-    setFocusedBayId(bayClientId);
-    setSelection(null);
-  }, []);
-
-  const selectSegment = useCallback((bayClientId: string, levelClientId: string, segmentClientId: string) => {
-    setFocusedBayId(bayClientId);
-    setSelection({ bayClientId, levelClientId, segmentClientId });
+  const selectSegment = useCallback((levelClientId: string, segmentClientId: string) => {
+    setSelection({ levelClientId, segmentClientId });
   }, []);
 
   const handleApplyPreset = useCallback(
@@ -77,7 +62,6 @@ export default function ConsolidationRackEditorPage() {
       handleDraftChange(next);
       setAppliedPreset(preset);
       setPresetPickerOpen(false);
-      setFocusedBayId(next.bays[0]?.clientId ?? null);
       setSelection(null);
     },
     [draft.warehouseId, handleDraftChange],
@@ -91,7 +75,6 @@ export default function ConsolidationRackEditorPage() {
       setRack(data);
       const nextDraft = apiRackToDraft(data);
       setDraft(nextDraft);
-      setFocusedBayId(nextDraft.bays[0]?.clientId ?? null);
       setSelection(null);
     } catch (err: unknown) {
       console.error("[ConsolidationRackEditor] load error:", err);
@@ -113,10 +96,31 @@ export default function ConsolidationRackEditorPage() {
 
   const validation = useMemo(() => validateRackDraft(draft), [draft]);
   const totalSegments = useMemo(() => countSegments(draft), [draft]);
-  const focusedBay = useMemo(
-    () => (focusedBayId ? findBay(draft, focusedBayId) ?? null : draft.bays[0] ?? null),
-    [draft, focusedBayId],
-  );
+
+  const selectedHit = useMemo(() => {
+    if (!selection) return null;
+    return findSegmentInDraft(draft, selection.levelClientId, selection.segmentClientId);
+  }, [draft, selection]);
+
+  const selectedLabel = selectedHit
+    ? segmentDisplayLabel(selectedHit.level, selectedHit.segment)
+    : "";
+
+  const updateSelectedSegment = useCallback((patch: Partial<SegmentDraft>) => {
+    if (!selection) return;
+    setDraft((prev) => ({
+      ...prev,
+      levels: prev.levels.map((lv) => {
+        if (lv.clientId !== selection.levelClientId) return lv;
+        return {
+          ...lv,
+          segments: lv.segments.map((s) =>
+            s.clientId === selection.segmentClientId ? { ...s, ...patch } : s,
+          ),
+        };
+      }),
+    }));
+  }, [selection]);
 
   const handleCreate = async () => {
     if (!draft.rackName.trim()) {
@@ -180,9 +184,9 @@ export default function ConsolidationRackEditorPage() {
     warehouses.find((w) => w.id === draft.warehouseId)?.name ?? warehouse?.name ?? `#${draft.warehouseId}`;
 
   const firstSlotLabel =
-    focusedBay?.levels[0]?.segments[0]
-      ? segmentDisplayLabel(focusedBay.levels[0], focusedBay.levels[0].segments[0])
-      : "A";
+    draft.levels[0]?.segments[0]
+      ? segmentDisplayLabel(draft.levels[0], draft.levels[0].segments[0])
+      : "A1";
 
   if (loading) {
     return (
@@ -211,7 +215,7 @@ export default function ConsolidationRackEditorPage() {
 
       <ConsolidationRackFormShell
         title={isCreate ? "Nowy regał kompletacyjny" : "Edycja regału"}
-        subtitle="Kliknij segment, aby edytować wymiary — jak w kreatorze koszyków i szablonów regałów"
+        subtitle="Kliknij segment na wizualizacji — panel edycji po prawej, jak w kreatorze szablonów"
         backTo="/carts/racks"
         headerActions={
           !isCreate ? (
@@ -227,7 +231,7 @@ export default function ConsolidationRackEditorPage() {
           <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
             <span className="font-semibold tabular-nums text-slate-800">{totalSegments} segmentów</span>
             <span className="text-slate-500">·</span>
-            <span className="tabular-nums">{draft.totalWidthMm ?? "—"} mm</span>
+            <span className="tabular-nums">{draft.levels.length} poziomów</span>
             <span className="text-slate-500">·</span>
             <span>
               Skan: <span className="font-mono font-semibold">{draft.rackName.trim() || "RK-XX"}/{firstSlotLabel}</span>
@@ -242,7 +246,6 @@ export default function ConsolidationRackEditorPage() {
             warehouses={warehouses}
             showWarehouseSelect={isCreate && showWarehouseSelector}
             structureLocked={!isCreate}
-            focusedBayId={focusedBayId}
             appliedPreset={appliedPreset}
             presetPickerOpen={presetPickerOpen}
             onApplyPreset={isCreate ? handleApplyPreset : undefined}
@@ -250,22 +253,33 @@ export default function ConsolidationRackEditorPage() {
           />
         }
         workspace={
-          <ConsolidationRackVisualEditor
-            draft={draft}
-            bay={focusedBay}
-            focusedBayId={focusedBayId}
-            selection={selection}
-            structureLocked={!isCreate}
-            onChange={handleDraftChange}
-            onSelectBay={selectBay}
-            onSelectSegment={selectSegment}
-            onClearSelection={() => setSelection(null)}
-          />
+          <div className="flex h-full min-h-0 w-full gap-2">
+            <div className="min-h-0 min-w-0 flex-1">
+              <ConsolidationRackOmsPreview
+                draft={draft}
+                selection={selection}
+                structureLocked={!isCreate}
+                onSegmentClick={selectSegment}
+                onAddLevel={isCreate ? () => handleDraftChange(addLevel(draft)) : undefined}
+              />
+            </div>
+            <div className="hidden w-[260px] shrink-0 lg:block">
+              <ConsolidationRackSegmentEditPanel
+                empty={!selectedHit}
+                segmentLabel={selectedLabel}
+                level={selectedHit?.level}
+                segment={selectedHit?.segment}
+                readOnly={false}
+                onUpdate={updateSelectedSegment}
+                onClose={() => setSelection(null)}
+              />
+            </div>
+          </div>
         }
         footer={
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-xs text-slate-500">
-              Układ edytujesz bezpośrednio na wizualizacji — segmenty dzielą szerokość regału równo.
+              Regał → poziomy → segmenty. Kliknij komórkę, aby edytować wymiary i nazwę.
             </p>
             <button
               type="button"

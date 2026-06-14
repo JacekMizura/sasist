@@ -6,13 +6,12 @@ import {
 } from "../carts/cartsModuleTokens";
 import { MAX_RACK_DIM, parseOptionalDim } from "./rackLayoutUtils";
 import {
-  addBay,
+  addLevel,
   applyRackDepthChange,
   applyRackWidthChange,
   countSegments,
-  findBay,
   RACK_PRESET_LABELS,
-  setBayLevelCount,
+  setLevelCount,
   setLevelSegmentCount,
   type RackPresetId,
   type RackStructureDraft,
@@ -26,8 +25,6 @@ type Props = {
   showWarehouseSelect: boolean;
   structureLocked?: boolean;
   readOnly?: boolean;
-  focusedBayId: string | null;
-  /** Tworzenie — preset wybrany / picker */
   appliedPreset?: RackPresetId | null;
   presetPickerOpen?: boolean;
   onApplyPreset?: (preset: RackPresetId) => void;
@@ -83,7 +80,6 @@ export default function ConsolidationRackStructureEditor({
   showWarehouseSelect,
   structureLocked = false,
   readOnly = false,
-  focusedBayId,
   appliedPreset = null,
   presetPickerOpen = false,
   onApplyPreset,
@@ -92,12 +88,11 @@ export default function ConsolidationRackStructureEditor({
   const totalSegments = countSegments(draft);
   const showPresetSection = !readOnly && onApplyPreset;
   const canEditStructure = !readOnly && !structureLocked;
-  const activeBay = findBay(draft, focusedBayId ?? "") ?? draft.bays[0] ?? null;
 
   return (
     <div className="space-y-4">
       <section>
-        <h2 className="text-xs font-bold uppercase tracking-wide text-slate-600">Dane regału</h2>
+        <h2 className="text-xs font-bold uppercase tracking-wide text-slate-600">Regał</h2>
         <div className="mt-2 space-y-2">
           <label className="block">
             <span className={cartsFieldLabelClass}>Nazwa regału</span>
@@ -184,7 +179,7 @@ export default function ConsolidationRackStructureEditor({
         </section>
       ) : null}
 
-      {activeBay && canEditStructure ? (
+      {canEditStructure ? (
         <section>
           <div className="flex items-center justify-between gap-2">
             <h2 className="text-xs font-bold uppercase tracking-wide text-slate-600">Poziomy</h2>
@@ -197,21 +192,19 @@ export default function ConsolidationRackStructureEditor({
                 type="number"
                 min={1}
                 max={20}
-                value={activeBay.levels.length}
-                onChange={(e) =>
-                  onChange(setBayLevelCount(draft, activeBay.clientId, Number(e.target.value) || 1))
-                }
+                value={draft.levels.length}
+                onChange={(e) => onChange(setLevelCount(draft, Number(e.target.value) || 1))}
                 className={`${cartsAppInputClass} mt-1 tabular-nums`}
               />
             </label>
             <div>
               <span className={cartsFieldLabelClass}>Segmenty na poziom</span>
               <div className="mt-1 space-y-1.5">
-                {activeBay.levels.map((lv) => {
+                {draft.levels.map((lv) => {
                   const title = lv.name.trim() || String.fromCharCode(65 + lv.levelIndex);
                   return (
                     <div key={lv.clientId} className="flex items-center gap-2">
-                      <span className="w-16 shrink-0 text-xs font-medium text-slate-600">{title}</span>
+                      <span className="w-16 shrink-0 text-xs font-medium text-slate-600">Poz. {title}</span>
                       <input
                         type="number"
                         min={1}
@@ -227,19 +220,16 @@ export default function ConsolidationRackStructureEditor({
                 })}
               </div>
             </div>
+            <button
+              type="button"
+              onClick={() => onChange(addLevel(draft))}
+              className="inline-flex h-8 w-full items-center justify-center gap-1 rounded-lg border border-violet-200 bg-white text-xs font-medium text-violet-900 hover:bg-violet-50/60"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Dodaj poziom
+            </button>
           </div>
         </section>
-      ) : null}
-
-      {canEditStructure && draft.bays.length === 1 ? (
-        <button
-          type="button"
-          onClick={() => onChange(addBay(draft))}
-          className="inline-flex h-8 w-full items-center justify-center gap-1 rounded-lg border border-violet-200 bg-white text-xs font-medium text-violet-900 hover:bg-violet-50/60"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          Dodaj rack (zaawansowane)
-        </button>
       ) : null}
     </div>
   );

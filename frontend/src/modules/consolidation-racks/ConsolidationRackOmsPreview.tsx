@@ -1,78 +1,82 @@
 import { useRef, useEffect, useState } from "react";
+import { Plus } from "lucide-react";
 
 import {
   CONSOLIDATION_PREVIEW_CELL,
-  CONSOLIDATION_PREVIEW_MAX_HEIGHT_PX,
   CONSOLIDATION_PREVIEW_SELECT,
-  buildOmsBayPreviewRows,
+  buildOmsPreviewRows,
   formatPreviewDimsCompact,
 } from "./consolidationRackPreviewLayout";
-import type { BayDraft, RackStructureDraft, SegmentSelection } from "./rackStructureModel";
+import { computeCapacityDm3 } from "./rackLayoutUtils";
+import type { RackStructureDraft, SegmentSelection } from "./rackStructureModel";
 
 const UPRIGHT = "#2563eb";
 
 type Props = {
   draft: RackStructureDraft;
-  bay: BayDraft | null;
   selection?: SegmentSelection;
-  onSegmentClick?: (bayClientId: string, levelClientId: string, segmentClientId: string) => void;
+  readOnly?: boolean;
+  structureLocked?: boolean;
+  onSegmentClick?: (levelClientId: string, segmentClientId: string) => void;
+  onAddLevel?: () => void;
   className?: string;
 };
 
 /**
- * OMS — fizyczny rack w jednym obrysie.
- * CSS flex (100% szerokości wiersza); segmenty ∝ width_mm w obrębie poziomu.
+ * OMS — wizualizacja regału (poziomy × segmenty), klik → panel boczny.
+ * Ten sam widok w edycji i podglądzie — jak RackPreview w kreatorze szablonów.
  */
 export default function ConsolidationRackOmsPreview({
   draft,
-  bay,
   selection = null,
+  readOnly = false,
+  structureLocked = false,
   onSegmentClick,
+  onAddLevel,
   className = "",
 }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [viewportHeight, setViewportHeight] = useState(520);
+  const canEditStructure = !readOnly && !structureLocked;
+  const clickable = Boolean(onSegmentClick);
 
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
     const ro = new ResizeObserver((entries) => {
       const h = entries[0]?.contentRect.height ?? 520;
-      setViewportHeight(Math.max(240, h));
+      setViewportHeight(Math.max(280, h));
     });
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
 
-  if (!bay || bay.levels.length === 0) {
+  if (draft.levels.length === 0) {
     return (
-      <div className="flex min-h-[240px] w-full items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white text-sm text-slate-500">
-        Wybierz rack lub dodaj poziom.
+      <div className="flex min-h-[280px] w-full items-center justify-center rounded-lg border border-dashed border-slate-200 bg-white text-sm text-slate-500">
+        Dodaj poziom w panelu bocznym.
       </div>
     );
   }
 
-  const rows = buildOmsBayPreviewRows(bay, draft, viewportHeight);
+  const rows = buildOmsPreviewRows(draft, viewportHeight);
   const rackWidth = draft.totalWidthMm ?? 2000;
   const totalLocations = rows.reduce((s, r) => s + r.cells.length, 0);
-  const clickable = Boolean(onSegmentClick);
+  const rackTitle = draft.rackName.trim() || "RK-XX";
 
   return (
-    <div className={`flex h-full min-h-0 w-full flex-col bg-white ${className}`}>
-      <div className="flex shrink-0 items-baseline justify-between gap-2 px-0.5 pb-2">
-        <h4 className="text-sm font-bold text-slate-600">
-          Rack {bay.name} — {rows.length} poziomów · {totalLocations} lokalizacji
+    <div className={`flex h-full min-h-0 w-full flex-col ${className}`}>
+      <div className="flex shrink-0 items-baseline justify-between gap-2 pb-2">
+        <h4 className="text-sm font-bold text-slate-700">
+          {rackTitle} — {rows.length} {rows.length === 1 ? "poziom" : "poziomów"} · {totalLocations} segmentów
         </h4>
         <span className="text-[11px] tabular-nums text-slate-500">{rackWidth} mm</span>
       </div>
 
-      {/* Jedna obudowa regału — pełna szerokość kontenera */}
       <div
         ref={scrollRef}
-        className="relative min-h-[240px] flex-1 overflow-y-auto rounded-lg border-2 border-slate-300 bg-white"
-        style={{ maxHeight: CONSOLIDATION_PREVIEW_MAX_HEIGHT_PX }}
+        className="relative min-h-[280px] flex-1 overflow-y-auto rounded-lg border-2 border-slate-300 bg-white"
       >
-        {/* Słupki — pełna wysokość scrollowanej zawartości */}
         <div
           className="pointer-events-none absolute bottom-0 left-0 top-0 z-10 w-2 rounded-sm"
           style={{ backgroundColor: UPRIGHT }}
@@ -84,7 +88,7 @@ export default function ConsolidationRackOmsPreview({
           aria-hidden
         />
 
-        <div className="flex min-h-full flex-col pl-2 pr-2">
+        <div className="flex min-h-full w-full flex-col pl-2 pr-2">
           {rows.map((row, rowIdx) => (
             <div
               key={row.key}
@@ -94,13 +98,13 @@ export default function ConsolidationRackOmsPreview({
               <div className="flex min-w-0 flex-1 gap-px py-px">
                 {row.cells.map((cell, cellIdx) => {
                   const isSelected =
-                    selection?.bayClientId === bay.clientId
-                    && selection.levelClientId === cell.levelClientId
+                    selection?.levelClientId === cell.levelClientId
                     && selection.segmentClientId === cell.key;
                   const flexGrow = Math.max(0.001, cell.widthFraction);
                   const dims = formatPreviewDimsCompact(cell.widthMm, cell.depthMm, cell.heightMm);
-                  const isCompact = row.cells.length >= 12 || row.bandHeightPx < 48;
-                  const isMedium = !isCompact && (row.cells.length >= 8 || row.bandHeightPx < 64);
+                  const cap = cell.capacityDm3 ?? computeCapacityDm3(cell.depthMm, cell.widthMm, cell.heightMm);
+                  const isCompact = row.cells.length >= 10 || row.bandHeightPx < 56;
+                  const isMedium = !isCompact && (row.cells.length >= 6 || row.bandHeightPx < 72);
 
                   let borderColor = CONSOLIDATION_PREVIEW_CELL.border;
                   let borderWidth = 1.5;
@@ -116,7 +120,7 @@ export default function ConsolidationRackOmsPreview({
                       tabIndex={clickable ? 0 : undefined}
                       onClick={
                         clickable
-                          ? () => onSegmentClick?.(bay.clientId, cell.levelClientId, cell.key)
+                          ? () => onSegmentClick?.(cell.levelClientId, cell.key)
                           : undefined
                       }
                       onKeyDown={
@@ -124,21 +128,21 @@ export default function ConsolidationRackOmsPreview({
                           ? (e) => {
                               if (e.key === "Enter" || e.key === " ") {
                                 e.preventDefault();
-                                onSegmentClick?.(bay.clientId, cell.levelClientId, cell.key);
+                                onSegmentClick?.(cell.levelClientId, cell.key);
                               }
                             }
                           : undefined
                       }
-                      className={`flex min-w-[28px] flex-col items-center justify-center overflow-hidden px-0.5 text-center ${
+                      className={`flex min-w-[32px] flex-col items-center justify-center overflow-hidden px-1 text-center ${
                         clickable ? "cursor-pointer hover:brightness-[0.98]" : ""
                       } ${cellIdx > 0 ? "border-l border-slate-300/80" : ""}`}
                       style={{
                         flex: `${flexGrow} 1 0`,
-                        backgroundColor: CONSOLIDATION_PREVIEW_CELL.bg,
+                        backgroundColor: isSelected ? "#fff7ed" : CONSOLIDATION_PREVIEW_CELL.bg,
                         border: `${borderWidth}px solid ${borderColor}`,
                         borderRadius: 3,
                       }}
-                      title={`${cell.label}\n${dims}`}
+                      title={`${cell.label}\n${dims}${cap != null ? `\n${cap.toFixed(0)} dm³` : ""}`}
                     >
                       <span className="w-full truncate font-sans text-sm font-extrabold leading-tight text-slate-900">
                         {cell.label}
@@ -160,6 +164,11 @@ export default function ConsolidationRackOmsPreview({
                           <span className="font-sans text-[10px] tabular-nums text-slate-600">
                             WYS {Math.round(cell.heightMm)}
                           </span>
+                          {cap != null ? (
+                            <span className="font-sans text-[9px] font-semibold tabular-nums text-violet-800">
+                              {cap.toFixed(0)} dm³
+                            </span>
+                          ) : null}
                         </>
                       )}
                     </div>
@@ -170,6 +179,17 @@ export default function ConsolidationRackOmsPreview({
           ))}
         </div>
       </div>
+
+      {canEditStructure && onAddLevel ? (
+        <button
+          type="button"
+          onClick={onAddLevel}
+          className="mt-2 inline-flex h-9 w-full items-center justify-center gap-1 rounded-lg border border-dashed border-slate-300 text-sm font-medium text-slate-600 hover:border-violet-300 hover:text-violet-900"
+        >
+          <Plus className="h-4 w-4" />
+          Dodaj poziom
+        </button>
+      ) : null}
     </div>
   );
 }
