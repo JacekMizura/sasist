@@ -1,5 +1,14 @@
 # Current context
 
+## P5.12E — Usprawnienie konfiguracji segmentów (2026-06-08)
+- Podgląd segmentu: nazwa + SZ/GŁ/WYS (lub `W×D×H` w kompaktowych komórkach) + dm³ — bez samotnego „500 mm”
+- Rozwinięty poziom: tabela segmentów (`LevelSegmentTable`) — Seg, SZ, GŁ, WYS, Nazwa + operacje masowe
+- Operacje masowe: kopiuj wymiary/głębokość/wysokość; nazwa z numeracją (np. TV → TV-01…)
+- Klik segmentu w podglądzie → panel po prawej (`ConsolidationRackSegmentEditPanel`) bez zmian
+- Tło spójne z OMS (#fff): `ConsolidationRackFormShell`, edytor, panel — bez szarych paneli
+- Podgląd regału: słupki niebieskie, półki z border, kolory jak Twórca szablonu (#eff6ff)
+- Pliki: `LevelSegmentTable.tsx`, bulk helpers w `rackStructureModel.ts`, `formatPreviewDims*` w `consolidationRackPreviewLayout.ts`
+
 ## P5.12C — Refaktor UX pod duże regały (CAD-style editor) (2026-06-08)
 - Accordion poziomów — tylko jeden rozwinięty; segmenty jako małe chipy (max scroll 120px)
 - Edycja segmentu: `ConsolidationRackSegmentEditPanel` — zawsze jeden formularz (panel po prawej)

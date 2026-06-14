@@ -526,3 +526,72 @@ export function buildSegmentOccupancyMap(
   }
   return map;
 }
+
+function updateLevelSegments(
+  draft: RackStructureDraft,
+  levelClientId: string,
+  mapper: (seg: SegmentDraft, index: number) => SegmentDraft,
+): RackStructureDraft {
+  return {
+    ...draft,
+    levels: draft.levels.map((lv) => {
+      if (lv.clientId !== levelClientId) return lv;
+      return { ...lv, segments: lv.segments.map(mapper) };
+    }),
+  };
+}
+
+/** Kopiuje SZ/GŁ/WYS z pierwszego segmentu poziomu na pozostałe. */
+export function copyFirstSegmentDimensionsToLevel(
+  draft: RackStructureDraft,
+  levelClientId: string,
+): RackStructureDraft {
+  const lv = draft.levels.find((l) => l.clientId === levelClientId);
+  const src = lv?.segments[0];
+  if (!src) return draft;
+  const w = src.widthMm;
+  const d = src.depthMm;
+  const h = src.heightMm ?? lv?.levelHeightMm;
+  return updateLevelSegments(draft, levelClientId, (seg, i) =>
+    i === 0 ? seg : { ...seg, widthMm: w, depthMm: d, heightMm: h },
+  );
+}
+
+/** Kopiuje głębokość (pierwszy segment lub parametr) na wszystkie segmenty poziomu. */
+export function copyDepthToAllSegmentsInLevel(
+  draft: RackStructureDraft,
+  levelClientId: string,
+  depthMm?: number | null,
+): RackStructureDraft {
+  const lv = draft.levels.find((l) => l.clientId === levelClientId);
+  const depth = depthMm ?? lv?.segments[0]?.depthMm ?? draft.totalDepthMm;
+  return updateLevelSegments(draft, levelClientId, (seg) => ({ ...seg, depthMm: depth }));
+}
+
+/** Kopiuje wysokość (pierwszy segment / wys. poziomu) na wszystkie segmenty poziomu. */
+export function copyHeightToAllSegmentsInLevel(
+  draft: RackStructureDraft,
+  levelClientId: string,
+  heightMm?: number | null,
+): RackStructureDraft {
+  const lv = draft.levels.find((l) => l.clientId === levelClientId);
+  const height = heightMm ?? lv?.segments[0]?.heightMm ?? lv?.levelHeightMm;
+  return updateLevelSegments(draft, levelClientId, (seg) => ({ ...seg, heightMm: height }));
+}
+
+/** Prefiks + numeracja: TV → TV-01, TV-02, … */
+export function applySegmentNameNumbering(
+  draft: RackStructureDraft,
+  levelClientId: string,
+  prefix: string,
+): RackStructureDraft {
+  const trimmed = prefix.trim();
+  if (!trimmed) return draft;
+  const lv = draft.levels.find((l) => l.clientId === levelClientId);
+  const count = lv?.segments.length ?? 0;
+  const pad = count >= 100 ? 3 : count >= 10 ? 2 : 2;
+  return updateLevelSegments(draft, levelClientId, (seg, i) => ({
+    ...seg,
+    slotLabel: `${trimmed}-${String(i + 1).padStart(pad, "0")}`,
+  }));
+}

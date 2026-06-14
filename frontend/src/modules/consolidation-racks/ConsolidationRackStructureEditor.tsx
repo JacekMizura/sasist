@@ -4,6 +4,7 @@ import {
   cartsAppInputClass,
   cartsFieldLabelClass,
 } from "../carts/cartsModuleTokens";
+import LevelSegmentTable from "./LevelSegmentTable";
 import { MAX_RACK_DIM, parseOptionalDim } from "./rackLayoutUtils";
 import {
   addLevel,
@@ -11,7 +12,6 @@ import {
   countSegments,
   levelWidthUsage,
   removeLevel,
-  segmentDisplayLabel,
   setLevelSegmentCount,
   type LevelDraft,
   type RackPresetId,
@@ -190,7 +190,7 @@ export default function ConsolidationRackStructureEditor({
             const usage = levelWidthUsage(lv, draft.totalWidthMm);
             const levelTitle = lv.name.trim() || String.fromCharCode(65 + lv.levelIndex);
             return (
-              <div key={lv.clientId} className="overflow-hidden rounded-lg border border-slate-200/80 bg-slate-50/30">
+              <div key={lv.clientId} className="overflow-hidden rounded-lg border border-slate-200 bg-white">
                 <div className="flex items-center gap-1 px-2 py-2">
                   <button
                     type="button"
@@ -263,37 +263,20 @@ export default function ConsolidationRackStructureEditor({
                       )}
                     </label>
 
-                    <div>
-                      <span className={cartsFieldLabelClass}>Segmenty</span>
-                      <div className="mt-1 flex max-h-[120px] flex-wrap gap-1 overflow-y-auto">
-                        {lv.segments.map((seg) => {
-                          const label = segmentDisplayLabel(lv, seg);
-                          const isActive =
-                            selection?.levelClientId === lv.clientId
-                            && selection.segmentClientId === seg.clientId;
-                          return (
-                            <button
-                              key={seg.clientId}
-                              type="button"
-                              onClick={() => onSelectSegment(lv.clientId, seg.clientId)}
-                              className={`rounded border px-2 py-0.5 font-mono text-xs font-semibold transition-colors ${
-                                isActive
-                                  ? "border-orange-500 bg-orange-50 text-orange-950"
-                                  : "border-slate-200 bg-white text-slate-700 hover:border-violet-300 hover:bg-violet-50/40"
-                              }`}
-                            >
-                              {label}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
+                    <LevelSegmentTable
+                      draft={draft}
+                      level={lv}
+                      readOnly={readOnly}
+                      selection={selection}
+                      onChange={onChange}
+                      onSelectSegment={onSelectSegment}
+                    />
 
                     <div
-                      className={`rounded px-2 py-1 text-[10px] tabular-nums ${
+                      className={`rounded border px-2 py-1 text-[10px] tabular-nums ${
                         usage.valid
-                          ? "bg-emerald-50/80 text-emerald-900"
-                          : "bg-red-50/80 font-medium text-red-900"
+                          ? "border-emerald-200 bg-white text-emerald-900"
+                          : "border-red-200 bg-white font-medium text-red-900"
                       }`}
                     >
                       Wykorzystano {usage.usedMm} / {usage.targetMm || "—"} mm
@@ -309,7 +292,7 @@ export default function ConsolidationRackStructureEditor({
           <button
             type="button"
             onClick={() => onChange(addLevel(draft))}
-            className="mt-2 inline-flex h-8 w-full items-center justify-center gap-1 rounded-lg border border-violet-200 bg-violet-50/50 text-xs font-medium text-violet-900 hover:bg-violet-100/60"
+            className="mt-2 inline-flex h-8 w-full items-center justify-center gap-1 rounded-lg border border-violet-200 bg-white text-xs font-medium text-violet-900 hover:bg-violet-50"
           >
             <Plus className="h-3.5 w-3.5" />
             Dodaj poziom

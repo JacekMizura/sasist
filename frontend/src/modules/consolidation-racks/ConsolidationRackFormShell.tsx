@@ -14,9 +14,7 @@ type Props = {
   footer?: ReactNode;
 };
 
-/**
- * Layout CAD-style: wąska nawigacja (lewo) + obszar roboczy (podgląd + panel segmentu).
- */
+/** Layout CAD-style: nawigacja (lewo) + podgląd + panel segmentu (prawo). Tło spójne z OMS (#fff). */
 export function ConsolidationRackFormShell({
   title,
   subtitle,
@@ -29,8 +27,8 @@ export function ConsolidationRackFormShell({
   footer,
 }: Props) {
   return (
-    <div className="flex flex-col overflow-hidden rounded-2xl border border-slate-200/60 bg-white shadow-sm">
-      <div className="shrink-0 border-b border-slate-200/50 bg-slate-50/40 px-5 py-3.5">
+    <div className="flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="shrink-0 border-b border-slate-200 bg-white px-5 py-3.5">
         <Link
           to={backTo}
           className="inline-flex items-center gap-1 text-[13px] font-medium text-slate-600 hover:text-slate-900"
@@ -47,13 +45,13 @@ export function ConsolidationRackFormShell({
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-col overflow-hidden lg:flex-row lg:items-stretch">
-        <div className="w-full shrink-0 overflow-y-auto border-b border-slate-200/45 bg-slate-50/25 px-3 py-3 lg:w-[min(100%,280px)] lg:border-b-0 lg:border-r">
+      <div className="flex min-h-0 flex-col overflow-hidden bg-white lg:flex-row lg:items-stretch">
+        <div className="w-full shrink-0 overflow-y-auto border-b border-slate-200 bg-white px-3 py-3 lg:w-[min(100%,300px)] lg:border-b-0 lg:border-r">
           {sidebar}
         </div>
         <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden bg-white px-3 py-3 lg:px-4">
           {summaryBar ? (
-            <div className="shrink-0 rounded-xl border border-slate-200/55 bg-slate-50/40 px-3 py-2 text-sm text-slate-700 shadow-sm">
+            <div className="shrink-0 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
               {summaryBar}
             </div>
           ) : null}
@@ -62,7 +60,7 @@ export function ConsolidationRackFormShell({
       </div>
 
       {footer ? (
-        <footer className="shrink-0 border-t border-slate-200/60 bg-white/95 px-5 py-3.5 shadow-[0_-4px_12px_rgba(15,23,42,0.04)]">
+        <footer className="shrink-0 border-t border-slate-200 bg-white px-5 py-3.5">
           {footer}
         </footer>
       ) : null}

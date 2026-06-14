@@ -132,7 +132,7 @@ export default function ConsolidationRackSegmentEditPanel({
             onChange={(v) => onUpdate({ heightMm: v })}
             readOnly={readOnly}
           />
-          <div className="rounded-lg border border-violet-100 bg-violet-50/50 px-3 py-2">
+          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
             <span className="text-xs font-medium text-slate-600">Pojemność (auto)</span>
             <div className="font-mono text-lg font-bold text-violet-900">
               {cap != null ? `${cap.toFixed(0)} dm³` : "—"}

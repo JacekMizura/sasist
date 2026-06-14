@@ -32,6 +32,7 @@ export type PreviewSegmentCell = {
   key: string;
   label: string;
   widthMm: number;
+  depthMm: number;
   heightMm: number;
   capacityDm3: number | null;
   segmentId?: number;
@@ -103,15 +104,30 @@ function segmentToPreviewCell(
   rackWidthMm: number,
 ): PreviewSegmentCell {
   const widthMm = seg.widthMm ?? 0;
+  const depthMm = seg.depthMm ?? 0;
   const heightMm = seg.heightMm ?? lv.levelHeightMm ?? 0;
   const label = computeSlotLabel(levelName, levelIndex, seg.segmentIndex, isSegmented, seg.slotLabel || null);
   return {
     key: seg.clientId,
     label,
     widthMm,
+    depthMm,
     heightMm,
     capacityDm3: computeCapacityDm3(seg.depthMm, seg.widthMm, heightMm),
     segmentId: seg.segmentId,
     widthFraction: widthMm / rackWidthMm,
   };
+}
+
+/** Tekst wymiarów w komórce podglądu (jak Twórca szablonu). */
+export function formatPreviewDimsLine(w: number, d: number, h: number, compact: boolean): string {
+  const rw = Math.round(w);
+  const rd = Math.round(d);
+  const rh = Math.round(h);
+  if (compact) return `${rw}×${rd}×${rh}`;
+  return `SZ ${rw} · GŁ ${rd} · WYS ${rh}`;
+}
+
+export function formatPreviewDimsMultiline(w: number, d: number, h: number): [string, string, string] {
+  return [`SZ ${Math.round(w)}`, `GŁ ${Math.round(d)}`, `WYS ${Math.round(h)}`];
 }

@@ -294,7 +294,7 @@ export default function ConsolidationRackEditorPage() {
                 />
               </div>
             ) : (
-              <div className="hidden w-[260px] shrink-0 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/50 px-4 py-8 text-center text-xs text-slate-500 lg:flex">
+              <div className="hidden w-[260px] shrink-0 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white px-4 py-8 text-center text-xs text-slate-500 lg:flex">
                 Kliknij segment w podglądzie lub na liście po lewej, aby edytować wymiary.
               </div>
             )}
