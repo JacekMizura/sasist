@@ -39,6 +39,7 @@ import {
 } from "../../utils/entityPricing";
 import {
   BUNDLE_OPERATIONAL_MODE_SHORT,
+  isStockProduction,
   normalizeBundleOperationalMode,
   type BundleOperationalMode,
 } from "../Production/bundleOperationalTypes";
@@ -139,16 +140,8 @@ export function BundleEditModal({
   const headerGalleryInputRef = useRef<HTMLInputElement>(null);
 
   const tabFromUrl = searchParams.get("tab") as BundleEditTabId | null;
-  const bundleTabs = useMemo(() => buildBundleEditTabs(isNew, operationalMode), [isNew, operationalMode]);
 
-  useEffect(() => {
-    if (activeTab === "production" && operationalMode !== "STOCK_PRODUCTION") {
-      setTab("warehouse");
-    }
-  }, [activeTab, operationalMode, setTab]);
-  const validTab = bundleTabs.some((t) => t.id === tabFromUrl) ? tabFromUrl! : null;
-  const [activeTab, setActiveTab] = useState<BundleEditTabId>(initialTab ?? validTab ?? "basic");
-
+  const [activeTab, setActiveTab] = useState<BundleEditTabId>(initialTab ?? tabFromUrl ?? "basic");
   const [saving, setSaving] = useState(false);
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [saveErr, setSaveErr] = useState<string | null>(null);
@@ -205,6 +198,20 @@ export function BundleEditModal({
     },
     [isPage, setSearchParams],
   );
+
+  const bundleTabs = useMemo(() => buildBundleEditTabs(isNew, operationalMode), [isNew, operationalMode]);
+
+  useEffect(() => {
+    if (activeTab === "production" && operationalMode !== "STOCK_PRODUCTION") {
+      setTab("warehouse");
+    }
+  }, [activeTab, operationalMode, setTab]);
+
+  useEffect(() => {
+    if (!bundleTabs.some((t) => t.id === activeTab)) {
+      setTab("basic");
+    }
+  }, [bundleTabs, activeTab, setTab]);
 
   const mergeProductIntoCache = useCallback((p: CatalogProduct, purchaseOverride?: number | null) => {
     const stock = p.stock_quantity != null && Number.isFinite(Number(p.stock_quantity)) ? Number(p.stock_quantity) : 0;
