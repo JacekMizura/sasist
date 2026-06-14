@@ -49,6 +49,7 @@ from ..schemas.order import (
     OrderListItemPreview,
     OrderNoteRead,
     OrderItemRead,
+    OrderLineBundleComponentRead,
     OrderUiStatusBrief,
     PanelFulfillmentHistoryEntry,
     ProductInOrder,
@@ -119,6 +120,15 @@ from ..services.bundle_explosion import (
     merge_resolved_lines,
     resolve_order_create_lines,
     vat_percent_from_product,
+)
+from ..services.order_bundle_persistence import persist_resolved_bundle_lines
+from ..services.bundle_order_snapshot_service import (
+    load_snapshots_for_order_line_ids,
+    snapshot_purchase_cost_total_net,
+)
+from ..services.bundle_order_item_ops import (
+    bundle_fulfillment_mode_from_order_item,
+    order_item_is_operational_picking_line,
 )
 from ..api.complaint_shipment import ensure_complaint_outbound_shipment
 from ..services.complaint_audit import append_complaint_audit_event
@@ -419,7 +429,7 @@ def _order_total_volume_and_multi(order: Order) -> tuple[float, bool, int, int]:
     total_volume = 0.0
     total_qty = 0
     for item in order.items:
-        if getattr(item, "is_bundle_parent", False):
+        if not order_item_is_operational_picking_line(item):
             continue
         product = item.product
         qty = item.quantity or 0
@@ -1215,7 +1225,7 @@ def get_office_dashboard_kpis(
 def create_order(body: OrderCreateBody, db: Session = Depends(get_db)):
     """Create order with lines from catalog products and/or bundles (bundles exploded to real products)."""
     try:
-        resolved = resolve_order_create_lines(
+        resolved_result = resolve_order_create_lines(
             db,
             tenant_id=body.tenant_id,
             warehouse_id=body.warehouse_id,
@@ -1224,6 +1234,7 @@ def create_order(body: OrderCreateBody, db: Session = Depends(get_db)):
         )
     except BundleExplosionError as e:
         raise HTTPException(status_code=400, detail=e.detail)
+    resolved = resolved_result.lines
 
     origin_up = (body.origin or "").strip().upper() or None
     cot_raw = (body.complaint_order_type or "").strip().upper() if body.complaint_order_type else None
@@ -1419,54 +1430,12 @@ def create_order(body: OrderCreateBody, db: Session = Depends(get_db)):
     apply_initial_fulfillment_assignment(db, order)
     assign_default_new_panel_status_to_order(db, order)
 
-    inst_to_parent_item_id: dict[str, int] = {}
-    for r in resolved:
-        if r.is_bundle_parent:
-            oi = OrderItem(
-                order_id=order.id,
-                product_id=r.product_id,
-                quantity=r.quantity,
-                unit_price=r.unit_price,
-                total_price=r.total_price,
-                list_price=r.list_price,
-                total_volume=round(r.line_volume, 4) if r.line_volume else None,
-                source_bundle_id=r.source_bundle_id,
-                bundle_instance_id=r.bundle_instance_id,
-                metadata_json=r.metadata_json,
-                vat_percent=r.vat_percent,
-                is_bundle_parent=True,
-                parent_bundle_order_item_id=None,
-                required_stock_disposition=r.required_stock_disposition,
-                product_sales_offer_id=r.product_sales_offer_id,
-                offer_name_snapshot=r.offer_name,
-            )
-            db.add(oi)
-            db.flush()
-            if r.bundle_instance_id:
-                inst_to_parent_item_id[str(r.bundle_instance_id)] = int(oi.id)
-            continue
-        pb_id = None
-        if r.bundle_instance_id:
-            pb_id = inst_to_parent_item_id.get(str(r.bundle_instance_id))
-        oi = OrderItem(
-            order_id=order.id,
-            product_id=r.product_id,
-            quantity=r.quantity,
-            unit_price=r.unit_price,
-            total_price=r.total_price,
-            list_price=r.list_price,
-            total_volume=round(r.line_volume, 4) if r.line_volume else None,
-            source_bundle_id=r.source_bundle_id,
-            bundle_instance_id=r.bundle_instance_id,
-            metadata_json=r.metadata_json,
-            vat_percent=r.vat_percent,
-            is_bundle_parent=False,
-            parent_bundle_order_item_id=pb_id,
-            required_stock_disposition=r.required_stock_disposition,
-            product_sales_offer_id=r.product_sales_offer_id,
-            offer_name_snapshot=r.offer_name,
-        )
-        db.add(oi)
+    persist_resolved_bundle_lines(
+        db,
+        order_id=int(order.id),
+        merged=resolved,
+        snapshots_by_instance=resolved_result.bundle_snapshots_by_instance,
+    )
 
     if origin_up == "COMPLAINT" and cot_raw is not None:
         pname, paddr, pphone, pemail = _complaint_pickup_from_create_body(body)
@@ -1565,13 +1534,17 @@ def _order_item_active_for_financial_totals(item: OrderItem) -> bool:
 
 
 def _order_item_include_in_purchase_cost_total(item: OrderItem) -> bool:
-    """Nagłówek zestawu nie ma sensownego kosztu zakupu „jednego produktu”; liczą się komponenty."""
+    """Koszt zakupu: komponenty ON_DEMAND; nagłówek STOCK_PRODUCTION (snapshot)."""
     if order_item_is_replaced_line(item):
         return False
     if int(item.quantity or 0) <= 0:
         return False
+    if getattr(item, "parent_bundle_order_item_id", None) is not None:
+        return True
     if getattr(item, "is_bundle_parent", False):
-        return False
+        from ..services.bundle_order_item_ops import order_item_is_stock_production_bundle_parent
+
+        return order_item_is_stock_production_bundle_parent(item)
     return True
 
 
@@ -1625,6 +1598,13 @@ def build_order_read(db: Session, order: Order) -> OrderRead:
         else {}
     )
 
+    bundle_parent_ids = [
+        int(item.id)
+        for item in order.items
+        if bool(getattr(item, "is_bundle_parent", False)) and int(item.quantity or 0) > 0
+    ]
+    snapshots_by_parent = load_snapshots_for_order_line_ids(db, bundle_parent_ids)
+
     sum_line_net_active = 0.0
     sum_purchase_active = 0.0
     items_out = []
@@ -1665,6 +1645,34 @@ def build_order_read(db: Session, order: Order) -> OrderRead:
                     except (TypeError, ValueError):
                         fifo_purchase_net = None
         fin = _compute_order_line_financials(item, product, fifo_purchase_net=fifo_purchase_net)
+        bundle_mode = bundle_fulfillment_mode_from_order_item(item) if is_bp else None
+        comp_rows = snapshots_by_parent.get(int(item.id), []) if is_bp else []
+        comp_reads = [
+            OrderLineBundleComponentRead(
+                product_id=int(c.product_id) if c.product_id is not None else None,
+                product_name_snapshot=str(c.product_name_snapshot or ""),
+                sku_snapshot=c.sku_snapshot,
+                ean_snapshot=c.ean_snapshot,
+                quantity_per_bundle=int(c.quantity_per_bundle or 0),
+                quantity_total=int(c.quantity_total or 0),
+                purchase_price_net_snapshot=(
+                    float(c.purchase_price_net_snapshot)
+                    if c.purchase_price_net_snapshot is not None
+                    else None
+                ),
+            )
+            for c in comp_rows
+        ]
+        if is_bp and comp_rows:
+            snap_cost = snapshot_purchase_cost_total_net(comp_rows)
+            line_net = fin.get("line_net_total")
+            if snap_cost is not None and line_net is not None:
+                fin = dict(fin)
+                fin["line_purchase_total_net"] = snap_cost
+                margin_amt = round(float(line_net) - snap_cost, 2)
+                fin["line_margin_amount"] = margin_amt
+                if float(line_net) > 1e-9:
+                    fin["line_margin_percent"] = round(margin_amt / float(line_net) * 100.0, 2)
         if _order_item_active_for_financial_totals(item):
             ln = fin.get("line_net_total")
             if ln is not None:
@@ -1739,6 +1747,8 @@ def build_order_read(db: Session, order: Order) -> OrderRead:
                 required_stock_disposition=resolve_order_item_required_disposition(item),
                 product_sales_offer_id=getattr(item, "product_sales_offer_id", None),
                 offer_name_snapshot=getattr(item, "offer_name_snapshot", None),
+                bundle_fulfillment_mode=bundle_mode,
+                bundle_components=comp_reads,
             )
         )
 
@@ -2321,7 +2331,7 @@ def add_order_line(order_id: int, body: OrderAddLineBody, db: Session = Depends(
 
     if body.bundle_id is not None:
         try:
-            raw_lines = explode_bundle_line(
+            out = explode_bundle_line(
                 db,
                 tenant_id=int(order.tenant_id),
                 bundle_id=int(body.bundle_id),
@@ -2329,66 +2339,24 @@ def add_order_line(order_id: int, body: OrderAddLineBody, db: Session = Depends(
                 line_unit_price_override=body.unit_price,
                 required_stock_disposition=req_disp,
             )
-            merged = merge_resolved_lines(raw_lines)
+            merged = merge_resolved_lines(out.lines)
         except BundleExplosionError as e:
             raise HTTPException(status_code=400, detail=e.detail)
-        inst_to_parent_item_id: dict[str, int] = {}
-        for r in merged:
-            vat_opt = float(body.vat_percent) if body.vat_percent is not None else None
-            vat_final: Optional[float] = vat_opt if vat_opt is not None else r.vat_percent
-            if r.is_bundle_parent:
-                oi = OrderItem(
-                    order_id=order.id,
-                    product_id=r.product_id,
-                    quantity=r.quantity,
-                    unit_price=r.unit_price,
-                    total_price=r.total_price,
-                    list_price=r.list_price,
-                    total_volume=round(r.line_volume, 4) if r.line_volume else None,
-                    unit=unit_str,
-                    vat_percent=vat_final,
-                    metadata_json=r.metadata_json,
-                    source_bundle_id=r.source_bundle_id,
-                    bundle_instance_id=r.bundle_instance_id,
-                    is_bundle_parent=True,
-                    parent_bundle_order_item_id=None,
-                    required_stock_disposition=r.required_stock_disposition,
-                    product_sales_offer_id=r.product_sales_offer_id,
-                    offer_name_snapshot=r.offer_name,
-                )
-                db.add(oi)
-                db.flush()
-                if r.bundle_instance_id:
-                    inst_to_parent_item_id[str(r.bundle_instance_id)] = int(oi.id)
-                continue
-            pb_id = inst_to_parent_item_id.get(str(r.bundle_instance_id)) if r.bundle_instance_id else None
-            oi = OrderItem(
-                order_id=order.id,
-                product_id=r.product_id,
-                quantity=r.quantity,
-                unit_price=r.unit_price,
-                total_price=r.total_price,
-                list_price=r.list_price,
-                total_volume=round(r.line_volume, 4) if r.line_volume else None,
-                unit=unit_str,
-                vat_percent=vat_final,
-                metadata_json=r.metadata_json,
-                source_bundle_id=r.source_bundle_id,
-                bundle_instance_id=r.bundle_instance_id,
-                is_bundle_parent=False,
-                parent_bundle_order_item_id=pb_id,
-                required_stock_disposition=r.required_stock_disposition,
-                product_sales_offer_id=r.product_sales_offer_id,
-                offer_name_snapshot=r.offer_name,
-            )
-            db.add(oi)
+        persist_resolved_bundle_lines(
+            db,
+            order_id=int(order.id),
+            merged=merged,
+            snapshots_by_instance=out.snapshots_by_instance,
+            unit_str=unit_str,
+            vat_override=float(body.vat_percent) if body.vat_percent is not None else None,
+        )
         db.flush()
         _recompute_order_value_and_volume(order, db)
         db.commit()
     else:
         wh_id = int(order.warehouse_id or 1)
         try:
-            merged = resolve_order_create_lines(
+            resolved_result = resolve_order_create_lines(
                 db,
                 tenant_id=int(order.tenant_id),
                 warehouse_id=wh_id,
@@ -2397,9 +2365,9 @@ def add_order_line(order_id: int, body: OrderAddLineBody, db: Session = Depends(
             )
         except BundleExplosionError as e:
             raise HTTPException(status_code=400, detail=e.detail)
-        if len(merged) != 1:
+        if len(resolved_result.lines) != 1:
             raise HTTPException(status_code=400, detail="Invalid catalog line resolution")
-        resolved = merged[0]
+        resolved = resolved_result.lines[0]
         product = (
             db.query(Product)
             .filter(Product.id == int(resolved.product_id), Product.tenant_id == int(order.tenant_id))

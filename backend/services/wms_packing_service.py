@@ -83,7 +83,9 @@ def _order_item_active_for_packing(it: OrderItem) -> bool:
     if int(it.quantity or 0) <= 0:
         return False
     if getattr(it, "is_bundle_parent", False):
-        return False
+        from .bundle_order_item_ops import order_item_is_stock_production_bundle_parent
+
+        return order_item_is_stock_production_bundle_parent(it)
     return True
 
 

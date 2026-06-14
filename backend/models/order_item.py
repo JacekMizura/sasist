@@ -153,6 +153,12 @@ class OrderItem(Base):
         remote_side="OrderItem.id",
         foreign_keys=[parent_bundle_order_item_id],
     )
+    bundle_component_snapshots = relationship(
+        "OrderLineBundleComponent",
+        back_populates="order_line",
+        cascade="all, delete-orphan",
+        foreign_keys="OrderLineBundleComponent.order_line_id",
+    )
 
     # ================================
     # CACHE OBJĘTOŚCI (opcjonalne)

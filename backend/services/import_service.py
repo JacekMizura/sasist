@@ -31,6 +31,7 @@ from ..config import product_refactor_flags as pr_flags
 from ..services.shipping_method_service import get_or_create_shipping_method_for_label
 from ..services.order_default_new_panel_status import assign_default_new_panel_status_to_order
 from ..services.bundle_explosion import BundleExplosionError, explode_bundle_line, merge_resolved_lines
+from ..services.order_bundle_persistence import persist_resolved_bundle_lines
 from ..services.stock_disposition import DEFAULT_STOCK_DISPOSITION
 
 logger = logging.getLogger(__name__)
@@ -2071,16 +2072,18 @@ class ImportService:
                     product_name=agg.get("product_name"),
                 )
                 merged_bundle = None
+                bundle_snapshots: dict = {}
                 if bundle_row is not None:
                     try:
-                        raw_bl = explode_bundle_line(
+                        out = explode_bundle_line(
                             self.db,
                             tenant_id=tenant_id,
                             bundle_id=int(bundle_row.id),
                             bundle_order_qty=qty_int,
                             line_unit_price_override=unit_price,
                         )
-                        merged_bundle = merge_resolved_lines(raw_bl)
+                        merged_bundle = merge_resolved_lines(out.lines)
+                        bundle_snapshots = out.snapshots_by_instance
                     except BundleExplosionError as exc:
                         logger.warning(
                             "import_orders: bundle explosion failed bundle_id=%s order_ext=%s: %s",
@@ -2091,63 +2094,18 @@ class ImportService:
                         merged_bundle = None
 
                 if merged_bundle:
-                    vat_override = agg.get("vat_percent")
-                    inst_to_parent_item_id: dict[str, int] = {}
                     unit_str = agg.get("unit")
                     import_extra = dict(meta_line) if meta_line else {}
-                    for r in merged_bundle:
-                        vat_final = (
-                            float(vat_override) if vat_override is not None else r.vat_percent
-                        )
-                        meta_use = r.metadata_json
-                        if r.is_bundle_parent and import_extra:
-                            meta_use = _merge_json_meta(meta_use, import_extra)
-                        if r.is_bundle_parent:
-                            oi = OrderItem(
-                                order_id=order.id,
-                                product_id=r.product_id,
-                                quantity=r.quantity,
-                                unit_price=r.unit_price,
-                                total_price=r.total_price,
-                                list_price=r.list_price,
-                                total_volume=round(r.line_volume, 4) if r.line_volume else None,
-                                unit=unit_str,
-                                vat_percent=vat_final,
-                                metadata_json=meta_use,
-                                source_bundle_id=r.source_bundle_id,
-                                bundle_instance_id=r.bundle_instance_id,
-                                is_bundle_parent=True,
-                                parent_bundle_order_item_id=None,
-                                required_stock_disposition=DEFAULT_STOCK_DISPOSITION,
-                            )
-                            self.db.add(oi)
-                            self.db.flush()
-                            if r.bundle_instance_id:
-                                inst_to_parent_item_id[str(r.bundle_instance_id)] = int(oi.id)
-                        else:
-                            pb_id = (
-                                inst_to_parent_item_id.get(str(r.bundle_instance_id))
-                                if r.bundle_instance_id
-                                else None
-                            )
-                            oi = OrderItem(
-                                order_id=order.id,
-                                product_id=r.product_id,
-                                quantity=r.quantity,
-                                unit_price=r.unit_price,
-                                total_price=r.total_price,
-                                list_price=r.list_price,
-                                total_volume=round(r.line_volume, 4) if r.line_volume else None,
-                                unit=unit_str,
-                                vat_percent=vat_final,
-                                metadata_json=meta_use,
-                                source_bundle_id=r.source_bundle_id,
-                                bundle_instance_id=r.bundle_instance_id,
-                                is_bundle_parent=False,
-                                parent_bundle_order_item_id=pb_id,
-                                required_stock_disposition=DEFAULT_STOCK_DISPOSITION,
-                            )
-                            self.db.add(oi)
+                    vat_override = agg.get("vat_percent")
+                    persist_resolved_bundle_lines(
+                        self.db,
+                        order_id=int(order.id),
+                        merged=merged_bundle,
+                        snapshots_by_instance=bundle_snapshots,
+                        unit_str=unit_str,
+                        vat_override=float(vat_override) if vat_override is not None else None,
+                        import_extra_meta=import_extra or None,
+                    )
                     items_added += len(merged_bundle)
                     continue
 

@@ -1747,6 +1747,50 @@ def ensure_bundles_pricing_columns(engine: Engine) -> None:
             )
 
 
+def ensure_order_line_bundle_components_table(engine: Engine) -> None:
+    """P4.13 — snapshot składników zestawu w linii zamówienia."""
+    with engine.connect() as conn:
+        if not _table_exists(conn, "order_line_bundle_components"):
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE order_line_bundle_components (
+                        id INTEGER NOT NULL PRIMARY KEY,
+                        order_line_id INTEGER NOT NULL REFERENCES order_items(id) ON DELETE CASCADE,
+                        bundle_id INTEGER REFERENCES bundles(id) ON DELETE SET NULL,
+                        product_id INTEGER REFERENCES products(id) ON DELETE SET NULL,
+                        product_name_snapshot VARCHAR(512) NOT NULL,
+                        sku_snapshot VARCHAR(128),
+                        ean_snapshot VARCHAR(64),
+                        quantity_per_bundle INTEGER NOT NULL,
+                        quantity_total INTEGER NOT NULL,
+                        purchase_price_net_snapshot FLOAT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_order_line_bundle_components_order_line_id "
+                    "ON order_line_bundle_components(order_line_id)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_order_line_bundle_components_bundle_id "
+                    "ON order_line_bundle_components(bundle_id)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_order_line_bundle_components_product_id "
+                    "ON order_line_bundle_components(product_id)"
+                )
+            )
+        conn.commit()
+
+
 def ensure_order_items_packing_quantity_packed_column(engine: Engine) -> None:
     """WMS pakowanie: własna ilość spakowana per pozycja (bez Pick / zbierania)."""
     cols = _cols(engine, "order_items")

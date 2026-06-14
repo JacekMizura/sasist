@@ -15,6 +15,15 @@ from sqlalchemy.orm import Session, joinedload
 from ..models.bundle import Bundle, BundleItem
 from ..models.inventory import Inventory
 from ..models.product import Product
+from .bundle_operational_mode import (
+    ON_DEMAND_ASSEMBLY,
+    STOCK_PRODUCTION,
+    normalize_bundle_operational_mode,
+)
+from .bundle_order_snapshot_service import (
+    BundleComponentSnapshotDraft,
+    build_component_snapshots_from_bundle,
+)
 from .stock_disposition import (
     DEFAULT_STOCK_DISPOSITION,
     disposition_for_new_order_line,
@@ -60,6 +69,18 @@ class ResolvedOrderLine:
     #: Etap 3A — źródłowa oferta (nullable dla legacy).
     product_sales_offer_id: Optional[int] = None
     offer_name: Optional[str] = None
+
+
+@dataclass
+class BundleExplosionOutput:
+    lines: list[ResolvedOrderLine]
+    snapshots_by_instance: dict[str, list[BundleComponentSnapshotDraft]]
+
+
+@dataclass
+class OrderCreateLinesResult:
+    lines: list[ResolvedOrderLine]
+    bundle_snapshots_by_instance: dict[str, list[BundleComponentSnapshotDraft]]
 
 
 def vat_percent_from_product(product: Product) -> Optional[float]:
@@ -132,11 +153,19 @@ def _bundle_component_meta_json(
     return json.dumps(payload, ensure_ascii=False)
 
 
-def _bundle_parent_meta_json(bundle: Bundle, *, bundle_order_qty: int, vat_percent: Optional[float]) -> str:
+def _bundle_parent_meta_json(
+    bundle: Bundle,
+    *,
+    bundle_order_qty: int,
+    vat_percent: Optional[float],
+    fulfillment_mode: str,
+) -> str:
     payload: dict[str, Any] = {
         "oms_bundle_parent_header": True,
         "bundle_qty": int(bundle_order_qty),
         "bundle_id": int(bundle.id),
+        "bundle_fulfillment_mode": fulfillment_mode,
+        "bundle_name_snapshot": str(bundle.name or "")[:512],
     }
     if vat_percent is not None:
         payload["vat_percent_catalog"] = float(vat_percent)
@@ -173,32 +202,26 @@ def _load_bundle(db: Session, bundle_id: int, tenant_id: int) -> Bundle:
     return b
 
 
-def explode_bundle_line(
-    db: Session,
+def _bundle_operational_mode(bundle: Bundle) -> str:
+    return normalize_bundle_operational_mode(
+        getattr(bundle, "bundle_fulfillment_mode", None),
+        stock_mode=getattr(bundle, "stock_mode", None),
+        fulfillment_mode=getattr(bundle, "fulfillment_mode", None),
+    )
+
+
+def _pricing_for_bundle(
+    bundle: Bundle,
+    items: list[BundleItem],
     *,
-    tenant_id: int,
-    bundle_id: int,
     bundle_order_qty: int,
     line_unit_price_override: Optional[float],
-    required_stock_disposition: str = DEFAULT_STOCK_DISPOSITION,
-) -> list[ResolvedOrderLine]:
-    """
-    Jedna linia katalogowa zestawu → nagłówek komercyjny + komponenty operacyjne (ta sama instancja UUID).
-
-    Komponenty mają ``total_price``/``unit_price`` zerowe w rozliczeniu zamówienia (wartość tylko na nagłówku).
-    Ceny składowe do UI są w ``metadata_json.bundle_display_*``.
-    """
-    bundle = _load_bundle(db, bundle_id, tenant_id)
-    instance_id = str(uuid.uuid4())
-    items = sorted(bundle.items or [], key=lambda x: (x.sort_order, x.id))
-
+) -> tuple[float, float, Optional[float]]:
     weights: list[tuple[BundleItem, int, float]] = []
     for bi in items:
         line_qty = int(bundle_order_qty) * int(bi.quantity)
         w = _sale_unit(bi.product) * line_qty
         weights.append((bi, line_qty, w))
-
-    weight_sum = sum(w for _, _, w in weights)
 
     if line_unit_price_override is not None:
         target_total = float(line_unit_price_override) * int(bundle_order_qty)
@@ -207,12 +230,6 @@ def explode_bundle_line(
     else:
         target_total = None
 
-    first_prod = items[0].product if items else None
-    if first_prod is None:
-        raise BundleExplosionError("Bundle has no components")
-    rep_pid = int(first_prod.id)
-    parent_vat = vat_percent_from_product(first_prod)
-
     if target_total is None:
         target_total = 0.0
         for bi, line_qty, _w in weights:
@@ -220,13 +237,53 @@ def explode_bundle_line(
 
     tt = float(target_total)
     unit_bundle = round(tt / float(bundle_order_qty), 4) if bundle_order_qty else 0.0
-    parent_meta = _bundle_parent_meta_json(bundle, bundle_order_qty=int(bundle_order_qty), vat_percent=parent_vat)
+    list_price = float(bundle.sale_price) if bundle.sale_price is not None else None
+    return tt, unit_bundle, list_price
+
+
+def _explode_on_demand_bundle(
+    bundle: Bundle,
+    *,
+    bundle_order_qty: int,
+    line_unit_price_override: Optional[float],
+    required_stock_disposition: str,
+    instance_id: str,
+) -> list[ResolvedOrderLine]:
+    """Nagłówek komercyjny + linie operacyjne składników."""
+    mode = ON_DEMAND_ASSEMBLY
+    items = sorted(bundle.items or [], key=lambda x: (x.sort_order, x.id))
+    weights: list[tuple[BundleItem, int, float]] = []
+    for bi in items:
+        line_qty = int(bundle_order_qty) * int(bi.quantity)
+        w = _sale_unit(bi.product) * line_qty
+        weights.append((bi, line_qty, w))
+
+    weight_sum = sum(w for _, _, w in weights)
+    tt, unit_bundle, list_price = _pricing_for_bundle(
+        bundle,
+        items,
+        bundle_order_qty=int(bundle_order_qty),
+        line_unit_price_override=line_unit_price_override,
+    )
+
+    first_prod = items[0].product if items else None
+    if first_prod is None:
+        raise BundleExplosionError("Bundle has no components")
+    rep_pid = int(first_prod.id)
+    parent_vat = vat_percent_from_product(first_prod)
+
+    parent_meta = _bundle_parent_meta_json(
+        bundle,
+        bundle_order_qty=int(bundle_order_qty),
+        vat_percent=parent_vat,
+        fulfillment_mode=mode,
+    )
     parent_line = ResolvedOrderLine(
         product_id=rep_pid,
         quantity=int(bundle_order_qty),
         unit_price=unit_bundle,
         total_price=round(tt, 2),
-        list_price=float(bundle.sale_price) if bundle.sale_price is not None else None,
+        list_price=list_price,
         line_volume=0.0,
         source_bundle_id=int(bundle.id),
         bundle_instance_id=instance_id,
@@ -309,6 +366,110 @@ def explode_bundle_line(
         )
 
     return [parent_line] + child_lines
+
+
+def _explode_stock_production_bundle(
+    db: Session,
+    bundle: Bundle,
+    *,
+    bundle_order_qty: int,
+    line_unit_price_override: Optional[float],
+    required_stock_disposition: str,
+    instance_id: str,
+) -> list[ResolvedOrderLine]:
+    """Tylko nagłówek z gotowym SKU (linked_product_id) — bez linii składników."""
+    linked_id = getattr(bundle, "linked_product_id", None)
+    if linked_id is None or int(linked_id) <= 0:
+        raise BundleExplosionError(
+            f"Bundle {bundle.id} (STOCK_PRODUCTION) wymaga powiązanego produktu (linked_product_id)."
+        )
+    linked = next(
+        (bi.product for bi in (bundle.items or []) if bi.product and int(bi.product.id) == int(linked_id)),
+        None,
+    )
+    if linked is None:
+        linked = (
+            db.query(Product)
+            .filter(Product.id == int(linked_id), Product.tenant_id == int(bundle.tenant_id))
+            .first()
+        )
+    if linked is None:
+        raise BundleExplosionError(f"Linked product {linked_id} not found for bundle {bundle.id}")
+
+    items = sorted(bundle.items or [], key=lambda x: (x.sort_order, x.id))
+    tt, unit_bundle, list_price = _pricing_for_bundle(
+        bundle,
+        items,
+        bundle_order_qty=int(bundle_order_qty),
+        line_unit_price_override=line_unit_price_override,
+    )
+    parent_vat = vat_percent_from_product(linked)
+    parent_meta = _bundle_parent_meta_json(
+        bundle,
+        bundle_order_qty=int(bundle_order_qty),
+        vat_percent=parent_vat,
+        fulfillment_mode=STOCK_PRODUCTION,
+    )
+    lv = unit_volume_dm3(linked) * int(bundle_order_qty)
+    parent_line = ResolvedOrderLine(
+        product_id=int(linked.id),
+        quantity=int(bundle_order_qty),
+        unit_price=unit_bundle,
+        total_price=round(tt, 2),
+        list_price=list_price,
+        line_volume=lv,
+        source_bundle_id=int(bundle.id),
+        bundle_instance_id=instance_id,
+        metadata_json=parent_meta,
+        vat_percent=parent_vat,
+        is_bundle_parent=True,
+        required_stock_disposition=normalize_stock_disposition(required_stock_disposition),
+    )
+    return [parent_line]
+
+
+def explode_bundle_line(
+    db: Session,
+    *,
+    tenant_id: int,
+    bundle_id: int,
+    bundle_order_qty: int,
+    line_unit_price_override: Optional[float],
+    required_stock_disposition: str = DEFAULT_STOCK_DISPOSITION,
+) -> BundleExplosionOutput:
+    """
+    Jedna linia katalogowa zestawu.
+
+    ON_DEMAND_ASSEMBLY: nagłówek komercyjny + komponenty operacyjne + snapshot.
+    STOCK_PRODUCTION: nagłówek z linked_product_id (bez linii składników) + snapshot.
+    """
+    bundle = _load_bundle(db, bundle_id, tenant_id)
+    instance_id = str(uuid.uuid4())
+    mode = _bundle_operational_mode(bundle)
+    snapshots = build_component_snapshots_from_bundle(bundle, bundle_order_qty=int(bundle_order_qty))
+
+    if mode == STOCK_PRODUCTION:
+        lines = _explode_stock_production_bundle(
+            db,
+            bundle,
+            bundle_order_qty=int(bundle_order_qty),
+            line_unit_price_override=line_unit_price_override,
+            required_stock_disposition=required_stock_disposition,
+            instance_id=instance_id,
+        )
+    else:
+        lines = _explode_on_demand_bundle(
+            bundle,
+            bundle_order_qty=int(bundle_order_qty),
+            line_unit_price_override=line_unit_price_override,
+            required_stock_disposition=required_stock_disposition,
+            instance_id=instance_id,
+        )
+
+    return BundleExplosionOutput(
+        lines=lines,
+        snapshots_by_instance={instance_id: snapshots},
+    )
 
 
 def explode_product_line(
@@ -427,6 +588,23 @@ def available_stock(db: Session, tenant_id: int, warehouse_id: int, product_id: 
     return float(q or 0)
 
 
+def _resolved_line_needs_stock(r: ResolvedOrderLine) -> bool:
+    """Linie zużywające stan magazynowy — komponenty ON_DEMAND + parent STOCK_PRODUCTION."""
+    if not r.is_bundle_parent:
+        return True
+    raw = r.metadata_json
+    if not raw or not str(raw).strip():
+        return False
+    try:
+        meta = json.loads(raw)
+    except json.JSONDecodeError:
+        return False
+    if not isinstance(meta, dict):
+        return False
+    mode = normalize_bundle_operational_mode(meta.get("bundle_fulfillment_mode"))
+    return mode == STOCK_PRODUCTION
+
+
 def validate_merged_stock(
     db: Session,
     *,
@@ -437,7 +615,7 @@ def validate_merged_stock(
     need_by_offer: dict[int, int] = {}
     need_by_disp: dict[tuple[int, str], int] = {}
     for r in lines:
-        if r.is_bundle_parent:
+        if not _resolved_line_needs_stock(r):
             continue
         qty = int(r.quantity)
         if getattr(r, "product_sales_offer_id", None) is not None:
@@ -488,7 +666,7 @@ def resolve_order_create_lines(
     warehouse_id: int,
     raw_lines: list[Any],
     check_bundle_stock: bool,
-) -> list[ResolvedOrderLine]:
+) -> OrderCreateLinesResult:
     """
     raw_lines: validated OrderCreateLine-like objects with product_id XOR bundle_id.
     """
@@ -501,20 +679,21 @@ def resolve_order_create_lines(
     from .product_sales_offers.crud_service import ensure_default_offer_for_product
 
     exploded: list[ResolvedOrderLine] = []
+    snapshots_by_instance: dict[str, list[BundleComponentSnapshotDraft]] = {}
     for line in raw_lines:
         qty = int(line.quantity)
         if getattr(line, "bundle_id", None) is not None:
             req_disp = disposition_for_new_order_line(getattr(line, "required_stock_disposition", None))
-            exploded.extend(
-                explode_bundle_line(
-                    db,
-                    tenant_id=tenant_id,
-                    bundle_id=int(line.bundle_id),
-                    bundle_order_qty=qty,
-                    line_unit_price_override=line.unit_price,
-                    required_stock_disposition=req_disp,
-                )
+            out = explode_bundle_line(
+                db,
+                tenant_id=tenant_id,
+                bundle_id=int(line.bundle_id),
+                bundle_order_qty=qty,
+                line_unit_price_override=line.unit_price,
+                required_stock_disposition=req_disp,
             )
+            exploded.extend(out.lines)
+            snapshots_by_instance.update(out.snapshots_by_instance)
             continue
 
         offer_id_raw = getattr(line, "offer_id", None)
@@ -564,4 +743,4 @@ def resolve_order_create_lines(
     merged = merge_resolved_lines(exploded)
     if check_bundle_stock:
         validate_merged_stock(db, tenant_id=tenant_id, warehouse_id=warehouse_id, lines=merged)
-    return merged
+    return OrderCreateLinesResult(lines=merged, bundle_snapshots_by_instance=snapshots_by_instance)

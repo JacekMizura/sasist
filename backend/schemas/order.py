@@ -85,6 +85,19 @@ class SourceBundleBrief(BaseModel):
         from_attributes = True
 
 
+class OrderLineBundleComponentRead(BaseModel):
+    product_id: Optional[int] = None
+    product_name_snapshot: str
+    sku_snapshot: Optional[str] = None
+    ean_snapshot: Optional[str] = None
+    quantity_per_bundle: int
+    quantity_total: int
+    purchase_price_net_snapshot: Optional[float] = None
+
+    class Config:
+        from_attributes = True
+
+
 class OrderItemRead(BaseModel):
     id: int
     quantity: int
@@ -132,6 +145,11 @@ class OrderItemRead(BaseModel):
     product_sales_offer_id: Optional[int] = None
     offer_name_snapshot: Optional[str] = None
     required_stock_disposition: str = "SALEABLE"
+    bundle_fulfillment_mode: Optional[str] = Field(
+        None,
+        description="ON_DEMAND_ASSEMBLY | STOCK_PRODUCTION — snapshot z momentu utworzenia linii zestawu",
+    )
+    bundle_components: list[OrderLineBundleComponentRead] = Field(default_factory=list)
 
     class Config:
         from_attributes = True

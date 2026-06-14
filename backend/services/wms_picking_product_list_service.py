@@ -33,6 +33,10 @@ from ..models.app_user import AppUser
 from ..models.product import Product
 from ..models.stock_movement import StockMovement
 from ..models.wms_picking_shortage_report import WmsPickingShortageReport
+from .bundle_order_item_ops import (
+    order_item_skip_bundle_commercial_header_for_ops,
+    sqlalchemy_operational_picking_order_item_clause,
+)
 
 
 def _order_item_not_replaced_clause():
@@ -497,7 +501,7 @@ def _sync_order_operational_state_after_picking_finalize(
     cid = int(cart_id)
     for o in orders:
         for oi in o.items or []:
-            if order_item_is_replaced_line(oi) or bool(getattr(oi, "is_bundle_parent", False)):
+            if order_item_is_replaced_line(oi) or order_item_skip_bundle_commercial_header_for_ops(oi):
                 continue
             qty = float(oi.quantity or 0)
             if qty <= 1e-9:
@@ -548,7 +552,7 @@ def _missing_qty_by_product_from_orders(
             Order.id.in_(list(order_ids)),
             Order.tenant_id == int(tenant_id),
             _order_item_not_replaced_clause(),
-            OrderItem.is_bundle_parent.is_(False),
+            sqlalchemy_operational_picking_order_item_clause(OrderItem),
         )
         .group_by(OrderItem.product_id)
         .all()
@@ -617,7 +621,7 @@ def _demand_by_product_from_orders(
             Order.id.in_(list(order_ids)),
             Order.tenant_id == int(tenant_id),
             _order_item_not_replaced_clause(),
-            OrderItem.is_bundle_parent.is_(False),
+            sqlalchemy_operational_picking_order_item_clause(OrderItem),
         )
         .group_by(OrderItem.product_id)
         .all()
@@ -860,7 +864,7 @@ def _missing_qty_by_product_for_finalize(
     out: dict[int, float] = defaultdict(float)
     for o in orders:
         for oi in o.items or []:
-            if order_item_is_replaced_line(oi) or bool(getattr(oi, "is_bundle_parent", False)):
+            if order_item_is_replaced_line(oi) or order_item_skip_bundle_commercial_header_for_ops(oi):
                 continue
             pid = getattr(oi, "product_id", None)
             if pid is None:
@@ -899,9 +903,7 @@ def _classify_order_after_picking_session(
     fully_picked: list[bool] = []
     fully_missing: list[bool] = []
     for oi in lines:
-        if getattr(oi, "parent_bundle_order_item_id", None) is not None:
-            continue
-        if bool(getattr(oi, "is_bundle_parent", False)):
+        if order_item_skip_bundle_commercial_header_for_ops(oi):
             continue
         if order_item_is_replaced_line(oi):
             continue
@@ -2438,9 +2440,7 @@ def _finalize_cohort_snapshot(
     cid = int(cart_id)
     for order in orders:
         for oi in order.items or []:
-            if getattr(oi, "parent_bundle_order_item_id", None) is not None:
-                continue
-            if bool(getattr(oi, "is_bundle_parent", False)):
+            if order_item_skip_bundle_commercial_header_for_ops(oi):
                 continue
             if order_item_is_replaced_line(oi):
                 removed_lines += 1

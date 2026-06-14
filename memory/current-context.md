@@ -1,5 +1,15 @@
 # Current context
 
+## P4.13 — Architektura zestawów w zamówieniach / WMS / produkcji (2026-06-08)
+- **Spec SSOT:** `memory/bundle-system-architecture.md` — pełny projekt (zwroty, korekty, RW-WMS, raporty)
+- Tabela **`order_line_bundle_components`** — snapshot składników przy utworzeniu linii zestawu (nazwa/SKU/EAN/qty + `purchase_price_net_snapshot` pod marżę)
+- **`bundle_explosion.py`**: ON_DEMAND → nagłówek + linie składników; STOCK_PRODUCTION → jedna linia (`linked_product_id`) + snapshot bez linii składników
+- **`order_bundle_persistence.py`** — wspólny zapis linii + snapshot (create order, add line, import)
+- **`bundle_order_item_ops.py`** — eligibility pickingu/pakowania/rezerwacji (STOCK parent operacyjny, ON_DEMAND parent tylko komercja)
+- WMS picking/packing: STOCK_PRODUCTION zbierany jako gotowy SKU; ON_DEMAND — składniki ze snapshotu
+- API **`OrderItemRead`**: `bundle_fulfillment_mode`, `bundle_components[]`; marża nagłówka z kosztu snapshotu
+- Roadmap skan EAN zestawu: **`memory/bundle-order-architecture.md`** (etap 2 — nie wdrożone)
+
 ## P4.11 — Typ realizacji zestawu (operacyjna terminologia) (2026-06-08)
 - Usunięto „Zestaw wirtualny / fizyczny” — język operacyjny:
   - **ON_DEMAND_ASSEMBLY** — Kompletowany na zamówienie
