@@ -36,11 +36,16 @@ export type LevelDraft = {
 
 export type BayDraft = {
   clientId: string;
+  /** Litera racka (A, B, C…) — wyświetlana jako „Rack A”. */
   name: string;
   sortOrder: number;
-  description: string;
   levels: LevelDraft[];
 };
+
+/** Etykieta racka w UI (auto, bez edycji). */
+export function bayDisplayLabel(bay: BayDraft): string {
+  return `Rack ${bay.name.trim() || columnLetter(bay.sortOrder)}`;
+}
 
 export type RackStructureDraft = {
   rackName: string;
@@ -75,6 +80,7 @@ function reindexBays(bays: BayDraft[]): BayDraft[] {
   return bays.map((bay, bi) => ({
     ...bay,
     sortOrder: bi,
+    name: columnLetter(bi),
     levels: reindexLevels(bay.levels),
   }));
 }
@@ -87,7 +93,6 @@ export function createEmptyBay(
     clientId: newClientId("bay"),
     name: columnLetter(index),
     sortOrder: index,
-    description: "",
     levels: [createEmptyLevel(0, defaults)],
   };
 }
@@ -187,7 +192,6 @@ export function duplicateBay(draft: RackStructureDraft, bayClientId: string): Ra
     clientId: newClientId("bay"),
     name: columnLetter(draft.bays.length),
     sortOrder: srcIdx + 1,
-    description: src.description,
     levels: src.levels.map((lv, li) => ({
       clientId: newClientId("lv"),
       levelIndex: li,
@@ -248,16 +252,46 @@ export function addSegment(
   levelClientId: string,
 ): RackStructureDraft {
   return mapLevelInDraft(draft, levelClientId, (lv) => {
-    const src = lv.segments[0];
-    const next = [
-      ...lv.segments,
-      createEmptySegment(lv.segments.length, {
-        widthMm: null,
-        depthMm: src?.depthMm ?? draft.totalDepthMm,
-        heightMm: src?.heightMm ?? lv.levelHeightMm,
-      }),
-    ];
-    return { ...lv, segments: redistributeSegmentWidths(next, draft.totalWidthMm) };
+    const src = lv.segments[lv.segments.length - 1] ?? lv.segments[0];
+    const used = lv.segments.reduce((s, seg) => s + (seg.widthMm ?? 0), 0);
+    const totalW = draft.totalWidthMm ?? 2000;
+    const remaining = Math.max(100, totalW - used);
+    const defaultH = src?.heightMm ?? lv.levelHeightMm ?? 500;
+    return {
+      ...lv,
+      segments: [
+        ...lv.segments,
+        createEmptySegment(lv.segments.length, {
+          widthMm: remaining,
+          depthMm: src?.depthMm ?? draft.totalDepthMm,
+          heightMm: defaultH,
+        }),
+      ].map((s, i) => ({ ...s, segmentIndex: i })),
+    };
+  });
+}
+
+export function duplicateSegment(
+  draft: RackStructureDraft,
+  _bayClientId: string,
+  levelClientId: string,
+  segmentClientId: string,
+): RackStructureDraft {
+  return mapLevelInDraft(draft, levelClientId, (lv) => {
+    const idx = lv.segments.findIndex((s) => s.clientId === segmentClientId);
+    if (idx < 0) return lv;
+    const src = lv.segments[idx]!;
+    const dup: SegmentDraft = {
+      clientId: newClientId("seg"),
+      segmentIndex: idx + 1,
+      slotLabel: src.slotLabel,
+      depthMm: src.depthMm,
+      widthMm: src.widthMm,
+      heightMm: src.heightMm,
+    };
+    const next = [...lv.segments];
+    next.splice(idx + 1, 0, dup);
+    return { ...lv, segments: next.map((s, i) => ({ ...s, segmentIndex: i })) };
   });
 }
 
@@ -285,17 +319,17 @@ export function removeSegment(
 ): RackStructureDraft {
   return mapLevelInDraft(draft, levelClientId, (lv) => {
     const filtered = lv.segments.filter((s) => s.clientId !== segmentClientId);
-    const next =
-      filtered.length > 0
-        ? filtered
-        : [
-            createEmptySegment(0, {
-              widthMm: draft.totalWidthMm,
-              depthMm: draft.totalDepthMm,
-              heightMm: lv.levelHeightMm,
-            }),
-          ];
-    return { ...lv, segments: redistributeSegmentWidths(next, draft.totalWidthMm) };
+      const next =
+        filtered.length > 0
+          ? filtered
+          : [
+              createEmptySegment(0, {
+                widthMm: draft.totalWidthMm,
+                depthMm: draft.totalDepthMm,
+                heightMm: lv.levelHeightMm ?? 500,
+              }),
+            ];
+      return { ...lv, segments: next.map((s, i) => ({ ...s, segmentIndex: i })) };
   });
 }
 
@@ -360,15 +394,14 @@ export function setLevelSegmentCount(
 
 function groupLevelsIntoBays(levels: LevelDraft[], rack?: ConsolidationRack | null): BayDraft[] {
   if (!levels.length) return [createEmptyBay(0, {})];
-  type Group = { name: string; sortOrder: number; description: string; levels: LevelDraft[] };
+  type Group = { name: string; sortOrder: number; levels: LevelDraft[] };
   const groups = new Map<string, Group>();
   levels.forEach((lv, flatIdx) => {
     const apiLevel = rack?.levels?.[flatIdx];
     const unitName = apiLevel?.unit_name?.trim() || "A";
     const sortOrder = apiLevel?.unit_sort_order ?? 0;
-    const description = apiLevel?.unit_description?.trim() || "";
     const key = `${sortOrder}:${unitName}`;
-    const g = groups.get(key) ?? { name: unitName, sortOrder, description, levels: [] };
+    const g = groups.get(key) ?? { name: unitName, sortOrder, levels: [] };
     g.levels.push(lv);
     groups.set(key, g);
   });
@@ -376,9 +409,8 @@ function groupLevelsIntoBays(levels: LevelDraft[], rack?: ConsolidationRack | nu
     .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))
     .map((g, bi) => ({
       clientId: newClientId("bay"),
-      name: g.name,
+      name: columnLetter(bi),
       sortOrder: bi,
-      description: g.description,
       levels: g.levels.map((lv, li) => ({ ...lv, levelIndex: li })),
     }));
 }
@@ -398,7 +430,7 @@ export function draftToApiPayload(draft: RackStructureDraft): RackLevelPayload[]
         is_segmented: isSegmented,
         unit_name: bay.name.trim() || columnLetter(bay.sortOrder),
         unit_sort_order: bay.sortOrder,
-        unit_description: bay.description.trim() || null,
+        unit_description: null,
         segments: lv.segments.map((seg, segmentIndex) => {
           const height = seg.heightMm ?? lv.levelHeightMm;
           const custom = seg.slotLabel.trim();
@@ -691,7 +723,6 @@ export function applyRackPreset(preset: RackPresetId, warehouseId = 1): RackStru
         clientId: newClientId("bay"),
         name: "A",
         sortOrder: 0,
-        description: "",
         levels: buildPresetLevels(levelCount, segCount, totalWidthMm, totalDepthMm, levelHeightMm),
       },
     ],

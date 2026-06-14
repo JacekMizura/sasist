@@ -9,6 +9,7 @@ import { ConsolidationRackFormShell } from "../../../modules/consolidation-racks
 import ConsolidationRackOmsPreview from "../../../modules/consolidation-racks/ConsolidationRackOmsPreview";
 import ConsolidationRackSegmentEditPanel from "../../../modules/consolidation-racks/ConsolidationRackSegmentEditPanel";
 import ConsolidationRackStructureEditor from "../../../modules/consolidation-racks/ConsolidationRackStructureEditor";
+import LevelSegmentConfigTable from "../../../modules/consolidation-racks/LevelSegmentConfigTable";
 import type { ConsolidationRack } from "../../../modules/consolidation-racks/consolidationRackTypes";
 import {
   allLevels,
@@ -18,6 +19,7 @@ import {
   createDefaultRackDraft,
   draftToApiPayload,
   findBay,
+  findLevelContext,
   findSegmentInDraft,
   segmentDisplayLabel,
   segmentDraftPayload,
@@ -80,8 +82,9 @@ export default function ConsolidationRackEditorPage() {
 
   const selectBay = useCallback((bayClientId: string) => {
     setFocusedBayId(bayClientId);
+    setFocusedLevelId(findBay(draft, bayClientId)?.levels[0]?.clientId ?? null);
     setSelection(null);
-  }, []);
+  }, [draft]);
 
   const selectLevel = useCallback((bayClientId: string, levelClientId: string) => {
     setFocusedBayId(bayClientId);
@@ -139,6 +142,11 @@ export default function ConsolidationRackEditorPage() {
     () => (focusedBayId ? findBay(draft, focusedBayId) ?? null : draft.bays[0] ?? null),
     [draft, focusedBayId],
   );
+
+  const focusedLevelCtx = useMemo(() => {
+    if (!focusedLevelId) return null;
+    return findLevelContext(draft, focusedLevelId);
+  }, [draft, focusedLevelId]);
 
   const selectedHit = useMemo(() => {
     if (!selection) return null;
@@ -264,7 +272,7 @@ export default function ConsolidationRackEditorPage() {
 
       <ConsolidationRackFormShell
         title={isCreate ? "Nowy regał kompletacyjny" : "Edycja regału"}
-        subtitle="Konfiguracja regału — racki, poziomy, segmenty; podgląd fizyczny bez statusów magazynowych"
+        subtitle="Tabela segmentów + podgląd fizyczny — jak w kreatorze regałów magazynowych"
         backTo="/carts/racks"
         headerActions={
           !isCreate ? (
@@ -308,14 +316,31 @@ export default function ConsolidationRackEditorPage() {
           />
         }
         workspace={
-          <div className="flex h-full min-h-0 w-full gap-2">
-            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-              <ConsolidationRackOmsPreview
-                draft={draft}
-                bay={focusedBay}
-                selection={selection}
-                onSegmentClick={selectSegment}
-              />
+          <div className="flex h-full min-h-0 w-full flex-col gap-2 lg:flex-row">
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden">
+              {focusedLevelCtx ? (
+                <LevelSegmentConfigTable
+                  draft={draft}
+                  bay={focusedLevelCtx.bay}
+                  level={focusedLevelCtx.level}
+                  structureLocked={!isCreate}
+                  selection={selection}
+                  onChange={handleDraftChange}
+                  onSelectSegment={selectSegment}
+                />
+              ) : (
+                <div className="shrink-0 rounded-xl border border-dashed border-slate-200 px-4 py-6 text-center text-sm text-slate-500">
+                  Wybierz poziom w strukturze regału, aby skonfigurować segmenty.
+                </div>
+              )}
+              <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+                <ConsolidationRackOmsPreview
+                  draft={draft}
+                  bay={focusedBay}
+                  selection={selection}
+                  onSegmentClick={selectSegment}
+                />
+              </div>
             </div>
             <div className="hidden w-[260px] shrink-0 lg:block">
               <ConsolidationRackSegmentEditPanel
@@ -333,7 +358,7 @@ export default function ConsolidationRackEditorPage() {
         footer={
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-xs text-slate-500">
-              Edytujesz jeden segment naraz — podgląd pokazuje cały regał.
+              Edytuj segmenty w tabeli; podgląd pokazuje układ fizyczny racka.
             </p>
             <button
               type="button"

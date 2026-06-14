@@ -9,11 +9,13 @@ import { ConsolidationRackFormShell } from "../../../modules/consolidation-racks
 import ConsolidationRackOmsPreview from "../../../modules/consolidation-racks/ConsolidationRackOmsPreview";
 import ConsolidationRackSegmentEditPanel from "../../../modules/consolidation-racks/ConsolidationRackSegmentEditPanel";
 import ConsolidationRackStructureEditor from "../../../modules/consolidation-racks/ConsolidationRackStructureEditor";
+import LevelSegmentConfigTable from "../../../modules/consolidation-racks/LevelSegmentConfigTable";
 import type { ConsolidationRack } from "../../../modules/consolidation-racks/consolidationRackTypes";
 import {
   apiRackToDraft,
   countSegments,
   findBay,
+  findLevelContext,
   findSegmentInDraft,
   segmentDisplayLabel,
   type RackStructureDraft,
@@ -61,8 +63,11 @@ export default function ConsolidationRackPreviewPage() {
 
   const selectBay = useCallback((bayClientId: string) => {
     setFocusedBayId(bayClientId);
+    if (draft) {
+      setFocusedLevelId(findBay(draft, bayClientId)?.levels[0]?.clientId ?? null);
+    }
     setSelection(null);
-  }, []);
+  }, [draft]);
 
   const selectLevel = useCallback((bayClientId: string, levelClientId: string) => {
     setFocusedBayId(bayClientId);
@@ -80,6 +85,11 @@ export default function ConsolidationRackPreviewPage() {
     if (!draft) return null;
     return focusedBayId ? findBay(draft, focusedBayId) ?? draft.bays[0] ?? null : draft.bays[0] ?? null;
   }, [draft, focusedBayId]);
+
+  const focusedLevelCtx = useMemo(() => {
+    if (!draft || !focusedLevelId) return null;
+    return findLevelContext(draft, focusedLevelId);
+  }, [draft, focusedLevelId]);
 
   const selectedHit = useMemo(() => {
     if (!draft || !selection) return null;
@@ -149,14 +159,28 @@ export default function ConsolidationRackPreviewPage() {
           />
         }
         workspace={
-          <div className="flex h-full min-h-0 w-full gap-2">
-            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-              <ConsolidationRackOmsPreview
-                draft={draft}
-                bay={focusedBay}
-                selection={selection}
-                onSegmentClick={selectSegment}
-              />
+          <div className="flex h-full min-h-0 w-full flex-col gap-2 lg:flex-row">
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden">
+              {focusedLevelCtx ? (
+                <LevelSegmentConfigTable
+                  draft={draft}
+                  bay={focusedLevelCtx.bay}
+                  level={focusedLevelCtx.level}
+                  readOnly
+                  structureLocked
+                  selection={selection}
+                  onChange={() => {}}
+                  onSelectSegment={selectSegment}
+                />
+              ) : null}
+              <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+                <ConsolidationRackOmsPreview
+                  draft={draft}
+                  bay={focusedBay}
+                  selection={selection}
+                  onSegmentClick={selectSegment}
+                />
+              </div>
             </div>
             <div className="hidden w-[260px] shrink-0 lg:block">
               <ConsolidationRackSegmentEditPanel

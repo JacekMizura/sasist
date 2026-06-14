@@ -1,5 +1,14 @@
 # Current context
 
+## P5.12G — Uproszczenie konfiguracji regałów kompletacyjnych (2026-06-08)
+- Usunięto `unit_description` / pole „Opis racka” z UI; API wysyła `unit_description: null`
+- Racki auto: `Rack A`, `Rack B`, … (`bayDisplayLabel`, `reindexBays`) — bez formularza nazwy
+- **Tabela segmentów** (`LevelSegmentConfigTable`): Segment | SZ | GŁ | WYS | Nazwa — główne miejsce edycji
+- Każdy segment niezależnie (W/D/H/nazwa/pojemność); `+ Dodaj segment` / duplikuj / usuń (tylko create)
+- Układ workspace: **tabela → podgląd** → panel 260px (pojemność / podsumowanie)
+- Drzewo (`RackStructureTree`): nawigacja rack → poziom tylko; segmenty tylko w tabeli
+- Edit istniejącego regału: wymiary w tabeli, struktura zablokowana (`structureLocked`)
+
 ## P5.12F — Naprawa renderera podglądu OMS (2026-06-08)
 - Segmenty: normalizacja `widthFraction` **per poziom** (suma = 100% szerokości wiersza)
 - Renderer: CSS flex zamiast SVG viewBox (pełna szerokość kontenera, bez letterboxingu)

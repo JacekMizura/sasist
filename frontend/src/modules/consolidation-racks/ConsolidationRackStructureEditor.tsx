@@ -226,7 +226,7 @@ export default function ConsolidationRackStructureEditor({
           </button>
         ) : structureLocked ? (
           <p className="mt-2 text-[11px] text-slate-500">
-            Kliknij segment w drzewie lub podglądzie, aby edytować wymiary.
+            Wybierz poziom w drzewie — segmenty edytujesz w tabeli nad podglądem.
           </p>
         ) : null}
       </section>
