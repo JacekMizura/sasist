@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
 
 from ..models.bundle import Bundle, BundleItem
+from .bundle_operational_mode import is_stock_production, normalize_bundle_operational_mode
 from .product_cost_service import get_products_current_costs
 
 
@@ -20,11 +21,6 @@ def _safe_float(v: object) -> Optional[float]:
     except (TypeError, ValueError):
         return None
     return f if math.isfinite(f) else None
-
-
-def _normalize_fulfillment_mode(v: Optional[str]) -> str:
-    s = (v or "assembly").strip().lower()
-    return s if s in ("assembly", "manufacturing") else "assembly"
 
 
 def _bundle_vat_percent(bundle: Bundle) -> float:
@@ -71,9 +67,13 @@ def compute_bundle_pricing(
     materials_cost = round(materials_cost, 2) if has_component else None
 
     packaging_cost = round(_safe_float(getattr(bundle, "extra_cost_packaging_net", None)) or 0.0, 2)
-    fulfillment = _normalize_fulfillment_mode(getattr(bundle, "fulfillment_mode", None))
+    mode = normalize_bundle_operational_mode(
+        getattr(bundle, "bundle_fulfillment_mode", None),
+        stock_mode=getattr(bundle, "stock_mode", None),
+        fulfillment_mode=getattr(bundle, "fulfillment_mode", None),
+    )
     production_raw = _safe_float(getattr(bundle, "production_cost_net", None)) or 0.0
-    production_cost = round(production_raw, 2) if fulfillment == "manufacturing" else 0.0
+    production_cost = round(production_raw, 2) if is_stock_production(mode) else 0.0
 
     if materials_cost is None:
         total_cost = None

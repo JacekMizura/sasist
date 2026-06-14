@@ -26,10 +26,14 @@ class Bundle(Base):
     weight_kg = Column(Float, nullable=True)
     #: Galeria zdjęć, etykieta itp. (JSON).
     metadata_json = Column(Text, nullable=True)
-    #: assembly = składanie składników; manufacturing = receptura produkcyjna (BOM).
+    #: assembly / manufacturing — legacy; synced from bundle_fulfillment_mode.
     fulfillment_mode = Column(String, nullable=False, default="assembly", server_default="assembly")
-    #: virtual = stan ze składników; physical = własny stan magazynowy (via linked_product_id).
+    #: virtual / physical — legacy; synced from bundle_fulfillment_mode.
     stock_mode = Column(String, nullable=False, default="virtual", server_default="virtual")
+    #: ON_DEMAND_ASSEMBLY | STOCK_PRODUCTION — canonical operational mode (P4.11).
+    bundle_fulfillment_mode = Column(
+        String, nullable=False, default="ON_DEMAND_ASSEMBLY", server_default="ON_DEMAND_ASSEMBLY"
+    )
     #: Produkt magazynowy powiązany z zestawem (produkcja / stan fizyczny).
     linked_product_id = Column(Integer, ForeignKey("products.id", ondelete="SET NULL"), nullable=True, index=True)
     #: Archiwizacja — ukrycie z listy; pozycje z source_bundle_id zachowują odniesienie.

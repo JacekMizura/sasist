@@ -1703,6 +1703,34 @@ def ensure_bundles_operational_columns(engine: Engine) -> None:
             )
 
 
+def ensure_bundles_operational_mode_column(engine: Engine) -> None:
+    """bundle_fulfillment_mode + migrate from legacy stock_mode (P4.11)."""
+    if not _table_exists(engine, "bundles"):
+        return
+    cols = _table_column_names(engine, "bundles")
+    with engine.begin() as conn:
+        if "bundle_fulfillment_mode" not in cols:
+            conn.execute(
+                text(
+                    "ALTER TABLE bundles ADD COLUMN bundle_fulfillment_mode VARCHAR "
+                    "NOT NULL DEFAULT 'ON_DEMAND_ASSEMBLY'"
+                )
+            )
+            if "stock_mode" in cols:
+                conn.execute(
+                    text(
+                        "UPDATE bundles SET bundle_fulfillment_mode = 'STOCK_PRODUCTION' "
+                        "WHERE LOWER(COALESCE(stock_mode, '')) = 'physical'"
+                    )
+                )
+                conn.execute(
+                    text(
+                        "UPDATE bundles SET bundle_fulfillment_mode = 'ON_DEMAND_ASSEMBLY' "
+                        "WHERE LOWER(COALESCE(stock_mode, '')) != 'physical'"
+                    )
+                )
+
+
 def ensure_bundles_pricing_columns(engine: Engine) -> None:
     """extra_cost_packaging_net, production_cost_net for P4.10 bundle pricing."""
     if not _table_exists(engine, "bundles"):

@@ -24,8 +24,8 @@ export function AssemblyComponentsTable({
     <div className="space-y-4">
       {showMaxSummary && maxBundles != null ? (
         <p className="text-sm text-slate-700">
-          Maksymalnie można złożyć:{" "}
-          <span className="text-lg font-bold tabular-nums text-slate-900">{maxBundles} zest.</span>
+          Maksymalnie można skompletować:{" "}
+          <span className="text-lg font-bold tabular-nums text-slate-900">{maxBundles} zestawów</span>
         </p>
       ) : null}
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -34,8 +34,8 @@ export function AssemblyComponentsTable({
             <tr>
               <th className="px-5 py-3.5">Produkt</th>
               <th className="px-5 py-3.5 text-right">Stan</th>
-              <th className="px-5 py-3.5 text-right">Ilość</th>
-              <th className="px-5 py-3.5 text-right">Maks. liczba zestawów</th>
+              <th className="px-5 py-3.5 text-right">Ilość w zestawie</th>
+              <th className="px-5 py-3.5 text-right">Możliwych zestawów</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 text-[13px] text-slate-600">
@@ -48,7 +48,7 @@ export function AssemblyComponentsTable({
                 <tr key={r.rowKey}>
                   <td className="px-5 py-3.5 font-medium text-slate-900">{c?.name ?? `#${r.productId}`}</td>
                   <td className="px-5 py-3.5 text-right tabular-nums">{stock}</td>
-                  <td className="px-5 py-3.5 text-right tabular-nums">×{qty}</td>
+                  <td className="px-5 py-3.5 text-right tabular-nums">{qty}</td>
                   <td className="px-5 py-3.5 text-right tabular-nums font-semibold text-slate-900">{per}</td>
                 </tr>
               );

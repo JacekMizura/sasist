@@ -20,6 +20,10 @@ from ..schemas.bundle import (
     BundleUpdateBody,
 )
 from ..schemas.entity_delete import EntityBulkDeleteResult, entity_bulk_delete_result_from_service_dict
+from ..services.bundle_operational_mode import (
+    legacy_fields_for_mode,
+    normalize_bundle_operational_mode,
+)
 from ..services.bundle_pricing_service import compute_bundle_pricing, component_purchase_prices
 from ..services.delete_service import delete_bundle_transaction, delete_bundles_bulk_transaction
 
@@ -56,14 +60,35 @@ def _compute_calculated_stock(items: List[BundleItem], stock_map: Dict[int, int]
     return min(parts) if parts else None
 
 
-def _normalize_fulfillment_mode(v: Optional[str]) -> str:
-    s = (v or "assembly").strip().lower()
-    return s if s in ("assembly", "manufacturing") else "assembly"
+def _operational_mode_from_bundle(b: Bundle) -> str:
+    raw = getattr(b, "bundle_fulfillment_mode", None)
+    return normalize_bundle_operational_mode(
+        str(raw) if raw is not None else None,
+        stock_mode=getattr(b, "stock_mode", None),
+        fulfillment_mode=getattr(b, "fulfillment_mode", None),
+    )
 
 
-def _normalize_stock_mode(v: Optional[str]) -> str:
-    s = (v or "virtual").strip().lower()
-    return s if s in ("physical", "virtual") else "virtual"
+def _resolve_operational_mode_from_body(body) -> str:
+    explicit = getattr(body, "bundle_fulfillment_mode", None)
+    if explicit:
+        return normalize_bundle_operational_mode(
+            str(explicit),
+            stock_mode=getattr(body, "stock_mode", None),
+            fulfillment_mode=getattr(body, "fulfillment_mode", None),
+        )
+    return normalize_bundle_operational_mode(
+        None,
+        stock_mode=getattr(body, "stock_mode", None),
+        fulfillment_mode=getattr(body, "fulfillment_mode", None),
+    )
+
+
+def _apply_operational_mode(bundle: Bundle, mode: str) -> None:
+    stock_mode, fulfillment_mode = legacy_fields_for_mode(mode)
+    bundle.bundle_fulfillment_mode = mode
+    bundle.stock_mode = stock_mode
+    bundle.fulfillment_mode = fulfillment_mode
 
 
 def _serialize_bundle(db: Session, b: Bundle, stock_map: Dict[int, int]) -> BundleRead:
@@ -95,13 +120,13 @@ def _serialize_bundle(db: Session, b: Bundle, stock_map: Dict[int, int]) -> Bund
     img = (getattr(b, "image_url", None) or "").strip() or None
     meta_raw = getattr(b, "metadata_json", None)
     meta_s = str(meta_raw).strip() if meta_raw is not None and str(meta_raw).strip() else None
-    fulfillment_mode = _normalize_fulfillment_mode(getattr(b, "fulfillment_mode", None))
-    stock_mode = _normalize_stock_mode(getattr(b, "stock_mode", None))
+    operational_mode = _operational_mode_from_bundle(b)
+    stock_mode, fulfillment_mode = legacy_fields_for_mode(operational_mode)
     linked_pid = getattr(b, "linked_product_id", None)
     linked_pid_int = int(linked_pid) if linked_pid is not None else None
     physical_stock = (
         int(stock_map.get(linked_pid_int, 0))
-        if linked_pid_int is not None and stock_mode == "physical"
+        if linked_pid_int is not None and operational_mode == "STOCK_PRODUCTION"
         else None
     )
     packaging_stored = float(getattr(b, "extra_cost_packaging_net", 0) or 0)
@@ -131,6 +156,7 @@ def _serialize_bundle(db: Session, b: Bundle, stock_map: Dict[int, int]) -> Bund
         height_mm=float(b.height_mm) if getattr(b, "height_mm", None) is not None else None,
         weight_kg=float(b.weight_kg) if getattr(b, "weight_kg", None) is not None else None,
         metadata_json=meta_s,
+        bundle_fulfillment_mode=operational_mode,
         fulfillment_mode=fulfillment_mode,
         stock_mode=stock_mode,
         linked_product_id=linked_pid_int,
@@ -312,6 +338,7 @@ def create_bundle(body: BundleCreateBody, db: Session = Depends(get_db)):
     _validate_bundle_items(db, body.tenant_id, body.items)
     img = (body.image_url or "").strip() or None if body.image_url is not None else None
     meta = (body.metadata_json or "").strip() or None if body.metadata_json is not None else None
+    operational_mode = _resolve_operational_mode_from_body(body)
     b = Bundle(
         tenant_id=body.tenant_id,
         name=body.name.strip(),
@@ -327,10 +354,9 @@ def create_bundle(body: BundleCreateBody, db: Session = Depends(get_db)):
         height_mm=body.height_mm,
         weight_kg=body.weight_kg,
         metadata_json=meta,
-        fulfillment_mode=_normalize_fulfillment_mode(body.fulfillment_mode),
-        stock_mode=_normalize_stock_mode(body.stock_mode),
         linked_product_id=int(body.linked_product_id) if body.linked_product_id else None,
     )
+    _apply_operational_mode(b, operational_mode)
     db.add(b)
     db.flush()
     for it in body.items:
@@ -372,6 +398,7 @@ def update_bundle(
     if not body.items:
         raise HTTPException(status_code=400, detail="Bundle must have at least one component")
     _validate_bundle_items(db, tenant_id, body.items)
+    operational_mode = _resolve_operational_mode_from_body(body)
     b.name = body.name.strip()
     b.sku = (body.sku or "").strip() or None
     b.ean = (body.ean or "").strip() or None
@@ -387,8 +414,7 @@ def update_bundle(
     b.weight_kg = body.weight_kg
     if body.metadata_json is not None:
         b.metadata_json = (body.metadata_json or "").strip() or None
-    b.fulfillment_mode = _normalize_fulfillment_mode(body.fulfillment_mode)
-    b.stock_mode = _normalize_stock_mode(body.stock_mode)
+    _apply_operational_mode(b, operational_mode)
     b.linked_product_id = int(body.linked_product_id) if body.linked_product_id else None
     db.query(BundleItem).filter(BundleItem.bundle_id == b.id).delete(synchronize_session=False)
     for it in body.items:

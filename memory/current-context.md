@@ -1,5 +1,16 @@
 # Current context
 
+## P4.11 — Typ realizacji zestawu (operacyjna terminologia) (2026-06-08)
+- Usunięto „Zestaw wirtualny / fizyczny” — język operacyjny:
+  - **ON_DEMAND_ASSEMBLY** — Kompletowany na zamówienie
+  - **STOCK_PRODUCTION** — Produkowany / konfekcjonowany na magazyn
+- Kolumna DB + API: `bundle_fulfillment_mode`; migracja z `stock_mode` (virtual→ON_DEMAND, physical→STOCK)
+- Legacy `stock_mode` / `fulfillment_mode` synchronizowane w backendzie (nie w UI)
+- **`BundleFulfillmentTypeSection`** — radio „Typ realizacji zestawu” w Podstawowych
+- Magazyn ON_DEMAND: tylko dostępność kompletacji + tabela składników
+- Magazyn STOCK: **`BundleStockProductionWarehousePanel`** (jak produkt, via `linked_product_id`)
+- Zakładka Produkcja tylko dla STOCK_PRODUCTION → `ProductManufacturingPanel`
+
 ## P4.10 — Ceny zestawów (pełna obsługa handlowa) (2026-06-08)
 - Zakładka **Ceny** (Tag, po Podstawowych — jak produkt)
 - **`EntityPricingPanel`** + **`entityPricing.ts`** — wspólna logika UI/kalkulacji (produkt: koszt bezpośredni; zestaw: ze składników)

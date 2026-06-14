@@ -40,7 +40,10 @@ export type BundleRead = {
   height_mm?: number | null;
   weight_kg?: number | null;
   metadata_json?: string | null;
+  bundle_fulfillment_mode?: "ON_DEMAND_ASSEMBLY" | "STOCK_PRODUCTION" | string;
+  /** @deprecated legacy — use bundle_fulfillment_mode */
   fulfillment_mode?: "assembly" | "manufacturing" | string;
+  /** @deprecated legacy — use bundle_fulfillment_mode */
   stock_mode?: "physical" | "virtual" | string;
   linked_product_id?: number | null;
   physical_stock?: number | null;
@@ -70,6 +73,7 @@ export type BundleCreatePayload = {
   height_mm?: number | null;
   weight_kg?: number | null;
   metadata_json?: string | null;
+  bundle_fulfillment_mode?: "ON_DEMAND_ASSEMBLY" | "STOCK_PRODUCTION";
   fulfillment_mode?: "assembly" | "manufacturing";
   stock_mode?: "physical" | "virtual";
   linked_product_id?: number | null;
@@ -90,6 +94,7 @@ export type BundleUpdatePayload = {
   height_mm?: number | null;
   weight_kg?: number | null;
   metadata_json?: string | null;
+  bundle_fulfillment_mode?: "ON_DEMAND_ASSEMBLY" | "STOCK_PRODUCTION";
   fulfillment_mode?: "assembly" | "manufacturing";
   stock_mode?: "physical" | "virtual";
   linked_product_id?: number | null;

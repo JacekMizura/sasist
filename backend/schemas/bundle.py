@@ -2,6 +2,8 @@ from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
+BundleOperationalMode = Literal["ON_DEMAND_ASSEMBLY", "STOCK_PRODUCTION"]
+# Legacy — synced internally; do not use in new UI.
 BundleFulfillmentMode = Literal["assembly", "manufacturing"]
 BundleStockMode = Literal["physical", "virtual"]
 
@@ -59,6 +61,7 @@ class BundleRead(BaseModel):
     height_mm: Optional[float] = None
     weight_kg: Optional[float] = None
     metadata_json: Optional[str] = None
+    bundle_fulfillment_mode: BundleOperationalMode = "ON_DEMAND_ASSEMBLY"
     fulfillment_mode: BundleFulfillmentMode = "assembly"
     stock_mode: BundleStockMode = "virtual"
     linked_product_id: Optional[int] = None
@@ -93,6 +96,7 @@ class BundleCreateBody(BaseModel):
     height_mm: Optional[float] = None
     weight_kg: Optional[float] = None
     metadata_json: Optional[str] = None
+    bundle_fulfillment_mode: BundleOperationalMode = "ON_DEMAND_ASSEMBLY"
     fulfillment_mode: BundleFulfillmentMode = "assembly"
     stock_mode: BundleStockMode = "virtual"
     linked_product_id: Optional[int] = Field(None, ge=1)
@@ -121,6 +125,7 @@ class BundleUpdateBody(BaseModel):
     height_mm: Optional[float] = None
     weight_kg: Optional[float] = None
     metadata_json: Optional[str] = None
+    bundle_fulfillment_mode: BundleOperationalMode = "ON_DEMAND_ASSEMBLY"
     fulfillment_mode: BundleFulfillmentMode = "assembly"
     stock_mode: BundleStockMode = "virtual"
     linked_product_id: Optional[int] = Field(None, ge=1)

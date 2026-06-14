@@ -27,13 +27,16 @@ const BUNDLE_TABS_BASE: { id: Exclude<BundleEditTabId, "production">; label: str
   { id: "labelSheet", label: "Etykieta", icon: Printer },
 ];
 
-/** Zakładki edycji zestawu — Produkcja jak u produktu (tylko istniejący zestaw). */
-export function buildBundleEditTabs(isNew: boolean): { id: BundleEditTabId; label: string; icon: LucideIcon }[] {
+/** Zakładki edycji zestawu — Produkcja tylko dla STOCK_PRODUCTION (istniejący zestaw). */
+export function buildBundleEditTabs(
+  isNew: boolean,
+  operationalMode?: "ON_DEMAND_ASSEMBLY" | "STOCK_PRODUCTION",
+): { id: BundleEditTabId; label: string; icon: LucideIcon }[] {
   if (isNew) return BUNDLE_TABS_BASE;
   const tabs: { id: BundleEditTabId; label: string; icon: LucideIcon }[] = [];
   for (const t of BUNDLE_TABS_BASE) {
     tabs.push(t);
-    if (t.id === "warehouse") {
+    if (t.id === "warehouse" && operationalMode === "STOCK_PRODUCTION") {
       tabs.push({ id: "production", label: "Produkcja", icon: Factory });
     }
   }

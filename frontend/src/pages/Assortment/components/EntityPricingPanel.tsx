@@ -1,7 +1,8 @@
 import { AlertTriangle } from "lucide-react";
 
 import { productLikeFieldLabelClass, productLikeInputClass } from "../../../components/catalog";
-import type { BundleFulfillmentMode } from "../../Production/bundleOperationalTypes";
+import type { BundleOperationalMode } from "../../Production/bundleOperationalTypes";
+import { isStockProduction } from "../../Production/bundleOperationalTypes";
 import type { BundleComponentRow, ProductSummary } from "../bundleEditTypes";
 import {
   buildPricingAlerts,
@@ -17,7 +18,7 @@ import {
 
 export type EntityPricingPanelProps = {
   entityType: "bundle";
-  fulfillmentMode: BundleFulfillmentMode;
+  operationalMode: BundleOperationalMode;
   salePrice: number | "";
   onSalePriceChange: (v: number | "") => void;
   salePriceEntryMode: PriceEntryMode;
@@ -58,7 +59,7 @@ export function EntityPricingPanel(props: EntityPricingPanelProps) {
     vatRate: props.vatRate,
     packagingCostNet: props.packagingCostNet,
     productionCostNet: props.productionCostNet,
-    fulfillmentMode: props.fulfillmentMode,
+    fulfillmentMode: props.operationalMode,
   });
 
   const alerts = buildPricingAlerts({
@@ -128,7 +129,7 @@ export function EntityPricingPanel(props: EntityPricingPanelProps) {
                   className={inputClass}
                 />
               </div>
-              {props.fulfillmentMode === "manufacturing" ? (
+              {isStockProduction(props.operationalMode) ? (
                 <div>
                   <label className={fieldLabel}>Koszt produkcji (netto)</label>
                   <input

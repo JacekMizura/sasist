@@ -142,7 +142,7 @@ export function resolveBundlePricingDisplay(args: {
   vatRate?: string;
   packagingCostNet?: number | "" | null;
   productionCostNet?: number | "" | null;
-  fulfillmentMode?: "assembly" | "manufacturing";
+  fulfillmentMode?: "ON_DEMAND_ASSEMBLY" | "STOCK_PRODUCTION";
 }): BundlePricingDisplay {
   const { percent: vatPercent, fromDefault } = (() => {
     const raw = (args.vatRate ?? "").trim().replace(",", ".");
@@ -175,7 +175,7 @@ export function resolveBundlePricingDisplay(args: {
   const materialsCost = hasComponent ? Math.round(materialsSum * 100) / 100 : null;
   const packagingCost = finiteNum(args.packagingCostNet) ?? 0;
   const productionRaw = finiteNum(args.productionCostNet) ?? 0;
-  const productionCost = args.fulfillmentMode === "manufacturing" ? productionRaw : 0;
+  const productionCost = args.fulfillmentMode === "STOCK_PRODUCTION" ? productionRaw : 0;
   const totalCost =
     materialsCost != null ? Math.round((materialsCost + packagingCost + productionCost) * 100) / 100 : null;
 

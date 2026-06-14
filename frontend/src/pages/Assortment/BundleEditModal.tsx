@@ -26,6 +26,7 @@ import type { ProductImageEntry } from "../../types/productLabel";
 import { BundleLabelTab } from "./BundleLabelTab";
 import { BundleProductsTab } from "./BundleProductsTab";
 import { BundleWarehouseTab } from "./BundleWarehouseTab";
+import { BundleFulfillmentTypeSection } from "./components/BundleFulfillmentTypeSection";
 import { EntityPricingPanel } from "./components/EntityPricingPanel";
 import { EntityProductionPanel } from "../Production/EntityProductionPanel";
 import {
@@ -37,12 +38,9 @@ import {
   type PriceHistoryEntry,
 } from "../../utils/entityPricing";
 import {
-  BUNDLE_FULFILLMENT_LABEL,
-  BUNDLE_TYPE_HEADER_LABEL,
-  normalizeFulfillmentMode,
-  normalizeStockMode,
-  type BundleFulfillmentMode,
-  type BundleStockMode,
+  BUNDLE_OPERATIONAL_MODE_SHORT,
+  normalizeBundleOperationalMode,
+  type BundleOperationalMode,
 } from "../Production/bundleOperationalTypes";
 import {
   buildBundleEditTabs,
@@ -141,7 +139,13 @@ export function BundleEditModal({
   const headerGalleryInputRef = useRef<HTMLInputElement>(null);
 
   const tabFromUrl = searchParams.get("tab") as BundleEditTabId | null;
-  const bundleTabs = useMemo(() => buildBundleEditTabs(isNew), [isNew]);
+  const bundleTabs = useMemo(() => buildBundleEditTabs(isNew, operationalMode), [isNew, operationalMode]);
+
+  useEffect(() => {
+    if (activeTab === "production" && operationalMode !== "STOCK_PRODUCTION") {
+      setTab("warehouse");
+    }
+  }, [activeTab, operationalMode, setTab]);
   const validTab = bundleTabs.some((t) => t.id === tabFromUrl) ? tabFromUrl! : null;
   const [activeTab, setActiveTab] = useState<BundleEditTabId>(initialTab ?? validTab ?? "basic");
 
@@ -165,8 +169,7 @@ export function BundleEditModal({
   const [heightMm, setHeightMm] = useState<number | "">("");
   const [weightKg, setWeightKg] = useState<number | "">("");
   const [metadataJson, setMetadataJson] = useState<string | null>(null);
-  const [fulfillmentMode, setFulfillmentMode] = useState<BundleFulfillmentMode>("assembly");
-  const [stockMode, setStockMode] = useState<BundleStockMode>("virtual");
+  const [operationalMode, setOperationalMode] = useState<BundleOperationalMode>("ON_DEMAND_ASSEMBLY");
   const [linkedProductId, setLinkedProductId] = useState<number | null>(null);
   const [physicalStock, setPhysicalStock] = useState<number | null>(null);
 
@@ -278,8 +281,7 @@ export function BundleEditModal({
     setHeightMm("");
     setWeightKg("");
     setMetadataJson(null);
-    setFulfillmentMode("assembly");
-    setStockMode("virtual");
+    setOperationalMode("ON_DEMAND_ASSEMBLY");
     setLinkedProductId(null);
     setPhysicalStock(null);
     resetGallery([]);
@@ -324,8 +326,12 @@ export function BundleEditModal({
         setHeightMm(parseDim(b.height_mm));
         setWeightKg(parseDim(b.weight_kg));
         setMetadataJson(b.metadata_json ?? null);
-        setFulfillmentMode(normalizeFulfillmentMode(b.fulfillment_mode));
-        setStockMode(normalizeStockMode(b.stock_mode));
+        setOperationalMode(
+          normalizeBundleOperationalMode(b.bundle_fulfillment_mode, {
+            stock_mode: b.stock_mode,
+            fulfillment_mode: b.fulfillment_mode,
+          }),
+        );
         setLinkedProductId(b.linked_product_id ?? null);
         setPhysicalStock(b.physical_stock ?? null);
 
@@ -465,9 +471,9 @@ export function BundleEditModal({
         vatRate,
         packagingCostNet,
         productionCostNet,
-        fulfillmentMode,
+        fulfillmentMode: operationalMode,
       }),
-    [rows, purchaseByProductId, salePrice, salePriceEntryMode, vatRate, packagingCostNet, productionCostNet, fulfillmentMode],
+    [rows, purchaseByProductId, salePrice, salePriceEntryMode, vatRate, packagingCostNet, productionCostNet, operationalMode],
   );
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -515,8 +521,7 @@ export function BundleEditModal({
         height_mm: dim(heightMm),
         weight_kg: dim(weightKg),
         metadata_json: metaStr ?? null,
-        fulfillment_mode: fulfillmentMode,
-        stock_mode: stockMode,
+        bundle_fulfillment_mode: operationalMode,
         linked_product_id: linkedProductId,
         items,
       };
@@ -556,19 +561,14 @@ export function BundleEditModal({
 
   const statCards: ProductLikeStatCard[] = [
     {
-      label: stockMode === "physical" ? "Stan magazynu" : "Dostępność",
+      label: isStockProduction(operationalMode) ? "Stan magazynu" : "Dostępność kompletacji",
       value:
-        stockMode === "physical" && physicalStock != null
+        isStockProduction(operationalMode) && physicalStock != null
           ? `${physicalStock} szt.`
           : bundleAvailability != null
             ? `${bundleAvailability} szt.`
             : "—",
-      subValue:
-        stockMode === "physical"
-          ? "Zestaw fizyczny"
-          : fulfillmentMode === "assembly"
-            ? "Kompletacja · ze składników"
-            : "Ze składników",
+      subValue: BUNDLE_OPERATIONAL_MODE_SHORT[operationalMode],
       variant: "blue",
     },
     {
@@ -653,14 +653,9 @@ export function BundleEditModal({
       title={name.trim() || (isNew ? "Nowy zestaw" : "—")}
       titleBadge={
         !isNew ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full bg-violet-100 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-violet-900">
-              {BUNDLE_TYPE_HEADER_LABEL[stockMode]}
-            </span>
-            <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-700">
-              {BUNDLE_FULFILLMENT_LABEL[fulfillmentMode]}
-            </span>
-          </div>
+          <span className="rounded-full bg-violet-100 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-violet-900">
+            {BUNDLE_OPERATIONAL_MODE_SHORT[operationalMode]}
+          </span>
         ) : undefined
       }
       imageUrl={headerPreviewUrl}
@@ -691,7 +686,14 @@ export function BundleEditModal({
       }
     >
       {activeTab === "basic" && (
-        <div className={productLikeThreeColClass}>
+        <div className="space-y-8">
+          <BundleFulfillmentTypeSection
+            mode={operationalMode}
+            onModeChange={setOperationalMode}
+            linkedProductId={linkedProductId}
+            onLinkedProductIdChange={setLinkedProductId}
+          />
+          <div className={productLikeThreeColClass}>
           <div className={productLikeSideColClass}>
             <ProductLikeSection title="Informacje ogólne">
               <div className="space-y-5">
@@ -798,13 +800,14 @@ export function BundleEditModal({
               </div>
             </ProductLikeSection>
           </div>
+          </div>
         </div>
       )}
 
       {activeTab === "prices" && (
         <EntityPricingPanel
           entityType="bundle"
-          fulfillmentMode={fulfillmentMode}
+          operationalMode={operationalMode}
           salePrice={salePrice}
           onSalePriceChange={setSalePrice}
           salePriceEntryMode={salePriceEntryMode}
@@ -835,12 +838,12 @@ export function BundleEditModal({
 
       {activeTab === "warehouse" && (
         <BundleWarehouseTab
+          tenantId={tenantId}
           rows={rows}
           productCache={productCache}
           bundleAvailability={bundleAvailability}
-          fulfillmentMode={fulfillmentMode}
-          stockMode={stockMode}
-          physicalStock={physicalStock}
+          operationalMode={operationalMode}
+          linkedProductId={linkedProductId}
         />
       )}
 
@@ -850,15 +853,8 @@ export function BundleEditModal({
           tenantId={tenantId}
           isNew={isNew}
           bundleName={name.trim() || "Zestaw"}
-          fulfillmentMode={fulfillmentMode}
-          stockMode={stockMode}
+          operationalMode={operationalMode}
           linkedProductId={linkedProductId}
-          onFulfillmentModeChange={setFulfillmentMode}
-          onStockModeChange={setStockMode}
-          onLinkedProductIdChange={setLinkedProductId}
-          rows={rows}
-          productCache={productCache}
-          bundleAvailability={bundleAvailability}
         />
       )}
 
