@@ -1,5 +1,16 @@
 # Current context
 
+## P4.10 — Ceny zestawów (pełna obsługa handlowa) (2026-06-08)
+- Zakładka **Ceny** (Tag, po Podstawowych — jak produkt)
+- **`EntityPricingPanel`** + **`entityPricing.ts`** — wspólna logika UI/kalkulacji (produkt: koszt bezpośredni; zestaw: ze składników)
+- Koszt materiałów: Σ(qty × `product_purchase_price` / `product_cost_service`)
+- Pola DB: `extra_cost_packaging_net`, `production_cost_net`; VAT w `metadata_json.bundle_ui.vat_rate`
+- API `BundleRead`: `purchase_cost`, `materials_cost`, `packaging_cost`, `production_cost`, `total_cost`, `selling_price_net/gross`, `margin_value/percent`
+- Backend: **`bundle_pricing_service.py`**, migracja `ensure_bundles_pricing_columns`
+- Header kafelki: Koszt, Cena netto (+ brutto), Marża (live recalc bez zapisu)
+- Ostrzeżenia: sprzedaż poniżej kosztu; marża poniżej 10% (domyślna minimalna)
+- Historia cen w `metadata_json.price_history` (wpis przy zapisie zmiany ceny)
+
 ## P4.9 — Produkcja i kompletacja zestawów (2026-06-08)
 - Zakładka **Produkcja** w zestawie (Factory, po Magazynie — jak produkt)
 - **`EntityProductionPanel`** — wspólny panel: produkt → `ProductManufacturingPanel`; zestaw → tryb + zawartość

@@ -10,6 +10,7 @@ export type BundleItemRead = {
   product_sku?: string | null;
   /** Physical stock (inventory sum) for tooltip / breakdown */
   product_stock?: number | null;
+  product_purchase_price?: number | null;
   /** Import CSV — JSON z dodatkowymi polami składnika */
   metadata_json?: string | null;
 };
@@ -21,6 +22,17 @@ export type BundleRead = {
   sku?: string | null;
   ean?: string | null;
   sale_price?: number | null;
+  extra_cost_packaging_net?: number | null;
+  production_cost_net?: number | null;
+  purchase_cost?: number | null;
+  materials_cost?: number | null;
+  packaging_cost?: number | null;
+  production_cost?: number | null;
+  total_cost?: number | null;
+  selling_price_net?: number | null;
+  selling_price_gross?: number | null;
+  margin_value?: number | null;
+  margin_percent?: number | null;
   active: boolean;
   image_url?: string | null;
   length_mm?: number | null;
@@ -49,6 +61,8 @@ export type BundleCreatePayload = {
   sku?: string | null;
   ean?: string | null;
   sale_price?: number | null;
+  extra_cost_packaging_net?: number | null;
+  production_cost_net?: number | null;
   active?: boolean;
   image_url?: string | null;
   length_mm?: number | null;
@@ -67,6 +81,8 @@ export type BundleUpdatePayload = {
   sku?: string | null;
   ean?: string | null;
   sale_price?: number | null;
+  extra_cost_packaging_net?: number | null;
+  production_cost_net?: number | null;
   active?: boolean;
   image_url?: string | null;
   length_mm?: number | null;

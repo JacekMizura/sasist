@@ -15,6 +15,8 @@ class BundleItemRead(BaseModel):
     product_sku: Optional[str] = None
     """SUM(inventory.quantity) for this product in tenant; for UI tooltips / breakdown."""
     product_stock: Optional[int] = None
+    """Koszt zakupu netto składnika (z product_cost_service)."""
+    product_purchase_price: Optional[float] = None
     #: Import CSV — dodatkowe pola składnika (JSON).
     metadata_json: Optional[str] = None
 
@@ -39,6 +41,17 @@ class BundleRead(BaseModel):
     sku: Optional[str] = None
     ean: Optional[str] = None
     sale_price: Optional[float] = None
+    extra_cost_packaging_net: float = 0.0
+    production_cost_net: float = 0.0
+    purchase_cost: Optional[float] = None
+    materials_cost: Optional[float] = None
+    packaging_cost: Optional[float] = None
+    production_cost: Optional[float] = None
+    total_cost: Optional[float] = None
+    selling_price_net: Optional[float] = None
+    selling_price_gross: Optional[float] = None
+    margin_value: Optional[float] = None
+    margin_percent: Optional[float] = None
     active: bool = True
     image_url: Optional[str] = None
     length_mm: Optional[float] = None
@@ -71,6 +84,8 @@ class BundleCreateBody(BaseModel):
     sku: Optional[str] = None
     ean: Optional[str] = None
     sale_price: Optional[float] = None
+    extra_cost_packaging_net: float = 0.0
+    production_cost_net: float = 0.0
     active: bool = True
     image_url: Optional[str] = None
     length_mm: Optional[float] = None
@@ -97,6 +112,8 @@ class BundleUpdateBody(BaseModel):
     sku: Optional[str] = None
     ean: Optional[str] = None
     sale_price: Optional[float] = None
+    extra_cost_packaging_net: float = 0.0
+    production_cost_net: float = 0.0
     active: bool = True
     image_url: Optional[str] = None
     length_mm: Optional[float] = None

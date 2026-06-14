@@ -1,6 +1,6 @@
 """Virtual product bundles: composed of real products; no inventory rows for bundles."""
 
-from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.orm import relationship
 
 from ..database import Base
@@ -15,6 +15,8 @@ class Bundle(Base):
     sku = Column(String, nullable=True, index=True)
     ean = Column(String, nullable=True, index=True)
     sale_price = Column(Float, nullable=True)
+    extra_cost_packaging_net = Column(Numeric(12, 2), nullable=False, default=0)
+    production_cost_net = Column(Numeric(12, 2), nullable=False, default=0)
     active = Column(Boolean, nullable=False, default=True)
     image_url = Column(String, nullable=True)
     #: Wymiary gotowego opakowania zestawu (mm / kg) — nie składników.

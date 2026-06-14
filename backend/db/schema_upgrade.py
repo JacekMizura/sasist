@@ -1703,6 +1703,22 @@ def ensure_bundles_operational_columns(engine: Engine) -> None:
             )
 
 
+def ensure_bundles_pricing_columns(engine: Engine) -> None:
+    """extra_cost_packaging_net, production_cost_net for P4.10 bundle pricing."""
+    if not _table_exists(engine, "bundles"):
+        return
+    cols = _table_column_names(engine, "bundles")
+    with engine.begin() as conn:
+        if "extra_cost_packaging_net" not in cols:
+            conn.execute(
+                text("ALTER TABLE bundles ADD COLUMN extra_cost_packaging_net NUMERIC(12,2) NOT NULL DEFAULT 0")
+            )
+        if "production_cost_net" not in cols:
+            conn.execute(
+                text("ALTER TABLE bundles ADD COLUMN production_cost_net NUMERIC(12,2) NOT NULL DEFAULT 0")
+            )
+
+
 def ensure_order_items_packing_quantity_packed_column(engine: Engine) -> None:
     """WMS pakowanie: własna ilość spakowana per pozycja (bez Pick / zbierania)."""
     cols = _cols(engine, "order_items")

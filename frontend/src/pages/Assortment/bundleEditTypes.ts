@@ -1,10 +1,11 @@
 import type { LucideIcon } from "lucide-react";
-import { Factory, History, ImageIcon, LayoutList, Link2, Package, Printer, ScrollText, Warehouse } from "lucide-react";
+import { Factory, History, ImageIcon, LayoutList, Link2, Package, Printer, ScrollText, Tag, Warehouse } from "lucide-react";
 
 import type { BundleItemWrite } from "../../api/bundlesApi";
 
 export type BundleEditTabId =
   | "basic"
+  | "prices"
   | "products"
   | "warehouse"
   | "production"
@@ -16,6 +17,7 @@ export type BundleEditTabId =
 
 const BUNDLE_TABS_BASE: { id: Exclude<BundleEditTabId, "production">; label: string; icon: LucideIcon }[] = [
   { id: "basic", label: "Podstawowe", icon: LayoutList },
+  { id: "prices", label: "Ceny", icon: Tag },
   { id: "products", label: "Produkty", icon: Package },
   { id: "warehouse", label: "Magazyn", icon: Warehouse },
   { id: "images", label: "Zdjęcia", icon: ImageIcon },
@@ -49,6 +51,7 @@ export type CatalogProduct = {
   sku?: string | null;
   stock_quantity?: number;
   image_url?: string | null;
+  purchase_price?: number | null;
 };
 
 export type ProductSummary = {
@@ -57,6 +60,7 @@ export type ProductSummary = {
   ean: string | null;
   stock: number;
   imageUrl: string | null;
+  purchasePrice: number | null;
 };
 
 export type BundleComponentRow = {

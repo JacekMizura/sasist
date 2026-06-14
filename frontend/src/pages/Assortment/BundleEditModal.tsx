@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { History, ImageUp, Link2, MoreHorizontal, ScrollText } from "lucide-react";
+import { History, ImageUp, Link2, MoreHorizontal, ScrollText, TrendingUp } from "lucide-react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import {
@@ -26,7 +26,16 @@ import type { ProductImageEntry } from "../../types/productLabel";
 import { BundleLabelTab } from "./BundleLabelTab";
 import { BundleProductsTab } from "./BundleProductsTab";
 import { BundleWarehouseTab } from "./BundleWarehouseTab";
+import { EntityPricingPanel } from "./components/EntityPricingPanel";
 import { EntityProductionPanel } from "../Production/EntityProductionPanel";
+import {
+  formatMoneyZlDisplay,
+  parsePriceHistory,
+  parseVatRateFromMetadata,
+  resolveBundlePricingDisplay,
+  type PriceEntryMode,
+  type PriceHistoryEntry,
+} from "../../utils/entityPricing";
 import {
   BUNDLE_FULFILLMENT_LABEL,
   BUNDLE_TYPE_HEADER_LABEL,
@@ -39,7 +48,6 @@ import {
   buildBundleEditTabs,
   emptyRow,
   formatBundleItemImportMeta,
-  formatMoneyZl,
   normalizeComponentsForSave,
   type BundleComponentRow,
   type BundleEditTabId,
@@ -64,6 +72,11 @@ type BundleEditModalProps = {
 function buildBundleMetadataJson(
   existing: string | null | undefined,
   images: ProductImageEntry[],
+  opts?: {
+    vatRate?: string;
+    priceHistory?: PriceHistoryEntry[];
+    appendPriceChange?: { saleNet: number | null; saleGross: number | null };
+  },
 ): string | undefined {
   let root: Record<string, unknown> = {};
   if (existing?.trim()) {
@@ -79,6 +92,30 @@ function buildBundleMetadataJson(
   const imgs = ensureSingleMainImage(images);
   if (imgs.length) root.product_images = imgs;
   else delete root.product_images;
+
+  if (opts?.vatRate != null && opts.vatRate.trim() !== "") {
+    const ui = root.bundle_ui;
+    const uiObj =
+      ui && typeof ui === "object" && !Array.isArray(ui) ? { ...(ui as Record<string, unknown>) } : {};
+    uiObj.vat_rate = opts.vatRate.trim();
+    root.bundle_ui = uiObj;
+  }
+
+  let history = opts?.priceHistory ?? parsePriceHistory(existing);
+  if (opts?.appendPriceChange) {
+    history = [
+      ...history,
+      {
+        at: new Date().toISOString(),
+        sale_net: opts.appendPriceChange.saleNet,
+        sale_gross: opts.appendPriceChange.saleGross,
+        note: "Zmiana ceny sprzedaży",
+      },
+    ].slice(-50);
+  }
+  if (history.length) root.price_history = history;
+  else delete root.price_history;
+
   return Object.keys(root).length ? JSON.stringify(root) : undefined;
 }
 
@@ -117,6 +154,12 @@ export function BundleEditModal({
   const [ean, setEan] = useState("");
   const [active, setActive] = useState(true);
   const [salePrice, setSalePrice] = useState<number | "">("");
+  const [packagingCostNet, setPackagingCostNet] = useState<number | "">("");
+  const [productionCostNet, setProductionCostNet] = useState<number | "">("");
+  const [vatRate, setVatRate] = useState("");
+  const [salePriceEntryMode, setSalePriceEntryMode] = useState<PriceEntryMode>("net");
+  const [priceHistory, setPriceHistory] = useState<PriceHistoryEntry[]>([]);
+  const loadedSalePriceRef = useRef<number | null>(null);
   const [lengthMm, setLengthMm] = useState<number | "">("");
   const [widthMm, setWidthMm] = useState<number | "">("");
   const [heightMm, setHeightMm] = useState<number | "">("");
@@ -160,8 +203,10 @@ export function BundleEditModal({
     [isPage, setSearchParams],
   );
 
-  const mergeProductIntoCache = useCallback((p: CatalogProduct) => {
+  const mergeProductIntoCache = useCallback((p: CatalogProduct, purchaseOverride?: number | null) => {
     const stock = p.stock_quantity != null && Number.isFinite(Number(p.stock_quantity)) ? Number(p.stock_quantity) : 0;
+    const purchaseFromProduct =
+      p.purchase_price != null && Number.isFinite(Number(p.purchase_price)) ? Number(p.purchase_price) : null;
     setProductCache((prev) => ({
       ...prev,
       [p.id]: {
@@ -170,6 +215,7 @@ export function BundleEditModal({
         ean: p.ean != null ? String(p.ean) : null,
         stock,
         imageUrl: typeof p.image_url === "string" && p.image_url.trim() ? p.image_url.trim() : null,
+        purchasePrice: purchaseOverride ?? purchaseFromProduct ?? prev[p.id]?.purchasePrice ?? null,
       },
     }));
   }, []);
@@ -183,15 +229,26 @@ export function BundleEditModal({
             const { data } = await api.get<Record<string, unknown>>(`/products/${id}/`, {
               params: { tenant_id: tenantId },
             });
-            mergeProductIntoCache({
-              id,
-              name: data.name as string | null,
-              ean: data.ean as string | null,
-              symbol: data.symbol as string | null,
-              sku: data.sku as string | null,
-              stock_quantity: data.stock_quantity != null ? Number(data.stock_quantity) : 0,
-              image_url: data.image_url as string | null,
-            });
+            const currentCost = data.current_cost as { purchase_net?: number | null } | null | undefined;
+            const purchaseNet =
+              currentCost?.purchase_net != null && Number.isFinite(Number(currentCost.purchase_net))
+                ? Number(currentCost.purchase_net)
+                : data.purchase_price != null && Number.isFinite(Number(data.purchase_price))
+                  ? Number(data.purchase_price)
+                  : null;
+            mergeProductIntoCache(
+              {
+                id,
+                name: data.name as string | null,
+                ean: data.ean as string | null,
+                symbol: data.symbol as string | null,
+                sku: data.sku as string | null,
+                stock_quantity: data.stock_quantity != null ? Number(data.stock_quantity) : 0,
+                image_url: data.image_url as string | null,
+                purchase_price: purchaseNet,
+              },
+              purchaseNet,
+            );
           } catch {
             /* keep placeholder */
           }
@@ -210,6 +267,12 @@ export function BundleEditModal({
     setEan("");
     setActive(true);
     setSalePrice("");
+    setPackagingCostNet("");
+    setProductionCostNet("");
+    setVatRate("");
+    setSalePriceEntryMode("net");
+    setPriceHistory([]);
+    loadedSalePriceRef.current = null;
     setLengthMm("");
     setWidthMm("");
     setHeightMm("");
@@ -242,6 +305,20 @@ export function BundleEditModal({
         setEan(b.ean ?? "");
         setActive(b.active);
         setSalePrice(b.sale_price != null && Number.isFinite(Number(b.sale_price)) ? Number(b.sale_price) : "");
+        loadedSalePriceRef.current =
+          b.sale_price != null && Number.isFinite(Number(b.sale_price)) ? Number(b.sale_price) : null;
+        setPackagingCostNet(
+          b.extra_cost_packaging_net != null && Number.isFinite(Number(b.extra_cost_packaging_net))
+            ? Number(b.extra_cost_packaging_net)
+            : "",
+        );
+        setProductionCostNet(
+          b.production_cost_net != null && Number.isFinite(Number(b.production_cost_net))
+            ? Number(b.production_cost_net)
+            : "",
+        );
+        setVatRate(parseVatRateFromMetadata(b.metadata_json, "bundle_ui"));
+        setPriceHistory(parsePriceHistory(b.metadata_json));
         setLengthMm(parseDim(b.length_mm));
         setWidthMm(parseDim(b.width_mm));
         setHeightMm(parseDim(b.height_mm));
@@ -279,6 +356,10 @@ export function BundleEditModal({
             ean: null,
             stock: it.product_stock ?? 0,
             imageUrl: null,
+            purchasePrice:
+              it.product_purchase_price != null && Number.isFinite(Number(it.product_purchase_price))
+                ? Number(it.product_purchase_price)
+                : null,
           };
         }
         setProductCache(seed);
@@ -360,6 +441,35 @@ export function BundleEditModal({
     setRows((prev) => prev.filter((_, j) => j !== rowIndex));
   }, []);
 
+  useEffect(() => {
+    const ids = rows.map((r) => r.productId).filter((id): id is number => id != null && id > 0);
+    if (ids.length === 0) return;
+    void prefetchProductDetails(ids);
+  }, [rows, prefetchProductDetails]);
+
+  const purchaseByProductId = useMemo(() => {
+    const out: Record<number, number | null> = {};
+    for (const [pid, summary] of Object.entries(productCache)) {
+      out[Number(pid)] = summary.purchasePrice ?? null;
+    }
+    return out;
+  }, [productCache]);
+
+  const pricingDisplay = useMemo(
+    () =>
+      resolveBundlePricingDisplay({
+        rows,
+        purchaseByProductId,
+        salePrice,
+        salePriceEntryMode,
+        vatRate,
+        packagingCostNet,
+        productionCostNet,
+        fulfillmentMode,
+      }),
+    [rows, purchaseByProductId, salePrice, salePriceEntryMode, vatRate, packagingCostNet, productionCostNet, fulfillmentMode],
+  );
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaveErr(null);
@@ -370,8 +480,23 @@ export function BundleEditModal({
       return;
     }
     const sp = salePrice === "" ? null : typeof salePrice === "number" ? salePrice : Number(salePrice);
+    const packaging =
+      packagingCostNet === "" ? 0 : typeof packagingCostNet === "number" ? packagingCostNet : Number(packagingCostNet);
+    const production =
+      productionCostNet === "" ? 0 : typeof productionCostNet === "number" ? productionCostNet : Number(productionCostNet);
+    const saleChanged =
+      !isNew &&
+      ((sp == null && loadedSalePriceRef.current != null) ||
+        (sp != null && loadedSalePriceRef.current != null && Math.abs(sp - loadedSalePriceRef.current) > 0.001) ||
+        (sp != null && loadedSalePriceRef.current == null));
     const mainImage = pickMainImageUrl(ensureSingleMainImage(galleryImages)) ?? "";
-    const metaStr = buildBundleMetadataJson(metadataJson, galleryImages);
+    const metaStr = buildBundleMetadataJson(metadataJson, galleryImages, {
+      vatRate,
+      priceHistory,
+      appendPriceChange: saleChanged
+        ? { saleNet: pricingDisplay.saleNet, saleGross: pricingDisplay.saleGross }
+        : undefined,
+    });
     const dim = (v: number | "") => (v === "" ? null : typeof v === "number" && Number.isFinite(v) ? v : null);
 
     setSaving(true);
@@ -381,6 +506,8 @@ export function BundleEditModal({
         sku: sku.trim() || null,
         ean: ean.trim() || null,
         sale_price: sp != null && Number.isFinite(sp) ? sp : null,
+        extra_cost_packaging_net: Number.isFinite(packaging) ? packaging : 0,
+        production_cost_net: Number.isFinite(production) ? production : 0,
         active,
         image_url: mainImage || null,
         length_mm: dim(lengthMm),
@@ -404,6 +531,11 @@ export function BundleEditModal({
         }
       } else {
         await updateBundle(tenantId, bundleId!, payload);
+        if (saleChanged && metaStr) {
+          setMetadataJson(metaStr);
+          setPriceHistory(parsePriceHistory(metaStr));
+          loadedSalePriceRef.current = sp;
+        }
         onSaved();
         if (!isPage) onClose();
       }
@@ -420,7 +552,6 @@ export function BundleEditModal({
 
   if (!isPage && !open) return null;
 
-  const salePriceNum = salePrice === "" ? null : typeof salePrice === "number" ? salePrice : Number(salePrice);
   const headerPreviewUrl = pickMainImageUrl(ensureSingleMainImage(galleryImages));
 
   const statCards: ProductLikeStatCard[] = [
@@ -441,14 +572,25 @@ export function BundleEditModal({
       variant: "blue",
     },
     {
-      label: "Cena",
-      value: formatMoneyZl(salePriceNum),
+      label: "Koszt",
+      value: formatMoneyZlDisplay(pricingDisplay.totalCost),
+      variant: "slate",
+    },
+    {
+      label: "Cena netto",
+      value: formatMoneyZlDisplay(pricingDisplay.saleNet, "brak ceny"),
+      subValue: `Brutto: ${formatMoneyZlDisplay(pricingDisplay.saleGross, "brak danych")}`,
       variant: "green",
     },
     {
-      label: "Status",
-      value: active ? "Aktywny" : "Nieaktywny",
-      variant: active ? "green" : "slate",
+      label: "Marża",
+      value: (
+        <span className="inline-flex items-center gap-1">
+          {pricingDisplay.marginLabel}
+          <TrendingUp className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+        </span>
+      ),
+      variant: "orange",
     },
   ];
 
@@ -576,32 +718,7 @@ export function BundleEditModal({
           </div>
 
           <div className={productLikeSideColClass}>
-            <ProductLikeSection title="Cena">
-              <div>
-                <label className={fieldLabel}>Cena sprzedaży (cały zestaw)</label>
-                <input
-                  type="number"
-                  min={0}
-                  step={0.01}
-                  value={salePrice === "" ? "" : salePrice}
-                  onChange={(e) => {
-                    const s = e.target.value.trim().replace(",", ".");
-                    if (s === "") setSalePrice("");
-                    else {
-                      const n = parseFloat(s);
-                      if (Number.isFinite(n)) setSalePrice(n);
-                    }
-                  }}
-                  className={inputClass}
-                  placeholder="Opcjonalnie"
-                />
-                <p className="mt-1 text-xs text-slate-500">
-                  Przy zamówieniu suma linii jest dopasowywana do tej wartości (proporcjonalnie do cen składowych).
-                </p>
-              </div>
-            </ProductLikeSection>
-
-            <ProductLikeSection title="Wymiary opakowania zestawu" className="mt-6">
+            <ProductLikeSection title="Wymiary opakowania zestawu">
               <p className="mb-4 text-xs text-slate-500">
                 Wymiary gotowego opakowania (kartonu) — nie składników. Używane w magazynie, pakowaniu i etykietach.
               </p>
@@ -682,6 +799,26 @@ export function BundleEditModal({
             </ProductLikeSection>
           </div>
         </div>
+      )}
+
+      {activeTab === "prices" && (
+        <EntityPricingPanel
+          entityType="bundle"
+          fulfillmentMode={fulfillmentMode}
+          salePrice={salePrice}
+          onSalePriceChange={setSalePrice}
+          salePriceEntryMode={salePriceEntryMode}
+          onSalePriceEntryModeChange={setSalePriceEntryMode}
+          vatRate={vatRate}
+          onVatRateChange={setVatRate}
+          packagingCostNet={packagingCostNet}
+          onPackagingCostChange={setPackagingCostNet}
+          productionCostNet={productionCostNet}
+          onProductionCostChange={setProductionCostNet}
+          rows={rows}
+          productCache={productCache}
+          priceHistory={priceHistory}
+        />
       )}
 
       {activeTab === "products" && (

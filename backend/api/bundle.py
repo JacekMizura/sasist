@@ -20,6 +20,7 @@ from ..schemas.bundle import (
     BundleUpdateBody,
 )
 from ..schemas.entity_delete import EntityBulkDeleteResult, entity_bulk_delete_result_from_service_dict
+from ..services.bundle_pricing_service import compute_bundle_pricing, component_purchase_prices
 from ..services.delete_service import delete_bundle_transaction, delete_bundles_bulk_transaction
 
 router = APIRouter(prefix="/bundles", tags=["Bundles"])
@@ -65,9 +66,12 @@ def _normalize_stock_mode(v: Optional[str]) -> str:
     return s if s in ("physical", "virtual") else "virtual"
 
 
-def _serialize_bundle(b: Bundle, stock_map: Dict[int, int]) -> BundleRead:
-    items_out: List[BundleItemRead] = []
+def _serialize_bundle(db: Session, b: Bundle, stock_map: Dict[int, int]) -> BundleRead:
     raw_items = list(b.items or [])
+    product_ids = [int(it.product_id) for it in raw_items]
+    pricing = compute_bundle_pricing(db, int(b.tenant_id), b)
+    purchase_by_pid = component_purchase_prices(db, int(b.tenant_id), product_ids)
+    items_out: List[BundleItemRead] = []
     for it in sorted(raw_items, key=lambda x: (x.sort_order, x.id)):
         p = it.product
         pid = int(it.product_id)
@@ -83,6 +87,7 @@ def _serialize_bundle(b: Bundle, stock_map: Dict[int, int]) -> BundleRead:
                 product_name=p.name if p else None,
                 product_sku=(p.sku or p.symbol) if p else None,
                 product_stock=pst,
+                product_purchase_price=purchase_by_pid.get(pid),
                 metadata_json=meta_s,
             )
         )
@@ -99,6 +104,8 @@ def _serialize_bundle(b: Bundle, stock_map: Dict[int, int]) -> BundleRead:
         if linked_pid_int is not None and stock_mode == "physical"
         else None
     )
+    packaging_stored = float(getattr(b, "extra_cost_packaging_net", 0) or 0)
+    production_stored = float(getattr(b, "production_cost_net", 0) or 0)
     return BundleRead(
         id=b.id,
         tenant_id=b.tenant_id,
@@ -106,6 +113,17 @@ def _serialize_bundle(b: Bundle, stock_map: Dict[int, int]) -> BundleRead:
         sku=b.sku,
         ean=b.ean,
         sale_price=float(b.sale_price) if b.sale_price is not None else None,
+        extra_cost_packaging_net=packaging_stored,
+        production_cost_net=production_stored,
+        purchase_cost=pricing.get("purchase_cost"),
+        materials_cost=pricing.get("materials_cost"),
+        packaging_cost=pricing.get("packaging_cost"),
+        production_cost=pricing.get("production_cost"),
+        total_cost=pricing.get("total_cost"),
+        selling_price_net=pricing.get("selling_price_net"),
+        selling_price_gross=pricing.get("selling_price_gross"),
+        margin_value=pricing.get("margin_value"),
+        margin_percent=pricing.get("margin_percent"),
         active=bool(b.active),
         image_url=img,
         length_mm=float(b.length_mm) if getattr(b, "length_mm", None) is not None else None,
@@ -199,7 +217,7 @@ def list_bundles(
 
     out: List[BundleRead] = []
     for b in rows:
-        br = _serialize_bundle(b, stock_map)
+        br = _serialize_bundle(db, b, stock_map)
         cs = br.calculated_stock
         eff = 0 if cs is None else int(cs)
         if stock_min is not None and eff < int(stock_min):
@@ -284,7 +302,7 @@ def get_bundle(
     if lp is not None:
         pids.append(int(lp))
     stock_map = _inventory_qty_by_product_ids(db, tenant_id, pids)
-    return _serialize_bundle(b, stock_map)
+    return _serialize_bundle(db, b, stock_map)
 
 
 @router.post("/", response_model=BundleRead, status_code=201)
@@ -300,6 +318,8 @@ def create_bundle(body: BundleCreateBody, db: Session = Depends(get_db)):
         sku=(body.sku or "").strip() or None,
         ean=(body.ean or "").strip() or None,
         sale_price=body.sale_price,
+        extra_cost_packaging_net=body.extra_cost_packaging_net,
+        production_cost_net=body.production_cost_net,
         active=bool(body.active),
         image_url=img,
         length_mm=body.length_mm,
@@ -334,7 +354,7 @@ def create_bundle(body: BundleCreateBody, db: Session = Depends(get_db)):
     if lp is not None:
         pids.append(int(lp))
     stock_map = _inventory_qty_by_product_ids(db, body.tenant_id, pids)
-    return _serialize_bundle(b, stock_map)
+    return _serialize_bundle(db, b, stock_map)
 
 
 @router.put("/{bundle_id}", response_model=BundleRead)
@@ -356,6 +376,8 @@ def update_bundle(
     b.sku = (body.sku or "").strip() or None
     b.ean = (body.ean or "").strip() or None
     b.sale_price = body.sale_price
+    b.extra_cost_packaging_net = body.extra_cost_packaging_net
+    b.production_cost_net = body.production_cost_net
     b.active = bool(body.active)
     if body.image_url is not None:
         b.image_url = (body.image_url or "").strip() or None
@@ -390,7 +412,7 @@ def update_bundle(
     if lp is not None:
         pids.append(int(lp))
     stock_map = _inventory_qty_by_product_ids(db, tenant_id, pids)
-    return _serialize_bundle(b, stock_map)
+    return _serialize_bundle(db, b, stock_map)
 
 
 @router.delete("/{bundle_id}", response_model=EntityBulkDeleteResult)
