@@ -28,6 +28,10 @@ export type BundleRead = {
   height_mm?: number | null;
   weight_kg?: number | null;
   metadata_json?: string | null;
+  fulfillment_mode?: "assembly" | "manufacturing" | string;
+  stock_mode?: "physical" | "virtual" | string;
+  linked_product_id?: number | null;
+  physical_stock?: number | null;
   /** min(floor(stock/qty)) over components */
   calculated_stock?: number | null;
   items: BundleItemRead[];
@@ -52,6 +56,9 @@ export type BundleCreatePayload = {
   height_mm?: number | null;
   weight_kg?: number | null;
   metadata_json?: string | null;
+  fulfillment_mode?: "assembly" | "manufacturing";
+  stock_mode?: "physical" | "virtual";
+  linked_product_id?: number | null;
   items: BundleItemWrite[];
 };
 
@@ -67,6 +74,9 @@ export type BundleUpdatePayload = {
   height_mm?: number | null;
   weight_kg?: number | null;
   metadata_json?: string | null;
+  fulfillment_mode?: "assembly" | "manufacturing";
+  stock_mode?: "physical" | "virtual";
+  linked_product_id?: number | null;
   items: BundleItemWrite[];
 };
 

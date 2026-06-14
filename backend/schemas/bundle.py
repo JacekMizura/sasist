@@ -1,6 +1,9 @@
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator
+
+BundleFulfillmentMode = Literal["assembly", "manufacturing"]
+BundleStockMode = Literal["physical", "virtual"]
 
 
 class BundleItemRead(BaseModel):
@@ -43,6 +46,11 @@ class BundleRead(BaseModel):
     height_mm: Optional[float] = None
     weight_kg: Optional[float] = None
     metadata_json: Optional[str] = None
+    fulfillment_mode: BundleFulfillmentMode = "assembly"
+    stock_mode: BundleStockMode = "virtual"
+    linked_product_id: Optional[int] = None
+    """Stan magazynowy powiązanego produktu (physical) lub None."""
+    physical_stock: Optional[int] = None
     """min(floor(product_stock / required_qty)) over components; None if bundle has no lines."""
     calculated_stock: Optional[int] = None
     items: List[BundleItemRead] = Field(default_factory=list)
@@ -70,6 +78,9 @@ class BundleCreateBody(BaseModel):
     height_mm: Optional[float] = None
     weight_kg: Optional[float] = None
     metadata_json: Optional[str] = None
+    fulfillment_mode: BundleFulfillmentMode = "assembly"
+    stock_mode: BundleStockMode = "virtual"
+    linked_product_id: Optional[int] = Field(None, ge=1)
     items: List[BundleItemWrite] = Field(default_factory=list)
 
     @field_validator("name")
@@ -93,6 +104,9 @@ class BundleUpdateBody(BaseModel):
     height_mm: Optional[float] = None
     weight_kg: Optional[float] = None
     metadata_json: Optional[str] = None
+    fulfillment_mode: BundleFulfillmentMode = "assembly"
+    stock_mode: BundleStockMode = "virtual"
+    linked_product_id: Optional[int] = Field(None, ge=1)
     items: List[BundleItemWrite] = Field(default_factory=list)
 
     @field_validator("name")

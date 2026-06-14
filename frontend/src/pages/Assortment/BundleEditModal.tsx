@@ -26,8 +26,17 @@ import type { ProductImageEntry } from "../../types/productLabel";
 import { BundleLabelTab } from "./BundleLabelTab";
 import { BundleProductsTab } from "./BundleProductsTab";
 import { BundleWarehouseTab } from "./BundleWarehouseTab";
+import { EntityProductionPanel } from "../Production/EntityProductionPanel";
 import {
-  BUNDLE_EDIT_TABS,
+  BUNDLE_FULFILLMENT_LABEL,
+  BUNDLE_TYPE_HEADER_LABEL,
+  normalizeFulfillmentMode,
+  normalizeStockMode,
+  type BundleFulfillmentMode,
+  type BundleStockMode,
+} from "../Production/bundleOperationalTypes";
+import {
+  buildBundleEditTabs,
   emptyRow,
   formatBundleItemImportMeta,
   formatMoneyZl,
@@ -95,7 +104,8 @@ export function BundleEditModal({
   const headerGalleryInputRef = useRef<HTMLInputElement>(null);
 
   const tabFromUrl = searchParams.get("tab") as BundleEditTabId | null;
-  const validTab = BUNDLE_EDIT_TABS.some((t) => t.id === tabFromUrl) ? tabFromUrl! : null;
+  const bundleTabs = useMemo(() => buildBundleEditTabs(isNew), [isNew]);
+  const validTab = bundleTabs.some((t) => t.id === tabFromUrl) ? tabFromUrl! : null;
   const [activeTab, setActiveTab] = useState<BundleEditTabId>(initialTab ?? validTab ?? "basic");
 
   const [saving, setSaving] = useState(false);
@@ -112,6 +122,10 @@ export function BundleEditModal({
   const [heightMm, setHeightMm] = useState<number | "">("");
   const [weightKg, setWeightKg] = useState<number | "">("");
   const [metadataJson, setMetadataJson] = useState<string | null>(null);
+  const [fulfillmentMode, setFulfillmentMode] = useState<BundleFulfillmentMode>("assembly");
+  const [stockMode, setStockMode] = useState<BundleStockMode>("virtual");
+  const [linkedProductId, setLinkedProductId] = useState<number | null>(null);
+  const [physicalStock, setPhysicalStock] = useState<number | null>(null);
 
   const {
     images: galleryImages,
@@ -201,6 +215,10 @@ export function BundleEditModal({
     setHeightMm("");
     setWeightKg("");
     setMetadataJson(null);
+    setFulfillmentMode("assembly");
+    setStockMode("virtual");
+    setLinkedProductId(null);
+    setPhysicalStock(null);
     resetGallery([]);
     setRows([emptyRow()]);
     setProductCache({});
@@ -229,6 +247,10 @@ export function BundleEditModal({
         setHeightMm(parseDim(b.height_mm));
         setWeightKg(parseDim(b.weight_kg));
         setMetadataJson(b.metadata_json ?? null);
+        setFulfillmentMode(normalizeFulfillmentMode(b.fulfillment_mode));
+        setStockMode(normalizeStockMode(b.stock_mode));
+        setLinkedProductId(b.linked_product_id ?? null);
+        setPhysicalStock(b.physical_stock ?? null);
 
         let metaParsed: unknown = null;
         if (b.metadata_json?.trim()) {
@@ -366,6 +388,9 @@ export function BundleEditModal({
         height_mm: dim(heightMm),
         weight_kg: dim(weightKg),
         metadata_json: metaStr ?? null,
+        fulfillment_mode: fulfillmentMode,
+        stock_mode: stockMode,
+        linked_product_id: linkedProductId,
         items,
       };
       if (isNew) {
@@ -400,9 +425,19 @@ export function BundleEditModal({
 
   const statCards: ProductLikeStatCard[] = [
     {
-      label: "Dostępność",
-      value: bundleAvailability != null ? `${bundleAvailability} szt.` : "—",
-      subValue: "Ze składników",
+      label: stockMode === "physical" ? "Stan magazynu" : "Dostępność",
+      value:
+        stockMode === "physical" && physicalStock != null
+          ? `${physicalStock} szt.`
+          : bundleAvailability != null
+            ? `${bundleAvailability} szt.`
+            : "—",
+      subValue:
+        stockMode === "physical"
+          ? "Zestaw fizyczny"
+          : fulfillmentMode === "assembly"
+            ? "Kompletacja · ze składników"
+            : "Ze składników",
       variant: "blue",
     },
     {
@@ -474,6 +509,18 @@ export function BundleEditModal({
       }
       modeLabel={isNew ? "Dodawanie zestawu" : "Edycja zestawu"}
       title={name.trim() || (isNew ? "Nowy zestaw" : "—")}
+      titleBadge={
+        !isNew ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full bg-violet-100 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-violet-900">
+              {BUNDLE_TYPE_HEADER_LABEL[stockMode]}
+            </span>
+            <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-700">
+              {BUNDLE_FULFILLMENT_LABEL[fulfillmentMode]}
+            </span>
+          </div>
+        ) : undefined
+      }
       imageUrl={headerPreviewUrl}
       statCards={statCards}
       productIdentifiers={{
@@ -482,7 +529,7 @@ export function BundleEditModal({
         ean,
       }}
       headerActions={headerActions}
-      tabs={BUNDLE_EDIT_TABS}
+      tabs={bundleTabs}
       activeTab={activeTab}
       onTabChange={setTab}
       onSubmit={handleSubmit}
@@ -650,7 +697,32 @@ export function BundleEditModal({
       )}
 
       {activeTab === "warehouse" && (
-        <BundleWarehouseTab rows={rows} productCache={productCache} bundleAvailability={bundleAvailability} />
+        <BundleWarehouseTab
+          rows={rows}
+          productCache={productCache}
+          bundleAvailability={bundleAvailability}
+          fulfillmentMode={fulfillmentMode}
+          stockMode={stockMode}
+          physicalStock={physicalStock}
+        />
+      )}
+
+      {activeTab === "production" && (
+        <EntityProductionPanel
+          entityType="bundle"
+          tenantId={tenantId}
+          isNew={isNew}
+          bundleName={name.trim() || "Zestaw"}
+          fulfillmentMode={fulfillmentMode}
+          stockMode={stockMode}
+          linkedProductId={linkedProductId}
+          onFulfillmentModeChange={setFulfillmentMode}
+          onStockModeChange={setStockMode}
+          onLinkedProductIdChange={setLinkedProductId}
+          rows={rows}
+          productCache={productCache}
+          bundleAvailability={bundleAvailability}
+        />
       )}
 
       {activeTab === "images" && (

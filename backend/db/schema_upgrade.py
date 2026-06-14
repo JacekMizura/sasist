@@ -1680,6 +1680,29 @@ def ensure_bundles_logistics_and_metadata_columns(engine: Engine) -> None:
             conn.execute(text("ALTER TABLE bundles ADD COLUMN metadata_json TEXT"))
 
 
+def ensure_bundles_operational_columns(engine: Engine) -> None:
+    """fulfillment_mode, stock_mode, linked_product_id for P4.9."""
+    if not _table_exists(engine, "bundles"):
+        return
+    cols = _table_column_names(engine, "bundles")
+    with engine.begin() as conn:
+        if "fulfillment_mode" not in cols:
+            conn.execute(
+                text("ALTER TABLE bundles ADD COLUMN fulfillment_mode VARCHAR NOT NULL DEFAULT 'assembly'")
+            )
+        if "stock_mode" not in cols:
+            conn.execute(
+                text("ALTER TABLE bundles ADD COLUMN stock_mode VARCHAR NOT NULL DEFAULT 'virtual'")
+            )
+        if "linked_product_id" not in cols:
+            conn.execute(text("ALTER TABLE bundles ADD COLUMN linked_product_id INTEGER"))
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_bundles_linked_product_id ON bundles(linked_product_id)"
+                )
+            )
+
+
 def ensure_order_items_packing_quantity_packed_column(engine: Engine) -> None:
     """WMS pakowanie: własna ilość spakowana per pozycja (bez Pick / zbierania)."""
     cols = _cols(engine, "order_items")

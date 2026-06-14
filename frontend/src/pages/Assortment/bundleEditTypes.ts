@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { History, ImageIcon, LayoutList, Link2, Package, Printer, ScrollText, Warehouse } from "lucide-react";
+import { Factory, History, ImageIcon, LayoutList, Link2, Package, Printer, ScrollText, Warehouse } from "lucide-react";
 
 import type { BundleItemWrite } from "../../api/bundlesApi";
 
@@ -7,13 +7,14 @@ export type BundleEditTabId =
   | "basic"
   | "products"
   | "warehouse"
+  | "production"
   | "images"
   | "history"
   | "logs"
   | "relations"
   | "labelSheet";
 
-export const BUNDLE_EDIT_TABS: { id: BundleEditTabId; label: string; icon: LucideIcon }[] = [
+const BUNDLE_TABS_BASE: { id: Exclude<BundleEditTabId, "production">; label: string; icon: LucideIcon }[] = [
   { id: "basic", label: "Podstawowe", icon: LayoutList },
   { id: "products", label: "Produkty", icon: Package },
   { id: "warehouse", label: "Magazyn", icon: Warehouse },
@@ -23,6 +24,22 @@ export const BUNDLE_EDIT_TABS: { id: BundleEditTabId; label: string; icon: Lucid
   { id: "relations", label: "Powiązania", icon: Link2 },
   { id: "labelSheet", label: "Etykieta", icon: Printer },
 ];
+
+/** Zakładki edycji zestawu — Produkcja jak u produktu (tylko istniejący zestaw). */
+export function buildBundleEditTabs(isNew: boolean): { id: BundleEditTabId; label: string; icon: LucideIcon }[] {
+  if (isNew) return BUNDLE_TABS_BASE;
+  const tabs: { id: BundleEditTabId; label: string; icon: LucideIcon }[] = [];
+  for (const t of BUNDLE_TABS_BASE) {
+    tabs.push(t);
+    if (t.id === "warehouse") {
+      tabs.push({ id: "production", label: "Produkcja", icon: Factory });
+    }
+  }
+  return tabs;
+}
+
+/** @deprecated Użyj buildBundleEditTabs(isNew) */
+export const BUNDLE_EDIT_TABS = buildBundleEditTabs(false);
 
 export type CatalogProduct = {
   id: number;

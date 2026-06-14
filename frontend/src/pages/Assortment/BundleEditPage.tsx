@@ -4,7 +4,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { getBundle, type BundleRead } from "../../api/bundlesApi";
 import { CatalogEntityPageShell } from "../../components/catalog";
 import { BundleEditModal } from "./BundleEditModal";
-import { BUNDLE_EDIT_TABS, type BundleEditTabId } from "./bundleEditTypes";
+import { buildBundleEditTabs, type BundleEditTabId } from "./bundleEditTypes";
 
 const DEFAULT_TENANT = 1;
 
@@ -13,7 +13,7 @@ export default function BundleEditPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const tabParam = searchParams.get("tab");
-  const initialTab = BUNDLE_EDIT_TABS.some((t) => t.id === tabParam) ? (tabParam as BundleEditTabId) : undefined;
+  const initialTab = buildBundleEditTabs(false).some((t) => t.id === tabParam) ? (tabParam as BundleEditTabId) : undefined;
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

@@ -55,6 +55,16 @@ def _compute_calculated_stock(items: List[BundleItem], stock_map: Dict[int, int]
     return min(parts) if parts else None
 
 
+def _normalize_fulfillment_mode(v: Optional[str]) -> str:
+    s = (v or "assembly").strip().lower()
+    return s if s in ("assembly", "manufacturing") else "assembly"
+
+
+def _normalize_stock_mode(v: Optional[str]) -> str:
+    s = (v or "virtual").strip().lower()
+    return s if s in ("physical", "virtual") else "virtual"
+
+
 def _serialize_bundle(b: Bundle, stock_map: Dict[int, int]) -> BundleRead:
     items_out: List[BundleItemRead] = []
     raw_items = list(b.items or [])
@@ -80,6 +90,15 @@ def _serialize_bundle(b: Bundle, stock_map: Dict[int, int]) -> BundleRead:
     img = (getattr(b, "image_url", None) or "").strip() or None
     meta_raw = getattr(b, "metadata_json", None)
     meta_s = str(meta_raw).strip() if meta_raw is not None and str(meta_raw).strip() else None
+    fulfillment_mode = _normalize_fulfillment_mode(getattr(b, "fulfillment_mode", None))
+    stock_mode = _normalize_stock_mode(getattr(b, "stock_mode", None))
+    linked_pid = getattr(b, "linked_product_id", None)
+    linked_pid_int = int(linked_pid) if linked_pid is not None else None
+    physical_stock = (
+        int(stock_map.get(linked_pid_int, 0))
+        if linked_pid_int is not None and stock_mode == "physical"
+        else None
+    )
     return BundleRead(
         id=b.id,
         tenant_id=b.tenant_id,
@@ -94,6 +113,10 @@ def _serialize_bundle(b: Bundle, stock_map: Dict[int, int]) -> BundleRead:
         height_mm=float(b.height_mm) if getattr(b, "height_mm", None) is not None else None,
         weight_kg=float(b.weight_kg) if getattr(b, "weight_kg", None) is not None else None,
         metadata_json=meta_s,
+        fulfillment_mode=fulfillment_mode,
+        stock_mode=stock_mode,
+        linked_product_id=linked_pid_int,
+        physical_stock=physical_stock,
         calculated_stock=calc,
         items=items_out,
     )
@@ -167,6 +190,9 @@ def list_bundles(
 
     all_pids: List[int] = []
     for b in rows:
+        lp = getattr(b, "linked_product_id", None)
+        if lp is not None:
+            all_pids.append(int(lp))
         for it in b.items or []:
             all_pids.append(int(it.product_id))
     stock_map = _inventory_qty_by_product_ids(db, tenant_id, list(set(all_pids)))
@@ -254,6 +280,9 @@ def get_bundle(
     if getattr(b, "deleted_at", None) is not None:
         raise HTTPException(status_code=404, detail="Bundle not found")
     pids = [int(it.product_id) for it in (b.items or [])]
+    lp = getattr(b, "linked_product_id", None)
+    if lp is not None:
+        pids.append(int(lp))
     stock_map = _inventory_qty_by_product_ids(db, tenant_id, pids)
     return _serialize_bundle(b, stock_map)
 
@@ -278,6 +307,9 @@ def create_bundle(body: BundleCreateBody, db: Session = Depends(get_db)):
         height_mm=body.height_mm,
         weight_kg=body.weight_kg,
         metadata_json=meta,
+        fulfillment_mode=_normalize_fulfillment_mode(body.fulfillment_mode),
+        stock_mode=_normalize_stock_mode(body.stock_mode),
+        linked_product_id=int(body.linked_product_id) if body.linked_product_id else None,
     )
     db.add(b)
     db.flush()
@@ -298,6 +330,9 @@ def create_bundle(body: BundleCreateBody, db: Session = Depends(get_db)):
         .first()
     )
     pids = [int(x.product_id) for x in (b.items or [])]
+    lp = getattr(b, "linked_product_id", None)
+    if lp is not None:
+        pids.append(int(lp))
     stock_map = _inventory_qty_by_product_ids(db, body.tenant_id, pids)
     return _serialize_bundle(b, stock_map)
 
@@ -330,6 +365,9 @@ def update_bundle(
     b.weight_kg = body.weight_kg
     if body.metadata_json is not None:
         b.metadata_json = (body.metadata_json or "").strip() or None
+    b.fulfillment_mode = _normalize_fulfillment_mode(body.fulfillment_mode)
+    b.stock_mode = _normalize_stock_mode(body.stock_mode)
+    b.linked_product_id = int(body.linked_product_id) if body.linked_product_id else None
     db.query(BundleItem).filter(BundleItem.bundle_id == b.id).delete(synchronize_session=False)
     for it in body.items:
         db.add(
@@ -348,6 +386,9 @@ def update_bundle(
         .first()
     )
     pids = [int(x.product_id) for x in (b.items or [])]
+    lp = getattr(b, "linked_product_id", None)
+    if lp is not None:
+        pids.append(int(lp))
     stock_map = _inventory_qty_by_product_ids(db, tenant_id, pids)
     return _serialize_bundle(b, stock_map)
 

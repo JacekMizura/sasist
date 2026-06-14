@@ -1,5 +1,15 @@
 # Current context
 
+## P4.9 — Produkcja i kompletacja zestawów (2026-06-08)
+- Zakładka **Produkcja** w zestawie (Factory, po Magazynie — jak produkt)
+- **`EntityProductionPanel`** — wspólny panel: produkt → `ProductManufacturingPanel`; zestaw → tryb + zawartość
+- **`AssemblyComponentsTable`** — tabela składników kompletacji (Produkcja + Magazyn)
+- Pola API/DB: `fulfillment_mode` (assembly|manufacturing), `stock_mode` (physical|virtual), `linked_product_id`, `physical_stock`
+- Header: badge typu (fizyczny/wirtualny) + źródło (Kompletacja/Produkcja)
+- Magazyn: stan + źródło stanu; wirtualny = ze składników, fizyczny = `physical_stock`
+- Produkcja zestawu: kompletacja = składniki; produkcja = ten sam `ProductManufacturingPanel` via `linked_product_id`
+- WMS auto-dokumenty kompletacji — **nie zaimplementowane** (kolejna iteracja)
+
 ## P4.8 — Ujednolicenie modułu Zestawów z Produktami (2026-06-08)
 - Zestaw używa tego samego `ProductLikePageLayout` co produkt: stat cards, SKU/EAN pod tytułem, save w headerze, `hideVerticalRail`, ikony w tabs
 - Usunięto prawy pionowy navigator; pełna szerokość na treść

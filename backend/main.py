@@ -54,6 +54,7 @@ from .db.schema_upgrade import (
     ensure_customers_deleted_at_column,
     ensure_bundles_deleted_at_column,
     ensure_bundles_logistics_and_metadata_columns,
+    ensure_bundles_operational_columns,
     ensure_wms_order_returns_deleted_at_column,
     ensure_inventory_location_uuid_columns,
     ensure_damage_report_columns,
@@ -1123,6 +1124,7 @@ def _upgrade_schema_background() -> None:
         logging.getLogger(__name__).exception("ensure_customer_crm_schema failed in background upgrade")
     ensure_bundles_deleted_at_column(engine)
     ensure_bundles_logistics_and_metadata_columns(engine)
+    ensure_bundles_operational_columns(engine)
     ensure_damage_report_columns(engine)
     ensure_wms_refunds_columns(engine)
     try:
