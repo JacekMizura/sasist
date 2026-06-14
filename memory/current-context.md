@@ -1,5 +1,15 @@
 # Current context
 
+## P5.12H — Rezygnacja z dedykowanego edytora (2026-06-08)
+- Usunięto drzewo struktury, tabelę segmentów i panel 260px
+- Jeden widok: `ConsolidationRackVisualEditor` (wzór `CartSectionGrid` + drawer jak koszyki)
+- Segment = klikalny kafel + drawer (SZ/GŁ/WYS/nazwa); edycja = podgląd
+- Sidebar: dane regału + preset + liczba poziomów / segmentów na poziom (jak TemplateCreator)
+- Auto podział szerokości: `redistributeSegmentWidths` przy add/remove/duplicate/setLevelSegmentCount
+- Naprawa `addLevel` (pełna szerokość); zmiana W regału → `applyRackWidthChange`
+- Usunięto: `RackStructureTree`, `LevelSegmentConfigTable`
+- Workspace: width 100%, minimalne marginesy w `ConsolidationRackFormShell`
+
 ## P5.12G — Uproszczenie konfiguracji regałów kompletacyjnych (2026-06-08)
 - Usunięto `unit_description` / pole „Opis racka” z UI; API wysyła `unit_description: null`
 - Racki auto: `Rack A`, `Rack B`, … (`bayDisplayLabel`, `reindexBays`) — bez formularza nazwy

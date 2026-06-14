@@ -4,17 +4,18 @@ import {
   cartsAppInputClass,
   cartsFieldLabelClass,
 } from "../carts/cartsModuleTokens";
-import RackStructureTree from "./RackStructureTree";
 import { MAX_RACK_DIM, parseOptionalDim } from "./rackLayoutUtils";
 import {
-  addLevel,
   addBay,
-  applyRackPreset,
+  applyRackDepthChange,
+  applyRackWidthChange,
   countSegments,
+  findBay,
   RACK_PRESET_LABELS,
+  setBayLevelCount,
+  setLevelSegmentCount,
   type RackPresetId,
   type RackStructureDraft,
-  type SegmentSelection,
 } from "./rackStructureModel";
 
 type Props = {
@@ -26,11 +27,6 @@ type Props = {
   structureLocked?: boolean;
   readOnly?: boolean;
   focusedBayId: string | null;
-  focusedLevelId: string | null;
-  onSelectBay: (bayClientId: string) => void;
-  onSelectLevel: (bayClientId: string, levelClientId: string) => void;
-  selection: SegmentSelection;
-  onSelectSegment: (bayClientId: string, levelClientId: string, segmentClientId: string) => void;
   /** Tworzenie — preset wybrany / picker */
   appliedPreset?: RackPresetId | null;
   presetPickerOpen?: boolean;
@@ -88,19 +84,15 @@ export default function ConsolidationRackStructureEditor({
   structureLocked = false,
   readOnly = false,
   focusedBayId,
-  focusedLevelId,
-  onSelectBay,
-  onSelectLevel,
-  selection,
-  onSelectSegment,
   appliedPreset = null,
   presetPickerOpen = false,
   onApplyPreset,
   onChangePreset,
 }: Props) {
-  const updateDraft = (patch: Partial<RackStructureDraft>) => onChange({ ...draft, ...patch });
   const totalSegments = countSegments(draft);
   const showPresetSection = !readOnly && onApplyPreset;
+  const canEditStructure = !readOnly && !structureLocked;
+  const activeBay = findBay(draft, focusedBayId ?? "") ?? draft.bays[0] ?? null;
 
   return (
     <div className="space-y-4">
@@ -115,7 +107,7 @@ export default function ConsolidationRackStructureEditor({
               <input
                 type="text"
                 value={draft.rackName}
-                onChange={(e) => updateDraft({ rackName: e.target.value })}
+                onChange={(e) => onChange({ ...draft, rackName: e.target.value })}
                 className={`${cartsAppInputClass} mt-1`}
                 placeholder="RK-01"
               />
@@ -128,7 +120,7 @@ export default function ConsolidationRackStructureEditor({
             ) : (
               <select
                 value={draft.warehouseId}
-                onChange={(e) => updateDraft({ warehouseId: Number(e.target.value) })}
+                onChange={(e) => onChange({ ...draft, warehouseId: Number(e.target.value) })}
                 className={`${cartsAppInputClass} mt-1`}
               >
                 {warehouses.map((w) => (
@@ -143,13 +135,13 @@ export default function ConsolidationRackStructureEditor({
             <DimInput
               label="Szerokość (mm)"
               value={draft.totalWidthMm}
-              onChange={(v) => updateDraft({ totalWidthMm: v })}
+              onChange={(v) => onChange(applyRackWidthChange(draft, v))}
               readOnly={readOnly}
             />
             <DimInput
               label="Głębokość (mm)"
               value={draft.totalDepthMm}
-              onChange={(v) => updateDraft({ totalDepthMm: v })}
+              onChange={(v) => onChange(applyRackDepthChange(draft, v))}
               readOnly={readOnly}
             />
           </div>
@@ -192,44 +184,63 @@ export default function ConsolidationRackStructureEditor({
         </section>
       ) : null}
 
-      <section>
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="text-xs font-bold uppercase tracking-wide text-slate-600">Struktura regału</h2>
-          <span className="text-[11px] tabular-nums text-slate-500">
-            {draft.bays.length} rack · {totalSegments} seg.
-          </span>
-        </div>
+      {activeBay && canEditStructure ? (
+        <section>
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-xs font-bold uppercase tracking-wide text-slate-600">Poziomy</h2>
+            <span className="text-[11px] tabular-nums text-slate-500">{totalSegments} seg.</span>
+          </div>
+          <div className="mt-2 space-y-2">
+            <label className="block">
+              <span className={cartsFieldLabelClass}>Liczba poziomów</span>
+              <input
+                type="number"
+                min={1}
+                max={20}
+                value={activeBay.levels.length}
+                onChange={(e) =>
+                  onChange(setBayLevelCount(draft, activeBay.clientId, Number(e.target.value) || 1))
+                }
+                className={`${cartsAppInputClass} mt-1 tabular-nums`}
+              />
+            </label>
+            <div>
+              <span className={cartsFieldLabelClass}>Segmenty na poziom</span>
+              <div className="mt-1 space-y-1.5">
+                {activeBay.levels.map((lv) => {
+                  const title = lv.name.trim() || String.fromCharCode(65 + lv.levelIndex);
+                  return (
+                    <div key={lv.clientId} className="flex items-center gap-2">
+                      <span className="w-16 shrink-0 text-xs font-medium text-slate-600">{title}</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={50}
+                        value={lv.segments.length}
+                        onChange={(e) =>
+                          onChange(setLevelSegmentCount(draft, lv.clientId, Number(e.target.value) || 1))
+                        }
+                        className={`${cartsAppInputClass} flex-1 tabular-nums py-1.5 text-xs`}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </section>
+      ) : null}
 
-        <div className="mt-2">
-          <RackStructureTree
-            draft={draft}
-            readOnly={readOnly}
-            structureLocked={structureLocked}
-            focusedBayId={focusedBayId}
-            focusedLevelId={focusedLevelId}
-            selection={selection}
-            onChange={onChange}
-            onSelectBay={onSelectBay}
-            onSelectLevel={onSelectLevel}
-            onSelectSegment={onSelectSegment}
-          />
-        </div>
-
-        {!readOnly && !structureLocked ? (
-          <button
-            type="button"
-            onClick={() => onChange(addBay(draft))}
-            className="mt-2 inline-flex h-8 w-full items-center justify-center gap-1 rounded-lg border border-violet-200 bg-white text-xs font-medium text-violet-900 hover:bg-violet-50/60"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            Dodaj rack
-          </button>
-        ) : structureLocked ? (
-          <p className="mt-2 text-[11px] text-slate-500">
-            Wybierz poziom w drzewie — segmenty edytujesz w tabeli nad podglądem.
-          </p>
-        ) : null}
-      </section>
+      {canEditStructure && draft.bays.length === 1 ? (
+        <button
+          type="button"
+          onClick={() => onChange(addBay(draft))}
+          className="inline-flex h-8 w-full items-center justify-center gap-1 rounded-lg border border-violet-200 bg-white text-xs font-medium text-violet-900 hover:bg-violet-50/60"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Dodaj rack (zaawansowane)
+        </button>
+      ) : null}
     </div>
   );
 }

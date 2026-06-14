@@ -49,7 +49,7 @@ export function ConsolidationRackFormShell({
         <div className="w-full shrink-0 overflow-y-auto border-b border-slate-200 bg-white px-3 py-3 lg:w-[min(100%,300px)] lg:border-b-0 lg:border-r">
           {sidebar}
         </div>
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-white px-2 py-3 lg:px-3">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-white px-0 py-2 lg:px-1">
           {summaryBar ? (
             <div className="shrink-0 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
               {summaryBar}
