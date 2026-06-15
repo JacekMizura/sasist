@@ -14,7 +14,7 @@ from ..auth.warehouse_deps import (
     require_operable_warehouse,
     require_active_operable_warehouse,
     require_active_or_query_operable_warehouse,
-    assert_stock_document_warehouse,
+    assert_warehouse_scoped_entity_access,
     enforce_warehouse_access,
 )
 from ..database import get_db
@@ -168,8 +168,13 @@ def get_wms_mm_draft(
 def post_wms_mm_draft_line(
     body: WmsMmDraftAppendBody,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
 ):
+    assert_warehouse_scoped_entity_access(
+        db, user, int(body.warehouse_id), warehouse_id
+    )
     try:
         return append_mm_draft_line(db, tenant_id, body)
     except ValueError as e:

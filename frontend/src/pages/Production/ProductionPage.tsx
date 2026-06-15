@@ -74,9 +74,13 @@ export default function ProductionPage() {
 
   const loadDetail = useCallback(
     async (id: number) => {
+      if (warehouseId == null) {
+        setDetail(null);
+        return;
+      }
       setDetailBusy(true);
       try {
-        const row = await getProductionBatch(tenantId, id);
+        const row = await getProductionBatch(tenantId, id, warehouseId);
         setDetail(row);
       } catch (e: unknown) {
         setErr(e instanceof Error ? e.message : "Nie udało się wczytać partii.");
@@ -85,7 +89,7 @@ export default function ProductionPage() {
         setDetailBusy(false);
       }
     },
-    [tenantId],
+    [tenantId, warehouseId],
   );
 
   useEffect(() => {
@@ -225,6 +229,7 @@ export default function ProductionPage() {
             ) : (
               <ProductionBatchExecutionPanel
                 tenantId={tenantId}
+                warehouseId={warehouseId}
                 batch={detail}
                 onBatchUpdated={setDetail}
                 onListRefresh={() => void reloadList()}

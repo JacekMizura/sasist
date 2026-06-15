@@ -1,5 +1,12 @@
 import api from "./axios";
 
+function productionQueryParams(tenantId: number, warehouseId?: number) {
+  return {
+    tenant_id: tenantId,
+    ...(warehouseId != null ? { warehouse_id: warehouseId } : {}),
+  };
+}
+
 export type ProductionRecipeLineRead = {
   id: number;
   component_product_id: number;
@@ -316,10 +323,7 @@ export async function getProductionOrder(
   warehouseId?: number,
 ): Promise<ProductionOrderRead> {
   const res = await api.get<ProductionOrderRead>(`/production/orders/${orderId}`, {
-    params: {
-      tenant_id: tenantId,
-      ...(warehouseId != null ? { warehouse_id: warehouseId } : {}),
-    },
+    params: productionQueryParams(tenantId, warehouseId),
   });
   return res.data;
 }
@@ -337,11 +341,12 @@ export async function createProductionOrder(
 export async function startProductionOrder(
   tenantId: number,
   orderId: number,
+  warehouseId?: number,
 ): Promise<ProductionOrderRead> {
   const res = await api.post<ProductionOrderRead>(
     `/production/orders/${orderId}/start`,
     null,
-    { params: { tenant_id: tenantId } },
+    { params: productionQueryParams(tenantId, warehouseId) },
   );
   return res.data;
 }
@@ -350,11 +355,12 @@ export async function completeProductionOrder(
   tenantId: number,
   orderId: number,
   body: ProductionOrderCompleteBody = {},
+  warehouseId?: number,
 ): Promise<ProductionCompleteResultRead> {
   const res = await api.post<ProductionCompleteResultRead>(
     `/production/orders/${orderId}/complete`,
     body,
-    { params: { tenant_id: tenantId } },
+    { params: productionQueryParams(tenantId, warehouseId) },
   );
   return res.data;
 }
@@ -362,9 +368,10 @@ export async function completeProductionOrder(
 export async function fetchProductionPickPlan(
   tenantId: number,
   orderId: number,
+  warehouseId?: number,
 ): Promise<ProductionPickPlanRead> {
   const res = await api.get<ProductionPickPlanRead>(`/production/orders/${orderId}/pick-plan`, {
-    params: { tenant_id: tenantId },
+    params: productionQueryParams(tenantId, warehouseId),
   });
   return res.data;
 }
@@ -406,11 +413,12 @@ export async function listProductionOrdersForProduct(
 export async function cancelProductionOrder(
   tenantId: number,
   orderId: number,
+  warehouseId?: number,
 ): Promise<ProductionOrderRead> {
   const res = await api.post<ProductionOrderRead>(
     `/production/orders/${orderId}/cancel`,
     null,
-    { params: { tenant_id: tenantId } },
+    { params: productionQueryParams(tenantId, warehouseId) },
   );
   return res.data;
 }
@@ -570,9 +578,10 @@ export async function listProductionBatches(
 export async function getProductionBatch(
   tenantId: number,
   batchId: number,
+  warehouseId?: number,
 ): Promise<ProductionBatchRead> {
   const res = await api.get<ProductionBatchRead>(`/production/batches/${batchId}`, {
-    params: { tenant_id: tenantId },
+    params: productionQueryParams(tenantId, warehouseId),
   });
   return res.data;
 }
@@ -580,9 +589,10 @@ export async function getProductionBatch(
 export async function fetchBatchPickPlan(
   tenantId: number,
   batchId: number,
+  warehouseId?: number,
 ): Promise<ProductionBatchPickPlanRead> {
   const res = await api.get<ProductionBatchPickPlanRead>(`/production/batches/${batchId}/pick-plan`, {
-    params: { tenant_id: tenantId },
+    params: productionQueryParams(tenantId, warehouseId),
   });
   return res.data;
 }
@@ -611,9 +621,10 @@ export async function createProductionBatch(
 export async function startProductionBatch(
   tenantId: number,
   batchId: number,
+  warehouseId?: number,
 ): Promise<ProductionBatchRead> {
   const res = await api.post<ProductionBatchRead>(`/production/batches/${batchId}/start`, null, {
-    params: { tenant_id: tenantId },
+    params: productionQueryParams(tenantId, warehouseId),
   });
   return res.data;
 }
@@ -622,11 +633,12 @@ export async function completeProductionBatch(
   tenantId: number,
   batchId: number,
   body: ProductionBatchCompleteBody = {},
+  warehouseId?: number,
 ): Promise<ProductionBatchCompleteResultRead> {
   const res = await api.post<ProductionBatchCompleteResultRead>(
     `/production/batches/${batchId}/complete`,
     body,
-    { params: { tenant_id: tenantId } },
+    { params: productionQueryParams(tenantId, warehouseId) },
   );
   return res.data;
 }
@@ -634,9 +646,10 @@ export async function completeProductionBatch(
 export async function cancelProductionBatch(
   tenantId: number,
   batchId: number,
+  warehouseId?: number,
 ): Promise<ProductionBatchRead> {
   const res = await api.post<ProductionBatchRead>(`/production/batches/${batchId}/cancel`, null, {
-    params: { tenant_id: tenantId },
+    params: productionQueryParams(tenantId, warehouseId),
   });
   return res.data;
 }
@@ -795,16 +808,24 @@ export async function getRecipeDetail(
   return res.data;
 }
 
-export async function startCollectingBatch(tenantId: number, batchId: number) {
+export async function startCollectingBatch(
+  tenantId: number,
+  batchId: number,
+  warehouseId?: number,
+) {
   const res = await api.post<ProductionBatchRead>(`/production/batches/${batchId}/start-collecting`, null, {
-    params: { tenant_id: tenantId },
+    params: productionQueryParams(tenantId, warehouseId),
   });
   return res.data;
 }
 
-export async function fetchCollectionState(tenantId: number, batchId: number) {
+export async function fetchCollectionState(
+  tenantId: number,
+  batchId: number,
+  warehouseId?: number,
+) {
   const res = await api.get<BatchCollectionStateRead>(`/production/batches/${batchId}/collection`, {
-    params: { tenant_id: tenantId },
+    params: productionQueryParams(tenantId, warehouseId),
   });
   return res.data;
 }
@@ -813,18 +834,23 @@ export async function updateCollectionTask(
   tenantId: number,
   batchId: number,
   body: { task_key: string; collected_qty: number },
+  warehouseId?: number,
 ) {
   const res = await api.post<BatchCollectionStateRead>(
     `/production/batches/${batchId}/collection/update`,
     body,
-    { params: { tenant_id: tenantId } },
+    { params: productionQueryParams(tenantId, warehouseId) },
   );
   return res.data;
 }
 
-export async function finishCollectingBatch(tenantId: number, batchId: number) {
+export async function finishCollectingBatch(
+  tenantId: number,
+  batchId: number,
+  warehouseId?: number,
+) {
   const res = await api.post<ProductionBatchRead>(`/production/batches/${batchId}/finish-collecting`, null, {
-    params: { tenant_id: tenantId },
+    params: productionQueryParams(tenantId, warehouseId),
   });
   return res.data;
 }
@@ -833,16 +859,21 @@ export async function updateProductionProgress(
   tenantId: number,
   batchId: number,
   body: { line_id: number; add_quantity: number },
+  warehouseId?: number,
 ) {
   const res = await api.post<ProductionBatchRead>(`/production/batches/${batchId}/production-progress`, body, {
-    params: { tenant_id: tenantId },
+    params: productionQueryParams(tenantId, warehouseId),
   });
   return res.data;
 }
 
-export async function finishProductionPhase(tenantId: number, batchId: number) {
+export async function finishProductionPhase(
+  tenantId: number,
+  batchId: number,
+  warehouseId?: number,
+) {
   const res = await api.post<ProductionBatchRead>(`/production/batches/${batchId}/finish-production`, null, {
-    params: { tenant_id: tenantId },
+    params: productionQueryParams(tenantId, warehouseId),
   });
   return res.data;
 }
@@ -851,11 +882,12 @@ export async function finishPutawayBatch(
   tenantId: number,
   batchId: number,
   body: { lines: { line_id: number; target_location_id: number; quantity?: number }[] },
+  warehouseId?: number,
 ) {
   const res = await api.post<ProductionBatchCompleteResultRead>(
     `/production/batches/${batchId}/finish-putaway`,
     body,
-    { params: { tenant_id: tenantId } },
+    { params: productionQueryParams(tenantId, warehouseId) },
   );
   return res.data;
 }

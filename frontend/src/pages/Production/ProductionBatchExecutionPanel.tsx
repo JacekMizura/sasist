@@ -29,6 +29,7 @@ export type BatchComponentPickState = {
 
 type Props = {
   tenantId: number;
+  warehouseId?: number | null;
   batch: ProductionBatchRead;
   onBatchUpdated: (batch: ProductionBatchRead) => void;
   onListRefresh: () => void;
@@ -47,7 +48,7 @@ function initBatchPicks(line: BatchAggregatedPickLineRead): BatchComponentPickSt
   };
 }
 
-export function ProductionBatchExecutionPanel({ tenantId, batch, onBatchUpdated, onListRefresh }: Props) {
+export function ProductionBatchExecutionPanel({ tenantId, warehouseId, batch, onBatchUpdated, onListRefresh }: Props) {
   const [pickPlan, setPickPlan] = useState<ProductionBatchPickPlanRead | null>(null);
   const [pickLoading, setPickLoading] = useState(false);
   const [pickStates, setPickStates] = useState<BatchComponentPickState[]>([]);
@@ -65,13 +66,13 @@ export function ProductionBatchExecutionPanel({ tenantId, batch, onBatchUpdated,
   const recentIds = useMemo(() => loadRecentTargetLocations(batch.warehouse_id), [batch.warehouse_id]);
 
   const loadPickPlan = useCallback(async () => {
-    if (!canExecute) {
+    if (!canExecute || warehouseId == null) {
       setPickPlan(null);
       return;
     }
     setPickLoading(true);
     try {
-      const plan = await fetchBatchPickPlan(tenantId, batch.id);
+      const plan = await fetchBatchPickPlan(tenantId, batch.id, warehouseId);
       setPickPlan(plan);
       setPickStates(plan.aggregated_components.map(initBatchPicks));
       const targets: Record<number, { id: number | null; code: string | null }> = {};
@@ -88,7 +89,7 @@ export function ProductionBatchExecutionPanel({ tenantId, batch, onBatchUpdated,
     } finally {
       setPickLoading(false);
     }
-  }, [tenantId, batch.id, canExecute]);
+  }, [tenantId, batch.id, canExecute, warehouseId]);
 
   useEffect(() => {
     setCompleteResult(null);
@@ -112,10 +113,11 @@ export function ProductionBatchExecutionPanel({ tenantId, batch, onBatchUpdated,
   };
 
   const handleStart = async () => {
+    if (warehouseId == null) return;
     setActionBusy(true);
     setErr(null);
     try {
-      const updated = await startProductionBatch(tenantId, batch.id);
+      const updated = await startProductionBatch(tenantId, batch.id, warehouseId);
       onBatchUpdated(updated);
       onListRefresh();
       await loadPickPlan();
@@ -127,17 +129,23 @@ export function ProductionBatchExecutionPanel({ tenantId, batch, onBatchUpdated,
   };
 
   const handleComplete = async () => {
+    if (warehouseId == null) return;
     setActionBusy(true);
     setErr(null);
     try {
-      const result = await completeProductionBatch(tenantId, batch.id, {
-        component_allocations: buildAllocations(),
-        line_completions: batch.lines.map((ln) => ({
-          line_id: ln.id,
-          completed_quantity: ln.planned_quantity,
-          target_location_id: lineTargets[ln.id]?.id ?? ln.target_location_id ?? null,
-        })),
-      });
+      const result = await completeProductionBatch(
+        tenantId,
+        batch.id,
+        {
+          component_allocations: buildAllocations(),
+          line_completions: batch.lines.map((ln) => ({
+            line_id: ln.id,
+            completed_quantity: ln.planned_quantity,
+            target_location_id: lineTargets[ln.id]?.id ?? ln.target_location_id ?? null,
+          })),
+        },
+        warehouseId,
+      );
       setCompleteResult(result);
       onBatchUpdated(result.batch);
       onListRefresh();
@@ -153,10 +161,11 @@ export function ProductionBatchExecutionPanel({ tenantId, batch, onBatchUpdated,
   };
 
   const handleCancel = async () => {
+    if (warehouseId == null) return;
     setActionBusy(true);
     setErr(null);
     try {
-      const updated = await cancelProductionBatch(tenantId, batch.id);
+      const updated = await cancelProductionBatch(tenantId, batch.id, warehouseId);
       onBatchUpdated(updated);
       onListRefresh();
     } catch (e: unknown) {

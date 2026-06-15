@@ -64,6 +64,44 @@ def load_stock_document_for_active_warehouse(
     return doc
 
 
+def load_stock_document_item_for_active_warehouse(
+    db: Session,
+    user: AppUser,
+    *,
+    tenant_id: int,
+    item_id: int,
+    active_warehouse_id: int,
+):
+    """Load StockDocumentItem + parent doc; enforce P2.2 warehouse scope on document."""
+    from ..models.stock_document import StockDocument, StockDocumentItem
+
+    row = (
+        db.query(StockDocumentItem)
+        .filter(StockDocumentItem.id == int(item_id))
+        .first()
+    )
+    if row is None:
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=404, detail="Pozycja nie znaleziona")
+    doc = (
+        db.query(StockDocument)
+        .filter(
+            StockDocument.id == int(row.document_id),
+            StockDocument.tenant_id == int(tenant_id),
+        )
+        .first()
+    )
+    if doc is None:
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=404, detail="Document not found")
+    assert_warehouse_scoped_entity_access(
+        db, user, getattr(doc, "warehouse_id", None), active_warehouse_id
+    )
+    return row, doc
+
+
 def load_inventory_document_for_active_warehouse(
     db: Session,
     user: AppUser,

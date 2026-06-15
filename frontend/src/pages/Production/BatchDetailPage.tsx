@@ -22,30 +22,31 @@ export default function BatchDetailPage() {
   const navigate = useNavigate();
   const { warehouse } = useWarehouse();
   const tenantId = warehouse?.tenant_id ?? DEFAULT_TENANT;
+  const warehouseId = warehouse?.id;
   const [batch, setBatch] = useState<ProductionBatchRead | null>(null);
   const [plan, setPlan] = useState<ProductionBatchPickPlanRead | null>(null);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
-    if (!batchId) return;
+    if (!batchId || warehouseId == null) return;
     const id = Number(batchId);
     const [b, p] = await Promise.all([
-      getProductionBatch(tenantId, id),
-      fetchBatchPickPlan(tenantId, id).catch(() => null),
+      getProductionBatch(tenantId, id, warehouseId),
+      fetchBatchPickPlan(tenantId, id, warehouseId).catch(() => null),
     ]);
     setBatch(b);
     setPlan(p);
-  }, [tenantId, batchId]);
+  }, [tenantId, batchId, warehouseId]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
   const startCollecting = async () => {
-    if (!batchId) return;
+    if (!batchId || warehouseId == null) return;
     setBusy(true);
     try {
-      await startCollectingBatch(tenantId, Number(batchId));
+      await startCollectingBatch(tenantId, Number(batchId), warehouseId);
       navigate(wmsProductionPaths.collecting(batchId));
     } finally {
       setBusy(false);
@@ -53,8 +54,8 @@ export default function BatchDetailPage() {
   };
 
   const cancel = async () => {
-    if (!batchId || !confirm("Anulować partię?")) return;
-    await cancelProductionBatch(tenantId, Number(batchId));
+    if (!batchId || !confirm("Anulować partię?") || warehouseId == null) return;
+    await cancelProductionBatch(tenantId, Number(batchId), warehouseId);
     navigate(erpProductionPaths.home);
   };
 

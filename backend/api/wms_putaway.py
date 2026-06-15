@@ -11,6 +11,7 @@ from ..auth.deps import get_current_user, get_optional_current_user
 from fastapi import Depends
 from ..auth.warehouse_deps import (
     load_stock_document_for_active_warehouse,
+    load_stock_document_item_for_active_warehouse,
     require_operable_warehouse,
     require_active_operable_warehouse,
     require_active_or_query_operable_warehouse,
@@ -136,8 +137,17 @@ def get_wms_putaway_pz_document(
 def get_wms_putaway_suggest_location(
     item_id: int,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
+    current_user: AppUser = Depends(get_current_user),
 ):
+    load_stock_document_item_for_active_warehouse(
+        db,
+        current_user,
+        tenant_id=tenant_id,
+        item_id=item_id,
+        active_warehouse_id=warehouse_id,
+    )
     try:
         return suggest_putaway_location(db, tenant_id, item_id)
     except ValueError as e:
@@ -148,8 +158,17 @@ def get_wms_putaway_suggest_location(
 def get_wms_putaway_location_suggestions(
     item_id: int,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
+    current_user: AppUser = Depends(get_current_user),
 ):
+    load_stock_document_item_for_active_warehouse(
+        db,
+        current_user,
+        tenant_id=tenant_id,
+        item_id=item_id,
+        active_warehouse_id=warehouse_id,
+    )
     try:
         return suggest_putaway_locations(db, tenant_id, item_id)
     except ValueError as e:
@@ -160,9 +179,17 @@ def get_wms_putaway_location_suggestions(
 def patch_wms_putaway_carrier(
     body: WmsPutawayCarrierBulkBody,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
     current_user: AppUser = Depends(get_current_user),
 ):
+    load_stock_document_for_active_warehouse(
+        db,
+        current_user,
+        tenant_id=tenant_id,
+        document_id=int(body.document_id),
+        active_warehouse_id=warehouse_id,
+    )
     try:
         out = patch_wms_putaway_carrier_bulk(db, tenant_id, body, performed_by=current_user)
         log_wms_workforce_activity(
@@ -191,9 +218,17 @@ def patch_wms_putaway(
     item_id: int,
     body: WmsPutawayPatchBody,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
     current_user: AppUser = Depends(get_current_user),
 ):
+    load_stock_document_item_for_active_warehouse(
+        db,
+        current_user,
+        tenant_id=tenant_id,
+        item_id=item_id,
+        active_warehouse_id=warehouse_id,
+    )
     try:
         out = patch_wms_putaway_item(db, tenant_id, item_id, body, performed_by=current_user)
         log_wms_workforce_activity(

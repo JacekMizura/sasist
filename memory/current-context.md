@@ -1,5 +1,12 @@
 # Current context
 
+## P2.2A — Warehouse Context Finalization (2026-06-08)
+- **Raport:** `memory/p2.2a-warehouse-context-finalization-report.md`
+- Putaway item/carrier/suggest → `load_stock_document_item_for_active_warehouse`
+- MM draft lines → gate `body.warehouse_id == active WH`
+- Production panel → `productionQueryParams` + wszystkie strony WMS/ERP batch/order
+- Testy: 10 passed (P2.2 + P2.2A); **wszystkie moduły magazynowe GREEN**
+
 ## P2.2 — Warehouse Context Enforcement (2026-06-08)
 - **Raport:** `memory/p2.2-warehouse-context-enforcement-report.md`
 - SSOT: `warehouse_scoped_access_service.assert_entity_warehouse_matches_active` + loadery w `warehouse_deps`

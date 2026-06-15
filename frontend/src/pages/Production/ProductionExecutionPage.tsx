@@ -36,8 +36,12 @@ export default function ProductionExecutionPage() {
   }, [tenantId, warehouseId]);
 
   const loadBatch = useCallback(async (id: number) => {
-    setBatch(await getProductionBatch(tenantId, id));
-  }, [tenantId]);
+    if (warehouseId == null) {
+      setBatch(null);
+      return;
+    }
+    setBatch(await getProductionBatch(tenantId, id, warehouseId));
+  }, [tenantId, warehouseId]);
 
   useEffect(() => {
     void loadQueue();
@@ -48,10 +52,15 @@ export default function ProductionExecutionPage() {
   }, [activeId, loadBatch]);
 
   const addQty = async (lineId: number, add: number) => {
-    if (activeId == null) return;
+    if (activeId == null || warehouseId == null) return;
     setBusy(true);
     try {
-      const updated = await updateProductionProgress(tenantId, activeId, { line_id: lineId, add_quantity: add });
+      const updated = await updateProductionProgress(
+        tenantId,
+        activeId,
+        { line_id: lineId, add_quantity: add },
+        warehouseId,
+      );
       setBatch(updated);
     } finally {
       setBusy(false);
@@ -59,10 +68,10 @@ export default function ProductionExecutionPage() {
   };
 
   const finish = async () => {
-    if (activeId == null) return;
+    if (activeId == null || warehouseId == null) return;
     setBusy(true);
     try {
-      await finishProductionPhase(tenantId, activeId);
+      await finishProductionPhase(tenantId, activeId, warehouseId);
       navigate(wmsProductionPaths.putaway(activeId));
     } finally {
       setBusy(false);

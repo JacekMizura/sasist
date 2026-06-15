@@ -30,6 +30,7 @@ export type ComponentPickState = {
 
 type Props = {
   tenantId: number;
+  warehouseId?: number | null;
   order: ProductionOrderRead;
   onOrderUpdated: (order: ProductionOrderRead) => void;
   onListRefresh: () => void;
@@ -50,6 +51,7 @@ function initPicksFromPlan(line: ProductionPickLinePlanRead): ComponentPickState
 
 export function ProductionOrderExecutionPanel({
   tenantId,
+  warehouseId,
   order,
   onOrderUpdated,
   onListRefresh,
@@ -73,13 +75,13 @@ export function ProductionOrderExecutionPanel({
   const recentIds = useMemo(() => loadRecentTargetLocations(order.warehouse_id), [order.warehouse_id]);
 
   const loadPickPlan = useCallback(async () => {
-    if (!canExecute) {
+    if (!canExecute || warehouseId == null) {
       setPickPlan(null);
       return;
     }
     setPickLoading(true);
     try {
-      const plan = await fetchProductionPickPlan(tenantId, order.id);
+      const plan = await fetchProductionPickPlan(tenantId, order.id, warehouseId);
       setPickPlan(plan);
       setPickStates(plan.lines.map(initPicksFromPlan));
     } catch (e: unknown) {
@@ -88,7 +90,7 @@ export function ProductionOrderExecutionPanel({
     } finally {
       setPickLoading(false);
     }
-  }, [tenantId, order.id, canExecute]);
+  }, [tenantId, order.id, canExecute, warehouseId]);
 
   useEffect(() => {
     setTargetLocationId(order.location_id ?? null);
@@ -190,10 +192,11 @@ export function ProductionOrderExecutionPanel({
   };
 
   const handleStart = async () => {
+    if (warehouseId == null) return;
     setActionBusy(true);
     setErr(null);
     try {
-      const row = await startProductionOrder(tenantId, order.id);
+      const row = await startProductionOrder(tenantId, order.id, warehouseId);
       onOrderUpdated(row);
       onListRefresh();
     } catch (e: unknown) {
@@ -204,15 +207,20 @@ export function ProductionOrderExecutionPanel({
   };
 
   const handleComplete = async () => {
-    if (!targetLocationId) return;
+    if (!targetLocationId || warehouseId == null) return;
     setActionBusy(true);
     setErr(null);
     try {
-      const result = await completeProductionOrder(tenantId, order.id, {
-        produced_quantity: producedQty,
-        location_id: targetLocationId,
-        component_allocations: buildAllocations(),
-      });
+      const result = await completeProductionOrder(
+        tenantId,
+        order.id,
+        {
+          produced_quantity: producedQty,
+          location_id: targetLocationId,
+          component_allocations: buildAllocations(),
+        },
+        warehouseId,
+      );
       rememberTargetLocation(order.warehouse_id, targetLocationId);
       setCompleteResult(result);
       onOrderUpdated(result.order);
@@ -225,10 +233,10 @@ export function ProductionOrderExecutionPanel({
   };
 
   const handleCancel = async () => {
-    if (!window.confirm("Anulować zlecenie produkcyjne?")) return;
+    if (!window.confirm("Anulować zlecenie produkcyjne?") || warehouseId == null) return;
     setActionBusy(true);
     try {
-      const row = await cancelProductionOrder(tenantId, order.id);
+      const row = await cancelProductionOrder(tenantId, order.id, warehouseId);
       onOrderUpdated(row);
       onListRefresh();
     } catch (e: unknown) {

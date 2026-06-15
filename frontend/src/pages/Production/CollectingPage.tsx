@@ -42,15 +42,23 @@ export default function CollectingPage() {
   }, [tenantId, warehouseId]);
 
   const loadState = useCallback(async (id: number) => {
+    if (warehouseId == null) {
+      setState(null);
+      setBatch(null);
+      return;
+    }
     try {
-      const [s, b] = await Promise.all([fetchCollectionState(tenantId, id), getProductionBatch(tenantId, id)]);
+      const [s, b] = await Promise.all([
+        fetchCollectionState(tenantId, id, warehouseId),
+        getProductionBatch(tenantId, id, warehouseId),
+      ]);
       setState(s);
       setBatch(b);
     } catch {
       setState(null);
       setBatch(null);
     }
-  }, [tenantId]);
+  }, [tenantId, warehouseId]);
 
   useEffect(() => {
     void loadQueue();
@@ -61,8 +69,9 @@ export default function CollectingPage() {
   }, [activeBatchId, loadState]);
 
   const openBatch = async (b: ProductionBatchRead) => {
+    if (warehouseId == null) return;
     if (b.status === "planned") {
-      await startCollectingBatch(tenantId, b.id);
+      await startCollectingBatch(tenantId, b.id, warehouseId);
     }
     setActiveBatchId(b.id);
     navigate(wmsProductionPaths.collecting(b.id));
@@ -70,13 +79,18 @@ export default function CollectingPage() {
   };
 
   const confirmTask = async (taskKey: string, required: number) => {
-    if (activeBatchId == null) return;
+    if (activeBatchId == null || warehouseId == null) return;
     setBusy(true);
     try {
-      const next = await updateCollectionTask(tenantId, activeBatchId, {
-        task_key: taskKey,
-        collected_qty: required,
-      });
+      const next = await updateCollectionTask(
+        tenantId,
+        activeBatchId,
+        {
+          task_key: taskKey,
+          collected_qty: required,
+        },
+        warehouseId,
+      );
       setState(next);
     } finally {
       setBusy(false);
@@ -84,10 +98,10 @@ export default function CollectingPage() {
   };
 
   const finish = async () => {
-    if (activeBatchId == null) return;
+    if (activeBatchId == null || warehouseId == null) return;
     setBusy(true);
     try {
-      await finishCollectingBatch(tenantId, activeBatchId);
+      await finishCollectingBatch(tenantId, activeBatchId, warehouseId);
       navigate(wmsProductionPaths.execute(activeBatchId));
     } finally {
       setBusy(false);

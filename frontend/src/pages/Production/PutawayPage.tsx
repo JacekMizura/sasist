@@ -37,14 +37,18 @@ export default function PutawayPage() {
   }, [tenantId, warehouseId]);
 
   const loadBatch = useCallback(async (id: number) => {
-    const b = await getProductionBatch(tenantId, id);
+    if (warehouseId == null) {
+      setBatch(null);
+      return;
+    }
+    const b = await getProductionBatch(tenantId, id, warehouseId);
     setBatch(b);
     const t: Record<number, { id: number | null; code: string | null }> = {};
     b.lines.forEach((ln) => {
       t[ln.id] = { id: ln.target_location_id ?? null, code: ln.target_location_name ?? null };
     });
     setTargets(t);
-  }, [tenantId]);
+  }, [tenantId, warehouseId]);
 
   useEffect(() => {
     void loadQueue();
@@ -65,7 +69,7 @@ export default function PutawayPage() {
     }
     setBusy(true);
     try {
-      await finishPutawayBatch(tenantId, activeId, { lines });
+      await finishPutawayBatch(tenantId, activeId, { lines }, warehouseId);
       lines.forEach((l) => rememberTargetLocation(warehouseId, l.target_location_id));
       navigate(wmsProductionPaths.collecting());
     } finally {
