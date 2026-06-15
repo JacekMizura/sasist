@@ -6,11 +6,13 @@ import {
   type InventoryDocumentRead,
 } from "@/api/inventoryCountApi";
 import InventoryDocumentsView from "@/modules/inventoryCount/ui/erp/InventoryDocumentsView";
-import { useWarehouse } from "@/context/WarehouseContext";
+import { useActiveWarehouseContext } from "@/hooks/useActiveWarehouseContext";
+import { ActiveWarehouseRequiredBanner } from "@/components/layout/ActiveWarehouseRequiredBanner";
+import { DAMAGE_TENANT_ID } from "@/pages/damage/damageShared";
 
 export default function InventoryCountDocumentsPage() {
-  const { warehouse } = useWarehouse();
-  const tenantId = warehouse?.tenant_id;
+  const { warehouseId, hasActiveWarehouse } = useActiveWarehouseContext();
+  const tenantId = DAMAGE_TENANT_ID;
   const [rows, setRows] = useState<InventoryDocumentRead[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleteBusyId, setDeleteBusyId] = useState<number | null>(null);
@@ -20,18 +22,26 @@ export default function InventoryCountDocumentsPage() {
     setLoading(true);
     setErr(null);
     try {
-      setRows(await listInventoryDocuments(tenantId, { warehouseId: warehouse?.id }));
+      setRows(await listInventoryDocuments(tenantId, { warehouseId: warehouseId ?? undefined }));
     } catch {
       setErr("Nie udało się wczytać dokumentów.");
       setRows([]);
     } finally {
       setLoading(false);
     }
-  }, [tenantId, warehouse?.id]);
+  }, [tenantId, warehouseId]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  if (!hasActiveWarehouse) {
+    return (
+      <div className="p-4">
+        <ActiveWarehouseRequiredBanner />
+      </div>
+    );
+  }
 
   const handleDeleteDraft = useCallback(
     async (doc: InventoryDocumentRead) => {

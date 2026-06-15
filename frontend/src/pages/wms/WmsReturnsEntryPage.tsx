@@ -12,7 +12,7 @@ import {
   lookupOrdersForWms,
   normalizeWmsReturnsSearchQuery,
 } from "../../api/wmsReturnsApi";
-import { useWarehouse } from "../../context/WarehouseContext";
+import { useActiveWarehouseContext, ACTIVE_WAREHOUSE_REQUIRED_MESSAGE } from "../../hooks/useActiveWarehouseContext";
 import { useWmsScanner } from "../../context/WmsScannerContext";
 import type { ComplaintListItem } from "../../types/complaint";
 import { complaintRowStatusPresentation, normalizeComplaintStatus } from "../../types/complaint";
@@ -570,8 +570,7 @@ function normalizeOrderSourceDisplay(raw?: string | null): string {
 export default function WmsReturnsEntryPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { warehouse } = useWarehouse();
-  const warehouseId = warehouse?.id ?? null;
+  const { warehouseId } = useActiveWarehouseContext();
 
   const [trackingQ, setTrackingQ] = useState("");
   const [advancedSearchOpen, setAdvancedSearchOpen] = useState(false);
@@ -965,6 +964,10 @@ export default function WmsReturnsEntryPage() {
 
   const openNewReturnForm = useCallback(async () => {
     if (!selectedOrder || creatingReturn) return;
+    if (warehouseId == null) {
+      toast.error(ACTIVE_WAREHOUSE_REQUIRED_MESSAGE);
+      return;
+    }
     setCreatingReturn(true);
     try {
       const created = await createWmsReturn({
@@ -986,7 +989,7 @@ export default function WmsReturnsEntryPage() {
     } finally {
       setCreatingReturn(false);
     }
-  }, [creatingReturn, navigate, selectedOrder]);
+  }, [creatingReturn, navigate, selectedOrder, warehouseId]);
 
   const backToStart = useCallback(() => {
     setScreen("start");

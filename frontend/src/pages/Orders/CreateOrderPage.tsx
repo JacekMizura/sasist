@@ -23,7 +23,7 @@ import {
   type OrderPanelFilter,
 } from "../../components/orders/OrdersPanelStatusSidebar";
 import { ShippingMethodLogo } from "../../components/shipping/ShippingMethodLogo";
-import { useWarehouse } from "../../context/WarehouseContext";
+import { useActiveWarehouseContext, ACTIVE_WAREHOUSE_REQUIRED_MESSAGE } from "../../hooks/useActiveWarehouseContext";
 import type { OrderUiPanelSubgroupRead, OrderUiStatusPanelSummary } from "../../types/orderUiStatus";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import type { ComplaintExchangePrefillState } from "../Complaints/complaintExchangePrefill";
@@ -100,8 +100,7 @@ function formatCustomerAddressStreet(addr: CustomerAddressDto): string {
 export default function CreateOrderPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { warehouse } = useWarehouse();
-  const warehouseId = warehouse?.id ?? null;
+  const { warehouseId, hasActiveWarehouse, warehouse } = useActiveWarehouseContext();
   const [panelSummary, setPanelSummary] = useState<OrderUiStatusPanelSummary | null>(null);
   const [panelSubgroups, setPanelSubgroups] = useState<OrderUiPanelSubgroupRead[] | null>(null);
   const [documentType, setDocumentType] = useState("");
@@ -538,7 +537,7 @@ export default function CreateOrderPage() {
     e.preventDefault();
     setError(null);
     if (!warehouseId) {
-      setError("Wybierz magazyn.");
+      setError(ACTIVE_WAREHOUSE_REQUIRED_MESSAGE);
       return;
     }
     if (lines.length === 0) {
@@ -684,7 +683,7 @@ export default function CreateOrderPage() {
             </div>
             {!warehouseId ? (
               <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                Wybierz magazyn.
+                {ACTIVE_WAREHOUSE_REQUIRED_MESSAGE}
               </p>
             ) : null}
             <div className="mt-4 max-w-md">

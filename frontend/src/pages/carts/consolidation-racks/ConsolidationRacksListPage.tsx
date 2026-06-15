@@ -4,7 +4,7 @@ import { Eye, Layers, Pencil, Plus, Trash2 } from "lucide-react";
 
 import api from "../../../api/axios";
 import { AppEmptyState } from "../../../components/app-shell/AppEmptyState";
-import { useWarehouse } from "../../../context/WarehouseContext";
+import { useActiveWarehouseContext, ACTIVE_WAREHOUSE_REQUIRED_MESSAGE } from "../../../hooks/useActiveWarehouseContext";
 import { CartsListPageHeader } from "../../../modules/carts/CartsListPageHeader";
 import {
   cartsBtnPrimary,
@@ -25,8 +25,7 @@ type RackRow = ConsolidationRack & {
 
 export default function ConsolidationRacksListPage() {
   const navigate = useNavigate();
-  const { warehouse, warehouses } = useWarehouse();
-  const warehouseId = warehouse?.id ?? null;
+  const { warehouse, warehouseId, hasActiveWarehouse, warehouses } = useActiveWarehouseContext();
   const [racks, setRacks] = useState<ConsolidationRack[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -89,11 +88,11 @@ export default function ConsolidationRacksListPage() {
     }
   };
 
-  if (!warehouseId) {
+  if (!hasActiveWarehouse) {
     return (
       <div className={cartsPageShellClass}>
         <CartsListPageHeader title="Regały kompletacyjne" />
-        <p className="py-8 text-center text-sm font-medium text-amber-800">Wybierz magazyn.</p>
+        <p className="py-8 text-center text-sm font-medium text-amber-800">{ACTIVE_WAREHOUSE_REQUIRED_MESSAGE}</p>
       </div>
     );
   }

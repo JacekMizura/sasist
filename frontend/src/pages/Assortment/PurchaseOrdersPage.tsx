@@ -15,7 +15,10 @@ import {
   type DeliveryStatus,
 } from "../../api/inboundDeliveriesApi";
 import { listSuppliers, type SupplierRead } from "../../api/inboundSuppliersApi";
-import { useWarehouse } from "../../context/WarehouseContext";
+import {
+  ACTIVE_WAREHOUSE_REQUIRED_MESSAGE,
+  useActiveWarehouseContext,
+} from "../../hooks/useActiveWarehouseContext";
 import { fetchPurchasingSupplierAnalytics } from "../../api/purchasingSupplierAnalyticsApi";
 import { CreatePzFromDeliveryModal } from "./CreatePzFromDeliveryModal";
 import { PurchaseOrderEditModal } from "./PurchaseOrderEditModal";
@@ -65,7 +68,7 @@ export default function PurchaseOrdersPage({ defaultCreateOpen = false }: Purcha
   const [searchParams, setSearchParams] = useSearchParams();
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [tenantId, setTenantId] = useState(1);
-  const { warehouse } = useWarehouse();
+  const { warehouseId, hasActiveWarehouse } = useActiveWarehouseContext();
   const [suppliers, setSuppliers] = useState<SupplierRead[]>([]);
   const [rows, setRows] = useState<DeliveryListRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -243,15 +246,15 @@ export default function PurchaseOrdersPage({ defaultCreateOpen = false }: Purcha
         return;
       }
       const sid = newSupplierId || suppliers[0].id;
-      if (!warehouse?.id) {
-        window.alert("Wybierz magazyn w kontekście aplikacji, aby utworzyć dostawę.");
+      if (!hasActiveWarehouse || warehouseId == null) {
+        window.alert(ACTIVE_WAREHOUSE_REQUIRED_MESSAGE);
         return;
       }
       try {
         const d = await createDelivery({
           tenant_id: tenantId,
           supplier_id: sid,
-          warehouse_id: warehouse.id,
+          warehouse_id: warehouseId,
           status: "draft",
         });
         if (race && race.gen !== race.ref.current) return;
@@ -263,7 +266,7 @@ export default function PurchaseOrdersPage({ defaultCreateOpen = false }: Purcha
         setErr("Nie udało się utworzyć szkicu.");
       }
     },
-    [suppliers, newSupplierId, tenantId, warehouse?.id, navigate, load],
+    [suppliers, newSupplierId, tenantId, warehouseId, hasActiveWarehouse, navigate, load],
   );
 
   const createNew = () => void createDraftOrder();

@@ -1,5 +1,13 @@
 # Current context
 
+## P2.1A — Warehouse Context UX Fix (2026-06-08)
+- **Raport:** `memory/p2.1a-warehouse-context-ux-report.md`
+- Hook: `useActiveWarehouseContext()` + `ActiveWarehouseRequiredBanner`
+- Komunikat SSOT: „Wybierz aktywny magazyn.”
+- Poprawione: dostawy, PO generator, PZ WMS, RMZ, reklamacje, produkcja, inwentaryzacja ERP
+- API: `createWmsReceivingPz` / `listWmsReceivingPz` z opcjonalnym `warehouse_id`
+- Build frontend OK
+
 ## P2.1 — Multi Warehouse Hardening (2026-06-08)
 - **Raport:** `memory/p2.1-multi-warehouse-hardening-report.md`
 - PO generator + alerty: `warehouse_id` obowiązkowe (HTTP 400)

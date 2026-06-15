@@ -9,11 +9,13 @@ import {
 } from "@/api/inventoryCountApi";
 import { triggerBrowserDownload } from "@/modules/inventoryCount/erp/downloadHelpers";
 import InventoryReportsView from "@/modules/inventoryCount/ui/erp/InventoryReportsView";
-import { useWarehouse } from "@/context/WarehouseContext";
+import { useActiveWarehouseContext } from "@/hooks/useActiveWarehouseContext";
+import { ActiveWarehouseRequiredBanner } from "@/components/layout/ActiveWarehouseRequiredBanner";
+import { DAMAGE_TENANT_ID } from "@/pages/damage/damageShared";
 
 export default function InventoryCountReportsPage() {
-  const { warehouse } = useWarehouse();
-  const tenantId = warehouse?.tenant_id;
+  const { warehouseId, hasActiveWarehouse } = useActiveWarehouseContext();
+  const tenantId = DAMAGE_TENANT_ID;
   const [reports, setReports] = useState<
     { kind: string; label: string; formats: string[]; status: string }[]
   >([]);
@@ -25,10 +27,18 @@ export default function InventoryCountReportsPage() {
     void fetchInventoryReportsCatalog()
       .then((r) => setReports(r.reports))
       .catch(() => setReports([]));
-    void listInventoryDocuments(tenantId, { warehouseId: warehouse?.id })
+    void listInventoryDocuments(tenantId, { warehouseId: warehouseId ?? undefined })
       .then(setDocuments)
       .catch(() => setDocuments([]));
-  }, [tenantId, warehouse?.id]);
+  }, [tenantId, warehouseId]);
+
+  if (!hasActiveWarehouse) {
+    return (
+      <div className="p-4">
+        <ActiveWarehouseRequiredBanner />
+      </div>
+    );
+  }
 
   const onDownload = async (kind: string, format: "pdf" | "xlsx") => {
     if (!documentId) {

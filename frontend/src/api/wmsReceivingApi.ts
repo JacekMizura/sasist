@@ -38,9 +38,13 @@ export type WmsCreateReceivingPzBody = {
 export async function createWmsReceivingPz(
   tenantId: number,
   body: WmsCreateReceivingPzBody,
+  warehouseId?: number | null,
 ): Promise<StockDocumentRead> {
   const res = await api.post<StockDocumentRead>("/wms/receiving/pz", body, {
-    params: { tenant_id: tenantId },
+    params: {
+      tenant_id: tenantId,
+      ...(warehouseId != null ? { warehouse_id: warehouseId } : {}),
+    },
   });
   return res.data;
 }
@@ -85,9 +89,15 @@ export async function createWmsReceivingProduct(
   return res.data;
 }
 
-export async function listWmsReceivingPz(tenantId: number): Promise<WmsReceivingPzListRow[]> {
+export async function listWmsReceivingPz(
+  tenantId: number,
+  warehouseId?: number | null,
+): Promise<WmsReceivingPzListRow[]> {
   const res = await api.get<WmsReceivingPzListRow[]>("/wms/receiving/pz", {
-    params: { tenant_id: tenantId },
+    params: {
+      tenant_id: tenantId,
+      ...(warehouseId != null ? { warehouse_id: warehouseId } : {}),
+    },
   });
   return res.data;
 }

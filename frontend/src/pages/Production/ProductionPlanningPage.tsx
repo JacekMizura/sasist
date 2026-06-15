@@ -1,20 +1,27 @@
 import { useNavigate } from "react-router-dom";
 import { Plus } from "lucide-react";
 import { useState } from "react";
-import { useWarehouse } from "../../context/WarehouseContext";
+import { useActiveWarehouseContext } from "../../hooks/useActiveWarehouseContext";
+import { ActiveWarehouseRequiredBanner } from "../../components/layout/ActiveWarehouseRequiredBanner";
 import BatchesListPage from "./BatchesListPage";
 import { CreateBatchModal } from "./components/CreateBatchModal";
 import { erpProductionPaths } from "./productionPaths";
 
+const DEFAULT_TENANT = 1;
+
 export default function ProductionPlanningPage() {
   const navigate = useNavigate();
-  const { warehouse } = useWarehouse();
-  const tenantId = warehouse?.tenant_id;
-  const warehouseId = warehouse?.id;
+  const { warehouseId, hasActiveWarehouse } = useActiveWarehouseContext();
+  const tenantId = DEFAULT_TENANT;
   const [modalOpen, setModalOpen] = useState(false);
 
   return (
     <div className="space-y-4">
+      {!hasActiveWarehouse ? (
+        <div className="px-4 pt-2">
+          <ActiveWarehouseRequiredBanner />
+        </div>
+      ) : null}
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 pt-2 lg:px-6">
         <div>
           <h2 className="text-lg font-semibold text-slate-900">Planowanie produkcji</h2>

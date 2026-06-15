@@ -9,7 +9,8 @@ import {
   type ReplenishmentRow,
 } from "../../api/purchasingReplenishmentApi";
 import { fetchPurchasingForecast, type PurchasingForecastPayload } from "../../api/purchasingForecastApi";
-import { useWarehouse } from "../../context/WarehouseContext";
+import { useActiveWarehouseContext, ACTIVE_WAREHOUSE_REQUIRED_MESSAGE } from "../../hooks/useActiveWarehouseContext";
+import { ActiveWarehouseRequiredBanner } from "../../components/layout/ActiveWarehouseRequiredBanner";
 import { createPurchaseOrdersFromGenerator } from "../../api/purchasingOrdersApi";
 import { pageContainerWidthAlignClass } from "../../components/layout/PageContainer";
 import { DataTablePageSizeSelect } from "../../components/table/DataTablePageSizeSelect";
@@ -110,7 +111,7 @@ function TableSkeleton({ cols }: { cols: number }) {
 
 export default function PurchasingReplenishmentPage() {
   const navigate = useNavigate();
-  const { selectedWarehouseId } = useWarehouse();
+  const { warehouseId, hasActiveWarehouse } = useActiveWarehouseContext();
   const [searchParams] = useSearchParams();
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [tenantId, setTenantId] = useState(1);
@@ -203,7 +204,7 @@ export default function PurchasingReplenishmentPage() {
   const queryBase = useMemo(
     () => ({
       tenant_id: tenantId,
-      warehouse_id: selectedWarehouseId,
+      warehouse_id: warehouseId,
       search: debouncedSearch || undefined,
       supplier_id: supplierId ? Number(supplierId) : null,
       critical_only: criticalOnly,
@@ -222,7 +223,7 @@ export default function PurchasingReplenishmentPage() {
     }),
     [
       tenantId,
-      selectedWarehouseId,
+      warehouseId,
       debouncedSearch,
       supplierId,
       criticalOnly,
@@ -268,7 +269,7 @@ export default function PurchasingReplenishmentPage() {
     setPage(1);
   }, [
     debouncedSearch,
-    selectedWarehouseId,
+    warehouseId,
     supplierId,
     criticalOnly,
     lowStockOnly,
@@ -293,7 +294,7 @@ export default function PurchasingReplenishmentPage() {
     setInspectorLoading(true);
     void fetchPurchasingForecast({
       tenant_id: tenantId,
-      warehouse_id: selectedWarehouseId,
+      warehouse_id: warehouseId,
       product_id: inspectorProductId,
       range_days: 30,
     })
@@ -309,7 +310,7 @@ export default function PurchasingReplenishmentPage() {
     return () => {
       cancelled = true;
     };
-  }, [inspectorProductId, tenantId, selectedWarehouseId]);
+  }, [inspectorProductId, tenantId, warehouseId]);
 
   const rows = data?.rows ?? [];
   const summary = data?.summary;
@@ -360,6 +361,9 @@ export default function PurchasingReplenishmentPage() {
 
   return (
     <div className="space-y-6 pb-28">
+      {!hasActiveWarehouse ? (
+        <ActiveWarehouseRequiredBanner hint="Propozycje zakupów i tworzenie PO dotyczą aktywnego magazynu z paska u góry." />
+      ) : null}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <h1 className="text-xl font-semibold tracking-tight text-slate-900">Generator propozycji zakupów</h1>
@@ -816,10 +820,14 @@ export default function PurchasingReplenishmentPage() {
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                disabled={creatingPo}
+                disabled={creatingPo || !hasActiveWarehouse}
                 className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50 disabled:opacity-50"
                 onClick={async () => {
                   setErr(null);
+                  if (!hasActiveWarehouse || warehouseId == null) {
+                    setErr(ACTIVE_WAREHOUSE_REQUIRED_MESSAGE);
+                    return;
+                  }
                   // Walidacja po stronie UI: wiersze widoczne na bieżącej stronie (zaznaczenie jest czyszczone przy zmianie strony).
                   const selectedRows = rows.filter((r) => selected.has(r.product_id));
                   const bezDostawcy = selectedRows.filter((r) => r.supplier_id == null);
@@ -831,7 +839,7 @@ export default function PurchasingReplenishmentPage() {
                   try {
                     const res = await createPurchaseOrdersFromGenerator({
                       tenant_id: tenantId,
-                      warehouse_id: selectedWarehouseId,
+                      warehouse_id: warehouseId,
                       product_ids: Array.from(selected),
                     });
                     const n = res.created_orders.length;

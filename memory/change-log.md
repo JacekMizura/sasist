@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-06-08 — P2.1A Warehouse Context UX Fix
+
+- `useActiveWarehouseContext()` + banner „Wybierz aktywny magazyn.”
+- Formularze tworzące encje magazynowe: `warehouse_id` z aktywnego kontekstu topbar
+- Raport: `memory/p2.1a-warehouse-context-ux-report.md`
+
 ## 2026-06-08 — P2.1 Multi Warehouse Hardening
 
 - PO: `warehouse_id` wymagane w generatorze i alertach (`ERR_PO_WAREHOUSE_REQUIRED`)

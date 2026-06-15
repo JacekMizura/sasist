@@ -26,7 +26,7 @@ import {
 } from "lucide-react";
 
 import { getComplaintStatusSummary, listComplaints, softDeleteComplaint } from "../../api/complaintsApi";
-import { useWarehouse } from "../../context/WarehouseContext";
+import { useActiveWarehouseContext, ACTIVE_WAREHOUSE_REQUIRED_MESSAGE } from "../../hooks/useActiveWarehouseContext";
 import type { ComplaintListItem } from "../../types/complaint";
 import { normalizeComplaintStatus, type ComplaintStatusCode } from "../../types/complaint";
 import { complaintDefectLabel } from "../../constants/complaintDefectTags";
@@ -108,8 +108,7 @@ function ComplaintListDefectTags({ ids }: { ids: string[] }) {
 export default function ComplaintsPanelPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { warehouse } = useWarehouse();
-  const warehouseId = warehouse?.id ?? null;
+  const { warehouseId } = useActiveWarehouseContext();
 
   const [rows, setRows] = useState<ComplaintListItem[]>([]);
   const [totalCount, setTotalCount] = useState(0);
@@ -454,7 +453,7 @@ export default function ComplaintsPanelPage() {
 
               {warehouseId == null && (
                 <div className="rounded-md border border-amber-200/90 bg-amber-50 px-3 py-2 text-sm text-amber-950">
-                  Wybierz magazyn w nagłówku, aby wczytać reklamacje.
+                  {ACTIVE_WAREHOUSE_REQUIRED_MESSAGE}
                 </div>
               )}
 

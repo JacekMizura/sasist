@@ -3,7 +3,7 @@ import { Loader2, Save } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import api from "../../../api/axios";
-import { useWarehouse } from "../../../context/WarehouseContext";
+import { useActiveWarehouseContext, ACTIVE_WAREHOUSE_REQUIRED_MESSAGE } from "../../../hooks/useActiveWarehouseContext";
 import { cartsBtnPrimary, cartsPageShellClass } from "../../../modules/carts/cartsModuleTokens";
 import { ConsolidationRackFormShell } from "../../../modules/consolidation-racks/ConsolidationRackFormShell";
 import ConsolidationRackOmsPreview from "../../../modules/consolidation-racks/ConsolidationRackOmsPreview";
@@ -33,13 +33,13 @@ export default function ConsolidationRackEditorPage() {
   const { rackId } = useParams<{ rackId: string }>();
   const isCreate = !rackId || rackId === "new";
   const navigate = useNavigate();
-  const { warehouse, warehouses, showWarehouseSelector } = useWarehouse();
+  const { warehouse, warehouses, showWarehouseSelector, warehouseId: activeWarehouseId, hasActiveWarehouse } =
+    useActiveWarehouseContext();
 
   const [loading, setLoading] = useState(!isCreate);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rack, setRack] = useState<ConsolidationRack | null>(null);
-  const activeWarehouseId = warehouse?.id ?? null;
   const [draft, setDraft] = useState<RackStructureDraft | null>(null);
   const [selection, setSelection] = useState<SegmentSelection>(null);
   const [appliedPreset, setAppliedPreset] = useState<RackPresetId | null>(null);
@@ -129,7 +129,7 @@ export default function ConsolidationRackEditorPage() {
 
   const handleCreate = async () => {
     if (!draft) {
-      setError("Wybierz magazyn.");
+      setError(ACTIVE_WAREHOUSE_REQUIRED_MESSAGE);
       return;
     }
     if (!draft.rackName.trim()) {
@@ -202,7 +202,7 @@ export default function ConsolidationRackEditorPage() {
   if (isCreate && !activeWarehouseId) {
     return (
       <div className={`${cartsPageShellClass} py-12 text-center text-sm font-medium text-amber-800`}>
-        Wybierz magazyn.
+        {ACTIVE_WAREHOUSE_REQUIRED_MESSAGE}
       </div>
     );
   }

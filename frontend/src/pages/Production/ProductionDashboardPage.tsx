@@ -1,18 +1,17 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { AlertTriangle, ArrowRight, Plus } from "lucide-react";
-import { useWarehouse } from "../../context/WarehouseContext";
+import { useActiveWarehouseContext } from "../../hooks/useActiveWarehouseContext";
 import { fetchProductionDashboard, type ProductionDashboardRead } from "../../api/productionApi";
 import { BatchCard } from "./components/BatchCard";
 import { ErpKpiCard } from "./components/ErpKpiCard";
-import { erpProductionPaths, wmsProductionPaths } from "./productionPaths";
+import { ActiveWarehouseRequiredBanner } from "../../components/layout/ActiveWarehouseRequiredBanner";
 
 const DEFAULT_TENANT = 1;
 
 export default function ProductionDashboardPage() {
-  const { warehouse } = useWarehouse();
-  const tenantId = warehouse?.tenant_id ?? DEFAULT_TENANT;
-  const warehouseId = warehouse?.id;
+  const { warehouseId, hasActiveWarehouse } = useActiveWarehouseContext();
+  const tenantId = DEFAULT_TENANT;
   const [data, setData] = useState<ProductionDashboardRead | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -31,12 +30,10 @@ export default function ProductionDashboardPage() {
     void reload();
   }, [reload]);
 
-  if (warehouseId == null) {
+  if (!hasActiveWarehouse || warehouseId == null) {
     return (
       <div className="px-4 py-8">
-        <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          Wybierz magazyn, aby wyświetlić pulpitu produkcji.
-        </p>
+        <ActiveWarehouseRequiredBanner hint="Zlecenia RW/PW i partie produkcyjne są tworzone w aktywnym magazynie." />
       </div>
     );
   }

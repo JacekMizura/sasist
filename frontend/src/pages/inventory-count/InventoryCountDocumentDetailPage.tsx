@@ -2,13 +2,14 @@ import { useParams } from "react-router-dom";
 
 import { useInventoryDocumentDetail } from "@/modules/inventoryCount/hooks/useInventoryDocumentDetail";
 import InventoryDocumentDetailView from "@/modules/inventoryCount/ui/erp/InventoryDocumentDetailView";
-import { useWarehouse } from "@/context/WarehouseContext";
+import { useActiveWarehouseContext } from "@/hooks/useActiveWarehouseContext";
+import { DAMAGE_TENANT_ID } from "@/pages/damage/damageShared";
 
 /** ERP document detail — thin route shell. */
 export default function InventoryCountDocumentDetailPage() {
   const { documentId } = useParams();
-  const { warehouse } = useWarehouse();
-  const tenantId = warehouse?.tenant_id;
+  const { warehouseId } = useActiveWarehouseContext();
+  const tenantId = DAMAGE_TENANT_ID;
   const id = Number(documentId);
   const state = useInventoryDocumentDetail(id, tenantId);
 

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useActiveWarehouseContext } from "../../hooks/useActiveWarehouseContext";
+import { ActiveWarehouseRequiredBanner } from "../../components/layout/ActiveWarehouseRequiredBanner";
 import { Clock, Plus, RotateCcw, Truck, CheckCircle2, ScanLine, User } from "lucide-react";
 import { WmsNewDeliveryModal } from "../../components/wms/receiving/WmsNewDeliveryModal";
 import api from "../../api/axios";
@@ -128,6 +130,8 @@ export default function WmsReceivingPage() {
     scanFx.warning("Otwórz wybraną PZ, aby skanować pozycje.");
   });
 
+  const { warehouseId, hasActiveWarehouse } = useActiveWarehouseContext();
+
   const [tenantId, setTenantId] = useState(1);
   const [rows, setRows] = useState<WmsReceivingPzListRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -153,14 +157,14 @@ export default function WmsReceivingPage() {
     setLoading(true);
     setErr(null);
     try {
-      setRows(await listWmsReceivingPz(tenantId));
+      setRows(await listWmsReceivingPz(tenantId, warehouseId));
     } catch {
       setErr("Nie udało się wczytać listy PZ.");
       setRows([]);
     } finally {
       setLoading(false);
     }
-  }, [tenantId]);
+  }, [tenantId, warehouseId]);
 
   useEffect(() => {
     void load();
@@ -191,6 +195,10 @@ export default function WmsReceivingPage() {
           </div>
         )}
 
+        {!hasActiveWarehouse ? (
+          <ActiveWarehouseRequiredBanner className="mb-6" hint="Nowe PZ i lista przyjęć dotyczą aktywnego magazynu." />
+        ) : null}
+
         {err && (
           <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 p-5 text-sm font-bold text-red-800 shadow-sm w-full">
             {err}
@@ -213,8 +221,12 @@ export default function WmsReceivingPage() {
           
           <button 
             type="button"
-            onClick={() => setNewDeliveryOpen(true)}
-            className="bg-[#5a4fcf] hover:bg-[#4a40b2] text-white px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-md shadow-indigo-500/20 shrink-0 md:w-auto w-full active:scale-95"
+            disabled={!hasActiveWarehouse}
+            onClick={() => {
+              if (!hasActiveWarehouse) return;
+              setNewDeliveryOpen(true);
+            }}
+            className="bg-[#5a4fcf] hover:bg-[#4a40b2] text-white px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-md shadow-indigo-500/20 shrink-0 md:w-auto w-full active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Plus size={18} strokeWidth={2.5} />
             Nowa dostawa
@@ -258,6 +270,7 @@ export default function WmsReceivingPage() {
       <WmsNewDeliveryModal
         open={newDeliveryOpen}
         tenantId={tenantId}
+        warehouseId={warehouseId}
         onClose={() => setNewDeliveryOpen(false)}
         onCreated={(pzId) => {
           navigate(WMS_ROUTES.receivingPz(pzId), { state: { tenantId } });

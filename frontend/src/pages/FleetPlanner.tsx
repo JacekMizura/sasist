@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "../locales";
-import { useWarehouse } from "../context/WarehouseContext";
+import { useActiveWarehouseContext, ACTIVE_WAREHOUSE_REQUIRED_MESSAGE } from "../hooks/useActiveWarehouseContext";
 import { useCartsRefresh } from "../context/CartsRefreshContext";
 import api from "../api/axios";
 import PageLayout from "../components/layout/PageLayout";
@@ -22,9 +22,8 @@ const TENANT_ID = 1;
 
 export default function FleetPlanner() {
   const t = useTranslation();
-  const { warehouse } = useWarehouse();
+  const { warehouseId, hasActiveWarehouse } = useActiveWarehouseContext();
   const refreshCarts = useCartsRefresh()?.refreshCarts;
-  const warehouseId = warehouse?.id ?? null;
 
   const [loading, setLoading] = useState(false);
   const [applying, setApplying] = useState(false);
@@ -33,7 +32,7 @@ export default function FleetPlanner() {
 
   const handleAnalyze = async () => {
     if (!warehouseId) {
-      setError("Wybierz magazyn.");
+      setError(ACTIVE_WAREHOUSE_REQUIRED_MESSAGE);
       return;
     }
     setLoading(true);
@@ -54,7 +53,7 @@ export default function FleetPlanner() {
 
   const handleApply = async () => {
     if (!warehouseId) {
-      setError("Wybierz magazyn.");
+      setError(ACTIVE_WAREHOUSE_REQUIRED_MESSAGE);
       return;
     }
     setApplying(true);
@@ -80,7 +79,7 @@ export default function FleetPlanner() {
           <button
             type="button"
             onClick={handleAnalyze}
-            disabled={loading || !warehouseId}
+            disabled={loading || !hasActiveWarehouse}
             className="rounded-lg bg-violet-600 px-6 py-3 text-sm font-bold uppercase text-white transition-colors hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading ? t.loading : (t.optimizer_analyze_button ?? "Oblicz zapotrzebowanie na wózki")}
@@ -90,8 +89,8 @@ export default function FleetPlanner() {
       <p className="text-sm text-slate-500">
         {t.optimizer_analyze_subtitle ?? "Oblicz minimalne zapotrzebowanie na wózki dla zamówień NEW."}
       </p>
-      {!warehouseId ? (
-        <p className="mt-2 text-sm font-medium text-amber-800">Wybierz magazyn.</p>
+      {!hasActiveWarehouse ? (
+        <p className="mt-2 text-sm font-medium text-amber-800">{ACTIVE_WAREHOUSE_REQUIRED_MESSAGE}</p>
       ) : null}
 
       {/* Dashboard stub cards */}

@@ -9,7 +9,7 @@ import {
   type ProductionOrderSummaryRead,
 } from "../../../api/productionApi";
 import { ProductLikeSection, productLikeFieldLabelClass, productLikeInputClass } from "../../../components/catalog";
-import { useWarehouse } from "../../../context/WarehouseContext";
+import { useActiveWarehouseContext, ACTIVE_WAREHOUSE_REQUIRED_MESSAGE } from "../../../hooks/useActiveWarehouseContext";
 import {
   formatProductionMoney,
   PRODUCTION_STATUS_LABEL,
@@ -38,7 +38,7 @@ export function BundleProductionPanel({
   productCache,
 }: Props) {
   const navigate = useNavigate();
-  const { warehouse } = useWarehouse();
+  const { warehouseId, hasActiveWarehouse } = useActiveWarehouseContext();
   const fieldLabel = productLikeFieldLabelClass;
   const inputClass = productLikeInputClass;
 
@@ -83,8 +83,12 @@ export function BundleProductionPanel({
   }, [reload]);
 
   const handleCreateOrder = async () => {
-    if (!activeRecipe || !warehouse?.id) {
-      setErr("Brak aktywnej receptury ERP lub magazynu WMS. Skonfiguruj recepturę na powiązanym produkcie magazynowym.");
+    if (!activeRecipe || !hasActiveWarehouse || warehouseId == null) {
+      setErr(
+        !hasActiveWarehouse || warehouseId == null
+          ? ACTIVE_WAREHOUSE_REQUIRED_MESSAGE
+          : "Brak aktywnej receptury ERP. Skonfiguruj recepturę na powiązanym produkcie magazynowym.",
+      );
       return;
     }
     setOrderBusy(true);
@@ -92,7 +96,7 @@ export function BundleProductionPanel({
     try {
       const order = await createProductionOrder(tenantId, {
         recipe_id: activeRecipe.id,
-        warehouse_id: warehouse.id,
+        warehouse_id: warehouseId,
         planned_quantity: orderQty,
         status: "planned",
       });
@@ -160,7 +164,7 @@ export function BundleProductionPanel({
               </div>
               <button
                 type="button"
-                disabled={orderBusy || !warehouse?.id}
+                disabled={orderBusy || !hasActiveWarehouse}
                 onClick={() => void handleCreateOrder()}
                 className="inline-flex items-center gap-2 rounded-lg bg-slate-800 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-900 disabled:opacity-50"
               >
@@ -168,8 +172,8 @@ export function BundleProductionPanel({
                 {orderBusy ? "Tworzenie…" : "Utwórz zlecenie produkcyjne"}
               </button>
             </div>
-            {!warehouse?.id ? (
-              <p className="text-xs text-amber-700">Wybierz magazyn WMS w kontekście aplikacji, aby utworzyć zlecenie.</p>
+            {!hasActiveWarehouse ? (
+              <p className="text-xs text-amber-700">{ACTIVE_WAREHOUSE_REQUIRED_MESSAGE}</p>
             ) : null}
           </div>
         )}

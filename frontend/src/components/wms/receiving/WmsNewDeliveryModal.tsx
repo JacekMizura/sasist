@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, X } from "lucide-react";
+import { ACTIVE_WAREHOUSE_REQUIRED_MESSAGE } from "../../../hooks/useActiveWarehouseContext";
 import { listSuppliers, type SupplierRead } from "../../../api/inboundSuppliersApi";
 import { createWmsReceivingPz } from "../../../api/wmsReceivingApi";
 import { useAutocompleteDropdown } from "../../../hooks/useAutocompleteDropdown";
@@ -8,11 +9,12 @@ import { AutocompleteDropdownPanel } from "../AutocompleteDropdownPanel";
 type Props = {
   open: boolean;
   tenantId: number;
+  warehouseId: number | null;
   onClose: () => void;
   onCreated: (pzId: number) => void;
 };
 
-export function WmsNewDeliveryModal({ open, tenantId, onClose, onCreated }: Props) {
+export function WmsNewDeliveryModal({ open, tenantId, warehouseId, onClose, onCreated }: Props) {
   const [supplierInput, setSupplierInput] = useState("");
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [suggestions, setSuggestions] = useState<SupplierRead[]>([]);
@@ -88,6 +90,10 @@ export function WmsNewDeliveryModal({ open, tenantId, onClose, onCreated }: Prop
   };
 
   const submit = async () => {
+    if (warehouseId == null) {
+      setErr(ACTIVE_WAREHOUSE_REQUIRED_MESSAGE);
+      return;
+    }
     if (!trimmed) {
       setErr("Podaj nazwę dostawcy");
       return;
@@ -98,7 +104,7 @@ export function WmsNewDeliveryModal({ open, tenantId, onClose, onCreated }: Prop
       const doc = await createWmsReceivingPz(tenantId, {
         supplier_name: trimmed,
         supplier_id: selectedId ?? exactMatch?.id ?? undefined,
-      });
+      }, warehouseId);
       onCreated(doc.id);
       onClose();
     } catch {

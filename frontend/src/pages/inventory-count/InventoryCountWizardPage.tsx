@@ -37,7 +37,9 @@ import {
   emptyFilters,
 } from "@/modules/inventoryCount/inventoryStrategyConfig";
 import InventoryWizardView from "@/modules/inventoryCount/ui/erp/InventoryWizardView";
-import { useWarehouse } from "@/context/WarehouseContext";
+import { useActiveWarehouseContext, ACTIVE_WAREHOUSE_REQUIRED_MESSAGE } from "@/hooks/useActiveWarehouseContext";
+import { ActiveWarehouseRequiredBanner } from "@/components/layout/ActiveWarehouseRequiredBanner";
+import { DAMAGE_TENANT_ID } from "@/pages/damage/damageShared";
 
 const STEPS = ["Typ", "Zakres", "Ustawienia", "Podsumowanie"] as const;
 
@@ -51,9 +53,8 @@ const INV_TYPES = [
 export default function InventoryCountWizardPage() {
   const { documentId } = useParams();
   const navigate = useNavigate();
-  const { warehouse } = useWarehouse();
-  const tenantId = warehouse?.tenant_id;
-  const warehouseId = warehouse?.id ?? null;
+  const { warehouseId, hasActiveWarehouse } = useActiveWarehouseContext();
+  const tenantId = DAMAGE_TENANT_ID;
 
   const [step, setStep] = useState(0);
   const [doc, setDoc] = useState<InventoryDocumentRead | null>(null);
@@ -102,9 +103,9 @@ export default function InventoryCountWizardPage() {
   }, [documentId, doc, tenantId, hydrateFromDoc]);
 
   const ensureDocument = useCallback(async () => {
-    if (!warehouseId || !tenantId) {
-      setErr("Wybierz magazyn.");
-      throw new Error("Wybierz magazyn.");
+    if (!hasActiveWarehouse || warehouseId == null) {
+      setErr(ACTIVE_WAREHOUSE_REQUIRED_MESSAGE);
+      throw new Error(ACTIVE_WAREHOUSE_REQUIRED_MESSAGE);
     }
     if (doc) return doc;
     const created = await createInventoryDocument(tenantId, {
@@ -116,10 +117,10 @@ export default function InventoryCountWizardPage() {
     return created;
   }, [doc, tenantId, warehouseId, inventoryType, navigate, hydrateFromDoc]);
 
-  if (!warehouseId || !tenantId) {
+  if (!hasActiveWarehouse || warehouseId == null) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-12 text-center">
-        <p className="text-sm font-medium text-amber-800">Wybierz magazyn.</p>
+        <ActiveWarehouseRequiredBanner />
       </div>
     );
   }
