@@ -348,6 +348,8 @@ def list_stock_documents(
                 receiving_status=str(getattr(d, "receiving_status", None) or "NEW"),
                 putaway_status=str(getattr(d, "putaway_status", None) or "NOT_STARTED"),
                 relocation_status=str(getattr(d, "relocation_status", None) or "OPEN"),
+                warehouse_workflow_status=str(getattr(d, "warehouse_workflow_status", None) or "NEW"),
+                purchase_workflow_status=str(getattr(d, "purchase_workflow_status", None) or "PENDING_INVOICE"),
                 is_fully_received=compute_is_fully_received_for_items(by_doc_lines.get(d.id, [])),
                 is_fully_putaway=compute_is_fully_putaway_for_items(db, by_doc_lines.get(d.id, [])),
                 currency=cur,

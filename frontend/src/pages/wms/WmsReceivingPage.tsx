@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useActiveWarehouseContext } from "../../hooks/useActiveWarehouseContext";
 import { ActiveWarehouseRequiredBanner } from "../../components/layout/ActiveWarehouseRequiredBanner";
 import { Clock, Plus, RotateCcw, Truck, CheckCircle2, ScanLine, User } from "lucide-react";
+import PzWorkflowStatusBadges from "../../components/wms/PzWorkflowStatusBadges";
 import { WmsNewDeliveryModal } from "../../components/wms/receiving/WmsNewDeliveryModal";
 import api from "../../api/axios";
 import { useWmsScanner } from "../../context/WmsScannerContext";
@@ -10,7 +11,6 @@ import { useWmsPageScanHandler } from "../../components/wms/execution/useWmsPage
 import { useScanFeedback } from "../../components/wms/execution/useScanFeedback";
 import { listWmsReceivingPz, type WmsReceivingPzListRow } from "../../api/wmsReceivingApi";
 import { WMS_ROUTES } from "./wmsRoutes";
-import { pzReceivingStatusBadgeClass, pzReceivingStatusLabelPl } from "../../utils/pzReceivingStatusPresentation";
 import { documentCreatedByLabel } from "../../utils/documentCreatedBy";
 import { formatRelativeUpdatePl, formatWmsListDate } from "./wmsListFormatters";
 
@@ -22,16 +22,8 @@ function fmtQty(n: number) {
   return new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 2 }).format(n);
 }
 
-function pzStatusPresentation(status: string): { label: string; badgeClass: string } {
-  return {
-    label: pzReceivingStatusLabelPl(status),
-    badgeClass: pzReceivingStatusBadgeClass(status),
-  };
-}
-
 function ReceivingPzCard({ row, tenantId }: { row: WmsReceivingPzListRow; tenantId: number }) {
   const idLine = row.number?.trim() || `PZ #${row.id}`;
-  const { label: statusLabel, badgeClass } = pzStatusPresentation(row.receiving_status);
   const activityIso = row.updated_at?.trim() ? row.updated_at : row.created_at;
 
   const isReturn = idLine.toUpperCase().includes("Z-PZ");
@@ -73,9 +65,17 @@ function ReceivingPzCard({ row, tenantId }: { row: WmsReceivingPzListRow; tenant
             </div>
           </div>
 
-          <span className={`shrink-0 text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-lg border ${badgeClass}`}>
-            {statusLabel}
-          </span>
+          <PzWorkflowStatusBadges
+            compact
+            className="shrink-0 justify-end"
+            documentType={row.document_type}
+            warehouseWorkflowStatus={row.warehouse_workflow_status}
+            purchaseWorkflowStatus={row.purchase_workflow_status}
+            receiving_status={row.receiving_status}
+            putaway_status={row.putaway_status}
+            relocation_status={row.relocation_status}
+            status={row.status}
+          />
         </div>
         
         {/* Sekcja informacyjna */}

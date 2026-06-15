@@ -69,6 +69,10 @@ class StockDocument(Base):
     putaway_status = Column(String(32), nullable=False, default="NOT_STARTED", index=True)
     # WMS „zamknięcie” rozlokowania (lista / proces) — OPEN | DONE; nie modyfikuje stanów magazynowych.
     relocation_status = Column(String(32), nullable=False, default="OPEN", index=True)
+    #: P2.5A — magazynowy workflow: NEW → COUNTING → COUNTED → PUTAWAY_* → CLOSED (niezależny od zakupu).
+    warehouse_workflow_status = Column(String(32), nullable=False, default="NEW", server_default=text("'NEW'"), index=True)
+    #: P2.5A — zakupowy / kosztowy workflow; nie blokuje przyjęcia ani rozlokowania.
+    purchase_workflow_status = Column(String(32), nullable=False, default="PENDING_INVOICE", server_default=text("'PENDING_INVOICE'"), index=True)
     # Financial snapshot (editing these does not touch inventory or stock_operations).
     currency = Column(String(8), nullable=False, default="PLN")
     total_net = Column(Float, nullable=True)

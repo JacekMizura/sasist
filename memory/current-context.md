@@ -1,5 +1,17 @@
 # Current context
 
+## P2.5A — Receiving Workflow Statuses (2026-06-08) — CLOSED
+- **Raport:** `memory/p2.5a-receiving-workflow-statuses-report.md`
+- Pola: `warehouse_workflow_status`, `purchase_workflow_status` (niezależne osie)
+- Sync magazynowy w `recalculate_wms_document_completion`; PATCH metadata dla statusu zakupowego
+- UI: `PzWorkflowStatusBadges` na listach WMS + ERP PZ
+
+## WMS.1 — Operational Readiness Audit (2026-06-08) — CLOSED
+- **Raport:** `memory/wms-operational-readiness-audit.md`
+- 5 blokery produkcyjne: A3 (brak lokalizacji), B1 (brak WZ e-commerce), D2 (bundle complaint Z-PZ), F2 (batch count), H9 (order GET bez WH gate)
+- Przyjęcia z lokalizacjami + zwroty standard + pick/pack/recovery ≈ operacyjne; MM intra-WH OK; A→B tylko konsolidacja
+- UX: „Brak propozycji” maskuje przyczyny putaway
+
 ## P2.4 — WMS Multi-Warehouse Selector (2026-06-08) — CLOSED
 - **Raport:** `memory/p2.4-wms-multi-warehouse-selector-report.md`
 - UI: `GlobalWarehouseSelect` w `WmsTopBar`; gate `WmsWarehouseAccessGate` w shellu WMS

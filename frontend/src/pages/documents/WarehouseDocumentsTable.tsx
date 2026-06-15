@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import type { StockDocumentListRow } from "@/api/stockDocumentsApi";
 import { formatMoneyPl } from "@/utils/formatOrderMoney";
 import { DocumentTypeBadge, ExternalStatusBadge } from "./documentsBadges";
+import PzWorkflowStatusBadges from "../../components/wms/PzWorkflowStatusBadges";
 import { documentsTableTheadCls } from "./documentsDashboardPrimitives";
 import { warehouseDocumentListStatus } from "./warehouseDocumentsUi";
 import {
@@ -125,6 +126,19 @@ export default function WarehouseDocumentsTable({
         return <span className="tabular-nums font-semibold text-slate-900">{fmtMoneyCur(val, r.currency)}</span>;
       }
       case "status":
+        if (dt === "PZ" || dt === "Z_PZ") {
+          return (
+            <PzWorkflowStatusBadges
+              documentType={r.document_type}
+              warehouseWorkflowStatus={r.warehouse_workflow_status}
+              purchaseWorkflowStatus={r.purchase_workflow_status}
+              receiving_status={r.receiving_status}
+              putaway_status={r.putaway_status}
+              relocation_status={r.relocation_status}
+              status={r.status}
+            />
+          );
+        }
         return <ExternalStatusBadge status={st} />;
       case "customer":
         return (

@@ -151,6 +151,7 @@ from .db.schema_upgrade import (
     ensure_product_sales_offers_schema,
     ensure_inventory_management_policy_schema,
     ensure_purchase_sales_block_schema,
+    ensure_receiving_workflow_status_schema,
     ensure_tenant_warehouse_fulfillment_schema,
     ensure_stock_document_items_stock_disposition_column,
     ensure_stock_document_items_stock_disposition_column,
@@ -1059,6 +1060,18 @@ try:
     register_purchase_order_warehouse_guard()
     ensure_inventory_management_policy_schema(engine)
     ensure_purchase_sales_block_schema(engine)
+    ensure_receiving_workflow_status_schema(engine)
+    from .services.receiving_workflow_status_service import backfill_warehouse_workflow_statuses
+    from .database import SessionLocal
+
+    try:
+        db = SessionLocal()
+        try:
+            backfill_warehouse_workflow_statuses(db)
+        finally:
+            db.close()
+    except Exception:
+        logger.exception("[P2.5A] warehouse_workflow_status backfill skipped")
     ensure_tenant_warehouse_fulfillment_schema(engine)
     from .db.tenant_fulfillment_configuration_schema import ensure_tenant_fulfillment_configuration_schema
 

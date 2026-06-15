@@ -768,6 +768,14 @@ def recalculate_wms_document_completion(db: Session, tenant_id: int, document_id
     if changed:
         doc.updated_at = datetime.utcnow()
         db.add(doc)
+
+    from .receiving_workflow_status_service import sync_warehouse_workflow_status
+
+    if sync_warehouse_workflow_status(doc, rows, db, full_recv=full_recv, full_put=full_put):
+        doc.updated_at = datetime.utcnow()
+        db.add(doc)
+        changed = True
+
     return changed
 
 
@@ -1465,11 +1473,23 @@ def build_stock_document_read(
     src_wh = db.query(Warehouse).filter(Warehouse.id == int(src_wh_id)).first() if src_wh_id is not None else None
     dst_wh = db.query(Warehouse).filter(Warehouse.id == int(dst_wh_id)).first() if dst_wh_id is not None else None
 
+    from .receiving_workflow_status_service import (
+        derive_warehouse_workflow_status,
+        normalize_purchase_workflow_status,
+        normalize_warehouse_workflow_status,
+    )
+
     rs = str(getattr(doc, "receiving_status", None) or "NEW").strip() or "NEW"
     ps = str(getattr(doc, "putaway_status", None) or "NOT_STARTED").strip() or "NOT_STARTED"
     rls = str(getattr(doc, "relocation_status", None) or "OPEN").strip() or "OPEN"
     full_recv = compute_is_fully_received_for_items(item_rows)
     full_put = compute_is_fully_putaway_for_items(db, item_rows)
+
+    wh_ws = normalize_warehouse_workflow_status(
+        getattr(doc, "warehouse_workflow_status", None)
+        or derive_warehouse_workflow_status(doc, item_rows, db, full_recv=full_recv, full_put=full_put)
+    )
+    pu_ws = normalize_purchase_workflow_status(getattr(doc, "purchase_workflow_status", None))
 
     em = compute_document_edit_mode(doc, item_rows)
     if em == "full":
@@ -1606,6 +1626,8 @@ def build_stock_document_read(
         receiving_status=rs,
         putaway_status=ps,
         relocation_status=rls,
+        warehouse_workflow_status=wh_ws,
+        purchase_workflow_status=pu_ws,
         is_fully_received=full_recv,
         is_fully_putaway=full_put,
         currency=cur,
@@ -2068,6 +2090,19 @@ def patch_stock_document_metadata(
         doc.total_net = float(body.total_net)
     if body.total_gross is not None:
         doc.total_gross = float(body.total_gross)
+    if body.purchase_workflow_status is not None:
+        from .receiving_workflow_status_service import (
+            PURCHASE_WORKFLOW_STATUSES,
+            is_purchase_workflow_document,
+            normalize_purchase_workflow_status,
+        )
+
+        if not is_purchase_workflow_document(doc):
+            raise ValueError("Status zakupowy dotyczy tylko dokumentów PZ zakupowych")
+        raw = str(body.purchase_workflow_status).strip().upper()
+        if raw not in PURCHASE_WORKFLOW_STATUSES:
+            raise ValueError("Nieprawidłowy purchase_workflow_status")
+        doc.purchase_workflow_status = normalize_purchase_workflow_status(raw)
     doc.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(doc)

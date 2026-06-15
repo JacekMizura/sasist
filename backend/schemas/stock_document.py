@@ -307,6 +307,10 @@ class PatchStockDocumentMetadataBody(BaseModel):
     currency: Optional[str] = Field(None, min_length=3, max_length=8)
     total_net: Optional[float] = None
     total_gross: Optional[float] = None
+    purchase_workflow_status: Optional[str] = Field(
+        None,
+        description="P2.5A purchase axis: PENDING_INVOICE | COST_REVIEW | COST_DISPUTE | VERIFIED",
+    )
 
     @field_validator("total_net", "total_gross")
     @classmethod
@@ -376,6 +380,14 @@ class StockDocumentRead(BaseModel):
     putaway_status: str = "NOT_STARTED"
     """WMS zamknięcie listy rozlokowania: OPEN | DONE."""
     relocation_status: str = "OPEN"
+    warehouse_workflow_status: str = Field(
+        default="NEW",
+        description="P2.5A warehouse axis: NEW | COUNTING | COUNTED | PUTAWAY_IN_PROGRESS | PUTAWAY_COMPLETED | CLOSED",
+    )
+    purchase_workflow_status: str = Field(
+        default="PENDING_INVOICE",
+        description="P2.5A purchase axis (independent): PENDING_INVOICE | COST_REVIEW | COST_DISPUTE | VERIFIED",
+    )
     is_fully_received: bool = False
     is_fully_putaway: bool = False
     total_ordered: float = 0.0
@@ -445,6 +457,8 @@ class StockDocumentListRow(BaseModel):
     receiving_status: str = "NEW"
     putaway_status: str = "NOT_STARTED"
     relocation_status: str = "OPEN"
+    warehouse_workflow_status: str = "NEW"
+    purchase_workflow_status: str = "PENDING_INVOICE"
     is_fully_received: bool = False
     is_fully_putaway: bool = False
     currency: str = "PLN"

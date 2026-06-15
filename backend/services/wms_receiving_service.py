@@ -761,6 +761,7 @@ def build_wms_pz_list_row(
     number = stored_num or warehouse_document_display_number(dt, created, d.id)
     has_rmz = any(getattr(x, "source_rmz_id", None) for x in lines)
     has_complaint = any(getattr(x, "source_complaint_id", None) for x in lines)
+    wf = _workflow_fields_for_list_row(d, lines, db)
     return WmsReceivingPzListRow(
         id=d.id,
         number=number,
@@ -772,6 +773,8 @@ def build_wms_pz_list_row(
         receiving_status=str(getattr(d, "receiving_status", None) or "NEW"),
         putaway_status=str(getattr(d, "putaway_status", None) or "NOT_STARTED"),
         relocation_status=str(getattr(d, "relocation_status", None) or "OPEN"),
+        warehouse_workflow_status=wf["warehouse_workflow_status"],
+        purchase_workflow_status=wf["purchase_workflow_status"],
         is_fully_received=compute_is_fully_received_for_items(lines),
         is_fully_putaway=compute_is_fully_putaway_for_items(db, lines),
         carrier_count=len(carrier_ids),
@@ -785,6 +788,27 @@ def build_wms_pz_list_row(
         has_complaint_source=bool(has_complaint),
         created_by=created_by_read_for_document(d, users_by_id),
     )
+
+
+def _workflow_fields_for_list_row(
+    d: StockDocument,
+    lines: List[StockDocumentItem],
+    db: Session,
+) -> dict[str, str]:
+    from ..services.receiving_workflow_status_service import (
+        derive_warehouse_workflow_status,
+        normalize_purchase_workflow_status,
+        normalize_warehouse_workflow_status,
+    )
+
+    full_recv = compute_is_fully_received_for_items(lines)
+    full_put = compute_is_fully_putaway_for_items(db, lines)
+    wh = normalize_warehouse_workflow_status(
+        getattr(d, "warehouse_workflow_status", None)
+        or derive_warehouse_workflow_status(d, lines, db, full_recv=full_recv, full_put=full_put)
+    )
+    pu = normalize_purchase_workflow_status(getattr(d, "purchase_workflow_status", None))
+    return {"warehouse_workflow_status": wh, "purchase_workflow_status": pu}
 
 
 def _load_draft_pz_docs_with_lines(

@@ -11,6 +11,7 @@ import { displayWarehouseDocumentNumber } from "../../utils/warehouseDocumentNum
 import { documentCreatedByLabel } from "../../utils/documentCreatedBy";
 import { formatRelativeUpdatePl, formatWmsListDate } from "./wmsListFormatters";
 import { isReturnReceiptDocumentType } from "./putawayDocumentGates";
+import PzWorkflowStatusBadges from "../../components/wms/PzWorkflowStatusBadges";
 
 type Tenant = { id: number; name: string };
 
@@ -36,12 +37,11 @@ function PutawayPzCard({ row, tenantId }: { row: WmsReceivingPzListRow; tenantId
   const docNumber = displayWarehouseDocumentNumber(row.number) || row.number?.trim() || (isReturnReceipt ? `Z-PZ #${row.id}` : `PZ #${row.id}`);
   const activityIso = row.updated_at?.trim() ? row.updated_at : row.created_at;
 
-  const receivingInProgress = String(row.receiving_status ?? "").toUpperCase() !== "DONE";
   const carrierCount = row.carrier_count ?? 0;
   const totalPut = row.total_putaway ?? 0;
   const putTarget =
     row.putaway_target_quantity ??
-    (receivingInProgress ? row.total_received : row.total_ordered);
+    (String(row.receiving_status ?? "").toUpperCase() !== "DONE" ? row.total_received : row.total_ordered);
   const progressPct =
     putTarget > 0 ? Math.min(100, Math.round((totalPut / putTarget) * 100)) : 0;
 
@@ -81,11 +81,16 @@ function PutawayPzCard({ row, tenantId }: { row: WmsReceivingPzListRow; tenantId
             >
               {isReturnReceipt ? "Do rozlokowania Z-PZ" : "Do rozlokowania PZ"}
             </span>
-            <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider border ${
-              receivingInProgress ? 'bg-amber-50 text-amber-700 border-amber-200/60' : 'bg-emerald-50 text-emerald-700 border-emerald-200/60'
-            }`}>
-              {receivingInProgress ? "W trakcie przyjęcia" : "Gotowe do rozlokowania"}
-            </span>
+            <PzWorkflowStatusBadges
+              compact
+              documentType={row.document_type}
+              warehouseWorkflowStatus={row.warehouse_workflow_status}
+              purchaseWorkflowStatus={row.purchase_workflow_status}
+              receiving_status={row.receiving_status}
+              putaway_status={row.putaway_status}
+              relocation_status={row.relocation_status}
+              status={row.status}
+            />
           </div>
         </div>
       </div>

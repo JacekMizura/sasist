@@ -45,6 +45,8 @@ export type StockDocumentListRow = {
   receiving_status?: string;
   putaway_status?: string;
   relocation_status?: string;
+  warehouse_workflow_status?: string;
+  purchase_workflow_status?: string;
   is_fully_received?: boolean;
   is_fully_putaway?: boolean;
   currency?: string;
@@ -202,6 +204,8 @@ export type StockDocumentRead = {
   receiving_status?: string;
   putaway_status?: string;
   relocation_status?: string;
+  warehouse_workflow_status?: string;
+  purchase_workflow_status?: string;
   is_fully_received?: boolean;
   is_fully_putaway?: boolean;
   total_ordered?: number;

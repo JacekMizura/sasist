@@ -195,6 +195,8 @@ class WmsReceivingPzListRow(BaseModel):
     has_rmz_source: bool = False
     has_complaint_source: bool = False
     created_by: DocumentCreatedByRead = Field(default_factory=DocumentCreatedByRead)
+    warehouse_workflow_status: str = "NEW"
+    purchase_workflow_status: str = "PENDING_INVOICE"
 
 
 class WmsReceivingItemQuantityBody(BaseModel):
