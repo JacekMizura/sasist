@@ -206,6 +206,11 @@ class StockDocumentItemRead(BaseModel):
         ge=0,
         description="received_quantity minus effective sales block for this line.",
     )
+    line_remaining_qty: float = Field(
+        0,
+        ge=0,
+        description="Remaining received qty on this PZ line after LIFO virtual consumption (sales block).",
+    )
 
     @computed_field
     @property

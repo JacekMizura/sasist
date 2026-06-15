@@ -1059,6 +1059,7 @@ def _item_row_to_read(
     sales_blocked_at=None,
     sales_blocked_by_user_id: Optional[int] = None,
     line_commercial_available_qty: float = 0.0,
+    line_remaining_qty: float = 0.0,
 ) -> StockDocumentItemRead:
     o = float(row.ordered_quantity or 0)
     r = float(row.received_quantity or 0)
@@ -1163,6 +1164,7 @@ def _item_row_to_read(
         sales_blocked_at=sales_blocked_at,
         sales_blocked_by_user_id=sales_blocked_by_user_id,
         line_commercial_available_qty=float(line_commercial_available_qty or 0),
+        line_remaining_qty=float(line_remaining_qty or 0),
     )
 
 

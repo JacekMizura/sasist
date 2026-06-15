@@ -154,6 +154,7 @@ export type StockDocumentItemRead = {
   sales_blocked_at?: string | null;
   sales_blocked_by_user_id?: number | null;
   line_commercial_available_qty?: number;
+  line_remaining_qty?: number;
 };
 
 export type StockDocumentLinkedSaleDocumentRead = {
