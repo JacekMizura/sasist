@@ -1054,6 +1054,9 @@ try:
     from .services.inbound_delivery_warehouse_service import register_inbound_delivery_warehouse_guard
 
     register_inbound_delivery_warehouse_guard()
+    from .services.purchase_order_warehouse_service import register_purchase_order_warehouse_guard
+
+    register_purchase_order_warehouse_guard()
     ensure_inventory_management_policy_schema(engine)
     ensure_purchase_sales_block_schema(engine)
     ensure_tenant_warehouse_fulfillment_schema(engine)
@@ -1972,6 +1975,17 @@ async def _log_backend_startup() -> None:
         _ensure_wms_returns_router_mounted()
     except Exception as exc:
         log_unhandled_exception("startup _ensure_wms_returns_router_mounted", exc)
+    try:
+        from .database import SessionLocal
+        from .services.warehouse_ownership_audit_service import log_warehouse_ownership_audit
+
+        db = SessionLocal()
+        try:
+            log_warehouse_ownership_audit(db)
+        finally:
+            db.close()
+    except Exception as exc:
+        log_unhandled_exception("startup warehouse ownership audit", exc)
     for r in app.routes:
         path = getattr(r, "path", None)
         if path and "/wms/inventory-count/" in str(path):

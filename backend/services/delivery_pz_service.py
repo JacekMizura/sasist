@@ -16,6 +16,11 @@ from .delivery_item_catalog_snapshot import hydrate_delivery_item_snapshots
 from .document_creator_service import stamp_document_creator
 from .inbound_delivery_warehouse_service import validate_inbound_delivery_warehouse_id
 from .purchase_order_warehouse_sync_service import sync_purchase_order_status_for_delivery_id
+from .warehouse_ownership_chain_service import (
+    assert_delivery_matches_purchase_order_warehouse,
+    assert_no_conflicting_pz_on_delivery,
+    assert_pz_inherits_delivery_warehouse,
+)
 from ..utils.product_vat import product_vat_rate_percent
 
 QTY_EPS = 1e-9
@@ -73,6 +78,13 @@ def create_pz_from_delivery(
         raise ValueError("Cannot create PZ for cancelled or fully received purchase order")
 
     warehouse_id = require_delivery_warehouse_id(d)
+    assert_delivery_matches_purchase_order_warehouse(db, d, tenant_id=tenant_id)
+    assert_no_conflicting_pz_on_delivery(
+        db,
+        tenant_id=tenant_id,
+        delivery_id=int(delivery_id),
+        delivery_warehouse_id=warehouse_id,
+    )
 
     sup = db.query(Supplier).filter(Supplier.id == d.supplier_id, Supplier.tenant_id == tenant_id).first()
     if not sup:
@@ -117,6 +129,10 @@ def create_pz_from_delivery(
     stamp_document_creator(doc, created_by)
     db.add(doc)
     db.flush()
+    assert_pz_inherits_delivery_warehouse(
+        delivery_warehouse_id=warehouse_id,
+        pz_warehouse_id=int(doc.warehouse_id),
+    )
 
     for it in receivable_plan:
         q_plan = float(it.quantity_ordered)

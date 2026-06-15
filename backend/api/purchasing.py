@@ -11,6 +11,13 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from ..database import get_db
+from ..auth.deps import get_current_user
+from ..auth.warehouse_deps import (
+    assert_warehouse_scoped_entity_access,
+    load_purchase_order_for_active_warehouse,
+    require_active_or_query_operable_warehouse,
+)
+from ..models.app_user import AppUser
 from ..schemas.purchasing_dashboard import PurchasingDashboardOut
 from ..schemas.purchasing_forecast import PurchasingForecastOut
 from ..schemas.purchasing_orders import (
@@ -484,8 +491,11 @@ def post_purchasing_alerts_run_scan(
 @router.post("/alerts/create-draft-orders", response_model=PurchasingAlertCreateDraftOut, status_code=201)
 def post_purchasing_alerts_create_draft_orders(
     body: PurchasingAlertCreateDraftBody,
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
 ) -> PurchasingAlertCreateDraftOut:
+    assert_warehouse_scoped_entity_access(db, user, int(body.warehouse_id), warehouse_id)
     raw = purch_alert_svc.create_draft_orders_from_critical_alerts(
         db,
         tenant_id=body.tenant_id,
@@ -697,9 +707,12 @@ def export_purchasing_replenishment_csv(
 @router.post("/orders/from-generator", response_model=PurchaseOrdersFromGeneratorOut, status_code=201)
 def post_purchase_orders_from_generator(
     body: PurchaseOrderFromGeneratorBody,
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
 ) -> PurchaseOrdersFromGeneratorOut:
     """Create one draft purchase order per supplier from replenishment rows for selected products."""
+    assert_warehouse_scoped_entity_access(db, user, int(body.warehouse_id), warehouse_id)
     with purchasing_api_span(
         "POST /purchasing/orders/from-generator",
         tenant_id=body.tenant_id,
@@ -744,8 +757,13 @@ def list_purchase_orders(
 def get_purchase_order(
     order_id: int,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
 ) -> PurchaseOrderDetailOut:
+    load_purchase_order_for_active_warehouse(
+        db, user, tenant_id=tenant_id, order_id=order_id, active_warehouse_id=warehouse_id
+    )
     raw = po_order_service.get_purchase_order(db, tenant_id, order_id)
     return PurchaseOrderDetailOut.model_validate(raw)
 
@@ -755,8 +773,13 @@ def patch_purchase_order(
     order_id: int,
     body: PurchaseOrderPatchBody,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
 ) -> PurchaseOrderDetailOut:
+    load_purchase_order_for_active_warehouse(
+        db, user, tenant_id=tenant_id, order_id=order_id, active_warehouse_id=warehouse_id
+    )
     line_dicts = None
     if body.line_updates:
         line_dicts = []
@@ -790,8 +813,13 @@ def patch_purchase_order_status(
     order_id: int,
     body: PurchaseOrderStatusBody,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
 ) -> PurchaseOrderDetailOut:
+    load_purchase_order_for_active_warehouse(
+        db, user, tenant_id=tenant_id, order_id=order_id, active_warehouse_id=warehouse_id
+    )
     raw = po_order_service.patch_purchase_order_status(db, tenant_id, order_id, body.status)
     return PurchaseOrderDetailOut.model_validate(raw)
 
@@ -800,9 +828,14 @@ def patch_purchase_order_status(
 def delete_purchase_order(
     order_id: int,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
 ) -> dict:
     """Delete draft PO or archive non-draft PO according to warehouse/PZ constraints."""
+    load_purchase_order_for_active_warehouse(
+        db, user, tenant_id=tenant_id, order_id=order_id, active_warehouse_id=warehouse_id
+    )
     return po_order_service.delete_or_archive_purchase_order(db, tenant_id, order_id)
 
 
@@ -810,9 +843,14 @@ def delete_purchase_order(
 def post_inbound_delivery_from_purchase_order(
     order_id: int,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
 ) -> InboundDeliveryFromPoOut:
     """Create draft inbound delivery (`/deliveries`) linked to this purchase order."""
+    load_purchase_order_for_active_warehouse(
+        db, user, tenant_id=tenant_id, order_id=order_id, active_warehouse_id=warehouse_id
+    )
     raw = po_order_service.create_inbound_delivery_from_purchase_order(db, tenant_id, order_id)
     return InboundDeliveryFromPoOut.model_validate(raw)
 

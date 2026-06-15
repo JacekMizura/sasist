@@ -155,6 +155,59 @@ def load_production_order_for_active_warehouse(
     return row
 
 
+def load_purchase_order_for_active_warehouse(
+    db: Session,
+    user: AppUser,
+    *,
+    tenant_id: int,
+    order_id: int,
+    active_warehouse_id: int,
+):
+    from ..models.purchase_order import PurchaseOrder
+
+    row = (
+        db.query(PurchaseOrder)
+        .filter(PurchaseOrder.id == int(order_id), PurchaseOrder.tenant_id == int(tenant_id))
+        .first()
+    )
+    if row is None:
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=404, detail="Purchase order not found")
+    assert_warehouse_scoped_entity_access(
+        db, user, getattr(row, "warehouse_id", None), active_warehouse_id
+    )
+    return row
+
+
+def load_inbound_delivery_for_active_warehouse(
+    db: Session,
+    user: AppUser,
+    *,
+    tenant_id: int,
+    delivery_id: int,
+    active_warehouse_id: int,
+):
+    from ..models.inbound_delivery import InboundDelivery
+
+    row = (
+        db.query(InboundDelivery)
+        .filter(
+            InboundDelivery.id == int(delivery_id),
+            InboundDelivery.tenant_id == int(tenant_id),
+        )
+        .first()
+    )
+    if row is None:
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=404, detail="Purchase order not found")
+    assert_warehouse_scoped_entity_access(
+        db, user, getattr(row, "warehouse_id", None), active_warehouse_id
+    )
+    return row
+
+
 def load_production_batch_for_active_warehouse(
     db: Session,
     user: AppUser,

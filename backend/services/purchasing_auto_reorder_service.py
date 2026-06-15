@@ -16,6 +16,7 @@ from ..models.purchase_auto_reorder import PurchaseAutoRule, PurchaseAutoRun
 from ..models.purchase_order import PurchaseOrder
 from ..models.supplier import Supplier
 from . import purchasing_order_service as po_svc
+from .purchasing_order_service import ERR_PO_WAREHOUSE_REQUIRED
 from .purchasing_forecast_service import sales_qty_by_days
 from .purchasing_replenishment_service import replenishment_rows_for_export
 from .purchasing_segments_service import build_purchasing_segments
@@ -277,6 +278,8 @@ def _execute_rule_engine(
     cfg = _parse_config(rule.config_json)
     wh_raw = cfg.get("warehouse_id")
     warehouse_id: Optional[int] = int(wh_raw) if wh_raw is not None else None
+    if not dry_run and (warehouse_id is None or int(warehouse_id) <= 0):
+        raise HTTPException(status_code=400, detail=ERR_PO_WAREHOUSE_REQUIRED)
 
     run = PurchaseAutoRun(
         tenant_id=tenant_id,

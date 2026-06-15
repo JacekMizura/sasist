@@ -1,5 +1,14 @@
 # Current context
 
+## P2.3 — Warehouse Ownership Finalization (2026-06-08) — CLOSED
+- **Raporty:** `memory/p2.3-purchase-flow-audit.md`, `memory/p2.3-warehouse-ownership-finalization-report.md`
+- SSOT łańcuch: PO → Delivery → PZ → Inventory; `warehouse_id` tylko w dół
+- ORM guards: PO + Delivery + StockDocument (registered in `main.py`)
+- Chain validators: `warehouse_ownership_chain_service`; PZ inherits delivery WH
+- API gates: PO + Delivery detail/mutations → P2.2 loaders (404 cross-wh)
+- Startup: `[WAREHOUSE_OWNERSHIP_AUDIT]`; script `report_missing_warehouse_ownership`
+- Testy: 28 passed (P2.2 + P2.2A + P2.3)
+
 ## P2.2A — Warehouse Context Finalization (2026-06-08)
 - **Raport:** `memory/p2.2a-warehouse-context-finalization-report.md`
 - Putaway item/carrier/suggest → `load_stock_document_item_for_active_warehouse`

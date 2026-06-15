@@ -11,6 +11,11 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, selectinload
 
 from ..auth.deps import get_current_user
+from ..auth.warehouse_deps import (
+    assert_warehouse_scoped_entity_access,
+    load_inbound_delivery_for_active_warehouse,
+    require_active_or_query_operable_warehouse,
+)
 from ..database import get_db
 from ..models.app_user import AppUser
 from ..domain.supplier_product_linkage import product_allowed_for_supplier
@@ -45,6 +50,7 @@ from ..services.inbound_delivery_warehouse_service import (
     ERR_INBOUND_DELIVERY_NO_WAREHOUSE,
     InboundDeliveryWarehouseRequiredError,
 )
+from ..services.warehouse_ownership_chain_service import assert_delivery_matches_purchase_order_warehouse
 from ..services.wms_warehouse_ownership_service import StockDocumentWarehouseRequiredError
 from ..services.wms_workforce_activity import MODULE_RECEIVING, log_wms_workforce_activity
 
@@ -405,7 +411,12 @@ def _assert_editable(d: InboundDelivery) -> None:
 
 
 @router.post("/quick-from-product", response_model=DeliveryRead, status_code=201)
-def quick_purchase_order_from_product(body: QuickFromProductBody, db: Session = Depends(get_db)):
+def quick_purchase_order_from_product(
+    body: QuickFromProductBody,
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
     p = db.query(Product).filter(Product.id == body.product_id, Product.tenant_id == body.tenant_id).first()
     if not p:
         raise HTTPException(status_code=400, detail="Product not found for tenant")
@@ -426,6 +437,7 @@ def quick_purchase_order_from_product(body: QuickFromProductBody, db: Session = 
             detail="Product is not linked to this supplier (supplier catalog or default supplier).",
         )
     _assert_delivery_warehouse_for_tenant(db, body.tenant_id, int(body.warehouse_id))
+    assert_warehouse_scoped_entity_access(db, user, int(body.warehouse_id), warehouse_id)
     now = datetime.utcnow()
     d = InboundDelivery(
         tenant_id=body.tenant_id,
@@ -549,19 +561,31 @@ def list_deliveries(
 
 
 @router.get("/{delivery_id}", response_model=DeliveryRead)
-def get_delivery(delivery_id: int, tenant_id: int = Query(..., ge=1), db: Session = Depends(get_db)):
-    d = db.query(InboundDelivery).filter(InboundDelivery.id == delivery_id, InboundDelivery.tenant_id == tenant_id).first()
-    if not d:
-        raise HTTPException(status_code=404, detail="Purchase order not found")
+def get_delivery(
+    delivery_id: int,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    d = load_inbound_delivery_for_active_warehouse(
+        db, user, tenant_id=tenant_id, delivery_id=delivery_id, active_warehouse_id=warehouse_id
+    )
     return _delivery_to_read(db, d)
 
 
 @router.post("/", response_model=DeliveryRead, status_code=201)
-def create_delivery(body: DeliveryCreateBody, db: Session = Depends(get_db)):
+def create_delivery(
+    body: DeliveryCreateBody,
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
     sup = db.query(Supplier).filter(Supplier.id == body.supplier_id, Supplier.tenant_id == body.tenant_id).first()
     if not sup:
         raise HTTPException(status_code=400, detail="Invalid supplier_id for tenant")
     _assert_delivery_warehouse_for_tenant(db, body.tenant_id, int(body.warehouse_id))
+    assert_warehouse_scoped_entity_access(db, user, int(body.warehouse_id), warehouse_id)
     now = datetime.utcnow()
     note_s = (body.notes or "").strip() if body.notes is not None else ""
     custom_name = (body.name or "").strip() if body.name is not None else ""
@@ -592,11 +616,13 @@ def update_delivery(
     delivery_id: int,
     body: DeliveryUpdateBody,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
 ):
-    d = db.query(InboundDelivery).filter(InboundDelivery.id == delivery_id, InboundDelivery.tenant_id == tenant_id).first()
-    if not d:
-        raise HTTPException(status_code=404, detail="Purchase order not found")
+    d = load_inbound_delivery_for_active_warehouse(
+        db, user, tenant_id=tenant_id, delivery_id=delivery_id, active_warehouse_id=warehouse_id
+    )
     old_status = (d.status or "draft").strip().lower()
     if body.supplier_id is not None:
         sup = db.query(Supplier).filter(Supplier.id == body.supplier_id, Supplier.tenant_id == tenant_id).first()
@@ -604,8 +630,14 @@ def update_delivery(
             raise HTTPException(status_code=400, detail="Invalid supplier_id")
         d.supplier_id = body.supplier_id
     if body.warehouse_id is not None:
-        _assert_delivery_warehouse_for_tenant(db, tenant_id, int(body.warehouse_id))
-        d.warehouse_id = int(body.warehouse_id)
+        new_wh = int(body.warehouse_id)
+        assert_warehouse_scoped_entity_access(db, user, new_wh, warehouse_id)
+        _assert_delivery_warehouse_for_tenant(db, tenant_id, new_wh)
+        d.warehouse_id = new_wh
+        try:
+            assert_delivery_matches_purchase_order_warehouse(db, d, tenant_id=tenant_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
     if body.status is not None:
         new_s = body.status.strip().lower()
         if new_s not in DELIVERY_STATUSES:
@@ -633,10 +665,16 @@ def update_delivery(
 
 
 @router.delete("/{delivery_id}")
-def delete_delivery(delivery_id: int, tenant_id: int = Query(..., ge=1), db: Session = Depends(get_db)):
-    d = db.query(InboundDelivery).filter(InboundDelivery.id == delivery_id, InboundDelivery.tenant_id == tenant_id).first()
-    if not d:
-        raise HTTPException(status_code=404, detail="Purchase order not found")
+def delete_delivery(
+    delivery_id: int,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    d = load_inbound_delivery_for_active_warehouse(
+        db, user, tenant_id=tenant_id, delivery_id=delivery_id, active_warehouse_id=warehouse_id
+    )
     if d.status != "draft":
         raise HTTPException(status_code=400, detail="Nie można usunąć zamówienia w tym statusie")
     db.delete(d)
@@ -649,11 +687,13 @@ def add_delivery_item(
     delivery_id: int,
     body: DeliveryItemCreateBody,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
 ):
-    d = db.query(InboundDelivery).filter(InboundDelivery.id == delivery_id, InboundDelivery.tenant_id == tenant_id).first()
-    if not d:
-        raise HTTPException(status_code=404, detail="Purchase order not found")
+    d = load_inbound_delivery_for_active_warehouse(
+        db, user, tenant_id=tenant_id, delivery_id=delivery_id, active_warehouse_id=warehouse_id
+    )
     _assert_editable(d)
     if body.product_id is not None:
         p = db.query(Product).filter(Product.id == body.product_id, Product.tenant_id == tenant_id).first()
@@ -745,11 +785,13 @@ def patch_delivery_item(
     item_id: int,
     body: DeliveryItemPatchBody,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
 ):
-    d = db.query(InboundDelivery).filter(InboundDelivery.id == delivery_id, InboundDelivery.tenant_id == tenant_id).first()
-    if not d:
-        raise HTTPException(status_code=404, detail="Purchase order not found")
+    d = load_inbound_delivery_for_active_warehouse(
+        db, user, tenant_id=tenant_id, delivery_id=delivery_id, active_warehouse_id=warehouse_id
+    )
     _assert_editable(d)
     it = (
         db.query(DeliveryItem)
@@ -798,11 +840,13 @@ def remove_delivery_item(
     delivery_id: int,
     item_id: int,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
 ):
-    d = db.query(InboundDelivery).filter(InboundDelivery.id == delivery_id, InboundDelivery.tenant_id == tenant_id).first()
-    if not d:
-        raise HTTPException(status_code=404, detail="Purchase order not found")
+    d = load_inbound_delivery_for_active_warehouse(
+        db, user, tenant_id=tenant_id, delivery_id=delivery_id, active_warehouse_id=warehouse_id
+    )
     _assert_editable(d)
     it = (
         db.query(DeliveryItem)
@@ -822,6 +866,7 @@ def remove_delivery_item(
 def create_pz_from_supplier_order(
     delivery_id: int,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
     user: AppUser = Depends(get_current_user),
 ):
@@ -829,6 +874,9 @@ def create_pz_from_supplier_order(
     Create a draft PZ from the purchase order: lines use ordered qty and price from delivery items only.
     Does not post inventory or receipt totals — use WMS / PATCH / accept on the stock document.
     """
+    load_inbound_delivery_for_active_warehouse(
+        db, user, tenant_id=tenant_id, delivery_id=delivery_id, active_warehouse_id=warehouse_id
+    )
     try:
         doc = create_pz_from_delivery(db, tenant_id, delivery_id, created_by=user)
         log_wms_workforce_activity(
