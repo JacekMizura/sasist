@@ -241,7 +241,7 @@ export default function DocumentsWarehousePage() {
       setReceivedByLineId({});
       setDetailLoading(true);
       try {
-        const d = await getStockDocument(tenantId, id);
+        const d = await getStockDocument(tenantId, id, warehouseId ?? undefined);
         setDetail(d);
         const init: Record<number, string> = {};
         const carrierInit: Record<number, string> = {};

@@ -12,7 +12,7 @@ from ..auth.deps import get_current_user
 from ..auth.warehouse_deps import (
     require_active_operable_warehouse,
     require_active_or_query_operable_warehouse,
-    assert_stock_document_warehouse,
+    load_stock_document_for_active_warehouse,
     enforce_warehouse_access,
 )
 from ..database import get_db
@@ -61,19 +61,18 @@ def _load_pz_for_user(
     tenant_id: int,
     pz_id: int,
     user: AppUser,
+    *,
+    active_warehouse_id: int,
 ) -> StockDocument:
-    doc = (
-        db.query(StockDocument)
-        .filter(
-            StockDocument.id == int(pz_id),
-            StockDocument.tenant_id == int(tenant_id),
-            StockDocument.document_type == "PZ",
-        )
-        .first()
+    doc = load_stock_document_for_active_warehouse(
+        db,
+        user,
+        tenant_id=tenant_id,
+        document_id=pz_id,
+        active_warehouse_id=active_warehouse_id,
     )
-    if doc is None:
+    if str(getattr(doc, "document_type", "") or "").strip().upper() != "PZ":
         raise HTTPException(status_code=404, detail="PZ not found")
-    assert_stock_document_warehouse(db, user, doc)
     return doc
 
 
@@ -135,11 +134,12 @@ def post_wms_receiving_pz_create_product(
     pz_id: int,
     body: WmsCreateReceivingProductBody,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_operable_warehouse),
     db: Session = Depends(get_db),
     user: AppUser = Depends(get_current_user),
 ):
     """Nowy produkt w asortymencie (minimalny) + linia na PZ."""
-    _load_pz_for_user(db, tenant_id, pz_id, user)
+    _load_pz_for_user(db, tenant_id, pz_id, user, active_warehouse_id=warehouse_id)
     try:
         doc = create_product_from_wms_receiving(db, tenant_id, pz_id, body, performed_by=user)
         log_wms_workforce_activity(
@@ -163,11 +163,12 @@ def post_wms_receiving_pz_ensure_product(
     pz_id: int,
     body: WmsEnsureProductLineBody,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_operable_warehouse),
     db: Session = Depends(get_db),
     user: AppUser = Depends(get_current_user),
 ):
     """Produkt spoza PZ: linia EXTRA_ITEM (ordered=0), opcjonalnie auto +1 szt."""
-    _load_pz_for_user(db, tenant_id, pz_id, user)
+    _load_pz_for_user(db, tenant_id, pz_id, user, active_warehouse_id=warehouse_id)
     try:
         doc, item_id, auto_received = ensure_wms_pz_product_anchor_line(
             db,
@@ -199,6 +200,7 @@ def post_wms_receiving_pz_finish(
     pz_id: int,
     body: PatchStockDocumentItemsBody,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_operable_warehouse),
     db: Session = Depends(get_db),
     user: AppUser = Depends(get_current_user),
 ):
@@ -210,7 +212,7 @@ def post_wms_receiving_pz_finish(
         user.id,
         len(body.items),
     )
-    doc_pre = _load_pz_for_user(db, tenant_id, pz_id, user)
+    doc_pre = _load_pz_for_user(db, tenant_id, pz_id, user, active_warehouse_id=warehouse_id)
     _logger.info(
         "[RECEIVING_FINISH] document_id=%s tenant_id=%s warehouse_id=%s status=%s document_type=%s",
         pz_id,
@@ -247,20 +249,17 @@ def post_wms_receiving_pz_finish(
 def post_wms_receive(
     body: WmsReceiveBody,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_operable_warehouse),
     db: Session = Depends(get_db),
     current_user: AppUser = Depends(get_current_user),
 ):
-    doc = (
-        db.query(StockDocument)
-        .filter(
-            StockDocument.id == int(body.pz_id),
-            StockDocument.tenant_id == int(tenant_id),
-        )
-        .first()
+    load_stock_document_for_active_warehouse(
+        db,
+        current_user,
+        tenant_id=tenant_id,
+        document_id=int(body.pz_id),
+        active_warehouse_id=warehouse_id,
     )
-    if doc is None:
-        raise HTTPException(status_code=404, detail="PZ not found")
-    assert_stock_document_warehouse(db, current_user, doc)
     try:
         doc = apply_wms_receive_deltas(db, tenant_id, body, performed_by=current_user)
         log_wms_workforce_activity(
@@ -284,11 +283,12 @@ def post_wms_receiving_pz_carriers(
     pz_id: int,
     body: ReceivingPzCarriersAttachBody,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_operable_warehouse),
     db: Session = Depends(get_db),
     user: AppUser = Depends(get_current_user),
 ):
     """Przypisz istniejący nośnik do PZ lub utwórz serię (bulk) i przypisz wszystkie."""
-    _load_pz_for_user(db, tenant_id, pz_id, user)
+    _load_pz_for_user(db, tenant_id, pz_id, user, active_warehouse_id=warehouse_id)
     try:
         doc = post_receiving_pz_carriers(db, tenant_id, pz_id, body, performed_by=user)
         act = "scan_carrier_activate" if body.warehouse_carrier_id else "scan_carrier_create"
@@ -316,11 +316,12 @@ def post_wms_receiving_pz_receive_serial(
     pz_id: int,
     body: WmsReceiveSerialBody,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_operable_warehouse),
     db: Session = Depends(get_db),
     user: AppUser = Depends(get_current_user),
 ):
     """Przyjęcie 1 szt. po numerze seryjnym (track_serial)."""
-    _load_pz_for_user(db, tenant_id, pz_id, user)
+    _load_pz_for_user(db, tenant_id, pz_id, user, active_warehouse_id=warehouse_id)
     try:
         doc = receive_wms_pz_serial(db, tenant_id, pz_id, body, performed_by=user)
         log_wms_workforce_activity(
@@ -346,11 +347,12 @@ def patch_wms_receiving_pz_item(
     item_id: int,
     body: WmsReceivingItemQuantityBody,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_operable_warehouse),
     db: Session = Depends(get_db),
     user: AppUser = Depends(get_current_user),
 ):
     """Add qty to a lot row matching batch/expiry or create a new row (draft PZ only; no inventory)."""
-    _load_pz_for_user(db, tenant_id, pz_id, user)
+    _load_pz_for_user(db, tenant_id, pz_id, user, active_warehouse_id=warehouse_id)
     try:
         doc = patch_wms_receiving_pz_item_quantity(db, tenant_id, pz_id, item_id, body, performed_by=user)
         log_wms_workforce_activity(
@@ -379,11 +381,12 @@ def post_wms_receiving_pz_item_mark_damaged(
     item_id: int,
     body: WmsReceivingMarkDamagedBody,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_operable_warehouse),
     db: Session = Depends(get_db),
     user: AppUser = Depends(get_current_user),
 ):
     """Transfer saleable received qty into a damaged (REJECTED_STOCK) bucket line on the draft PZ."""
-    _load_pz_for_user(db, tenant_id, pz_id, user)
+    _load_pz_for_user(db, tenant_id, pz_id, user, active_warehouse_id=warehouse_id)
     try:
         doc = mark_wms_receiving_pz_item_damaged(db, tenant_id, pz_id, item_id, body, performed_by=user)
         log_wms_workforce_activity(
@@ -409,11 +412,12 @@ def post_wms_receiving_pz_item_move_carrier(
     item_id: int,
     body: WmsReceivingMoveCarrierBody,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_operable_warehouse),
     db: Session = Depends(get_db),
     user: AppUser = Depends(get_current_user),
 ):
     """Move all received qty on a line from its current carrier to another (or luzem)."""
-    _load_pz_for_user(db, tenant_id, pz_id, user)
+    _load_pz_for_user(db, tenant_id, pz_id, user, active_warehouse_id=warehouse_id)
     try:
         doc = move_wms_receiving_pz_item_carrier(db, tenant_id, pz_id, item_id, body, performed_by=user)
         log_wms_workforce_activity(
@@ -439,11 +443,12 @@ def put_wms_receiving_pz_item_split(
     item_id: int,
     body: WmsReceivingSplitBody,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_operable_warehouse),
     db: Session = Depends(get_db),
     _user: AppUser = Depends(get_current_user),
 ):
     """Replace line group (same delivery line) with multiple batch/expiry segments."""
-    _load_pz_for_user(db, tenant_id, pz_id, _user)
+    _load_pz_for_user(db, tenant_id, pz_id, _user, active_warehouse_id=warehouse_id)
     try:
         return split_wms_receiving_pz_item_lines(db, tenant_id, pz_id, item_id, body)
     except ValueError as e:

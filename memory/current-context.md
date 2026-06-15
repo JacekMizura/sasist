@@ -1,5 +1,13 @@
 # Current context
 
+## P2.2 — Warehouse Context Enforcement (2026-06-08)
+- **Raport:** `memory/p2.2-warehouse-context-enforcement-report.md`
+- SSOT: `warehouse_scoped_access_service.assert_entity_warehouse_matches_active` + loadery w `warehouse_deps`
+- Stock documents, receiving, putaway list/detail, MM relocation, production, inventory ERP/WMS task — WH gate
+- Cross-wh → HTTP 404; testy: `test_p2_2_warehouse_context_enforcement.py` (6 passed)
+- Deliveries: rekomendacja hybrydowa (tenant-central + scoped view) — **bez implementacji**
+- YELLOW follow-up: putaway/MM mutacje po `item_id`, WMS inventory scan po linii
+
 ## P2.1A — Warehouse Context UX Fix (2026-06-08)
 - **Raport:** `memory/p2.1a-warehouse-context-ux-report.md`
 - Hook: `useActiveWarehouseContext()` + `ActiveWarehouseRequiredBanner`

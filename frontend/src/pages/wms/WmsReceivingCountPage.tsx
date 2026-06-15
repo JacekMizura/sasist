@@ -160,7 +160,7 @@ export default function WmsReceivingCountPage() {
     }
     setLoading(true);
     try {
-      const d = await getStockDocument(tenantId, pzId);
+      const d = await getStockDocument(tenantId, pzId, warehouse?.id ?? undefined);
       setDetail(d);
       const init: Record<number, number> = {};
       for (const it of d.items ?? []) init[it.id] = toCountValue(it.received_quantity);
@@ -172,7 +172,7 @@ export default function WmsReceivingCountPage() {
     } finally {
       setLoading(false);
     }
-  }, [tenantId, pzId, pzIdValid, showScannerToast]);
+  }, [tenantId, pzId, pzIdValid, showScannerToast, warehouse?.id]);
 
   useEffect(() => {
     void load();

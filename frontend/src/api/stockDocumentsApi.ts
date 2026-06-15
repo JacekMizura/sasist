@@ -236,9 +236,20 @@ export async function listStockDocuments(
   return res.data;
 }
 
-export async function getStockDocument(tenantId: number, documentId: number): Promise<StockDocumentRead> {
+function stockDocQueryParams(tenantId: number, warehouseId?: number) {
+  return {
+    tenant_id: tenantId,
+    ...(warehouseId != null ? { warehouse_id: warehouseId } : {}),
+  };
+}
+
+export async function getStockDocument(
+  tenantId: number,
+  documentId: number,
+  warehouseId?: number,
+): Promise<StockDocumentRead> {
   const res = await api.get<StockDocumentRead>(`/stock-documents/${documentId}`, {
-    params: { tenant_id: tenantId },
+    params: stockDocQueryParams(tenantId, warehouseId),
   });
   return res.data;
 }
@@ -249,9 +260,10 @@ export async function patchStockDocumentItems(
   body: {
     items: { id: number; received_quantity: number; suggested_warehouse_carrier_id?: number | null }[];
   },
+  warehouseId?: number,
 ): Promise<StockDocumentRead> {
   const res = await api.patch<StockDocumentRead>(`/stock-documents/${documentId}`, body, {
-    params: { tenant_id: tenantId },
+    params: stockDocQueryParams(tenantId, warehouseId),
   });
   return res.data;
 }
@@ -260,16 +272,21 @@ export async function patchStockDocumentReceivingTarget(
   tenantId: number,
   documentId: number,
   body: { warehouse_id: number; location_id: number },
+  contextWarehouseId?: number,
 ): Promise<StockDocumentRead> {
   const res = await api.patch<StockDocumentRead>(`/stock-documents/${documentId}/receiving-target`, body, {
-    params: { tenant_id: tenantId },
+    params: stockDocQueryParams(tenantId, contextWarehouseId),
   });
   return res.data;
 }
 
-export async function acceptStockDocument(tenantId: number, documentId: number): Promise<StockDocumentRead> {
+export async function acceptStockDocument(
+  tenantId: number,
+  documentId: number,
+  warehouseId?: number,
+): Promise<StockDocumentRead> {
   const res = await api.post<StockDocumentRead>(`/stock-documents/${documentId}/accept`, {}, {
-    params: { tenant_id: tenantId },
+    params: stockDocQueryParams(tenantId, warehouseId),
   });
   return res.data;
 }
@@ -280,16 +297,21 @@ export type StockDocumentHardDeleteResult = { ok: boolean; id: number };
 export async function deleteStockDocument(
   tenantId: number,
   documentId: number,
+  warehouseId?: number,
 ): Promise<StockDocumentHardDeleteResult> {
   const res = await api.delete<StockDocumentHardDeleteResult>(`/documents/${documentId}`, {
-    params: { tenant_id: tenantId },
+    params: stockDocQueryParams(tenantId, warehouseId),
   });
   return res.data;
 }
 
-export async function duplicateStockDocument(tenantId: number, documentId: number): Promise<StockDocumentRead> {
+export async function duplicateStockDocument(
+  tenantId: number,
+  documentId: number,
+  warehouseId?: number,
+): Promise<StockDocumentRead> {
   const res = await api.post<StockDocumentRead>(`/stock-documents/${documentId}/duplicate`, {}, {
-    params: { tenant_id: tenantId },
+    params: stockDocQueryParams(tenantId, warehouseId),
   });
   return res.data;
 }
@@ -298,15 +320,17 @@ export async function patchStockDocumentMetadata(
   tenantId: number,
   documentId: number,
   body: { currency?: string; total_net?: number | null; total_gross?: number | null },
+  warehouseId?: number,
 ): Promise<StockDocumentRead> {
   const res = await api.patch<StockDocumentRead>(`/stock-documents/${documentId}/metadata`, body, {
-    params: { tenant_id: tenantId },
+    params: stockDocQueryParams(tenantId, warehouseId),
   });
   return res.data;
 }
 
 /** Same-origin URL for PDF (axios baseURL). */
-export function stockDocumentPdfUrl(tenantId: number, documentId: number): string {
+export function stockDocumentPdfUrl(tenantId: number, documentId: number, warehouseId?: number): string {
   const base = (api.defaults.baseURL || "").replace(/\/$/, "");
-  return `${base}/stock-documents/${documentId}/pdf?tenant_id=${tenantId}`;
+  const wh = warehouseId != null ? `&warehouse_id=${warehouseId}` : "";
+  return `${base}/stock-documents/${documentId}/pdf?tenant_id=${tenantId}${wh}`;
 }

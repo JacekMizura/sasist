@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from ..auth.deps import get_current_user, get_optional_current_user
 from fastapi import Depends
 from ..auth.warehouse_deps import (
+    load_stock_document_for_active_warehouse,
     require_operable_warehouse,
     require_active_operable_warehouse,
     require_active_or_query_operable_warehouse,
@@ -66,6 +67,24 @@ from ..services.wms_audit_service import touch_wms_operation_session
 router = APIRouter(prefix="/stock-documents", tags=["Stock documents"])
 documents_router = APIRouter(prefix="/documents", tags=["Documents"])
 _logger = logging.getLogger(__name__)
+
+
+def _gate_stock_document(
+    db: Session,
+    user: AppUser,
+    *,
+    tenant_id: int,
+    document_id: int,
+    warehouse_id: int,
+) -> None:
+    """P2.2 — document must belong to active warehouse context."""
+    load_stock_document_for_active_warehouse(
+        db,
+        user,
+        tenant_id=tenant_id,
+        document_id=document_id,
+        active_warehouse_id=warehouse_id,
+    )
 
 
 @router.get("/", response_model=List[StockDocumentListRow])
@@ -346,25 +365,24 @@ def list_stock_documents(
 def get_stock_document(
     document_id: int,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
-    current_user: AppUser | None = Depends(get_optional_current_user),
+    current_user: AppUser = Depends(get_current_user),
 ):
     _logger.info(
-        "[STOCK_DOCUMENT_READ] endpoint GET document_id=%s tenant_id=%s user_id=%s",
+        "[STOCK_DOCUMENT_READ] endpoint GET document_id=%s tenant_id=%s warehouse_id=%s user_id=%s",
         document_id,
         tenant_id,
-        getattr(current_user, "id", None) if current_user is not None else None,
+        warehouse_id,
+        getattr(current_user, "id", None),
+    )
+    _gate_stock_document(
+        db, current_user, tenant_id=tenant_id, document_id=document_id, warehouse_id=warehouse_id
     )
     read = get_stock_document_read(db, tenant_id, document_id)
     if not read:
         raise HTTPException(status_code=404, detail="Document not found")
-    if current_user is not None and getattr(read, "warehouse_id", None) is not None:
-        assert_stock_document_warehouse(
-            db,
-            current_user,
-            type("Doc", (), {"warehouse_id": read.warehouse_id})(),
-        )
-    if current_user is not None and current_user.id is not None and getattr(read, "warehouse_id", None) is not None:
+    if current_user.id is not None and getattr(read, "warehouse_id", None) is not None:
         dtype = str(getattr(read, "document_type", "") or "").upper()
         receiving_status = str(getattr(read, "receiving_status", "") or "").upper()
         if dtype in {"PZ", "Z_PZ", "PZ_RT", "RETURN_RECEIPT"} and receiving_status != "DONE":
@@ -394,8 +412,13 @@ def patch_stock_document_lines(
     document_id: int,
     body: PatchStockDocumentItemsBody,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
 ):
+    _gate_stock_document(
+        db, user, tenant_id=tenant_id, document_id=document_id, warehouse_id=warehouse_id
+    )
     try:
         return patch_stock_document_items(db, tenant_id, document_id, body)
     except ValueError as e:
@@ -408,9 +431,13 @@ def patch_stock_document_line_sales_block(
     line_id: int,
     body: PatchPurchaseSalesBlockBody,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
     user: AppUser = Depends(get_current_user),
 ):
+    _gate_stock_document(
+        db, user, tenant_id=tenant_id, document_id=document_id, warehouse_id=warehouse_id
+    )
     try:
         return patch_purchase_line_sales_block(
             db,
@@ -429,8 +456,13 @@ def patch_stock_document_receiving_target(
     document_id: int,
     body: PatchStockDocumentReceivingTargetBody,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
 ):
+    _gate_stock_document(
+        db, user, tenant_id=tenant_id, document_id=document_id, warehouse_id=warehouse_id
+    )
     try:
         return set_stock_document_receiving_target(
             db, tenant_id, document_id, body.location_id, body.warehouse_id
@@ -443,8 +475,13 @@ def patch_stock_document_receiving_target(
 def post_accept_stock_document(
     document_id: int,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
 ):
+    _gate_stock_document(
+        db, user, tenant_id=tenant_id, document_id=document_id, warehouse_id=warehouse_id
+    )
     try:
         return accept_stock_document(db, tenant_id, document_id)
     except ValueError as e:
@@ -455,8 +492,13 @@ def post_accept_stock_document(
 def post_cancel_stock_document(
     document_id: int,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
 ):
+    _gate_stock_document(
+        db, user, tenant_id=tenant_id, document_id=document_id, warehouse_id=warehouse_id
+    )
     try:
         return cancel_stock_document(db, tenant_id, document_id)
     except ValueError as e:
@@ -467,9 +509,14 @@ def post_cancel_stock_document(
 def delete_stock_document_hard(
     document_id: int,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
 ):
     """Hard-delete: revert inventory when stock_operations exist, then remove document and lines."""
+    _gate_stock_document(
+        db, user, tenant_id=tenant_id, document_id=document_id, warehouse_id=warehouse_id
+    )
     try:
         hard_delete_stock_document(db, tenant_id, document_id)
         return StockDocumentHardDeleteResult(id=document_id)
@@ -484,9 +531,14 @@ def delete_stock_document_hard(
 def delete_document_hard_alias(
     document_id: int,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
 ):
     """Alias: DELETE /documents/{id} — same as DELETE /stock-documents/{id}."""
+    _gate_stock_document(
+        db, user, tenant_id=tenant_id, document_id=document_id, warehouse_id=warehouse_id
+    )
     try:
         hard_delete_stock_document(db, tenant_id, document_id)
         return StockDocumentHardDeleteResult(id=document_id)
@@ -501,9 +553,13 @@ def delete_document_hard_alias(
 def post_duplicate_stock_document(
     document_id: int,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
     user: AppUser = Depends(get_current_user),
 ):
+    _gate_stock_document(
+        db, user, tenant_id=tenant_id, document_id=document_id, warehouse_id=warehouse_id
+    )
     try:
         return duplicate_stock_document(db, tenant_id, document_id, created_by=user)
     except ValueError as e:
@@ -515,8 +571,13 @@ def patch_stock_document_metadata_route(
     document_id: int,
     body: PatchStockDocumentMetadataBody,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
 ):
+    _gate_stock_document(
+        db, user, tenant_id=tenant_id, document_id=document_id, warehouse_id=warehouse_id
+    )
     try:
         return patch_stock_document_metadata(db, tenant_id, document_id, body)
     except ValueError as e:
@@ -571,8 +632,13 @@ def _stock_document_pdf_response(db: Session, tenant_id: int, document_id: int) 
 def get_stock_document_pdf(
     document_id: int,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
 ):
+    _gate_stock_document(
+        db, user, tenant_id=tenant_id, document_id=document_id, warehouse_id=warehouse_id
+    )
     return _stock_document_pdf_response(db, tenant_id, document_id)
 
 
@@ -580,7 +646,12 @@ def get_stock_document_pdf(
 def get_document_pdf_alias(
     document_id: int,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
 ):
     """Alias: GET /documents/{id}/pdf (same as /stock-documents/{id}/pdf)."""
+    _gate_stock_document(
+        db, user, tenant_id=tenant_id, document_id=document_id, warehouse_id=warehouse_id
+    )
     return _stock_document_pdf_response(db, tenant_id, document_id)

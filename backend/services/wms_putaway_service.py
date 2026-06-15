@@ -615,11 +615,15 @@ def backfill_stock_item_locations_if_needed(db: Session) -> None:
         db.commit()
 
 
-def list_wms_putaway_pz_documents(db: Session, tenant_id: int) -> List[WmsReceivingPzListRow]:
+def list_wms_putaway_pz_documents(
+    db: Session, tenant_id: int, *, warehouse_id: int
+) -> List[WmsReceivingPzListRow]:
     """PZ ready for putaway: any received qty (live) + relocation OPEN. MM drafts use /wms/mm/relocation."""
     from .complaints.complaint_physical_receipt import document_has_putaway_eligible_received_lines
 
-    pz_docs, pz_by = _load_putaway_pz_docs_with_lines(db, tenant_id)
+    pz_docs, pz_by = _load_putaway_pz_docs_with_lines(
+        db, tenant_id, extra_filters=(StockDocument.warehouse_id == int(warehouse_id),)
+    )
     merged: List[tuple[StockDocument, List[StockDocumentItem]]] = []
     for d in pz_docs:
         lines = pz_by.get(d.id) or []

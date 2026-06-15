@@ -213,12 +213,15 @@ def append_mm_draft_line(
     return build_stock_document_read(db, doc)
 
 
-def list_wms_mm_relocation_documents(db: Session, tenant_id: int) -> List[WmsReceivingPzListRow]:
+def list_wms_mm_relocation_documents(
+    db: Session, tenant_id: int, *, warehouse_id: int
+) -> List[WmsReceivingPzListRow]:
     """Draft MM (PM) with staged qty and relocation OPEN — warehouse transfer queue, not PZ receiving."""
     q = (
         db.query(StockDocument)
         .filter(
             StockDocument.tenant_id == int(tenant_id),
+            StockDocument.warehouse_id == int(warehouse_id),
             StockDocument.document_type == "MM",
             StockDocument.status == "draft",
             StockDocument.relocation_status != "DONE",

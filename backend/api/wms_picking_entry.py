@@ -17,6 +17,7 @@ from ..auth.warehouse_deps import (
     require_operable_warehouse,
     require_active_operable_warehouse,
     require_active_or_query_operable_warehouse,
+    assert_warehouse_scoped_entity_access,
     assert_stock_document_warehouse,
     enforce_warehouse_access,
 )
@@ -1017,15 +1018,18 @@ def post_recovery_batch_create(
 def get_recovery_batch_detail(
     batch_id: int,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
     current_user: AppUser = Depends(get_current_user),
 ):
     from ..services.recovery_intelligence import get_recovery_batch_session
 
-    _ = current_user
     sess = get_recovery_batch_session(db, int(batch_id), tenant_id=int(tenant_id))
     if sess is None:
         raise HTTPException(status_code=404, detail={"message": "Nie znaleziono sesji batch dogrywki."})
+    assert_warehouse_scoped_entity_access(
+        db, current_user, getattr(sess, "warehouse_id", None), warehouse_id
+    )
     return WmsRecoveryBatchSessionRead.model_validate(_batch_session_to_read(sess))
 
 

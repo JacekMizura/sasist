@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import { getStockDocument, stockDocumentPdfUrl, type StockDocumentRead } from "../../api/stockDocumentsApi";
+import { useWarehouse } from "../../context/WarehouseContext";
 import { openPdfUrlInPrintViewer } from "../../utils/openPdfForBrowserPrint";
 import { DocumentsSectionShell } from "./DocumentsSectionShell";
 import { WarehouseZPzDocumentDetail } from "./WarehouseZPzDocumentDetail";
@@ -15,6 +16,7 @@ type Props = {
 
 export function WarehouseZPzDocumentPage({ documentId }: Props) {
   const navigate = useNavigate();
+  const { warehouse } = useWarehouse();
   const [detail, setDetail] = useState<StockDocumentRead | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -23,14 +25,14 @@ export function WarehouseZPzDocumentPage({ documentId }: Props) {
     setLoading(true);
     setErr(null);
     try {
-      setDetail(await getStockDocument(DAMAGE_TENANT_ID, documentId));
+      setDetail(await getStockDocument(DAMAGE_TENANT_ID, documentId, warehouse?.id ?? undefined));
     } catch {
       setErr("Nie udało się wczytać dokumentu Z-PZ.");
       setDetail(null);
     } finally {
       setLoading(false);
     }
-  }, [documentId]);
+  }, [documentId, warehouse?.id]);
 
   useEffect(() => {
     void load();

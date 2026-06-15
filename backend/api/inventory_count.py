@@ -66,7 +66,7 @@ from ..services.inventory_count.unknown_product_service import (
     map_unknown_to_product,
     reject_unknown_product,
 )
-from ..api.inventory_count_deps import require_inventory_permission
+from ..api.inventory_count_deps import require_inventory_permission, ScopedInventoryDocumentId
 from ..services.inventory_count.permissions import (
     PERM_APPROVE,
     PERM_AUDIT_PACKAGE,
@@ -209,7 +209,7 @@ def inventory_count_list_documents(
 
 @router.get("/documents/{document_id}", response_model=InventoryDocumentRead)
 def inventory_count_get_document(
-    document_id: int,
+    document_id: ScopedInventoryDocumentId,
     tenant_id: int = Query(..., ge=1),
     db: Session = Depends(get_db),
 ):
@@ -232,7 +232,7 @@ def inventory_count_get_document(
 
 @router.delete("/documents/{document_id}")
 def inventory_count_delete_document(
-    document_id: int,
+    document_id: ScopedInventoryDocumentId,
     tenant_id: int = Query(..., ge=1),
     db: Session = Depends(get_db),
     user: AppUser = Depends(require_inventory_permission(PERM_DELETE)),
@@ -268,7 +268,7 @@ def inventory_count_create_document(
 
 @router.patch("/documents/{document_id}/wizard", response_model=InventoryDocumentRead)
 def inventory_count_wizard_update(
-    document_id: int,
+    document_id: ScopedInventoryDocumentId,
     body: InventoryDocumentWizardUpdateBody,
     tenant_id: int = Query(..., ge=1),
     db: Session = Depends(get_db),
@@ -312,7 +312,7 @@ def inventory_count_scope_preview(
 
 @router.get("/documents/{document_id}/scope-preview", response_model=InventoryScopePreviewRead)
 def inventory_count_document_scope_preview(
-    document_id: int,
+    document_id: ScopedInventoryDocumentId,
     tenant_id: int = Query(..., ge=1),
     db: Session = Depends(get_db),
 ):
@@ -328,7 +328,7 @@ def inventory_count_document_scope_preview(
 
 @router.post("/documents/{document_id}/plan", response_model=InventoryDocumentRead)
 def inventory_count_plan_document(
-    document_id: int,
+    document_id: ScopedInventoryDocumentId,
     tenant_id: int = Query(..., ge=1),
     db: Session = Depends(get_db),
     user: AppUser | None = Depends(get_optional_current_user),
@@ -346,7 +346,7 @@ def inventory_count_plan_document(
 
 @router.post("/documents/{document_id}/start", response_model=InventoryDocumentRead)
 def inventory_count_start_document(
-    document_id: int,
+    document_id: ScopedInventoryDocumentId,
     tenant_id: int = Query(..., ge=1),
     db: Session = Depends(get_db),
     user: AppUser | None = Depends(get_optional_current_user),
@@ -381,7 +381,7 @@ def inventory_count_start_document(
 
 @router.post("/documents/{document_id}/generate-tasks")
 def inventory_count_generate_tasks(
-    document_id: int,
+    document_id: ScopedInventoryDocumentId,
     body: InventoryGenerateTasksBody,
     tenant_id: int = Query(..., ge=1),
     db: Session = Depends(get_db),
@@ -415,7 +415,7 @@ def inventory_count_reports_catalog():
 
 @router.get("/documents/{document_id}/lines")
 def inventory_count_document_lines(
-    document_id: int,
+    document_id: ScopedInventoryDocumentId,
     tenant_id: int = Query(..., ge=1),
     supervisor: bool = Query(True),
     focus: str = Query("operational", pattern="^(operational|all|differences|uncounted)$"),
@@ -440,7 +440,7 @@ def inventory_count_document_lines(
 
 @router.get("/documents/{document_id}/differences", response_model=InventoryDifferenceAnalysisRead)
 def inventory_count_differences(
-    document_id: int,
+    document_id: ScopedInventoryDocumentId,
     tenant_id: int = Query(..., ge=1),
     db: Session = Depends(get_db),
 ):
@@ -452,7 +452,7 @@ def inventory_count_differences(
 
 @router.get("/documents/{document_id}/posting-preview", response_model=InventoryPostingPreviewRead)
 def inventory_count_posting_preview(
-    document_id: int,
+    document_id: ScopedInventoryDocumentId,
     tenant_id: int = Query(..., ge=1),
     db: Session = Depends(get_db),
     _: AppUser = Depends(require_inventory_permission(PERM_VIEW)),
@@ -465,7 +465,7 @@ def inventory_count_posting_preview(
 
 @router.get("/documents/{document_id}/conflicts", response_model=InventoryConflictsRead)
 def inventory_count_conflicts(
-    document_id: int,
+    document_id: ScopedInventoryDocumentId,
     tenant_id: int = Query(..., ge=1),
     db: Session = Depends(get_db),
     _: AppUser = Depends(require_inventory_permission(PERM_VIEW)),
@@ -493,7 +493,7 @@ def inventory_count_conflicts(
 
 @router.post("/documents/{document_id}/conflicts/accept")
 def inventory_count_accept_conflict(
-    document_id: int,
+    document_id: ScopedInventoryDocumentId,
     body: InventoryConflictAcceptBody,
     tenant_id: int = Query(..., ge=1),
     db: Session = Depends(get_db),
@@ -517,7 +517,7 @@ def inventory_count_accept_conflict(
 
 @router.post("/documents/{document_id}/conflicts/reject")
 def inventory_count_reject_conflict(
-    document_id: int,
+    document_id: ScopedInventoryDocumentId,
     body: InventoryConflictRejectBody,
     tenant_id: int = Query(..., ge=1),
     db: Session = Depends(get_db),
@@ -541,7 +541,7 @@ def inventory_count_reject_conflict(
 
 @router.post("/documents/{document_id}/conflicts/recount")
 def inventory_count_conflict_recount(
-    document_id: int,
+    document_id: ScopedInventoryDocumentId,
     body: InventoryConflictRecountBody,
     tenant_id: int = Query(..., ge=1),
     db: Session = Depends(get_db),
@@ -564,7 +564,7 @@ def inventory_count_conflict_recount(
 
 @router.get("/documents/{document_id}/unknown-products", response_model=list[InventoryUnknownProductRead])
 def inventory_count_unknown_products(
-    document_id: int,
+    document_id: ScopedInventoryDocumentId,
     tenant_id: int = Query(..., ge=1),
     status: str = Query("draft"),
     db: Session = Depends(get_db),
@@ -615,7 +615,7 @@ def inventory_count_reject_unknown(
 
 @router.post("/documents/{document_id}/submit-approval")
 def inventory_count_submit_approval(
-    document_id: int,
+    document_id: ScopedInventoryDocumentId,
     body: InventoryApprovalNotesBody,
     tenant_id: int = Query(..., ge=1),
     db: Session = Depends(get_db),
@@ -635,7 +635,7 @@ def inventory_count_submit_approval(
 
 @router.post("/documents/{document_id}/approve")
 def inventory_count_approve(
-    document_id: int,
+    document_id: ScopedInventoryDocumentId,
     body: InventoryApprovalNotesBody,
     tenant_id: int = Query(..., ge=1),
     db: Session = Depends(get_db),
@@ -655,7 +655,7 @@ def inventory_count_approve(
 
 @router.post("/documents/{document_id}/reject")
 def inventory_count_reject(
-    document_id: int,
+    document_id: ScopedInventoryDocumentId,
     body: InventoryApprovalNotesBody,
     tenant_id: int = Query(..., ge=1),
     db: Session = Depends(get_db),
@@ -675,7 +675,7 @@ def inventory_count_reject(
 
 @router.post("/documents/{document_id}/post")
 def inventory_count_post(
-    document_id: int,
+    document_id: ScopedInventoryDocumentId,
     tenant_id: int = Query(..., ge=1),
     idempotency_key: Optional[str] = Query(None, max_length=128),
     expected_version: Optional[int] = Query(None, ge=0),
@@ -716,7 +716,7 @@ def inventory_count_post(
 
 @router.post("/documents/{document_id}/recounts/generate")
 def inventory_count_generate_recounts(
-    document_id: int,
+    document_id: ScopedInventoryDocumentId,
     tenant_id: int = Query(..., ge=1),
     db: Session = Depends(get_db),
     user: AppUser | None = Depends(get_optional_current_user),
@@ -754,7 +754,7 @@ def inventory_count_complete_recount(
 
 @router.get("/documents/{document_id}/reports/{report_kind}")
 def inventory_count_download_report(
-    document_id: int,
+    document_id: ScopedInventoryDocumentId,
     report_kind: str,
     tenant_id: int = Query(..., ge=1),
     format: str = Query("xlsx", pattern="^(pdf|xlsx)$"),
@@ -784,7 +784,7 @@ def inventory_count_download_report(
 
 @router.get("/documents/{document_id}/audit-package")
 def inventory_count_audit_package(
-    document_id: int,
+    document_id: ScopedInventoryDocumentId,
     tenant_id: int = Query(..., ge=1),
     db: Session = Depends(get_db),
     user: AppUser = Depends(require_inventory_permission(PERM_AUDIT_PACKAGE)),
@@ -814,7 +814,7 @@ def inventory_count_metrics(
 
 @router.get("/documents/{document_id}/audit-log")
 def inventory_count_audit_log(
-    document_id: int,
+    document_id: ScopedInventoryDocumentId,
     tenant_id: int = Query(..., ge=1),
     offset: int = Query(0, ge=0),
     limit: int = Query(200, ge=1, le=1000),
@@ -831,7 +831,7 @@ def inventory_count_audit_log(
 
 @router.get("/documents/{document_id}/timelines")
 def inventory_count_timelines(
-    document_id: int,
+    document_id: ScopedInventoryDocumentId,
     tenant_id: int = Query(..., ge=1),
     db: Session = Depends(get_db),
     _: AppUser = Depends(require_inventory_permission(PERM_VIEW)),
@@ -844,7 +844,7 @@ def inventory_count_timelines(
 
 @router.post("/documents/{document_id}/jobs")
 def inventory_count_enqueue_job(
-    document_id: int,
+    document_id: ScopedInventoryDocumentId,
     tenant_id: int = Query(..., ge=1),
     job_kind: str = Query("report"),
     report_kind: str = Query("differences"),

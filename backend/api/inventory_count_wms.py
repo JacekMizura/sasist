@@ -56,7 +56,7 @@ from ..services.inventory_count.wms_search_service import (
 )
 from ..services.inventory_count.wms_task_queue_service import list_tasks_paginated, resolve_task_by_location_scan
 from ..services.inventory_count.wms_variance_service import get_audit_queues, get_location_execution_summary
-from ..api.inventory_count_deps import require_inventory_permission_optional
+from ..api.inventory_count_deps import require_inventory_permission_optional, ScopedInventoryTaskId
 from ..services.inventory_count.permissions import PERM_EXECUTE
 from ..services.inventory_count.count_entry_service import resolve_barcode_to_line, resolve_carrier_by_code
 from ..services.inventory_count.session_service import heartbeat_session
@@ -235,7 +235,7 @@ def wms_inventory_universal_search(
 
 @router.get("/tasks/{task_id}/search-products")
 def wms_inventory_task_product_search(
-    task_id: int,
+    task_id: ScopedInventoryTaskId,
     tenant_id: int = Query(..., ge=1),
     q: str = Query(..., min_length=1),
     db: Session = Depends(get_db),
@@ -248,7 +248,7 @@ def wms_inventory_task_product_search(
 
 @router.get("/tasks/{task_id}/execution-summary", response_model=InventoryLocationExecutionSummaryRead)
 def wms_inventory_execution_summary(
-    task_id: int,
+    task_id: ScopedInventoryTaskId,
     tenant_id: int = Query(..., ge=1),
     db: Session = Depends(get_db),
 ):
@@ -325,7 +325,7 @@ def wms_inventory_list_unknown_products(
 
 @router.get("/tasks/{task_id}", response_model=InventoryTaskRead)
 def wms_inventory_task_detail(
-    task_id: int,
+    task_id: ScopedInventoryTaskId,
     tenant_id: int = Query(..., ge=1),
     db: Session = Depends(get_db),
 ):
@@ -337,7 +337,7 @@ def wms_inventory_task_detail(
 
 @router.get("/tasks/{task_id}/lines")
 def wms_inventory_task_lines(
-    task_id: int,
+    task_id: ScopedInventoryTaskId,
     tenant_id: int = Query(..., ge=1),
     scope: Optional[str] = Query(None, description="mine = only lines counted by current operator"),
     db: Session = Depends(get_db),
@@ -358,7 +358,7 @@ def wms_inventory_task_lines(
 
 @router.post("/tasks/{task_id}/resolve-barcode", summary="Resolve scanned barcode to inventory line")
 def wms_inventory_resolve_barcode(
-    task_id: int,
+    task_id: ScopedInventoryTaskId,
     barcode_value: str = Query(..., min_length=1),
     tenant_id: int = Query(..., ge=1),
     carrier_id: int | None = Query(None, ge=1),
@@ -445,7 +445,7 @@ def wms_inventory_close_session(
 
 @router.post("/tasks/{task_id}/confirm-location")
 def wms_inventory_confirm_location(
-    task_id: int,
+    task_id: ScopedInventoryTaskId,
     body: InventoryLocationConfirmBody,
     tenant_id: int = Query(..., ge=1),
     db: Session = Depends(get_db),

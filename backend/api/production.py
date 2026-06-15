@@ -9,7 +9,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from ..auth.deps import get_optional_current_user
+from ..auth.deps import get_optional_current_user, get_current_user
+from ..auth.warehouse_deps import (
+    load_production_order_for_active_warehouse,
+    load_production_batch_for_active_warehouse,
+    require_active_or_query_operable_warehouse,
+)
 from ..database import get_db
 from ..models.app_user import AppUser
 from ..schemas.production_batch import (
@@ -87,6 +92,32 @@ from ..services.production_recipe_service import (
 
 router = APIRouter(prefix="/production", tags=["Production"])
 logger = logging.getLogger(__name__)
+
+
+def _gate_production_order(
+    db: Session,
+    user: AppUser,
+    *,
+    tenant_id: int,
+    order_id: int,
+    warehouse_id: int,
+) -> None:
+    load_production_order_for_active_warehouse(
+        db, user, tenant_id=tenant_id, order_id=order_id, active_warehouse_id=warehouse_id
+    )
+
+
+def _gate_production_batch(
+    db: Session,
+    user: AppUser,
+    *,
+    tenant_id: int,
+    batch_id: int,
+    warehouse_id: int,
+) -> None:
+    load_production_batch_for_active_warehouse(
+        db, user, tenant_id=tenant_id, batch_id=batch_id, active_warehouse_id=warehouse_id
+    )
 
 
 def _recipe_err(exc: ProductionRecipeError) -> HTTPException:
@@ -278,8 +309,13 @@ def api_orders_by_product(
 def api_pick_plan(
     order_id: int,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
 ):
+    _gate_production_order(
+        db, user, tenant_id=tenant_id, order_id=order_id, warehouse_id=warehouse_id
+    )
     try:
         return build_production_pick_plan(db, tenant_id=tenant_id, order_id=order_id)
     except ProductionOrderError as exc:
@@ -300,8 +336,13 @@ def api_list_orders(
 def api_get_order(
     order_id: int,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
 ):
+    _gate_production_order(
+        db, user, tenant_id=tenant_id, order_id=order_id, warehouse_id=warehouse_id
+    )
     row = get_production_order(db, tenant_id=tenant_id, order_id=order_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Zlecenie nie istnieje.")
@@ -329,8 +370,13 @@ def api_create_order(
 def api_start_order(
     order_id: int,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
 ):
+    _gate_production_order(
+        db, user, tenant_id=tenant_id, order_id=order_id, warehouse_id=warehouse_id
+    )
     try:
         row = start_production_order(db, tenant_id=tenant_id, order_id=order_id)
         db.commit()
@@ -345,9 +391,13 @@ def api_complete_order(
     order_id: int,
     body: ProductionOrderCompleteBody,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
-    user: AppUser | None = Depends(get_optional_current_user),
+    user: AppUser = Depends(get_current_user),
 ):
+    _gate_production_order(
+        db, user, tenant_id=tenant_id, order_id=order_id, warehouse_id=warehouse_id
+    )
     try:
         uid = int(user.id) if user is not None else None
         row = complete_production_order(
@@ -426,8 +476,13 @@ def api_list_batches(
 def api_get_batch(
     batch_id: int,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
 ):
+    _gate_production_batch(
+        db, user, tenant_id=tenant_id, batch_id=batch_id, warehouse_id=warehouse_id
+    )
     row = get_batch(db, tenant_id=tenant_id, batch_id=batch_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Partia nie istnieje.")
@@ -438,8 +493,13 @@ def api_get_batch(
 def api_batch_pick_plan(
     batch_id: int,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
 ):
+    _gate_production_batch(
+        db, user, tenant_id=tenant_id, batch_id=batch_id, warehouse_id=warehouse_id
+    )
     try:
         return build_batch_pick_plan(db, tenant_id=tenant_id, batch_id=batch_id)
     except ProductionBatchError as exc:
@@ -581,8 +641,13 @@ def api_create_batch(
 def api_start_batch(
     batch_id: int,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
 ):
+    _gate_production_batch(
+        db, user, tenant_id=tenant_id, batch_id=batch_id, warehouse_id=warehouse_id
+    )
     try:
         row = start_batch(db, tenant_id=tenant_id, batch_id=batch_id)
         db.commit()
@@ -597,9 +662,13 @@ def api_complete_batch(
     batch_id: int,
     body: ProductionBatchCompleteBody,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
-    user: AppUser | None = Depends(get_optional_current_user),
+    user: AppUser = Depends(get_current_user),
 ):
+    _gate_production_batch(
+        db, user, tenant_id=tenant_id, batch_id=batch_id, warehouse_id=warehouse_id
+    )
     try:
         uid = int(user.id) if user is not None else None
         row = complete_batch(
@@ -620,8 +689,13 @@ def api_complete_batch(
 def api_start_collecting(
     batch_id: int,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
 ):
+    _gate_production_batch(
+        db, user, tenant_id=tenant_id, batch_id=batch_id, warehouse_id=warehouse_id
+    )
     try:
         row = start_collecting(db, tenant_id=tenant_id, batch_id=batch_id)
         db.commit()
@@ -635,8 +709,13 @@ def api_start_collecting(
 def api_get_collection(
     batch_id: int,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
 ):
+    _gate_production_batch(
+        db, user, tenant_id=tenant_id, batch_id=batch_id, warehouse_id=warehouse_id
+    )
     try:
         return get_collection_state(db, tenant_id=tenant_id, batch_id=batch_id)
     except ProductionBatchError as exc:
@@ -648,8 +727,13 @@ def api_update_collection(
     batch_id: int,
     body: BatchCollectionUpdateBody,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
 ):
+    _gate_production_batch(
+        db, user, tenant_id=tenant_id, batch_id=batch_id, warehouse_id=warehouse_id
+    )
     try:
         row = update_collection_task(db, tenant_id=tenant_id, batch_id=batch_id, body=body)
         db.commit()
@@ -663,9 +747,13 @@ def api_update_collection(
 def api_finish_collecting(
     batch_id: int,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
-    user: AppUser | None = Depends(get_optional_current_user),
+    user: AppUser = Depends(get_current_user),
 ):
+    _gate_production_batch(
+        db, user, tenant_id=tenant_id, batch_id=batch_id, warehouse_id=warehouse_id
+    )
     try:
         uid = int(user.id) if user is not None else None
         row = finish_collecting(db, tenant_id=tenant_id, batch_id=batch_id, performed_by_user_id=uid)
@@ -681,8 +769,13 @@ def api_production_progress(
     batch_id: int,
     body: BatchProductionProgressBody,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
 ):
+    _gate_production_batch(
+        db, user, tenant_id=tenant_id, batch_id=batch_id, warehouse_id=warehouse_id
+    )
     try:
         row = update_production_progress(db, tenant_id=tenant_id, batch_id=batch_id, body=body)
         db.commit()
@@ -696,8 +789,13 @@ def api_production_progress(
 def api_finish_production(
     batch_id: int,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
 ):
+    _gate_production_batch(
+        db, user, tenant_id=tenant_id, batch_id=batch_id, warehouse_id=warehouse_id
+    )
     try:
         row = finish_production(db, tenant_id=tenant_id, batch_id=batch_id)
         db.commit()
@@ -712,9 +810,13 @@ def api_finish_putaway(
     batch_id: int,
     body: BatchPutawayBody,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
-    user: AppUser | None = Depends(get_optional_current_user),
+    user: AppUser = Depends(get_current_user),
 ):
+    _gate_production_batch(
+        db, user, tenant_id=tenant_id, batch_id=batch_id, warehouse_id=warehouse_id
+    )
     try:
         uid = int(user.id) if user is not None else None
         row = finish_putaway(db, tenant_id=tenant_id, batch_id=batch_id, body=body, performed_by_user_id=uid)
@@ -729,8 +831,13 @@ def api_finish_putaway(
 def api_cancel_batch(
     batch_id: int,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
 ):
+    _gate_production_batch(
+        db, user, tenant_id=tenant_id, batch_id=batch_id, warehouse_id=warehouse_id
+    )
     try:
         row = cancel_batch(db, tenant_id=tenant_id, batch_id=batch_id)
         db.commit()
@@ -744,8 +851,13 @@ def api_cancel_batch(
 def api_cancel_order(
     order_id: int,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
 ):
+    _gate_production_order(
+        db, user, tenant_id=tenant_id, order_id=order_id, warehouse_id=warehouse_id
+    )
     try:
         row = cancel_production_order(db, tenant_id=tenant_id, order_id=order_id)
         db.commit()

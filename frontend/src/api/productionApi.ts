@@ -313,9 +313,13 @@ export async function listProductionOrders(
 export async function getProductionOrder(
   tenantId: number,
   orderId: number,
+  warehouseId?: number,
 ): Promise<ProductionOrderRead> {
   const res = await api.get<ProductionOrderRead>(`/production/orders/${orderId}`, {
-    params: { tenant_id: tenantId },
+    params: {
+      tenant_id: tenantId,
+      ...(warehouseId != null ? { warehouse_id: warehouseId } : {}),
+    },
   });
   return res.data;
 }

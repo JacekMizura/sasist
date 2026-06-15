@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from ..auth.deps import get_current_user, get_optional_current_user
 from fastapi import Depends
 from ..auth.warehouse_deps import (
+    load_stock_document_for_active_warehouse,
     require_operable_warehouse,
     require_active_operable_warehouse,
     require_active_or_query_operable_warehouse,
@@ -64,20 +65,29 @@ def get_wms_tenant_context(
 @router.get("/putaway/pz", response_model=List[WmsReceivingPzListRow])
 def get_wms_putaway_pz_list(
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
 ):
     """PZ with received stock (live during przyjęcie) and relocation OPEN — Rozlokowanie list."""
-    return list_wms_putaway_pz_documents(db, tenant_id)
+    return list_wms_putaway_pz_documents(db, tenant_id, warehouse_id=warehouse_id)
 
 
 @router.get("/putaway/pz/{document_id}", response_model=StockDocumentRead)
 def get_wms_putaway_pz_document(
     document_id: int,
     tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
-    current_user: AppUser | None = Depends(get_optional_current_user),
+    current_user: AppUser = Depends(get_current_user),
 ):
     """Single PZ for rozlokowanie — items with received_quantity > 0 only."""
+    load_stock_document_for_active_warehouse(
+        db,
+        current_user,
+        tenant_id=tenant_id,
+        document_id=document_id,
+        active_warehouse_id=warehouse_id,
+    )
     doc = get_stock_document_read(db, tenant_id, document_id)
     if doc is None:
         raise HTTPException(status_code=404, detail="Dokument nie znaleziony")
@@ -100,7 +110,7 @@ def get_wms_putaway_pz_document(
     if not received_lines:
         raise HTTPException(status_code=404, detail="Brak przyjętych pozycji do rozlokowania")
     doc.items = received_lines
-    if current_user is not None and current_user.id is not None and getattr(doc, "warehouse_id", None) is not None:
+    if current_user.id is not None and getattr(doc, "warehouse_id", None) is not None:
         touch_wms_operation_session(
             db,
             tenant_id=int(tenant_id),
