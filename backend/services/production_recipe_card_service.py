@@ -188,7 +188,7 @@ def get_recipe_detail(
         unit_net = float(get_product_current_cost(db, int(tenant_id), pid).get("purchase_net") or 0)
         loc_names: list[str] = []
         if wh_id and avail > 0:
-            snap = build_location_stock(db, tenant_id=int(tenant_id), warehouse_id=wh_id, product_id=pid, available_only=True)
+            snap = build_location_stock(db, tenant_id=int(tenant_id), warehouse_id=wh_id, product_id=pid, available_only=True, pick_eligible_only=True)
             loc_rows = list(snap.get("locations") or [])
             suggested = suggest_picking_locations(loc_rows, quantity=per)
             loc_names = [str(s.get("code") or "") for s in suggested[:3] if s.get("code")]

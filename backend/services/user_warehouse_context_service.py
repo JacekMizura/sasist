@@ -209,9 +209,22 @@ def warehouse_context_payload(db: Session, user: AppUser) -> dict[str, Any]:
                     "can_operate": bool(row.can_operate),
                 }
             )
+    wh_by_id = {int(w.id): w for w in whs}
+    active_requires_putaway = True
+    if active_id is not None:
+        aw = wh_by_id.get(int(active_id))
+        if aw is not None:
+            active_requires_putaway = bool(getattr(aw, "requires_putaway", True))
     return {
         "active_warehouse_id": active_id,
-        "warehouses": [{"id": int(w.id), "name": str(w.name or f"Magazyn #{w.id}")} for w in whs],
+        "warehouses": [
+            {
+                "id": int(w.id),
+                "name": str(w.name or f"Magazyn #{w.id}"),
+                "requires_putaway": bool(getattr(w, "requires_putaway", True)),
+            }
+            for w in whs
+        ],
         "show_warehouse_selector": len(whs) > 1,
         "assignments": assignments,
         "uses_legacy_all_warehouses": (
@@ -220,4 +233,5 @@ def warehouse_context_payload(db: Session, user: AppUser) -> dict[str, Any]:
             and not is_super_role(user.role)
         ),
         "wms_warehouse_enforcement": wms_warehouse_assignment_enforcement_enabled(),
+        "active_warehouse_requires_putaway": active_requires_putaway,
     }

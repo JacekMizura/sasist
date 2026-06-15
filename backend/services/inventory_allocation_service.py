@@ -15,6 +15,10 @@ from ..models.stock_reservation import StockReservation
 from ..models.warehouse import Bin
 from ..storage_types import NON_PICKABLE_STORAGE_TYPE_ALIASES, get_storage_priority
 from .inventory_lot_keys import NO_EXPIRY_SENTINEL
+from .pick_eligible_inventory_service import (
+    is_pick_eligible_location_row,
+    resolve_requires_putaway_for_warehouse,
+)
 from .stock_disposition import (
     DEFAULT_STOCK_DISPOSITION,
     normalize_stock_disposition,
@@ -70,8 +74,9 @@ def allocate_inventory_slices_fefo_pick_path(
     if need <= 0:
         return ([], current_pick_sequence)
     sd = normalize_stock_disposition(stock_disposition)
+    requires_putaway = resolve_requires_putaway_for_warehouse(db, warehouse_id)
     stock_rows = (
-        db.query(Inventory, Location.pick_sequence, Bin.storage_type)
+        db.query(Inventory, Location, Location.pick_sequence, Bin.storage_type)
         .join(Location, Inventory.location_id == Location.id)
         .outerjoin(Bin, Bin.location_uuid == Location.location_uuid)
         .filter(
@@ -89,15 +94,17 @@ def allocate_inventory_slices_fefo_pick_path(
         .all()
     )
     candidates: list[tuple[Inventory, int | None, str | None]] = []
-    for row, pick_sequence, storage_type in stock_rows:
-        bn = getattr(row, "batch_number", "") or ""
-        ed = getattr(row, "expiry_date", None) or NO_EXPIRY_SENTINEL
-        reserved = reserved_qty_at_lot(
-            db, tenant_id, product_id, row.location_id, bn, ed, sd
-        )
-        if float(row.quantity) - reserved <= 0:
+    for inv, loc, pick_sequence, storage_type in stock_rows:
+        if not is_pick_eligible_location_row(loc, requires_putaway=requires_putaway):
             continue
-        candidates.append((row, pick_sequence, storage_type))
+        bn = getattr(inv, "batch_number", "") or ""
+        ed = getattr(inv, "expiry_date", None) or NO_EXPIRY_SENTINEL
+        reserved = reserved_qty_at_lot(
+            db, tenant_id, product_id, inv.location_id, bn, ed, sd
+        )
+        if float(inv.quantity) - reserved <= 0:
+            continue
+        candidates.append((inv, pick_sequence, storage_type))
     if not candidates:
         return ([], current_pick_sequence)
     best_priority = min(get_storage_priority(item[2]) or EFFECTIVE_SEQ_UNSEQUENCED for item in candidates)

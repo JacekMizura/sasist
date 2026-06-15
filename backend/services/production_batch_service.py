@@ -450,6 +450,7 @@ def preview_batch_demand(
             warehouse_id=int(warehouse_id),
             product_id=pid,
             available_only=True,
+            pick_eligible_only=True,
         )
         loc_rows = list(snap_stock.get("locations") or [])
         suggested = suggest_picking_locations(loc_rows, quantity=req)
@@ -745,6 +746,7 @@ def build_batch_pick_plan(db: Session, *, tenant_id: int, batch_id: int) -> Prod
             warehouse_id=int(batch.warehouse_id),
             product_id=pid,
             available_only=True,
+            pick_eligible_only=True,
         )
         loc_rows = list(snap_stock.get("locations") or [])
         suggested = suggest_picking_locations(loc_rows, quantity=req)

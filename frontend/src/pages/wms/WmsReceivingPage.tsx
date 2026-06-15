@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useActiveWarehouseContext } from "../../hooks/useActiveWarehouseContext";
 import { ActiveWarehouseRequiredBanner } from "../../components/layout/ActiveWarehouseRequiredBanner";
+import { WmsDockPutawayBanner } from "../../components/wms/WmsPutawayProfileGate";
 import { Clock, Plus, RotateCcw, Truck, CheckCircle2, ScanLine, User } from "lucide-react";
 import PzWorkflowStatusBadges from "../../components/wms/PzWorkflowStatusBadges";
 import { WmsNewDeliveryModal } from "../../components/wms/receiving/WmsNewDeliveryModal";
@@ -197,7 +198,9 @@ export default function WmsReceivingPage() {
 
         {!hasActiveWarehouse ? (
           <ActiveWarehouseRequiredBanner className="mb-6" hint="Nowe PZ i lista przyjęć dotyczą aktywnego magazynu." />
-        ) : null}
+        ) : (
+          <WmsDockPutawayBanner />
+        )}
 
         {err && (
           <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 p-5 text-sm font-bold text-red-800 shadow-sm w-full">

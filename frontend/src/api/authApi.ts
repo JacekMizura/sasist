@@ -151,6 +151,7 @@ export async function fetchMe(): Promise<MeResponse> {
 export type WarehouseBrief = {
   id: number;
   name: string;
+  requires_putaway?: boolean;
 };
 
 export type WarehouseContextResponse = {
@@ -159,6 +160,7 @@ export type WarehouseContextResponse = {
   show_warehouse_selector: boolean;
   assignments: Array<{ warehouse_id: number; is_default: boolean; can_operate: boolean }>;
   uses_legacy_all_warehouses: boolean;
+  active_warehouse_requires_putaway?: boolean;
 };
 
 export async function fetchWarehouseContext(): Promise<WarehouseContextResponse> {

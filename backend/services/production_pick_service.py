@@ -60,6 +60,7 @@ def build_production_pick_plan(
             warehouse_id=int(order.warehouse_id),
             product_id=pid,
             available_only=True,
+            pick_eligible_only=True,
         )
         loc_rows = list(snap_stock.get("locations") or [])
         suggested = suggest_picking_locations(loc_rows, quantity=req)

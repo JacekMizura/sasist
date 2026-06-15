@@ -23,6 +23,10 @@ class WarehouseService:
             raise ValueError("Tenant nie istnieje")
         warehouse = Warehouse(name=name, tenant_id=tenant_id)
         self.db.add(warehouse)
+        self.db.flush()
+        from .warehouse_receiving_location_service import ensure_warehouse_system_receiving_location
+
+        ensure_warehouse_system_receiving_location(self.db, int(warehouse.id))
         self.db.commit()
         self.db.refresh(warehouse)
         # Ensure assignment exists
@@ -33,6 +37,10 @@ class WarehouseService:
         """Create warehouse (no tenant required). Optionally assign owner via tenant_warehouses."""
         warehouse = Warehouse(name=name, tenant_id=owner_tenant_id)
         self.db.add(warehouse)
+        self.db.flush()
+        from .warehouse_receiving_location_service import ensure_warehouse_system_receiving_location
+
+        ensure_warehouse_system_receiving_location(self.db, int(warehouse.id))
         self.db.commit()
         self.db.refresh(warehouse)
         if owner_tenant_id is not None:

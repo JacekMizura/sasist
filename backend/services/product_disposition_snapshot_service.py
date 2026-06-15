@@ -18,6 +18,10 @@ from ..models.inventory import Inventory
 from ..models.location import Location
 from ..models.stock_reservation import StockReservation
 from .legacy_import_inventory_display_filter import should_hide_legacy_csv_import_inventory_location
+from .pick_eligible_inventory_service import (
+    is_pick_eligible_location,
+    resolve_requires_putaway_for_warehouse,
+)
 from .product_inventory_snapshot_service import _nz
 from .stock_disposition import (
     DEFAULT_STOCK_DISPOSITION,
@@ -61,12 +65,15 @@ def empty_disposition_stock_dict() -> Dict[str, float]:
         "other_qty": 0.0,
         "physical_qty": 0.0,
         "saleable_available_qty": 0.0,
+        "dock_qty": 0.0,
     }
 
 
 def _disposition_stock_from_buckets(
     buckets: Dict[str, float],
     *,
+    pick_eligible_buckets: Dict[str, float] | None = None,
+    dock_saleable: float = 0.0,
     reserved: float = 0.0,
 ) -> Dict[str, float]:
     out = empty_disposition_stock_dict()
@@ -84,8 +91,12 @@ def _disposition_stock_from_buckets(
         else:
             out["other_qty"] = _nz(out["other_qty"] + q)
     out["physical_qty"] = _nz(physical)
-    saleable = float(out["saleable_qty"])
-    out["saleable_available_qty"] = _nz(max(0.0, saleable - float(reserved or 0)))
+    out["dock_qty"] = _nz(max(0.0, float(dock_saleable or 0)))
+    pe = pick_eligible_buckets if pick_eligible_buckets is not None else buckets
+    pick_saleable = _nz(float(pe.get(STOCK_DISPOSITION_SALEABLE, 0.0)))
+    if STOCK_DISPOSITION_SALEABLE not in pe and DEFAULT_STOCK_DISPOSITION in pe:
+        pick_saleable = _nz(float(pe.get(DEFAULT_STOCK_DISPOSITION, 0.0)))
+    out["saleable_available_qty"] = _nz(max(0.0, pick_saleable - float(reserved or 0)))
     return out
 
 
@@ -94,8 +105,12 @@ def _on_hand_by_disposition_visible(
     tenant_id: int,
     warehouse_id: Optional[int],
     product_ids: Optional[Sequence[int]],
-) -> Dict[int, Dict[str, float]]:
-    """``product_id`` -> normalized disposition code -> quantity (visible locations only)."""
+) -> tuple[Dict[int, Dict[str, float]], Dict[int, Dict[str, float]], Dict[int, float]]:
+    """
+    Returns (all_buckets, pick_eligible_buckets, dock_saleable_by_product) per product_id.
+    """
+    requires_putaway = resolve_requires_putaway_for_warehouse(db, warehouse_id)
+
     q = (
         db.query(
             Inventory.product_id,
@@ -114,7 +129,10 @@ def _on_hand_by_disposition_visible(
     if product_ids is not None and len(product_ids) > 0:
         q = q.filter(Inventory.product_id.in_(tuple(int(x) for x in product_ids)))
 
-    acc: Dict[int, Dict[str, float]] = defaultdict(lambda: defaultdict(float))
+    all_acc: Dict[int, Dict[str, float]] = defaultdict(lambda: defaultdict(float))
+    pick_acc: Dict[int, Dict[str, float]] = defaultdict(lambda: defaultdict(float))
+    dock_acc: Dict[int, float] = defaultdict(float)
+
     for r in q.all():
         if should_hide_legacy_csv_import_inventory_location(
             loc_name=r.name or "",
@@ -125,8 +143,25 @@ def _on_hand_by_disposition_visible(
             continue
         pid = int(r.product_id)
         code = normalize_stock_disposition(getattr(r, "stock_disposition", None))
-        acc[pid][code] += float(r.quantity or 0)
-    return {pid: {k: _nz(v) for k, v in buckets.items()} for pid, buckets in acc.items()}
+        qty = float(r.quantity or 0)
+        all_acc[pid][code] += qty
+
+        lt = (r.location_type or "").strip().upper()
+        is_dock = lt == "DOCK"
+        if is_dock and code == STOCK_DISPOSITION_SALEABLE:
+            dock_acc[pid] += qty
+
+        if is_pick_eligible_location(
+            requires_putaway=requires_putaway,
+            location_type=r.location_type,
+            location_name=r.name,
+        ):
+            pick_acc[pid][code] += qty
+
+    all_out = {pid: {k: _nz(v) for k, v in buckets.items()} for pid, buckets in all_acc.items()}
+    pick_out = {pid: {k: _nz(v) for k, v in buckets.items()} for pid, buckets in pick_acc.items()}
+    dock_out = {pid: _nz(v) for pid, v in dock_acc.items()}
+    return all_out, pick_out, dock_out
 
 
 def _reserved_by_product_and_disposition(
@@ -176,10 +211,14 @@ def disposition_snapshots_for_products(
     _CHUNK = 400
     reserved_map: Dict[int, float] = {}
     disposition_map: Dict[int, Dict[str, float]] = {}
+    pick_eligible_map: Dict[int, Dict[str, float]] = {}
+    dock_map: Dict[int, float] = {}
     for off in range(0, len(pids), _CHUNK):
         chunk = pids[off : off + _CHUNK]
-        part_disp = _on_hand_by_disposition_visible(db, tenant_id, warehouse_id, chunk)
-        disposition_map.update(part_disp)
+        part_all, part_pick, part_dock = _on_hand_by_disposition_visible(db, tenant_id, warehouse_id, chunk)
+        disposition_map.update(part_all)
+        pick_eligible_map.update(part_pick)
+        dock_map.update(part_dock)
         part_res = _reserved_by_product_and_disposition(
             db,
             tenant_id,
@@ -192,8 +231,15 @@ def disposition_snapshots_for_products(
     out: Dict[int, Dict[str, float]] = {}
     for pid in pids:
         buckets = disposition_map.get(int(pid), {})
+        pick_buckets = pick_eligible_map.get(int(pid), {})
         reserved = float(reserved_map.get(int(pid), 0.0))
-        out[int(pid)] = _disposition_stock_from_buckets(buckets, reserved=reserved)
+        dock_qty = float(dock_map.get(int(pid), 0.0))
+        out[int(pid)] = _disposition_stock_from_buckets(
+            buckets,
+            pick_eligible_buckets=pick_buckets,
+            dock_saleable=dock_qty,
+            reserved=reserved,
+        )
     return out
 
 

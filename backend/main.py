@@ -1061,9 +1061,21 @@ try:
     ensure_inventory_management_policy_schema(engine)
     ensure_purchase_sales_block_schema(engine)
     ensure_receiving_workflow_status_schema(engine)
+    from .db.warehouse_requires_putaway_schema import ensure_warehouse_requires_putaway_schema
+
+    ensure_warehouse_requires_putaway_schema(engine)
+    from .services.warehouse_receiving_location_service import backfill_warehouse_system_receiving_locations
     from .services.receiving_workflow_status_service import backfill_warehouse_workflow_statuses
     from .database import SessionLocal
 
+    try:
+        db = SessionLocal()
+        try:
+            backfill_warehouse_system_receiving_locations(db)
+        finally:
+            db.close()
+    except Exception:
+        logger.exception("[P2.5C] warehouse system receiving location backfill skipped")
     try:
         db = SessionLocal()
         try:

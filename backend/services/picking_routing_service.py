@@ -21,6 +21,10 @@ from ..models.location import Location
 from ..models.order import Order
 from ..models.order_item import OrderItem, order_item_is_replaced_line
 from .bundle_order_item_ops import order_item_skip_bundle_commercial_header_for_ops
+from .pick_eligible_inventory_service import (
+    is_pick_eligible_location,
+    load_warehouse_requires_putaway_map,
+)
 from ..schemas.picking_routing import (
     PickingRoutingAllocationShortfall,
     PickingRoutingResult,
@@ -220,6 +224,7 @@ class PickingRoutingService:
 
         wid_list = list({p[0] for p in pairs})
         pid_list = list({p[1] for p in pairs})
+        requires_putaway_map = load_warehouse_requires_putaway_map(self.db, set(wid_list))
 
         subq = (
             self.db.query(
@@ -245,6 +250,7 @@ class PickingRoutingService:
                 subq.c.qty_sum,
                 Location.name,
                 Location.type,
+                Location.location_type,
             )
             .join(Location, Location.id == subq.c.loc_id)
             .filter(Location.is_active.is_(True))
@@ -252,9 +258,16 @@ class PickingRoutingService:
         )
 
         raw: dict[tuple[int, int], list[tuple[int, float, str, str]]] = defaultdict(list)
-        for wh_id, pr_id, loc_id, qty_sum, loc_name, loc_type in rows:
+        for wh_id, pr_id, loc_id, qty_sum, loc_name, loc_type, location_type in rows:
             pair = (int(wh_id), int(pr_id))
             if pair not in pairs:
+                continue
+            req_putaway = requires_putaway_map.get(int(wh_id), True)
+            if not is_pick_eligible_location(
+                requires_putaway=req_putaway,
+                location_type=location_type,
+                location_name=loc_name,
+            ):
                 continue
             lt = str(loc_type or "")
             raw[pair].append((int(loc_id), float(qty_sum or 0), str(loc_name or ""), lt))

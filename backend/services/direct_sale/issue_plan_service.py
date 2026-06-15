@@ -41,6 +41,7 @@ def _available_at_location(
         warehouse_id=warehouse_id,
         product_id=product_id,
         available_only=True,
+        pick_eligible_only=True,
     )
     for row in snap.get("locations") or []:
         if int(row.get("location_id") or 0) == int(location_id):
@@ -61,6 +62,7 @@ def _warehouse_product_available(
         warehouse_id=warehouse_id,
         product_id=product_id,
         available_only=True,
+        pick_eligible_only=True,
     )
     return float((snap.get("summary") or {}).get("available") or 0)
 
@@ -214,7 +216,7 @@ def _plan_single_line(
 
         if strategy == "SINGLE_LOCATION_ONLY":
             snap = build_location_stock(
-                db, tenant_id=tid, warehouse_id=wid, product_id=pid, available_only=True
+                db, tenant_id=tid, warehouse_id=wid, product_id=pid, available_only=True, pick_eligible_only=True
             )
             candidates = [
                 r

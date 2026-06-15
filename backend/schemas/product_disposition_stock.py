@@ -27,5 +27,10 @@ class ProductDispositionStockOut(BaseModel):
     saleable_available_qty: float = Field(
         0,
         ge=0,
-        description="max(0, saleable_qty - global reserved); UI secondary line when reserved > 0",
+        description="max(0, pick-eligible saleable_qty - global reserved); excludes DOCK when requires_putaway",
+    )
+    dock_qty: float = Field(
+        0,
+        ge=0,
+        description="On-hand SALEABLE on DOCK-IN (physical buffer awaiting putaway)",
     )

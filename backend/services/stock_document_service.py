@@ -319,51 +319,20 @@ def ensure_pz_document_warehouse_resolved(db: Session, doc: StockDocument) -> in
 
 def ensure_default_pz_receiving_location_if_missing(db: Session, doc: StockDocument) -> None:
     """
-    Draft PZ with warehouse but NULL receiving location: pick a default bin so accept
-    does not deadlock after WMS counts. Preference: DOCK, then floor, then first active.
+    Draft PZ with warehouse but NULL receiving location: provision system receiving
+    location (DOCK-IN or STOCK per warehouse.requires_putaway) and assign doc.location_id.
     """
     if doc.location_id is not None:
         return
-    wh_id = doc.warehouse_id
-    if wh_id is None:
+    if doc.warehouse_id is None:
         return
 
-    dock = (
-        db.query(Location)
-        .filter(
-            Location.warehouse_id == int(wh_id),
-            Location.is_active.is_(True),
-            Location.location_type == "DOCK",
-        )
-        .order_by(Location.id.asc())
-        .first()
-    )
-    chosen = dock
-    if not chosen:
-        chosen = (
-            db.query(Location)
-            .filter(
-                Location.warehouse_id == int(wh_id),
-                Location.is_active.is_(True),
-                Location.type == "floor",
-            )
-            .order_by(Location.id.asc())
-            .first()
-        )
-    if not chosen:
-        chosen = (
-            db.query(Location)
-            .filter(
-                Location.warehouse_id == int(wh_id),
-                Location.is_active.is_(True),
-            )
-            .order_by(Location.id.asc())
-            .first()
-        )
-    if chosen:
-        doc.location_id = int(chosen.id)
-        doc.updated_at = datetime.utcnow()
-        db.flush()
+    from .warehouse_receiving_location_service import ensure_receiving_location_for_pz_document
+
+    chosen = ensure_receiving_location_for_pz_document(db, doc)
+    doc.location_id = int(chosen.id)
+    doc.updated_at = datetime.utcnow()
+    db.flush()
 
 
 def is_wms_ghost_stock_document_item(row: StockDocumentItem, eps: float = 1e-9) -> bool:

@@ -67,5 +67,14 @@ class WmsProductViewResponse(BaseModel):
         ge=0,
         description="Effective sales block total for this product in warehouse",
     )
+    dock_qty: float = Field(
+        0,
+        ge=0,
+        description="Physical SALEABLE qty on DOCK-IN awaiting putaway",
+    )
+    requires_putaway: bool = Field(
+        True,
+        description="Warehouse profile — when true, dock_qty blocks ATP until putaway",
+    )
     logistics: WmsProductViewLogistics
     package: WmsProductViewPackage

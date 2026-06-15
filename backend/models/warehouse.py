@@ -35,6 +35,9 @@ class Warehouse(Base, BaseModelMixin):
     start_x = Column(Float, nullable=True, default=0)
     start_y = Column(Float, nullable=True, default=0)
 
+    # P2.5C: True = WMS with DOCK-IN + putaway; False = simple warehouse (receive → STOCK).
+    requires_putaway = Column(Boolean, nullable=False, default=True, server_default="1")
+
     tenant_warehouses = relationship(
         "TenantWarehouse",
         back_populates="warehouse",

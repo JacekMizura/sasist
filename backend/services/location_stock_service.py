@@ -76,10 +76,18 @@ def build_location_stock(
     product_id: int,
     operational_zone_type: str | None = None,
     available_only: bool = False,
+    pick_eligible_only: bool = False,
 ) -> dict:
     pid = int(product_id)
     wid = int(warehouse_id)
     tid = int(tenant_id)
+
+    from .pick_eligible_inventory_service import (
+        is_pick_eligible_location_row,
+        resolve_requires_putaway_for_warehouse,
+    )
+
+    requires_putaway = resolve_requires_putaway_for_warehouse(db, wid) if pick_eligible_only else True
 
     inv_rows = (
         db.query(
@@ -182,6 +190,10 @@ def build_location_stock(
         zone = (getattr(loc, "operational_zone_type", None) or "").strip().upper() or None
         if zone_filter and zone != zone_filter:
             continue
+        if pick_eligible_only and not is_pick_eligible_location_row(
+            loc, requires_putaway=requires_putaway
+        ):
+            continue
         on_hand = float(qty_raw or 0)
         reserved = float(reserved_by_loc.get(lid_i, 0.0))
         picking = float(picking_by_loc.get(lid_i, 0.0))
@@ -248,6 +260,7 @@ def suggest_issue_locations_for_sales(
         warehouse_id=warehouse_id,
         product_id=product_id,
         available_only=True,
+        pick_eligible_only=True,
     )
     return suggest_sales_locations(
         list(snap.get("locations") or []),

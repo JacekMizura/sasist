@@ -35,6 +35,7 @@ describe("applyWarehouseContext", () => {
     expect(applied.showSelector).toBe(false);
     expect(applied.list).toHaveLength(1);
     expect(applied.active?.id).toBe(1);
+    expect(applied.activeRequiresPutaway).toBe(true);
   });
 
   it("shows selector for two warehouses (scenario 2)", () => {
@@ -59,12 +60,15 @@ describe("applyWarehouseContext", () => {
   it("respects show_warehouse_selector flag from backend", () => {
     const ctx: WarehouseContextResponse = {
       active_warehouse_id: 1,
-      warehouses: [{ id: 1, name: "A" }],
+      warehouses: [{ id: 1, name: "A", requires_putaway: false }],
       show_warehouse_selector: true,
       assignments: [],
       uses_legacy_all_warehouses: false,
+      active_warehouse_requires_putaway: false,
     };
-    expect(applyWarehouseContext(ctx).showSelector).toBe(true);
+    const applied = applyWarehouseContext(ctx);
+    expect(applied.showSelector).toBe(true);
+    expect(applied.activeRequiresPutaway).toBe(false);
   });
 });
 

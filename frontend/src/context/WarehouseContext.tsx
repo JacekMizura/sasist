@@ -13,6 +13,7 @@ import { useAuth } from "./AuthContext";
 export type Warehouse = {
   id: number;
   name: string;
+  requires_putaway: boolean;
 };
 
 type WarehouseContextType = {
@@ -27,6 +28,8 @@ type WarehouseContextType = {
   refreshWarehouses: () => Promise<void>;
   /** Increments after successful active-warehouse switch — use in refetch deps. */
   warehouseRevision: number;
+  /** P2.5C — false hides putaway module for simple warehouses. */
+  activeWarehouseRequiresPutaway: boolean;
 };
 
 const WarehouseContext = createContext<WarehouseContextType | undefined>(undefined);
@@ -36,14 +39,16 @@ export function WarehouseProvider({ children }: { children: ReactNode }) {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [warehouse, setWarehouseState] = useState<Warehouse | null>(null);
   const [showWarehouseSelector, setShowWarehouseSelector] = useState(false);
+  const [activeWarehouseRequiresPutaway, setActiveWarehouseRequiresPutaway] = useState(true);
   const [loading, setLoading] = useState(true);
   const [warehouseRevision, setWarehouseRevision] = useState(0);
 
   const applyFromServer = useCallback((ctx: WarehouseContextResponse) => {
-    const { list, active, showSelector } = applyWarehouseContext(ctx);
+    const { list, active, showSelector, activeRequiresPutaway } = applyWarehouseContext(ctx);
     setWarehouses(list);
     setWarehouseState(active);
     setShowWarehouseSelector(showSelector);
+    setActiveWarehouseRequiresPutaway(activeRequiresPutaway);
   }, []);
 
   const refreshWarehouses = useCallback(async () => {
@@ -92,6 +97,7 @@ export function WarehouseProvider({ children }: { children: ReactNode }) {
       showWarehouseSelector,
       refreshWarehouses,
       warehouseRevision,
+      activeWarehouseRequiresPutaway,
     }),
     [
       warehouse,
@@ -102,6 +108,7 @@ export function WarehouseProvider({ children }: { children: ReactNode }) {
       showWarehouseSelector,
       refreshWarehouses,
       warehouseRevision,
+      activeWarehouseRequiresPutaway,
     ],
   );
 

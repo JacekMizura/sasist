@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 class WarehouseBrief(BaseModel):
     id: int
     name: str
+    requires_putaway: bool = True
 
 
 class UserWarehouseAssignmentBrief(BaseModel):
@@ -22,6 +23,7 @@ class WarehouseContextResponse(BaseModel):
     show_warehouse_selector: bool = False
     assignments: list[UserWarehouseAssignmentBrief] = Field(default_factory=list)
     uses_legacy_all_warehouses: bool = False
+    active_warehouse_requires_putaway: bool = True
 
 
 class SetActiveWarehouseBody(BaseModel):

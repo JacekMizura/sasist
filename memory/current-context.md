@@ -1,5 +1,23 @@
 # Current context
 
+## P2.5C — DOCK / ATP / Putaway Implementation (2026-06-08) — CLOSED
+- **Raport:** `memory/p2.5c-dock-putaway-implementation-report.md`
+- `warehouse.requires_putaway` + auto DOCK-IN/STOCK; A3 fix; pick-eligible filter (ATP/pick/production)
+- UX: banner DOCK-IN na przyjęciach; putaway ukryty dla magazynu prostego
+- Testy: `test_p2_5c_dock_putaway.py` (9 passed)
+
+## P2.5B — DOCK / ATP & Cost Verification Architecture (2026-06-08) — ANALYSIS CLOSED
+- **Raport arch.:** `memory/p2.5b-dock-and-cost-architecture.md`
+- Rekomendacja: `warehouse.requires_putaway` + auto DOCK-IN/STOCK; centralny filtr pick-eligible (exclude DOCK z ATP/pick); dual cost light (provisional RECEIPT + `verified_unit_price_net` / `purchase_workflow_status=VERIFIED`)
+- Gap as-is: DOCK w ATP/pick; magazyn bez lokalizacji → inventory=0 (A3); ISSUE bez unit_price (COGS)
+- Bez implementacji — plan faz §9 w raporcie
+
+## P2.5A — Inbound Lifecycle Architecture (2026-06-08) — ANALYSIS CLOSED
+- **Raport arch.:** `memory/p2.5a-inbound-lifecycle-architecture.md`
+- **Raport statusów (impl.):** `memory/p2.5a-receiving-workflow-statuses-report.md`
+- Rekomendacja: fizyka natychmiast (DOCK) + 3 osie (magazyn / zakup / komercja linii); spór 300+7 = block linii nie PZ; exclude DOCK z pick/sell
+- Bez implementacji w tej fazie — plan wdrożenia w raporcie §8
+
 ## P2.5A — Receiving Workflow Statuses (2026-06-08) — CLOSED
 - **Raport:** `memory/p2.5a-receiving-workflow-statuses-report.md`
 - Pola: `warehouse_workflow_status`, `purchase_workflow_status` (niezależne osie)

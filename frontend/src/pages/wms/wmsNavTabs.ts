@@ -53,6 +53,7 @@ function sortTabsLikeRegistry(tabs: WmsTabConfigItem[]): WmsTabConfigItem[] {
 export function resolveWmsNavTabs(
   pinnedModes: WmsPinnedMode[],
   userOperationalModes?: string[] | null,
+  activeWarehouseRequiresPutaway = true,
 ): WmsNavTabsResolution {
   const catalog = WMS_TAB_ITEMS;
   const catalogIds = catalog.map((t) => t.id);
@@ -64,10 +65,16 @@ export function resolveWmsNavTabs(
 
   const allowedModules = WMS_MODULES.filter((m) => moduleAllowed(m, allowedModeKeys));
   let permissionFilteredCatalog = sortTabsLikeRegistry(allowedModules.map(toTabItem));
+  if (!activeWarehouseRequiresPutaway) {
+    permissionFilteredCatalog = permissionFilteredCatalog.filter((t) => t.id !== "putaway");
+  }
   permissionFilteredCatalog = ensureMandatoryTabs(permissionFilteredCatalog);
   const permissionFilteredIds = permissionFilteredCatalog.map((t) => t.id);
 
   let dashboardModules = allowedModules.filter((m) => m.dashboard).sort((a, b) => a.sortOrder - b.sortOrder);
+  if (!activeWarehouseRequiresPutaway) {
+    dashboardModules = dashboardModules.filter((m) => m.id !== "putaway");
+  }
   const mandatoryModules = WMS_MODULES.filter((m) => MANDATORY_WMS_TAB_IDS.includes(m.id));
   for (const mod of mandatoryModules) {
     if (!dashboardModules.some((m) => m.id === mod.id)) {

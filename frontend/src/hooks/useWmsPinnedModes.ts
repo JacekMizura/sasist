@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "../context/AuthContext";
+import { useWarehouse } from "../context/WarehouseContext";
 import { WMS_TAB_ITEMS, type WmsTabConfigItem } from "../pages/wms/wmsTabConfig";
 import { resolveWmsNavTabs } from "../pages/wms/wmsNavTabs";
 import {
@@ -13,6 +14,7 @@ export type { WmsPinnedMode };
 
 export function useWmsPinnedModes(userId: number | null) {
   const { user } = useAuth();
+  const { activeWarehouseRequiresPutaway } = useWarehouse();
   const [modes, setModes] = useState<WmsPinnedMode[]>(() => readWmsPinnedModesFromStorage(userId));
 
   useEffect(() => {
@@ -24,8 +26,8 @@ export function useWmsPinnedModes(userId: number | null) {
   }, [userId, modes]);
 
   const navResolution = useMemo(
-    () => resolveWmsNavTabs(modes, user?.wms_operational_modes),
-    [modes, user?.wms_operational_modes],
+    () => resolveWmsNavTabs(modes, user?.wms_operational_modes, activeWarehouseRequiresPutaway),
+    [modes, user?.wms_operational_modes, activeWarehouseRequiresPutaway],
   );
 
   const pinnedTabsInOrder: WmsTabConfigItem[] = navResolution.pinnedTabs;

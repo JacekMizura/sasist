@@ -12,6 +12,7 @@ import { documentCreatedByLabel } from "../../utils/documentCreatedBy";
 import { formatRelativeUpdatePl, formatWmsListDate } from "./wmsListFormatters";
 import { isReturnReceiptDocumentType } from "./putawayDocumentGates";
 import PzWorkflowStatusBadges from "../../components/wms/PzWorkflowStatusBadges";
+import { WmsPutawayProfileGate } from "../../components/wms/WmsPutawayProfileGate";
 
 type Tenant = { id: number; name: string };
 
@@ -242,6 +243,7 @@ export default function WmsPutawayPage() {
   }, [rows, searchTerm]);
 
   return (
+    <WmsPutawayProfileGate>
     <div className="min-h-full bg-white flex flex-col">
       <div className="p-4 sm:p-6 lg:p-8 flex flex-col flex-1">
       <div className="w-full flex-1 flex flex-col animate-in fade-in duration-500">
@@ -305,5 +307,6 @@ export default function WmsPutawayPage() {
       </div>
       </div>
     </div>
+    </WmsPutawayProfileGate>
   );
 }
