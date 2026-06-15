@@ -13,7 +13,7 @@ import { useWarehouse } from "@/context/WarehouseContext";
 
 export default function InventoryCountReportsPage() {
   const { warehouse } = useWarehouse();
-  const tenantId = warehouse?.tenant_id ?? 1;
+  const tenantId = warehouse?.tenant_id;
   const [reports, setReports] = useState<
     { kind: string; label: string; formats: string[]; status: string }[]
   >([]);

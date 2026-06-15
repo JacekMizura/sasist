@@ -1,5 +1,6 @@
 import { useState } from "react"
 import api from "../api/axios"
+import { useWarehouse } from "../context/WarehouseContext"
 
 const productFields = [
   "name",
@@ -22,6 +23,9 @@ const orderFields = [
 ]
 
 export default function Import() {
+  const { warehouse } = useWarehouse()
+  const tenantId = warehouse?.tenant_id
+  const warehouseId = warehouse?.id ?? null
   const [file, setFile] = useState<File | null>(null)
   const [columns, setColumns] = useState<string[]>([])
   const [preview, setPreview] = useState<any[]>([])
@@ -44,6 +48,10 @@ export default function Import() {
 
   const handleImport = async () => {
     if (!file) return
+    if (type === "orders" && (!tenantId || !warehouseId)) {
+      alert("Wybierz magazyn.")
+      return
+    }
 
     const formData = new FormData()
     formData.append("file", file)
@@ -51,8 +59,8 @@ export default function Import() {
 
     const url =
       type === "products"
-        ? "/import/products/?tenant_id=1"
-        : "/import/orders/?tenant_id=1&warehouse_id=1"
+        ? `/import/products/?tenant_id=${tenantId ?? 1}`
+        : `/import/orders/?tenant_id=${tenantId}&warehouse_id=${warehouseId}`
 
     try {
       const res = await api.post(url, formData, {

@@ -101,7 +101,7 @@ export default function CreateOrderPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { warehouse } = useWarehouse();
-  const warehouseId = warehouse?.id ?? 1;
+  const warehouseId = warehouse?.id ?? null;
   const [panelSummary, setPanelSummary] = useState<OrderUiStatusPanelSummary | null>(null);
   const [panelSubgroups, setPanelSubgroups] = useState<OrderUiPanelSubgroupRead[] | null>(null);
   const [documentType, setDocumentType] = useState("");
@@ -537,6 +537,10 @@ export default function CreateOrderPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    if (!warehouseId) {
+      setError("Wybierz magazyn.");
+      return;
+    }
     if (lines.length === 0) {
       setError("Dodaj co najmniej jeden produkt.");
       return;
@@ -678,6 +682,11 @@ export default function CreateOrderPage() {
                 ← Lista zamówień
               </Link>
             </div>
+            {!warehouseId ? (
+              <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                Wybierz magazyn.
+              </p>
+            ) : null}
             <div className="mt-4 max-w-md">
               <label className="flex flex-col gap-1">
                 <span className="text-xs font-semibold text-slate-500">Status panelu</span>

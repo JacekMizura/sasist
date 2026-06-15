@@ -27,8 +27,6 @@ from ..models.supplier import Supplier
 from ..models.tenant_warehouse import TenantWarehouse
 from .tenant_default_warehouse import (
     ERR_CHOOSE_WAREHOUSE_FOR_DOCUMENT,
-    ERR_NO_WAREHOUSE,
-    list_tenant_warehouse_ids,
 )
 from ..models.warehouse import Warehouse
 from ..schemas.stock_document import (
@@ -312,38 +310,9 @@ def is_stock_document_item_wm_material(row: StockDocumentItem) -> bool:
 _CANCELLED_STATUS_TOKENS = frozenset({"cancelled", "canceled", "anulowany", "anulowane"})
 
 
-def maybe_auto_assign_single_warehouse_on_pz(db: Session, doc: StockDocument) -> bool:
-    """
-    Draft PZ with NULL warehouse_id: if tenant has exactly one linked warehouse, set it and return True.
-    Does not commit — caller commits. No-op if already set, not PZ draft, or 0 / >1 warehouses.
-    """
-    if doc.warehouse_id is not None:
-        return False
-    if str(getattr(doc, "document_type", "") or "") != "PZ" or str(getattr(doc, "status", "") or "") != "draft":
-        return False
-    whs = list_tenant_warehouse_ids(db, doc.tenant_id)
-    if len(whs) != 1:
-        return False
-    doc.warehouse_id = whs[0]
-    doc.updated_at = datetime.utcnow()
-    db.flush()
-    return True
-
-
 def ensure_pz_document_warehouse_resolved(db: Session, doc: StockDocument) -> int:
-    """
-    Require a warehouse on the document for operations that need it.
-    Auto-assign when tenant has exactly one warehouse; persist with flush (caller commits).
-    """
+    """Require explicit warehouse_id on the document — no tenant default or auto-assign."""
     if doc.warehouse_id is not None:
-        return int(doc.warehouse_id)
-    whs = list_tenant_warehouse_ids(db, doc.tenant_id)
-    if len(whs) == 0:
-        raise ValueError(ERR_NO_WAREHOUSE)
-    if len(whs) == 1:
-        doc.warehouse_id = whs[0]
-        doc.updated_at = datetime.utcnow()
-        db.flush()
         return int(doc.warehouse_id)
     raise ValueError(ERR_CHOOSE_WAREHOUSE_FOR_DOCUMENT)
 
@@ -1669,8 +1638,6 @@ def get_stock_document_read(db: Session, tenant_id: int, document_id: int) -> Op
     if not doc:
         return None
     needs_commit = False
-    if maybe_auto_assign_single_warehouse_on_pz(db, doc):
-        needs_commit = True
     if recalculate_wms_document_completion(db, tenant_id, document_id):
         needs_commit = True
     if needs_commit:
@@ -1772,11 +1739,7 @@ def set_stock_document_receiving_target(
 
     resolved_wh = warehouse_id if warehouse_id is not None else doc.warehouse_id
     if resolved_wh is None:
-        whs = list_tenant_warehouse_ids(db, tenant_id)
-        if len(whs) == 1:
-            resolved_wh = whs[0]
-        else:
-            raise ValueError(ERR_CHOOSE_WAREHOUSE_FOR_DOCUMENT)
+        raise ValueError(ERR_CHOOSE_WAREHOUSE_FOR_DOCUMENT)
 
     tw = (
         db.query(TenantWarehouse)

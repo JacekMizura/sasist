@@ -109,7 +109,7 @@ class PurchasingAlertRunScanOut(BaseModel):
 
 class PurchasingAlertCreateDraftBody(BaseModel):
     tenant_id: int = Field(..., ge=1)
-    warehouse_id: Optional[int] = Field(None, ge=1)
+    warehouse_id: int = Field(..., ge=1)
 
 
 class PurchasingAlertBulkResolveBody(BaseModel):

@@ -52,8 +52,8 @@ export default function InventoryCountWizardPage() {
   const { documentId } = useParams();
   const navigate = useNavigate();
   const { warehouse } = useWarehouse();
-  const tenantId = warehouse?.tenant_id ?? 1;
-  const warehouseId = warehouse?.id ?? 1;
+  const tenantId = warehouse?.tenant_id;
+  const warehouseId = warehouse?.id ?? null;
 
   const [step, setStep] = useState(0);
   const [doc, setDoc] = useState<InventoryDocumentRead | null>(null);
@@ -102,6 +102,10 @@ export default function InventoryCountWizardPage() {
   }, [documentId, doc, tenantId, hydrateFromDoc]);
 
   const ensureDocument = useCallback(async () => {
+    if (!warehouseId || !tenantId) {
+      setErr("Wybierz magazyn.");
+      throw new Error("Wybierz magazyn.");
+    }
     if (doc) return doc;
     const created = await createInventoryDocument(tenantId, {
       warehouse_id: warehouseId,
@@ -111,6 +115,14 @@ export default function InventoryCountWizardPage() {
     navigate(erpInventoryCountPaths.wizardDoc(created.id), { replace: true });
     return created;
   }, [doc, tenantId, warehouseId, inventoryType, navigate, hydrateFromDoc]);
+
+  if (!warehouseId || !tenantId) {
+    return (
+      <div className="mx-auto max-w-2xl px-4 py-12 text-center">
+        <p className="text-sm font-medium text-amber-800">Wybierz magazyn.</p>
+      </div>
+    );
+  }
 
   const onTypeChange = (type: string) => {
     setInventoryType(type);

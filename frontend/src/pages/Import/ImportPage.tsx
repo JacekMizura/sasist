@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { Box, Boxes, Factory, Package, ShoppingCart, Tags, Truck, Users } from "lucide-react";
 import api from "../../api/axios";
+import { useWarehouse } from "../../context/WarehouseContext";
 import { useTranslation } from "../../locales";
 import type { Translations } from "../../locales";
 import {
@@ -327,6 +328,9 @@ export type ImportPageProps = {
 /** Kreator importu CSV (produkty / zamówienia / zestawy) — używany wyłącznie z Ustawienia → Import. */
 export default function ImportPage({ settingsKind, embedded = false }: ImportPageProps) {
   const t = useTranslation();
+  const { warehouse } = useWarehouse();
+  const tenantId = warehouse?.tenant_id ?? 1;
+  const warehouseId = warehouse?.id ?? null;
   const [file, setFile] = useState<File | null>(null);
   const [columns, setColumns] = useState<string[]>([]);
   const [preview, setPreview] = useState<Record<string, unknown>[]>([]);
@@ -384,6 +388,17 @@ export default function ImportPage({ settingsKind, embedded = false }: ImportPag
 
   const handleImport = async () => {
     if (!file) return;
+    const isOrdersImport =
+      settingsKind !== "products" &&
+      settingsKind !== "manufacturers" &&
+      settingsKind !== "suppliers" &&
+      settingsKind !== "cartons" &&
+      settingsKind !== "customers" &&
+      settingsKind !== "sets";
+    if (isOrdersImport && !warehouseId) {
+      alert("Wybierz magazyn.");
+      return;
+    }
     setLoading(true);
     try {
       const formData = new FormData();
@@ -410,18 +425,18 @@ export default function ImportPage({ settingsKind, embedded = false }: ImportPag
       formData.append("column_map", JSON.stringify(columnMap));
       const url =
         settingsKind === "products"
-          ? "/import/products/?tenant_id=1"
+          ? `/import/products/?tenant_id=${tenantId}`
           : settingsKind === "manufacturers"
-            ? "/import/manufacturers/?tenant_id=1"
+            ? `/import/manufacturers/?tenant_id=${tenantId}`
             : settingsKind === "suppliers"
-              ? "/import/suppliers/?tenant_id=1"
+              ? `/import/suppliers/?tenant_id=${tenantId}`
               : settingsKind === "cartons"
-                ? "/import/cartons/?tenant_id=1"
+                ? `/import/cartons/?tenant_id=${tenantId}`
                 : settingsKind === "customers"
-                  ? "/import/customers/?tenant_id=1"
+                  ? `/import/customers/?tenant_id=${tenantId}`
                   : settingsKind === "sets"
-                    ? "/import/sets/?tenant_id=1"
-                    : "/import/orders/?tenant_id=1&warehouse_id=1";
+                    ? `/import/sets/?tenant_id=${tenantId}`
+                    : `/import/orders/?tenant_id=${tenantId}&warehouse_id=${warehouseId}`;
       const res = await api.post(url, formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });

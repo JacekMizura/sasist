@@ -24,7 +24,7 @@ export default function FleetPlanner() {
   const t = useTranslation();
   const { warehouse } = useWarehouse();
   const refreshCarts = useCartsRefresh()?.refreshCarts;
-  const warehouseId = warehouse?.id ?? 1;
+  const warehouseId = warehouse?.id ?? null;
 
   const [loading, setLoading] = useState(false);
   const [applying, setApplying] = useState(false);
@@ -32,6 +32,10 @@ export default function FleetPlanner() {
   const [error, setError] = useState<string | null>(null);
 
   const handleAnalyze = async () => {
+    if (!warehouseId) {
+      setError("Wybierz magazyn.");
+      return;
+    }
     setLoading(true);
     setError(null);
     setResult(null);
@@ -49,6 +53,10 @@ export default function FleetPlanner() {
   };
 
   const handleApply = async () => {
+    if (!warehouseId) {
+      setError("Wybierz magazyn.");
+      return;
+    }
     setApplying(true);
     setError(null);
     try {
@@ -72,7 +80,7 @@ export default function FleetPlanner() {
           <button
             type="button"
             onClick={handleAnalyze}
-            disabled={loading}
+            disabled={loading || !warehouseId}
             className="rounded-lg bg-violet-600 px-6 py-3 text-sm font-bold uppercase text-white transition-colors hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading ? t.loading : (t.optimizer_analyze_button ?? "Oblicz zapotrzebowanie na wózki")}
@@ -82,6 +90,9 @@ export default function FleetPlanner() {
       <p className="text-sm text-slate-500">
         {t.optimizer_analyze_subtitle ?? "Oblicz minimalne zapotrzebowanie na wózki dla zamówień NEW."}
       </p>
+      {!warehouseId ? (
+        <p className="mt-2 text-sm font-medium text-amber-800">Wybierz magazyn.</p>
+      ) : null}
 
       {/* Dashboard stub cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

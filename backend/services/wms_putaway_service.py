@@ -52,7 +52,6 @@ from .stock_document_service import (
     doc_allows_wms_putaway,
     ensure_pz_document_warehouse_resolved,
     is_stock_document_item_wm_material,
-    maybe_auto_assign_single_warehouse_on_pz,
     recompute_putaway_status_for_document,
     recalculate_wms_document_completion,
     wms_putaway_queue_statuses,
@@ -674,11 +673,7 @@ def suggest_putaway_location(db: Session, tenant_id: int, item_id: int) -> WmsPu
         if mm_src is None:
             return WmsPutawaySuggestLocationOut(source="none")
         mm_skip_source.add(int(mm_src))
-    else:
-        if maybe_auto_assign_single_warehouse_on_pz(db, doc):
-            _sync_po_from_pz(db, tenant_id, doc.id)
-            db.commit()
-            db.refresh(doc)
+
     wh_id = doc.warehouse_id
     if wh_id is None:
         return WmsPutawaySuggestLocationOut(source="none")
@@ -863,11 +858,6 @@ def suggest_putaway_locations(db: Session, tenant_id: int, item_id: int) -> WmsP
         if mm_src is None:
             return WmsPutawayLocationSuggestionsOut()
         mm_skip_source.add(int(mm_src))
-    else:
-        if maybe_auto_assign_single_warehouse_on_pz(db, doc):
-            _sync_po_from_pz(db, tenant_id, doc.id)
-            db.commit()
-            db.refresh(doc)
 
     wh_id = doc.warehouse_id
     if wh_id is None:

@@ -93,7 +93,7 @@ export function createEmptyLevel(
   };
 }
 
-export function createDefaultRackDraft(warehouseId = 1): RackStructureDraft {
+export function createDefaultRackDraft(warehouseId: number): RackStructureDraft {
   return {
     rackName: "RK-01",
     warehouseId,
@@ -447,7 +447,7 @@ export function apiRackToDraft(rack: ConsolidationRack): RackStructureDraft {
     .filter((d): d is number => d != null && d > 0);
   return {
     rackName: rack.name,
-    warehouseId: rack.warehouse_id ?? 1,
+    warehouseId: rack.warehouse_id ?? 0,
     totalWidthMm: maxLevelWidth > 0 ? maxLevelWidth : 2000,
     totalDepthMm: depths[0] ?? 800,
     levels: levels.length ? reindexLevels(levels) : [createEmptyLevel(0, {})],

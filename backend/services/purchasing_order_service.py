@@ -53,9 +53,12 @@ _ALLOWED_TRANSITIONS: Dict[str, frozenset[str]] = {
 }
 
 
+ERR_PO_WAREHOUSE_REQUIRED = "Zamówienie zakupu wymaga przypisanego magazynu."
+
+
 def _assert_warehouse_for_tenant(db: Session, tenant_id: int, warehouse_id: Optional[int]) -> None:
     if warehouse_id is None:
-        return
+        raise HTTPException(status_code=400, detail=ERR_PO_WAREHOUSE_REQUIRED)
     ok = (
         db.query(TenantWarehouse.id)
         .filter(TenantWarehouse.tenant_id == tenant_id, TenantWarehouse.warehouse_id == int(warehouse_id))
@@ -121,7 +124,7 @@ def create_orders_from_generator(
     db: Session,
     *,
     tenant_id: int,
-    warehouse_id: Optional[int],
+    warehouse_id: int,
     product_ids: Sequence[int],
     override_qty_map: Optional[Dict[int, float]] = None,
 ) -> Dict[str, Any]:

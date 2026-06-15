@@ -126,7 +126,7 @@ export async function postPurchasingAlertsRunScan(tenantId: number, warehouseId:
 
 export async function postPurchasingAlertsCreateDraftOrders(
   tenantId: number,
-  warehouseId: number | null,
+  warehouseId: number,
 ): Promise<{
   purchase_order_ids: number[];
   summary: Record<string, unknown>;
@@ -136,7 +136,7 @@ export async function postPurchasingAlertsCreateDraftOrders(
 }> {
   const res = await api.post("/purchasing/alerts/create-draft-orders", {
     tenant_id: tenantId,
-    warehouse_id: warehouseId ?? undefined,
+    warehouse_id: warehouseId,
   });
   return res.data;
 }

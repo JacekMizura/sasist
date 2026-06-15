@@ -1,5 +1,14 @@
 # Change log
 
+## 2026-06-08 — P2.1 Multi Warehouse Hardening
+
+- PO: `warehouse_id` wymagane w generatorze i alertach (`ERR_PO_WAREHOUSE_REQUIRED`)
+- Usunięto auto-assign PZ (`maybe_auto_assign_single_warehouse_on_pz`) i single-WH fallback w resolve/receiving-target
+- Frontend: usunięte hardcoded WH w reklamacjach, inwentaryzacji, import zamówień, regałach, create order
+- Skrypt legacy: `backend/scripts/report_deliveries_missing_warehouse.py`
+- Testy: `test_purchase_order_warehouse_hardening.py`, `test_multi_warehouse_hardening.py` (10 passed)
+- Raport: `memory/p2.1-multi-warehouse-hardening-report.md`
+
 ## 2026-06-08 — P4.18 Bundle Warehouse Intelligence
 
 - Serwisy read-only: analytics, slotting, replenishment, capacity (`backend/services/bundles/intelligence/`)

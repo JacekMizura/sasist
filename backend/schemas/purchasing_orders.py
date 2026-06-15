@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field, field_validator
 
 class PurchaseOrderFromGeneratorBody(BaseModel):
     tenant_id: int = Field(..., ge=1)
-    warehouse_id: Optional[int] = Field(None, ge=1)
+    warehouse_id: int = Field(..., ge=1)
     product_ids: List[int] = Field(..., min_length=1)
     override_qty_map: Optional[Dict[int, float]] = None
 

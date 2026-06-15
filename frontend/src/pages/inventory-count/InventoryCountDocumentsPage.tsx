@@ -10,7 +10,7 @@ import { useWarehouse } from "@/context/WarehouseContext";
 
 export default function InventoryCountDocumentsPage() {
   const { warehouse } = useWarehouse();
-  const tenantId = warehouse?.tenant_id ?? 1;
+  const tenantId = warehouse?.tenant_id;
   const [rows, setRows] = useState<InventoryDocumentRead[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleteBusyId, setDeleteBusyId] = useState<number | null>(null);

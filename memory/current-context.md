@@ -1,5 +1,13 @@
 # Current context
 
+## P2.1 — Multi Warehouse Hardening (2026-06-08)
+- **Raport:** `memory/p2.1-multi-warehouse-hardening-report.md`
+- PO generator + alerty: `warehouse_id` obowiązkowe (HTTP 400)
+- Usunięto: `maybe_auto_assign_single_warehouse_on_pz`, single-WH fallback w PZ resolve/receiving-target
+- Frontend: usunięte `?? 1` / `warehouse_id=1` w kluczowych formularzach (reklamacje, inwentaryzacja, import, regały, zamówienia)
+- Legacy: `python -m backend.scripts.report_deliveries_missing_warehouse`
+- Testy: 10 passed (PO + StockDocument + InboundDelivery)
+
 ## P4.18 — Bundle Warehouse Intelligence (2026-06-08)
 - **Raport:** `memory/bundle-warehouse-intelligence-report.md`
 - **Werdykt:** **READY** (rekomendacje only — bez automatyzacji)

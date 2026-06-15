@@ -8,7 +8,7 @@ import { useWarehouse } from "@/context/WarehouseContext";
 export default function InventoryCountDocumentDetailPage() {
   const { documentId } = useParams();
   const { warehouse } = useWarehouse();
-  const tenantId = warehouse?.tenant_id ?? 1;
+  const tenantId = warehouse?.tenant_id;
   const id = Number(documentId);
   const state = useInventoryDocumentDetail(id, tenantId);
 

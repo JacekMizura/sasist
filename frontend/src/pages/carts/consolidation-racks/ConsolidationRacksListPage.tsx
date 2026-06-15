@@ -26,7 +26,7 @@ type RackRow = ConsolidationRack & {
 export default function ConsolidationRacksListPage() {
   const navigate = useNavigate();
   const { warehouse, warehouses } = useWarehouse();
-  const warehouseId = warehouse?.id ?? 1;
+  const warehouseId = warehouse?.id ?? null;
   const [racks, setRacks] = useState<ConsolidationRack[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -88,6 +88,15 @@ export default function ConsolidationRacksListPage() {
       setDeletingId(null);
     }
   };
+
+  if (!warehouseId) {
+    return (
+      <div className={cartsPageShellClass}>
+        <CartsListPageHeader title="Regały kompletacyjne" />
+        <p className="py-8 text-center text-sm font-medium text-amber-800">Wybierz magazyn.</p>
+      </div>
+    );
+  }
 
   if (loading) {
     return <div className="py-10 text-center text-[13px] text-slate-500">Ładowanie regałów…</div>;

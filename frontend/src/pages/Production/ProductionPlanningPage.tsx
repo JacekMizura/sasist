@@ -9,7 +9,7 @@ import { erpProductionPaths } from "./productionPaths";
 export default function ProductionPlanningPage() {
   const navigate = useNavigate();
   const { warehouse } = useWarehouse();
-  const tenantId = warehouse?.tenant_id ?? 1;
+  const tenantId = warehouse?.tenant_id;
   const warehouseId = warehouse?.id;
   const [modalOpen, setModalOpen] = useState(false);
 

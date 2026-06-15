@@ -99,7 +99,7 @@ export type FromGeneratorResponse = {
 
 export async function createPurchaseOrdersFromGenerator(payload: {
   tenant_id: number;
-  warehouse_id?: number | null;
+  warehouse_id: number;
   product_ids: number[];
   override_qty_map?: Record<number, number>;
 }): Promise<FromGeneratorResponse> {

@@ -6,7 +6,7 @@ import { useWarehouse } from "@/context/WarehouseContext";
 
 export default function InventoryCountDashboardPage() {
   const { warehouse } = useWarehouse();
-  const tenantId = warehouse?.tenant_id ?? 1;
+  const tenantId = warehouse?.tenant_id;
   const warehouseId = warehouse?.id;
   const [data, setData] = useState<InventoryDashboardPayload | null>(null);
   const [loading, setLoading] = useState(true);

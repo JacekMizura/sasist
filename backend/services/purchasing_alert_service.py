@@ -550,7 +550,7 @@ def create_draft_orders_from_critical_alerts(
     db: Session,
     *,
     tenant_id: int,
-    warehouse_id: Optional[int],
+    warehouse_id: int,
 ) -> Dict[str, Any]:
     q = (
         db.query(PurchasingAlertEvent)

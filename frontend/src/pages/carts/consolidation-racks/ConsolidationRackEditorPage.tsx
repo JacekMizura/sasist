@@ -39,7 +39,8 @@ export default function ConsolidationRackEditorPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rack, setRack] = useState<ConsolidationRack | null>(null);
-  const [draft, setDraft] = useState<RackStructureDraft>(() => createDefaultRackDraft(warehouse?.id ?? 1));
+  const activeWarehouseId = warehouse?.id ?? null;
+  const [draft, setDraft] = useState<RackStructureDraft | null>(null);
   const [selection, setSelection] = useState<SegmentSelection>(null);
   const [appliedPreset, setAppliedPreset] = useState<RackPresetId | null>(null);
   const [presetPickerOpen, setPresetPickerOpen] = useState(true);
@@ -58,13 +59,14 @@ export default function ConsolidationRackEditorPage() {
 
   const handleApplyPreset = useCallback(
     (preset: RackPresetId) => {
+      if (!draft) return;
       const next = applyRackPreset(preset, draft.warehouseId);
       handleDraftChange(next);
       setAppliedPreset(preset);
       setPresetPickerOpen(false);
       setSelection(null);
     },
-    [draft.warehouseId, handleDraftChange],
+    [draft, handleDraftChange],
   );
 
   const loadRack = useCallback(async (id: number) => {
@@ -89,16 +91,16 @@ export default function ConsolidationRackEditorPage() {
   }, [isCreate, rackId, loadRack]);
 
   useEffect(() => {
-    if (isCreate && warehouse?.id) {
-      setDraft((prev) => ({ ...prev, warehouseId: warehouse.id }));
+    if (isCreate && activeWarehouseId) {
+      setDraft((prev) => prev ?? createDefaultRackDraft(activeWarehouseId));
     }
-  }, [isCreate, warehouse?.id]);
+  }, [isCreate, activeWarehouseId]);
 
-  const validation = useMemo(() => validateRackDraft(draft), [draft]);
-  const totalSegments = useMemo(() => countSegments(draft), [draft]);
+  const validation = useMemo(() => (draft ? validateRackDraft(draft) : { valid: false, levelErrors: [] as const, globalError: null }), [draft]);
+  const totalSegments = useMemo(() => (draft ? countSegments(draft) : 0), [draft]);
 
   const selectedHit = useMemo(() => {
-    if (!selection) return null;
+    if (!selection || !draft) return null;
     return findSegmentInDraft(draft, selection.levelClientId, selection.segmentClientId);
   }, [draft, selection]);
 
@@ -107,22 +109,29 @@ export default function ConsolidationRackEditorPage() {
     : "";
 
   const updateSelectedSegment = useCallback((patch: Partial<SegmentDraft>) => {
-    if (!selection) return;
-    setDraft((prev) => ({
-      ...prev,
-      levels: prev.levels.map((lv) => {
-        if (lv.clientId !== selection.levelClientId) return lv;
-        return {
-          ...lv,
-          segments: lv.segments.map((s) =>
-            s.clientId === selection.segmentClientId ? { ...s, ...patch } : s,
-          ),
-        };
-      }),
-    }));
-  }, [selection]);
+    if (!selection || !draft) return;
+    setDraft((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        levels: prev.levels.map((lv) => {
+          if (lv.clientId !== selection.levelClientId) return lv;
+          return {
+            ...lv,
+            segments: lv.segments.map((s) =>
+              s.clientId === selection.segmentClientId ? { ...s, ...patch } : s,
+            ),
+          };
+        }),
+      };
+    });
+  }, [selection, draft]);
 
   const handleCreate = async () => {
+    if (!draft) {
+      setError("Wybierz magazyn.");
+      return;
+    }
     if (!draft.rackName.trim()) {
       setError("Podaj nazwę regału.");
       return;
@@ -181,14 +190,32 @@ export default function ConsolidationRackEditorPage() {
   };
 
   const warehouseLabel =
-    warehouses.find((w) => w.id === draft.warehouseId)?.name ?? warehouse?.name ?? `#${draft.warehouseId}`;
+    draft != null
+      ? (warehouses.find((w) => w.id === draft.warehouseId)?.name ?? warehouse?.name ?? `#${draft.warehouseId}`)
+      : "—";
 
   const firstSlotLabel =
-    draft.levels[0]?.segments[0]
+    draft?.levels[0]?.segments[0]
       ? segmentDisplayLabel(draft.levels[0], draft.levels[0].segments[0])
       : "A1";
 
-  if (loading) {
+  if (isCreate && !activeWarehouseId) {
+    return (
+      <div className={`${cartsPageShellClass} py-12 text-center text-sm font-medium text-amber-800`}>
+        Wybierz magazyn.
+      </div>
+    );
+  }
+
+  if (!draft && !loading) {
+    return (
+      <div className={`${cartsPageShellClass} py-12 text-center text-sm text-slate-500`}>
+        Brak danych regału.
+      </div>
+    );
+  }
+
+  if (loading || !draft) {
     return (
       <div className={`${cartsPageShellClass} flex items-center justify-center gap-2 py-16 text-slate-500`}>
         <Loader2 className="h-5 w-5 animate-spin" />
