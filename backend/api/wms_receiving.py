@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -52,6 +53,7 @@ from ..services.wms_receiving_service import (
 from ..services.wms_workforce_activity import MODULE_RECEIVING, log_wms_workforce_activity
 
 router = APIRouter(prefix="/wms", tags=["WMS receiving"])
+_logger = logging.getLogger(__name__)
 
 
 def _load_pz_for_user(
@@ -201,7 +203,22 @@ def post_wms_receiving_pz_finish(
     user: AppUser = Depends(get_current_user),
 ):
     """Persist counted lines and set receiving_status = DONE (Zakończ przyjęcie)."""
-    _load_pz_for_user(db, tenant_id, pz_id, user)
+    _logger.info(
+        "[RECEIVING_FINISH] endpoint POST document_id=%s tenant_id=%s user_id=%s patch_items=%s",
+        pz_id,
+        tenant_id,
+        user.id,
+        len(body.items),
+    )
+    doc_pre = _load_pz_for_user(db, tenant_id, pz_id, user)
+    _logger.info(
+        "[RECEIVING_FINISH] document_id=%s tenant_id=%s warehouse_id=%s status=%s document_type=%s",
+        pz_id,
+        tenant_id,
+        getattr(doc_pre, "warehouse_id", None),
+        getattr(doc_pre, "status", None),
+        getattr(doc_pre, "document_type", None),
+    )
     try:
         doc = finish_wms_receiving_pz(db, tenant_id, pz_id, body)
         log_wms_workforce_activity(
@@ -216,7 +233,14 @@ def post_wms_receiving_pz_finish(
         db.commit()
         return doc
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        detail = str(e)
+        _logger.warning(
+            "[RECEIVING_FINISH] HTTP 400 document_id=%s tenant_id=%s detail=%s",
+            pz_id,
+            tenant_id,
+            detail,
+        )
+        raise HTTPException(status_code=400, detail=detail)
 
 
 @router.post("/receive", response_model=StockDocumentRead)

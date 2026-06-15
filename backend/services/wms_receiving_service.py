@@ -1455,16 +1455,57 @@ def finish_wms_receiving_pz(
         .filter(StockDocument.id == pz_id, StockDocument.tenant_id == tenant_id)
         .first()
     )
+    logger.info(
+        "[RECEIVING_FINISH] document_id=%s tenant_id=%s warehouse_id=%s status=%s document_type=%s",
+        pz_id,
+        tenant_id,
+        getattr(doc, "warehouse_id", None) if doc else None,
+        getattr(doc, "status", None) if doc else None,
+        getattr(doc, "document_type", None) if doc else None,
+    )
     if not doc:
+        logger.info("[RECEIVING_FINISH_VALIDATE] check=document_exists result=fail detail=Document not found")
         raise ValueError("Document not found")
+    logger.info("[RECEIVING_FINISH_VALIDATE] check=document_exists result=pass")
     if doc.status != "draft":
-        raise ValueError("Only draft documents can be edited")
+        msg = "Only draft documents can be edited"
+        logger.info(
+            "[RECEIVING_FINISH_VALIDATE] check=status_is_draft result=fail detail=%s actual_status=%s",
+            msg,
+            doc.status,
+        )
+        raise ValueError(msg)
+    logger.info("[RECEIVING_FINISH_VALIDATE] check=status_is_draft result=pass")
     dt_up = str(doc.document_type or "").strip().upper()
     if dt_up not in ("PZ", "Z_PZ", "PZ_RT", "RETURN_RECEIPT"):
-        raise ValueError("Not a PZ document")
-    ensure_pz_document_warehouse_resolved(db, doc)
+        msg = "Not a PZ document"
+        logger.info("[RECEIVING_FINISH_VALIDATE] check=document_type_pz result=fail detail=%s actual=%s", msg, dt_up)
+        raise ValueError(msg)
+    logger.info("[RECEIVING_FINISH_VALIDATE] check=document_type_pz result=pass")
+    try:
+        ensure_pz_document_warehouse_resolved(db, doc)
+        logger.info("[RECEIVING_FINISH_VALIDATE] check=pz_warehouse_resolved result=pass warehouse_id=%s", doc.warehouse_id)
+    except ValueError as e:
+        logger.info("[RECEIVING_FINISH_VALIDATE] check=pz_warehouse_resolved result=fail detail=%s", e)
+        raise
     ensure_default_pz_receiving_location_if_missing(db, doc)
-    _assert_receiving_session_open(doc)
+    logger.info(
+        "[RECEIVING_FINISH_VALIDATE] check=default_receiving_location result=pass location_id=%s",
+        getattr(doc, "location_id", None),
+    )
+    try:
+        _assert_receiving_session_open(doc)
+        logger.info(
+            "[RECEIVING_FINISH_VALIDATE] check=receiving_session_open result=pass receiving_status=%s",
+            getattr(doc, "receiving_status", None),
+        )
+    except ValueError as e:
+        logger.info(
+            "[RECEIVING_FINISH_VALIDATE] check=receiving_session_open result=fail detail=%s receiving_status=%s",
+            e,
+            getattr(doc, "receiving_status", None),
+        )
+        raise
 
     rows: List[StockDocumentItem] = (
         db.query(StockDocumentItem)
@@ -1472,7 +1513,12 @@ def finish_wms_receiving_pz(
         .order_by(StockDocumentItem.id)
         .all()
     )
-    apply_patch_lines_to_stock_document_items(rows, body)
+    try:
+        apply_patch_lines_to_stock_document_items(rows, body)
+        logger.info("[RECEIVING_FINISH_VALIDATE] check=patch_lines result=pass items=%s", len(body.items))
+    except ValueError as e:
+        logger.info("[RECEIVING_FINISH_VALIDATE] check=patch_lines result=fail detail=%s", e)
+        raise
     doc.receiving_status = "DONE"
     recompute_putaway_status_for_document(doc, rows, db)
     recalculate_wms_document_completion(db, tenant_id, pz_id)
