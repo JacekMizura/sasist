@@ -1,4 +1,4 @@
-"""Create draft PZ (stock document) from supplier order — document only; no warehouse/location."""
+"""Create draft PZ (stock document) from supplier order — warehouse from delivery.warehouse_id (SSOT)."""
 
 from __future__ import annotations
 
@@ -13,12 +13,20 @@ from ..models.product import Product
 from ..models.stock_document import StockDocument, StockDocumentItem
 from ..models.supplier import Supplier
 from .delivery_item_catalog_snapshot import hydrate_delivery_item_snapshots
-from .tenant_default_warehouse import list_tenant_warehouse_ids
 from .document_creator_service import stamp_document_creator
 from .purchase_order_warehouse_sync_service import sync_purchase_order_status_for_delivery_id
 from ..utils.product_vat import product_vat_rate_percent
 
 QTY_EPS = 1e-9
+ERR_DELIVERY_NO_WAREHOUSE = "Dostawa nie ma przypisanego magazynu."
+
+
+def require_delivery_warehouse_id(d: InboundDelivery) -> int:
+    """SSOT: PZ warehouse comes from the inbound delivery record."""
+    wid = getattr(d, "warehouse_id", None)
+    if wid is None or int(wid) <= 0:
+        raise ValueError(ERR_DELIVERY_NO_WAREHOUSE)
+    return int(wid)
 
 
 def pz_display_number(created_at: datetime, doc_id: int) -> str:
@@ -53,8 +61,7 @@ def create_pz_from_delivery(
     created_by=None,
 ) -> StockDocument:
     """
-    Draft PZ: warehouse auto-set when tenant has exactly one linked warehouse; otherwise NULL until chosen.
-    Location remains NULL until receiving-target (WMS).
+    Draft PZ: warehouse_id from delivery (required). Location NULL until receiving-target (WMS).
     Lines: ordered qty and purchase price from delivery items; received stays 0.
     """
     d = (
@@ -67,6 +74,8 @@ def create_pz_from_delivery(
 
     if d.status in ("cancelled", "received"):
         raise ValueError("Cannot create PZ for cancelled or fully received purchase order")
+
+    warehouse_id = require_delivery_warehouse_id(d)
 
     sup = db.query(Supplier).filter(Supplier.id == d.supplier_id, Supplier.tenant_id == tenant_id).first()
     if not sup:
@@ -93,15 +102,13 @@ def create_pz_from_delivery(
     db.flush()
 
     now = datetime.utcnow()
-    whs = list_tenant_warehouse_ids(db, tenant_id)
-    initial_wh = whs[0] if len(whs) == 1 else None
     doc = StockDocument(
         tenant_id=tenant_id,
         document_type="PZ",
         creation_source="PANEL",
         supplier_id=d.supplier_id,
         delivery_id=d.id,
-        warehouse_id=initial_wh,
+        warehouse_id=warehouse_id,
         location_id=None,
         status="draft",
         receiving_status="NEW",

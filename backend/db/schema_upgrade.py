@@ -2512,6 +2512,39 @@ def ensure_deliveries_purchase_order_id_column(engine: Engine) -> None:
         conn.commit()
 
 
+def ensure_deliveries_warehouse_id_column(engine: Engine) -> None:
+    """Inbound delivery target warehouse — SSOT for PZ creation from delivery."""
+    with engine.connect() as conn:
+        d = _table_exists(conn, "deliveries")
+        if not d:
+            conn.commit()
+            return
+        cols = _table_column_names(conn, "deliveries")
+        if "warehouse_id" not in cols:
+            conn.execute(
+                text(
+                    "ALTER TABLE deliveries ADD COLUMN warehouse_id INTEGER "
+                    "REFERENCES warehouses(id) ON DELETE SET NULL"
+                )
+            )
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_deliveries_warehouse_id ON deliveries(warehouse_id)"))
+        if _table_exists(conn, "purchase_orders") and "purchase_order_id" in _table_column_names(conn, "deliveries"):
+            conn.execute(
+                text(
+                    """
+                    UPDATE deliveries
+                    SET warehouse_id = (
+                        SELECT po.warehouse_id FROM purchase_orders po
+                        WHERE po.id = deliveries.purchase_order_id
+                    )
+                    WHERE deliveries.warehouse_id IS NULL
+                      AND deliveries.purchase_order_id IS NOT NULL
+                    """
+                )
+            )
+        conn.commit()
+
+
 def ensure_purchasing_alert_tables(engine: Engine) -> None:
     """Alert rules, events, and auto-draft audit for purchasing module."""
     if engine.dialect.name != "sqlite":

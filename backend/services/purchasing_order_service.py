@@ -749,6 +749,7 @@ def create_inbound_delivery_from_purchase_order(db: Session, tenant_id: int, ord
         tenant_id=tenant_id,
         supplier_id=po.supplier_id,
         purchase_order_id=po.id,
+        warehouse_id=po.warehouse_id,
         name=_default_delivery_name((sup.name or "").strip(), now),
         status="draft",
         created_at=now,

@@ -20,6 +20,8 @@ from ..models.inbound_delivery import DeliveryItem, InboundDelivery
 from ..models.packaging_material import PackagingMaterial
 from ..models.product import Product
 from ..models.supplier import Supplier
+from ..models.tenant_warehouse import TenantWarehouse
+from ..models.warehouse import Warehouse
 from ..schemas.delivery import (
     DELIVERY_STATUSES,
     DeliveryCreateBody,
@@ -39,9 +41,27 @@ from ..services.delivery_item_catalog_snapshot import (
 from ..services.delivery_line_pricing import resolve_product_unit_net, resolve_wm_unit_net
 from ..services.document_creator_service import app_user_full_name
 from ..services.delivery_pz_service import create_pz_from_delivery, pz_display_number
+from ..services.wms_warehouse_ownership_service import StockDocumentWarehouseRequiredError
 from ..services.wms_workforce_activity import MODULE_RECEIVING, log_wms_workforce_activity
 
 router = APIRouter(prefix="/deliveries", tags=["Purchase orders"])
+
+
+def _assert_delivery_warehouse_for_tenant(db: Session, tenant_id: int, warehouse_id: int) -> None:
+    linked = (
+        db.query(TenantWarehouse.id)
+        .filter(TenantWarehouse.tenant_id == int(tenant_id), TenantWarehouse.warehouse_id == int(warehouse_id))
+        .first()
+    )
+    if not linked:
+        raise HTTPException(status_code=400, detail="warehouse_id is not linked to this tenant")
+
+
+def _warehouse_display_name(db: Session, warehouse_id: Optional[int]) -> Optional[str]:
+    if warehouse_id is None:
+        return None
+    w = db.query(Warehouse).filter(Warehouse.id == int(warehouse_id)).first()
+    return (w.name or "").strip() if w else None
 
 _TERMINAL_EDIT = frozenset({"received", "cancelled"})
 
@@ -298,6 +318,7 @@ def _delivery_to_list_row(
         tenant_id=d.tenant_id,
         supplier_id=d.supplier_id,
         supplier_name=(sup.name or "").strip() if sup else "",
+        warehouse_id=getattr(d, "warehouse_id", None),
         name=name_val,
         status=d.status,
         created_at=d.created_at,
@@ -356,6 +377,8 @@ def _delivery_to_read(db: Session, d: InboundDelivery) -> DeliveryRead:
         tenant_id=d.tenant_id,
         supplier_id=d.supplier_id,
         supplier_name=(sup.name or "").strip() if sup else "",
+        warehouse_id=getattr(d, "warehouse_id", None),
+        warehouse_name=_warehouse_display_name(db, getattr(d, "warehouse_id", None)),
         name=name_val,
         status=d.status,
         created_at=d.created_at,
@@ -532,6 +555,8 @@ def create_delivery(body: DeliveryCreateBody, db: Session = Depends(get_db)):
     sup = db.query(Supplier).filter(Supplier.id == body.supplier_id, Supplier.tenant_id == body.tenant_id).first()
     if not sup:
         raise HTTPException(status_code=400, detail="Invalid supplier_id for tenant")
+    if body.warehouse_id is not None:
+        _assert_delivery_warehouse_for_tenant(db, body.tenant_id, int(body.warehouse_id))
     now = datetime.utcnow()
     note_s = (body.notes or "").strip() if body.notes is not None else ""
     custom_name = (body.name or "").strip() if body.name is not None else ""
@@ -542,6 +567,7 @@ def create_delivery(body: DeliveryCreateBody, db: Session = Depends(get_db)):
     d = InboundDelivery(
         tenant_id=body.tenant_id,
         supplier_id=body.supplier_id,
+        warehouse_id=body.warehouse_id,
         name=resolved_name,
         status=body.status,
         created_at=now,
@@ -572,6 +598,9 @@ def update_delivery(
         if not sup:
             raise HTTPException(status_code=400, detail="Invalid supplier_id")
         d.supplier_id = body.supplier_id
+    if body.warehouse_id is not None:
+        _assert_delivery_warehouse_for_tenant(db, tenant_id, int(body.warehouse_id))
+        d.warehouse_id = int(body.warehouse_id)
     if body.status is not None:
         new_s = body.status.strip().lower()
         if new_s not in DELIVERY_STATUSES:
@@ -811,6 +840,8 @@ def create_pz_from_supplier_order(
             },
         )
         db.commit()
+    except StockDocumentWarehouseRequiredError:
+        raise HTTPException(status_code=400, detail="Dostawa nie ma przypisanego magazynu.") from None
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 

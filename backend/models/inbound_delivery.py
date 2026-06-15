@@ -15,6 +15,7 @@ class InboundDelivery(Base):
     supplier_id = Column(Integer, ForeignKey("suppliers.id", ondelete="RESTRICT"), nullable=False, index=True)
     #: Optional link to formal purchase order (Generator → PO → inbound delivery).
     purchase_order_id = Column(Integer, ForeignKey("purchase_orders.id", ondelete="SET NULL"), nullable=True, index=True)
+    warehouse_id = Column(Integer, ForeignKey("warehouses.id", ondelete="SET NULL"), nullable=True, index=True)
 
     name = Column(String(512), nullable=True)
     status = Column(String(32), nullable=False, default="draft", index=True)
@@ -31,6 +32,7 @@ class InboundDelivery(Base):
         back_populates="linked_deliveries",
         foreign_keys=[purchase_order_id],
     )
+    warehouse = relationship("Warehouse", foreign_keys=[warehouse_id])
     items = relationship(
         "DeliveryItem",
         back_populates="delivery",

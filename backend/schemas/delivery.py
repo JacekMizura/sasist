@@ -94,6 +94,8 @@ class DeliveryRead(BaseModel):
     tenant_id: int
     supplier_id: int
     supplier_name: str
+    warehouse_id: Optional[int] = None
+    warehouse_name: Optional[str] = None
     name: Optional[str] = None
     status: str
     created_at: datetime
@@ -114,6 +116,7 @@ class DeliveryListRow(BaseModel):
     tenant_id: int
     supplier_id: int
     supplier_name: str
+    warehouse_id: Optional[int] = None
     name: Optional[str] = None
     status: str
     created_at: datetime
@@ -131,6 +134,7 @@ class DeliveryListRow(BaseModel):
 class DeliveryCreateBody(BaseModel):
     tenant_id: int = Field(..., ge=1)
     supplier_id: int = Field(..., ge=1)
+    warehouse_id: Optional[int] = Field(None, ge=1)
     name: Optional[str] = Field(None, max_length=512)
     status: str = "draft"
     expected_date: Optional[datetime] = None
@@ -149,6 +153,7 @@ class DeliveryCreateBody(BaseModel):
 
 class DeliveryUpdateBody(BaseModel):
     supplier_id: Optional[int] = Field(None, ge=1)
+    warehouse_id: Optional[int] = Field(None, ge=1)
     name: Optional[str] = Field(None, max_length=512)
     status: Optional[str] = None
     expected_date: Optional[datetime] = None

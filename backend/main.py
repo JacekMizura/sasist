@@ -110,6 +110,7 @@ from .db.schema_upgrade import (
     ensure_purchasing_alert_tables,
     ensure_purchase_auto_reorder_tables,
     ensure_deliveries_purchase_order_id_column,
+    ensure_deliveries_warehouse_id_column,
     ensure_manufacturer_supplier_business_entity_columns,
     ensure_tenant_business_profile_columns,
     ensure_tenant_default_warehouse_column,
@@ -943,6 +944,10 @@ try:
 except Exception:
     logging.getLogger(__name__).exception("ensure_deliveries_purchase_order_id_column failed at import")
 try:
+    ensure_deliveries_warehouse_id_column(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_deliveries_warehouse_id_column failed at import")
+try:
     ensure_manufacturer_supplier_business_entity_columns(engine)
 except Exception:
     logging.getLogger(__name__).exception("ensure_manufacturer_supplier_business_entity_columns failed at import")
@@ -1308,6 +1313,10 @@ def _upgrade_schema_background() -> None:
         pass
     try:
         ensure_deliveries_purchase_order_id_column(engine)
+    except Exception:
+        pass
+    try:
+        ensure_deliveries_warehouse_id_column(engine)
     except Exception:
         pass
     try:
