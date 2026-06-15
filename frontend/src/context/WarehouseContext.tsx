@@ -6,6 +6,8 @@ import {
   setActiveWarehouse as setActiveWarehouseApi,
   type WarehouseContextResponse,
 } from "../api/authApi";
+import { applyWarehouseContext } from "./warehouseContextLogic";
+import { dispatchWmsWarehouseChanged } from "../wms/wmsWarehouseChange";
 import { useAuth } from "./AuthContext";
 
 export type Warehouse = {
@@ -23,29 +25,11 @@ type WarehouseContextType = {
   warehousesLoading: boolean;
   showWarehouseSelector: boolean;
   refreshWarehouses: () => Promise<void>;
+  /** Increments after successful active-warehouse switch — use in refetch deps. */
+  warehouseRevision: number;
 };
 
 const WarehouseContext = createContext<WarehouseContextType | undefined>(undefined);
-
-function pickActive(list: Warehouse[], activeId: number | null | undefined): Warehouse | null {
-  if (activeId != null) {
-    const hit = list.find((w) => w.id === activeId);
-    if (hit) return hit;
-  }
-  return list[0] ?? null;
-}
-
-function applyContext(
-  ctx: WarehouseContextResponse,
-): { list: Warehouse[]; active: Warehouse | null; showSelector: boolean } {
-  const list = ctx.warehouses ?? [];
-  const active = pickActive(list, ctx.active_warehouse_id);
-  return {
-    list,
-    active,
-    showSelector: Boolean(ctx.show_warehouse_selector),
-  };
-}
 
 export function WarehouseProvider({ children }: { children: ReactNode }) {
   const { sessionReady } = useAuth();
@@ -53,9 +37,10 @@ export function WarehouseProvider({ children }: { children: ReactNode }) {
   const [warehouse, setWarehouseState] = useState<Warehouse | null>(null);
   const [showWarehouseSelector, setShowWarehouseSelector] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [warehouseRevision, setWarehouseRevision] = useState(0);
 
   const applyFromServer = useCallback((ctx: WarehouseContextResponse) => {
-    const { list, active, showSelector } = applyContext(ctx);
+    const { list, active, showSelector } = applyWarehouseContext(ctx);
     setWarehouses(list);
     setWarehouseState(active);
     setShowWarehouseSelector(showSelector);
@@ -89,6 +74,8 @@ export function WarehouseProvider({ children }: { children: ReactNode }) {
     async (w: Warehouse) => {
       const ctx = await setActiveWarehouseApi(w.id);
       applyFromServer(ctx);
+      setWarehouseRevision((r) => r + 1);
+      dispatchWmsWarehouseChanged(w.id);
     },
     [applyFromServer],
   );
@@ -104,8 +91,18 @@ export function WarehouseProvider({ children }: { children: ReactNode }) {
       warehousesLoading: loading,
       showWarehouseSelector,
       refreshWarehouses,
+      warehouseRevision,
     }),
-    [warehouse, selectedWarehouseId, setWarehouse, warehouses, loading, showWarehouseSelector, refreshWarehouses],
+    [
+      warehouse,
+      selectedWarehouseId,
+      setWarehouse,
+      warehouses,
+      loading,
+      showWarehouseSelector,
+      refreshWarehouses,
+      warehouseRevision,
+    ],
   );
 
   return <WarehouseContext.Provider value={value}>{children}</WarehouseContext.Provider>;

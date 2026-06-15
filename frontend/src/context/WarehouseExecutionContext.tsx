@@ -12,6 +12,7 @@ import {
   isOperationalExecutionHub,
   isWarehouseExecutionRoute,
 } from "../components/wms/execution/executionRoutes";
+import { useWarehouse } from "./WarehouseContext";
 
 const STORAGE_KEY = "wms.warehouseExecutionMode";
 
@@ -92,6 +93,7 @@ function loadWarehouseModePreference(): boolean | null {
 }
 
 export function WarehouseExecutionProvider({ children }: { children: ReactNode }) {
+  const { selectedWarehouseId } = useWarehouse();
   const { pathname } = useLocation();
   const isExecutionRoute = useMemo(() => isWarehouseExecutionRoute(pathname), [pathname]);
   const pref = useMemo(() => loadWarehouseModePreference(), []);
@@ -128,6 +130,10 @@ export function WarehouseExecutionProvider({ children }: { children: ReactNode }
     const t = window.setTimeout(() => setScanFeedback(null), 420);
     return () => window.clearTimeout(t);
   }, [scanFeedback]);
+
+  useEffect(() => {
+    setActiveContext(null);
+  }, [selectedWarehouseId]);
 
   const setWarehouseMode = useCallback((enabled: boolean) => {
     setWarehouseModeState(enabled);

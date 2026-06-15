@@ -7,13 +7,19 @@ type Props = {
   /** Use on dark headers (e.g. legacy WMS). `topbar` = compact light row (Sellasist-style WMS header). */
   variant?: "light" | "dark" | "topbar";
   className?: string;
+  /** Show API errors visibly (WMS top bar); ERP strip keeps sr-only for layout density. */
+  showErrorInline?: boolean;
 };
 
 /**
  * Global warehouse switcher — visible when user has access to more than one warehouse.
  * Persists active warehouse on the server (`user_wms_profiles.active_warehouse_id`).
  */
-export default function GlobalWarehouseSelect({ variant = "light", className }: Props) {
+export default function GlobalWarehouseSelect({
+  variant = "light",
+  className,
+  showErrorInline = false,
+}: Props) {
   const { warehouse, setWarehouse, warehouses, showWarehouseSelector } = useWarehouse();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,6 +39,10 @@ export default function GlobalWarehouseSelect({ variant = "light", className }: 
     variant === "topbar"
       ? "hidden text-[11px] font-semibold text-slate-500 sm:inline"
       : "text-sm font-medium text-slate-600";
+
+  const errorCls = showErrorInline
+    ? "max-w-[14rem] text-[11px] font-medium text-red-600"
+    : "sr-only";
 
   return (
     <div className="flex items-center gap-2">
@@ -59,7 +69,7 @@ export default function GlobalWarehouseSelect({ variant = "light", className }: 
           </option>
         ))}
       </select>
-      {error ? <span className="sr-only">{error}</span> : null}
+      {error ? <span className={errorCls}>{error}</span> : null}
     </div>
   );
 }

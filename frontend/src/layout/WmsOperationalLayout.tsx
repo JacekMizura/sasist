@@ -7,6 +7,7 @@ import { WmsPickingCartProvider } from "../context/WmsPickingCartContext";
 import { WarehouseExecutionProvider } from "../context/WarehouseExecutionContext";
 import { WmsScannerProvider } from "../context/WmsScannerContext";
 import WmsTopBar from "./WmsTopBar";
+import WmsWarehouseAccessGate from "./WmsWarehouseAccessGate";
 
 /**
  * Unified WMS shell — one top navigation for every mode (picking, recovery, braki, packing, …).
@@ -20,7 +21,9 @@ function WmsLayoutChrome() {
       </div>
       <ScanFeedbackOverlay />
       <main className="min-h-0 w-full max-w-none flex-1 overflow-y-auto bg-slate-50/50">
-        <Outlet />
+        <WmsWarehouseAccessGate>
+          <Outlet />
+        </WmsWarehouseAccessGate>
       </main>
     </div>
   );

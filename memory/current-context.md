@@ -1,5 +1,12 @@
 # Current context
 
+## P2.4 — WMS Multi-Warehouse Selector (2026-06-08) — CLOSED
+- **Raport:** `memory/p2.4-wms-multi-warehouse-selector-report.md`
+- UI: `GlobalWarehouseSelect` w `WmsTopBar`; gate `WmsWarehouseAccessGate` w shellu WMS
+- SSOT: `WarehouseContext` + `/auth/me/warehouse-context` / `PUT /auth/me/active-warehouse`
+- Odświeżanie: `warehouseRevision`, event `wms:warehouse-changed`, deps `warehouse?.id`
+- Testy frontend: `warehouseContextLogic.test.ts`, `wmsWarehouseChange.test.ts`
+
 ## P2.3 — Warehouse Ownership Finalization (2026-06-08) — CLOSED
 - **Raporty:** `memory/p2.3-purchase-flow-audit.md`, `memory/p2.3-warehouse-ownership-finalization-report.md`
 - SSOT łańcuch: PO → Delivery → PZ → Inventory; `warehouse_id` tylko w dół

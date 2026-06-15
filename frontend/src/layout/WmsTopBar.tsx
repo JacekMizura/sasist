@@ -1,6 +1,7 @@
 import { Menu } from "lucide-react";
 import { NavLink } from "react-router-dom";
 
+import GlobalWarehouseSelect from "../components/layout/GlobalWarehouseSelect";
 import WmsTopBarModuleNav from "../components/wms/WmsTopBarModuleNav";
 import UserAccountMenu from "../components/layout/UserAccountMenu";
 import { useAuth } from "../context/AuthContext";
@@ -34,7 +35,8 @@ export default function WmsTopBar() {
           <WmsTopBarModuleNav tabs={pinnedTabsInOrder} className="h-full min-w-0" onReorder={reorderPinned} />
         </nav>
 
-        <div className="flex shrink-0 items-center border-l border-slate-200 px-4">
+        <div className="flex shrink-0 items-center gap-3 border-l border-slate-200 px-4">
+          <GlobalWarehouseSelect variant="topbar" showErrorInline />
           <UserAccountMenu compact hideChevron profileVariant="minimal" />
         </div>
       </div>
