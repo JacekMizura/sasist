@@ -1,6 +1,6 @@
 import { Check, Package } from "lucide-react";
-import type { BundlePickingDisplay } from "../../utils/bundleScanFlow";
-import { pickingBundleProgressLabel } from "../../utils/bundleScanFlow";
+import type { BundlePickingDisplay } from "../../../utils/bundleScanFlow";
+import { pickingBundleProgressLabel } from "../../../utils/bundleScanFlow";
 
 type Props = {
   display: BundlePickingDisplay;
