@@ -1636,7 +1636,21 @@ def get_stock_document_read(db: Session, tenant_id: int, document_id: int) -> Op
         .first()
     )
     if not doc:
+        _logger.info(
+            "[STOCK_DOCUMENT_READ] document_id=%s tenant_id=%s warehouse_id=%s document_type=%s (not found)",
+            document_id,
+            tenant_id,
+            None,
+            None,
+        )
         return None
+    _logger.info(
+        "[STOCK_DOCUMENT_READ] document_id=%s tenant_id=%s warehouse_id=%s document_type=%s",
+        document_id,
+        tenant_id,
+        getattr(doc, "warehouse_id", None),
+        getattr(doc, "document_type", None),
+    )
     needs_commit = False
     if recalculate_wms_document_completion(db, tenant_id, document_id):
         needs_commit = True

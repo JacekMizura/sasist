@@ -349,6 +349,12 @@ def get_stock_document(
     db: Session = Depends(get_db),
     current_user: AppUser | None = Depends(get_optional_current_user),
 ):
+    _logger.info(
+        "[STOCK_DOCUMENT_READ] endpoint GET document_id=%s tenant_id=%s user_id=%s",
+        document_id,
+        tenant_id,
+        getattr(current_user, "id", None) if current_user is not None else None,
+    )
     read = get_stock_document_read(db, tenant_id, document_id)
     if not read:
         raise HTTPException(status_code=404, detail="Document not found")
