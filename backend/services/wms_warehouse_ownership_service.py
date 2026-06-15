@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 from ..models.location import Location
 from ..models.order import Order
@@ -124,6 +127,20 @@ def register_stock_document_warehouse_guard() -> None:
     def _require_warehouse_on_insert(_mapper, _connection, target: StockDocument) -> None:
         wid = getattr(target, "warehouse_id", None)
         if wid is None or int(wid) <= 0:
+            payload = {
+                "tenant_id": getattr(target, "tenant_id", None),
+                "delivery_id": getattr(target, "delivery_id", None),
+                "supplier_id": getattr(target, "supplier_id", None),
+                "warehouse_id": wid,
+                "document_type": getattr(target, "document_type", None),
+                "status": getattr(target, "status", None),
+            }
+            document_type = getattr(target, "document_type", None)
+            logger.error(
+                "[CREATE_PZ] warehouse_id_missing document_type=%s payload=%s",
+                document_type,
+                payload,
+            )
             raise StockDocumentWarehouseRequiredError(
                 "Nie można utworzyć dokumentu magazynowego bez warehouse_id (P2)."
             )

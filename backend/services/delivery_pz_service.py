@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 from ..models.carton import Carton
 from ..models.inbound_delivery import InboundDelivery
@@ -72,6 +75,12 @@ def create_pz_from_delivery(
     if not d:
         raise ValueError("Purchase order not found")
 
+    logger.error(
+        "[CREATE_PZ] delivery_id=%s warehouse_id=%s",
+        d.id,
+        getattr(d, "warehouse_id", None),
+    )
+
     if d.status in ("cancelled", "received"):
         raise ValueError("Cannot create PZ for cancelled or fully received purchase order")
 
@@ -100,6 +109,11 @@ def create_pz_from_delivery(
     for it in receivable_plan:
         hydrate_delivery_item_snapshots(db, tenant_id, it)
     db.flush()
+
+    logger.error(
+        "[CREATE_PZ] before_stock_document warehouse_id=%s",
+        warehouse_id,
+    )
 
     now = datetime.utcnow()
     doc = StockDocument(
