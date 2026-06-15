@@ -198,7 +198,7 @@ def create_wms_mm_transfer(
         raise ValueError("Produkt nie istnieje")
 
     allocations = _allocate_fifo_from_source(db, tenant_id, wh_id, from_id, pid, qty)
-    sid, did = get_or_create_mm_placeholder_fks(db, tenant_id)
+    sid, did = get_or_create_mm_placeholder_fks(db, tenant_id, wh_id)
     now = datetime.utcnow()
 
     doc = StockDocument(

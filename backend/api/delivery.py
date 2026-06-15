@@ -41,6 +41,10 @@ from ..services.delivery_item_catalog_snapshot import (
 from ..services.delivery_line_pricing import resolve_product_unit_net, resolve_wm_unit_net
 from ..services.document_creator_service import app_user_full_name
 from ..services.delivery_pz_service import create_pz_from_delivery, pz_display_number
+from ..services.inbound_delivery_warehouse_service import (
+    ERR_INBOUND_DELIVERY_NO_WAREHOUSE,
+    InboundDeliveryWarehouseRequiredError,
+)
 from ..services.wms_warehouse_ownership_service import StockDocumentWarehouseRequiredError
 from ..services.wms_workforce_activity import MODULE_RECEIVING, log_wms_workforce_activity
 
@@ -421,10 +425,12 @@ def quick_purchase_order_from_product(body: QuickFromProductBody, db: Session = 
             status_code=400,
             detail="Product is not linked to this supplier (supplier catalog or default supplier).",
         )
+    _assert_delivery_warehouse_for_tenant(db, body.tenant_id, int(body.warehouse_id))
     now = datetime.utcnow()
     d = InboundDelivery(
         tenant_id=body.tenant_id,
         supplier_id=int(sid),
+        warehouse_id=int(body.warehouse_id),
         name=_default_delivery_name((sup.name or "").strip(), now),
         status="draft",
         created_at=now,
@@ -555,8 +561,7 @@ def create_delivery(body: DeliveryCreateBody, db: Session = Depends(get_db)):
     sup = db.query(Supplier).filter(Supplier.id == body.supplier_id, Supplier.tenant_id == body.tenant_id).first()
     if not sup:
         raise HTTPException(status_code=400, detail="Invalid supplier_id for tenant")
-    if body.warehouse_id is not None:
-        _assert_delivery_warehouse_for_tenant(db, body.tenant_id, int(body.warehouse_id))
+    _assert_delivery_warehouse_for_tenant(db, body.tenant_id, int(body.warehouse_id))
     now = datetime.utcnow()
     note_s = (body.notes or "").strip() if body.notes is not None else ""
     custom_name = (body.name or "").strip() if body.name is not None else ""
@@ -567,7 +572,7 @@ def create_delivery(body: DeliveryCreateBody, db: Session = Depends(get_db)):
     d = InboundDelivery(
         tenant_id=body.tenant_id,
         supplier_id=body.supplier_id,
-        warehouse_id=body.warehouse_id,
+        warehouse_id=int(body.warehouse_id),
         name=resolved_name,
         status=body.status,
         created_at=now,
@@ -840,6 +845,8 @@ def create_pz_from_supplier_order(
             },
         )
         db.commit()
+    except InboundDeliveryWarehouseRequiredError:
+        raise HTTPException(status_code=400, detail=ERR_INBOUND_DELIVERY_NO_WAREHOUSE) from None
     except StockDocumentWarehouseRequiredError:
         raise HTTPException(status_code=400, detail="Dostawa nie ma przypisanego magazynu.") from None
     except ValueError as e:

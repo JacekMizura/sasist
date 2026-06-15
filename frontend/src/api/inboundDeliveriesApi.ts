@@ -45,6 +45,8 @@ export type DeliveryRead = {
   tenant_id: number;
   supplier_id: number;
   supplier_name: string;
+  warehouse_id?: number | null;
+  warehouse_name?: string | null;
   name?: string | null;
   status: DeliveryStatus;
   created_at: string;
@@ -109,6 +111,7 @@ export async function getDelivery(tenantId: number, id: number): Promise<Deliver
 export async function createDelivery(payload: {
   tenant_id: number;
   supplier_id: number;
+  warehouse_id: number;
   name?: string | null;
   status?: DeliveryStatus;
   expected_date?: string | null;
@@ -187,6 +190,7 @@ export async function patchDeliveryItem(
 /** Assortment: draft purchase order with one line (no warehouse / inventory). */
 export async function quickPurchaseOrderFromProduct(payload: {
   tenant_id: number;
+  warehouse_id: number;
   product_id: number;
   supplier_id?: number;
   quantity?: number;

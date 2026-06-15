@@ -15,6 +15,7 @@ import {
   type DeliveryStatus,
 } from "../../api/inboundDeliveriesApi";
 import { listSuppliers, type SupplierRead } from "../../api/inboundSuppliersApi";
+import { useWarehouse } from "../../context/WarehouseContext";
 import { fetchPurchasingSupplierAnalytics } from "../../api/purchasingSupplierAnalyticsApi";
 import { CreatePzFromDeliveryModal } from "./CreatePzFromDeliveryModal";
 import { PurchaseOrderEditModal } from "./PurchaseOrderEditModal";
@@ -64,6 +65,7 @@ export default function PurchaseOrdersPage({ defaultCreateOpen = false }: Purcha
   const [searchParams, setSearchParams] = useSearchParams();
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [tenantId, setTenantId] = useState(1);
+  const { warehouse } = useWarehouse();
   const [suppliers, setSuppliers] = useState<SupplierRead[]>([]);
   const [rows, setRows] = useState<DeliveryListRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -241,8 +243,17 @@ export default function PurchaseOrdersPage({ defaultCreateOpen = false }: Purcha
         return;
       }
       const sid = newSupplierId || suppliers[0].id;
+      if (!warehouse?.id) {
+        window.alert("Wybierz magazyn w kontekście aplikacji, aby utworzyć dostawę.");
+        return;
+      }
       try {
-        const d = await createDelivery({ tenant_id: tenantId, supplier_id: sid, status: "draft" });
+        const d = await createDelivery({
+          tenant_id: tenantId,
+          supplier_id: sid,
+          warehouse_id: warehouse.id,
+          status: "draft",
+        });
         if (race && race.gen !== race.ref.current) return;
         setEditId(d.id);
         setModalOpen(true);
@@ -252,7 +263,7 @@ export default function PurchaseOrdersPage({ defaultCreateOpen = false }: Purcha
         setErr("Nie udało się utworzyć szkicu.");
       }
     },
-    [suppliers, newSupplierId, tenantId, navigate, load],
+    [suppliers, newSupplierId, tenantId, warehouse?.id, navigate, load],
   );
 
   const createNew = () => void createDraftOrder();

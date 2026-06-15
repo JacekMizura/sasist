@@ -2512,13 +2512,17 @@ def ensure_deliveries_purchase_order_id_column(engine: Engine) -> None:
         conn.commit()
 
 
-def ensure_deliveries_warehouse_id_column(engine: Engine) -> None:
-    """Inbound delivery target warehouse — SSOT for PZ creation from delivery."""
+def ensure_deliveries_warehouse_id_column(engine: Engine) -> dict[str, int]:
+    """Inbound delivery target warehouse — SSOT for PZ; backfill from PO where possible."""
+    import logging
+
+    logger = logging.getLogger(__name__)
+    report = {"null_before": 0, "fixed_from_po": 0, "null_after": 0}
     with engine.connect() as conn:
         d = _table_exists(conn, "deliveries")
         if not d:
             conn.commit()
-            return
+            return report
         cols = _table_column_names(conn, "deliveries")
         if "warehouse_id" not in cols:
             conn.execute(
@@ -2528,7 +2532,14 @@ def ensure_deliveries_warehouse_id_column(engine: Engine) -> None:
                 )
             )
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_deliveries_warehouse_id ON deliveries(warehouse_id)"))
-        if _table_exists(conn, "purchase_orders") and "purchase_order_id" in _table_column_names(conn, "deliveries"):
+            conn.commit()
+            cols = _table_column_names(conn, "deliveries")
+
+        report["null_before"] = int(
+            conn.execute(text("SELECT COUNT(*) FROM deliveries WHERE warehouse_id IS NULL")).scalar() or 0
+        )
+
+        if _table_exists(conn, "purchase_orders") and "purchase_order_id" in cols:
             conn.execute(
                 text(
                     """
@@ -2537,12 +2548,25 @@ def ensure_deliveries_warehouse_id_column(engine: Engine) -> None:
                         SELECT po.warehouse_id FROM purchase_orders po
                         WHERE po.id = deliveries.purchase_order_id
                     )
-                    WHERE deliveries.warehouse_id IS NULL
-                      AND deliveries.purchase_order_id IS NOT NULL
+                    WHERE warehouse_id IS NULL
+                      AND purchase_order_id IS NOT NULL
                     """
                 )
             )
+
+        report["null_after"] = int(
+            conn.execute(text("SELECT COUNT(*) FROM deliveries WHERE warehouse_id IS NULL")).scalar() or 0
+        )
+        report["fixed_from_po"] = max(0, report["null_before"] - report["null_after"])
         conn.commit()
+
+    logger.warning(
+        "[DELIVERIES_WAREHOUSE_BACKFILL] null_before=%s fixed_from_po=%s null_after=%s",
+        report["null_before"],
+        report["fixed_from_po"],
+        report["null_after"],
+    )
+    return report
 
 
 def ensure_purchasing_alert_tables(engine: Engine) -> None:

@@ -744,12 +744,17 @@ def create_inbound_delivery_from_purchase_order(db: Session, tenant_id: int, ord
     sup = po.supplier or db.query(Supplier).filter(Supplier.id == po.supplier_id).first()
     if not sup:
         raise HTTPException(status_code=400, detail="Supplier not found")
+    if po.warehouse_id is None or int(po.warehouse_id) <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Zamówienie zakupu nie ma przypisanego magazynu — nie można utworzyć dostawy.",
+        )
     now = datetime.utcnow()
     d = InboundDelivery(
         tenant_id=tenant_id,
         supplier_id=po.supplier_id,
         purchase_order_id=po.id,
-        warehouse_id=po.warehouse_id,
+        warehouse_id=int(po.warehouse_id),
         name=_default_delivery_name((sup.name or "").strip(), now),
         status="draft",
         created_at=now,

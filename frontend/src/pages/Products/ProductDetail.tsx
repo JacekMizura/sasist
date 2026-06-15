@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import axios from "axios";
 import api from "../../api/axios";
 import { quickPurchaseOrderFromProduct } from "../../api/inboundDeliveriesApi";
+import { useWarehouse } from "../../context/WarehouseContext";
 
 type Product = {
   id: number;
@@ -26,6 +27,7 @@ export default function ProductDetail() {
     const t = Number(searchParams.get("tenant_id"));
     return Number.isFinite(t) && t >= 1 ? t : 1;
   }, [searchParams]);
+  const { warehouse } = useWarehouse();
 
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
@@ -54,10 +56,15 @@ export default function ProductDetail() {
       return;
     }
     const tid = product.tenant_id ?? tenantId;
+    if (!warehouse?.id) {
+      window.alert("Wybierz magazyn w kontekście aplikacji, aby utworzyć zamówienie.");
+      return;
+    }
     setOrderBusy(true);
     try {
       const d = await quickPurchaseOrderFromProduct({
         tenant_id: tid,
+        warehouse_id: warehouse.id,
         product_id: product.id,
       });
       navigate(`/goods-orders?edit=${d.id}&tenant_id=${tid}`);
@@ -81,7 +88,7 @@ export default function ProductDetail() {
     } finally {
       setOrderBusy(false);
     }
-  }, [navigate, product, tenantId]);
+  }, [navigate, product, tenantId, warehouse?.id]);
 
   if (loading) {
     return (

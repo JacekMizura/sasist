@@ -6,20 +6,24 @@ from sqlalchemy.orm import Session
 
 from ..models.inbound_delivery import InboundDelivery
 from ..models.supplier import Supplier
+from .inbound_delivery_warehouse_service import validate_inbound_delivery_warehouse_id
 
 MM_INTERNAL_SUPPLIER_NAME = "PZ PRODUCENT"
 MM_INTERNAL_DELIVERY_NAME = "PZ DOSTAWCA"
 
 
-def get_or_create_mm_placeholder_fks(db: Session, tenant_id: int) -> tuple[int, int]:
+def get_or_create_mm_placeholder_fks(db: Session, tenant_id: int, warehouse_id: int) -> tuple[int, int]:
     """
-    One inactive supplier + one shell delivery per tenant for document_type=MM.
+    One inactive supplier + one shell delivery per tenant/warehouse for document_type=MM.
     Returns (supplier_id, delivery_id).
     """
+    wh_id = validate_inbound_delivery_warehouse_id(warehouse_id, context="mm_placeholder")
+
     d = (
         db.query(InboundDelivery)
         .filter(
             InboundDelivery.tenant_id == int(tenant_id),
+            InboundDelivery.warehouse_id == int(wh_id),
             InboundDelivery.name == MM_INTERNAL_DELIVERY_NAME,
         )
         .first()
@@ -40,6 +44,7 @@ def get_or_create_mm_placeholder_fks(db: Session, tenant_id: int) -> tuple[int, 
     d = InboundDelivery(
         tenant_id=int(tenant_id),
         supplier_id=int(s.id),
+        warehouse_id=int(wh_id),
         name=MM_INTERNAL_DELIVERY_NAME,
         status="received",
     )

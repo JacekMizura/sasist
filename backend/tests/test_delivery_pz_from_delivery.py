@@ -8,8 +8,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from backend.models.inbound_delivery import InboundDelivery
+from backend.services.inbound_delivery_warehouse_service import (
+    InboundDeliveryWarehouseRequiredError,
+    validate_inbound_delivery_warehouse_id,
+)
 from backend.services.delivery_pz_service import (
-    ERR_DELIVERY_NO_WAREHOUSE,
     create_pz_from_delivery,
     require_delivery_warehouse_id,
 )
@@ -22,7 +25,7 @@ def test_require_delivery_warehouse_id_ok() -> None:
 
 def test_require_delivery_warehouse_id_missing() -> None:
     d = InboundDelivery(id=1, tenant_id=1, supplier_id=1, warehouse_id=None)
-    with pytest.raises(ValueError, match=ERR_DELIVERY_NO_WAREHOUSE):
+    with pytest.raises(InboundDeliveryWarehouseRequiredError):
         require_delivery_warehouse_id(d)
 
 
@@ -38,7 +41,7 @@ def test_create_pz_fails_when_delivery_has_no_warehouse() -> None:
     )
     db.query.return_value.filter.return_value.first.return_value = delivery
 
-    with pytest.raises(ValueError, match=ERR_DELIVERY_NO_WAREHOUSE):
+    with pytest.raises(InboundDeliveryWarehouseRequiredError):
         create_pz_from_delivery(db, tenant_id=1, delivery_id=4)
 
 

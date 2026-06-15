@@ -134,7 +134,7 @@ class DeliveryListRow(BaseModel):
 class DeliveryCreateBody(BaseModel):
     tenant_id: int = Field(..., ge=1)
     supplier_id: int = Field(..., ge=1)
-    warehouse_id: Optional[int] = Field(None, ge=1)
+    warehouse_id: int = Field(..., ge=1)
     name: Optional[str] = Field(None, max_length=512)
     status: str = "draft"
     expected_date: Optional[datetime] = None
@@ -174,6 +174,7 @@ class QuickFromProductBody(BaseModel):
     """Create a draft purchase order (delivery) with a single line from catalog product (Assortment — no inventory)."""
 
     tenant_id: int = Field(..., ge=1)
+    warehouse_id: int = Field(..., ge=1)
     product_id: int = Field(..., ge=1)
     supplier_id: Optional[int] = Field(None, ge=1)
     quantity: float = Field(1, gt=0)

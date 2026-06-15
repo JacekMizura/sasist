@@ -944,7 +944,13 @@ try:
 except Exception:
     logging.getLogger(__name__).exception("ensure_deliveries_purchase_order_id_column failed at import")
 try:
-    ensure_deliveries_warehouse_id_column(engine)
+    backfill_report = ensure_deliveries_warehouse_id_column(engine)
+    logging.getLogger(__name__).warning(
+        "[DELIVERIES_WAREHOUSE_BACKFILL] null_before=%s fixed_from_po=%s null_after=%s",
+        backfill_report.get("null_before", 0),
+        backfill_report.get("fixed_from_po", 0),
+        backfill_report.get("null_after", 0),
+    )
 except Exception:
     logging.getLogger(__name__).exception("ensure_deliveries_warehouse_id_column failed at import")
 try:
@@ -1045,6 +1051,9 @@ try:
     from .services.wms_warehouse_ownership_service import register_stock_document_warehouse_guard
 
     register_stock_document_warehouse_guard()
+    from .services.inbound_delivery_warehouse_service import register_inbound_delivery_warehouse_guard
+
+    register_inbound_delivery_warehouse_guard()
     ensure_inventory_management_policy_schema(engine)
     ensure_purchase_sales_block_schema(engine)
     ensure_tenant_warehouse_fulfillment_schema(engine)

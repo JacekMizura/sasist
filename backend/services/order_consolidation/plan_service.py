@@ -271,7 +271,7 @@ def _create_inter_warehouse_mm_draft(
         tenant_id=int(tenant_id),
         warehouse_id=int(source_warehouse_id),
     )
-    sid, did = get_or_create_mm_placeholder_fks(db, tenant_id)
+    sid, did = get_or_create_mm_placeholder_fks(db, tenant_id, int(source_warehouse_id))
     now = datetime.utcnow()
     doc = StockDocument(
         tenant_id=int(tenant_id),

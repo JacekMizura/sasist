@@ -7,6 +7,7 @@ import { ModuleListFiltersCard } from "../../components/listPage/ModuleListFilte
 import { UI_STRINGS } from "../../constants/uiStrings";
 import api from "../../api/axios";
 import { createDelivery } from "../../api/inboundDeliveriesApi";
+import { useWarehouse } from "../../context/WarehouseContext";
 import { deleteSupplier, listSuppliers, type SupplierRead } from "../../api/inboundSuppliersApi";
 import { SupplierEditModal } from "./SupplierEditModal";
 import ExportModal from "../../components/exports/ExportModal";
@@ -67,6 +68,7 @@ export default function SuppliersPage({ defaultCreateOpen = false }: Props) {
   const [deleteBusy, setDeleteBusy] = useState<number | null>(null);
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [tenantId, setTenantId] = useState(1);
+  const { warehouse } = useWarehouse();
   const [toast, setToast] = useState<string | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [supplierVisibilityOpen, setSupplierVisibilityOpen] = useState(false);
@@ -230,8 +232,18 @@ export default function SuppliersPage({ defaultCreateOpen = false }: Props) {
 
   const handleNewSupplierOrder = async (supplierId: number) => {
     setNewOrderBusyId(supplierId);
+    if (!warehouse?.id) {
+      setToast("Wybierz magazyn w kontekście aplikacji.");
+      setNewOrderBusyId(null);
+      return;
+    }
     try {
-      const d = await createDelivery({ tenant_id: tenantId, supplier_id: supplierId, status: "draft" });
+      const d = await createDelivery({
+        tenant_id: tenantId,
+        supplier_id: supplierId,
+        warehouse_id: warehouse.id,
+        status: "draft",
+      });
       navigate(`/goods-orders?edit=${d.id}&tenant_id=${tenantId}`);
     } catch {
       setToast("Nie udało się utworzyć szkicu zamówienia do dostawcy.");
