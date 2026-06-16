@@ -7,6 +7,7 @@ import logging
 from typing import Any, Literal, Optional
 
 from sqlalchemy import func, inspect, or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..models.bundle import Bundle, BundleItem
@@ -21,6 +22,10 @@ logger = logging.getLogger(__name__)
 SHADOW_META_FLAG = "is_bundle_stock_shadow"
 SHADOW_BUNDLE_ID_KEY = "shadow_bundle_id"
 SyncAction = Literal["create", "update"]
+
+# Mirrors PostgreSQL uq_product_tenant_ean — applies to all product rows (incl. soft-deleted).
+EAN_CONFLICT_MESSAGE = "EAN jest już używany przez inny produkt."
+SKU_CONFLICT_MESSAGE = "SKU jest już używany przez inny produkt."
 
 
 class BundleStockProductError(Exception):
@@ -93,6 +98,35 @@ def _bundle_operational_mode(bundle: Bundle) -> str:
     )
 
 
+def _normalize_identifier(value: Any) -> Optional[str]:
+    return _strip_str(value)
+
+
+def _product_ean_matches(column_ean, normalized_ean: str):
+    """Case-insensitive trimmed match — application-level; DB stores stripped values on sync."""
+    return func.lower(func.trim(func.coalesce(column_ean, ""))) == normalized_ean.lower()
+
+
+def _product_sku_or_symbol_matches(normalized_sku: str):
+    sku_low = normalized_sku.lower()
+    return or_(
+        func.lower(func.trim(func.coalesce(Product.sku, ""))) == sku_low,
+        func.lower(func.trim(func.coalesce(Product.symbol, ""))) == sku_low,
+    )
+
+
+def map_product_integrity_error(exc: IntegrityError) -> None:
+    """Map unhandled products UNIQUE violations to BundleStockProductError (HTTP 400)."""
+    orig = getattr(exc, "orig", None)
+    detail = str(orig or exc)
+    detail_lower = detail.lower()
+    if "uq_product_tenant_ean" in detail_lower or (
+        "unique" in detail_lower and "ean" in detail_lower and "products" in detail_lower
+    ):
+        raise BundleStockProductError(EAN_CONFLICT_MESSAGE, code="ean_conflict") from exc
+    raise exc
+
+
 def _validate_identifier_uniqueness(
     db: Session,
     *,
@@ -102,29 +136,32 @@ def _validate_identifier_uniqueness(
     exclude_product_id: Optional[int] = None,
     exclude_bundle_id: Optional[int] = None,
 ) -> None:
-    sku_n = _strip_str(sku)
-    ean_n = _strip_str(ean)
+    """
+    Pre-flush identifier checks for shadow product sync.
+
+    Product EAN: mirrors DB ``uq_product_tenant_ean (tenant_id, ean)`` — includes soft-deleted rows.
+    Product SKU/symbol: application-level only (no products-table UNIQUE on sku/symbol in schema).
+    Bundle EAN/SKU: active bundles only (no bundle-table UNIQUE constraints in schema).
+    """
+    sku_n = _normalize_identifier(sku)
+    ean_n = _normalize_identifier(ean)
     if not sku_n and not ean_n:
         return
 
     if ean_n:
         pq = db.query(Product.id).filter(
             Product.tenant_id == int(tenant_id),
-            Product.deleted_at.is_(None),
-            func.lower(func.trim(func.coalesce(Product.ean, ""))) == ean_n.lower(),
+            _product_ean_matches(Product.ean, ean_n),
         )
         if exclude_product_id is not None:
             pq = pq.filter(Product.id != int(exclude_product_id))
-        conflict = pq.first()
-        if conflict is not None:
-            raise BundleStockProductError(
-                f"EAN „{ean_n}” jest już używany przez produkt #{int(conflict[0])}.",
-                code="ean_conflict",
-            )
+        if pq.first() is not None:
+            raise BundleStockProductError(EAN_CONFLICT_MESSAGE, code="ean_conflict")
+
         bq = db.query(Bundle.id).filter(
             Bundle.tenant_id == int(tenant_id),
             Bundle.deleted_at.is_(None),
-            func.lower(func.trim(func.coalesce(Bundle.ean, ""))) == ean_n.lower(),
+            _product_ean_matches(Bundle.ean, ean_n),
         )
         if exclude_bundle_id is not None:
             bq = bq.filter(Bundle.id != int(exclude_bundle_id))
@@ -136,27 +173,20 @@ def _validate_identifier_uniqueness(
             )
 
     if sku_n:
-        sku_low = sku_n.lower()
         pq = db.query(Product.id).filter(
             Product.tenant_id == int(tenant_id),
             Product.deleted_at.is_(None),
-            or_(
-                func.lower(func.trim(func.coalesce(Product.sku, ""))) == sku_low,
-                func.lower(func.trim(func.coalesce(Product.symbol, ""))) == sku_low,
-            ),
+            _product_sku_or_symbol_matches(sku_n),
         )
         if exclude_product_id is not None:
             pq = pq.filter(Product.id != int(exclude_product_id))
-        conflict = pq.first()
-        if conflict is not None:
-            raise BundleStockProductError(
-                f"SKU „{sku_n}” jest już używany przez produkt #{int(conflict[0])}.",
-                code="sku_conflict",
-            )
+        if pq.first() is not None:
+            raise BundleStockProductError(SKU_CONFLICT_MESSAGE, code="sku_conflict")
+
         bq = db.query(Bundle.id).filter(
             Bundle.tenant_id == int(tenant_id),
             Bundle.deleted_at.is_(None),
-            func.lower(func.trim(func.coalesce(Bundle.sku, ""))) == sku_low,
+            func.lower(func.trim(func.coalesce(Bundle.sku, ""))) == sku_n.lower(),
         )
         if exclude_bundle_id is not None:
             bq = bq.filter(Bundle.id != int(exclude_bundle_id))

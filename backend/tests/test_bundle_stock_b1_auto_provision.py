@@ -141,6 +141,9 @@ class TestBundleStockAutoProvision:
         with pytest.raises(BundleStockProductError) as exc:
             ensure_shadow_product_for_stock_bundle(db, bundle)
         assert exc.value.code == "ean_conflict"
+        from backend.services.bundle_stock_product_service import EAN_CONFLICT_MESSAGE
+
+        assert exc.value.message == EAN_CONFLICT_MESSAGE
 
     def test_update_linked_product_no_duplicate_insert(self, db) -> None:
         """Regression: PUT when linked_product_id=3 must UPDATE product #3, not INSERT."""

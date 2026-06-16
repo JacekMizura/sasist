@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-06-08 — B1 bundle STOCK EAN validation fix
+
+- `_validate_identifier_uniqueness`: product EAN check mirrors `uq_product_tenant_ean` (includes soft-deleted rows)
+- PUT/POST bundle → HTTP 400 `"EAN jest już używany przez inny produkt."` zamiast 500
+- Safety net: `map_product_integrity_error` w routerze (adapter + commit)
+- Testy: `test_bundle_stock_identifier_validation.py`
+
 ## 2026-06-08 — P2.1A Warehouse Context UX Fix
 
 - `useActiveWarehouseContext()` + banner „Wybierz aktywny magazyn.”

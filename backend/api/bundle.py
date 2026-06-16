@@ -5,6 +5,7 @@ from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from ..database import get_db
@@ -29,6 +30,7 @@ from ..services.bundle_pricing_service import compute_bundle_pricing, component_
 from ..services.bundle_stock_product_service import (
     BundleStockProductError,
     apply_stock_bundle_product_adapter,
+    map_product_integrity_error,
 )
 from ..services.delete_service import delete_bundle_transaction, delete_bundles_bulk_transaction
 
@@ -342,6 +344,13 @@ def _apply_stock_adapter_or_http(db: Session, bundle: Bundle) -> None:
         apply_stock_bundle_product_adapter(db, bundle)
     except BundleStockProductError as exc:
         raise HTTPException(status_code=400, detail=exc.message) from exc
+    except IntegrityError as exc:
+        db.rollback()
+        try:
+            map_product_integrity_error(exc)
+        except BundleStockProductError as mapped:
+            raise HTTPException(status_code=400, detail=mapped.message) from mapped
+        raise HTTPException(status_code=400, detail="Konflikt identyfikatora produktu.") from exc
 
 
 @router.get("/{bundle_id}/warehouse-stock")
@@ -495,6 +504,20 @@ def update_bundle(
     logger.info("[BUNDLE_SAVE] stage=commit bundle_id=%s", bundle_id)
     try:
         db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        logger.exception(
+            "[BUNDLE_SAVE] stage=commit_failed bundle_id=%s linked_product_id=%s exc_type=%s exc=%s",
+            bundle_id,
+            getattr(b, "linked_product_id", None) if getattr(b, "linked_product_id", None) is not None else "NULL",
+            type(exc).__name__,
+            exc,
+        )
+        try:
+            map_product_integrity_error(exc)
+        except BundleStockProductError as mapped:
+            raise HTTPException(status_code=400, detail=mapped.message) from mapped
+        raise HTTPException(status_code=400, detail="Konflikt identyfikatora produktu.") from exc
     except Exception as exc:
         logger.exception(
             "[BUNDLE_SAVE] stage=commit_failed bundle_id=%s linked_product_id=%s exc_type=%s exc=%s",
