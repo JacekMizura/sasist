@@ -6,7 +6,7 @@ import json
 import logging
 from typing import Any, Literal, Optional
 
-from sqlalchemy import func, inspect, or_
+from sqlalchemy import func, inspect, or_, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -125,6 +125,42 @@ def map_product_integrity_error(exc: IntegrityError) -> None:
     ):
         raise BundleStockProductError(EAN_CONFLICT_MESSAGE, code="ean_conflict") from exc
     raise exc
+
+
+def _postgres_products_sequence_state(db: Session) -> str:
+    bind = db.get_bind()
+    if bind is None or bind.dialect.name != "postgresql":
+        return "n/a"
+    try:
+        row = db.execute(text("SELECT last_value, is_called FROM products_id_seq")).fetchone()
+        if row is not None:
+            return f"last_value={int(row[0])} is_called={bool(row[1])}"
+    except Exception as exc:
+        return f"error({type(exc).__name__}: {exc})"
+    return "unknown"
+
+
+def _log_shadow_resolve_decision(
+    db: Session,
+    *,
+    bundle_id: int,
+    linked_product_id: Optional[int],
+    action: SyncAction,
+    product_id: Optional[int],
+    resolve_reason: str,
+) -> None:
+    max_product_id = db.query(func.max(Product.id)).scalar()
+    logger.info(
+        "[BUNDLE_STOCK_CREATE] action=%s bundle_id=%s linked_product_id=%s resolve=%s "
+        "generated_product_id=%s sequence_value=%s max_product_id=%s",
+        action,
+        bundle_id,
+        linked_product_id if linked_product_id is not None else "NULL",
+        resolve_reason,
+        product_id if product_id is not None else "pending",
+        _postgres_products_sequence_state(db),
+        max_product_id if max_product_id is not None else "NULL",
+    )
 
 
 def _validate_identifier_uniqueness(
@@ -351,19 +387,62 @@ def _resolve_shadow_product(db: Session, bundle: Bundle) -> tuple[Product, SyncA
     if linked_raw is not None and int(linked_raw) > 0:
         product = _load_product_by_id(db, product_id=int(linked_raw), tenant_id=tenant_id)
         if product is not None:
+            _log_shadow_resolve_decision(
+                db,
+                bundle_id=bundle_id,
+                linked_product_id=int(linked_raw),
+                action="update",
+                product_id=int(product.id),
+                resolve_reason="linked_product_id_hit",
+            )
             return product, "update"
 
     product = _find_shadow_product_by_bundle_id(db, tenant_id=tenant_id, bundle_id=bundle_id)
     if product is not None:
         bundle.linked_product_id = int(product.id)
+        _log_shadow_resolve_decision(
+            db,
+            bundle_id=bundle_id,
+            linked_product_id=int(linked_raw) if linked_raw is not None else None,
+            action="update",
+            product_id=int(product.id),
+            resolve_reason="shadow_bundle_id_metadata_hit",
+        )
         return product, "update"
 
+    _log_shadow_resolve_decision(
+        db,
+        bundle_id=bundle_id,
+        linked_product_id=int(linked_raw) if linked_raw is not None else None,
+        action="create",
+        product_id=None,
+        resolve_reason="insert_new_no_linked_no_shadow",
+    )
     product = Product(
         tenant_id=tenant_id,
         name=str(bundle.name or "").strip() or f"Zestaw #{bundle_id}",
     )
     db.add(product)
-    db.flush()
+    try:
+        db.flush()
+    except IntegrityError as exc:
+        _log_shadow_resolve_decision(
+            db,
+            bundle_id=bundle_id,
+            linked_product_id=int(linked_raw) if linked_raw is not None else None,
+            action="create",
+            product_id=getattr(product, "id", None),
+            resolve_reason="insert_flush_failed_products_pkey",
+        )
+        raise
+    _log_shadow_resolve_decision(
+        db,
+        bundle_id=bundle_id,
+        linked_product_id=int(linked_raw) if linked_raw is not None else None,
+        action="create",
+        product_id=int(product.id),
+        resolve_reason="insert_new_flushed",
+    )
     return product, "create"
 
 
