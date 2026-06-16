@@ -99,6 +99,7 @@ class BundleCreateBody(BaseModel):
     bundle_fulfillment_mode: BundleOperationalMode = "ON_DEMAND_ASSEMBLY"
     fulfillment_mode: BundleFulfillmentMode = "assembly"
     stock_mode: BundleStockMode = "virtual"
+    #: B1 — ustawiane automatycznie przez backend; ignorowane w POST/PUT z UI
     linked_product_id: Optional[int] = Field(None, ge=1)
     items: List[BundleItemWrite] = Field(default_factory=list)
 
@@ -128,6 +129,7 @@ class BundleUpdateBody(BaseModel):
     bundle_fulfillment_mode: BundleOperationalMode = "ON_DEMAND_ASSEMBLY"
     fulfillment_mode: BundleFulfillmentMode = "assembly"
     stock_mode: BundleStockMode = "virtual"
+    #: B1 — ignorowane w PUT z UI
     linked_product_id: Optional[int] = Field(None, ge=1)
     items: List[BundleItemWrite] = Field(default_factory=list)
 

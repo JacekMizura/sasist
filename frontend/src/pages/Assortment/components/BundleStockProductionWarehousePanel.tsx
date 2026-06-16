@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 
-import api from "../../../api/axios";
+import { getBundleWarehouseStock } from "../../../api/bundlesApi";
 import { ProductWarehouseStockPanel } from "../../../components/products/ProductWarehouseStockPanel";
 import type { MagazynInvRowDisplay } from "../../../components/products/MagazynInventoryLine";
 import { ProductLikeSection } from "../../../components/catalog";
 
-type LinkedProductSnapshot = {
-  id: number;
+type WarehouseSnapshot = {
   name: string;
   stock_quantity?: number | null;
   unallocated_quantity?: number | null;
@@ -20,7 +19,10 @@ type LinkedProductSnapshot = {
 
 type Props = {
   tenantId: number;
-  linkedProductId: number | null;
+  bundleId: number;
+  bundleName: string;
+  /** Po zapisie zestawu STOCK — czy backend zwrócił powiązany magazyn (read-only). */
+  warehouseReady: boolean;
 };
 
 function mapInventoryRows(inv: unknown): MagazynInvRowDisplay[] {
@@ -50,15 +52,20 @@ function mapInventoryRows(inv: unknown): MagazynInvRowDisplay[] {
   });
 }
 
-/** Magazyn gotowego zestawu — pełny widok jak produkt (STOCK_PRODUCTION). */
-export function BundleStockProductionWarehousePanel({ tenantId, linkedProductId }: Props) {
-  const [product, setProduct] = useState<LinkedProductSnapshot | null>(null);
+/** Magazyn gotowego zestawu — pełny widok jak produkt (STOCK_PRODUCTION, B1). */
+export function BundleStockProductionWarehousePanel({
+  tenantId,
+  bundleId,
+  bundleName,
+  warehouseReady,
+}: Props) {
+  const [snapshot, setSnapshot] = useState<WarehouseSnapshot | null>(null);
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (linkedProductId == null || linkedProductId <= 0) {
-      setProduct(null);
+    if (!warehouseReady || bundleId <= 0) {
+      setSnapshot(null);
       setLoadErr(null);
       return;
     }
@@ -67,13 +74,10 @@ export function BundleStockProductionWarehousePanel({ tenantId, linkedProductId 
     setLoadErr(null);
     void (async () => {
       try {
-        const { data } = await api.get<Record<string, unknown>>(`/products/${linkedProductId}/`, {
-          params: { tenant_id: tenantId },
-        });
+        const data = await getBundleWarehouseStock(tenantId, bundleId);
         if (cancelled) return;
-        setProduct({
-          id: linkedProductId,
-          name: String(data.name ?? `#${linkedProductId}`),
+        setSnapshot({
+          name: String(data.name ?? bundleName),
           stock_quantity: data.stock_quantity != null ? Number(data.stock_quantity) : null,
           unallocated_quantity:
             data.unallocated_quantity != null ? Number(data.unallocated_quantity) : null,
@@ -89,7 +93,7 @@ export function BundleStockProductionWarehousePanel({ tenantId, linkedProductId 
               : null,
         });
       } catch {
-        if (!cancelled) setLoadErr("Nie udało się wczytać stanu magazynowego produktu.");
+        if (!cancelled) setLoadErr("Nie udało się wczytać stanu magazynowego zestawu.");
       } finally {
         if (!cancelled) setBusy(false);
       }
@@ -97,28 +101,28 @@ export function BundleStockProductionWarehousePanel({ tenantId, linkedProductId 
     return () => {
       cancelled = true;
     };
-  }, [tenantId, linkedProductId]);
+  }, [tenantId, bundleId, bundleName, warehouseReady]);
 
-  const inventoryRows = useMemo(() => product?.inventory ?? [], [product?.inventory]);
+  const inventoryRows = useMemo(() => snapshot?.inventory ?? [], [snapshot?.inventory]);
 
   const physicalStockDisplay = useMemo(() => {
-    const q = product?.stock_quantity;
+    const q = snapshot?.stock_quantity;
     if (q == null || Number.isNaN(Number(q))) return "—";
     return String(Math.round(Number(q)));
-  }, [product?.stock_quantity]);
+  }, [snapshot?.stock_quantity]);
 
-  if (linkedProductId == null || linkedProductId <= 0) {
+  if (!warehouseReady) {
     return (
       <ProductLikeSection title="Stan magazynowy">
         <p className="text-sm text-slate-600">
-          Ustaw powiązany produkt magazynowy w sekcji „Typ realizacji zestawu”, aby zobaczyć stan, lokalizacje i ruchy
-          magazynowe gotowego zestawu.
+          Zapisz zestaw w trybie „Produkowany / konfekcjonowany na magazyn”, aby zobaczyć stan, lokalizacje i ruchy
+          magazynowe.
         </p>
       </ProductLikeSection>
     );
   }
 
-  if (busy && !product) {
+  if (busy && !snapshot) {
     return <p className="text-sm text-slate-500">Wczytywanie magazynu…</p>;
   }
 
@@ -129,24 +133,23 @@ export function BundleStockProductionWarehousePanel({ tenantId, linkedProductId 
   return (
     <div className="space-y-6">
       <p className="text-sm text-slate-600">
-        Magazyn gotowego zestawu — produkt{" "}
-        <span className="font-semibold text-slate-900">{product?.name ?? `#${linkedProductId}`}</span> (ID{" "}
-        {linkedProductId}).
+        Magazyn gotowego zestawu —{" "}
+        <span className="font-semibold text-slate-900">{snapshot?.name ?? bundleName}</span>
       </p>
       <ProductWarehouseStockPanel
         physicalStockDisplay={physicalStockDisplay}
         totalStockDisplay={physicalStockDisplay}
-        dispositionStock={product?.disposition_stock as never}
-        commerciallySellableQty={product?.commercially_sellable_qty ?? null}
-        salesBlockedQty={product?.sales_blocked_qty ?? null}
-        networkCommerciallySellableQty={product?.network_commercially_sellable_qty ?? null}
+        dispositionStock={snapshot?.disposition_stock as never}
+        commerciallySellableQty={snapshot?.commercially_sellable_qty ?? null}
+        salesBlockedQty={snapshot?.sales_blocked_qty ?? null}
+        networkCommerciallySellableQty={snapshot?.network_commercially_sellable_qty ?? null}
         inventoryRows={inventoryRows}
         showInventoryLink
         emptyLocationsMessage={
-          product?.locations_load_incomplete
+          snapshot?.locations_load_incomplete
             ? "Dane lokalizacji nie zostały załadowane"
-            : inventoryRows.length === 0 && (product?.unallocated_quantity ?? 0) > 0
-              ? `Brak wierszy lokalizacji — ${product?.unallocated_quantity} szt. nieprzypisanych`
+            : inventoryRows.length === 0 && (snapshot?.unallocated_quantity ?? 0) > 0
+              ? `Brak wierszy lokalizacji — ${snapshot?.unallocated_quantity} szt. nieprzypisanych`
               : "Brak stanu magazynowego"
         }
       />

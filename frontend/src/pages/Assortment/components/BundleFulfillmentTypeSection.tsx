@@ -1,4 +1,4 @@
-import { productLikeFieldLabelClass, productLikeInputClass, ProductLikeSection } from "../../../components/catalog";
+import { productLikeThreeColClass, ProductLikeSection } from "../../../components/catalog";
 import {
   BUNDLE_OPERATIONAL_MODE_DESCRIPTION,
   BUNDLE_OPERATIONAL_MODE_LABEL,
@@ -8,8 +8,6 @@ import {
 type Props = {
   mode: BundleOperationalMode;
   onModeChange: (mode: BundleOperationalMode) => void;
-  linkedProductId: number | null;
-  onLinkedProductIdChange: (id: number | null) => void;
 };
 
 function RadioOption({
@@ -49,16 +47,8 @@ function RadioOption({
   );
 }
 
-/** Sekcja „Typ realizacji zestawu” — P4.11. */
-export function BundleFulfillmentTypeSection({
-  mode,
-  onModeChange,
-  linkedProductId,
-  onLinkedProductIdChange,
-}: Props) {
-  const fieldLabel = productLikeFieldLabelClass;
-  const inputClass = productLikeInputClass;
-
+/** Sekcja „Typ realizacji zestawu” — P4.11 / B1 UX. */
+export function BundleFulfillmentTypeSection({ mode, onModeChange }: Props) {
   return (
     <ProductLikeSection title="Typ realizacji zestawu">
       <div className="grid gap-3">
@@ -80,24 +70,15 @@ export function BundleFulfillmentTypeSection({
         />
       </div>
       {mode === "STOCK_PRODUCTION" ? (
-        <div className="mt-5 max-w-md">
-          <label className={fieldLabel}>Powiązany produkt magazynowy (ID)</label>
-          <input
-            type="text"
-            inputMode="numeric"
-            className={inputClass}
-            placeholder="SKU gotowego zestawu w magazynie"
-            value={linkedProductId ?? ""}
-            onChange={(e) => {
-              const digits = e.target.value.replace(/\D/g, "");
-              onLinkedProductIdChange(digits ? parseInt(digits, 10) : null);
-            }}
-          />
-          <p className="mt-1 text-xs text-slate-500">
-            Produkt reprezentujący gotowy zestaw — stan, lokalizacje, PZ/WZ i inwentaryzacja jak dla zwykłego SKU.
-          </p>
-        </div>
-      ) : null}
+        <p className="mt-4 text-sm text-slate-600">
+          Zestaw ma własny stan magazynowy, lokalizacje, partie i produkcję — jak zwykły produkt. SKU i EAN z tej
+          karty są używane w magazynie i WMS.
+        </p>
+      ) : (
+        <p className="mt-4 text-sm text-slate-600">
+          Brak własnego stanu — dostępność wyliczana ze składników przy realizacji zamówienia.
+        </p>
+      )}
     </ProductLikeSection>
   );
 }

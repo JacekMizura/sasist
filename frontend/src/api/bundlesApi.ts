@@ -45,6 +45,7 @@ export type BundleRead = {
   fulfillment_mode?: "assembly" | "manufacturing" | string;
   /** @deprecated legacy — use bundle_fulfillment_mode */
   stock_mode?: "physical" | "virtual" | string;
+  /** @internal B1 — ustawiane automatycznie przez backend; nie wysyłać z formularza */
   linked_product_id?: number | null;
   physical_stock?: number | null;
   /** min(floor(stock/qty)) over components */
@@ -76,7 +77,6 @@ export type BundleCreatePayload = {
   bundle_fulfillment_mode?: "ON_DEMAND_ASSEMBLY" | "STOCK_PRODUCTION";
   fulfillment_mode?: "assembly" | "manufacturing";
   stock_mode?: "physical" | "virtual";
-  linked_product_id?: number | null;
   items: BundleItemWrite[];
 };
 
@@ -97,8 +97,19 @@ export type BundleUpdatePayload = {
   bundle_fulfillment_mode?: "ON_DEMAND_ASSEMBLY" | "STOCK_PRODUCTION";
   fulfillment_mode?: "assembly" | "manufacturing";
   stock_mode?: "physical" | "virtual";
-  linked_product_id?: number | null;
   items: BundleItemWrite[];
+};
+
+export type BundleWarehouseStockRead = {
+  name?: string;
+  stock_quantity?: number | null;
+  unallocated_quantity?: number | null;
+  locations_load_incomplete?: boolean;
+  inventory?: unknown[];
+  disposition_stock?: unknown;
+  commercially_sellable_qty?: number | null;
+  sales_blocked_qty?: number | null;
+  network_commercially_sellable_qty?: number | null;
 };
 
 export type BundleListParams = {
@@ -114,6 +125,20 @@ export type BundleListParams = {
   stockMin?: number;
   stockMax?: number;
 };
+
+export async function getBundleWarehouseStock(
+  tenantId: number,
+  bundleId: number,
+  warehouseId?: number | null,
+): Promise<BundleWarehouseStockRead> {
+  const res = await api.get<BundleWarehouseStockRead>(`/bundles/${bundleId}/warehouse-stock`, {
+    params: {
+      tenant_id: tenantId,
+      warehouse_id: warehouseId != null && warehouseId > 0 ? warehouseId : undefined,
+    },
+  });
+  return res.data;
+}
 
 export async function listBundles(params: BundleListParams): Promise<BundleRead[]> {
   const {

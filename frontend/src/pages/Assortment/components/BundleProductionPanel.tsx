@@ -22,18 +22,21 @@ import { BundleProductionRecipeTable } from "./BundleProductionRecipeTable";
 type Props = {
   tenantId: number;
   bundleName: string;
-  linkedProductId: number | null;
+  /** Wewnętrzny — nie wyświetlany użytkownikowi (B1). */
+  warehouseProductId: number | null;
+  warehouseReady: boolean;
   rows: BundleComponentRow[];
   productCache: Record<number, ProductSummary>;
 };
 
 /**
- * Zakładka Produkcja zestawu (STOCK_PRODUCTION) — receptura ze składników + zlecenia powiązanego SKU.
+ * Zakładka Produkcja zestawu (STOCK_PRODUCTION) — receptura ze składników + zlecenia.
  */
 export function BundleProductionPanel({
   tenantId,
   bundleName,
-  linkedProductId,
+  warehouseProductId,
+  warehouseReady,
   rows,
   productCache,
 }: Props) {
@@ -55,7 +58,7 @@ export function BundleProductionPanel({
   );
 
   const reload = useCallback(async () => {
-    if (linkedProductId == null || linkedProductId <= 0) {
+    if (!warehouseReady || warehouseProductId == null || warehouseProductId <= 0) {
       setRecipes([]);
       setHistory([]);
       return;
@@ -64,8 +67,8 @@ export function BundleProductionPanel({
     setErr(null);
     try {
       const [mfg, hRes] = await Promise.all([
-        listCompositionsForProduct(tenantId, linkedProductId, "manufacturing"),
-        listProductionOrdersForProduct(tenantId, linkedProductId),
+        listCompositionsForProduct(tenantId, warehouseProductId, "manufacturing"),
+        listProductionOrdersForProduct(tenantId, warehouseProductId),
       ]);
       setRecipes(mfg);
       setHistory(hRes);
@@ -76,7 +79,7 @@ export function BundleProductionPanel({
     } finally {
       setLoading(false);
     }
-  }, [tenantId, linkedProductId]);
+  }, [tenantId, warehouseProductId, warehouseReady]);
 
   useEffect(() => {
     void reload();
@@ -87,7 +90,7 @@ export function BundleProductionPanel({
       setErr(
         !hasActiveWarehouse || warehouseId == null
           ? ACTIVE_WAREHOUSE_REQUIRED_MESSAGE
-          : "Brak aktywnej receptury ERP. Skonfiguruj recepturę na powiązanym produkcie magazynowym.",
+          : "Brak aktywnej receptury. Zapisz zestaw ponownie lub uzupełnij składniki.",
       );
       return;
     }
@@ -109,6 +112,8 @@ export function BundleProductionPanel({
     }
   };
 
+  const displayName = bundleName.trim() || "zestaw";
+
   return (
     <div className="w-full max-w-5xl space-y-10">
       {err ? (
@@ -124,18 +129,18 @@ export function BundleProductionPanel({
       </ProductLikeSection>
 
       <ProductLikeSection title="Produkcja">
-        {linkedProductId == null || linkedProductId <= 0 ? (
+        {!warehouseReady ? (
           <p className="text-sm text-slate-600">
-            Ustaw powiązany produkt magazynowy w sekcji „Typ realizacji zestawu”, aby tworzyć zlecenia produkcyjne dla
-            gotowego zestawu ({bundleName.trim() || "zestaw"}).
+            Zapisz zestaw w trybie produkcji magazynowej, aby tworzyć zlecenia dla „{displayName}”.
           </p>
         ) : loading ? (
-          <p className="text-sm text-slate-500">Wczytywanie receptury ERP…</p>
+          <p className="text-sm text-slate-500">Wczytywanie receptury…</p>
         ) : !activeRecipe ? (
           <div className="rounded-xl border-2 border-dashed border-slate-300 bg-white p-6 text-center">
             <Factory className="mx-auto h-9 w-9 text-slate-400" aria-hidden />
             <p className="mt-3 text-sm text-slate-600">
-              Powiązany produkt #{linkedProductId} nie ma aktywnej receptury produkcyjnej (BOM) w module ERP.
+              Brak aktywnej receptury produkcyjnej dla „{displayName}”. Zapisz zestaw ponownie po uzupełnieniu
+              składników.
             </p>
             <Link
               to={erpProductionPaths.recipes}
@@ -147,7 +152,7 @@ export function BundleProductionPanel({
         ) : (
           <div className="space-y-4">
             <p className="text-sm text-slate-600">
-              Zlecenie dotyczy produktu magazynowego #{linkedProductId}. Receptura ERP:{" "}
+              Zlecenie produkcyjne dla „{displayName}”. Receptura:{" "}
               <strong>{activeRecipe.name}</strong> (v{activeRecipe.version}).
             </p>
             <div className="flex flex-wrap items-end gap-4">
@@ -180,10 +185,10 @@ export function BundleProductionPanel({
       </ProductLikeSection>
 
       <ProductLikeSection title="Historia produkcji">
-        {linkedProductId == null || linkedProductId <= 0 ? (
-          <p className="text-sm text-slate-500">Historia zleceń pojawi się po powiązaniu produktu magazynowego.</p>
+        {!warehouseReady ? (
+          <p className="text-sm text-slate-500">Historia zleceń pojawi się po zapisaniu zestawu STOCK.</p>
         ) : history.length === 0 ? (
-          <p className="text-sm text-slate-500">Brak zleceń produkcyjnych dla powiązanego produktu.</p>
+          <p className="text-sm text-slate-500">Brak zleceń produkcyjnych dla „{displayName}”.</p>
         ) : (
           <div className="overflow-x-auto rounded-lg border border-slate-200">
             <table className="min-w-full text-sm">
@@ -225,7 +230,7 @@ export function BundleProductionPanel({
             </table>
           </div>
         )}
-        {linkedProductId != null && linkedProductId > 0 ? (
+        {warehouseReady ? (
           <Link
             to={erpProductionPaths.history}
             className="mt-3 inline-block text-xs font-medium text-slate-600 underline hover:text-slate-800"

@@ -25,6 +25,10 @@ from ..services.bundle_operational_mode import (
     normalize_bundle_operational_mode,
 )
 from ..services.bundle_pricing_service import compute_bundle_pricing, component_purchase_prices
+from ..services.bundle_stock_product_service import (
+    BundleStockProductError,
+    apply_stock_bundle_product_adapter,
+)
 from ..services.delete_service import delete_bundle_transaction, delete_bundles_bulk_transaction
 
 router = APIRouter(prefix="/bundles", tags=["Bundles"])
@@ -331,6 +335,42 @@ def get_bundle(
     return _serialize_bundle(db, b, stock_map)
 
 
+def _apply_stock_adapter_or_http(db: Session, bundle: Bundle) -> None:
+    try:
+        apply_stock_bundle_product_adapter(db, bundle)
+    except BundleStockProductError as exc:
+        raise HTTPException(status_code=400, detail=exc.message) from exc
+
+
+@router.get("/{bundle_id}/warehouse-stock")
+def get_bundle_warehouse_stock(
+    bundle_id: int,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: Optional[int] = Query(None, ge=1),
+    db: Session = Depends(get_db),
+):
+    """Magazyn gotowego zestawu STOCK — payload jak GET /products/{id}/ (B1 UX)."""
+    from ..services.product_detail_service import build_product_detail_payload
+
+    b = db.query(Bundle).filter(Bundle.id == bundle_id, Bundle.tenant_id == tenant_id).first()
+    if not b or getattr(b, "deleted_at", None) is not None:
+        raise HTTPException(status_code=404, detail="Bundle not found")
+    if _operational_mode_from_bundle(b) != STOCK_PRODUCTION:
+        raise HTTPException(status_code=400, detail="Bundle is not STOCK_PRODUCTION")
+    lp = getattr(b, "linked_product_id", None)
+    if lp is None or int(lp) <= 0:
+        raise HTTPException(
+            status_code=409,
+            detail="Zapisz zestaw w trybie produkcji magazynowej, aby zobaczyć stan.",
+        )
+    return build_product_detail_payload(
+        db,
+        product_id=int(lp),
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+    )
+
+
 @router.post("/", response_model=BundleRead, status_code=201)
 def create_bundle(body: BundleCreateBody, db: Session = Depends(get_db)):
     if not body.items:
@@ -354,7 +394,6 @@ def create_bundle(body: BundleCreateBody, db: Session = Depends(get_db)):
         height_mm=body.height_mm,
         weight_kg=body.weight_kg,
         metadata_json=meta,
-        linked_product_id=int(body.linked_product_id) if body.linked_product_id else None,
     )
     _apply_operational_mode(b, operational_mode)
     db.add(b)
@@ -368,6 +407,7 @@ def create_bundle(body: BundleCreateBody, db: Session = Depends(get_db)):
                 sort_order=int(it.sort_order),
             )
         )
+    _apply_stock_adapter_or_http(db, b)
     db.commit()
     b = (
         db.query(Bundle)
@@ -415,7 +455,6 @@ def update_bundle(
     if body.metadata_json is not None:
         b.metadata_json = (body.metadata_json or "").strip() or None
     _apply_operational_mode(b, operational_mode)
-    b.linked_product_id = int(body.linked_product_id) if body.linked_product_id else None
     db.query(BundleItem).filter(BundleItem.bundle_id == b.id).delete(synchronize_session=False)
     for it in body.items:
         db.add(
@@ -426,6 +465,7 @@ def update_bundle(
                 sort_order=int(it.sort_order),
             )
         )
+    _apply_stock_adapter_or_http(db, b)
     db.commit()
     b = (
         db.query(Bundle)

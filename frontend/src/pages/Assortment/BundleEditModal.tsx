@@ -163,7 +163,7 @@ export function BundleEditModal({
   const [weightKg, setWeightKg] = useState<number | "">("");
   const [metadataJson, setMetadataJson] = useState<string | null>(null);
   const [operationalMode, setOperationalMode] = useState<BundleOperationalMode>("ON_DEMAND_ASSEMBLY");
-  const [linkedProductId, setLinkedProductId] = useState<number | null>(null);
+  const [warehouseProductId, setWarehouseProductId] = useState<number | null>(null);
   const [physicalStock, setPhysicalStock] = useState<number | null>(null);
 
   const {
@@ -289,7 +289,7 @@ export function BundleEditModal({
     setWeightKg("");
     setMetadataJson(null);
     setOperationalMode("ON_DEMAND_ASSEMBLY");
-    setLinkedProductId(null);
+    setWarehouseProductId(null);
     setPhysicalStock(null);
     resetGallery([]);
     setRows([emptyRow()]);
@@ -339,7 +339,7 @@ export function BundleEditModal({
             fulfillment_mode: b.fulfillment_mode,
           }),
         );
-        setLinkedProductId(b.linked_product_id ?? null);
+        setWarehouseProductId(b.linked_product_id ?? null);
         setPhysicalStock(b.physical_stock ?? null);
 
         let metaParsed: unknown = null;
@@ -529,11 +529,12 @@ export function BundleEditModal({
         weight_kg: dim(weightKg),
         metadata_json: metaStr ?? null,
         bundle_fulfillment_mode: operationalMode,
-        linked_product_id: linkedProductId,
         items,
       };
       if (isNew) {
         const created = await createBundle({ tenant_id: tenantId, ...payload });
+        setWarehouseProductId(created.linked_product_id ?? null);
+        setPhysicalStock(created.physical_stock ?? null);
         onSaved();
         onCreated?.(created);
         if (isPage) {
@@ -542,7 +543,9 @@ export function BundleEditModal({
           onClose();
         }
       } else {
-        await updateBundle(tenantId, bundleId!, payload);
+        const updated = await updateBundle(tenantId, bundleId!, payload);
+        setWarehouseProductId(updated.linked_product_id ?? null);
+        setPhysicalStock(updated.physical_stock ?? null);
         if (saleChanged && metaStr) {
           setMetadataJson(metaStr);
           setPriceHistory(parsePriceHistory(metaStr));
@@ -565,6 +568,12 @@ export function BundleEditModal({
   if (!isPage && !open) return null;
 
   const headerPreviewUrl = pickMainImageUrl(ensureSingleMainImage(galleryImages));
+
+  const warehouseReady =
+    isStockProduction(operationalMode) &&
+    !isNew &&
+    warehouseProductId != null &&
+    warehouseProductId > 0;
 
   const statCards: ProductLikeStatCard[] = [
     {
@@ -694,12 +703,7 @@ export function BundleEditModal({
     >
       {activeTab === "basic" && (
         <div className="space-y-8">
-          <BundleFulfillmentTypeSection
-            mode={operationalMode}
-            onModeChange={setOperationalMode}
-            linkedProductId={linkedProductId}
-            onLinkedProductIdChange={setLinkedProductId}
-          />
+          <BundleFulfillmentTypeSection mode={operationalMode} onModeChange={setOperationalMode} />
           <div className={productLikeThreeColClass}>
           <div className={productLikeSideColClass}>
             <ProductLikeSection title="Informacje ogólne">
@@ -846,11 +850,13 @@ export function BundleEditModal({
       {activeTab === "warehouse" && (
         <BundleWarehouseTab
           tenantId={tenantId}
+          bundleId={bundleId ?? 0}
+          bundleName={name.trim() || "Zestaw"}
           rows={rows}
           productCache={productCache}
           bundleAvailability={bundleAvailability}
           operationalMode={operationalMode}
-          linkedProductId={linkedProductId}
+          warehouseReady={warehouseReady}
         />
       )}
 
@@ -861,7 +867,8 @@ export function BundleEditModal({
           isNew={isNew}
           bundleName={name.trim() || "Zestaw"}
           operationalMode={operationalMode}
-          linkedProductId={linkedProductId}
+          warehouseProductId={warehouseProductId}
+          warehouseReady={warehouseReady}
           rows={rows}
           productCache={productCache}
         />

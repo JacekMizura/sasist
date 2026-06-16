@@ -6,25 +6,34 @@ import { BundleStockProductionWarehousePanel } from "./components/BundleStockPro
 
 type Props = {
   tenantId: number;
+  bundleId: number;
+  bundleName: string;
   rows: BundleComponentRow[];
   productCache: Record<number, ProductSummary>;
   bundleAvailability: number | null;
   operationalMode: BundleOperationalMode;
-  linkedProductId: number | null;
+  warehouseReady: boolean;
 };
 
 export function BundleWarehouseTab({
   tenantId,
+  bundleId,
+  bundleName,
   rows,
   productCache,
   bundleAvailability,
   operationalMode,
-  linkedProductId,
+  warehouseReady,
 }: Props) {
   if (isStockProduction(operationalMode)) {
     return (
       <div className="w-full max-w-5xl space-y-8">
-        <BundleStockProductionWarehousePanel tenantId={tenantId} linkedProductId={linkedProductId} />
+        <BundleStockProductionWarehousePanel
+          tenantId={tenantId}
+          bundleId={bundleId}
+          bundleName={bundleName}
+          warehouseReady={warehouseReady}
+        />
       </div>
     );
   }

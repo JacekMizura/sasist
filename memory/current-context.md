@@ -1,5 +1,17 @@
 # Current context
 
+## Bundle STOCK B1 — UX Simplification (2026-06-08) — CLOSED
+- **Raport:** `memory/bundle-stock-b1-ux-simplification-report.md`
+- Auto shadow Product przy zapisie STOCK; ukryte pole linked_product_id w UI
+- Endpoint `GET /bundles/{id}/warehouse-stock`; shadow products ukryte w liście produktów
+- Testy: `test_bundle_stock_b1_auto_provision.py` (6) + regresja bundle (33 passed)
+
+## Bundle STOCK Simplification Audit (2026-06-08) — CLOSED (analysis only)
+- **Audyt:** `memory/bundle-stock-architecture-audit.md`
+- **Plan (rekom. B):** `memory/bundle-stock-simplification-plan.md`
+- Werdykt: powiązany produkt = adapter techniczny (brak wartości UX); rekomendacja **B1** auto shadow Product + ukrycie pola ID; **B2** opcjonalnie bundle-native inventory
+- **Bez implementacji** do akceptacji PO
+
 ## P2.5C.1 — Putaway UI & Operational Validation (2026-06-08) — CLOSED
 - **Audyt:** `memory/p2.5c.1-putaway-ui-and-operational-audit.md`
 - **Raport impl.:** `memory/p2.5c.1-putaway-ui-implementation-report.md`

@@ -17,7 +17,9 @@ type BundleProps = {
   isNew: boolean;
   bundleName: string;
   operationalMode: BundleOperationalMode;
-  linkedProductId: number | null;
+  /** Wewnętrzny identyfikator magazynowy — nie pokazywany w UI (B1). */
+  warehouseProductId: number | null;
+  warehouseReady: boolean;
   rows: BundleComponentRow[];
   productCache: Record<number, ProductSummary>;
 };
@@ -39,7 +41,8 @@ export function EntityProductionPanel(props: EntityProductionPanelProps) {
     );
   }
 
-  const { tenantId, isNew, bundleName, operationalMode, linkedProductId, rows, productCache } = props;
+  const { tenantId, isNew, bundleName, operationalMode, warehouseProductId, warehouseReady, rows, productCache } =
+    props;
 
   if (isNew) {
     return (
@@ -55,7 +58,8 @@ export function EntityProductionPanel(props: EntityProductionPanelProps) {
     <BundleProductionPanel
       tenantId={tenantId}
       bundleName={bundleName}
-      linkedProductId={linkedProductId}
+      warehouseProductId={warehouseProductId}
+      warehouseReady={warehouseReady}
       rows={rows}
       productCache={productCache}
     />

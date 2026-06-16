@@ -1821,12 +1821,24 @@ def get_products(
         False,
         description="P4 — include warehouse_stocks map per tenant warehouse (requires tenant_id).",
     ),
+    exclude_bundle_stock_shadows: bool = Query(
+        True,
+        description="B1 — hide auto-provisioned shadow products for STOCK bundles from catalog list.",
+    ),
 ):
     """
     Lista produktów z filtrowaniem, sortowaniem (sort_by, sort_dir: asc|desc) i paginacją.
     tenant_id optional: when provided, only products for that tenant; when omitted, all products.
     """
     q = db.query(Product).filter(Product.deleted_at.is_(None))
+    if exclude_bundle_stock_shadows:
+        q = q.filter(
+            or_(
+                Product.metadata_json.is_(None),
+                func.coalesce(Product.metadata_json, "").notlike('%"is_bundle_stock_shadow": true%'),
+                func.coalesce(Product.metadata_json, "").notlike('%"is_bundle_stock_shadow":true%'),
+            )
+        )
     if tenant_id is not None:
         q = q.filter(Product.tenant_id == tenant_id)
     if manufacturer_id is not None:
