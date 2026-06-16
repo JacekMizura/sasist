@@ -4,7 +4,8 @@
 - **Raport:** `memory/bundle-stock-b1-ux-simplification-report.md`
 - Auto shadow Product przy zapisie STOCK; ukryte pole linked_product_id w UI
 - Endpoint `GET /bundles/{id}/warehouse-stock`; shadow products ukryte w liście produktów
-- Testy: `test_bundle_stock_b1_auto_provision.py` (6) + regresja bundle (33 passed)
+- Testy: `test_bundle_stock_b1_auto_provision.py` (9 passed)
+- **Fix regresji products_pkey:** `memory/bundle-stock-b1-regression-products-pkey.md` — orphan shadow lookup przed INSERT
 
 ## Bundle STOCK Simplification Audit (2026-06-08) — CLOSED (analysis only)
 - **Audyt:** `memory/bundle-stock-architecture-audit.md`

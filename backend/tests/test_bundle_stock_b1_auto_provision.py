@@ -141,3 +141,53 @@ class TestBundleStockAutoProvision:
         with pytest.raises(BundleStockProductError) as exc:
             ensure_shadow_product_for_stock_bundle(db, bundle)
         assert exc.value.code == "ean_conflict"
+
+    def test_update_linked_product_no_duplicate_insert(self, db) -> None:
+        """Regression: PUT when linked_product_id=3 must UPDATE product #3, not INSERT."""
+        shadow = Product(
+            id=3,
+            tenant_id=1,
+            name="Shadow",
+            sku="DEO-X3",
+            symbol="DEO-X3",
+            metadata_json=json.dumps({"is_bundle_stock_shadow": True, "shadow_bundle_id": 1}),
+        )
+        db.add(shadow)
+        db.flush()
+        bundle = _stock_bundle(db, linked=3)
+        count_before = db.query(Product).count()
+        ensure_shadow_product_for_stock_bundle(db, bundle)
+        assert db.query(Product).count() == count_before
+        assert bundle.linked_product_id == 3
+        db.refresh(shadow)
+        assert shadow.name == "Dezodorant x3"
+
+    def test_reuses_orphan_shadow_when_linked_null(self, db) -> None:
+        """Product #3 exists with shadow_bundle_id=1 but bundle.linked_product_id IS NULL."""
+        shadow = Product(
+            id=3,
+            tenant_id=1,
+            name="Orphan shadow",
+            sku="DEO-X3",
+            symbol="DEO-X3",
+            metadata_json=json.dumps({"is_bundle_stock_shadow": True, "shadow_bundle_id": 1}),
+        )
+        db.add(shadow)
+        db.flush()
+        bundle = _stock_bundle(db, linked=None)
+        count_before = db.query(Product).count()
+        pid = ensure_shadow_product_for_stock_bundle(db, bundle)
+        assert pid == 3
+        assert bundle.linked_product_id == 3
+        assert db.query(Product).count() == count_before
+
+    def test_double_save_idempotent(self, db) -> None:
+        """Second save (PUT-like) must not create another Product row."""
+        bundle = _stock_bundle(db, linked=None)
+        ensure_shadow_product_for_stock_bundle(db, bundle)
+        first_pid = int(bundle.linked_product_id)
+        count = db.query(Product).count()
+        bundle.name = "Zmieniona nazwa"
+        ensure_shadow_product_for_stock_bundle(db, bundle)
+        assert db.query(Product).count() == count
+        assert bundle.linked_product_id == first_pid

@@ -407,6 +407,7 @@ def create_bundle(body: BundleCreateBody, db: Session = Depends(get_db)):
                 sort_order=int(it.sort_order),
             )
         )
+    db.flush()
     _apply_stock_adapter_or_http(db, b)
     db.commit()
     b = (
@@ -465,6 +466,7 @@ def update_bundle(
                 sort_order=int(it.sort_order),
             )
         )
+    db.flush()
     _apply_stock_adapter_or_http(db, b)
     db.commit()
     b = (

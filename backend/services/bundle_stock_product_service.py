@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Optional
+import logging
+from typing import Any, Literal, Optional
 
-from sqlalchemy import func, or_
+from sqlalchemy import func, inspect, or_
 from sqlalchemy.orm import Session
 
 from ..models.bundle import Bundle, BundleItem
@@ -15,9 +16,11 @@ from ..schemas.composition import CompositionLineWrite
 from .bundle_operational_mode import ON_DEMAND_ASSEMBLY, STOCK_PRODUCTION, normalize_bundle_operational_mode
 from .composition_engine_service import CompositionError, _deactivate_siblings
 
+logger = logging.getLogger(__name__)
 
 SHADOW_META_FLAG = "is_bundle_stock_shadow"
 SHADOW_BUNDLE_ID_KEY = "shadow_bundle_id"
+SyncAction = Literal["create", "update"]
 
 
 class BundleStockProductError(Exception):
@@ -25,6 +28,22 @@ class BundleStockProductError(Exception):
         self.message = message
         self.code = code
         super().__init__(message)
+
+
+def _log_sync(
+    *,
+    bundle_id: int,
+    linked_product_id: Optional[int],
+    action: SyncAction,
+    product_id: Optional[int],
+) -> None:
+    logger.info(
+        "[BUNDLE_STOCK_SYNC] bundle_id=%s linked_product_id=%s action=%s product_id=%s",
+        bundle_id,
+        linked_product_id if linked_product_id is not None else "NULL",
+        action,
+        product_id if product_id is not None else "NULL",
+    )
 
 
 def _meta_dict(raw: Any) -> dict[str, Any]:
@@ -175,6 +194,50 @@ def _sync_bundle_fields_to_product(bundle: Bundle, product: Product) -> None:
     _set_shadow_metadata(product, bundle_id=int(bundle.id))
 
 
+def _load_product_by_id(db: Session, *, product_id: int, tenant_id: int) -> Optional[Product]:
+    product = db.get(Product, int(product_id))
+    if product is None:
+        return None
+    if int(product.tenant_id) != int(tenant_id):
+        raise BundleStockProductError(
+            f"Powiązany produkt #{int(product_id)} należy do innego tenant.",
+            code="tenant_mismatch",
+        )
+    return product
+
+
+def _find_shadow_product_by_bundle_id(db: Session, *, tenant_id: int, bundle_id: int) -> Optional[Product]:
+    """Fallback when linked_product_id is NULL but shadow product already exists (orphan / failed commit)."""
+    candidates = (
+        db.query(Product)
+        .filter(
+            Product.tenant_id == int(tenant_id),
+            Product.metadata_json.isnot(None),
+            or_(
+                Product.metadata_json.like(f'%"shadow_bundle_id": {int(bundle_id)}%'),
+                Product.metadata_json.like(f'%"shadow_bundle_id":{int(bundle_id)}%'),
+            ),
+        )
+        .all()
+    )
+    for product in candidates:
+        if shadow_bundle_id_from_product(product) == int(bundle_id):
+            return product
+    return None
+
+
+def _bundle_items(db: Session, bundle: Bundle) -> list[BundleItem]:
+    """Fresh items after PUT delete/re-add (relationship cache may be stale)."""
+    if bundle.id is None:
+        return list(bundle.items or [])
+    return (
+        db.query(BundleItem)
+        .filter(BundleItem.bundle_id == int(bundle.id))
+        .order_by(BundleItem.sort_order.asc(), BundleItem.id.asc())
+        .all()
+    )
+
+
 def _composition_lines_from_bundle_items(items: list[BundleItem]) -> list[CompositionLineWrite]:
     out: list[CompositionLineWrite] = []
     for idx, it in enumerate(sorted(items, key=lambda x: (x.sort_order or 0, x.id or 0))):
@@ -190,7 +253,7 @@ def _composition_lines_from_bundle_items(items: list[BundleItem]) -> list[Compos
 
 
 def _sync_manufacturing_composition(db: Session, bundle: Bundle, product_id: int) -> None:
-    items = list(bundle.items or [])
+    items = _bundle_items(db, bundle)
     if not items:
         return
     lines = _composition_lines_from_bundle_items(items)
@@ -242,6 +305,38 @@ def _sync_manufacturing_composition(db: Session, bundle: Bundle, product_id: int
     db.flush()
 
 
+def _resolve_shadow_product(db: Session, bundle: Bundle) -> tuple[Product, SyncAction]:
+    """
+    Resolve existing shadow product (UPDATE) or create new one (INSERT).
+
+    Order:
+    1. bundles.linked_product_id → db.get(Product)
+    2. metadata shadow_bundle_id fallback (orphan shadow after partial save)
+    3. INSERT new Product (only when no existing shadow)
+    """
+    tenant_id = int(bundle.tenant_id)
+    bundle_id = int(bundle.id)
+    linked_raw = getattr(bundle, "linked_product_id", None)
+
+    if linked_raw is not None and int(linked_raw) > 0:
+        product = _load_product_by_id(db, product_id=int(linked_raw), tenant_id=tenant_id)
+        if product is not None:
+            return product, "update"
+
+    product = _find_shadow_product_by_bundle_id(db, tenant_id=tenant_id, bundle_id=bundle_id)
+    if product is not None:
+        bundle.linked_product_id = int(product.id)
+        return product, "update"
+
+    product = Product(
+        tenant_id=tenant_id,
+        name=str(bundle.name or "").strip() or f"Zestaw #{bundle_id}",
+    )
+    db.add(product)
+    db.flush()
+    return product, "create"
+
+
 def ensure_shadow_product_for_stock_bundle(db: Session, bundle: Bundle) -> Optional[int]:
     """
     For STOCK_PRODUCTION: create or sync shadow Product and set bundle.linked_product_id.
@@ -253,34 +348,35 @@ def ensure_shadow_product_for_stock_bundle(db: Session, bundle: Bundle) -> Optio
         bundle.linked_product_id = None
         return None
 
+    linked_before = getattr(bundle, "linked_product_id", None)
+    product, action = _resolve_shadow_product(db, bundle)
+
     _validate_identifier_uniqueness(
         db,
         tenant_id=int(bundle.tenant_id),
         sku=_strip_str(bundle.sku),
         ean=_strip_str(bundle.ean),
-        exclude_product_id=int(bundle.linked_product_id) if bundle.linked_product_id else None,
+        exclude_product_id=int(product.id),
         exclude_bundle_id=int(bundle.id) if bundle.id else None,
     )
 
-    product: Optional[Product] = None
-    linked_id = getattr(bundle, "linked_product_id", None)
-    if linked_id is not None and int(linked_id) > 0:
-        product = (
-            db.query(Product)
-            .filter(Product.id == int(linked_id), Product.tenant_id == int(bundle.tenant_id))
-            .first()
+    # Never db.add() on persistent product — UPDATE path only mutates attributes.
+    state = inspect(product)
+    if action == "update" and not state.persistent:
+        raise BundleStockProductError(
+            f"Shadow product #{product.id} nie jest przypięty do sesji — błąd synchronizacji.",
+            code="session_state",
         )
-
-    if product is None:
-        product = Product(
-            tenant_id=int(bundle.tenant_id),
-            name=str(bundle.name or "").strip() or f"Zestaw #{bundle.id}",
-        )
-        db.add(product)
-        db.flush()
 
     _sync_bundle_fields_to_product(bundle, product)
     bundle.linked_product_id = int(product.id)
+
+    _log_sync(
+        bundle_id=int(bundle.id),
+        linked_product_id=int(linked_before) if linked_before is not None else None,
+        action=action,
+        product_id=int(product.id),
+    )
 
     try:
         _sync_manufacturing_composition(db, bundle, int(product.id))
