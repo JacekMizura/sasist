@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-06-08 — PostgreSQL sequence sync (startup)
+
+- `backend/db/postgres_sequence_sync.py` — idempotent sync all integer PK sequences vs MAX(id)
+- Tier 0 startup + `migrate_sqlite_to_postgres` post-step
+- SQL: `backend/migrations/postgres_sync_all_sequences.sql`
+- Fixes bundle STOCK shadow `products_pkey` after import/migration desync
+
 ## 2026-06-08 — B1 bundle STOCK EAN validation fix
 
 - `_validate_identifier_uniqueness`: product EAN check mirrors `uq_product_tenant_ean` (includes soft-deleted rows)

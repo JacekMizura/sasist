@@ -1701,6 +1701,21 @@ def _bootstrap_tier0_platform_schema(*, phase: str) -> None:
         )
         raise
     run_production_schema_startup_gate(engine, phase=phase)
+    try:
+        from .db.schema_upgrade import ensure_postgres_serial_sequences_synced
+
+        seq_fixed = ensure_postgres_serial_sequences_synced(engine)
+        if seq_fixed:
+            print(
+                f"[startup] postgres_sequence_sync fixed={seq_fixed} phase={phase}",
+                flush=True,
+            )
+    except Exception:
+        logging.getLogger(__name__).exception(
+            "[startup] postgres_sequence_sync failed phase=%s",
+            phase,
+        )
+        raise
     duration_ms = round((time.perf_counter() - t0) * 1000, 2)
     log_startup_schema(
         phase,

@@ -148,8 +148,12 @@ def _log_shadow_resolve_decision(
     action: SyncAction,
     product_id: Optional[int],
     resolve_reason: str,
+    include_db_diagnostics: bool = True,
 ) -> None:
-    max_product_id = db.query(func.max(Product.id)).scalar()
+    sequence_value = _postgres_products_sequence_state(db) if include_db_diagnostics else "skipped"
+    max_product_id = (
+        db.query(func.max(Product.id)).scalar() if include_db_diagnostics else "skipped"
+    )
     logger.info(
         "[BUNDLE_STOCK_CREATE] action=%s bundle_id=%s linked_product_id=%s resolve=%s "
         "generated_product_id=%s sequence_value=%s max_product_id=%s",
@@ -158,7 +162,7 @@ def _log_shadow_resolve_decision(
         linked_product_id if linked_product_id is not None else "NULL",
         resolve_reason,
         product_id if product_id is not None else "pending",
-        _postgres_products_sequence_state(db),
+        sequence_value,
         max_product_id if max_product_id is not None else "NULL",
     )
 
@@ -433,6 +437,7 @@ def _resolve_shadow_product(db: Session, bundle: Bundle) -> tuple[Product, SyncA
             action="create",
             product_id=getattr(product, "id", None),
             resolve_reason="insert_flush_failed_products_pkey",
+            include_db_diagnostics=False,
         )
         raise
     _log_shadow_resolve_decision(

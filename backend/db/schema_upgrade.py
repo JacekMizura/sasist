@@ -7949,3 +7949,16 @@ from .purchase_sales_block_schema import ensure_purchase_sales_block_schema  # n
 from .receiving_workflow_status_schema import ensure_receiving_workflow_status_schema  # noqa: E402
 from .tenant_warehouse_fulfillment_schema import ensure_tenant_warehouse_fulfillment_schema  # noqa: E402
 
+
+def ensure_postgres_serial_sequences_synced(engine: Engine) -> int:
+    """
+    Idempotent: align PostgreSQL SERIAL/IDENTITY sequences with MAX(pk).
+
+    Runs on startup (Tier 0) after SQLite→PG migration or CSV import with explicit ids.
+    Returns count of sequences adjusted.
+    """
+    from .postgres_sequence_sync import ensure_postgres_sequences_synced
+
+    report = ensure_postgres_sequences_synced(engine)
+    return report.fixed
+

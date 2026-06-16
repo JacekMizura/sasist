@@ -667,39 +667,15 @@ def _is_integer_pk_column(column: Column) -> bool:
 def _reset_postgres_sequences(
     conn: Connection, metadata: MetaData, table_names: Iterable[str]
 ) -> None:
-    print("\nAdjusting PostgreSQL sequences for integer serial PKs...")
-    for name in table_names:
-        table = metadata.tables[name]
-        pk_columns = list(table.primary_key.columns)
-        if len(pk_columns) != 1:
-            continue
-        pk = pk_columns[0]
-        if not _is_integer_pk_column(pk):
-            continue
+    """Delegate to shared startup sync (migration post-step)."""
+    from backend.db.postgres_sequence_sync import ensure_postgres_sequences_synced
 
-        sequence_name = conn.execute(
-            text("SELECT pg_get_serial_sequence(:table_name, :column_name)"),
-            {
-                "table_name": _qualified_pg_table_name(table),
-                "column_name": pk.name,
-            },
-        ).scalar()
-        if not sequence_name:
-            continue
-
-        max_id = conn.execute(select(func.max(table.c[pk.name]))).scalar()
-        if max_id is None:
-            conn.execute(
-                text("SELECT setval(CAST(:sequence_name AS regclass), 1, false)"),
-                {"sequence_name": sequence_name},
-            )
-            print(f"  {name}.{pk.name}: sequence -> empty")
-        else:
-            conn.execute(
-                text("SELECT setval(CAST(:sequence_name AS regclass), :value, true)"),
-                {"sequence_name": sequence_name, "value": int(max_id)},
-            )
-            print(f"  {name}.{pk.name}: sequence -> {max_id}")
+    bind = conn.engine
+    report = ensure_postgres_sequences_synced(bind, metadata=metadata, table_names=list(table_names))
+    print(
+        f"\nPostgreSQL sequences: checked={report.checked} fixed={report.fixed} "
+        f"ok={report.ok} skipped={report.skipped} errors={report.errors}"
+    )
 
 
 def _validate_row_counts(
