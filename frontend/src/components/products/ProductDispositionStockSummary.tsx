@@ -25,6 +25,11 @@ function poolLines(d: ProductDispositionStock): { label: string; qty: number }[]
   return lines;
 }
 
+function dockQty(d: ProductDispositionStock): number {
+  const v = d.dock_qty;
+  return v != null && Number.isFinite(v) ? v : 0;
+}
+
 function ReservedSecondary({
   reserved,
   disposition,
@@ -50,40 +55,50 @@ export function ProductDispositionStockSummary({
 }: ProductDispositionStockSummaryProps) {
   const d = disposition ?? EMPTY_DISPOSITION_STOCK;
   const reserved = reservedQuantity != null && Number.isFinite(reservedQuantity) ? reservedQuantity : 0;
-  const physical =
-    d.physical_qty > 0 ? d.physical_qty : disposition == null ? undefined : d.physical_qty;
-  const saleable = d.saleable_qty;
+  const available = d.saleable_available_qty;
+  const physical = d.physical_qty;
+  const dock = dockQty(d);
+  const pools = poolLines(d);
 
   if (variant === "list") {
     return (
       <div className={`text-right text-sm tabular-nums ${className}`}>
         <p className="text-slate-800">
-          <span className="text-slate-500">Dostępne:</span>{" "}
-          <span className={saleable === 0 ? "font-semibold text-red-600" : "font-medium text-slate-900"}>
-            {fmtDispositionQty(saleable)}
+          <span className="text-slate-500">Dostępny:</span>{" "}
+          <span className={available === 0 ? "font-semibold text-red-600" : "font-medium text-slate-900"}>
+            {fmtDispositionQty(available)}
           </span>
         </p>
         <p className="text-slate-600">
-          <span className="text-slate-500">Fizycznie:</span> {fmtDispositionQty(physical ?? saleable)}
+          <span className="text-slate-500">Fizycznie:</span> {fmtDispositionQty(physical)}
         </p>
+        {dock > 0 ? (
+          <p className="text-xs text-amber-800">
+            Na DOCK: {fmtDispositionQty(dock)}
+          </p>
+        ) : null}
         {reserved > 0 ? (
-          <p className="text-xs text-slate-500">Po rezerwacji: {fmtDispositionQty(d.saleable_available_qty)}</p>
+          <p className="text-xs text-slate-500">Po rezerwacji: {fmtDispositionQty(available)}</p>
         ) : null}
       </div>
     );
   }
 
   if (variant === "wms") {
-    const pools = poolLines(d);
     return (
       <div className={`space-y-1 ${className}`}>
         <p className="text-center text-2xl font-black tabular-nums text-indigo-950 sm:text-3xl">
-          {fmtDispositionQty(saleable)}{" "}
-          <span className="text-base font-bold text-indigo-800/90">dostępne (A)</span>
+          {fmtDispositionQty(available)}{" "}
+          <span className="text-base font-bold text-indigo-800/90">dostępny</span>
         </p>
         <p className="text-center text-sm font-medium tabular-nums text-indigo-900/80">
-          Fizycznie: {fmtDispositionQty(physical ?? d.physical_qty)} szt.
+          Fizycznie: {fmtDispositionQty(physical)} szt.
         </p>
+        {dock > 0 ? (
+          <p className="text-center text-sm font-semibold tabular-nums text-amber-900">
+            Na DOCK: {fmtDispositionQty(dock)} szt. · wymaga rozlokowania
+          </p>
+        ) : null}
         {pools.length > 0 ? (
           <p className="text-center text-xs text-indigo-900/70">
             {pools.map((p) => `${p.label}: ${fmtDispositionQty(p.qty)}`).join(" · ")}
@@ -91,7 +106,7 @@ export function ProductDispositionStockSummary({
         ) : null}
         {reserved > 0 ? (
           <p className="text-center text-xs text-indigo-800/60">
-            Po rezerwacji: {fmtDispositionQty(d.saleable_available_qty)} szt.
+            Po rezerwacji: {fmtDispositionQty(available)} szt.
           </p>
         ) : null}
       </div>
@@ -99,25 +114,29 @@ export function ProductDispositionStockSummary({
   }
 
   // panel
-  const pools = poolLines(d);
   return (
     <div className={`space-y-2 text-sm text-slate-700 ${className}`}>
       <p>
-        Dostępne:{" "}
-        <span className="font-semibold text-slate-900 tabular-nums">{fmtDispositionQty(saleable)} szt.</span>
+        Stan fizyczny:{" "}
+        <span className="font-semibold text-slate-900 tabular-nums">{fmtDispositionQty(physical)} szt.</span>
       </p>
+      <p>
+        Dostępny:{" "}
+        <span className="font-semibold text-emerald-800 tabular-nums">{fmtDispositionQty(available)} szt.</span>
+      </p>
+      {dock > 0 ? (
+        <p>
+          Na DOCK:{" "}
+          <span className="font-semibold text-amber-900 tabular-nums">{fmtDispositionQty(dock)} szt.</span>
+          <span className="ml-1 text-xs text-amber-800/90">(wymaga rozlokowania)</span>
+        </p>
+      ) : null}
       {pools.map((p) => (
         <p key={p.label}>
           {p.label}:{" "}
           <span className="font-semibold text-slate-900 tabular-nums">{fmtDispositionQty(p.qty)} szt.</span>
         </p>
       ))}
-      <p>
-        Fizycznie:{" "}
-        <span className="font-semibold text-slate-900 tabular-nums">
-          {fmtDispositionQty(physical ?? d.physical_qty)} szt.
-        </span>
-      </p>
       <ReservedSecondary reserved={reserved} disposition={d} />
     </div>
   );

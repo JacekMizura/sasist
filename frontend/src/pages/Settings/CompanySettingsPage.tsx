@@ -148,6 +148,10 @@ function fmtDateTime(iso: string | undefined): string {
   }
 }
 
+function warehouseProfileLabel(requiresPutaway: boolean | undefined): string {
+  return requiresPutaway !== false ? "WMS (DOCK + putaway)" : "Magazyn prosty (STOCK)";
+}
+
 function warehouseTypeLabel(t: string | null | undefined): string {
   if (!t) return "—";
   if (t === "own") return "Własny";
@@ -196,6 +200,7 @@ export default function CompanySettingsPage() {
   const [editParticipatesNetwork, setEditParticipatesNetwork] = useState(true);
   const [editFulfillmentEligible, setEditFulfillmentEligible] = useState(true);
   const [editFulfillmentPriority, setEditFulfillmentPriority] = useState(100);
+  const [editRequiresPutaway, setEditRequiresPutaway] = useState(true);
   const [editWhSaving, setEditWhSaving] = useState(false);
 
   const [fulfillmentMode, setFulfillmentMode] = useState<FulfillmentAssignmentMode>("DEFAULT_WAREHOUSE");
@@ -351,6 +356,7 @@ export default function CompanySettingsPage() {
     setEditParticipatesNetwork(assignment?.participates_in_network_stock ?? true);
     setEditFulfillmentEligible(assignment?.fulfillment_eligible ?? true);
     setEditFulfillmentPriority(assignment?.fulfillment_priority ?? 100);
+    setEditRequiresPutaway(w.requires_putaway !== false);
   };
 
   const closeWarehouseEdit = () => {
@@ -361,6 +367,7 @@ export default function CompanySettingsPage() {
     setEditParticipatesNetwork(true);
     setEditFulfillmentEligible(true);
     setEditFulfillmentPriority(100);
+    setEditRequiresPutaway(true);
   };
 
   const defaultTenantsForWarehouse = (wid: number) =>
@@ -458,7 +465,10 @@ export default function CompanySettingsPage() {
     }
     setEditWhSaving(true);
     try {
-      await warehouseService.updateWarehouse(editWh.id, { name: nm });
+      await warehouseService.updateWarehouse(editWh.id, {
+        name: nm,
+        requires_putaway: editRequiresPutaway,
+      });
       if (editWhAssignmentId != null) {
         await warehouseService.updateAssignment(editWhAssignmentId, {
           participates_in_network_stock: editParticipatesNetwork,
@@ -469,8 +479,13 @@ export default function CompanySettingsPage() {
       closeWarehouseEdit();
       toast.success("Zaktualizowano magazyn.");
       await loadStructure();
-    } catch {
-      toast.error("Nie udało się zapisać magazynu.");
+    } catch (e: unknown) {
+      const detail =
+        e &&
+        typeof e === "object" &&
+        "response" in e &&
+        (e as { response?: { data?: { detail?: string } } }).response?.data?.detail;
+      toast.error(typeof detail === "string" ? detail : "Nie udało się zapisać magazynu.");
     } finally {
       setEditWhSaving(false);
     }
@@ -771,6 +786,10 @@ export default function CompanySettingsPage() {
                         </div>
                         <dl className="mt-4 space-y-2 text-sm">
                           <div className="flex justify-between gap-2">
+                            <dt className="text-slate-500">Profil przyjęć</dt>
+                            <dd className="font-medium text-slate-800">{warehouseProfileLabel(w.requires_putaway)}</dd>
+                          </div>
+                          <div className="flex justify-between gap-2">
                             <dt className="text-slate-500">Status / typ</dt>
                             <dd className="font-medium text-slate-800">{warehouseTypeLabel(w.type)}</dd>
                           </div>
@@ -1042,6 +1061,25 @@ export default function CompanySettingsPage() {
               <span className={lab}>Nazwa</span>
               <input className={inp} value={editWhName} onChange={(e) => setEditWhName(e.target.value)} />
             </label>
+
+            <div className="mt-6 border-t border-slate-100 pt-5">
+              <h4 className="text-sm font-bold text-slate-900">Profil magazynu (przyjęcia)</h4>
+              <label className="mt-4 flex cursor-pointer items-start gap-3">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 rounded border-slate-300 text-cyan-600"
+                  checked={editRequiresPutaway}
+                  onChange={(e) => setEditRequiresPutaway(e.target.checked)}
+                />
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold text-slate-800">Wymaga rozlokowania (WMS)</span>
+                  <span className="mt-0.5 block text-xs text-slate-500">
+                    Włączone: towar trafia na DOCK-IN i wymaga putaway przed sprzedażą. Wyłączone: towar trafia na STOCK
+                    i jest od razu dostępny do pickingu.
+                  </span>
+                </span>
+              </label>
+            </div>
 
             <div className="mt-6 border-t border-slate-100 pt-5">
               <h4 className="text-sm font-bold text-slate-900">Sprzedaż i realizacja</h4>

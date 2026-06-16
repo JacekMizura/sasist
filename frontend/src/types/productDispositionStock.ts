@@ -9,6 +9,7 @@ export type ProductDispositionStock = {
   other_qty: number;
   physical_qty: number;
   saleable_available_qty: number;
+  dock_qty?: number;
 };
 
 export const EMPTY_DISPOSITION_STOCK: ProductDispositionStock = {
@@ -21,6 +22,7 @@ export const EMPTY_DISPOSITION_STOCK: ProductDispositionStock = {
   other_qty: 0,
   physical_qty: 0,
   saleable_available_qty: 0,
+  dock_qty: 0,
 };
 
 /** Future Etap 2: OrderItem.required_stock_disposition will use these codes. */
@@ -52,6 +54,7 @@ export function parseDispositionStock(raw: unknown): ProductDispositionStock | u
     other_qty: num("other_qty"),
     physical_qty: num("physical_qty"),
     saleable_available_qty: num("saleable_available_qty"),
+    dock_qty: num("dock_qty"),
   };
 }
 

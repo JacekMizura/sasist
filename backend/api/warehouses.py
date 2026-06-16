@@ -47,13 +47,19 @@ def create_warehouse(data: WarehouseCreateBody, db: Session = Depends(get_db)):
 @router.put("/{warehouse_id}", response_model=WarehouseRead)
 def update_warehouse(warehouse_id: int, data: WarehouseUpdate, db: Session = Depends(get_db)):
     service = WarehouseService(db)
+    if data.name is None and data.requires_putaway is None:
+        raise HTTPException(status_code=400, detail="Podaj nazwę lub profil putaway.")
     try:
-        return service.update_warehouse(warehouse_id, data.name)
+        return service.update_warehouse(
+            warehouse_id,
+            name=data.name,
+            requires_putaway=data.requires_putaway,
+        )
     except ValueError as e:
         msg = str(e)
         if "nie istnieje" in msg:
             raise HTTPException(status_code=404, detail=msg) from e
-        raise HTTPException(status_code=400, detail=msg) from e
+        raise HTTPException(status_code=409, detail=msg) from e
 
 
 def _warehouse_inventory_value(db: Session, warehouse_id: int) -> float:

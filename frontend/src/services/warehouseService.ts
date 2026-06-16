@@ -6,6 +6,7 @@ export type Warehouse = {
   tenant_id?: number | null;
   address?: string | null;
   type?: string | null;
+  requires_putaway?: boolean;
   created_at?: string;
 };
 
@@ -56,7 +57,7 @@ export const warehouseService = {
     return api.post<Warehouse>("/warehouses/", data);
   },
 
-  updateWarehouse(warehouseId: number, data: { name: string }) {
+  updateWarehouse(warehouseId: number, data: { name?: string; requires_putaway?: boolean }) {
     return api.put<Warehouse>(`warehouses/${warehouseId}`, data);
   },
 

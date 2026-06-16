@@ -1,5 +1,11 @@
 # Current context
 
+## P2.5C.1 — Putaway UI & Operational Validation (2026-06-08) — CLOSED
+- **Audyt:** `memory/p2.5c.1-putaway-ui-and-operational-audit.md`
+- **Raport impl.:** `memory/p2.5c.1-putaway-ui-implementation-report.md`
+- UI: CompanySettings `requires_putaway`; walidacja 409; ATP UX (fizyczny/dostępny/DOCK)
+- Audyt: bundle/produkcja OK; MM rekomendacja A (DOCK dozwolony)
+
 ## P2.5C — DOCK / ATP / Putaway Implementation (2026-06-08) — CLOSED
 - **Raport:** `memory/p2.5c-dock-putaway-implementation-report.md`
 - `warehouse.requires_putaway` + auto DOCK-IN/STOCK; A3 fix; pick-eligible filter (ATP/pick/production)

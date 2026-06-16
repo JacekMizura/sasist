@@ -41,6 +41,8 @@ export type WmsProductViewResponseApi = {
   disposition_stock?: ProductDispositionStock;
   commercially_sellable_qty?: number;
   sales_blocked_qty?: number;
+  dock_qty?: number;
+  requires_putaway?: boolean;
   locations: WmsProductViewLocationApi[];
   logistics: WmsProductViewLogisticsApi;
   package: WmsProductViewPackageApi;
