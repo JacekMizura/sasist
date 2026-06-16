@@ -383,6 +383,13 @@ def ensure_shadow_product_for_stock_bundle(db: Session, bundle: Bundle) -> Optio
     except CompositionError as exc:
         raise BundleStockProductError(str(exc.message), code=str(exc.code)) from exc
 
+    logger.info(
+        "[BUNDLE_SAVE] stage=shadow_product_done bundle_id=%s action=%s product_id=%s",
+        int(bundle.id),
+        action,
+        int(product.id),
+    )
+
     return int(product.id)
 
 

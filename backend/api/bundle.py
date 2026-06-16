@@ -1,5 +1,6 @@
 """CRUD for virtual product bundles (no inventory)."""
 
+import logging
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -32,6 +33,7 @@ from ..services.bundle_stock_product_service import (
 from ..services.delete_service import delete_bundle_transaction, delete_bundles_bulk_transaction
 
 router = APIRouter(prefix="/bundles", tags=["Bundles"])
+logger = logging.getLogger(__name__)
 
 
 def _inventory_qty_by_product_ids(db: Session, tenant_id: int, product_ids: List[int]) -> Dict[int, int]:
@@ -431,7 +433,18 @@ def update_bundle(
     tenant_id: int = Query(..., ge=1),
     db: Session = Depends(get_db),
 ):
+    linked_before = None
     b = db.query(Bundle).filter(Bundle.id == bundle_id, Bundle.tenant_id == tenant_id).first()
+    if b:
+        linked_before = getattr(b, "linked_product_id", None)
+    logger.info(
+        "[BUNDLE_SAVE] stage=start bundle_id=%s tenant_id=%s mode=%s linked_product_id=%s item_count=%s",
+        bundle_id,
+        tenant_id,
+        getattr(body, "bundle_fulfillment_mode", None),
+        linked_before if linked_before is not None else "NULL",
+        len(body.items or []),
+    )
     if not b:
         raise HTTPException(status_code=404, detail="Bundle not found")
     if getattr(b, "deleted_at", None) is not None:
@@ -467,8 +480,35 @@ def update_bundle(
             )
         )
     db.flush()
+    logger.info(
+        "[BUNDLE_SAVE] stage=items_flushed bundle_id=%s linked_product_id=%s",
+        bundle_id,
+        getattr(b, "linked_product_id", None) if getattr(b, "linked_product_id", None) is not None else "NULL",
+    )
+    logger.info("[BUNDLE_SAVE] stage=shadow_product bundle_id=%s", bundle_id)
     _apply_stock_adapter_or_http(db, b)
-    db.commit()
+    logger.info(
+        "[BUNDLE_SAVE] stage=bom_sync bundle_id=%s linked_product_id=%s",
+        bundle_id,
+        getattr(b, "linked_product_id", None) if getattr(b, "linked_product_id", None) is not None else "NULL",
+    )
+    logger.info("[BUNDLE_SAVE] stage=commit bundle_id=%s", bundle_id)
+    try:
+        db.commit()
+    except Exception as exc:
+        logger.exception(
+            "[BUNDLE_SAVE] stage=commit_failed bundle_id=%s linked_product_id=%s exc_type=%s exc=%s",
+            bundle_id,
+            getattr(b, "linked_product_id", None) if getattr(b, "linked_product_id", None) is not None else "NULL",
+            type(exc).__name__,
+            exc,
+        )
+        raise
+    logger.info(
+        "[BUNDLE_SAVE] stage=commit_ok bundle_id=%s linked_product_id=%s",
+        bundle_id,
+        getattr(b, "linked_product_id", None),
+    )
     b = (
         db.query(Bundle)
         .options(joinedload(Bundle.items).joinedload(BundleItem.product))
@@ -480,6 +520,7 @@ def update_bundle(
     if lp is not None:
         pids.append(int(lp))
     stock_map = _inventory_qty_by_product_ids(db, tenant_id, pids)
+    logger.info("[BUNDLE_SAVE] stage=pricing_sync bundle_id=%s", bundle_id)
     return _serialize_bundle(db, b, stock_map)
 
 
