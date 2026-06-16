@@ -23,6 +23,7 @@ from ..schemas.bundle import (
 )
 from ..schemas.entity_delete import EntityBulkDeleteResult, entity_bulk_delete_result_from_service_dict
 from ..services.bundle_operational_mode import (
+    STOCK_PRODUCTION,
     legacy_fields_for_mode,
     normalize_bundle_operational_mode,
 )
