@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { StockDocumentItemRead, StockDocumentRead } from "../../api/stockDocumentsApi";
 import { AppStatCard } from "../../components/app-shell/AppStatCard";
 import { PurchaseSalesBlockDrawer } from "../../components/purchasing/PurchaseSalesBlockDrawer";
@@ -11,6 +11,9 @@ import {
 } from "./WarehouseDocumentLineActionsMenu";
 import { WarehouseDocumentLineDetailDrawer } from "./WarehouseDocumentLineDetailDrawer";
 import {
+  DeliveryDifferenceAcceptedBadge,
+  deliveryShortageQty,
+  hasDeliveryQuantityDiff,
   receiptLineDisplayName,
   receiptLineStatusLabel,
   WarehouseLineLocationCell,
@@ -102,9 +105,37 @@ export function WarehouseDocumentLinesSection({
     | { kind: "line_detail"; line: StockDocumentItemRead; index: number }
     | null;
 
-  const [drawer, setDrawer] = useState<DrawerState>(null);
+  type ConfirmDiffState = {
+    line: StockDocumentItemRead;
+    index: number;
+    ordered: number;
+    received: number;
+  };
 
-  function openLineAction(index: number, line: StockDocumentItemRead, kind: LineActionKind) {
+  const [drawer, setDrawer] = useState<DrawerState>(null);
+  const [confirmDiff, setConfirmDiff] = useState<ConfirmDiffState | null>(null);
+  const [acceptedDiffLineIds, setAcceptedDiffLineIds] = useState<Set<number>>(() => new Set());
+
+  useEffect(() => {
+    setAcceptedDiffLineIds(new Set());
+    setConfirmDiff(null);
+  }, [detail.id]);
+
+  function openLineAction(
+    index: number,
+    line: StockDocumentItemRead,
+    kind: LineActionKind,
+    received: number,
+  ) {
+    if (kind === "accept_delivery_diff") {
+      setConfirmDiff({
+        line,
+        index,
+        ordered: line.ordered_quantity,
+        received,
+      });
+      return;
+    }
     if (kind === "sales_block") {
       setDrawer({ kind: "sales_block", line, index });
       return;
@@ -114,6 +145,16 @@ export function WarehouseDocumentLinesSection({
       return;
     }
     setDrawer({ kind: "line_detail", line, index });
+  }
+
+  function confirmDeliveryDiffAcceptance() {
+    if (!confirmDiff) return;
+    setAcceptedDiffLineIds((prev) => {
+      const next = new Set(prev);
+      next.add(confirmDiff.line.id);
+      return next;
+    });
+    setConfirmDiff(null);
   }
 
   const actionCol = showPurchaseSalesBlock && !isWzDetail;
@@ -170,7 +211,8 @@ export function WarehouseDocumentLinesSection({
                     onCreateCarrier={onCreateCarrier}
                     onClearCarrier={onClearCarrier}
                     showActions={actionCol}
-                    onLineAction={(kind) => openLineAction(index, it, kind)}
+                    deliveryDiffAccepted={acceptedDiffLineIds.has(it.id)}
+                    onLineAction={(kind, received) => openLineAction(index, it, kind, received)}
                     tdCls={tdCls}
                   />
                 ))}
@@ -196,7 +238,23 @@ export function WarehouseDocumentLinesSection({
             lineIndex={
               drawer?.kind === "block_history" || drawer?.kind === "line_detail" ? drawer.index : 0
             }
+            deliveryDiffAccepted={
+              drawer?.kind === "line_detail" ? acceptedDiffLineIds.has(drawer.line.id) : false
+            }
             onClose={() => setDrawer(null)}
+          />
+
+          <DeliveryDiffConfirmDialog
+            open={confirmDiff != null}
+            ordered={confirmDiff?.ordered ?? 0}
+            received={confirmDiff?.received ?? 0}
+            lineLabel={
+              confirmDiff
+                ? `#${confirmDiff.index + 1} · ${receiptLineDisplayName(confirmDiff.line)}`
+                : ""
+            }
+            onCancel={() => setConfirmDiff(null)}
+            onConfirm={confirmDeliveryDiffAcceptance}
           />
 
           {lineSummary ? (
@@ -226,6 +284,7 @@ function LineRow({
   onCreateCarrier,
   onClearCarrier,
   showActions,
+  deliveryDiffAccepted,
   onLineAction,
   tdCls,
 }: {
@@ -242,7 +301,8 @@ function LineRow({
   onCreateCarrier: (lineId: number) => void;
   onClearCarrier: (lineId: number) => void;
   showActions: boolean;
-  onLineAction: (kind: LineActionKind) => void;
+  deliveryDiffAccepted: boolean;
+  onLineAction: (kind: LineActionKind, received: number) => void;
   tdCls: string;
 }) {
   const parseQty = (s: string | undefined): number | null => {
@@ -270,6 +330,9 @@ function LineRow({
   const statusLabel = isWzDetail ? wzLineStatusLabel(it) : receiptLineStatusLabel(it);
   const effectiveBlock = Number(it.sales_block_effective_qty ?? it.sales_blocked_qty ?? 0);
   const hasActiveBlock = effectiveBlock > 0;
+  const canAddSalesBlock = it.product_id != null && rec > 1e-6;
+  const hasQtyDiff = hasDeliveryQuantityDiff(it.ordered_quantity, rec);
+  const canAcceptDeliveryDiff = hasQtyDiff && !deliveryDiffAccepted;
 
   return (
     <tr className="transition-colors hover:bg-slate-50/40">
@@ -322,7 +385,10 @@ function LineRow({
         <WarehouseLineLocationCell it={it} isWz={isWzDetail} />
       </td>
       <td className={tdCls}>
-        <WarehouseLineStatusBadge label={statusLabel} />
+        <div className="flex flex-wrap items-center gap-1.5">
+          <WarehouseLineStatusBadge label={statusLabel} />
+          {deliveryDiffAccepted ? <DeliveryDifferenceAcceptedBadge received={rec} /> : null}
+        </div>
       </td>
       {!isWzDetail ? (
         <td className={`${tdCls} text-right tabular-nums text-sm font-semibold ${diffToneClass(diff)}`}>
@@ -353,7 +419,9 @@ function LineRow({
             lineId={it.id}
             hasProduct={it.product_id != null}
             hasActiveBlock={hasActiveBlock}
-            onAction={onLineAction}
+            canAddSalesBlock={canAddSalesBlock}
+            canAcceptDeliveryDiff={canAcceptDeliveryDiff}
+            onAction={(kind) => onLineAction(kind, rec)}
           />
         </td>
       ) : null}
@@ -417,6 +485,78 @@ function CarrierSuggestionCell({
         onChange={(e) => onSuggestedCarrierChange(lineId, e.target.value)}
         aria-label={`Kod nośnika sugerowanego dla pozycji ${lineId}`}
       />
+    </div>
+  );
+}
+
+function DeliveryDiffConfirmDialog({
+  open,
+  lineLabel,
+  ordered,
+  received,
+  onCancel,
+  onConfirm,
+}: {
+  open: boolean;
+  lineLabel: string;
+  ordered: number;
+  received: number;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  if (!open) return null;
+
+  const shortage = deliveryShortageQty(ordered, received);
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4"
+      role="presentation"
+      onClick={onCancel}
+    >
+      <div
+        role="dialog"
+        aria-labelledby="delivery-diff-confirm-title"
+        className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-5 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 id="delivery-diff-confirm-title" className="text-base font-semibold text-slate-900">
+          Zaakceptuj różnicę dostawy
+        </h2>
+        <p className="mt-1 text-xs text-slate-500">{lineLabel}</p>
+        <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-3 text-sm">
+          <dt className="text-slate-500">Zamówiono</dt>
+          <dd className="text-right font-medium tabular-nums text-slate-900">{fmtQty(ordered)}</dd>
+          <dt className="text-slate-500">Przyjęto</dt>
+          <dd className="text-right font-medium tabular-nums text-slate-900">{fmtQty(received)}</dd>
+          <dt className="text-slate-500">Brak</dt>
+          <dd className="text-right font-semibold tabular-nums text-red-600">{fmtQty(shortage)}</dd>
+        </dl>
+        <p className="mt-4 text-sm leading-relaxed text-slate-600">
+          Potwierdzasz, że różnica między ilością zamówioną a przyjętą jest znana i akceptowana.
+          Decyzja jest zapisana tylko w tej sesji widoku — nie zmienia stanu magazynowego.
+          Aby zaksięgować PZ, użyj przycisku „Zatwierdź przyjęcie” z aktualną ilością przyjętą.
+        </p>
+        <p className="mt-2 text-xs text-slate-500">
+          Blokada sprzedaży dotyczy wyłącznie towaru fizycznie przyjętego na magazyn.
+        </p>
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Anuluj
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-500"
+          >
+            Potwierdź
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

@@ -1,5 +1,13 @@
 # Change log
 
+## 2026-06-08 — PZ: UX akceptacji różnicy dostawy (bez backendu)
+
+- Menu ⋯: „Zaakceptuj różnicę dostawy” gdy `ordered > received` (lokalny stan sesji)
+- Badge „Niedobór zaakceptowany” / „Różnica zaakceptowana” w tabeli i szczegółach
+- Szczegóły pozycji: Zamówiono / Przyjęto / Brak
+- Ukryta „Dodaj blokadę sprzedaży” przy `received <= 0`
+- Zero zmian API, modelu, inventory, sales_block
+
 ## 2026-06-08 — Zakupy i planowanie: UI refactor (prototyp)
 
 - Nowy shell: `PurchasingModuleLayout` — sticky zakładki w ramce, podmiot + odśwież w pasku

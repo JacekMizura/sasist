@@ -2,6 +2,9 @@ import type { ReactNode } from "react";
 import type { StockDocumentItemRead } from "../../api/stockDocumentsApi";
 import { formatMoneyPl } from "../../utils/formatOrderMoney";
 import {
+  DeliveryDifferenceAcceptedBadge,
+  deliveryShortageQty,
+  hasDeliveryQuantityDiff,
   receiptLineDisplayName,
   receiptLineLocationCode,
   receiptLineStatusLabel,
@@ -17,6 +20,7 @@ type Props = {
   mode: Mode;
   line: StockDocumentItemRead | null;
   lineIndex: number;
+  deliveryDiffAccepted?: boolean;
   onClose: () => void;
 };
 
@@ -24,13 +28,24 @@ function fmtQty(n: number) {
   return new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 6 }).format(n);
 }
 
-export function WarehouseDocumentLineDetailDrawer({ open, mode, line, lineIndex, onClose }: Props) {
+export function WarehouseDocumentLineDetailDrawer({
+  open,
+  mode,
+  line,
+  lineIndex,
+  deliveryDiffAccepted = false,
+  onClose,
+}: Props) {
   if (!open || line == null) return null;
 
   const title = mode === "detail" ? "Szczegóły pozycji" : "Historia blokad";
   const ean = (line.product_ean || "").trim();
   const sku = (line.product_sku || "").trim();
   const effectiveBlock = Number(line.sales_block_effective_qty ?? line.sales_blocked_qty ?? 0);
+  const ordered = Number(line.ordered_quantity) || 0;
+  const received = Number(line.received_quantity) || 0;
+  const shortage = deliveryShortageQty(ordered, received);
+  const showShortage = hasDeliveryQuantityDiff(ordered, received);
 
   return (
     <div
@@ -68,11 +83,21 @@ export function WarehouseDocumentLineDetailDrawer({ open, mode, line, lineIndex,
               </DetailRow>
               <DetailRow label="EAN">{ean || "—"}</DetailRow>
               <DetailRow label="SKU">{sku || "—"}</DetailRow>
-              <DetailRow label="Zamówiono">{fmtQty(line.ordered_quantity)}</DetailRow>
-              <DetailRow label="Przyjęto">{fmtQty(line.received_quantity)}</DetailRow>
-              <DetailRow label="Różnica">{fmtQty(line.received_quantity - line.ordered_quantity)}</DetailRow>
+              <DetailRow label="Zamówiono">{fmtQty(ordered)}</DetailRow>
+              <DetailRow label="Przyjęto">{fmtQty(received)}</DetailRow>
+              {showShortage ? (
+                <DetailRow label="Brak">
+                  <span className="font-semibold tabular-nums text-red-600">{fmtQty(shortage)}</span>
+                </DetailRow>
+              ) : null}
+              <DetailRow label="Różnica">{fmtQty(received - ordered)}</DetailRow>
               <DetailRow label="Status">
-                <WarehouseLineStatusBadge label={receiptLineStatusLabel(line)} />
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <WarehouseLineStatusBadge label={receiptLineStatusLabel(line)} />
+                  {deliveryDiffAccepted ? (
+                    <DeliveryDifferenceAcceptedBadge received={received} />
+                  ) : null}
+                </div>
               </DetailRow>
               <DetailRow label="Lokalizacja">
                 <WarehouseLineLocationCell it={line} isWz={false} />

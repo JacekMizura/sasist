@@ -101,6 +101,35 @@ export function receiptLineStatusLabel(it: StockDocumentItemRead): string {
   }
 }
 
+const QTY_EPS = 1e-6;
+
+/** Linia PZ z różnicą dostawy: zamówiono więcej niż przyjęto. */
+export function hasDeliveryQuantityDiff(ordered: number, received: number): boolean {
+  return ordered > QTY_EPS && received + QTY_EPS < ordered;
+}
+
+/** Brak dostawy (zamówiono − przyjęto), nieujemny. */
+export function deliveryShortageQty(ordered: number, received: number): number {
+  if (!hasDeliveryQuantityDiff(ordered, received)) return 0;
+  return Math.max(0, ordered - received);
+}
+
+export function deliveryDifferenceAcceptedLabel(received: number): string {
+  return received <= QTY_EPS ? "Niedobór zaakceptowany" : "Różnica zaakceptowana";
+}
+
+export function DeliveryDifferenceAcceptedBadge({ received }: { received: number }) {
+  const label = deliveryDifferenceAcceptedLabel(received);
+  return (
+    <span
+      className={`${statusPill} bg-violet-50 text-violet-900 ring-violet-200/90`}
+      title="Decyzja zapisana lokalnie w tej sesji — nie zmienia danych magazynowych"
+    >
+      {label}
+    </span>
+  );
+}
+
 export function wzLineStatusLabel(it: StockDocumentItemRead): string {
   const q = Number(it.quantity) || Number(it.ordered_quantity) || 0;
   if (q > 1e-6) return "Wydano";
