@@ -1,17 +1,21 @@
-import { Fragment } from "react";
+import { useState } from "react";
 import type { StockDocumentItemRead, StockDocumentRead } from "../../api/stockDocumentsApi";
 import { AppStatCard } from "../../components/app-shell/AppStatCard";
-import { PurchaseSalesBlockLinePanel } from "../../components/purchasing/PurchaseSalesBlockLinePanel";
+import { PurchaseSalesBlockDrawer } from "../../components/purchasing/PurchaseSalesBlockDrawer";
 import { CarrierBadge } from "../../components/warehouse/carriers/CarrierBadge";
 import { formatMoneyPl } from "../../utils/formatOrderMoney";
 import { wmsReceiptLineImageUrl } from "../../utils/wmsReceiptLineMedia";
+import {
+  WarehouseDocumentLineActionsMenu,
+  type LineActionKind,
+} from "./WarehouseDocumentLineActionsMenu";
+import { WarehouseDocumentLineDetailDrawer } from "./WarehouseDocumentLineDetailDrawer";
 import {
   receiptLineDisplayName,
   receiptLineStatusLabel,
   WarehouseLineLocationCell,
   WarehouseLineProductThumb,
   WarehouseLineStatusBadge,
-  WarehouseLineTypeBadge,
   wzLineStatusLabel,
 } from "./warehouseDocumentLineUi";
 
@@ -88,8 +92,31 @@ export function WarehouseDocumentLinesSection({
   lineSummary,
 }: Props) {
   const thCls =
-    "px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500";
+    "px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500";
   const thRightCls = `${thCls} text-right`;
+  const tdCls = "px-3 py-2 align-middle";
+
+  type DrawerState =
+    | { kind: "sales_block"; line: StockDocumentItemRead; index: number }
+    | { kind: "block_history"; line: StockDocumentItemRead; index: number }
+    | { kind: "line_detail"; line: StockDocumentItemRead; index: number }
+    | null;
+
+  const [drawer, setDrawer] = useState<DrawerState>(null);
+
+  function openLineAction(index: number, line: StockDocumentItemRead, kind: LineActionKind) {
+    if (kind === "sales_block") {
+      setDrawer({ kind: "sales_block", line, index });
+      return;
+    }
+    if (kind === "block_history") {
+      setDrawer({ kind: "block_history", line, index });
+      return;
+    }
+    setDrawer({ kind: "line_detail", line, index });
+  }
+
+  const actionCol = showPurchaseSalesBlock && !isWzDetail;
 
   return (
     <section className="overflow-hidden rounded-xl border border-slate-200/90 bg-white">
@@ -102,11 +129,11 @@ export function WarehouseDocumentLinesSection({
       ) : (
         <>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1280px] text-sm">
+            <table className="w-full min-w-[1180px] text-sm">
               <thead>
                 <tr className="border-b border-slate-100">
-                  <th className={thCls}>Typ</th>
-                  <th className={`${thCls} pl-4`}>Nazwa</th>
+                  <th className={`${thCls} w-10 text-center`}>#</th>
+                  <th className={`${thCls} pl-2`}>Nazwa</th>
                   <th className={thRightCls}>{isWzDetail ? "Ilość" : "Zamówiono"}</th>
                   {!isWzDetail ? <th className={thRightCls}>Przyjęto</th> : null}
                   {lineEditEnabled ? (
@@ -114,50 +141,63 @@ export function WarehouseDocumentLinesSection({
                       Nośnik <span className="font-normal normal-case text-slate-400">(sugestia)</span>
                     </th>
                   ) : null}
-                  <th className={thRightCls}>Jedn.</th>
                   <th className={thCls}>Lokalizacja</th>
                   <th className={thCls}>Status</th>
                   {!isWzDetail ? <th className={thRightCls}>Różnica</th> : null}
+                  <th className={thRightCls}>Jedn.</th>
                   <th className={thRightCls}>VAT</th>
                   <th className={thRightCls}>Cena netto</th>
                   <th className={thRightCls}>Wartość netto</th>
                   <th className={thRightCls}>Cena brutto</th>
                   <th className={thRightCls}>Wartość brutto</th>
+                  {actionCol ? <th className={`${thCls} w-12 text-center`}>Akcje</th> : null}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {detail.items.map((it) => (
-                  <Fragment key={it.id}>
-                    <LineRow
-                      it={it}
-                      isWzDetail={isWzDetail}
-                      lineEditEnabled={lineEditEnabled}
-                      inputClass={inputClass}
-                      receivedRaw={receivedByLineId[it.id]}
-                      suggestedCarrier={suggestedCarrierBarcodeByLineId[it.id]}
-                      onReceivedChange={onReceivedChange}
-                      onSuggestedCarrierChange={onSuggestedCarrierChange}
-                      onAssignCarrier={onAssignCarrier}
-                      onCreateCarrier={onCreateCarrier}
-                      onClearCarrier={onClearCarrier}
-                    />
-                    {showPurchaseSalesBlock && it.product_id != null ? (
-                      <tr className="bg-amber-50/20">
-                        <td colSpan={isWzDetail ? 11 : 12} className="px-4 pb-4 pt-0">
-                          <PurchaseSalesBlockLinePanel
-                            tenantId={tenantId}
-                            documentId={detail.id}
-                            line={it}
-                            onUpdated={() => onSalesBlockUpdated?.()}
-                          />
-                        </td>
-                      </tr>
-                    ) : null}
-                  </Fragment>
+                {detail.items.map((it, index) => (
+                  <LineRow
+                    key={it.id}
+                    index={index}
+                    it={it}
+                    isWzDetail={isWzDetail}
+                    lineEditEnabled={lineEditEnabled}
+                    inputClass={inputClass}
+                    receivedRaw={receivedByLineId[it.id]}
+                    suggestedCarrier={suggestedCarrierBarcodeByLineId[it.id]}
+                    onReceivedChange={onReceivedChange}
+                    onSuggestedCarrierChange={onSuggestedCarrierChange}
+                    onAssignCarrier={onAssignCarrier}
+                    onCreateCarrier={onCreateCarrier}
+                    onClearCarrier={onClearCarrier}
+                    showActions={actionCol}
+                    onLineAction={(kind) => openLineAction(index, it, kind)}
+                    tdCls={tdCls}
+                  />
                 ))}
               </tbody>
             </table>
           </div>
+
+          <PurchaseSalesBlockDrawer
+            open={drawer?.kind === "sales_block"}
+            tenantId={tenantId}
+            documentId={detail.id}
+            line={drawer?.kind === "sales_block" ? drawer.line : null}
+            lineIndex={drawer?.kind === "sales_block" ? drawer.index : 0}
+            onClose={() => setDrawer(null)}
+            onUpdated={() => onSalesBlockUpdated?.()}
+          />
+          <WarehouseDocumentLineDetailDrawer
+            open={drawer?.kind === "block_history" || drawer?.kind === "line_detail"}
+            mode={drawer?.kind === "block_history" ? "block_history" : "detail"}
+            line={
+              drawer?.kind === "block_history" || drawer?.kind === "line_detail" ? drawer.line : null
+            }
+            lineIndex={
+              drawer?.kind === "block_history" || drawer?.kind === "line_detail" ? drawer.index : 0
+            }
+            onClose={() => setDrawer(null)}
+          />
 
           {lineSummary ? (
             <WarehouseDocumentSummaryPanel
@@ -173,6 +213,7 @@ export function WarehouseDocumentLinesSection({
 }
 
 function LineRow({
+  index,
   it,
   isWzDetail,
   lineEditEnabled,
@@ -184,7 +225,11 @@ function LineRow({
   onAssignCarrier,
   onCreateCarrier,
   onClearCarrier,
+  showActions,
+  onLineAction,
+  tdCls,
 }: {
+  index: number;
   it: StockDocumentItemRead;
   isWzDetail: boolean;
   lineEditEnabled: boolean;
@@ -196,6 +241,9 @@ function LineRow({
   onAssignCarrier: (lineId: number) => void;
   onCreateCarrier: (lineId: number) => void;
   onClearCarrier: (lineId: number) => void;
+  showActions: boolean;
+  onLineAction: (kind: LineActionKind) => void;
+  tdCls: string;
 }) {
   const parseQty = (s: string | undefined): number | null => {
     const t = (s ?? "").trim().replace(",", ".");
@@ -220,44 +268,45 @@ function LineRow({
   const ean = (it.product_ean || "").trim();
   const sku = (it.product_sku || "").trim();
   const statusLabel = isWzDetail ? wzLineStatusLabel(it) : receiptLineStatusLabel(it);
-  const lineType = it.receipt_line_type ?? it.item_type;
+  const effectiveBlock = Number(it.sales_block_effective_qty ?? it.sales_blocked_qty ?? 0);
+  const hasActiveBlock = effectiveBlock > 0;
 
   return (
     <tr className="transition-colors hover:bg-slate-50/40">
-      <td className="px-3 py-3 align-middle">
-        <WarehouseLineTypeBadge type={lineType} />
+      <td className={`${tdCls} text-center tabular-nums text-xs font-semibold text-slate-500`}>
+        {index + 1}
       </td>
-      <td className="px-4 py-3">
-        <div className="flex items-start gap-3">
+      <td className={`${tdCls} pl-2`}>
+        <div className="flex items-center gap-2.5">
           <WarehouseLineProductThumb url={wmsReceiptLineImageUrl(it)} />
           <div className="min-w-0 flex-1">
-            <div className="font-medium leading-snug text-slate-900">{receiptLineDisplayName(it)}</div>
-            <div className="mt-0.5 text-xs text-slate-500">
+            <div className="text-sm font-medium leading-tight text-slate-900">{receiptLineDisplayName(it)}</div>
+            <div className="mt-0.5 text-[11px] leading-tight text-slate-500">
               {ean ? `EAN ${ean}` : "EAN —"}
               {sku ? ` · SKU ${sku}` : " · SKU —"}
             </div>
           </div>
         </div>
       </td>
-      <td className="px-3 py-3 text-right align-middle tabular-nums text-slate-800">{fmtQty(qty)}</td>
+      <td className={`${tdCls} text-right tabular-nums font-medium text-slate-800`}>{fmtQty(qty)}</td>
       {!isWzDetail ? (
-        <td className="px-3 py-3 text-right align-middle tabular-nums">
+        <td className={`${tdCls} text-right tabular-nums`}>
           {lineEditEnabled ? (
             <input
               type="text"
               inputMode="decimal"
-              className={`${inputClass} inline-block w-[6.5rem]`}
+              className={`${inputClass} inline-block w-[5.5rem] py-1.5 text-sm`}
               value={receivedRaw ?? ""}
               onChange={(e) => onReceivedChange(it.id, e.target.value)}
-              aria-label={`Przyjęto dla pozycji ${it.id}`}
+              aria-label={`Przyjęto dla pozycji ${index + 1}`}
             />
           ) : (
-            <span className="text-slate-900">{fmtQty(it.received_quantity)}</span>
+            <span className="font-medium text-slate-900">{fmtQty(it.received_quantity)}</span>
           )}
         </td>
       ) : null}
       {lineEditEnabled ? (
-        <td className="px-3 py-3 align-middle">
+        <td className={tdCls}>
           <CarrierSuggestionCell
             lineId={it.id}
             suggestedCarrier={suggestedCarrier}
@@ -269,35 +318,45 @@ function LineRow({
           />
         </td>
       ) : null}
-      <td className="px-3 py-3 text-right align-middle text-slate-600">
-        {(it.line_unit || "").trim() || "—"}
-      </td>
-      <td className="px-3 py-3 align-middle">
+      <td className={tdCls}>
         <WarehouseLineLocationCell it={it} isWz={isWzDetail} />
       </td>
-      <td className="px-3 py-3 align-middle">
+      <td className={tdCls}>
         <WarehouseLineStatusBadge label={statusLabel} />
       </td>
       {!isWzDetail ? (
-        <td className={`px-3 py-3 text-right align-middle tabular-nums font-medium ${diffToneClass(diff)}`}>
+        <td className={`${tdCls} text-right tabular-nums text-sm font-semibold ${diffToneClass(diff)}`}>
           {fmtQty(diff)}
         </td>
       ) : null}
-      <td className="px-3 py-3 text-right align-middle tabular-nums text-slate-600">
+      <td className={`${tdCls} text-right text-xs text-slate-600`}>
+        {(it.line_unit || "").trim() || "—"}
+      </td>
+      <td className={`${tdCls} text-right tabular-nums text-xs text-slate-600`}>
         {fmtVatRate(it.vat_rate)}
       </td>
-      <td className="px-3 py-3 text-right align-middle tabular-nums text-slate-700">
+      <td className={`${tdCls} text-right tabular-nums text-xs text-slate-700`}>
         {price != null ? fmtMoney(price) : "—"}
       </td>
-      <td className="px-3 py-3 text-right align-middle tabular-nums font-medium text-slate-900">
+      <td className={`${tdCls} text-right tabular-nums text-sm font-medium text-slate-900`}>
         {valNet != null ? fmtMoney(valNet) : "—"}
       </td>
-      <td className="px-3 py-3 text-right align-middle tabular-nums text-slate-700">
+      <td className={`${tdCls} text-right tabular-nums text-xs text-slate-700`}>
         {priceGross != null ? fmtMoney(priceGross) : "—"}
       </td>
-      <td className="px-3 py-3 text-right align-middle tabular-nums font-medium text-slate-900">
+      <td className={`${tdCls} text-right tabular-nums text-sm font-medium text-slate-900`}>
         {valGross != null ? fmtMoney(valGross) : "—"}
       </td>
+      {showActions ? (
+        <td className={`${tdCls} text-center`}>
+          <WarehouseDocumentLineActionsMenu
+            lineId={it.id}
+            hasProduct={it.product_id != null}
+            hasActiveBlock={hasActiveBlock}
+            onAction={onLineAction}
+          />
+        </td>
+      ) : null}
     </tr>
   );
 }

@@ -11,12 +11,19 @@ type Props = {
   documentId: number;
   line: StockDocumentItemRead;
   onUpdated: () => void;
+  variant?: "inline" | "drawer";
 };
 
 const inputClass =
   "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-amber-400 focus:ring-2 focus:ring-amber-200";
 
-export function PurchaseSalesBlockLinePanel({ tenantId, documentId, line, onUpdated }: Props) {
+export function PurchaseSalesBlockLinePanel({
+  tenantId,
+  documentId,
+  line,
+  onUpdated,
+  variant = "inline",
+}: Props) {
   const [blockedQty, setBlockedQty] = useState(String(line.sales_blocked_qty ?? 0));
   const [reason, setReason] = useState<SalesBlockReasonCode | "">(
     (line.sales_block_reason_code as SalesBlockReasonCode) || "",
@@ -65,9 +72,16 @@ export function PurchaseSalesBlockLinePanel({ tenantId, documentId, line, onUpda
     }
   }
 
+  const shellClass =
+    variant === "drawer"
+      ? "text-sm"
+      : "mt-2 rounded-lg border border-amber-200/80 bg-amber-50/60 px-3 py-3 text-sm";
+
   return (
-    <div className="mt-2 rounded-lg border border-amber-200/80 bg-amber-50/60 px-3 py-3 text-sm">
-      <p className="text-[11px] font-bold uppercase tracking-wide text-amber-900/80">Blokada sprzedaży</p>
+    <div className={shellClass}>
+      {variant === "inline" ? (
+        <p className="text-[11px] font-bold uppercase tracking-wide text-amber-900/80">Blokada sprzedaży</p>
+      ) : null}
       <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
         <label className="block text-xs text-slate-600">
           Ilość niedopuszczona do sprzedaży
