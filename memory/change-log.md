@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-06-08 — Zakupy Faza 3: operacyjny pulpit + unified KPI
+
+- `PlanningDashboard`: copy operacyjne, 5 Quick Actions (Dostawcy, Oszczędności), nawigacja z tabel, poprawione nazwy sekcji PZ
+- `PurchasingKpiCard`: styl „Balanced” (rounded-2xl, ikona po prawej, opcjonalny badge trendu)
+- `PurchasingKpiGrid`: gap-6 — propagacja na wszystkie zakładki modułu
+
 ## 2026-06-08 — Zakupy Faza 2.5: cleanup UI po unifikacji
 
 - Usunięto z barrel `ui/index.ts`: `purchasingFilterLabelClass`, `PurchasingSectionHeader` (komponent zostaje wewnętrzny w `PurchasingDataPanel`)

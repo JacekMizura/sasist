@@ -1,5 +1,5 @@
 export { PurchasingKpiCard } from "./PurchasingKpiCard";
-export type { PurchasingKpiTone } from "./PurchasingKpiCard";
+export type { PurchasingKpiTone, PurchasingKpiTrendSentiment } from "./PurchasingKpiCard";
 export { PurchasingTableHeader } from "./PurchasingTableHeader";
 export { PurchasingStatusBadge } from "./PurchasingStatusBadge";
 export { PurchasingDataPanel } from "./PurchasingDataPanel";

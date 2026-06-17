@@ -1,37 +1,26 @@
 import { memo, type ReactNode } from "react";
+import { Minus, TrendingDown, TrendingUp } from "lucide-react";
 import { Link } from "react-router-dom";
 
 export type PurchasingKpiTone = "default" | "red" | "amber" | "blue" | "emerald" | "indigo" | "purple" | "yellow";
 
-const ACCENT: Record<PurchasingKpiTone, string> = {
-  default: "border-l-transparent",
-  red: "border-l-red-500",
-  amber: "border-l-amber-400",
-  blue: "border-l-blue-500",
-  emerald: "border-l-emerald-500",
-  indigo: "border-l-indigo-500",
-  purple: "border-l-purple-500",
-  yellow: "border-l-yellow-400",
+export type PurchasingKpiTrendSentiment = "good" | "bad" | "neutral";
+
+const TONE_HEX: Record<PurchasingKpiTone, string> = {
+  default: "#64748b",
+  red: "#ef4444",
+  amber: "#f59e0b",
+  blue: "#3b82f6",
+  emerald: "#10b981",
+  indigo: "#6366f1",
+  purple: "#a855f7",
+  yellow: "#eab308",
 };
 
-const VALUE_COLOR: Partial<Record<PurchasingKpiTone, string>> = {
-  red: "text-red-600",
-  amber: "text-amber-700",
-  blue: "text-blue-600",
-  emerald: "text-emerald-600",
-  indigo: "text-indigo-600",
-  purple: "text-purple-700",
-  yellow: "text-yellow-700",
-};
-
-const ICON_BG: Partial<Record<PurchasingKpiTone, string>> = {
-  red: "bg-red-50",
-  amber: "bg-amber-50",
-  blue: "bg-blue-50",
-  emerald: "bg-emerald-50",
-  indigo: "bg-indigo-50",
-  purple: "bg-purple-50",
-  yellow: "bg-yellow-50",
+const TREND_CLASS: Record<PurchasingKpiTrendSentiment, string> = {
+  good: "text-emerald-700 bg-emerald-100/60",
+  bad: "text-red-700 bg-red-100/60",
+  neutral: "text-slate-600 bg-slate-100",
 };
 
 type Props = {
@@ -41,26 +30,72 @@ type Props = {
   icon?: ReactNode;
   tone?: PurchasingKpiTone;
   className?: string;
+  /** Opcjonalny badge trendu — tylko gdy dane są dostępne w ekranie nadrzędnym. */
+  trend?: {
+    label: string;
+    sentiment?: PurchasingKpiTrendSentiment;
+  };
   /** Nawigacja — karta staje się klikalna (tylko UX, bez zmiany danych). */
   to?: string;
 };
 
-function PurchasingKpiCardInner({ title, value, subtitle, icon, tone = "default", className = "", to }: Props) {
-  const cardClass = `relative flex flex-col justify-between overflow-hidden rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow border-l-4 ${ACCENT[tone]} ${
-    to ? "hover:shadow-md hover:border-slate-300" : ""
-  } ${className}`.trim();
+function trendIcon(label: string, sentiment: PurchasingKpiTrendSentiment) {
+  if (sentiment !== "neutral") {
+    return label.includes("-") ? TrendingDown : TrendingUp;
+  }
+  if (label.includes("+")) return TrendingUp;
+  if (label.includes("-")) return TrendingDown;
+  return Minus;
+}
+
+function PurchasingKpiCardInner({
+  title,
+  value,
+  subtitle,
+  icon,
+  tone = "default",
+  className = "",
+  trend,
+  to,
+}: Props) {
+  const hex = TONE_HEX[tone];
+  const cardClass = [
+    "relative flex min-h-[148px] flex-col rounded-2xl border border-slate-100 bg-white p-6 shadow-sm transition-all duration-300",
+    to ? "cursor-pointer hover:border-slate-200 hover:shadow-md" : "",
+    className,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const trendSentiment = trend?.sentiment ?? "neutral";
+  const TrendIcon = trend ? trendIcon(trend.label, trendSentiment) : null;
 
   const inner = (
     <>
-      <div className="mb-4 flex items-start justify-between">
-        <h3 className="w-3/4 text-[11px] font-bold uppercase tracking-widest text-slate-500">{title}</h3>
-        {icon ? <div className={`rounded-lg p-2 ${ICON_BG[tone] ?? "bg-slate-50"}`}>{icon}</div> : null}
+      <div className="mb-6 flex items-center justify-between gap-3">
+        <h3 className="text-sm font-semibold text-slate-500">{title}</h3>
+        {icon ? (
+          <div
+            className="shrink-0 rounded-xl p-2.5 [&_svg]:h-5 [&_svg]:w-5 [&_svg]:stroke-[2]"
+            style={{ backgroundColor: `${hex}26`, color: hex }}
+          >
+            {icon}
+          </div>
+        ) : null}
       </div>
-      <div>
-        <div className={`mb-1 text-3xl font-extrabold tracking-tight tabular-nums ${VALUE_COLOR[tone] ?? "text-slate-800"}`}>
-          {value}
+      <div className="mt-auto">
+        <div className="mb-2 flex flex-wrap items-end gap-3">
+          <div className="text-4xl font-bold tracking-tight tabular-nums text-slate-800">{value}</div>
+          {trend && TrendIcon ? (
+            <div
+              className={`mb-1 flex items-center gap-1 rounded-md px-2 py-1 text-xs font-bold ${TREND_CLASS[trendSentiment]}`}
+            >
+              <TrendIcon className="h-3.5 w-3.5" strokeWidth={2.5} aria-hidden />
+              {trend.label}
+            </div>
+          ) : null}
         </div>
-        {subtitle ? <div className="text-xs text-slate-400">{subtitle}</div> : <div className="text-xs text-transparent select-none">{"\u00A0"}</div>}
+        {subtitle ? <div className="text-xs font-medium text-slate-400">{subtitle}</div> : null}
       </div>
     </>
   );

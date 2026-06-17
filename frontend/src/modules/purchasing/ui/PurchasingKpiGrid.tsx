@@ -15,7 +15,7 @@ const COL_CLASS: Record<NonNullable<Props["columns"]>, string> = {
 
 function PurchasingKpiGridInner({ children, columns = 4, className = "" }: Props) {
   return (
-    <div className={`grid grid-cols-1 gap-4 ${COL_CLASS[columns]} ${className}`.trim()}>{children}</div>
+    <div className={`grid grid-cols-1 gap-6 ${COL_CLASS[columns]} ${className}`.trim()}>{children}</div>
   );
 }
 
