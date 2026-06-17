@@ -20,4 +20,4 @@ COPY run_server.py ./
 
 EXPOSE 8000
 
-CMD ["python", "run_server.py"]
+CMD ["python3", "run_server.py"]

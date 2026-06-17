@@ -14,7 +14,7 @@ watchPatterns = [
 ]
 
 [deploy]
-startCommand = "python run_server.py"
+startCommand = "python3 run_server.py"
 healthcheckPath = "/healthz"
 healthcheckTimeout = 300
 restartPolicyType = "on_failure"

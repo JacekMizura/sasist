@@ -24,7 +24,7 @@ That means the service is building a **Node** app (usually Root Directory = `fro
 |--------|------------------------|
 | **Root Directory** | `/` (empty / repo root) — **not** `frontend`, **not** `backend` alone |
 | **Config file** | `/railway.toml` (path is from repo root; it does **not** follow Root Directory) |
-| **Start command** | leave empty to use config, or `python run_server.py` |
+| **Start command** | leave empty to use config, or `python3 run_server.py` |
 | **Builder** | Nixpacks (uses repo `nixpacks.toml`) |
 
 Why not `backend/` as root? `requirements.txt` and `run_server.py` live at **repo root**. Root `backend/` alone would miss them.
@@ -60,7 +60,7 @@ If `router_routes=0` or `CRITICAL: no /api/wms/returns/*`, the router did not re
 | File | Role |
 |------|------|
 | `nixpacks.toml` | `providers = ["python"]` — ignores root `package.json` |
-| `railway.toml` / `railway.json` | Start: `python run_server.py`, health: `/healthz` |
+| `railway.toml` / `railway.json` | Start: `python3 run_server.py`, health: `/healthz` |
 | `requirements.txt` | Python dependencies |
 | `run_server.py` | Uvicorn entry (`backend.main:app`) |
 | `Procfile` | `web: python3 -m backend` (Heroku-style; Railway uses `railway.toml`) |
