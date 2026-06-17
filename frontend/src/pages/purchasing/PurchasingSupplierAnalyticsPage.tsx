@@ -265,7 +265,6 @@ export default function PurchasingSupplierAnalyticsPage() {
           <PurchasingTableSection title="Ranking dostawców" indicatorClass="bg-indigo-500">
             <table className="min-w-full text-left text-sm">
               <PurchasingTableHeader
-                compact
                 headers={[
                   "#",
                   "Dostawca",

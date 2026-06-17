@@ -581,7 +581,7 @@ export default function PurchasingAlertsPage() {
           <>
             <PurchasingTableSection title="Lista problemów" indicatorClass="bg-orange-500">
               <table className="min-w-full text-left text-sm">
-                <PurchasingTableHeader compact>
+                <PurchasingTableHeader>
                   <tr>
                     <th className="pb-2 pr-2">
                       <input

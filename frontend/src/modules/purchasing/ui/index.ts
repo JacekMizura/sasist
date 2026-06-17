@@ -1,6 +1,5 @@
 export { PurchasingKpiCard } from "./PurchasingKpiCard";
 export type { PurchasingKpiTone } from "./PurchasingKpiCard";
-export { PurchasingSectionHeader } from "./PurchasingSectionHeader";
 export { PurchasingTableHeader } from "./PurchasingTableHeader";
 export { PurchasingStatusBadge } from "./PurchasingStatusBadge";
 export { PurchasingDataPanel } from "./PurchasingDataPanel";
@@ -12,7 +11,7 @@ export {
   purchasingFilterButtonClass,
   purchasingFilterPrimaryButtonClass,
 } from "./PurchasingFilterBar";
-export { purchasingSelectClass, purchasingInputClass, purchasingFilterLabelClass } from "./purchasingFormStyles";
+export { purchasingSelectClass, purchasingInputClass } from "./purchasingFormStyles";
 export { PurchasingKpiGrid } from "./PurchasingKpiGrid";
 export { PurchasingAnalysisSection } from "./PurchasingAnalysisSection";
 export { PurchasingTableSection } from "./PurchasingTableSection";

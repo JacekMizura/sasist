@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-06-08 — Zakupy Faza 2.5: cleanup UI po unifikacji
+
+- Usunięto z barrel `ui/index.ts`: `purchasingFilterLabelClass`, `PurchasingSectionHeader` (komponent zostaje wewnętrzny w `PurchasingDataPanel`)
+- `PurchasingTableHeader`: usunięto prop `compact`; domyślny padding nagłówka `px-3 py-3`; Pulpit + PO zachowują `px-6 py-4` przez wariant `children`
+- Przeszukanie `modules/purchasing/**`: brak dodatkowych martwych helperów / nieużywanych importów do usunięcia
+
 ## 2026-06-08 — Zakupy Faza 2: Alerty + Generator UX
 
 - `PurchasingAlertsPage`: usunięto lokalne `KpiCard`/`SectionCard` → `PageShell` + wspólne KPI/Filter/Table/Analysis

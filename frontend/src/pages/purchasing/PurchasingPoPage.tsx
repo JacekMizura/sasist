@@ -124,10 +124,18 @@ export default function PurchasingPoPage() {
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[900px] text-left text-sm">
-              <PurchasingTableHeader
-                headers={["Numer", "Dostawca", "Utworzono", "Oczekiwana", "Pozycje", "Razem", "Status", "Akcje"]}
-                align={["left", "left", "left", "left", "center", "right", "center", "right"]}
-              />
+              <PurchasingTableHeader>
+                <tr>
+                  <th className="px-6 py-4 text-left">Numer</th>
+                  <th className="px-6 py-4 text-left">Dostawca</th>
+                  <th className="px-6 py-4 text-left">Utworzono</th>
+                  <th className="px-6 py-4 text-left">Oczekiwana</th>
+                  <th className="px-6 py-4 text-center">Pozycje</th>
+                  <th className="px-6 py-4 text-right">Razem</th>
+                  <th className="px-6 py-4 text-center">Status</th>
+                  <th className="px-6 py-4 text-right">Akcje</th>
+                </tr>
+              </PurchasingTableHeader>
               <tbody className="divide-y divide-slate-100">
                 {rows.length === 0 ? (
                   <tr>

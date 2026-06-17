@@ -342,7 +342,6 @@ export default function PurchasingPriceOpportunitiesPage() {
           <PurchasingTableSection title="Okazje cenowe" indicatorClass="bg-emerald-500">
             <table className="min-w-[960px] w-full border-collapse text-left text-sm">
               <PurchasingTableHeader
-                compact
                 headers={[
                   "Typ",
                   "Produkt",

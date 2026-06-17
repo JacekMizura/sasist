@@ -193,10 +193,16 @@ function PlanningDashboardInner() {
                   <p className="px-6 py-8 text-sm text-slate-500">Brak pozycji spełniających kryterium.</p>
                 ) : (
                   <table className="w-full text-left text-sm">
-                    <PurchasingTableHeader
-                      headers={["Produkt", "Stan", "Śr./Dzień", "Dni", "Dostawca", ""]}
-                      align={["left", "right", "right", "center", "left", "right"]}
-                    />
+                    <PurchasingTableHeader>
+                      <tr>
+                        <th className="px-6 py-4 text-left">Produkt</th>
+                        <th className="px-6 py-4 text-right">Stan</th>
+                        <th className="px-6 py-4 text-right">Śr./Dzień</th>
+                        <th className="px-6 py-4 text-center">Dni</th>
+                        <th className="px-6 py-4 text-left">Dostawca</th>
+                        <th className="px-6 py-4 text-right" />
+                      </tr>
+                    </PurchasingTableHeader>
                     <tbody className="divide-y divide-slate-100">
                       {data.critical_products.map((r) => (
                         <tr key={r.product_id} className="group transition-colors hover:bg-blue-50/30">
@@ -237,10 +243,14 @@ function PlanningDashboardInner() {
                   </p>
                 ) : (
                   <table className="w-full text-left text-sm">
-                    <PurchasingTableHeader
-                      headers={["Produkt", "Sug. Ilość", "Dostawca", "Szac. Koszt"]}
-                      align={["left", "right", "left", "right"]}
-                    />
+                    <PurchasingTableHeader>
+                      <tr>
+                        <th className="px-6 py-4 text-left">Produkt</th>
+                        <th className="px-6 py-4 text-right">Sug. Ilość</th>
+                        <th className="px-6 py-4 text-left">Dostawca</th>
+                        <th className="px-6 py-4 text-right">Szac. Koszt</th>
+                      </tr>
+                    </PurchasingTableHeader>
                     <tbody className="divide-y divide-slate-100">
                       {data.suggested_orders.map((r) => (
                         <tr key={r.product_id} className="transition-colors hover:bg-blue-50/30">
@@ -268,10 +278,15 @@ function PlanningDashboardInner() {
                 <p className="px-6 py-8 text-sm text-slate-500">Brak dokumentów dostaw w bazie.</p>
               ) : (
                 <table className="w-full text-left text-sm">
-                  <PurchasingTableHeader
-                    headers={["Numer / Nazwa", "Dostawca", "Status", "Data", "Akcje"]}
-                    align={["left", "left", "left", "left", "right"]}
-                  />
+                  <PurchasingTableHeader>
+                    <tr>
+                      <th className="px-6 py-4 text-left">Numer / Nazwa</th>
+                      <th className="px-6 py-4 text-left">Dostawca</th>
+                      <th className="px-6 py-4 text-left">Status</th>
+                      <th className="px-6 py-4 text-left">Data</th>
+                      <th className="px-6 py-4 text-right">Akcje</th>
+                    </tr>
+                  </PurchasingTableHeader>
                   <tbody className="divide-y divide-slate-100">
                     {data.recent_orders.map((r) => (
                       <tr key={r.id} className="transition-colors hover:bg-blue-50/30">

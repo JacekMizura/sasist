@@ -157,7 +157,6 @@ export default function PurchasingCooperationHistoryPage() {
             <PurchasingTableSection title="Ostatnie dokumenty" indicatorClass="bg-slate-500">
               <table className="min-w-full text-sm">
                 <PurchasingTableHeader
-                  compact
                   headers={["Typ", "Dokument", "Data", "Status", "Netto", "Brutto"]}
                   align={["left", "left", "left", "left", "right", "right"]}
                 />

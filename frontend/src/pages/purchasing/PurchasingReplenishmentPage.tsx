@@ -647,7 +647,7 @@ export default function PurchasingReplenishmentPage() {
               }
             >
               <table className="w-full min-w-[1100px] border-collapse text-sm">
-                <PurchasingTableHeader compact sticky className="bg-white">
+                <PurchasingTableHeader sticky className="bg-white">
                   <tr>
                     <th className={`${td} w-10 text-center font-semibold uppercase tracking-wide text-slate-500`}>
                       <input

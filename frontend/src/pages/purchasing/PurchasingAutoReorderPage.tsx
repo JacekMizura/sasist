@@ -428,7 +428,6 @@ export default function PurchasingAutoReorderPage() {
             >
               <table className="min-w-full text-left text-sm">
                 <PurchasingTableHeader
-                  compact
                   headers={["Nazwa", "Dostawca", "Kiedy działa", "Co robi", "Status", "Akcje"]}
                 />
             <tbody className="divide-y divide-slate-100">
@@ -497,7 +496,6 @@ export default function PurchasingAutoReorderPage() {
             <PurchasingTableSection title="Ostatnie uruchomienia" indicatorClass="bg-indigo-500">
               <table className="min-w-full text-left text-sm">
                 <PurchasingTableHeader
-                  compact
                   headers={["Start", "Wynik", "Nowe szkice", "Pominięte pozycje", "Notatka"]}
                 />
             <tbody className="divide-y divide-slate-100">

@@ -286,7 +286,6 @@ export default function PurchasingForecastPage() {
               <PurchasingTableSection title="Produkty ryzyka" indicatorClass="bg-amber-500">
                 <table className="w-full min-w-[520px]">
                   <PurchasingTableHeader
-                    compact
                     headers={["Produkt", "Stan", "Śr./dzień", "Dni zapasu", "Akcja"]}
                     align={["left", "right", "right", "right", "right"]}
                   />
@@ -325,7 +324,6 @@ export default function PurchasingForecastPage() {
               <PurchasingTableSection title="Martwy stock" indicatorClass="bg-violet-500">
                 <table className="w-full min-w-[560px]">
                   <PurchasingTableHeader
-                    compact
                     headers={["Produkt", "Stan", "Dni bez sprzedaży", "Wartość", "Akcja"]}
                     align={["left", "right", "right", "right", "right"]}
                   />

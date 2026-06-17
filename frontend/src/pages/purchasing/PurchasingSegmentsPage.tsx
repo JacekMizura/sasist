@@ -304,7 +304,6 @@ export default function PurchasingSegmentsPage() {
           >
             <table className="min-w-full text-left text-sm">
               <PurchasingTableHeader
-                compact
                 headers={[
                   "Produkt",
                   "Priorytet (A–C + X–Z)",

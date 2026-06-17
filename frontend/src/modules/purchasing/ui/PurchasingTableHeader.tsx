@@ -5,7 +5,6 @@ type Align = "left" | "right" | "center";
 type Props = {
   headers?: string[];
   align?: Align[];
-  compact?: boolean;
   /** Własny wiersz nagłówka (checkbox, sortowanie) — zamiast headers/align. */
   children?: ReactNode;
   className?: string;
@@ -21,12 +20,11 @@ const ALIGN_CLASS: Record<Align, string> = {
 function PurchasingTableHeaderInner({
   headers = [],
   align = [],
-  compact = false,
   children,
   className = "",
   sticky = false,
 }: Props) {
-  const thPad = compact ? "px-3 py-3" : "px-6 py-4";
+  const thPad = "px-3 py-3";
   const theadClass = [
     "border-b border-slate-100 bg-slate-50/50 text-[11px] font-bold uppercase tracking-wider text-slate-500",
     sticky ? "sticky top-0 z-10 shadow-sm" : "",
