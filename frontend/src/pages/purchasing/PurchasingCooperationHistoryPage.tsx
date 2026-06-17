@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import api from "../../api/axios";
 import { fetchPurchasingCooperationHistory, type PurchasingCooperationHistoryPayload } from "../../api/purchasingCooperationHistoryApi";
+import { PurchasingContentArea, PurchasingPageHeader } from "../../modules/purchasing/ui";
 
 type Supplier = { id: number; name: string };
 
@@ -78,10 +79,9 @@ export default function PurchasingCooperationHistoryPage() {
   const summary = data?.summary;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold text-slate-900">Historia współpracy</h1>
-      </div>
+    <PurchasingContentArea>
+      <PurchasingPageHeader title="Historia współpracy" />
+      <div className="space-y-6">
 
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <label className="text-xs font-medium text-slate-600">Dostawca</label>
@@ -175,6 +175,7 @@ export default function PurchasingCooperationHistoryPage() {
           </div>
         </>
       ) : null}
-    </div>
+      </div>
+    </PurchasingContentArea>
   );
 }

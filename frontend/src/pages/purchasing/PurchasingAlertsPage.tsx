@@ -18,6 +18,7 @@ import {
   type PurchasingAlertRule,
   type PurchasingAutoDraftRow,
 } from "../../api/purchasingAlertsApi";
+import { PurchasingContentArea, PurchasingPageHeader } from "../../modules/purchasing/ui";
 import { listSuppliers, type SupplierRead } from "../../api/inboundSuppliersApi";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { formatApiError } from "../../utils/apiErrorMessage";
@@ -495,26 +496,9 @@ export default function PurchasingAlertsPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-900">Problemy wymagające uwagi</h1>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <label className="text-xs font-medium text-slate-500">Podmiot</label>
-          <select
-            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800"
-            value={tenantId}
-            onChange={(e) => setTenantId(Number(e.target.value))}
-          >
-            {tenants.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
+    <PurchasingContentArea>
+      <PurchasingPageHeader title="Problemy wymagające uwagi" />
+      <div className="space-y-6">
 
       {err ? (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
@@ -856,6 +840,7 @@ export default function PurchasingAlertsPage() {
           </div>
         </div>
       ) : null}
-    </div>
+      </div>
+    </PurchasingContentArea>
   );
 }

@@ -8,6 +8,7 @@ import api from "../../api/axios";
 import { listSuppliers, type SupplierRead } from "../../api/inboundSuppliersApi";
 import { fetchPurchasingSegments, type PurchasingSegmentsPayload } from "../../api/purchasingSegmentsApi";
 import { useWarehouse } from "../../context/WarehouseContext";
+import { PurchasingContentArea, PurchasingPageHeader } from "../../modules/purchasing/ui";
 
 type Tenant = { id: number; name: string };
 
@@ -159,19 +160,12 @@ export default function PurchasingSegmentsPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold text-slate-900">Priorytety asortymentu</h1>
-        <p className="mt-1 text-sm text-slate-600">
-          Produkty są pogrupowane według <strong>ważności dla obrotu</strong> (A — najważniejsze, B — średnie, C — mało istotne) oraz{" "}
-          <strong>sposobu sprzedaży</strong> (X — stabilna, Y — sezonowa, Z — nieregularna). To pomaga ustalić, gdzie trzymać zapas, a
-          gdzie nie zamrażać pieniędzy.
-        </p>
-        <ul className="mt-2 list-inside list-disc text-xs text-slate-600">
-          <li>A = najważniejsze produkty · B = średnie · C = mało istotne</li>
-          <li>X = sprzedaż stabilna · Y = sezonowa · Z = nieregularna</li>
-        </ul>
-      </div>
+    <PurchasingContentArea>
+      <PurchasingPageHeader
+        title="Priorytety asortymentu"
+        subtitle="Produkty są pogrupowane według ważności dla obrotu (A, B, C) oraz sposobu sprzedaży (X, Y, Z). To pomaga ustalić, gdzie trzymać zapas."
+      />
+      <div className="space-y-6">
 
       <div className="flex flex-col flex-wrap gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div className="flex flex-wrap gap-3">
@@ -366,6 +360,7 @@ export default function PurchasingSegmentsPage() {
           <p className="px-4 py-8 text-center text-sm text-slate-500">Brak produktów spełniających kryteria.</p>
         ) : null}
       </div>
-    </div>
+      </div>
+    </PurchasingContentArea>
   );
 }

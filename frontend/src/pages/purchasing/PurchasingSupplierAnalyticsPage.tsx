@@ -20,6 +20,8 @@ import {
   type SupplierAnalyticsRow,
   type SupplierAnalyticsSeries,
 } from "../../api/purchasingSupplierAnalyticsApi";
+import { usePurchasingModuleContextOptional } from "../../modules/purchasing/context/PurchasingModuleContext";
+import { PurchasingContentArea, PurchasingPageHeader } from "../../modules/purchasing/ui";
 
 type Tenant = { id: number; name: string };
 
@@ -95,6 +97,7 @@ function Kpi({
 }
 
 export default function PurchasingSupplierAnalyticsPage() {
+  const moduleCtx = usePurchasingModuleContextOptional();
   const [searchParams] = useSearchParams();
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [tenantId, setTenantId] = useState(1);
@@ -201,26 +204,26 @@ export default function PurchasingSupplierAnalyticsPage() {
   const ordersHref = `/purchasing/orders?tenant_id=${tenantId}`;
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-900">Ocena dostawców</h1>
-        </div>
+    <PurchasingContentArea>
+      <PurchasingPageHeader title="Ocena dostawców" />
+      <div className="space-y-6">
         <div className="flex flex-wrap items-end gap-3">
-          <div>
-            <label className="text-xs font-medium text-slate-500">Tenant</label>
-            <select
-              className="mt-1 block rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
-              value={tenantId}
-              onChange={(e) => setTenantId(Number(e.target.value))}
-            >
-              {tenants.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name} (#{t.id})
-                </option>
-              ))}
-            </select>
-          </div>
+          {!moduleCtx ? (
+            <div>
+              <label className="text-xs font-medium text-slate-500">Tenant</label>
+              <select
+                className="mt-1 block rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                value={tenantId}
+                onChange={(e) => setTenantId(Number(e.target.value))}
+              >
+                {tenants.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name} (#{t.id})
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
           <div>
             <label className="text-xs font-medium text-slate-500">Okres</label>
             <select
@@ -234,7 +237,6 @@ export default function PurchasingSupplierAnalyticsPage() {
             </select>
           </div>
         </div>
-      </div>
 
       {err ? (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
@@ -458,6 +460,7 @@ export default function PurchasingSupplierAnalyticsPage() {
           </div>
         </div>
       ) : null}
-    </div>
+      </div>
+    </PurchasingContentArea>
   );
 }

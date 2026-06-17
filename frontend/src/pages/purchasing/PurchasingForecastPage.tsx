@@ -11,13 +11,13 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import api from "../../api/axios";
 import { fetchPurchasingForecast, type PurchasingForecastPayload } from "../../api/purchasingForecastApi";
 import { listSuppliers, type SupplierRead } from "../../api/inboundSuppliersApi";
 import { searchProductsCatalog, type ProductSearchHit } from "../../api/productsSearchApi";
 import { useWarehouse } from "../../context/WarehouseContext";
-
-type Tenant = { id: number; name: string };
+import { usePurchasingModuleContextOptional } from "../../modules/purchasing/context/PurchasingModuleContext";
+import { usePurchasingTenant } from "../../modules/purchasing/hooks/usePurchasingTenant";
+import { PurchasingContentArea, PurchasingPageHeader } from "../../modules/purchasing/ui";
 
 const FORECAST_TOOLTIP_PL =
   "Prognoza oparta na sprzedaży historycznej. Wzór 30 dni: sprzedaż_30d×0,6 + sprzedaż_poprz_30d×0,3 + sprzedaż_7d×0,1×4. Trend %: porównanie ostatnich 30 dni z poprzednimi 30 dniami.";
@@ -46,9 +46,9 @@ function useDebounced<T>(value: T, ms: number): T {
 
 export default function PurchasingForecastPage() {
   const { selectedWarehouseId } = useWarehouse();
+  const moduleCtx = usePurchasingModuleContextOptional();
+  const { tenantId, refreshSignal } = usePurchasingTenant();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [tenants, setTenants] = useState<Tenant[]>([]);
-  const [tenantId, setTenantId] = useState(1);
   const [suppliers, setSuppliers] = useState<SupplierRead[]>([]);
   const [supplierId, setSupplierId] = useState("");
   const [rangeDays, setRangeDays] = useState<30 | 90 | 365>(90);
@@ -61,22 +61,6 @@ export default function PurchasingForecastPage() {
   const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
 
   useEffect(() => {
-    void api
-      .get<Tenant[]>("/tenants/")
-      .then((res) => {
-        const list = Array.isArray(res.data) ? res.data : [];
-        setTenants(list);
-        if (list.length > 0 && !list.some((t) => t.id === tenantId)) setTenantId(list[0].id);
-      })
-      .catch(() => setTenants([]));
-  }, []);
-
-  useEffect(() => {
-    const tid = searchParams.get("tenant_id");
-    if (tid != null && tid !== "") {
-      const n = Number(tid);
-      if (Number.isFinite(n) && n >= 1) setTenantId(n);
-    }
     const pid = searchParams.get("product_id");
     if (pid != null && pid !== "") {
       const n = Number(pid);
@@ -121,7 +105,7 @@ export default function PurchasingForecastPage() {
 
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, refreshSignal]);
 
   const selectProduct = (id: number | null) => {
     setSelectedProductId(id);
@@ -148,30 +132,18 @@ export default function PurchasingForecastPage() {
   const s = data?.summary;
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight text-slate-900">Prognoza / analiza zakupowa</h1>
-      </div>
+    <PurchasingContentArea>
+      <PurchasingPageHeader title="Prognoza / analiza zakupowa" />
 
       <div className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-slate-600">Podmiot</label>
-          <select
-            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm"
-            value={tenantId}
-            onChange={(e) => setTenantId(Number(e.target.value))}
-          >
-            {tenants.length === 0 ? (
+        {!moduleCtx ? (
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-slate-600">Podmiot</label>
+            <select className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm" value={tenantId} disabled>
               <option value={tenantId}>#{tenantId}</option>
-            ) : (
-              tenants.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))
-            )}
-          </select>
-        </div>
+            </select>
+          </div>
+        ) : null}
         <div className="flex min-w-[160px] flex-col gap-1">
           <label className="text-xs font-medium text-slate-600">Dostawca (opcjonalnie)</label>
           <select
@@ -499,6 +471,6 @@ export default function PurchasingForecastPage() {
           </section>
         </>
       ) : null}
-    </div>
+    </PurchasingContentArea>
   );
 }

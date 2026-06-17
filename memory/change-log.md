@@ -1,6 +1,14 @@
 # Change log
 
-## 2026-06-08 — PostgreSQL sequence sync (startup)
+## 2026-06-08 — Zakupy i planowanie: UI refactor (prototyp)
+
+- Nowy shell: `PurchasingModuleLayout` — sticky zakładki w ramce, podmiot + odśwież w pasku
+- Wspólne komponenty UI: `modules/purchasing/ui/*` (KPI, tabele, panele, statusy)
+- Widoki lazy-loaded: `PlanningDashboard`, `PurchaseGeneratorView`, … `SavingsView`
+- Kontekst: `PurchasingModuleContext` + `usePurchasingTenant` (tenant z URL, global refresh)
+- Pulpit przepisany na nowy design z ikonami lucide; generator/PO zaktualizowane wizualnie
+- Zero zmian API / logiki biznesowej
+
 
 - `backend/db/postgres_sequence_sync.py` — idempotent sync all integer PK sequences vs MAX(id)
 - Tier 0 startup + `migrate_sqlite_to_postgres` post-step

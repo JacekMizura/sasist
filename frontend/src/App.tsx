@@ -203,17 +203,22 @@ import ManufacturersPage from "./pages/Assortment/ManufacturersPage"
 import SuppliersPage from "./pages/Assortment/SuppliersPage"
 import SuppliersLayout from "./pages/Assortment/SuppliersLayout"
 import PurchasingLayout from "./pages/purchasing/PurchasingLayout"
-import PurchasingDashboardPage from "./pages/purchasing/PurchasingDashboardPage"
-import PurchasingAlertsPage from "./pages/purchasing/PurchasingAlertsPage"
-import PurchasingAutoReorderPage from "./pages/purchasing/PurchasingAutoReorderPage"
-import PurchasingPriceOpportunitiesPage from "./pages/purchasing/PurchasingPriceOpportunitiesPage"
-import PurchasingSegmentsPage from "./pages/purchasing/PurchasingSegmentsPage"
-import PurchasingSupplierAnalyticsPage from "./pages/purchasing/PurchasingSupplierAnalyticsPage"
-import PurchasingPoPage from "./pages/purchasing/PurchasingPoPage"
 import PurchasingPoDetailPage from "./pages/purchasing/PurchasingPoDetailPage"
-import PurchasingForecastPage from "./pages/purchasing/PurchasingForecastPage"
-import PurchasingReplenishmentPage from "./pages/purchasing/PurchasingReplenishmentPage"
+import PurchasingSupplierAnalyticsPage from "./pages/purchasing/PurchasingSupplierAnalyticsPage"
 import PurchasingCooperationHistoryPage from "./pages/purchasing/PurchasingCooperationHistoryPage"
+import { PurchasingTabSuspense } from "./modules/purchasing/views/PurchasingTabSuspense"
+import {
+  AutoReplenishmentView,
+  ForecastView,
+  InventoryPriorityView,
+  PlanningDashboard,
+  PurchaseGeneratorView,
+  PurchaseOrdersView,
+  PurchasingAlertsView,
+  SavingsView,
+  SupplierHistoryView,
+  SupplierScoreView,
+} from "./modules/purchasing/views/lazyViews"
 import InventoryCountErpLayout from "./pages/inventory-count/InventoryCountErpLayout"
 import InventoryCountDashboardPage from "./pages/inventory-count/InventoryCountDashboardPage"
 import InventoryCountDocumentsPage from "./pages/inventory-count/InventoryCountDocumentsPage"
@@ -697,17 +702,87 @@ export const router = createBrowserRouter(
                 <Route path="purchase-orders" element={<LegacyPurchaseOrdersRedirect />} />
                 <Route path="purchasing" element={<PurchasingLayout />}>
                   <Route index element={<Navigate to="dashboard" replace />} />
-                  <Route path="dashboard" element={<PurchasingDashboardPage />} />
-                  <Route path="replenishment" element={<PurchasingReplenishmentPage />} />
-                  <Route path="suppliers/analytics" element={<PurchasingSupplierAnalyticsPage />} />
-                  <Route path="cooperation-history" element={<PurchasingCooperationHistoryPage />} />
+                  <Route
+                    path="dashboard"
+                    element={
+                      <PurchasingTabSuspense>
+                        <PlanningDashboard />
+                      </PurchasingTabSuspense>
+                    }
+                  />
+                  <Route
+                    path="replenishment"
+                    element={
+                      <PurchasingTabSuspense>
+                        <PurchaseGeneratorView />
+                      </PurchasingTabSuspense>
+                    }
+                  />
+                  <Route
+                    path="suppliers/analytics"
+                    element={
+                      <PurchasingTabSuspense>
+                        <SupplierScoreView />
+                      </PurchasingTabSuspense>
+                    }
+                  />
+                  <Route
+                    path="cooperation-history"
+                    element={
+                      <PurchasingTabSuspense>
+                        <SupplierHistoryView />
+                      </PurchasingTabSuspense>
+                    }
+                  />
                   <Route path="orders/:id" element={<PurchasingPoDetailPage />} />
-                  <Route path="orders" element={<PurchasingPoPage />} />
-                  <Route path="forecast" element={<PurchasingForecastPage />} />
-                  <Route path="alerts" element={<PurchasingAlertsPage />} />
-                  <Route path="segments" element={<PurchasingSegmentsPage />} />
-                  <Route path="auto-reorder" element={<PurchasingAutoReorderPage />} />
-                  <Route path="price-opportunities" element={<PurchasingPriceOpportunitiesPage />} />
+                  <Route
+                    path="orders"
+                    element={
+                      <PurchasingTabSuspense>
+                        <PurchaseOrdersView />
+                      </PurchasingTabSuspense>
+                    }
+                  />
+                  <Route
+                    path="forecast"
+                    element={
+                      <PurchasingTabSuspense>
+                        <ForecastView />
+                      </PurchasingTabSuspense>
+                    }
+                  />
+                  <Route
+                    path="alerts"
+                    element={
+                      <PurchasingTabSuspense>
+                        <PurchasingAlertsView />
+                      </PurchasingTabSuspense>
+                    }
+                  />
+                  <Route
+                    path="segments"
+                    element={
+                      <PurchasingTabSuspense>
+                        <InventoryPriorityView />
+                      </PurchasingTabSuspense>
+                    }
+                  />
+                  <Route
+                    path="auto-reorder"
+                    element={
+                      <PurchasingTabSuspense>
+                        <AutoReplenishmentView />
+                      </PurchasingTabSuspense>
+                    }
+                  />
+                  <Route
+                    path="price-opportunities"
+                    element={
+                      <PurchasingTabSuspense>
+                        <SavingsView />
+                      </PurchasingTabSuspense>
+                    }
+                  />
                 </Route>
                 <Route path="assortment/import" element={<Navigate to="/settings/import" replace />} />
                 <Route path="orders" element={<OrdersLayout />}>

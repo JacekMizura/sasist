@@ -20,6 +20,7 @@ import {
   type PurchaseAutoRun,
 } from "../../api/purchasingAutoReorderApi";
 import { useWarehouse } from "../../context/WarehouseContext";
+import { PurchasingContentArea, PurchasingPageHeader } from "../../modules/purchasing/ui";
 import { formatApiError } from "../../utils/apiErrorMessage";
 
 type Tenant = { id: number; name: string };
@@ -342,30 +343,12 @@ export default function PurchasingAutoReorderPage() {
   };
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-900">Auto-uzupełnianie</h1>
-          <p className="mt-1 text-sm text-slate-600">
-            System sam przygotuje <strong>szkice</strong> zamówień zakupowych, gdy wykryje braki względem ustawionego poziomu zapasu. Ty
-            zatwierdzasz treść zamówienia — nic nie idzie do dostawcy bez Twojej decyzji.
-          </p>
-        </div>
-        <div>
-          <label className="text-xs font-medium text-slate-500">Podmiot</label>
-          <select
-            className="mt-1 block rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
-            value={tenantId}
-            onChange={(e) => setTenantId(Number(e.target.value))}
-          >
-            {tenants.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
+    <PurchasingContentArea>
+      <PurchasingPageHeader
+        title="Auto-uzupełnianie"
+        subtitle="System sam przygotuje szkice zamówień, gdy wykryje braki. Ty zatwierdzasz treść — nic nie idzie do dostawcy bez Twojej decyzji."
+      />
+      <div className="space-y-8">
 
       {toast ? (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
@@ -693,6 +676,7 @@ export default function PurchasingAutoReorderPage() {
           </div>
         </div>
       ) : null}
-    </div>
+      </div>
+    </PurchasingContentArea>
   );
 }

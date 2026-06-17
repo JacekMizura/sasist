@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { Download, Save } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import api from "../../api/axios";
 import { listSuppliers, type SupplierRead } from "../../api/inboundSuppliersApi";
 import {
   downloadReplenishmentCsv,
@@ -14,11 +14,11 @@ import { ActiveWarehouseRequiredBanner } from "../../components/layout/ActiveWar
 import { createPurchaseOrdersFromGenerator } from "../../api/purchasingOrdersApi";
 import { pageContainerWidthAlignClass } from "../../components/layout/PageContainer";
 import { DataTablePageSizeSelect } from "../../components/table/DataTablePageSizeSelect";
+import { usePurchasingTenant } from "../../modules/purchasing/hooks/usePurchasingTenant";
+import { PurchasingContentArea, PurchasingPageHeader } from "../../modules/purchasing/ui";
 
 const PO_TOAST_KEY = "purchasing_po_toast";
 const PURCHASE_GENERATOR_PAGE_SIZE_KEY = "purchase_generator.pageSize";
-
-type Tenant = { id: number; name: string };
 
 /** Odmiana po polsku: „zamówienie / zamówienia / zamówień … zakupowe”. */
 function formatCreatedPurchaseOrdersPhrase(n: number): string {
@@ -111,10 +111,9 @@ function TableSkeleton({ cols }: { cols: number }) {
 
 export default function PurchasingReplenishmentPage() {
   const navigate = useNavigate();
+  const { tenantId, refreshSignal } = usePurchasingTenant();
   const { warehouseId, hasActiveWarehouse } = useActiveWarehouseContext();
   const [searchParams] = useSearchParams();
-  const [tenants, setTenants] = useState<Tenant[]>([]);
-  const [tenantId, setTenantId] = useState(1);
   const [suppliers, setSuppliers] = useState<SupplierRead[]>([]);
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounced(search, 400);
@@ -151,22 +150,6 @@ export default function PurchasingReplenishmentPage() {
   const [inspectorLoading, setInspectorLoading] = useState(false);
 
   useEffect(() => {
-    void api
-      .get<Tenant[]>("/tenants/")
-      .then((res) => {
-        const list = Array.isArray(res.data) ? res.data : [];
-        setTenants(list);
-        if (list.length > 0 && !list.some((t) => t.id === tenantId)) setTenantId(list[0].id);
-      })
-      .catch(() => setTenants([]));
-  }, []);
-
-  useEffect(() => {
-    const tid = searchParams.get("tenant_id");
-    if (tid != null && tid !== "") {
-      const n = Number(tid);
-      if (Number.isFinite(n) && n >= 1) setTenantId(n);
-    }
     const sid = searchParams.get("supplier_id");
     if (sid != null && sid !== "") {
       const n = Number(sid);
@@ -263,7 +246,7 @@ export default function PurchasingReplenishmentPage() {
 
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, refreshSignal]);
 
   useLayoutEffect(() => {
     setPage(1);
@@ -360,74 +343,71 @@ export default function PurchasingReplenishmentPage() {
     "sticky top-0 z-10 border-b border-slate-200 bg-white py-3 px-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 shadow-sm";
 
   return (
-    <div className="space-y-6 pb-28">
+    <PurchasingContentArea className="pb-28">
       {!hasActiveWarehouse ? (
         <ActiveWarehouseRequiredBanner hint="Propozycje zakupów i tworzenie PO dotyczą aktywnego magazynu z paska u góry." />
       ) : null}
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight text-slate-900">Generator propozycji zakupów</h1>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            disabled={loading}
-            onClick={() => void load()}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800 shadow-sm hover:bg-slate-50 disabled:opacity-50"
-          >
-            Generuj ponownie
-          </button>
-          <button
-            type="button"
-            disabled={exporting || loading}
-            onClick={async () => {
-              setExporting(true);
-              try {
-                await downloadReplenishmentCsv({ ...queryBase });
-              } catch {
-                setErr("Eksport CSV nie powiódł się.");
-              } finally {
-                setExporting(false);
-              }
-            }}
-            className="rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-slate-800 disabled:opacity-50"
-            title="Plik CSV (UTF-8 ze znakiem BOM, średnik) — Excel."
-          >
-            {exporting ? "Eksport…" : "Eksport CSV"}
-          </button>
-          <button
-            type="button"
-            disabled
-            title="Funkcja w przygotowaniu (Etap 4 — zamówienia zakupowe)."
-            className="rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-sm font-medium text-slate-400"
-          >
-            Zapisz szkic
-          </button>
-        </div>
-      </div>
+      <PurchasingPageHeader
+        title="Generator propozycji zakupów"
+        actions={
+          <>
+            <button
+              type="button"
+              disabled={loading}
+              onClick={() => void load()}
+              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium hover:bg-slate-50 disabled:opacity-50"
+            >
+              Generuj ponownie
+            </button>
+            <button
+              type="button"
+              disabled={exporting || loading}
+              onClick={async () => {
+                setExporting(true);
+                try {
+                  await downloadReplenishmentCsv({ ...queryBase });
+                } catch {
+                  setErr("Eksport CSV nie powiódł się.");
+                } finally {
+                  setExporting(false);
+                }
+              }}
+              className="flex items-center rounded-lg border border-slate-800 bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+            >
+              <Download className="mr-2 h-4 w-4" />
+              {exporting ? "Eksport…" : "Eksport CSV"}
+            </button>
+            <button
+              type="button"
+              disabled
+              title="Funkcja w przygotowaniu (Etap 4 — zamówienia zakupowe)."
+              className="flex items-center rounded-lg bg-blue-50 px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-100"
+            >
+              <Save className="mr-2 h-4 w-4" />
+              Zapisz szkic
+            </button>
+          </>
+        }
+      />
 
-      <div className="flex flex-col flex-wrap gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-end">
-        <div className="flex min-w-[180px] flex-1 flex-col gap-1">
-          <label className="text-xs font-medium text-slate-600">Podmiot</label>
-          <select
-            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm"
-            value={tenantId}
-            onChange={(e) => {
-              setTenantId(Number(e.target.value));
-              setPage(1);
-            }}
-          >
-            {tenants.length === 0 ? (
-              <option value={tenantId}>#{tenantId}</option>
-            ) : (
-              tenants.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))
-            )}
-          </select>
+      {summary && !loading ? (
+        <div className="flex flex-wrap gap-3 text-sm">
+          <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-600">
+            Wiersze: <strong>{summary.total_rows}</strong>
+          </span>
+          <span className="rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-blue-700">
+            Sugestie ≥ 1: <strong>{summary.suggested_count}</strong>
+          </span>
+          <span className="rounded-full border border-red-100 bg-red-50 px-3 py-1 text-red-700">
+            Krytyczne: <strong>{summary.critical_count}</strong>
+          </span>
+          <span className="rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-emerald-700">
+            Wartość sugerowana:{" "}
+            <strong>{numFmt(summary.total_suggested_value, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+          </span>
         </div>
+      ) : null}
+      <div className="flex flex-col flex-wrap gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-end">
         <div className="flex min-w-[200px] flex-[2] flex-col gap-1">
           <label className="text-xs font-medium text-slate-600">Szukaj</label>
           <input
@@ -634,23 +614,6 @@ export default function PurchasingReplenishmentPage() {
 
       {err ? (
         <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{err}</p>
-      ) : null}
-
-      {summary && !loading ? (
-        <div className="flex flex-wrap gap-3 text-sm text-slate-700">
-          <span className="rounded-full bg-slate-100 px-3 py-1 font-medium tabular-nums">
-            Wiersze: {summary.total_rows}
-          </span>
-          <span className="rounded-full bg-slate-100 px-3 py-1 font-medium tabular-nums">
-            Sugestie ≥1: {summary.suggested_count}
-          </span>
-          <span className="rounded-full bg-rose-100 px-3 py-1 font-medium tabular-nums text-rose-900">
-            Krytyczne: {summary.critical_count}
-          </span>
-          <span className="rounded-full bg-violet-100 px-3 py-1 font-medium tabular-nums text-violet-900">
-            Wartość sugerowana: {numFmt(summary.total_suggested_value, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </span>
-        </div>
       ) : null}
 
       {loading ? (
@@ -1050,6 +1013,6 @@ export default function PurchasingReplenishmentPage() {
           </div>
         </div>
       ) : null}
-    </div>
+    </PurchasingContentArea>
   );
 }

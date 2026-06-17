@@ -13,6 +13,7 @@ import {
 } from "../../api/purchasingPriceOpportunitiesApi";
 import { listSuppliers, type SupplierRead } from "../../api/inboundSuppliersApi";
 import { useWarehouse } from "../../context/WarehouseContext";
+import { PurchasingContentArea, PurchasingPageHeader } from "../../modules/purchasing/ui";
 
 type Tenant = { id: number; name: string };
 
@@ -228,29 +229,28 @@ export default function PurchasingPriceOpportunitiesPage() {
   };
 
   return (
-    <div className="space-y-6 p-4 md:p-6">
-      <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-900">Oszczędności zakupowe</h1>
-          <p className="text-sm text-slate-600">
-            Porównanie ofert, historia zakupów i progi dostaw — wyłącznie na podstawie danych z systemu.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Link
-            to={`/purchasing/replenishment?tenant_id=${tenantId}`}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 shadow-sm hover:bg-slate-50"
-          >
-            Generator
-          </Link>
-          <Link
-            to={`/purchasing/orders?tenant_id=${tenantId}`}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 shadow-sm hover:bg-slate-50"
-          >
-            Zamówienia (PO)
-          </Link>
-        </div>
-      </div>
+    <PurchasingContentArea>
+      <PurchasingPageHeader
+        title="Oszczędności zakupowe"
+        subtitle="Porównanie ofert, historia zakupów i progi dostaw — wyłącznie na podstawie danych z systemu."
+        actions={
+          <>
+            <Link
+              to={`/purchasing/replenishment?tenant_id=${tenantId}`}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 shadow-sm hover:bg-slate-50"
+            >
+              Generator
+            </Link>
+            <Link
+              to={`/purchasing/orders?tenant_id=${tenantId}`}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 shadow-sm hover:bg-slate-50"
+            >
+              Zamówienia (PO)
+            </Link>
+          </>
+        }
+      />
+      <div className="space-y-6">
 
       {data?.data_message && (data.rows?.length ?? 0) === 0 ? (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">{data.data_message}</div>
@@ -544,6 +544,7 @@ export default function PurchasingPriceOpportunitiesPage() {
           </div>
         </div>
       ) : null}
-    </div>
+      </div>
+    </PurchasingContentArea>
   );
 }
