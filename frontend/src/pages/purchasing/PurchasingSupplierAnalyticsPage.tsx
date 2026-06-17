@@ -29,6 +29,7 @@ import {
   PurchasingKpiGrid,
   PurchasingPageHeader,
   PurchasingPageShell,
+  PurchasingTableHeader,
   PurchasingTableSection,
   purchasingFilterButtonClass,
   purchasingSelectClass,
@@ -263,21 +264,22 @@ export default function PurchasingSupplierAnalyticsPage() {
         table={
           <PurchasingTableSection title="Ranking dostawców" indicatorClass="bg-indigo-500">
             <table className="min-w-full text-left text-sm">
-          <thead className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wide text-slate-500">
-            <tr>
-              <th className="px-3 py-3">#</th>
-              <th className="px-3 py-3">Dostawca</th>
-              <th className="px-3 py-3">Dostawy PZ</th>
-              <th className="px-3 py-3">PO planowane</th>
-              <th className="px-3 py-3">Terminowość (PZ)</th>
-              <th className="px-3 py-3">Śr. interwał dostaw (dni)</th>
-              <th className="px-3 py-3">Śr. opóźnienie (dni)</th>
-              <th className="px-3 py-3">Trend ceny zakupu (%)</th>
-              <th className="px-3 py-3">Wartość zakupów netto (PLN)</th>
-              <th className="px-3 py-3">Ocena (0–100)</th>
-              <th className="px-3 py-3">Ryzyko</th>
-            </tr>
-          </thead>
+              <PurchasingTableHeader
+                compact
+                headers={[
+                  "#",
+                  "Dostawca",
+                  "Dostawy PZ",
+                  "PO planowane",
+                  "Terminowość (PZ)",
+                  "Śr. interwał dostaw (dni)",
+                  "Śr. opóźnienie (dni)",
+                  "Trend ceny zakupu (%)",
+                  "Wartość zakupów netto (PLN)",
+                  "Ocena (0–100)",
+                  "Ryzyko",
+                ]}
+              />
           <tbody className="divide-y divide-slate-100">
             {loading ? (
               <tr>

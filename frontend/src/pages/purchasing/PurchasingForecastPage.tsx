@@ -26,6 +26,7 @@ import {
   PurchasingKpiGrid,
   PurchasingPageHeader,
   PurchasingPageShell,
+  PurchasingTableHeader,
   PurchasingTableSection,
   purchasingFilterButtonClass,
   purchasingInputClass,
@@ -139,7 +140,6 @@ export default function PurchasingForecastPage() {
     [data],
   );
 
-  const th = "py-2 px-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500";
   const td = "py-2 px-3 text-sm text-slate-800";
 
   const s = data?.summary;
@@ -285,15 +285,11 @@ export default function PurchasingForecastPage() {
             <>
               <PurchasingTableSection title="Produkty ryzyka" indicatorClass="bg-amber-500">
                 <table className="w-full min-w-[520px]">
-                  <thead className="border-b border-slate-200">
-                    <tr>
-                      <th className={th}>Produkt</th>
-                      <th className={`${th} text-right`}>Stan</th>
-                      <th className={`${th} text-right`}>Śr./dzień</th>
-                      <th className={`${th} text-right`}>Dni zapasu</th>
-                      <th className={`${th} text-right`}>Akcja</th>
-                    </tr>
-                  </thead>
+                  <PurchasingTableHeader
+                    compact
+                    headers={["Produkt", "Stan", "Śr./dzień", "Dni zapasu", "Akcja"]}
+                    align={["left", "right", "right", "right", "right"]}
+                  />
                   <tbody>
                     {(data?.charts.top_risk_products ?? []).length === 0 ? (
                       <tr>
@@ -328,15 +324,11 @@ export default function PurchasingForecastPage() {
 
               <PurchasingTableSection title="Martwy stock" indicatorClass="bg-violet-500">
                 <table className="w-full min-w-[560px]">
-                  <thead className="border-b border-slate-200">
-                    <tr>
-                      <th className={th}>Produkt</th>
-                      <th className={`${th} text-right`}>Stan</th>
-                      <th className={`${th} text-right`}>Dni bez sprzedaży</th>
-                      <th className={`${th} text-right`}>Wartość</th>
-                      <th className={`${th} text-right`}>Akcja</th>
-                    </tr>
-                  </thead>
+                  <PurchasingTableHeader
+                    compact
+                    headers={["Produkt", "Stan", "Dni bez sprzedaży", "Wartość", "Akcja"]}
+                    align={["left", "right", "right", "right", "right"]}
+                  />
                   <tbody>
                     {(data?.charts.dead_stock ?? []).length === 0 ? (
                       <tr>

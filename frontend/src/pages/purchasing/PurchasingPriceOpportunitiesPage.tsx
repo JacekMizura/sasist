@@ -22,6 +22,7 @@ import {
   PurchasingPageHeader,
   PurchasingPageShell,
   PurchasingQuickActions,
+  PurchasingTableHeader,
   PurchasingTableSection,
   purchasingFilterButtonClass,
   purchasingSelectClass,
@@ -340,19 +341,21 @@ export default function PurchasingPriceOpportunitiesPage() {
         table={
           <PurchasingTableSection title="Okazje cenowe" indicatorClass="bg-emerald-500">
             <table className="min-w-[960px] w-full border-collapse text-left text-sm">
-          <thead className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase text-slate-600">
-            <tr>
-              <th className="px-3 py-2">Typ</th>
-              <th className="px-3 py-2">Produkt</th>
-              <th className="px-3 py-2">Dostawca</th>
-              <th className="px-3 py-2 text-right">Cena teraz</th>
-              <th className="px-3 py-2 text-right">Najlepsza</th>
-              <th className="px-3 py-2 text-right">Różnica</th>
-              <th className="px-3 py-2 text-right">Potencjał / mies.</th>
-              <th className="px-3 py-2">Rekomendacja</th>
-              <th className="px-3 py-2 text-right">Akcje</th>
-            </tr>
-          </thead>
+              <PurchasingTableHeader
+                compact
+                headers={[
+                  "Typ",
+                  "Produkt",
+                  "Dostawca",
+                  "Cena teraz",
+                  "Najlepsza",
+                  "Różnica",
+                  "Potencjał / mies.",
+                  "Rekomendacja",
+                  "Akcje",
+                ]}
+                align={["left", "left", "left", "right", "right", "right", "right", "left", "right"]}
+              />
           <tbody>
             {loading ? (
               <tr>

@@ -11,6 +11,7 @@ import {
   PurchasingKpiGrid,
   PurchasingPageHeader,
   PurchasingPageShell,
+  PurchasingTableHeader,
   PurchasingTableSection,
   purchasingSelectClass,
 } from "../../modules/purchasing/ui";
@@ -155,16 +156,11 @@ export default function PurchasingCooperationHistoryPage() {
           summary ? (
             <PurchasingTableSection title="Ostatnie dokumenty" indicatorClass="bg-slate-500">
               <table className="min-w-full text-sm">
-                <thead className="border-b border-slate-200 bg-slate-50/80">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Typ</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Dokument</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Data</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Status</th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Netto</th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Brutto</th>
-                  </tr>
-                </thead>
+                <PurchasingTableHeader
+                  compact
+                  headers={["Typ", "Dokument", "Data", "Status", "Netto", "Brutto"]}
+                  align={["left", "left", "left", "left", "right", "right"]}
+                />
                 <tbody className="divide-y divide-slate-100">
                   {data?.recent_documents.map((d, idx) => (
                     <tr key={`${d.doc_type}-${d.document_no}-${idx}`} className="hover:bg-slate-50/50">

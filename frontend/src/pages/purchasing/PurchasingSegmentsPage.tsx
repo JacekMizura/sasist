@@ -17,6 +17,7 @@ import {
   PurchasingKpiGrid,
   PurchasingPageHeader,
   PurchasingPageShell,
+  PurchasingTableHeader,
   PurchasingTableSection,
   purchasingSelectClass,
 } from "../../modules/purchasing/ui";
@@ -302,18 +303,19 @@ export default function PurchasingSegmentsPage() {
             }
           >
             <table className="min-w-full text-left text-sm">
-          <thead className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wide text-slate-500">
-            <tr>
-              <th className="px-3 py-3">Produkt</th>
-              <th className="px-3 py-3">Priorytet (A–C + X–Z)</th>
-              <th className="px-3 py-3">Co rekomendujemy</th>
-              <th className="px-3 py-3">Sprzedaż</th>
-              <th className="px-3 py-3">Stan</th>
-              <th className="px-3 py-3">Wartość st.</th>
-              <th className="px-3 py-3">Dostawca</th>
-              <th className="px-3 py-3">Kolejność uzupełniania</th>
-            </tr>
-          </thead>
+              <PurchasingTableHeader
+                compact
+                headers={[
+                  "Produkt",
+                  "Priorytet (A–C + X–Z)",
+                  "Co rekomendujemy",
+                  "Sprzedaż",
+                  "Stan",
+                  "Wartość st.",
+                  "Dostawca",
+                  "Kolejność uzupełniania",
+                ]}
+              />
           <tbody className="divide-y divide-slate-100">
             {(data?.rows ?? []).map((r) => (
               <tr key={r.product_id}>

@@ -28,6 +28,7 @@ import {
   PurchasingKpiGrid,
   PurchasingPageHeader,
   PurchasingPageShell,
+  PurchasingTableHeader,
   PurchasingTableSection,
   purchasingFilterPrimaryButtonClass,
   purchasingSelectClass,
@@ -426,16 +427,10 @@ export default function PurchasingAutoReorderPage() {
               }
             >
               <table className="min-w-full text-left text-sm">
-            <thead className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              <tr>
-                <th className="px-3 py-3">Nazwa</th>
-                <th className="px-3 py-3">Dostawca</th>
-                <th className="px-3 py-3">Kiedy działa</th>
-                <th className="px-3 py-3">Co robi</th>
-                <th className="px-3 py-3">Status</th>
-                <th className="px-3 py-3">Akcje</th>
-              </tr>
-            </thead>
+                <PurchasingTableHeader
+                  compact
+                  headers={["Nazwa", "Dostawca", "Kiedy działa", "Co robi", "Status", "Akcje"]}
+                />
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
@@ -501,15 +496,10 @@ export default function PurchasingAutoReorderPage() {
 
             <PurchasingTableSection title="Ostatnie uruchomienia" indicatorClass="bg-indigo-500">
               <table className="min-w-full text-left text-sm">
-            <thead className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              <tr>
-                <th className="px-3 py-3">Start</th>
-                <th className="px-3 py-3">Wynik</th>
-                <th className="px-3 py-3">Nowe szkice</th>
-                <th className="px-3 py-3">Pominięte pozycje</th>
-                <th className="px-3 py-3">Notatka</th>
-              </tr>
-            </thead>
+                <PurchasingTableHeader
+                  compact
+                  headers={["Start", "Wynik", "Nowe szkice", "Pominięte pozycje", "Notatka"]}
+                />
             <tbody className="divide-y divide-slate-100">
               {(hist?.runs ?? []).map((run: PurchaseAutoRun) => (
                 <tr key={run.id}>

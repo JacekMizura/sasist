@@ -1,5 +1,13 @@
 # Change log
 
+## 2026-06-08 — Zakupy Faza 2: Alerty + Generator UX
+
+- `PurchasingAlertsPage`: usunięto lokalne `KpiCard`/`SectionCard` → `PageShell` + wspólne KPI/Filter/Table/Analysis
+- `PurchasingReplenishmentPage`: chipy KPI → `KpiGrid`, filtry → `FilterBar`, tabela → `TableSection` + sticky `TableHeader`
+- `PurchasingTableHeader`: rozszerzony o `children`, `sticky`, `className`; naprawione klasy align (bez dynamic Tailwind)
+- Wszystkie strony list zakupów: inline `<thead>` → `PurchasingTableHeader` (oprócz PO detail / modal preview)
+- Zero zmian API / logiki biznesowej
+
 ## 2026-06-08 — Zakupy Faza 1: UX Consistency Pass
 
 - Wspólne komponenty: `PurchasingKpiGrid`, `PurchasingFilterBar`, `PurchasingTableSection`, `PurchasingAnalysisSection`, `PurchasingPageShell`, `PurchasingQuickActions`

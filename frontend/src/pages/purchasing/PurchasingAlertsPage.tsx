@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import api from "../../api/axios";
 import {
@@ -18,7 +18,20 @@ import {
   type PurchasingAlertRule,
   type PurchasingAutoDraftRow,
 } from "../../api/purchasingAlertsApi";
-import { PurchasingContentArea, PurchasingPageHeader } from "../../modules/purchasing/ui";
+import {
+  PurchasingAnalysisSection,
+  PurchasingContentArea,
+  PurchasingFilterBar,
+  PurchasingFilterField,
+  PurchasingKpiCard,
+  PurchasingKpiGrid,
+  PurchasingPageHeader,
+  PurchasingPageShell,
+  PurchasingTableHeader,
+  PurchasingTableSection,
+  purchasingFilterPrimaryButtonClass,
+  purchasingSelectClass,
+} from "../../modules/purchasing/ui";
 import { listSuppliers, type SupplierRead } from "../../api/inboundSuppliersApi";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { formatApiError } from "../../utils/apiErrorMessage";
@@ -141,45 +154,6 @@ function suggestionText(a: PurchasingAlertEvent): string {
     default:
       return "Otwórz generator zakupów i zweryfikuj działania.";
   }
-}
-
-function KpiCard({
-  title,
-  value,
-  hint,
-  tone = "slate",
-}: {
-  title: string;
-  value: string | number;
-  hint?: ReactNode;
-  tone?: "slate" | "amber" | "rose" | "emerald" | "violet";
-}) {
-  const ring =
-    tone === "rose"
-      ? "ring-rose-200/80"
-      : tone === "amber"
-        ? "ring-amber-200/80"
-        : tone === "emerald"
-          ? "ring-emerald-200/80"
-          : tone === "violet"
-            ? "ring-violet-200/80"
-            : "ring-slate-200/90";
-  return (
-    <div className={`rounded-xl border border-slate-200/90 bg-white p-5 shadow-sm ring-1 ${ring}`}>
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{title}</p>
-      <p className="mt-2 text-3xl font-semibold tabular-nums tracking-tight text-slate-900">{value}</p>
-      {hint ? <p className="mt-1 text-xs text-slate-600">{hint}</p> : null}
-    </div>
-  );
-}
-
-function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-      <h2 className="text-base font-semibold text-slate-900">{title}</h2>
-      <div className="mt-4">{children}</div>
-    </div>
-  );
 }
 
 type SortKey = "severity" | "title" | "entity" | "created_at" | "status";
@@ -495,291 +469,297 @@ export default function PurchasingAlertsPage() {
     }
   };
 
+  const sortMark = (key: SortKey) => (sortKey === key ? (sortDir === "asc" ? " ↑" : " ↓") : "");
+  const thSort = "cursor-pointer pb-2 pr-3 hover:text-slate-700";
+  const thStatic = "pb-2 pr-3";
+
   return (
     <PurchasingContentArea>
-      <PurchasingPageHeader title="Problemy wymagające uwagi" />
-      <div className="space-y-6">
-
-      {err ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
-          {err}
-          <button type="button" className="ml-3 underline" onClick={() => setErr(null)}>
-            Zamknij
-          </button>
-        </div>
-      ) : null}
-      {toast ? (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-          {toast}
-          <button type="button" className="ml-3 underline" onClick={() => setToast(null)}>
-            OK
-          </button>
-        </div>
-      ) : null}
-
-      {loading && !summary ? (
-        <p className="text-sm text-slate-500">Ładowanie…</p>
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <KpiCard title="Otwarte problemy" value={openCount} tone="slate" hint="Wymagają decyzji lub działania." />
-          <KpiCard title="Pilne (wysoki priorytet)" value={criticalOpen} tone="rose" hint="Zacznij od tych pozycji w tabeli." />
-          <KpiCard title="Zamknięte dziś" value={resolvedToday} tone="emerald" hint="Dobra robota — utrzymuj porządek na liście." />
-          <KpiCard
-            title="Szkice zamówień do sprawdzenia"
-            value={draftsWaiting}
-            hint={<Link className="text-sky-700 underline" to={ordersHref}>Przejdź do zamówień zakupowych</Link>}
-            tone="violet"
-          />
-        </div>
-      )}
-
-      <SectionCard title="Co możesz zrobić teraz">
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            disabled={actionBusy}
-            onClick={() => void runScan()}
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-          >
-            Przeskanuj magazyn i zamówienia
-          </button>
-          <button
-            type="button"
-            disabled={actionBusy}
-            onClick={() => void createDrafts()}
-            className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 disabled:opacity-50"
-          >
-            Utwórz szkice zamówień (pozycje pilne)
-          </button>
-          <button
-            type="button"
-            disabled={actionBusy || selectedIds.size === 0}
-            onClick={() => void bulkResolve()}
-            className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-950 disabled:opacity-50"
-          >
-            Oznacz jako zamknięte ({selectedIds.size})
-          </button>
-        </div>
-        <p className="mt-2 text-xs text-slate-500">
-          Skan odczytuje reguły poniżej i odświeża listę. Szkice zawsze możesz poprawić przed wysłką do dostawcy.
-        </p>
-      </SectionCard>
-
-      <SectionCard title="Lista problemów">
-        <div className="mb-4 flex flex-wrap gap-3">
-          <select
-            className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-          >
-            <option value="">Status: wszystkie</option>
-            <option value="open">Do obsłużenia</option>
-            <option value="acknowledged">Przejrzane</option>
-            <option value="resolved">Zamknięte</option>
-          </select>
-          <select
-            className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
-            value={filterSeverity}
-            onChange={(e) => setFilterSeverity(e.target.value)}
-          >
-            <option value="">Priorytet: wszystkie</option>
-            <option value="critical">Wysoki</option>
-            <option value="warning">Średni</option>
-            <option value="info">Informacja</option>
-          </select>
-          <select
-            className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
-            value={filterRuleType}
-            onChange={(e) => setFilterRuleType(e.target.value)}
-          >
-            <option value="">Kategoria: wszystkie</option>
-            {PURCHASING_ALERT_RULE_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {RULE_TYPE_META[t]?.emoji} {RULE_TYPE_META[t]?.short ?? t}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-slate-200 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                <th className="pb-2 pr-2">
-                  <input
-                    type="checkbox"
-                    aria-label="Zaznacz widoczne"
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        setSelectedIds(new Set(sortedAlerts.filter((a) => a.status !== "resolved").map((a) => a.id)));
-                      } else setSelectedIds(new Set());
-                    }}
-                  />
-                </th>
-                <th className="cursor-pointer pb-2 pr-3" onClick={() => toggleSort("severity")}>
-                  Priorytet {sortKey === "severity" ? (sortDir === "asc" ? "↑" : "↓") : ""}
-                </th>
-                <th className="cursor-pointer pb-2 pr-3" onClick={() => toggleSort("title")}>
-                  Problem {sortKey === "title" ? (sortDir === "asc" ? "↑" : "↓") : ""}
-                </th>
-                <th className="cursor-pointer pb-2 pr-3" onClick={() => toggleSort("entity")}>
-                  Produkt {sortKey === "entity" ? (sortDir === "asc" ? "↑" : "↓") : ""}
-                </th>
-                <th className="pb-2 pr-3">Dostawca</th>
-                <th className="pb-2 pr-3">Sugestia</th>
-                <th className="cursor-pointer pb-2 pr-3" onClick={() => toggleSort("created_at")}>
-                  Zgłoszono {sortKey === "created_at" ? (sortDir === "asc" ? "↑" : "↓") : ""}
-                </th>
-                <th className="cursor-pointer pb-2 pr-3" onClick={() => toggleSort("status")}>
-                  Status {sortKey === "status" ? (sortDir === "asc" ? "↑" : "↓") : ""}
-                </th>
-                <th className="pb-2">Akcje</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {sortedAlerts.map((a) => {
-                const prodName = extractQuotedName(a.message) ?? (a.product_id != null ? `Produkt #${a.product_id}` : "—");
-                const supName =
-                  a.supplier_id != null ? supplierNameById.get(a.supplier_id) ?? `Dostawca #${a.supplier_id}` : "—";
-                const cat = RULE_TYPE_META[a.rule_type];
-                return (
-                  <tr key={a.id} className="align-top">
-                    <td className="py-2 pr-2">
-                      {a.status !== "resolved" ? (
-                        <input
-                          type="checkbox"
-                          checked={selectedIds.has(a.id)}
-                          onChange={(e) => toggleSelect(a.id, e.target.checked)}
-                        />
-                      ) : null}
-                    </td>
-                    <td className="py-2 pr-3">
-                      <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${severityBadgeClass(a.severity)}`}>
-                        {priorityLabel(a.severity)}
-                      </span>
-                    </td>
-                    <td className="py-2 pr-3 text-slate-900">
-                      <div className="font-medium text-slate-900">
-                        {cat?.emoji} {cat?.short ?? "Problem"}
-                      </div>
-                      <div className="mt-0.5 text-xs text-slate-600">{problemDescription(a)}</div>
-                    </td>
-                    <td className="py-2 pr-3 text-slate-800">
-                      {a.product_id != null ? (
-                        <Link className="text-sky-800 underline" to={`/products/${a.product_id}`}>
-                          {prodName}
-                        </Link>
-                      ) : (
-                        <span className="text-slate-500">{prodName}</span>
-                      )}
-                    </td>
-                    <td className="py-2 pr-3 text-slate-700">{supName}</td>
-                    <td className="py-2 pr-3 text-slate-700">{suggestionText(a)}</td>
-                    <td className="py-2 pr-3 whitespace-nowrap text-slate-600">{fmtDate(a.created_at)}</td>
-                    <td className="py-2 pr-3 text-slate-700">{statusLabelPl(a.status)}</td>
-                    <td className="py-2">
-                      <div className="flex flex-col gap-1">
-                        <Link className="text-xs font-medium text-sky-800 underline" to={replenishmentHref(a)}>
-                          Dodaj do szkicu (generator)
-                        </Link>
-                        {a.status === "open" ? (
-                          <button
-                            type="button"
-                            className="text-left text-xs text-slate-700 underline"
-                            onClick={() =>
-                              void patchPurchasingAlertAcknowledge(a.id, tenantId).then(() => load())
-                            }
-                          >
-                            Oznacz jako przejrzane
-                          </button>
-                        ) : null}
-                        {a.status !== "resolved" ? (
-                          <button
-                            type="button"
-                            className="text-left text-xs text-slate-700 underline"
-                            onClick={() => void patchPurchasingAlertResolve(a.id, tenantId).then(() => load())}
-                          >
-                            Zamknij
-                          </button>
-                        ) : null}
-                      </div>
-                    </td>
+      <PurchasingPageShell
+        header={<PurchasingPageHeader title="Problemy wymagające uwagi" subtitle="Alerty z reguł wykrywania — decyzje i szkice zamówień." />}
+        status={
+          <>
+            {err ? (
+              <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+                {err}
+                <button type="button" className="ml-3 underline" onClick={() => setErr(null)}>
+                  Zamknij
+                </button>
+              </div>
+            ) : null}
+            {toast ? (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+                {toast}
+                <button type="button" className="ml-3 underline" onClick={() => setToast(null)}>
+                  OK
+                </button>
+              </div>
+            ) : null}
+            {loading && !summary ? <p className="text-sm text-slate-500">Ładowanie…</p> : null}
+          </>
+        }
+        kpis={
+          summary ? (
+            <PurchasingKpiGrid columns={4}>
+              <PurchasingKpiCard title="Otwarte problemy" value={openCount} subtitle="Wymagają decyzji lub działania." tone="default" />
+              <PurchasingKpiCard title="Pilne (wysoki priorytet)" value={criticalOpen} subtitle="Zacznij od tych pozycji w tabeli." tone="red" />
+              <PurchasingKpiCard title="Zamknięte dziś" value={resolvedToday} subtitle="Dobra robota — utrzymuj porządek na liście." tone="emerald" />
+              <PurchasingKpiCard
+                title="Szkice zamówień do sprawdzenia"
+                value={draftsWaiting}
+                subtitle="Przejdź do zamówień zakupowych"
+                tone="purple"
+                to={ordersHref}
+              />
+            </PurchasingKpiGrid>
+          ) : null
+        }
+        analysis={
+          <PurchasingAnalysisSection title="Co możesz zrobić teraz">
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={actionBusy}
+                onClick={() => void runScan()}
+                className={purchasingFilterPrimaryButtonClass}
+              >
+                Przeskanuj magazyn i zamówienia
+              </button>
+              <button
+                type="button"
+                disabled={actionBusy}
+                onClick={() => void createDrafts()}
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 disabled:opacity-50"
+              >
+                Utwórz szkice zamówień (pozycje pilne)
+              </button>
+              <button
+                type="button"
+                disabled={actionBusy || selectedIds.size === 0}
+                onClick={() => void bulkResolve()}
+                className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-950 disabled:opacity-50"
+              >
+                Oznacz jako zamknięte ({selectedIds.size})
+              </button>
+            </div>
+            <p className="mt-2 text-xs text-slate-500">
+              Skan odczytuje reguły poniżej i odświeża listę. Szkice zawsze możesz poprawić przed wysłką do dostawcy.
+            </p>
+          </PurchasingAnalysisSection>
+        }
+        filters={
+          <PurchasingFilterBar>
+            <PurchasingFilterField label="Status">
+              <select className={purchasingSelectClass} value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
+                <option value="">Wszystkie</option>
+                <option value="open">Do obsłużenia</option>
+                <option value="acknowledged">Przejrzane</option>
+                <option value="resolved">Zamknięte</option>
+              </select>
+            </PurchasingFilterField>
+            <PurchasingFilterField label="Priorytet">
+              <select className={purchasingSelectClass} value={filterSeverity} onChange={(e) => setFilterSeverity(e.target.value)}>
+                <option value="">Wszystkie</option>
+                <option value="critical">Wysoki</option>
+                <option value="warning">Średni</option>
+                <option value="info">Informacja</option>
+              </select>
+            </PurchasingFilterField>
+            <PurchasingFilterField label="Kategoria">
+              <select className={purchasingSelectClass} value={filterRuleType} onChange={(e) => setFilterRuleType(e.target.value)}>
+                <option value="">Wszystkie</option>
+                {PURCHASING_ALERT_RULE_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {RULE_TYPE_META[t]?.emoji} {RULE_TYPE_META[t]?.short ?? t}
+                  </option>
+                ))}
+              </select>
+            </PurchasingFilterField>
+          </PurchasingFilterBar>
+        }
+        table={
+          <>
+            <PurchasingTableSection title="Lista problemów" indicatorClass="bg-orange-500">
+              <table className="min-w-full text-left text-sm">
+                <PurchasingTableHeader compact>
+                  <tr>
+                    <th className="pb-2 pr-2">
+                      <input
+                        type="checkbox"
+                        aria-label="Zaznacz widoczne"
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedIds(new Set(sortedAlerts.filter((a) => a.status !== "resolved").map((a) => a.id)));
+                          } else setSelectedIds(new Set());
+                        }}
+                      />
+                    </th>
+                    <th className={thSort} onClick={() => toggleSort("severity")}>
+                      Priorytet{sortMark("severity")}
+                    </th>
+                    <th className={thSort} onClick={() => toggleSort("title")}>
+                      Problem{sortMark("title")}
+                    </th>
+                    <th className={thSort} onClick={() => toggleSort("entity")}>
+                      Produkt{sortMark("entity")}
+                    </th>
+                    <th className={thStatic}>Dostawca</th>
+                    <th className={thStatic}>Sugestia</th>
+                    <th className={thSort} onClick={() => toggleSort("created_at")}>
+                      Zgłoszono{sortMark("created_at")}
+                    </th>
+                    <th className={thSort} onClick={() => toggleSort("status")}>
+                      Status{sortMark("status")}
+                    </th>
+                    <th className="pb-2">Akcje</th>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          {sortedAlerts.length === 0 && !loading ? (
-            <p className="mt-4 text-sm text-slate-500">Brak pozycji — zmień filtry lub uruchom skan.</p>
-          ) : null}
-        </div>
-      </SectionCard>
+                </PurchasingTableHeader>
+                <tbody className="divide-y divide-slate-100">
+                  {sortedAlerts.map((a) => {
+                    const prodName = extractQuotedName(a.message) ?? (a.product_id != null ? `Produkt #${a.product_id}` : "—");
+                    const supName =
+                      a.supplier_id != null ? supplierNameById.get(a.supplier_id) ?? `Dostawca #${a.supplier_id}` : "—";
+                    const cat = RULE_TYPE_META[a.rule_type];
+                    return (
+                      <tr key={a.id} className="align-top">
+                        <td className="px-3 py-2 pr-2">
+                          {a.status !== "resolved" ? (
+                            <input
+                              type="checkbox"
+                              checked={selectedIds.has(a.id)}
+                              onChange={(e) => toggleSelect(a.id, e.target.checked)}
+                            />
+                          ) : null}
+                        </td>
+                        <td className="px-3 py-2 pr-3">
+                          <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${severityBadgeClass(a.severity)}`}>
+                            {priorityLabel(a.severity)}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 pr-3 text-slate-900">
+                          <div className="font-medium text-slate-900">
+                            {cat?.emoji} {cat?.short ?? "Problem"}
+                          </div>
+                          <div className="mt-0.5 text-xs text-slate-600">{problemDescription(a)}</div>
+                        </td>
+                        <td className="px-3 py-2 pr-3 text-slate-800">
+                          {a.product_id != null ? (
+                            <Link className="text-sky-800 underline" to={`/products/${a.product_id}`}>
+                              {prodName}
+                            </Link>
+                          ) : (
+                            <span className="text-slate-500">{prodName}</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 pr-3 text-slate-700">{supName}</td>
+                        <td className="px-3 py-2 pr-3 text-slate-700">{suggestionText(a)}</td>
+                        <td className="px-3 py-2 pr-3 whitespace-nowrap text-slate-600">{fmtDate(a.created_at)}</td>
+                        <td className="px-3 py-2 pr-3 text-slate-700">{statusLabelPl(a.status)}</td>
+                        <td className="px-3 py-2">
+                          <div className="flex flex-col gap-1">
+                            <Link className="text-xs font-medium text-sky-800 underline" to={replenishmentHref(a)}>
+                              Dodaj do szkicu (generator)
+                            </Link>
+                            {a.status === "open" ? (
+                              <button
+                                type="button"
+                                className="text-left text-xs text-slate-700 underline"
+                                onClick={() => void patchPurchasingAlertAcknowledge(a.id, tenantId).then(() => load())}
+                              >
+                                Oznacz jako przejrzane
+                              </button>
+                            ) : null}
+                            {a.status !== "resolved" ? (
+                              <button
+                                type="button"
+                                className="text-left text-xs text-slate-700 underline"
+                                onClick={() => void patchPurchasingAlertResolve(a.id, tenantId).then(() => load())}
+                              >
+                                Zamknij
+                              </button>
+                            ) : null}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              {sortedAlerts.length === 0 && !loading ? (
+                <p className="px-4 py-8 text-sm text-slate-500">Brak pozycji — zmień filtry lub uruchom skan.</p>
+              ) : null}
+            </PurchasingTableSection>
 
-      <SectionCard title="Reguły wykrywania (dla administratora zakupów)">
-        <div className="mb-3 flex justify-end">
-          <button
-            type="button"
-            onClick={() => setModalOpen(true)}
-            className="rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white"
-          >
-            Dodaj regułę
-          </button>
-        </div>
-        <ul className="divide-y divide-slate-100 text-sm">
-          {rules.map((r) => (
-            <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
-              <div>
-                <span className="font-medium text-slate-900">{r.name}</span>
-                <span className="ml-2 text-slate-600">
-                  {RULE_TYPE_META[r.type]?.emoji} {RULE_TYPE_META[r.type]?.label ?? r.type} ·{" "}
-                  <span className={`rounded px-1.5 py-0.5 text-xs ${severityBadgeClass(r.severity)}`}>
-                    {priorityLabel(r.severity)}
-                  </span>
-                </span>
-              </div>
-              <label className="flex items-center gap-2 text-slate-600">
-                <input
-                  type="checkbox"
-                  checked={r.is_enabled}
-                  onChange={(e) =>
-                    void patchPurchasingAlertRule(r.id, tenantId, { is_enabled: e.target.checked }).then(() => load())
-                  }
-                />
-                Włączona
-              </label>
-            </li>
-          ))}
-        </ul>
-        {rules.length === 0 ? (
-          <p className="text-sm text-slate-500">Nie masz jeszcze reguł — dodaj pierwszą, aby skan miał się czego trzymać.</p>
-        ) : null}
-      </SectionCard>
-
-      <SectionCard title="Ostatnio utworzone szkice (automat)">
-        <ul className="space-y-3 text-sm">
-          {drafts.map((d) => (
-            <li key={d.id} className="rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2">
-              <div className="font-medium text-slate-800">{fmtDate(d.generated_at)}</div>
-              <div className="mt-1 text-slate-600">
-                {d.purchase_order_ids.length === 0 ? (
-                  <span>Brak powiązanych numerów PO w zapisie.</span>
-                ) : (
-                  <>
-                    Numery szkiców:{" "}
-                    {d.purchase_order_ids.map((id) => (
-                      <span key={id}>
-                        <Link className="text-sky-700 underline" to={ordersHref}>
-                          {id}
-                        </Link>{" "}
+            <PurchasingTableSection
+              title="Reguły wykrywania (dla administratora zakupów)"
+              indicatorClass="bg-slate-500"
+              action={
+                <button type="button" onClick={() => setModalOpen(true)} className={purchasingFilterPrimaryButtonClass}>
+                  Dodaj regułę
+                </button>
+              }
+            >
+              <ul className="divide-y divide-slate-100 px-4 py-2 text-sm">
+                {rules.map((r) => (
+                  <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
+                    <div>
+                      <span className="font-medium text-slate-900">{r.name}</span>
+                      <span className="ml-2 text-slate-600">
+                        {RULE_TYPE_META[r.type]?.emoji} {RULE_TYPE_META[r.type]?.label ?? r.type} ·{" "}
+                        <span className={`rounded px-1.5 py-0.5 text-xs ${severityBadgeClass(r.severity)}`}>
+                          {priorityLabel(r.severity)}
+                        </span>
                       </span>
-                    ))}
-                  </>
-                )}
-              </div>
-            </li>
-          ))}
-        </ul>
-        {drafts.length === 0 ? <p className="text-sm text-slate-500">Jeszcze nie zapisano partii szkiców z tej ścieżki.</p> : null}
-      </SectionCard>
+                    </div>
+                    <label className="flex items-center gap-2 text-slate-600">
+                      <input
+                        type="checkbox"
+                        checked={r.is_enabled}
+                        onChange={(e) =>
+                          void patchPurchasingAlertRule(r.id, tenantId, { is_enabled: e.target.checked }).then(() => load())
+                        }
+                      />
+                      Włączona
+                    </label>
+                  </li>
+                ))}
+              </ul>
+              {rules.length === 0 ? (
+                <p className="px-4 py-6 text-sm text-slate-500">Nie masz jeszcze reguł — dodaj pierwszą, aby skan miał się czego trzymać.</p>
+              ) : null}
+            </PurchasingTableSection>
+
+            <PurchasingAnalysisSection title="Ostatnio utworzone szkice (automat)">
+              <ul className="space-y-3 text-sm">
+                {drafts.map((d) => (
+                  <li key={d.id} className="rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2">
+                    <div className="font-medium text-slate-800">{fmtDate(d.generated_at)}</div>
+                    <div className="mt-1 text-slate-600">
+                      {d.purchase_order_ids.length === 0 ? (
+                        <span>Brak powiązanych numerów PO w zapisie.</span>
+                      ) : (
+                        <>
+                          Numery szkiców:{" "}
+                          {d.purchase_order_ids.map((id) => (
+                            <span key={id}>
+                              <Link className="text-sky-700 underline" to={ordersHref}>
+                                {id}
+                              </Link>{" "}
+                            </span>
+                          ))}
+                        </>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              {drafts.length === 0 ? (
+                <p className="text-sm text-slate-500">Jeszcze nie zapisano partii szkiców z tej ścieżki.</p>
+              ) : null}
+            </PurchasingAnalysisSection>
+          </>
+        }
+      />
 
       {modalOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -840,7 +820,6 @@ export default function PurchasingAlertsPage() {
           </div>
         </div>
       ) : null}
-      </div>
     </PurchasingContentArea>
   );
 }

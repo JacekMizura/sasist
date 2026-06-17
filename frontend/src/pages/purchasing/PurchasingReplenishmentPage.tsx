@@ -15,7 +15,21 @@ import { createPurchaseOrdersFromGenerator } from "../../api/purchasingOrdersApi
 import { pageContainerWidthAlignClass } from "../../components/layout/PageContainer";
 import { DataTablePageSizeSelect } from "../../components/table/DataTablePageSizeSelect";
 import { usePurchasingTenant } from "../../modules/purchasing/hooks/usePurchasingTenant";
-import { PurchasingContentArea, PurchasingPageHeader } from "../../modules/purchasing/ui";
+import {
+  PurchasingContentArea,
+  PurchasingFilterBar,
+  PurchasingFilterField,
+  PurchasingKpiCard,
+  PurchasingKpiGrid,
+  PurchasingPageHeader,
+  PurchasingPageShell,
+  PurchasingTableHeader,
+  PurchasingTableSection,
+  purchasingFilterButtonClass,
+  purchasingFilterPrimaryButtonClass,
+  purchasingInputClass,
+  purchasingSelectClass,
+} from "../../modules/purchasing/ui";
 
 const PO_TOAST_KEY = "purchasing_po_toast";
 const PURCHASE_GENERATOR_PAGE_SIZE_KEY = "purchase_generator.pageSize";
@@ -339,330 +353,325 @@ export default function PurchasingReplenishmentPage() {
     return true;
   };
 
-  const th =
-    "sticky top-0 z-10 border-b border-slate-200 bg-white py-3 px-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 shadow-sm";
+  const td = "px-2 py-2 align-middle text-sm text-slate-800";
 
   return (
     <PurchasingContentArea className="pb-28">
       {!hasActiveWarehouse ? (
         <ActiveWarehouseRequiredBanner hint="Propozycje zakupów i tworzenie PO dotyczą aktywnego magazynu z paska u góry." />
       ) : null}
-      <PurchasingPageHeader
-        title="Generator propozycji zakupów"
-        actions={
-          <>
-            <button
-              type="button"
-              disabled={loading}
-              onClick={() => void load()}
-              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium hover:bg-slate-50 disabled:opacity-50"
-            >
-              Generuj ponownie
-            </button>
-            <button
-              type="button"
-              disabled={exporting || loading}
-              onClick={async () => {
-                setExporting(true);
-                try {
-                  await downloadReplenishmentCsv({ ...queryBase });
-                } catch {
-                  setErr("Eksport CSV nie powiódł się.");
-                } finally {
-                  setExporting(false);
-                }
-              }}
-              className="flex items-center rounded-lg border border-slate-800 bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
-            >
-              <Download className="mr-2 h-4 w-4" />
-              {exporting ? "Eksport…" : "Eksport CSV"}
-            </button>
-            <button
-              type="button"
-              disabled
-              title="Funkcja w przygotowaniu (Etap 4 — zamówienia zakupowe)."
-              className="flex items-center rounded-lg bg-blue-50 px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-100"
-            >
-              <Save className="mr-2 h-4 w-4" />
-              Zapisz szkic
-            </button>
-          </>
+      <PurchasingPageShell
+        header={
+          <PurchasingPageHeader
+            title="Generator propozycji zakupów"
+            subtitle="Sugestie uzupełnień na podstawie stanów, sprzedaży i otwartych dostaw."
+            actions={
+              <>
+                <button type="button" disabled={loading} onClick={() => void load()} className={purchasingFilterButtonClass}>
+                  Generuj ponownie
+                </button>
+                <button
+                  type="button"
+                  disabled={exporting || loading}
+                  onClick={async () => {
+                    setExporting(true);
+                    try {
+                      await downloadReplenishmentCsv({ ...queryBase });
+                    } catch {
+                      setErr("Eksport CSV nie powiódł się.");
+                    } finally {
+                      setExporting(false);
+                    }
+                  }}
+                  className={`flex items-center ${purchasingFilterPrimaryButtonClass}`}
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  {exporting ? "Eksport…" : "Eksport CSV"}
+                </button>
+                <button
+                  type="button"
+                  disabled
+                  title="Funkcja w przygotowaniu (Etap 4 — zamówienia zakupowe)."
+                  className="flex items-center rounded-lg bg-blue-50 px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-100"
+                >
+                  <Save className="mr-2 h-4 w-4" />
+                  Zapisz szkic
+                </button>
+              </>
+            }
+          />
         }
-      />
-
-      {summary && !loading ? (
-        <div className="flex flex-wrap gap-3 text-sm">
-          <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-600">
-            Wiersze: <strong>{summary.total_rows}</strong>
-          </span>
-          <span className="rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-blue-700">
-            Sugestie ≥ 1: <strong>{summary.suggested_count}</strong>
-          </span>
-          <span className="rounded-full border border-red-100 bg-red-50 px-3 py-1 text-red-700">
-            Krytyczne: <strong>{summary.critical_count}</strong>
-          </span>
-          <span className="rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-emerald-700">
-            Wartość sugerowana:{" "}
-            <strong>{numFmt(summary.total_suggested_value, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
-          </span>
-        </div>
-      ) : null}
-      <div className="flex flex-col flex-wrap gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-end">
-        <div className="flex min-w-[200px] flex-[2] flex-col gap-1">
-          <label className="text-xs font-medium text-slate-600">Szukaj</label>
-          <input
-            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm"
-            placeholder="Nazwa, SKU, symbol, EAN…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <div className="flex min-w-[160px] flex-1 flex-col gap-1">
-          <label className="text-xs font-medium text-slate-600">Dostawca</label>
-          <select
-            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm"
-            value={supplierId}
-            onChange={(e) => {
-              setSupplierId(e.target.value);
-              setPage(1);
-            }}
-          >
-            <option value="">Wszyscy</option>
-            {suppliers.map((s) => (
-              <option key={s.id} value={String(s.id)}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="flex min-w-[140px] flex-1 flex-col gap-1">
-          <label className="text-xs font-medium text-slate-600">Kategoria</label>
-          <select disabled className="cursor-not-allowed rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500 shadow-sm" title="Brak powiązania kategorii w modelu produktu — wkrótce.">
-            <option value="">Wszystkie</option>
-          </select>
-        </div>
-        <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
-          <input
-            type="checkbox"
-            checked={criticalOnly}
-            onChange={(e) => {
-              setCriticalOnly(e.target.checked);
-              setPage(1);
-            }}
-          />
-          Tylko krytyczne
-        </label>
-        <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
-          <input
-            type="checkbox"
-            checked={lowStockOnly}
-            onChange={(e) => {
-              setLowStockOnly(e.target.checked);
-              setPage(1);
-            }}
-          />
-          Niski stan
-        </label>
-        <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
-          <input
-            type="checkbox"
-            checked={positiveMarginOnly}
-            onChange={(e) => {
-              setPositiveMarginOnly(e.target.checked);
-              setPage(1);
-            }}
-          />
-          Dodatnia marża
-        </label>
-        <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
-          <input
-            type="checkbox"
-            checked={stockZeroOnly}
-            onChange={(e) => {
-              setStockZeroOnly(e.target.checked);
-              setPage(1);
-            }}
-          />
-          Tylko brak stanu
-        </label>
-        <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
-          <input
-            type="checkbox"
-            checked={belowMinStockOnly}
-            onChange={(e) => {
-              setBelowMinStockOnly(e.target.checked);
-              setPage(1);
-            }}
-          />
-          Poniżej min. stanu
-        </label>
-        <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
-          <input
-            type="checkbox"
-            checked={hasBuyPriceOnly}
-            onChange={(e) => {
-              setHasBuyPriceOnly(e.target.checked);
-              setPage(1);
-            }}
-          />
-          Z ceną zakupu
-        </label>
-        <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
-          <input
-            type="checkbox"
-            checked={showLossProducts}
-            onChange={(e) => {
-              setShowLossProducts(e.target.checked);
-              setPage(1);
-            }}
-          />
-          Tylko strata
-        </label>
-        <div className="flex min-w-[100px] flex-col gap-1">
-          <label className="text-xs font-medium text-slate-600">Top rotacja (N)</label>
-          <input
-            type="number"
-            min={1}
-            className="w-full rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm text-slate-800 shadow-sm"
-            placeholder="—"
-            value={topSalesLimitStr}
-            onChange={(e) => {
-              setTopSalesLimitStr(e.target.value);
-              setPage(1);
-            }}
-          />
-        </div>
-        <div className="flex min-w-[90px] flex-col gap-1">
-          <label className="text-xs font-medium text-slate-600">Marża min. %</label>
-          <input
-            type="text"
-            inputMode="decimal"
-            className="w-full rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm text-slate-800 shadow-sm"
-            placeholder="—"
-            value={marginMinStr}
-            onChange={(e) => {
-              setMarginMinStr(e.target.value);
-              setPage(1);
-            }}
-          />
-        </div>
-        <div className="flex min-w-[90px] flex-col gap-1">
-          <label className="text-xs font-medium text-slate-600">Niska marża &lt; %</label>
-          <input
-            type="text"
-            inputMode="decimal"
-            className="w-full rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm text-slate-800 shadow-sm"
-            placeholder="—"
-            value={lowMarginLtStr}
-            onChange={(e) => {
-              setLowMarginLtStr(e.target.value);
-              setPage(1);
-            }}
-          />
-        </div>
-        <div className="flex min-w-[100px] flex-col gap-1">
-          <label className="text-xs font-medium text-slate-600">Klasa ABC</label>
-          <select
-            className="rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm text-slate-800 shadow-sm"
-            value={segmentAbc}
-            onChange={(e) => {
-              setSegmentAbc(e.target.value as "" | "A" | "B" | "C");
-              setPage(1);
-            }}
-          >
-            <option value="">Wszystkie</option>
-            <option value="A">A</option>
-            <option value="B">B</option>
-            <option value="C">C</option>
-          </select>
-        </div>
-        <div className="flex gap-2">
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-slate-600">Sortowanie</label>
-            <select
-              className="rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm text-slate-800 shadow-sm"
-              value={sortBy}
-              onChange={(e) => {
-                setSortBy(e.target.value);
-                setPage(1);
-              }}
-            >
-              <option value="suggested_qty">Sugestia</option>
-              <option value="estimated_order_value">Wartość</option>
-              <option value="product_name">Produkt</option>
-              <option value="current_stock">Stan</option>
-              <option value="avg_daily_sales">Śr. / dzień</option>
-              <option value="margin_percent">Marża %</option>
-            </select>
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-slate-600">Kierunek</label>
-            <select
-              className="rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm text-slate-800 shadow-sm"
-              value={sortDir}
-              onChange={(e) => {
-                setSortDir(e.target.value as "asc" | "desc");
-                setPage(1);
-              }}
-            >
-              <option value="desc">Malejąco</option>
-              <option value="asc">Rosnąco</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
-      {err ? (
-        <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{err}</p>
-      ) : null}
-
-      {loading ? (
-        <TableSkeleton cols={6} />
-      ) : !data || data.summary.total_rows === 0 ? (
-        <div className="rounded-2xl border border-slate-200 bg-white p-12 text-center shadow-sm">
-          <p className="text-base font-medium text-slate-800">Brak pozycji do wyświetlenia</p>
-          <p className="mt-2 max-w-md text-sm text-slate-600">
-            Zmień filtry lub sprawdź, czy w wybranym podmiocie są produkty ze stanem, sprzedażą lub otwartymi dostawami.
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          <div className="flex justify-end">
-            <DataTablePageSizeSelect
-              value={pageSize}
-              onChange={(next) => {
-                setPageSize(next);
-                setPage(1);
-              }}
-            />
-          </div>
-          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-            <table className="w-full min-w-[1100px] border-collapse text-sm">
-            <thead>
-              <tr>
-                <th className={`${th} w-10 text-center`}>
+        status={err ? <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{err}</p> : null}
+        kpis={
+          summary && !loading ? (
+            <PurchasingKpiGrid columns={4}>
+              <PurchasingKpiCard title="Wiersze" value={summary.total_rows} tone="default" />
+              <PurchasingKpiCard title="Sugestie ≥ 1" value={summary.suggested_count} tone="blue" />
+              <PurchasingKpiCard title="Krytyczne" value={summary.critical_count} tone="red" />
+              <PurchasingKpiCard
+                title="Wartość sugerowana"
+                value={numFmt(summary.total_suggested_value, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                tone="emerald"
+              />
+            </PurchasingKpiGrid>
+          ) : null
+        }
+        filters={
+          <PurchasingFilterBar
+            footer={
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-slate-700">
+                <label className="flex cursor-pointer items-center gap-2">
                   <input
                     type="checkbox"
-                    aria-label="Zaznacz stronę"
-                    checked={rows.length > 0 && rows.every((r) => selected.has(r.product_id))}
-                    onChange={togglePage}
+                    checked={criticalOnly}
+                    onChange={(e) => {
+                      setCriticalOnly(e.target.checked);
+                      setPage(1);
+                    }}
                   />
-                </th>
-                <th className={th}>Produkt</th>
-                <th className={`${th} text-right`}>Stan</th>
-                <th className={`${th} text-right`}>W drodze</th>
-                <th className={`${th} text-right`}>Sprzedaż 30d</th>
-                <th className={`${th} text-right`}>Śr/dzień</th>
-                <th className={`${th} text-right`}>Dni zapasu</th>
-                <th className={`${th} text-right`}>Sugestia</th>
-                <th className={`${th} w-28 text-center`}>Sygnał</th>
-                <th className={th}>Dostawca</th>
-                <th className={`${th} text-right`}>Zakup</th>
-                <th className={`${th} text-right`}>Marża</th>
-                <th className={`${th} text-right`}>Wartość</th>
-              </tr>
-            </thead>
-            <tbody>
+                  Tylko krytyczne
+                </label>
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={lowStockOnly}
+                    onChange={(e) => {
+                      setLowStockOnly(e.target.checked);
+                      setPage(1);
+                    }}
+                  />
+                  Niski stan
+                </label>
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={positiveMarginOnly}
+                    onChange={(e) => {
+                      setPositiveMarginOnly(e.target.checked);
+                      setPage(1);
+                    }}
+                  />
+                  Dodatnia marża
+                </label>
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={stockZeroOnly}
+                    onChange={(e) => {
+                      setStockZeroOnly(e.target.checked);
+                      setPage(1);
+                    }}
+                  />
+                  Tylko brak stanu
+                </label>
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={belowMinStockOnly}
+                    onChange={(e) => {
+                      setBelowMinStockOnly(e.target.checked);
+                      setPage(1);
+                    }}
+                  />
+                  Poniżej min. stanu
+                </label>
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={hasBuyPriceOnly}
+                    onChange={(e) => {
+                      setHasBuyPriceOnly(e.target.checked);
+                      setPage(1);
+                    }}
+                  />
+                  Z ceną zakupu
+                </label>
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={showLossProducts}
+                    onChange={(e) => {
+                      setShowLossProducts(e.target.checked);
+                      setPage(1);
+                    }}
+                  />
+                  Tylko strata
+                </label>
+              </div>
+            }
+          >
+            <PurchasingFilterField label="Szukaj" className="min-w-[200px] flex-[2]">
+              <input
+                className={purchasingInputClass}
+                placeholder="Nazwa, SKU, symbol, EAN…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </PurchasingFilterField>
+            <PurchasingFilterField label="Dostawca" className="min-w-[160px] flex-1">
+              <select
+                className={purchasingSelectClass}
+                value={supplierId}
+                onChange={(e) => {
+                  setSupplierId(e.target.value);
+                  setPage(1);
+                }}
+              >
+                <option value="">Wszyscy</option>
+                {suppliers.map((s) => (
+                  <option key={s.id} value={String(s.id)}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </PurchasingFilterField>
+            <PurchasingFilterField label="Kategoria" className="min-w-[140px] flex-1">
+              <select
+                disabled
+                className="w-full cursor-not-allowed rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500 shadow-sm"
+                title="Brak powiązania kategorii w modelu produktu — wkrótce."
+              >
+                <option value="">Wszystkie</option>
+              </select>
+            </PurchasingFilterField>
+            <PurchasingFilterField label="Top rotacja (N)" className="min-w-[100px]">
+              <input
+                type="number"
+                min={1}
+                className={purchasingInputClass}
+                placeholder="—"
+                value={topSalesLimitStr}
+                onChange={(e) => {
+                  setTopSalesLimitStr(e.target.value);
+                  setPage(1);
+                }}
+              />
+            </PurchasingFilterField>
+            <PurchasingFilterField label="Marża min. %" className="min-w-[90px]">
+              <input
+                type="text"
+                inputMode="decimal"
+                className={purchasingInputClass}
+                placeholder="—"
+                value={marginMinStr}
+                onChange={(e) => {
+                  setMarginMinStr(e.target.value);
+                  setPage(1);
+                }}
+              />
+            </PurchasingFilterField>
+            <PurchasingFilterField label="Niska marża < %" className="min-w-[90px]">
+              <input
+                type="text"
+                inputMode="decimal"
+                className={purchasingInputClass}
+                placeholder="—"
+                value={lowMarginLtStr}
+                onChange={(e) => {
+                  setLowMarginLtStr(e.target.value);
+                  setPage(1);
+                }}
+              />
+            </PurchasingFilterField>
+            <PurchasingFilterField label="Klasa ABC" className="min-w-[100px]">
+              <select
+                className={purchasingSelectClass}
+                value={segmentAbc}
+                onChange={(e) => {
+                  setSegmentAbc(e.target.value as "" | "A" | "B" | "C");
+                  setPage(1);
+                }}
+              >
+                <option value="">Wszystkie</option>
+                <option value="A">A</option>
+                <option value="B">B</option>
+                <option value="C">C</option>
+              </select>
+            </PurchasingFilterField>
+            <PurchasingFilterField label="Sortowanie">
+              <select
+                className={purchasingSelectClass}
+                value={sortBy}
+                onChange={(e) => {
+                  setSortBy(e.target.value);
+                  setPage(1);
+                }}
+              >
+                <option value="suggested_qty">Sugestia</option>
+                <option value="estimated_order_value">Wartość</option>
+                <option value="product_name">Produkt</option>
+                <option value="current_stock">Stan</option>
+                <option value="avg_daily_sales">Śr. / dzień</option>
+                <option value="margin_percent">Marża %</option>
+              </select>
+            </PurchasingFilterField>
+            <PurchasingFilterField label="Kierunek">
+              <select
+                className={purchasingSelectClass}
+                value={sortDir}
+                onChange={(e) => {
+                  setSortDir(e.target.value as "asc" | "desc");
+                  setPage(1);
+                }}
+              >
+                <option value="desc">Malejąco</option>
+                <option value="asc">Rosnąco</option>
+              </select>
+            </PurchasingFilterField>
+          </PurchasingFilterBar>
+        }
+        table={
+          loading ? (
+            <TableSkeleton cols={6} />
+          ) : !data || data.summary.total_rows === 0 ? (
+            <div className="rounded-xl border border-slate-200 bg-white p-12 text-center shadow-sm">
+              <p className="text-base font-medium text-slate-800">Brak pozycji do wyświetlenia</p>
+              <p className="mt-2 max-w-md text-sm text-slate-600">
+                Zmień filtry lub sprawdź, czy w wybranym podmiocie są produkty ze stanem, sprzedażą lub otwartymi dostawami.
+              </p>
+            </div>
+          ) : (
+            <PurchasingTableSection
+              title="Propozycje uzupełnień"
+              indicatorClass="bg-blue-500"
+              toolbar={
+                <div className="flex justify-end">
+                  <DataTablePageSizeSelect
+                    value={pageSize}
+                    onChange={(next) => {
+                      setPageSize(next);
+                      setPage(1);
+                    }}
+                  />
+                </div>
+              }
+            >
+              <table className="w-full min-w-[1100px] border-collapse text-sm">
+                <PurchasingTableHeader compact sticky className="bg-white">
+                  <tr>
+                    <th className={`${td} w-10 text-center font-semibold uppercase tracking-wide text-slate-500`}>
+                      <input
+                        type="checkbox"
+                        aria-label="Zaznacz stronę"
+                        checked={rows.length > 0 && rows.every((r) => selected.has(r.product_id))}
+                        onChange={togglePage}
+                      />
+                    </th>
+                    <th className={`${td} text-left font-semibold uppercase tracking-wide text-slate-500`}>Produkt</th>
+                    <th className={`${td} text-right font-semibold uppercase tracking-wide text-slate-500`}>Stan</th>
+                    <th className={`${td} text-right font-semibold uppercase tracking-wide text-slate-500`}>W drodze</th>
+                    <th className={`${td} text-right font-semibold uppercase tracking-wide text-slate-500`}>Sprzedaż 30d</th>
+                    <th className={`${td} text-right font-semibold uppercase tracking-wide text-slate-500`}>Śr/dzień</th>
+                    <th className={`${td} text-right font-semibold uppercase tracking-wide text-slate-500`}>Dni zapasu</th>
+                    <th className={`${td} text-right font-semibold uppercase tracking-wide text-slate-500`}>Sugestia</th>
+                    <th className={`${td} w-28 text-center font-semibold uppercase tracking-wide text-slate-500`}>Sygnał</th>
+                    <th className={`${td} text-left font-semibold uppercase tracking-wide text-slate-500`}>Dostawca</th>
+                    <th className={`${td} text-right font-semibold uppercase tracking-wide text-slate-500`}>Zakup</th>
+                    <th className={`${td} text-right font-semibold uppercase tracking-wide text-slate-500`}>Marża</th>
+                    <th className={`${td} text-right font-semibold uppercase tracking-wide text-slate-500`}>Wartość</th>
+                  </tr>
+                </PurchasingTableHeader>
+                <tbody>
               {rows.map((r, idx) => (
                 <tr
                   key={r.product_id}
@@ -742,37 +751,39 @@ export default function PurchasingReplenishmentPage() {
                   </td>
                 </tr>
               ))}
-            </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {!loading && data && data.summary.total_rows > 0 ? (
-        <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-slate-600">
-          <span>
-            Strona {page} / {totalPages}
-          </span>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              disabled={page <= 1}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 font-medium hover:bg-slate-50 disabled:opacity-40"
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-            >
-              Poprzednia
-            </button>
-            <button
-              type="button"
-              disabled={page >= totalPages}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 font-medium hover:bg-slate-50 disabled:opacity-40"
-              onClick={() => setPage((p) => p + 1)}
-            >
-              Następna
-            </button>
-          </div>
-        </div>
-      ) : null}
+                </tbody>
+              </table>
+            </PurchasingTableSection>
+          )
+        }
+        footer={
+          !loading && data && data.summary.total_rows > 0 ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-slate-600">
+              <span>
+                Strona {page} / {totalPages}
+              </span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={page <= 1}
+                  className={purchasingFilterButtonClass}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                >
+                  Poprzednia
+                </button>
+                <button
+                  type="button"
+                  disabled={page >= totalPages}
+                  className={purchasingFilterButtonClass}
+                  onClick={() => setPage((p) => p + 1)}
+                >
+                  Następna
+                </button>
+              </div>
+            </div>
+          ) : null
+        }
+      />
 
       {selected.size > 0 ? (
         <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-slate-200 bg-white/95 py-3 shadow-[0_-4px_20px_rgba(15,23,42,0.08)] backdrop-blur supports-[backdrop-filter]:bg-white/80">
