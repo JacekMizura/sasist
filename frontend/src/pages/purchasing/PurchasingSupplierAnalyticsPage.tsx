@@ -21,7 +21,18 @@ import {
   type SupplierAnalyticsSeries,
 } from "../../api/purchasingSupplierAnalyticsApi";
 import { usePurchasingModuleContextOptional } from "../../modules/purchasing/context/PurchasingModuleContext";
-import { PurchasingContentArea, PurchasingPageHeader } from "../../modules/purchasing/ui";
+import {
+  PurchasingContentArea,
+  PurchasingFilterBar,
+  PurchasingFilterField,
+  PurchasingKpiCard,
+  PurchasingKpiGrid,
+  PurchasingPageHeader,
+  PurchasingPageShell,
+  PurchasingTableSection,
+  purchasingFilterButtonClass,
+  purchasingSelectClass,
+} from "../../modules/purchasing/ui";
 
 type Tenant = { id: number; name: string };
 
@@ -76,24 +87,6 @@ function riskLabel(risk: string): string {
     default:
       return "Wysoki";
   }
-}
-
-function Kpi({
-  title,
-  value,
-  hint,
-}: {
-  title: string;
-  value: string;
-  hint?: string;
-}) {
-  return (
-    <div className="rounded-xl border border-slate-200/90 bg-white p-5 shadow-sm ring-1 ring-slate-200/90">
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{title}</p>
-      <p className="mt-2 text-2xl font-semibold tabular-nums text-slate-900">{value}</p>
-      {hint ? <p className="mt-1 text-xs text-slate-500">{hint}</p> : null}
-    </div>
-  );
 }
 
 export default function PurchasingSupplierAnalyticsPage() {
@@ -205,61 +198,71 @@ export default function PurchasingSupplierAnalyticsPage() {
 
   return (
     <PurchasingContentArea>
-      <PurchasingPageHeader title="Ocena dostawców" />
-      <div className="space-y-6">
-        <div className="flex flex-wrap items-end gap-3">
-          {!moduleCtx ? (
-            <div>
-              <label className="text-xs font-medium text-slate-500">Tenant</label>
-              <select
-                className="mt-1 block rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
-                value={tenantId}
-                onChange={(e) => setTenantId(Number(e.target.value))}
-              >
-                {tenants.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name} (#{t.id})
-                  </option>
-                ))}
-              </select>
+      <PurchasingPageShell
+        header={<PurchasingPageHeader title="Ocena dostawców" subtitle="Ranking dostawców wg terminowości, cen i wolumenu zakupów." />}
+        status={
+          err ? (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+              {err}
+              <button type="button" className="ml-3 underline" onClick={() => void load()}>
+                Spróbuj ponownie
+              </button>
             </div>
-          ) : null}
-          <div>
-            <label className="text-xs font-medium text-slate-500">Okres</label>
-            <select
-              className="mt-1 block rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
-              value={rangeDays}
-              onChange={(e) => setRangeDays(Number(e.target.value) as 30 | 90 | 365)}
-            >
-              <option value={30}>30 dni</option>
-              <option value={90}>90 dni</option>
-              <option value={365}>365 dni</option>
-            </select>
-          </div>
-        </div>
-
-      {err ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
-          {err}
-          <button type="button" className="ml-3 underline" onClick={() => void load()}>
-            Spróbuj ponownie
-          </button>
-        </div>
-      ) : null}
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Kpi title="Najlepszy dostawca (wg oceny)" value={kpis.best} />
-        <Kpi title="Najsłabszy dostawca (wg oceny)" value={kpis.worst} />
-        <Kpi title="Średnia ocena liczbowa" value={kpis.avgScore} hint="0–100, tylko dostawcy z kompletem danych" />
-        <Kpi
-          title="Dostawcy z problemami terminów"
-          value={kpis.delayed}
-          hint="terminowość poniżej 80% lub średnie opóźnienie powyżej 2 dni"
-        />
-      </div>
-
-      <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <table className="min-w-full text-left text-sm">
+          ) : null
+        }
+        kpis={
+          <PurchasingKpiGrid columns={4}>
+            <PurchasingKpiCard title="Najlepszy dostawca (wg oceny)" value={kpis.best} tone="emerald" />
+            <PurchasingKpiCard title="Najsłabszy dostawca (wg oceny)" value={kpis.worst} tone="amber" />
+            <PurchasingKpiCard
+              title="Średnia ocena liczbowa"
+              value={kpis.avgScore}
+              subtitle="0–100, tylko dostawcy z kompletem danych"
+              tone="blue"
+            />
+            <PurchasingKpiCard
+              title="Dostawcy z problemami terminów"
+              value={kpis.delayed}
+              subtitle="terminowość poniżej 80% lub średnie opóźnienie powyżej 2 dni"
+              tone="red"
+            />
+          </PurchasingKpiGrid>
+        }
+        filters={
+          <PurchasingFilterBar
+            actions={
+              <button type="button" className={purchasingFilterButtonClass} onClick={() => void load()} disabled={loading}>
+                Odśwież
+              </button>
+            }
+          >
+            {!moduleCtx ? (
+              <PurchasingFilterField label="Podmiot">
+                <select className={purchasingSelectClass} value={tenantId} onChange={(e) => setTenantId(Number(e.target.value))}>
+                  {tenants.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name} (#{t.id})
+                    </option>
+                  ))}
+                </select>
+              </PurchasingFilterField>
+            ) : null}
+            <PurchasingFilterField label="Okres">
+              <select
+                className={purchasingSelectClass}
+                value={rangeDays}
+                onChange={(e) => setRangeDays(Number(e.target.value) as 30 | 90 | 365)}
+              >
+                <option value={30}>30 dni</option>
+                <option value={90}>90 dni</option>
+                <option value={365}>365 dni</option>
+              </select>
+            </PurchasingFilterField>
+          </PurchasingFilterBar>
+        }
+        table={
+          <PurchasingTableSection title="Ranking dostawców" indicatorClass="bg-indigo-500">
+            <table className="min-w-full text-left text-sm">
           <thead className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wide text-slate-500">
             <tr>
               <th className="px-3 py-3">#</th>
@@ -337,8 +340,10 @@ export default function PurchasingSupplierAnalyticsPage() {
               </tr>
             ))}
           </tbody>
-        </table>
-      </div>
+            </table>
+          </PurchasingTableSection>
+        }
+      />
 
       {drawerSid != null ? (
         <div className="fixed inset-0 z-50 flex justify-end bg-black/40" role="presentation" onClick={() => setDrawerSid(null)}>
@@ -460,7 +465,6 @@ export default function PurchasingSupplierAnalyticsPage() {
           </div>
         </div>
       ) : null}
-      </div>
     </PurchasingContentArea>
   );
 }

@@ -8,7 +8,18 @@ import api from "../../api/axios";
 import { listSuppliers, type SupplierRead } from "../../api/inboundSuppliersApi";
 import { fetchPurchasingSegments, type PurchasingSegmentsPayload } from "../../api/purchasingSegmentsApi";
 import { useWarehouse } from "../../context/WarehouseContext";
-import { PurchasingContentArea, PurchasingPageHeader } from "../../modules/purchasing/ui";
+import {
+  PurchasingAnalysisSection,
+  PurchasingContentArea,
+  PurchasingFilterBar,
+  PurchasingFilterField,
+  PurchasingKpiCard,
+  PurchasingKpiGrid,
+  PurchasingPageHeader,
+  PurchasingPageShell,
+  PurchasingTableSection,
+  purchasingSelectClass,
+} from "../../modules/purchasing/ui";
 
 type Tenant = { id: number; name: string };
 
@@ -63,16 +74,6 @@ function badgeXyz(c: string): string {
 function fmtNum(n: number | null | undefined, d = 2): string {
   if (n == null || Number.isNaN(n)) return "—";
   return n.toLocaleString("pl-PL", { maximumFractionDigits: d });
-}
-
-function Kpi({ title, value, hint }: { title: string; value: string | number; hint?: string }) {
-  return (
-    <div className="rounded-xl border border-slate-200/90 bg-white p-5 shadow-sm ring-1 ring-slate-200/90">
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{title}</p>
-      <p className="mt-2 text-2xl font-semibold tabular-nums text-slate-900">{value}</p>
-      {hint ? <p className="mt-1 text-xs text-slate-500">{hint}</p> : null}
-    </div>
-  );
 }
 
 export default function PurchasingSegmentsPage() {
@@ -161,144 +162,146 @@ export default function PurchasingSegmentsPage() {
 
   return (
     <PurchasingContentArea>
-      <PurchasingPageHeader
-        title="Priorytety asortymentu"
-        subtitle="Produkty są pogrupowane według ważności dla obrotu (A, B, C) oraz sposobu sprzedaży (X, Y, Z). To pomaga ustalić, gdzie trzymać zapas."
-      />
-      <div className="space-y-6">
-
-      <div className="flex flex-col flex-wrap gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <div className="flex flex-wrap gap-3">
-          <div>
-            <label className="text-xs font-medium text-slate-500">Podmiot</label>
-            <select
-              className="mt-1 block rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
-              value={tenantId}
-              onChange={(e) => setTenantId(Number(e.target.value))}
-            >
-              {tenants.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name} (#{t.id})
-                </option>
+      <PurchasingPageShell
+        header={
+          <PurchasingPageHeader
+            title="Priorytety asortymentu"
+            subtitle="Produkty są pogrupowane według ważności dla obrotu (A, B, C) oraz sposobu sprzedaży (X, Y, Z). To pomaga ustalić, gdzie trzymać zapas."
+          />
+        }
+        status={
+          err ? (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+              {err}
+              <button type="button" className="ml-3 underline" onClick={() => void load()}>
+                Ponów
+              </button>
+            </div>
+          ) : null
+        }
+        kpis={
+          <PurchasingKpiGrid columns={4}>
+            <PurchasingKpiCard
+              title="Najważniejszy asortyment (A)"
+              value={data?.summary.products_a_count ?? 0}
+              subtitle="Produkty, które generują większość obrotu — tu warto pilnować dostępności."
+              tone="emerald"
+            />
+            <PurchasingKpiCard
+              title="Stabilne hity (A + stabilny popyt)"
+              value={data?.summary.ax_count ?? 0}
+              subtitle="Najbezpieczniejsze do planowania zapasu i automatyzacji."
+              tone="blue"
+            />
+            <PurchasingKpiCard
+              title="Nieregularna sprzedaż (wysokie ryzyko zapasu)"
+              value={data?.summary.high_risk_count ?? 0}
+              subtitle="Te SKU potrafią „stać” lub znikać z półki — sprawdź, czy nie zamrażają kapitału."
+              tone="amber"
+            />
+            <PurchasingKpiCard
+              title="Martwy stock"
+              value={data?.summary.dead_stock_count ?? 0}
+              subtitle="Stan > 0, a w oknie brak ruchu — rozważ wyprzedaż lub wstrzymanie zakupów."
+              tone="red"
+            />
+          </PurchasingKpiGrid>
+        }
+        filters={
+          <PurchasingFilterBar
+            footer={
+              <div className="flex flex-wrap items-center gap-4 text-sm">
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input type="checkbox" checked={deadStockOnly} onChange={(e) => setDeadStockOnly(e.target.checked)} />
+                  Martwy stock
+                </label>
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input type="checkbox" checked={highPriorityOnly} onChange={(e) => setHighPriorityOnly(e.target.checked)} />
+                  Wysoki priorytet (≥70)
+                </label>
+                {segmentFilter ? (
+                  <button type="button" className="text-sky-700 underline" onClick={() => setSegmentFilter("")}>
+                    Wyczyść segment z heatmapy
+                  </button>
+                ) : null}
+              </div>
+            }
+          >
+            <PurchasingFilterField label="Podmiot">
+              <select className={purchasingSelectClass} value={tenantId} onChange={(e) => setTenantId(Number(e.target.value))}>
+                {tenants.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name} (#{t.id})
+                  </option>
+                ))}
+              </select>
+            </PurchasingFilterField>
+            <PurchasingFilterField label="Magazyn">
+              <p className="rounded-lg border border-dashed border-slate-200 px-3 py-2 text-sm text-slate-600">
+                {selectedWarehouseId != null ? `#${selectedWarehouseId}` : "Cały tenant (wszystkie magazyny)"}
+              </p>
+            </PurchasingFilterField>
+            <PurchasingFilterField label="Okres sprzedaży">
+              <select
+                className={purchasingSelectClass}
+                value={rangeDays}
+                onChange={(e) => setRangeDays(Number(e.target.value) as 30 | 90 | 365)}
+              >
+                <option value={30}>30 dni</option>
+                <option value={90}>90 dni</option>
+                <option value={365}>365 dni</option>
+              </select>
+            </PurchasingFilterField>
+            <PurchasingFilterField label="Dostawca" className="min-w-[12rem]">
+              <select className={purchasingSelectClass} value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
+                <option value="">Wszyscy</option>
+                {suppliers.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </PurchasingFilterField>
+          </PurchasingFilterBar>
+        }
+        analysis={
+          <PurchasingAnalysisSection
+            title="Mapa priorytetów"
+            subtitle="Kliknij pole, aby zobaczyć listę produktów w tabeli poniżej (drugi klik wyłącza filtr). Skrót w nawiasie to tylko pomoc sortowania — pod spodem masz ludzki opis."
+          >
+            <div className="grid w-full grid-cols-3 gap-2">
+              {heatmapTiles.map(({ seg, count, active }) => (
+                <button
+                  key={seg}
+                  type="button"
+                  onClick={() => toggleSegmentFromHeatmap(seg)}
+                  className={`rounded-xl border px-2 py-3 text-left text-xs transition ${
+                    active
+                      ? "border-sky-500 bg-sky-50 ring-2 ring-sky-300"
+                      : "border-slate-200 bg-slate-50/80 hover:border-slate-300 hover:bg-white"
+                  }`}
+                >
+                  <div className="font-mono text-sm font-bold text-slate-900">{seg}</div>
+                  <div className="mt-0.5 text-[11px] font-medium leading-snug text-slate-800">{segmentBadgeLabel(seg)}</div>
+                  <div className="mt-1 text-[11px] leading-snug text-slate-600">{SEGMENT_USER_HINT[seg]}</div>
+                  <div className="mt-2 text-xs font-semibold text-slate-700">{count} produktów</div>
+                </button>
               ))}
-            </select>
-          </div>
-          <div>
-            <label className="text-xs font-medium text-slate-500">Magazyn</label>
-            <p className="mt-1 rounded-lg border border-dashed border-slate-200 px-3 py-2 text-sm text-slate-600">
-              {selectedWarehouseId != null ? `#${selectedWarehouseId}` : "Cały tenant (wszystkie magazyny)"}
-            </p>
-          </div>
-          <div>
-            <label className="text-xs font-medium text-slate-500">Okres sprzedaży</label>
-            <select
-              className="mt-1 block rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
-              value={rangeDays}
-              onChange={(e) => setRangeDays(Number(e.target.value) as 30 | 90 | 365)}
-            >
-              <option value={30}>30 dni</option>
-              <option value={90}>90 dni</option>
-              <option value={365}>365 dni</option>
-            </select>
-          </div>
-          <div>
-            <label className="text-xs font-medium text-slate-500">Dostawca</label>
-            <select
-              className="mt-1 block min-w-[12rem] rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
-              value={supplierId}
-              onChange={(e) => setSupplierId(e.target.value)}
-            >
-              <option value="">Wszyscy</option>
-              {suppliers.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-4 text-sm">
-          <label className="flex cursor-pointer items-center gap-2">
-            <input type="checkbox" checked={deadStockOnly} onChange={(e) => setDeadStockOnly(e.target.checked)} />
-            Martwy stock
-          </label>
-          <label className="flex cursor-pointer items-center gap-2">
-            <input type="checkbox" checked={highPriorityOnly} onChange={(e) => setHighPriorityOnly(e.target.checked)} />
-            Wysoki priorytet (≥70)
-          </label>
-          {segmentFilter ? (
-            <button type="button" className="text-sky-700 underline" onClick={() => setSegmentFilter("")}>
-              Wyczyść segment z heatmapy
-            </button>
-          ) : null}
-        </div>
-      </div>
-
-      {err ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
-          {err}
-          <button type="button" className="ml-3 underline" onClick={() => void load()}>
-            Ponów
-          </button>
-        </div>
-      ) : null}
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Kpi
-          title="Najważniejszy asortyment (A)"
-          value={data?.summary.products_a_count ?? 0}
-          hint="Produkty, które generują większość obrotu — tu warto pilnować dostępności."
-        />
-        <Kpi
-          title="Stabilne hity (A + stabilny popyt)"
-          value={data?.summary.ax_count ?? 0}
-          hint="Najbezpieczniejsze do planowania zapasu i automatyzacji."
-        />
-        <Kpi
-          title="Nieregularna sprzedaż (wysokie ryzyko zapasu)"
-          value={data?.summary.high_risk_count ?? 0}
-          hint="Te SKU potrafią „stać” lub znikać z półki — sprawdź, czy nie zamrażają kapitału."
-        />
-        <Kpi
-          title="Martwy stock"
-          value={data?.summary.dead_stock_count ?? 0}
-          hint="Stan &gt; 0, a w oknie brak ruchu — rozważ wyprzedaż lub wstrzymanie zakupów."
-        />
-      </div>
-
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="text-base font-semibold text-slate-900">Mapa priorytetów</h2>
-        <p className="mt-1 text-xs text-slate-600">
-          Kliknij pole, aby zobaczyć listę produktów w tabeli poniżej (drugi klik wyłącza filtr). Skrót w nawiasie to tylko pomoc
-          sortowania — pod spodem masz ludzki opis.
-        </p>
-        <div className="mt-4 grid w-full grid-cols-3 gap-2">
-          {heatmapTiles.map(({ seg, count, active }) => (
-            <button
-              key={seg}
-              type="button"
-              onClick={() => toggleSegmentFromHeatmap(seg)}
-              className={`rounded-xl border px-2 py-3 text-left text-xs transition ${
-                active
-                  ? "border-sky-500 bg-sky-50 ring-2 ring-sky-300"
-                  : "border-slate-200 bg-slate-50/80 hover:border-slate-300 hover:bg-white"
-              }`}
-            >
-              <div className="font-mono text-sm font-bold text-slate-900">{seg}</div>
-              <div className="mt-0.5 text-[11px] font-medium leading-snug text-slate-800">{segmentBadgeLabel(seg)}</div>
-              <div className="mt-1 text-[11px] leading-snug text-slate-600">{SEGMENT_USER_HINT[seg]}</div>
-              <div className="mt-2 text-xs font-semibold text-slate-700">{count} produktów</div>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-100 px-4 py-3 text-sm text-slate-600">
-          Wyniki: <strong>{data?.summary.total_products ?? 0}</strong> produktów (po filtrach)
-          {loading ? <span className="ml-2 text-slate-400">Ładowanie…</span> : null}
-        </div>
-        <table className="min-w-full text-left text-sm">
+            </div>
+          </PurchasingAnalysisSection>
+        }
+        table={
+          <PurchasingTableSection
+            title="Lista produktów"
+            indicatorClass="bg-sky-500"
+            toolbar={
+              <>
+                Wyniki: <strong>{data?.summary.total_products ?? 0}</strong> produktów (po filtrach)
+                {loading ? <span className="ml-2 text-slate-400">Ładowanie…</span> : null}
+              </>
+            }
+          >
+            <table className="min-w-full text-left text-sm">
           <thead className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wide text-slate-500">
             <tr>
               <th className="px-3 py-3">Produkt</th>
@@ -356,11 +359,12 @@ export default function PurchasingSegmentsPage() {
             ))}
           </tbody>
         </table>
-        {!loading && (data?.rows.length ?? 0) === 0 ? (
-          <p className="px-4 py-8 text-center text-sm text-slate-500">Brak produktów spełniających kryteria.</p>
-        ) : null}
-      </div>
-      </div>
+            {!loading && (data?.rows.length ?? 0) === 0 ? (
+              <p className="px-4 py-8 text-center text-sm text-slate-500">Brak produktów spełniających kryteria.</p>
+            ) : null}
+          </PurchasingTableSection>
+        }
+      />
     </PurchasingContentArea>
   );
 }

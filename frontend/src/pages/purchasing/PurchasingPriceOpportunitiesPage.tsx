@@ -13,7 +13,19 @@ import {
 } from "../../api/purchasingPriceOpportunitiesApi";
 import { listSuppliers, type SupplierRead } from "../../api/inboundSuppliersApi";
 import { useWarehouse } from "../../context/WarehouseContext";
-import { PurchasingContentArea, PurchasingPageHeader } from "../../modules/purchasing/ui";
+import {
+  PurchasingContentArea,
+  PurchasingFilterBar,
+  PurchasingFilterField,
+  PurchasingKpiCard,
+  PurchasingKpiGrid,
+  PurchasingPageHeader,
+  PurchasingPageShell,
+  PurchasingQuickActions,
+  PurchasingTableSection,
+  purchasingFilterButtonClass,
+  purchasingSelectClass,
+} from "../../modules/purchasing/ui";
 
 type Tenant = { id: number; name: string };
 
@@ -86,16 +98,6 @@ function wczytajZignorowane(tenantId: number): Set<string> {
 
 function zapiszZignorowane(tenantId: number, s: Set<string>): void {
   localStorage.setItem(dismissStorageKey(tenantId), JSON.stringify(Array.from(s)));
-}
-
-function Kpi({ title, value, hint }: { title: string; value: string | number; hint?: string }) {
-  return (
-    <div className="rounded-xl border border-slate-200/90 bg-white p-5 shadow-sm ring-1 ring-slate-200/90">
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{title}</p>
-      <p className="mt-2 text-2xl font-semibold tabular-nums text-slate-900">{value}</p>
-      {hint ? <p className="mt-1 text-xs text-slate-500">{hint}</p> : null}
-    </div>
-  );
 }
 
 export default function PurchasingPriceOpportunitiesPage() {
@@ -230,119 +232,114 @@ export default function PurchasingPriceOpportunitiesPage() {
 
   return (
     <PurchasingContentArea>
-      <PurchasingPageHeader
-        title="Oszczędności zakupowe"
-        subtitle="Porównanie ofert, historia zakupów i progi dostaw — wyłącznie na podstawie danych z systemu."
-        actions={
+      <PurchasingPageShell
+        header={
+          <PurchasingPageHeader
+            title="Oszczędności zakupowe"
+            subtitle="Porównanie ofert, historia zakupów i progi dostaw — wyłącznie na podstawie danych z systemu."
+            actions={
+              <>
+                <Link to={`/purchasing/replenishment?tenant_id=${tenantId}`} className={purchasingFilterButtonClass}>
+                  Generator
+                </Link>
+                <Link to={`/purchasing/orders?tenant_id=${tenantId}`} className={purchasingFilterButtonClass}>
+                  Zamówienia (PO)
+                </Link>
+              </>
+            }
+          />
+        }
+        status={
           <>
-            <Link
-              to={`/purchasing/replenishment?tenant_id=${tenantId}`}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 shadow-sm hover:bg-slate-50"
-            >
-              Generator
-            </Link>
-            <Link
-              to={`/purchasing/orders?tenant_id=${tenantId}`}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 shadow-sm hover:bg-slate-50"
-            >
-              Zamówienia (PO)
-            </Link>
+            {data?.data_message && (data.rows?.length ?? 0) === 0 ? (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">{data.data_message}</div>
+            ) : null}
+            {(data?.rows?.length ?? 0) > 0 && wierszeWidoczne.length === 0 ? (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                Wszystkie okazje z listy są ukryte (filtr „tylko wysokie” lub oznaczone jako zignorowane w tej przeglądarce).
+              </div>
+            ) : null}
+            {err ? <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{err}</div> : null}
           </>
         }
-      />
-      <div className="space-y-6">
-
-      {data?.data_message && (data.rows?.length ?? 0) === 0 ? (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">{data.data_message}</div>
-      ) : null}
-      {(data?.rows?.length ?? 0) > 0 && wierszeWidoczne.length === 0 ? (
-        <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-          Wszystkie okazje z listy są ukryte (filtr „tylko wysokie” lub oznaczone jako zignorowane w tej przeglądarce).
-        </div>
-      ) : null}
-
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Kpi title="Wszystkie okazje" value={loading ? "—" : kpiZListy.liczba} hint="Widoczne w tabeli (filtry + zignorowane wyłączone)" />
-        <Kpi
-          title="Możliwe oszczędności / mies."
-          value={num(kpiZListy.oszcz, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " PLN"}
-          hint="Suma kolumny „Potencjał” dla widocznych wierszy"
-        />
-        <Kpi title="Tańsi dostawcy (w tabeli)" value={loading ? "—" : kpiZListy.taniej} />
-        <Kpi title="Podwyżki cen (w tabeli)" value={loading ? "—" : kpiZListy.podw} />
-      </div>
-
-      <div className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <label className="text-sm">
-          <span className="mb-1 block text-xs font-medium text-slate-500">Podmiot</span>
-          <select
-            className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
-            value={tenantId}
-            onChange={(e) => setTenantId(Number(e.target.value))}
+        kpis={
+          <PurchasingKpiGrid columns={4}>
+            <PurchasingKpiCard
+              title="Wszystkie okazje"
+              value={loading ? "—" : kpiZListy.liczba}
+              subtitle="Widoczne w tabeli (filtry + zignorowane wyłączone)"
+              tone="blue"
+            />
+            <PurchasingKpiCard
+              title="Możliwe oszczędności / mies."
+              value={`${num(kpiZListy.oszcz, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} PLN`}
+              subtitle="Suma kolumny „Potencjał” dla widocznych wierszy"
+              tone="emerald"
+            />
+            <PurchasingKpiCard title="Tańsi dostawcy (w tabeli)" value={loading ? "—" : kpiZListy.taniej} tone="indigo" />
+            <PurchasingKpiCard title="Podwyżki cen (w tabeli)" value={loading ? "—" : kpiZListy.podw} tone="amber" />
+          </PurchasingKpiGrid>
+        }
+        filters={
+          <PurchasingFilterBar
+            footer={
+              <div className="flex flex-wrap items-center gap-4 text-sm">
+                <label className="flex cursor-pointer items-center gap-2 text-slate-700">
+                  <input type="checkbox" checked={tylkoWysokie} onChange={(e) => setTylkoWysokie(e.target.checked)} />
+                  Tylko wysokie
+                </label>
+                <label className="flex cursor-pointer items-center gap-2 text-slate-700">
+                  <input type="checkbox" checked={tylkoAktywneSku} onChange={(e) => setTylkoAktywneSku(e.target.checked)} />
+                  Tylko aktywne SKU
+                </label>
+              </div>
+            }
           >
-            {tenants.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="text-sm">
-          <span className="mb-1 block text-xs font-medium text-slate-500">Dostawca</span>
-          <select
-            className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
-            value={supplierFilter}
-            onChange={(e) => setSupplierFilter(e.target.value)}
-          >
-            <option value="">Wszyscy</option>
-            {suppliers.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="text-sm">
-          <span className="mb-1 block text-xs font-medium text-slate-500">Typ okazji</span>
-          <select
-            className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-          >
-            <option value="">Wszystkie</option>
-            <option value="cheaper_supplier">Tańszy dostawca</option>
-            <option value="price_increase">Podwyżka vs zakupy</option>
-            <option value="threshold_discount">Próg / dostawa</option>
-            <option value="bulk_discount">Partia (MOQ)</option>
-            <option value="low_rotation_high_cost">Niska rotacja</option>
-          </select>
-        </label>
-        <label className="text-sm">
-          <span className="mb-1 block text-xs font-medium text-slate-500">Okres</span>
-          <select
-            className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
-            value={rangeDays}
-            onChange={(e) => setRangeDays(Number(e.target.value) as 30 | 90 | 365)}
-          >
-            <option value={30}>30 dni</option>
-            <option value={90}>90 dni</option>
-            <option value={365}>365 dni</option>
-          </select>
-        </label>
-        <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
-          <input type="checkbox" checked={tylkoWysokie} onChange={(e) => setTylkoWysokie(e.target.checked)} />
-          Tylko wysokie
-        </label>
-        <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
-          <input type="checkbox" checked={tylkoAktywneSku} onChange={(e) => setTylkoAktywneSku(e.target.checked)} />
-          Tylko aktywne SKU
-        </label>
-      </div>
-
-      {err ? <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">{err}</div> : null}
-
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-        <table className="min-w-[960px] w-full border-collapse text-left text-sm">
+            <PurchasingFilterField label="Podmiot">
+              <select className={purchasingSelectClass} value={tenantId} onChange={(e) => setTenantId(Number(e.target.value))}>
+                {tenants.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </PurchasingFilterField>
+            <PurchasingFilterField label="Dostawca">
+              <select className={purchasingSelectClass} value={supplierFilter} onChange={(e) => setSupplierFilter(e.target.value)}>
+                <option value="">Wszyscy</option>
+                {suppliers.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </PurchasingFilterField>
+            <PurchasingFilterField label="Typ okazji">
+              <select className={purchasingSelectClass} value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
+                <option value="">Wszystkie</option>
+                <option value="cheaper_supplier">Tańszy dostawca</option>
+                <option value="price_increase">Podwyżka vs zakupy</option>
+                <option value="threshold_discount">Próg / dostawa</option>
+                <option value="bulk_discount">Partia (MOQ)</option>
+                <option value="low_rotation_high_cost">Niska rotacja</option>
+              </select>
+            </PurchasingFilterField>
+            <PurchasingFilterField label="Okres">
+              <select
+                className={purchasingSelectClass}
+                value={rangeDays}
+                onChange={(e) => setRangeDays(Number(e.target.value) as 30 | 90 | 365)}
+              >
+                <option value={30}>30 dni</option>
+                <option value={90}>90 dni</option>
+                <option value={365}>365 dni</option>
+              </select>
+            </PurchasingFilterField>
+          </PurchasingFilterBar>
+        }
+        table={
+          <PurchasingTableSection title="Okazje cenowe" indicatorClass="bg-emerald-500">
+            <table className="min-w-[960px] w-full border-collapse text-left text-sm">
           <thead className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase text-slate-600">
             <tr>
               <th className="px-3 py-2">Typ</th>
@@ -417,32 +414,28 @@ export default function PurchasingPriceOpportunitiesPage() {
             )}
           </tbody>
         </table>
-      </div>
-
-      <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4">
-        <p className="text-xs font-semibold uppercase text-slate-500">Szybkie akcje</p>
-        <div className="mt-2 flex flex-wrap gap-2">
-          <button
-            type="button"
-            className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-            onClick={() => void load()}
-          >
-            Odśwież dane
-          </button>
-          <Link
-            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800 hover:bg-white"
-            to={`/purchasing/replenishment?tenant_id=${tenantId}${supplierFilter ? `&supplier_id=${supplierFilter}` : ""}`}
-          >
-            Otwórz generator z filtrem dostawcy
-          </Link>
-          <Link
-            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800 hover:bg-white"
-            to={`/purchasing/orders?tenant_id=${tenantId}`}
-          >
-            Otwórz listę PO
-          </Link>
-        </div>
-      </div>
+          </PurchasingTableSection>
+        }
+        footer={
+          <PurchasingQuickActions
+            actions={[
+              {
+                label: "Generator z filtrem dostawcy",
+                to: `/purchasing/replenishment?tenant_id=${tenantId}${supplierFilter ? `&supplier_id=${supplierFilter}` : ""}`,
+              },
+              {
+                label: "Lista PO",
+                to: `/purchasing/orders?tenant_id=${tenantId}`,
+              },
+            ]}
+            trailing={
+              <button type="button" className="text-xs font-medium text-slate-600 underline" onClick={() => void load()}>
+                Odśwież dane
+              </button>
+            }
+          />
+        }
+      />
 
       {drawerRow ? (
         <div className="fixed inset-0 z-50 flex justify-end bg-black/30" role="presentation" onClick={() => setDrawerRow(null)}>
@@ -544,7 +537,6 @@ export default function PurchasingPriceOpportunitiesPage() {
           </div>
         </div>
       ) : null}
-      </div>
     </PurchasingContentArea>
   );
 }

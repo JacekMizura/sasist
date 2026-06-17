@@ -1,5 +1,13 @@
 # Change log
 
+## 2026-06-08 — Zakupy Faza 1: UX Consistency Pass
+
+- Wspólne komponenty: `PurchasingKpiGrid`, `PurchasingFilterBar`, `PurchasingTableSection`, `PurchasingAnalysisSection`, `PurchasingPageShell`, `PurchasingQuickActions`
+- `PurchasingKpiCard`: opcjonalna nawigacja (`to`) — klikalne KPI na Pulpicie
+- Pulpit: Quick Actions → Generator / Alerty / PO; KPI linkują do replenishment, orders, suppliers/analytics
+- Ujednolicony układ (Header → KPI → Filtry → Analiza → Tabela) na: Prognoza, Ocena dostawców, Historia, Priorytety, Auto-uzupełnianie, Oszczędności
+- Zero zmian API, routingu, logiki biznesowej, struktury zakładek
+
 ## 2026-06-08 — PZ: UX akceptacji różnicy dostawy (bez backendu)
 
 - Menu ⋯: „Zaakceptuj różnicę dostawy” gdy `ordered > received` (lokalny stan sesji)

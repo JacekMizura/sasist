@@ -1,4 +1,5 @@
 import { memo, type ReactNode } from "react";
+import { Link } from "react-router-dom";
 
 export type PurchasingKpiTone = "default" | "red" | "amber" | "blue" | "emerald" | "indigo" | "purple" | "yellow";
 
@@ -40,13 +41,17 @@ type Props = {
   icon?: ReactNode;
   tone?: PurchasingKpiTone;
   className?: string;
+  /** Nawigacja — karta staje się klikalna (tylko UX, bez zmiany danych). */
+  to?: string;
 };
 
-function PurchasingKpiCardInner({ title, value, subtitle, icon, tone = "default", className = "" }: Props) {
-  return (
-    <div
-      className={`relative flex flex-col justify-between overflow-hidden rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md border-l-4 ${ACCENT[tone]} ${className}`.trim()}
-    >
+function PurchasingKpiCardInner({ title, value, subtitle, icon, tone = "default", className = "", to }: Props) {
+  const cardClass = `relative flex flex-col justify-between overflow-hidden rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow border-l-4 ${ACCENT[tone]} ${
+    to ? "hover:shadow-md hover:border-slate-300" : ""
+  } ${className}`.trim();
+
+  const inner = (
+    <>
       <div className="mb-4 flex items-start justify-between">
         <h3 className="w-3/4 text-[11px] font-bold uppercase tracking-widest text-slate-500">{title}</h3>
         {icon ? <div className={`rounded-lg p-2 ${ICON_BG[tone] ?? "bg-slate-50"}`}>{icon}</div> : null}
@@ -57,8 +62,18 @@ function PurchasingKpiCardInner({ title, value, subtitle, icon, tone = "default"
         </div>
         {subtitle ? <div className="text-xs text-slate-400">{subtitle}</div> : <div className="text-xs text-transparent select-none">{"\u00A0"}</div>}
       </div>
-    </div>
+    </>
   );
+
+  if (to) {
+    return (
+      <Link to={to} className={`block no-underline ${cardClass}`} aria-label={title}>
+        {inner}
+      </Link>
+    );
+  }
+
+  return <div className={cardClass}>{inner}</div>;
 }
 
 export const PurchasingKpiCard = memo(PurchasingKpiCardInner);

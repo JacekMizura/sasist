@@ -2,7 +2,18 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import api from "../../api/axios";
 import { fetchPurchasingCooperationHistory, type PurchasingCooperationHistoryPayload } from "../../api/purchasingCooperationHistoryApi";
-import { PurchasingContentArea, PurchasingPageHeader } from "../../modules/purchasing/ui";
+import {
+  PurchasingAnalysisSection,
+  PurchasingContentArea,
+  PurchasingFilterBar,
+  PurchasingFilterField,
+  PurchasingKpiCard,
+  PurchasingKpiGrid,
+  PurchasingPageHeader,
+  PurchasingPageShell,
+  PurchasingTableSection,
+  purchasingSelectClass,
+} from "../../modules/purchasing/ui";
 
 type Supplier = { id: number; name: string };
 
@@ -80,102 +91,104 @@ export default function PurchasingCooperationHistoryPage() {
 
   return (
     <PurchasingContentArea>
-      <PurchasingPageHeader title="Historia współpracy" />
-      <div className="space-y-6">
-
-      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <label className="text-xs font-medium text-slate-600">Dostawca</label>
-        <select
-          className="mt-1 block w-full max-w-md rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
-          value={supplierId ?? ""}
-          onChange={(e) => setSupplierId(e.target.value ? Number(e.target.value) : null)}
-        >
-          {suppliers.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {err ? <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{err}</div> : null}
-      {loading ? <p className="text-sm text-slate-500">Ładowanie…</p> : null}
-
-      {summary ? (
-        <>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-              <p className="text-xs text-slate-500">Liczba PO</p>
-              <p className="mt-1 text-lg font-semibold tabular-nums">{summary.total_orders}</p>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-              <p className="text-xs text-slate-500">Przyjęcia PZ</p>
-              <p className="mt-1 text-lg font-semibold tabular-nums">{summary.total_receipts}</p>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-              <p className="text-xs text-slate-500">Terminowość %</p>
-              <p className="mt-1 text-lg font-semibold tabular-nums">{fmtPct(summary.on_time_percent)}</p>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-              <p className="text-xs text-slate-500">Śr. czas dostawy (dni)</p>
-              <p className="mt-1 text-lg font-semibold tabular-nums">{summary.avg_delivery_time != null ? summary.avg_delivery_time.toFixed(2) : "—"}</p>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-              <p className="text-xs text-slate-500">Wydatki netto</p>
-              <p className="mt-1 text-lg font-semibold tabular-nums">{fmtMoney(summary.total_net_spend)}</p>
-            </div>
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm text-sm">
-              <p className="text-xs font-medium text-slate-500">Pierwsze zamówienie</p>
-              <p className="mt-1 text-slate-800">{fmtDate(summary.first_order_date)}</p>
-              <p className="mt-3 text-xs font-medium text-slate-500">Ostatnia dostawa</p>
-              <p className="mt-1 text-slate-800">{fmtDate(summary.last_delivery_date)}</p>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm text-sm">
-              <p className="text-xs font-medium text-slate-500">Trend ceny</p>
-              <p className="mt-1 text-slate-800">{fmtPct(summary.price_trend)}</p>
-              <p className="mt-3 text-xs text-slate-500">Wyliczone z historii przyjęć</p>
-            </div>
-          </div>
-
-          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-            <table className="min-w-full text-sm">
-              <thead className="bg-slate-50">
-                <tr>
-                  <th className="px-3 py-2 text-left font-semibold text-slate-700">Typ</th>
-                  <th className="px-3 py-2 text-left font-semibold text-slate-700">Dokument</th>
-                  <th className="px-3 py-2 text-left font-semibold text-slate-700">Data</th>
-                  <th className="px-3 py-2 text-left font-semibold text-slate-700">Status</th>
-                  <th className="px-3 py-2 text-right font-semibold text-slate-700">Netto</th>
-                  <th className="px-3 py-2 text-right font-semibold text-slate-700">Brutto</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {data?.recent_documents.map((d, idx) => (
-                  <tr key={`${d.doc_type}-${d.document_no}-${idx}`}>
-                    <td className="px-3 py-2">{d.doc_type}</td>
-                    <td className="px-3 py-2">{d.document_no}</td>
-                    <td className="px-3 py-2">{fmtDate(d.date)}</td>
-                    <td className="px-3 py-2">{d.status || "—"}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{fmtMoney(d.total_net)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{fmtMoney(d.total_gross)}</td>
-                  </tr>
+      <PurchasingPageShell
+        header={
+          <PurchasingPageHeader
+            title="Historia współpracy"
+            subtitle="Podsumowanie zamówień, przyjęć i trendów cenowych wybranego dostawcy."
+          />
+        }
+        status={
+          <>
+            {err ? <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{err}</div> : null}
+            {loading ? <p className="text-sm text-slate-500">Ładowanie…</p> : null}
+          </>
+        }
+        filters={
+          <PurchasingFilterBar>
+            <PurchasingFilterField label="Dostawca" className="min-w-[240px] flex-1">
+              <select
+                className={purchasingSelectClass}
+                value={supplierId ?? ""}
+                onChange={(e) => setSupplierId(e.target.value ? Number(e.target.value) : null)}
+              >
+                {suppliers.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
                 ))}
-                {!data?.recent_documents?.length ? (
+              </select>
+            </PurchasingFilterField>
+          </PurchasingFilterBar>
+        }
+        kpis={
+          summary ? (
+            <PurchasingKpiGrid columns={4}>
+              <PurchasingKpiCard title="Liczba PO" value={summary.total_orders} tone="blue" />
+              <PurchasingKpiCard title="Przyjęcia PZ" value={summary.total_receipts} tone="indigo" />
+              <PurchasingKpiCard title="Terminowość %" value={fmtPct(summary.on_time_percent)} tone="emerald" />
+              <PurchasingKpiCard
+                title="Śr. czas dostawy (dni)"
+                value={summary.avg_delivery_time != null ? summary.avg_delivery_time.toFixed(2) : "—"}
+                tone="default"
+              />
+              <PurchasingKpiCard title="Wydatki netto" value={`${fmtMoney(summary.total_net_spend)} zł`} tone="purple" />
+            </PurchasingKpiGrid>
+          ) : null
+        }
+        analysis={
+          summary ? (
+            <div className="grid gap-4 lg:grid-cols-2">
+              <PurchasingAnalysisSection title="Oś czasu współpracy">
+                <p className="text-xs font-medium text-slate-500">Pierwsze zamówienie</p>
+                <p className="mt-1 text-sm text-slate-800">{fmtDate(summary.first_order_date)}</p>
+                <p className="mt-3 text-xs font-medium text-slate-500">Ostatnia dostawa</p>
+                <p className="mt-1 text-sm text-slate-800">{fmtDate(summary.last_delivery_date)}</p>
+              </PurchasingAnalysisSection>
+              <PurchasingAnalysisSection title="Trend ceny" subtitle="Wyliczone z historii przyjęć">
+                <p className="text-2xl font-semibold tabular-nums text-slate-900">{fmtPct(summary.price_trend)}</p>
+              </PurchasingAnalysisSection>
+            </div>
+          ) : null
+        }
+        table={
+          summary ? (
+            <PurchasingTableSection title="Ostatnie dokumenty" indicatorClass="bg-slate-500">
+              <table className="min-w-full text-sm">
+                <thead className="border-b border-slate-200 bg-slate-50/80">
                   <tr>
-                    <td colSpan={6} className="px-3 py-6 text-center text-slate-500">
-                      Brak dokumentów.
-                    </td>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Typ</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Dokument</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Data</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Status</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Netto</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Brutto</th>
                   </tr>
-                ) : null}
-              </tbody>
-            </table>
-          </div>
-        </>
-      ) : null}
-      </div>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {data?.recent_documents.map((d, idx) => (
+                    <tr key={`${d.doc_type}-${d.document_no}-${idx}`} className="hover:bg-slate-50/50">
+                      <td className="px-4 py-3">{d.doc_type}</td>
+                      <td className="px-4 py-3 font-medium text-slate-800">{d.document_no}</td>
+                      <td className="px-4 py-3 text-slate-600">{fmtDate(d.date)}</td>
+                      <td className="px-4 py-3">{d.status || "—"}</td>
+                      <td className="px-4 py-3 text-right tabular-nums">{fmtMoney(d.total_net)}</td>
+                      <td className="px-4 py-3 text-right tabular-nums">{fmtMoney(d.total_gross)}</td>
+                    </tr>
+                  ))}
+                  {!data?.recent_documents?.length ? (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
+                        Brak dokumentów.
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </PurchasingTableSection>
+          ) : null
+        }
+      />
     </PurchasingContentArea>
   );
 }

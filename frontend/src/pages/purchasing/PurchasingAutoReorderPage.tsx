@@ -20,7 +20,18 @@ import {
   type PurchaseAutoRun,
 } from "../../api/purchasingAutoReorderApi";
 import { useWarehouse } from "../../context/WarehouseContext";
-import { PurchasingContentArea, PurchasingPageHeader } from "../../modules/purchasing/ui";
+import {
+  PurchasingContentArea,
+  PurchasingFilterBar,
+  PurchasingFilterField,
+  PurchasingKpiCard,
+  PurchasingKpiGrid,
+  PurchasingPageHeader,
+  PurchasingPageShell,
+  PurchasingTableSection,
+  purchasingFilterPrimaryButtonClass,
+  purchasingSelectClass,
+} from "../../modules/purchasing/ui";
 import { formatApiError } from "../../utils/apiErrorMessage";
 
 type Tenant = { id: number; name: string };
@@ -127,16 +138,6 @@ function humanRunLog(logJson: string | null | undefined): string {
     /* ignore */
   }
   return "Zapisano podsumowanie uruchomienia.";
-}
-
-function Kpi({ title, value, hint }: { title: string; value: string | number; hint?: string }) {
-  return (
-    <div className="rounded-xl border border-slate-200/90 bg-white p-5 shadow-sm ring-1 ring-slate-200/90">
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{title}</p>
-      <p className="mt-2 text-2xl font-semibold tabular-nums text-slate-900">{value}</p>
-      {hint ? <p className="mt-1 text-xs text-slate-600">{hint}</p> : null}
-    </div>
-  );
 }
 
 function buildEngineConfig(params: {
@@ -344,58 +345,87 @@ export default function PurchasingAutoReorderPage() {
 
   return (
     <PurchasingContentArea>
-      <PurchasingPageHeader
-        title="Auto-uzupełnianie"
-        subtitle="System sam przygotuje szkice zamówień, gdy wykryje braki. Ty zatwierdzasz treść — nic nie idzie do dostawcy bez Twojej decyzji."
-      />
-      <div className="space-y-8">
-
-      {toast ? (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-          {toast}
-          <button type="button" className="ml-3 underline" onClick={() => setToast(null)}>
-            OK
-          </button>
-        </div>
-      ) : null}
-      {err ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
-          {err}
-          <button type="button" className="ml-3 underline" onClick={() => setErr(null)}>
-            Zamknij
-          </button>
-        </div>
-      ) : null}
-
-      <section>
-        <h2 className="mb-3 text-base font-semibold text-slate-900">Na pierwszy rzut oka</h2>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <Kpi title="Włączone automatyzacje" value={loading ? "…" : enabledCount} hint="Liczba aktywnych wierszy w tabeli poniżej." />
-          <Kpi title="Najbliższe uruchomienie (plan)" value={loading ? "…" : nextRunText} hint="Liczone z godziny i dni tygodnia — pełny harmonogram cron można dodać na serwerze." />
-          <Kpi
-            title="Szkice utworzone dziś (cały podmiot)"
-            value={loading ? "…" : draftsToday}
-            hint={`Ostatnie zakończenie silnika: ${ostatnieUruchomienie}`}
+      <PurchasingPageShell
+        header={
+          <PurchasingPageHeader
+            title="Auto-uzupełnianie"
+            subtitle="System sam przygotuje szkice zamówień, gdy wykryje braki. Ty zatwierdzasz treść — nic nie idzie do dostawcy bez Twojej decyzji."
           />
-        </div>
-      </section>
-
-      <section>
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-base font-semibold text-slate-900">Twoje automatyzacje</h2>
-          <button
-            type="button"
-            onClick={() => {
-              resetWizard();
-              setWizardOpen(true);
-            }}
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white"
-          >
-            + Dodaj automatyzację
-          </button>
-        </div>
-        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <table className="min-w-full text-left text-sm">
+        }
+        status={
+          <>
+            {toast ? (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+                {toast}
+                <button type="button" className="ml-3 underline" onClick={() => setToast(null)}>
+                  OK
+                </button>
+              </div>
+            ) : null}
+            {err ? (
+              <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+                {err}
+                <button type="button" className="ml-3 underline" onClick={() => setErr(null)}>
+                  Zamknij
+                </button>
+              </div>
+            ) : null}
+          </>
+        }
+        kpis={
+          <PurchasingKpiGrid columns={3}>
+            <PurchasingKpiCard
+              title="Włączone automatyzacje"
+              value={loading ? "…" : enabledCount}
+              subtitle="Liczba aktywnych wierszy w tabeli poniżej."
+              tone="emerald"
+            />
+            <PurchasingKpiCard
+              title="Najbliższe uruchomienie (plan)"
+              value={loading ? "…" : nextRunText}
+              subtitle="Liczone z godziny i dni tygodnia — pełny harmonogram cron można dodać na serwerze."
+              tone="blue"
+            />
+            <PurchasingKpiCard
+              title="Szkice utworzone dziś (cały podmiot)"
+              value={loading ? "…" : draftsToday}
+              subtitle={`Ostatnie zakończenie silnika: ${ostatnieUruchomienie}`}
+              tone="indigo"
+            />
+          </PurchasingKpiGrid>
+        }
+        filters={
+          <PurchasingFilterBar>
+            <PurchasingFilterField label="Podmiot">
+              <select className={purchasingSelectClass} value={tenantId} onChange={(e) => setTenantId(Number(e.target.value))}>
+                {tenants.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name} (#{t.id})
+                  </option>
+                ))}
+              </select>
+            </PurchasingFilterField>
+          </PurchasingFilterBar>
+        }
+        table={
+          <>
+            <PurchasingTableSection
+              title="Twoje automatyzacje"
+              indicatorClass="bg-slate-700"
+              action={
+                <button
+                  type="button"
+                  onClick={() => {
+                    resetWizard();
+                    setWizardOpen(true);
+                  }}
+                  className={purchasingFilterPrimaryButtonClass}
+                >
+                  + Dodaj automatyzację
+                </button>
+              }
+            >
+              <table className="min-w-full text-left text-sm">
             <thead className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="px-3 py-3">Nazwa</th>
@@ -467,13 +497,10 @@ export default function PurchasingAutoReorderPage() {
               })}
             </tbody>
           </table>
-        </div>
-      </section>
+            </PurchasingTableSection>
 
-      <section>
-        <h2 className="mb-3 text-base font-semibold text-slate-900">Ostatnie uruchomienia</h2>
-        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <table className="min-w-full text-left text-sm">
+            <PurchasingTableSection title="Ostatnie uruchomienia" indicatorClass="bg-indigo-500">
+              <table className="min-w-full text-left text-sm">
             <thead className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="px-3 py-3">Start</th>
@@ -498,28 +525,27 @@ export default function PurchasingAutoReorderPage() {
           {(hist?.runs.length ?? 0) === 0 && !loading ? (
             <p className="px-4 py-6 text-center text-sm text-slate-500">Brak historii — uruchom automatyzację pierwszy raz.</p>
           ) : null}
-        </div>
-      </section>
+            </PurchasingTableSection>
+          </>
+        }
+      />
 
-      <section>
-        <h2 className="mb-3 text-base font-semibold text-slate-900">Skrót</h2>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => void uruchomTeraz(null)}
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-          >
-            Uruchom wszystkie włączone
-          </button>
-          <Link
-            to={`/purchasing/orders?tenant_id=${tenantId}`}
-            className="inline-flex items-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-800"
-          >
-            Otwórz szkice zamówień
-          </Link>
-        </div>
-      </section>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void uruchomTeraz(null)}
+          className={purchasingFilterPrimaryButtonClass}
+        >
+          Uruchom wszystkie włączone
+        </button>
+        <Link
+          to={`/purchasing/orders?tenant_id=${tenantId}`}
+          className="inline-flex items-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50"
+        >
+          Otwórz szkice zamówień
+        </Link>
+      </div>
 
       {wizardOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setWizardOpen(false)} role="presentation">
@@ -676,7 +702,6 @@ export default function PurchasingAutoReorderPage() {
           </div>
         </div>
       ) : null}
-      </div>
     </PurchasingContentArea>
   );
 }
