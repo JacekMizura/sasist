@@ -13,7 +13,6 @@ import {
   PurchasingKpiGrid,
   PurchasingPageHeader,
   PurchasingPageShell,
-  PurchasingQuickActions,
   PurchasingStatusBadge,
   PurchasingTableHeader,
   PurchasingTableSection,
@@ -65,10 +64,8 @@ function PlanningDashboardInner() {
   const td = "px-4 py-3 text-sm text-slate-800 sm:px-6 sm:py-4";
   const tenantQ = `?tenant_id=${tenantId}`;
   const genHref = `/purchasing/replenishment${tenantQ}`;
-  const alertsHref = `/purchasing/alerts${tenantQ}`;
   const ordersHref = `/purchasing/orders${tenantQ}`;
   const suppliersHref = `/purchasing/suppliers/analytics${tenantQ}`;
-  const savingsHref = `/purchasing/price-opportunities${tenantQ}`;
   const cooperationHref = `/purchasing/cooperation-history${tenantQ}`;
 
   return (
@@ -78,38 +75,6 @@ function PlanningDashboardInner() {
           <PurchasingPageHeader
             title="Pulpit zakupów"
             subtitle="Decyzje zakupowe na dziś — stany, alerty, zamówienia i dostawcy."
-          />
-        }
-        quickActions={
-          <PurchasingQuickActions
-            actions={[
-              {
-                label: "Uzupełnij stany",
-                to: genHref,
-                description: "Sugestie zakupów i tworzenie PO",
-                variant: "primary",
-              },
-              {
-                label: "Alerty",
-                to: alertsHref,
-                description: "Problemy wymagające decyzji",
-              },
-              {
-                label: "Zamówienia PO",
-                to: ordersHref,
-                description: "Szkice i otwarte dostawy",
-              },
-              {
-                label: "Ocena dostawców",
-                to: suppliersHref,
-                description: "Ranking, terminy i wolumen",
-              },
-              {
-                label: "Oszczędności",
-                to: savingsHref,
-                description: "Okazje cenowe i tańsi dostawcy",
-              },
-            ]}
           />
         }
         status={
