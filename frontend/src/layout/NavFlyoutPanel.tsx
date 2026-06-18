@@ -6,8 +6,9 @@ import { isNavPathActive } from "./navActive";
 import { isSuperRole } from "../auth/isSuperRole";
 import { useAuth } from "../context/AuthContext";
 
+import { ERP_SIDEBAR_WIDTH_PX } from "./erpSidebarStyles";
+
 const FLYOUT_ICON = 18;
-const SIDEBAR_WIDTH = 240;
 const VIEWPORT_MARGIN = 8;
 
 const plusBtnClass =
@@ -145,7 +146,7 @@ export default function NavFlyoutPanel({
       aria-label={category.label}
       className="fixed z-[200] flex min-h-0 min-w-[220px] max-w-[300px] max-h-[calc(100vh-16px)] flex-col overflow-hidden rounded-xl bg-white shadow-lg ring-1 ring-slate-200/80"
       style={{
-        left: SIDEBAR_WIDTH + 8,
+        left: ERP_SIDEBAR_WIDTH_PX + 8,
         top,
       }}
       onMouseEnter={onMouseEnter}

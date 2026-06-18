@@ -100,8 +100,13 @@ export const WMS_NAV_ACCENT: NavCategoryAccent = {
   hoverBgClass: "hover:bg-orange-50/80",
 };
 
+/** Sidebar width in px — shared with fly-out positioning ({@link NavFlyoutPanel}). */
+export const ERP_SIDEBAR_WIDTH_PX = 224;
+
+export const ERP_SIDEBAR_WIDTH_CLASS = "w-56";
+
 export const ERP_SIDEBAR_NAV_SCROLL =
   "[scrollbar-width:thin] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-transparent hover:[&::-webkit-scrollbar-thumb]:bg-slate-300";
 
-export const ERP_SIDEBAR_SECTION_LABEL =
-  "mb-2 px-2 text-[11px] font-bold uppercase tracking-wider text-slate-400";
+export const ERP_SIDEBAR_ACTIVE_BAR =
+  "absolute left-0 top-1/2 h-7 w-1.5 -translate-y-1/2 rounded-r-full";
