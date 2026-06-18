@@ -31,7 +31,6 @@ import {
   DEFAULT_APPLIED_RETURN_LIST_FILTERS,
   type AppliedReturnListFilters,
 } from "../../components/returns/returnList/returnListFilterTypes";
-import { ReturnsListKpiRow } from "../../components/returns/returnList/ReturnsListKpiRow";
 import { ReturnsListTable } from "../../components/returns/returnList/ReturnsListTable";
 import { ReturnsListToolbar } from "../../components/returns/returnList/ReturnsListToolbar";
 import {
@@ -614,16 +613,6 @@ export default function ReturnsListPanel() {
             onToggleFilters={toggleFiltersExpanded}
             openFilterFieldsRef={openFilterFieldsRef}
           />
-
-          {effectiveWarehouseId != null ? (
-            <ReturnsListKpiRow
-              queueCounts={queueCounts}
-              panelSummary={panelSummary}
-              onSelectQueue={selectOperationalQueue}
-              onSelectUnassigned={() => handlePanelFilterChange("unassigned")}
-              disabled={loading}
-            />
-          ) : null}
 
           {effectiveWarehouseId == null && (
             <div className="rounded-lg border border-amber-200/90 bg-amber-50 px-4 py-3 text-sm text-amber-950">
