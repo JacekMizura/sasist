@@ -10,7 +10,7 @@ import {
   panelListDenseRowClass,
   panelListDenseRowSelectedClass,
 } from "../../operational";
-import { PanelListDenseProductCell } from "../../panelList/PanelListDenseProductCell";
+import { ReturnsListProductCell } from "./ReturnsListProductCell";
 import { firstProductImageUrl } from "../../panelList/ProductListItem";
 import { listSellasistInputClass } from "../../listPage/listSellasistTokens";
 import { ORDERS_PANEL_GROUP_LABELS } from "../../orders/OrderStatusSidebar";
@@ -238,8 +238,8 @@ const ReturnsListTableRow = memo(function ReturnsListTableRow({
       <td className={`${TD} min-w-[10rem]`}>
         <ReturnsListRowStatusBadges r={r} />
       </td>
-      <td className={`${TD} min-w-[12rem] whitespace-normal`}>
-        <PanelListDenseProductCell lines={displayLines} more={more} />
+      <td className={`${TD} min-w-[14rem] whitespace-normal !py-3`}>
+        <ReturnsListProductCell lines={displayLines} more={more} />
       </td>
       <td className={`${TD} min-w-[10rem] whitespace-normal break-words text-slate-600`}>{cust}</td>
       <td className={TD}>
