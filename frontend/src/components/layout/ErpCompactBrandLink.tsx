@@ -2,10 +2,6 @@ import { Link } from "react-router-dom";
 
 import { UI_STRINGS } from "../../constants/uiStrings";
 
-// Unowocześniony styl kontenera: delikatniejsze obramowanie, większe zaokrąglenie (rounded-xl) i subtelny hover
-const linkClass =
-  "flex min-h-0 w-full min-w-0 items-center gap-3 rounded-xl border border-slate-200/70 bg-white px-2.5 py-2 shadow-sm transition hover:border-slate-300 hover:bg-slate-50";
-
 /**
  * Kompaktowa marka ERP: ikona „S” + SELLASIST / ERP (bez chipa środowiska).
  * Używana w nagłówku lewego sidebaru szkieletu ERP.
@@ -14,20 +10,17 @@ export default function ErpCompactBrandLink() {
   return (
     <Link
       to="/dashboard"
-      className={linkClass}
+      className="flex w-full min-w-0 items-center gap-3 rounded-xl px-2 py-1 transition-colors hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
       title={`${UI_STRINGS.app.brandMark} — panel`}
     >
-      {/* Nowy sygnet "S" - ciemny granat (slate-900), lekko zaokrąglony (rounded-lg) */}
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-sm font-bold leading-none text-white shadow-sm">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-base font-bold leading-none text-white shadow-md shadow-slate-900/15">
         S
       </span>
-      
-      {/* Tekst logotypu ułożony poziomo (baseline), z wyraźnym zróżnicowaniem wagi i koloru */}
-      <span className="flex min-w-0 flex-1 items-baseline gap-1 truncate">
-        <span className="truncate text-[15px] font-bold tracking-tight text-slate-900">
+      <span className="flex min-w-0 flex-col">
+        <span className="truncate text-base font-extrabold leading-none tracking-tight text-slate-900">
           {UI_STRINGS.app.brandMark}
         </span>
-        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+        <span className="mt-1 text-[10px] font-semibold uppercase tracking-widest text-slate-400">
           {UI_STRINGS.app.erpSubtitle}
         </span>
       </span>
