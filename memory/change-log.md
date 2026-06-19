@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-06-08 — Konfigurator zwrotów: uproszczenie UX (analiza + refaktor)
+
+- **Statusy RMZ** → zwinięta sekcja „Workflow magazynowy” z opisem 3 pojęć (etykiety / decyzje / etapy dokumentu)
+- **Decyzje:** usunięto „Widoczna dla magazyniera” z UI (pole zachowane w danych); aktywność na liście; karty pokazują skutek biznesowy
+- **Modal decyzji:** tylko nazwa, kategoria, „Produkt wraca na magazyn”; bez code/sort_order
+- **Integracje i API** zamiast „Zaawansowane” (RMZ, uszkodzenia, etykiety — kolejność)
+
 ## 2026-06-08 — Konfigurator statusów zwrotów: eksperymentalna przebudowa UX
 
 - 4 sekcje kartami: Etykiety listy, Decyzje produktowe, Statusy RMZ (proces), Uszkodzenia

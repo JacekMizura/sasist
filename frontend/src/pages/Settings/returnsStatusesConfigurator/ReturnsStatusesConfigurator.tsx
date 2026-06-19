@@ -7,8 +7,8 @@ import { ListLabelsSection } from "./ListLabelsSection";
 import { ProductDecisionsCardsSection } from "./ProductDecisionsCardsSection";
 import { ReturnPanelSubgroupModal } from "./ReturnPanelSubgroupModal";
 import { ReturnUiStatusModal } from "./ReturnUiStatusModal";
-import { RmzWorkflowProcessSection } from "./RmzWorkflowProcessSection";
 import { useReturnPanelStatusesConfig } from "./useReturnPanelStatusesConfig";
+import { WorkflowMagazynowySection } from "./WorkflowMagazynowySection";
 
 type Props = {
   warehouseId: number | null;
@@ -19,8 +19,8 @@ type Props = {
 const SECTION_NAV = [
   { id: "etykiety-listy", label: "Etykiety listy" },
   { id: "decyzje-produktowe", label: "Decyzje produktowe" },
-  { id: "statusy-rmz", label: "Statusy RMZ" },
   { id: "uszkodzenia", label: "Uszkodzenia" },
+  { id: "workflow-magazynowy", label: "Workflow magazynowy" },
 ] as const;
 
 export function ReturnsStatusesConfigurator({ warehouseId, cfg, setDraft }: Props) {
@@ -44,10 +44,10 @@ export function ReturnsStatusesConfigurator({ warehouseId, cfg, setDraft }: Prop
   return (
     <div className="space-y-8">
       <header>
-        <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">Konfigurator statusów zwrotów</h1>
+        <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">Konfigurator zwrotów</h1>
         <p className="mt-1.5 max-w-3xl text-sm leading-relaxed text-slate-600">
-          Ustaw etykiety listy, decyzje produktowe, etapy procesu RMZ i typy uszkodzeń — w języku biznesowym, bez technicznych tabel.
-          Etykiety listy i etapy RMZ zapisują się od razu; decyzje i uszkodzenia — przyciskiem na dole strony.
+          Ustaw etykiety listy, decyzje produktowe i typy uszkodzeń. Etapy workflow magazynowego są opcjonalne — większość sklepów
+          korzysta z domyślnych.
         </p>
         <nav className="mt-4 flex flex-wrap gap-2" aria-label="Sekcje konfiguratora">
           {SECTION_NAV.map((s) => (
@@ -80,9 +80,9 @@ export function ReturnsStatusesConfigurator({ warehouseId, cfg, setDraft }: Prop
 
       <ProductDecisionsCardsSection cfg={cfg} setDraft={setDraft} />
 
-      <RmzWorkflowProcessSection warehouseId={warehouseId} />
-
       <DamageCardsSection cfg={cfg} setDraft={setDraft} />
+
+      <WorkflowMagazynowySection warehouseId={warehouseId} />
 
       {subgroupModal != null ? (
         <ReturnPanelSubgroupModal

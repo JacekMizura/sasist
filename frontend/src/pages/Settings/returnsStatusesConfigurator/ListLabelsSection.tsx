@@ -17,9 +17,9 @@ export function ListLabelsSection({ summary, panelSubgroups, onAddSubgroup, onAd
   return (
     <ConfiguratorSectionShell
       id="etykiety-listy"
-      eyebrow="Sekcja 1"
+      eyebrow=""
       title="Etykiety listy"
-      description="Etykiety widoczne na liście zwrotów i w panelu bocznym — pogrupowane według etapu obsługi."
+      description="Jak grupujesz zwroty w panelu biurowym (Nowe / W toku / Zakończone) — to nie jest status magazynowy ani decyzja produktowa."
       action={
         <button
           type="button"

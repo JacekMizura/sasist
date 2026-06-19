@@ -2,8 +2,7 @@ import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { Plus } from "lucide-react";
 
 import type { ReturnModuleConfigDto, ReturnProductDecisionDto } from "../../../types/returnModuleConfig";
-import { AdvancedCodeField, AdvancedSettingsPanel } from "./AdvancedSettingsPanel";
-import { productDecisionEffects } from "./businessLabels";
+import { productDecisionBusinessOutcome } from "./businessLabels";
 import { ConfiguratorSectionShell } from "./ConfiguratorSectionShell";
 import { ReturnsConfiguratorModalShell } from "./ReturnsConfiguratorModalShell";
 
@@ -26,14 +25,27 @@ export function ProductDecisionsCardsSection({ cfg, setDraft }: Props) {
     [cfg.product_decisions],
   );
 
+  const patchRow = (row: ReturnProductDecisionDto, patch: Partial<ReturnProductDecisionDto>) => {
+    setDraft({
+      ...cfg,
+      product_decisions: cfg.product_decisions.map((r) =>
+        r.code === row.code && r.category === row.category ? { ...r, ...patch } : r,
+      ),
+    });
+  };
+
   const saveRow = (next: ReturnProductDecisionDto, mode: "create" | "edit", original?: ReturnProductDecisionDto) => {
+    const withDefaults: ReturnProductDecisionDto = {
+      ...next,
+      visible_wms: original?.visible_wms ?? true,
+    };
     if (mode === "create") {
-      setDraft({ ...cfg, product_decisions: [...cfg.product_decisions, next] });
+      setDraft({ ...cfg, product_decisions: [...cfg.product_decisions, withDefaults] });
     } else if (original) {
       setDraft({
         ...cfg,
         product_decisions: cfg.product_decisions.map((r) =>
-          r.code === original.code && r.category === original.category ? next : r,
+          r.code === original.code && r.category === original.category ? withDefaults : r,
         ),
       });
     }
@@ -52,9 +64,8 @@ export function ProductDecisionsCardsSection({ cfg, setDraft }: Props) {
     <>
       <ConfiguratorSectionShell
         id="decyzje-produktowe"
-        eyebrow="Sekcja 2"
         title="Decyzje produktowe"
-        description="Co operator może zrobić z pojedynczą pozycją zwrotu — w języku biznesowym, bez skrótów systemowych."
+        description="Co operator wybiera dla pojedynczej pozycji zwrotu — efekt widoczny na karcie, bez ustawień technicznych."
       >
         <div className="grid gap-8 lg:grid-cols-2">
           <DecisionColumn
@@ -63,6 +74,7 @@ export function ProductDecisionsCardsSection({ cfg, setDraft }: Props) {
             rows={accepted}
             onAdd={() => setModal({ mode: "create", category: "ACCEPTED" })}
             onEdit={(row) => setModal({ mode: "edit", row })}
+            onToggleActive={(row, active) => patchRow(row, { is_active: active })}
           />
           <DecisionColumn
             title="Odrzucenia"
@@ -70,6 +82,7 @@ export function ProductDecisionsCardsSection({ cfg, setDraft }: Props) {
             rows={rejected}
             onAdd={() => setModal({ mode: "create", category: "REJECTED" })}
             onEdit={(row) => setModal({ mode: "edit", row })}
+            onToggleActive={(row, active) => patchRow(row, { is_active: active })}
           />
         </div>
       </ConfiguratorSectionShell>
@@ -95,12 +108,14 @@ function DecisionColumn({
   rows,
   onAdd,
   onEdit,
+  onToggleActive,
 }: {
   title: string;
   subtitle: string;
   rows: ReturnProductDecisionDto[];
   onAdd: () => void;
   onEdit: (row: ReturnProductDecisionDto) => void;
+  onToggleActive: (row: ReturnProductDecisionDto, active: boolean) => void;
 }) {
   return (
     <div>
@@ -110,7 +125,7 @@ function DecisionColumn({
       </div>
       <div className="space-y-3">
         {rows.map((row) => (
-          <DecisionCard key={`${row.category}-${row.code}`} row={row} onEdit={() => onEdit(row)} />
+          <DecisionCard key={`${row.category}-${row.code}`} row={row} onEdit={() => onEdit(row)} onToggleActive={onToggleActive} />
         ))}
         {rows.length === 0 ? <p className="text-sm text-slate-400">Brak decyzji w tej kategorii.</p> : null}
       </div>
@@ -126,32 +141,41 @@ function DecisionColumn({
   );
 }
 
-function DecisionCard({ row, onEdit }: { row: ReturnProductDecisionDto; onEdit: () => void }) {
-  const effectLines = productDecisionEffects(row);
+function DecisionCard({
+  row,
+  onEdit,
+  onToggleActive,
+}: {
+  row: ReturnProductDecisionDto;
+  onEdit: () => void;
+  onToggleActive: (row: ReturnProductDecisionDto, active: boolean) => void;
+}) {
+  const outcome = productDecisionBusinessOutcome(row);
   return (
-    <button
-      type="button"
-      className={`w-full rounded-xl border bg-white p-4 text-left shadow-sm transition hover:border-slate-300 hover:shadow ${
-        row.is_active ? "border-slate-200/90" : "border-slate-100 opacity-70"
+    <div
+      className={`rounded-xl border bg-white p-4 shadow-sm transition ${
+        row.is_active ? "border-slate-200/90" : "border-slate-100 opacity-75"
       }`}
-      onClick={onEdit}
     >
       <div className="flex items-start justify-between gap-3">
-        <p className="text-base font-semibold text-slate-900">{row.label}</p>
-        {!row.is_active ? (
-          <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-slate-500">
-            Nieaktywna
-          </span>
-        ) : null}
+        <button type="button" className="min-w-0 flex-1 text-left" onClick={onEdit}>
+          <p className="text-base font-semibold text-slate-900">{row.label}</p>
+          <p className={`mt-2 text-sm ${row.is_active ? "text-slate-600" : "text-slate-400"}`}>{outcome}</p>
+        </button>
+        <label
+          className="inline-flex shrink-0 items-center gap-2 text-xs font-medium text-slate-600"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <input
+            type="checkbox"
+            className="rounded border-slate-300"
+            checked={row.is_active}
+            onChange={(e) => onToggleActive(row, e.target.checked)}
+          />
+          Aktywna
+        </label>
       </div>
-      <ul className="mt-3 space-y-1">
-        {effectLines.map((line) => (
-          <li key={line} className={`text-sm ${line.startsWith("✕") ? "text-slate-500" : "text-emerald-800"}`}>
-            {line}
-          </li>
-        ))}
-      </ul>
-    </button>
+    </div>
   );
 }
 
@@ -187,11 +211,23 @@ function ProductDecisionModal({
     },
   );
 
+  const handleSave = () => {
+    const next: ReturnProductDecisionDto = {
+      ...draft,
+      label: draft.label.trim(),
+      is_active: row?.is_active ?? true,
+      visible_wms: row?.visible_wms ?? true,
+      code: row?.code ?? draft.code,
+      sort_order: row?.sort_order ?? draft.sort_order,
+    };
+    onSave(next, mode, row);
+  };
+
   return (
     <ReturnsConfiguratorModalShell
       open
       title={mode === "create" ? "Nowa decyzja produktowa" : "Edytuj decyzję"}
-      subtitle="Nazwa i zachowanie widoczne dla operatora magazynu."
+      subtitle="Nazwa widoczna dla operatora magazynu."
       onClose={onClose}
       footer={
         <>
@@ -207,7 +243,7 @@ function ProductDecisionModal({
             type="button"
             disabled={!draft.label.trim()}
             className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-45"
-            onClick={() => onSave({ ...draft, label: draft.label.trim() }, mode, row)}
+            onClick={handleSave}
           >
             Zapisz
           </button>
@@ -237,56 +273,24 @@ function ProductDecisionModal({
           </select>
         </label>
 
-        <div className="space-y-3 rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Efekt biznesowy</p>
-          <label className="flex items-start gap-2 text-sm text-slate-700">
+        {draft.category === "REJECTED" ? (
+          <label className="flex items-start gap-2 rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-3 text-sm text-slate-700">
             <input
               type="checkbox"
               className="mt-0.5 rounded border-slate-300"
-              checked={draft.is_active}
-              onChange={(e) => setDraft((d) => ({ ...d, is_active: e.target.checked }))}
+              checked={draft.creates_stock_document === true}
+              onChange={(e) => setDraft((d) => ({ ...d, creates_stock_document: e.target.checked }))}
             />
-            Decyzja aktywna — dostępna przy obsłudze zwrotu
+            <span>
+              <span className="font-medium text-slate-900">Produkt wraca na magazyn</span>
+              <span className="mt-0.5 block text-xs text-slate-500">Twórz przyjęcie magazynowe po zwrocie, mimo odrzucenia pozycji.</span>
+            </span>
           </label>
-          <label className="flex items-start gap-2 text-sm text-slate-700">
-            <input
-              type="checkbox"
-              className="mt-0.5 rounded border-slate-300"
-              checked={draft.visible_wms}
-              onChange={(e) => setDraft((d) => ({ ...d, visible_wms: e.target.checked }))}
-            />
-            Widoczna dla magazyniera na terminalu WMS
-          </label>
-          {draft.category === "REJECTED" ? (
-            <label className="flex items-start gap-2 text-sm text-slate-700">
-              <input
-                type="checkbox"
-                className="mt-0.5 rounded border-slate-300"
-                checked={draft.creates_stock_document === true}
-                onChange={(e) => setDraft((d) => ({ ...d, creates_stock_document: e.target.checked }))}
-              />
-              Przyjmij produkt na magazyn mimo odrzucenia (dokument PZ ze zwrotu)
-            </label>
-          ) : null}
-        </div>
+        ) : null}
 
-        <AdvancedSettingsPanel>
-          <AdvancedCodeField
-            label="Identyfikator systemowy (code)"
-            value={draft.code}
-            onChange={(v) => setDraft((d) => ({ ...d, code: v.trim() }))}
-            hint="Używany w integracjach — zwykle nie wymaga zmiany."
-          />
-          <label className="block text-xs font-medium text-slate-600">
-            Kolejność wyświetlania
-            <input
-              type="number"
-              className="mt-1 w-full max-w-[8rem] rounded-lg border border-slate-200 px-3 py-2 text-sm"
-              value={draft.sort_order}
-              onChange={(e) => setDraft((d) => ({ ...d, sort_order: Number(e.target.value) }))}
-            />
-          </label>
-        </AdvancedSettingsPanel>
+        {mode === "create" ? (
+          <p className="text-xs text-slate-500">Nowa decyzja jest domyślnie aktywna — możesz wyłączyć ją przełącznikiem na liście.</p>
+        ) : null}
       </div>
     </ReturnsConfiguratorModalShell>
   );

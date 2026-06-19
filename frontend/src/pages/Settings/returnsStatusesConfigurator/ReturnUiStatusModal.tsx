@@ -12,7 +12,7 @@ import type {
 } from "../../../types/wmsReturn";
 import { RETURN_MAIN_GROUP_LABELS, RETURN_MAIN_GROUP_ORDER } from "./constants";
 import { ReturnsConfiguratorModalShell } from "./ReturnsConfiguratorModalShell";
-import { AdvancedSettingsPanel } from "./AdvancedSettingsPanel";
+import { IntegrationsApiPanel } from "./AdvancedSettingsPanel";
 
 const inp = "mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-300";
 const lab = "block text-xs font-medium text-slate-600";
@@ -246,7 +246,7 @@ export function ReturnUiStatusModal({
             Aktywna etykieta
           </label>
         </div>
-        <AdvancedSettingsPanel title="Ustawienia zaawansowane">
+        <IntegrationsApiPanel title="Integracje i API">
           <label className={lab}>
             Kolejność na liście
             <input
@@ -260,7 +260,7 @@ export function ReturnUiStatusModal({
               }}
             />
           </label>
-        </AdvancedSettingsPanel>
+        </IntegrationsApiPanel>
         {mode === "edit" && status && onUploadImage ? (
           <div>
             <span className={lab}>Logo (opcjonalnie)</span>

@@ -6,7 +6,7 @@ import type {
   ReturnDamageReasonDto,
   ReturnModuleConfigDto,
 } from "../../../types/returnModuleConfig";
-import { AdvancedCodeField, AdvancedSettingsPanel } from "./AdvancedSettingsPanel";
+import { IntegrationsApiPanel, IntegrationsCodeField } from "./AdvancedSettingsPanel";
 import { damageClassDisplayLabel } from "./businessLabels";
 import { ConfiguratorSectionShell } from "./ConfiguratorSectionShell";
 import { ReturnsConfiguratorModalShell } from "./ReturnsConfiguratorModalShell";
@@ -64,8 +64,7 @@ export function DamageCardsSection({ cfg, setDraft }: Props) {
   return (
     <>
       <ConfiguratorSectionShell
-        id="uszkodzenia"
-        eyebrow="Sekcja 4"
+        eyebrow=""
         title="Uszkodzenia"
         description="Typy uszkodzeń wybierane przy kontroli jakości — bez technicznych kodów klas na liście głównej."
         action={
@@ -280,8 +279,8 @@ function DamageClassModal({
             Grupa aktywna
           </label>
         </div>
-        <AdvancedSettingsPanel>
-          <AdvancedCodeField label="Kod klasy (class_code)" value={draft.code} onChange={(v) => setDraft((d) => ({ ...d, code: v.trim() }))} />
+        <IntegrationsApiPanel>
+          <IntegrationsCodeField label="Kod klasy (class_code)" value={draft.code} onChange={(v) => setDraft((d) => ({ ...d, code: v.trim() }))} />
           <label className="block text-xs font-medium text-slate-600">
             Zachowanie magazynowe (warehouse_behavior)
             <input
@@ -299,7 +298,7 @@ function DamageClassModal({
               onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value.trim() || null }))}
             />
           </label>
-        </AdvancedSettingsPanel>
+        </IntegrationsApiPanel>
       </div>
     </ReturnsConfiguratorModalShell>
   );
@@ -394,8 +393,8 @@ function DamageReasonModal({
           <input type="checkbox" checked={draft.is_active} onChange={(e) => setDraft((d) => ({ ...d, is_active: e.target.checked }))} />
           Aktywne
         </label>
-        <AdvancedSettingsPanel>
-          <AdvancedCodeField label="Identyfikator (code)" value={draft.code} onChange={(v) => setDraft((d) => ({ ...d, code: v.trim() }))} />
+        <IntegrationsApiPanel>
+          <IntegrationsCodeField label="Identyfikator (code)" value={draft.code} onChange={(v) => setDraft((d) => ({ ...d, code: v.trim() }))} />
           <label className="block text-xs font-medium text-slate-600">
             Kolejność
             <input
@@ -405,7 +404,7 @@ function DamageReasonModal({
               onChange={(e) => setDraft((d) => ({ ...d, sort_order: Number(e.target.value) }))}
             />
           </label>
-        </AdvancedSettingsPanel>
+        </IntegrationsApiPanel>
       </div>
     </ReturnsConfiguratorModalShell>
   );

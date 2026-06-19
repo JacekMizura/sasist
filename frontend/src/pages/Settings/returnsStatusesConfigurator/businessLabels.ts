@@ -1,5 +1,4 @@
-import type { ReturnDamageClassDto, ReturnProductDecisionDto } from "../../../types/returnModuleConfig";
-import type { ReturnStatusType } from "../../../types/wmsReturn";
+import type { ReturnProductDecisionDto } from "../../../types/returnModuleConfig";
 
 const DAMAGE_CODE_FALLBACK: Record<string, string> = {
   b: "Lekkie uszkodzenia",
@@ -7,7 +6,7 @@ const DAMAGE_CODE_FALLBACK: Record<string, string> = {
   a: "Uszkodzenia minimalne",
 };
 
-export function damageClassDisplayLabel(cls: ReturnDamageClassDto): string {
+export function damageClassDisplayLabel(cls: { code: string; label: string }): string {
   const code = cls.code.trim().toLowerCase();
   if (DAMAGE_CODE_FALLBACK[code]) return DAMAGE_CODE_FALLBACK[code];
   const label = cls.label.trim();
@@ -15,24 +14,34 @@ export function damageClassDisplayLabel(cls: ReturnDamageClassDto): string {
   return label || cls.code;
 }
 
+function isRefundLikeDecision(row: ReturnProductDecisionDto): boolean {
+  const code = row.code.trim().toLowerCase();
+  const label = row.label.trim().toLowerCase();
+  return code.includes("refund") || label.includes("zwrot środk") || label.includes("zwrot srodk");
+}
+
+/** Opis skutku biznesowego decyzji — bez flag systemowych. */
+export function productDecisionBusinessOutcome(row: ReturnProductDecisionDto): string {
+  if (!row.is_active) return "Decyzja wyłączona — niedostępna przy obsłudze";
+
+  if (row.category === "ACCEPTED") {
+    if (isRefundLikeDecision(row)) return "Produkt nie wraca na magazyn";
+    return "Produkt wraca na magazyn";
+  }
+
+  if (row.creates_stock_document) {
+    if (/uszkodz|damage|zniszcz/i.test(row.label)) {
+      return "Produkt wraca na magazyn i wymaga dalszej oceny";
+    }
+    return "Produkt wraca na magazyn";
+  }
+
+  return "Produkt nie wraca na magazyn";
+}
+
+/** @deprecated Użyj productDecisionBusinessOutcome */
 export function productDecisionEffects(row: ReturnProductDecisionDto): string[] {
-  const lines: string[] = [];
-  if (row.is_active) {
-    lines.push(row.visible_wms ? "✓ Widoczna dla magazyniera" : "✕ Ukryta przed magazynem");
-  } else {
-    lines.push("✕ Decyzja nieaktywna");
-    return lines;
-  }
-  if (row.category === "REJECTED") {
-    lines.push(
-      row.creates_stock_document
-        ? "✓ Przyjmij produkt na magazyn (PZ ze zwrotu)"
-        : "✕ Nie przyjmuje produktu na stan",
-    );
-  } else {
-    lines.push("✓ Przyjmuje produkt w procesie zwrotu");
-  }
-  return lines;
+  return [productDecisionBusinessOutcome(row)];
 }
 
 export const RMZ_COLOR_OPTIONS = [
@@ -58,12 +67,12 @@ export function rmzColorLabelPl(color: string): string {
   return RMZ_COLOR_OPTIONS.find((c) => c.value === color)?.label ?? color;
 }
 
-export const RMZ_TYPE_OPTIONS: { value: ReturnStatusType; label: string; hint: string }[] = [
-  { value: "in_progress", label: "Etap w trakcie", hint: "Zwrot jest nadal obsługiwany." },
-  { value: "done_success", label: "Zakończony pomyślnie", hint: "Proces zakończony — rozliczenie OK." },
-  { value: "done_rejected", label: "Odrzucony / zamknięty negatywnie", hint: "Zwrot zamknięty bez pełnego przyjęcia." },
+export const RMZ_TYPE_OPTIONS = [
+  { value: "in_progress" as const, label: "Etap w trakcie", hint: "Zwrot jest nadal obsługiwany." },
+  { value: "done_success" as const, label: "Zakończony pomyślnie", hint: "Proces zakończony — rozliczenie OK." },
+  { value: "done_rejected" as const, label: "Odrzucony / zamknięty negatywnie", hint: "Zwrot zamknięty bez pełnego przyjęcia." },
 ];
 
-export function rmzTypeLabelPl(type: ReturnStatusType): string {
+export function rmzTypeLabelPl(type: string): string {
   return RMZ_TYPE_OPTIONS.find((o) => o.value === type)?.label ?? type;
 }
