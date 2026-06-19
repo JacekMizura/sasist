@@ -1,4 +1,6 @@
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { Search } from "lucide-react";
 
 import type { ComplaintStatusCode } from "../../types/complaint";
 import {
@@ -7,11 +9,7 @@ import {
 } from "../../types/complaint";
 import {
   panelSidebarFilterRowClass,
-  panelSidebarMainGroupCountBadgeClass,
   panelSidebarSubCountBadgeClass,
-  panelSidebarSubRowClass,
-  panelSidebarSubRowStyleRich,
-  type PanelSidebarMainGroup,
 } from "../../utils/panelSidebarHierarchy";
 
 export type ComplaintPanelFilter = "all" | { kind: "status"; status: ComplaintStatusCode };
@@ -25,8 +23,6 @@ type Props = {
   chromeVariant?: "sellasist";
   collapsed?: boolean;
 };
-
-const ACCENT_W = "w-1 shrink-0 rounded-full";
 
 function stripeHexForStatus(code: ComplaintStatusCode): string {
   switch (code) {
@@ -47,21 +43,12 @@ function stripeHexForStatus(code: ComplaintStatusCode): string {
   }
 }
 
-function mainGroupForComplaintStatus(code: ComplaintStatusCode): PanelSidebarMainGroup {
-  if (code === "NOWE") return "NEW";
-  if (code === "ZAAKCEPTOWANA" || code === "ODRZUCONA") return "DONE";
-  return "IN_PROGRESS";
-}
-
-function accentBarFromMainGroup(g: PanelSidebarMainGroup): string {
-  if (g === "NEW") return "bg-blue-500";
-  if (g === "IN_PROGRESS") return "bg-amber-500";
-  return "bg-emerald-600";
-}
-
 function isStatusActive(panelFilter: ComplaintPanelFilter, code: ComplaintStatusCode): boolean {
   return typeof panelFilter === "object" && panelFilter.kind === "status" && panelFilter.status === code;
 }
+
+const STATUS_ROW_BASE =
+  "relative flex w-full min-h-[30px] items-center gap-2 rounded-md py-1.5 pl-2 pr-1 text-left text-[13px] leading-tight transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500";
 
 export function ComplaintsListStatusSidebar({
   warehouseId: _warehouseId,
@@ -74,6 +61,15 @@ export function ComplaintsListStatusSidebar({
 }: Props) {
   void _warehouseId;
   const sellasist = chromeVariant === "sellasist";
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const visibleStatuses = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return COMPLAINT_STATUS_FILTER_ORDER;
+    return COMPLAINT_STATUS_FILTER_ORDER.filter((code) =>
+      COMPLAINT_SIDEBAR_FILTER_LABELS_PL[code].toLowerCase().includes(q),
+    );
+  }, [searchQuery]);
 
   if (collapsed) {
     return (
@@ -88,7 +84,7 @@ export function ComplaintsListStatusSidebar({
           <span className="h-2.5 w-2.5 rounded-full bg-slate-500" />
           <span className={panelSidebarSubCountBadgeClass()}>{totalCount ?? "—"}</span>
         </button>
-        {COMPLAINT_STATUS_FILTER_ORDER.map((code) => (
+        {visibleStatuses.map((code) => (
           <button
             key={code}
             type="button"
@@ -107,60 +103,80 @@ export function ComplaintsListStatusSidebar({
 
   return (
     <aside
-      className={`w-full min-w-0 max-w-full shrink-0 space-y-2 overflow-x-hidden p-1.5 lg:sticky lg:top-4 ${
+      className={`w-full min-w-0 max-w-full shrink-0 overflow-x-hidden p-2 lg:sticky lg:top-4 ${
         sellasist
-          ? "max-h-[min(100vh-6rem,52rem)] overflow-y-auto rounded-md border border-slate-200/90 bg-slate-50"
-          : "rounded-lg border border-slate-200/90 bg-white"
+          ? "max-h-[min(100vh-6rem,52rem)] overflow-y-auto rounded-xl border border-slate-200/90 bg-white"
+          : "rounded-xl border border-slate-200/90 bg-white"
       }`}
     >
-      <p className={`text-[10px] font-semibold uppercase tracking-wide ${sellasist ? "text-slate-600" : "text-slate-500"}`}>
-        Status reklamacji
-      </p>
-      <button
-        type="button"
-        className={panelSidebarFilterRowClass(panelFilter === "all")}
-        onClick={() => onPanelFilterChange("all")}
-      >
-        <span>Wszystkie</span>
-        <span className={panelSidebarSubCountBadgeClass()}>{totalCount ?? "—"}</span>
-      </button>
+      <p className="mb-2 px-1 text-[11px] font-bold uppercase tracking-wider text-slate-500">Status reklamacji</p>
 
-      <div className={sellasist ? "space-y-2 border-t border-slate-200/85 pt-4" : "space-y-2"}>
-        <div className="flex min-w-0 items-center gap-2 px-0.5">
-          <span className={`h-6 ${ACCENT_W} ${accentBarFromMainGroup("IN_PROGRESS")}`} aria-hidden />
-          <span className="truncate text-sm font-semibold tracking-tight text-slate-900">Etapy</span>
-          <span className={`ml-auto ${panelSidebarMainGroupCountBadgeClass()}`}>{totalCount ?? "—"}</span>
-        </div>
-        <div className={sellasist ? "ml-0 space-y-0.5 border-l border-slate-200/55 pl-1.5" : "space-y-0.5"}>
-          <div className="space-y-0.5">
-            {COMPLAINT_STATUS_FILTER_ORDER.map((code) => {
+      <div className="relative mb-2 px-1">
+        <Search
+          className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400"
+          strokeWidth={2}
+          aria-hidden
+        />
+        <input
+          type="search"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Szukaj etapu…"
+          aria-label="Szukaj etapu reklamacji"
+          className="w-full rounded-lg border border-slate-200 bg-slate-50 py-1.5 pl-8 pr-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-slate-300 focus:bg-white focus:outline-none focus:ring-1 focus:ring-slate-200"
+        />
+      </div>
+
+      <div className="space-y-0.5 px-1">
+        <button
+          type="button"
+          className={panelSidebarFilterRowClass(panelFilter === "all")}
+          onClick={() => onPanelFilterChange("all")}
+        >
+          <span className={panelFilter === "all" ? "font-semibold" : ""}>Wszystkie</span>
+          <span className={panelSidebarSubCountBadgeClass()}>{totalCount ?? "—"}</span>
+        </button>
+
+        {visibleStatuses.length === 0 ? (
+          <p className="px-1 py-2 text-xs text-slate-500">Brak etapów pasujących do wyszukiwania.</p>
+        ) : (
+          <div className="space-y-0.5 pt-1">
+            {visibleStatuses.map((code) => {
               const active = isStatusActive(panelFilter, code);
-              const group = mainGroupForComplaintStatus(code);
-              const style = panelSidebarSubRowStyleRich(
-                { color: stripeHexForStatus(code) },
-                group,
-                active,
-                { barWidthPx: sellasist ? 4 : 6 },
-              );
+              const dotColor = stripeHexForStatus(code);
               return (
                 <button
                   key={code}
                   type="button"
-                  className={panelSidebarSubRowClass(active, { compactLabel: sellasist })}
-                  style={style}
+                  className={`${STATUS_ROW_BASE} ${
+                    active ? "bg-slate-100 font-semibold text-slate-900" : "font-medium text-slate-600 hover:bg-slate-50"
+                  }`}
                   title={COMPLAINT_SIDEBAR_FILTER_LABELS_PL[code]}
                   onClick={() => onPanelFilterChange({ kind: "status", status: code })}
                 >
-                  <span className="min-w-0 truncate">{COMPLAINT_SIDEBAR_FILTER_LABELS_PL[code]}</span>
-                  <span className={panelSidebarSubCountBadgeClass()}>{countFor(code)}</span>
+                  {active ? (
+                    <span
+                      className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-r-full"
+                      style={{ backgroundColor: dotColor }}
+                      aria-hidden
+                    />
+                  ) : null}
+                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: dotColor }} aria-hidden />
+                  <span className="min-w-0 flex-1 truncate">{COMPLAINT_SIDEBAR_FILTER_LABELS_PL[code]}</span>
+                  <span className={`${panelSidebarSubCountBadgeClass()} ${active ? "text-slate-800" : ""}`}>
+                    {countFor(code)}
+                  </span>
                 </button>
               );
             })}
           </div>
-        </div>
+        )}
       </div>
 
-      <Link to="/settings/complaints/ui-statuses" className="mt-1 block text-center text-xs font-medium text-blue-700 hover:underline">
+      <Link
+        to="/settings/complaints/ui-statuses"
+        className="mt-3 block px-1 text-center text-xs font-medium text-slate-500 hover:text-blue-700 hover:underline"
+      >
         Zarządzaj statusami…
       </Link>
     </aside>

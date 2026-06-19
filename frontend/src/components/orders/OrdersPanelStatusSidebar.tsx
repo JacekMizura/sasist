@@ -1,4 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react";
+import { ChevronDown, ChevronRight, Search } from "lucide-react";
 import type {
   OrderUiMainGroup,
   OrderUiPanelSubgroupRead,
@@ -6,25 +7,15 @@ import type {
   OrderUiStatusWithCount,
 } from "../../types/orderUiStatus";
 import { getPanelStatusWmsMarkers, panelStatusCollapsedTitle } from "./panelStatusWmsChips";
-import { PanelSidebarSubgroupCollapsible } from "../panel/PanelSidebarSubgroupCollapsible";
 import {
   panelSidebarFilterRowClass,
   panelSidebarMainGroupCountBadgeClass,
   panelSidebarSubCountBadgeClass,
-  panelSidebarSubRowStyleRich,
+  sidebarSubStatusHex,
 } from "../../utils/panelSidebarHierarchy";
 import { buildPanelSidebarLayout } from "../../utils/orderPanelSidebarBuckets";
 import { MAIN_PANEL_GROUP_ORDER } from "../../utils/orderPanelMainGroupOrder";
 import { panelListStatusSidebarWidthLg } from "../listPage/listSellasistTokens";
-import { getStatusClass } from "./orderList/OrderListPanelStatusBadge";
-
-// === IKONY SVG DLA NOWEGO WYGLĄDU ===
-const IconChevronDown = ({ size = 18 }) => (
-  <svg viewBox="0 0 24 24" width={size} height={size} stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-);
-const IconChevronRight = ({ size = 18 }) => (
-  <svg viewBox="0 0 24 24" width={size} height={size} stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
-);
 
 export type OrderPanelFilter =
   | "all"
@@ -46,10 +37,34 @@ function isSubFilterActive(panelFilter: OrderPanelFilter, id: number): boolean {
   return typeof panelFilter === "object" && panelFilter.kind === "sub" && panelFilter.id === id;
 }
 
-// === FUNKCJA POMOCNICZA DO CZYSZCZENIA NAZW PODGRUP ===
-function cleanSubgroupName(name: string): string {
-  if (!name) return '';
-  return name.replace(/-/g, '').trim();
+function sectionKeyForGroup(g: OrderUiMainGroup): "nowe" | "wtoku" | "zakonczone" {
+  if (g === "NEW") return "nowe";
+  if (g === "IN_PROGRESS") return "wtoku";
+  return "zakonczone";
+}
+
+function accentBarFromMainGroup(g: OrderUiMainGroup): string {
+  if (g === "NEW") return "bg-blue-500";
+  if (g === "IN_PROGRESS") return "bg-amber-500";
+  return "bg-emerald-500";
+}
+
+function statusDotClass(name: string): string {
+  const n = name.toLowerCase();
+  if (n === "nowe") return "bg-blue-500";
+  if (n === "w toku") return "bg-amber-500";
+  if (n === "zakończone") return "bg-emerald-500";
+  if (n === "pilne") return "bg-red-500";
+  return "bg-slate-400";
+}
+
+function normalizeSearchQuery(q: string): string {
+  return q.trim().toLowerCase();
+}
+
+function statusMatchesSearch(s: OrderUiStatusWithCount, query: string): boolean {
+  if (!query) return true;
+  return (s.name ?? "").toLowerCase().includes(query);
 }
 
 type OrdersPanelStatusSidebarProps = {
@@ -60,7 +75,7 @@ type OrdersPanelStatusSidebarProps = {
   onPanelFilterChange: (next: OrderPanelFilter) => void;
   chromeVariant?: "default" | "sellasist";
   collapsed?: boolean;
-  manageStatusesHref?: string; // Pozostawione w typach z uwagi na ewentualną wsteczną kompatybilność, ale nieużywane w renderze
+  manageStatusesHref?: string;
   titleTrailing?: ReactNode;
   panelGroupLabels?: Record<OrderUiMainGroup, string>;
   returnsOperationalQueuesSlot?: ReactNode;
@@ -68,23 +83,11 @@ type OrdersPanelStatusSidebarProps = {
   parentScrollContainer?: boolean;
 };
 
-function statusDotClass(name: string): string {
-  const n = name.toLowerCase();
-  if (n === "nowe") return "bg-blue-500";
-  if (n === "w toku") return "bg-yellow-500";
-  if (n === "zakończone") return "bg-green-500";
-  if (n === "pilne") return "bg-red-500";
-  return "bg-slate-400";
-}
-
-function accentBarFromMainGroup(g: OrderUiMainGroup): string {
-  if (g === "NEW") return "bg-blue-500";
-  if (g === "IN_PROGRESS") return "bg-amber-500";
-  return "bg-emerald-500";
-}
+const STATUS_ROW_BASE =
+  "group/status relative flex w-full min-h-[30px] items-center gap-2 rounded-md py-1.5 pl-2 pr-1 text-left text-[13px] leading-tight transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500";
 
 export function OrdersPanelStatusSidebar({
-  warehouseId,
+  warehouseId: _warehouseId,
   panelSummary,
   panelSubgroups,
   panelFilter,
@@ -97,6 +100,8 @@ export function OrdersPanelStatusSidebar({
   returnsOperationalQueuesCollapsedSlot,
   parentScrollContainer = false,
 }: OrdersPanelStatusSidebarProps) {
+  void _warehouseId;
+
   const totalPanelOrders =
     panelSummary != null
       ? panelSummary.unassigned_count + panelSummary.groups.reduce((acc, g) => acc + g.total_count, 0)
@@ -104,6 +109,8 @@ export function OrdersPanelStatusSidebar({
 
   const sgDefs = panelSubgroups ?? [];
   const sellasist = chromeVariant === "sellasist";
+  const [searchQuery, setSearchQuery] = useState("");
+  const normalizedSearch = normalizeSearchQuery(searchQuery);
   const [openSections, setOpenSections] = useState({
     nowe: true,
     wtoku: true,
@@ -118,59 +125,65 @@ export function OrdersPanelStatusSidebar({
     return m;
   }, [panelSummary?.groups]);
 
-  // === RENDER POJEDYNCZEGO STATUSU Z NOWYM WYGLĄDEM ===
+  const stickySelf = parentScrollContainer ? "" : "lg:sticky lg:top-4";
+
   const renderStatusButton = (block: { main_group: OrderUiMainGroup }, s: OrderUiStatusWithCount) => {
     const active = isSubFilterActive(panelFilter, s.id);
-    const style = panelSidebarSubRowStyleRich(s, block.main_group, active, { barWidthPx: sellasist ? 4 : 6 });
     const markers = getPanelStatusWmsMarkers(s, block.main_group);
     const titleDetail = panelStatusCollapsedTitle(s, block.main_group);
-    
+    const dotColor = sidebarSubStatusHex(s.badge_color ?? s.color, block.main_group);
+
     return (
       <button
         key={s.id}
         type="button"
-        className={`flex w-full items-center justify-between p-2 rounded-md cursor-pointer relative overflow-hidden mb-1 transition-all hover:scale-[1.01] hover:shadow-sm ${
-          active ? "ring-1 ring-blue-400 font-medium" : ""
+        className={`${STATUS_ROW_BASE} ${
+          active ? "bg-slate-100 font-semibold text-slate-900" : "font-medium text-slate-600 hover:bg-slate-50"
         }`}
-        style={style}
         title={titleDetail || undefined}
         onClick={() => onPanelFilterChange({ kind: "sub", id: s.id })}
       >
-        <span className="flex min-w-0 flex-1 items-center gap-1.5 pl-1.5">
-          {s.image_url ? (
-            <img src={s.image_url} alt="" className="h-4 w-4 shrink-0 rounded object-contain" />
-          ) : null}
-          <span className="min-w-0 flex-1 truncate text-left text-[13px] tracking-normal">
-            {s.name}
+        {active ? (
+          <span
+            className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-r-full"
+            style={{ backgroundColor: dotColor }}
+            aria-hidden
+          />
+        ) : null}
+        <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: dotColor }} aria-hidden />
+        {s.image_url ? (
+          <img src={s.image_url} alt="" className="h-4 w-4 shrink-0 rounded object-contain" />
+        ) : null}
+        <span className="min-w-0 flex-1 truncate">{s.name}</span>
+        {markers.length > 0 ? (
+          <span className="flex shrink-0 items-center gap-0.5">
+            {markers.map((m) => {
+              const MIcon = m.Icon;
+              return (
+                <span key={m.id} title={m.title} className="inline-flex text-slate-400">
+                  <MIcon className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+                </span>
+              );
+            })}
           </span>
-          {/* LOGIKA WMS MARKERS ZACHOWANA */}
-          {markers.length > 0 ? (
-            <span className="flex shrink-0 flex-wrap items-center justify-end gap-0.5">
-              {markers.map((m) => {
-                const MIcon = m.Icon;
-                return (
-                  <span
-                    key={m.id}
-                    title={m.title}
-                    className={`inline-flex items-center justify-center rounded p-0.5 ring-inset ${m.wrapClass}`}
-                  >
-                    <MIcon className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
-                  </span>
-                );
-              })}
-            </span>
-          ) : null}
-        </span>
-        <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-white/70 shadow-sm ml-2 shrink-0 text-slate-700">
-          {s.count}
-        </span>
+        ) : null}
+        <span className={`${panelSidebarSubCountBadgeClass()} ${active ? "text-slate-800" : ""}`}>{s.count}</span>
       </button>
     );
   };
 
-  const stickySelf = parentScrollContainer ? "" : "lg:sticky lg:top-4";
+  const renderOperationalSection = (slot: ReactNode, compact: boolean) => {
+    if (slot == null) return null;
+    return (
+      <div className={compact ? "space-y-0.5 border-t border-slate-200/80 pt-1" : "space-y-1 border-t border-slate-200/90 pt-3"}>
+        {!compact ? (
+          <p className="px-1 text-[11px] font-bold uppercase tracking-wider text-slate-400">Operacyjne</p>
+        ) : null}
+        <div className="space-y-0.5">{slot}</div>
+      </div>
+    );
+  };
 
-  // === WIDOK ZWINIĘTY (Pozostawiony zgodnie z poprzednią logiką z kosmetyką klas) ===
   if (collapsed) {
     return (
       <aside
@@ -206,7 +219,9 @@ export function OrdersPanelStatusSidebar({
         {MAIN_PANEL_GROUP_ORDER.flatMap((mg) => {
           const block = blocksByMainGroup.get(mg);
           if (!block) return [];
-          const chunk: ReactNode[] = [
+          const visibleStatuses = block.sub_statuses.filter((s) => statusMatchesSearch(s, normalizedSearch));
+          if (normalizedSearch && visibleStatuses.length === 0) return [];
+          return [
             <div key={mg} className="space-y-1 border-t border-slate-200/80 pt-1 first:border-t-0 first:pt-0">
               <button
                 type="button"
@@ -218,7 +233,7 @@ export function OrdersPanelStatusSidebar({
                 <span className={`h-2.5 w-2.5 rounded-full ${statusDotClass(panelGroupLabels[block.main_group])}`} />
                 <span className={panelSidebarMainGroupCountBadgeClass()}>{block.total_count}</span>
               </button>
-              {block.sub_statuses.map((s) => (
+              {visibleStatuses.map((s) => (
                 <button
                   key={s.id}
                   type="button"
@@ -227,199 +242,159 @@ export function OrdersPanelStatusSidebar({
                   title={panelStatusCollapsedTitle(s, block.main_group)}
                   aria-label={panelStatusCollapsedTitle(s, block.main_group)}
                 >
-                  <span className={`h-2.5 w-2.5 rounded-full ${statusDotClass(s.name ?? "")}`} />
+                  <span
+                    className="h-2.5 w-2.5 rounded-full"
+                    style={{ backgroundColor: sidebarSubStatusHex(s.badge_color ?? s.color, block.main_group) }}
+                  />
                   <span className={panelSidebarSubCountBadgeClass()}>{s.count}</span>
                 </button>
               ))}
             </div>,
           ];
-          if (mg === "IN_PROGRESS" && returnsOperationalQueuesCollapsedSlot != null) {
-            chunk.push(
-              <div
-                key={`${mg}-op`}
-                className="space-y-1 border-t border-slate-200/80 pt-1"
-                aria-label="Operacyjne widoki"
-              >
-                {returnsOperationalQueuesCollapsedSlot}
-              </div>,
-            );
-          }
-          return chunk;
         })}
+        {renderOperationalSection(returnsOperationalQueuesCollapsedSlot, true)}
       </aside>
     );
   }
 
-  // === WIDOK ROZWINIĘTY (GŁÓWNY Z NOWYM DESIGNEM) ===
   const sellasistScroll =
-    sellasist && !parentScrollContainer
-      ? "max-h-[min(100vh-6rem,52rem)] overflow-y-auto"
-      : "";
+    sellasist && !parentScrollContainer ? "max-h-[min(100vh-6rem,52rem)] overflow-y-auto" : "";
 
   return (
     <aside
-      className={`w-full min-w-0 max-w-full shrink-0 space-y-2 overflow-x-hidden p-2 ${stickySelf} ${
+      className={`w-full min-w-0 max-w-full shrink-0 overflow-x-hidden p-2 ${stickySelf} ${
         sellasist ? "" : panelListStatusSidebarWidthLg
-      } ${
-        sellasist
-          ? `${sellasistScroll} rounded-xl border border-slate-200 bg-white shadow-sm`
-          : "rounded-xl border border-slate-200 bg-white shadow-sm"
-      }`}
+      } ${sellasistScroll} rounded-xl border border-slate-200/90 bg-white`}
     >
-      <div className="p-2 mb-2 border-b border-slate-100">
-        <div className="flex items-center justify-between">
-          <h2
-            className={`text-xs font-bold uppercase tracking-wide ${
-            sellasist ? "text-slate-600" : "text-slate-500"
-          }`}
-        >
-          Status panelu
-        </h2>
-
-        {titleTrailing != null ? (
-          <div className="shrink-0">
-            {titleTrailing}
-          </div>
-        ) : null}
+      <div className="mb-2 flex items-center justify-between gap-2 px-1">
+        <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Status panelu</h2>
+        {titleTrailing != null ? <div className="shrink-0">{titleTrailing}</div> : null}
       </div>
-    </div>
 
-      <div className="px-1 space-y-2">
+      <div className="relative mb-2 px-1">
+        <Search
+          className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400"
+          strokeWidth={2}
+          aria-hidden
+        />
+        <input
+          type="search"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Szukaj statusu…"
+          aria-label="Szukaj statusu"
+          className="w-full rounded-lg border border-slate-200 bg-slate-50 py-1.5 pl-8 pr-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-slate-300 focus:bg-white focus:outline-none focus:ring-1 focus:ring-slate-200"
+        />
+      </div>
+
+      <div className="space-y-0.5 px-1">
         <button
           type="button"
-          className={`flex w-full items-center justify-between p-2.5 rounded-lg cursor-pointer transition-colors group ${
-            panelFilter === "all" ? "bg-slate-100" : "hover:bg-slate-50"
-          }`}
+          className={panelSidebarFilterRowClass(panelFilter === "all")}
           onClick={() => onPanelFilterChange("all")}
         >
-          <span className={panelFilter === "all" ? "font-semibold text-slate-800" : "font-semibold text-slate-700"}>
-            Wszystkie
-          </span>
-          <span className={`px-2.5 py-0.5 rounded-full text-sm font-medium transition-colors ${
-            panelFilter === "all" ? "bg-slate-200 text-slate-700" : "bg-slate-100 text-slate-600 group-hover:bg-slate-200"
-          }`}>
-            {totalPanelOrders ?? "—"}
-          </span>
+          <span className={panelFilter === "all" ? "font-semibold" : ""}>Wszystkie</span>
+          <span className={panelSidebarSubCountBadgeClass()}>{totalPanelOrders ?? "—"}</span>
         </button>
 
         {(panelSummary?.unassigned_count ?? 0) > 0 ? (
           <button
             type="button"
-            className={`flex w-full items-center justify-between p-2.5 rounded-lg cursor-pointer transition-colors group ${
-              panelFilter === "unassigned" ? "bg-slate-100" : "hover:bg-slate-50"
-            }`}
+            className={panelSidebarFilterRowClass(panelFilter === "unassigned")}
             onClick={() => onPanelFilterChange("unassigned")}
           >
-            <span className={panelFilter === "unassigned" ? "font-semibold text-slate-800" : "font-semibold text-slate-700"}>
-              Bez etykiety
-            </span>
-            <span className={`px-2.5 py-0.5 rounded-full text-sm font-medium transition-colors ${
-              panelFilter === "unassigned" ? "bg-slate-200 text-slate-700" : "bg-slate-100 text-slate-600 group-hover:bg-slate-200"
-            }`}>
-              {panelSummary?.unassigned_count ?? "—"}
-            </span>
+            <span className={panelFilter === "unassigned" ? "font-semibold" : ""}>Bez etykiety</span>
+            <span className={panelSidebarSubCountBadgeClass()}>{panelSummary?.unassigned_count ?? "—"}</span>
           </button>
         ) : null}
+      </div>
 
-        {MAIN_PANEL_GROUP_ORDER.flatMap((mainGroup, groupIdx) => {
+      <div className="mt-2 space-y-3 px-1">
+        {MAIN_PANEL_GROUP_ORDER.map((mainGroup) => {
           const block = blocksByMainGroup.get(mainGroup);
-          if (!block) return [];
-          const { ungrouped, subgroupSections } = buildPanelSidebarLayout(block.main_group, block.sub_statuses, sgDefs);
-          
-          const sectionKey =
-            block.main_group === "NEW"
-              ? "nowe"
-              : block.main_group === "IN_PROGRESS"
-                ? "wtoku"
-                : "zakonczone";
-          const isOpen = openSections[sectionKey];
-          
-          const chunk: ReactNode[] = [
-            <div
-              key={block.main_group}
-              className={`space-y-1 ${sellasist && groupIdx > 0 ? "mt-4 pt-2" : "mt-2"}`}
-            >
-              <button
-                type="button"
-                className={`flex w-full items-center justify-between p-2.5 rounded-lg cursor-pointer transition-colors border shadow-sm relative overflow-hidden ${
-                  isGroupFilterActive(panelFilter, block.main_group)
-                    ? "bg-slate-100 border-slate-200 shadow-md"
-                    : "bg-slate-50 border-slate-100 hover:bg-slate-100"
-                }`}
-                onClick={() => {
-                  onPanelFilterChange({ kind: "group", group: block.main_group });
-                  setOpenSections((prev) => ({
-                    ...prev,
-                    [sectionKey]: !prev[sectionKey],
-                  }));
-                }}
-              >
-                <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${accentBarFromMainGroup(block.main_group)}`}></div>
-                <div className="flex items-center gap-2 pl-2 text-slate-400">
-                  {isOpen ? <IconChevronDown size={18} /> : <IconChevronRight size={18} />}
-                  <span className="font-semibold text-slate-800 tracking-tight">
-                    {panelGroupLabels[block.main_group]}
-                  </span>
-                </div>
-                <span className="bg-white border border-slate-200 text-slate-700 px-2.5 py-0.5 rounded-full text-sm font-bold shadow-sm">
-                  {block.total_count}
-                </span>
-              </button>
+          if (!block) return null;
 
-              <div
-                className={
-                  isOpen
-                    ? "ml-0 space-y-0.5 border-l-2 border-slate-50 pl-3 pr-1 pt-1 pb-2"
-                    : "hidden"
-                }
-              >
-                <div className="space-y-0.5">
-                  {ungrouped.length ? (
-                    <div className="space-y-1">{ungrouped.map((s) => renderStatusButton(block, s))}</div>
-                  ) : null}
-                  
-                  {subgroupSections.map((sec) => {
+          const { ungrouped, subgroupSections } = buildPanelSidebarLayout(block.main_group, block.sub_statuses, sgDefs);
+          const filteredUngrouped = ungrouped.filter((s) => statusMatchesSearch(s, normalizedSearch));
+          const filteredSections = subgroupSections
+            .map((sec) => ({
+              ...sec,
+              rows: sec.rows.filter((s) => statusMatchesSearch(s, normalizedSearch)),
+            }))
+            .filter((sec) => sec.rows.length > 0);
+
+          const hasVisibleChildren = filteredUngrouped.length > 0 || filteredSections.length > 0;
+          if (normalizedSearch && !hasVisibleChildren) return null;
+
+          const sectionKey = sectionKeyForGroup(block.main_group);
+          const isOpen = normalizedSearch ? true : openSections[sectionKey];
+          const groupActive = isGroupFilterActive(panelFilter, block.main_group);
+
+          return (
+            <section key={block.main_group} className="space-y-0.5">
+              <div className="flex items-stretch gap-0">
+                <button
+                  type="button"
+                  className={`relative flex min-h-[32px] flex-1 items-center gap-1.5 rounded-md py-1.5 pl-2 pr-1 text-left transition-colors ${
+                    groupActive ? "bg-slate-100 font-semibold text-slate-900" : "text-slate-700 hover:bg-slate-50"
+                  }`}
+                  onClick={() => onPanelFilterChange({ kind: "group", group: block.main_group })}
+                >
+                  <span
+                    className={`absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full ${accentBarFromMainGroup(block.main_group)}`}
+                    aria-hidden
+                  />
+                  <span className="pl-1.5">{panelGroupLabels[block.main_group]}</span>
+                </button>
+                <button
+                  type="button"
+                  className="flex shrink-0 items-center gap-1 rounded-md px-1.5 text-slate-400 hover:bg-slate-50 hover:text-slate-600"
+                  onClick={() =>
+                    setOpenSections((prev) => ({
+                      ...prev,
+                      [sectionKey]: !prev[sectionKey],
+                    }))
+                  }
+                  aria-expanded={isOpen}
+                  aria-label={isOpen ? "Zwiń grupę" : "Rozwiń grupę"}
+                >
+                  <span className={panelSidebarSubCountBadgeClass()}>{block.total_count}</span>
+                  {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                </button>
+              </div>
+
+              {isOpen ? (
+                <div className="space-y-0.5 pl-3">
+                  {filteredUngrouped.map((s) => renderStatusButton(block, s))}
+                  {filteredSections.map((sec) => {
                     const sectionTotal = sec.rows.reduce((acc, r) => acc + (r.count ?? 0), 0);
                     return (
-                      <div key={sec.key} className="mt-2 mb-1">
-                        <PanelSidebarSubgroupCollapsible
-                          storageKey={`panel-sg:orders:${warehouseId ?? "tenant"}:${block.main_group}:${sec.key}`}
-                          title={
-                            <div className="flex items-center gap-2 w-full pt-1 pb-1 opacity-80 hover:opacity-100 transition-opacity">
-                              <div className="h-px bg-slate-200 flex-1"></div>
-                              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                                {cleanSubgroupName(sec.title)}
-                              </span>
-                              <div className="h-px bg-slate-200 flex-1"></div>
-                            </div>
-                          }
-                          totalCount={sectionTotal}
-                        >
-                          {sec.rows.map((s) => renderStatusButton(block, s))}
-                        </PanelSidebarSubgroupCollapsible>
+                      <div key={sec.key} className="pt-1">
+                        <div className="flex items-center gap-2 py-1 pl-1">
+                          <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                            {sec.title}
+                          </span>
+                          <span className="text-[10px] tabular-nums text-slate-400">{sectionTotal}</span>
+                        </div>
+                        <div className="space-y-0.5">{sec.rows.map((s) => renderStatusButton(block, s))}</div>
                       </div>
                     );
                   })}
                 </div>
-              </div>
-            </div>,
-          ];
-
-          if (mainGroup === "IN_PROGRESS" && returnsOperationalQueuesSlot != null) {
-            chunk.push(
-              <div
-                key={`${mainGroup}-op`}
-                className={`space-y-2 ${sellasist ? "mt-4 border-t border-slate-100 pt-4" : "mt-3 border-t border-slate-100 pt-3"}`}
-              >
-                <p className={`text-[10px] font-semibold uppercase tracking-wide px-2 ${sellasist ? "text-slate-600" : "text-slate-500"}`}>
-                  Operacyjne widoki
-                </p>
-                <div className="space-y-1">{returnsOperationalQueuesSlot}</div>
-              </div>,
-            );
-          }
-          return chunk;
+              ) : null}
+            </section>
+          );
         })}
+
+        {normalizedSearch && MAIN_PANEL_GROUP_ORDER.every((mg) => {
+          const block = blocksByMainGroup.get(mg);
+          if (!block) return true;
+          return !block.sub_statuses.some((s) => statusMatchesSearch(s, normalizedSearch));
+        }) ? (
+          <p className="px-1 py-2 text-xs text-slate-500">Brak statusów pasujących do wyszukiwania.</p>
+        ) : null}
+
+        {renderOperationalSection(returnsOperationalQueuesSlot, false)}
       </div>
     </aside>
   );
