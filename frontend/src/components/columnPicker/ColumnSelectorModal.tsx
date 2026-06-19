@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import {
   DndContext,
   PointerSensor,
@@ -220,8 +221,8 @@ export function ColumnSelectorModal({
 
   if (!open) return null;
 
-  return (
-    <div className="fixed inset-0 z-[500] flex items-end justify-center p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true">
+  return createPortal(
+    <div className="fixed inset-0 z-[5000] flex items-end justify-center p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true">
       <button type="button" className="absolute inset-0 bg-slate-900/40" aria-label="Zamknij" onClick={onClose} />
       <div className="relative flex max-h-[min(92vh,760px)] w-full min-w-0 flex-col overflow-hidden rounded-t-xl border border-slate-200 bg-white shadow-xl sm:rounded-xl">
         <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 sm:px-5 sm:py-4">
@@ -296,6 +297,7 @@ export function ColumnSelectorModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

@@ -1,11 +1,4 @@
-import {
-  ArrowUpDown,
-  ChevronDown,
-  Filter,
-  MoreHorizontal,
-  Table2,
-  Wrench,
-} from "lucide-react";
+import { ChevronDown, Filter, SlidersHorizontal, Table2, Wrench } from "lucide-react";
 import { memo, type MutableRefObject, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 
@@ -27,13 +20,12 @@ export type ModuleListPageToolbarProps = {
   settingsTitle?: string;
   filtersToggleLabelExpanded?: string;
   filtersToggleLabelCollapsed?: string;
-  /** Dodatkowe przyciski przed sortowaniem (np. widoki). */
+  /** Dodatkowe przyciski przed konfiguracją kolumn. */
   extraToolbarControls?: ReactNode;
-  /** Dodatkowe pozycje menu „Więcej” (przed „Widoczne pola filtrów”). */
-  moreMenuItems?: ReactNode;
   onColumnsClick?: () => void;
   columnsDisabled?: boolean;
-  sortDisabled?: boolean;
+  /** Przycisk konfiguracji pól filtrów (modal) — domyślnie widoczny. */
+  showFilterFieldsButton?: boolean;
 };
 
 function ModuleListPageToolbarInner({
@@ -50,10 +42,9 @@ function ModuleListPageToolbarInner({
   filtersToggleLabelExpanded = "Ukryj filtry",
   filtersToggleLabelCollapsed = "Dodatkowe filtry",
   extraToolbarControls,
-  moreMenuItems,
   onColumnsClick,
   columnsDisabled = true,
-  sortDisabled = false,
+  showFilterFieldsButton = true,
 }: ModuleListPageToolbarProps) {
   return (
     <div className="space-y-4">
@@ -91,15 +82,18 @@ function ModuleListPageToolbarInner({
             />
           </button>
           {extraToolbarControls}
-          <button
-            type="button"
-            disabled={sortDisabled}
-            className={`${listSellasistToolbarSquareBtn} !h-10 !w-10 ${sortDisabled ? "cursor-not-allowed opacity-40" : ""}`}
-            title="Sortowanie — kliknij nagłówki (wkrótce)"
-            aria-label="Sortowanie"
-          >
-            <ArrowUpDown className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
-          </button>
+          {showFilterFieldsButton ? (
+            <button
+              type="button"
+              onClick={() => openFilterFieldsRef.current?.()}
+              className={`${listSellasistToolbarSquareBtn} inline-flex !h-10 items-center gap-2 whitespace-nowrap px-3 !w-auto`}
+              title="Widoczne pola filtrów"
+              aria-label="Widoczne pola filtrów"
+            >
+              <SlidersHorizontal className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
+              <span className="hidden text-sm font-medium sm:inline">Pola filtrów</span>
+            </button>
+          ) : null}
           <button
             type="button"
             disabled={columnsDisabled && !onColumnsClick}
@@ -110,29 +104,6 @@ function ModuleListPageToolbarInner({
           >
             <Table2 className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
           </button>
-          <details className="relative">
-            <summary
-              className={`${listSellasistToolbarSquareBtn} !h-10 !w-10 cursor-pointer list-none [&::-webkit-details-marker]:hidden`}
-              aria-label="Więcej opcji"
-            >
-              <MoreHorizontal className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
-            </summary>
-            <div className="absolute right-0 z-50 mt-1 min-w-[13rem] rounded-md border border-slate-200 bg-white py-1 shadow-lg ring-1 ring-slate-200/60">
-              {moreMenuItems ? (
-                <>
-                  {moreMenuItems}
-                  <div className="my-1 border-t border-slate-100" role="separator" />
-                </>
-              ) : null}
-              <button
-                type="button"
-                className="flex w-full px-3 py-2 text-left text-sm text-slate-800 hover:bg-slate-50"
-                onClick={() => openFilterFieldsRef.current?.()}
-              >
-                Widoczne pola filtrów
-              </button>
-            </div>
-          </details>
           {settingsHref ? (
             <Link
               to={settingsHref}

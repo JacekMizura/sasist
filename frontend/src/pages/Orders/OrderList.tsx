@@ -186,7 +186,6 @@ export default function OrderList() {
   const [quickNoteSelection, setQuickNoteSelection] = useState<OrderBulkSelectionDto | null>(null);
   const [quickNoteCount, setQuickNoteCount] = useState(0);
   const [customFieldModalOpen, setCustomFieldModalOpen] = useState(false);
-  const [tableDensityCompact, setTableDensityCompact] = useState(false);
 
   const [columnOrder, setColumnOrder] = useState<string[]>(() =>
     loadColumnLayout(ORDERS_COLUMNS_LAYOUT_KEY, ORDER_LIST_USER_COLUMN_IDS, ORDER_LIST_DEFAULT_TABLE_COLUMN_ORDER, {
@@ -943,14 +942,7 @@ export default function OrderList() {
             filtersExpanded={filtersExpanded}
             onToggleFilters={toggleFiltersPanel}
             openFilterFieldsRef={openFilterFieldsRef}
-            tableDensityCompact={tableDensityCompact}
-            onToggleTableDensity={() => setTableDensityCompact((v) => !v)}
             onOpenColumnPicker={() => setColumnPickerOpen(true)}
-            bulkBusy={bulkBusy}
-            onExport={() => setExportOpen(true)}
-            onRefresh={() => void fetchOrders()}
-            onMultiMenuSelect={handleMultiMenu}
-            onQuickAction={openQuickAction}
           />
 
           {fetchError ? (
@@ -1002,6 +994,9 @@ export default function OrderList() {
                   onClearSelection={clearSelection}
                   onSelectMenuBump={() => setBulkSelectMenuKey((k) => k + 1)}
                   onBulkStatusSelect={(statusId) => void handleQuickChangeStatus(statusId)}
+                  onMultiMenuSelect={handleMultiMenu}
+                  onQuickAction={openQuickAction}
+                  onExport={() => setExportOpen(true)}
                 />
               }
               footer={
@@ -1087,7 +1082,6 @@ export default function OrderList() {
                   isRowSelected={isRowSelected}
                   toggleOne={toggleOne}
                   bulkBusy={bulkBusy}
-                  densityCompact={tableDensityCompact}
                   openOrder={openOrder}
                   onRowQuickAction={(orderId, kind) => {
                     if (kind === "operational_notes") {

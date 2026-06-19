@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type DragEvent } from "react";
+import { createPortal } from "react-dom";
 import { ChevronRight, GripVertical, X } from "lucide-react";
 
 import { filterToolbarBtnPrimary, filterToolbarBtnSecondary } from "./filterUiTokens";
@@ -88,8 +89,8 @@ export function FilterVisibilityModal({
 
   if (!open) return null;
 
-  return (
-    <div className="fixed inset-0 z-[500] flex items-center justify-center p-4" role="dialog" aria-modal="true">
+  return createPortal(
+    <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4" role="dialog" aria-modal="true">
       <button
         type="button"
         className="absolute inset-0 bg-slate-900/40"
@@ -204,6 +205,7 @@ export function FilterVisibilityModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
