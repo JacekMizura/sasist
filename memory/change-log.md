@@ -1,5 +1,13 @@
 # Change log
 
+## 2026-06-08 — Konfigurator statusów zwrotów: eksperymentalna przebudowa UX
+
+- 4 sekcje kartami: Etykiety listy, Decyzje produktowe, Statusy RMZ (proces), Uszkodzenia
+- Ukryto tabele techniczne, skróty WMS/Z-PZ, kody klas B/C na liście głównej
+- Pola techniczne (code, transition_key, typ workflow, sort_order) → „Ustawienia zaawansowane” w modalach
+- RMZ workflow włączone do konfiguratora (wcześniej osobna strona `/workflow-statuses`)
+- Screenshoty mock: `/dev/returns-statuses-configurator-screenshots`, PNG w `returnsStatusesConfigurator/mockups/`
+
 ## 2026-06-08 — Słowniki zwrotów: przebudowa UX
 
 - Pełna szerokość — usunięto panel „Podgląd formularza klienta”

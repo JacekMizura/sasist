@@ -8,6 +8,13 @@ export const RETURN_MAIN_GROUP_LABELS: Record<ReturnUiMainGroup, string> = {
   DONE: "Zakończone",
 };
 
+/** Krótkie tytuły kart etykiet listy. */
+export const LIST_LABEL_CARD_TITLE: Record<ReturnUiMainGroup, string> = {
+  NEW: "Nowe",
+  IN_PROGRESS: "W toku",
+  DONE: "Zakończone",
+};
+
 export const RETURN_MAIN_GROUP_DOT: Record<ReturnUiMainGroup, string> = {
   NEW: "bg-blue-500",
   IN_PROGRESS: "bg-orange-500",

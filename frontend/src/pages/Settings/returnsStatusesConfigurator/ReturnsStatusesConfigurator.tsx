@@ -1,14 +1,13 @@
 import { useState, type Dispatch, type SetStateAction } from "react";
-import { Info } from "lucide-react";
 
 import type { ReturnModuleConfigDto } from "../../../types/returnModuleConfig";
 import type { ReturnUiMainGroup, ReturnUiStatusWithCount } from "../../../types/wmsReturn";
-import { DamageClassesEditor, DamageReasonsEditor } from "../returnsSettingsOps";
-import { ProductDecisionsTableSection } from "./ProductDecisionsTableSection";
+import { DamageCardsSection } from "./DamageCardsSection";
+import { ListLabelsSection } from "./ListLabelsSection";
+import { ProductDecisionsCardsSection } from "./ProductDecisionsCardsSection";
 import { ReturnPanelSubgroupModal } from "./ReturnPanelSubgroupModal";
 import { ReturnUiStatusModal } from "./ReturnUiStatusModal";
-import { ReturnsListPreviewCard } from "./ReturnsListPreviewCard";
-import { ReturnsPanelStatusGroupsCard } from "./ReturnsPanelStatusGroupsCard";
+import { RmzWorkflowProcessSection } from "./RmzWorkflowProcessSection";
 import { useReturnPanelStatusesConfig } from "./useReturnPanelStatusesConfig";
 
 type Props = {
@@ -16,6 +15,13 @@ type Props = {
   cfg: ReturnModuleConfigDto;
   setDraft: Dispatch<SetStateAction<ReturnModuleConfigDto | null>>;
 };
+
+const SECTION_NAV = [
+  { id: "etykiety-listy", label: "Etykiety listy" },
+  { id: "decyzje-produktowe", label: "Decyzje produktowe" },
+  { id: "statusy-rmz", label: "Statusy RMZ" },
+  { id: "uszkodzenia", label: "Uszkodzenia" },
+] as const;
 
 export function ReturnsStatusesConfigurator({ warehouseId, cfg, setDraft }: Props) {
   const panel = useReturnPanelStatusesConfig(warehouseId);
@@ -30,18 +36,30 @@ export function ReturnsStatusesConfigurator({ warehouseId, cfg, setDraft }: Prop
   if (warehouseId == null) {
     return (
       <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
-        Wybierz magazyn w górnym pasku, aby konfigurować statusy zwrotów.
+        Wybierz magazyn w górnym pasku, aby konfigurować proces zwrotów.
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <header>
-        <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">Statusy panelu — zwroty</h1>
+        <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">Konfigurator statusów zwrotów</h1>
         <p className="mt-1.5 max-w-3xl text-sm leading-relaxed text-slate-600">
-          Wizualny konfigurator etykiet na liście zwrotów. Zmiany statusów panelu zapisują się od razu; decyzje produktowe — przyciskiem na dole strony.
+          Ustaw etykiety listy, decyzje produktowe, etapy procesu RMZ i typy uszkodzeń — w języku biznesowym, bez technicznych tabel.
+          Etykiety listy i etapy RMZ zapisują się od razu; decyzje i uszkodzenia — przyciskiem na dole strony.
         </p>
+        <nav className="mt-4 flex flex-wrap gap-2" aria-label="Sekcje konfiguratora">
+          {SECTION_NAV.map((s) => (
+            <a
+              key={s.id}
+              href={`#${s.id}`}
+              className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+            >
+              {s.label}
+            </a>
+          ))}
+        </nav>
       </header>
 
       {panel.err ? (
@@ -49,43 +67,22 @@ export function ReturnsStatusesConfigurator({ warehouseId, cfg, setDraft }: Prop
       ) : null}
 
       {panel.loading && !panel.summary ? (
-        <p className="py-8 text-center text-sm text-slate-500">Wczytywanie statusów panelu…</p>
+        <p className="py-8 text-center text-sm text-slate-500">Wczytywanie konfiguracji…</p>
       ) : (
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(260px,320px)]">
-          <ReturnsPanelStatusGroupsCard
-            summary={panel.summary}
-            panelSubgroups={panel.panelSubgroups}
-            onAddSubgroup={(mg) => setSubgroupModal(mg)}
-            onAddStatus={(mg) => setStatusModal({ mode: "create", mainGroup: mg })}
-            onEditStatus={(s) => setStatusModal({ mode: "edit", status: s })}
-            onDeleteStatus={(id) => void panel.removeStatus(id)}
-          />
-          <ReturnsListPreviewCard summary={panel.summary} cfg={cfg} />
-        </div>
+        <ListLabelsSection
+          summary={panel.summary}
+          panelSubgroups={panel.panelSubgroups}
+          onAddSubgroup={(mg) => setSubgroupModal(mg)}
+          onAddStatus={(mg) => setStatusModal({ mode: "create", mainGroup: mg })}
+          onEditStatus={(s) => setStatusModal({ mode: "edit", status: s })}
+        />
       )}
 
-      <ProductDecisionsTableSection cfg={cfg} setDraft={setDraft} />
+      <ProductDecisionsCardsSection cfg={cfg} setDraft={setDraft} />
 
-      <details className="rounded-xl border border-slate-200/90 bg-white shadow-sm">
-        <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-          Klasy i powody uszkodzeń (zaawansowane)
-        </summary>
-        <div className="space-y-4 border-t border-slate-100 p-4">
-          <DamageClassesEditor cfg={cfg} setDraft={setDraft} />
-          <DamageReasonsEditor cfg={cfg} setDraft={setDraft} />
-        </div>
-      </details>
+      <RmzWorkflowProcessSection warehouseId={warehouseId} />
 
-      <div className="flex flex-wrap items-start gap-3 rounded-lg border border-sky-100 bg-sky-50/80 px-4 py-3 text-sm text-sky-950">
-        <Info className="mt-0.5 h-4 w-4 shrink-0 text-sky-600" aria-hidden />
-        <p>
-          Zmiany statusów panelu dotyczą wyłącznie widoku listy zwrotów i filtrów w panelu bocznym. Statusy workflow RMZ konfigurujesz w{" "}
-          <a href="/orders/returns/workflow-statuses" className="font-medium underline decoration-sky-300 underline-offset-2">
-            statusach workflow
-          </a>
-          .
-        </p>
-      </div>
+      <DamageCardsSection cfg={cfg} setDraft={setDraft} />
 
       {subgroupModal != null ? (
         <ReturnPanelSubgroupModal

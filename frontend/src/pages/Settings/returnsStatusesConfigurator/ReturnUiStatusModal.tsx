@@ -12,6 +12,7 @@ import type {
 } from "../../../types/wmsReturn";
 import { RETURN_MAIN_GROUP_LABELS, RETURN_MAIN_GROUP_ORDER } from "./constants";
 import { ReturnsConfiguratorModalShell } from "./ReturnsConfiguratorModalShell";
+import { AdvancedSettingsPanel } from "./AdvancedSettingsPanel";
 
 const inp = "mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-300";
 const lab = "block text-xs font-medium text-slate-600";
@@ -130,8 +131,8 @@ export function ReturnUiStatusModal({
       open={open}
       wide
       busy={busy}
-      title={mode === "create" ? "Nowy status panelu" : "Edytuj status"}
-      subtitle="Etykieta widoczna na liście zwrotów i w panelu bocznym."
+      title={mode === "create" ? "Nowa etykieta listy" : "Edytuj etykietę"}
+      subtitle="Nazwa i kolory widoczne na liście zwrotów oraz w panelu bocznym."
       onClose={onClose}
       aside={previewAside}
       footer={
@@ -242,10 +243,12 @@ export function ReturnUiStatusModal({
                   : setEditDraft((d) => ({ ...d, is_active: e.target.checked }))
               }
             />
-            Aktywny
+            Aktywna etykieta
           </label>
+        </div>
+        <AdvancedSettingsPanel title="Ustawienia zaawansowane">
           <label className={lab}>
-            Kolejność
+            Kolejność na liście
             <input
               type="number"
               className={`${inp} max-w-[8rem]`}
@@ -257,7 +260,7 @@ export function ReturnUiStatusModal({
               }}
             />
           </label>
-        </div>
+        </AdvancedSettingsPanel>
         {mode === "edit" && status && onUploadImage ? (
           <div>
             <span className={lab}>Logo (opcjonalnie)</span>
