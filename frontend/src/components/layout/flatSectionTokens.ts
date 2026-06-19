@@ -5,6 +5,10 @@ export const flatSectionDividerClass = "border-b border-gray-200";
 export const flatSectionsStackClass =
   "[&>section:not(:first-child)]:mt-10 [&>section:not(:first-child)]:border-t [&>section:not(:first-child)]:border-gray-200 [&>section:not(:first-child)]:pt-10";
 
+/** Zwarty stos sekcji formularza (mniejsze odstępy między blokami). */
+export const flatFormSectionsStackClass =
+  "[&>section:not(:first-child)]:mt-6 [&>section:not(:first-child)]:border-t [&>section:not(:first-child)]:border-gray-200 [&>section:not(:first-child)]:pt-6";
+
 /** Pionowy separator kolumny listy (sidebar | treść). */
 export const flatListSidebarDividerClass = "lg:border-r lg:border-gray-200 lg:pr-8";
 

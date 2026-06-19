@@ -10,7 +10,7 @@ import {
   type OrderCustomFieldDto,
 } from "../../api/orderCustomFieldsApi";
 import { FlatPageSection } from "../../components/layout/FlatPageSection";
-import { flatSectionsStackClass, moduleSettingsPageShellClass } from "../../components/layout/flatSectionTokens";
+import { flatFormSectionsStackClass, moduleSettingsPageShellClass } from "../../components/layout/flatSectionTokens";
 import { ModuleListBreadcrumb } from "../../components/listPage/moduleList";
 import { IntegrationsApiPanel } from "../Settings/returnsStatusesConfigurator/AdvancedSettingsPanel";
 import { useAuth } from "../../context/AuthContext";
@@ -291,75 +291,27 @@ export default function OrderCustomFieldEditPage() {
   }
 
   return (
-    <div className="min-h-full w-full pb-28">
+    <div className="min-h-full w-full pb-24">
       <div className={`${contentShell} pb-6`}>
         <ModuleListBreadcrumb items={breadcrumbItems} />
 
-        <div className="mb-8">
+        <div className="mb-5">
           <h1 className="text-2xl font-semibold text-slate-900">{isCreate ? "Nowe pole" : "Edycja pola"}</h1>
         </div>
 
         {err ? (
-          <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
+          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
             {err}
           </div>
         ) : null}
 
-        <form id="ocf-edit-form" onSubmit={(e) => void onSubmit(e)} className={flatSectionsStackClass}>
-          <FlatPageSection title="Pole">
-            <div className="space-y-5">
+        <form id="ocf-edit-form" onSubmit={(e) => void onSubmit(e)} className={flatFormSectionsStackClass}>
+          <FlatPageSection title="Podstawowe informacje" dense>
+            <div className="max-w-xl space-y-4">
               <label className={LABEL}>
                 Nazwa pola <span className="text-red-600">*</span>
                 <input required className={INPUT} value={name} onChange={(e) => setName(e.target.value)} placeholder="Np. Numer referencyjny" />
               </label>
-
-              <IntegrationsApiPanel title="⋯ Zaawansowane">
-                <label className={LABEL}>
-                  Identyfikator techniczny
-                  <input
-                    className={`${INPUT} font-mono text-xs`}
-                    value={slug}
-                    onChange={(e) => setSlug(e.target.value)}
-                    placeholder="np. numer_referencyjny"
-                  />
-                </label>
-                <p className="text-xs text-slate-500">Puste = wygenerujemy automatycznie z nazwy.</p>
-              </IntegrationsApiPanel>
-
-              <div>
-                <span className={LABEL}>Ikona</span>
-                <div className="mt-2">
-                  <OrderCustomFieldIconPicker
-                    backendType={resolvedType}
-                    previewSettings={settings}
-                    lucideKey={(settings.ui as { icon?: string | null } | undefined)?.icon ?? null}
-                    onLucideKeyChange={(next) =>
-                      setSettings((prev) => ({
-                        ...prev,
-                        ui: { ...extractUiBlock(prev), icon: next },
-                      }))
-                    }
-                    customIconUrl={(settings.ui as { custom_icon_url?: string | null } | undefined)?.custom_icon_url ?? null}
-                    onCustomIconUrlChange={(next) =>
-                      setSettings((prev) => ({
-                        ...prev,
-                        ui: { ...extractUiBlock(prev), custom_icon_url: next },
-                      }))
-                    }
-                    definitionUpload={
-                      !isCreate && Number.isFinite(idNum) && warehouseId != null
-                        ? {
-                            fieldId: idNum,
-                            tenantId,
-                            warehouseId,
-                            onDefinitionUpdated: (dto) =>
-                              setSettings(mergeSettings(dto.settings_json as Record<string, unknown>, dto.type)),
-                          }
-                        : undefined
-                    }
-                  />
-                </div>
-              </div>
 
               <div>
                 <span className={LABEL}>Typ pola</span>
@@ -379,32 +331,21 @@ export default function OrderCustomFieldEditPage() {
                 </div>
               </div>
 
-              <div className="grid gap-5 sm:grid-cols-2 sm:items-end">
-                <label className={LABEL}>
-                  Kolejność
-                  <input
-                    type="number"
-                    className={`${INPUT} tabular-nums`}
-                    value={sortOrder}
-                    onChange={(e) => setSortOrder(Number(e.target.value))}
-                  />
-                </label>
-                <label className={`${CHOICE_ROW} sm:pb-2`}>
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-slate-300"
-                    checked={isActive}
-                    onChange={(e) => setIsActive(e.target.checked)}
-                  />
-                  Aktywne (widoczne na zamówieniach)
-                </label>
-              </div>
+              <label className={CHOICE_ROW}>
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-slate-300"
+                  checked={isActive}
+                  onChange={(e) => setIsActive(e.target.checked)}
+                />
+                Aktywne (widoczne na zamówieniach)
+              </label>
             </div>
           </FlatPageSection>
 
-          <FlatPageSection title="Konfiguracja pola">
+          <FlatPageSection title="Konfiguracja pola" dense>
             {uiKind === "TEXT" ? (
-              <div className="mt-3">
+              <div>
                 <p className="text-sm font-medium text-slate-800">Format danych</p>
                 <div className="mt-2 flex flex-col gap-1.5">
                   {(
@@ -449,7 +390,7 @@ export default function OrderCustomFieldEditPage() {
             ) : null}
 
             {uiKind === "NUMBER" ? (
-              <div className="mt-3 grid gap-3 sm:grid-cols-3">
+              <div className="grid max-w-xl gap-3 sm:grid-cols-3">
                 <label className={LABEL}>
                   Min
                   <input
@@ -500,7 +441,7 @@ export default function OrderCustomFieldEditPage() {
             ) : null}
 
             {uiKind === "FILES" ? (
-              <div className="mt-3">
+              <div>
                 <p className="text-sm font-medium text-slate-800">Typ plików</p>
                 <div className="mt-2 flex flex-col gap-1.5">
                   {(
@@ -534,7 +475,7 @@ export default function OrderCustomFieldEditPage() {
             ) : null}
 
             {uiKind === "LIST" ? (
-              <div className="mt-3 space-y-4">
+              <div className="space-y-4">
                 <div>
                   <p className="text-sm font-medium text-slate-800">Rodzaj wyboru</p>
                   <div className="mt-2 flex flex-col gap-1.5 sm:flex-row sm:gap-3">
@@ -619,12 +560,12 @@ export default function OrderCustomFieldEditPage() {
             ) : null}
 
             {uiKind === "SALES_DOCUMENT" ? (
-              <p className="mt-4 text-sm leading-relaxed text-slate-600">
+              <p className="text-sm leading-relaxed text-slate-600">
                 Pole przechowuje jeden plik dokumentu sprzedaży wgrany bezpośrednio przy zamówieniu (pobieranie, podmiana, usunięcie).
               </p>
             ) : null}
             {uiKind === "SHIPPING_LABEL" ? (
-              <p className="mt-4 text-sm leading-relaxed text-slate-600">
+              <p className="text-sm leading-relaxed text-slate-600">
                 Pole przechowuje jeden plik listu przewozowego wgrany bezpośrednio przy zamówieniu (pobieranie, podmiana, usunięcie).
               </p>
             ) : null}
@@ -633,6 +574,71 @@ export default function OrderCustomFieldEditPage() {
               <p className="text-sm text-slate-500">Brak dodatkowej konfiguracji dla tego typu.</p>
             )}
           </FlatPageSection>
+
+          <section>
+            <IntegrationsApiPanel title="⋯ Zaawansowane">
+              <div className="space-y-4">
+                <div>
+                  <span className={LABEL}>Ikona</span>
+                  <div className="mt-1">
+                    <OrderCustomFieldIconPicker
+                      compact
+                      backendType={resolvedType}
+                      previewSettings={settings}
+                      lucideKey={(settings.ui as { icon?: string | null } | undefined)?.icon ?? null}
+                      onLucideKeyChange={(next) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          ui: { ...extractUiBlock(prev), icon: next },
+                        }))
+                      }
+                      customIconUrl={(settings.ui as { custom_icon_url?: string | null } | undefined)?.custom_icon_url ?? null}
+                      onCustomIconUrlChange={(next) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          ui: { ...extractUiBlock(prev), custom_icon_url: next },
+                        }))
+                      }
+                      definitionUpload={
+                        !isCreate && Number.isFinite(idNum) && warehouseId != null
+                          ? {
+                              fieldId: idNum,
+                              tenantId,
+                              warehouseId,
+                              onDefinitionUpdated: (dto) =>
+                                setSettings(mergeSettings(dto.settings_json as Record<string, unknown>, dto.type)),
+                            }
+                          : undefined
+                      }
+                    />
+                  </div>
+                </div>
+
+                <label className={`${LABEL} block max-w-xs`}>
+                  Kolejność
+                  <input
+                    type="number"
+                    className={`${INPUT} tabular-nums`}
+                    value={sortOrder}
+                    onChange={(e) => setSortOrder(Number(e.target.value))}
+                  />
+                </label>
+
+                <label className={`${LABEL} block max-w-md`}>
+                  Identyfikator techniczny
+                  <input
+                    className={`${INPUT} font-mono text-xs`}
+                    value={slug}
+                    onChange={(e) => setSlug(e.target.value)}
+                    placeholder="Generowany automatycznie z nazwy"
+                  />
+                </label>
+                <p className="text-xs text-slate-500">
+                  Opcjonalnie — dla integracji API. Puste pole: system utworzy identyfikator z nazwy (np. „Numer referencyjny” → numer_referencyjny).
+                </p>
+              </div>
+            </IntegrationsApiPanel>
+          </section>
         </form>
       </div>
 

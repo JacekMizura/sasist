@@ -8,12 +8,14 @@ export type FlatPageSectionProps = {
   description?: string;
   action?: ReactNode;
   children: ReactNode;
+  /** Mniejszy odstęp między nagłówkiem a treścią (formularze). */
+  dense?: boolean;
 };
 
 /** Płaska sekcja: nagłówek, opcjonalny opis, cienka linia, treść — bez karty. */
-export function FlatPageSection({ id, title, description, action, children }: FlatPageSectionProps) {
+export function FlatPageSection({ id, title, description, action, children, dense }: FlatPageSectionProps) {
   return (
-    <section id={id} className="space-y-5">
+    <section id={id} className={dense ? "space-y-3" : "space-y-5"}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="text-lg font-semibold tracking-tight text-slate-900">{title}</h2>
