@@ -1,16 +1,18 @@
 import { useMemo, useState } from "react";
-import { Check, Search } from "lucide-react";
+import { Search } from "lucide-react";
 
 import { PanelStatusWmsIconColumn } from "./PanelStatusWmsIconColumn";
+import { PanelSubgroupLineHeader } from "./PanelSubgroupLineHeader";
+import { PanelTreeCount } from "./PanelTreeCount";
 import {
   PANEL_TREE_CHILDREN_CLASS,
-  PANEL_TREE_GROUP_BAR_CLASS,
+  PANEL_TREE_GROUP_LABEL_CLASS,
   PANEL_TREE_GROUP_SECTION_CLASS,
   PANEL_TREE_GROUP_STATUS_LIST_CLASS,
   PANEL_TREE_PICKER_GROUP_HEAD_CLASS,
-  PANEL_TREE_STATUS_ROW_CLASS,
   PANEL_TREE_SUBGROUP_CHILDREN_CLASS,
-  panelTreeGroupAccentClass,
+  panelTreeGroupBarHex,
+  panelTreeMetaRowClass,
   panelTreeStatusBarClass,
   panelTreeStatusRowClass,
 } from "./panelStatusTreeStyles";
@@ -29,12 +31,10 @@ import type {
 export type PanelStatusHierarchyPickerProps = {
   panelSummary: OrderUiStatusPanelSummary | null;
   panelSubgroups?: OrderUiPanelSubgroupRead[] | null;
-  /** Podświetlenie aktualnie wybranego statusu (np. w modalu). */
   selectedStatusId?: number | null;
   disabled?: boolean;
   showClearOption?: boolean;
   clearLabel?: string;
-  /** Wywołane po wyborze statusu; `null` = wyczyść etykietę. */
   onPick: (statusId: number | null) => void;
   className?: string;
   listMaxHeightClass?: string;
@@ -84,22 +84,14 @@ function StatusPickRow({
     >
       <PanelStatusWmsIconColumn markers={markers} />
       <span className={panelTreeStatusBarClass(selected)} style={{ backgroundColor: stripeColor }} aria-hidden />
-      {selected ? (
-        <Check className="h-3.5 w-3.5 shrink-0 text-slate-600" strokeWidth={2.5} aria-hidden />
-      ) : (
-        <span className="w-3.5 shrink-0" aria-hidden />
-      )}
-      <span className="min-w-0 flex-1 truncate">{status.name}</span>
+      <span className="min-w-0 flex-1 leading-snug">{status.name}</span>
       {status.image_url ? (
-        <img src={status.image_url} alt="" className="h-4 w-4 shrink-0 rounded object-contain" />
+        <img src={status.image_url} alt="" className="mt-0.5 h-4 w-4 shrink-0 rounded object-contain" />
       ) : null}
     </button>
   );
 }
 
-/**
- * Hierarchiczna lista statusów panelu (grupa → podgrupa → status) ze sticky wyszukiwarką.
- */
 export function PanelStatusHierarchyPicker({
   panelSummary,
   panelSubgroups,
@@ -215,17 +207,10 @@ export function PanelStatusHierarchyPicker({
           <button
             type="button"
             disabled={disabled}
-            className={`${PANEL_TREE_STATUS_ROW_CLASS} mb-1 font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 ${
-              selectedStatusId === null ? "border-slate-200 bg-slate-100 font-medium text-slate-900" : "border-transparent"
-            }`}
+            className={`${panelTreeMetaRowClass(selectedStatusId === null)} mb-1 disabled:cursor-not-allowed disabled:opacity-50`}
             onClick={() => onPick(null)}
           >
-            {selectedStatusId === null ? (
-              <Check className="h-3.5 w-3.5 shrink-0 text-slate-600" strokeWidth={2.5} aria-hidden />
-            ) : (
-              <span className="w-3.5 shrink-0" aria-hidden />
-            )}
-            <span className="min-w-0 flex-1 truncate">{clearLabel}</span>
+            <span className="min-w-0 flex-1 leading-snug">{clearLabel}</span>
           </button>
         ) : null}
 
@@ -246,13 +231,15 @@ export function PanelStatusHierarchyPicker({
           <p className="px-2 py-3 text-xs text-slate-500">Brak statusów pasujących do wyszukiwania.</p>
         ) : (
           sections.map(({ block, groupLabel, filteredUngrouped, filteredSections }, idx) => (
-            <section key={block.main_group} className={idx > 0 ? `${PANEL_TREE_GROUP_SECTION_CLASS} border-t border-slate-100` : ""}>
-              <div className={`${PANEL_TREE_PICKER_GROUP_HEAD_CLASS} relative overflow-hidden`}>
+            <section key={block.main_group} className={idx > 0 ? `${PANEL_TREE_GROUP_SECTION_CLASS} border-t border-slate-100` : "pt-1"}>
+              <div className={`${PANEL_TREE_PICKER_GROUP_HEAD_CLASS} items-start gap-2`}>
                 <span
-                  className={`${PANEL_TREE_GROUP_BAR_CLASS} ${panelTreeGroupAccentClass(block.main_group)}`}
+                  className="mt-1 h-4 w-1 shrink-0 rounded-full"
+                  style={{ backgroundColor: panelTreeGroupBarHex(block.main_group) }}
                   aria-hidden
                 />
-                <span className="min-w-0 truncate">{groupLabel}</span>
+                <span className={`${PANEL_TREE_GROUP_LABEL_CLASS} min-w-0 flex-1`}>{groupLabel}</span>
+                <PanelTreeCount value={block.total_count} />
               </div>
               <div className={PANEL_TREE_CHILDREN_CLASS}>
                 {filteredUngrouped.length > 0 ? (
@@ -272,7 +259,7 @@ export function PanelStatusHierarchyPicker({
                 {filteredSections.map((sec) => {
                   const open = isSubgroupOpen(sec.key);
                   return (
-                    <div key={sec.key} className="pt-0.5">
+                    <div key={sec.key}>
                       <PanelSubgroupLineHeader
                         title={sec.title}
                         expanded={open}

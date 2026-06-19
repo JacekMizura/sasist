@@ -939,7 +939,7 @@ export default function OrderList() {
                   Statusy panelu
                 </button>
                 <aside
-                  className={`hidden min-h-0 min-w-0 shrink-0 flex-col gap-2 lg:sticky lg:top-3 lg:z-30 lg:flex lg:max-h-[calc(100dvh-5.75rem)] lg:overflow-y-auto lg:overscroll-y-contain lg:border-r lg:border-slate-200/90 lg:bg-slate-50/95 lg:pb-2 lg:pr-2.5 lg:pt-2 lg:shadow-[4px_0_24px_-12px_rgba(15,23,42,0.12)] ${isStatusPanelCollapsed ? "lg:w-14" : "lg:w-64"}`}
+                  className={`hidden min-h-0 min-w-0 shrink-0 flex-col gap-2 lg:sticky lg:top-3 lg:z-30 lg:flex lg:max-h-[calc(100dvh-5.75rem)] lg:overflow-y-auto lg:overscroll-y-contain lg:border-r lg:border-slate-200/90 lg:bg-slate-50/95 lg:pb-2 lg:pr-2.5 lg:pt-2 lg:shadow-[4px_0_24px_-12px_rgba(15,23,42,0.12)] ${isStatusPanelCollapsed ? "lg:w-14" : "lg:w-[19.5rem]"}`}
                 >
                   <button
                     type="button"

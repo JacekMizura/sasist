@@ -55,7 +55,7 @@ export function PanelSidebarSubgroupCollapsible({
 
   return (
     <div>
-      <PanelSubgroupLineHeader title={title} totalCount={totalCount} expanded={expanded} onToggle={toggle} />
+      <PanelSubgroupLineHeader title={title} totalCount={totalCount} expanded={expanded} onToggle={toggle} showCount={false} />
       {expanded ? <div className={PANEL_TREE_SUBGROUP_CHILDREN_CLASS}>{children}</div> : null}
     </div>
   );

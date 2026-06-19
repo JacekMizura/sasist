@@ -1,13 +1,13 @@
 import { ChevronDown, ChevronRight } from "lucide-react";
 
 import {
-  PANEL_TREE_COUNT_CLASS,
   PANEL_TREE_SUBGROUP_LINE_CLASS,
   PANEL_TREE_SUBGROUP_SECTION_CLASS,
   PANEL_TREE_SUBGROUP_TITLE_CLASS,
   PANEL_TREE_SUBGROUP_TOGGLE_CLASS,
   panelTreeDisplaySubgroupTitle,
 } from "./panelStatusTreeStyles";
+import { PanelTreeCount } from "./PanelTreeCount";
 
 export type PanelSubgroupLineHeaderProps = {
   title: string;
@@ -48,9 +48,7 @@ export function PanelSubgroupLineHeader({
       </button>
       <span className={PANEL_TREE_SUBGROUP_TITLE_CLASS}>{displayTitle}</span>
       <span className={PANEL_TREE_SUBGROUP_LINE_CLASS} aria-hidden />
-      {showCount && totalCount !== undefined ? (
-        <span className={PANEL_TREE_COUNT_CLASS}>{totalCount}</span>
-      ) : null}
+      {showCount && totalCount !== undefined ? <PanelTreeCount value={totalCount} /> : null}
     </div>
   );
 }

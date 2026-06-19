@@ -40,7 +40,7 @@ import {
 } from "../../components/orders/OrderStatusSidebar";
 import type { OrderUiMainGroup } from "../../types/orderUiStatus";
 import { PanelSidebarOperationalRow } from "../../components/panel/PanelSidebarOperationalRow";
-import { PANEL_TREE_COUNT_CLASS } from "../../components/panel/panelStatusTreeStyles";
+import { panelTreeCountClass } from "../../components/panel/panelStatusTreeStyles";
 import ReturnsModuleTabsStrip from "./ReturnsModuleTabsStrip";
 
 function panelFilterToSidebarArg(f: OrderPanelFilter): WmsReturnsSidebarPanelArg {
@@ -487,7 +487,7 @@ export default function ReturnsListPanel() {
             aria-label={RETURN_QUEUE_TAB_LABELS[key]}
           >
             <span className={`h-3 w-0.5 shrink-0 rounded-full ${returnOperationalQueueCollapsedDotClass(key)}`} />
-            <span className={PANEL_TREE_COUNT_CLASS}>{typeof c === "number" ? c : "—"}</span>
+            <span className={panelTreeCountClass()}>{typeof c === "number" ? c : "—"}</span>
           </button>
         );
       })}
@@ -526,7 +526,7 @@ export default function ReturnsListPanel() {
               Statusy panelu
             </button>
             <aside
-              className={`hidden min-h-0 min-w-0 shrink-0 flex-col gap-2 lg:sticky lg:top-3 lg:z-30 lg:flex lg:max-h-[calc(100dvh-5.75rem)] lg:overflow-y-auto lg:overscroll-y-contain lg:rounded-xl lg:border lg:border-slate-100 lg:bg-white lg:p-3 lg:shadow-sm ${isStatusPanelCollapsed ? "lg:w-14" : "lg:w-64"}`}
+              className={`hidden min-h-0 min-w-0 shrink-0 flex-col gap-2 lg:sticky lg:top-3 lg:z-30 lg:flex lg:max-h-[calc(100dvh-5.75rem)] lg:overflow-y-auto lg:overscroll-y-contain lg:rounded-xl lg:border lg:border-slate-100 lg:bg-white lg:p-3 lg:shadow-sm ${isStatusPanelCollapsed ? "lg:w-14" : "lg:w-[19.5rem]"}`}
             >
               <button
                 type="button"

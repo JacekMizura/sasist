@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { ChevronDown, ChevronRight, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import type {
   OrderUiMainGroup,
   OrderUiPanelSubgroupRead,
@@ -9,24 +9,21 @@ import type {
 import { getPanelStatusWmsMarkers, panelStatusCollapsedTitle } from "./panelStatusWmsChips";
 import { PanelStatusWmsIconColumn } from "../panel/PanelStatusWmsIconColumn";
 import { PanelSidebarSubgroupCollapsible } from "../panel/PanelSidebarSubgroupCollapsible";
+import { PanelTreeCount } from "../panel/PanelTreeCount";
+import { PanelTreeGroupRow } from "../panel/PanelTreeGroupRow";
 import {
+  PANEL_SIDEBAR_WIDTH_LG_CLASS,
   PANEL_TREE_CHILDREN_CLASS,
-  PANEL_TREE_COUNT_CLASS,
-  PANEL_TREE_GROUP_BAR_CLASS,
+  PANEL_TREE_GROUP_SECTION_CLASS,
+  PANEL_TREE_GROUP_STATUS_LIST_CLASS,
   PANEL_TREE_OPERATIONAL_LIST_CLASS,
   PANEL_TREE_OPERATIONAL_SECTION_HEADER_CLASS,
   PANEL_TREE_OPERATIONAL_TITLE_CLASS,
   PANEL_TREE_SUBGROUP_LINE_CLASS,
-  PANEL_TREE_GROUP_ROW_CLASS,
-  PANEL_TREE_GROUP_ROW_IDLE_CLASS,
-  PANEL_TREE_GROUP_SECTION_CLASS,
-  PANEL_TREE_GROUP_STATUS_LIST_CLASS,
-  PANEL_TREE_GROUP_TOGGLE_CLASS,
-  panelTreeGroupAccentClass,
-  panelTreeGroupShellClass,
   panelTreeMetaRowClass,
   panelTreeStatusBarClass,
   panelTreeStatusRowClass,
+  panelTreeCountClass,
 } from "../panel/panelStatusTreeStyles";
 import { sidebarSubStatusHex } from "../../utils/panelSidebarHierarchy";
 import { buildPanelSidebarLayout } from "../../utils/orderPanelSidebarBuckets";
@@ -154,11 +151,11 @@ export function OrdersPanelStatusSidebar({
       >
         <PanelStatusWmsIconColumn markers={markers} />
         <span className={panelTreeStatusBarClass(active)} style={{ backgroundColor: stripeColor }} aria-hidden />
-        <span className="min-w-0 flex-1 truncate">{s.name}</span>
+        <span className="min-w-0 flex-1 leading-snug">{s.name}</span>
         {s.image_url ? (
-          <img src={s.image_url} alt="" className="h-4 w-4 shrink-0 rounded object-contain" />
+          <img src={s.image_url} alt="" className="mt-0.5 h-4 w-4 shrink-0 rounded object-contain" />
         ) : null}
-        <span className={`${PANEL_TREE_COUNT_CLASS} ${active ? "text-slate-700" : ""}`}>{s.count}</span>
+        <PanelTreeCount value={s.count} active={active} />
       </button>
     );
   };
@@ -196,7 +193,7 @@ export function OrdersPanelStatusSidebar({
           aria-label="Wszystkie"
         >
           <span className="h-2.5 w-2.5 rounded-full bg-slate-500" />
-          <span className={PANEL_TREE_COUNT_CLASS}>{totalPanelOrders ?? "—"}</span>
+          <PanelTreeCount value={totalPanelOrders ?? "—"} />
         </button>
         {(panelSummary?.unassigned_count ?? 0) > 0 ? (
           <button
@@ -207,7 +204,7 @@ export function OrdersPanelStatusSidebar({
             aria-label="Bez etykiety"
           >
             <span className="h-2.5 w-2.5 rounded-full bg-slate-400" />
-            <span className={PANEL_TREE_COUNT_CLASS}>{panelSummary?.unassigned_count ?? "—"}</span>
+            <PanelTreeCount value={panelSummary?.unassigned_count ?? "—"} />
           </button>
         ) : null}
         {MAIN_PANEL_GROUP_ORDER.flatMap((mg) => {
@@ -225,7 +222,7 @@ export function OrdersPanelStatusSidebar({
                 aria-label={panelGroupLabels[block.main_group]}
               >
                 <span className={`h-2.5 w-2.5 rounded-full ${statusDotClass(panelGroupLabels[block.main_group])}`} />
-                <span className={PANEL_TREE_COUNT_CLASS}>{block.total_count}</span>
+                <PanelTreeCount value={block.total_count} />
               </button>
               {visibleStatuses.map((s) => (
                 <button
@@ -241,7 +238,7 @@ export function OrdersPanelStatusSidebar({
                     style={{ backgroundColor: sidebarSubStatusHex(s.badge_color ?? s.color, block.main_group) }}
                     aria-hidden
                   />
-                  <span className={PANEL_TREE_COUNT_CLASS}>{s.count}</span>
+                  <span className={panelTreeCountClass()}>{s.count}</span>
                 </button>
               ))}
             </div>,
@@ -258,7 +255,7 @@ export function OrdersPanelStatusSidebar({
   return (
     <aside
       className={`w-full min-w-0 max-w-full shrink-0 overflow-x-hidden p-2 ${stickySelf} ${
-        sellasist ? "" : panelListStatusSidebarWidthLg
+        sellasist ? PANEL_SIDEBAR_WIDTH_LG_CLASS : panelListStatusSidebarWidthLg
       } ${sellasistScroll} rounded-xl border border-slate-200/90 bg-white`}
     >
       <div className="mb-2 flex items-center justify-between gap-2 px-1">
@@ -288,8 +285,8 @@ export function OrdersPanelStatusSidebar({
           className={panelTreeMetaRowClass(panelFilter === "all")}
           onClick={() => onPanelFilterChange("all")}
         >
-          <span className={panelFilter === "all" ? "font-semibold" : ""}>Wszystkie</span>
-          <span className={PANEL_TREE_COUNT_CLASS}>{totalPanelOrders ?? "—"}</span>
+          <span className="min-w-0 flex-1 leading-snug">Wszystkie</span>
+          <PanelTreeCount value={totalPanelOrders ?? "—"} active={panelFilter === "all"} />
         </button>
 
         {(panelSummary?.unassigned_count ?? 0) > 0 ? (
@@ -298,8 +295,8 @@ export function OrdersPanelStatusSidebar({
             className={panelTreeMetaRowClass(panelFilter === "unassigned")}
             onClick={() => onPanelFilterChange("unassigned")}
           >
-            <span className={panelFilter === "unassigned" ? "font-semibold" : ""}>Bez etykiety</span>
-            <span className={PANEL_TREE_COUNT_CLASS}>{panelSummary?.unassigned_count ?? "—"}</span>
+            <span className="min-w-0 flex-1 leading-snug">Bez etykiety</span>
+            <PanelTreeCount value={panelSummary?.unassigned_count ?? "—"} active={panelFilter === "unassigned"} />
           </button>
         ) : null}
       </div>
@@ -327,34 +324,20 @@ export function OrdersPanelStatusSidebar({
 
           return (
             <section key={block.main_group} className={PANEL_TREE_GROUP_SECTION_CLASS}>
-              <div className={panelTreeGroupShellClass(groupActive)}>
-                <button
-                  type="button"
-                  className={`${PANEL_TREE_GROUP_ROW_CLASS} ${groupActive ? "" : PANEL_TREE_GROUP_ROW_IDLE_CLASS}`}
-                  onClick={() => onPanelFilterChange({ kind: "group", group: block.main_group })}
-                >
-                  <span
-                    className={`${PANEL_TREE_GROUP_BAR_CLASS} ${panelTreeGroupAccentClass(block.main_group)}`}
-                    aria-hidden
-                  />
-                  <span className="min-w-0 flex-1 truncate pl-0.5">{panelGroupLabels[block.main_group]}</span>
-                  <span className={PANEL_TREE_COUNT_CLASS}>{block.total_count}</span>
-                </button>
-                <button
-                  type="button"
-                  className={PANEL_TREE_GROUP_TOGGLE_CLASS}
-                  onClick={() =>
-                    setOpenSections((prev) => ({
-                      ...prev,
-                      [sectionKey]: !prev[sectionKey],
-                    }))
-                  }
-                  aria-expanded={isOpen}
-                  aria-label={isOpen ? "Zwiń grupę" : "Rozwiń grupę"}
-                >
-                  {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                </button>
-              </div>
+              <PanelTreeGroupRow
+                label={panelGroupLabels[block.main_group]}
+                count={block.total_count}
+                mainGroup={block.main_group}
+                expanded={isOpen}
+                active={groupActive}
+                onFilter={() => onPanelFilterChange({ kind: "group", group: block.main_group })}
+                onToggle={() =>
+                  setOpenSections((prev) => ({
+                    ...prev,
+                    [sectionKey]: !prev[sectionKey],
+                  }))
+                }
+              />
 
               {isOpen ? (
                 <div className={PANEL_TREE_CHILDREN_CLASS}>

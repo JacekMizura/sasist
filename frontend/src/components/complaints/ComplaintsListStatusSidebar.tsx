@@ -7,8 +7,11 @@ import {
   COMPLAINT_SIDEBAR_FILTER_LABELS_PL,
   COMPLAINT_STATUS_FILTER_ORDER,
 } from "../../types/complaint";
+import { PanelStatusWmsIconColumn } from "../panel/PanelStatusWmsIconColumn";
+import { PanelTreeCount } from "../panel/PanelTreeCount";
 import {
-  PANEL_TREE_COUNT_CLASS,
+  PANEL_SIDEBAR_WIDTH_LG_CLASS,
+  panelTreeCountClass,
   panelTreeMetaRowClass,
   panelTreeStatusBarClass,
   panelTreeStatusRowClass,
@@ -81,7 +84,7 @@ export function ComplaintsListStatusSidebar({
           aria-label="Wszystkie"
         >
           <span className="h-2.5 w-2.5 rounded-full bg-slate-500" />
-          <span className={PANEL_TREE_COUNT_CLASS}>{totalCount ?? "—"}</span>
+          <span className={panelTreeCountClass()}>{totalCount ?? "—"}</span>
         </button>
         {visibleStatuses.map((code) => (
           <button
@@ -93,7 +96,7 @@ export function ComplaintsListStatusSidebar({
             aria-label={COMPLAINT_SIDEBAR_FILTER_LABELS_PL[code]}
           >
             <span className="h-3 w-0.5 shrink-0 rounded-full" style={{ backgroundColor: stripeHexForStatus(code) }} aria-hidden />
-            <span className={PANEL_TREE_COUNT_CLASS}>{countFor(code)}</span>
+            <span className={panelTreeCountClass()}>{countFor(code)}</span>
           </button>
         ))}
       </aside>
@@ -102,7 +105,7 @@ export function ComplaintsListStatusSidebar({
 
   return (
     <aside
-      className={`w-full min-w-0 max-w-full shrink-0 overflow-x-hidden p-2 lg:sticky lg:top-4 ${
+      className={`w-full min-w-0 max-w-full shrink-0 overflow-x-hidden p-2 lg:sticky lg:top-4 ${PANEL_SIDEBAR_WIDTH_LG_CLASS} ${
         sellasist
           ? "max-h-[min(100vh-6rem,52rem)] overflow-y-auto rounded-xl border border-slate-200/90 bg-white"
           : "rounded-xl border border-slate-200/90 bg-white"
@@ -132,14 +135,14 @@ export function ComplaintsListStatusSidebar({
           className={panelTreeMetaRowClass(panelFilter === "all")}
           onClick={() => onPanelFilterChange("all")}
         >
-          <span className={panelFilter === "all" ? "font-semibold" : ""}>Wszystkie</span>
-          <span className={PANEL_TREE_COUNT_CLASS}>{totalCount ?? "—"}</span>
+          <span className="min-w-0 flex-1 leading-snug">Wszystkie</span>
+          <PanelTreeCount value={totalCount ?? "—"} active={panelFilter === "all"} />
         </button>
 
         {visibleStatuses.length === 0 ? (
           <p className="px-1 py-2 text-xs text-slate-500">Brak etapów pasujących do wyszukiwania.</p>
         ) : (
-          <div className="space-y-1.5 pt-2">
+          <div className="space-y-1 pt-2">
             {visibleStatuses.map((code) => {
               const active = isStatusActive(panelFilter, code);
               const dotColor = stripeHexForStatus(code);
@@ -151,15 +154,10 @@ export function ComplaintsListStatusSidebar({
                   title={COMPLAINT_SIDEBAR_FILTER_LABELS_PL[code]}
                   onClick={() => onPanelFilterChange({ kind: "status", status: code })}
                 >
-                  <span
-                    className={panelTreeStatusBarClass(active)}
-                    style={{ backgroundColor: dotColor }}
-                    aria-hidden
-                  />
-                  <span className="min-w-0 flex-1 truncate pl-0.5">{COMPLAINT_SIDEBAR_FILTER_LABELS_PL[code]}</span>
-                  <span className={`${PANEL_TREE_COUNT_CLASS} ${active ? "text-slate-700" : ""}`}>
-                    {countFor(code)}
-                  </span>
+                  <PanelStatusWmsIconColumn markers={[]} />
+                  <span className={panelTreeStatusBarClass(active)} style={{ backgroundColor: dotColor }} aria-hidden />
+                  <span className="min-w-0 flex-1 leading-snug">{COMPLAINT_SIDEBAR_FILTER_LABELS_PL[code]}</span>
+                  <PanelTreeCount value={countFor(code)} active={active} />
                 </button>
               );
             })}

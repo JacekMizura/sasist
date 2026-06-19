@@ -20,6 +20,10 @@ import ErrorBoundary from "./components/ErrorBoundary"
 import ProtectedRoute from "./components/auth/ProtectedRoute"
 
 import Dashboard from "./pages/Dashboard"
+import PanelStatusSidebarMockupV3, {
+  PanelStatusSidebarMockupV3Screenshot,
+} from "./components/panel/mockups/PanelStatusSidebarMockupV3"
+import PanelStatusV3ScreenshotsPage from "./components/panel/mockups/PanelStatusV3ScreenshotsPage"
 import ProductsLayout from "./pages/Products/ProductsLayout"
 import ProductList from "./pages/Products/ProductList"
 import ProductNewPage from "./pages/Products/ProductNewPage"
@@ -369,6 +373,8 @@ export const router = createBrowserRouter(
   createRoutesFromElements(
     <Route path="/" element={<AppRootLayout />}>
       <Route path="login" element={<LoginPage />} />
+      <Route path="dev/panel-status-sidebar-mockup-screenshot" element={<PanelStatusSidebarMockupV3Screenshot />} />
+      <Route path="dev/panel-status-v3-screenshots" element={<PanelStatusV3ScreenshotsPage />} />
       <Route path="wms-upload/:sessionId" element={<WmsPhoneUploadPage />} />
       <Route element={<ProtectedRoute />}>
       <Route index element={<Navigate to="/dashboard" replace />} />
@@ -605,6 +611,7 @@ export const router = createBrowserRouter(
       </Route>
       <Route element={<MainPanelLayout />} errorElement={<ErpPanelRouteErrorPage />}>
                 <Route path="dashboard" element={<Dashboard />} />
+                <Route path="dev/panel-status-sidebar-mockup" element={<PanelStatusSidebarMockupV3 />} />
                 <Route path="complaints" element={<ComplaintsLayout />}>
                   <Route index element={<ComplaintsPanelPage />} />
                   <Route path=":id" element={<ComplaintDetailPage />} />

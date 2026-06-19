@@ -73,5 +73,5 @@ export const listSellasistToolbarSquareBtn =
 export const listSellasistTitleAddBtn =
   "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 shadow-none transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/30";
 
-/** Orders / Returns panel status sidebar @ lg (~192px; tighter than legacy 17.5rem). */
-export const panelListStatusSidebarWidthLg = "lg:w-[12rem]";
+/** Orders / Returns panel status sidebar @ lg — mockup v3 (~312px). */
+export const panelListStatusSidebarWidthLg = "lg:w-[19.5rem]";
