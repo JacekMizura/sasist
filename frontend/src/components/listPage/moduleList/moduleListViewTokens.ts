@@ -4,11 +4,11 @@ export const moduleListTwoColumnShellClass = "flex flex-col gap-6 lg:flex-row lg
 /** Kolumna treści listy. */
 export const moduleListContentColumnClass = "flex min-w-0 flex-1 flex-col gap-6";
 
-/** Karta tabeli z paskiem multiakcji u góry. */
-export const moduleTableCardClass = "min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm";
+/** Kontener tabeli z paskiem multiakcji — bez zewnętrznej karty. */
+export const moduleTableCardClass = "min-w-0";
 
-/** Pasek multiakcji wewnątrz karty tabeli. */
-export const moduleBulkBarClass = "flex min-h-12 flex-wrap items-center gap-2 border-b border-slate-100 px-4 py-2";
+/** Pasek multiakcji nad tabelą. */
+export const moduleBulkBarClass = "flex min-h-12 flex-wrap items-center gap-2 border-b border-slate-100 py-2";
 
 /** Kwadratowy przycisk skrótu w pasku multiakcji. */
 export const moduleBulkIconBtnClass =
@@ -24,6 +24,6 @@ export const moduleBulkDangerBtnClass =
 /** Separator „lub” między sekcjami paska. */
 export const moduleBulkOrSeparatorClass = "shrink-0 text-xs text-slate-400";
 
-/** Stopka paginacji tabeli — wzorzec zwrotów. */
+/** Stopka paginacji tabeli. */
 export const moduleTablePaginationFooterClass =
-  "flex flex-col gap-3 border-t border-slate-100 px-6 py-4 text-sm text-slate-400 sm:flex-row sm:items-center sm:justify-between";
+  "flex flex-col gap-3 border-t border-slate-100 py-4 text-sm text-slate-400 sm:flex-row sm:items-center sm:justify-between";

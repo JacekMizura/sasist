@@ -20,7 +20,7 @@ export const moduleListRowSelectedClass = "bg-sky-50/60";
 export const moduleListRowActionsRevealClass =
   "opacity-0 transition-opacity group-hover:opacity-100";
 
-export const moduleListEmptyStateClass = "px-6 py-12 text-center text-sm text-slate-500";
+export const moduleListEmptyStateClass = "py-12 text-center text-sm text-slate-500";
 
 export const moduleListChannelBadgeClass =
   "inline-flex items-center rounded-md border border-slate-100 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-500";

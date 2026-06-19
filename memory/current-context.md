@@ -1,5 +1,9 @@
 # Current context
 
+## Listy modułów — płaski layout (2026-06-08)
+- Usunięto card-in-card w Zamówienia / Zwroty / Reklamacje: `PANEL_STATUS_SIDEBAR_PAGE_SHELL_BASE` (sidebar bez border/shadow), `moduleTableCardClass` (tabela bez zewnętrznej karty).
+- Wspólne tokeny: `panelStatusTreeStyles.ts`, `moduleListViewTokens.ts`, `moduleListTableTokens.ts`.
+
 ## Bundle STOCK B1 — UX Simplification (2026-06-08) — CLOSED
 - **Raport:** `memory/bundle-stock-b1-ux-simplification-report.md`
 - Auto shadow Product przy zapisie STOCK; ukryte pole linked_product_id w UI
