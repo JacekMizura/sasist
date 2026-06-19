@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Sklep">
+  <rect width="32" height="32" rx="6" fill="#64748b"/>
+  <path d="M10 14h12v10H10z M12 14v-2a4 4 0 018 0v2" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

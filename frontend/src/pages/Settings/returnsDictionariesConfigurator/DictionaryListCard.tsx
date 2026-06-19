@@ -1,25 +1,59 @@
-import { useState, useRef } from "react";
-import { MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
+import { useMemo } from "react";
+import {
+  DndContext,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { GripVertical, Pencil, Plus, Trash2 } from "lucide-react";
 
 import type { ReturnCustomerReturnTypeDto, ReturnOrderSourceDto } from "../../../types/returnModuleConfig";
-import { ORDER_SOURCE_ICONS, RETURN_TYPE_ICONS, type DictionaryKind } from "./constants";
-
-type Row = ReturnCustomerReturnTypeDto | ReturnOrderSourceDto;
+import { OrderSourceLogo } from "./OrderSourceLogo";
+import type { DictionaryKind, DictionaryRow } from "./constants";
 
 type Props = {
   title: string;
   description: string;
   addLabel: string;
   kind: DictionaryKind;
-  rows: Row[];
+  rows: DictionaryRow[];
+  busy?: boolean;
   onAdd: () => void;
-  onEdit: (row: Row) => void;
-  onDelete: (row: Row) => void;
+  onEdit: (row: DictionaryRow) => void;
+  onDelete: (row: DictionaryRow) => void;
+  onToggleActive: (row: DictionaryRow, active: boolean) => void;
+  onReorder: (rows: DictionaryRow[]) => void;
 };
 
-export function DictionaryListCard({ title, description, addLabel, kind, rows, onAdd, onEdit, onDelete }: Props) {
-  const icons = kind === "return_type" ? RETURN_TYPE_ICONS : ORDER_SOURCE_ICONS;
-  const sorted = [...rows].sort((a, b) => a.sort_order - b.sort_order);
+export function DictionaryListCard({
+  title,
+  description,
+  addLabel,
+  kind,
+  rows,
+  busy = false,
+  onAdd,
+  onEdit,
+  onDelete,
+  onToggleActive,
+  onReorder,
+}: Props) {
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  const sorted = useMemo(() => [...rows].sort((a, b) => a.sort_order - b.sort_order), [rows]);
+  const ids = useMemo(() => sorted.map((r) => `${kind}:${r.code}`), [sorted, kind]);
+
+  const onDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = ids.indexOf(String(active.id));
+    const newIndex = ids.indexOf(String(over.id));
+    if (oldIndex === -1 || newIndex === -1) return;
+    onReorder(arrayMove(sorted, oldIndex, newIndex));
+  };
 
   return (
     <section className="rounded-xl border border-slate-200/90 bg-white shadow-sm">
@@ -30,98 +64,117 @@ export function DictionaryListCard({ title, description, addLabel, kind, rows, o
         </div>
         <button
           type="button"
-          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+          disabled={busy}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-45"
           onClick={onAdd}
         >
           <Plus className="h-4 w-4" strokeWidth={2} aria-hidden />
           {addLabel}
         </button>
       </header>
-      <ul className="space-y-2 p-4">
-        {sorted.map((row, i) => (
-          <DictionaryItemRow
-            key={row.code}
-            icon={icons[i % icons.length]}
-            row={row}
-            onEdit={() => onEdit(row)}
-            onDelete={() => onDelete(row)}
-          />
-        ))}
-        {sorted.length === 0 ? (
-          <li className="rounded-lg border border-dashed border-slate-200 px-4 py-6 text-center text-sm text-slate-400">
-            Brak pozycji — dodaj pierwszą.
-          </li>
-        ) : null}
-      </ul>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+        <SortableContext items={ids} strategy={verticalListSortingStrategy}>
+          <ul className="divide-y divide-slate-100 p-2">
+            {sorted.map((row) => (
+              <SortableDictionaryRow
+                key={`${kind}:${row.code}`}
+                id={`${kind}:${row.code}`}
+                kind={kind}
+                row={row}
+                busy={busy}
+                onEdit={() => onEdit(row)}
+                onDelete={() => onDelete(row)}
+                onToggleActive={(active) => onToggleActive(row, active)}
+              />
+            ))}
+            {sorted.length === 0 ? (
+              <li className="px-3 py-8 text-center text-sm text-slate-400">Brak pozycji — dodaj pierwszą.</li>
+            ) : null}
+          </ul>
+        </SortableContext>
+      </DndContext>
     </section>
   );
 }
 
-function DictionaryItemRow({
-  icon,
+function SortableDictionaryRow({
+  id,
+  kind,
   row,
+  busy,
   onEdit,
   onDelete,
+  onToggleActive,
 }: {
-  icon: string;
-  row: Row;
+  id: string;
+  kind: DictionaryKind;
+  row: DictionaryRow;
+  busy: boolean;
   onEdit: () => void;
   onDelete: () => void;
+  onToggleActive: (active: boolean) => void;
 }) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.6 : undefined,
+  };
 
   return (
-    <li className="flex items-center gap-3 rounded-xl border border-slate-200/80 bg-slate-50/40 px-3 py-3">
-      <span className="text-xl leading-none" aria-hidden>
-        {icon}
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="font-medium text-slate-900">{row.label}</p>
-        <span
-          className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-            row.is_active ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200/80" : "bg-slate-100 text-slate-500 ring-1 ring-slate-200"
-          }`}
-        >
-          {row.is_active ? "Aktywny" : "Wyłączony"}
-        </span>
-      </div>
+    <li
+      ref={setNodeRef}
+      style={style}
+      className="flex flex-wrap items-center gap-3 rounded-lg px-2 py-2.5 hover:bg-slate-50/80 sm:flex-nowrap"
+    >
+      <button
+        type="button"
+        className="cursor-grab touch-none rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
+        title="Przeciągnij aby zmienić kolejność"
+        aria-label="Zmień kolejność"
+        disabled={busy}
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical className="h-4 w-4" strokeWidth={2} aria-hidden />
+      </button>
+
+      {kind === "source" ? (
+        <OrderSourceLogo code={row.code} label={row.label} />
+      ) : null}
+
+      <p className="min-w-0 flex-1 text-sm font-medium text-slate-900">{row.label}</p>
+
+      <label className="inline-flex shrink-0 items-center gap-2 text-sm text-slate-600">
+        <input
+          type="checkbox"
+          className="rounded border-slate-300"
+          checked={row.is_active}
+          disabled={busy}
+          onChange={(e) => onToggleActive(e.target.checked)}
+        />
+        Aktywny
+      </label>
+
       <div className="flex shrink-0 items-center gap-1.5">
         <button
           type="button"
-          className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+          disabled={busy}
+          className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-45"
           onClick={onEdit}
         >
           <Pencil className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
           Edytuj
         </button>
-        <div className="relative" ref={menuRef}>
-          <button
-            type="button"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
-            aria-label="Więcej akcji"
-            onClick={() => setMenuOpen((v) => !v)}
-          >
-            <MoreHorizontal className="h-4 w-4" />
-          </button>
-          {menuOpen ? (
-            <>
-              <div className="fixed inset-0 z-10" aria-hidden onClick={() => setMenuOpen(false)} />
-              <div className="absolute right-0 top-full z-20 mt-1 min-w-[9rem] rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    onDelete();
-                  }}
-                >
-                  <Trash2 className="h-3.5 w-3.5" /> Usuń
-                </button>
-              </div>
-            </>
-          ) : null}
-        </div>
+        <button
+          type="button"
+          disabled={busy}
+          className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-45"
+          onClick={onDelete}
+        >
+          <Trash2 className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+          Usuń
+        </button>
       </div>
     </li>
   );

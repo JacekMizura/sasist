@@ -47,36 +47,52 @@ export default function ReturnsModuleSettingsPanel({ warehouseId, activeTab }: P
     return JSON.stringify(draft) !== savedFingerprint;
   }, [draft, savedFingerprint]);
 
+  const persistConfig = useCallback(
+    async (next: ReturnModuleConfigDto): Promise<boolean> => {
+      setSaving(true);
+      try {
+        const saved = await putOfficeReturnModuleConfig(next, { tenantId: DAMAGE_TENANT_ID, warehouseId: whOpt });
+        setDraft(saved);
+        setSavedFingerprint(JSON.stringify(saved));
+        return true;
+      } catch {
+        toast.error("Nie udało się zapisać konfiguracji.");
+        return false;
+      } finally {
+        setSaving(false);
+      }
+    },
+    [whOpt],
+  );
+
   const saveCfg = async () => {
     if (!draft || !dirty || saving) return;
-    setSaving(true);
-    try {
-      const saved = await putOfficeReturnModuleConfig(draft, { tenantId: DAMAGE_TENANT_ID, warehouseId: whOpt });
-      setDraft(saved);
-      setSavedFingerprint(JSON.stringify(saved));
-      toast.success("Zapisano konfigurację modułu zwrotów.");
-    } catch {
-      toast.error("Nie udało się zapisać konfiguracji.");
-    } finally {
-      setSaving(false);
-    }
+    const ok = await persistConfig(draft);
+    if (ok) toast.success("Zapisano konfigurację modułu zwrotów.");
   };
 
-  const saveStrip = (
-    <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50/90 px-3 py-2.5">
-      <p className="text-sm text-slate-600">
-        {dirty ? "Masz niezapisane zmiany." : "Zsynchronizowano z serwerem."}
-      </p>
-      <button
-        type="button"
-        disabled={!dirty || saving || loading || draft == null}
-        className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-45"
-        onClick={() => void saveCfg()}
-      >
-        {saving ? "Zapisywanie…" : "Zapisz konfigurację zwrotów"}
-      </button>
-    </div>
-  );
+  const saveStrip =
+    activeTab === "slowniki" ? (
+      <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50/90 px-3 py-2.5">
+        <p className="text-sm text-slate-600">
+          {saving ? "Zapisywanie…" : "Zmiany w słownikach zapisują się automatycznie."}
+        </p>
+      </div>
+    ) : (
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50/90 px-3 py-2.5">
+        <p className="text-sm text-slate-600">
+          {dirty ? "Masz niezapisane zmiany." : "Zsynchronizowano z serwerem."}
+        </p>
+        <button
+          type="button"
+          disabled={!dirty || saving || loading || draft == null}
+          className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-45"
+          onClick={() => void saveCfg()}
+        >
+          {saving ? "Zapisywanie…" : "Zapisz konfigurację zwrotów"}
+        </button>
+      </div>
+    );
 
   const cfg = draft;
 
@@ -102,7 +118,9 @@ export default function ReturnsModuleSettingsPanel({ warehouseId, activeTab }: P
         <ReturnsStatusesConfigurator warehouseId={warehouseId} cfg={cfg} setDraft={setDraft} />
       ) : null}
 
-      {activeTab === "slowniki" && cfg ? <ReturnsDictionariesConfigurator cfg={cfg} setDraft={setDraft} /> : null}
+      {activeTab === "slowniki" && cfg ? (
+        <ReturnsDictionariesConfigurator cfg={cfg} saving={saving} onPersist={persistConfig} />
+      ) : null}
 
       {activeTab === "konfigurator" && cfg ? (
         <OpsSection

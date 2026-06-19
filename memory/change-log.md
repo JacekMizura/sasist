@@ -1,5 +1,14 @@
 # Change log
 
+## 2026-06-08 — Słowniki zwrotów: przebudowa UX
+
+- Pełna szerokość — usunięto panel „Podgląd formularza klienta”
+- Rodzaje zwrotów: bez emoji; źródła: logotypy marketplace (`OrderSourceLogo` + SVG w `public/assets/marketplaces/`)
+- Aktywność: checkbox inline w wierszu + auto-zapis (`persistConfig` w `ReturnsModuleSettingsPanel`)
+- Kolejność: drag & drop (`@dnd-kit`); bez pola kolejności i sekcji „Zaawansowane” w modalach
+- Modal rodzaju: tylko nazwa; modal źródła: marketplace + nazwa + aktywny
+- `slugDictionaryCode()` generuje identyfikator systemowy automatycznie
+
 ## 2026-06-08 — Słowniki zwrotów (UI)
 
 - Połączono zakładki „Rodzaje zwrotów” + „Źródła” → **Słowniki zwrotów** (`/orders/returns/dictionaries`)
