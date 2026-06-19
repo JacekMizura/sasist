@@ -1343,6 +1343,7 @@ export default function OrderList() {
         }}
         orderCount={effectiveSelectionCount}
         panelSummary={panelSummary}
+        panelSubgroups={panelSubgroups}
         shippingMethods={shippingMethods}
         busy={multiBusy}
         onExecute={(payload) => void handleMultiExecute(payload)}
@@ -1352,6 +1353,7 @@ export default function OrderList() {
         modal={quickModal}
         orderCount={effectiveSelectionCount}
         panelSummary={panelSummary}
+        panelSubgroups={panelSubgroups}
         busy={quickBusy}
         onClose={() => {
           if (!quickBusy) setQuickModal(null);

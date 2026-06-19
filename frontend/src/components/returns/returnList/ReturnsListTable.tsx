@@ -12,14 +12,15 @@ import {
 } from "../../operational";
 import { ReturnsListProductCell } from "./ReturnsListProductCell";
 import { firstProductImageUrl } from "../../panelList/ProductListItem";
+import { PanelBulkStatusPickerDropdown } from "../../panel/PanelBulkStatusPickerDropdown";
 import { listSellasistInputClass } from "../../listPage/listSellasistTokens";
-import { ORDERS_PANEL_GROUP_LABELS } from "../../orders/OrderStatusSidebar";
 import { WMS_ROUTES } from "../../../pages/wms/wmsRoutes";
 import { resolveDamageMediaUrl } from "../../../utils/resolveDamageMediaUrl";
 import { displayWarehouseDocumentNumber } from "../../../utils/warehouseDocumentNumberDisplay";
 import { panelSidebarSubRowStyleRich } from "../../../utils/panelSidebarHierarchy";
 import type { PanelConfigurableUiStatusBrief } from "../../../utils/panelListStatusBriefMappers";
 import { returnUiStatusBriefToPanelBrief, returnWorkflowStatusToPanelBrief } from "../../../utils/panelListStatusBriefMappers";
+import type { OrderUiPanelSubgroupRead, OrderUiStatusPanelSummary } from "../../../types/orderUiStatus";
 import type { ReturnUiStatusPanelSummary, WmsReturnListItem } from "../../../types/wmsReturn";
 import type { PanelBulkSelectionMode } from "../../../hooks/usePanelListBulkSelection";
 
@@ -312,6 +313,7 @@ export type ReturnsListTableProps = {
   loading: boolean;
   effectiveWarehouseId: number | null;
   panelSummary: ReturnUiStatusPanelSummary | null;
+  panelSubgroups?: OrderUiPanelSubgroupRead[] | null;
   bulkBusy: boolean;
   bulkToolbarDisabled: boolean;
   bulkSelectMenuKey: number;
@@ -336,6 +338,7 @@ function ReturnsListTableInner({
   loading,
   effectiveWarehouseId,
   panelSummary,
+  panelSubgroups,
   bulkBusy,
   bulkToolbarDisabled,
   bulkSelectMenuKey,
@@ -388,37 +391,18 @@ function ReturnsListTableInner({
             </span>
           )}
           <span className="shrink-0 text-xs text-slate-500">wykonaj</span>
-          <select
+          <PanelBulkStatusPickerDropdown
             key={`${bulkSelectMenuKey}-st`}
+            panelSummary={panelSummary as unknown as OrderUiStatusPanelSummary | null}
+            panelSubgroups={panelSubgroups}
             disabled={bulkToolbarDisabled}
-            defaultValue=""
-            className={`${listSellasistInputClass} !h-9 max-w-[14rem] shrink-0 text-xs disabled:opacity-40`}
-            aria-label="Zmień status panelu dla zaznaczonych zwrotów"
-            onChange={(e) => {
-              const v = e.target.value;
-              e.target.selectedIndex = 0;
-              if (!v || effectiveSelectionCount === 0) return;
-              if (v === "__clear__") {
-                onBulkStatusConfirm("", resolveBulkReturnStatusLabel(""));
-                return;
-              }
+            placeholder="Wybierz akcję"
+            ariaLabel="Zmień status panelu dla zaznaczonych zwrotów"
+            onSelect={(v) => {
+              if (effectiveSelectionCount === 0) return;
               onBulkStatusConfirm(v, resolveBulkReturnStatusLabel(v));
             }}
-          >
-            <option value="" disabled>
-              Wybierz akcję
-            </option>
-            <option value="__clear__">Bez etykiety (wyczyść)</option>
-            {(panelSummary?.groups ?? []).map((block) => (
-              <optgroup key={block.main_group} label={ORDERS_PANEL_GROUP_LABELS[block.main_group]}>
-                {block.sub_statuses.map((s) => (
-                  <option key={s.id} value={String(s.id)}>
-                    {s.name}
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
+          />
           <span className="hidden shrink-0 text-[11px] font-medium tabular-nums text-slate-500 sm:inline">
             ({effectiveSelectionCount})
           </span>

@@ -677,6 +677,7 @@ export default function ReturnsListPanel() {
             onOpenDetail={openDetail}
             onDeleteSingle={(id) => setDeleteConfirm({ kind: "single", id })}
             resolveBulkReturnStatusLabel={resolveBulkReturnStatusLabel}
+            panelSubgroups={orderSubgroupsCast}
           />
         </div>
       </div>

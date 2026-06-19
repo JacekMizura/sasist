@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { X } from "lucide-react";
-import type { OrderUiStatusPanelSummary } from "../../../types/orderUiStatus";
-import { ORDERS_PANEL_GROUP_LABELS } from "../OrdersPanelStatusSidebar";
+import { PanelStatusHierarchyPicker } from "../../panel/PanelStatusHierarchyPicker";
+import type { OrderUiPanelSubgroupRead, OrderUiStatusPanelSummary } from "../../../types/orderUiStatus";
 import type { OrderQuickToolbarActionKind } from "./orderQuickActionKinds";
 
 const inp =
@@ -61,6 +61,7 @@ export type OrderQuickActionModalsProps = {
   modal: OrderQuickToolbarActionKind | null;
   orderCount: number;
   panelSummary: OrderUiStatusPanelSummary | null;
+  panelSubgroups?: OrderUiPanelSubgroupRead[] | null;
   busy: boolean;
   onClose: () => void;
   onApplyChangeStatus: (statusId: string) => Promise<void>;
@@ -76,6 +77,7 @@ export function OrderQuickActionModals({
   modal,
   orderCount,
   panelSummary,
+  panelSubgroups,
   busy,
   onClose,
   onApplyChangeStatus,
@@ -136,25 +138,27 @@ export function OrderQuickActionModals({
           </>
         }
       >
-        <label className={lab}>
-          Status panelu
-          <select
-            className={inp}
-            disabled={busy}
-            value={statusId}
-            onChange={(e) => setStatusId(e.target.value)}
-          >
-            <option value="">— wybierz —</option>
-            <option value="__clear__">Usuń etykietę panelu</option>
-            {(panelSummary?.groups ?? []).flatMap((block) =>
-              block.sub_statuses.map((s) => (
-                <option key={s.id} value={String(s.id)}>
-                  {ORDERS_PANEL_GROUP_LABELS[block.main_group]}: {s.name}
-                </option>
-              )),
-            )}
-          </select>
-        </label>
+        <div>
+          <span className={lab}>Status panelu</span>
+          <div className="mt-1 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+            <PanelStatusHierarchyPicker
+              panelSummary={panelSummary}
+              panelSubgroups={panelSubgroups}
+              disabled={busy}
+              showClearOption
+              clearLabel="Usuń etykietę panelu"
+              selectedStatusId={
+                statusId === "__clear__"
+                  ? null
+                  : statusId.trim() === ""
+                    ? undefined
+                    : Number(statusId)
+              }
+              onPick={(id) => setStatusId(id == null ? "__clear__" : String(id))}
+              listMaxHeightClass="max-h-[min(50vh,18rem)]"
+            />
+          </div>
+        </div>
       </ModalShell>
     );
   }

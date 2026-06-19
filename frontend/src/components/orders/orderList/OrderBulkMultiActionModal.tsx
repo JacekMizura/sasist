@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { ArrowDown, ArrowUp, ChevronDown, X } from "lucide-react";
-import type { OrderUiStatusPanelSummary } from "../../../types/orderUiStatus";
+import { PanelStatusHierarchyPicker } from "../../panel/PanelStatusHierarchyPicker";
+import type { OrderUiPanelSubgroupRead, OrderUiStatusPanelSummary } from "../../../types/orderUiStatus";
 import type { ShippingMethodDto } from "../../../api/shippingMethodsApi";
-import { ORDERS_PANEL_GROUP_LABELS } from "../OrdersPanelStatusSidebar";
 import {
   BULK_ACTION_DROPDOWN_ORDER,
   BULK_ACTION_LABELS,
@@ -43,6 +43,7 @@ export type OrderBulkMultiActionModalProps = {
   onClose: () => void;
   orderCount: number;
   panelSummary: OrderUiStatusPanelSummary | null;
+  panelSubgroups?: OrderUiPanelSubgroupRead[] | null;
   shippingMethods: ShippingMethodDto[];
   busy?: boolean;
   onExecute: (payload: { rows: BulkActionRow[]; config: BulkActionConfig }) => Promise<void> | void;
@@ -53,6 +54,7 @@ export function OrderBulkMultiActionModal({
   onClose,
   orderCount,
   panelSummary,
+  panelSubgroups,
   shippingMethods,
   busy,
   onExecute,
@@ -203,30 +205,32 @@ export function OrderBulkMultiActionModal({
                   {row.expanded ? (
                     <div className="border-t border-slate-200 bg-white px-3 py-3">
                       {row.kind === "change_status" ? (
-                        <label className={lab}>
-                          Status panelu
-                          <select
-                            className={inp}
-                            disabled={busy}
-                            value={config.change_status?.statusId ?? ""}
-                            onChange={(e) =>
-                              setConfig((c) => ({
-                                ...c,
-                                change_status: { statusId: e.target.value },
-                              }))
-                            }
-                          >
-                            <option value="">— bez zmian / wyczyść —</option>
-                            <option value="__clear__">Usuń etykietę panelu</option>
-                            {(panelSummary?.groups ?? []).flatMap((block) =>
-                              block.sub_statuses.map((s) => (
-                                <option key={s.id} value={String(s.id)}>
-                                  {ORDERS_PANEL_GROUP_LABELS[block.main_group]}: {s.name}
-                                </option>
-                              )),
-                            )}
-                          </select>
-                        </label>
+                        <div>
+                          <span className={lab}>Status panelu</span>
+                          <div className="mt-1 overflow-hidden rounded-lg border border-slate-200 bg-white">
+                            <PanelStatusHierarchyPicker
+                              panelSummary={panelSummary}
+                              panelSubgroups={panelSubgroups}
+                              disabled={busy}
+                              showClearOption
+                              clearLabel="Usuń etykietę panelu"
+                              selectedStatusId={(() => {
+                                const raw = config.change_status?.statusId ?? "";
+                                if (raw === "__clear__") return null;
+                                if (raw.trim() === "") return undefined;
+                                const n = Number(raw);
+                                return Number.isNaN(n) ? undefined : n;
+                              })()}
+                              onPick={(id) =>
+                                setConfig((c) => ({
+                                  ...c,
+                                  change_status: { statusId: id == null ? "__clear__" : String(id) },
+                                }))
+                              }
+                              listMaxHeightClass="max-h-[min(40vh,16rem)]"
+                            />
+                          </div>
+                        </div>
                       ) : null}
                       {row.kind === "issue_document" ? (
                         <fieldset>
