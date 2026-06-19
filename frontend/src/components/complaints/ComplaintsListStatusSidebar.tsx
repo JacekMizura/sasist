@@ -8,16 +8,10 @@ import {
   COMPLAINT_STATUS_FILTER_ORDER,
 } from "../../types/complaint";
 import {
-  panelSidebarFilterRowClass,
-} from "../../utils/panelSidebarHierarchy";
-import {
   PANEL_TREE_COUNT_CLASS,
-  PANEL_TREE_STATUS_BAR_ACTIVE_CLASS,
-  PANEL_TREE_STATUS_BAR_CLASS,
-  PANEL_TREE_STATUS_BAR_IDLE_CLASS,
-  PANEL_TREE_STATUS_ROW_ACTIVE_CLASS,
-  PANEL_TREE_STATUS_ROW_CLASS,
-  PANEL_TREE_STATUS_ROW_IDLE_CLASS,
+  panelTreeMetaRowClass,
+  panelTreeStatusBarClass,
+  panelTreeStatusRowClass,
 } from "../panel/panelStatusTreeStyles";
 
 export type ComplaintPanelFilter = "all" | { kind: "status"; status: ComplaintStatusCode };
@@ -54,8 +48,6 @@ function stripeHexForStatus(code: ComplaintStatusCode): string {
 function isStatusActive(panelFilter: ComplaintPanelFilter, code: ComplaintStatusCode): boolean {
   return typeof panelFilter === "object" && panelFilter.kind === "status" && panelFilter.status === code;
 }
-
-const STATUS_ROW_BASE = PANEL_TREE_STATUS_ROW_CLASS;
 
 export function ComplaintsListStatusSidebar({
   warehouseId: _warehouseId,
@@ -134,10 +126,10 @@ export function ComplaintsListStatusSidebar({
         />
       </div>
 
-      <div className="space-y-0.5 px-1">
+      <div className="space-y-1.5 px-1">
         <button
           type="button"
-          className={panelSidebarFilterRowClass(panelFilter === "all")}
+          className={panelTreeMetaRowClass(panelFilter === "all")}
           onClick={() => onPanelFilterChange("all")}
         >
           <span className={panelFilter === "all" ? "font-semibold" : ""}>Wszystkie</span>
@@ -147,7 +139,7 @@ export function ComplaintsListStatusSidebar({
         {visibleStatuses.length === 0 ? (
           <p className="px-1 py-2 text-xs text-slate-500">Brak etapów pasujących do wyszukiwania.</p>
         ) : (
-          <div className="space-y-1 pt-2">
+          <div className="space-y-1.5 pt-2">
             {visibleStatuses.map((code) => {
               const active = isStatusActive(panelFilter, code);
               const dotColor = stripeHexForStatus(code);
@@ -155,20 +147,16 @@ export function ComplaintsListStatusSidebar({
                 <button
                   key={code}
                   type="button"
-                  className={`${STATUS_ROW_BASE} ${
-                    active ? PANEL_TREE_STATUS_ROW_ACTIVE_CLASS : PANEL_TREE_STATUS_ROW_IDLE_CLASS
-                  }`}
+                  className={panelTreeStatusRowClass(active)}
                   title={COMPLAINT_SIDEBAR_FILTER_LABELS_PL[code]}
                   onClick={() => onPanelFilterChange({ kind: "status", status: code })}
                 >
                   <span
-                    className={`${PANEL_TREE_STATUS_BAR_CLASS} ${
-                      active ? PANEL_TREE_STATUS_BAR_ACTIVE_CLASS : PANEL_TREE_STATUS_BAR_IDLE_CLASS
-                    }`}
+                    className={panelTreeStatusBarClass(active)}
                     style={{ backgroundColor: dotColor }}
                     aria-hidden
                   />
-                  <span className="min-w-0 flex-1 truncate">{COMPLAINT_SIDEBAR_FILTER_LABELS_PL[code]}</span>
+                  <span className="min-w-0 flex-1 truncate pl-0.5">{COMPLAINT_SIDEBAR_FILTER_LABELS_PL[code]}</span>
                   <span className={`${PANEL_TREE_COUNT_CLASS} ${active ? "text-slate-700" : ""}`}>
                     {countFor(code)}
                   </span>

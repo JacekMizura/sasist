@@ -7,14 +7,11 @@ import {
   PANEL_TREE_GROUP_BAR_CLASS,
   PANEL_TREE_GROUP_SECTION_CLASS,
   PANEL_TREE_PICKER_GROUP_HEAD_CLASS,
-  PANEL_TREE_STATUS_BAR_ACTIVE_CLASS,
-  PANEL_TREE_STATUS_BAR_CLASS,
-  PANEL_TREE_STATUS_BAR_IDLE_CLASS,
-  PANEL_TREE_STATUS_ROW_ACTIVE_CLASS,
   PANEL_TREE_STATUS_ROW_CLASS,
-  PANEL_TREE_STATUS_ROW_IDLE_CLASS,
   PANEL_TREE_SUBGROUP_CHILDREN_CLASS,
   panelTreeGroupAccentClass,
+  panelTreeStatusBarClass,
+  panelTreeStatusRowClass,
 } from "./panelStatusTreeStyles";
 import { getPanelStatusWmsMarkers } from "../orders/panelStatusWmsChips";
 import { ORDERS_PANEL_GROUP_LABELS } from "../orders/OrdersPanelStatusSidebar";
@@ -81,27 +78,16 @@ function StatusPickRow({
     <button
       type="button"
       disabled={disabled}
-      className={`${PANEL_TREE_STATUS_ROW_CLASS} ${
-        selected ? PANEL_TREE_STATUS_ROW_ACTIVE_CLASS : PANEL_TREE_STATUS_ROW_IDLE_CLASS
-      } disabled:cursor-not-allowed disabled:opacity-50`}
+      className={`${panelTreeStatusRowClass(selected)} disabled:cursor-not-allowed disabled:opacity-50`}
       onClick={onPick}
     >
-      <span
-        className={`${PANEL_TREE_STATUS_BAR_CLASS} ${
-          selected ? PANEL_TREE_STATUS_BAR_ACTIVE_CLASS : PANEL_TREE_STATUS_BAR_IDLE_CLASS
-        }`}
-        style={{ backgroundColor: stripeColor }}
-        aria-hidden
-      />
+      <span className={panelTreeStatusBarClass(selected)} style={{ backgroundColor: stripeColor }} aria-hidden />
       {selected ? (
         <Check className="h-3.5 w-3.5 shrink-0 text-slate-600" strokeWidth={2.5} aria-hidden />
       ) : (
         <span className="w-3.5 shrink-0" aria-hidden />
       )}
-      {status.image_url ? (
-        <img src={status.image_url} alt="" className="h-4 w-4 shrink-0 rounded object-contain" />
-      ) : null}
-      <span className="min-w-0 flex-1 truncate">{status.name}</span>
+      <span className="min-w-0 flex-1 truncate pl-0.5">{status.name}</span>
       {markers.length > 0 ? (
         <span className="flex shrink-0 items-center gap-0.5">
           {markers.map((m) => {
@@ -237,7 +223,7 @@ export function PanelStatusHierarchyPicker({
             type="button"
             disabled={disabled}
             className={`${PANEL_TREE_STATUS_ROW_CLASS} mb-1 font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 ${
-              selectedStatusId === null ? PANEL_TREE_STATUS_ROW_ACTIVE_CLASS : ""
+              selectedStatusId === null ? "border-slate-200 bg-slate-100 font-medium text-slate-900" : "border-transparent"
             }`}
             onClick={() => onPick(null)}
           >
@@ -268,7 +254,7 @@ export function PanelStatusHierarchyPicker({
         ) : (
           sections.map(({ block, groupLabel, filteredUngrouped, filteredSections }, idx) => (
             <section key={block.main_group} className={idx > 0 ? `${PANEL_TREE_GROUP_SECTION_CLASS} border-t border-slate-100` : ""}>
-              <div className={`${PANEL_TREE_PICKER_GROUP_HEAD_CLASS} relative`}>
+              <div className={`${PANEL_TREE_PICKER_GROUP_HEAD_CLASS} relative overflow-hidden`}>
                 <span
                   className={`${PANEL_TREE_GROUP_BAR_CLASS} ${panelTreeGroupAccentClass(block.main_group)}`}
                   aria-hidden

@@ -12,21 +12,17 @@ import {
   PANEL_TREE_CHILDREN_CLASS,
   PANEL_TREE_COUNT_CLASS,
   PANEL_TREE_GROUP_BAR_CLASS,
-  PANEL_TREE_GROUP_ROW_ACTIVE_CLASS,
   PANEL_TREE_GROUP_ROW_CLASS,
   PANEL_TREE_GROUP_ROW_IDLE_CLASS,
   PANEL_TREE_GROUP_SECTION_CLASS,
-  PANEL_TREE_GROUP_SHELL_ACTIVE_CLASS,
   PANEL_TREE_GROUP_TOGGLE_CLASS,
-  PANEL_TREE_STATUS_BAR_ACTIVE_CLASS,
-  PANEL_TREE_STATUS_BAR_CLASS,
-  PANEL_TREE_STATUS_BAR_IDLE_CLASS,
-  PANEL_TREE_STATUS_ROW_ACTIVE_CLASS,
-  PANEL_TREE_STATUS_ROW_CLASS,
-  PANEL_TREE_STATUS_ROW_IDLE_CLASS,
   panelTreeGroupAccentClass,
+  panelTreeGroupShellClass,
+  panelTreeMetaRowClass,
+  panelTreeStatusBarClass,
+  panelTreeStatusRowClass,
 } from "../panel/panelStatusTreeStyles";
-import { panelSidebarFilterRowClass, sidebarSubStatusHex } from "../../utils/panelSidebarHierarchy";
+import { sidebarSubStatusHex } from "../../utils/panelSidebarHierarchy";
 import { buildPanelSidebarLayout } from "../../utils/orderPanelSidebarBuckets";
 import { MAIN_PANEL_GROUP_ORDER } from "../../utils/orderPanelMainGroupOrder";
 import { panelListStatusSidebarWidthLg } from "../listPage/listSellasistTokens";
@@ -146,23 +142,12 @@ export function OrdersPanelStatusSidebar({
       <button
         key={s.id}
         type="button"
-        className={`${PANEL_TREE_STATUS_ROW_CLASS} ${
-          active ? PANEL_TREE_STATUS_ROW_ACTIVE_CLASS : PANEL_TREE_STATUS_ROW_IDLE_CLASS
-        }`}
+        className={panelTreeStatusRowClass(active)}
         title={titleDetail || undefined}
         onClick={() => onPanelFilterChange({ kind: "sub", id: s.id })}
       >
-        <span
-          className={`${PANEL_TREE_STATUS_BAR_CLASS} ${
-            active ? PANEL_TREE_STATUS_BAR_ACTIVE_CLASS : PANEL_TREE_STATUS_BAR_IDLE_CLASS
-          }`}
-          style={{ backgroundColor: stripeColor }}
-          aria-hidden
-        />
-        {s.image_url ? (
-          <img src={s.image_url} alt="" className="h-4 w-4 shrink-0 rounded object-contain" />
-        ) : null}
-        <span className="min-w-0 flex-1 truncate">{s.name}</span>
+        <span className={panelTreeStatusBarClass(active)} style={{ backgroundColor: stripeColor }} aria-hidden />
+        <span className="min-w-0 flex-1 truncate pl-0.5">{s.name}</span>
         {markers.length > 0 ? (
           <span className="flex shrink-0 items-center gap-0.5">
             {markers.map((m) => {
@@ -174,6 +159,9 @@ export function OrdersPanelStatusSidebar({
               );
             })}
           </span>
+        ) : null}
+        {s.image_url ? (
+          <img src={s.image_url} alt="" className="h-4 w-4 shrink-0 rounded object-contain" />
         ) : null}
         <span className={`${PANEL_TREE_COUNT_CLASS} ${active ? "text-slate-700" : ""}`}>{s.count}</span>
       </button>
@@ -296,10 +284,10 @@ export function OrdersPanelStatusSidebar({
         />
       </div>
 
-      <div className="space-y-0.5 px-1">
+      <div className="space-y-1.5 px-1">
         <button
           type="button"
-          className={panelSidebarFilterRowClass(panelFilter === "all")}
+          className={panelTreeMetaRowClass(panelFilter === "all")}
           onClick={() => onPanelFilterChange("all")}
         >
           <span className={panelFilter === "all" ? "font-semibold" : ""}>Wszystkie</span>
@@ -309,7 +297,7 @@ export function OrdersPanelStatusSidebar({
         {(panelSummary?.unassigned_count ?? 0) > 0 ? (
           <button
             type="button"
-            className={panelSidebarFilterRowClass(panelFilter === "unassigned")}
+            className={panelTreeMetaRowClass(panelFilter === "unassigned")}
             onClick={() => onPanelFilterChange("unassigned")}
           >
             <span className={panelFilter === "unassigned" ? "font-semibold" : ""}>Bez etykiety</span>
@@ -341,26 +329,22 @@ export function OrdersPanelStatusSidebar({
 
           return (
             <section key={block.main_group} className={PANEL_TREE_GROUP_SECTION_CLASS}>
-              <div
-                className={`flex items-stretch gap-0 ${groupActive ? PANEL_TREE_GROUP_SHELL_ACTIVE_CLASS : ""}`}
-              >
+              <div className={panelTreeGroupShellClass(groupActive)}>
                 <button
                   type="button"
-                  className={`${PANEL_TREE_GROUP_ROW_CLASS} ${
-                    groupActive ? PANEL_TREE_GROUP_ROW_ACTIVE_CLASS : PANEL_TREE_GROUP_ROW_IDLE_CLASS
-                  } ${groupActive ? "border-transparent bg-transparent" : ""}`}
+                  className={`${PANEL_TREE_GROUP_ROW_CLASS} ${groupActive ? "" : PANEL_TREE_GROUP_ROW_IDLE_CLASS}`}
                   onClick={() => onPanelFilterChange({ kind: "group", group: block.main_group })}
                 >
                   <span
                     className={`${PANEL_TREE_GROUP_BAR_CLASS} ${panelTreeGroupAccentClass(block.main_group)}`}
                     aria-hidden
                   />
-                  <span className="min-w-0 flex-1 truncate">{panelGroupLabels[block.main_group]}</span>
+                  <span className="min-w-0 flex-1 truncate pl-0.5">{panelGroupLabels[block.main_group]}</span>
                   <span className={PANEL_TREE_COUNT_CLASS}>{block.total_count}</span>
                 </button>
                 <button
                   type="button"
-                  className={`${PANEL_TREE_GROUP_TOGGLE_CLASS} ${groupActive ? "border-transparent" : ""}`}
+                  className={PANEL_TREE_GROUP_TOGGLE_CLASS}
                   onClick={() =>
                     setOpenSections((prev) => ({
                       ...prev,
@@ -377,7 +361,7 @@ export function OrdersPanelStatusSidebar({
               {isOpen ? (
                 <div className={PANEL_TREE_CHILDREN_CLASS}>
                   {filteredUngrouped.length > 0 ? (
-                    <div className="space-y-1">{filteredUngrouped.map((s) => renderStatusButton(block, s))}</div>
+                    <div className="space-y-1.5">{filteredUngrouped.map((s) => renderStatusButton(block, s))}</div>
                   ) : null}
                   {filteredSections.map((sec) => {
                     const sectionTotal = sec.rows.reduce((acc, r) => acc + (r.count ?? 0), 0);

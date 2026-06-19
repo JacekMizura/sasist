@@ -54,7 +54,7 @@ export function PanelSidebarSubgroupCollapsible({
   const expanded = forceExpanded || open;
 
   return (
-    <div className="space-y-0.5">
+    <div>
       <PanelSubgroupLineHeader title={title} totalCount={totalCount} expanded={expanded} onToggle={toggle} />
       {expanded ? <div className={PANEL_TREE_SUBGROUP_CHILDREN_CLASS}>{children}</div> : null}
     </div>
