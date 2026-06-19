@@ -24,8 +24,26 @@ export const PANEL_TREE_GROUP_SHELL_ACTIVE_CLASS = "border-slate-200 bg-slate-10
 export const PANEL_TREE_GROUP_TOGGLE_CLASS =
   "flex shrink-0 items-center self-stretch border-l border-slate-100/90 px-2.5 text-slate-400 transition-colors hover:bg-slate-50 hover:text-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500";
 
-/** Wyraźny odstęp między nagłówkiem grupy a dziećmi. */
-export const PANEL_TREE_CHILDREN_CLASS = "mt-3 space-y-1.5 pl-6";
+/** Odstęp między nagłówkiem grupy a dziećmi — bez wcięcia poziomego (wcięcia per poziom). */
+export const PANEL_TREE_CHILDREN_CLASS = "mt-3 space-y-0";
+
+/** Statusy przypisane bezpośrednio do grupy głównej. */
+export const PANEL_TREE_GROUP_STATUS_LIST_CLASS = "space-y-1.5 pl-4";
+
+/** Nagłówek sekcji podgrupy — ten sam poziom co statusy grupy (nie głębiej). */
+export const PANEL_TREE_SUBGROUP_SECTION_CLASS = "mb-0.5 mt-2 flex w-full items-center gap-2 pl-4 pr-1";
+
+export const PANEL_TREE_SUBGROUP_TOGGLE_CLASS =
+  "flex w-5 shrink-0 items-center justify-center rounded text-slate-300 transition-colors hover:text-slate-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500";
+
+export const PANEL_TREE_SUBGROUP_TITLE_CLASS = "shrink-0 text-xs font-medium text-slate-400";
+
+export const PANEL_TREE_SUBGROUP_LINE_CLASS = "h-px min-w-[2rem] flex-1 bg-slate-100";
+
+/** Statusy pod podgrupą — jeden poziom głębiej niż statusy grupy. */
+export const PANEL_TREE_SUBGROUP_CHILDREN_CLASS = "mb-0.5 space-y-1.5 pl-7";
+
+export const PANEL_TREE_GROUP_SECTION_CLASS = "pt-7 first:pt-2";
 
 /** Pełnowierszowy element listy — status. */
 export const PANEL_TREE_STATUS_ROW_CLASS =
@@ -38,20 +56,6 @@ export const PANEL_TREE_STATUS_ROW_IDLE_CLASS = "hover:bg-slate-50";
 export const PANEL_TREE_STATUS_BAR_IDLE_CLASS = "opacity-70 group-hover:opacity-100";
 
 export const PANEL_TREE_STATUS_BAR_ACTIVE_CLASS = "opacity-100";
-
-/** Nagłówek sekcji podgrupy — nie wygląda jak wiersz listy. */
-export const PANEL_TREE_SUBGROUP_SECTION_CLASS = "mt-3 mb-1 flex w-full items-center gap-2 pl-6 pr-1";
-
-export const PANEL_TREE_SUBGROUP_TOGGLE_CLASS =
-  "flex w-5 shrink-0 items-center justify-center rounded text-slate-300 transition-colors hover:text-slate-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500";
-
-export const PANEL_TREE_SUBGROUP_TITLE_CLASS = "shrink-0 text-xs font-medium text-slate-400";
-
-export const PANEL_TREE_SUBGROUP_LINE_CLASS = "h-px min-w-[2rem] flex-1 bg-slate-100";
-
-export const PANEL_TREE_SUBGROUP_CHILDREN_CLASS = "mb-0.5 space-y-1.5 pl-7";
-
-export const PANEL_TREE_GROUP_SECTION_CLASS = "pt-7 first:pt-2";
 
 /** Meta-filtry (Wszystkie, Bez etykiety). */
 export const PANEL_TREE_META_ROW_CLASS =

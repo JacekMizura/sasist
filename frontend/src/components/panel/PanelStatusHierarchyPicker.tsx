@@ -6,6 +6,7 @@ import {
   PANEL_TREE_CHILDREN_CLASS,
   PANEL_TREE_GROUP_BAR_CLASS,
   PANEL_TREE_GROUP_SECTION_CLASS,
+  PANEL_TREE_GROUP_STATUS_LIST_CLASS,
   PANEL_TREE_PICKER_GROUP_HEAD_CLASS,
   PANEL_TREE_STATUS_ROW_CLASS,
   PANEL_TREE_SUBGROUP_CHILDREN_CLASS,
@@ -262,16 +263,20 @@ export function PanelStatusHierarchyPicker({
                 <span className="min-w-0 truncate">{groupLabel}</span>
               </div>
               <div className={PANEL_TREE_CHILDREN_CLASS}>
-                {filteredUngrouped.map((s) => (
-                  <StatusPickRow
-                    key={s.id}
-                    status={s}
-                    mainGroup={block.main_group}
-                    selected={selectedStatusId === s.id}
-                    disabled={disabled}
-                    onPick={() => onPick(s.id)}
-                  />
-                ))}
+                {filteredUngrouped.length > 0 ? (
+                  <div className={PANEL_TREE_GROUP_STATUS_LIST_CLASS}>
+                    {filteredUngrouped.map((s) => (
+                      <StatusPickRow
+                        key={s.id}
+                        status={s}
+                        mainGroup={block.main_group}
+                        selected={selectedStatusId === s.id}
+                        disabled={disabled}
+                        onPick={() => onPick(s.id)}
+                      />
+                    ))}
+                  </div>
+                ) : null}
                 {filteredSections.map((sec) => {
                   const open = isSubgroupOpen(sec.key);
                   return (

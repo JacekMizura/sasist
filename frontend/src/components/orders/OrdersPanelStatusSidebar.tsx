@@ -15,6 +15,7 @@ import {
   PANEL_TREE_GROUP_ROW_CLASS,
   PANEL_TREE_GROUP_ROW_IDLE_CLASS,
   PANEL_TREE_GROUP_SECTION_CLASS,
+  PANEL_TREE_GROUP_STATUS_LIST_CLASS,
   PANEL_TREE_GROUP_TOGGLE_CLASS,
   panelTreeGroupAccentClass,
   panelTreeGroupShellClass,
@@ -361,7 +362,9 @@ export function OrdersPanelStatusSidebar({
               {isOpen ? (
                 <div className={PANEL_TREE_CHILDREN_CLASS}>
                   {filteredUngrouped.length > 0 ? (
-                    <div className="space-y-1.5">{filteredUngrouped.map((s) => renderStatusButton(block, s))}</div>
+                    <div className={PANEL_TREE_GROUP_STATUS_LIST_CLASS}>
+                      {filteredUngrouped.map((s) => renderStatusButton(block, s))}
+                    </div>
                   ) : null}
                   {filteredSections.map((sec) => {
                     const sectionTotal = sec.rows.reduce((acc, r) => acc + (r.count ?? 0), 0);
