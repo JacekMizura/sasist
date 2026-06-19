@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-06-08 — Module list: Orders vs Returns UX (wiersze)
+
+- `ReturnsListProductCell`: klikalne rozwijanie `+X poz. ▼` / `Zwiń ▲` (stan lokalny, `stopPropagation`)
+- `OrderListDenseTable`: akcje jako ostatnia kolumna, `OperationalActionColumn layout="stack"` (pionowy stos 40×40 jak zwroty)
+- Kolumny zamówień: `Zamówienie | Status | Produkty | … | Akcje`; backend `items_display_lines` = pełna lista pozycji
+- Dev/screenshot: `/dev/module-list-orders-vs-returns`, PNG w `moduleList/mockups/module-list-orders-vs-returns.png`
+
 ## 2026-06-08 — Zakupy Faza 3: operacyjny pulpit + unified KPI
 
 - `PlanningDashboard`: copy operacyjne, 5 Quick Actions (Dostawcy, Oszczędności), nawigacja z tabel, poprawione nazwy sekcji PZ

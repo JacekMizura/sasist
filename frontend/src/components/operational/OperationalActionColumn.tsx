@@ -24,20 +24,22 @@ function normalizeSlots(slots: readonly (ReactNode | null | undefined)[]): React
 /**
  * Shared operational actions column (Orders baseline density).
  *
- * - **≤3 actions** → single vertical stack (`gap-1`), no empty holes.
- * - **>3 actions** → two columns, row-major; incomplete last row padded with invisible placeholders.
+ * - **stack** → zawsze pionowy stos (wzorzec zwrotów / list modułu).
+ * - **auto** (domyślnie): ≤3 akcje → stos; >3 → siatka 2 kolumny.
  */
 export function OperationalActionColumn({
   slots,
+  layout = "auto",
   "aria-label": ariaLabel = "Akcje",
 }: {
   slots: readonly (ReactNode | null | undefined)[] | OperationalActionSixSlots;
+  layout?: "auto" | "stack";
   "aria-label"?: string;
 }) {
   const items = normalizeSlots(slots);
   if (items.length === 0) return null;
 
-  if (items.length <= 3) {
+  if (layout === "stack" || items.length <= 3) {
     return (
       <div className={operationalActionColumnInnerClass} role="group" aria-label={ariaLabel}>
         <div className={operationalActionColumnStackClass}>

@@ -164,9 +164,7 @@ const ReturnsListTableRow = memo(function ReturnsListTableRow({
   onToggleSelect,
   onDelete,
 }: RowProps) {
-  const lineCount = r.lines?.length ?? 0;
   const previews = r.lines_preview ?? [];
-  const more = Math.max(0, lineCount - previews.length);
   const custParts = [(r.first_name || "").trim(), (r.last_name || "").trim()].filter(Boolean);
   const cust = custParts.length ? custParts.join(" ") : "—";
   const srcDisp = normalizeOrderSourceDisplay(r.source);
@@ -214,7 +212,7 @@ const ReturnsListTableRow = memo(function ReturnsListTableRow({
         <ReturnsListRowStatusBadges r={r} />
       </td>
       <td className={`${TD} min-w-[14rem] whitespace-normal !py-3`}>
-        <ReturnsListProductCell lines={displayLines} more={more} />
+        <ReturnsListProductCell lines={displayLines} />
       </td>
       <td className={`${TD} min-w-[10rem] whitespace-normal break-words text-slate-600`}>{cust}</td>
       <td className={TD}>
@@ -228,6 +226,7 @@ const ReturnsListTableRow = memo(function ReturnsListTableRow({
       </td>
       <ModuleListRowActionsCell ariaLabel="Akcje zwrotu">
         <OperationalActionColumn
+          layout="stack"
           aria-label="Akcje zwrotu"
           slots={[
             <OperationalActionLink

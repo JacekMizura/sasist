@@ -126,6 +126,8 @@ export type OrderListDenseTableProps = {
   openOrder: (id: number) => void;
   onRowQuickAction: (orderId: number, kind: OrderQuickToolbarActionKind) => void;
   onRowOpenMulti?: (orderId: number) => void;
+  /** Wiersze z domyślnie rozwiniętą listą produktów (mockup / dev). */
+  initialExpandedProductOrderIds?: ReadonlySet<number>;
 };
 
 function Th({
@@ -176,6 +178,7 @@ export function OrderListDenseTable({
   openOrder,
   onRowQuickAction,
   onRowOpenMulti,
+  initialExpandedProductOrderIds,
 }: OrderListDenseTableProps) {
   const userColumnAllow = useMemo(() => new Set(ORDER_LIST_USER_COLUMN_IDS), []);
 
@@ -243,8 +246,6 @@ export function OrderListDenseTable({
 
   const renderCell = (col: string, o: OrderListDenseOrder) => {
     const displayLines = (o.items_display_lines?.length ? o.items_display_lines : o.items_preview) ?? [];
-    const previewLines = displayLines.slice(0, 2);
-    const more = Math.max(0, displayLines.length - 2);
     const payRow = deriveOrderListPaymentBadgeRow({
       panel_payment_status: o.panel_payment_status,
       panel_payment_method: o.panel_payment_method,
@@ -292,7 +293,10 @@ export function OrderListDenseTable({
       case "products":
         return (
           <td key={col} className={`${TD} min-w-[14rem] whitespace-normal !py-3`}>
-            <ReturnsListProductCell lines={previewLines} more={more} />
+            <ReturnsListProductCell
+              lines={displayLines}
+              initialExpanded={initialExpandedProductOrderIds?.has(o.id) ?? false}
+            />
           </td>
         );
       case "customer":
@@ -399,6 +403,8 @@ export function OrderListDenseTable({
                 {tableColumns.map((c) => renderCell(c, o))}
                 <ModuleListRowActionsCell ariaLabel="Akcje zamówienia">
                   <OperationalActionColumn
+                    layout="stack"
+                    aria-label="Akcje zamówienia"
                     slots={[
                       <OperationalActionButton
                         key="eye"

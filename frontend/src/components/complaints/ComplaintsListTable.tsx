@@ -193,7 +193,6 @@ function ComplaintsListTableInner({
                         image_url: img,
                       },
                     ]}
-                    more={0}
                     trailing={productTrailing}
                   />
                 </td>
@@ -233,6 +232,8 @@ function ComplaintsListTableInner({
                 </td>
                 <ModuleListRowActionsCell ariaLabel="Akcje reklamacji">
                   <OperationalActionColumn
+                    layout="stack"
+                    aria-label="Akcje reklamacji"
                     slots={[
                       <OperationalActionButton
                         key="eye"

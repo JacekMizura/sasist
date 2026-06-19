@@ -1,5 +1,5 @@
 import { memo, useState } from "react";
-import type { ReactNode } from "react";
+import type { MouseEvent, ReactNode } from "react";
 
 import { firstProductImageUrl, type ProductListItemLine } from "../../panelList/ProductListItem";
 
@@ -58,29 +58,55 @@ function ReturnsListProductItem({ product, extra }: { product: ProductListItemLi
 
 export type ReturnsListProductCellProps = {
   lines: ProductListItemLine[];
-  more: number;
+  /** Ile pozycji pokazać przed rozwinięciem (domyślnie 2). */
+  collapsedCount?: number;
   /** Treść pod listą produktów (np. tagi usterek reklamacji). */
   trailing?: ReactNode;
+  /** Domyślnie rozwinięte (np. mockup / screenshot). */
+  initialExpanded?: boolean;
 };
 
-function ReturnsListProductCellInner({ lines, more, trailing }: ReturnsListProductCellProps) {
-  const preview = lines.slice(0, 2);
-  if (preview.length === 0) {
+function ReturnsListProductCellInner({
+  lines,
+  collapsedCount = 2,
+  trailing,
+  initialExpanded = false,
+}: ReturnsListProductCellProps) {
+  const [expanded, setExpanded] = useState(initialExpanded);
+
+  if (lines.length === 0) {
     return <span className="text-sm text-slate-400">—</span>;
   }
 
+  const hiddenCount = Math.max(0, lines.length - collapsedCount);
+  const visibleLines = expanded ? lines : lines.slice(0, collapsedCount);
+
+  const toggleExpanded = (e: MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    setExpanded((v) => !v);
+  };
+
   return (
-    <>
+    <div onClick={(e) => e.stopPropagation()}>
       <ul className="flex flex-col gap-2">
-        {preview.map((item, idx) => (
-          <li key={idx} className="min-w-0">
+        {visibleLines.map((item, idx) => (
+          <li key={`${item.sku ?? ""}-${item.ean ?? ""}-${item.name ?? idx}`} className="min-w-0">
             <ReturnsListProductItem product={item} />
           </li>
         ))}
       </ul>
-      {more > 0 ? <span className="mt-1 block text-xs text-slate-500">+ {more} poz.</span> : null}
+      {hiddenCount > 0 ? (
+        <button
+          type="button"
+          className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-slate-900"
+          onClick={toggleExpanded}
+          aria-expanded={expanded}
+        >
+          {expanded ? "Zwiń ▲" : `+ ${hiddenCount} poz. ▼`}
+        </button>
+      ) : null}
       {trailing}
-    </>
+    </div>
   );
 }
 
