@@ -15,8 +15,12 @@ import {
   PANEL_TREE_GROUP_ROW_ACTIVE_CLASS,
   PANEL_TREE_GROUP_ROW_CLASS,
   PANEL_TREE_GROUP_ROW_IDLE_CLASS,
+  PANEL_TREE_GROUP_SECTION_CLASS,
+  PANEL_TREE_GROUP_SHELL_ACTIVE_CLASS,
   PANEL_TREE_GROUP_TOGGLE_CLASS,
+  PANEL_TREE_STATUS_BAR_ACTIVE_CLASS,
   PANEL_TREE_STATUS_BAR_CLASS,
+  PANEL_TREE_STATUS_BAR_IDLE_CLASS,
   PANEL_TREE_STATUS_ROW_ACTIVE_CLASS,
   PANEL_TREE_STATUS_ROW_CLASS,
   PANEL_TREE_STATUS_ROW_IDLE_CLASS,
@@ -149,7 +153,9 @@ export function OrdersPanelStatusSidebar({
         onClick={() => onPanelFilterChange({ kind: "sub", id: s.id })}
       >
         <span
-          className={PANEL_TREE_STATUS_BAR_CLASS}
+          className={`${PANEL_TREE_STATUS_BAR_CLASS} ${
+            active ? PANEL_TREE_STATUS_BAR_ACTIVE_CLASS : PANEL_TREE_STATUS_BAR_IDLE_CLASS
+          }`}
           style={{ backgroundColor: stripeColor }}
           aria-hidden
         />
@@ -169,7 +175,7 @@ export function OrdersPanelStatusSidebar({
             })}
           </span>
         ) : null}
-        <span className={`${PANEL_TREE_COUNT_CLASS} ${active ? "font-medium text-slate-600" : ""}`}>{s.count}</span>
+        <span className={`${PANEL_TREE_COUNT_CLASS} ${active ? "text-slate-700" : ""}`}>{s.count}</span>
       </button>
     );
   };
@@ -312,7 +318,7 @@ export function OrdersPanelStatusSidebar({
         ) : null}
       </div>
 
-      <div className="mt-2 space-y-4 px-1">
+      <div className="mt-3 px-1">
         {MAIN_PANEL_GROUP_ORDER.map((mainGroup) => {
           const block = blocksByMainGroup.get(mainGroup);
           if (!block) return null;
@@ -334,24 +340,27 @@ export function OrdersPanelStatusSidebar({
           const groupActive = isGroupFilterActive(panelFilter, block.main_group);
 
           return (
-            <section key={block.main_group} className="space-y-0">
-              <div className="flex items-stretch gap-0">
+            <section key={block.main_group} className={PANEL_TREE_GROUP_SECTION_CLASS}>
+              <div
+                className={`flex items-stretch gap-0 ${groupActive ? PANEL_TREE_GROUP_SHELL_ACTIVE_CLASS : ""}`}
+              >
                 <button
                   type="button"
                   className={`${PANEL_TREE_GROUP_ROW_CLASS} ${
                     groupActive ? PANEL_TREE_GROUP_ROW_ACTIVE_CLASS : PANEL_TREE_GROUP_ROW_IDLE_CLASS
-                  }`}
+                  } ${groupActive ? "border-transparent bg-transparent" : ""}`}
                   onClick={() => onPanelFilterChange({ kind: "group", group: block.main_group })}
                 >
                   <span
                     className={`${PANEL_TREE_GROUP_BAR_CLASS} ${panelTreeGroupAccentClass(block.main_group)}`}
                     aria-hidden
                   />
-                  <span className="min-w-0 truncate">{panelGroupLabels[block.main_group]}</span>
+                  <span className="min-w-0 flex-1 truncate">{panelGroupLabels[block.main_group]}</span>
+                  <span className={PANEL_TREE_COUNT_CLASS}>{block.total_count}</span>
                 </button>
                 <button
                   type="button"
-                  className={PANEL_TREE_GROUP_TOGGLE_CLASS}
+                  className={`${PANEL_TREE_GROUP_TOGGLE_CLASS} ${groupActive ? "border-transparent" : ""}`}
                   onClick={() =>
                     setOpenSections((prev) => ({
                       ...prev,
@@ -361,7 +370,6 @@ export function OrdersPanelStatusSidebar({
                   aria-expanded={isOpen}
                   aria-label={isOpen ? "Zwiń grupę" : "Rozwiń grupę"}
                 >
-                  <span className={`${PANEL_TREE_COUNT_CLASS} font-medium`}>{block.total_count}</span>
                   {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                 </button>
               </div>
@@ -369,7 +377,7 @@ export function OrdersPanelStatusSidebar({
               {isOpen ? (
                 <div className={PANEL_TREE_CHILDREN_CLASS}>
                   {filteredUngrouped.length > 0 ? (
-                    <div className="space-y-0.5">{filteredUngrouped.map((s) => renderStatusButton(block, s))}</div>
+                    <div className="space-y-1">{filteredUngrouped.map((s) => renderStatusButton(block, s))}</div>
                   ) : null}
                   {filteredSections.map((sec) => {
                     const sectionTotal = sec.rows.reduce((acc, r) => acc + (r.count ?? 0), 0);

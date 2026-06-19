@@ -10,6 +10,15 @@ import {
 import {
   panelSidebarFilterRowClass,
 } from "../../utils/panelSidebarHierarchy";
+import {
+  PANEL_TREE_COUNT_CLASS,
+  PANEL_TREE_STATUS_BAR_ACTIVE_CLASS,
+  PANEL_TREE_STATUS_BAR_CLASS,
+  PANEL_TREE_STATUS_BAR_IDLE_CLASS,
+  PANEL_TREE_STATUS_ROW_ACTIVE_CLASS,
+  PANEL_TREE_STATUS_ROW_CLASS,
+  PANEL_TREE_STATUS_ROW_IDLE_CLASS,
+} from "../panel/panelStatusTreeStyles";
 
 export type ComplaintPanelFilter = "all" | { kind: "status"; status: ComplaintStatusCode };
 
@@ -46,10 +55,7 @@ function isStatusActive(panelFilter: ComplaintPanelFilter, code: ComplaintStatus
   return typeof panelFilter === "object" && panelFilter.kind === "status" && panelFilter.status === code;
 }
 
-const STATUS_ROW_BASE =
-  "relative flex w-full min-h-[30px] items-center gap-2 rounded-md py-1.5 pl-3 pr-1.5 text-left text-[13px] leading-tight transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500";
-
-const STATUS_COUNT_CLASS = "shrink-0 tabular-nums text-xs text-slate-400";
+const STATUS_ROW_BASE = PANEL_TREE_STATUS_ROW_CLASS;
 
 export function ComplaintsListStatusSidebar({
   warehouseId: _warehouseId,
@@ -83,7 +89,7 @@ export function ComplaintsListStatusSidebar({
           aria-label="Wszystkie"
         >
           <span className="h-2.5 w-2.5 rounded-full bg-slate-500" />
-          <span className={STATUS_COUNT_CLASS}>{totalCount ?? "—"}</span>
+          <span className={PANEL_TREE_COUNT_CLASS}>{totalCount ?? "—"}</span>
         </button>
         {visibleStatuses.map((code) => (
           <button
@@ -95,7 +101,7 @@ export function ComplaintsListStatusSidebar({
             aria-label={COMPLAINT_SIDEBAR_FILTER_LABELS_PL[code]}
           >
             <span className="h-3 w-0.5 shrink-0 rounded-full" style={{ backgroundColor: stripeHexForStatus(code) }} aria-hidden />
-            <span className={STATUS_COUNT_CLASS}>{countFor(code)}</span>
+            <span className={PANEL_TREE_COUNT_CLASS}>{countFor(code)}</span>
           </button>
         ))}
       </aside>
@@ -135,13 +141,13 @@ export function ComplaintsListStatusSidebar({
           onClick={() => onPanelFilterChange("all")}
         >
           <span className={panelFilter === "all" ? "font-semibold" : ""}>Wszystkie</span>
-          <span className={STATUS_COUNT_CLASS}>{totalCount ?? "—"}</span>
+          <span className={PANEL_TREE_COUNT_CLASS}>{totalCount ?? "—"}</span>
         </button>
 
         {visibleStatuses.length === 0 ? (
           <p className="px-1 py-2 text-xs text-slate-500">Brak etapów pasujących do wyszukiwania.</p>
         ) : (
-          <div className="space-y-0.5 pt-1">
+          <div className="space-y-1 pt-2">
             {visibleStatuses.map((code) => {
               const active = isStatusActive(panelFilter, code);
               const dotColor = stripeHexForStatus(code);
@@ -150,18 +156,20 @@ export function ComplaintsListStatusSidebar({
                   key={code}
                   type="button"
                   className={`${STATUS_ROW_BASE} ${
-                    active ? "bg-slate-100 font-semibold text-slate-900" : "font-medium text-slate-600 hover:bg-slate-50"
+                    active ? PANEL_TREE_STATUS_ROW_ACTIVE_CLASS : PANEL_TREE_STATUS_ROW_IDLE_CLASS
                   }`}
                   title={COMPLAINT_SIDEBAR_FILTER_LABELS_PL[code]}
                   onClick={() => onPanelFilterChange({ kind: "status", status: code })}
                 >
                   <span
-                    className="absolute bottom-1 left-0 top-1 w-1 rounded-full"
+                    className={`${PANEL_TREE_STATUS_BAR_CLASS} ${
+                      active ? PANEL_TREE_STATUS_BAR_ACTIVE_CLASS : PANEL_TREE_STATUS_BAR_IDLE_CLASS
+                    }`}
                     style={{ backgroundColor: dotColor }}
                     aria-hidden
                   />
                   <span className="min-w-0 flex-1 truncate">{COMPLAINT_SIDEBAR_FILTER_LABELS_PL[code]}</span>
-                  <span className={`${STATUS_COUNT_CLASS} ${active ? "text-slate-600" : ""}`}>
+                  <span className={`${PANEL_TREE_COUNT_CLASS} ${active ? "text-slate-700" : ""}`}>
                     {countFor(code)}
                   </span>
                 </button>

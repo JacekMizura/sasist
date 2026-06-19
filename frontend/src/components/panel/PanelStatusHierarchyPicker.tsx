@@ -5,8 +5,11 @@ import { PanelSubgroupLineHeader } from "./PanelSubgroupLineHeader";
 import {
   PANEL_TREE_CHILDREN_CLASS,
   PANEL_TREE_GROUP_BAR_CLASS,
+  PANEL_TREE_GROUP_SECTION_CLASS,
   PANEL_TREE_PICKER_GROUP_HEAD_CLASS,
+  PANEL_TREE_STATUS_BAR_ACTIVE_CLASS,
   PANEL_TREE_STATUS_BAR_CLASS,
+  PANEL_TREE_STATUS_BAR_IDLE_CLASS,
   PANEL_TREE_STATUS_ROW_ACTIVE_CLASS,
   PANEL_TREE_STATUS_ROW_CLASS,
   PANEL_TREE_STATUS_ROW_IDLE_CLASS,
@@ -83,7 +86,13 @@ function StatusPickRow({
       } disabled:cursor-not-allowed disabled:opacity-50`}
       onClick={onPick}
     >
-      <span className={PANEL_TREE_STATUS_BAR_CLASS} style={{ backgroundColor: stripeColor }} aria-hidden />
+      <span
+        className={`${PANEL_TREE_STATUS_BAR_CLASS} ${
+          selected ? PANEL_TREE_STATUS_BAR_ACTIVE_CLASS : PANEL_TREE_STATUS_BAR_IDLE_CLASS
+        }`}
+        style={{ backgroundColor: stripeColor }}
+        aria-hidden
+      />
       {selected ? (
         <Check className="h-3.5 w-3.5 shrink-0 text-slate-600" strokeWidth={2.5} aria-hidden />
       ) : (
@@ -258,7 +267,7 @@ export function PanelStatusHierarchyPicker({
           <p className="px-2 py-3 text-xs text-slate-500">Brak statusów pasujących do wyszukiwania.</p>
         ) : (
           sections.map(({ block, groupLabel, filteredUngrouped, filteredSections }, idx) => (
-            <section key={block.main_group} className={idx > 0 ? "mt-4 border-t border-slate-100 pt-3" : ""}>
+            <section key={block.main_group} className={idx > 0 ? `${PANEL_TREE_GROUP_SECTION_CLASS} border-t border-slate-100` : ""}>
               <div className={`${PANEL_TREE_PICKER_GROUP_HEAD_CLASS} relative`}>
                 <span
                   className={`${PANEL_TREE_GROUP_BAR_CLASS} ${panelTreeGroupAccentClass(block.main_group)}`}
