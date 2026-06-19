@@ -37,6 +37,7 @@ import {
   ModuleStatusSidebarShell,
   ModuleTableCard,
   moduleListContentColumnClass,
+  moduleListEmptyStateClass,
   moduleListTwoColumnShellClass,
   moduleTablePaginationFooterClass,
 } from "../../components/listPage/moduleList";
@@ -981,7 +982,7 @@ export default function OrderList() {
           ) : null}
 
           {loading ? (
-            <div className="py-12 text-center text-sm text-slate-500">Ładowanie…</div>
+            <div className={moduleListEmptyStateClass}>Ładowanie…</div>
           ) : (
             <ModuleTableCard
               bulkBar={
@@ -1071,7 +1072,7 @@ export default function OrderList() {
               }
             >
               {orders.length === 0 ? (
-                <div className="px-6 py-12 text-center text-sm text-slate-500">Brak zamówień do wyświetlenia.</div>
+                <div className={moduleListEmptyStateClass}>Brak zamówień do wyświetlenia.</div>
               ) : (
                 <OrderListDenseTable
                   orders={orders}

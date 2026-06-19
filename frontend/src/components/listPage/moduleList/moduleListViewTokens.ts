@@ -24,6 +24,6 @@ export const moduleBulkDangerBtnClass =
 /** Separator „lub” między sekcjami paska. */
 export const moduleBulkOrSeparatorClass = "shrink-0 text-xs text-slate-400";
 
-/** Stopka paginacji tabeli. */
+/** Stopka paginacji tabeli — wzorzec zwrotów. */
 export const moduleTablePaginationFooterClass =
-  "flex flex-col gap-2 border-t border-slate-200 bg-slate-50 px-4 py-2 sm:flex-row sm:items-center sm:justify-between sm:gap-2";
+  "flex flex-col gap-3 border-t border-slate-100 px-6 py-4 text-sm text-slate-400 sm:flex-row sm:items-center sm:justify-between";

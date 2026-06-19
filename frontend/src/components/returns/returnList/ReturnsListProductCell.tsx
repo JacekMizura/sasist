@@ -59,9 +59,11 @@ function ReturnsListProductItem({ product, extra }: { product: ProductListItemLi
 export type ReturnsListProductCellProps = {
   lines: ProductListItemLine[];
   more: number;
+  /** Treść pod listą produktów (np. tagi usterek reklamacji). */
+  trailing?: ReactNode;
 };
 
-function ReturnsListProductCellInner({ lines, more }: ReturnsListProductCellProps) {
+function ReturnsListProductCellInner({ lines, more, trailing }: ReturnsListProductCellProps) {
   const preview = lines.slice(0, 2);
   if (preview.length === 0) {
     return <span className="text-sm text-slate-400">—</span>;
@@ -77,6 +79,7 @@ function ReturnsListProductCellInner({ lines, more }: ReturnsListProductCellProp
         ))}
       </ul>
       {more > 0 ? <span className="mt-1 block text-xs text-slate-500">+ {more} poz.</span> : null}
+      {trailing}
     </>
   );
 }

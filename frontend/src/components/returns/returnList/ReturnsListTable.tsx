@@ -1,37 +1,45 @@
-import { memo, type CSSProperties } from "react";
+import { memo } from "react";
 import { Link } from "react-router-dom";
-import { Eye, ExternalLink, MoreHorizontal, Trash2 } from "lucide-react";
+import { Eye, ExternalLink, Trash2 } from "lucide-react";
 
 import {
   OperationalActionButton,
   OperationalActionColumn,
   OperationalActionLink,
   panelListDenseCheckboxInputClass,
-  panelListDenseRowClass,
-  panelListDenseRowSelectedClass,
 } from "../../operational";
 import { ReturnsListProductCell } from "./ReturnsListProductCell";
 import { firstProductImageUrl } from "../../panelList/ProductListItem";
 import { PanelBulkStatusPickerDropdown } from "../../panel/PanelBulkStatusPickerDropdown";
 import {
   ModuleListBulkBar,
+  ModuleListRowActionsCell,
+  ModuleListStatusPill,
   ModuleTableCard,
+  moduleListEmptyStateClass,
+  moduleListRowClass,
+  moduleListRowSelectedClass,
+  moduleListTableClass,
+  moduleListTableScrollClass,
+  moduleListTdClass,
+  moduleListThClass,
+  moduleListTheadClass,
+  moduleListChannelBadgeClass,
+  moduleListChannelBadgeEmptyClass,
 } from "../../listPage/moduleList";
 import { WMS_ROUTES } from "../../../pages/wms/wmsRoutes";
 import { resolveDamageMediaUrl } from "../../../utils/resolveDamageMediaUrl";
 import { displayWarehouseDocumentNumber } from "../../../utils/warehouseDocumentNumberDisplay";
-import { panelSidebarSubRowStyleRich } from "../../../utils/panelSidebarHierarchy";
-import type { PanelConfigurableUiStatusBrief } from "../../../utils/panelListStatusBriefMappers";
 import { returnUiStatusBriefToPanelBrief, returnWorkflowStatusToPanelBrief } from "../../../utils/panelListStatusBriefMappers";
 import type { OrderUiPanelSubgroupRead, OrderUiStatusPanelSummary } from "../../../types/orderUiStatus";
 import type { ReturnUiStatusPanelSummary, WmsReturnListItem } from "../../../types/wmsReturn";
 import type { PanelBulkSelectionMode } from "../../../hooks/usePanelListBulkSelection";
 
-const TH = "px-4 py-3 text-left text-xs font-medium text-slate-400";
-const TD = "px-4 py-4 align-top text-sm text-slate-800";
+const TH = moduleListThClass;
+const TD = moduleListTdClass;
 
 const RETURNS_LIST_ROW_ARCHIVED_CLASS =
-  "bg-emerald-50/40 [&_.returns-list-row-actions]:opacity-[0.72] [&_.returns-list-row-actions]:saturate-[0.88]";
+  "bg-emerald-50/40 [&_.module-list-row-actions]:opacity-[0.72] [&_.module-list-row-actions]:saturate-[0.88]";
 
 const KNOWN_SOURCE_LABEL: Record<string, string> = {
   allegro: "Allegro",
@@ -118,14 +126,6 @@ function firstImageUrl(imageUrl: string | null | undefined): string | null {
   return raw ? resolveDamageMediaUrl(raw) : null;
 }
 
-function returnListRowStatusPillStyle(brief: PanelConfigurableUiStatusBrief): CSSProperties {
-  const base = panelSidebarSubRowStyleRich(brief, brief.main_group, false, {
-    barWidthPx: 0,
-    inlineLabel: true,
-  });
-  return { ...base, borderLeft: "none" };
-}
-
 function isReturnsListRowArchivedTone(r: WmsReturnListItem): boolean {
   const wfDone = r.status.type === "done_success" || r.status.type === "done_rejected";
   const panelDone = r.ui_status?.main_group === "DONE";
@@ -138,40 +138,11 @@ const ReturnsListRowStatusBadges = memo(function ReturnsListRowStatusBadges({ r 
   const uiTerminal = r.ui_status?.main_group === "DONE";
   const wfTerminal = r.status.type === "done_success" || r.status.type === "done_rejected";
   const wfPositive = r.status.type === "done_success";
-  const labelUpper = (name: string) => name.trim().toUpperCase();
 
   return (
     <div className="flex flex-col gap-1" aria-label="Status zwrotu">
-      {uiBrief ? (
-        <span
-          className="inline-flex max-w-[min(100%,14rem)] items-center gap-0.5 rounded-full border px-2.5 py-1 text-xs font-medium"
-          style={returnListRowStatusPillStyle(uiBrief)}
-          title={uiBrief.name}
-        >
-          {uiTerminal ? (
-            <span className="shrink-0 text-emerald-800/80" aria-hidden>
-              ✓
-            </span>
-          ) : null}
-          <span className="min-w-0 truncate">{labelUpper(uiBrief.name)}</span>
-        </span>
-      ) : (
-        <span className="inline-flex rounded-full border border-dashed border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-400">
-          Bez etykiety
-        </span>
-      )}
-      <span
-        className="inline-flex max-w-[min(100%,14rem)] items-center gap-0.5 rounded-full border px-2.5 py-1 text-xs font-medium"
-        style={returnListRowStatusPillStyle(wfBrief)}
-        title={wfBrief.name}
-      >
-        {wfTerminal ? (
-          <span className={`shrink-0 ${wfPositive ? "text-emerald-800/80" : "text-slate-600/85"}`} aria-hidden>
-            ✓
-          </span>
-        ) : null}
-        <span className="min-w-0 truncate">{labelUpper(wfBrief.name)}</span>
-      </span>
+      <ModuleListStatusPill status={uiBrief} terminal={uiTerminal} terminalPositive={uiTerminal} />
+      <ModuleListStatusPill status={wfBrief} terminal={wfTerminal} terminalPositive={wfPositive} />
     </div>
   );
 });
@@ -211,7 +182,7 @@ const ReturnsListTableRow = memo(function ReturnsListTableRow({
 
   return (
     <tr
-      className={`group border-b border-slate-50 transition-colors hover:bg-slate-50/50 ${rowArchived ? RETURNS_LIST_ROW_ARCHIVED_CLASS : ""} ${selected ? panelListDenseRowSelectedClass : panelListDenseRowClass}`}
+      className={`${moduleListRowClass} ${rowArchived ? RETURNS_LIST_ROW_ARCHIVED_CLASS : ""} ${selected ? moduleListRowSelectedClass : ""}`}
       onClick={() => onOpenDetail(r.id)}
     >
       <td className={`${TD} w-12 text-center`} onClick={(e) => e.stopPropagation()}>
@@ -247,9 +218,7 @@ const ReturnsListTableRow = memo(function ReturnsListTableRow({
       </td>
       <td className={`${TD} min-w-[10rem] whitespace-normal break-words text-slate-600`}>{cust}</td>
       <td className={TD}>
-        <span
-          className={`inline-flex items-center rounded-md border border-slate-100 bg-slate-50 px-2 py-1 text-xs font-medium ${srcIsEmpty ? "text-slate-400" : "text-slate-500"}`}
-        >
+        <span className={srcIsEmpty ? moduleListChannelBadgeEmptyClass : moduleListChannelBadgeClass}>
           {srcIsEmpty ? "—" : srcDisp}
         </span>
       </td>
@@ -257,11 +226,10 @@ const ReturnsListTableRow = memo(function ReturnsListTableRow({
         <div className="font-medium tabular-nums text-slate-900">{panelListRefundTotalPln(r)}</div>
         <div className="mt-1 text-xs text-slate-400">{returnTypeBadgeLabel(r.return_type)}</div>
       </td>
-      <td className={`${TD} text-center`} onClick={(e) => e.stopPropagation()}>
-        <div className="returns-list-row-actions opacity-0 transition-opacity group-hover:opacity-100">
-          <OperationalActionColumn
-            aria-label="Akcje zwrotu"
-            slots={[
+      <ModuleListRowActionsCell ariaLabel="Akcje zwrotu">
+        <OperationalActionColumn
+          aria-label="Akcje zwrotu"
+          slots={[
             <OperationalActionLink
               key="eye"
               to={`/orders/returns/${r.id}`}
@@ -296,18 +264,9 @@ const ReturnsListTableRow = memo(function ReturnsListTableRow({
             >
               <Trash2 strokeWidth={2} aria-hidden />
             </OperationalActionButton>,
-            ]}
-          />
-        </div>
-        <button
-          type="button"
-          className="ml-1 inline-flex rounded-md p-1.5 text-slate-300 opacity-0 transition-all hover:bg-slate-100 hover:text-slate-900 group-hover:opacity-100 lg:hidden"
-          aria-label="Więcej akcji"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <MoreHorizontal className="h-4 w-4" />
-        </button>
-      </td>
+          ]}
+        />
+      </ModuleListRowActionsCell>
     </tr>
   );
 });
@@ -411,11 +370,11 @@ function ReturnsListTableInner({
       }
     >
       {rows.length === 0 ? (
-        <div className="px-6 py-12 text-center text-sm text-slate-500">Brak zwrotów do wyświetlenia.</div>
+        <div className={moduleListEmptyStateClass}>Brak zwrotów do wyświetlenia.</div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[960px] text-left text-sm whitespace-nowrap">
-            <thead className="border-b border-slate-100 bg-white">
+        <div className={moduleListTableScrollClass}>
+          <table className={moduleListTableClass}>
+            <thead className={moduleListTheadClass}>
               <tr>
                 <th className={`${TH} w-12 text-center`}>
                   <span className="sr-only">Zaznacz</span>
