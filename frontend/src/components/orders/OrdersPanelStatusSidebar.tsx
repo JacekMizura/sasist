@@ -13,6 +13,10 @@ import {
   PANEL_TREE_CHILDREN_CLASS,
   PANEL_TREE_COUNT_CLASS,
   PANEL_TREE_GROUP_BAR_CLASS,
+  PANEL_TREE_OPERATIONAL_LIST_CLASS,
+  PANEL_TREE_OPERATIONAL_SECTION_HEADER_CLASS,
+  PANEL_TREE_OPERATIONAL_TITLE_CLASS,
+  PANEL_TREE_SUBGROUP_LINE_CLASS,
   PANEL_TREE_GROUP_ROW_CLASS,
   PANEL_TREE_GROUP_ROW_IDLE_CLASS,
   PANEL_TREE_GROUP_SECTION_CLASS,
@@ -162,12 +166,15 @@ export function OrdersPanelStatusSidebar({
   const renderOperationalSection = (slot: ReactNode, compact: boolean) => {
     if (slot == null) return null;
     return (
-      <div className={compact ? "space-y-0.5 border-t border-slate-200/80 pt-1" : "space-y-1 border-t border-slate-200/90 pt-3"}>
+      <section className={compact ? "border-t border-slate-200/80 pt-1" : "border-t border-slate-100 pt-3"}>
         {!compact ? (
-          <p className="px-1 text-[11px] font-bold uppercase tracking-wider text-slate-400">Operacyjne</p>
+          <div className={PANEL_TREE_OPERATIONAL_SECTION_HEADER_CLASS}>
+            <span className={PANEL_TREE_OPERATIONAL_TITLE_CLASS}>Operacyjne</span>
+            <span className={PANEL_TREE_SUBGROUP_LINE_CLASS} aria-hidden />
+          </div>
         ) : null}
-        <div className="space-y-0.5">{slot}</div>
-      </div>
+        <div className={compact ? "space-y-0.5" : PANEL_TREE_OPERATIONAL_LIST_CLASS}>{slot}</div>
+      </section>
     );
   };
 

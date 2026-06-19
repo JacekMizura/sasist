@@ -39,10 +39,8 @@ import {
   type OrderPanelFilter,
 } from "../../components/orders/OrderStatusSidebar";
 import type { OrderUiMainGroup } from "../../types/orderUiStatus";
-import {
-  panelSidebarFilterRowClass,
-  panelSidebarSubCountBadgeClass,
-} from "../../utils/panelSidebarHierarchy";
+import { PanelSidebarOperationalRow } from "../../components/panel/PanelSidebarOperationalRow";
+import { PANEL_TREE_COUNT_CLASS } from "../../components/panel/panelStatusTreeStyles";
 import ReturnsModuleTabsStrip from "./ReturnsModuleTabsStrip";
 
 function panelFilterToSidebarArg(f: OrderPanelFilter): WmsReturnsSidebarPanelArg {
@@ -452,25 +450,25 @@ export default function ReturnsListPanel() {
   const orderSummaryCast = panelSummary as unknown as OrderUiStatusPanelSummary | null;
   const orderSubgroupsCast = panelSubgroups as unknown as OrderUiPanelSubgroupRead[] | null;
 
-  const operationalQueuesSlot = (
-    <>
-      {RETURNS_SIDEBAR_OPERATIONAL_QUEUE_KEYS.map((key) => {
-        const active = operationalQueue === key;
-        const c = queueCounts[key];
-        return (
-          <button
-            key={key}
-            type="button"
-            className={panelSidebarFilterRowClass(active)}
-            onClick={() => selectOperationalQueue(key)}
-          >
-            <span>{RETURN_QUEUE_TAB_LABELS[key]}</span>
-            {typeof c === "number" ? <span className={panelSidebarSubCountBadgeClass()}>{c}</span> : null}
-          </button>
-        );
-      })}
-    </>
-  );
+  const renderOperationalQueueSidebarRows = (onPick?: () => void) =>
+    RETURNS_SIDEBAR_OPERATIONAL_QUEUE_KEYS.map((key) => {
+      const active = operationalQueue === key;
+      const c = queueCounts[key];
+      return (
+        <PanelSidebarOperationalRow
+          key={key}
+          active={active}
+          label={RETURN_QUEUE_TAB_LABELS[key]}
+          count={typeof c === "number" ? c : undefined}
+          onClick={() => {
+            selectOperationalQueue(key);
+            onPick?.();
+          }}
+        />
+      );
+    });
+
+  const operationalQueuesSlot = <>{renderOperationalQueueSidebarRows()}</>;
 
   const operationalQueuesCollapsedSlot = (
     <>
@@ -481,15 +479,15 @@ export default function ReturnsListPanel() {
           <button
             key={key}
             type="button"
-            className={`flex w-full items-center justify-between rounded-lg px-1 py-1 hover:bg-slate-50 ${
-              active ? "bg-slate-50 ring-1 ring-slate-200" : ""
+            className={`flex w-full items-center justify-between rounded-md px-1 py-1 hover:bg-slate-100 ${
+              active ? "bg-slate-100" : ""
             }`}
             onClick={() => selectOperationalQueue(key)}
             title={RETURN_QUEUE_TAB_LABELS[key]}
             aria-label={RETURN_QUEUE_TAB_LABELS[key]}
           >
-            <span className={`h-2 w-2 shrink-0 rounded-full ${returnOperationalQueueCollapsedDotClass(key)}`} />
-            <span className={panelSidebarSubCountBadgeClass()}>{typeof c === "number" ? c : "—"}</span>
+            <span className={`h-3 w-0.5 shrink-0 rounded-full ${returnOperationalQueueCollapsedDotClass(key)}`} />
+            <span className={PANEL_TREE_COUNT_CLASS}>{typeof c === "number" ? c : "—"}</span>
           </button>
         );
       })}
@@ -572,30 +570,7 @@ export default function ReturnsListPanel() {
                     }}
                     chromeVariant="sellasist"
                     manageStatusesHref="/orders/returns/panel-statuses"
-                    returnsOperationalQueuesSlot={
-                      <>
-                        {RETURNS_SIDEBAR_OPERATIONAL_QUEUE_KEYS.map((key) => {
-                          const active = operationalQueue === key;
-                          const c = queueCounts[key];
-                          return (
-                            <button
-                              key={key}
-                              type="button"
-                              className={panelSidebarFilterRowClass(active)}
-                              onClick={() => {
-                                selectOperationalQueue(key);
-                                setStatusDrawerOpen(false);
-                              }}
-                            >
-                              <span>{RETURN_QUEUE_TAB_LABELS[key]}</span>
-                              {typeof c === "number" ? (
-                                <span className={panelSidebarSubCountBadgeClass()}>{c}</span>
-                              ) : null}
-                            </button>
-                          );
-                        })}
-                      </>
-                    }
+                    returnsOperationalQueuesSlot={renderOperationalQueueSidebarRows(() => setStatusDrawerOpen(false))}
                     returnsOperationalQueuesCollapsedSlot={operationalQueuesCollapsedSlot}
                   />
                 </div>

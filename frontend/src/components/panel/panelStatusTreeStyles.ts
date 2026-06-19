@@ -1,7 +1,17 @@
 import type { OrderUiMainGroup } from "../../types/orderUiStatus";
 
-/** Plain-text licznik — bez badge. */
-export const PANEL_TREE_COUNT_CLASS = "shrink-0 tabular-nums text-xs font-medium text-slate-500";
+/** Plain-text licznik — stała kolumna, wyrównanie do prawej (bez badge). */
+export const PANEL_TREE_COUNT_CLASS =
+  "w-12 shrink-0 text-right tabular-nums text-xs font-medium text-slate-500";
+
+/** Nagłówek sekcji Operacyjne (zwroty) — etykieta + linia. */
+export const PANEL_TREE_OPERATIONAL_SECTION_HEADER_CLASS =
+  "mb-1 mt-2 flex w-full items-center gap-2 pr-1";
+
+export const PANEL_TREE_OPERATIONAL_TITLE_CLASS =
+  "shrink-0 text-[11px] font-bold uppercase tracking-wider text-slate-400";
+
+export const PANEL_TREE_OPERATIONAL_LIST_CLASS = "space-y-1.5";
 
 /** Pasek grupy — pełna wysokość wiersza. */
 export const PANEL_TREE_GROUP_BAR_CLASS =
