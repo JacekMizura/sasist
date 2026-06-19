@@ -5,14 +5,11 @@ import { getOfficeReturnModuleConfig, putOfficeReturnModuleConfig } from "../../
 import type { ReturnModuleConfigDto } from "../../types/returnModuleConfig";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { ReturnDetailLayoutEditor } from "./ReturnDetailLayoutEditor";
-import {
-  CustomerReturnTypesEditor,
-  OpsSection,
-  OrderSourcesEditor,
-} from "./returnsSettingsOps";
+import { OpsSection } from "./returnsSettingsOps";
+import { ReturnsDictionariesConfigurator } from "./returnsDictionariesConfigurator/ReturnsDictionariesConfigurator";
 import { ReturnsStatusesConfigurator } from "./returnsStatusesConfigurator/ReturnsStatusesConfigurator";
 
-export type ReturnsModuleSettingsTabId = "statusy" | "rodzaje" | "zrodla" | "konfigurator";
+export type ReturnsModuleSettingsTabId = "statusy" | "slowniki" | "konfigurator";
 
 type Props = { warehouseId: number | null; activeTab: ReturnsModuleSettingsTabId };
 
@@ -105,9 +102,7 @@ export default function ReturnsModuleSettingsPanel({ warehouseId, activeTab }: P
         <ReturnsStatusesConfigurator warehouseId={warehouseId} cfg={cfg} setDraft={setDraft} />
       ) : null}
 
-      {activeTab === "rodzaje" && cfg ? <CustomerReturnTypesEditor cfg={cfg} setDraft={setDraft} /> : null}
-
-      {activeTab === "zrodla" && cfg ? <OrderSourcesEditor cfg={cfg} setDraft={setDraft} /> : null}
+      {activeTab === "slowniki" && cfg ? <ReturnsDictionariesConfigurator cfg={cfg} setDraft={setDraft} /> : null}
 
       {activeTab === "konfigurator" && cfg ? (
         <OpsSection

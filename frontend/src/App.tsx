@@ -332,8 +332,9 @@ const LEGACY_RETURNS_SETTINGS_SEGMENTS: Record<string, string> = {
   "": "/orders/returns",
   "ui-statuses": "/orders/returns/panel-statuses",
   statusy: "/orders/returns/statuses",
-  "rodzaje-zwrotow": "/orders/returns/return-types",
-  zrodla: "/orders/returns/sources",
+  "rodzaje-zwrotow": "/orders/returns/dictionaries",
+  zrodla: "/orders/returns/dictionaries",
+  slowniki: "/orders/returns/dictionaries",
   konfigurator: "/orders/returns/configurator",
   "zwroty-zamowien": "/orders/returns",
 }
@@ -807,8 +808,9 @@ export const router = createBrowserRouter(
                     <Route path="panel-statuses" element={<ReturnPanelUiStatusesSettingsPage />} />
                     <Route path="workflow-statuses" element={<ReturnStatusesPage />} />
                     <Route path="statuses" element={<ReturnsModuleSettingsTabPage tab="statusy" />} />
-                    <Route path="return-types" element={<ReturnsModuleSettingsTabPage tab="rodzaje" />} />
-                    <Route path="sources" element={<ReturnsModuleSettingsTabPage tab="zrodla" />} />
+                    <Route path="dictionaries" element={<ReturnsModuleSettingsTabPage tab="slowniki" />} />
+                    <Route path="return-types" element={<Navigate to="/orders/returns/dictionaries" replace />} />
+                    <Route path="sources" element={<Navigate to="/orders/returns/dictionaries" replace />} />
                     <Route path="configurator" element={<ReturnsModuleSettingsTabPage tab="konfigurator" />} />
                     <Route path=":returnId" element={<ReturnsReturnDetailPage />} />
                   </Route>

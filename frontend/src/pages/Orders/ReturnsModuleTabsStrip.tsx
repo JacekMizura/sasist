@@ -14,8 +14,7 @@ export const RETURNS_MODULE_TABS = [
     end: true as const,
     activePaths: [`${BASE}/panel-statuses`, `${BASE}/workflow-statuses`],
   },
-  { path: `${BASE}/return-types`, label: "Rodzaje zwrotów", end: true as const },
-  { path: `${BASE}/sources`, label: "Źródła", end: true as const },
+  { path: `${BASE}/dictionaries`, label: "Słowniki zwrotów", end: true as const, activePaths: [`${BASE}/return-types`, `${BASE}/sources`] },
   { path: `${BASE}/configurator`, label: "Konfigurator", end: true as const },
 ];
 

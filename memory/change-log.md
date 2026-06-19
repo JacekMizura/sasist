@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-06-08 — Słowniki zwrotów (UI)
+
+- Połączono zakładki „Rodzaje zwrotów” + „Źródła” → **Słowniki zwrotów** (`/orders/returns/dictionaries`)
+- Układ 2-kolumnowy: karty rodzajów/źródeł + podgląd formularza klienta (radio na żywo)
+- Edycja przez modale; legacy URL `/return-types`, `/sources` → przekierowanie
+
 ## 2026-06-08 — Konfigurator statusów zwrotów (UI)
 
 - `/orders/returns/statuses`: układ 2-kolumnowy (grupy statusów + podgląd listy), tabela decyzji produktowych, modale edycji
