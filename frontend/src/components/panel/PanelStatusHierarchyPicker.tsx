@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Check, Search } from "lucide-react";
 
-import { PanelSubgroupLineHeader } from "./PanelSubgroupLineHeader";
+import { PanelStatusWmsIconColumn } from "./PanelStatusWmsIconColumn";
 import {
   PANEL_TREE_CHILDREN_CLASS,
   PANEL_TREE_GROUP_BAR_CLASS,
@@ -82,24 +82,16 @@ function StatusPickRow({
       className={`${panelTreeStatusRowClass(selected)} disabled:cursor-not-allowed disabled:opacity-50`}
       onClick={onPick}
     >
+      <PanelStatusWmsIconColumn markers={markers} />
       <span className={panelTreeStatusBarClass(selected)} style={{ backgroundColor: stripeColor }} aria-hidden />
       {selected ? (
         <Check className="h-3.5 w-3.5 shrink-0 text-slate-600" strokeWidth={2.5} aria-hidden />
       ) : (
         <span className="w-3.5 shrink-0" aria-hidden />
       )}
-      <span className="min-w-0 flex-1 truncate pl-0.5">{status.name}</span>
-      {markers.length > 0 ? (
-        <span className="flex shrink-0 items-center gap-0.5">
-          {markers.map((m) => {
-            const MIcon = m.Icon;
-            return (
-              <span key={m.id} title={m.title} className="inline-flex text-slate-400">
-                <MIcon className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
-              </span>
-            );
-          })}
-        </span>
+      <span className="min-w-0 flex-1 truncate">{status.name}</span>
+      {status.image_url ? (
+        <img src={status.image_url} alt="" className="h-4 w-4 shrink-0 rounded object-contain" />
       ) : null}
     </button>
   );

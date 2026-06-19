@@ -7,9 +7,13 @@ export const PANEL_TREE_COUNT_CLASS = "shrink-0 tabular-nums text-xs font-medium
 export const PANEL_TREE_GROUP_BAR_CLASS =
   "pointer-events-none absolute inset-y-0 left-0 w-1 rounded-l-lg";
 
-/** Pasek statusu — pełna wysokość wiersza listy. */
+/** Pasek statusu — inline, za kolumną ikon WMS. */
 export const PANEL_TREE_STATUS_BAR_CLASS =
-  "pointer-events-none absolute inset-y-0 left-0 w-1 rounded-l-lg transition-opacity duration-150";
+  "mr-1.5 h-4 w-1 shrink-0 rounded-full transition-opacity duration-150";
+
+/** Stała lewa kolumna na ikony WMS (pusta gdy brak markera). */
+export const PANEL_TREE_WMS_ICON_COLUMN_CLASS =
+  "flex w-5 shrink-0 items-center justify-center gap-0.5";
 
 export const PANEL_TREE_GROUP_ROW_CLASS =
   "relative flex min-h-0 flex-1 items-center gap-2 overflow-hidden rounded-l-lg px-3 py-2.5 text-left text-sm font-semibold leading-snug text-slate-800 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500";

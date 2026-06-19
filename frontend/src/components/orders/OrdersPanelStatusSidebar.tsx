@@ -7,6 +7,7 @@ import type {
   OrderUiStatusWithCount,
 } from "../../types/orderUiStatus";
 import { getPanelStatusWmsMarkers, panelStatusCollapsedTitle } from "./panelStatusWmsChips";
+import { PanelStatusWmsIconColumn } from "../panel/PanelStatusWmsIconColumn";
 import { PanelSidebarSubgroupCollapsible } from "../panel/PanelSidebarSubgroupCollapsible";
 import {
   PANEL_TREE_CHILDREN_CLASS,
@@ -147,20 +148,9 @@ export function OrdersPanelStatusSidebar({
         title={titleDetail || undefined}
         onClick={() => onPanelFilterChange({ kind: "sub", id: s.id })}
       >
+        <PanelStatusWmsIconColumn markers={markers} />
         <span className={panelTreeStatusBarClass(active)} style={{ backgroundColor: stripeColor }} aria-hidden />
-        <span className="min-w-0 flex-1 truncate pl-0.5">{s.name}</span>
-        {markers.length > 0 ? (
-          <span className="flex shrink-0 items-center gap-0.5">
-            {markers.map((m) => {
-              const MIcon = m.Icon;
-              return (
-                <span key={m.id} title={m.title} className="inline-flex text-slate-400">
-                  <MIcon className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
-                </span>
-              );
-            })}
-          </span>
-        ) : null}
+        <span className="min-w-0 flex-1 truncate">{s.name}</span>
         {s.image_url ? (
           <img src={s.image_url} alt="" className="h-4 w-4 shrink-0 rounded object-contain" />
         ) : null}
