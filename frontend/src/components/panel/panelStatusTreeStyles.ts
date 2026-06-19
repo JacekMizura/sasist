@@ -1,7 +1,10 @@
 import type { OrderUiMainGroup } from "../../types/orderUiStatus";
 
-/** Mockup v3 — 312px (prod. lg:w-64 = 256px + 56px). */
-export const PANEL_SIDEBAR_WIDTH_LG_CLASS = "lg:w-[19.5rem]";
+/** Sidebar statusów — 288px (280–288 px docelowo). */
+export const PANEL_SIDEBAR_WIDTH_LG_CLASS = "lg:w-[18rem]";
+
+/** Szerokość powłoki listy (zamówienia / zwroty) — ten sam wymiar co sidebar. */
+export const PANEL_SIDEBAR_WIDTH_CLASS = "w-[18rem]";
 
 /** Jedna karta sidebara na stronie listy (zamówienia / zwroty). */
 export const PANEL_STATUS_SIDEBAR_PAGE_SHELL_BASE =
@@ -66,13 +69,17 @@ export function panelTreeOperationalRowClass(active: boolean): string {
 
 export const PANEL_TREE_GROUP_SECTION_CLASS = "pt-3 first:pt-1";
 
-/** Dzieci grupy głównej — jeden poziom wcięcia. */
-export const PANEL_TREE_CHILDREN_CLASS = "mt-1.5 space-y-1 pl-4";
+/** Kontener pod grupą główną — bez wcięcia (poziomy przypisane do elementów). */
+export const PANEL_TREE_CHILDREN_CLASS = "mt-1.5 space-y-1";
 
-export const PANEL_TREE_GROUP_STATUS_LIST_CLASS = "space-y-1";
+/** Status bez podgrupy — pierwszy poziom (~16 px od grupy). */
+export const PANEL_TREE_LEVEL1_INDENT_CLASS = "pl-4";
 
-/** Nagłówek sekcji podgrupy. */
-export const PANEL_TREE_SUBGROUP_SECTION_CLASS = "mb-0.5 mt-2 flex w-full items-center gap-2 pr-1";
+export const PANEL_TREE_GROUP_STATUS_LIST_CLASS = `space-y-1 ${PANEL_TREE_LEVEL1_INDENT_CLASS}`;
+
+/** Nagłówek podgrupy — ten sam poziom co status bez podgrupy. */
+export const PANEL_TREE_SUBGROUP_SECTION_CLASS =
+  "mb-0.5 mt-2 flex w-full items-center gap-2 pr-1 pl-4";
 
 export const PANEL_TREE_SUBGROUP_TOGGLE_CLASS =
   "flex w-5 shrink-0 items-center justify-center rounded text-slate-300 transition-colors hover:text-slate-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500";
@@ -81,7 +88,8 @@ export const PANEL_TREE_SUBGROUP_TITLE_CLASS = "shrink-0 text-xs font-medium tex
 
 export const PANEL_TREE_SUBGROUP_LINE_CLASS = "h-px min-w-[2rem] flex-1 bg-slate-100";
 
-export const PANEL_TREE_SUBGROUP_CHILDREN_CLASS = "space-y-1";
+/** Statusy w podgrupie — drugi poziom (~28 px od grupy). */
+export const PANEL_TREE_SUBGROUP_CHILDREN_CLASS = "space-y-1 pl-7";
 
 /** Nagłówek sekcji Operacyjne (zwroty). */
 export const PANEL_TREE_OPERATIONAL_SECTION_HEADER_CLASS =

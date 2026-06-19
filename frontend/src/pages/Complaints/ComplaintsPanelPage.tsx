@@ -323,7 +323,7 @@ export default function ComplaintsPanelPage() {
                   Statusy
                 </button>
                 <aside
-                  className={`hidden min-w-0 max-w-full shrink-0 overflow-x-hidden lg:block ${isStatusPanelCollapsed ? "w-14" : "w-[19.5rem]"}`}
+                  className={`hidden min-w-0 max-w-full shrink-0 overflow-x-hidden lg:block ${isStatusPanelCollapsed ? "w-14" : "w-[18rem]"}`}
                 >
                   <button
                     type="button"

@@ -8,7 +8,7 @@ import { ComplaintsListStatusSidebar } from "../../complaints/ComplaintsListStat
 import { OrdersPanelStatusSidebar } from "../../orders/OrdersPanelStatusSidebar";
 import { PanelSidebarOperationalRow } from "../PanelSidebarOperationalRow";
 import { PanelStatusHierarchyPicker } from "../PanelStatusHierarchyPicker";
-import { PANEL_STATUS_SIDEBAR_PAGE_SHELL_BASE } from "../panelStatusTreeStyles";
+import { PANEL_SIDEBAR_WIDTH_CLASS, PANEL_STATUS_SIDEBAR_PAGE_SHELL_BASE } from "../panelStatusTreeStyles";
 import type { OrderUiStatusPanelSummary } from "../../../types/orderUiStatus";
 
 const MOCK_SUMMARY: OrderUiStatusPanelSummary = {
@@ -90,7 +90,7 @@ function ProductionShellSidebar({
     <div className="flex flex-col">
       <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">{title}</p>
       <aside
-        className={`flex w-[19.5rem] shrink-0 ${PANEL_STATUS_SIDEBAR_PAGE_SHELL_BASE}`}
+        className={`flex shrink-0 ${PANEL_SIDEBAR_WIDTH_CLASS} ${PANEL_STATUS_SIDEBAR_PAGE_SHELL_BASE}`}
         data-screenshot-sidebar={operational ? "returns" : "orders"}
       >
         <OrdersPanelStatusSidebar
@@ -193,7 +193,7 @@ export function PanelStatusV3ScreenshotsPage() {
             >
               <span className="text-slate-600">Zmień status panelu</span>
             </button>
-            <div className="w-[19.5rem] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg">
+            <div className={`${PANEL_SIDEBAR_WIDTH_CLASS} overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg`}>
               <PanelStatusHierarchyPicker
                 panelSummary={MOCK_SUMMARY}
                 selectedStatusId={4}

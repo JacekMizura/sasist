@@ -939,7 +939,7 @@ export default function OrderList() {
                   Statusy panelu
                 </button>
                 <aside
-                  className={`${PANEL_STATUS_SIDEBAR_PAGE_SHELL_CLASS} ${isStatusPanelCollapsed ? "lg:w-14" : "lg:w-[19.5rem]"}`}
+                  className={`${PANEL_STATUS_SIDEBAR_PAGE_SHELL_CLASS} ${isStatusPanelCollapsed ? "lg:w-14" : "lg:w-[18rem]"}`}
                 >
                   <OrderStatusSidebar
                     warehouseId={fulfillmentWarehouseFilter}

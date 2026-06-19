@@ -74,7 +74,7 @@ export function PanelBulkStatusPickerDropdown({
 
       {open && panelSummary != null ? (
         <div
-          className="absolute left-0 top-full z-[200] mt-1 w-[min(100vw-2rem,19.5rem)] overflow-hidden rounded-lg border border-slate-200/95 bg-white shadow-xl ring-1 ring-slate-200/60"
+          className="absolute left-0 top-full z-[200] mt-1 w-[min(100vw-2rem,18rem)] overflow-hidden rounded-lg border border-slate-200/95 bg-white shadow-xl ring-1 ring-slate-200/60"
           role="listbox"
           aria-label={ariaLabel}
         >
