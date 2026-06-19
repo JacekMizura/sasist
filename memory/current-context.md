@@ -5,7 +5,7 @@
 - Dodano lekki podział sekcji: `FlatPageSection`, `FlatColumnHeader`, `flatSectionTokens` (separator `#e5e7eb`, odstępy).
 - Zastosowano w: listach modułów (toolbar/tabela/sidebar), słownikach zwrotów, konfiguratorze statusów, edytorze układu RMZ.
 - **Dodatkowe pola zamówień** (`OrderCustomFieldsListPage`, `OrderCustomFieldEditPage`): lewy shell `moduleSettingsPageShellClass`, lista jak moduły ERP, edycja z `FlatPageSection` + `IntegrationsApiPanel` (Zaawansowane), bez szarych kart.
-- **Akcje automatyczne** — pełna przebudowa UI: `OrderAutomationModuleShell` (breadcrumb + tabs), listy/grupy/dziennik płaskie, edytor z `FlatPageSection` (Wyzwalacze → Warunki → Akcje → Historia), przyciski pod formularzem bez sticky footera.
+- **Akcje automatyczne** — pełna przebudowa UI: `OrderAutomationModuleShell` (breadcrumb + tabs), listy/grupy/dziennik płaskie, edytor z `FlatPageSection` (Wyzwalacze → Historia), sekcja **Jeśli → To** pełnej szerokości (kolumny 1fr | strzałka | 1fr, bez pionowej kreski, jeden przycisk dodawania w strefie dashed, nagłówki Jeśli/To wyrównane).
 
 ## Bundle STOCK B1 — UX Simplification (2026-06-08) — CLOSED
 - **Raport:** `memory/bundle-stock-b1-ux-simplification-report.md`
