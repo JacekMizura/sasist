@@ -1,6 +1,18 @@
 import { useMemo, useState } from "react";
-import { Check, ChevronDown, ChevronRight, Search } from "lucide-react";
+import { Check, Search } from "lucide-react";
 
+import { PanelSubgroupLineHeader } from "./PanelSubgroupLineHeader";
+import {
+  PANEL_TREE_CHILDREN_CLASS,
+  PANEL_TREE_GROUP_BAR_CLASS,
+  PANEL_TREE_PICKER_GROUP_HEAD_CLASS,
+  PANEL_TREE_STATUS_BAR_CLASS,
+  PANEL_TREE_STATUS_ROW_ACTIVE_CLASS,
+  PANEL_TREE_STATUS_ROW_CLASS,
+  PANEL_TREE_STATUS_ROW_IDLE_CLASS,
+  PANEL_TREE_SUBGROUP_CHILDREN_CLASS,
+  panelTreeGroupAccentClass,
+} from "./panelStatusTreeStyles";
 import { getPanelStatusWmsMarkers } from "../orders/panelStatusWmsChips";
 import { ORDERS_PANEL_GROUP_LABELS } from "../orders/OrdersPanelStatusSidebar";
 import { buildPanelSidebarLayout } from "../../utils/orderPanelSidebarBuckets";
@@ -46,9 +58,6 @@ function subgroupMatchesSearch(title: string, query: string): boolean {
   return title.toLowerCase().includes(query);
 }
 
-const STATUS_ROW =
-  "relative flex w-full min-h-[32px] items-center gap-2 rounded-md py-1.5 pl-3 pr-2 text-left text-[13px] leading-tight transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500 disabled:cursor-not-allowed disabled:opacity-50";
-
 function StatusPickRow({
   status,
   mainGroup,
@@ -69,16 +78,12 @@ function StatusPickRow({
     <button
       type="button"
       disabled={disabled}
-      className={`${STATUS_ROW} ${
-        selected ? "bg-slate-100 font-semibold text-slate-900" : "font-medium text-slate-700 hover:bg-slate-50"
-      }`}
+      className={`${PANEL_TREE_STATUS_ROW_CLASS} ${
+        selected ? PANEL_TREE_STATUS_ROW_ACTIVE_CLASS : PANEL_TREE_STATUS_ROW_IDLE_CLASS
+      } disabled:cursor-not-allowed disabled:opacity-50`}
       onClick={onPick}
     >
-      <span
-        className="absolute bottom-1 left-0 top-1 w-1 rounded-full"
-        style={{ backgroundColor: stripeColor }}
-        aria-hidden
-      />
+      <span className={PANEL_TREE_STATUS_BAR_CLASS} style={{ backgroundColor: stripeColor }} aria-hidden />
       {selected ? (
         <Check className="h-3.5 w-3.5 shrink-0 text-slate-600" strokeWidth={2.5} aria-hidden />
       ) : (
@@ -181,7 +186,11 @@ export function PanelStatusHierarchyPicker({
     const { status, mainGroup } = selectedStatusInfo;
     const groupLabel = ORDERS_PANEL_GROUP_LABELS[mainGroup];
     if (groupMatchesSearch(groupLabel, normalizedSearch)) return true;
-    const layout = buildPanelSidebarLayout(mainGroup, panelSummary!.groups.find((g) => g.main_group === mainGroup)!.sub_statuses, sgDefs);
+    const layout = buildPanelSidebarLayout(
+      mainGroup,
+      panelSummary!.groups.find((g) => g.main_group === mainGroup)!.sub_statuses,
+      sgDefs,
+    );
     const inUngrouped = layout.ungrouped.some((s) => s.id === status.id);
     if (inUngrouped && statusMatchesSearch(status.name ?? "", normalizedSearch)) return true;
     for (const sec of layout.subgroupSections) {
@@ -218,8 +227,8 @@ export function PanelStatusHierarchyPicker({
           <button
             type="button"
             disabled={disabled}
-            className={`${STATUS_ROW} mb-1 font-medium text-slate-600 hover:bg-slate-50 ${
-              selectedStatusId === null ? "bg-slate-100 font-semibold text-slate-900" : ""
+            className={`${PANEL_TREE_STATUS_ROW_CLASS} mb-1 font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 ${
+              selectedStatusId === null ? PANEL_TREE_STATUS_ROW_ACTIVE_CLASS : ""
             }`}
             onClick={() => onPick(null)}
           >
@@ -234,7 +243,7 @@ export function PanelStatusHierarchyPicker({
 
         {selectedStatusInfo && normalizedSearch && !selectedVisibleWhenFiltered ? (
           <div className="mb-2 border-b border-slate-100 pb-2">
-            <div className="px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Wybrany</div>
+            <div className="px-1 py-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-400">Wybrany</div>
             <StatusPickRow
               status={selectedStatusInfo.status}
               mainGroup={selectedStatusInfo.mainGroup}
@@ -249,9 +258,15 @@ export function PanelStatusHierarchyPicker({
           <p className="px-2 py-3 text-xs text-slate-500">Brak statusów pasujących do wyszukiwania.</p>
         ) : (
           sections.map(({ block, groupLabel, filteredUngrouped, filteredSections }, idx) => (
-            <section key={block.main_group} className={idx > 0 ? "mt-3 border-t border-slate-100 pt-2" : ""}>
-              <div className="px-2 py-1 text-[11px] font-bold uppercase tracking-wider text-slate-400">{groupLabel}</div>
-              <div className="space-y-0.5 pl-1">
+            <section key={block.main_group} className={idx > 0 ? "mt-4 border-t border-slate-100 pt-3" : ""}>
+              <div className={`${PANEL_TREE_PICKER_GROUP_HEAD_CLASS} relative`}>
+                <span
+                  className={`${PANEL_TREE_GROUP_BAR_CLASS} ${panelTreeGroupAccentClass(block.main_group)}`}
+                  aria-hidden
+                />
+                <span className="min-w-0 truncate">{groupLabel}</span>
+              </div>
+              <div className={PANEL_TREE_CHILDREN_CLASS}>
                 {filteredUngrouped.map((s) => (
                   <StatusPickRow
                     key={s.id}
@@ -263,28 +278,17 @@ export function PanelStatusHierarchyPicker({
                   />
                 ))}
                 {filteredSections.map((sec) => {
-                  const sectionTotal = sec.rows.reduce((acc, r) => acc + (r.count ?? 0), 0);
                   const open = isSubgroupOpen(sec.key);
                   return (
-                    <div key={sec.key} className="pt-1">
-                      <button
-                        type="button"
-                        className="flex w-full min-h-[28px] items-center gap-1 rounded-md py-1 pl-1 pr-2 text-left text-[12px] font-semibold text-slate-600 hover:bg-slate-50"
-                        onClick={() => toggleSubgroup(sec.key)}
-                        aria-expanded={open}
-                      >
-                        <span className="flex w-4 shrink-0 items-center justify-center text-slate-400">
-                          {open ? (
-                            <ChevronDown className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
-                          ) : (
-                            <ChevronRight className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
-                          )}
-                        </span>
-                        <span className="min-w-0 flex-1 truncate text-slate-700">{sec.title}</span>
-                        <span className="shrink-0 tabular-nums text-xs font-medium text-slate-400">{sectionTotal}</span>
-                      </button>
+                    <div key={sec.key} className="pt-0.5">
+                      <PanelSubgroupLineHeader
+                        title={sec.title}
+                        expanded={open}
+                        onToggle={() => toggleSubgroup(sec.key)}
+                        showCount={false}
+                      />
                       {open ? (
-                        <div className="space-y-0.5 pl-4">
+                        <div className={PANEL_TREE_SUBGROUP_CHILDREN_CLASS}>
                           {sec.rows.map((s) => (
                             <StatusPickRow
                               key={s.id}

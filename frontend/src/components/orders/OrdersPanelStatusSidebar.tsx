@@ -9,10 +9,20 @@ import type {
 import { getPanelStatusWmsMarkers, panelStatusCollapsedTitle } from "./panelStatusWmsChips";
 import { PanelSidebarSubgroupCollapsible } from "../panel/PanelSidebarSubgroupCollapsible";
 import {
-  panelSidebarFilterRowClass,
-  panelSidebarMainGroupCountBadgeClass,
-  sidebarSubStatusHex,
-} from "../../utils/panelSidebarHierarchy";
+  PANEL_TREE_CHILDREN_CLASS,
+  PANEL_TREE_COUNT_CLASS,
+  PANEL_TREE_GROUP_BAR_CLASS,
+  PANEL_TREE_GROUP_ROW_ACTIVE_CLASS,
+  PANEL_TREE_GROUP_ROW_CLASS,
+  PANEL_TREE_GROUP_ROW_IDLE_CLASS,
+  PANEL_TREE_GROUP_TOGGLE_CLASS,
+  PANEL_TREE_STATUS_BAR_CLASS,
+  PANEL_TREE_STATUS_ROW_ACTIVE_CLASS,
+  PANEL_TREE_STATUS_ROW_CLASS,
+  PANEL_TREE_STATUS_ROW_IDLE_CLASS,
+  panelTreeGroupAccentClass,
+} from "../panel/panelStatusTreeStyles";
+import { panelSidebarFilterRowClass, sidebarSubStatusHex } from "../../utils/panelSidebarHierarchy";
 import { buildPanelSidebarLayout } from "../../utils/orderPanelSidebarBuckets";
 import { MAIN_PANEL_GROUP_ORDER } from "../../utils/orderPanelMainGroupOrder";
 import { panelListStatusSidebarWidthLg } from "../listPage/listSellasistTokens";
@@ -41,12 +51,6 @@ function sectionKeyForGroup(g: OrderUiMainGroup): "nowe" | "wtoku" | "zakonczone
   if (g === "NEW") return "nowe";
   if (g === "IN_PROGRESS") return "wtoku";
   return "zakonczone";
-}
-
-function accentBarFromMainGroup(g: OrderUiMainGroup): string {
-  if (g === "NEW") return "bg-blue-500";
-  if (g === "IN_PROGRESS") return "bg-amber-500";
-  return "bg-emerald-500";
 }
 
 function statusDotClass(name: string): string {
@@ -88,11 +92,6 @@ type OrdersPanelStatusSidebarProps = {
   returnsOperationalQueuesCollapsedSlot?: ReactNode;
   parentScrollContainer?: boolean;
 };
-
-const STATUS_ROW_BASE =
-  "relative flex w-full min-h-[30px] items-center gap-2 rounded-md py-1.5 pl-3 pr-1.5 text-left text-[13px] leading-tight transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500";
-
-const STATUS_COUNT_CLASS = "shrink-0 tabular-nums text-xs text-slate-400";
 
 export function OrdersPanelStatusSidebar({
   warehouseId,
@@ -143,14 +142,14 @@ export function OrdersPanelStatusSidebar({
       <button
         key={s.id}
         type="button"
-        className={`${STATUS_ROW_BASE} ${
-          active ? "bg-slate-100 font-semibold text-slate-900" : "font-medium text-slate-600 hover:bg-slate-50"
+        className={`${PANEL_TREE_STATUS_ROW_CLASS} ${
+          active ? PANEL_TREE_STATUS_ROW_ACTIVE_CLASS : PANEL_TREE_STATUS_ROW_IDLE_CLASS
         }`}
         title={titleDetail || undefined}
         onClick={() => onPanelFilterChange({ kind: "sub", id: s.id })}
       >
         <span
-          className="absolute bottom-1 left-0 top-1 w-1 rounded-full"
+          className={PANEL_TREE_STATUS_BAR_CLASS}
           style={{ backgroundColor: stripeColor }}
           aria-hidden
         />
@@ -170,7 +169,7 @@ export function OrdersPanelStatusSidebar({
             })}
           </span>
         ) : null}
-        <span className={`${STATUS_COUNT_CLASS} ${active ? "text-slate-600" : ""}`}>{s.count}</span>
+        <span className={`${PANEL_TREE_COUNT_CLASS} ${active ? "font-medium text-slate-600" : ""}`}>{s.count}</span>
       </button>
     );
   };
@@ -205,7 +204,7 @@ export function OrdersPanelStatusSidebar({
           aria-label="Wszystkie"
         >
           <span className="h-2.5 w-2.5 rounded-full bg-slate-500" />
-          <span className={STATUS_COUNT_CLASS}>{totalPanelOrders ?? "—"}</span>
+          <span className={PANEL_TREE_COUNT_CLASS}>{totalPanelOrders ?? "—"}</span>
         </button>
         {(panelSummary?.unassigned_count ?? 0) > 0 ? (
           <button
@@ -216,7 +215,7 @@ export function OrdersPanelStatusSidebar({
             aria-label="Bez etykiety"
           >
             <span className="h-2.5 w-2.5 rounded-full bg-slate-400" />
-            <span className={STATUS_COUNT_CLASS}>{panelSummary?.unassigned_count ?? "—"}</span>
+            <span className={PANEL_TREE_COUNT_CLASS}>{panelSummary?.unassigned_count ?? "—"}</span>
           </button>
         ) : null}
         {MAIN_PANEL_GROUP_ORDER.flatMap((mg) => {
@@ -234,7 +233,7 @@ export function OrdersPanelStatusSidebar({
                 aria-label={panelGroupLabels[block.main_group]}
               >
                 <span className={`h-2.5 w-2.5 rounded-full ${statusDotClass(panelGroupLabels[block.main_group])}`} />
-                <span className={panelSidebarMainGroupCountBadgeClass()}>{block.total_count}</span>
+                <span className={PANEL_TREE_COUNT_CLASS}>{block.total_count}</span>
               </button>
               {visibleStatuses.map((s) => (
                 <button
@@ -250,7 +249,7 @@ export function OrdersPanelStatusSidebar({
                     style={{ backgroundColor: sidebarSubStatusHex(s.badge_color ?? s.color, block.main_group) }}
                     aria-hidden
                   />
-                  <span className={STATUS_COUNT_CLASS}>{s.count}</span>
+                  <span className={PANEL_TREE_COUNT_CLASS}>{s.count}</span>
                 </button>
               ))}
             </div>,
@@ -298,7 +297,7 @@ export function OrdersPanelStatusSidebar({
           onClick={() => onPanelFilterChange("all")}
         >
           <span className={panelFilter === "all" ? "font-semibold" : ""}>Wszystkie</span>
-          <span className={STATUS_COUNT_CLASS}>{totalPanelOrders ?? "—"}</span>
+          <span className={PANEL_TREE_COUNT_CLASS}>{totalPanelOrders ?? "—"}</span>
         </button>
 
         {(panelSummary?.unassigned_count ?? 0) > 0 ? (
@@ -308,12 +307,12 @@ export function OrdersPanelStatusSidebar({
             onClick={() => onPanelFilterChange("unassigned")}
           >
             <span className={panelFilter === "unassigned" ? "font-semibold" : ""}>Bez etykiety</span>
-            <span className={STATUS_COUNT_CLASS}>{panelSummary?.unassigned_count ?? "—"}</span>
+            <span className={PANEL_TREE_COUNT_CLASS}>{panelSummary?.unassigned_count ?? "—"}</span>
           </button>
         ) : null}
       </div>
 
-      <div className="mt-2 space-y-3 px-1">
+      <div className="mt-2 space-y-4 px-1">
         {MAIN_PANEL_GROUP_ORDER.map((mainGroup) => {
           const block = blocksByMainGroup.get(mainGroup);
           if (!block) return null;
@@ -335,24 +334,24 @@ export function OrdersPanelStatusSidebar({
           const groupActive = isGroupFilterActive(panelFilter, block.main_group);
 
           return (
-            <section key={block.main_group} className="space-y-0.5">
+            <section key={block.main_group} className="space-y-0">
               <div className="flex items-stretch gap-0">
                 <button
                   type="button"
-                  className={`relative flex min-h-[32px] flex-1 items-center gap-1.5 rounded-md py-1.5 pl-2 pr-1 text-left transition-colors ${
-                    groupActive ? "bg-slate-100 font-semibold text-slate-900" : "text-slate-700 hover:bg-slate-50"
+                  className={`${PANEL_TREE_GROUP_ROW_CLASS} ${
+                    groupActive ? PANEL_TREE_GROUP_ROW_ACTIVE_CLASS : PANEL_TREE_GROUP_ROW_IDLE_CLASS
                   }`}
                   onClick={() => onPanelFilterChange({ kind: "group", group: block.main_group })}
                 >
                   <span
-                    className={`absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full ${accentBarFromMainGroup(block.main_group)}`}
+                    className={`${PANEL_TREE_GROUP_BAR_CLASS} ${panelTreeGroupAccentClass(block.main_group)}`}
                     aria-hidden
                   />
-                  <span className="pl-1.5">{panelGroupLabels[block.main_group]}</span>
+                  <span className="min-w-0 truncate">{panelGroupLabels[block.main_group]}</span>
                 </button>
                 <button
                   type="button"
-                  className="flex shrink-0 items-center gap-1 rounded-md px-1.5 text-slate-400 hover:bg-slate-50 hover:text-slate-600"
+                  className={PANEL_TREE_GROUP_TOGGLE_CLASS}
                   onClick={() =>
                     setOpenSections((prev) => ({
                       ...prev,
@@ -362,13 +361,13 @@ export function OrdersPanelStatusSidebar({
                   aria-expanded={isOpen}
                   aria-label={isOpen ? "Zwiń grupę" : "Rozwiń grupę"}
                 >
-                  <span className={panelSidebarMainGroupCountBadgeClass()}>{block.total_count}</span>
+                  <span className={`${PANEL_TREE_COUNT_CLASS} font-medium`}>{block.total_count}</span>
                   {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                 </button>
               </div>
 
               {isOpen ? (
-                <div className="space-y-1 pl-2">
+                <div className={PANEL_TREE_CHILDREN_CLASS}>
                   {filteredUngrouped.length > 0 ? (
                     <div className="space-y-0.5">{filteredUngrouped.map((s) => renderStatusButton(block, s))}</div>
                   ) : null}
