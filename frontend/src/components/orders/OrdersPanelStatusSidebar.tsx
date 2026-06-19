@@ -7,10 +7,10 @@ import type {
   OrderUiStatusWithCount,
 } from "../../types/orderUiStatus";
 import { getPanelStatusWmsMarkers, panelStatusCollapsedTitle } from "./panelStatusWmsChips";
+import { PanelSidebarSubgroupCollapsible } from "../panel/PanelSidebarSubgroupCollapsible";
 import {
   panelSidebarFilterRowClass,
   panelSidebarMainGroupCountBadgeClass,
-  panelSidebarSubCountBadgeClass,
   sidebarSubStatusHex,
 } from "../../utils/panelSidebarHierarchy";
 import { buildPanelSidebarLayout } from "../../utils/orderPanelSidebarBuckets";
@@ -67,6 +67,12 @@ function statusMatchesSearch(s: OrderUiStatusWithCount, query: string): boolean 
   return (s.name ?? "").toLowerCase().includes(query);
 }
 
+function subgroupMatchesSearch(title: string, rows: OrderUiStatusWithCount[], query: string): boolean {
+  if (!query) return true;
+  const t = title.toLowerCase();
+  return t.includes(query) || rows.some((s) => statusMatchesSearch(s, query));
+}
+
 type OrdersPanelStatusSidebarProps = {
   warehouseId?: number | null;
   panelSummary: OrderUiStatusPanelSummary | null;
@@ -84,10 +90,12 @@ type OrdersPanelStatusSidebarProps = {
 };
 
 const STATUS_ROW_BASE =
-  "group/status relative flex w-full min-h-[30px] items-center gap-2 rounded-md py-1.5 pl-2 pr-1 text-left text-[13px] leading-tight transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500";
+  "relative flex w-full min-h-[30px] items-center gap-2 rounded-md py-1.5 pl-3 pr-1.5 text-left text-[13px] leading-tight transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500";
+
+const STATUS_COUNT_CLASS = "shrink-0 tabular-nums text-xs text-slate-400";
 
 export function OrdersPanelStatusSidebar({
-  warehouseId: _warehouseId,
+  warehouseId,
   panelSummary,
   panelSubgroups,
   panelFilter,
@@ -100,8 +108,6 @@ export function OrdersPanelStatusSidebar({
   returnsOperationalQueuesCollapsedSlot,
   parentScrollContainer = false,
 }: OrdersPanelStatusSidebarProps) {
-  void _warehouseId;
-
   const totalPanelOrders =
     panelSummary != null
       ? panelSummary.unassigned_count + panelSummary.groups.reduce((acc, g) => acc + g.total_count, 0)
@@ -131,7 +137,7 @@ export function OrdersPanelStatusSidebar({
     const active = isSubFilterActive(panelFilter, s.id);
     const markers = getPanelStatusWmsMarkers(s, block.main_group);
     const titleDetail = panelStatusCollapsedTitle(s, block.main_group);
-    const dotColor = sidebarSubStatusHex(s.badge_color ?? s.color, block.main_group);
+    const stripeColor = sidebarSubStatusHex(s.badge_color ?? s.color, block.main_group);
 
     return (
       <button
@@ -143,14 +149,11 @@ export function OrdersPanelStatusSidebar({
         title={titleDetail || undefined}
         onClick={() => onPanelFilterChange({ kind: "sub", id: s.id })}
       >
-        {active ? (
-          <span
-            className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-r-full"
-            style={{ backgroundColor: dotColor }}
-            aria-hidden
-          />
-        ) : null}
-        <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: dotColor }} aria-hidden />
+        <span
+          className="absolute bottom-1 left-0 top-1 w-1 rounded-full"
+          style={{ backgroundColor: stripeColor }}
+          aria-hidden
+        />
         {s.image_url ? (
           <img src={s.image_url} alt="" className="h-4 w-4 shrink-0 rounded object-contain" />
         ) : null}
@@ -167,7 +170,7 @@ export function OrdersPanelStatusSidebar({
             })}
           </span>
         ) : null}
-        <span className={`${panelSidebarSubCountBadgeClass()} ${active ? "text-slate-800" : ""}`}>{s.count}</span>
+        <span className={`${STATUS_COUNT_CLASS} ${active ? "text-slate-600" : ""}`}>{s.count}</span>
       </button>
     );
   };
@@ -202,7 +205,7 @@ export function OrdersPanelStatusSidebar({
           aria-label="Wszystkie"
         >
           <span className="h-2.5 w-2.5 rounded-full bg-slate-500" />
-          <span className={panelSidebarSubCountBadgeClass()}>{totalPanelOrders ?? "—"}</span>
+          <span className={STATUS_COUNT_CLASS}>{totalPanelOrders ?? "—"}</span>
         </button>
         {(panelSummary?.unassigned_count ?? 0) > 0 ? (
           <button
@@ -213,7 +216,7 @@ export function OrdersPanelStatusSidebar({
             aria-label="Bez etykiety"
           >
             <span className="h-2.5 w-2.5 rounded-full bg-slate-400" />
-            <span className={panelSidebarSubCountBadgeClass()}>{panelSummary?.unassigned_count ?? "—"}</span>
+            <span className={STATUS_COUNT_CLASS}>{panelSummary?.unassigned_count ?? "—"}</span>
           </button>
         ) : null}
         {MAIN_PANEL_GROUP_ORDER.flatMap((mg) => {
@@ -243,10 +246,11 @@ export function OrdersPanelStatusSidebar({
                   aria-label={panelStatusCollapsedTitle(s, block.main_group)}
                 >
                   <span
-                    className="h-2.5 w-2.5 rounded-full"
+                    className="h-3 w-0.5 shrink-0 rounded-full"
                     style={{ backgroundColor: sidebarSubStatusHex(s.badge_color ?? s.color, block.main_group) }}
+                    aria-hidden
                   />
-                  <span className={panelSidebarSubCountBadgeClass()}>{s.count}</span>
+                  <span className={STATUS_COUNT_CLASS}>{s.count}</span>
                 </button>
               ))}
             </div>,
@@ -294,7 +298,7 @@ export function OrdersPanelStatusSidebar({
           onClick={() => onPanelFilterChange("all")}
         >
           <span className={panelFilter === "all" ? "font-semibold" : ""}>Wszystkie</span>
-          <span className={panelSidebarSubCountBadgeClass()}>{totalPanelOrders ?? "—"}</span>
+          <span className={STATUS_COUNT_CLASS}>{totalPanelOrders ?? "—"}</span>
         </button>
 
         {(panelSummary?.unassigned_count ?? 0) > 0 ? (
@@ -304,7 +308,7 @@ export function OrdersPanelStatusSidebar({
             onClick={() => onPanelFilterChange("unassigned")}
           >
             <span className={panelFilter === "unassigned" ? "font-semibold" : ""}>Bez etykiety</span>
-            <span className={panelSidebarSubCountBadgeClass()}>{panelSummary?.unassigned_count ?? "—"}</span>
+            <span className={STATUS_COUNT_CLASS}>{panelSummary?.unassigned_count ?? "—"}</span>
           </button>
         ) : null}
       </div>
@@ -321,7 +325,7 @@ export function OrdersPanelStatusSidebar({
               ...sec,
               rows: sec.rows.filter((s) => statusMatchesSearch(s, normalizedSearch)),
             }))
-            .filter((sec) => sec.rows.length > 0);
+            .filter((sec) => sec.rows.length > 0 && subgroupMatchesSearch(sec.title, sec.rows, normalizedSearch));
 
           const hasVisibleChildren = filteredUngrouped.length > 0 || filteredSections.length > 0;
           if (normalizedSearch && !hasVisibleChildren) return null;
@@ -358,26 +362,28 @@ export function OrdersPanelStatusSidebar({
                   aria-expanded={isOpen}
                   aria-label={isOpen ? "Zwiń grupę" : "Rozwiń grupę"}
                 >
-                  <span className={panelSidebarSubCountBadgeClass()}>{block.total_count}</span>
+                  <span className={panelSidebarMainGroupCountBadgeClass()}>{block.total_count}</span>
                   {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                 </button>
               </div>
 
               {isOpen ? (
-                <div className="space-y-0.5 pl-3">
-                  {filteredUngrouped.map((s) => renderStatusButton(block, s))}
+                <div className="space-y-1 pl-2">
+                  {filteredUngrouped.length > 0 ? (
+                    <div className="space-y-0.5">{filteredUngrouped.map((s) => renderStatusButton(block, s))}</div>
+                  ) : null}
                   {filteredSections.map((sec) => {
                     const sectionTotal = sec.rows.reduce((acc, r) => acc + (r.count ?? 0), 0);
                     return (
-                      <div key={sec.key} className="pt-1">
-                        <div className="flex items-center gap-2 py-1 pl-1">
-                          <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                            {sec.title}
-                          </span>
-                          <span className="text-[10px] tabular-nums text-slate-400">{sectionTotal}</span>
-                        </div>
-                        <div className="space-y-0.5">{sec.rows.map((s) => renderStatusButton(block, s))}</div>
-                      </div>
+                      <PanelSidebarSubgroupCollapsible
+                        key={sec.key}
+                        storageKey={`panel-sg:${warehouseId ?? "tenant"}:${block.main_group}:${sec.key}`}
+                        title={sec.title}
+                        totalCount={sectionTotal}
+                        forceExpanded={Boolean(normalizedSearch)}
+                      >
+                        {sec.rows.map((s) => renderStatusButton(block, s))}
+                      </PanelSidebarSubgroupCollapsible>
                     );
                   })}
                 </div>
@@ -386,7 +392,8 @@ export function OrdersPanelStatusSidebar({
           );
         })}
 
-        {normalizedSearch && MAIN_PANEL_GROUP_ORDER.every((mg) => {
+        {normalizedSearch &&
+        MAIN_PANEL_GROUP_ORDER.every((mg) => {
           const block = blocksByMainGroup.get(mg);
           if (!block) return true;
           return !block.sub_statuses.some((s) => statusMatchesSearch(s, normalizedSearch));

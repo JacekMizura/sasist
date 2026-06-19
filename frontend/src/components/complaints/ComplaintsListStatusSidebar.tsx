@@ -9,7 +9,6 @@ import {
 } from "../../types/complaint";
 import {
   panelSidebarFilterRowClass,
-  panelSidebarSubCountBadgeClass,
 } from "../../utils/panelSidebarHierarchy";
 
 export type ComplaintPanelFilter = "all" | { kind: "status"; status: ComplaintStatusCode };
@@ -48,7 +47,9 @@ function isStatusActive(panelFilter: ComplaintPanelFilter, code: ComplaintStatus
 }
 
 const STATUS_ROW_BASE =
-  "relative flex w-full min-h-[30px] items-center gap-2 rounded-md py-1.5 pl-2 pr-1 text-left text-[13px] leading-tight transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500";
+  "relative flex w-full min-h-[30px] items-center gap-2 rounded-md py-1.5 pl-3 pr-1.5 text-left text-[13px] leading-tight transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500";
+
+const STATUS_COUNT_CLASS = "shrink-0 tabular-nums text-xs text-slate-400";
 
 export function ComplaintsListStatusSidebar({
   warehouseId: _warehouseId,
@@ -82,7 +83,7 @@ export function ComplaintsListStatusSidebar({
           aria-label="Wszystkie"
         >
           <span className="h-2.5 w-2.5 rounded-full bg-slate-500" />
-          <span className={panelSidebarSubCountBadgeClass()}>{totalCount ?? "—"}</span>
+          <span className={STATUS_COUNT_CLASS}>{totalCount ?? "—"}</span>
         </button>
         {visibleStatuses.map((code) => (
           <button
@@ -93,8 +94,8 @@ export function ComplaintsListStatusSidebar({
             title={COMPLAINT_SIDEBAR_FILTER_LABELS_PL[code]}
             aria-label={COMPLAINT_SIDEBAR_FILTER_LABELS_PL[code]}
           >
-            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: stripeHexForStatus(code) }} />
-            <span className={panelSidebarSubCountBadgeClass()}>{countFor(code)}</span>
+            <span className="h-3 w-0.5 shrink-0 rounded-full" style={{ backgroundColor: stripeHexForStatus(code) }} aria-hidden />
+            <span className={STATUS_COUNT_CLASS}>{countFor(code)}</span>
           </button>
         ))}
       </aside>
@@ -134,7 +135,7 @@ export function ComplaintsListStatusSidebar({
           onClick={() => onPanelFilterChange("all")}
         >
           <span className={panelFilter === "all" ? "font-semibold" : ""}>Wszystkie</span>
-          <span className={panelSidebarSubCountBadgeClass()}>{totalCount ?? "—"}</span>
+          <span className={STATUS_COUNT_CLASS}>{totalCount ?? "—"}</span>
         </button>
 
         {visibleStatuses.length === 0 ? (
@@ -154,16 +155,13 @@ export function ComplaintsListStatusSidebar({
                   title={COMPLAINT_SIDEBAR_FILTER_LABELS_PL[code]}
                   onClick={() => onPanelFilterChange({ kind: "status", status: code })}
                 >
-                  {active ? (
-                    <span
-                      className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-r-full"
-                      style={{ backgroundColor: dotColor }}
-                      aria-hidden
-                    />
-                  ) : null}
-                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: dotColor }} aria-hidden />
+                  <span
+                    className="absolute bottom-1 left-0 top-1 w-1 rounded-full"
+                    style={{ backgroundColor: dotColor }}
+                    aria-hidden
+                  />
                   <span className="min-w-0 flex-1 truncate">{COMPLAINT_SIDEBAR_FILTER_LABELS_PL[code]}</span>
-                  <span className={`${panelSidebarSubCountBadgeClass()} ${active ? "text-slate-800" : ""}`}>
+                  <span className={`${STATUS_COUNT_CLASS} ${active ? "text-slate-600" : ""}`}>
                     {countFor(code)}
                   </span>
                 </button>
