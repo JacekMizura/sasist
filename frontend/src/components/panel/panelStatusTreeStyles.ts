@@ -3,6 +3,12 @@ import type { OrderUiMainGroup } from "../../types/orderUiStatus";
 /** Mockup v3 — 312px (prod. lg:w-64 = 256px + 56px). */
 export const PANEL_SIDEBAR_WIDTH_LG_CLASS = "lg:w-[19.5rem]";
 
+/** Jedna karta sidebara na stronie listy (zamówienia / zwroty). */
+export const PANEL_STATUS_SIDEBAR_PAGE_SHELL_BASE =
+  "min-h-0 min-w-0 shrink-0 flex-col lg:sticky lg:top-3 lg:z-30 lg:max-h-[calc(100dvh-5.75rem)] lg:overflow-y-auto lg:overscroll-y-contain lg:rounded-xl lg:border lg:border-slate-100 lg:bg-white lg:p-3 lg:shadow-sm";
+
+export const PANEL_STATUS_SIDEBAR_PAGE_SHELL_CLASS = `hidden lg:flex ${PANEL_STATUS_SIDEBAR_PAGE_SHELL_BASE}`;
+
 /** Licznik — flex prawo, bez stałej szerokości kolumny. */
 export const PANEL_TREE_COUNT_CLASS =
   "ml-auto shrink-0 pl-2 text-right tabular-nums text-xs font-medium text-slate-500";

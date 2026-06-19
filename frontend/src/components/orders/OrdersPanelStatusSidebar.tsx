@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { Search } from "lucide-react";
+import { ChevronLeft, Search } from "lucide-react";
 import type {
   OrderUiMainGroup,
   OrderUiPanelSubgroupRead,
@@ -80,6 +80,53 @@ function subgroupMatchesSearch(title: string, rows: OrderUiStatusWithCount[], qu
   return t.includes(query) || rows.some((s) => statusMatchesSearch(s, query));
 }
 
+function PanelStatusSidebarCollapseButton({
+  collapsed,
+  onToggle,
+}: {
+  collapsed: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+      aria-label={collapsed ? "Rozwiń panel statusów" : "Zwiń panel statusów"}
+    >
+      <ChevronLeft className={`h-4 w-4 transition-transform ${collapsed ? "rotate-180" : ""}`} />
+    </button>
+  );
+}
+
+function PanelStatusSidebarHeader({
+  collapsed,
+  titleTrailing,
+  onToggleCollapsed,
+}: {
+  collapsed?: boolean;
+  titleTrailing?: ReactNode;
+  onToggleCollapsed?: () => void;
+}) {
+  return (
+    <div className={`mb-2 flex items-center gap-2 ${collapsed ? "justify-end" : "justify-between"}`}>
+      {!collapsed ? (
+        <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Status panelu</h2>
+      ) : (
+        <span className="sr-only">Status panelu</span>
+      )}
+      {(titleTrailing != null || onToggleCollapsed != null) && (
+        <div className="ml-auto flex shrink-0 items-center gap-1.5">
+          {titleTrailing}
+          {onToggleCollapsed ? (
+            <PanelStatusSidebarCollapseButton collapsed={!!collapsed} onToggle={onToggleCollapsed} />
+          ) : null}
+        </div>
+      )}
+    </div>
+  );
+}
+
 type OrdersPanelStatusSidebarProps = {
   warehouseId?: number | null;
   panelSummary: OrderUiStatusPanelSummary | null;
@@ -94,6 +141,7 @@ type OrdersPanelStatusSidebarProps = {
   returnsOperationalQueuesSlot?: ReactNode;
   returnsOperationalQueuesCollapsedSlot?: ReactNode;
   parentScrollContainer?: boolean;
+  onToggleCollapsed?: () => void;
 };
 
 export function OrdersPanelStatusSidebar({
@@ -109,6 +157,7 @@ export function OrdersPanelStatusSidebar({
   returnsOperationalQueuesSlot,
   returnsOperationalQueuesCollapsedSlot,
   parentScrollContainer = false,
+  onToggleCollapsed,
 }: OrdersPanelStatusSidebarProps) {
   const totalPanelOrders =
     panelSummary != null
@@ -117,6 +166,7 @@ export function OrdersPanelStatusSidebar({
 
   const sgDefs = panelSubgroups ?? [];
   const sellasist = chromeVariant === "sellasist";
+  const embedded = parentScrollContainer;
   const [searchQuery, setSearchQuery] = useState("");
   const normalizedSearch = normalizeSearchQuery(searchQuery);
   const [openSections, setOpenSections] = useState({
@@ -133,7 +183,7 @@ export function OrdersPanelStatusSidebar({
     return m;
   }, [panelSummary?.groups]);
 
-  const stickySelf = parentScrollContainer ? "" : "lg:sticky lg:top-4";
+  const stickySelf = embedded ? "" : "lg:sticky lg:top-4";
 
   const renderStatusButton = (block: { main_group: OrderUiMainGroup }, s: OrderUiStatusWithCount) => {
     const active = isSubFilterActive(panelFilter, s.id);
@@ -176,15 +226,17 @@ export function OrdersPanelStatusSidebar({
   };
 
   if (collapsed) {
+    const collapsedRootClass = embedded
+      ? "w-full min-w-0 max-w-full shrink-0 space-y-1 overflow-x-hidden"
+      : `w-full max-w-full min-w-0 shrink-0 space-y-1 overflow-x-hidden rounded-md border border-slate-200/90 bg-slate-50 p-1 ${stickySelf} lg:w-14 lg:max-w-[3.5rem]`;
+
     return (
-      <aside
-        className={`w-full max-w-full min-w-0 shrink-0 space-y-1 overflow-x-hidden rounded-md border border-slate-200/90 bg-slate-50 p-1 ${stickySelf} lg:w-14 lg:max-w-[3.5rem]`}
-      >
-        {titleTrailing != null ? (
-          <div className="mb-1 flex justify-end">
-            <div className="shrink-0">{titleTrailing}</div>
-          </div>
-        ) : null}
+      <div className={collapsedRootClass}>
+        <PanelStatusSidebarHeader
+          collapsed
+          titleTrailing={titleTrailing}
+          onToggleCollapsed={onToggleCollapsed}
+        />
         <button
           type="button"
           className="flex w-full items-center justify-between rounded-md px-1 py-1 hover:bg-slate-100"
@@ -245,25 +297,29 @@ export function OrdersPanelStatusSidebar({
           ];
         })}
         {renderOperationalSection(returnsOperationalQueuesCollapsedSlot, true)}
-      </aside>
+      </div>
     );
   }
 
   const sellasistScroll =
-    sellasist && !parentScrollContainer ? "max-h-[min(100vh-6rem,52rem)] overflow-y-auto" : "";
+    sellasist && !embedded ? "max-h-[min(100vh-6rem,52rem)] overflow-y-auto" : "";
+
+  const expandedRootClass = embedded
+    ? "w-full min-w-0 max-w-full shrink-0 overflow-x-hidden"
+    : `w-full min-w-0 max-w-full shrink-0 overflow-x-hidden p-2 ${stickySelf} ${
+        sellasist ? PANEL_SIDEBAR_WIDTH_LG_CLASS : panelListStatusSidebarWidthLg
+      } ${sellasistScroll} rounded-xl border border-slate-200/90 bg-white`;
+
+  const RootTag = embedded ? "div" : "aside";
 
   return (
-    <aside
-      className={`w-full min-w-0 max-w-full shrink-0 overflow-x-hidden p-2 ${stickySelf} ${
-        sellasist ? PANEL_SIDEBAR_WIDTH_LG_CLASS : panelListStatusSidebarWidthLg
-      } ${sellasistScroll} rounded-xl border border-slate-200/90 bg-white`}
-    >
-      <div className="mb-2 flex items-center justify-between gap-2 px-1">
-        <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Status panelu</h2>
-        {titleTrailing != null ? <div className="shrink-0">{titleTrailing}</div> : null}
-      </div>
+    <RootTag className={expandedRootClass}>
+      <PanelStatusSidebarHeader
+        titleTrailing={titleTrailing}
+        onToggleCollapsed={onToggleCollapsed}
+      />
 
-      <div className="relative mb-2 px-1">
+      <div className="relative mb-2">
         <Search
           className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400"
           strokeWidth={2}
@@ -279,7 +335,7 @@ export function OrdersPanelStatusSidebar({
         />
       </div>
 
-      <div className="space-y-1.5 px-1">
+      <div className="space-y-1.5">
         <button
           type="button"
           className={panelTreeMetaRowClass(panelFilter === "all")}
@@ -301,7 +357,7 @@ export function OrdersPanelStatusSidebar({
         ) : null}
       </div>
 
-      <div className="mt-3 px-1">
+      <div className="mt-3">
         {MAIN_PANEL_GROUP_ORDER.map((mainGroup) => {
           const block = blocksByMainGroup.get(mainGroup);
           if (!block) return null;
@@ -372,11 +428,11 @@ export function OrdersPanelStatusSidebar({
           if (!block) return true;
           return !block.sub_statuses.some((s) => statusMatchesSearch(s, normalizedSearch));
         }) ? (
-          <p className="px-1 py-2 text-xs text-slate-500">Brak statusów pasujących do wyszukiwania.</p>
+          <p className="py-2 text-xs text-slate-500">Brak statusów pasujących do wyszukiwania.</p>
         ) : null}
 
         {renderOperationalSection(returnsOperationalQueuesSlot, false)}
       </div>
-    </aside>
+    </RootTag>
   );
 }

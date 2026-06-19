@@ -8,6 +8,7 @@ import { ComplaintsListStatusSidebar } from "../../complaints/ComplaintsListStat
 import { OrdersPanelStatusSidebar } from "../../orders/OrdersPanelStatusSidebar";
 import { PanelSidebarOperationalRow } from "../PanelSidebarOperationalRow";
 import { PanelStatusHierarchyPicker } from "../PanelStatusHierarchyPicker";
+import { PANEL_STATUS_SIDEBAR_PAGE_SHELL_BASE } from "../panelStatusTreeStyles";
 import type { OrderUiStatusPanelSummary } from "../../../types/orderUiStatus";
 
 const MOCK_SUMMARY: OrderUiStatusPanelSummary = {
@@ -60,6 +61,53 @@ function ScreenshotFrame({ title, children }: { title: string; children: React.R
   );
 }
 
+function ProductionShellSidebar({
+  title,
+  operational,
+}: {
+  title: string;
+  operational?: boolean;
+}) {
+  const [filter, setFilter] = useState<"all" | { kind: "sub"; id: number }>({ kind: "sub", id: 4 });
+  const [returnsOp, setReturnsOp] = useState("uszkodzone");
+  const [collapsed, setCollapsed] = useState(false);
+
+  const operationalSlot = operational ? (
+    <>
+      {OPERATIONAL_ROWS.map((row) => (
+        <PanelSidebarOperationalRow
+          key={row.key}
+          active={returnsOp === row.key}
+          label={row.label}
+          count={row.count}
+          onClick={() => setReturnsOp(row.key)}
+        />
+      ))}
+    </>
+  ) : undefined;
+
+  return (
+    <div className="flex flex-col">
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">{title}</p>
+      <aside
+        className={`flex w-[19.5rem] shrink-0 ${PANEL_STATUS_SIDEBAR_PAGE_SHELL_BASE}`}
+        data-screenshot-sidebar={operational ? "returns" : "orders"}
+      >
+        <OrdersPanelStatusSidebar
+          panelSummary={MOCK_SUMMARY}
+          panelFilter={filter}
+          onPanelFilterChange={setFilter}
+          chromeVariant="sellasist"
+          collapsed={collapsed}
+          parentScrollContainer
+          onToggleCollapsed={() => setCollapsed((v) => !v)}
+          returnsOperationalQueuesSlot={operationalSlot}
+        />
+      </aside>
+    </div>
+  );
+}
+
 export function PanelStatusV3ScreenshotsPage() {
   const [ordersFilter, setOrdersFilter] = useState<"all" | { kind: "sub"; id: number }>({ kind: "sub", id: 4 });
   const [returnsOp, setReturnsOp] = useState("uszkodzone");
@@ -85,8 +133,19 @@ export function PanelStatusV3ScreenshotsPage() {
   return (
     <div className="min-h-screen bg-slate-100 p-8 font-sans">
       <h1 className="mb-6 text-lg font-bold text-slate-800">Panel statusów — wdrożenie v3 (przykładowe dane)</h1>
+
+      <section className="mb-10" id="panel-status-layout-comparison">
+        <h2 className="mb-4 text-sm font-bold uppercase tracking-wider text-slate-600">
+          Porównanie layoutu — zamówienia vs zwroty
+        </h2>
+        <div className="flex flex-wrap items-start gap-8 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <ProductionShellSidebar title="Zamówienia" />
+          <ProductionShellSidebar title="Zwroty" operational />
+        </div>
+      </section>
+
       <div className="grid gap-8 xl:grid-cols-2">
-        <ScreenshotFrame title="1. Zamówienia">
+        <ScreenshotFrame title="1. Zamówienia (standalone)">
           <OrdersPanelStatusSidebar
             panelSummary={MOCK_SUMMARY}
             panelFilter={ordersFilter}

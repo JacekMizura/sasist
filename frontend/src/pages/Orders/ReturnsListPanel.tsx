@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { ChevronLeft, ChevronRight, Home, Package } from "lucide-react";
+import { ChevronRight, Home, Package } from "lucide-react";
 
 import { getShippingMethods, type ShippingMethodDto } from "../../api/shippingMethodsApi";
 import {
@@ -38,6 +38,7 @@ import {
   ORDERS_PANEL_GROUP_LABELS,
   type OrderPanelFilter,
 } from "../../components/orders/OrderStatusSidebar";
+import { PANEL_STATUS_SIDEBAR_PAGE_SHELL_CLASS } from "../../components/panel/panelStatusTreeStyles";
 import type { OrderUiMainGroup } from "../../types/orderUiStatus";
 import { PanelSidebarOperationalRow } from "../../components/panel/PanelSidebarOperationalRow";
 import { panelTreeCountClass } from "../../components/panel/panelStatusTreeStyles";
@@ -526,16 +527,8 @@ export default function ReturnsListPanel() {
               Statusy panelu
             </button>
             <aside
-              className={`hidden min-h-0 min-w-0 shrink-0 flex-col gap-2 lg:sticky lg:top-3 lg:z-30 lg:flex lg:max-h-[calc(100dvh-5.75rem)] lg:overflow-y-auto lg:overscroll-y-contain lg:rounded-xl lg:border lg:border-slate-100 lg:bg-white lg:p-3 lg:shadow-sm ${isStatusPanelCollapsed ? "lg:w-14" : "lg:w-[19.5rem]"}`}
+              className={`${PANEL_STATUS_SIDEBAR_PAGE_SHELL_CLASS} ${isStatusPanelCollapsed ? "lg:w-14" : "lg:w-[19.5rem]"}`}
             >
-              <button
-                type="button"
-                onClick={() => setIsStatusPanelCollapsed((v) => !v)}
-                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white hover:bg-slate-50"
-                aria-label={isStatusPanelCollapsed ? "Rozwiń panel statusów" : "Zwiń panel statusów"}
-              >
-                <ChevronLeft className={`h-4 w-4 transition-transform ${isStatusPanelCollapsed ? "rotate-180" : ""}`} />
-              </button>
               <OrderStatusSidebar
                 warehouseId={effectiveWarehouseId}
                 panelSummary={orderSummaryCast}
@@ -545,6 +538,7 @@ export default function ReturnsListPanel() {
                 chromeVariant="sellasist"
                 collapsed={isStatusPanelCollapsed}
                 parentScrollContainer
+                onToggleCollapsed={() => setIsStatusPanelCollapsed((v) => !v)}
                 manageStatusesHref="/orders/returns/panel-statuses"
                 returnsOperationalQueuesSlot={operationalQueuesSlot}
                 returnsOperationalQueuesCollapsedSlot={operationalQueuesCollapsedSlot}

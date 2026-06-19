@@ -21,6 +21,11 @@ const page = await browser.newPage({
 await page.goto(url, { waitUntil: "networkidle" });
 await page.waitForTimeout(500);
 
+const comparison = page.locator("#panel-status-layout-comparison");
+await comparison.screenshot({
+  path: path.join(outDir, "panel-status-v3-orders-vs-returns.png"),
+});
+
 const frames = page.locator("div").filter({ has: page.getByText("1. Zamówienia") }).first();
 await page.screenshot({
   path: path.join(outDir, "panel-status-v3-production-screenshots.png"),

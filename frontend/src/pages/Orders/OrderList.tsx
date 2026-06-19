@@ -4,7 +4,6 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   ArrowUpDown,
   ChevronDown,
-  ChevronLeft,
   ChevronRight,
   Download,
   Flag,
@@ -50,6 +49,7 @@ import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { dispatchOrdersOperationsUpdated } from "../wms/wmsRoutes";
 import { dispatchWmsShortagesUpdated } from "../../utils/wmsRefresh";
 import { OrderStatusSidebar, type OrderPanelFilter } from "../../components/orders/OrderStatusSidebar";
+import { PANEL_STATUS_SIDEBAR_PAGE_SHELL_CLASS } from "../../components/panel/panelStatusTreeStyles";
 import { deriveOrderListPaymentBadgeRow } from "../../utils/orderListPaymentBadge";
 import ExportModal from "../../components/exports/ExportModal";
 import { WMS_ROUTES } from "../wms/wmsRoutes";
@@ -939,16 +939,8 @@ export default function OrderList() {
                   Statusy panelu
                 </button>
                 <aside
-                  className={`hidden min-h-0 min-w-0 shrink-0 flex-col gap-2 lg:sticky lg:top-3 lg:z-30 lg:flex lg:max-h-[calc(100dvh-5.75rem)] lg:overflow-y-auto lg:overscroll-y-contain lg:border-r lg:border-slate-200/90 lg:bg-slate-50/95 lg:pb-2 lg:pr-2.5 lg:pt-2 lg:shadow-[4px_0_24px_-12px_rgba(15,23,42,0.12)] ${isStatusPanelCollapsed ? "lg:w-14" : "lg:w-[19.5rem]"}`}
+                  className={`${PANEL_STATUS_SIDEBAR_PAGE_SHELL_CLASS} ${isStatusPanelCollapsed ? "lg:w-14" : "lg:w-[19.5rem]"}`}
                 >
-                  <button
-                    type="button"
-                    onClick={() => setIsStatusPanelCollapsed((v) => !v)}
-                    className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white hover:bg-slate-100"
-                    aria-label={isStatusPanelCollapsed ? "Rozwiń panel statusów" : "Zwiń panel statusów"}
-                  >
-                    <ChevronLeft className={`h-4 w-4 transition-transform ${isStatusPanelCollapsed ? "rotate-180" : ""}`} />
-                  </button>
                   <OrderStatusSidebar
                     warehouseId={fulfillmentWarehouseFilter}
                     panelSummary={panelSummary}
@@ -958,6 +950,7 @@ export default function OrderList() {
                     chromeVariant="sellasist"
                     collapsed={isStatusPanelCollapsed}
                     parentScrollContainer
+                    onToggleCollapsed={() => setIsStatusPanelCollapsed((v) => !v)}
                   />
                 </aside>
                 {statusDrawerOpen ? (
