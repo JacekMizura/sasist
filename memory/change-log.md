@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-06-08 — Konfigurator statusów zwrotów (UI)
+
+- `/orders/returns/statuses`: układ 2-kolumnowy (grupy statusów + podgląd listy), tabela decyzji produktowych, modale edycji
+- `/orders/returns/panel-statuses` → przekierowanie na `/orders/returns/statuses`
+- Klasy/powody uszkodzeń w zwiniętej sekcji zaawansowanej (bez zmian API)
+
 ## 2026-06-08 — Zwroty: wspólny shell breadcrumb + zakładki
 
 - `ReturnsModuleLayout`: jeden `ModuleListBreadcrumb` (🏠 > Zamówienia > Zwroty) + `ReturnsModuleTabsStrip` dla wszystkich zakładek modułu

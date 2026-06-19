@@ -2,29 +2,17 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 
 import { getOfficeReturnModuleConfig, putOfficeReturnModuleConfig } from "../../api/returnModuleConfigApi";
-import { getReturnUiStatusSummary } from "../../api/returnUiStatusApi";
-import type { ReturnUiStatusPanelSummary } from "../../types/wmsReturn";
 import type { ReturnModuleConfigDto } from "../../types/returnModuleConfig";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { ReturnDetailLayoutEditor } from "./ReturnDetailLayoutEditor";
 import {
   CustomerReturnTypesEditor,
-  DamageClassesEditor,
-  DamageReasonsEditor,
   OpsSection,
   OrderSourcesEditor,
-  ProductDecisionsEditor,
-  ReturnsPanelStatusesOverview,
 } from "./returnsSettingsOps";
+import { ReturnsStatusesConfigurator } from "./returnsStatusesConfigurator/ReturnsStatusesConfigurator";
 
 export type ReturnsModuleSettingsTabId = "statusy" | "rodzaje" | "zrodla" | "konfigurator";
-
-function countPanelStatuses(summary: ReturnUiStatusPanelSummary | null): number {
-  if (!summary?.groups?.length) return 0;
-  let n = 0;
-  for (const g of summary.groups) n += g.sub_statuses?.length ?? 0;
-  return n;
-}
 
 type Props = { warehouseId: number | null; activeTab: ReturnsModuleSettingsTabId };
 
@@ -34,7 +22,6 @@ export default function ReturnsModuleSettingsPanel({ warehouseId, activeTab }: P
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [draft, setDraft] = useState<ReturnModuleConfigDto | null>(null);
   const [savedFingerprint, setSavedFingerprint] = useState("");
-  const [panelSnap, setPanelSnap] = useState<ReturnUiStatusPanelSummary | null>(null);
 
   const whOpt =
     warehouseId != null && Number.isFinite(warehouseId) && warehouseId > 0 ? Math.floor(warehouseId) : undefined;
@@ -43,17 +30,12 @@ export default function ReturnsModuleSettingsPanel({ warehouseId, activeTab }: P
     setLoading(true);
     setLoadErr(null);
     try {
-      const [cfg, panel] = await Promise.all([
-        getOfficeReturnModuleConfig({ tenantId: DAMAGE_TENANT_ID, warehouseId: whOpt }),
-        getReturnUiStatusSummary(DAMAGE_TENANT_ID, whOpt ?? undefined),
-      ]);
+      const cfg = await getOfficeReturnModuleConfig({ tenantId: DAMAGE_TENANT_ID, warehouseId: whOpt });
       setDraft(cfg);
       setSavedFingerprint(JSON.stringify(cfg));
-      setPanelSnap(panel);
     } catch {
       setDraft(null);
       setLoadErr("Nie udało się wczytać konfiguracji zwrotów.");
-      setPanelSnap(null);
     } finally {
       setLoading(false);
     }
@@ -120,12 +102,7 @@ export default function ReturnsModuleSettingsPanel({ warehouseId, activeTab }: P
       ) : null}
 
       {activeTab === "statusy" && cfg ? (
-        <div className="space-y-4">
-          <ReturnsPanelStatusesOverview panelSnap={panelSnap} count={countPanelStatuses(panelSnap)} />
-          <ProductDecisionsEditor cfg={cfg} setDraft={setDraft} />
-          <DamageClassesEditor cfg={cfg} setDraft={setDraft} />
-          <DamageReasonsEditor cfg={cfg} setDraft={setDraft} />
-        </div>
+        <ReturnsStatusesConfigurator warehouseId={warehouseId} cfg={cfg} setDraft={setDraft} />
       ) : null}
 
       {activeTab === "rodzaje" && cfg ? <CustomerReturnTypesEditor cfg={cfg} setDraft={setDraft} /> : null}
