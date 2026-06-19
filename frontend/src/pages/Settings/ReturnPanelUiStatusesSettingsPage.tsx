@@ -34,7 +34,6 @@ import { partitionStatusesBySubgroupForSettings, subgroupSectionTitle } from "..
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { tabsNavItemClassName } from "../../components/layout/TabsNav";
-import ReturnsModuleTabsStrip from "../Orders/ReturnsModuleTabsStrip";
 import { ReturnPanelSubgroupsManager } from "./ReturnPanelSubgroupsManager";
 
 const GROUP_ORDER: ReturnUiMainGroup[] = ["NEW", "IN_PROGRESS", "DONE"];
@@ -541,7 +540,6 @@ export default function ReturnPanelUiStatusesSettingsPage() {
   if (warehouseId == null) {
     return (
       <div className="w-full min-w-0 space-y-4">
-        <ReturnsModuleTabsStrip />
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
           Wybierz magazyn w górnym pasku.
         </div>
@@ -552,25 +550,7 @@ export default function ReturnPanelUiStatusesSettingsPage() {
   return (
     <div className="w-full min-w-0 space-y-6">
       <div>
-        <p className="text-sm text-slate-500">
-          <Link
-            to="/orders/list"
-            className="font-medium text-slate-700 underline decoration-slate-300 underline-offset-2 hover:text-slate-900"
-          >
-            Zamówienia
-          </Link>
-          <span className="mx-1.5 text-slate-300">/</span>
-          <Link
-            to="/orders/returns/statuses"
-            className="font-medium text-slate-700 underline decoration-slate-300 underline-offset-2 hover:text-slate-900"
-          >
-            Zwroty
-          </Link>
-          <span className="mx-1.5 text-slate-300">/</span>
-          <span className="font-medium text-slate-800">Statusy panelu</span>
-        </p>
-        <ReturnsModuleTabsStrip />
-        <h1 className="mt-2 text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">Statusy panelu — zwroty</h1>
+        <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">Statusy panelu — zwroty</h1>
         <p className="mt-1.5 text-sm leading-relaxed text-slate-600">
           Grupy główne są stałe (Nowe zwroty, W toku, Zakończone). Podgrupa opcjonalna — bez podgrupy statusy są od razu pod grupą. Przy zapisie czyszczone jest
           legacy <code className="text-xs">group_name</code>. Osobno od{" "}

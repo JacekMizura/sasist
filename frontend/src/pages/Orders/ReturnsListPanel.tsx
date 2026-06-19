@@ -39,7 +39,6 @@ import {
 } from "../../components/orders/OrderStatusSidebar";
 import {
   ModuleFilteredAllBanner,
-  ModuleListBreadcrumb,
   ModuleStatusSidebarShell,
   moduleListContentColumnClass,
   moduleListTwoColumnShellClass,
@@ -47,7 +46,6 @@ import {
 import type { OrderUiMainGroup } from "../../types/orderUiStatus";
 import { PanelSidebarOperationalRow } from "../../components/panel/PanelSidebarOperationalRow";
 import { panelTreeCountClass } from "../../components/panel/panelStatusTreeStyles";
-import ReturnsModuleTabsStrip from "./ReturnsModuleTabsStrip";
 
 function panelFilterToSidebarArg(f: OrderPanelFilter): WmsReturnsSidebarPanelArg {
   if (f === "all") return undefined;
@@ -502,10 +500,6 @@ export default function ReturnsListPanel() {
 
   return (
     <>
-      <ModuleListBreadcrumb items={[{ label: "Zamówienia", to: "/orders/list" }, { label: "Zwroty" }]} />
-
-      <ReturnsModuleTabsStrip />
-
       <div className={moduleListTwoColumnShellClass}>
         {effectiveWarehouseId != null ? (
           <ModuleStatusSidebarShell

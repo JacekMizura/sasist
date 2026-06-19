@@ -13,7 +13,6 @@ import type {
   ReturnStatusUpdatePayload,
 } from "../../types/wmsReturn";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
-import ReturnsModuleTabsStrip from "./ReturnsModuleTabsStrip";
 
 const COLOR_OPTIONS = [
   "blue",
@@ -168,7 +167,6 @@ export default function ReturnStatusesPage() {
 
   return (
     <div className="w-full min-w-0 max-w-none">
-      <ReturnsModuleTabsStrip />
       <h2 className="text-xl font-semibold text-slate-900">Statusy RMZ (workflow)</h2>
       <p className="mt-2 text-sm text-slate-600">
         Konfiguracja etykiet i kolorów dla dokumentów zwrotu. Logika aplikacji opiera się na polu typu (

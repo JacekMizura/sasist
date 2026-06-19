@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-06-08 — Zwroty: wspólny shell breadcrumb + zakładki
+
+- `ReturnsModuleLayout`: jeden `ModuleListBreadcrumb` (🏠 > Zamówienia > Zwroty) + `ReturnsModuleTabsStrip` dla wszystkich zakładek modułu
+- Usunięto lokalne duplikaty z `ReturnsListPanel`, `ReturnsModuleSettingsTabPage`, `ReturnStatusesPage`, `ReturnPanelUiStatusesSettingsPage`
+- Szczegół RMZ (`/orders/returns/:id`) bez zmian — własna ścieżka nawigacji w widoku szczegółu
+
 ## 2026-06-08 — Module list: Orders vs Returns UX (wiersze)
 
 - `ReturnsListProductCell`: klikalne rozwijanie `+X poz. ▼` / `Zwiń ▲` (stan lokalny, `stopPropagation`)

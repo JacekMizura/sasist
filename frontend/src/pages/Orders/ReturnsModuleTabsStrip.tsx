@@ -19,11 +19,15 @@ export const RETURNS_MODULE_TABS = [
   { path: `${BASE}/configurator`, label: "Konfigurator", end: true as const },
 ];
 
-/** Pasuje do listy zamówień: zakładki w treści strony, bez dodatkowej „aplikacji w aplikacji”. Ukrywane na szczegółach RMZ (`/orders/returns/:id`). */
+/** Ukrywane na szczegółach RMZ (`/orders/returns/:id`) — shell modułu pomija breadcrumb i zakładki. */
+export function isReturnsModuleDetailPath(pathname: string): boolean {
+  return /^\/orders\/returns\/\d+(\/|$)/.test(pathname);
+}
+
+/** Pasuje do listy zamówień: zakładki w treści strony, bez dodatkowej „aplikacji w aplikacji”. */
 export default function ReturnsModuleTabsStrip() {
   const { pathname } = useLocation();
-  const hideTabs = /^\/orders\/returns\/\d+(\/|$)/.test(pathname);
-  if (hideTabs) return null;
+  if (isReturnsModuleDetailPath(pathname)) return null;
 
   return (
     <TabsContainer className="mb-3 w-full [-webkit-overflow-scrolling:touch] pb-0 pt-0">
