@@ -1,26 +1,16 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import {
-  autoUpdate,
-  flip,
-  FloatingPortal,
-  offset,
-  shift,
-  useDismiss,
-  useFloating,
-  useInteractions,
-} from "@floating-ui/react";
-import {
   Activity,
-  ArrowDown,
   Calendar,
+  Check,
   ChevronDown,
+  Copy,
   FlaskConical,
   MousePointerClick,
   Plus,
   Save,
   Trash2,
-  GripVertical
 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -41,31 +31,29 @@ import type {
 import { loadActionGroups, newUid, saveActionGroups } from "../../utils/orderAutomationLocalStore";
 import {
   ORDER_AUTOMATION_CONDITION_FIELDS,
-  ORDER_AUTOMATION_EFFECT_KINDS,
-  ORDER_AUTOMATION_OPERATOR_LABELS,
+  ORDER_AUTOMATION_OPERATOR_UI,
+  buildConditionCategorySteps,
+  buildEffectCategorySteps,
   conditionFieldLabel,
-  effectKindLabel,
 } from "../../utils/orderAutomationCatalog";
+import { formatEffectPill } from "../../utils/orderAutomationPreview";
 import {
   decodeScheduleCron,
   defaultScheduleSpec,
   defaultTimezone,
   encodeScheduleCron,
   normalizeScheduleRows,
-  scheduleEnabledDayCount,
 } from "../../utils/orderAutomationSchedule";
 import { getManualIconComponent } from "@/modules/orders/automation/utils/orderAutomationManualIcons";
 import { getOrderUiStatusSummary } from "../../api/orderUiStatusApi";
 import type { OrderUiStatusPanelSummary } from "../../types/orderUiStatus";
 import { AutomationIconGridPicker } from "../../components/orders/automation/AutomationIconGridPicker";
+import { AutomationCategoryStepMenu } from "../../components/orders/automation/AutomationCategoryStepMenu";
 import { AutomationAnchorMenu, type AutomationAnchorMenuGroup } from "../../components/orders/automation/AutomationAnchorMenu";
 import { WmsOrderedStatusPopover } from "../../components/orders/automation/WmsOrderedStatusPopover";
-import {
-  EFFECT_BUSINESS_SIDEBAR,
-  renderAutomationEffectConfigEditor,
-} from "../../components/orders/automation/effects/orderAutomationEffectEditorRenderers";
+import { renderAutomationEffectConfigEditor } from "../../components/orders/automation/effects/orderAutomationEffectEditorRenderers";
 import { FlatPageSection } from "../../components/layout/FlatPageSection";
-import { flatSectionsStackClass, moduleSettingsPageShellClass } from "../../components/layout/flatSectionTokens";
+import { flatFormSectionsStackClass, flatSectionDividerClass, moduleSettingsPageShellClass } from "../../components/layout/flatSectionTokens";
 import { ModuleListBreadcrumb } from "../../components/listPage/moduleList";
 import { IntegrationsApiPanel } from "../Settings/returnsStatusesConfigurator/AdvancedSettingsPanel";
 import {
@@ -335,38 +323,8 @@ export default function OrderAutomationEditorPage() {
     return out;
   }, [statusSummary]);
 
-  const conditionFieldGroups: AutomationAnchorMenuGroup[] = useMemo(() => {
-    const byCat = new Map<string, typeof ORDER_AUTOMATION_CONDITION_FIELDS>();
-    for (const f of ORDER_AUTOMATION_CONDITION_FIELDS) {
-      if (!byCat.has(f.category)) byCat.set(f.category, []);
-      byCat.get(f.category)!.push(f);
-    }
-    return [...byCat.entries()].map(([title, items]) => ({
-      title,
-      id: title,
-      items: items.map((it) => ({
-        id: it.key,
-        label: it.label,
-        description: it.valueKind === "status" ? "Status panelu (WMS)" : undefined,
-        keywords: it.category,
-      })),
-    }));
-  }, []);
-
-  const effectKindGroups: AutomationAnchorMenuGroup[] = useMemo(
-    () => [
-      {
-        id: "fx",
-        title: "Efekty",
-        items: ORDER_AUTOMATION_EFFECT_KINDS.map((k) => ({
-          id: k.kind,
-          label: k.label,
-          description: k.category,
-        })),
-      },
-    ],
-    []
-  );
+  const conditionCategorySteps = useMemo(() => buildConditionCategorySteps(), []);
+  const effectCategorySteps = useMemo(() => buildEffectCategorySteps(), []);
 
   const groupPickerGroups: AutomationAnchorMenuGroup[] = useMemo(() => {
     const items: AutomationAnchorMenuGroup["items"] = groupOptions.map((g) => ({ id: g, label: g }));
@@ -407,6 +365,28 @@ export default function OrderAutomationEditorPage() {
   const addEffect = (kind: AutomationEffectKind) => {
     const base: AutomationEffect = { uid: newUid("e"), kind, payload: payloadForKind(kind) };
     setDraft((d) => ({ ...d, effects: [...d.effects, base] }));
+  };
+
+  const duplicateCondition = (c: AutomationCondition) => {
+    const copy: AutomationCondition = { ...c, uid: newUid("c") };
+    setDraft((d) => {
+      const idx = d.conditions.findIndex((x) => x.uid === c.uid);
+      if (idx < 0) return d;
+      const next = [...d.conditions];
+      next.splice(idx + 1, 0, copy);
+      return normalizeRule({ ...d, conditions: next });
+    });
+  };
+
+  const duplicateEffect = (e: AutomationEffect) => {
+    const copy: AutomationEffect = { uid: newUid("e"), kind: e.kind, payload: { ...e.payload } };
+    setDraft((d) => {
+      const idx = d.effects.findIndex((x) => x.uid === e.uid);
+      if (idx < 0) return d;
+      const next = [...d.effects];
+      next.splice(idx + 1, 0, copy);
+      return { ...d, effects: next };
+    });
   };
 
   const patchEffectKind = (uid: string, kind: AutomationEffectKind) => {
@@ -499,8 +479,8 @@ export default function OrderAutomationEditorPage() {
         <h1 className="text-2xl font-semibold text-slate-900">{isNew ? "Nowa akcja automatyczna" : "Edycja akcji automatycznej"}</h1>
       </div>
 
-      <div className={flatSectionsStackClass}>
-        <FlatPageSection title="Nazwa akcji">
+      <div className={flatFormSectionsStackClass}>
+        <FlatPageSection title="Nazwa akcji" dense>
           <div className="grid gap-5 sm:grid-cols-12 sm:items-end">
             <div className="sm:col-span-6">
               <label className={oaLbl}>
@@ -542,7 +522,7 @@ export default function OrderAutomationEditorPage() {
           </div>
         </FlatPageSection>
 
-        <FlatPageSection title="Wyzwalacze">
+        <FlatPageSection title="Wyzwalacze" dense>
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
@@ -708,170 +688,212 @@ export default function OrderAutomationEditorPage() {
           </IntegrationsApiPanel>
         </FlatPageSection>
 
-        <FlatPageSection
-          title="Warunki"
-          action={
-            <button type="button" className={`${oaBtn} gap-1.5`} ref={condAddRef} onClick={() => setCondMenuOpen(true)}>
-              <Plus className="h-4 w-4" /> Dodaj warunek
-            </button>
-          }
-        >
-          {draft.conditions.length === 0 ? (
-            <p className="text-sm text-slate-500">Brak warunków — akcja wykona się zawsze, gdy zadziała wyzwalacz.</p>
-          ) : (
-            <ul className="divide-y divide-gray-200">
-              {draft.conditions.map((c, idx) => {
-                const meta = ORDER_AUTOMATION_CONDITION_FIELDS.find((f) => f.key === c.fieldKey);
-                const stName = c.fieldKey === "order_status" && c.value && statusNameById.has(Number(c.value)) ? statusNameById.get(Number(c.value))! : null;
-                const join = c.joinToNext ?? "and";
-                const isLast = idx >= draft.conditions.length - 1;
+        <section className="space-y-4">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">Jeśli → To</h2>
+            <p className="mt-1 text-sm text-slate-500">Spełnione warunki po lewej — wykonywane akcje po prawej.</p>
+          </div>
+          <div className={flatSectionDividerClass} aria-hidden />
 
-                return (
-                  <li key={c.uid} className="py-4 first:pt-0">
-                    <div className="mb-3 flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2 text-slate-500">
-                        <GripVertical className="h-4 w-4" aria-hidden />
-                        <span className="text-xs font-medium text-slate-500">Warunek {idx + 1}</span>
-                      </div>
-                      <button
-                        type="button"
-                        className={oaIconGhost}
-                        onClick={() => setDraft((d) => normalizeRule({ ...d, conditions: d.conditions.filter((x) => x.uid !== c.uid) }))}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                    <div className="flex flex-col gap-2 lg:flex-row">
-                      <button
-                        type="button"
-                        className={`${oaInp} flex flex-1 items-center justify-between text-left`}
-                        onClick={(e) => {
-                          condFieldAnchorRef.current = e.currentTarget;
-                          setOpenConditionFieldFor(c.uid);
-                        }}
-                      >
-                        <span className="truncate">{conditionFieldLabel(c.fieldKey)}</span>
-                        <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-                      </button>
-                      <select
-                        className={`${oaInp} lg:w-36`}
-                        value={c.operator}
-                        onChange={(e) => setDraft((d) => normalizeRule({ ...d, conditions: d.conditions.map((x) => x.uid === c.uid ? { ...x, operator: e.target.value as AutomationConditionOp } : x) }))}
-                      >
-                        {ops.map((op) => (
-                          <option key={op} value={op}>{ORDER_AUTOMATION_OPERATOR_LABELS[op] ?? op}</option>
-                        ))}
-                      </select>
-                      <div className="min-w-0 flex-1">
-                        {meta?.valueKind === "status" ? (
+          <div className="grid items-start gap-8 lg:grid-cols-2 lg:gap-0">
+            {/* Warunki */}
+            <div className="min-w-0 lg:border-r lg:border-gray-200 lg:pr-8">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700">Warunki</h3>
+                <button type="button" className={`${oaBtn} gap-1.5 text-xs`} ref={condAddRef} onClick={() => setCondMenuOpen(true)}>
+                  <Plus className="h-3.5 w-3.5" /> Dodaj warunek
+                </button>
+              </div>
+
+              {draft.conditions.length === 0 ? (
+                <div className="py-4">
+                  <p className="text-sm text-slate-500">Brak warunków — reguła wykona się zawsze po wyzwalaczu.</p>
+                  <button type="button" className={`${oaBtnGhost} mt-3 max-w-xs`} onClick={() => setCondMenuOpen(true)}>
+                    <Plus className="h-4 w-4" /> Dodaj warunek
+                  </button>
+                </div>
+              ) : (
+                <ul className="space-y-0">
+                  {draft.conditions.map((c, idx) => {
+                    const meta = ORDER_AUTOMATION_CONDITION_FIELDS.find((f) => f.key === c.fieldKey);
+                    const stName =
+                      c.fieldKey === "order_status" && c.value && statusNameById.has(Number(c.value))
+                        ? statusNameById.get(Number(c.value))!
+                        : null;
+                    const join = c.joinToNext ?? "and";
+                    const isLast = idx >= draft.conditions.length - 1;
+
+                    return (
+                      <li key={c.uid}>
+                        <div className="flex flex-wrap items-center gap-1.5 py-2">
                           <button
                             type="button"
-                            className={`${oaInp} w-full text-left`}
-                            onClick={(e) => openStatus(e.currentTarget, { mode: "cond", uid: c.uid })}
+                            className={`${oaInpDense} min-w-[7.5rem] flex-1 text-left`}
+                            onClick={(e) => {
+                              condFieldAnchorRef.current = e.currentTarget;
+                              setOpenConditionFieldFor(c.uid);
+                            }}
                           >
-                            {stName ? <span className="truncate">{stName}</span> : <span className="text-slate-400">Wybierz status…</span>}
+                            <span className="truncate">{conditionFieldLabel(c.fieldKey)}</span>
                           </button>
-                        ) : (
-                          <input
-                            className={oaInp}
-                            value={c.value}
-                            placeholder="Wartość…"
-                            onChange={(e) => setDraft((d) => normalizeRule({ ...d, conditions: d.conditions.map((x) => x.uid === c.uid ? { ...x, value: e.target.value } : x) }))}
-                          />
-                        )}
-                      </div>
-                    </div>
-                    {!isLast ? (
-                      <div className="mt-3">
-                        <select
-                          className={`${oaInpDense} w-auto min-w-[5rem] font-medium`}
-                          value={join}
-                          onChange={(e) => setJoinToNext(c.uid, e.target.value as AutomationConditionJoin)}
-                        >
-                          <option value="and">ORAZ</option>
-                          <option value="or">LUB</option>
-                        </select>
-                      </div>
-                    ) : null}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-          {draft.conditions.length > 0 ? (
-            <button type="button" className={`${oaBtnGhost} mt-4`} onClick={() => setCondMenuOpen(true)}>
-              <Plus className="h-4 w-4" /> Dodaj warunek
-            </button>
-          ) : null}
-        </FlatPageSection>
+                          <select
+                            className={`${oaInpDense} w-[7.25rem] shrink-0`}
+                            value={c.operator}
+                            onChange={(e) =>
+                              setDraft((d) =>
+                                normalizeRule({
+                                  ...d,
+                                  conditions: d.conditions.map((x) =>
+                                    x.uid === c.uid ? { ...x, operator: e.target.value as AutomationConditionOp } : x,
+                                  ),
+                                }),
+                              )
+                            }
+                          >
+                            {ops.map((op) => (
+                              <option key={op} value={op}>
+                                {ORDER_AUTOMATION_OPERATOR_UI[op] ?? op}
+                              </option>
+                            ))}
+                          </select>
+                          <div className="min-w-[6rem] flex-1">
+                            {meta?.valueKind === "status" ? (
+                              <button
+                                type="button"
+                                className={`${oaInpDense} w-full text-left`}
+                                onClick={(e) => openStatus(e.currentTarget, { mode: "cond", uid: c.uid })}
+                              >
+                                {stName ? (
+                                  <span className="truncate">{stName}</span>
+                                ) : (
+                                  <span className="text-slate-400">Wybierz…</span>
+                                )}
+                              </button>
+                            ) : (
+                              <input
+                                className={oaInpDense}
+                                value={c.value}
+                                placeholder="Wartość…"
+                                onChange={(e) =>
+                                  setDraft((d) =>
+                                    normalizeRule({
+                                      ...d,
+                                      conditions: d.conditions.map((x) =>
+                                        x.uid === c.uid ? { ...x, value: e.target.value } : x,
+                                      ),
+                                    }),
+                                  )
+                                }
+                              />
+                            )}
+                          </div>
+                          <button type="button" className={oaIconGhost} title="Duplikuj warunek" onClick={() => duplicateCondition(c)}>
+                            <Copy className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            className={`${oaIconGhost} hover:text-red-600`}
+                            title="Usuń warunek"
+                            onClick={() =>
+                              setDraft((d) => normalizeRule({ ...d, conditions: d.conditions.filter((x) => x.uid !== c.uid) }))
+                            }
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                        {!isLast ? (
+                          <div className="flex items-center gap-2 py-1">
+                            <div className="h-px flex-1 bg-gray-200" aria-hidden />
+                            <select
+                              className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-700 outline-none focus:border-slate-400"
+                              value={join}
+                              onChange={(e) => setJoinToNext(c.uid, e.target.value as AutomationConditionJoin)}
+                              aria-label="Łącznik warunków"
+                            >
+                              <option value="and">ORAZ</option>
+                              <option value="or">LUB</option>
+                            </select>
+                            <div className="h-px flex-1 bg-gray-200" aria-hidden />
+                          </div>
+                        ) : null}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
 
-        <FlatPageSection
-          title="Akcje"
-          action={
-            <button type="button" className={`${oaBtn} gap-1.5`} ref={effAddRef} onClick={() => setEffMenuOpen(true)}>
-              <Plus className="h-4 w-4" /> Dodaj akcję
-            </button>
-          }
-        >
-          {draft.effects.length === 0 ? (
-            <p className="text-sm text-slate-500">Dodaj co najmniej jedną akcję wykonywaną po spełnieniu warunków.</p>
-          ) : (
-            <ul className="divide-y divide-gray-200">
-              {draft.effects.map((e, eidx) => {
-                const meta = EFFECT_BUSINESS_SIDEBAR[e.kind as AutomationEffectKind] ?? EFFECT_BUSINESS_SIDEBAR.wms_action;
-                const Icon = meta.Icon;
-                const isLast = eidx >= draft.effects.length - 1;
+            {/* Akcje */}
+            <div className="min-w-0 lg:pl-8">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700">Akcje</h3>
+                <button type="button" className={`${oaBtn} gap-1.5 text-xs`} ref={effAddRef} onClick={() => setEffMenuOpen(true)}>
+                  <Plus className="h-3.5 w-3.5" /> Dodaj akcję
+                </button>
+              </div>
 
-                return (
-                  <li key={e.uid} className="py-4 first:pt-0">
-                    <div className="mb-3 flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <GripVertical className="h-4 w-4 text-slate-300" aria-hidden />
-                        <span className="text-xs font-medium text-slate-500">Akcja {eidx + 1}</span>
-                      </div>
-                      <button type="button" className={oaIconGhost} onClick={() => setDraft((d) => ({ ...d, effects: d.effects.filter((x) => x.uid !== e.uid) }))}>
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                    <div className="flex flex-col gap-3 lg:flex-row">
-                      <button
-                        type="button"
-                        className={`${oaInp} flex lg:w-52 items-center gap-2 text-left`}
-                        onClick={(ev) => {
-                          effectKindAnchorRef.current = ev.currentTarget;
-                          setOpenEffectKindFor(e.uid);
-                        }}
-                      >
-                        <Icon className="h-4 w-4 shrink-0 text-slate-500" />
-                        <span className="truncate font-medium">{meta.title}</span>
-                      </button>
-                      <div className="min-w-0 flex-1">
-                        {renderAutomationEffectConfigEditor({
-                          kind: e.kind,
-                          effect: e,
-                          statusOptions: panelStatusOptions,
-                          patchPayload: (partial) => patchEffectPayload(e.uid, partial),
-                        })}
-                      </div>
-                    </div>
-                    {!isLast ? (
-                      <div className="mt-3 flex justify-center">
-                        <ArrowDown className="h-4 w-4 text-slate-300" aria-hidden />
-                      </div>
-                    ) : null}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-          {draft.effects.length > 0 ? (
-            <button type="button" className={`${oaBtnGhost} mt-4`} onClick={() => setEffMenuOpen(true)}>
-              <Plus className="h-4 w-4" /> Dodaj akcję
-            </button>
-          ) : null}
-        </FlatPageSection>
+              {draft.effects.length === 0 ? (
+                <div className="py-4">
+                  <p className="text-sm text-slate-500">Dodaj co najmniej jedną akcję wykonywaną po spełnieniu warunków.</p>
+                  <button type="button" className={`${oaBtnGhost} mt-3 max-w-xs`} onClick={() => setEffMenuOpen(true)}>
+                    <Plus className="h-4 w-4" /> Dodaj akcję
+                  </button>
+                </div>
+              ) : (
+                <ul className="divide-y divide-gray-200">
+                  {draft.effects.map((e) => {
+                    const summary = formatEffectPill(e, statusNameById);
 
-        <FlatPageSection title="Historia zmian">
+                    return (
+                      <li key={e.uid} className="py-3 first:pt-0">
+                        <div className="flex items-start gap-2">
+                          <Check className="mt-2 h-4 w-4 shrink-0 text-emerald-600" strokeWidth={2.5} aria-hidden />
+                          <div className="min-w-0 flex-1">
+                            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                              <button
+                                type="button"
+                                className="text-left text-sm font-medium text-slate-900 hover:text-slate-700"
+                                onClick={(ev) => {
+                                  effectKindAnchorRef.current = ev.currentTarget;
+                                  setOpenEffectKindFor(e.uid);
+                                }}
+                              >
+                                {summary}
+                              </button>
+                              <div className="flex shrink-0 items-center gap-0.5">
+                                <button type="button" className={oaIconGhost} title="Duplikuj akcję" onClick={() => duplicateEffect(e)}>
+                                  <Copy className="h-4 w-4" />
+                                </button>
+                                <button
+                                  type="button"
+                                  className={`${oaIconGhost} hover:text-red-600`}
+                                  title="Usuń akcję"
+                                  onClick={() => setDraft((d) => ({ ...d, effects: d.effects.filter((x) => x.uid !== e.uid) }))}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </div>
+                            </div>
+                            <div className="mt-2">
+                              {renderAutomationEffectConfigEditor({
+                                kind: e.kind,
+                                effect: e,
+                                statusOptions: panelStatusOptions,
+                                patchPayload: (partial) => patchEffectPayload(e.uid, partial),
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          </div>
+        </section>
+
+        <FlatPageSection title="Historia zmian" dense>
           <div className={moduleListTableScrollClass}>
             <table className={moduleListTableClass}>
               <thead className={moduleListTheadClass}>
@@ -924,41 +946,46 @@ export default function OrderAutomationEditorPage() {
       </div>
 
       {/* MENU I POPOVERY */}
-      <AutomationAnchorMenu
+      <AutomationCategoryStepMenu
         open={condMenuOpen}
         anchorRef={condAddRef}
-        title="Nowy warunek"
-        groups={conditionFieldGroups}
+        title="Dodaj warunek"
+        categories={conditionCategorySteps}
         onClose={() => setCondMenuOpen(false)}
         onPick={(id) => addCondition(id)}
       />
-      <AutomationAnchorMenu
+      <AutomationCategoryStepMenu
         open={effMenuOpen}
         anchorRef={effAddRef}
-        title="Rodzaj efektu"
-        groups={effectKindGroups}
+        title="Dodaj akcję"
+        categories={effectCategorySteps}
         onClose={() => setEffMenuOpen(false)}
         onPick={(id) => addEffect(id as AutomationEffectKind)}
       />
-      <AutomationAnchorMenu
+      <AutomationCategoryStepMenu
         open={openConditionFieldFor !== null}
         anchorRef={condFieldAnchorRef}
         title="Wybierz pole"
-        groups={conditionFieldGroups}
+        categories={conditionCategorySteps}
         onClose={() => setOpenConditionFieldFor(null)}
         onPick={(id) => {
           const uid = openConditionFieldFor;
           if (uid) {
-            setDraft((d) => normalizeRule({ ...d, conditions: d.conditions.map((x) => (x.uid === uid ? { ...x, fieldKey: id, value: "" } : x)) }));
+            setDraft((d) =>
+              normalizeRule({
+                ...d,
+                conditions: d.conditions.map((x) => (x.uid === uid ? { ...x, fieldKey: id, value: "" } : x)),
+              }),
+            );
           }
           setOpenConditionFieldFor(null);
         }}
       />
-      <AutomationAnchorMenu
+      <AutomationCategoryStepMenu
         open={openEffectKindFor !== null}
         anchorRef={effectKindAnchorRef}
-        title="Rodzaj efektu"
-        groups={effectKindGroups}
+        title="Zmień akcję"
+        categories={effectCategorySteps}
         onClose={() => setOpenEffectKindFor(null)}
         onPick={(id) => {
           const uid = openEffectKindFor;

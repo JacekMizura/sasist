@@ -58,3 +58,73 @@ export function conditionFieldLabel(key: string): string {
 export function effectKindLabel(kind: AutomationEffectKind): string {
   return ORDER_AUTOMATION_EFFECT_KINDS.find((k) => k.kind === kind)?.label ?? kind;
 }
+
+/** Kolejność kategorii w pickerze warunków (krok 1 → pola). */
+export const CONDITION_CATEGORY_ORDER = [
+  "Zamówienie",
+  "Klient",
+  "Wysyłka",
+  "Płatności",
+  "Produkty",
+  "WMS",
+  "Dokumenty",
+  "Allegro",
+  "Integracje",
+  "Pola własne",
+] as const;
+
+export function conditionCategoryDisplayLabel(category: string): string {
+  if (category === "Płatności") return "Płatność";
+  return category;
+}
+
+export type AutomationPickerCategory = {
+  id: string;
+  label: string;
+  items: { id: string; label: string; description?: string }[];
+};
+
+export function buildConditionCategorySteps(): AutomationPickerCategory[] {
+  const byCat = new Map<string, AutomationPickerCategory["items"]>();
+  for (const f of ORDER_AUTOMATION_CONDITION_FIELDS) {
+    if (!byCat.has(f.category)) byCat.set(f.category, []);
+    byCat.get(f.category)!.push({ id: f.key, label: f.label });
+  }
+  const out: AutomationPickerCategory[] = [];
+  const seen = new Set<string>();
+  for (const cat of CONDITION_CATEGORY_ORDER) {
+    const items = byCat.get(cat);
+    if (!items?.length) continue;
+    out.push({ id: cat, label: conditionCategoryDisplayLabel(cat), items });
+    seen.add(cat);
+  }
+  for (const [cat, items] of byCat.entries()) {
+    if (seen.has(cat) || !items.length) continue;
+    out.push({ id: cat, label: conditionCategoryDisplayLabel(cat), items });
+  }
+  return out;
+}
+
+/** Kolejność kategorii w pickerze akcji. */
+export const EFFECT_CATEGORY_ORDER = ["Zamówienie", "Komunikacja", "Dokumenty", "Wysyłka", "WMS"] as const;
+
+export function buildEffectCategorySteps(): AutomationPickerCategory[] {
+  const byCat = new Map<string, AutomationPickerCategory["items"]>();
+  for (const e of ORDER_AUTOMATION_EFFECT_KINDS) {
+    if (!byCat.has(e.category)) byCat.set(e.category, []);
+    byCat.get(e.category)!.push({ id: e.kind, label: e.label });
+  }
+  const out: AutomationPickerCategory[] = [];
+  const seen = new Set<string>();
+  for (const cat of EFFECT_CATEGORY_ORDER) {
+    const items = byCat.get(cat);
+    if (!items?.length) continue;
+    out.push({ id: cat, label: cat, items });
+    seen.add(cat);
+  }
+  for (const [cat, items] of byCat.entries()) {
+    if (seen.has(cat) || !items.length) continue;
+    out.push({ id: cat, label: cat, items });
+  }
+  return out;
+}
