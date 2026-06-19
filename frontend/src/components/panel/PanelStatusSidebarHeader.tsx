@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import { ChevronLeft } from "lucide-react";
 
+import { flatSectionDividerClass } from "../layout/flatSectionTokens";
+
 export function PanelStatusSidebarCollapseButton({
   collapsed,
   onToggle,
@@ -34,20 +36,23 @@ export function PanelStatusSidebarHeader({
   onToggleCollapsed,
 }: PanelStatusSidebarHeaderProps) {
   return (
-    <div className={`mb-2 flex items-center gap-2 ${collapsed ? "justify-end" : "justify-between"}`}>
-      {!collapsed ? (
-        <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-500">{title}</h2>
-      ) : (
-        <span className="sr-only">{title}</span>
-      )}
-      {(titleTrailing != null || onToggleCollapsed != null) && (
-        <div className="ml-auto flex shrink-0 items-center gap-1.5">
-          {titleTrailing}
-          {onToggleCollapsed ? (
-            <PanelStatusSidebarCollapseButton collapsed={!!collapsed} onToggle={onToggleCollapsed} />
-          ) : null}
-        </div>
-      )}
+    <div className={`mb-3 space-y-3 ${collapsed ? "" : ""}`}>
+      <div className={`flex items-center gap-2 ${collapsed ? "justify-end" : "justify-between"}`}>
+        {!collapsed ? (
+          <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-500">{title}</h2>
+        ) : (
+          <span className="sr-only">{title}</span>
+        )}
+        {(titleTrailing != null || onToggleCollapsed != null) && (
+          <div className="ml-auto flex shrink-0 items-center gap-1.5">
+            {titleTrailing}
+            {onToggleCollapsed ? (
+              <PanelStatusSidebarCollapseButton collapsed={!!collapsed} onToggle={onToggleCollapsed} />
+            ) : null}
+          </div>
+        )}
+      </div>
+      {!collapsed ? <div className={flatSectionDividerClass} aria-hidden /> : null}
     </div>
   );
 }

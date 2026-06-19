@@ -2,10 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 
 import { getOfficeReturnModuleConfig, putOfficeReturnModuleConfig } from "../../api/returnModuleConfigApi";
+import { flatSectionDividerClass } from "../../components/layout/flatSectionTokens";
 import type { ReturnModuleConfigDto } from "../../types/returnModuleConfig";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { ReturnDetailLayoutEditor } from "./ReturnDetailLayoutEditor";
-import { OpsSection } from "./returnsSettingsOps";
 import { ReturnsDictionariesConfigurator } from "./returnsDictionariesConfigurator/ReturnsDictionariesConfigurator";
 import { ReturnsStatusesConfigurator } from "./returnsStatusesConfigurator/ReturnsStatusesConfigurator";
 
@@ -73,16 +73,12 @@ export default function ReturnsModuleSettingsPanel({ warehouseId, activeTab }: P
 
   const saveStrip =
     activeTab === "slowniki" ? (
-      <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50/90 px-3 py-2.5">
-        <p className="text-sm text-slate-600">
-          {saving ? "Zapisywanie…" : "Zmiany w słownikach zapisują się automatycznie."}
-        </p>
+      <div className="border-t border-gray-200 pt-5">
+        <p className="text-sm text-slate-500">{saving ? "Zapisywanie…" : "Zmiany w słownikach zapisują się automatycznie."}</p>
       </div>
     ) : (
-      <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50/90 px-3 py-2.5">
-        <p className="text-sm text-slate-600">
-          {dirty ? "Masz niezapisane zmiany." : "Zsynchronizowano z serwerem."}
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 pt-5">
+        <p className="text-sm text-slate-500">{dirty ? "Masz niezapisane zmiany." : "Zsynchronizowano z serwerem."}</p>
         <button
           type="button"
           disabled={!dirty || saving || loading || draft == null}
@@ -123,15 +119,10 @@ export default function ReturnsModuleSettingsPanel({ warehouseId, activeTab }: P
       ) : null}
 
       {activeTab === "konfigurator" && cfg ? (
-        <OpsSection
-          title="Układ strony szczegółów zwrotu"
-          description="Ułóż bloki dokładnie tak, jak operator ma je zobaczyć po wejściu w zwrot — przeciąganie od razu na podglądzie dwóch kolumn."
-        >
-          <ReturnDetailLayoutEditor
-            layout={cfg.detail_layout}
-            onChange={(next) => setDraft({ ...cfg, detail_layout: next })}
-          />
-        </OpsSection>
+        <div className="space-y-5">
+          <div className={flatSectionDividerClass} aria-hidden />
+          <ReturnDetailLayoutEditor layout={cfg.detail_layout} onChange={(next) => setDraft({ ...cfg, detail_layout: next })} />
+        </div>
       ) : null}
 
       {saveStrip}

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 
+import { flatSectionDividerClass, flatSectionsStackClass } from "../../../components/layout/flatSectionTokens";
 import type { ReturnModuleConfigDto } from "../../../types/returnModuleConfig";
 import { DictionaryListCard } from "./DictionaryListCard";
 import { OrderSourceEntryModal, ReturnTypeEntryModal } from "./DictionaryEntryModal";
@@ -103,18 +104,15 @@ export function ReturnsDictionariesConfigurator({ cfg, saving = false, onPersist
   };
 
   return (
-    <div className="space-y-6">
-      <header>
+    <div className="space-y-8">
+      <header className="space-y-4">
         <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">Słowniki zwrotów</h1>
-        <p className="mt-1.5 max-w-3xl text-sm leading-relaxed text-slate-600">
-          Powody zwrotu i kanały sprzedaży w formularzu klienta. Zmiany zapisują się automatycznie.
-        </p>
+        <div className={flatSectionDividerClass} aria-hidden />
       </header>
 
-      <div className="space-y-6">
+      <div className={flatSectionsStackClass}>
         <DictionaryListCard
           title="Rodzaje zwrotów"
-          description="Powody wybierane przez klienta podczas tworzenia zwrotu."
           addLabel="Dodaj rodzaj"
           kind="return_type"
           rows={cfg.customer_return_types}
@@ -129,7 +127,6 @@ export function ReturnsDictionariesConfigurator({ cfg, saving = false, onPersist
         />
         <DictionaryListCard
           title="Źródła zamówień"
-          description="Kanały sprzedaży dostępne przy tworzeniu zwrotu."
           addLabel="Dodaj źródło"
           kind="source"
           rows={cfg.order_sources}

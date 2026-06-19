@@ -1,5 +1,6 @@
 import { useState, type Dispatch, type SetStateAction } from "react";
 
+import { flatSectionsStackClass } from "../../../components/layout/flatSectionTokens";
 import type { ReturnModuleConfigDto } from "../../../types/returnModuleConfig";
 import type { ReturnUiMainGroup, ReturnUiStatusWithCount } from "../../../types/wmsReturn";
 import { DamageCardsSection } from "./DamageCardsSection";
@@ -35,7 +36,7 @@ export function ReturnsStatusesConfigurator({ warehouseId, cfg, setDraft }: Prop
   }
 
   return (
-    <div className="space-y-12">
+    <div className={flatSectionsStackClass}>
       {panel.err ? (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{panel.err}</div>
       ) : null}

@@ -1,8 +1,9 @@
 import { Pencil, Plus } from "lucide-react";
 
+import { FlatColumnHeader } from "../../../components/layout/FlatPageSection";
 import type { ReturnUiMainGroup, ReturnUiPanelSubgroupRead, ReturnUiStatusPanelSummary, ReturnUiStatusWithCount } from "../../../types/wmsReturn";
 import { partitionStatusesBySubgroupForSettings } from "../../../utils/panelUiStatusSettingsTree";
-import { LIST_LABEL_CARD_TITLE, RETURN_MAIN_GROUP_DOT, RETURN_MAIN_GROUP_ORDER } from "./constants";
+import { LIST_LABEL_CARD_TITLE, RETURN_MAIN_GROUP_ORDER } from "./constants";
 import { ConfiguratorSectionShell } from "./ConfiguratorSectionShell";
 
 type Props = {
@@ -67,14 +68,16 @@ function ListLabelGroupColumn({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2">
-        <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${RETURN_MAIN_GROUP_DOT[mainGroup]}`} aria-hidden />
-        <h3 className="text-sm font-bold uppercase tracking-wide text-slate-800">{LIST_LABEL_CARD_TITLE[mainGroup]}</h3>
-        {block?.total_count != null ? (
-          <span className="text-xs text-slate-400">({block.total_count})</span>
-        ) : null}
-      </div>
+      <FlatColumnHeader
+        title={LIST_LABEL_CARD_TITLE[mainGroup]}
+        action={
+          block?.total_count != null ? (
+            <span className="text-xs tabular-nums text-slate-400">{block.total_count}</span>
+          ) : null
+        }
+      />
 
+      <div className="space-y-4 pt-1">
       {subgroupBuckets.map((bucket) => (
         <div key={bucket.subgroupKey}>
           <p className="text-xs font-semibold text-slate-500">{bucket.subgroupKey}</p>
@@ -116,6 +119,7 @@ function ListLabelGroupColumn({
         <Plus className="h-4 w-4" strokeWidth={2} aria-hidden />
         Dodaj etykietę
       </button>
+      </div>
     </div>
   );
 }

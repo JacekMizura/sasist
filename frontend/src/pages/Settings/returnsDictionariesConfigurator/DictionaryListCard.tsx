@@ -11,13 +11,14 @@ import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } 
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, Pencil, Plus, Trash2 } from "lucide-react";
 
+import { FlatPageSection } from "../../../components/layout/FlatPageSection";
 import type { ReturnCustomerReturnTypeDto, ReturnOrderSourceDto } from "../../../types/returnModuleConfig";
 import { OrderSourceLogo } from "./OrderSourceLogo";
 import type { DictionaryKind, DictionaryRow } from "./constants";
 
 type Props = {
   title: string;
-  description: string;
+  description?: string;
   addLabel: string;
   kind: DictionaryKind;
   rows: DictionaryRow[];
@@ -56,12 +57,10 @@ export function DictionaryListCard({
   };
 
   return (
-    <section className="rounded-xl border border-slate-200/90 bg-white shadow-sm">
-      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 px-4 py-3">
-        <div>
-          <h3 className="text-lg font-semibold tracking-tight text-slate-900">{title}</h3>
-          <p className="mt-1 text-sm text-slate-500">{description}</p>
-        </div>
+    <FlatPageSection
+      title={title}
+      description={description}
+      action={
         <button
           type="button"
           disabled={busy}
@@ -71,10 +70,11 @@ export function DictionaryListCard({
           <Plus className="h-4 w-4" strokeWidth={2} aria-hidden />
           {addLabel}
         </button>
-      </header>
+      }
+    >
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <SortableContext items={ids} strategy={verticalListSortingStrategy}>
-          <ul className="divide-y divide-slate-100 p-2">
+          <ul className="divide-y divide-gray-200">
             {sorted.map((row) => (
               <SortableDictionaryRow
                 key={`${kind}:${row.code}`}
@@ -88,12 +88,12 @@ export function DictionaryListCard({
               />
             ))}
             {sorted.length === 0 ? (
-              <li className="px-3 py-8 text-center text-sm text-slate-400">Brak pozycji — dodaj pierwszą.</li>
+              <li className="py-8 text-center text-sm text-slate-400">Brak pozycji — dodaj pierwszą.</li>
             ) : null}
           </ul>
         </SortableContext>
       </DndContext>
-    </section>
+    </FlatPageSection>
   );
 }
 
@@ -125,7 +125,7 @@ function SortableDictionaryRow({
     <li
       ref={setNodeRef}
       style={style}
-      className="flex flex-wrap items-center gap-3 rounded-lg px-2 py-2.5 hover:bg-slate-50/80 sm:flex-nowrap"
+      className="flex flex-wrap items-center gap-3 py-3 hover:bg-slate-50/60 sm:flex-nowrap"
     >
       <button
         type="button"
@@ -139,9 +139,7 @@ function SortableDictionaryRow({
         <GripVertical className="h-4 w-4" strokeWidth={2} aria-hidden />
       </button>
 
-      {kind === "source" ? (
-        <OrderSourceLogo code={row.code} label={row.label} />
-      ) : null}
+      {kind === "source" ? <OrderSourceLogo code={row.code} label={row.label} /> : null}
 
       <p className="min-w-0 flex-1 text-sm font-medium text-slate-900">{row.label}</p>
 

@@ -1,8 +1,9 @@
 # Current context
 
 ## Listy modułów — płaski layout (2026-06-08)
-- Usunięto card-in-card w Zamówienia / Zwroty / Reklamacje: `PANEL_STATUS_SIDEBAR_PAGE_SHELL_BASE` (sidebar bez border/shadow), `moduleTableCardClass` (tabela bez zewnętrznej karty).
-- Wspólne tokeny: `panelStatusTreeStyles.ts`, `moduleListViewTokens.ts`, `moduleListTableTokens.ts`.
+- Usunięto card-in-card w Zamówienia / Zwroty / Reklamacje: sidebar bez karty, tabela bez zewnętrznej karty.
+- Dodano lekki podział sekcji: `FlatPageSection`, `FlatColumnHeader`, `flatSectionTokens` (separator `#e5e7eb`, odstępy).
+- Zastosowano w: listach modułów (toolbar/tabela/sidebar), słownikach zwrotów, konfiguratorze statusów, edytorze układu RMZ.
 
 ## Bundle STOCK B1 — UX Simplification (2026-06-08) — CLOSED
 - **Raport:** `memory/bundle-stock-b1-ux-simplification-report.md`

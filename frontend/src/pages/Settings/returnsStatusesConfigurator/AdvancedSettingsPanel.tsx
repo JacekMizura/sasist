@@ -12,7 +12,7 @@ export function IntegrationsApiPanel({ children, title = "⋯ Opcje techniczne" 
       <summary className="cursor-pointer select-none text-xs font-medium text-slate-400 hover:text-slate-600">
         {title}
       </summary>
-      <div className="mt-3 space-y-3 rounded-lg border border-slate-100 bg-slate-50/50 px-3 py-3">{children}</div>
+      <div className="mt-3 space-y-3">{children}</div>
     </details>
   );
 }

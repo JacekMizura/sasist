@@ -1,0 +1,12 @@
+/** Cienki separator sekcji (#e5e7eb). */
+export const flatSectionDividerClass = "border-b border-gray-200";
+
+/** Stos sekcji — kolejne dzieci dostają linię u góry i odstęp. */
+export const flatSectionsStackClass =
+  "[&>section:not(:first-child)]:mt-10 [&>section:not(:first-child)]:border-t [&>section:not(:first-child)]:border-gray-200 [&>section:not(:first-child)]:pt-10";
+
+/** Pionowy separator kolumny listy (sidebar | treść). */
+export const flatListSidebarDividerClass = "lg:border-r lg:border-gray-200 lg:pr-8";
+
+/** Separator między filtrem a tabelą na liście modułu. */
+export const flatListTableSectionClass = "border-t border-gray-200 pt-6";

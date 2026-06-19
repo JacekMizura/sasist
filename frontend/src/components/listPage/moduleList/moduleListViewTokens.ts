@@ -2,7 +2,7 @@
 export const moduleListTwoColumnShellClass = "flex flex-col gap-6 lg:flex-row lg:items-start";
 
 /** Kolumna treści listy. */
-export const moduleListContentColumnClass = "flex min-w-0 flex-1 flex-col gap-6";
+export const moduleListContentColumnClass = "flex min-w-0 flex-1 flex-col gap-5";
 
 /** Kontener tabeli z paskiem multiakcji — bez zewnętrznej karty. */
 export const moduleTableCardClass = "min-w-0";

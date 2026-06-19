@@ -54,11 +54,7 @@ export function RmzWorkflowProcessSection({ warehouseId, embedded = false }: Pro
     <>
       {embedded ? (
         <div>
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h3 className="text-sm font-semibold text-slate-900">Etapy dokumentu zwrotu</h3>
-              <p className="mt-0.5 text-xs text-slate-500">Kolejność typowego przebiegu w magazynie — kliknij etap, aby edytować nazwę i kolor.</p>
-            </div>
+          <div className="mb-4 flex flex-wrap items-center justify-end gap-3">
             <button
               type="button"
               disabled={warehouseId == null}
@@ -74,9 +70,7 @@ export function RmzWorkflowProcessSection({ warehouseId, embedded = false }: Pro
       ) : (
         <ConfiguratorSectionShell
           id="statusy-rmz"
-          eyebrow="Workflow magazynowy"
           title="Etapy dokumentu zwrotu"
-          description="Statusy dokumentu RMZ w magazynie — nie mylić z etykietami listy w panelu biurowym."
           action={
             <button
               type="button"
@@ -256,11 +250,9 @@ function ReturnRmzStatusModal({
             ))}
           </select>
         </label>
-        <div className="rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2">
-          <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ${rmzColorBadgeClass(color)}`}>
-            Podgląd: {name.trim() || "Nazwa etapu"}
-          </span>
-        </div>
+        <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ${rmzColorBadgeClass(color)}`}>
+          {name.trim() || "Nazwa etapu"}
+        </span>
 
         <IntegrationsApiPanel>
           <label className="block text-xs font-medium text-slate-600">

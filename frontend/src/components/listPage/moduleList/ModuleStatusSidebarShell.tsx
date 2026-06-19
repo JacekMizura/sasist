@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { PANEL_STATUS_SIDEBAR_PAGE_SHELL_CLASS } from "../../panel/panelStatusTreeStyles";
+import { flatListSidebarDividerClass } from "../../layout/flatSectionTokens";
 
 type ModuleStatusSidebarShellProps = {
   collapsed: boolean;
@@ -32,7 +33,7 @@ export function ModuleStatusSidebarShell({
         {mobileOpenLabel}
       </button>
       <aside
-        className={`${PANEL_STATUS_SIDEBAR_PAGE_SHELL_CLASS} ${collapsed ? "lg:w-14" : "lg:w-[18rem]"}`}
+        className={`${PANEL_STATUS_SIDEBAR_PAGE_SHELL_CLASS} ${flatListSidebarDividerClass} ${collapsed ? "lg:w-14" : "lg:w-[18rem]"}`}
       >
         {sidebar}
       </aside>

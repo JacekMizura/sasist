@@ -1,6 +1,7 @@
 import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { Plus } from "lucide-react";
 
+import { FlatColumnHeader } from "../../../components/layout/FlatPageSection";
 import type { ReturnModuleConfigDto, ReturnProductDecisionDto } from "../../../types/returnModuleConfig";
 import { productDecisionBusinessOutcome } from "./businessLabels";
 import { ConfiguratorSectionShell } from "./ConfiguratorSectionShell";
@@ -111,8 +112,8 @@ function DecisionColumn({
   onToggleActive: (row: ReturnProductDecisionDto, active: boolean) => void;
 }) {
   return (
-    <div className="space-y-3">
-      <h3 className="text-sm font-bold uppercase tracking-wide text-slate-700">{title}</h3>
+    <div className="space-y-4">
+      <FlatColumnHeader title={title} />
       <div className="space-y-4">
         {rows.map((row) => (
           <DecisionCard key={`${row.category}-${row.code}`} row={row} onEdit={() => onEdit(row)} onToggleActive={onToggleActive} />

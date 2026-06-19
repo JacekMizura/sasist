@@ -1,4 +1,4 @@
-import { useMemo, type Dispatch, type SetStateAction } from "react";
+import { useMemo, type Dispatch, type SetStateAction, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import {
   DndContext,
@@ -28,9 +28,10 @@ const GROUP_TITLE: Record<ReturnUiMainGroup, string> = {
   DONE: "Zakończone",
 };
 
-/** Sekcja — ciaśniejsza niż stary SectionCard, wyraźna hierarchia. */
+import { FlatPageSection } from "../../components/layout/FlatPageSection";
+
+/** Sekcja ustawień operacyjnych — płaski układ bez karty. */
 export function OpsSection({
-  eyebrow,
   title,
   description,
   children,
@@ -38,19 +39,12 @@ export function OpsSection({
   eyebrow?: string;
   title: string;
   description?: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
-    <section className="overflow-hidden rounded-lg border border-slate-200/90 bg-white shadow-sm">
-      <header className="border-b border-slate-100 px-4 py-3">
-        {eyebrow ? (
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{eyebrow}</p>
-        ) : null}
-        <h3 className="text-lg font-semibold tracking-tight text-slate-900">{title}</h3>
-        {description ? <p className="mt-1 max-w-3xl text-sm leading-relaxed text-slate-600">{description}</p> : null}
-      </header>
-      <div className="px-4 py-3">{children}</div>
-    </section>
+    <FlatPageSection title={title} description={description}>
+      {children}
+    </FlatPageSection>
   );
 }
 

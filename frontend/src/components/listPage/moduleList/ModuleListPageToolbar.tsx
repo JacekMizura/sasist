@@ -6,6 +6,7 @@ import {
   listSellasistToolbarSquareBtn,
   listSellasistToolbarToggleBtn,
 } from "../listSellasistTokens";
+import { flatSectionDividerClass } from "../../layout/flatSectionTokens";
 
 export type ModuleListPageToolbarProps = {
   title: string;
@@ -116,6 +117,7 @@ function ModuleListPageToolbarInner({
           ) : null}
         </div>
       </div>
+      <div className={flatSectionDividerClass} aria-hidden />
     </div>
   );
 }

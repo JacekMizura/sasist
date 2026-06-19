@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { flatListTableSectionClass } from "../../layout/flatSectionTokens";
 import { moduleTableCardClass } from "./moduleListViewTokens";
 
 type ModuleTableCardProps = {
@@ -10,7 +11,7 @@ type ModuleTableCardProps = {
 
 export function ModuleTableCard({ bulkBar, children, footer }: ModuleTableCardProps) {
   return (
-    <div className={moduleTableCardClass}>
+    <div className={`${moduleTableCardClass} ${flatListTableSectionClass}`}>
       {bulkBar}
       {children}
       {footer}

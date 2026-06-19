@@ -13,6 +13,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { GripVertical } from "lucide-react";
 
 import { RETURN_DETAIL_SECTION_LABELS_PL } from "../../constants/returnModuleDetailSections";
+import { FlatColumnHeader } from "../../components/layout/FlatPageSection";
 import type { ReturnDetailLayoutDto, ReturnDetailSectionWidth } from "../../types/returnModuleConfig";
 import { normalizeReturnDetailLayout } from "../../utils/returnDetailLayout";
 
@@ -50,9 +51,9 @@ function SortableRow({
     <li
       ref={setNodeRef}
       style={style}
-      className="rounded-lg border border-slate-200/90 bg-white shadow-sm"
+      className="border-b border-gray-200 py-2 last:border-b-0"
     >
-      <div className="flex items-start gap-2 px-2 py-2">
+      <div className="flex items-start gap-2">
         <button
           type="button"
           className="cursor-grab touch-none rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
@@ -84,18 +85,15 @@ function SortableRow({
   );
 }
 
-function DropPane({ id, title, hint, children }: { id: string; title: string; hint: string; children: ReactNode }) {
+function DropPane({ id, title, children }: { id: string; title: string; children: ReactNode }) {
   const { setNodeRef, isOver } = useDroppable({ id });
   return (
-    <div className="flex min-h-0 flex-col gap-2 rounded-lg border border-slate-200/80 bg-white p-3 shadow-sm">
-      <div>
-        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">{title}</h4>
-        <p className="mt-0.5 text-[11px] leading-relaxed text-slate-500">{hint}</p>
-      </div>
+    <div className="flex min-h-0 flex-col gap-4">
+      <FlatColumnHeader title={title} />
       <div
         ref={setNodeRef}
         className={`min-h-[180px] flex-1 rounded-md border border-dashed p-2 transition-colors ${
-          isOver ? "border-blue-400 bg-blue-50/40" : "border-slate-200 bg-slate-50/50"
+          isOver ? "border-blue-400 bg-blue-50/30" : "border-gray-200"
         }`}
       >
         {children}
@@ -248,66 +246,47 @@ export function ReturnDetailLayoutEditor({ layout, onChange }: Props) {
   const widthFor = (id: string): ReturnDetailSectionWidth => sectionWidths[id] ?? "sidebar";
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-xl border border-slate-200 bg-gradient-to-b from-slate-100/90 to-white p-4 shadow-inner">
-        <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Podgląd układu</p>
-            <p className="mt-0.5 max-w-xl text-sm text-slate-700">
-              Tak wygląda podział na dwie kolumny na stronie szczegółów zwrotu — przeciągaj bloki jak w edytorze szablonu.
-            </p>
-          </div>
-          <div className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-[11px] text-slate-600 shadow-sm">
-            RMZ · szczegóły
-          </div>
-        </div>
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <div className="grid gap-4 lg:grid-cols-2">
-            <DropPane
-              id="dz-left"
-              title="Lewa kolumna"
-              hint="Najczęściej produkty, terminal WMS, zdjęcia, dziennik."
-            >
-              <SortableContext items={idsL} strategy={verticalListSortingStrategy}>
-                <ul className="space-y-2">
-                  {left.length === 0 ? (
-                    <li className="py-8 text-center text-xs text-slate-500">Przeciągnij sekcje z prawej lub dodaj z konfiguracji domyślnej.</li>
-                  ) : (
-                    left.map((id) => (
-                      <SortableRow
-                        key={id}
-                        sid={`${PL}${id}`}
-                        label={labelFor(id)}
-                        width={widthFor(id)}
-                        onWidth={(w) => setWidth(id, w)}
-                      />
-                    ))
-                  )}
-                </ul>
-              </SortableContext>
-            </DropPane>
-            <DropPane id="dz-right" title="Prawa kolumna" hint="Status, podsumowanie, dokumenty, notatki…">
-              <SortableContext items={idsR} strategy={verticalListSortingStrategy}>
-                <ul className="space-y-2">
-                  {right.length === 0 ? (
-                    <li className="py-8 text-center text-xs text-slate-500">Pusta — przeciągnij tu bloki z lewej.</li>
-                  ) : (
-                    right.map((id) => (
-                      <SortableRow
-                        key={id}
-                        sid={`${PR}${id}`}
-                        label={labelFor(id)}
-                        width={widthFor(id)}
-                        onWidth={(w) => setWidth(id, w)}
-                      />
-                    ))
-                  )}
-                </ul>
-              </SortableContext>
-            </DropPane>
-          </div>
-        </DndContext>
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+      <div className="grid gap-10 lg:grid-cols-2">
+        <DropPane id="dz-left" title="Lewa kolumna">
+          <SortableContext items={idsL} strategy={verticalListSortingStrategy}>
+            <ul>
+              {left.length === 0 ? (
+                <li className="py-8 text-center text-xs text-slate-500">Przeciągnij sekcje z prawej kolumny.</li>
+              ) : (
+                left.map((id) => (
+                  <SortableRow
+                    key={id}
+                    sid={`${PL}${id}`}
+                    label={labelFor(id)}
+                    width={widthFor(id)}
+                    onWidth={(w) => setWidth(id, w)}
+                  />
+                ))
+              )}
+            </ul>
+          </SortableContext>
+        </DropPane>
+        <DropPane id="dz-right" title="Prawa kolumna">
+          <SortableContext items={idsR} strategy={verticalListSortingStrategy}>
+            <ul>
+              {right.length === 0 ? (
+                <li className="py-8 text-center text-xs text-slate-500">Przeciągnij sekcje z lewej kolumny.</li>
+              ) : (
+                right.map((id) => (
+                  <SortableRow
+                    key={id}
+                    sid={`${PR}${id}`}
+                    label={labelFor(id)}
+                    width={widthFor(id)}
+                    onWidth={(w) => setWidth(id, w)}
+                  />
+                ))
+              )}
+            </ul>
+          </SortableContext>
+        </DropPane>
       </div>
-    </div>
+    </DndContext>
   );
 }
