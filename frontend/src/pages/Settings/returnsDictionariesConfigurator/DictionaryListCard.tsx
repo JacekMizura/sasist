@@ -139,7 +139,9 @@ function SortableDictionaryRow({
         <GripVertical className="h-4 w-4" strokeWidth={2} aria-hidden />
       </button>
 
-      {kind === "source" ? <OrderSourceLogo code={row.code} label={row.label} /> : null}
+      {kind === "source" ? (
+        <OrderSourceLogo label={row.label} logoUrl={"logo_url" in row ? row.logo_url : null} />
+      ) : null}
 
       <p className="min-w-0 flex-1 text-sm font-medium text-slate-900">{row.label}</p>
 
@@ -151,7 +153,7 @@ function SortableDictionaryRow({
           disabled={busy}
           onChange={(e) => onToggleActive(e.target.checked)}
         />
-        Aktywny
+        Aktywne
       </label>
 
       <div className="flex shrink-0 items-center gap-1.5">

@@ -40,6 +40,7 @@ export type ReturnCustomerReturnTypeDto = {
 export type ReturnOrderSourceDto = {
   code: string;
   label: string;
+  logo_url?: string | null;
   sort_order: number;
   is_active: boolean;
 };

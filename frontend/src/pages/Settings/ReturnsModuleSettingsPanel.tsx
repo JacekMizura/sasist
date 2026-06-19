@@ -115,7 +115,13 @@ export default function ReturnsModuleSettingsPanel({ warehouseId, activeTab }: P
       ) : null}
 
       {activeTab === "slowniki" && cfg ? (
-        <ReturnsDictionariesConfigurator cfg={cfg} saving={saving} onPersist={persistConfig} />
+        <ReturnsDictionariesConfigurator
+          cfg={cfg}
+          tenantId={DAMAGE_TENANT_ID}
+          warehouseId={warehouseId}
+          saving={saving}
+          onPersist={persistConfig}
+        />
       ) : null}
 
       {activeTab === "konfigurator" && cfg ? (

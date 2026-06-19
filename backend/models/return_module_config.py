@@ -92,6 +92,7 @@ class ReturnOrderSource(Base):
     warehouse_id = Column(Integer, ForeignKey("warehouses.id"), nullable=False, index=True)
     code = Column(String(64), nullable=False)
     label = Column(String(256), nullable=False)
+    logo_url = Column(String(512), nullable=True)
     sort_order = Column(Integer, nullable=False, default=0)
     is_active = Column(Boolean, nullable=False, default=True)
 

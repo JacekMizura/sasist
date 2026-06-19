@@ -6421,6 +6421,18 @@ def ensure_return_product_decisions_creates_stock_document_column(engine: Engine
         conn.commit()
 
 
+def ensure_return_order_sources_logo_url_column(engine: Engine) -> None:
+    """Optional logo URL for return order sources (configurator)."""
+    with engine.connect() as conn:
+        if not _table_exists(conn, "return_order_sources"):
+            conn.commit()
+            return
+        cols = _table_column_names(conn, "return_order_sources")
+        if "logo_url" not in cols:
+            conn.execute(text("ALTER TABLE return_order_sources ADD COLUMN logo_url VARCHAR(512)"))
+        conn.commit()
+
+
 def ensure_company_profile_table(engine: Engine) -> None:
     """Create company_profiles (one row per tenant) for Firma / documents branding."""
     with engine.connect() as conn:

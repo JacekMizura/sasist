@@ -9,8 +9,10 @@ import {
   updateOrderCustomField,
   type OrderCustomFieldDto,
 } from "../../api/orderCustomFieldsApi";
-import { PageHeader } from "../../components/layout/PageHeader";
-import { pageContainerWidthAlignClass } from "../../components/layout/PageLayout";
+import { FlatPageSection } from "../../components/layout/FlatPageSection";
+import { flatSectionsStackClass, moduleSettingsPageShellClass } from "../../components/layout/flatSectionTokens";
+import { ModuleListBreadcrumb } from "../../components/listPage/moduleList";
+import { IntegrationsApiPanel } from "../Settings/returnsStatusesConfigurator/AdvancedSettingsPanel";
 import { useAuth } from "../../context/AuthContext";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { DAMAGE_TENANT_ID } from "../../constants/panelTenant";
@@ -78,12 +80,11 @@ function extractUiBlock(prev: Record<string, unknown>): Record<string, unknown> 
   return {};
 }
 
-/** Sekcje formularza — kompaktowy panel konfiguracyjny. */
-const SECTION = "rounded-lg border border-slate-200/90 bg-slate-50/60 p-3 sm:p-4";
-const LABEL = "block text-[12px] font-medium text-slate-700";
+const LABEL = "block text-xs font-medium text-slate-600";
 const INPUT =
-  "mt-1 w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-slate-300 focus:ring-1 focus:ring-slate-300/40";
+  "mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-400 focus:ring-2 focus:ring-slate-300/35";
 const SELECT_SHELL = "relative mt-1";
+const CHOICE_ROW = "flex cursor-pointer items-center gap-2 py-1.5 text-sm text-slate-800";
 
 export default function OrderCustomFieldEditPage() {
   const { fieldId } = useParams<{ fieldId: string }>();
@@ -241,9 +242,9 @@ export default function OrderCustomFieldEditPage() {
   const num = (settings.number as { min?: number | null; max?: number | null; decimals?: number | null } | undefined) ?? {};
   const fileMode = String((settings.files as { mode?: string } | undefined)?.mode ?? "documents");
 
-  const contentShell = `mx-auto w-full max-w-5xl ${pageContainerWidthAlignClass}`;
+  const contentShell = moduleSettingsPageShellClass;
 
-  const breadcrumbs = useMemo(() => {
+  const breadcrumbItems = useMemo(() => {
     const base = [
       { label: "Zamówienia", to: "/orders/list" as const },
       { label: "Dodatkowe pola", to: "/orders/custom-fields" as const },
@@ -291,134 +292,117 @@ export default function OrderCustomFieldEditPage() {
 
   return (
     <div className="min-h-full w-full pb-28">
-      <div className={`${contentShell} pb-6 pt-4`}>
-        <PageHeader
-          className="space-y-4"
-          breadcrumbs={breadcrumbs}
-          title={
-            <span className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-              {isCreate ? "Nowe pole" : "Edycja pola"}
-            </span>
-          }
-        />
+      <div className={`${contentShell} pb-6`}>
+        <ModuleListBreadcrumb items={breadcrumbItems} />
+
+        <div className="mb-8">
+          <h1 className="text-2xl font-semibold text-slate-900">{isCreate ? "Nowe pole" : "Edycja pola"}</h1>
+        </div>
 
         {err ? (
-          <div
-            className="mb-3 mt-2 max-w-2xl rounded-md border border-red-200/90 bg-red-50/90 px-2.5 py-1.5 text-[11px] leading-snug text-red-900"
-            role="alert"
-          >
+          <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
             {err}
           </div>
         ) : null}
 
-        <form id="ocf-edit-form" onSubmit={(e) => void onSubmit(e)} className="space-y-3">
-          <section className={SECTION}>
-            <div className="mt-3 space-y-3">
+        <form id="ocf-edit-form" onSubmit={(e) => void onSubmit(e)} className={flatSectionsStackClass}>
+          <FlatPageSection title="Pole">
+            <div className="space-y-5">
               <label className={LABEL}>
-                Nazwa pola <span className="font-normal text-red-600">*</span>
+                Nazwa pola <span className="text-red-600">*</span>
                 <input required className={INPUT} value={name} onChange={(e) => setName(e.target.value)} placeholder="Np. Numer referencyjny" />
               </label>
 
-              <details className="group rounded-lg border border-slate-200/80 bg-white/60">
-                <summary className="cursor-pointer list-none px-3 py-2 text-xs font-medium text-slate-600 marker:hidden [&::-webkit-details-marker]:hidden">
-                  <span className="inline-flex items-center gap-2">
-                    <span className="text-slate-400 transition group-open:rotate-90">▸</span>
-                    Zaawansowane
-                  </span>
-                </summary>
-                <div className="border-t border-slate-100 px-3 pb-3 pt-2">
-                  <label className={LABEL}>
-                    Identyfikator techniczny <span className="font-normal text-slate-400">— opcjonalnie</span>
-                    <input
-                      className={`${INPUT} font-mono text-[12px]`}
-                      value={slug}
-                      onChange={(e) => setSlug(e.target.value)}
-                      placeholder="np. numer_referencyjny"
-                    />
-                  </label>
-                  <p className="mt-1 text-[11px] leading-snug text-slate-500">Puste = wygenerujemy automatycznie z nazwy.</p>
+              <IntegrationsApiPanel title="⋯ Zaawansowane">
+                <label className={LABEL}>
+                  Identyfikator techniczny
+                  <input
+                    className={`${INPUT} font-mono text-xs`}
+                    value={slug}
+                    onChange={(e) => setSlug(e.target.value)}
+                    placeholder="np. numer_referencyjny"
+                  />
+                </label>
+                <p className="text-xs text-slate-500">Puste = wygenerujemy automatycznie z nazwy.</p>
+              </IntegrationsApiPanel>
+
+              <div>
+                <span className={LABEL}>Ikona</span>
+                <div className="mt-2">
+                  <OrderCustomFieldIconPicker
+                    backendType={resolvedType}
+                    previewSettings={settings}
+                    lucideKey={(settings.ui as { icon?: string | null } | undefined)?.icon ?? null}
+                    onLucideKeyChange={(next) =>
+                      setSettings((prev) => ({
+                        ...prev,
+                        ui: { ...extractUiBlock(prev), icon: next },
+                      }))
+                    }
+                    customIconUrl={(settings.ui as { custom_icon_url?: string | null } | undefined)?.custom_icon_url ?? null}
+                    onCustomIconUrlChange={(next) =>
+                      setSettings((prev) => ({
+                        ...prev,
+                        ui: { ...extractUiBlock(prev), custom_icon_url: next },
+                      }))
+                    }
+                    definitionUpload={
+                      !isCreate && Number.isFinite(idNum) && warehouseId != null
+                        ? {
+                            fieldId: idNum,
+                            tenantId,
+                            warehouseId,
+                            onDefinitionUpdated: (dto) =>
+                              setSettings(mergeSettings(dto.settings_json as Record<string, unknown>, dto.type)),
+                          }
+                        : undefined
+                    }
+                  />
                 </div>
-              </details>
-            </div>
+              </div>
 
-            <div className="mt-3 border-t border-slate-200/80 pt-2">
-              <span className={LABEL}>Ikona</span>
-              <div className="mt-2">
-                <OrderCustomFieldIconPicker
-                  backendType={resolvedType}
-                  previewSettings={settings}
-                  lucideKey={(settings.ui as { icon?: string | null } | undefined)?.icon ?? null}
-                  onLucideKeyChange={(next) =>
-                    setSettings((prev) => ({
-                      ...prev,
-                      ui: { ...extractUiBlock(prev), icon: next },
-                    }))
-                  }
-                  customIconUrl={(settings.ui as { custom_icon_url?: string | null } | undefined)?.custom_icon_url ?? null}
-                  onCustomIconUrlChange={(next) =>
-                    setSettings((prev) => ({
-                      ...prev,
-                      ui: { ...extractUiBlock(prev), custom_icon_url: next },
-                    }))
-                  }
-                  definitionUpload={
-                    !isCreate && Number.isFinite(idNum) && warehouseId != null
-                      ? {
-                          fieldId: idNum,
-                          tenantId,
-                          warehouseId,
-                          onDefinitionUpdated: (dto) =>
-                            setSettings(mergeSettings(dto.settings_json as Record<string, unknown>, dto.type)),
-                        }
-                      : undefined
-                  }
-                />
+              <div>
+                <span className={LABEL}>Typ pola</span>
+                <div className={SELECT_SHELL}>
+                  <select
+                    className="w-full appearance-none rounded-lg border border-slate-200 bg-white py-2 pl-3 pr-9 text-sm font-medium text-slate-900 outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-300/35"
+                    value={uiKind}
+                    onChange={(e) => applyUiKindChange(e.target.value as UiFieldKind)}
+                  >
+                    {FIELD_TYPE_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden />
+                </div>
+              </div>
+
+              <div className="grid gap-5 sm:grid-cols-2 sm:items-end">
+                <label className={LABEL}>
+                  Kolejność
+                  <input
+                    type="number"
+                    className={`${INPUT} tabular-nums`}
+                    value={sortOrder}
+                    onChange={(e) => setSortOrder(Number(e.target.value))}
+                  />
+                </label>
+                <label className={`${CHOICE_ROW} sm:pb-2`}>
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-slate-300"
+                    checked={isActive}
+                    onChange={(e) => setIsActive(e.target.checked)}
+                  />
+                  Aktywne (widoczne na zamówieniach)
+                </label>
               </div>
             </div>
+          </FlatPageSection>
 
-            <div className="mt-4">
-              <span className={LABEL}>Typ pola</span>
-              <div className={SELECT_SHELL}>
-                <select
-                  className="w-full appearance-none rounded-lg border border-slate-200 bg-white py-2 pl-2.5 pr-9 text-sm font-medium text-slate-900 shadow-sm outline-none focus:border-slate-300 focus:ring-1 focus:ring-slate-300/40"
-                  value={uiKind}
-                  onChange={(e) => applyUiKindChange(e.target.value as UiFieldKind)}
-                >
-                  {FIELD_TYPE_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden />
-              </div>
-            </div>
-
-            <div className="mt-3 grid gap-3 sm:grid-cols-2 sm:items-end">
-              <label className={LABEL}>
-                Kolejność
-                <input
-                  type="number"
-                  className={`${INPUT} tabular-nums`}
-                  value={sortOrder}
-                  onChange={(e) => setSortOrder(Number(e.target.value))}
-                />
-              </label>
-              <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-100 bg-white px-3 py-2 text-sm font-medium text-slate-800">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-400"
-                  checked={isActive}
-                  onChange={(e) => setIsActive(e.target.checked)}
-                />
-                Aktywne (widoczne na zamówieniach)
-              </label>
-            </div>
-          </section>
-
-          <section className={SECTION}>
-            <h2 className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Konfiguracja typu</h2>
-
+          <FlatPageSection title="Konfiguracja pola">
             {uiKind === "TEXT" ? (
               <div className="mt-3">
                 <p className="text-sm font-medium text-slate-800">Format danych</p>
@@ -430,10 +414,7 @@ export default function OrderCustomFieldEditPage() {
                       { v: "url", label: "URL" },
                     ] as const
                   ).map(({ v, label }) => (
-                    <label
-                      key={v}
-                      className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-100 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm transition hover:border-slate-200"
-                    >
+                    <label key={v} className={CHOICE_ROW}>
                       <input
                         type="radio"
                         name="text-subtype"
@@ -450,7 +431,7 @@ export default function OrderCustomFieldEditPage() {
                     </label>
                   ))}
                 </div>
-                <label className="mt-2 flex cursor-pointer items-center gap-2 rounded-lg border border-slate-100 bg-slate-50/90 px-3 py-2 text-sm font-medium text-slate-800">
+                <label className={`${CHOICE_ROW} mt-3`}>
                   <input
                     type="checkbox"
                     className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-400"
@@ -529,10 +510,7 @@ export default function OrderCustomFieldEditPage() {
                       { v: "both", label: "Zdjęcia i dokumenty" },
                     ] as const
                   ).map(({ v, label }) => (
-                    <label
-                      key={v}
-                      className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-100 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm transition hover:border-slate-200"
-                    >
+                    <label key={v} className={CHOICE_ROW}>
                       <input
                         type="radio"
                         name="files-mode"
@@ -560,23 +538,21 @@ export default function OrderCustomFieldEditPage() {
                 <div>
                   <p className="text-sm font-medium text-slate-800">Rodzaj wyboru</p>
                   <div className="mt-2 flex flex-col gap-1.5 sm:flex-row sm:gap-3">
-                    <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-100 bg-slate-50/90 px-3 py-2 text-sm font-medium text-slate-800">
+                    <label className={CHOICE_ROW}>
                       <input
                         type="radio"
                         name="list-multi"
                         checked={!listMulti}
                         onChange={() => applyListMultiChange(false)}
-                        className="text-slate-900 focus:ring-slate-400"
                       />
                       Jedna opcja
                     </label>
-                    <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-100 bg-slate-50/90 px-3 py-2 text-sm font-medium text-slate-800">
+                    <label className={CHOICE_ROW}>
                       <input
                         type="radio"
                         name="list-multi"
                         checked={listMulti}
                         onChange={() => applyListMultiChange(true)}
-                        className="text-slate-900 focus:ring-slate-400"
                       />
                       Wiele opcji
                     </label>
@@ -594,14 +570,11 @@ export default function OrderCustomFieldEditPage() {
                       + Dodaj opcję
                     </button>
                   </div>
-                  <ul className="mt-3 space-y-2">
+                  <ul className="mt-3 divide-y divide-gray-200">
                     {options.map((op, idx) => (
-                      <li
-                        key={`opt-${idx}`}
-                        className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2"
-                      >
+                      <li key={`opt-${idx}`} className="flex flex-wrap items-center gap-2 py-3 first:pt-0">
                         <input
-                          className="min-w-[12rem] flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-300 focus:ring-2 focus:ring-slate-400/15"
+                          className={`${INPUT} min-w-[12rem] flex-1`}
                           placeholder={`Opcja ${idx + 1}`}
                           value={op.label}
                           onChange={(e) =>
@@ -657,17 +630,17 @@ export default function OrderCustomFieldEditPage() {
             ) : null}
 
             {uiKind === "TEXT" || uiKind === "NUMBER" || uiKind === "FILES" || uiKind === "LIST" ? null : uiKind === "SALES_DOCUMENT" || uiKind === "SHIPPING_LABEL" ? null : (
-              <p className="mt-5 text-sm text-slate-500">Brak dodatkowej konfiguracji dla tego typu.</p>
+              <p className="text-sm text-slate-500">Brak dodatkowej konfiguracji dla tego typu.</p>
             )}
-          </section>
+          </FlatPageSection>
         </form>
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-slate-200 bg-white/95 shadow-[0_-4px_24px_rgba(15,23,42,0.06)] backdrop-blur-sm supports-[backdrop-filter]:bg-white/85">
-        <div className={`${contentShell} flex flex-wrap items-center justify-between gap-3 py-3 sm:py-4`}>
+      <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-gray-200 bg-white px-4 md:px-6">
+        <div className={`${contentShell} flex flex-wrap items-center justify-between gap-3 py-4`}>
           <Link
             to="/orders/custom-fields"
-            className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50"
+            className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50"
           >
             Anuluj
           </Link>
@@ -675,7 +648,7 @@ export default function OrderCustomFieldEditPage() {
             type="submit"
             form="ocf-edit-form"
             disabled={saving}
-            className="rounded-xl bg-slate-900 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 disabled:opacity-50"
+            className="rounded-lg bg-slate-900 px-5 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
           >
             {saving ? "Zapisywanie…" : isCreate ? "Utwórz pole" : "Zapisz pole"}
           </button>

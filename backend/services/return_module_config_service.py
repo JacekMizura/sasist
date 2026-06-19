@@ -308,6 +308,7 @@ def seed_defaults_session(db: Session, tenant_id: int, warehouse_id: int) -> Non
                 warehouse_id=warehouse_id,
                 code=os.code,
                 label=os.label,
+                logo_url=(os.logo_url.strip()[:512] if getattr(os, "logo_url", None) and str(os.logo_url).strip() else None),
                 sort_order=os.sort_order,
                 is_active=os.is_active,
             )
@@ -414,6 +415,7 @@ def read_config_session(db: Session, tenant_id: int, warehouse_id: int) -> Retur
             ReturnOrderSourceRW(
                 code=r.code,
                 label=r.label,
+                logo_url=(r.logo_url.strip() if getattr(r, "logo_url", None) else None) or None,
                 sort_order=r.sort_order,
                 is_active=bool(r.is_active),
             )
@@ -527,6 +529,7 @@ def replace_config_session(db: Session, tenant_id: int, warehouse_id: int, body:
                 warehouse_id=warehouse_id,
                 code=os.code.strip(),
                 label=os.label.strip(),
+                logo_url=(os.logo_url.strip()[:512] if os.logo_url and os.logo_url.strip() else None),
                 sort_order=os.sort_order,
                 is_active=os.is_active,
             )

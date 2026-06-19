@@ -5,10 +5,12 @@ import type { ReturnModuleConfigDto } from "../../../types/returnModuleConfig";
 import { DictionaryListCard } from "./DictionaryListCard";
 import { OrderSourceEntryModal, ReturnTypeEntryModal } from "./DictionaryEntryModal";
 import { renumberDictionary } from "./constants";
-import { ORDER_SOURCE_MARKETPLACE_PRESETS, slugDictionaryCode } from "./marketplaceSourceUtils";
+import { slugDictionaryCode } from "./orderSourceUtils";
 
 type Props = {
   cfg: ReturnModuleConfigDto;
+  tenantId: number;
+  warehouseId: number | null;
   saving?: boolean;
   onPersist: (next: ReturnModuleConfigDto) => Promise<boolean>;
 };
@@ -18,7 +20,7 @@ type ModalState =
   | { kind: "source"; mode: "create" | "edit"; row: ReturnModuleConfigDto["order_sources"][number] }
   | null;
 
-export function ReturnsDictionariesConfigurator({ cfg, saving = false, onPersist }: Props) {
+export function ReturnsDictionariesConfigurator({ cfg, tenantId, warehouseId, saving = false, onPersist }: Props) {
   const [modal, setModal] = useState<ModalState>(null);
 
   const typeSortNext = useMemo(() => (cfg.customer_return_types.at(-1)?.sort_order ?? 0) + 10, [cfg.customer_return_types]);
@@ -70,11 +72,16 @@ export function ReturnsDictionariesConfigurator({ cfg, saving = false, onPersist
   };
 
   const openCreateSource = () => {
-    const preset = ORDER_SOURCE_MARKETPLACE_PRESETS[0];
     setModal({
       kind: "source",
       mode: "create",
-      row: { code: preset.code, label: preset.label, sort_order: sourceSortNext, is_active: true },
+      row: {
+        code: slugDictionaryCode("zrodlo", "nowe_zrodlo"),
+        label: "",
+        logo_url: null,
+        sort_order: sourceSortNext,
+        is_active: true,
+      },
     });
   };
 
@@ -92,10 +99,12 @@ export function ReturnsDictionariesConfigurator({ cfg, saving = false, onPersist
 
   const saveSource = async (entry: ReturnModuleConfigDto["order_sources"][number], mode: "create" | "edit", originalCode?: string) => {
     const matchCode = mode === "edit" ? (originalCode ?? entry.code) : entry.code;
-    let next = entry;
+    let next = {
+      ...entry,
+      code: mode === "create" ? slugDictionaryCode("zrodlo", entry.label || "zrodlo") : matchCode,
+      logo_url: entry.logo_url?.trim() || null,
+    };
     if (mode === "create") {
-      const preset = ORDER_SOURCE_MARKETPLACE_PRESETS.find((p) => p.code === entry.code);
-      next = preset ? { ...entry, code: preset.code } : { ...entry, code: slugDictionaryCode("zrodlo", entry.label) };
       await persistSources([...cfg.order_sources, next]);
     } else {
       await persistSources(cfg.order_sources.map((r) => (r.code === matchCode ? next : r)));
@@ -154,6 +163,8 @@ export function ReturnsDictionariesConfigurator({ cfg, saving = false, onPersist
           open
           mode={modal.mode}
           row={modal.row}
+          tenantId={tenantId}
+          warehouseId={warehouseId}
           onClose={() => setModal(null)}
           onSave={(entry) => void saveSource(entry, modal.mode, modal.mode === "edit" ? modal.row.code : undefined)}
         />

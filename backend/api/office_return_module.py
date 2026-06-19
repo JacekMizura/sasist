@@ -3,13 +3,16 @@
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
+
+from pydantic import BaseModel
 
 from ..database import get_db
 from ..schemas.return_module_config import ReturnModuleConfigRead, ReturnModuleConfigWrite
 from ..services.return_module_config_service import read_config_session, replace_config_session
+from ..services.return_order_source_logo_upload import save_return_order_source_logo_bytes
 from ..services.tenant_default_warehouse import ERR_NO_WAREHOUSE, resolve_tenant_default_warehouse_id
 
 logger = logging.getLogger(__name__)
@@ -64,3 +67,19 @@ def put_full_config(
         logger.exception("office_return_module put_full_config")
         db.rollback()
         raise HTTPException(status_code=500, detail="Błąd bazy danych") from None
+
+
+class ReturnOrderSourceLogoUploadRead(BaseModel):
+    logo_url: str
+
+
+@router.post("/order-sources/logo", response_model=ReturnOrderSourceLogoUploadRead)
+async def upload_order_source_logo(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(office_return_module_wh_dep),
+    file: UploadFile = File(...),
+):
+    del tenant_id, warehouse_id
+    raw = await file.read()
+    url = save_return_order_source_logo_bytes(raw, file.content_type or "image/png")
+    return ReturnOrderSourceLogoUploadRead(logo_url=url)

@@ -50,6 +50,7 @@ class ReturnCustomerReturnTypeRW(BaseModel):
 class ReturnOrderSourceRW(BaseModel):
     code: str = Field(..., min_length=1, max_length=64)
     label: str = Field(..., min_length=1, max_length=256)
+    logo_url: Optional[str] = Field(None, max_length=512)
     sort_order: int = 0
     is_active: bool = True
 

@@ -4,6 +4,7 @@
 - Usunięto card-in-card w Zamówienia / Zwroty / Reklamacje: sidebar bez karty, tabela bez zewnętrznej karty.
 - Dodano lekki podział sekcji: `FlatPageSection`, `FlatColumnHeader`, `flatSectionTokens` (separator `#e5e7eb`, odstępy).
 - Zastosowano w: listach modułów (toolbar/tabela/sidebar), słownikach zwrotów, konfiguratorze statusów, edytorze układu RMZ.
+- **Dodatkowe pola zamówień** (`OrderCustomFieldsListPage`, `OrderCustomFieldEditPage`): lewy shell `moduleSettingsPageShellClass`, lista jak moduły ERP, edycja z `FlatPageSection` + `IntegrationsApiPanel` (Zaawansowane), bez szarych kart.
 
 ## Bundle STOCK B1 — UX Simplification (2026-06-08) — CLOSED
 - **Raport:** `memory/bundle-stock-b1-ux-simplification-report.md`

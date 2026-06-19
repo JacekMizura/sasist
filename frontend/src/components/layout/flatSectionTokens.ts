@@ -10,3 +10,6 @@ export const flatListSidebarDividerClass = "lg:border-r lg:border-gray-200 lg:pr
 
 /** Separator między filtrem a tabelą na liście modułu. */
 export const flatListTableSectionClass = "border-t border-gray-200 pt-6";
+
+/** Lewo wyrównany obszar contentu (max ~1400px) — ustawienia, formularze modułu. */
+export const moduleSettingsPageShellClass = "w-full max-w-[87.5rem]";

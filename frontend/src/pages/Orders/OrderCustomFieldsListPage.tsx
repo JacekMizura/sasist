@@ -8,8 +8,18 @@ import {
   listOrderCustomFields,
   type OrderCustomFieldDto,
 } from "../../api/orderCustomFieldsApi";
-import { PageHeader } from "../../components/layout/PageHeader";
-import { pageContainerWidthAlignClass } from "../../components/layout/PageLayout";
+import { flatListTableSectionClass, flatSectionDividerClass, moduleSettingsPageShellClass } from "../../components/layout/flatSectionTokens";
+import {
+  ModuleListBreadcrumb,
+  moduleBulkBarClass,
+  moduleListEmptyStateClass,
+  moduleListRowClass,
+  moduleListTableClass,
+  moduleListTableScrollClass,
+  moduleListTdClass,
+  moduleListThClass,
+  moduleListTheadClass,
+} from "../../components/listPage/moduleList";
 import OrderCustomFieldGlyph from "../../components/orders/OrderCustomFieldGlyph";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { useAuth } from "../../context/AuthContext";
@@ -104,10 +114,7 @@ export default function OrderCustomFieldsListPage() {
     setBulkBusy(true);
     setErr(null);
     try {
-      await bulkDeleteOrderCustomFields(
-        { tenant_id: tenantId, warehouse_id: warehouseId },
-        Array.from(selected),
-      );
+      await bulkDeleteOrderCustomFields({ tenant_id: tenantId, warehouse_id: warehouseId }, Array.from(selected));
       await load();
     } catch (e: unknown) {
       setErr(formatApiErrorMessage(e, "Nie udało się usunąć zaznaczonych pól."));
@@ -128,29 +135,25 @@ export default function OrderCustomFieldsListPage() {
     }
   };
 
-  const listShell = `mx-auto w-full max-w-5xl ${pageContainerWidthAlignClass}`;
+  const shell = moduleSettingsPageShellClass;
 
   if (warehouseId == null) {
     return (
-      <div className={`${listShell} py-6`}>
+      <div className={shell}>
         <p className="text-sm text-slate-600">Wybierz magazyn w nagłówku aplikacji.</p>
       </div>
     );
   }
 
   if (authLoading) {
-    return (
-      <div className={`${listShell} py-6 text-sm text-slate-600`}>
-        Wczytywanie sesji…
-      </div>
-    );
+    return <div className={`${shell} text-sm text-slate-600`}>Wczytywanie sesji…</div>;
   }
 
   if (!user) {
     return (
-      <div className={`${listShell} py-6`}>
+      <div className={shell}>
         <p className="text-sm text-slate-600">
-          <Link to="/login" className="font-medium text-blue-700 hover:underline">
+          <Link to="/login" className="font-medium text-slate-900 hover:underline">
             Zaloguj się
           </Link>{" "}
           — wymagana aktywna sesja, aby wczytać listę pól.
@@ -160,102 +163,97 @@ export default function OrderCustomFieldsListPage() {
   }
 
   return (
-    <div className={`${listShell} min-h-full pb-6 pt-4`}>
-      <PageHeader
-        breadcrumbs={[
-          { label: "Zamówienia", to: "/orders/list" },
-          { label: "Dodatkowe pola" },
-        ]}
-        title="Dodatkowe pola zamówień"
-        actions={
+    <div className={`${shell} pb-6`}>
+      <ModuleListBreadcrumb items={[{ label: "Zamówienia", to: "/orders/list" }, { label: "Dodatkowe pola" }]} />
+
+      <div className="mb-6 space-y-4">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-semibold text-slate-900">Dodatkowe pola zamówień</h1>
+            {!loading ? (
+              <p className="mt-1 text-sm text-slate-500">
+                {visibleRows.length} {visibleRows.length === 1 ? "pole" : visibleRows.length < 5 ? "pola" : "pól"}
+              </p>
+            ) : null}
+          </div>
           <button
             type="button"
             onClick={() => navigate("/orders/custom-fields/new")}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800"
+            className="inline-flex h-10 items-center gap-2 rounded-lg bg-slate-900 px-4 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800"
           >
-            <Plus className="h-3.5 w-3.5" aria-hidden />
+            <Plus className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
             Dodaj pole
           </button>
-        }
-      />
+        </div>
+        <div className={flatSectionDividerClass} aria-hidden />
+      </div>
 
       {err ? (
-        <div
-          className="mb-2 mt-2 max-w-xl rounded-md border border-red-200/90 bg-red-50/90 px-2.5 py-1.5 text-[11px] leading-snug text-red-900"
-          role="alert"
-        >
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
           {err}
         </div>
       ) : null}
 
-      <div className="overflow-hidden rounded-lg border border-slate-200/80">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/90 px-3 py-2">
-          <div className="flex flex-wrap items-center gap-2">
-            {visibleRows.length > 0 ? (
-              <>
-                <label className="flex items-center gap-2 text-xs text-slate-700">
-                  <input type="checkbox" checked={allSelected} onChange={toggleAll} />
-                  Wszystkie
-                </label>
-                <button
-                  type="button"
-                  disabled={selected.size === 0 || bulkBusy}
-                  onClick={() => void onBulkDelete()}
-                  className="rounded-md border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] font-semibold text-red-900 hover:bg-red-100 disabled:opacity-50"
-                >
-                  {bulkBusy ? "…" : `Usuń (${selected.size})`}
-                </button>
-              </>
-            ) : (
-              <span className="text-[11px] text-slate-500">{loading ? "Ładowanie…" : "Brak pozycji"}</span>
-            )}
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {loading && visibleRows.length > 0 ? <span className="text-[11px] text-slate-500">Odświeżanie…</span> : null}
-            <label className="flex items-center gap-1.5 text-[11px] text-slate-600">
-              <span className="hidden sm:inline">Sortuj:</span>
-              <select
-                className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-800"
-                value={sort}
-                onChange={(e) => setSort(e.target.value as typeof sort)}
-              >
-                <option value="sort_order">Kolejność</option>
-                <option value="name">Nazwa A–Z</option>
-                <option value="-name">Nazwa Z–A</option>
-              </select>
+      <div className={flatListTableSectionClass}>
+        {visibleRows.length > 0 ? (
+          <div className={moduleBulkBarClass}>
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input type="checkbox" checked={allSelected} onChange={toggleAll} />
+              Wszystkie
             </label>
+            <button
+              type="button"
+              disabled={selected.size === 0 || bulkBusy}
+              onClick={() => void onBulkDelete()}
+              className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-45"
+            >
+              {bulkBusy ? "Usuwanie…" : `Usuń (${selected.size})`}
+            </button>
+            <div className="ml-auto flex items-center gap-2">
+              {loading ? <span className="text-xs text-slate-500">Odświeżanie…</span> : null}
+              <label className="flex items-center gap-2 text-xs text-slate-600">
+                Sortuj
+                <select
+                  className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-800"
+                  value={sort}
+                  onChange={(e) => setSort(e.target.value as typeof sort)}
+                >
+                  <option value="sort_order">Kolejność</option>
+                  <option value="name">Nazwa A–Z</option>
+                  <option value="-name">Nazwa Z–A</option>
+                </select>
+              </label>
+            </div>
           </div>
-        </div>
+        ) : null}
 
         {loading && visibleRows.length === 0 ? (
-          <div className="py-6 text-center text-xs text-slate-500">Ładowanie listy…</div>
+          <div className={moduleListEmptyStateClass}>Ładowanie listy…</div>
         ) : visibleRows.length === 0 ? (
-          <div className="flex max-h-[160px] items-center gap-3 border-t border-slate-100 px-3 py-4">
-            <ClipboardList className="h-5 w-5 shrink-0 text-slate-300" strokeWidth={1.5} aria-hidden />
-            <div className="min-w-0 text-left">
-              <p className="text-xs font-medium text-slate-800">Brak zdefiniowanych pól</p>
-              <p className="mt-0.5 text-[11px] leading-snug text-slate-500">
-                Użyj „Dodaj pole” powyżej — wartości uzupełnisz na kartach zamówień.
-              </p>
+          <div className="flex items-start gap-3 py-10">
+            <ClipboardList className="mt-0.5 h-5 w-5 shrink-0 text-slate-300" strokeWidth={1.5} aria-hidden />
+            <div>
+              <p className="text-sm font-medium text-slate-800">Brak zdefiniowanych pól</p>
+              <p className="mt-1 text-sm text-slate-500">Użyj „Dodaj pole” — wartości uzupełnisz na kartach zamówień.</p>
             </div>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[40rem] text-left text-sm">
-              <thead className="border-b border-slate-200 bg-slate-50 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+          <div className={moduleListTableScrollClass}>
+            <table className={moduleListTableClass}>
+              <thead className={moduleListTheadClass}>
                 <tr>
-                  <th className="w-10 px-2 py-1.5" />
-                  <th className="w-12 px-2 py-1.5">Ikona</th>
-                  <th className="px-2 py-1.5">ID</th>
-                  <th className="px-2 py-1.5">Nazwa</th>
-                  <th className="px-2 py-1.5">Typ pola</th>
-                  <th className="w-40 px-2 py-1.5" />
+                  <th className={`${moduleListThClass} w-10`} />
+                  <th className={`${moduleListThClass} w-14`}>Ikona</th>
+                  <th className={moduleListThClass}>ID</th>
+                  <th className={moduleListThClass}>Nazwa</th>
+                  <th className={moduleListThClass}>Typ pola</th>
+                  <th className={`${moduleListThClass} w-36 text-right`}>Akcje</th>
                 </tr>
               </thead>
               <tbody>
                 {visibleRows.map((r) => (
-                  <tr key={r.id} className="border-b border-slate-100 text-xs hover:bg-slate-50/80">
-                    <td className="px-2 py-1.5">
+                  <tr key={r.id} className={moduleListRowClass}>
+                    <td className={moduleListTdClass}>
                       <input
                         type="checkbox"
                         checked={selected.has(r.id)}
@@ -263,22 +261,22 @@ export default function OrderCustomFieldsListPage() {
                         aria-label={`Zaznacz ${r.name}`}
                       />
                     </td>
-                    <td className="px-2 py-1.5">
+                    <td className={moduleListTdClass}>
                       <OrderCustomFieldGlyph
                         type={r.type}
                         settings={(r.settings_json ?? {}) as Record<string, unknown>}
-                        boxClassName="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md border border-slate-200 bg-slate-50 text-slate-600"
-                        lucideClassName="h-3.5 w-3.5"
+                        boxClassName="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-white text-slate-600"
+                        lucideClassName="h-4 w-4"
                       />
                     </td>
-                    <td className="px-2 py-1.5 font-mono text-[11px] text-slate-700">{r.id}</td>
-                    <td className="px-2 py-1.5 font-medium text-slate-900">{r.name}</td>
-                    <td className="px-2 py-1.5 text-[11px] text-slate-600">{typeLabelPl(r.type)}</td>
-                    <td className="px-2 py-1.5 text-right text-[11px]">
-                      <Link to={`/orders/custom-fields/${r.id}/edit`} className="mr-2 text-blue-700 hover:underline">
+                    <td className={`${moduleListTdClass} font-mono text-xs text-slate-600`}>{r.id}</td>
+                    <td className={`${moduleListTdClass} font-medium text-slate-900`}>{r.name}</td>
+                    <td className={`${moduleListTdClass} text-slate-600`}>{typeLabelPl(r.type)}</td>
+                    <td className={`${moduleListTdClass} text-right text-sm`}>
+                      <Link to={`/orders/custom-fields/${r.id}/edit`} className="mr-3 font-medium text-slate-700 hover:text-slate-900">
                         Edytuj
                       </Link>
-                      <button type="button" onClick={() => void onDeleteOne(r)} className="text-red-700 hover:underline">
+                      <button type="button" onClick={() => void onDeleteOne(r)} className="font-medium text-red-600 hover:text-red-800">
                         Usuń
                       </button>
                     </td>

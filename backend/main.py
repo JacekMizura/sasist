@@ -124,6 +124,7 @@ from .db.schema_upgrade import (
     ensure_stock_document_items_return_receipt_columns,
     ensure_warehouse_sqlite_schema_stabilization,
     ensure_return_product_decisions_creates_stock_document_column,
+    ensure_return_order_sources_logo_url_column,
     ensure_workforce_operational_tables,
     ensure_workforce_user_groups_schema,
     migrate_orders_sales_document_misassigned_number,
@@ -1026,6 +1027,7 @@ try:
     ensure_stock_document_items_return_receipt_columns(engine)
     ensure_stock_document_items_stock_disposition_column(engine)
     ensure_return_product_decisions_creates_stock_document_column(engine)
+    ensure_return_order_sources_logo_url_column(engine)
 except Exception:
     logging.getLogger(__name__).exception("ensure_stock_document_items_return_columns failed at import")
 try:
@@ -1436,6 +1438,7 @@ def _upgrade_schema_background() -> None:
         ensure_stock_document_items_return_receipt_columns(engine)
         ensure_stock_document_items_stock_disposition_column(engine)
         ensure_return_product_decisions_creates_stock_document_column(engine)
+        ensure_return_order_sources_logo_url_column(engine)
     except Exception:
         pass
     try:
