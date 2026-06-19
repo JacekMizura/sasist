@@ -27,8 +27,10 @@ export type ModuleListPageToolbarProps = {
   settingsTitle?: string;
   filtersToggleLabelExpanded?: string;
   filtersToggleLabelCollapsed?: string;
-  /** Dodatkowe przyciski przed sortowaniem (np. gęstość, widoki). */
+  /** Dodatkowe przyciski przed sortowaniem (np. widoki). */
   extraToolbarControls?: ReactNode;
+  /** Dodatkowe pozycje menu „Więcej” (przed „Widoczne pola filtrów”). */
+  moreMenuItems?: ReactNode;
   onColumnsClick?: () => void;
   columnsDisabled?: boolean;
   sortDisabled?: boolean;
@@ -48,6 +50,7 @@ function ModuleListPageToolbarInner({
   filtersToggleLabelExpanded = "Ukryj filtry",
   filtersToggleLabelCollapsed = "Dodatkowe filtry",
   extraToolbarControls,
+  moreMenuItems,
   onColumnsClick,
   columnsDisabled = true,
   sortDisabled = false,
@@ -115,6 +118,12 @@ function ModuleListPageToolbarInner({
               <MoreHorizontal className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
             </summary>
             <div className="absolute right-0 z-50 mt-1 min-w-[13rem] rounded-md border border-slate-200 bg-white py-1 shadow-lg ring-1 ring-slate-200/60">
+              {moreMenuItems ? (
+                <>
+                  {moreMenuItems}
+                  <div className="my-1 border-t border-slate-100" role="separator" />
+                </>
+              ) : null}
               <button
                 type="button"
                 className="flex w-full px-3 py-2 text-left text-sm text-slate-800 hover:bg-slate-50"

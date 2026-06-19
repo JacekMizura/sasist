@@ -7,18 +7,27 @@ import { loadVisibleFieldOrder, saveVisibleFieldOrder } from "./filterVisibility
  * @param storageKey short id e.g. `orders.list` (prefixed internally)
  * @param catalogIds stable ordered ids of all known fields
  */
-export function useFilterFieldOrder(storageKey: string, catalogIds: readonly string[]) {
+export function useFilterFieldOrder(
+  storageKey: string,
+  catalogIds: readonly string[],
+  defaultVisibleIds?: readonly string[],
+) {
   console.log("[HOOK] useFilterFieldOrder init", { storageKey, n: catalogIds.length });
   const catalogKey = useMemo(() => catalogIds.join("\0"), [catalogIds]);
+  const defaultKey = useMemo(() => defaultVisibleIds?.join("\0") ?? "", [defaultVisibleIds]);
   /** Avoid effect re-running every render when callers pass a new array instance with the same ids. */
   const catalogIdsRef = useRef(catalogIds);
   catalogIdsRef.current = catalogIds;
+  const defaultVisibleRef = useRef(defaultVisibleIds);
+  defaultVisibleRef.current = defaultVisibleIds;
 
-  const [order, setOrder] = useState<string[]>(() => loadVisibleFieldOrder(storageKey, catalogIds));
+  const [order, setOrder] = useState<string[]>(() =>
+    loadVisibleFieldOrder(storageKey, catalogIds, defaultVisibleIds),
+  );
 
   useEffect(() => {
-    setOrder(loadVisibleFieldOrder(storageKey, catalogIdsRef.current));
-  }, [storageKey, catalogKey]);
+    setOrder(loadVisibleFieldOrder(storageKey, catalogIdsRef.current, defaultVisibleRef.current));
+  }, [storageKey, catalogKey, defaultKey]);
 
   useEffect(() => {
     console.log("[HOOK] usePreferences persist", { storageKey, rawLen: order.length, orderPreview: order.slice(0, 12) });

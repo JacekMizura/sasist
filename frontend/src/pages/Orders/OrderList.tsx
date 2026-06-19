@@ -1,10 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import {
-  ChevronRight,
-  Home,
-} from "lucide-react";
 import api from "../../api/axios";
 import { getOrderPanelSubgroups, getOrderUiStatusSummary } from "../../api/orderUiStatusApi";
 import { useWarehouse } from "../../context/WarehouseContext";
@@ -37,6 +33,7 @@ import { OrderStatusSidebar, type OrderPanelFilter } from "../../components/orde
 import {
   formatOrderPanelFilterLabel,
   ModuleFilteredAllBanner,
+  ModuleListBreadcrumb,
   ModuleStatusSidebarShell,
   ModuleTableCard,
   moduleListContentColumnClass,
@@ -901,21 +898,7 @@ export default function OrderList() {
 
   return (
     <>
-      <nav className="mb-2.5 flex flex-wrap items-center gap-1.5 text-sm" aria-label="Ścieżka nawigacji">
-          <Link
-            to="/dashboard"
-            className="inline-flex items-center gap-1 font-medium text-slate-500 transition hover:text-slate-800"
-            aria-label="Panel"
-          >
-            <Home className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
-          </Link>
-          <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" aria-hidden />
-          <Link to="/orders/list" className="font-medium text-slate-500 transition hover:text-slate-800">
-            Zamówienia
-          </Link>
-          <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" aria-hidden />
-          <span className="font-medium text-slate-600">Lista</span>
-        </nav>
+      <ModuleListBreadcrumb items={[{ label: "Zamówienia", to: "/orders/list" }, { label: "Lista" }]} />
 
       <div className={moduleListTwoColumnShellClass}>
         <ModuleStatusSidebarShell
@@ -962,6 +945,11 @@ export default function OrderList() {
             tableDensityCompact={tableDensityCompact}
             onToggleTableDensity={() => setTableDensityCompact((v) => !v)}
             onOpenColumnPicker={() => setColumnPickerOpen(true)}
+            bulkBusy={bulkBusy}
+            onExport={() => setExportOpen(true)}
+            onRefresh={() => void fetchOrders()}
+            onMultiMenuSelect={handleMultiMenu}
+            onQuickAction={openQuickAction}
           />
 
           {fetchError ? (
@@ -1006,15 +994,13 @@ export default function OrderList() {
                   bulkSelectionMode={bulkSelectionMode}
                   headerChecked={headerChecked}
                   headerIndeterminate={headerIndeterminate}
+                  panelSummary={panelSummary}
+                  panelSubgroups={panelSubgroups}
                   onSelectPage={selectAllOnPage}
                   onSelectFiltered={selectAllFiltered}
                   onClearSelection={clearSelection}
                   onSelectMenuBump={() => setBulkSelectMenuKey((k) => k + 1)}
-                  onMultiMenuSelect={handleMultiMenu}
-                  onQuickAction={openQuickAction}
-                  onOpenMultiModal={openMultiModal}
-                  onRefresh={() => void fetchOrders()}
-                  onExport={() => setExportOpen(true)}
+                  onBulkStatusSelect={(statusId) => void handleQuickChangeStatus(statusId)}
                 />
               }
               footer={

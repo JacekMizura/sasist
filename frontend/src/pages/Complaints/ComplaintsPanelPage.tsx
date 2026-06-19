@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { isAxiosError } from "axios";
-import { ChevronRight, Eye, Home, Phone, Trash2 } from "lucide-react";
+import { ChevronRight, Eye, Phone, Trash2 } from "lucide-react";
 
 import { getComplaintStatusSummary, listComplaints, softDeleteComplaint } from "../../api/complaintsApi";
 import { useActiveWarehouseContext, ACTIVE_WAREHOUSE_REQUIRED_MESSAGE } from "../../hooks/useActiveWarehouseContext";
@@ -36,6 +36,7 @@ import { ComplaintsListBulkBar } from "../../components/complaints/ComplaintsLis
 import { ComplaintsListToolbar } from "../../components/complaints/ComplaintsListToolbar";
 import {
   ModuleFilteredAllBanner,
+  ModuleListBreadcrumb,
   ModuleStatusSidebarShell,
   ModuleTableCard,
   moduleListContentColumnClass,
@@ -280,28 +281,14 @@ export default function ComplaintsPanelPage() {
 
   return (
     <>
-      <nav className="mb-2.5 flex flex-wrap items-center gap-1.5 text-sm" aria-label="Ścieżka nawigacji">
-          <Link
-            to="/dashboard"
-            className="inline-flex items-center gap-1 font-medium text-slate-500 transition hover:text-slate-800"
-            aria-label="Panel"
-          >
-            <Home className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
-          </Link>
-          <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" aria-hidden />
-          <Link to="/complaints" className="font-medium text-slate-500 transition hover:text-slate-800">
-            Reklamacje
-          </Link>
-          <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" aria-hidden />
-          <span className="font-medium text-slate-600">Lista</span>
-        </nav>
+      <ModuleListBreadcrumb items={[{ label: "Reklamacje", to: "/complaints" }, { label: "Lista" }]} />
 
       <div className={moduleListTwoColumnShellClass}>
         {warehouseId != null ? (
           <ModuleStatusSidebarShell
             collapsed={isStatusPanelCollapsed}
             onToggleCollapsed={() => setIsStatusPanelCollapsed((v) => !v)}
-            mobileOpenLabel="Statusy reklamacji"
+            mobileOpenLabel="Statusy panelu"
             statusDrawerOpen={statusDrawerOpen}
             onStatusDrawerOpenChange={setStatusDrawerOpen}
             sidebar={

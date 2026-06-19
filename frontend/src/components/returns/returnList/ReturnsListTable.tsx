@@ -14,10 +14,8 @@ import { ReturnsListProductCell } from "./ReturnsListProductCell";
 import { firstProductImageUrl } from "../../panelList/ProductListItem";
 import { PanelBulkStatusPickerDropdown } from "../../panel/PanelBulkStatusPickerDropdown";
 import {
-  ModuleBulkActionsToolbar,
+  ModuleListBulkBar,
   ModuleTableCard,
-  moduleBulkDangerBtnClass,
-  moduleBulkTextBtnClass,
 } from "../../listPage/moduleList";
 import { WMS_ROUTES } from "../../../pages/wms/wmsRoutes";
 import { resolveDamageMediaUrl } from "../../../utils/resolveDamageMediaUrl";
@@ -370,7 +368,7 @@ function ReturnsListTableInner({
     <ModuleTableCard
       bulkBar={
         effectiveWarehouseId != null ? (
-          <ModuleBulkActionsToolbar
+          <ModuleListBulkBar
             bulkSelectMenuKey={bulkSelectMenuKey}
             selectDisabled={bulkBusy}
             selectAriaLabel="Opcje zaznaczania listy zwrotów"
@@ -381,7 +379,11 @@ function ReturnsListTableInner({
             bulkSelectionMode={bulkSelectionMode}
             headerChecked={headerChecked}
             headerIndeterminate={headerIndeterminate}
-            primaryActions={
+            clearDisabled={bulkToolbarDisabled}
+            showDelete
+            deleteDisabled={bulkToolbarDisabled}
+            onDelete={onBulkDelete}
+            actionSlot={
               <PanelBulkStatusPickerDropdown
                 key={`${bulkSelectMenuKey}-st`}
                 panelSummary={panelSummary as unknown as OrderUiStatusPanelSummary | null}
@@ -394,30 +396,6 @@ function ReturnsListTableInner({
                   onBulkStatusConfirm(v, resolveBulkReturnStatusLabel(v));
                 }}
               />
-            }
-            showOrBeforeIcons={false}
-            secondaryActions={
-              <>
-                <button
-                  type="button"
-                  onClick={onBulkDelete}
-                  disabled={bulkToolbarDisabled}
-                  className={moduleBulkDangerBtnClass}
-                >
-                  Usuń
-                </button>
-                <button
-                  type="button"
-                  disabled={bulkToolbarDisabled}
-                  className={moduleBulkTextBtnClass}
-                  onClick={() => {
-                    clearSelection();
-                    onBulkSelectMenuKeyBump();
-                  }}
-                >
-                  Odznacz
-                </button>
-              </>
             }
           />
         ) : null

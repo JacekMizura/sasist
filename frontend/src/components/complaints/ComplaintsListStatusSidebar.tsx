@@ -1,5 +1,4 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { Link } from "react-router-dom";
 import { Search } from "lucide-react";
 
 import type { ComplaintStatusCode } from "../../types/complaint";
@@ -90,7 +89,7 @@ export function ComplaintsListStatusSidebar({
     return (
       <div className={collapsedRootClass}>
         <PanelStatusSidebarHeader
-          title="Status reklamacji"
+          title="Status panelu"
           collapsed
           titleTrailing={titleTrailing}
           onToggleCollapsed={onToggleCollapsed}
@@ -136,7 +135,7 @@ export function ComplaintsListStatusSidebar({
   return (
     <RootTag className={expandedRootClass}>
       <PanelStatusSidebarHeader
-        title="Status reklamacji"
+        title="Status panelu"
         titleTrailing={titleTrailing}
         onToggleCollapsed={onToggleCollapsed}
       />
@@ -151,8 +150,8 @@ export function ComplaintsListStatusSidebar({
           type="search"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Szukaj etapu…"
-          aria-label="Szukaj etapu reklamacji"
+          placeholder="Szukaj statusu…"
+          aria-label="Szukaj statusu"
           className="w-full rounded-lg border border-slate-200 bg-slate-50 py-1.5 pl-8 pr-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-slate-300 focus:bg-white focus:outline-none focus:ring-1 focus:ring-slate-200"
         />
       </div>
@@ -192,13 +191,6 @@ export function ComplaintsListStatusSidebar({
           </div>
         )}
       </div>
-
-      <Link
-        to="/settings/complaints/ui-statuses"
-        className="mt-3 block text-center text-xs font-medium text-slate-500 hover:text-blue-700 hover:underline"
-      >
-        Zarządzaj statusami…
-      </Link>
     </RootTag>
   );
 }

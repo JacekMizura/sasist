@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { ChevronRight, Home } from "lucide-react";
 
 import { getShippingMethods, type ShippingMethodDto } from "../../api/shippingMethodsApi";
 import {
@@ -40,6 +39,7 @@ import {
 } from "../../components/orders/OrderStatusSidebar";
 import {
   ModuleFilteredAllBanner,
+  ModuleListBreadcrumb,
   ModuleStatusSidebarShell,
   moduleListContentColumnClass,
   moduleListTwoColumnShellClass,
@@ -502,21 +502,7 @@ export default function ReturnsListPanel() {
 
   return (
     <>
-      <nav className="mb-6 flex flex-wrap items-center gap-2 text-sm text-slate-400" aria-label="Ścieżka nawigacji">
-        <Link
-          to="/dashboard"
-          className="inline-flex items-center gap-1 transition hover:text-slate-900"
-          aria-label="Panel"
-        >
-          <Home className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
-        </Link>
-        <ChevronRight className="h-3.5 w-3.5 shrink-0" aria-hidden />
-        <Link to="/orders/list" className="transition hover:text-slate-900">
-          Zamówienia
-        </Link>
-        <ChevronRight className="h-3.5 w-3.5 shrink-0" aria-hidden />
-        <span className="font-medium text-slate-900">Zwroty</span>
-      </nav>
+      <ModuleListBreadcrumb items={[{ label: "Zamówienia", to: "/orders/list" }, { label: "Zwroty" }]} />
 
       <ReturnsModuleTabsStrip />
 

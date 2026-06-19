@@ -1,24 +1,7 @@
-import {
-  Download,
-  Flag,
-  Mail,
-  Package,
-  Printer,
-  RefreshCw,
-  Truck,
-} from "lucide-react";
-import { Link } from "react-router-dom";
-
+import { PanelBulkStatusPickerDropdown } from "../../panel/PanelBulkStatusPickerDropdown";
 import type { PanelBulkSelectionMode } from "../../../hooks/usePanelListBulkSelection";
-import {
-  ModuleBulkActionsToolbar,
-  moduleBulkIconBtnClass,
-  moduleBulkOrSeparatorClass,
-  moduleBulkTextBtnClass,
-} from "../../listPage/moduleList";
-import { listSellasistInputClass } from "../../listPage/listSellasistTokens";
-import { WMS_ROUTES } from "../../../pages/wms/wmsRoutes";
-import { OrderListMultiActionsMenu, type MultiMenuActionId } from "./OrderListMultiActionsMenu";
+import type { OrderUiPanelSubgroupRead, OrderUiStatusPanelSummary } from "../../../types/orderUiStatus";
+import { ModuleListBulkBar } from "../../listPage/moduleList";
 
 export type OrdersListBulkBarProps = {
   bulkSelectMenuKey: number;
@@ -29,15 +12,13 @@ export type OrdersListBulkBarProps = {
   bulkSelectionMode: PanelBulkSelectionMode;
   headerChecked: boolean;
   headerIndeterminate: boolean;
+  panelSummary: OrderUiStatusPanelSummary | null;
+  panelSubgroups: OrderUiPanelSubgroupRead[] | null;
   onSelectPage: () => void;
   onSelectFiltered: () => void;
   onClearSelection: () => void;
   onSelectMenuBump: () => void;
-  onMultiMenuSelect: (id: MultiMenuActionId) => void;
-  onQuickAction: (kind: import("./orderQuickActionKinds").OrderQuickToolbarActionKind) => void;
-  onOpenMultiModal: () => void;
-  onRefresh: () => void;
-  onExport: () => void;
+  onBulkStatusSelect: (statusId: string) => void;
 };
 
 export function OrdersListBulkBar({
@@ -49,18 +30,16 @@ export function OrdersListBulkBar({
   bulkSelectionMode,
   headerChecked,
   headerIndeterminate,
+  panelSummary,
+  panelSubgroups,
   onSelectPage,
   onSelectFiltered,
   onClearSelection,
   onSelectMenuBump,
-  onMultiMenuSelect,
-  onQuickAction,
-  onOpenMultiModal,
-  onRefresh,
-  onExport,
+  onBulkStatusSelect,
 }: OrdersListBulkBarProps) {
   return (
-    <ModuleBulkActionsToolbar
+    <ModuleListBulkBar
       bulkSelectMenuKey={bulkSelectMenuKey}
       selectDisabled={bulkBusy}
       selectAriaLabel="Zakres zaznaczenia na liście zamówień"
@@ -74,112 +53,20 @@ export function OrdersListBulkBar({
       bulkSelectionMode={bulkSelectionMode}
       headerChecked={headerChecked}
       headerIndeterminate={headerIndeterminate}
-      primaryActions={
-        <>
-          <select
-            disabled={bulkToolbarDisabled}
-            aria-label="Wybierz akcję zbiorczą"
-            className={`${listSellasistInputClass} !h-9 max-w-[14rem] shrink-0 text-sm ${bulkToolbarDisabled ? "opacity-50" : ""}`}
-            defaultValue=""
-            onChange={() => undefined}
-          >
-            <option value="">Wybierz akcję</option>
-          </select>
-          <button
-            type="button"
-            disabled={bulkToolbarDisabled}
-            className="inline-flex h-9 shrink-0 items-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-900 hover:bg-slate-50 disabled:opacity-40"
-          >
-            Wykonaj
-          </button>
-          <span className={moduleBulkOrSeparatorClass}>lub</span>
-          <OrderListMultiActionsMenu disabled={bulkBusy} onSelect={onMultiMenuSelect} />
-        </>
-      }
-      iconActions={
-        <>
-          <button
-            type="button"
-            disabled={bulkToolbarDisabled}
-            className={moduleBulkIconBtnClass}
-            title="Zmień status"
-            aria-label="Zmień status"
-            onClick={() => onQuickAction("change_status")}
-          >
-            <Flag className="h-4 w-4" strokeWidth={2} aria-hidden />
-          </button>
-          <button
-            type="button"
-            disabled={bulkToolbarDisabled}
-            className={moduleBulkIconBtnClass}
-            title="Wystaw dokument"
-            aria-label="Wystaw dokument"
-            onClick={() => onQuickAction("issue_document")}
-          >
-            <Printer className="h-4 w-4" strokeWidth={2} aria-hidden />
-          </button>
-          <button
-            type="button"
-            disabled={bulkToolbarDisabled}
-            className={moduleBulkIconBtnClass}
-            title="Metoda wysyłki — multiakcje"
-            aria-label="Metoda wysyłki"
-            onClick={onOpenMultiModal}
-          >
-            <Truck className="h-4 w-4" strokeWidth={2} aria-hidden />
-          </button>
-          <button
-            type="button"
-            disabled={bulkToolbarDisabled}
-            className={moduleBulkIconBtnClass}
-            title="Wiadomość"
-            aria-label="Wyślij wiadomość"
-            onClick={() => onQuickAction("send_message")}
-          >
-            <Mail className="h-4 w-4" strokeWidth={2} aria-hidden />
-          </button>
-          <button
-            type="button"
-            disabled={bulkToolbarDisabled}
-            className={moduleBulkIconBtnClass}
-            title="Eksportuj"
-            aria-label="Eksportuj"
-            onClick={onExport}
-          >
-            <Download className="h-4 w-4" strokeWidth={2} aria-hidden />
-          </button>
-          <button
-            type="button"
-            disabled={bulkBusy}
-            className={moduleBulkIconBtnClass}
-            title="Odśwież"
-            aria-label="Odśwież listę"
-            onClick={onRefresh}
-          >
-            <RefreshCw className="h-4 w-4" strokeWidth={2} aria-hidden />
-          </button>
-          <Link
-            to={WMS_ROUTES.packing}
-            className={`${moduleBulkIconBtnClass} no-underline`}
-            title="Pakowanie WMS"
-            aria-label="Pakowanie WMS"
-          >
-            <Package className="h-4 w-4" strokeWidth={2} aria-hidden />
-          </Link>
-        </>
-      }
-      secondaryActions={
-        <button
-          type="button"
+      clearDisabled={bulkToolbarDisabled}
+      actionSlot={
+        <PanelBulkStatusPickerDropdown
+          key={`${bulkSelectMenuKey}-st`}
+          panelSummary={panelSummary}
+          panelSubgroups={panelSubgroups}
           disabled={bulkToolbarDisabled}
-          className={moduleBulkTextBtnClass}
-          onClick={() => {
-            onClearSelection();
-            onSelectMenuBump();
+          placeholder="Wybierz akcję"
+          ariaLabel="Zmień status panelu dla zaznaczonych zamówień"
+          onSelect={(v) => {
+            if (effectiveSelectionCount === 0) return;
+            onBulkStatusSelect(v);
           }}
-        >
-          Odznacz
-        </button>
+        />
       }
     />
   );

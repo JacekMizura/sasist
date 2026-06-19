@@ -25,8 +25,16 @@ import {
 } from "../../filters";
 import { listSellasistFilterGridClass4 } from "../../listPage/listSellasistTokens";
 
-/** Bumped: default field order matches row priority (search → … → extra_filters). */
-const ORDER_LIST_FILTER_STORAGE_KEY = "orders.list.v4";
+/** Bumped: domyślnie kompaktowy zestaw pól (jak zwroty/reklamacje). */
+const ORDER_LIST_FILTER_STORAGE_KEY = "orders.list.v5";
+
+/** Domyślnie widoczne pola — reszta przez „Widoczne pola filtrów”. */
+const ORDER_LIST_DEFAULT_VISIBLE_FIELDS = [
+  "search",
+  "payment_status",
+  "shipping_method",
+  "date_range",
+] as const;
 
 const ORDER_EXTRA_FLAG_OPTIONS: FilterMutexFlagOption[] = [
   { id: "paid", label: "Tylko opłacone", mutexWith: ["unpaid"] },
@@ -111,6 +119,7 @@ export function OrderListFiltersPanel({
   const { order: visibleFieldOrder, setOrderFromModal } = useFilterFieldOrder(
     ORDER_LIST_FILTER_STORAGE_KEY,
     ORDER_LIST_FILTER_IDS,
+    ORDER_LIST_DEFAULT_VISIBLE_FIELDS,
   );
 
   const embedded = filterLayout === "embedded";

@@ -6,13 +6,23 @@ const STORAGE_PREFIX = "ui.filterFields.v1:";
  * - Saved array lists only visible fields (subset). Omitted ids stay hidden (e.g. new app fields until user adds them).
  * - If user clears everything, fall back to full catalog.
  */
-export function loadVisibleFieldOrder(storageKey: string, catalogIds: readonly string[]): string[] {
+export function loadVisibleFieldOrder(
+  storageKey: string,
+  catalogIds: readonly string[],
+  defaultVisibleIds?: readonly string[],
+): string[] {
   const valid = new Set(catalogIds);
   const lsKey = STORAGE_PREFIX + storageKey;
   try {
     const raw = localStorage.getItem(lsKey);
     console.log("[LS]", lsKey, raw);
-    if (raw == null || raw === "") return [...catalogIds];
+    if (raw == null || raw === "") {
+      if (defaultVisibleIds?.length) {
+        const subset = defaultVisibleIds.filter((id) => valid.has(id));
+        if (subset.length > 0) return subset;
+      }
+      return [...catalogIds];
+    }
     let parsed: unknown;
     try {
       parsed = JSON.parse(raw) as unknown;

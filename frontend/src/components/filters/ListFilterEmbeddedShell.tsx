@@ -12,7 +12,7 @@ type ListFilterEmbeddedShellProps = {
 export function ListFilterEmbeddedShell({ expanded, children }: ListFilterEmbeddedShellProps) {
   if (!expanded) return null;
   return (
-    <FilterPanel tone="white" className={filterEmbeddedPanelClass}>
+    <FilterPanel tone="white" className={`${filterEmbeddedPanelClass} border-slate-200/70 shadow-none`}>
       {children}
     </FilterPanel>
   );
