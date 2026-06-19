@@ -16,13 +16,6 @@ type Props = {
   setDraft: Dispatch<SetStateAction<ReturnModuleConfigDto | null>>;
 };
 
-const SECTION_NAV = [
-  { id: "etykiety-listy", label: "Etykiety listy" },
-  { id: "decyzje-produktowe", label: "Decyzje produktowe" },
-  { id: "uszkodzenia", label: "Uszkodzenia" },
-  { id: "workflow-magazynowy", label: "Workflow magazynowy" },
-] as const;
-
 export function ReturnsStatusesConfigurator({ warehouseId, cfg, setDraft }: Props) {
   const panel = useReturnPanelStatusesConfig(warehouseId);
   const [subgroupModal, setSubgroupModal] = useState<ReturnUiMainGroup | null>(null);
@@ -42,26 +35,7 @@ export function ReturnsStatusesConfigurator({ warehouseId, cfg, setDraft }: Prop
   }
 
   return (
-    <div className="space-y-8">
-      <header>
-        <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">Konfigurator zwrotów</h1>
-        <p className="mt-1.5 max-w-3xl text-sm leading-relaxed text-slate-600">
-          Ustaw etykiety listy, decyzje produktowe i typy uszkodzeń. Etapy workflow magazynowego są opcjonalne — większość sklepów
-          korzysta z domyślnych.
-        </p>
-        <nav className="mt-4 flex flex-wrap gap-2" aria-label="Sekcje konfiguratora">
-          {SECTION_NAV.map((s) => (
-            <a
-              key={s.id}
-              href={`#${s.id}`}
-              className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
-            >
-              {s.label}
-            </a>
-          ))}
-        </nav>
-      </header>
-
+    <div className="space-y-12">
       {panel.err ? (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{panel.err}</div>
       ) : null}

@@ -135,7 +135,7 @@ function ProcessStageCard({ row, onEdit }: { row: ReturnStatusRead; onEdit: () =
   return (
     <button
       type="button"
-      className="w-full rounded-xl border border-slate-200/90 bg-white px-5 py-4 text-left shadow-sm transition hover:border-slate-300 hover:shadow"
+      className="w-full rounded-lg border border-slate-200/70 bg-white px-4 py-3 text-left transition hover:border-slate-300"
       onClick={onEdit}
     >
       <div className="flex items-center gap-3">

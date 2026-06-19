@@ -20,23 +20,23 @@ function isRefundLikeDecision(row: ReturnProductDecisionDto): boolean {
   return code.includes("refund") || label.includes("zwrot środk") || label.includes("zwrot srodk");
 }
 
-/** Opis skutku biznesowego decyzji — bez flag systemowych. */
+/** Opis skutku biznesowego decyzji — z prefiksem ✓/✕. */
 export function productDecisionBusinessOutcome(row: ReturnProductDecisionDto): string {
-  if (!row.is_active) return "Decyzja wyłączona — niedostępna przy obsłudze";
+  if (!row.is_active) return "✕ Decyzja wyłączona";
 
   if (row.category === "ACCEPTED") {
-    if (isRefundLikeDecision(row)) return "Produkt nie wraca na magazyn";
-    return "Produkt wraca na magazyn";
+    if (isRefundLikeDecision(row)) return "✕ Produkt nie wraca na magazyn";
+    return "✓ Produkt wraca na magazyn";
   }
 
   if (row.creates_stock_document) {
     if (/uszkodz|damage|zniszcz/i.test(row.label)) {
-      return "Produkt wraca na magazyn i wymaga dalszej oceny";
+      return "✓ Produkt wraca na magazyn i wymaga dalszej oceny";
     }
-    return "Produkt wraca na magazyn";
+    return "✓ Produkt wraca na magazyn";
   }
 
-  return "Produkt nie wraca na magazyn";
+  return "✕ Produkt nie wraca na magazyn";
 }
 
 /** @deprecated Użyj productDecisionBusinessOutcome */

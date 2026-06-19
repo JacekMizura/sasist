@@ -246,7 +246,7 @@ export function ReturnUiStatusModal({
             Aktywna etykieta
           </label>
         </div>
-        <IntegrationsApiPanel title="Integracje i API">
+        <IntegrationsApiPanel>
           <label className={lab}>
             Kolejność na liście
             <input

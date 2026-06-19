@@ -1,5 +1,5 @@
 import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
-import { Plus } from "lucide-react";
+import { Pencil, Plus } from "lucide-react";
 
 import type {
   ReturnDamageClassDto,
@@ -7,8 +7,7 @@ import type {
   ReturnModuleConfigDto,
 } from "../../../types/returnModuleConfig";
 import { IntegrationsApiPanel, IntegrationsCodeField } from "./AdvancedSettingsPanel";
-import { damageClassDisplayLabel } from "./businessLabels";
-import { ConfiguratorSectionShell } from "./ConfiguratorSectionShell";
+import { ConfiguratorSectionShell, WMS_VISIBILITY_LABEL } from "./ConfiguratorSectionShell";
 import { ReturnsConfiguratorModalShell } from "./ReturnsConfiguratorModalShell";
 
 type Props = {
@@ -37,6 +36,22 @@ export function DamageCardsSection({ cfg, setDraft }: Props) {
     return m;
   }, [cfg.damage_reasons]);
 
+  const patchClass = (row: ReturnDamageClassDto, patch: Partial<ReturnDamageClassDto>) => {
+    setDraft({
+      ...cfg,
+      damage_classes: cfg.damage_classes.map((r) => (r.code === row.code ? { ...r, ...patch } : r)),
+    });
+  };
+
+  const patchReason = (row: ReturnDamageReasonDto, patch: Partial<ReturnDamageReasonDto>) => {
+    setDraft({
+      ...cfg,
+      damage_reasons: cfg.damage_reasons.map((r) =>
+        r.code === row.code && r.class_code === row.class_code ? { ...r, ...patch } : r,
+      ),
+    });
+  };
+
   const saveClass = (next: ReturnDamageClassDto, mode: "create" | "edit", original?: ReturnDamageClassDto) => {
     if (mode === "create") setDraft({ ...cfg, damage_classes: [...cfg.damage_classes, next] });
     else if (original) {
@@ -49,12 +64,19 @@ export function DamageCardsSection({ cfg, setDraft }: Props) {
   };
 
   const saveReason = (next: ReturnDamageReasonDto, mode: "create" | "edit", original?: ReturnDamageReasonDto) => {
-    if (mode === "create") setDraft({ ...cfg, damage_reasons: [...cfg.damage_reasons, next] });
+    const merged = {
+      ...next,
+      is_active: original?.is_active ?? next.is_active,
+      visible_wms: original?.visible_wms ?? next.visible_wms,
+      code: original?.code ?? next.code,
+      sort_order: original?.sort_order ?? next.sort_order,
+    };
+    if (mode === "create") setDraft({ ...cfg, damage_reasons: [...cfg.damage_reasons, merged] });
     else if (original) {
       setDraft({
         ...cfg,
         damage_reasons: cfg.damage_reasons.map((r) =>
-          r.code === original.code && r.class_code === original.class_code ? next : r,
+          r.code === original.code && r.class_code === original.class_code ? merged : r,
         ),
       });
     }
@@ -64,13 +86,12 @@ export function DamageCardsSection({ cfg, setDraft }: Props) {
   return (
     <>
       <ConfiguratorSectionShell
-        eyebrow=""
+        id="uszkodzenia"
         title="Uszkodzenia"
-        description="Typy uszkodzeń wybierane przy kontroli jakości — bez technicznych kodów klas na liście głównej."
         action={
           <button
             type="button"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+            className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-700 hover:text-slate-900"
             onClick={() => setClassModal({ mode: "create" })}
           >
             <Plus className="h-4 w-4" strokeWidth={2} aria-hidden />
@@ -78,33 +99,55 @@ export function DamageCardsSection({ cfg, setDraft }: Props) {
           </button>
         }
       >
-        <div className="space-y-8">
+        <div className="space-y-10">
           {classes.map((cls) => {
             const reasons = reasonsByClass.get(cls.code) ?? [];
             return (
-              <div key={cls.code}>
-                <div className="mb-3 flex flex-wrap items-center gap-3">
+              <div key={cls.code} className="space-y-4">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                   <span
-                    className="h-3 w-3 shrink-0 rounded-full ring-2 ring-white"
+                    className="h-3 w-3 shrink-0 rounded-full"
                     style={{ backgroundColor: cls.color_hex?.startsWith("#") ? cls.color_hex : "#94a3b8" }}
                     aria-hidden
                   />
-                  <h3 className="text-sm font-bold text-slate-900">{damageClassDisplayLabel(cls)}</h3>
                   <button
                     type="button"
-                    className="text-xs font-semibold text-slate-500 underline decoration-slate-300 underline-offset-2 hover:text-slate-800"
+                    className="text-sm font-bold text-slate-900 hover:underline"
                     onClick={() => setClassModal({ mode: "edit", row: cls })}
                   >
+                    {cls.label || cls.code}
+                  </button>
+                  <label className="inline-flex items-center gap-1.5 text-sm text-slate-600">
+                    <input
+                      type="checkbox"
+                      className="rounded border-slate-300"
+                      checked={cls.is_active}
+                      onChange={(e) => patchClass(cls, { is_active: e.target.checked })}
+                    />
+                    Aktywna
+                  </label>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-slate-800"
+                    onClick={() => setClassModal({ mode: "edit", row: cls })}
+                  >
+                    <Pencil className="h-3 w-3" strokeWidth={2} aria-hidden />
                     Edytuj grupę
                   </button>
                 </div>
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {reasons.map((r) => (
-                    <DamageReasonCard key={`${r.class_code}-${r.code}`} row={r} onEdit={() => setReasonModal({ mode: "edit", row: r })} />
+                    <DamageReasonTile
+                      key={`${r.class_code}-${r.code}`}
+                      row={r}
+                      onEdit={() => setReasonModal({ mode: "edit", row: r })}
+                      onPatch={(patch) => patchReason(r, patch)}
+                    />
                   ))}
                   <button
                     type="button"
-                    className="flex min-h-[4.5rem] items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50/50 px-4 py-3 text-sm font-semibold text-slate-600 hover:border-slate-400 hover:bg-white"
+                    className="flex min-h-[5rem] items-center justify-center rounded-lg border border-dashed border-slate-300 px-4 py-3 text-sm font-semibold text-slate-500 hover:border-slate-400 hover:text-slate-700"
                     onClick={() => setReasonModal({ mode: "create", classCode: cls.code })}
                   >
                     <Plus className="mr-1.5 h-4 w-4" strokeWidth={2} aria-hidden />
@@ -114,7 +157,7 @@ export function DamageCardsSection({ cfg, setDraft }: Props) {
               </div>
             );
           })}
-          {classes.length === 0 ? <p className="text-sm text-slate-400">Brak grup uszkodzeń — dodaj pierwszą.</p> : null}
+          {classes.length === 0 ? <p className="text-sm text-slate-400">Brak grup — dodaj pierwszą.</p> : null}
         </div>
       </ConfiguratorSectionShell>
 
@@ -128,7 +171,7 @@ export function DamageCardsSection({ cfg, setDraft }: Props) {
           onDelete={
             classModal.row
               ? () => {
-                  if (!window.confirm(`Usunąć grupę „${damageClassDisplayLabel(classModal.row!)}”?`)) return;
+                  if (!window.confirm(`Usunąć grupę „${classModal.row!.label}”?`)) return;
                   setDraft({
                     ...cfg,
                     damage_classes: cfg.damage_classes.filter((c) => c.code !== classModal.row!.code),
@@ -169,21 +212,39 @@ export function DamageCardsSection({ cfg, setDraft }: Props) {
   );
 }
 
-function DamageReasonCard({ row, onEdit }: { row: ReturnDamageReasonDto; onEdit: () => void }) {
+function DamageReasonTile({
+  row,
+  onEdit,
+  onPatch,
+}: {
+  row: ReturnDamageReasonDto;
+  onEdit: () => void;
+  onPatch: (patch: Partial<ReturnDamageReasonDto>) => void;
+}) {
   return (
-    <button
-      type="button"
-      className={`rounded-xl border bg-white px-4 py-3 text-left shadow-sm transition hover:border-slate-300 hover:shadow ${
-        row.is_active ? "border-slate-200/90" : "border-slate-100 opacity-60"
-      }`}
-      onClick={onEdit}
-    >
-      <p className="font-medium text-slate-900">{row.label}</p>
-      <p className="mt-1 text-xs text-slate-500">
-        {row.visible_wms ? "Widoczne na terminalu WMS" : "Tylko panel biurowy"}
-        {!row.is_active ? " · Nieaktywne" : ""}
-      </p>
-    </button>
+    <div className={`space-y-2 rounded-lg border border-slate-200/80 px-3 py-3 ${row.is_active ? "" : "opacity-60"}`}>
+      <button type="button" className="text-left text-sm font-semibold text-slate-900 hover:underline" onClick={onEdit}>
+        {row.label}
+      </button>
+      <label className="flex items-center gap-2 text-sm text-slate-600">
+        <input
+          type="checkbox"
+          className="rounded border-slate-300"
+          checked={row.is_active}
+          onChange={(e) => onPatch({ is_active: e.target.checked })}
+        />
+        Aktywne
+      </label>
+      <label className="flex items-center gap-2 text-sm text-slate-600">
+        <input
+          type="checkbox"
+          className="rounded border-slate-300"
+          checked={row.visible_wms}
+          onChange={(e) => onPatch({ visible_wms: e.target.checked })}
+        />
+        {WMS_VISIBILITY_LABEL}
+      </label>
+    </div>
   );
 }
 
@@ -206,7 +267,7 @@ function DamageClassModal({
   const [draft, setDraft] = useState<ReturnDamageClassDto>(
     () =>
       row ?? {
-        code: `c${cfg.damage_classes.length + 1}`,
+        code: `grupa_${cfg.damage_classes.length + 1}`,
         label: "",
         color_hex: "#64748b",
         description: null,
@@ -221,8 +282,7 @@ function DamageClassModal({
   return (
     <ReturnsConfiguratorModalShell
       open
-      title={mode === "create" ? "Nowa grupa uszkodzeń" : "Edytuj grupę uszkodzeń"}
-      subtitle="Nazwa widoczna dla operatorów — np. „Lekkie uszkodzenia”."
+      title={mode === "create" ? "Nowa grupa uszkodzeń" : "Edytuj grupę"}
       onClose={onClose}
       footer={
         <>
@@ -251,13 +311,13 @@ function DamageClassModal({
           <input
             className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
             value={draft.label}
-            placeholder="np. Lekkie uszkodzenia"
+            placeholder="np. Lekkie uszkodzenia, Towar pełnowartościowy"
             onChange={(e) => setDraft((d) => ({ ...d, label: e.target.value }))}
             autoFocus
           />
         </label>
         <label className="block text-xs font-medium text-slate-600">
-          Kolor etykiety
+          Kolor
           <input
             type="color"
             className="mt-1 h-10 w-14 cursor-pointer rounded border border-slate-200"
@@ -265,38 +325,20 @@ function DamageClassModal({
             onChange={(e) => setDraft((d) => ({ ...d, color_hex: e.target.value }))}
           />
         </label>
-        <div className="space-y-2 rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-3">
+        <label className="flex items-center gap-2 text-sm text-slate-700">
+          <input type="checkbox" checked={draft.is_active} onChange={(e) => setDraft((d) => ({ ...d, is_active: e.target.checked }))} />
+          Aktywna
+        </label>
+
+        <IntegrationsApiPanel>
+          <IntegrationsCodeField label="Kod grupy (class_code)" value={draft.code} onChange={(v) => setDraft((d) => ({ ...d, code: v.trim() }))} />
           <label className="flex items-center gap-2 text-sm text-slate-700">
             <input type="checkbox" checked={draft.visible_wms} onChange={(e) => setDraft((d) => ({ ...d, visible_wms: e.target.checked }))} />
-            Widoczna na terminalu WMS
+            {WMS_VISIBILITY_LABEL}
           </label>
           <label className="flex items-center gap-2 text-sm text-slate-700">
             <input type="checkbox" checked={draft.resale_allowed} onChange={(e) => setDraft((d) => ({ ...d, resale_allowed: e.target.checked }))} />
             Produkt może wrócić do sprzedaży
-          </label>
-          <label className="flex items-center gap-2 text-sm text-slate-700">
-            <input type="checkbox" checked={draft.is_active} onChange={(e) => setDraft((d) => ({ ...d, is_active: e.target.checked }))} />
-            Grupa aktywna
-          </label>
-        </div>
-        <IntegrationsApiPanel>
-          <IntegrationsCodeField label="Kod klasy (class_code)" value={draft.code} onChange={(v) => setDraft((d) => ({ ...d, code: v.trim() }))} />
-          <label className="block text-xs font-medium text-slate-600">
-            Zachowanie magazynowe (warehouse_behavior)
-            <input
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 font-mono text-xs"
-              value={draft.warehouse_behavior ?? ""}
-              onChange={(e) => setDraft((d) => ({ ...d, warehouse_behavior: e.target.value.trim() || null }))}
-            />
-          </label>
-          <label className="block text-xs font-medium text-slate-600">
-            Opis wewnętrzny
-            <textarea
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-              rows={2}
-              value={draft.description ?? ""}
-              onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value.trim() || null }))}
-            />
           </label>
         </IntegrationsApiPanel>
       </div>
@@ -337,7 +379,7 @@ function DamageReasonModal({
   return (
     <ReturnsConfiguratorModalShell
       open
-      title={mode === "create" ? "Nowy typ uszkodzenia" : "Edytuj typ uszkodzenia"}
+      title={mode === "create" ? "Nowy typ uszkodzenia" : "Edytuj typ"}
       onClose={onClose}
       footer={
         <>
@@ -372,7 +414,7 @@ function DamageReasonModal({
           />
         </label>
         <label className="block text-xs font-medium text-slate-600">
-          Grupa uszkodzeń
+          Grupa
           <select
             className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
             value={draft.class_code}
@@ -380,31 +422,14 @@ function DamageReasonModal({
           >
             {cfg.damage_classes.map((c) => (
               <option key={c.code} value={c.code}>
-                {damageClassDisplayLabel(c)}
+                {c.label || c.code}
               </option>
             ))}
           </select>
         </label>
-        <label className="flex items-center gap-2 text-sm text-slate-700">
-          <input type="checkbox" checked={draft.visible_wms} onChange={(e) => setDraft((d) => ({ ...d, visible_wms: e.target.checked }))} />
-          Widoczne na terminalu WMS
-        </label>
-        <label className="flex items-center gap-2 text-sm text-slate-700">
-          <input type="checkbox" checked={draft.is_active} onChange={(e) => setDraft((d) => ({ ...d, is_active: e.target.checked }))} />
-          Aktywne
-        </label>
-        <IntegrationsApiPanel>
-          <IntegrationsCodeField label="Identyfikator (code)" value={draft.code} onChange={(v) => setDraft((d) => ({ ...d, code: v.trim() }))} />
-          <label className="block text-xs font-medium text-slate-600">
-            Kolejność
-            <input
-              type="number"
-              className="mt-1 w-full max-w-[8rem] rounded-lg border border-slate-200 px-3 py-2 text-sm"
-              value={draft.sort_order}
-              onChange={(e) => setDraft((d) => ({ ...d, sort_order: Number(e.target.value) }))}
-            />
-          </label>
-        </IntegrationsApiPanel>
+        {mode === "create" ? (
+          <p className="text-xs text-slate-500">Aktywność i widoczność ustawisz na kafelku po zapisaniu.</p>
+        ) : null}
       </div>
     </ReturnsConfiguratorModalShell>
   );
