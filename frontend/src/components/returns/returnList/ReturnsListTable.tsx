@@ -13,7 +13,12 @@ import {
 import { ReturnsListProductCell } from "./ReturnsListProductCell";
 import { firstProductImageUrl } from "../../panelList/ProductListItem";
 import { PanelBulkStatusPickerDropdown } from "../../panel/PanelBulkStatusPickerDropdown";
-import { listSellasistInputClass } from "../../listPage/listSellasistTokens";
+import {
+  ModuleBulkActionsToolbar,
+  ModuleTableCard,
+  moduleBulkDangerBtnClass,
+  moduleBulkTextBtnClass,
+} from "../../listPage/moduleList";
 import { WMS_ROUTES } from "../../../pages/wms/wmsRoutes";
 import { resolveDamageMediaUrl } from "../../../utils/resolveDamageMediaUrl";
 import { displayWarehouseDocumentNumber } from "../../../utils/warehouseDocumentNumberDisplay";
@@ -362,72 +367,71 @@ function ReturnsListTableInner({
   }
 
   return (
-    <div className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-      {effectiveWarehouseId != null ? (
-        <div className="flex min-h-12 flex-wrap items-center gap-2 border-b border-slate-100 px-4 py-2">
-          <select
-            key={bulkSelectMenuKey}
-            defaultValue=""
-            disabled={bulkBusy}
-            aria-label="Opcje zaznaczania listy zwrotów"
-            className={`${listSellasistInputClass} !h-9 max-w-[11rem] shrink-0 text-sm`}
-            onChange={(e) => {
-              const v = e.target.value;
-              if (v === "page") selectAllOnPage();
-              else if (v === "clear") {
-                clearSelection();
-                onBulkSelectMenuKeyBump();
-              }
-              e.target.value = "";
-            }}
-          >
-            <option value="">Zaznacz…</option>
-            <option value="page">Strona</option>
-            <option value="clear">Odznacz</option>
-          </select>
-          {(headerChecked || headerIndeterminate) && (
-            <span className="hidden shrink-0 text-xs text-slate-500 lg:inline" aria-live="polite">
-              {bulkSelectionMode === "filtered_all" ? "Pełny zbiór wg filtrów" : headerChecked ? "Strona" : "Częściowo"}
-            </span>
-          )}
-          <span className="shrink-0 text-xs text-slate-500">wykonaj</span>
-          <PanelBulkStatusPickerDropdown
-            key={`${bulkSelectMenuKey}-st`}
-            panelSummary={panelSummary as unknown as OrderUiStatusPanelSummary | null}
-            panelSubgroups={panelSubgroups}
-            disabled={bulkToolbarDisabled}
-            placeholder="Wybierz akcję"
-            ariaLabel="Zmień status panelu dla zaznaczonych zwrotów"
-            onSelect={(v) => {
-              if (effectiveSelectionCount === 0) return;
-              onBulkStatusConfirm(v, resolveBulkReturnStatusLabel(v));
-            }}
+    <ModuleTableCard
+      bulkBar={
+        effectiveWarehouseId != null ? (
+          <ModuleBulkActionsToolbar
+            bulkSelectMenuKey={bulkSelectMenuKey}
+            selectDisabled={bulkBusy}
+            selectAriaLabel="Opcje zaznaczania listy zwrotów"
+            onSelectPage={selectAllOnPage}
+            onClearSelection={clearSelection}
+            onSelectMenuBump={onBulkSelectMenuKeyBump}
+            effectiveSelectionCount={effectiveSelectionCount}
+            bulkSelectionMode={bulkSelectionMode}
+            headerChecked={headerChecked}
+            headerIndeterminate={headerIndeterminate}
+            primaryActions={
+              <PanelBulkStatusPickerDropdown
+                key={`${bulkSelectMenuKey}-st`}
+                panelSummary={panelSummary as unknown as OrderUiStatusPanelSummary | null}
+                panelSubgroups={panelSubgroups}
+                disabled={bulkToolbarDisabled}
+                placeholder="Wybierz akcję"
+                ariaLabel="Zmień status panelu dla zaznaczonych zwrotów"
+                onSelect={(v) => {
+                  if (effectiveSelectionCount === 0) return;
+                  onBulkStatusConfirm(v, resolveBulkReturnStatusLabel(v));
+                }}
+              />
+            }
+            showOrBeforeIcons={false}
+            secondaryActions={
+              <>
+                <button
+                  type="button"
+                  onClick={onBulkDelete}
+                  disabled={bulkToolbarDisabled}
+                  className={moduleBulkDangerBtnClass}
+                >
+                  Usuń
+                </button>
+                <button
+                  type="button"
+                  disabled={bulkToolbarDisabled}
+                  className={moduleBulkTextBtnClass}
+                  onClick={() => {
+                    clearSelection();
+                    onBulkSelectMenuKeyBump();
+                  }}
+                >
+                  Odznacz
+                </button>
+              </>
+            }
           />
-          <span className="hidden shrink-0 text-[11px] font-medium tabular-nums text-slate-500 sm:inline">
-            ({effectiveSelectionCount})
-          </span>
-          <button
-            type="button"
-            onClick={onBulkDelete}
-            disabled={bulkToolbarDisabled}
-            className="inline-flex h-9 shrink-0 items-center rounded-lg border border-red-200 bg-red-50 px-2 text-xs font-semibold text-red-900 hover:bg-red-100 disabled:opacity-40"
-          >
-            Usuń
-          </button>
-          <button
-            type="button"
-            disabled={bulkToolbarDisabled}
-            className="inline-flex h-9 shrink-0 items-center rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium text-slate-800 hover:bg-slate-50 disabled:opacity-40"
-            onClick={() => {
-              clearSelection();
-              onBulkSelectMenuKeyBump();
-            }}
-          >
-            Odznacz
-          </button>
-        </div>
-      ) : null}
-
+        ) : null
+      }
+      footer={
+        rows.length > 0 ? (
+          <div className="flex items-center justify-between border-t border-slate-100 px-6 py-4 text-sm text-slate-400">
+            <div>
+              Pokazano 1 do {rows.length} z {rows.length} wpisów (limit serwera 500)
+            </div>
+          </div>
+        ) : null
+      }
+    >
       {rows.length === 0 ? (
         <div className="px-6 py-12 text-center text-sm text-slate-500">Brak zwrotów do wyświetlenia.</div>
       ) : (
@@ -463,15 +467,7 @@ function ReturnsListTableInner({
           </table>
         </div>
       )}
-
-      {rows.length > 0 ? (
-        <div className="flex items-center justify-between border-t border-slate-100 px-6 py-4 text-sm text-slate-400">
-          <div>
-            Pokazano 1 do {rows.length} z {rows.length} wpisów (limit serwera 500)
-          </div>
-        </div>
-      ) : null}
-    </div>
+    </ModuleTableCard>
   );
 }
 

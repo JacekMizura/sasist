@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { ChevronLeft, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import type {
   OrderUiMainGroup,
   OrderUiPanelSubgroupRead,
@@ -11,6 +11,7 @@ import { PanelStatusWmsIconColumn } from "../panel/PanelStatusWmsIconColumn";
 import { PanelSidebarSubgroupCollapsible } from "../panel/PanelSidebarSubgroupCollapsible";
 import { PanelTreeCount } from "../panel/PanelTreeCount";
 import { PanelTreeGroupRow } from "../panel/PanelTreeGroupRow";
+import { PanelStatusSidebarHeader } from "../panel/PanelStatusSidebarHeader";
 import {
   PANEL_SIDEBAR_WIDTH_LG_CLASS,
   PANEL_TREE_CHILDREN_CLASS,
@@ -78,53 +79,6 @@ function subgroupMatchesSearch(title: string, rows: OrderUiStatusWithCount[], qu
   if (!query) return true;
   const t = title.toLowerCase();
   return t.includes(query) || rows.some((s) => statusMatchesSearch(s, query));
-}
-
-function PanelStatusSidebarCollapseButton({
-  collapsed,
-  onToggle,
-}: {
-  collapsed: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onToggle}
-      className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700"
-      aria-label={collapsed ? "Rozwiń panel statusów" : "Zwiń panel statusów"}
-    >
-      <ChevronLeft className={`h-4 w-4 transition-transform ${collapsed ? "rotate-180" : ""}`} />
-    </button>
-  );
-}
-
-function PanelStatusSidebarHeader({
-  collapsed,
-  titleTrailing,
-  onToggleCollapsed,
-}: {
-  collapsed?: boolean;
-  titleTrailing?: ReactNode;
-  onToggleCollapsed?: () => void;
-}) {
-  return (
-    <div className={`mb-2 flex items-center gap-2 ${collapsed ? "justify-end" : "justify-between"}`}>
-      {!collapsed ? (
-        <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Status panelu</h2>
-      ) : (
-        <span className="sr-only">Status panelu</span>
-      )}
-      {(titleTrailing != null || onToggleCollapsed != null) && (
-        <div className="ml-auto flex shrink-0 items-center gap-1.5">
-          {titleTrailing}
-          {onToggleCollapsed ? (
-            <PanelStatusSidebarCollapseButton collapsed={!!collapsed} onToggle={onToggleCollapsed} />
-          ) : null}
-        </div>
-      )}
-    </div>
-  );
 }
 
 type OrdersPanelStatusSidebarProps = {
@@ -233,6 +187,7 @@ export function OrdersPanelStatusSidebar({
     return (
       <div className={collapsedRootClass}>
         <PanelStatusSidebarHeader
+          title="Status panelu"
           collapsed
           titleTrailing={titleTrailing}
           onToggleCollapsed={onToggleCollapsed}
@@ -315,6 +270,7 @@ export function OrdersPanelStatusSidebar({
   return (
     <RootTag className={expandedRootClass}>
       <PanelStatusSidebarHeader
+        title="Status panelu"
         titleTrailing={titleTrailing}
         onToggleCollapsed={onToggleCollapsed}
       />

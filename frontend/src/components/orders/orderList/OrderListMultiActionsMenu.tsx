@@ -42,7 +42,7 @@ export function OrderListMultiActionsMenu({ disabled, onSelect }: OrderListMulti
   return (
     <details className="group relative">
       <summary
-        className={`inline-flex h-8 cursor-pointer list-none items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-900 shadow-none transition hover:bg-slate-50 [&::-webkit-details-marker]:hidden ${
+        className={`inline-flex h-9 cursor-pointer list-none items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-900 shadow-none transition hover:bg-slate-50 [&::-webkit-details-marker]:hidden ${
           disabled ? "pointer-events-none opacity-40" : ""
         }`}
         aria-label="Multiakcje"

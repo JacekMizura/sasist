@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { ChevronRight, Home, Package } from "lucide-react";
+import { ChevronRight, Home } from "lucide-react";
 
 import { getShippingMethods, type ShippingMethodDto } from "../../api/shippingMethodsApi";
 import {
@@ -38,7 +38,12 @@ import {
   ORDERS_PANEL_GROUP_LABELS,
   type OrderPanelFilter,
 } from "../../components/orders/OrderStatusSidebar";
-import { PANEL_STATUS_SIDEBAR_PAGE_SHELL_CLASS } from "../../components/panel/panelStatusTreeStyles";
+import {
+  ModuleFilteredAllBanner,
+  ModuleStatusSidebarShell,
+  moduleListContentColumnClass,
+  moduleListTwoColumnShellClass,
+} from "../../components/listPage/moduleList";
 import type { OrderUiMainGroup } from "../../types/orderUiStatus";
 import { PanelSidebarOperationalRow } from "../../components/panel/PanelSidebarOperationalRow";
 import { panelTreeCountClass } from "../../components/panel/panelStatusTreeStyles";
@@ -515,20 +520,15 @@ export default function ReturnsListPanel() {
 
       <ReturnsModuleTabsStrip />
 
-      <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+      <div className={moduleListTwoColumnShellClass}>
         {effectiveWarehouseId != null ? (
-          <>
-            <button
-              type="button"
-              className="flex shrink-0 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 shadow-sm hover:bg-slate-50 lg:hidden"
-              onClick={() => setStatusDrawerOpen(true)}
-            >
-              <Package className="h-4 w-4" aria-hidden />
-              Statusy panelu
-            </button>
-            <aside
-              className={`${PANEL_STATUS_SIDEBAR_PAGE_SHELL_CLASS} ${isStatusPanelCollapsed ? "lg:w-14" : "lg:w-[18rem]"}`}
-            >
+          <ModuleStatusSidebarShell
+            collapsed={isStatusPanelCollapsed}
+            onToggleCollapsed={() => setIsStatusPanelCollapsed((v) => !v)}
+            mobileOpenLabel="Statusy panelu"
+            statusDrawerOpen={statusDrawerOpen}
+            onStatusDrawerOpenChange={setStatusDrawerOpen}
+            sidebar={
               <OrderStatusSidebar
                 warehouseId={effectiveWarehouseId}
                 panelSummary={orderSummaryCast}
@@ -543,37 +543,27 @@ export default function ReturnsListPanel() {
                 returnsOperationalQueuesSlot={operationalQueuesSlot}
                 returnsOperationalQueuesCollapsedSlot={operationalQueuesCollapsedSlot}
               />
-            </aside>
-            {statusDrawerOpen ? (
-              <div className="fixed inset-0 z-[420] flex lg:hidden">
-                <button
-                  type="button"
-                  className="absolute inset-0 bg-slate-900/45"
-                  aria-label="Zamknij panel statusów"
-                  onClick={() => setStatusDrawerOpen(false)}
-                />
-                <div className="relative w-[min(20rem,92vw)] overflow-y-auto border-r border-slate-100 bg-white p-3 shadow-xl">
-                  <OrderStatusSidebar
-                    warehouseId={effectiveWarehouseId}
-                    panelSummary={orderSummaryCast}
-                    panelSubgroups={orderSubgroupsCast}
-                    panelFilter={panelFilter}
-                    onPanelFilterChange={(f) => {
-                      handlePanelFilterChange(f);
-                      setStatusDrawerOpen(false);
-                    }}
-                    chromeVariant="sellasist"
-                    manageStatusesHref="/orders/returns/panel-statuses"
-                    returnsOperationalQueuesSlot={renderOperationalQueueSidebarRows(() => setStatusDrawerOpen(false))}
-                    returnsOperationalQueuesCollapsedSlot={operationalQueuesCollapsedSlot}
-                  />
-                </div>
-              </div>
-            ) : null}
-          </>
+            }
+            mobileDrawerSidebar={
+              <OrderStatusSidebar
+                warehouseId={effectiveWarehouseId}
+                panelSummary={orderSummaryCast}
+                panelSubgroups={orderSubgroupsCast}
+                panelFilter={panelFilter}
+                onPanelFilterChange={(f) => {
+                  handlePanelFilterChange(f);
+                  setStatusDrawerOpen(false);
+                }}
+                chromeVariant="sellasist"
+                manageStatusesHref="/orders/returns/panel-statuses"
+                returnsOperationalQueuesSlot={renderOperationalQueueSidebarRows(() => setStatusDrawerOpen(false))}
+                returnsOperationalQueuesCollapsedSlot={operationalQueuesCollapsedSlot}
+              />
+            }
+          />
         ) : null}
 
-        <div className="flex min-w-0 flex-1 flex-col gap-6">
+        <div className={moduleListContentColumnClass}>
           <ReturnsListToolbar
             loading={loading}
             resultCount={rows.length}
@@ -609,19 +599,13 @@ export default function ReturnsListPanel() {
           />
 
           {bulkSelectionMode === "filtered_all" && effectiveWarehouseId != null ? (
-            <div className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-950">
-              Zaznaczono {effectiveSelectionCount} rekordów pasujących do filtrów.{" "}
-              <button
-                type="button"
-                className="font-semibold text-sky-900 underline decoration-sky-400 underline-offset-2 hover:text-sky-950"
-                onClick={() => {
-                  clearSelection();
-                  setBulkSelectMenuKey((k) => k + 1);
-                }}
-              >
-                Wyczyść zaznaczenie
-              </button>
-            </div>
+            <ModuleFilteredAllBanner
+              count={effectiveSelectionCount}
+              onClear={() => {
+                clearSelection();
+                setBulkSelectMenuKey((k) => k + 1);
+              }}
+            />
           ) : null}
 
           <ReturnsListTable

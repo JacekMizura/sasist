@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Search } from "lucide-react";
 
@@ -7,6 +7,7 @@ import {
   COMPLAINT_SIDEBAR_FILTER_LABELS_PL,
   COMPLAINT_STATUS_FILTER_ORDER,
 } from "../../types/complaint";
+import { PanelStatusSidebarHeader } from "../panel/PanelStatusSidebarHeader";
 import { PanelStatusWmsIconColumn } from "../panel/PanelStatusWmsIconColumn";
 import { PanelTreeCount } from "../panel/PanelTreeCount";
 import {
@@ -16,6 +17,7 @@ import {
   panelTreeStatusBarClass,
   panelTreeStatusRowClass,
 } from "../panel/panelStatusTreeStyles";
+import { panelListStatusSidebarWidthLg } from "../listPage/listSellasistTokens";
 
 export type ComplaintPanelFilter = "all" | { kind: "status"; status: ComplaintStatusCode };
 
@@ -27,6 +29,9 @@ type Props = {
   onPanelFilterChange: (next: ComplaintPanelFilter) => void;
   chromeVariant?: "sellasist";
   collapsed?: boolean;
+  parentScrollContainer?: boolean;
+  onToggleCollapsed?: () => void;
+  titleTrailing?: ReactNode;
 };
 
 function stripeHexForStatus(code: ComplaintStatusCode): string {
@@ -60,9 +65,13 @@ export function ComplaintsListStatusSidebar({
   onPanelFilterChange,
   chromeVariant = "sellasist",
   collapsed = false,
+  parentScrollContainer = false,
+  onToggleCollapsed,
+  titleTrailing,
 }: Props) {
   void _warehouseId;
   const sellasist = chromeVariant === "sellasist";
+  const embedded = parentScrollContainer;
   const [searchQuery, setSearchQuery] = useState("");
 
   const visibleStatuses = useMemo(() => {
@@ -74,8 +83,18 @@ export function ComplaintsListStatusSidebar({
   }, [searchQuery]);
 
   if (collapsed) {
+    const collapsedRootClass = embedded
+      ? "w-full min-w-0 max-w-full shrink-0 space-y-1 overflow-x-hidden"
+      : `w-full max-w-full min-w-0 shrink-0 space-y-1 overflow-x-hidden rounded-md border border-slate-200/90 bg-slate-50 p-1 lg:sticky lg:top-4 lg:w-14 lg:max-w-[3.5rem]`;
+
     return (
-      <aside className="w-full max-w-full min-w-0 shrink-0 space-y-1 overflow-x-hidden rounded-md border border-slate-200/90 bg-slate-50 p-1 lg:sticky lg:top-4 lg:w-14 lg:max-w-[3.5rem]">
+      <div className={collapsedRootClass}>
+        <PanelStatusSidebarHeader
+          title="Status reklamacji"
+          collapsed
+          titleTrailing={titleTrailing}
+          onToggleCollapsed={onToggleCollapsed}
+        />
         <button
           type="button"
           className="flex w-full items-center justify-between rounded-md px-1 py-1 hover:bg-slate-100"
@@ -99,21 +118,30 @@ export function ComplaintsListStatusSidebar({
             <span className={panelTreeCountClass()}>{countFor(code)}</span>
           </button>
         ))}
-      </aside>
+      </div>
     );
   }
 
-  return (
-    <aside
-      className={`w-full min-w-0 max-w-full shrink-0 overflow-x-hidden p-2 lg:sticky lg:top-4 ${PANEL_SIDEBAR_WIDTH_LG_CLASS} ${
-        sellasist
-          ? "max-h-[min(100vh-6rem,52rem)] overflow-y-auto rounded-xl border border-slate-200/90 bg-white"
-          : "rounded-xl border border-slate-200/90 bg-white"
-      }`}
-    >
-      <p className="mb-2 px-1 text-[11px] font-bold uppercase tracking-wider text-slate-500">Status reklamacji</p>
+  const sellasistScroll =
+    sellasist && !embedded ? "max-h-[min(100vh-6rem,52rem)] overflow-y-auto" : "";
 
-      <div className="relative mb-2 px-1">
+  const expandedRootClass = embedded
+    ? "w-full min-w-0 max-w-full shrink-0 overflow-x-hidden"
+    : `w-full min-w-0 max-w-full shrink-0 overflow-x-hidden p-2 lg:sticky lg:top-4 ${
+        sellasist ? PANEL_SIDEBAR_WIDTH_LG_CLASS : panelListStatusSidebarWidthLg
+      } ${sellasistScroll} rounded-xl border border-slate-200/90 bg-white`;
+
+  const RootTag = embedded ? "div" : "aside";
+
+  return (
+    <RootTag className={expandedRootClass}>
+      <PanelStatusSidebarHeader
+        title="Status reklamacji"
+        titleTrailing={titleTrailing}
+        onToggleCollapsed={onToggleCollapsed}
+      />
+
+      <div className="relative mb-2">
         <Search
           className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400"
           strokeWidth={2}
@@ -129,7 +157,7 @@ export function ComplaintsListStatusSidebar({
         />
       </div>
 
-      <div className="space-y-1.5 px-1">
+      <div className="space-y-1.5">
         <button
           type="button"
           className={panelTreeMetaRowClass(panelFilter === "all")}
@@ -140,7 +168,7 @@ export function ComplaintsListStatusSidebar({
         </button>
 
         {visibleStatuses.length === 0 ? (
-          <p className="px-1 py-2 text-xs text-slate-500">Brak etapów pasujących do wyszukiwania.</p>
+          <p className="py-2 text-xs text-slate-500">Brak etapów pasujących do wyszukiwania.</p>
         ) : (
           <div className="space-y-1 pt-2">
             {visibleStatuses.map((code) => {
@@ -167,10 +195,10 @@ export function ComplaintsListStatusSidebar({
 
       <Link
         to="/settings/complaints/ui-statuses"
-        className="mt-3 block px-1 text-center text-xs font-medium text-slate-500 hover:text-blue-700 hover:underline"
+        className="mt-3 block text-center text-xs font-medium text-slate-500 hover:text-blue-700 hover:underline"
       >
         Zarządzaj statusami…
       </Link>
-    </aside>
+    </RootTag>
   );
 }
