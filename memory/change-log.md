@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-06-08 — Dostawcy: Ocena i Historia w stylu Pulpitu zakupów
+
+- KPI: `PurchasingKpiCard` + `PurchasingKpiGrid` (4 / 5 kolumn), ikony, układ liczba + opis jak dashboard
+- Ocena: karta „Ranking dostawców” z nagłówkiem/opisem; tabela ze stylami dashboardu
+- Historia: 5 KPI w jednym rzędzie, filtr dostawcy pod KPI, sekcje analityczne 2-kolumnowe, karta „Ostatnie dokumenty”
+- `PurchasingKpiGrid`: nowa opcja `columns={5}`; obsługa `supplier_id` z URL na Historii
+
 ## 2026-06-08 — Lista dostawców: nowy standard tabel
 
 - Tabela jak Producenci/Klienci: checkbox, Nazwa (system), kolumny konfigurowalne, Akcje 120px sticky

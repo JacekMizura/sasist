@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
+import { AlertTriangle, Award, Star, TrendingDown, X } from "lucide-react";
 import {
   Bar,
   CartesianGrid,
@@ -12,7 +13,6 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { X } from "lucide-react";
 import api from "../../api/axios";
 import {
   fetchPurchasingSupplierAnalytics,
@@ -92,6 +92,8 @@ function riskLabel(risk: string): string {
 
 export default function PurchasingSupplierAnalyticsPage() {
   const moduleCtx = usePurchasingModuleContextOptional();
+  const location = useLocation();
+  const isSuppliersModule = location.pathname.startsWith("/suppliers");
   const [searchParams] = useSearchParams();
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [tenantId, setTenantId] = useState(1);
@@ -166,10 +168,10 @@ export default function PurchasingSupplierAnalyticsPage() {
     const scored = rows.filter((r) => r.score != null && !r.insufficient_data);
     if (scored.length === 0) {
       return {
-        best: "—",
-        worst: "—",
-        avgScore: "—",
-        delayed: "—",
+        best: null as SupplierAnalyticsRow | null,
+        worst: null as SupplierAnalyticsRow | null,
+        avgScore: null as number | null,
+        delayed: 0,
       };
     }
     const byScore = [...scored].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
@@ -182,13 +184,10 @@ export default function PurchasingSupplierAnalyticsPage() {
         (r.on_time_percent != null && r.on_time_percent < 80) ||
         (r.avg_delay_days != null && (r.avg_delay_days ?? 0) > 2),
     ).length;
-    return {
-      best: `${best.supplier_name} (${best.score})`,
-      worst: `${worst.supplier_name} (${worst.score})`,
-      avgScore: avg.toFixed(1),
-      delayed: String(delayed),
-    };
+    return { best, worst, avgScore: avg, delayed };
   }, [data]);
+
+  const td = "px-4 py-3 text-sm text-slate-800 sm:px-6 sm:py-4";
 
   const openDrawer = (sid: number) => setDrawerSid(sid);
 
@@ -200,7 +199,12 @@ export default function PurchasingSupplierAnalyticsPage() {
   return (
     <PurchasingContentArea>
       <PurchasingPageShell
-        header={<PurchasingPageHeader title="Ocena dostawców" subtitle="Ranking dostawców wg terminowości, cen i wolumenu zakupów." />}
+        header={
+          <PurchasingPageHeader
+            title={isSuppliersModule ? "Ocena" : "Ocena dostawców"}
+            subtitle="Ranking dostawców wg terminowości, cen i wolumenu zakupów."
+          />
+        }
         status={
           err ? (
             <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
@@ -209,23 +213,39 @@ export default function PurchasingSupplierAnalyticsPage() {
                 Spróbuj ponownie
               </button>
             </div>
+          ) : loading ? (
+            <p className="text-sm text-slate-500">Ładowanie danych…</p>
           ) : null
         }
         kpis={
           <PurchasingKpiGrid columns={4}>
-            <PurchasingKpiCard title="Najlepszy dostawca (wg oceny)" value={kpis.best} tone="emerald" />
-            <PurchasingKpiCard title="Najsłabszy dostawca (wg oceny)" value={kpis.worst} tone="amber" />
             <PurchasingKpiCard
-              title="Średnia ocena liczbowa"
-              value={kpis.avgScore}
-              subtitle="0–100, tylko dostawcy z kompletem danych"
+              title="Najlepszy dostawca"
+              value={kpis.best?.score ?? "—"}
+              subtitle={kpis.best?.supplier_name ?? "Brak ocenionych dostawców"}
+              tone="emerald"
+              icon={<Award aria-hidden />}
+            />
+            <PurchasingKpiCard
+              title="Najsłabszy dostawca"
+              value={kpis.worst?.score ?? "—"}
+              subtitle={kpis.worst?.supplier_name ?? "Brak ocenionych dostawców"}
+              tone="amber"
+              icon={<TrendingDown aria-hidden />}
+            />
+            <PurchasingKpiCard
+              title="Średnia ocena"
+              value={kpis.avgScore != null ? kpis.avgScore.toFixed(1) : "—"}
+              subtitle="Skala 0–100, dostawcy z kompletem danych"
               tone="blue"
+              icon={<Star aria-hidden />}
             />
             <PurchasingKpiCard
               title="Dostawcy z problemami terminów"
               value={kpis.delayed}
-              subtitle="terminowość poniżej 80% lub średnie opóźnienie powyżej 2 dni"
+              subtitle="Terminowość poniżej 80% lub śr. opóźnienie powyżej 2 dni"
               tone="red"
+              icon={<AlertTriangle aria-hidden />}
             />
           </PurchasingKpiGrid>
         }
@@ -262,34 +282,38 @@ export default function PurchasingSupplierAnalyticsPage() {
           </PurchasingFilterBar>
         }
         table={
-          <PurchasingTableSection title="Ranking dostawców" indicatorClass="bg-indigo-500">
-            <table className="min-w-full text-left text-sm">
-              <PurchasingTableHeader
-                headers={[
-                  "#",
-                  "Dostawca",
-                  "Dostawy PZ",
-                  "PO planowane",
-                  "Terminowość (PZ)",
-                  "Śr. interwał dostaw (dni)",
-                  "Śr. opóźnienie (dni)",
-                  "Trend ceny zakupu (%)",
-                  "Wartość zakupów netto (PLN)",
-                  "Ocena (0–100)",
-                  "Ryzyko",
-                ]}
-              />
+          <PurchasingTableSection
+            title="Ranking dostawców"
+            subtitle={`Okres ${rangeDays} dni — kliknij wiersz, aby zobaczyć szczegóły`}
+            indicatorClass="bg-indigo-500"
+          >
+            <table className="w-full min-w-full text-left text-sm">
+              <PurchasingTableHeader>
+                <tr>
+                  <th className="px-6 py-4 text-left">#</th>
+                  <th className="px-6 py-4 text-left">Dostawca</th>
+                  <th className="px-6 py-4 text-left">Dostawy PZ</th>
+                  <th className="px-6 py-4 text-left">PO planowane</th>
+                  <th className="px-6 py-4 text-left">Terminowość (PZ)</th>
+                  <th className="px-6 py-4 text-left">Śr. interwał dostaw (dni)</th>
+                  <th className="px-6 py-4 text-left">Śr. opóźnienie (dni)</th>
+                  <th className="px-6 py-4 text-left">Trend ceny zakupu (%)</th>
+                  <th className="px-6 py-4 text-left">Wartość zakupów netto (PLN)</th>
+                  <th className="px-6 py-4 text-left">Ocena (0–100)</th>
+                  <th className="px-6 py-4 text-left">Ryzyko</th>
+                </tr>
+              </PurchasingTableHeader>
           <tbody className="divide-y divide-slate-100">
             {loading ? (
               <tr>
-                <td colSpan={12} className="px-3 py-8 text-center text-slate-500">
+                <td colSpan={11} className={`${td} text-center text-slate-500`}>
                   Ładowanie…
                 </td>
               </tr>
             ) : null}
             {!loading && (data?.rows.length ?? 0) === 0 ? (
               <tr>
-                <td colSpan={12} className="px-3 py-8 text-center text-slate-500">
+                <td colSpan={11} className={`${td} text-center text-slate-500`}>
                   Brak dostawców dla tego podmiotu.
                 </td>
               </tr>
@@ -297,7 +321,7 @@ export default function PurchasingSupplierAnalyticsPage() {
             {(data?.rows ?? []).map((r) => (
               <tr
                 key={r.supplier_id}
-                className="cursor-pointer hover:bg-slate-50/80"
+                className="cursor-pointer transition-colors hover:bg-blue-50/30"
                 onClick={() => openDrawer(r.supplier_id)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
@@ -308,18 +332,16 @@ export default function PurchasingSupplierAnalyticsPage() {
                 tabIndex={0}
                 role="button"
               >
-                <td className="px-3 py-2 tabular-nums text-slate-600">{r.rank}</td>
-                <td className="px-3 py-2 font-medium text-slate-900">{r.supplier_name}</td>
-                <td className="px-3 py-2 tabular-nums text-slate-700">{r.deliveries_count ?? r.total_orders}</td>
-                <td className="px-3 py-2 tabular-nums text-slate-700">{r.planned_orders_count ?? 0}</td>
-                <td className="px-3 py-2 text-slate-700">{fmtPct(r.on_time_rate ?? r.on_time_percent)}</td>
-                <td className="px-3 py-2 text-slate-700">
-                  {fmtNum(r.avg_delivery_interval)}
-                </td>
-                <td className="px-3 py-2 text-slate-700">{fmtNum(r.avg_delay_days)}</td>
-                <td className="px-3 py-2 text-slate-700">{fmtPct(r.price_trend ?? r.avg_buy_price_change_percent)}</td>
-                <td className="px-3 py-2 tabular-nums text-slate-700">{fmtMoney(r.total_purchase_value_net ?? r.total_value)}</td>
-                <td className="px-3 py-2">
+                <td className={`${td} tabular-nums text-slate-600`}>{r.rank}</td>
+                <td className={`${td} font-medium text-slate-800`}>{r.supplier_name}</td>
+                <td className={`${td} tabular-nums text-slate-700`}>{r.deliveries_count ?? r.total_orders}</td>
+                <td className={`${td} tabular-nums text-slate-700`}>{r.planned_orders_count ?? 0}</td>
+                <td className={td}>{fmtPct(r.on_time_rate ?? r.on_time_percent)}</td>
+                <td className={td}>{fmtNum(r.avg_delivery_interval)}</td>
+                <td className={td}>{fmtNum(r.avg_delay_days)}</td>
+                <td className={td}>{fmtPct(r.price_trend ?? r.avg_buy_price_change_percent)}</td>
+                <td className={`${td} tabular-nums text-slate-700`}>{fmtMoney(r.total_purchase_value_net ?? r.total_value)}</td>
+                <td className={td}>
                   {r.insufficient_data ? (
                     <span className="text-xs text-amber-800">Za mało historii</span>
                   ) : (
@@ -333,7 +355,7 @@ export default function PurchasingSupplierAnalyticsPage() {
                     </div>
                   )}
                 </td>
-                <td className="px-3 py-2">
+                <td className={td}>
                   <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1 ${riskBadge(r.risk_level)}`}>
                     {riskLabel(r.risk_level)}
                   </span>
