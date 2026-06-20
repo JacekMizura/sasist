@@ -10,6 +10,10 @@ import {
   poListActionsCellClass,
   poListActionsInnerClass,
   poListActionsThClass,
+  poListPosCellClass,
+  poListPosThClass,
+  PO_LIST_ACTIONS_COL_PX,
+  PO_LIST_POS_COL_PX,
   poListNameCellClass,
   poListNameThClass,
   poListRowActionBtn,
@@ -22,12 +26,14 @@ import {
 } from "../../components/purchaseOrders/purchaseOrdersList/purchaseOrdersListTableTokens";
 import { supplierScoreTier } from "../../utils/supplierScoreBadge";
 
-const PO_DYNAMIC_COLUMN_COUNT = 9;
+const PO_DYNAMIC_COLUMN_COUNT = 8;
 
 const PO_TABLE_LAYOUT = {
   ...PROPORTIONAL_TABLE_SYSTEM_WIDTHS,
   ...PROPORTIONAL_TABLE_NO_LOGO,
   checkboxPx: 0,
+  actionsPx: PO_LIST_ACTIONS_COL_PX,
+  extraFixedColumnsPx: PO_LIST_POS_COL_PX,
 };
 
 const STATUS_LABEL: Record<DeliveryStatus, string> = {
@@ -115,8 +121,8 @@ export function PurchaseOrdersListTable({
           <col style={{ width: dynamicW }} />
           <col style={{ width: dynamicW }} />
           <col style={{ width: dynamicW }} />
-          <col style={{ width: dynamicW }} />
-          <col style={{ width: widths.actions }} />
+          <col style={{ width: PO_LIST_POS_COL_PX }} />
+          <col style={{ width: PO_LIST_ACTIONS_COL_PX }} />
         </colgroup>
         <thead>
           <tr>
@@ -129,7 +135,7 @@ export function PurchaseOrdersListTable({
             <th className={poListThClass}>Oczekiwana</th>
             <th className={`${poListThClass} text-right`}>Netto</th>
             <th className={`${poListThClass} text-right`}>Brutto</th>
-            <th className={`${poListThClass} text-right`}>Poz.</th>
+            <th className={poListPosThClass}>Poz.</th>
             <th className={poListActionsThClass}>Akcje</th>
           </tr>
         </thead>
@@ -202,7 +208,7 @@ export function PurchaseOrdersListTable({
                     {fmtMoney(gross)}
                   </div>
                 </td>
-                <td className={poListTdClass}>
+                <td className={poListPosCellClass}>
                   <div className={`${poListRowInnerClass} justify-end tabular-nums text-slate-800`}>
                     {row.item_count}
                   </div>

@@ -248,6 +248,8 @@ import CustomerActivityPage from "./pages/customers/CustomerActivityPage"
 import CustomerNotesPage from "./pages/customers/CustomerNotesPage"
 import CustomerDocumentsPage from "./pages/customers/CustomerDocumentsPage"
 import PurchaseOrdersPage from "./pages/Assortment/PurchaseOrdersPage"
+import PurchaseOrderEditPage from "./pages/Assortment/PurchaseOrderEditPage"
+import PurchaseOrderNewPage from "./pages/Assortment/PurchaseOrderNewPage"
 import ProductsImportTabPage from "./pages/Products/ProductsImportTabPage"
 import ProductsImportHistoryTabPage from "./pages/Products/ProductsImportHistoryTabPage"
 import ProductCategoriesPage from "./pages/Products/ProductCategoriesPage"
@@ -681,7 +683,9 @@ export const router = createBrowserRouter(
                 <Route path="suppliers/new" element={<SupplierEditPage />} />
                 <Route path="suppliers/:supplierId/:tab" element={<SupplierEditPage />} />
                 <Route path="suppliers/:supplierId" element={<SupplierEditPage />} />
-                <Route path="goods-orders/new" element={<PurchaseOrdersPage defaultCreateOpen />} />
+                <Route path="goods-orders/new" element={<PurchaseOrderNewPage />} />
+                <Route path="goods-orders/:orderId/:tab" element={<PurchaseOrderEditPage />} />
+                <Route path="goods-orders/:orderId" element={<PurchaseOrderEditPage />} />
                 <Route path="goods-orders" element={<PurchaseOrdersPage />} />
                 <Route path="suppliers/zamowienia" element={<LegacySuppliersZamowieniaRedirect />} />
                 <Route path="products/profitability" element={<ProductProfitabilityPage />} />

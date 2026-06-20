@@ -204,7 +204,7 @@ export default function SuppliersPage() {
         warehouse_id: warehouseId,
         status: "draft",
       });
-      navigate(`/goods-orders?edit=${d.id}&tenant_id=${tenantId}`);
+      navigate(`/goods-orders/${d.id}?tenant_id=${tenantId}`);
     } catch {
       setToast("Nie udało się utworzyć szkicu zamówienia do dostawcy.");
     } finally {

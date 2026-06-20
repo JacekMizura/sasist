@@ -1,5 +1,13 @@
 # Change log
 
+## 2026-06-08 — Zamówienia towaru: pełna strona edycji + tabela Akcje/Poz.
+
+- Edycja PO: `/goods-orders/:id`, `/goods-orders/:id/:tab` (Podstawowe, Produkty) — shell jak Klienci/Dostawcy
+- Nowe zamówienie: `/goods-orders/new` → szkic + redirect na stronę edycji
+- Lista: bez modala; legacy `?edit=` → redirect
+- Tabela: kolumna Poz. stała 52px; Akcje stała 176px, `flex-nowrap`, sticky prawo
+- `proportionalTableColumns`: opcja `extraFixedColumnsPx` dla kolumn poza pulą fr
+
 ## 2026-06-08 — Producenci i Dostawcy: pełne strony edycji (wzorzec Klienci)
 
 - Producenci: `/manufacturers/new`, `/manufacturers/:id`, `/manufacturers/:id/:tab` — breadcrumb, zakładki, shell `AssortmentEntityPageShell`

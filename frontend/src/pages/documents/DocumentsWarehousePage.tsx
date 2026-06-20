@@ -968,7 +968,7 @@ export default function DocumentsWarehousePage() {
                             <dt className="text-slate-500">Dostawa</dt>
                             <dd>
                               <Link
-                                to={`/goods-orders?edit=${detail.delivery_id}`}
+                                to={`/goods-orders/${detail.delivery_id}`}
                                 className="font-semibold text-violet-700 underline decoration-violet-200 underline-offset-2 hover:text-violet-900"
                               >
                                 #{detail.delivery_id}

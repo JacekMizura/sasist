@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Award, Banknote, FileText, Receipt, ShoppingCart, Star } from "lucide-react";
 import PageLayout from "../../components/layout/PageLayout";
@@ -8,7 +8,6 @@ import { listSellasistInputClass } from "../../components/listPage/listSellasist
 import { PurchaseOrdersListTable } from "./PurchaseOrdersListTable";
 import api from "../../api/axios";
 import {
-  createDelivery,
   deleteDelivery,
   listDeliveries,
   supplierOrderPdfUrl,
@@ -16,13 +15,8 @@ import {
   type DeliveryStatus,
 } from "../../api/inboundDeliveriesApi";
 import { listSuppliers, type SupplierRead } from "../../api/inboundSuppliersApi";
-import {
-  ACTIVE_WAREHOUSE_REQUIRED_MESSAGE,
-  useActiveWarehouseContext,
-} from "../../hooks/useActiveWarehouseContext";
 import { fetchPurchasingSupplierAnalytics } from "../../api/purchasingSupplierAnalyticsApi";
 import { CreatePzFromDeliveryModal } from "./CreatePzFromDeliveryModal";
-import { PurchaseOrderEditModal } from "./PurchaseOrderEditModal";
 import { openPdfUrlInPrintViewer } from "../../utils/openPdfForBrowserPrint";
 import {
   PurchasingFilterBar,
@@ -59,25 +53,15 @@ function inRange(iso: string | null | undefined, start: Date, end: Date): boolea
   return t >= start.getTime() && t <= end.getTime();
 }
 
-type RaceGen = { gen: number; ref: MutableRefObject<number> };
-
-type PurchaseOrdersPageProps = {
-  /** When true (route `/goods-orders/new`), auto-create draft and open editor like sidebar „+”. */
-  defaultCreateOpen?: boolean;
-};
-
-export default function PurchaseOrdersPage({ defaultCreateOpen = false }: PurchaseOrdersPageProps) {
+export default function PurchaseOrdersPage() {
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [tenantId, setTenantId] = useState(1);
-  const { warehouseId, hasActiveWarehouse } = useActiveWarehouseContext();
   const [suppliers, setSuppliers] = useState<SupplierRead[]>([]);
   const [rows, setRows] = useState<DeliveryListRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editId, setEditId] = useState<number | null>(null);
   const [page, setPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(25);
   const [pzForDeliveryId, setPzForDeliveryId] = useState<number | null>(null);
@@ -87,9 +71,6 @@ export default function PurchaseOrdersPage({ defaultCreateOpen = false }: Purcha
   const [toastText, setToastText] = useState<string | null>(null);
   const [printMenuOpenId, setPrintMenuOpenId] = useState<number | null>(null);
   const [scoreBySupplierId, setScoreBySupplierId] = useState<Record<number, number | null>>({});
-  const plusRouteGen = useRef(0);
-  /** One auto-create per `/goods-orders/new` visit (avoids re-running when `createDraftOrder` identity updates). */
-  const plusBootstrapStartedRef = useRef(false);
 
   const [draftSearch, setDraftSearch] = useState("");
   const [draftSupplierId, setDraftSupplierId] = useState(0);
@@ -204,12 +185,9 @@ export default function PurchaseOrdersPage({ defaultCreateOpen = false }: Purcha
     if (e == null || e === "") return;
     const id = Number(e);
     if (!Number.isFinite(id) || id < 1) return;
-    setEditId(id);
-    setModalOpen(true);
-    const next = new URLSearchParams(searchParams);
-    next.delete("edit");
-    setSearchParams(next, { replace: true });
-  }, [searchParams, setSearchParams]);
+    const tid = searchParams.get("tenant_id");
+    void navigate(`/goods-orders/${id}${tid ? `?tenant_id=${tid}` : ""}`, { replace: true });
+  }, [searchParams, navigate]);
 
   const applyFilters = () => {
     setAppliedSearch(draftSearch);
@@ -234,58 +212,8 @@ export default function PurchaseOrdersPage({ defaultCreateOpen = false }: Purcha
     setPage(1);
   };
 
-  const createDraftOrder = useCallback(
-    async (race?: RaceGen): Promise<void> => {
-      if (suppliers.length === 0) {
-        window.alert("Najpierw dodaj dostawcę (Asortyment → Dostawcy).");
-        navigate("/suppliers");
-        return;
-      }
-      const sid = suppliers[0].id;
-      if (!hasActiveWarehouse || warehouseId == null) {
-        window.alert(ACTIVE_WAREHOUSE_REQUIRED_MESSAGE);
-        return;
-      }
-      try {
-        const d = await createDelivery({
-          tenant_id: tenantId,
-          supplier_id: sid,
-          warehouse_id: warehouseId,
-          status: "draft",
-        });
-        if (race && race.gen !== race.ref.current) return;
-        setEditId(d.id);
-        setModalOpen(true);
-        void load();
-      } catch {
-        if (race && race.gen !== race.ref.current) return;
-        setErr("Nie udało się utworzyć szkicu.");
-      }
-    },
-    [suppliers, tenantId, warehouseId, hasActiveWarehouse, navigate, load],
-  );
-
-  useEffect(() => {
-    if (!defaultCreateOpen || loading) return;
-    if (plusBootstrapStartedRef.current) return;
-    plusBootstrapStartedRef.current = true;
-    const gen = ++plusRouteGen.current;
-    void createDraftOrder({ gen, ref: plusRouteGen });
-  }, [defaultCreateOpen, loading, createDraftOrder]);
-
-  const closeOrderModal = () => {
-    setModalOpen(false);
-    setEditId(null);
-    if (defaultCreateOpen) {
-      const q = new URLSearchParams(searchParams);
-      q.set("tenant_id", String(tenantId));
-      navigate({ pathname: "/goods-orders", search: `?${q.toString()}` }, { replace: true });
-    }
-  };
-
   const openRow = (id: number) => {
-    setEditId(id);
-    setModalOpen(true);
+    void navigate(`/goods-orders/${id}?tenant_id=${tenantId}`);
   };
 
   const openSupplierOrderPdf = (orderId: number) => {
@@ -307,17 +235,13 @@ export default function PurchaseOrdersPage({ defaultCreateOpen = false }: Purcha
       await deleteDelivery(tenantId, id);
       setDeleteConfirmId(null);
       setRows((prev) => prev.filter((r) => r.id !== id));
-      if (editId === id) {
-        setModalOpen(false);
-        setEditId(null);
-      }
       void load();
     } catch {
       setToastText("Błąd podczas usuwania zamówienia");
     } finally {
       setDeleteBusy(false);
     }
-  }, [deleteConfirmId, tenantId, editId, load]);
+  }, [deleteConfirmId, tenantId, load]);
 
   const formatDt = (iso: string | null | undefined) => {
     if (!iso) return "—";
@@ -627,17 +551,6 @@ export default function PurchaseOrdersPage({ defaultCreateOpen = false }: Purcha
           )}
         </div>
       </PageLayout>
-
-      {editId != null ? (
-        <PurchaseOrderEditModal
-          open={modalOpen}
-          tenantId={tenantId}
-          orderId={editId}
-          suppliers={suppliers}
-          onClose={closeOrderModal}
-          onSaved={() => void load()}
-        />
-      ) : null}
 
       {pzForDeliveryId != null ? (
         <CreatePzFromDeliveryModal

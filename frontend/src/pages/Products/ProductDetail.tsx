@@ -67,7 +67,7 @@ export default function ProductDetail() {
         warehouse_id: warehouseId,
         product_id: product.id,
       });
-      navigate(`/goods-orders?edit=${d.id}&tenant_id=${tid}`);
+      navigate(`/goods-orders/${d.id}?tenant_id=${tid}`);
     } catch (e) {
       let msg = "Nie udało się utworzyć szkicu zamówienia.";
       if (axios.isAxiosError(e)) {

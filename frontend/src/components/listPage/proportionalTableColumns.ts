@@ -9,6 +9,8 @@ export const PROPORTIONAL_TABLE_SYSTEM_WIDTHS = {
   dynamicFr: 1,
   /** Minimalna szerokość pojedynczej kolumny dynamicznej przy wąskim viewporcie. */
   dynamicMinPx: 72,
+  /** Dodatkowe kolumny o stałej szerokości (np. „Poz.”) — odejmowane przed podziałem fr. */
+  extraFixedColumnsPx: 0,
 } as const;
 
 /** Układ bez kolumny logo (np. Dostawcy). */
@@ -25,6 +27,7 @@ export type ProportionalTableLayoutConfig = {
   nameFr: number;
   dynamicFr: number;
   dynamicMinPx: number;
+  extraFixedColumnsPx?: number;
 };
 
 export type ProportionalTableWidths = {
@@ -45,7 +48,8 @@ export function proportionalTableMinWidthPx(
 ): number {
   const cfg = resolveLayoutConfig(config);
   const n = Math.max(0, dynamicColumnCount);
-  return cfg.checkboxPx + cfg.logoPx + cfg.nameMinPx + cfg.actionsPx + n * cfg.dynamicMinPx;
+  const extra = cfg.extraFixedColumnsPx ?? 0;
+  return cfg.checkboxPx + cfg.logoPx + cfg.nameMinPx + cfg.actionsPx + extra + n * cfg.dynamicMinPx;
 }
 
 /**
@@ -57,7 +61,8 @@ export function computeProportionalTableWidths(
   config?: Partial<ProportionalTableLayoutConfig>,
 ): ProportionalTableWidths {
   const cfg = resolveLayoutConfig(config);
-  const fixed = cfg.checkboxPx + cfg.logoPx + cfg.actionsPx;
+  const extra = cfg.extraFixedColumnsPx ?? 0;
+  const fixed = cfg.checkboxPx + cfg.logoPx + cfg.actionsPx + extra;
   const available = Math.max(0, tableWidthPx - fixed);
   const n = Math.max(0, dynamicColumnCount);
 
