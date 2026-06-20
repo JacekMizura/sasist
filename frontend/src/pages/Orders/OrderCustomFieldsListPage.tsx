@@ -8,40 +8,34 @@ import {
   useSensors,
   type DragEndEvent,
 } from "@dnd-kit/core";
-import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, Plus } from "lucide-react";
+import { SortableContext, arrayMove, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { LayoutList, Plus, Search } from "lucide-react";
 
 import {
+  bulkDeleteOrderCustomFields,
   deleteOrderCustomField,
   listOrderCustomFields,
   updateOrderCustomField,
   type OrderCustomFieldDto,
   type OrderCustomFieldWritePayload,
 } from "../../api/orderCustomFieldsApi";
-import { flatSectionDividerClass, moduleSettingsPageShellClass } from "../../components/layout/flatSectionTokens";
+import { moduleAutomationShellClass } from "../../components/layout/flatSectionTokens";
 import { ModuleListBreadcrumb, moduleListEmptyStateClass } from "../../components/listPage/moduleList";
-import OrderCustomFieldGlyph from "../../components/orders/OrderCustomFieldGlyph";
+import {
+  OrderCustomFieldsTable,
+  orderCustomFieldsSortableIds,
+} from "../../components/orders/customFields/OrderCustomFieldsTable";
+import { oaBtnDanger, oaBtnPri, oaSearchInp } from "../../components/orders/automation/orderAutomationUiTokens";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { useAuth } from "../../context/AuthContext";
 import { DAMAGE_TENANT_ID } from "../../constants/panelTenant";
 import { formatApiErrorMessage } from "../../utils/formatApiErrorMessage";
-
-const DENSE_TH = "px-3 py-2 text-left text-xs font-medium text-slate-400";
-const DENSE_TD = "px-3 py-2 align-middle text-sm text-slate-800";
-
-function typeLabelPl(t: string): string {
-  const m: Record<string, string> = {
-    TEXT: "Pole tekstowe",
-    NUMBER: "Pole liczbowe",
-    FILES: "Pliki",
-    SELECT_SINGLE: "Lista",
-    SELECT_MULTI: "Lista",
-    SALES_DOCUMENT: "Dokument sprzedaży",
-    SHIPPING_LABEL: "List przewozowy",
-  };
-  return m[t] ?? t;
-}
+import {
+  mapOrderCustomFieldAdminRow,
+  orderCustomFieldCountLabel,
+  orderCustomFieldMatchesSearch,
+  type OrderCustomFieldAdminRow,
+} from "../../utils/orderCustomFieldListPresentation";
 
 function fieldToWritePayload(r: OrderCustomFieldDto, sortOrder: number): OrderCustomFieldWritePayload {
   return {
@@ -61,77 +55,7 @@ function fieldToWritePayload(r: OrderCustomFieldDto, sortOrder: number): OrderCu
   };
 }
 
-function SortableFieldRow({
-  row,
-  reorderBusy,
-  onDelete,
-}: {
-  row: OrderCustomFieldDto;
-  reorderBusy: boolean;
-  onDelete: (row: OrderCustomFieldDto) => void;
-}) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: row.id,
-  });
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.55 : undefined,
-  };
-
-  return (
-    <tr
-      ref={setNodeRef}
-      style={style}
-      className="group border-b border-slate-100 transition-colors hover:bg-slate-50/50"
-    >
-      <td className={`${DENSE_TD} w-10`}>
-        <button
-          type="button"
-          className="cursor-grab touch-none rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing disabled:cursor-not-allowed disabled:opacity-40"
-          title="Przeciągnij, aby zmienić kolejność"
-          aria-label={`Zmień kolejność: ${row.name}`}
-          disabled={reorderBusy}
-          {...attributes}
-          {...listeners}
-        >
-          <GripVertical className="h-4 w-4" strokeWidth={2} aria-hidden />
-        </button>
-      </td>
-      <td className={DENSE_TD}>
-        <div className="flex min-w-0 items-center gap-2">
-          <OrderCustomFieldGlyph
-            type={row.type}
-            settings={(row.settings_json ?? {}) as Record<string, unknown>}
-            boxClassName="flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden rounded text-slate-500"
-            lucideClassName="h-3 w-3"
-          />
-          <span className="truncate font-medium text-slate-900">{row.name}</span>
-          {!row.is_active ? (
-            <span className="shrink-0 text-[10px] font-medium uppercase tracking-wide text-slate-400">Wył.</span>
-          ) : null}
-        </div>
-      </td>
-      <td className={`${DENSE_TD} text-slate-600`}>{typeLabelPl(row.type)}</td>
-      <td className={`${DENSE_TD} w-36 text-right text-sm`}>
-        <Link
-          to={`/orders/custom-fields/${row.id}/edit`}
-          className="mr-3 font-medium text-slate-700 hover:text-slate-900"
-        >
-          Edytuj
-        </Link>
-        <button
-          type="button"
-          disabled={reorderBusy}
-          onClick={() => onDelete(row)}
-          className="font-medium text-red-600 hover:text-red-800 disabled:opacity-45"
-        >
-          Usuń
-        </button>
-      </td>
-    </tr>
-  );
-}
+type ListOrderMode = "manual" | "id";
 
 export default function OrderCustomFieldsListPage() {
   const navigate = useNavigate();
@@ -143,10 +67,14 @@ export default function OrderCustomFieldsListPage() {
   const [rows, setRows] = useState<OrderCustomFieldDto[]>([]);
   const [loading, setLoading] = useState(false);
   const [reorderBusy, setReorderBusy] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [listOrderMode, setListOrderMode] = useState<ListOrderMode>("manual");
+  const [idSort, setIdSort] = useState<"asc" | "desc">("asc");
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
-  const rowIds = useMemo(() => rows.map((r) => r.id), [rows]);
 
   const load = useCallback(async () => {
     if (warehouseId == null) {
@@ -170,6 +98,7 @@ export default function OrderCustomFieldsListPage() {
         sort: "sort_order",
       });
       setRows(list);
+      setSelectedIds(new Set());
     } catch (e: unknown) {
       setErr(formatApiErrorMessage(e, "Nie udało się wczytać dodatkowych pól."));
       setRows([]);
@@ -181,6 +110,66 @@ export default function OrderCustomFieldsListPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const adminRows = useMemo(() => rows.map(mapOrderCustomFieldAdminRow), [rows]);
+
+  const filteredRows = useMemo(() => {
+    return adminRows.filter((r) => orderCustomFieldMatchesSearch(r.field, search));
+  }, [adminRows, search]);
+
+  const displayRows = useMemo(() => {
+    if (listOrderMode !== "id") return filteredRows;
+    const copy = [...filteredRows];
+    copy.sort((a, b) => (idSort === "asc" ? a.field.id - b.field.id : b.field.id - a.field.id));
+    return copy;
+  }, [filteredRows, listOrderMode, idSort]);
+
+  const reorderEnabled = listOrderMode === "manual" && search.trim() === "";
+  const sortableIds = useMemo(() => orderCustomFieldsSortableIds(displayRows), [displayRows]);
+
+  const visibleIds = useMemo(() => displayRows.map((r) => r.field.id), [displayRows]);
+  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id));
+  const someVisibleSelected = visibleIds.some((id) => selectedIds.has(id));
+  const selectedCount = selectedIds.size;
+
+  const handleIdSortChange = (_dir: "asc" | "desc") => {
+    if (listOrderMode === "manual") {
+      setListOrderMode("id");
+      setIdSort("asc");
+      return;
+    }
+    if (idSort === "asc") {
+      setIdSort("desc");
+      return;
+    }
+    setListOrderMode("manual");
+    setIdSort("asc");
+  };
+
+  const handleSelect = (id: number, checked: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (!checked) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        for (const id of visibleIds) next.delete(id);
+        return next;
+      });
+      return;
+    }
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      for (const id of visibleIds) next.add(id);
+      return next;
+    });
+  };
 
   const persistReorder = async (next: OrderCustomFieldDto[], prev: OrderCustomFieldDto[]) => {
     if (warehouseId == null) return;
@@ -204,10 +193,14 @@ export default function OrderCustomFieldsListPage() {
   };
 
   const onDragEnd = (event: DragEndEvent) => {
+    if (!reorderEnabled) return;
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-    const oldIndex = rowIds.indexOf(Number(active.id));
-    const newIndex = rowIds.indexOf(Number(over.id));
+
+    const activeId = Number(active.id);
+    const overId = Number(over.id);
+    const oldIndex = rows.findIndex((r) => r.id === activeId);
+    const newIndex = rows.findIndex((r) => r.id === overId);
     if (oldIndex === -1 || newIndex === -1) return;
 
     const prev = rows;
@@ -225,15 +218,36 @@ export default function OrderCustomFieldsListPage() {
     setErr(null);
     try {
       await deleteOrderCustomField(row.id, { tenant_id: tenantId, warehouse_id: warehouseId });
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(row.id);
+        return next;
+      });
       await load();
     } catch (e: unknown) {
       setErr(formatApiErrorMessage(e, "Nie udało się usunąć pola."));
     }
   };
 
-  const shell = moduleSettingsPageShellClass;
-  const countLabel =
-    rows.length === 1 ? "1 pole" : rows.length < 5 ? `${rows.length} pola` : `${rows.length} pól`;
+  const onBulkDelete = async () => {
+    if (warehouseId == null || selectedCount === 0) return;
+    if (!window.confirm(`Usunąć zaznaczone pola (${selectedCount})?`)) return;
+    setBulkBusy(true);
+    setErr(null);
+    try {
+      await bulkDeleteOrderCustomFields(
+        { tenant_id: tenantId, warehouse_id: warehouseId },
+        [...selectedIds],
+      );
+      await load();
+    } catch (e: unknown) {
+      setErr(formatApiErrorMessage(e, "Nie udało się usunąć zaznaczonych pól."));
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const shell = `${moduleAutomationShellClass} w-full max-w-none pb-6`;
 
   if (warehouseId == null) {
     return (
@@ -261,24 +275,37 @@ export default function OrderCustomFieldsListPage() {
   }
 
   return (
-    <div className={`${shell} w-full pb-6`}>
+    <div className={shell}>
       <ModuleListBreadcrumb items={[{ label: "Zamówienia", to: "/orders/list" }, { label: "Dodatkowe pola" }]} />
 
       <div className="mb-4 mt-6 flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
           <h1 className="text-2xl font-semibold text-slate-900">Dodatkowe pola zamówień</h1>
-          {!loading ? <p className="mt-1 text-sm text-slate-500">{countLabel}</p> : null}
+          {!loading ? (
+            <p className="mt-1 text-sm text-slate-500">{orderCustomFieldCountLabel(rows.length)}</p>
+          ) : null}
         </div>
-        <button
-          type="button"
-          onClick={() => navigate("/orders/custom-fields/new")}
-          className="inline-flex h-9 items-center gap-2 rounded-lg bg-slate-900 px-4 text-sm font-medium text-white transition hover:bg-slate-800"
-        >
+        <button type="button" onClick={() => navigate("/orders/custom-fields/new")} className={oaBtnPri}>
           <Plus className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
           Dodaj pole
         </button>
       </div>
-      <div className={`${flatSectionDividerClass} mb-4`} aria-hidden />
+
+      <div className="relative mb-4 max-w-xl">
+        <Search
+          className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+          strokeWidth={2}
+          aria-hidden
+        />
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Szukaj pola…"
+          className={oaSearchInp}
+          type="search"
+          aria-label="Szukaj pola"
+        />
+      </div>
 
       {err ? (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
@@ -288,33 +315,69 @@ export default function OrderCustomFieldsListPage() {
 
       {reorderBusy ? <p className="mb-2 text-xs text-slate-500">Zapisywanie kolejności…</p> : null}
 
+      {listOrderMode === "id" ? (
+        <p className="mb-2 text-xs text-slate-500">
+          Sortowanie po ID — kliknij nagłówek ID ponownie, aby wrócić do kolejności ręcznej i przeciągania.
+        </p>
+      ) : search.trim() ? (
+        <p className="mb-2 text-xs text-slate-500">Wyczyść wyszukiwanie, aby zmienić kolejność pól.</p>
+      ) : null}
+
+      {selectedCount > 0 ? (
+        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+          <span className="text-sm font-medium text-slate-800">
+            Zaznaczono: <span className="tabular-nums">{selectedCount}</span>
+          </span>
+          <button
+            type="button"
+            className={oaBtnDanger}
+            disabled={bulkBusy}
+            onClick={() => void onBulkDelete()}
+          >
+            Usuń zaznaczone
+          </button>
+        </div>
+      ) : null}
+
       {loading && rows.length === 0 ? (
         <div className={moduleListEmptyStateClass}>Ładowanie listy…</div>
       ) : rows.length === 0 ? (
-        <div className="py-8">
-          <p className="text-sm font-medium text-slate-800">Brak zdefiniowanych pól</p>
-          <p className="mt-1 text-sm text-slate-500">Użyj „Dodaj pole” — wartości uzupełnisz na kartach zamówień.</p>
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white px-6 py-16 text-center">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-400">
+            <LayoutList className="h-7 w-7" strokeWidth={1.75} aria-hidden />
+          </div>
+          <p className="mt-5 text-base font-semibold text-slate-900">Brak dodatkowych pól</p>
+          <p className="mt-1 max-w-sm text-sm text-slate-500">
+            Zdefiniuj pola widoczne na kartach zamówień — tekst, liczby, listy, załączniki i więcej.
+          </p>
+          <button type="button" className={`${oaBtnPri} mt-6`} onClick={() => navigate("/orders/custom-fields/new")}>
+            <Plus className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
+            Dodaj pierwsze pole
+          </button>
+        </div>
+      ) : displayRows.length === 0 ? (
+        <div className="rounded-xl border border-slate-200 bg-white px-6 py-12 text-center">
+          <p className="text-sm font-medium text-slate-800">Brak wyników wyszukiwania</p>
+          <p className="mt-1 text-sm text-slate-500">Zmień frazę lub wyczyść pole wyszukiwania.</p>
         </div>
       ) : (
-        <div className="w-full overflow-x-auto">
+        <div className="rounded-xl border border-slate-200 bg-white">
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-            <table className="w-full text-left text-sm">
-              <thead className="border-b border-slate-100">
-                <tr>
-                  <th className={`${DENSE_TH} w-10`} aria-label="Kolejność" />
-                  <th className={DENSE_TH}>Nazwa pola</th>
-                  <th className={`${DENSE_TH} w-44`}>Typ pola</th>
-                  <th className={`${DENSE_TH} w-36 text-right`}>Akcje</th>
-                </tr>
-              </thead>
-              <SortableContext items={rowIds} strategy={verticalListSortingStrategy}>
-                <tbody>
-                  {rows.map((r) => (
-                    <SortableFieldRow key={r.id} row={r} reorderBusy={reorderBusy} onDelete={(row) => void onDeleteOne(row)} />
-                  ))}
-                </tbody>
-              </SortableContext>
-            </table>
+            <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
+              <OrderCustomFieldsTable
+                rows={displayRows}
+                selectedIds={selectedIds}
+                idSort={idSort}
+                onIdSortChange={handleIdSortChange}
+                onSelect={handleSelect}
+                onSelectAll={handleSelectAll}
+                onDelete={(row) => void onDeleteOne(row)}
+                reorderEnabled={reorderEnabled}
+                reorderBusy={reorderBusy || bulkBusy}
+                allVisibleSelected={allVisibleSelected}
+                someVisibleSelected={someVisibleSelected}
+              />
+            </SortableContext>
           </DndContext>
         </div>
       )}
