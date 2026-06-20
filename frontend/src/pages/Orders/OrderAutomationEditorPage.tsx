@@ -93,6 +93,7 @@ function defaultRule(): OrderAutomationRule {
       scheduleCron: "",
     },
     stats: { lastRunAt: null, runCount: 0 },
+    delayMinutes: 0,
   };
 }
 
@@ -153,6 +154,7 @@ function normalizeRule(r: OrderAutomationRule): OrderAutomationRule {
     })),
     effects: effects.map(ensureEffectPayload),
     stats,
+    delayMinutes: Math.max(0, Math.floor(Number(r.delayMinutes) || 0)),
   };
 }
 
@@ -605,6 +607,21 @@ export default function OrderAutomationEditorPage() {
                 </div>
               ) : null}
             </IntegrationsApiPanel>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <label className={`${oaLbl} mb-0 shrink-0`}>Opóźnij wykonanie o</label>
+            <input
+              type="number"
+              min={0}
+              step={1}
+              className={`${oaInpDense} w-24`}
+              value={draft.delayMinutes ?? 0}
+              onChange={(e) => {
+                const v = Math.max(0, Math.floor(Number(e.target.value) || 0));
+                setDraft((d) => ({ ...d, delayMinutes: v }));
+              }}
+            />
+            <span className="text-sm text-slate-600">minut</span>
           </div>
           {draft.execution.onSchedule ? (
             <div className={`${moduleListTableScrollClass} mt-3`}>

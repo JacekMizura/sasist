@@ -76,6 +76,52 @@ export function formatRuleWorkflowTitle(
   return `${from} → ${to}`;
 }
 
+export function formatDelayMinutes(minutes: number | undefined | null): string {
+  const m = Math.max(0, Math.floor(Number(minutes) || 0));
+  return `${m} min`;
+}
+
+export type ExecutionModeKind = "automatic" | "schedule" | "manual";
+
+export function resolveExecutionMode(rule: Pick<OrderAutomationRule, "execution" | "manualTrigger">): ExecutionModeKind {
+  if (rule.execution.onSchedule) return "schedule";
+  if (rule.execution.onOrderCreated || rule.execution.onStatusChanged) return "automatic";
+  if (rule.manualTrigger.enabled) return "manual";
+  return "manual";
+}
+
+export function formatExecutionModeBadge(
+  rule: Pick<OrderAutomationRule, "enabled" | "execution" | "manualTrigger">,
+): { label: string; className: string } {
+  const mode = resolveExecutionMode(rule);
+  if (mode === "schedule") {
+    return { label: "Harmonogram", className: "border-blue-200 bg-blue-50 text-blue-800" };
+  }
+  if (mode === "automatic") {
+    const prefix = rule.enabled ? "✓ " : "";
+    return { label: `${prefix}Automatycznie`, className: "border-emerald-200 bg-emerald-50 text-emerald-800" };
+  }
+  return { label: "Ręcznie", className: "border-slate-200 bg-white text-slate-600" };
+}
+
+export function formatEffectsSummary(
+  effects: AutomationEffect[],
+  statusNameById?: Map<number, string>,
+): { short: string; full: string } {
+  if (effects.length === 0) return { short: "—", full: "—" };
+  const lines = effects.map((e) => formatEffectPill(e, statusNameById));
+  if (effects.length === 1) {
+    return { short: lines[0]!, full: lines[0]! };
+  }
+  return { short: `${effects.length} akcje`, full: lines.join("\n") };
+}
+
+export function compareRulesByPublicId(a: OrderAutomationRule, b: OrderAutomationRule, dir: "asc" | "desc"): number {
+  const da = typeof a.publicId === "number" && a.publicId > 0 ? a.publicId : Number.MAX_SAFE_INTEGER;
+  const db = typeof b.publicId === "number" && b.publicId > 0 ? b.publicId : Number.MAX_SAFE_INTEGER;
+  return dir === "asc" ? da - db : db - da;
+}
+
 export function primaryTriggerLabel(r: Pick<OrderAutomationRule, "execution" | "manualTrigger">): string {
   const parts: string[] = [];
   if (r.execution.onOrderCreated) parts.push("Po utworzeniu");

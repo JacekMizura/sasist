@@ -42,6 +42,19 @@ export const oaChip =
 export const oaWorkflowChipClass =
   "inline-block max-w-full rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs leading-snug text-slate-700 shadow-sm";
 
+/** Kompaktowy chip w tabeli listy automatyzacji */
+export const oaListChipClass =
+  "inline-flex max-w-full items-center rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[11px] leading-tight text-slate-700";
+
+/** Komórki tabeli listy automatyzacji — gęstość 60–72px */
+export const oaListThClass =
+  "whitespace-nowrap px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500";
+export const oaListThSortClass = `${oaListThClass} cursor-pointer select-none hover:text-slate-800`;
+export const oaListTdClass = "px-3 py-2 align-middle text-xs leading-snug text-slate-800";
+export const oaListRowClass =
+  "group border-b border-slate-100 transition-colors hover:bg-slate-50/40 last:border-b-0";
+export const oaListTableClass = "w-full min-w-[1100px] table-fixed text-left text-sm";
+
 /** Nagłówek grupy — sticky, wyraźny kontrast */
 export const oaWorkflowGroupHeaderClass =
   "group/header sticky top-0 z-20 flex w-full items-center gap-3 border-b border-slate-300 bg-white px-4 py-3.5 text-left transition hover:bg-white";

@@ -89,6 +89,8 @@ export type OrderAutomationRule = {
   conditions: AutomationCondition[];
   effects: AutomationEffect[];
   execution: OrderAutomationExecution;
+  /** Opóźnienie wykonania po spełnieniu warunków (minuty). Domyślnie 0. */
+  delayMinutes?: number;
   stats: OrderAutomationStats;
 };
 
