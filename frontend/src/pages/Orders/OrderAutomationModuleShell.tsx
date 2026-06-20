@@ -1,6 +1,6 @@
 import { Outlet, useLocation } from "react-router-dom";
 
-import { flatSectionDividerClass, moduleSettingsPageShellClass } from "../../components/layout/flatSectionTokens";
+import { flatSectionDividerClass, moduleEditorFullWidthClass, moduleSettingsPageShellClass } from "../../components/layout/flatSectionTokens";
 import { ModuleListBreadcrumb } from "../../components/listPage/moduleList";
 import { TabsNav } from "../../components/layout/TabsNav";
 
@@ -36,7 +36,7 @@ export default function OrderAutomationModuleShell() {
           <div className={`${flatSectionDividerClass} mt-3`} aria-hidden />
         </div>
       ) : null}
-      <div className={`${moduleSettingsPageShellClass} min-h-0 flex-1 pb-6`}>
+      <div className={`${onEditor ? moduleEditorFullWidthClass : moduleSettingsPageShellClass} min-h-0 flex-1 pb-6`}>
         <Outlet />
       </div>
     </div>

@@ -33,3 +33,13 @@ export const oaWorkspaceMax = "w-full max-w-[87.5rem]";
 /** @deprecated padding from PageLayout */
 export const oaWorkspacePad = "";
 export const oaWorkspacePadNeg = "";
+
+/** Workflow block (Jeśli → To) — czytelna karta warunku / akcji. */
+export const oaWorkflowBlockClass = "rounded-lg border border-gray-200 bg-white";
+export const oaWorkflowBlockHeaderClass =
+  "flex items-start justify-between gap-3 border-b border-gray-100 px-4 py-3";
+export const oaWorkflowBlockTitleClass = "min-w-0 text-sm font-semibold leading-snug text-slate-900";
+export const oaWorkflowBlockBodyClass = "px-4 py-1";
+export const oaWorkflowFieldRowClass =
+  "grid grid-cols-[minmax(7.5rem,9.5rem)_minmax(0,1fr)] items-center gap-x-4 border-b border-gray-100 py-2.5 last:border-b-0";
+export const oaWorkflowFieldLabelClass = "text-sm text-slate-500";

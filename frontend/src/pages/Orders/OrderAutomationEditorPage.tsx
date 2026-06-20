@@ -1,12 +1,9 @@
-import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   Activity,
-  ArrowRight,
   Calendar,
-  Check,
   ChevronDown,
-  Copy,
   FlaskConical,
   MousePointerClick,
   Save,
@@ -31,12 +28,9 @@ import type {
 import { loadActionGroups, newUid, saveActionGroups } from "../../utils/orderAutomationLocalStore";
 import {
   ORDER_AUTOMATION_CONDITION_FIELDS,
-  ORDER_AUTOMATION_OPERATOR_UI,
   buildConditionCategorySteps,
   buildEffectCategorySteps,
-  conditionFieldLabel,
 } from "../../utils/orderAutomationCatalog";
-import { formatConditionChipShort, formatEffectPill } from "../../utils/orderAutomationPreview";
 import {
   decodeScheduleCron,
   defaultScheduleSpec,
@@ -51,9 +45,9 @@ import { AutomationIconGridPicker } from "../../components/orders/automation/Aut
 import { AutomationCategoryStepMenu } from "../../components/orders/automation/AutomationCategoryStepMenu";
 import { AutomationAnchorMenu, type AutomationAnchorMenuGroup } from "../../components/orders/automation/AutomationAnchorMenu";
 import { WmsOrderedStatusPopover } from "../../components/orders/automation/WmsOrderedStatusPopover";
-import { renderAutomationEffectConfigEditor } from "../../components/orders/automation/effects/orderAutomationEffectEditorRenderers";
+import { AutomationIfThenSection } from "../../components/orders/automation/AutomationIfThenSection";
 import { FlatPageSection } from "../../components/layout/FlatPageSection";
-import { flatFormSectionsStackClass, flatSectionDividerClass, moduleSettingsPageShellClass } from "../../components/layout/flatSectionTokens";
+import { flatFormSectionsStackClass, moduleEditorFullWidthClass } from "../../components/layout/flatSectionTokens";
 import { ModuleListBreadcrumb } from "../../components/listPage/moduleList";
 import { IntegrationsApiPanel } from "../Settings/returnsStatusesConfigurator/AdvancedSettingsPanel";
 import {
@@ -68,9 +62,7 @@ import {
   oaBtn,
   oaBtnPri,
   oaBtnDanger,
-  oaIconGhost,
   oaInp,
-  oaInpDense,
   oaLbl,
   oaToggleChip,
 } from "../../components/orders/automation/orderAutomationUiTokens";
@@ -193,36 +185,6 @@ const OA_DAY_ROWS: { day: number; label: string }[] = [
   { day: 6, label: "So" },
   { day: 7, label: "Nd" },
 ];
-
-type LogicAddZoneProps = {
-  variant: "condition" | "effect";
-  label: string;
-  hint: string;
-  expanded: boolean;
-  anchorRef?: RefObject<HTMLButtonElement | null>;
-  onClick: () => void;
-};
-
-function LogicAddZone({ variant, label, hint, expanded, anchorRef, onClick }: LogicAddZoneProps) {
-  const tone =
-    variant === "condition"
-      ? "border-sky-200/90 hover:border-sky-300 hover:bg-sky-50/40"
-      : "border-emerald-200/90 hover:border-emerald-300 hover:bg-emerald-50/40";
-  const plusTone = variant === "condition" ? "text-sky-500" : "text-emerald-500";
-
-  return (
-    <button
-      type="button"
-      ref={anchorRef}
-      onClick={onClick}
-      className={`flex w-full flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed bg-white px-4 text-center transition ${tone} ${expanded ? "min-h-[10rem] flex-1 py-10" : "py-5"}`}
-    >
-      <span className={`text-2xl font-light leading-none ${plusTone}`}>+</span>
-      <span className="text-sm font-medium text-slate-900">{label}</span>
-      {expanded ? <span className="max-w-xs text-xs text-slate-500">{hint}</span> : null}
-    </button>
-  );
-}
 
 const LOG_ROWS = [
   {
@@ -501,7 +463,7 @@ export default function OrderAutomationEditorPage() {
   }
 
   return (
-    <div className={`${moduleSettingsPageShellClass} min-w-0 pb-8 text-[13px] text-slate-900`}>
+    <div className={`${moduleEditorFullWidthClass} min-w-0 pb-8 text-[13px] text-slate-900`}>
       <ModuleListBreadcrumb items={breadcrumbItems} />
 
       <div className="mb-8 mt-6">
@@ -717,226 +679,50 @@ export default function OrderAutomationEditorPage() {
           </IntegrationsApiPanel>
         </FlatPageSection>
 
-        <section className="w-full space-y-4">
-          <div>
-            <h2 className="text-lg font-semibold text-slate-900">Jeśli → To</h2>
-            <p className="mt-1 text-sm text-slate-500">Spełnione warunki po lewej — wykonywane akcje po prawej.</p>
-          </div>
-          <div className={flatSectionDividerClass} aria-hidden />
-
-          <div className="grid w-full items-stretch gap-6 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:gap-8">
-            {/* Jeśli */}
-            <div className="flex min-h-[12rem] min-w-0 flex-col">
-              <div className="mb-4 shrink-0">
-                <h3 className="text-base font-semibold text-slate-900">Jeśli</h3>
-                <p className="mt-0.5 text-sm text-slate-500">Warunki muszą być spełnione</p>
-              </div>
-
-              <div className="flex flex-1 flex-col">
-                {draft.conditions.length > 0 ? (
-                  <ul className="mb-4 divide-y divide-gray-100">
-                    {draft.conditions.map((c, idx) => {
-                      const meta = ORDER_AUTOMATION_CONDITION_FIELDS.find((f) => f.key === c.fieldKey);
-                      const stName =
-                        c.fieldKey === "order_status" && c.value && statusNameById.has(Number(c.value))
-                          ? statusNameById.get(Number(c.value))!
-                          : null;
-                      const join = c.joinToNext ?? "and";
-                      const isLast = idx >= draft.conditions.length - 1;
-
-                      return (
-                        <li key={c.uid} className="py-3 first:pt-0">
-                          <p className="mb-2 text-sm font-medium text-slate-900">
-                            {formatConditionChipShort(c, statusNameById)}
-                          </p>
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <button
-                              type="button"
-                              className={`${oaInpDense} min-w-[7.5rem] flex-1 text-left`}
-                              onClick={(e) => {
-                                condFieldAnchorRef.current = e.currentTarget;
-                                setOpenConditionFieldFor(c.uid);
-                              }}
-                            >
-                              <span className="truncate">{conditionFieldLabel(c.fieldKey)}</span>
-                            </button>
-                            <select
-                              className={`${oaInpDense} w-[7.25rem] shrink-0`}
-                              value={c.operator}
-                              onChange={(e) =>
-                                setDraft((d) =>
-                                  normalizeRule({
-                                    ...d,
-                                    conditions: d.conditions.map((x) =>
-                                      x.uid === c.uid ? { ...x, operator: e.target.value as AutomationConditionOp } : x,
-                                    ),
-                                  }),
-                                )
-                              }
-                            >
-                              {ops.map((op) => (
-                                <option key={op} value={op}>
-                                  {ORDER_AUTOMATION_OPERATOR_UI[op] ?? op}
-                                </option>
-                              ))}
-                            </select>
-                            <div className="min-w-[6rem] flex-1">
-                              {meta?.valueKind === "status" ? (
-                                <button
-                                  type="button"
-                                  className={`${oaInpDense} w-full text-left`}
-                                  onClick={(e) => openStatus(e.currentTarget, { mode: "cond", uid: c.uid })}
-                                >
-                                  {stName ? (
-                                    <span className="truncate">{stName}</span>
-                                  ) : (
-                                    <span className="text-slate-400">Wybierz…</span>
-                                  )}
-                                </button>
-                              ) : (
-                                <input
-                                  className={oaInpDense}
-                                  value={c.value}
-                                  placeholder="Wartość…"
-                                  onChange={(e) =>
-                                    setDraft((d) =>
-                                      normalizeRule({
-                                        ...d,
-                                        conditions: d.conditions.map((x) =>
-                                          x.uid === c.uid ? { ...x, value: e.target.value } : x,
-                                        ),
-                                      }),
-                                    )
-                                  }
-                                />
-                              )}
-                            </div>
-                            <button type="button" className={oaIconGhost} title="Duplikuj warunek" onClick={() => duplicateCondition(c)}>
-                              <Copy className="h-4 w-4" />
-                            </button>
-                            <button
-                              type="button"
-                              className={`${oaIconGhost} hover:text-red-600`}
-                              title="Usuń warunek"
-                              onClick={() =>
-                                setDraft((d) => normalizeRule({ ...d, conditions: d.conditions.filter((x) => x.uid !== c.uid) }))
-                              }
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          </div>
-                          {!isLast ? (
-                            <div className="mt-2 flex items-center gap-2">
-                              <div className="h-px flex-1 bg-gray-200" aria-hidden />
-                              <select
-                                className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-700 outline-none focus:border-slate-400"
-                                value={join}
-                                onChange={(e) => setJoinToNext(c.uid, e.target.value as AutomationConditionJoin)}
-                                aria-label="Łącznik warunków"
-                              >
-                                <option value="and">ORAZ</option>
-                                <option value="or">LUB</option>
-                              </select>
-                              <div className="h-px flex-1 bg-gray-200" aria-hidden />
-                            </div>
-                          ) : null}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                ) : null}
-
-                <div className={draft.conditions.length > 0 ? "mt-auto" : "flex flex-1 flex-col"}>
-                  <LogicAddZone
-                    variant="condition"
-                    label="Dodaj warunek"
-                    hint="Przeciągnij pola, aby zbudować warunek"
-                    expanded={draft.conditions.length === 0}
-                    anchorRef={condAddRef}
-                    onClick={() => setCondMenuOpen(true)}
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Strzałka */}
-            <div className="flex items-center justify-center py-1 lg:self-center lg:py-0">
-              <ArrowRight className="h-8 w-8 shrink-0 rotate-90 text-slate-300 lg:rotate-0" aria-hidden />
-            </div>
-
-            {/* To */}
-            <div className="flex min-h-[12rem] min-w-0 flex-col">
-              <div className="mb-4 shrink-0">
-                <h3 className="text-base font-semibold text-slate-900">To</h3>
-                <p className="mt-0.5 text-sm text-slate-500">Akcje wykonywane po spełnieniu warunków</p>
-              </div>
-
-              <div className="flex flex-1 flex-col">
-                {draft.effects.length > 0 ? (
-                  <ul className="mb-4 divide-y divide-gray-100">
-                    {draft.effects.map((e) => {
-                      const summary = formatEffectPill(e, statusNameById);
-
-                      return (
-                        <li key={e.uid} className="py-3 first:pt-0">
-                          <div className="flex items-start gap-2">
-                            <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" strokeWidth={2.5} aria-hidden />
-                            <div className="min-w-0 flex-1">
-                              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                                <button
-                                  type="button"
-                                  className="text-left text-sm font-medium text-slate-900 hover:text-slate-700"
-                                  onClick={(ev) => {
-                                    effectKindAnchorRef.current = ev.currentTarget;
-                                    setOpenEffectKindFor(e.uid);
-                                  }}
-                                >
-                                  {summary}
-                                </button>
-                                <div className="flex shrink-0 items-center gap-0.5">
-                                  <button type="button" className={oaIconGhost} title="Duplikuj akcję" onClick={() => duplicateEffect(e)}>
-                                    <Copy className="h-4 w-4" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className={`${oaIconGhost} hover:text-red-600`}
-                                    title="Usuń akcję"
-                                    onClick={() => setDraft((d) => ({ ...d, effects: d.effects.filter((x) => x.uid !== e.uid) }))}
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </button>
-                                </div>
-                              </div>
-                              <div>
-                                {renderAutomationEffectConfigEditor({
-                                  kind: e.kind,
-                                  effect: e,
-                                  statusOptions: panelStatusOptions,
-                                  patchPayload: (partial) => patchEffectPayload(e.uid, partial),
-                                })}
-                              </div>
-                            </div>
-                          </div>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                ) : null}
-
-                <div className={draft.effects.length > 0 ? "mt-auto" : "flex flex-1 flex-col"}>
-                  <LogicAddZone
-                    variant="effect"
-                    label="Dodaj akcję"
-                    hint="Przeciągnij akcję, aby ją dodać"
-                    expanded={draft.effects.length === 0}
-                    anchorRef={effAddRef}
-                    onClick={() => setEffMenuOpen(true)}
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
+        <AutomationIfThenSection
+          conditions={draft.conditions}
+          effects={draft.effects}
+          ops={ops}
+          statusNameById={statusNameById}
+          panelStatusOptions={panelStatusOptions}
+          condAddRef={condAddRef}
+          effAddRef={effAddRef}
+          onOpenCondMenu={() => setCondMenuOpen(true)}
+          onOpenEffMenu={() => setEffMenuOpen(true)}
+          onOpenConditionField={(uid, anchor) => {
+            condFieldAnchorRef.current = anchor;
+            setOpenConditionFieldFor(uid);
+          }}
+          onOpenEffectKind={(uid, anchor) => {
+            effectKindAnchorRef.current = anchor;
+            setOpenEffectKindFor(uid);
+          }}
+          onOpenStatus={(el, uid) => openStatus(el, { mode: "cond", uid })}
+          onPatchConditionOperator={(uid, operator) =>
+            setDraft((d) =>
+              normalizeRule({
+                ...d,
+                conditions: d.conditions.map((x) => (x.uid === uid ? { ...x, operator } : x)),
+              }),
+            )
+          }
+          onPatchConditionValue={(uid, value) =>
+            setDraft((d) =>
+              normalizeRule({
+                ...d,
+                conditions: d.conditions.map((x) => (x.uid === uid ? { ...x, value } : x)),
+              }),
+            )
+          }
+          onSetJoinToNext={setJoinToNext}
+          onDuplicateCondition={duplicateCondition}
+          onRemoveCondition={(uid) =>
+            setDraft((d) => normalizeRule({ ...d, conditions: d.conditions.filter((x) => x.uid !== uid) }))
+          }
+          onDuplicateEffect={duplicateEffect}
+          onRemoveEffect={(uid) => setDraft((d) => ({ ...d, effects: d.effects.filter((x) => x.uid !== uid) }))}
+          onPatchEffectPayload={patchEffectPayload}
+        />
 
         <FlatPageSection title="Historia zmian" dense>
           <div className={moduleListTableScrollClass}>

@@ -17,3 +17,6 @@ export const flatListTableSectionClass = "border-t border-gray-200 pt-6";
 
 /** Lewo wyrównany obszar contentu (max ~1400px) — ustawienia, formularze modułu. */
 export const moduleSettingsPageShellClass = "w-full max-w-[87.5rem]";
+
+/** Pełna szerokość content area — edytory workflow (np. akcje automatyczne). */
+export const moduleEditorFullWidthClass = "w-full min-w-0 max-w-none";

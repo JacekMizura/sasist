@@ -11,7 +11,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-import { oaInpDense } from "../orderAutomationUiTokens";
+import { oaInp, oaWorkflowFieldLabelClass, oaWorkflowFieldRowClass } from "../orderAutomationUiTokens";
 
 /** Lewa kolumna: zwięzła etykieta operacji (ERP), nie pełna nazwa z katalogu. */
 export const EFFECT_BUSINESS_SIDEBAR: Record<
@@ -27,8 +27,9 @@ export const EFFECT_BUSINESS_SIDEBAR: Record<
   wms_action: { title: "WMS", Icon: Package },
 };
 
-const erpRow = "grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-x-1.5 gap-y-0.5 py-0.5";
-const erpLbl = "text-[11px] font-semibold leading-tight text-slate-600";
+const erpRow = oaWorkflowFieldRowClass;
+const erpLbl = oaWorkflowFieldLabelClass;
+const erpInp = oaInp;
 
 export type EffectEditorBaseProps = {
   effect: AutomationEffect;
@@ -45,7 +46,7 @@ export function renderChangeStatusEffectEditor({ effect, patchPayload, statusOpt
     <div className={erpRow}>
       <span className={erpLbl}>Status docelowy</span>
       <select
-        className={oaInpDense}
+        className={erpInp}
         value={v}
         onChange={(e) => patchPayload({ order_ui_status_id: e.target.value })}
       >
@@ -92,7 +93,7 @@ export function renderGenerateDocumentEffectEditor({ effect, patchPayload }: Eff
     <div className="grid min-w-0 gap-y-0">
       <div className={erpRow}>
         <span className={erpLbl}>Typ dokumentu</span>
-        <select className={oaInpDense} value={docType} onChange={(e) => patchPayload({ doc_type: e.target.value })}>
+        <select className={erpInp} value={docType} onChange={(e) => patchPayload({ doc_type: e.target.value })}>
           <option value="">—</option>
           {DOC_TYPES.map((o) => (
             <option key={o.value} value={o.value}>
@@ -103,7 +104,7 @@ export function renderGenerateDocumentEffectEditor({ effect, patchPayload }: Eff
       </div>
       <div className={erpRow}>
         <span className={erpLbl}>Seria</span>
-        <select className={oaInpDense} value={series} onChange={(e) => patchPayload({ doc_series: e.target.value })}>
+        <select className={erpInp} value={series} onChange={(e) => patchPayload({ doc_series: e.target.value })}>
           <option value="">—</option>
           {DOC_SERIES.map((o) => (
             <option key={o.value} value={o.value}>
@@ -115,7 +116,7 @@ export function renderGenerateDocumentEffectEditor({ effect, patchPayload }: Eff
       <div className={erpRow}>
         <span className={erpLbl}>Stacja druku</span>
         <select
-          className={oaInpDense}
+          className={erpInp}
           value={station}
           onChange={(e) => patchPayload({ print_station: e.target.value })}
         >
@@ -129,7 +130,7 @@ export function renderGenerateDocumentEffectEditor({ effect, patchPayload }: Eff
       </div>
       <div className={erpRow}>
         <span className={erpLbl}>Kopie</span>
-        <select className={oaInpDense} value={copies} onChange={(e) => patchPayload({ copies: e.target.value })}>
+        <select className={erpInp} value={copies} onChange={(e) => patchPayload({ copies: e.target.value })}>
           {COPIES_OPTS.map((n) => (
             <option key={n} value={n}>
               {n}
@@ -170,7 +171,7 @@ export function renderSendMessageEffectEditor({ effect, patchPayload }: EffectEd
     <div className="grid min-w-0 gap-y-0">
       <div className={erpRow}>
         <span className={erpLbl}>Szablon</span>
-        <select className={oaInpDense} value={template} onChange={(e) => patchPayload({ template: e.target.value })}>
+        <select className={erpInp} value={template} onChange={(e) => patchPayload({ template: e.target.value })}>
           <option value="">—</option>
           {MESSAGE_TEMPLATES.map((o) => (
             <option key={o.value} value={o.value}>
@@ -182,7 +183,7 @@ export function renderSendMessageEffectEditor({ effect, patchPayload }: EffectEd
       <div className={erpRow}>
         <span className={erpLbl}>Kanał</span>
         <select
-          className={oaInpDense}
+          className={erpInp}
           value={channel}
           onChange={(e) => patchPayload({ message_channel: e.target.value })}
         >
@@ -195,7 +196,7 @@ export function renderSendMessageEffectEditor({ effect, patchPayload }: EffectEd
       </div>
       <div className={erpRow}>
         <span className={erpLbl}>Opóźnienie</span>
-        <select className={oaInpDense} value={delay} onChange={(e) => patchPayload({ delay_min: e.target.value })}>
+        <select className={erpInp} value={delay} onChange={(e) => patchPayload({ delay_min: e.target.value })}>
           {DELAY_OPTS.map((o) => (
             <option key={o.value} value={o.value}>
               {o.label}
@@ -231,7 +232,7 @@ export function renderPrintEffectEditor({ effect, patchPayload }: EffectEditorBa
     <div className="grid min-w-0 gap-y-0">
       <div className={erpRow}>
         <span className={erpLbl}>Drukarka</span>
-        <select className={oaInpDense} value={printer} onChange={(e) => patchPayload({ printer: e.target.value })}>
+        <select className={erpInp} value={printer} onChange={(e) => patchPayload({ printer: e.target.value })}>
           <option value="">—</option>
           {PRINTERS.map((o) => (
             <option key={o.value} value={o.value}>
@@ -243,7 +244,7 @@ export function renderPrintEffectEditor({ effect, patchPayload }: EffectEditorBa
       <div className={erpRow}>
         <span className={erpLbl}>Dokument</span>
         <select
-          className={oaInpDense}
+          className={erpInp}
           value={doc}
           onChange={(e) => patchPayload({ print_document: e.target.value, template: e.target.value })}
         >
@@ -257,7 +258,7 @@ export function renderPrintEffectEditor({ effect, patchPayload }: EffectEditorBa
       </div>
       <div className={erpRow}>
         <span className={erpLbl}>Kopie</span>
-        <select className={oaInpDense} value={copies} onChange={(e) => patchPayload({ copies: e.target.value })}>
+        <select className={erpInp} value={copies} onChange={(e) => patchPayload({ copies: e.target.value })}>
           {COPIES_OPTS.map((n) => (
             <option key={n} value={n}>
               {n}
@@ -298,7 +299,7 @@ export function renderAssignCourierEffectEditor({ effect, patchPayload }: Effect
       <div className={erpRow}>
         <span className={erpLbl}>Przewoźnik</span>
         <select
-          className={oaInpDense}
+          className={erpInp}
           value={selectValue}
           onChange={(e) => {
             const v = e.target.value;
@@ -321,7 +322,7 @@ export function renderAssignCourierEffectEditor({ effect, patchPayload }: Effect
         <div className={erpRow}>
           <span className={erpLbl}>Nazwa</span>
           <input
-            className={oaInpDense}
+            className={erpInp}
             placeholder="np. kurier lokalny"
             value={courier}
             onChange={(e) => patchPayload({ courier: e.target.value })}
@@ -337,7 +338,7 @@ export function renderAddTagEffectEditor({ effect, patchPayload }: EffectEditorB
     <div className={erpRow}>
       <span className={erpLbl}>Treść tagu</span>
       <input
-        className={oaInpDense}
+        className={erpInp}
         placeholder="np. pilne, faktura"
         value={String(effect.payload.tag ?? "")}
         onChange={(e) => patchPayload({ tag: e.target.value })}
@@ -351,7 +352,7 @@ export function renderWmsActionEffectEditor({ effect, patchPayload }: EffectEdit
     <div className={erpRow}>
       <span className={erpLbl}>Klucz akcji</span>
       <input
-        className={oaInpDense}
+        className={erpInp}
         placeholder="np. release_line, pick_confirm"
         value={String(effect.payload.action_key ?? "")}
         onChange={(e) => patchPayload({ action_key: e.target.value })}
