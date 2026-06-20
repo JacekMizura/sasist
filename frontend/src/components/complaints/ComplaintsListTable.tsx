@@ -25,7 +25,6 @@ import {
   panelListDenseCheckboxInputClass,
 } from "../operational";
 import ComplaintResponseDeadlineBanner from "../../pages/Complaints/ComplaintResponseDeadlineBanner";
-import ComplaintAutoAcceptBadge from "../../pages/Complaints/ComplaintAutoAcceptBadge";
 import { complaintRawStatusToPanelBrief } from "../../utils/panelListStatusBriefMappers";
 
 const TD = moduleListTdClass;
@@ -138,6 +137,7 @@ function ComplaintsListTableInner({
                   : null;
             const goDetail = () => navigate(`/complaints/${r.id}`);
             const legalAuto = Boolean(r.accepted_by_law || r.auto_accepted);
+            const statusContextTitle = legalAuto ? "Uznana automatycznie" : undefined;
             const selected = isRowSelected(String(r.id));
             const uiTerminal = statusBrief.main_group === "DONE";
 
@@ -179,7 +179,7 @@ function ComplaintsListTableInner({
                   ) : null}
                   {orderLabel ? <div className="mt-1 text-xs text-slate-500">{orderLabel}</div> : null}
                 </td>
-                <td className={`${TD} min-w-[10rem]`}>
+                <td className={`${TD} min-w-[10rem]`} title={statusContextTitle}>
                   <ModuleListStatusPill status={statusBrief} terminal={uiTerminal} terminalPositive={uiTerminal} />
                 </td>
                 <td className={`${TD} min-w-[14rem] whitespace-normal !py-3`}>
@@ -215,7 +215,6 @@ function ComplaintsListTableInner({
                 </td>
                 <td className={`${TD} text-right`} onClick={(e) => e.stopPropagation()}>
                   <div className="flex min-w-0 flex-col items-end gap-1.5">
-                    {legalAuto ? <ComplaintAutoAcceptBadge compact /> : null}
                     <ComplaintResponseDeadlineBanner
                       compact
                       responseDeadline={r.response_deadline}

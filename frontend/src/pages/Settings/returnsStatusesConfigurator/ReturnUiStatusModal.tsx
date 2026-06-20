@@ -1,15 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { CompactLabelColorPicker } from "../../../components/label/CompactLabelColorPicker";
+import { PanelStatusConfiguratorAside } from "../../../components/settings/PanelStatusConfiguratorAside";
 import { DEFAULT_PANEL_STATUS_HEX } from "../../../components/panel/HexColorField";
-import { PanelStatusMiniPreview } from "../../../components/settings/PanelStatusMiniPreview";
+import { usePanelStatusCounterColor } from "../../../hooks/usePanelStatusCounterColor";
 import type {
   ReturnUiMainGroup,
   ReturnUiPanelSubgroupRead,
   ReturnUiStatusCreatePayload,
+  ReturnUiStatusPanelSummary,
   ReturnUiStatusUpdatePayload,
   ReturnUiStatusWithCount,
 } from "../../../types/wmsReturn";
+import { DAMAGE_TENANT_ID } from "../../damage/damageShared";
 import { RETURN_MAIN_GROUP_LABELS, RETURN_MAIN_GROUP_ORDER } from "./constants";
 import { ReturnsConfiguratorModalShell } from "./ReturnsConfiguratorModalShell";
 import { IntegrationsApiPanel } from "./AdvancedSettingsPanel";
@@ -23,9 +26,11 @@ type Props = {
   status: ReturnUiStatusWithCount | null;
   initialMainGroup?: ReturnUiMainGroup;
   panelSubgroups: ReturnUiPanelSubgroupRead[];
+  summary: ReturnUiStatusPanelSummary | null;
+  warehouseId: number;
   busy: boolean;
   onClose: () => void;
-  onSaveCreate: (body: ReturnUiStatusCreatePayload) => Promise<boolean>;
+  onSaveCreate: (body: ReturnUiStatusCreatePayload) => Promise<number | false>;
   onSaveEdit: (id: number, draft: ReturnUiStatusUpdatePayload) => Promise<boolean>;
   onUploadImage?: (statusId: number, file: File) => Promise<boolean>;
   onClearImage?: (statusId: number) => Promise<boolean>;
@@ -55,6 +60,8 @@ export function ReturnUiStatusModal({
   status,
   initialMainGroup = "NEW",
   panelSubgroups,
+  summary,
+  warehouseId,
   busy,
   onClose,
   onSaveCreate,
@@ -65,11 +72,22 @@ export function ReturnUiStatusModal({
   const [createDraft, setCreateDraft] = useState(() => emptyCreate(initialMainGroup));
   const [editDraft, setEditDraft] = useState<ReturnUiStatusUpdatePayload>({});
   const [previewBlob, setPreviewBlob] = useState<string | null>(null);
+  const [pendingCounterColor, setPendingCounterColor] = useState<string | null>(null);
+
+  const statusId = mode === "edit" ? status?.id ?? null : null;
+  const { counterColor, setCounterColor, persistForStatusId } = usePanelStatusCounterColor(
+    "returns",
+    DAMAGE_TENANT_ID,
+    warehouseId,
+    statusId,
+  );
 
   useEffect(() => {
     if (!open) return;
-    if (mode === "create") setCreateDraft(emptyCreate(initialMainGroup));
-    else if (status) {
+    if (mode === "create") {
+      setCreateDraft(emptyCreate(initialMainGroup));
+      setPendingCounterColor(null);
+    } else if (status) {
       setEditDraft({
         name: status.name,
         color: status.color,
@@ -100,13 +118,21 @@ export function ReturnUiStatusModal({
   const badge = mode === "create" ? createDraft.badge_color ?? createDraft.color : editDraft.badge_color ?? editDraft.color ?? status?.badge_color ?? status?.color ?? DEFAULT_PANEL_STATUS_HEX;
   const bg = mode === "create" ? createDraft.background_color : editDraft.background_color ?? status?.background_color ?? badge;
   const tx = mode === "create" ? createDraft.text_color : editDraft.text_color ?? status?.text_color ?? "#0f172a";
-  const subVal = mode === "create" ? (createDraft.subgroup_name ?? "") : (editDraft.subgroup_name ?? "").trim();
+  const subVal = mode === "create" ? (createDraft.subgroup_name ?? "") : (editDraft.subgroup_name ?? status?.subgroup_name ?? "").trim();
   const imageUrl = previewBlob ?? status?.image_url ?? null;
+  const effectiveCounterColor = mode === "create" ? pendingCounterColor : counterColor;
 
   const handleSave = async () => {
     if (mode === "create") {
-      const ok = await onSaveCreate({ ...createDraft, name: createDraft.name.trim(), subgroup_name: createDraft.subgroup_name?.trim() || null });
-      if (ok) onClose();
+      const createdId = await onSaveCreate({
+        ...createDraft,
+        name: createDraft.name.trim(),
+        subgroup_name: createDraft.subgroup_name?.trim() || null,
+      });
+      if (createdId !== false) {
+        if (pendingCounterColor) persistForStatusId(createdId, pendingCounterColor);
+        onClose();
+      }
     } else if (status) {
       const ok = await onSaveEdit(status.id, editDraft);
       if (ok) onClose();
@@ -114,15 +140,30 @@ export function ReturnUiStatusModal({
   };
 
   const previewAside = (
-    <PanelStatusMiniPreview
-      name={name.trim() || "Nazwa statusu"}
-      count={status?.count ?? 12}
-      badgeHex={badge ?? DEFAULT_PANEL_STATUS_HEX}
-      backgroundHex={bg ?? DEFAULT_PANEL_STATUS_HEX}
-      textHex={tx ?? "#0f172a"}
-      imageUrl={imageUrl}
-      mainGroupLabel={RETURN_MAIN_GROUP_LABELS[mg]}
-      subgroupLabel={subVal || null}
+    <PanelStatusConfiguratorAside
+      preview={{
+        name: name.trim() || "Nazwa statusu",
+        count: status?.count ?? 4,
+        mainGroup: mg,
+        mainGroupLabel: RETURN_MAIN_GROUP_LABELS[mg],
+        subgroupLabel: subVal || null,
+        badgeHex: badge ?? DEFAULT_PANEL_STATUS_HEX,
+        backgroundHex: bg ?? DEFAULT_PANEL_STATUS_HEX,
+        textHex: tx ?? "#0f172a",
+        imageUrl,
+        active: true,
+      }}
+      summary={summary}
+      mainGroupLabels={RETURN_MAIN_GROUP_LABELS}
+      mainGroupOrder={RETURN_MAIN_GROUP_ORDER}
+      highlightStatusId={mode === "edit" ? status?.id : null}
+      highlightDraft={
+        mode === "create"
+          ? { name, main_group: mg, subgroup_name: subVal || null }
+          : null
+      }
+      counterColorHex={effectiveCounterColor}
+      onCounterColorChange={mode === "create" ? setPendingCounterColor : setCounterColor}
     />
   );
 

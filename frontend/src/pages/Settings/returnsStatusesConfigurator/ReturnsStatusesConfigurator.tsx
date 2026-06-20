@@ -77,12 +77,14 @@ export function ReturnsStatusesConfigurator({ warehouseId, cfg, setDraft }: Prop
           status={statusModal.mode === "edit" ? statusModal.status : null}
           initialMainGroup={statusModal.mode === "create" ? statusModal.mainGroup : undefined}
           panelSubgroups={panel.panelSubgroups}
+          summary={panel.summary}
+          warehouseId={warehouseId}
           onClose={() => setStatusModal(null)}
           onSaveCreate={async (body) => {
             setStatusBusy(true);
-            const ok = await panel.createStatus(body);
+            const id = await panel.createStatus(body);
             setStatusBusy(false);
-            return ok;
+            return id;
           }}
           onSaveEdit={async (id, draft) => {
             setStatusBusy(true);

@@ -97,16 +97,16 @@ export function useReturnPanelStatusesConfig(warehouseId: number | null) {
     }
   };
 
-  const createStatus = async (body: ReturnUiStatusCreatePayload) => {
+  const createStatus = async (body: ReturnUiStatusCreatePayload): Promise<number | false> => {
     const badge = (body.badge_color ?? body.color ?? DEFAULT_PANEL_STATUS_HEX).trim();
     if (!isValidPanelStatusHex(badge) || !isValidPanelStatusHex(body.background_color ?? badge) || !isValidPanelStatusHex(body.text_color ?? "#0f172a")) {
       setErr("Kolory: format #RRGGBB.");
       return false;
     }
     try {
-      await createReturnUiStatus(DAMAGE_TENANT_ID, body, warehouseId);
+      const created = await createReturnUiStatus(DAMAGE_TENANT_ID, body, warehouseId);
       await load();
-      return true;
+      return created.id;
     } catch {
       setErr("Nie udało się utworzyć statusu.");
       return false;

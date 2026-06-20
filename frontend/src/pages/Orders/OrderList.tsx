@@ -29,7 +29,7 @@ import type { OrderListBulkSelectionArg } from "../../components/orders/orderLis
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { dispatchOrdersOperationsUpdated } from "../wms/wmsRoutes";
 import { dispatchWmsShortagesUpdated } from "../../utils/wmsRefresh";
-import { OrderStatusSidebar, type OrderPanelFilter } from "../../components/orders/OrderStatusSidebar";
+import { panelStatusCounterColorResolver } from "../../hooks/usePanelStatusCounterColor";
 import {
   formatOrderPanelFilterLabel,
   ModuleFilteredAllBanner,
@@ -210,6 +210,11 @@ export default function OrderList() {
 
   /** Optional user filter — never derived from global WMS warehouse selector. */
   const fulfillmentWarehouseFilter = appliedFilters.warehouseIdOverride;
+
+  const statusCounterColorForId = useMemo(() => {
+    if (fulfillmentWarehouseFilter == null) return undefined;
+    return panelStatusCounterColorResolver("orders", DAMAGE_TENANT_ID, fulfillmentWarehouseFilter);
+  }, [fulfillmentWarehouseFilter]);
 
   const appliedFiltersKey = useMemo(() => JSON.stringify(appliedFilters), [appliedFilters]);
 
@@ -916,6 +921,7 @@ export default function OrderList() {
               chromeVariant="sellasist"
               collapsed={isStatusPanelCollapsed}
               parentScrollContainer
+              statusCounterColorForId={statusCounterColorForId}
               onToggleCollapsed={() => setIsStatusPanelCollapsed((v) => !v)}
             />
           }
@@ -930,6 +936,7 @@ export default function OrderList() {
                 setStatusDrawerOpen(false);
               }}
               chromeVariant="sellasist"
+              statusCounterColorForId={statusCounterColorForId}
             />
           }
         />

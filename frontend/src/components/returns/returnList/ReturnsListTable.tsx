@@ -136,13 +136,16 @@ const ReturnsListRowStatusBadges = memo(function ReturnsListRowStatusBadges({ r 
   const wfBrief = returnWorkflowStatusToPanelBrief(r.status);
   const uiBrief = r.ui_status ? returnUiStatusBriefToPanelBrief(r.ui_status) : null;
   const uiTerminal = r.ui_status?.main_group === "DONE";
-  const wfTerminal = r.status.type === "done_success" || r.status.type === "done_rejected";
-  const wfPositive = r.status.type === "done_success";
+  const wfTitle = wfBrief.name !== uiBrief?.name ? `Workflow magazynowy: ${wfBrief.name}` : undefined;
 
   return (
-    <div className="flex flex-col gap-1" aria-label="Status zwrotu">
-      <ModuleListStatusPill status={uiBrief} terminal={uiTerminal} terminalPositive={uiTerminal} />
-      <ModuleListStatusPill status={wfBrief} terminal={wfTerminal} terminalPositive={wfPositive} />
+    <div className="flex flex-col gap-1" aria-label="Status zwrotu" title={wfTitle}>
+      <ModuleListStatusPill
+        status={uiBrief}
+        terminal={uiTerminal}
+        terminalPositive={uiTerminal}
+        emptyLabel="Bez etykiety"
+      />
     </div>
   );
 });
@@ -194,7 +197,10 @@ const ReturnsListTableRow = memo(function ReturnsListTableRow({
         />
       </td>
       <td className={`${TD} min-w-[11rem]`}>
-        <div className="font-medium text-slate-900 hover:underline">
+        <div
+          className="font-medium text-slate-900 hover:underline"
+          title={[returnTypeBadgeLabel(r.return_type), r.status?.name].filter(Boolean).join(" · ")}
+        >
           #{displayWarehouseDocumentNumber(r.rmz_number) || r.rmz_number}
         </div>
         <div className="mt-1 text-xs text-slate-400">{formatReturnDate(r.created_at)}</div>
@@ -222,7 +228,6 @@ const ReturnsListTableRow = memo(function ReturnsListTableRow({
       </td>
       <td className={`${TD} text-right`}>
         <div className="font-medium tabular-nums text-slate-900">{panelListRefundTotalPln(r)}</div>
-        <div className="mt-1 text-xs text-slate-400">{returnTypeBadgeLabel(r.return_type)}</div>
       </td>
       <ModuleListRowActionsCell ariaLabel="Akcje zwrotu">
         <OperationalActionColumn

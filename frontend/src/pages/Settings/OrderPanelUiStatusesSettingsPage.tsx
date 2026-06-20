@@ -12,8 +12,9 @@ import {
   uploadOrderUiStatusImage,
 } from "../../api/orderUiStatusApi";
 import { CompactLabelColorPicker } from "../../components/label/CompactLabelColorPicker";
-import { PanelStatusMiniPreview } from "../../components/settings/PanelStatusMiniPreview";
+import { PanelStatusConfiguratorAside } from "../../components/settings/PanelStatusConfiguratorAside";
 import { OrderUiStatusConfigRowPresent } from "../../components/orders/orderList/OrderUiStatusConfigRowPresent";
+import { usePanelStatusCounterColor } from "../../hooks/usePanelStatusCounterColor";
 import {
   stBtnDanger,
   stBtnGhost,
@@ -80,9 +81,12 @@ export default function OrderPanelUiStatusesSettingsPage() {
   const [newText, setNewText] = useState("#0f172a");
   const [newSort, setNewSort] = useState(0);
   const [newActive, setNewActive] = useState(true);
+  const [newCounterColor, setNewCounterColor] = useState<string | null>(null);
 
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editDraft, setEditDraft] = useState<OrderUiStatusUpdatePayload>({});
+  const { counterColor: editCounterColor, setCounterColor: setEditCounterColor, persistForStatusId } =
+    usePanelStatusCounterColor("orders", DAMAGE_TENANT_ID, warehouseId, editingId);
   /** Lokalny podgląd PNG przed odświeżeniem z serwera po uploadzie */
   const [editImageBlobUrl, setEditImageBlobUrl] = useState<string | null>(null);
 
@@ -220,7 +224,7 @@ export default function OrderPanelUiStatusesSettingsPage() {
     setCreating(true);
     setErr(null);
     try {
-      await createOrderUiStatus(DAMAGE_TENANT_ID, warehouseId, {
+      const created = await createOrderUiStatus(DAMAGE_TENANT_ID, warehouseId, {
         name,
         main_group: newMainGroup,
         group_name: null,
@@ -235,6 +239,7 @@ export default function OrderPanelUiStatusesSettingsPage() {
         text_color: newText.trim().toLowerCase(),
         is_active: newActive,
       });
+      if (newCounterColor) persistForStatusId(created.id, newCounterColor);
       setNewName("");
       setNewSubgroupName("");
       setNewBadge(DEFAULT_PANEL_STATUS_HEX);
@@ -243,6 +248,7 @@ export default function OrderPanelUiStatusesSettingsPage() {
       setNewSort(0);
       setNewMainGroup("NEW");
       setNewActive(true);
+      setNewCounterColor(null);
       await load();
     } catch {
       setErr("Nie udało się utworzyć statusu (unikalna nazwa w grupie i magazynie).");
@@ -487,15 +493,25 @@ export default function OrderPanelUiStatusesSettingsPage() {
               </div>
             </div>
 
-            <PanelStatusMiniPreview
-              name={(editDraft.name ?? r.name).trim() || "—"}
-              count={r.count}
-              badgeHex={badge}
-              backgroundHex={bg}
-              textHex={tx}
-              imageUrl={previewImg}
-              mainGroupLabel={GROUP_LABELS[mgEdit]}
-              subgroupLabel={subLabel}
+            <PanelStatusConfiguratorAside
+              preview={{
+                name: (editDraft.name ?? r.name).trim() || "—",
+                count: r.count,
+                mainGroup: mgEdit,
+                mainGroupLabel: GROUP_LABELS[mgEdit],
+                subgroupLabel: subLabel,
+                badgeHex: badge,
+                backgroundHex: bg,
+                textHex: tx,
+                imageUrl: previewImg,
+                active: true,
+              }}
+              summary={summary}
+              mainGroupLabels={GROUP_LABELS}
+              mainGroupOrder={GROUP_ORDER}
+              highlightStatusId={r.id}
+              counterColorHex={editCounterColor}
+              onCounterColorChange={setEditCounterColor}
             />
           </div>
         </div>
@@ -673,13 +689,28 @@ export default function OrderPanelUiStatusesSettingsPage() {
                   </div>
                 </div>
 
-                <PanelStatusMiniPreview
-                  name={newName.trim() || "—"}
-                  badgeHex={newBadge}
-                  backgroundHex={newBg}
-                  textHex={newText}
-                  mainGroupLabel={GROUP_LABELS[newMainGroup]}
-                  subgroupLabel={newSubgroupName.trim() || null}
+                <PanelStatusConfiguratorAside
+                  preview={{
+                    name: newName.trim() || "—",
+                    count: 4,
+                    mainGroup: newMainGroup,
+                    mainGroupLabel: GROUP_LABELS[newMainGroup],
+                    subgroupLabel: newSubgroupName.trim() || null,
+                    badgeHex: newBadge,
+                    backgroundHex: newBg,
+                    textHex: newText,
+                    active: true,
+                  }}
+                  summary={summary}
+                  mainGroupLabels={GROUP_LABELS}
+                  mainGroupOrder={GROUP_ORDER}
+                  highlightDraft={{
+                    name: newName,
+                    main_group: newMainGroup,
+                    subgroup_name: newSubgroupName.trim() || null,
+                  }}
+                  counterColorHex={newCounterColor}
+                  onCounterColorChange={setNewCounterColor}
                 />
               </div>
             </div>

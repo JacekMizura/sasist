@@ -28,9 +28,7 @@ import {
   OperationalActionColumn,
   panelListDenseCheckboxInputClass,
 } from "../../operational";
-import { OrderDirectSalesBadge } from "./OrderDirectSalesBadge";
-import { OrderWmsOperationalBadge } from "./OrderWmsOperationalBadge";
-import { shouldShowOrderWmsOperationalBadge } from "../../../utils/orderWmsOperationalBadgeVisibility";
+import { buildOrderListDocumentContextTitle } from "../../../utils/orderListDocumentContextTitle";
 
 const TD = moduleListTdClass;
 const TH = moduleListThClass;
@@ -259,25 +257,23 @@ export function OrderListDenseTable({
       case "order_core":
         return (
           <td key={col} className={`${TD} min-w-[11rem]`}>
-            <div className="inline-flex items-center gap-1 font-medium text-slate-900">
+            <div
+              className="inline-flex items-center gap-1 font-medium text-slate-900"
+              title={buildOrderListDocumentContextTitle({
+                orderNumber: o.number,
+                orderId: o.id,
+                orderChannel: o.order_channel,
+                fulfillmentMode: o.fulfillment_mode,
+                workflowPhase: o.wms_workflow_phase,
+                packedAtIso: o.wms_packed_at,
+                packedByLabel: o.wms_packed_by_label,
+                missingLineCount: o.wms_missing_line_count,
+              })}
+            >
               <OrderPriorityFlameIcon priorityColor={o.priority_color} />
               #{o.number ?? o.id}
             </div>
             <div className="mt-1 text-xs text-slate-400">{formatOrderDate(o.order_date)}</div>
-            <div className="mt-1.5 flex flex-col items-start gap-1">
-              <OrderDirectSalesBadge orderChannel={o.order_channel} fulfillmentMode={o.fulfillment_mode} />
-              {shouldShowOrderWmsOperationalBadge({
-                workflowPhase: o.wms_workflow_phase,
-                packedAtIso: o.wms_packed_at,
-                missingLineCount: o.wms_missing_line_count,
-              }) ? (
-                <OrderWmsOperationalBadge
-                  workflowPhase={o.wms_workflow_phase}
-                  packedAtIso={o.wms_packed_at}
-                  packedByLabel={o.wms_packed_by_label}
-                />
-              ) : null}
-            </div>
           </td>
         );
       case "panel_status":

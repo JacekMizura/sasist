@@ -9,6 +9,8 @@ import {
 } from "../../api/complaintUiStatusApi";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { HexColorField, DEFAULT_PANEL_STATUS_HEX, isValidPanelStatusHex } from "../../components/panel/HexColorField";
+import { PanelStatusConfiguratorAside } from "../../components/settings/PanelStatusConfiguratorAside";
+import { usePanelStatusCounterColor } from "../../hooks/usePanelStatusCounterColor";
 import type {
   ComplaintUiMainGroup,
   ComplaintUiStatusRead,
@@ -48,6 +50,9 @@ export default function ComplaintPanelUiStatusesSettingsPage() {
 
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editDraft, setEditDraft] = useState<ComplaintUiStatusUpdatePayload>({});
+  const [newCounterColor, setNewCounterColor] = useState<string | null>(null);
+  const { counterColor: editCounterColor, setCounterColor: setEditCounterColor, persistForStatusId } =
+    usePanelStatusCounterColor("complaints", DAMAGE_TENANT_ID, warehouseId, editingId);
 
   const load = useCallback(async () => {
     if (warehouseId == null) {
@@ -116,15 +121,17 @@ export default function ComplaintPanelUiStatusesSettingsPage() {
     setCreating(true);
     setErr(null);
     try {
-      await createComplaintUiStatus(DAMAGE_TENANT_ID, {
+      const created = await createComplaintUiStatus(DAMAGE_TENANT_ID, {
         name,
         main_group: newMainGroup,
         color: newColor.trim().toLowerCase(),
         sort_order: 0,
       });
+      if (newCounterColor && warehouseId != null) persistForStatusId(created.id, newCounterColor);
       setNewName("");
       setNewColor(DEFAULT_PANEL_STATUS_HEX);
       setNewMainGroup("NEW");
+      setNewCounterColor(null);
       await load();
     } catch {
       setErr("Nie udało się utworzyć statusu (unikalna nazwa w grupie dla podmiotu).");
@@ -219,6 +226,26 @@ export default function ComplaintPanelUiStatusesSettingsPage() {
             Dodaj
           </button>
         </div>
+        <div className="mt-6 border-t border-gray-100 pt-4">
+          <PanelStatusConfiguratorAside
+            preview={{
+              name: newName.trim() || "—",
+              count: 4,
+              mainGroup: newMainGroup,
+              mainGroupLabel: GROUP_LABELS[newMainGroup],
+              badgeHex: newColor,
+              backgroundHex: newColor,
+              textHex: "#0f172a",
+              active: true,
+            }}
+            summary={summary}
+            mainGroupLabels={GROUP_LABELS}
+            mainGroupOrder={GROUP_ORDER}
+            highlightDraft={{ name: newName, main_group: newMainGroup }}
+            counterColorHex={newCounterColor}
+            onCounterColorChange={setNewCounterColor}
+          />
+        </div>
       </div>
       </div>
       </div>
@@ -254,43 +281,65 @@ export default function ComplaintPanelUiStatusesSettingsPage() {
                           >
                             <div className="min-w-0 flex-1">
                               {isEdit ? (
-                                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-                                  <select
-                                    value={editDraft.main_group ?? r.main_group}
-                                    onChange={(e) =>
-                                      setEditDraft((d) => ({
-                                        ...d,
-                                        main_group: e.target.value as ComplaintUiMainGroup,
-                                      }))
-                                    }
-                                    className="w-full max-w-xs rounded border border-gray-200 px-2 py-1 text-sm"
-                                  >
-                                    {GROUP_ORDER.map((og) => (
-                                      <option key={og} value={og}>
-                                        {GROUP_LABELS[og]}
-                                      </option>
-                                    ))}
-                                  </select>
-                                  <input
-                                    type="text"
-                                    value={editDraft.name ?? ""}
-                                    onChange={(e) => setEditDraft((d) => ({ ...d, name: e.target.value }))}
-                                    className="w-full max-w-xs rounded border border-gray-200 px-2 py-1 text-sm"
-                                  />
-                                  <HexColorField
-                                    value={editDraft.color ?? r.color}
-                                    onChange={(hex) => setEditDraft((d) => ({ ...d, color: hex }))}
-                                  />
-                                  <input
-                                    type="number"
-                                    value={editDraft.sort_order ?? 0}
-                                    onChange={(e) =>
-                                      setEditDraft((d) => ({ ...d, sort_order: Number(e.target.value) }))
-                                    }
-                                    className="w-24 rounded border border-gray-200 px-2 py-1 text-sm"
-                                    title="Kolejność sortowania"
-                                  />
-                                </div>
+                                <>
+                                  <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+                                    <select
+                                      value={editDraft.main_group ?? r.main_group}
+                                      onChange={(e) =>
+                                        setEditDraft((d) => ({
+                                          ...d,
+                                          main_group: e.target.value as ComplaintUiMainGroup,
+                                        }))
+                                      }
+                                      className="w-full max-w-xs rounded border border-gray-200 px-2 py-1 text-sm"
+                                    >
+                                      {GROUP_ORDER.map((og) => (
+                                        <option key={og} value={og}>
+                                          {GROUP_LABELS[og]}
+                                        </option>
+                                      ))}
+                                    </select>
+                                    <input
+                                      type="text"
+                                      value={editDraft.name ?? ""}
+                                      onChange={(e) => setEditDraft((d) => ({ ...d, name: e.target.value }))}
+                                      className="w-full max-w-xs rounded border border-gray-200 px-2 py-1 text-sm"
+                                    />
+                                    <HexColorField
+                                      value={editDraft.color ?? r.color}
+                                      onChange={(hex) => setEditDraft((d) => ({ ...d, color: hex }))}
+                                    />
+                                    <input
+                                      type="number"
+                                      value={editDraft.sort_order ?? 0}
+                                      onChange={(e) =>
+                                        setEditDraft((d) => ({ ...d, sort_order: Number(e.target.value) }))
+                                      }
+                                      className="w-24 rounded border border-gray-200 px-2 py-1 text-sm"
+                                      title="Kolejność sortowania"
+                                    />
+                                  </div>
+                                  <div className="mt-4 max-w-sm">
+                                    <PanelStatusConfiguratorAside
+                                      preview={{
+                                        name: (editDraft.name ?? r.name).trim() || "—",
+                                        count: r.count,
+                                        mainGroup: (editDraft.main_group ?? r.main_group) as ComplaintUiMainGroup,
+                                        mainGroupLabel: GROUP_LABELS[(editDraft.main_group ?? r.main_group) as ComplaintUiMainGroup],
+                                        badgeHex: displayColor,
+                                        backgroundHex: displayColor,
+                                        textHex: "#0f172a",
+                                        active: true,
+                                      }}
+                                      summary={summary}
+                                      mainGroupLabels={GROUP_LABELS}
+                                      mainGroupOrder={GROUP_ORDER}
+                                      highlightStatusId={r.id}
+                                      counterColorHex={editCounterColor}
+                                      onCounterColorChange={setEditCounterColor}
+                                    />
+                                  </div>
+                                </>
                               ) : (
                                 <div className="flex flex-wrap items-center gap-2">
                                   <span

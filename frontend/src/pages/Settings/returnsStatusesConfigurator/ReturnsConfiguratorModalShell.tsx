@@ -59,9 +59,9 @@ export function ReturnsConfiguratorModalShell({
             <X className="h-5 w-5" aria-hidden />
           </button>
         </div>
-        <div className={`min-h-0 flex-1 overflow-y-auto ${aside ? "grid lg:grid-cols-[1fr_240px]" : ""}`}>
+        <div className={`min-h-0 flex-1 overflow-y-auto ${aside ? "grid lg:grid-cols-[1fr_minmax(17rem,20rem)]" : ""}`}>
           <div className="px-5 py-4">{children}</div>
-          {aside ? <div className="border-t border-slate-100 bg-slate-50/80 px-4 py-4 lg:border-l lg:border-t-0">{aside}</div> : null}
+          {aside ? <div className="border-t border-slate-100 bg-slate-50/80 px-4 py-4 lg:max-h-[min(92vh,880px)] lg:overflow-y-auto lg:border-l lg:border-t-0">{aside}</div> : null}
         </div>
         {footer ? (
           <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-slate-100 px-5 py-4">{footer}</div>

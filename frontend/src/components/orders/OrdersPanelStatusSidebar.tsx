@@ -96,6 +96,8 @@ type OrdersPanelStatusSidebarProps = {
   returnsOperationalQueuesCollapsedSlot?: ReactNode;
   parentScrollContainer?: boolean;
   onToggleCollapsed?: () => void;
+  /** Opcjonalny kolor licznika per status (warstwa UX, localStorage). */
+  statusCounterColorForId?: (statusId: number) => string | null;
 };
 
 export function OrdersPanelStatusSidebar({
@@ -112,6 +114,7 @@ export function OrdersPanelStatusSidebar({
   returnsOperationalQueuesCollapsedSlot,
   parentScrollContainer = false,
   onToggleCollapsed,
+  statusCounterColorForId,
 }: OrdersPanelStatusSidebarProps) {
   const totalPanelOrders =
     panelSummary != null
@@ -159,7 +162,7 @@ export function OrdersPanelStatusSidebar({
         {s.image_url ? (
           <img src={s.image_url} alt="" className="mt-0.5 h-4 w-4 shrink-0 rounded object-contain" />
         ) : null}
-        <PanelTreeCount value={s.count} active={active} />
+        <PanelTreeCount value={s.count} active={active} colorHex={statusCounterColorForId?.(s.id)} />
       </button>
     );
   };
@@ -245,7 +248,7 @@ export function OrdersPanelStatusSidebar({
                     style={{ backgroundColor: sidebarSubStatusHex(s.badge_color ?? s.color, block.main_group) }}
                     aria-hidden
                   />
-                  <span className={panelTreeCountClass()}>{s.count}</span>
+                  <span className={panelTreeCountClass()} style={statusCounterColorForId?.(s.id) ? { color: statusCounterColorForId(s.id)! } : undefined}>{s.count}</span>
                 </button>
               ))}
             </div>,
