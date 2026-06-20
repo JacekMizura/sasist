@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 
 import type { OrderAutomationChangeLogEntry, OrderAutomationExecutionLogEntry } from "../../../types/orderAutomation";
 import { flatSectionDividerClass } from "../../layout/flatSectionTokens";
+import { AutomationChangeLogDiffView } from "./AutomationChangeLogDiffView";
 
 type TabId = "changes" | "executions";
 
@@ -36,21 +37,10 @@ function ChangeLogList({ entries }: { entries: OrderAutomationChangeLogEntry[] }
         <li key={e.id} className="py-4 first:pt-0">
           <p className="text-sm font-medium tabular-nums text-slate-900">{fmtDateTime(e.createdAt)}</p>
           <p className="mt-0.5 text-sm text-slate-700">{e.userName}</p>
-          <div className="mt-3 space-y-1 text-sm">
-            <p className="text-slate-500">Pole:</p>
-            <p className="font-medium text-slate-900">{e.field}</p>
-            {e.before != null ? (
-              <>
-                <p className="mt-2 text-slate-500">Przed:</p>
-                <p className="whitespace-pre-wrap text-slate-800">{e.before || "—"}</p>
-              </>
-            ) : null}
-            {e.after != null ? (
-              <>
-                <p className="mt-2 text-slate-500">Po:</p>
-                <p className="whitespace-pre-wrap font-medium text-slate-900">{e.after || "—"}</p>
-              </>
-            ) : null}
+          <div className="mt-3 text-sm">
+            <p className="text-slate-500">Zmiana:</p>
+            <p className="mt-0.5 font-medium text-slate-900">{e.field}</p>
+            <AutomationChangeLogDiffView entry={e} />
           </div>
         </li>
       ))}
