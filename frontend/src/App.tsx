@@ -53,7 +53,11 @@ import {
   RedirectLegacyAutomationRuleEdit,
 } from "./pages/Orders/orderAutomationRouteRedirects"
 import SettingsImportPage from "./pages/Settings/SettingsImportPage"
-import CompanySettingsPage from "./pages/Settings/CompanySettingsPage"
+import CompanySettingsLayout from "./modules/companySettings/layout/CompanySettingsLayout"
+import CompanyProfileTab from "./modules/companySettings/views/CompanyProfileTab"
+import CompanyWarehousesTab from "./modules/companySettings/views/CompanyWarehousesTab"
+import CompanyTenantsTab from "./modules/companySettings/views/CompanyTenantsTab"
+import CompanyBrandingTab from "./modules/companySettings/views/CompanyBrandingTab"
 import CartsLayout from "./pages/CartsLayout"
 import CartsBulk from "./pages/CartsBulk"
 import CartsBaskets from "./pages/CartsBaskets"
@@ -559,7 +563,12 @@ export const router = createBrowserRouter(
                 <Route path="settings/exports/:id" element={<ExportEditorPage />} />
                 <Route path="settings/import" element={<SettingsImportPage />} />
                 <Route path="settings" element={<Navigate to="/settings/company" replace />} />
-                <Route path="settings/company" element={<CompanySettingsPage />} />
+                <Route path="settings/company" element={<CompanySettingsLayout />}>
+                  <Route index element={<CompanyProfileTab />} />
+                  <Route path="warehouses" element={<CompanyWarehousesTab />} />
+                  <Route path="tenants" element={<CompanyTenantsTab />} />
+                  <Route path="branding" element={<CompanyBrandingTab />} />
+                </Route>
                 <Route path="settings/document-series" element={<Navigate to="/documents/series" replace />} />
                 <Route path="settings/document-series/new" element={<Navigate to="/documents/series/new" replace />} />
                 <Route path="settings/document-series/:legacyId" element={<RedirectLegacySettingsDocumentSeriesId />} />

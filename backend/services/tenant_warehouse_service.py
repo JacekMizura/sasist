@@ -88,6 +88,12 @@ class TenantWarehouseService:
             tw.fulfillment_eligible = bool(fields["fulfillment_eligible"])
         if "fulfillment_priority" in fields and fields["fulfillment_priority"] is not None:
             tw.fulfillment_priority = int(fields["fulfillment_priority"])
+        if "is_default" in fields and fields["is_default"] is not None:
+            if bool(fields["is_default"]):
+                self.db.query(TenantWarehouse).filter(
+                    TenantWarehouse.tenant_id == tw.tenant_id
+                ).update({TenantWarehouse.is_default: 0})
+            tw.is_default = 1 if bool(fields["is_default"]) else 0
         self.db.commit()
         self.db.refresh(tw)
         return tw

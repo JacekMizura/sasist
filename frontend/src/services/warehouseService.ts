@@ -77,7 +77,7 @@ export const warehouseService = {
     return api.post<TenantWarehouseAssignment>("/tenant-warehouses/", data);
   },
 
-  updateAssignment(assignmentId: number, data: TenantWarehouseAssignmentUpdate) {
+  updateAssignment(assignmentId: number, data: TenantWarehouseAssignmentUpdate & { is_default?: boolean }) {
     return api.patch<TenantWarehouseAssignment>(`/tenant-warehouses/${assignmentId}`, data);
   },
 

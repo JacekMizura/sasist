@@ -19,6 +19,7 @@ class TenantWarehouseUpdate(BaseModel):
     participates_in_network_stock: bool | None = None
     fulfillment_eligible: bool | None = None
     fulfillment_priority: int | None = Field(default=None, ge=1, le=9999)
+    is_default: bool | None = None
 
 
 class TenantWarehouseRead(BaseModel):

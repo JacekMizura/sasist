@@ -1,5 +1,13 @@
 # Change log
 
+## 2026-06-08 — Ustawienia → Firma: redesign UX (design system)
+
+- Moduł `companySettings`: layout full-width, `TabsNav` (pomarańczowa linia), trasy `/settings/company/*`
+- Zakładki: Dane firmy (2 kolumny + Zapisz), Magazyny (KPI + tabela + drawer), Firmy (KPI + tabela + drawer), Branding (KPI + upload + podgląd systemu)
+- Wspólne komponenty: `PurchasingPageShell`, `PurchasingKpiGrid`, `PurchasingTableSection`, `AppButton`, tokeny formularzy
+- Backend: `PATCH tenant-warehouses` obsługuje `is_default` (ustaw magazyn domyślny)
+- Usunięto monolityczny `CompanySettingsPage.tsx` (~1160 linii)
+
 ## 2026-06-08 — Zakupy: ujednolicone miniatury produktów + inspektor
 
 - `PurchasingProductThumbnail` / `PurchasingProductCell` — 40×40 px, `object-fit: contain`, hover preview (150 ms, preload, portal)
