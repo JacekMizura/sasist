@@ -1,11 +1,7 @@
 import { useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 
-import type {
-  ManualActivatorType,
-  ManualConditionFilterMode,
-  OrderAutomationManualTrigger,
-} from "../../../types/orderAutomation";
+import type { OrderAutomationManualTrigger } from "../../../types/orderAutomation";
 import { getManualIconComponent } from "@/modules/orders/automation/utils/orderAutomationManualIcons";
 import { resolveManualTriggerColor } from "../../../utils/orderAutomationManualTrigger";
 import { AutomationIconGridPicker } from "./AutomationIconGridPicker";
@@ -16,38 +12,6 @@ type Props = {
   manualTrigger: OrderAutomationManualTrigger;
   onChange: (patch: Partial<OrderAutomationManualTrigger>) => void;
 };
-
-function RadioOption<T extends string>({
-  name,
-  value,
-  current,
-  label,
-  description,
-  onSelect,
-}: {
-  name: string;
-  value: T;
-  current: T;
-  label: string;
-  description?: string;
-  onSelect: (v: T) => void;
-}) {
-  return (
-    <label className="flex cursor-pointer gap-2 text-sm text-slate-800">
-      <input
-        type="radio"
-        name={name}
-        className="mt-0.5 h-4 w-4 shrink-0 border-slate-300 text-slate-900"
-        checked={current === value}
-        onChange={() => onSelect(value)}
-      />
-      <span>
-        <span className="font-medium text-slate-900">{label}</span>
-        {description ? <span className="mt-0.5 block text-slate-600">{description}</span> : null}
-      </span>
-    </label>
-  );
-}
 
 function VisibilityCheckbox({
   checked,
@@ -197,53 +161,6 @@ export function AutomationManualTriggerSection({ manualTrigger, onChange }: Prop
                 checked={manualTrigger.visibleOnWmsPacking !== false}
                 label="Pakowanie WMS"
                 onToggle={() => toggleVisibility("visibleOnWmsPacking")}
-              />
-            </div>
-          </div>
-
-          <div className="space-y-3 border-t border-slate-100 pt-4">
-            <p className="text-sm font-medium text-slate-800">Typ aktywatora</p>
-            <div className="flex flex-col gap-3">
-              <RadioOption<ManualActivatorType>
-                name="activatorType"
-                value="default"
-                current={manualTrigger.activatorType ?? "default"}
-                label="Domyślny"
-                description="Przycisk w miejscu docelowym — na liście, karcie lub w multiakcjach."
-                onSelect={(v) => patch({ activatorType: v })}
-              />
-              <RadioOption<ManualActivatorType>
-                name="activatorType"
-                value="side_panel"
-                current={manualTrigger.activatorType ?? "default"}
-                label="Panel wysuwany z boku"
-                description="Akcje dostępne z bocznego panelu kontekstowego zamówienia (jak w Sellasist)."
-                onSelect={(v) => patch({ activatorType: v })}
-              />
-            </div>
-          </div>
-
-          <div className="space-y-3 border-t border-slate-100 pt-4">
-            <p className="text-sm font-medium text-slate-800">Sposób filtrowania aktywatorów</p>
-            <p className="text-xs text-slate-500">
-              Gdy warunki reguły nie pozwalają na wykonanie akcji (przy włączonej opcji sprawdzania warunków).
-            </p>
-            <div className="flex flex-col gap-3">
-              <RadioOption<ManualConditionFilterMode>
-                name="conditionFilterMode"
-                value="hide"
-                current={manualTrigger.conditionFilterMode ?? "hide"}
-                label="Całkowicie ukryj"
-                description="Przycisk nie jest widoczny, dopóki warunki nie są spełnione."
-                onSelect={(v) => patch({ conditionFilterMode: v })}
-              />
-              <RadioOption<ManualConditionFilterMode>
-                name="conditionFilterMode"
-                value="disabled"
-                current={manualTrigger.conditionFilterMode ?? "hide"}
-                label="Tylko wyszarz"
-                description="Przycisk jest widoczny, ale nieaktywny — nie można go kliknąć."
-                onSelect={(v) => patch({ conditionFilterMode: v })}
               />
             </div>
           </div>

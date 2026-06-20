@@ -47,6 +47,7 @@ import OrderAutomationListPage from "./pages/Orders/OrderAutomationListPage"
 import OrderAutomationLogsPage from "./pages/Orders/OrderAutomationLogsPage"
 import OrderAutomationEditorPage from "./pages/Orders/OrderAutomationEditorPage"
 import OrderAutomationGroupsPage from "./pages/Orders/OrderAutomationGroupsPage"
+import OrderAutomationSettingsPage from "./pages/Orders/OrderAutomationSettingsPage"
 import {
   RedirectAssortmentRuleEditToInventory,
   RedirectLegacyAutomationRuleEdit,
@@ -820,6 +821,7 @@ export const router = createBrowserRouter(
                     <Route index element={<Navigate to="orders" replace />} />
                     <Route path="logs" element={<OrderAutomationLogsPage />} />
                     <Route path="groups" element={<OrderAutomationGroupsPage />} />
+                    <Route path="settings" element={<OrderAutomationSettingsPage />} />
                     <Route path="orders" element={<OrderAutomationListPage />} />
                     <Route path="orders/new" element={<OrderAutomationEditorPage />} />
                     <Route path="orders/:ruleId/edit" element={<OrderAutomationEditorPage />} />

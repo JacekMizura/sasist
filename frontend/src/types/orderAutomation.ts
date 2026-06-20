@@ -67,9 +67,9 @@ export type OrderAutomationManualTrigger = {
   visibleOnMultiActions?: boolean;
   /** Ekran pakowania WMS */
   visibleOnWmsPacking?: boolean;
-  /** Typ prezentacji aktywatora */
+  /** @deprecated przeniesione do {@link OrderAutomationModuleSettings} */
   activatorType?: ManualActivatorType;
-  /** Zachowanie gdy warunki reguły nie są spełnione */
+  /** @deprecated przeniesione do {@link OrderAutomationModuleSettings} */
   conditionFilterMode?: ManualConditionFilterMode;
   /** Przed ręcznym wykonaniem sprawdź warunki JEŚLI */
   checkConditionsOnManualRun?: boolean;
@@ -77,6 +77,12 @@ export type OrderAutomationManualTrigger = {
   executionMode?: ManualExecutionMode;
   /** Treść modala / drugiego kroku potwierdzenia */
   confirmMessage?: string;
+};
+
+/** Globalne ustawienia modułu akcji automatycznych (per magazyn). */
+export type OrderAutomationModuleSettings = {
+  activatorType: ManualActivatorType;
+  conditionFilterMode: ManualConditionFilterMode;
 };
 
 /** Jedna linia harmonogramu (dzień tygodnia ISO: 1 = pon … 7 = nd). */

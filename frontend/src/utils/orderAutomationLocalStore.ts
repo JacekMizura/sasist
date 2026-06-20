@@ -5,9 +5,15 @@
 import type {
   OrderAutomationChangeLogEntry,
   OrderAutomationExecutionLogEntry,
+  OrderAutomationModuleSettings,
   OrderAutomationRule,
 } from "../types/orderAutomation";
 import { normalizeCondition } from "./orderAutomationConditionUtils";
+import {
+  defaultOrderAutomationModuleSettings,
+  migrateOrderAutomationModuleSettings,
+  moduleSettingsFromLegacyManualFields,
+} from "./orderAutomationModuleSettings";
 
 const RULES_PREFIX = "orderAutomation.rules.v1";
 /** Legacy suffix — migrowane przy pierwszym odczycie magazynu (inventory). */
@@ -16,6 +22,7 @@ const RULES_INVENTORY_SUFFIX = ".inventory";
 const LOGS_PREFIX = "orderAutomation.executionLogs.v1";
 const CHANGE_LOGS_PREFIX = "orderAutomation.changeLogs.v1";
 const GROUPS_PREFIX = "orderAutomation.actionGroups.v1";
+const MODULE_SETTINGS_PREFIX = "orderAutomation.moduleSettings.v1";
 const PUBLIC_ID_COUNTER_PREFIX = "orderAutomation.publicIdCounter.v1";
 
 export type OrderAutomationScope = "orders" | "inventory";
@@ -52,6 +59,10 @@ function changeLogsKey(tenantId: number, warehouseId: number) {
 
 function groupsKey(tenantId: number, warehouseId: number) {
   return `${GROUPS_PREFIX}:${tenantId}:${warehouseId}`;
+}
+
+function moduleSettingsKey(tenantId: number, warehouseId: number) {
+  return `${MODULE_SETTINGS_PREFIX}:${tenantId}:${warehouseId}`;
 }
 
 function publicIdCounterKey(tenantId: number, warehouseId: number, scope: OrderAutomationScope) {
@@ -226,6 +237,45 @@ export function loadActionGroups(tenantId: number, warehouseId: number): OrderAu
 
 export function saveActionGroups(tenantId: number, warehouseId: number, groups: OrderAutomationActionGroup[]) {
   localStorage.setItem(groupsKey(tenantId, warehouseId), JSON.stringify(groups));
+}
+
+export function loadOrderAutomationModuleSettings(
+  tenantId: number,
+  warehouseId: number,
+): OrderAutomationModuleSettings {
+  try {
+    const raw = localStorage.getItem(moduleSettingsKey(tenantId, warehouseId));
+    if (raw) {
+      const parsed = JSON.parse(raw) as unknown;
+      return migrateOrderAutomationModuleSettings(parsed as OrderAutomationModuleSettings);
+    }
+  } catch {
+    /* fall through to legacy migration */
+  }
+
+  for (const scope of ["orders", "inventory"] as const) {
+    const rules = loadAutomationRules(tenantId, warehouseId, scope);
+    for (const rule of rules) {
+      const legacy = moduleSettingsFromLegacyManualFields(rule.manualTrigger ?? {});
+      if (legacy) {
+        saveOrderAutomationModuleSettings(tenantId, warehouseId, legacy);
+        return legacy;
+      }
+    }
+  }
+
+  return defaultOrderAutomationModuleSettings();
+}
+
+export function saveOrderAutomationModuleSettings(
+  tenantId: number,
+  warehouseId: number,
+  settings: OrderAutomationModuleSettings,
+) {
+  localStorage.setItem(
+    moduleSettingsKey(tenantId, warehouseId),
+    JSON.stringify(migrateOrderAutomationModuleSettings(settings)),
+  );
 }
 
 export function newUid(prefix: string) {

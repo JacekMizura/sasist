@@ -20,8 +20,6 @@ export function defaultManualTrigger(): OrderAutomationManualTrigger {
     visibleOnOrderCard: true,
     visibleOnMultiActions: true,
     visibleOnWmsPacking: true,
-    activatorType: "default",
-    conditionFilterMode: "hide",
     checkConditionsOnManualRun: true,
     executionMode: "immediate",
     confirmMessage: DEFAULT_MANUAL_CONFIRM_MESSAGE,
@@ -31,9 +29,14 @@ export function defaultManualTrigger(): OrderAutomationManualTrigger {
 export function migrateManualTrigger(m: OrderAutomationManualTrigger | null | undefined): OrderAutomationManualTrigger {
   const defaults = defaultManualTrigger();
   if (!m || typeof m !== "object") return defaults;
+  const {
+    activatorType: _legacyActivatorType,
+    conditionFilterMode: _legacyConditionFilterMode,
+    ...rest
+  } = m;
   return {
     ...defaults,
-    ...m,
+    ...rest,
     buttonEnabled: m.buttonEnabled !== false,
     iconSource: m.iconSource ?? "system",
     iconKey: m.iconKey ?? "Zap",
@@ -42,8 +45,6 @@ export function migrateManualTrigger(m: OrderAutomationManualTrigger | null | un
     visibleOnOrderCard: m.visibleOnOrderCard !== false,
     visibleOnMultiActions: m.visibleOnMultiActions !== false,
     visibleOnWmsPacking: m.visibleOnWmsPacking !== false,
-    activatorType: m.activatorType === "side_panel" ? "side_panel" : "default",
-    conditionFilterMode: m.conditionFilterMode === "disabled" ? "disabled" : "hide",
     checkConditionsOnManualRun: m.checkConditionsOnManualRun !== false,
     executionMode: m.executionMode === "confirm" ? "confirm" : "immediate",
     confirmMessage:
