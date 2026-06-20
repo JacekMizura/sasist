@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-06-08 — Regały (WMS): standard UI jak Nośniki / Produkty
+
+- `ConsolidationRacksListPage`: `ListPageHeader` (breadcrumb Magazyn → WMS → Regały), KPI (`PurchasingKpiGrid` × 5), przycisk „Nowy regał kompletacyjny”
+- Tabela proporcjonalna: `ConsolidationRacksListTable` — kolumna Akcje 120px sticky, ikony Podgląd / Edycja / Usuń (`OperationalActionColumn`)
+- Pakiet: `frontend/src/components/consolidationRacks/rackList/*`
+
 ## 2026-06-08 — Nośniki (Wózki): płaski layout modułu + KPI + tabela standard
 
 - `CartsModuleLayout`: breadcrumb → tytuł → `TabsNav` → treść (jak Materiały magazynowe); bypass pełnoekranowy dla szczegółu nośnika / edycji regału

@@ -1,27 +1,21 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { Eye, Layers, Pencil, Plus, Trash2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Box, CheckCircle2, Gauge, Layers, LayoutGrid, Plus } from "lucide-react";
 
 import api from "../../../api/axios";
 import { AppEmptyState } from "../../../components/app-shell/AppEmptyState";
-import { useActiveWarehouseContext, ACTIVE_WAREHOUSE_REQUIRED_MESSAGE } from "../../../hooks/useActiveWarehouseContext";
-import { CartsListPageHeader } from "../../../modules/carts/CartsListPageHeader";
 import {
-  cartsBtnPrimary,
-  cartsDangerBtnClass,
-  cartsPageShellClass,
-  cartsTableClass,
-  cartsTableHeadClass,
-  cartsTableWrapClass,
-} from "../../../modules/carts/cartsModuleTokens";
+  ConsolidationRacksListTable,
+  type ConsolidationRackListRow,
+} from "../../../components/consolidationRacks/rackList/ConsolidationRacksListTable";
+import { filterToolbarBtnApply } from "../../../components/filters/filterUiTokens";
+import { ListPageHeader } from "../../../components/listPage/ListPageHeader";
+import { moduleTableCardClass } from "../../../components/listPage/moduleList";
+import { useActiveWarehouseContext, ACTIVE_WAREHOUSE_REQUIRED_MESSAGE } from "../../../hooks/useActiveWarehouseContext";
 import type { ConsolidationRack } from "../../../modules/consolidation-racks/consolidationRackTypes";
 import { rackOccupancyStats } from "../../../modules/consolidation-racks/rackLayoutUtils";
+import { PurchasingKpiCard, PurchasingKpiGrid } from "../../../modules/purchasing/ui";
 import { DAMAGE_TENANT_ID } from "../../damage/damageShared";
-
-type RackRow = ConsolidationRack & {
-  stats: ReturnType<typeof rackOccupancyStats>;
-  warehouseName: string;
-};
 
 export default function ConsolidationRacksListPage() {
   const navigate = useNavigate();
@@ -38,6 +32,11 @@ export default function ConsolidationRacksListPage() {
   }, [warehouses]);
 
   const fetchRacks = useCallback(async () => {
+    if (!hasActiveWarehouse || warehouseId == null) {
+      setRacks([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -52,23 +51,43 @@ export default function ConsolidationRacksListPage() {
     } finally {
       setLoading(false);
     }
-  }, [warehouseId]);
+  }, [warehouseId, hasActiveWarehouse]);
 
   useEffect(() => {
     void fetchRacks();
   }, [fetchRacks]);
 
-  const rows: RackRow[] = useMemo(
+  const rows: ConsolidationRackListRow[] = useMemo(
     () =>
       racks.map((rack) => ({
-        ...rack,
+        id: rack.id,
+        name: rack.name,
+        warehouseName: warehouseNameById.get(rack.warehouse_id ?? warehouseId ?? 0) ?? warehouse?.name ?? "—",
         stats: rackOccupancyStats(rack.levels ?? []),
-        warehouseName: warehouseNameById.get(rack.warehouse_id ?? warehouseId) ?? warehouse?.name ?? "—",
       })),
     [racks, warehouseNameById, warehouseId, warehouse?.name],
   );
 
-  const handleDelete = async (rack: RackRow) => {
+  const aggregateStats = useMemo(() => {
+    let segments = 0;
+    let free = 0;
+    let occupied = 0;
+    for (const row of rows) {
+      segments += row.stats.total;
+      free += row.stats.free;
+      occupied += row.stats.occupied;
+    }
+    const avgUtilization = segments > 0 ? Math.round((occupied / segments) * 1000) / 10 : 0;
+    return {
+      rackCount: rows.length,
+      segments,
+      free,
+      occupied,
+      avgUtilization,
+    };
+  }, [rows]);
+
+  const handleDelete = async (rack: ConsolidationRackListRow) => {
     if (
       !window.confirm(
         `Usunąć regał ${rack.name}? Segmenty z przypisanymi zamówieniami zostaną zwolnione.`,
@@ -88,107 +107,99 @@ export default function ConsolidationRacksListPage() {
     }
   };
 
-  if (!hasActiveWarehouse) {
-    return (
-      <div className={cartsPageShellClass}>
-        <CartsListPageHeader title="Regały kompletacyjne" />
-        <p className="py-8 text-center text-sm font-medium text-amber-800">{ACTIVE_WAREHOUSE_REQUIRED_MESSAGE}</p>
-      </div>
-    );
-  }
-
-  if (loading) {
-    return <div className="py-10 text-center text-[13px] text-slate-500">Ładowanie regałów…</div>;
-  }
-
-  if (error) {
-    return (
-      <div className="rounded-lg border border-red-200 bg-white p-4 text-[13px] font-medium text-red-700">{error}</div>
-    );
-  }
-
   return (
-    <div className={cartsPageShellClass}>
-      <CartsListPageHeader
-        title="Regały kompletacyjne"
-        description={
-          warehouse?.name
-            ? `Konfiguracja OMS — magazyn ${warehouse.name}. Operacje WMS (staging, packing) korzystają z tych regałów.`
-            : "Konfiguracja regałów kompletacyjnych w OMS."
-        }
+    <div className="space-y-6">
+      <ListPageHeader
+        title="Regały"
+        description="Konfiguracja regałów magazynowych wykorzystywanych przez procesy WMS."
+        breadcrumbs={[
+          { label: "Magazyn", to: "/carts/bulk" },
+          { label: "WMS", to: "/carts/racks" },
+          { label: "Regały" },
+        ]}
         actions={
-          <button type="button" className={cartsBtnPrimary} onClick={() => navigate("/carts/racks/new")}>
-            <Plus className="mr-1.5 inline h-4 w-4" />
+          <button
+            type="button"
+            disabled={!hasActiveWarehouse}
+            className={filterToolbarBtnApply}
+            onClick={() => navigate("/carts/racks/new")}
+          >
+            <Plus className="mr-1.5 inline h-4 w-4" strokeWidth={2} aria-hidden />
             Nowy regał kompletacyjny
           </button>
         }
       />
 
-      {rows.length === 0 ? (
-        <AppEmptyState
-          icon={Layers}
-          title="Brak regałów"
-          description="Utwórz pierwszy regał kompletacyjny."
-          action={
-            <button type="button" className={cartsBtnPrimary} onClick={() => navigate("/carts/racks/new")}>
-              Nowy regał kompletacyjny
-            </button>
-          }
-        />
+      {!loading && !error && hasActiveWarehouse ? (
+        <PurchasingKpiGrid columns={5}>
+          <PurchasingKpiCard title="Regały" value={aggregateStats.rackCount} tone="indigo" icon={<Layers aria-hidden />} />
+          <PurchasingKpiCard
+            title="Segmenty"
+            value={aggregateStats.segments}
+            tone="blue"
+            icon={<LayoutGrid aria-hidden />}
+          />
+          <PurchasingKpiCard
+            title="Wolne"
+            value={aggregateStats.free}
+            tone="emerald"
+            icon={<CheckCircle2 aria-hidden />}
+          />
+          <PurchasingKpiCard title="Zajęte" value={aggregateStats.occupied} tone="amber" icon={<Box aria-hidden />} />
+          <PurchasingKpiCard
+            title="Średnie wykorzystanie"
+            value={`${aggregateStats.avgUtilization}%`}
+            tone="purple"
+            icon={<Gauge aria-hidden />}
+          />
+        </PurchasingKpiGrid>
+      ) : null}
+
+      {!hasActiveWarehouse ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-8 text-center">
+          <p className="text-sm font-medium text-amber-900">{ACTIVE_WAREHOUSE_REQUIRED_MESSAGE}</p>
+        </div>
+      ) : loading ? (
+        <div className="space-y-2 py-8" aria-busy="true" aria-label="Ładowanie listy regałów">
+          {[0, 1, 2, 3, 4].map((i) => (
+            <div key={i} className="h-14 animate-pulse rounded-md bg-slate-100" />
+          ))}
+        </div>
+      ) : error ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-8 text-center">
+          <p className="text-sm font-medium text-amber-900">{error}</p>
+          <button
+            type="button"
+            onClick={() => void fetchRacks()}
+            className="mt-4 rounded-lg border border-amber-300 bg-white px-4 py-2 text-sm font-semibold text-amber-950 hover:bg-amber-100"
+          >
+            Spróbuj ponownie
+          </button>
+        </div>
+      ) : rows.length === 0 ? (
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+          <AppEmptyState
+            icon={Layers}
+            title="Brak regałów"
+            description="Utwórz pierwszy regał kompletacyjny dla aktywnego magazynu."
+            action={
+              <button type="button" className={filterToolbarBtnApply} onClick={() => navigate("/carts/racks/new")}>
+                Nowy regał kompletacyjny
+              </button>
+            }
+          />
+        </div>
       ) : (
-        <div className={cartsTableWrapClass}>
-          <table className={cartsTableClass}>
-            <thead>
-              <tr className={cartsTableHeadClass}>
-                <th className="px-3 py-2">Nazwa</th>
-                <th className="px-3 py-2">Magazyn</th>
-                <th className="px-3 py-2 text-right">Segmentów</th>
-                <th className="px-3 py-2 text-right">Wolne</th>
-                <th className="px-3 py-2 text-right">Zajęte</th>
-                <th className="px-3 py-2 text-right">Śr. wykorzystanie</th>
-                <th className="px-3 py-2 text-right">Akcje</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((rack) => (
-                <tr key={rack.id} className="border-t border-slate-100 hover:bg-slate-50/80">
-                  <td className="px-3 py-2.5 font-mono font-semibold text-slate-900">{rack.name}</td>
-                  <td className="px-3 py-2.5 text-slate-700">{rack.warehouseName}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums">{rack.stats.total}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums text-emerald-800">{rack.stats.free}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums text-orange-800">{rack.stats.occupied}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums font-semibold">{rack.stats.utilizationPercent}%</td>
-                  <td className="px-3 py-2.5">
-                    <div className="flex justify-end gap-1">
-                      <Link
-                        to={`/carts/racks/${rack.id}/preview`}
-                        className="inline-flex h-8 items-center gap-1 rounded-md border border-slate-200 px-2 text-[12px] font-medium text-slate-700 hover:bg-white"
-                      >
-                        <Eye className="h-3.5 w-3.5" />
-                        Podgląd
-                      </Link>
-                      <Link
-                        to={`/carts/racks/${rack.id}/edit`}
-                        className="inline-flex h-8 items-center gap-1 rounded-md border border-violet-200 bg-violet-50 px-2 text-[12px] font-medium text-violet-900 hover:bg-violet-100"
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                        Edytuj
-                      </Link>
-                      <button
-                        type="button"
-                        disabled={deletingId === rack.id}
-                        onClick={() => void handleDelete(rack)}
-                        className={`${cartsDangerBtnClass} h-8 px-2 text-[12px]`}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                        Usuń
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className={`${moduleTableCardClass} min-w-0`}>
+          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+            <ConsolidationRacksListTable
+              rows={rows}
+              deleteBusyId={deletingId}
+              onPreview={(id) => navigate(`/carts/racks/${id}/preview`)}
+              onEdit={(id) => navigate(`/carts/racks/${id}/edit`)}
+              onDelete={(row) => void handleDelete(row)}
+            />
+          </div>
         </div>
       )}
     </div>
