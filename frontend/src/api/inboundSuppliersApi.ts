@@ -24,6 +24,7 @@ export type SupplierRead = {
   requires_moq?: boolean;
   notes?: string | null;
   delivery_count: number;
+  product_count?: number;
   is_incomplete?: boolean;
   /** From API when country is in catalog; null if legacy/unknown. */
   country_is_eu?: boolean | null;
@@ -55,15 +56,41 @@ export type SupplierCreatePayload = {
 
 export type SupplierUpdatePayload = Omit<SupplierCreatePayload, "tenant_id">;
 
-export async function listSuppliers(
-  tenantId: number,
-  params?: { name?: string; status?: "all" | "active" | "inactive" },
-): Promise<SupplierRead[]> {
+export type SupplierListParams = {
+  name?: string;
+  status?: "all" | "active" | "inactive";
+  country?: string;
+  city?: string;
+  email?: string;
+  phone?: string;
+  currency?: string;
+  requiresMoq?: boolean;
+  offersFreeShipping?: boolean;
+  minProductCount?: number;
+  minDeliveryCount?: number;
+};
+
+export async function listSuppliers(tenantId: number, params?: SupplierListParams): Promise<SupplierRead[]> {
   const res = await api.get<SupplierRead[]>("/suppliers/", {
     params: {
       tenant_id: tenantId,
       name: params?.name?.trim() || undefined,
       status: params?.status ?? "all",
+      country: params?.country?.trim() || undefined,
+      city: params?.city?.trim() || undefined,
+      email: params?.email?.trim() || undefined,
+      phone: params?.phone?.trim() || undefined,
+      currency: params?.currency?.trim() || undefined,
+      requires_moq: params?.requiresMoq,
+      offers_free_shipping: params?.offersFreeShipping,
+      min_product_count:
+        params?.minProductCount != null && Number.isFinite(params.minProductCount)
+          ? params.minProductCount
+          : undefined,
+      min_delivery_count:
+        params?.minDeliveryCount != null && Number.isFinite(params.minDeliveryCount)
+          ? params.minDeliveryCount
+          : undefined,
     },
   });
   return res.data;

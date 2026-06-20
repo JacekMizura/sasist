@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-06-08 — Lista dostawców: nowy standard tabel
+
+- Tabela jak Producenci/Klienci: checkbox, Nazwa (system), kolumny konfigurowalne, Akcje 120px sticky
+- Konfigurator kolumn (Widoczne pola), filtry rozszerzone, licznik `Filtry (N)`
+- Proporcjonalny układ bez logo: Nazwa 2fr (250–500px), pozostałe 1fr
+- API: `product_count`, filtry kraj/miasto/e-mail/telefon/waluta/MOQ/dostawa/min. produkty/zamówienia
+
 ## 2026-06-08 — Konfiguratory kolumn/filtrów: kierunkowe strzałki
 
 - `FilterVisibilityModal` + `ColumnSelectorModal`: ← przed nazwą (Dostępne), → po wierszu (Widoczne), układ ⋮⋮ ↑ ↓ →

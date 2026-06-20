@@ -10,6 +10,7 @@ from ..catalog.supplier_taxonomy import country_is_eu, list_country_choices, lis
 from ..database import get_db
 from ..models.inbound_delivery import InboundDelivery
 from ..models.supplier import Supplier
+from ..models.supplier_product import SupplierProduct
 from ..schemas.supplier import SupplierCreateBody, SupplierRead, SupplierUpdateBody
 
 router = APIRouter(prefix="/suppliers", tags=["Suppliers"])
@@ -43,7 +44,19 @@ def _delivery_counts(db: Session, tenant_id: int, ids: List[int]) -> Dict[int, i
     return {int(sid): int(c or 0) for sid, c in rows if sid is not None}
 
 
-def _serialize(s: Supplier, delivery_count: int) -> SupplierRead:
+def _product_counts(db: Session, tenant_id: int, ids: List[int]) -> Dict[int, int]:
+    if not ids:
+        return {}
+    rows = (
+        db.query(SupplierProduct.supplier_id, func.count(SupplierProduct.id))
+        .filter(SupplierProduct.tenant_id == tenant_id, SupplierProduct.supplier_id.in_(ids))
+        .group_by(SupplierProduct.supplier_id)
+        .all()
+    )
+    return {int(sid): int(c or 0) for sid, c in rows if sid is not None}
+
+
+def _serialize(s: Supplier, delivery_count: int, product_count: int = 0) -> SupplierRead:
     mov = getattr(s, "minimum_order_value", None)
     mov_f = float(mov) if mov is not None else None
     ctry = _strip_opt(getattr(s, "country", None))
@@ -75,6 +88,7 @@ def _serialize(s: Supplier, delivery_count: int) -> SupplierRead:
         requires_moq=bool(getattr(s, "requires_moq", True)),
         notes=_strip_opt(getattr(s, "notes", None)),
         delivery_count=int(delivery_count),
+        product_count=int(product_count),
         is_incomplete=bool(getattr(s, "is_incomplete", False)),
         country_is_eu=country_is_eu(ctry),
     )
@@ -84,6 +98,15 @@ def _serialize(s: Supplier, delivery_count: int) -> SupplierRead:
 def list_suppliers(
     tenant_id: int = Query(..., ge=1),
     name: Optional[str] = Query(None),
+    country: Optional[str] = Query(None),
+    city: Optional[str] = Query(None),
+    email: Optional[str] = Query(None),
+    phone: Optional[str] = Query(None),
+    currency: Optional[str] = Query(None),
+    requires_moq: Optional[bool] = Query(None),
+    offers_free_shipping: Optional[bool] = Query(None),
+    min_product_count: Optional[int] = Query(None, ge=0),
+    min_delivery_count: Optional[int] = Query(None, ge=0),
     status: str = Query("all", description="all | active | inactive"),
     sort_by: str = Query("name", description="name only"),
     sort_dir: str = Query("asc", description="asc | desc"),
@@ -104,10 +127,36 @@ def list_suppliers(
                 Supplier.tax_id.ilike(term),
             )
         )
+    if country and country.strip():
+        q = q.filter(Supplier.country.ilike(f"%{country.strip()}%"))
+    if city and city.strip():
+        q = q.filter(Supplier.city.ilike(f"%{city.strip()}%"))
+    if email and email.strip():
+        q = q.filter(Supplier.email.ilike(f"%{email.strip()}%"))
+    if phone and phone.strip():
+        q = q.filter(Supplier.phone.ilike(f"%{phone.strip()}%"))
+    if currency and currency.strip():
+        q = q.filter(Supplier.default_currency.ilike(f"%{currency.strip()}%"))
+    if requires_moq is not None:
+        q = q.filter(Supplier.requires_moq.is_(bool(requires_moq)))
+    if offers_free_shipping is not None:
+        q = q.filter(Supplier.offers_free_shipping.is_(bool(offers_free_shipping)))
     rows = q.all()
     ids = [s.id for s in rows]
-    counts = _delivery_counts(db, tenant_id, ids)
-    out = [_serialize(s, counts.get(s.id, 0)) for s in rows]
+    delivery_counts = _delivery_counts(db, tenant_id, ids)
+    product_counts = _product_counts(db, tenant_id, ids)
+    out = [
+        _serialize(
+            s,
+            delivery_counts.get(s.id, 0),
+            product_counts.get(s.id, 0),
+        )
+        for s in rows
+    ]
+    if min_product_count is not None:
+        out = [r for r in out if r.product_count >= int(min_product_count)]
+    if min_delivery_count is not None:
+        out = [r for r in out if r.delivery_count >= int(min_delivery_count)]
     rev = (sort_dir or "asc").strip().lower() == "desc"
     out.sort(key=lambda r: (r.name or "").lower(), reverse=rev)
     return out
@@ -123,7 +172,7 @@ def get_supplier(supplier_id: int, tenant_id: int = Query(..., ge=1), db: Sessio
         .filter(InboundDelivery.supplier_id == s.id, InboundDelivery.tenant_id == tenant_id)
         .scalar()
     )
-    return _serialize(s, int(cnt or 0))
+    return _serialize(s, int(cnt or 0), _product_counts(db, tenant_id, [s.id]).get(s.id, 0))
 
 
 @router.post("/", response_model=SupplierRead, status_code=201)
@@ -154,7 +203,7 @@ def create_supplier(body: SupplierCreateBody, db: Session = Depends(get_db)):
     db.add(s)
     db.commit()
     db.refresh(s)
-    return _serialize(s, 0)
+    return _serialize(s, 0, 0)
 
 
 @router.put("/{supplier_id}", response_model=SupplierRead)
@@ -194,7 +243,7 @@ def update_supplier(
         .filter(InboundDelivery.supplier_id == s.id, InboundDelivery.tenant_id == tenant_id)
         .scalar()
     )
-    return _serialize(s, int(cnt or 0))
+    return _serialize(s, int(cnt or 0), _product_counts(db, tenant_id, [s.id]).get(s.id, 0))
 
 
 @router.delete("/{supplier_id}")

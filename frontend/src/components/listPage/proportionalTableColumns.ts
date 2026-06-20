@@ -11,6 +11,22 @@ export const PROPORTIONAL_TABLE_SYSTEM_WIDTHS = {
   dynamicMinPx: 72,
 } as const;
 
+/** Układ bez kolumny logo (np. Dostawcy). */
+export const PROPORTIONAL_TABLE_NO_LOGO = {
+  logoPx: 0,
+} as const;
+
+export type ProportionalTableLayoutConfig = {
+  checkboxPx: number;
+  logoPx: number;
+  actionsPx: number;
+  nameMinPx: number;
+  nameMaxPx: number;
+  nameFr: number;
+  dynamicFr: number;
+  dynamicMinPx: number;
+};
+
 export type ProportionalTableWidths = {
   checkbox: number;
   logo: number;
@@ -19,21 +35,28 @@ export type ProportionalTableWidths = {
   actions: number;
 };
 
-export function proportionalTableMinWidthPx(dynamicColumnCount: number): number {
-  const { checkboxPx, logoPx, actionsPx, nameMinPx, dynamicMinPx } = PROPORTIONAL_TABLE_SYSTEM_WIDTHS;
+function resolveLayoutConfig(partial?: Partial<ProportionalTableLayoutConfig>): ProportionalTableLayoutConfig {
+  return { ...PROPORTIONAL_TABLE_SYSTEM_WIDTHS, ...partial };
+}
+
+export function proportionalTableMinWidthPx(
+  dynamicColumnCount: number,
+  config?: Partial<ProportionalTableLayoutConfig>,
+): number {
+  const cfg = resolveLayoutConfig(config);
   const n = Math.max(0, dynamicColumnCount);
-  return checkboxPx + logoPx + nameMinPx + actionsPx + n * dynamicMinPx;
+  return cfg.checkboxPx + cfg.logoPx + cfg.nameMinPx + cfg.actionsPx + n * cfg.dynamicMinPx;
 }
 
 /**
- * Wylicza szerokości kolumn: stałe (checkbox, logo, akcje) + nazwa (2fr, clamp) + dynamiczne (1fr).
- * Checkbox i akcje nie uczestniczą w podziale fr.
+ * Wylicza szerokości kolumn: stałe (checkbox, logo?, akcje) + nazwa (2fr, clamp) + dynamiczne (1fr).
  */
 export function computeProportionalTableWidths(
   tableWidthPx: number,
   dynamicColumnCount: number,
+  config?: Partial<ProportionalTableLayoutConfig>,
 ): ProportionalTableWidths {
-  const cfg = PROPORTIONAL_TABLE_SYSTEM_WIDTHS;
+  const cfg = resolveLayoutConfig(config);
   const fixed = cfg.checkboxPx + cfg.logoPx + cfg.actionsPx;
   const available = Math.max(0, tableWidthPx - fixed);
   const n = Math.max(0, dynamicColumnCount);

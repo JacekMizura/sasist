@@ -36,6 +36,7 @@ class SupplierRead(BaseModel):
     offers_free_shipping: bool = True
     requires_moq: bool = True
     notes: Optional[str] = None
+    product_count: int = 0
     delivery_count: int = 0
     is_incomplete: bool = False
     country_is_eu: Optional[bool] = Field(

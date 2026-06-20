@@ -1,26 +1,30 @@
-import { useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 
 import {
   computeProportionalTableWidths,
   proportionalTableMinWidthPx,
+  type ProportionalTableLayoutConfig,
   type ProportionalTableWidths,
 } from "./proportionalTableColumns";
 
 export type ProportionalTableLayoutState = {
   widths: ProportionalTableWidths;
-  /** Minimalna szerokość treści — scroll tylko gdy przekracza kontener. */
   contentMinWidthPx: number;
   needsHorizontalScroll: boolean;
 };
 
-export function useProportionalTableColumns(dynamicColumnCount: number): ProportionalTableLayoutState & {
+export function useProportionalTableColumns(
+  dynamicColumnCount: number,
+  layoutConfig?: Partial<ProportionalTableLayoutConfig>,
+): ProportionalTableLayoutState & {
   containerRef: RefObject<HTMLDivElement | null>;
 } {
   const containerRef = useRef<HTMLDivElement>(null);
-  const contentMinWidthPx = proportionalTableMinWidthPx(dynamicColumnCount);
+  const layoutKey = useMemo(() => JSON.stringify(layoutConfig ?? {}), [layoutConfig]);
+  const contentMinWidthPx = proportionalTableMinWidthPx(dynamicColumnCount, layoutConfig);
 
   const [state, setState] = useState<ProportionalTableLayoutState>(() => {
-    const widths = computeProportionalTableWidths(contentMinWidthPx, dynamicColumnCount);
+    const widths = computeProportionalTableWidths(contentMinWidthPx, dynamicColumnCount, layoutConfig);
     return { widths, contentMinWidthPx, needsHorizontalScroll: false };
   });
 
@@ -36,7 +40,7 @@ export function useProportionalTableColumns(dynamicColumnCount: number): Proport
       const layoutWidth = needsHorizontalScroll ? contentMinWidthPx : containerWidth;
 
       setState({
-        widths: computeProportionalTableWidths(layoutWidth, dynamicColumnCount),
+        widths: computeProportionalTableWidths(layoutWidth, dynamicColumnCount, layoutConfig),
         contentMinWidthPx,
         needsHorizontalScroll,
       });
@@ -46,7 +50,7 @@ export function useProportionalTableColumns(dynamicColumnCount: number): Proport
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [dynamicColumnCount, contentMinWidthPx]);
+  }, [dynamicColumnCount, contentMinWidthPx, layoutKey, layoutConfig]);
 
   return { containerRef, ...state };
 }
