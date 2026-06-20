@@ -3,7 +3,7 @@
 ## 2026-06-08 — Ustawienia → Firma: redesign UX (design system)
 
 - Moduł `companySettings`: layout full-width, `TabsNav` (pomarańczowa linia), trasy `/settings/company/*`
-- Zakładki: Dane firmy (2 kolumny + Zapisz), Magazyny (KPI + tabela + drawer), Firmy (KPI + tabela + drawer), Branding (KPI + upload + podgląd systemu)
+- Zakładki konfiguracyjne bez KPI i bez powielonych nagłówków (tylko PageHeader w layoutcie)
 - Wspólne komponenty: `PurchasingPageShell`, `PurchasingKpiGrid`, `PurchasingTableSection`, `AppButton`, tokeny formularzy
 - Backend: `PATCH tenant-warehouses` obsługuje `is_default` (ustaw magazyn domyślny)
 - Usunięto monolityczny `CompanySettingsPage.tsx` (~1160 linii)

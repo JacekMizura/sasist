@@ -1,14 +1,10 @@
-import { Building2, Link2, Loader2, Plus, Users } from "lucide-react";
+import { Building2, Loader2, Plus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { AppButton, AppEmptyState } from "../../../components/app-shell";
 import {
-  PurchasingKpiCard,
-  PurchasingKpiGrid,
-  PurchasingPageHeader,
   PurchasingPageShell,
   PurchasingTableHeader,
-  PurchasingTableSection,
   purchasingBtnPrimary,
   purchasingTableTdClass,
 } from "../../purchasing/ui";
@@ -34,9 +30,6 @@ export default function CompanyTenantsTab() {
     return map;
   }, [assignments]);
 
-  const defaultAssignmentsCount = assignments.filter((a) => a.is_default).length;
-  const assignedWarehouses = new Set(assignments.map((a) => a.warehouse_id)).size;
-
   const rows = tenants.map((t) => ({
     tenant: t,
     warehouseCount: warehouseCountByTenant.get(t.id) ?? 0,
@@ -46,34 +39,14 @@ export default function CompanyTenantsTab() {
   return (
     <>
       <PurchasingPageShell
-        header={
-          <PurchasingPageHeader
-            title="Firmy i przypisania"
-            subtitle="Firmy w systemie, przypisania magazynów, role dostępu i ustawienia domyślne."
-          />
-        }
-        kpis={
-          structLoading ? null : (
-            <PurchasingKpiGrid>
-              <PurchasingKpiCard title="Liczba firm" value={String(tenants.length)} icon={<Building2 aria-hidden />} />
-              <PurchasingKpiCard title="Liczba przypisań" value={String(assignments.length)} icon={<Link2 aria-hidden />} />
-              <PurchasingKpiCard title="Magazynów przypisanych" value={String(assignedWarehouses)} icon={<Users aria-hidden />} />
-              <PurchasingKpiCard title="Domyślne przypisania" value={String(defaultAssignmentsCount)} icon={<Link2 aria-hidden />} />
-            </PurchasingKpiGrid>
-          )
-        }
         table={
-          <PurchasingTableSection
-            title="Firmy"
-            subtitle="Kliknij wiersz, aby zobaczyć przypisane magazyny i role."
-            indicatorClass="bg-teal-500"
-            action={
+          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+            <div className="flex justify-end border-b border-slate-100 px-4 py-3">
               <AppButton variant="primary" className={purchasingBtnPrimary} onClick={() => setCreateOpen(true)}>
                 <Plus className="mr-1.5 h-4 w-4" aria-hidden />
                 Nowa firma
               </AppButton>
-            }
-          >
+            </div>
             {structLoading ? (
               <div className="flex justify-center py-12">
                 <Loader2 className="h-8 w-8 animate-spin text-slate-400" aria-hidden />
@@ -97,11 +70,7 @@ export default function CompanyTenantsTab() {
                 />
                 <tbody className="divide-y divide-slate-100">
                   {rows.map(({ tenant, warehouseCount, hasDefault }) => (
-                    <tr
-                      key={tenant.id}
-                      className="cursor-pointer hover:bg-slate-50/80"
-                      onClick={() => setSelectedTenant(tenant)}
-                    >
+                    <tr key={tenant.id} className="cursor-pointer hover:bg-slate-50/80" onClick={() => setSelectedTenant(tenant)}>
                       <td className={`${purchasingTableTdClass} font-medium text-slate-900`}>{tenant.name}</td>
                       <td className={`${purchasingTableTdClass} text-slate-600`}>{fmtDateTime(tenant.created_at)}</td>
                       <td className={`${purchasingTableTdClass} text-right tabular-nums`}>{warehouseCount}</td>
@@ -118,7 +87,7 @@ export default function CompanyTenantsTab() {
                 </tbody>
               </table>
             )}
-          </PurchasingTableSection>
+          </div>
         }
       />
 

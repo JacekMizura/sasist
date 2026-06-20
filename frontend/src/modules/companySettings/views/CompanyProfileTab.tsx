@@ -1,35 +1,15 @@
-import { Building2, Landmark, Loader2 } from "lucide-react";
+import { Landmark, Loader2 } from "lucide-react";
 
 import { AppButton } from "../../../components/app-shell";
-import {
-  PurchasingInfoNotice,
-  PurchasingPageHeader,
-  PurchasingPageShell,
-  PurchasingTableSection,
-  purchasingBtnPrimary,
-} from "../../purchasing/ui";
+import { PurchasingInfoNotice, PurchasingPageShell, purchasingBtnPrimary } from "../../purchasing/ui";
 import { CompanyFormField, companyInputClass } from "../components/CompanyFormField";
 import { useCompanySettings } from "../context/CompanySettingsContext";
 
 export default function CompanyProfileTab() {
-  const {
-    form,
-    setForm,
-    profileLoading,
-    profileErr,
-    profileDirty,
-    profileSaving,
-    saveProfile,
-  } = useCompanySettings();
+  const { form, setForm, profileLoading, profileErr, profileDirty, profileSaving, saveProfile } = useCompanySettings();
 
   return (
     <PurchasingPageShell
-      header={
-        <PurchasingPageHeader
-          title="Dane firmy"
-          subtitle="Dane rejestrowe, adres korespondencyjny oraz kontakt rozliczeniowy organizacji."
-        />
-      }
       status={
         profileErr ? (
           <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{profileErr}</div>
@@ -47,23 +27,10 @@ export default function CompanyProfileTab() {
             Wczytywanie…
           </div>
         ) : (
-          <PurchasingTableSection title="Dane firmy" subtitle="Profil organizacji używany na dokumentach i w systemie." indicatorClass="bg-slate-700">
-            <div className="border-b border-slate-100 px-4 py-4">
-              <div className="flex items-start gap-3">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-white">
-                  <Building2 className="h-5 w-5" aria-hidden />
-                </span>
-                <div>
-                  <p className="text-sm font-semibold text-slate-900">Profil firmy</p>
-                  <p className="mt-0.5 text-xs text-slate-500">
-                    Serie dokumentów i szablony konfigurujesz w module dokumentów.
-                  </p>
-                </div>
-              </div>
-            </div>
+          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
             <div className="grid gap-6 px-4 py-5 lg:grid-cols-2">
               <div className="space-y-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Rejestr i adres</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Dane rejestrowe</p>
                 <CompanyFormField label="Nazwa firmy">
                   <input className={companyInputClass} value={form.company_name} onChange={(e) => setForm({ ...form, company_name: e.target.value })} />
                 </CompanyFormField>
@@ -125,16 +92,11 @@ export default function CompanyProfileTab() {
               </div>
             </div>
             <div className="flex justify-end border-t border-slate-100 px-4 py-3">
-              <AppButton
-                variant="primary"
-                className={purchasingBtnPrimary}
-                disabled={!profileDirty || profileSaving}
-                onClick={() => void saveProfile()}
-              >
+              <AppButton variant="primary" className={purchasingBtnPrimary} disabled={!profileDirty || profileSaving} onClick={() => void saveProfile()}>
                 {profileSaving ? "Zapisywanie…" : "Zapisz zmiany"}
               </AppButton>
             </div>
-          </PurchasingTableSection>
+          </div>
         )
       }
     />

@@ -1,29 +1,11 @@
-import { useId, useMemo, useState } from "react";
-import { ImageIcon, Loader2, Trash2, Upload } from "lucide-react";
-import { Link } from "react-router-dom";
+import { useId, useState } from "react";
+import { Loader2, Trash2, Upload } from "lucide-react";
 
 import { resolvePublicUploadUrl } from "../../../components/admin/AvatarUploadField";
 import { AppButton } from "../../../components/app-shell";
-import {
-  PurchasingKpiCard,
-  PurchasingKpiGrid,
-  PurchasingPageHeader,
-  PurchasingPageShell,
-  PurchasingTableSection,
-  purchasingBtnPrimary,
-  purchasingLinkClass,
-} from "../../purchasing/ui";
+import { PurchasingPageShell, PurchasingTableSection, purchasingBtnPrimary } from "../../purchasing/ui";
 import { BrandingSystemPreview } from "../components/BrandingSystemPreview";
 import { useCompanySettings } from "../context/CompanySettingsContext";
-
-function logoFormat(url: string | null | undefined): string {
-  if (!url) return "—";
-  const lower = url.toLowerCase();
-  if (lower.includes(".svg")) return "SVG";
-  if (lower.includes(".png")) return "PNG";
-  if (lower.includes(".jpg") || lower.includes(".jpeg")) return "JPEG";
-  return "Obraz";
-}
 
 export default function CompanyBrandingTab() {
   const { profile, form, profileLoading, profileErr, logoBusy, onLogoFiles, removeLogo } = useCompanySettings();
@@ -31,43 +13,14 @@ export default function CompanyBrandingTab() {
   const [dragOver, setDragOver] = useState(false);
 
   const logoSrc = resolvePublicUploadUrl(profile?.logo_url ?? "");
-  const hasLogo = Boolean(profile?.logo_url);
   const companyName = form?.company_name?.trim() || profile?.company_name || "Firma";
-
-  const logoMeta = useMemo(() => {
-    if (!profile?.logo_url) {
-      return { size: "—", updated: "—" };
-    }
-    return { size: "—", updated: "Po wgraniu" };
-  }, [profile?.logo_url]);
 
   return (
     <PurchasingPageShell
-      header={
-        <PurchasingPageHeader
-          title="Branding"
-          subtitle="Logo firmy widoczne w interfejsie, na logowaniu i dokumentach."
-          actions={
-            <Link to="/settings/printers" className={purchasingLinkClass}>
-              Drukarki i kalibracja etykiet →
-            </Link>
-          }
-        />
-      }
       status={
         profileErr ? (
           <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{profileErr}</div>
         ) : null
-      }
-      kpis={
-        profileLoading ? null : (
-          <PurchasingKpiGrid>
-            <PurchasingKpiCard title="Logo wgrane" value={hasLogo ? "Tak" : "Nie"} icon={<ImageIcon aria-hidden />} tone={hasLogo ? "emerald" : "amber"} />
-            <PurchasingKpiCard title="Rozmiar pliku" value={logoMeta.size} icon={<Upload aria-hidden />} />
-            <PurchasingKpiCard title="Format" value={logoFormat(profile?.logo_url)} icon={<ImageIcon aria-hidden />} />
-            <PurchasingKpiCard title="Data aktualizacji" value={logoMeta.updated} icon={<ImageIcon aria-hidden />} />
-          </PurchasingKpiGrid>
-        )
       }
       table={
         profileLoading || !profile ? (

@@ -1,15 +1,10 @@
-import { Loader2, Plus, Settings2, Warehouse } from "lucide-react";
+import { Loader2, Plus, Warehouse } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 
-import { AppEmptyState } from "../../../components/app-shell";
+import { AppButton, AppEmptyState } from "../../../components/app-shell";
+import { FULFILLMENT_ASSIGNMENT_MODE_OPTIONS } from "../../../api/fulfillmentConfigurationApi";
 import {
-  FULFILLMENT_ASSIGNMENT_MODE_OPTIONS,
-} from "../../../api/fulfillmentConfigurationApi";
-import {
-  PurchasingKpiCard,
-  PurchasingKpiGrid,
-  PurchasingPageHeader,
   PurchasingPageShell,
   PurchasingTableHeader,
   PurchasingTableSection,
@@ -20,20 +15,14 @@ import {
 import { CompanyRowIconActions } from "../components/CompanyRowIconActions";
 import { WarehouseCreateDrawer, WarehouseEditDrawer } from "../components/WarehouseDrawers";
 import { useCompanySettings } from "../context/CompanySettingsContext";
-import {
-  fmtDateTime,
-  warehouseProfileLabel,
-  warehouseTypeLabel,
-} from "../companySettingsUtils";
+import { fmtDateTime, warehouseProfileLabel, warehouseTypeLabel } from "../companySettingsUtils";
 import type { Warehouse as WarehouseType } from "../../../services/warehouseService";
-import { AppButton } from "../../../components/app-shell";
 
 export default function CompanyWarehousesTab() {
   const {
     warehouses,
     structLoading,
     loadStructure,
-    defaultWarehouseName,
     fulfillmentMode,
     setFulfillmentMode,
     consolidationWarehouseId,
@@ -54,10 +43,6 @@ export default function CompanyWarehousesTab() {
     void loadStructure();
   }, [loadStructure]);
 
-  const activeCount = warehouses.length;
-  const strategyLabel =
-    FULFILLMENT_ASSIGNMENT_MODE_OPTIONS.find((o) => o.value === fulfillmentMode)?.label ?? fulfillmentMode;
-
   const rows = useMemo(
     () =>
       warehouses.map((w) => {
@@ -71,35 +56,15 @@ export default function CompanyWarehousesTab() {
   return (
     <>
       <PurchasingPageShell
-        header={
-          <PurchasingPageHeader
-            title="Magazyny"
-            subtitle="Zarządzanie magazynami, magazynem domyślnym i strategią realizacji zamówień."
-          />
-        }
-        kpis={
-          structLoading ? null : (
-            <PurchasingKpiGrid>
-              <PurchasingKpiCard title="Liczba magazynów" value={String(activeCount)} icon={<Warehouse aria-hidden />} />
-              <PurchasingKpiCard title="Magazyn domyślny" value={defaultWarehouseName} icon={<Settings2 aria-hidden />} />
-              <PurchasingKpiCard title="Strategia realizacji" value={strategyLabel} icon={<Settings2 aria-hidden />} />
-              <PurchasingKpiCard title="Magazynów aktywnych" value={String(activeCount)} icon={<Warehouse aria-hidden />} />
-            </PurchasingKpiGrid>
-          )
-        }
         table={
           <>
-            <PurchasingTableSection
-              title="Magazyny"
-              subtitle="Lista magazynów przypisanych do organizacji."
-              indicatorClass="bg-blue-500"
-              action={
+            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+              <div className="flex justify-end border-b border-slate-100 px-4 py-3">
                 <AppButton variant="primary" className={purchasingBtnPrimary} onClick={() => setCreateOpen(true)}>
                   <Plus className="mr-1.5 h-4 w-4" aria-hidden />
                   Nowy magazyn
                 </AppButton>
-              }
-            >
+              </div>
               {structLoading ? (
                 <div className="flex justify-center py-12 text-slate-500">
                   <Loader2 className="h-8 w-8 animate-spin" aria-hidden />
@@ -143,12 +108,7 @@ export default function CompanyWarehousesTab() {
                         <td className={`${purchasingTableTdClass} text-right`}>
                           <CompanyRowIconActions
                             actions={[
-                              {
-                                id: "edit",
-                                label: "Edytuj magazyn",
-                                icon: "edit",
-                                onClick: () => setEditWarehouse(w),
-                              },
+                              { id: "edit", label: "Edytuj magazyn", icon: "edit", onClick: () => setEditWarehouse(w) },
                               {
                                 id: "default",
                                 label: "Ustaw jako domyślny",
@@ -173,7 +133,7 @@ export default function CompanyWarehousesTab() {
                   </tbody>
                 </table>
               )}
-            </PurchasingTableSection>
+            </div>
 
             <PurchasingTableSection
               title="Strategia realizacji zamówień"

@@ -1,6 +1,6 @@
 import { Loader2 } from "lucide-react";
 import { memo, useEffect } from "react";
-import { Navigate, Outlet, useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, Navigate, Outlet, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 import PageLayout from "../../../components/layout/PageLayout";
 import { TabsNav } from "../../../components/layout/TabsNav";
@@ -8,7 +8,7 @@ import { flatSectionDividerClass } from "../../../components/layout/flatSectionT
 import { ModuleListBreadcrumb } from "../../../components/listPage/moduleList";
 import { isSuperRole } from "../../../auth/isSuperRole";
 import { useAuth } from "../../../context/AuthContext";
-import { PurchasingContentArea } from "../../purchasing/ui";
+import { PurchasingContentArea, purchasingLinkClass } from "../../purchasing/ui";
 import { COMPANY_SETTINGS_TABS, resolveCompanySettingsTabMeta } from "../companySettingsTabs";
 import { CompanySettingsProvider } from "../context/CompanySettingsContext";
 
@@ -57,8 +57,17 @@ function CompanySettingsLayoutInner() {
           ...(location.pathname !== "/settings/company" ? [{ label: meta.title }] : []),
         ]}
       />
-      <h1 className="text-2xl font-semibold text-slate-900">{meta.title}</h1>
-      <p className="mt-1 max-w-4xl text-sm text-slate-500">{meta.description}</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold text-slate-900">{meta.title}</h1>
+          <p className="mt-1 max-w-4xl text-sm text-slate-500">{meta.description}</p>
+        </div>
+        {location.pathname.includes("/branding") ? (
+          <Link to="/settings/printers" className={`${purchasingLinkClass} shrink-0 text-sm`}>
+            Drukarki i kalibracja etykiet →
+          </Link>
+        ) : null}
+      </div>
       <TabsNav
         items={COMPANY_SETTINGS_TABS}
         exact
