@@ -34,8 +34,20 @@ export type AutomationEffect = {
 
 export type ManualTriggerIconSource = "system" | "custom";
 
+/** Domyślny przycisk vs panel wysuwany z boku (Sellasist). */
+export type ManualActivatorType = "default" | "side_panel";
+
+/** Gdy warunki niespełnione — ukryj przycisk lub tylko wyszarz. */
+export type ManualConditionFilterMode = "hide" | "disabled";
+
+/** Natychmiast vs wymagane potwierdzenie przed wykonaniem. */
+export type ManualExecutionMode = "immediate" | "confirm";
+
 export type OrderAutomationManualTrigger = {
+  /** Reguła może być uruchamiana ręcznie (górny checkbox „Ręcznie”). */
   enabled: boolean;
+  /** Pokazuj skonfigurowany przycisk aktywatora w UI. */
+  buttonEnabled?: boolean;
   label: string;
   /** Legacy / emoji fallback */
   icon: string;
@@ -51,6 +63,20 @@ export type OrderAutomationManualTrigger = {
   visibleOnOrderList?: boolean;
   /** Przycisk ręczny widoczny na karcie zamówienia */
   visibleOnOrderCard?: boolean;
+  /** Multiakcje (zbiorcze operacje na zamówieniach) */
+  visibleOnMultiActions?: boolean;
+  /** Ekran pakowania WMS */
+  visibleOnWmsPacking?: boolean;
+  /** Typ prezentacji aktywatora */
+  activatorType?: ManualActivatorType;
+  /** Zachowanie gdy warunki reguły nie są spełnione */
+  conditionFilterMode?: ManualConditionFilterMode;
+  /** Przed ręcznym wykonaniem sprawdź warunki JEŚLI */
+  checkConditionsOnManualRun?: boolean;
+  /** Tryb wykonania po kliknięciu */
+  executionMode?: ManualExecutionMode;
+  /** Treść modala / drugiego kroku potwierdzenia */
+  confirmMessage?: string;
 };
 
 /** Jedna linia harmonogramu (dzień tygodnia ISO: 1 = pon … 7 = nd). */

@@ -1,12 +1,8 @@
-import { useRef, useState } from "react";
-import { ChevronDown } from "lucide-react";
-
 import type { OrderAutomationExecution, OrderAutomationManualTrigger, OrderAutomationRunMode } from "../../../types/orderAutomation";
-import { getManualIconComponent } from "@/modules/orders/automation/utils/orderAutomationManualIcons";
 import { flatSectionDividerClass } from "../../layout/flatSectionTokens";
 import { isScheduleWindowValid } from "../../../utils/orderAutomationValidation";
-import { AutomationIconGridPicker } from "./AutomationIconGridPicker";
-import { ManualTriggerButtonPreview } from "./ManualTriggerButtonPreview";
+import { AutomationManualConfirmSection } from "./AutomationManualConfirmSection";
+import { AutomationManualTriggerSection } from "./AutomationManualTriggerSection";
 import { oaInp, oaInpDense, oaLbl } from "./orderAutomationUiTokens";
 
 const DAY_ROWS: { day: number; label: string }[] = [
@@ -53,9 +49,6 @@ export function AutomationExecutionSettingsSection({
   showValidation = false,
   onChange,
 }: Props) {
-  const iconPickerAnchorRef = useRef<HTMLButtonElement | null>(null);
-  const [iconPickerOpen, setIconPickerOpen] = useState(false);
-
   const toggleDay = (day: number) => {
     const set = new Set(activeDays);
     if (set.has(day)) set.delete(day);
@@ -67,8 +60,7 @@ export function AutomationExecutionSettingsSection({
   const scheduleInvalid =
     automatic && runMode !== "continuous" && !isScheduleWindowValid(runMode, windowFrom, windowTo);
 
-  const colorValue = manualTrigger.color?.startsWith("#") ? manualTrigger.color : "#0f172a";
-  const IconPreview = getManualIconComponent(manualTrigger.iconKey || "Zap");
+  const patchManual = (p: Partial<OrderAutomationManualTrigger>) => onChange({ manualTrigger: p });
 
   return (
     <section className="w-full space-y-5">
@@ -98,7 +90,15 @@ export function AutomationExecutionSettingsSection({
               type="checkbox"
               className="h-4 w-4 rounded border-slate-300 accent-emerald-600"
               checked={manualEnabled}
-              onChange={() => onChange({ manualEnabled: !manualEnabled })}
+              onChange={() =>
+                onChange({
+                  manualEnabled: !manualEnabled,
+                  manualTrigger: {
+                    enabled: !manualEnabled,
+                    ...(!manualEnabled ? { buttonEnabled: true } : {}),
+                  },
+                })
+              }
             />
             Ręcznie
           </label>
@@ -208,121 +208,11 @@ export function AutomationExecutionSettingsSection({
       ) : null}
 
       {manualEnabled ? (
-        <div className="space-y-4 rounded-lg border border-slate-200 bg-white p-4">
-          <p className="text-sm font-medium text-slate-800">Uruchamianie ręczne</p>
-
-          <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
-            <div className="space-y-4">
-              <label className={oaLbl}>
-                Nazwa przycisku
-                <input
-                  type="text"
-                  className={`${oaInp} mt-1`}
-                  value={manualTrigger.label}
-                  placeholder="np. Generuj fakturę"
-                  onChange={(e) => onChange({ manualTrigger: { label: e.target.value } })}
-                />
-              </label>
-
-              <div>
-                <span className={oaLbl}>Ikona przycisku</span>
-                <button
-                  type="button"
-                  ref={iconPickerAnchorRef}
-                  className={`${oaInp} mt-1 flex w-full max-w-md items-center justify-between text-left`}
-                  onClick={() => setIconPickerOpen(true)}
-                >
-                  <span className="flex items-center gap-2">
-                    <IconPreview className="h-4 w-4 text-slate-600" strokeWidth={2} />
-                    {manualTrigger.iconKey || "Zap"}
-                  </span>
-                  <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" />
-                </button>
-              </div>
-
-              <label className={oaLbl}>
-                Kolor przycisku
-                <div className="mt-1 flex max-w-md items-center gap-3">
-                  <input
-                    type="color"
-                    className="h-9 w-14 cursor-pointer rounded-lg border border-slate-200 p-0.5"
-                    value={colorValue}
-                    onChange={(e) => onChange({ manualTrigger: { color: e.target.value } })}
-                  />
-                  <input
-                    type="text"
-                    className={`${oaInpDense} flex-1 font-mono text-xs`}
-                    value={colorValue}
-                    onChange={(e) => {
-                      const v = e.target.value.trim();
-                      if (/^#[0-9A-Fa-f]{3,8}$/.test(v) || v === "") {
-                        onChange({ manualTrigger: { color: v || "#0f172a" } });
-                      }
-                    }}
-                    placeholder="#0f172a"
-                  />
-                </div>
-              </label>
-            </div>
-
-            <div className="rounded-lg border border-dashed border-slate-200 bg-white p-4">
-              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Podgląd przycisku</p>
-              <div className="mt-3 flex flex-wrap items-center gap-3">
-                <ManualTriggerButtonPreview manualTrigger={manualTrigger} />
-              </div>
-              <p className="mt-3 text-xs text-slate-500">
-                Przycisk będzie widoczny w wybranych miejscach na liście i karcie zamówienia.
-              </p>
-            </div>
-          </div>
-
-          <div className="space-y-2 border-t border-slate-100 pt-4">
-            <p className="text-sm font-medium text-slate-700">Widoczność</p>
-            <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-800">
-              <input
-                type="checkbox"
-                className="h-4 w-4 rounded border-slate-300 accent-emerald-600"
-                checked={manualTrigger.visibleOnOrderList !== false}
-                onChange={() =>
-                  onChange({
-                    manualTrigger: { visibleOnOrderList: manualTrigger.visibleOnOrderList === false },
-                  })
-                }
-              />
-              Lista zamówień
-            </label>
-            <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-800">
-              <input
-                type="checkbox"
-                className="h-4 w-4 rounded border-slate-300 accent-emerald-600"
-                checked={manualTrigger.visibleOnOrderCard !== false}
-                onChange={() =>
-                  onChange({
-                    manualTrigger: { visibleOnOrderCard: manualTrigger.visibleOnOrderCard === false },
-                  })
-                }
-              />
-              Karta zamówienia
-            </label>
-          </div>
-        </div>
+        <>
+          <AutomationManualTriggerSection manualTrigger={manualTrigger} onChange={patchManual} />
+          <AutomationManualConfirmSection manualTrigger={manualTrigger} onChange={patchManual} />
+        </>
       ) : null}
-
-      <AutomationIconGridPicker
-        open={iconPickerOpen}
-        anchorRef={iconPickerAnchorRef}
-        selectedKey={manualTrigger.iconKey || "Zap"}
-        onClose={() => setIconPickerOpen(false)}
-        onPick={(key) =>
-          onChange({
-            manualTrigger: {
-              iconKey: key,
-              iconSource: "system",
-              icon: "",
-            },
-          })
-        }
-      />
     </section>
   );
 }

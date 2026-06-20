@@ -12,7 +12,6 @@ import type {
   AutomationConditionJoin,
   AutomationEffect,
   AutomationEffectKind,
-  OrderAutomationManualTrigger,
   OrderAutomationRule,
 } from "../../types/orderAutomation";
 import { loadActionGroups, allocateRulePublicId, newUid, saveActionGroups } from "../../utils/orderAutomationLocalStore";
@@ -22,6 +21,7 @@ import {
   defaultOperatorForField,
   normalizeCondition,
 } from "../../utils/orderAutomationConditionUtils";
+import { defaultManualTrigger, migrateManualTrigger } from "../../utils/orderAutomationManualTrigger";
 import { validateAutomationRule } from "../../utils/orderAutomationValidation";
 import {
   buildConditionCategorySteps,
@@ -52,48 +52,12 @@ function defaultRule(): OrderAutomationRule {
     name: "Nowa automatyzacja",
     group: "Ogólne",
     enabled: true,
-    manualTrigger: {
-      enabled: false,
-      label: "Akcja",
-      icon: "⚡",
-      color: "#0f172a",
-      shortcut: "",
-      iconSource: "system",
-      iconKey: "Zap",
-      customImageDataUrl: null,
-      visibleOnOrderList: true,
-      visibleOnOrderCard: true,
-    },
+    manualTrigger: defaultManualTrigger(),
     conditions: [],
     effects: [],
     execution: defaultExecution(),
     stats: { lastRunAt: null, runCount: 0 },
     delayMinutes: 0,
-  };
-}
-
-function migrateManualTrigger(m: OrderAutomationManualTrigger | null | undefined): OrderAutomationManualTrigger {
-  const defaults: OrderAutomationManualTrigger = {
-    enabled: false,
-    label: "Akcja",
-    icon: "⚡",
-    color: "#0f172a",
-    shortcut: "",
-    iconSource: "system",
-    iconKey: "Zap",
-    customImageDataUrl: null,
-    visibleOnOrderList: true,
-    visibleOnOrderCard: true,
-  };
-  if (!m || typeof m !== "object") return defaults;
-  return {
-    ...defaults,
-    ...m,
-    iconSource: m.iconSource ?? "system",
-    iconKey: m.iconKey ?? "Zap",
-    customImageDataUrl: m.customImageDataUrl ?? null,
-    visibleOnOrderList: m.visibleOnOrderList !== false,
-    visibleOnOrderCard: m.visibleOnOrderCard !== false,
   };
 }
 
