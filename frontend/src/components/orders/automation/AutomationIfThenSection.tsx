@@ -1,4 +1,4 @@
-import { AlertTriangle, Copy, Pencil, Plus, Trash2 } from "lucide-react";
+import { AlertTriangle, ArrowRight, Copy, Pencil, Plus, Trash2 } from "lucide-react";
 
 import type { AutomationCondition, AutomationConditionJoin, AutomationEffect } from "../../../types/orderAutomation";
 import { formatConditionDisplayParts, formatEffectListBlock } from "../../../utils/orderAutomationPreview";
@@ -10,7 +10,9 @@ import {
   oaWorkflowAddCtaEffect,
   oaWorkflowCardActionsClass,
   oaWorkflowCardTitleClass,
+  oaWorkflowFlowArrowClass,
   oaWorkflowLaneBadgeClass,
+  oaWorkflowLaneClass,
 } from "./orderAutomationUiTokens";
 
 type ConditionJoinBadgeProps = {
@@ -120,100 +122,120 @@ export function AutomationIfThenSection({
   onRemoveEffect,
 }: AutomationIfThenSectionProps) {
   return (
-    <div className="w-full min-w-0 max-w-none space-y-8">
-      <section className="w-full space-y-4">
-        <div>
-          <h2 className="text-lg font-semibold text-slate-900">
+    <section className="w-full min-w-0 max-w-none space-y-4">
+      <div>
+        <h2 className="text-lg font-semibold text-slate-900">Reguły automatyzacji</h2>
+        <p className="mt-0.5 text-sm text-slate-600">Kliknij kartę, aby edytować warunek lub akcję.</p>
+      </div>
+      <div className={flatSectionDividerClass} aria-hidden />
+
+      <div className="grid w-full min-w-0 max-w-none items-stretch gap-y-6 lg:grid-cols-[minmax(0,1fr)_5.5rem_minmax(0,1fr)] lg:gap-x-6 lg:gap-y-0">
+        {/* JEŚLI — lewa kolumna */}
+        <div className={`${oaWorkflowLaneClass} min-w-0`}>
+          <div className="mb-4 flex items-center text-sm font-bold text-slate-700">
             <span className={oaWorkflowLaneBadgeClass}>Jeśli</span>
-            Warunki
-          </h2>
-          <p className="mt-0.5 text-sm text-slate-600">Reguła uruchamia się, gdy wszystkie warunki są spełnione.</p>
-        </div>
-        <div className={flatSectionDividerClass} aria-hidden />
+            Spełnione są warunki:
+          </div>
 
-        <div className="flex flex-col gap-3">
-          {conditions.length > 0 ? (
-            <ul className="space-y-2">
-              {conditions.map((c, idx) => {
-                const join = c.joinToNext ?? "and";
-                const isLast = idx >= conditions.length - 1;
-                const parts = formatConditionDisplayParts(c, statusNameById);
-                const err = conditionErrors[c.uid] ?? null;
+          <div className="flex flex-1 flex-col gap-3">
+            {conditions.length > 0 ? (
+              <ul className="space-y-2">
+                {conditions.map((c, idx) => {
+                  const join = c.joinToNext ?? "and";
+                  const isLast = idx >= conditions.length - 1;
+                  const parts = formatConditionDisplayParts(c, statusNameById);
+                  const err = conditionErrors[c.uid] ?? null;
 
-                return (
-                  <li key={c.uid}>
-                    <WorkflowCard
-                      title={conditionErrorTitle(c)}
-                      errorMessage={err}
-                      summary={
-                        <>
-                          {parts.field}{" "}
-                          <span className="font-semibold">
-                            {parts.op} {parts.value}
-                          </span>
-                        </>
-                      }
-                      onEdit={() => onEditCondition(c.uid)}
-                      onDuplicate={() => onDuplicateCondition(c)}
-                      onRemove={() => onRemoveCondition(c.uid)}
-                    />
-                    {!isLast ? <ConditionJoinBadge join={join} /> : null}
-                  </li>
-                );
-              })}
-            </ul>
-          ) : null}
-          <WorkflowAddCta variant="condition" label="Dodaj warunek" onClick={onAddCondition} />
-        </div>
-      </section>
-
-      <section className="w-full space-y-4">
-        <div>
-          <h2 className="text-lg font-semibold text-slate-900">
-            <span className={oaWorkflowLaneBadgeClass}>To</span>
-            Efekty
-          </h2>
-          <p className="mt-0.5 text-sm text-slate-600">Akcje wykonywane po spełnieniu warunków.</p>
-        </div>
-        <div className={flatSectionDividerClass} aria-hidden />
-
-        <div className="flex flex-col gap-3">
-          {effects.length > 0 ? (
-            <ul className="space-y-2">
-              {effects.map((e) => {
-                const block = formatEffectListBlock(e, statusNameById);
-                const hasDetail = block.primaryBold || block.secondaryDetail;
-                const err = effectErrors[e.uid] ?? null;
-
-                return (
-                  <li key={e.uid}>
-                    <WorkflowCard
-                      title={effectErrorTitle(e)}
-                      errorMessage={err}
-                      summary={
-                        <>
-                          <span className="block font-medium text-slate-900">{block.title}</span>
-                          {hasDetail ? (
-                            <span className="mt-0.5 block text-sm font-normal text-slate-700">
-                              {block.detailPrefix}
-                              {block.primaryBold ? <span className="font-semibold">{block.primaryBold}</span> : null}
-                              {block.secondaryDetail}
+                  return (
+                    <li key={c.uid}>
+                      <WorkflowCard
+                        title={conditionErrorTitle(c)}
+                        errorMessage={err}
+                        summary={
+                          <>
+                            {parts.field}{" "}
+                            <span className="font-semibold">
+                              {parts.op} {parts.value}
                             </span>
-                          ) : null}
-                        </>
-                      }
-                      onEdit={() => onEditEffect(e.uid)}
-                      onDuplicate={() => onDuplicateEffect(e)}
-                      onRemove={() => onRemoveEffect(e.uid)}
-                    />
-                  </li>
-                );
-              })}
-            </ul>
-          ) : null}
-          <WorkflowAddCta variant="effect" label="Dodaj akcję" onClick={onAddEffect} />
+                          </>
+                        }
+                        onEdit={() => onEditCondition(c.uid)}
+                        onDuplicate={() => onDuplicateCondition(c)}
+                        onRemove={() => onRemoveCondition(c.uid)}
+                      />
+                      {!isLast ? <ConditionJoinBadge join={join} /> : null}
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : null}
+
+            <div className={conditions.length > 0 ? "mt-auto" : "flex-1"}>
+              <WorkflowAddCta variant="condition" label="Dodaj warunek" onClick={onAddCondition} />
+            </div>
+          </div>
         </div>
-      </section>
-    </div>
+
+        {/* Strzałka — wyśrodkowana pionowo; pozioma na desktopie, pionowa na mobile */}
+        <div className="flex items-center justify-center self-stretch px-1" aria-hidden>
+          <div className={oaWorkflowFlowArrowClass}>
+            <ArrowRight
+              className="h-8 w-8 rotate-90 text-slate-500 lg:h-10 lg:w-10 lg:rotate-0"
+              strokeWidth={2}
+            />
+          </div>
+        </div>
+
+        {/* TO — prawa kolumna */}
+        <div className={`${oaWorkflowLaneClass} min-w-0`}>
+          <div className="mb-4 flex items-center text-sm font-bold text-slate-700">
+            <span className={oaWorkflowLaneBadgeClass}>To</span>
+            Wykonaj akcje:
+          </div>
+
+          <div className="flex flex-1 flex-col gap-3">
+            {effects.length > 0 ? (
+              <ul className="space-y-2">
+                {effects.map((e) => {
+                  const block = formatEffectListBlock(e, statusNameById);
+                  const hasDetail = block.primaryBold || block.secondaryDetail;
+                  const err = effectErrors[e.uid] ?? null;
+
+                  return (
+                    <li key={e.uid}>
+                      <WorkflowCard
+                        title={effectErrorTitle(e)}
+                        errorMessage={err}
+                        summary={
+                          <>
+                            <span className="block font-medium text-slate-900">{block.title}</span>
+                            {hasDetail ? (
+                              <span className="mt-0.5 block text-sm font-normal text-slate-700">
+                                {block.detailPrefix}
+                                {block.primaryBold ? (
+                                  <span className="font-semibold">{block.primaryBold}</span>
+                                ) : null}
+                                {block.secondaryDetail}
+                              </span>
+                            ) : null}
+                          </>
+                        }
+                        onEdit={() => onEditEffect(e.uid)}
+                        onDuplicate={() => onDuplicateEffect(e)}
+                        onRemove={() => onRemoveEffect(e.uid)}
+                      />
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : null}
+
+            <div className={effects.length > 0 ? "mt-auto" : "flex-1"}>
+              <WorkflowAddCta variant="effect" label="Dodaj akcję" onClick={onAddEffect} />
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }
