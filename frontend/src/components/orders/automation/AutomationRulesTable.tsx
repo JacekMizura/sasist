@@ -1,20 +1,18 @@
 import { useNavigate } from "react-router-dom";
 import { ChevronDown, ChevronUp, ClipboardList, Pencil, Trash2 } from "lucide-react";
 
-import type { AutomationCondition, AutomationEffect, OrderAutomationRule } from "../../../types/orderAutomation";
+import type { OrderAutomationRule } from "../../../types/orderAutomation";
 import {
   compareRulesByPublicId,
-  formatConditionListLine,
   formatDelayMinutes,
-  formatEffectListBlock,
   formatRuleDisplayId,
   formatRuleListName,
 } from "../../../utils/orderAutomationPreview";
 import type { ConditionOption } from "../../../utils/orderAutomationConditionOptions";
 import { formatExecutionListDisplay } from "../../../utils/orderAutomationExecution";
+import { AutomationConditionDisplay, AutomationEffectDisplay } from "./AutomationRuleDisplay";
 import {
   oaListJoinBadgeClass,
-  oaListLogicLineClass,
   oaListRowClass,
   oaListTableClass,
   oaListTdClass,
@@ -39,29 +37,6 @@ function fmtTime(iso: string | null | undefined) {
   }
 }
 
-function ConditionLine({
-  c,
-  join,
-  statusNameById,
-  warehouseOptions,
-}: {
-  c: AutomationCondition;
-  join: string | null;
-  statusNameById: Map<number, string>;
-  warehouseOptions?: ConditionOption[];
-}) {
-  const line = formatConditionListLine(c, statusNameById, warehouseOptions);
-  return (
-    <div className="flex min-w-0 flex-col gap-1.5">
-      {join ? <span className={oaListJoinBadgeClass}>{join}</span> : null}
-      <p className={`${oaListLogicLineClass} break-words`}>
-        {line.field} {line.operator}{" "}
-        <span className="font-semibold">{line.value}</span>
-      </p>
-    </div>
-  );
-}
-
 function ConditionsCell({
   rule,
   statusNameById,
@@ -78,34 +53,20 @@ function ConditionsCell({
   }
 
   return (
-    <div className="flex min-w-0 flex-col gap-2">
+    <div className="flex min-w-0 flex-col gap-2.5">
       {conditions.map((c, i) => {
         const join = i > 0 ? (conditions[i - 1]?.joinToNext === "or" ? "LUB" : "ORAZ") : null;
-        return <ConditionLine key={c.uid} c={c} join={join} statusNameById={statusNameById} warehouseOptions={warehouseOptions} />;
+        return (
+          <div key={c.uid} className="flex min-w-0 flex-col gap-1.5">
+            {join ? <span className={oaListJoinBadgeClass}>{join}</span> : null}
+            <AutomationConditionDisplay
+              condition={c}
+              statusNameById={statusNameById}
+              warehouseOptions={warehouseOptions}
+            />
+          </div>
+        );
       })}
-    </div>
-  );
-}
-
-function EffectBlock({
-  e,
-  statusNameById,
-}: {
-  e: AutomationEffect;
-  statusNameById: Map<number, string>;
-}) {
-  const block = formatEffectListBlock(e, statusNameById);
-  const hasDetail = block.primaryBold || block.secondaryDetail;
-  return (
-    <div className="min-w-0">
-      <p className={`${oaListLogicLineClass} font-medium text-slate-900`}>{block.title}</p>
-      {hasDetail ? (
-        <p className={`${oaListLogicLineClass} mt-0.5 break-words text-slate-700`}>
-          {block.detailPrefix}
-          {block.primaryBold ? <span className="font-semibold">{block.primaryBold}</span> : null}
-          {block.secondaryDetail}
-        </p>
-      ) : null}
     </div>
   );
 }
@@ -124,7 +85,7 @@ function EffectsCell({
   return (
     <div className="flex min-w-0 flex-col gap-3">
       {rule.effects.map((e) => (
-        <EffectBlock key={e.uid} e={e} statusNameById={statusNameById} />
+        <AutomationEffectDisplay key={e.uid} effect={e} statusNameById={statusNameById} />
       ))}
     </div>
   );

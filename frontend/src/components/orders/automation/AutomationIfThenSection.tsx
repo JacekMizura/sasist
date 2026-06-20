@@ -1,7 +1,7 @@
 import { AlertTriangle, ArrowRight, Copy, Pencil, Plus, Trash2 } from "lucide-react";
 
 import type { AutomationCondition, AutomationConditionJoin, AutomationEffect } from "../../../types/orderAutomation";
-import { formatConditionDisplayParts, formatEffectListBlock } from "../../../utils/orderAutomationPreview";
+import { AutomationConditionDisplay, AutomationEffectDisplay } from "./AutomationRuleDisplay";
 import type { ConditionOption } from "../../../utils/orderAutomationConditionOptions";
 import { conditionErrorTitle, effectErrorTitle } from "../../../utils/orderAutomationValidation";
 import { flatSectionDividerClass } from "../../layout/flatSectionTokens";
@@ -10,7 +10,6 @@ import {
   oaWorkflowAddCtaCondition,
   oaWorkflowAddCtaEffect,
   oaWorkflowCardActionsClass,
-  oaWorkflowCardTitleClass,
   oaWorkflowFlowArrowClass,
   oaWorkflowLaneBadgeClass,
   oaWorkflowLaneClass,
@@ -56,7 +55,7 @@ function WorkflowCard({ title, summary, errorMessage, onEdit, onDuplicate, onRem
         {hasError ? <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" aria-hidden /> : null}
         <div className="min-w-0 flex-1">
           <p className="text-xs font-medium text-slate-500">{title}</p>
-          <div className={`${oaWorkflowCardTitleClass} mt-0.5 whitespace-normal pr-0`}>{summary}</div>
+          <div className="mt-0.5 min-w-0 whitespace-normal pr-0 text-sm leading-snug">{summary}</div>
           {hasError ? <p className="mt-1 text-xs text-red-600">{errorMessage}</p> : null}
         </div>
       </div>
@@ -146,7 +145,6 @@ export function AutomationIfThenSection({
                 {conditions.map((c, idx) => {
                   const join = c.joinToNext ?? "and";
                   const isLast = idx >= conditions.length - 1;
-                  const parts = formatConditionDisplayParts(c, statusNameById, warehouseOptions);
                   const err = conditionErrors[c.uid] ?? null;
 
                   return (
@@ -155,12 +153,12 @@ export function AutomationIfThenSection({
                         title={conditionErrorTitle(c)}
                         errorMessage={err}
                         summary={
-                          <>
-                            {parts.field}{" "}
-                            <span className="font-semibold">
-                              {parts.op} {parts.value}
-                            </span>
-                          </>
+                          <AutomationConditionDisplay
+                            condition={c}
+                            statusNameById={statusNameById}
+                            warehouseOptions={warehouseOptions}
+                            lineClassName=""
+                          />
                         }
                         onEdit={() => onEditCondition(c.uid)}
                         onDuplicate={() => onDuplicateCondition(c)}
@@ -200,8 +198,6 @@ export function AutomationIfThenSection({
             {effects.length > 0 ? (
               <ul className="space-y-2">
                 {effects.map((e) => {
-                  const block = formatEffectListBlock(e, statusNameById);
-                  const hasDetail = block.primaryBold || block.secondaryDetail;
                   const err = effectErrors[e.uid] ?? null;
 
                   return (
@@ -210,18 +206,11 @@ export function AutomationIfThenSection({
                         title={effectErrorTitle(e)}
                         errorMessage={err}
                         summary={
-                          <>
-                            <span className="block font-medium text-slate-900">{block.title}</span>
-                            {hasDetail ? (
-                              <span className="mt-0.5 block text-sm font-normal text-slate-700">
-                                {block.detailPrefix}
-                                {block.primaryBold ? (
-                                  <span className="font-semibold">{block.primaryBold}</span>
-                                ) : null}
-                                {block.secondaryDetail}
-                              </span>
-                            ) : null}
-                          </>
+                          <AutomationEffectDisplay
+                            effect={e}
+                            statusNameById={statusNameById}
+                            lineClassName=""
+                          />
                         }
                         onEdit={() => onEditEffect(e.uid)}
                         onDuplicate={() => onDuplicateEffect(e)}

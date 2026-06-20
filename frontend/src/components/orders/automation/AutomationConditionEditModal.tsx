@@ -24,8 +24,8 @@ import {
   isMultiValueConditionField,
   migrateConditionValue,
 } from "../../../utils/orderAutomationConditionUtils";
-import { formatConditionDisplayParts } from "../../../utils/orderAutomationPreview";
 import { AutomationCategoryPickerModal } from "./AutomationCategoryPickerModal";
+import { AutomationConditionDisplay } from "./AutomationRuleDisplay";
 import {
   oaBtn,
   oaBtnPri,
@@ -92,7 +92,6 @@ export function AutomationConditionEditModal({
   const isMulti = isMultiValueConditionField(condition.fieldKey);
   const values = migrateConditionValue(condition.value);
   const ops = defaultOperatorsForField(condition.fieldKey);
-  const summary = formatConditionDisplayParts(condition, statusNameById, warehouseOptions);
   const selectedLabels = resolveOptionLabels(values, selectOptions);
 
   const onFieldPick = (fieldKey: string) => {
@@ -117,11 +116,14 @@ export function AutomationConditionEditModal({
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex items-center justify-between gap-3 border-b border-gray-200 px-4 py-3">
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Warunek</p>
-              <p className="truncate text-sm font-semibold text-slate-900">
-                {summary.field} {summary.op} {summary.value}
-              </p>
+              <AutomationConditionDisplay
+                condition={condition}
+                statusNameById={statusNameById}
+                warehouseOptions={warehouseOptions}
+                lineClassName="text-sm leading-snug"
+              />
             </div>
             <button
               type="button"

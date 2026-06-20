@@ -22,9 +22,17 @@ export function formatConditionValuesDisplay(
   c: AutomationCondition,
   ctx?: ConditionFormatContext,
 ): string {
+  return resolveConditionValueLabels(c, ctx).join(", ") || "—";
+}
+
+/** Etykiety wartości warunku (do listy punktowanej w UI). */
+export function resolveConditionValueLabels(
+  c: AutomationCondition,
+  ctx?: ConditionFormatContext,
+): string[] {
   const cond = normalizeCondition(c);
   const values = cond.value;
-  if (values.length === 0) return "—";
+  if (values.length === 0) return [];
 
   const options = conditionOptionsForField(cond.fieldKey, {
     statusOptions: statusOptionsFromMap(ctx?.statusNameById),
@@ -32,19 +40,17 @@ export function formatConditionValuesDisplay(
   });
 
   if (options.length > 0) {
-    return resolveOptionLabels(values, options).join(", ");
+    return resolveOptionLabels(values, options);
   }
 
   if (cond.fieldKey === "order_status" && ctx?.statusNameById) {
-    return values
-      .map((v) => {
-        const id = Number(v);
-        return Number.isFinite(id) && ctx.statusNameById!.has(id) ? ctx.statusNameById!.get(id)! : v;
-      })
-      .join(", ");
+    return values.map((v) => {
+      const id = Number(v);
+      return Number.isFinite(id) && ctx.statusNameById!.has(id) ? ctx.statusNameById!.get(id)! : v;
+    });
   }
 
-  return values.join(", ");
+  return values;
 }
 
 export function formatConditionPill(c: AutomationCondition, statusNameById?: Map<number, string>): string {
@@ -68,15 +74,28 @@ export function formatEffectPill(e: AutomationEffect, statusNameById?: Map<numbe
 }
 
 /** Części warunku do chipów na liście (pole + operator + wartość). */
+export type ConditionDisplayParts = {
+  field: string;
+  op: string;
+  /** Połączone etykiety — m.in. historia zmian */
+  value: string;
+  valueLabels: string[];
+  /** Wielowartościowy warunek z listą punktowaną (≥2 wartości) */
+  useValueList: boolean;
+};
+
 export function formatConditionDisplayParts(
   c: AutomationCondition,
   statusNameById?: Map<number, string>,
   warehouseOptions?: ConditionOption[],
-): { field: string; op: string; value: string } {
+): ConditionDisplayParts {
   const field = conditionFieldLabel(c.fieldKey);
   const op = ORDER_AUTOMATION_OPERATOR_UI[c.operator] ?? ORDER_AUTOMATION_OPERATOR_LABELS[c.operator] ?? c.operator;
-  const value = formatConditionValuesDisplay(c, { statusNameById, warehouseOptions });
-  return { field, op, value };
+  const ctx: ConditionFormatContext = { statusNameById, warehouseOptions };
+  const valueLabels = resolveConditionValueLabels(c, ctx);
+  const value = valueLabels.length > 0 ? valueLabels.join(", ") : "—";
+  const useValueList = isMultiValueConditionField(c.fieldKey) && valueLabels.length > 1;
+  return { field, op, value, valueLabels, useValueList };
 }
 
 export function formatRuleDisplayId(rule: Pick<OrderAutomationRule, "id" | "publicId">): string {
@@ -123,31 +142,21 @@ export function formatConditionSentence(c: AutomationCondition, statusNameById?:
   return `${parts.field} ${op} ${parts.value}`;
 }
 
-/** Części warunku do wyświetlenia w tabeli (pole normalne, operator + wartość pogrubione). */
+/** Części warunku do wyświetlenia w tabeli — alias {@link formatConditionDisplayParts}. */
 export function formatConditionListLine(
   c: AutomationCondition,
   statusNameById?: Map<number, string>,
   warehouseOptions?: ConditionOption[],
-): { field: string; operator: string; value: string } {
-  const parts = formatConditionDisplayParts(c, statusNameById, warehouseOptions);
-  const operator =
-    c.operator === "eq"
-      ? "="
-      : c.operator === "neq"
-        ? "≠"
-        : c.operator === "contains"
-          ? "zawiera"
-          : parts.op;
-  return { field: parts.field, operator, value: parts.value };
+): ConditionDisplayParts {
+  return formatConditionDisplayParts(c, statusNameById, warehouseOptions);
 }
 
 export type EffectListBlock = {
-  title: string;
-  /** Prefiks przed wartością (np. „SZABLON: ”) */
-  detailPrefix: string | null;
+  /** Tekst przed wyróżnioną wartością, np. „Zmień status na ” */
+  leadIn: string;
   /** Najważniejsza wartość — pogrubiona w UI */
   primaryBold: string | null;
-  /** Reszta linii szczegółów (np. „ • FV Polska • Główna”) */
+  /** Dodatkowy kontekst (np. seria dokumentu) — linia pod spodem */
   secondaryDetail: string | null;
 };
 
@@ -191,18 +200,17 @@ function payloadLabel(map: Record<string, string>, value: string): string | null
   return map[v] ?? v;
 }
 
-/** Pełny opis efektu na liście — tytuł akcji + szczegóły z wyróżnioną wartością. */
+/** Pełne zdanie efektu na liście — lead-in + wyróżniona wartość + kontekst. */
 export function formatEffectListBlock(e: AutomationEffect, statusNameById?: Map<number, string>): EffectListBlock {
-  const title =
-    e.kind === "send_message" && String(e.payload.message_channel ?? "email") === "email"
-      ? "Wyślij e-mail"
-      : effectKindLabel(e.kind);
-
   if (e.kind === "change_status") {
     const id = Number(e.payload.order_ui_status_id);
     const name = Number.isFinite(id) && statusNameById?.get(id);
     const primary = name ?? (e.payload.order_ui_status_id ? `#${e.payload.order_ui_status_id}` : null);
-    return { title, detailPrefix: null, primaryBold: primary, secondaryDetail: null };
+    return {
+      leadIn: "Zmień status na ",
+      primaryBold: primary ? primary.toUpperCase() : null,
+      secondaryDetail: null,
+    };
   }
 
   if (e.kind === "generate_document") {
@@ -213,30 +221,40 @@ export function formatEffectListBlock(e: AutomationEffect, statusNameById?: Map<
     const copies = String(e.payload.copies ?? "").trim();
     if (copies && copies !== "1") rest.push(`${copies} kopie`);
     return {
-      title,
-      detailPrefix: null,
+      leadIn: "Generuj dokument → ",
       primaryBold: docType ? docType.toUpperCase() : null,
-      secondaryDetail: rest.length ? ` • ${rest.join(" • ")}` : null,
+      secondaryDetail: rest.length ? rest.join(" • ") : null,
     };
   }
 
   if (e.kind === "send_message") {
+    const channel = String(e.payload.message_channel ?? "email");
+    const leadIn =
+      channel === "sms" ? "Wyślij SMS — szablon " : channel === "panel" ? "Wyślij wiadomość — szablon " : "Wyślij e-mail — szablon ";
     const raw = String(e.payload.template ?? "").trim();
     const template = payloadLabel(MESSAGE_TEMPLATE_LABELS, raw) ?? (raw || null);
-    return { title, detailPrefix: "SZABLON: ", primaryBold: template, secondaryDetail: null };
+    return { leadIn, primaryBold: template, secondaryDetail: null };
   }
 
   if (e.kind === "assign_courier") {
     const courier = String(e.payload.courier ?? "").trim();
     const preset = String(e.payload.courier_preset ?? "").trim();
     const primary = courier || preset || null;
-    const rest = courier && preset ? ` • ${preset}` : null;
-    return { title, detailPrefix: null, primaryBold: primary, secondaryDetail: rest };
+    const rest = courier && preset && courier !== preset ? preset : null;
+    return {
+      leadIn: "Przypisz kuriera ",
+      primaryBold: primary,
+      secondaryDetail: rest,
+    };
   }
 
   if (e.kind === "add_tag") {
     const tag = String(e.payload.tag ?? "").trim();
-    return { title, detailPrefix: null, primaryBold: tag || null, secondaryDetail: null };
+    return {
+      leadIn: "Dodaj tag ",
+      primaryBold: tag ? tag.toUpperCase() : null,
+      secondaryDetail: null,
+    };
   }
 
   if (e.kind === "print") {
@@ -244,19 +262,22 @@ export function formatEffectListBlock(e: AutomationEffect, statusNameById?: Map<
       String(e.payload.print_document ?? "").trim() || String(e.payload.template ?? "").trim();
     const printer = String(e.payload.printer ?? "").trim();
     return {
-      title,
-      detailPrefix: null,
+      leadIn: "Drukuj ",
       primaryBold: doc || null,
-      secondaryDetail: printer ? ` • ${printer}` : null,
+      secondaryDetail: printer || null,
     };
   }
 
   if (e.kind === "wms_action") {
     const key = String(e.payload.action_key ?? "").trim();
-    return { title, detailPrefix: null, primaryBold: key || null, secondaryDetail: null };
+    return {
+      leadIn: "Akcja WMS — ",
+      primaryBold: key || null,
+      secondaryDetail: null,
+    };
   }
 
-  return { title, detailPrefix: null, primaryBold: null, secondaryDetail: null };
+  return { leadIn: effectKindLabel(e.kind), primaryBold: null, secondaryDetail: null };
 }
 
 /** @deprecated Użyj formatExecutionListDisplay — bez wyzwalaczy eventów. */

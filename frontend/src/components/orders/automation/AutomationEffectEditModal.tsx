@@ -3,9 +3,9 @@ import { ChevronDown, X } from "lucide-react";
 
 import type { AutomationEffect, AutomationEffectKind } from "../../../types/orderAutomation";
 import { buildEffectCategorySteps, effectKindLabel } from "../../../utils/orderAutomationCatalog";
-import { formatEffectPill } from "../../../utils/orderAutomationPreview";
 import { renderAutomationEffectConfigEditor } from "./effects/orderAutomationEffectEditorRenderers";
 import { AutomationCategoryPickerModal } from "./AutomationCategoryPickerModal";
+import { AutomationEffectDisplay } from "./AutomationRuleDisplay";
 import { oaBtn, oaBtnPri, oaInp, oaWorkflowBlockBodyClass } from "./orderAutomationUiTokens";
 
 type Props = {
@@ -42,7 +42,6 @@ export function AutomationEffectEditModal({
   if (!open || !effect) return null;
 
   const title = effectKindLabel(effect.kind);
-  const summary = formatEffectPill(effect, statusNameById);
 
   return (
     <>
@@ -58,9 +57,9 @@ export function AutomationEffectEditModal({
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex items-center justify-between gap-3 border-b border-gray-200 px-4 py-3">
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Akcja</p>
-              <p className="truncate text-sm font-semibold text-slate-900">{summary || title}</p>
+              <AutomationEffectDisplay effect={effect} statusNameById={statusNameById} lineClassName="text-sm leading-snug" />
             </div>
             <button
               type="button"
