@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-06-08 — Rentowność produktów: standard tabel + KPI zakupowe
+
+- Tabela proporcjonalna (Akcje 80px, Zdjęcie 80px, Produkt 2fr max 500px), konfigurator kolumn pod ikoną tabeli
+- Miniatury: wspólny `ProductListPhotoCell` (identyczny jak Asortyment → Produkty)
+- Filtry: przycisk „Filtry” z licznikiem, panel `PurchasingFilterBar`, draft/applied
+- KPI: `PurchasingKpiGrid` × 6 + `PurchasingKpiCard`; nazewnictwo: Zysk, Marża, Zamrożony kapitał
+
 ## 2026-06-08 — Zamówienia towaru: pełna strona edycji + tabela Akcje/Poz.
 
 - Edycja PO: `/goods-orders/:id`, `/goods-orders/:id/:tab` (Podstawowe, Produkty) — shell jak Klienci/Dostawcy

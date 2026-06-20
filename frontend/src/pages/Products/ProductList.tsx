@@ -23,6 +23,7 @@ import { LocationTypeBadge } from "../../components/warehouse/LocationTypeBadge"
 import { getManufacturer } from "../../api/manufacturersApi";
 import { mapProductListRow, type ProductListRow } from "./productListMapper";
 import { ProductDispositionStockSummary } from "../../components/products/ProductDispositionStockSummary";
+import { ProductListPhotoCell } from "../../components/products/ProductListPhotoCell";
 import { useWarehouse } from "../../context/WarehouseContext";
 import {
   formatResolvedSalePrice,
@@ -1174,21 +1175,7 @@ export default function ProductList() {
       case "photo":
         return (
           <td key={`${p.id}-${col}`} className={`${listSellasistTableBodyCellGrid} text-center`}>
-            <div className="mx-auto flex h-20 w-20 max-h-20 max-w-20 items-center justify-center bg-transparent">
-              {imgUrl ? (
-                <img
-                  src={imgUrl}
-                  alt=""
-                  className="max-h-20 max-w-20 object-contain object-center"
-                  loading="lazy"
-                  onError={(e) => {
-                    (e.currentTarget as HTMLImageElement).style.visibility = "hidden";
-                  }}
-                />
-              ) : (
-                <span className="text-center text-xs leading-tight text-slate-400">—</span>
-              )}
-            </div>
+            <ProductListPhotoCell imageUrl={p.image_url} />
           </td>
         );
       case "name":
