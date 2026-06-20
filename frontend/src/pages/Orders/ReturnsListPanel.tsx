@@ -18,6 +18,7 @@ import type {
   WmsReturnListItem,
 } from "../../types/wmsReturn";
 import type { OrderUiPanelSubgroupRead, OrderUiStatusPanelSummary } from "../../types/orderUiStatus";
+import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { panelStatusCounterColorResolver } from "../../hooks/usePanelStatusCounterColor";
 import { PanelBulkStatusConfirmModal } from "../../components/orders/panelList/PanelBulkStatusConfirmModal";
 import { deletePanelReturn, postReturnsBulkDelete, postReturnsBulkPanelStatus } from "../../api/panelBulkStatusApi";
