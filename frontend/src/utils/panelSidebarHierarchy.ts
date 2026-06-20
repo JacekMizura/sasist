@@ -171,6 +171,8 @@ export type PanelSidebarSubRowStyleRichOptions = {
   inlineLabel?: boolean;
   /** Nagłówek szczegółów zamówienia — nieco wyższa krycie tła, bez „inline”. */
   primaryChip?: boolean;
+  /** Wiersz drzewa panelu v3 (zamówienia/zwroty) — delikatny tint ~10–14%, bez pełnego fill. */
+  treeRow?: boolean;
 };
 
 /**
@@ -185,14 +187,15 @@ export function panelSidebarSubRowStyleRich(
   const barW = opts?.barWidthPx ?? 6;
   const inlineLabel = opts?.inlineLabel ?? false;
   const primaryChip = opts?.primaryChip ?? false;
+  const treeRow = opts?.treeRow ?? false;
   const alphaBoost = primaryChip ? 0.04 : 0;
   const legacy = s?.color;
   const stripe = s?.badge_color && isValidPanelStatusHex(s.badge_color) ? s.badge_color : legacy;
   const [r, g, b] = sidebarSubStatusRgb(stripe, group);
-  const aIdleCfg = (inlineLabel ? 0.11 : 0.14) + alphaBoost;
-  const aActiveCfg = (inlineLabel ? 0.18 : 0.22) + alphaBoost;
-  const aIdleStripe = (inlineLabel ? 0.1 : 0.12) + alphaBoost;
-  const aActiveStripe = (inlineLabel ? 0.17 : 0.22) + alphaBoost;
+  const aIdleCfg = treeRow ? 0.1 : (inlineLabel ? 0.11 : 0.14) + alphaBoost;
+  const aActiveCfg = treeRow ? 0.14 : (inlineLabel ? 0.18 : 0.22) + alphaBoost;
+  const aIdleStripe = treeRow ? 0.1 : (inlineLabel ? 0.1 : 0.12) + alphaBoost;
+  const aActiveStripe = treeRow ? 0.14 : (inlineLabel ? 0.17 : 0.22) + alphaBoost;
   let backgroundColor: string;
   if (s?.background_color && isValidPanelStatusHex(s.background_color)) {
     const bg = hexToRgbStrict(s.background_color);

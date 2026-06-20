@@ -23,9 +23,9 @@ import {
   PANEL_TREE_SUBGROUP_LINE_CLASS,
   panelTreeMetaRowClass,
   panelTreeStatusBarClass,
-  panelTreeStatusRowClass,
 } from "../panel/panelStatusTreeStyles";
 import { sidebarSubStatusHex } from "../../utils/panelSidebarHierarchy";
+import { panelTreeStatusRowPresentation } from "../../utils/panelTreeStatusRowPresentation";
 import { buildPanelSidebarLayout } from "../../utils/orderPanelSidebarBuckets";
 import { MAIN_PANEL_GROUP_ORDER } from "../../utils/orderPanelMainGroupOrder";
 import { panelListStatusSidebarWidthLg } from "../listPage/listSellasistTokens";
@@ -157,19 +157,31 @@ export function OrdersPanelStatusSidebar({
     const active = isSubFilterActive(panelFilter, s.id);
     const markers = getPanelStatusWmsMarkers(s, block.main_group);
     const titleDetail = panelStatusCollapsedTitle(s, block.main_group);
-    const stripeColor = sidebarSubStatusHex(s.badge_color ?? s.color, block.main_group);
+    const row = panelTreeStatusRowPresentation(
+      {
+        color: s.color,
+        badge_color: s.badge_color,
+        background_color: s.background_color,
+        text_color: s.text_color,
+      },
+      block.main_group,
+      active,
+    );
 
     return (
       <button
         key={s.id}
         type="button"
-        className={panelTreeStatusRowClass(active)}
+        className={row.rowClassName}
+        style={row.rowStyle}
         title={titleDetail || undefined}
         onClick={() => onPanelFilterChange({ kind: "sub", id: s.id })}
       >
         <PanelStatusWmsIconColumn markers={markers} />
-        <span className={panelTreeStatusBarClass(active)} style={{ backgroundColor: stripeColor }} aria-hidden />
-        <span className="min-w-0 flex-1 leading-snug">{s.name}</span>
+        <span className={panelTreeStatusBarClass(active)} style={{ backgroundColor: row.stripeHex }} aria-hidden />
+        <span className="min-w-0 flex-1 leading-snug" style={row.labelStyle}>
+          {s.name}
+        </span>
         {s.image_url ? (
           <img src={s.image_url} alt="" className="mt-0.5 h-4 w-4 shrink-0 rounded object-contain" />
         ) : null}

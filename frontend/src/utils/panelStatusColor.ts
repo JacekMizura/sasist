@@ -39,6 +39,18 @@ export function contrastingTextColor(hex: string): "#ffffff" | "#000000" {
   return relativeLuminance(hex) > 0.179 ? "#000000" : "#ffffff";
 }
 
+/** Symulacja koloru tła: tint RGBA na białym płótnie sidebara. */
+export function blendHexOverWhite(hex: string, alpha: number): string {
+  const rgb = parseHexRgb(hex);
+  if (!rgb) return "#ffffff";
+  const a = Math.min(1, Math.max(0, alpha));
+  const mix = (c: number) => Math.round(255 * (1 - a) + c * a);
+  const r = mix(rgb[0]);
+  const g = mix(rgb[1]);
+  const b = mix(rgb[2]);
+  return `#${[r, g, b].map((x) => x.toString(16).padStart(2, "0")).join("")}`;
+}
+
 /** Stosunek kontrastu WCAG (>= 4.5 zwykle „AA” dla małego tekstu). */
 export function contrastRatio(hexFg: string, hexBg: string): number {
   const L1 = relativeLuminance(normalizePanelStatusBg(hexFg));

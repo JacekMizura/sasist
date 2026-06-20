@@ -8,12 +8,11 @@ import {
   PANEL_TREE_GROUP_STATUS_LIST_CLASS,
   PANEL_TREE_SUBGROUP_CHILDREN_CLASS,
   panelTreeStatusBarClass,
-  panelTreeStatusRowClass,
 } from "../panel/panelStatusTreeStyles";
 import { ModuleListStatusPill } from "../listPage/moduleList/ModuleListTableParts";
 import type { PanelConfigurableUiStatusBrief } from "../../utils/panelListStatusBriefMappers";
 import type { PanelSidebarMainGroup } from "../../utils/panelSidebarHierarchy";
-import { sidebarSubStatusHex } from "../../utils/panelSidebarHierarchy";
+import { panelTreeStatusRowPresentation } from "../../utils/panelTreeStatusRowPresentation";
 import type { OrderUiMainGroup } from "../../types/orderUiStatus";
 
 export type PanelStatusConfiguratorPreviewProps = {
@@ -60,7 +59,6 @@ export function PanelStatusConfiguratorPreview({
 }: PanelStatusConfiguratorPreviewProps) {
   const displayName = name.trim() || "Nazwa statusu";
   const groupCount = count;
-  const stripeColor = sidebarSubStatusHex(badgeHex, mainGroup);
   const listBrief = toListBrief({
     name,
     count,
@@ -75,11 +73,24 @@ export function PanelStatusConfiguratorPreview({
     counterColorHex,
   });
 
+  const row = panelTreeStatusRowPresentation(
+    {
+      color: badgeHex,
+      badge_color: badgeHex,
+      background_color: backgroundHex ?? null,
+      text_color: textHex ?? null,
+    },
+    mainGroup,
+    active,
+  );
+
   const statusRow = (
-    <div className={panelTreeStatusRowClass(active)} aria-hidden>
+    <div className={row.rowClassName} style={row.rowStyle} aria-hidden>
       <PanelStatusWmsIconColumn markers={[]} />
-      <span className={panelTreeStatusBarClass(active)} style={{ backgroundColor: stripeColor }} aria-hidden />
-      <span className="min-w-0 flex-1 leading-snug">{displayName}</span>
+      <span className={panelTreeStatusBarClass(active)} style={{ backgroundColor: row.stripeHex }} aria-hidden />
+      <span className="min-w-0 flex-1 leading-snug" style={row.labelStyle}>
+        {displayName}
+      </span>
       {imageUrl ? <img src={imageUrl} alt="" className="mt-0.5 h-4 w-4 shrink-0 rounded object-contain" /> : null}
       <PanelTreeCount value={count} active={active} colorHex={counterColorHex} />
     </div>
