@@ -1,46 +1,36 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { ChevronDown, Columns3, Download, Pencil, Table2, Trash2 } from "lucide-react";
+import { Link } from "react-router-dom";
+import { ChevronDown, Columns3, Download } from "lucide-react";
+
 import PageLayout from "../../components/layout/PageLayout";
 import { PageHeader } from "../../components/layout/PageHeader";
 import { PanelBulkStatusConfirmModal } from "../../components/orders/panelList/PanelBulkStatusConfirmModal";
 import { deleteCustomer, listCustomers, postCustomersBulkDelete, type CustomerListRow } from "../../api/customersApi";
 import { CustomerListFiltersPanel } from "../../components/customers/customerList/CustomerListFiltersPanel";
+import { CustomersListTable } from "../../components/customers/customerList/CustomersListTable";
 import {
   DEFAULT_APPLIED_CUSTOMER_LIST_FILTERS,
   triStateToBool,
   type AppliedCustomerListFilters,
 } from "../../components/customers/customerList/customerListFilterTypes";
-import { UI_STRINGS } from "../../constants/uiStrings";
-import { countryLabel } from "../../constants/countryCodes";
-import { DAMAGE_TENANT_ID } from "../damage/damageShared";
-import { summarizeEntityBulkDeleteToast } from "../../types/entityBulkDelete";
-import { getCustomerDisplayName } from "../../utils/getCustomerDisplayName";
-import { customerTypeLabel, salesChannelLabel } from "../../modules/customers/customerProfile";
 import {
+  moduleTableCardClass,
+  moduleTablePaginationFooterClass,
+} from "../../components/listPage/moduleList";
+import {
+  listSellasistInputClass,
   listSellasistToolbarSquareBtn,
   listSellasistToolbarToggleBtn,
 } from "../../components/listPage/listSellasistTokens";
+import { oaBtnDanger } from "../../components/orders/automation/orderAutomationUiTokens";
+import { UI_STRINGS } from "../../constants/uiStrings";
+import { DAMAGE_TENANT_ID } from "../damage/damageShared";
+import { summarizeEntityBulkDeleteToast } from "../../types/entityBulkDelete";
 import ExportModal from "../../components/exports/ExportModal";
-import {
-  OperationalActionButton,
-  OperationalActionColumn,
-  operationalActionsColumnCellClass,
-  operationalActionsColumnHeaderClass,
-  operationalCheckboxColumnCellClass,
-  operationalCheckboxColumnHeaderClass,
-  panelListDenseCheckboxInputClass,
-  panelListDenseRowClass,
-  panelListDenseRowSelectedClass,
-  panelListDenseTableClass,
-  panelListDenseTableScrollWrapClass,
-  panelListDenseTdBase,
-  panelListDenseThBase,
-  panelListDenseTheadClass,
-} from "../../components/operational";
+
+const ROWS_PER_PAGE_OPTIONS = [25, 50, 100, 200] as const;
 
 export default function CustomersListPage() {
-  const navigate = useNavigate();
   const tenantId = DAMAGE_TENANT_ID;
   const [rows, setRows] = useState<CustomerListRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,7 +42,6 @@ export default function CustomersListPage() {
       return false;
     }
   });
-  const [comfortableTableView, setComfortableTableView] = useState(false);
   const [draftFilters, setDraftFilters] = useState<AppliedCustomerListFilters>(DEFAULT_APPLIED_CUSTOMER_LIST_FILTERS);
   const [appliedFilters, setAppliedFilters] = useState<AppliedCustomerListFilters>(DEFAULT_APPLIED_CUSTOMER_LIST_FILTERS);
   const [selected, setSelected] = useState<Set<number>>(() => new Set());
@@ -60,6 +49,8 @@ export default function CustomersListPage() {
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
+  const [page, setPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState<number>(25);
   const headerSelectAllRef = useRef<HTMLInputElement>(null);
   const openFilterFieldsRef = useRef<(() => void) | null>(null);
 
@@ -98,6 +89,7 @@ export default function CustomersListPage() {
 
   useEffect(() => {
     setSelected(new Set());
+    setPage(1);
   }, [appliedFiltersKey]);
 
   useEffect(() => {
@@ -106,14 +98,26 @@ export default function CustomersListPage() {
     return () => window.clearTimeout(t);
   }, [toast]);
 
-  const visibleIds = useMemo(() => rows.map((r) => r.id), [rows]);
-  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selected.has(id));
-  const someVisibleSelected = visibleIds.some((id) => selected.has(id));
+  const totalCount = rows.length;
+  const totalPages = Math.max(1, Math.ceil(totalCount / rowsPerPage));
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
+  const paginatedRows = useMemo(() => {
+    const start = (page - 1) * rowsPerPage;
+    return rows.slice(start, start + rowsPerPage);
+  }, [rows, page, rowsPerPage]);
+
+  const pageRowIds = useMemo(() => paginatedRows.map((r) => r.id), [paginatedRows]);
+  const allPageSelected = pageRowIds.length > 0 && pageRowIds.every((id) => selected.has(id));
+  const somePageSelected = pageRowIds.some((id) => selected.has(id));
 
   useLayoutEffect(() => {
     const el = headerSelectAllRef.current;
-    if (el) el.indeterminate = someVisibleSelected && !allVisibleSelected;
-  }, [someVisibleSelected, allVisibleSelected]);
+    if (el) el.indeterminate = somePageSelected && !allPageSelected;
+  }, [somePageSelected, allPageSelected]);
 
   const toggleOne = (id: number) => {
     setSelected((prev) => {
@@ -124,19 +128,36 @@ export default function CustomersListPage() {
     });
   };
 
-  const toggleAllVisible = () => {
+  const toggleAllPage = () => {
     setSelected((prev) => {
       const n = new Set(prev);
-      if (allVisibleSelected) {
-        visibleIds.forEach((id) => n.delete(id));
+      if (allPageSelected) {
+        pageRowIds.forEach((id) => n.delete(id));
       } else {
-        visibleIds.forEach((id) => n.add(id));
+        pageRowIds.forEach((id) => n.add(id));
       }
       return n;
     });
   };
 
   const selectedIds = useMemo(() => Array.from(selected).sort((a, b) => a - b), [selected]);
+  const visibleIds = useMemo(() => rows.map((r) => r.id), [rows]);
+
+  const startRow = totalCount === 0 ? 0 : (page - 1) * rowsPerPage + 1;
+  const endRow = Math.min(page * rowsPerPage, totalCount);
+
+  const pageNumbers = useMemo(() => {
+    if (totalPages <= 1) return [1];
+    const max = 5;
+    if (totalPages <= max) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+    if (page <= 3) return [1, 2, 3, 4, 5];
+    if (page >= totalPages - 2) {
+      return Array.from({ length: 5 }, (_, i) => totalPages - 4 + i);
+    }
+    return [page - 2, page - 1, page, page + 1, page + 2];
+  }, [page, totalPages]);
 
   const toggleFiltersExpanded = () => {
     setFiltersExpanded((prev) => {
@@ -201,250 +222,213 @@ export default function CustomersListPage() {
     }
   };
 
-  const dataTdComfort = comfortableTableView ? "!py-3" : "";
-
   return (
     <>
       <PageLayout fullBleed>
-          <PageHeader
-            title={`Lista klientów${loading ? "" : ` (${rows.length} wyników)`}`}
-            breadcrumbs={[
-              { label: UI_STRINGS.navigation.customersList, to: "/customers" },
-              { label: "Lista" },
-            ]}
-            actions={
-              <div className="flex flex-wrap items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={toggleFiltersExpanded}
-                  className={listSellasistToolbarToggleBtn}
-                  aria-expanded={filtersExpanded}
-                >
-                  {filtersExpanded ? "Ukryj filtry" : "Pokaż filtry"}
-                  <ChevronDown
-                    className={`h-4 w-4 shrink-0 transition-transform ${filtersExpanded ? "rotate-180" : ""}`}
-                    aria-hidden
-                  />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => openFilterFieldsRef.current?.()}
-                  className={listSellasistToolbarSquareBtn}
-                  title="Widoczne pola filtrów"
-                  aria-label="Widoczne pola filtrów"
-                >
-                  <Columns3 className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setComfortableTableView((v) => !v)}
-                  className={`${listSellasistToolbarSquareBtn} ${comfortableTableView ? "border-slate-400 bg-slate-50" : ""}`}
-                  title={comfortableTableView ? "Widok zwarty" : "Widok wygodniejszy"}
-                  aria-label={comfortableTableView ? "Widok zwarty" : "Widok wygodniejszy"}
-                  aria-pressed={comfortableTableView}
-                >
-                  <Table2 className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setExportOpen(true)}
-                  className={listSellasistToolbarSquareBtn}
-                  title="Eksport CSV"
-                  aria-label="Eksport CSV"
-                >
-                  <Download className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
-                </button>
-              </div>
-            }
-          />
-
-          {err && !loading && rows.length > 0 && (
-            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">{err}</div>
-          )}
-
-          <CustomerListFiltersPanel
-            expanded={filtersExpanded}
-            onToggleExpanded={toggleFiltersExpanded}
-            draft={draftFilters}
-            onChangeDraft={(patch) => setDraftFilters((d) => ({ ...d, ...patch }))}
-            onApply={applyFilters}
-            onClear={clearFilters}
-            filterLayout="embedded"
-            openFilterFieldsRef={openFilterFieldsRef}
-          />
-
-          {selectedIds.length > 0 && (
-            <div className="flex flex-wrap items-center gap-3 py-1">
-              <span className="text-sm font-semibold text-slate-900">Zaznaczono: {selectedIds.length}</span>
+        <PageHeader
+          title={`Lista klientów${loading ? "" : ` (${totalCount} wyników)`}`}
+          breadcrumbs={[
+            { label: UI_STRINGS.navigation.customersList, to: "/customers" },
+            { label: "Lista" },
+          ]}
+          actions={
+            <div className="flex flex-wrap items-center justify-end gap-2">
               <button
                 type="button"
-                disabled={deleteBusy}
-                onClick={() => setDeleteConfirm({ kind: "bulk" })}
-                className="rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"
+                onClick={toggleFiltersExpanded}
+                className={listSellasistToolbarToggleBtn}
+                aria-expanded={filtersExpanded}
               >
-                Usuń zaznaczone
+                {filtersExpanded ? "Ukryj filtry" : "Pokaż filtry"}
+                <ChevronDown
+                  className={`h-4 w-4 shrink-0 transition-transform ${filtersExpanded ? "rotate-180" : ""}`}
+                  aria-hidden
+                />
               </button>
               <button
                 type="button"
-                disabled={deleteBusy}
-                onClick={() => setSelected(new Set())}
-                className="ml-auto rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50 disabled:opacity-50"
+                onClick={() => openFilterFieldsRef.current?.()}
+                className={listSellasistToolbarSquareBtn}
+                title="Widoczne pola filtrów"
+                aria-label="Widoczne pola filtrów"
               >
-                Odznacz wszystko
+                <Columns3 className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
               </button>
-            </div>
-          )}
-
-          {loading ? (
-            <div className="space-y-2 py-8" aria-busy="true" aria-label="Ładowanie listy klientów">
-              {[0, 1, 2, 3, 4].map((i) => (
-                <div key={i} className="h-10 animate-pulse rounded-md bg-slate-100" />
-              ))}
-            </div>
-          ) : err ? (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-8 text-center">
-              <p className="text-sm font-medium text-amber-900">{err}</p>
               <button
                 type="button"
-                onClick={() => void load()}
-                className="mt-4 rounded-lg border border-amber-300 bg-white px-4 py-2 text-sm font-semibold text-amber-950 hover:bg-amber-100"
+                onClick={() => setExportOpen(true)}
+                className={listSellasistToolbarSquareBtn}
+                title="Eksport CSV"
+                aria-label="Eksport CSV"
               >
-                Spróbuj ponownie
+                <Download className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
               </button>
             </div>
-          ) : (
-            <div className="min-w-0 overflow-hidden">
-              <div className={panelListDenseTableScrollWrapClass}>
-                <table className={panelListDenseTableClass}>
-                  <thead className={panelListDenseTheadClass}>
-                    <tr>
-                      <th className={operationalCheckboxColumnHeaderClass}>
-                        <input
-                          ref={headerSelectAllRef}
-                          type="checkbox"
-                          checked={allVisibleSelected}
-                          disabled={deleteBusy || rows.length === 0}
-                          onChange={toggleAllVisible}
-                          className={panelListDenseCheckboxInputClass}
-                          aria-label="Zaznacz wszystkich widocznych klientów"
-                        />
-                      </th>
-                      <th className={operationalActionsColumnHeaderClass}>Akcje</th>
-                      <th className={`${panelListDenseThBase} text-left`}>Imię i nazwisko / firma</th>
-                      <th className={`${panelListDenseThBase} text-left`}>Typ</th>
-                      <th className={`${panelListDenseThBase} text-left`}>Kanał</th>
-                      <th className={`${panelListDenseThBase} text-left`}>E-mail</th>
-                      <th className={`${panelListDenseThBase} text-left`}>Telefon</th>
-                      <th className={`${panelListDenseThBase} text-left`}>NIP</th>
-                      <th className={`${panelListDenseThBase} text-left`}>Kraj</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.length === 0 ? (
-                      <tr>
-                        <td colSpan={9} className={`${panelListDenseTdBase} py-10 text-center text-slate-600`}>
-                          <p className="text-sm">Brak klientów.</p>
-                          <Link
-                            to="/customers/new"
-                            className="mt-4 inline-flex items-center justify-center rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-slate-800"
-                          >
-                            {UI_STRINGS.navigation.addCustomer}
-                          </Link>
-                        </td>
-                      </tr>
-                    ) : (
-                      rows.map((r) => (
-                        <tr
-                          key={r.id}
-                          className={`${panelListDenseRowClass} ${selected.has(r.id) ? panelListDenseRowSelectedClass : ""}`}
-                          onClick={() => navigate(`/customers/${r.id}`)}
-                        >
-                          <td
-                            className={`${operationalCheckboxColumnCellClass} text-center`}
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={selected.has(r.id)}
-                              disabled={deleteBusy}
-                              onChange={() => toggleOne(r.id)}
-                              className={panelListDenseCheckboxInputClass}
-                              aria-label={`Zaznacz klienta ${getCustomerDisplayName(r)}`}
-                            />
-                          </td>
-                          <td className={operationalActionsColumnCellClass} onClick={(e) => e.stopPropagation()}>
-                            <OperationalActionColumn
-                              aria-label="Akcje klienta"
-                              slots={[
-                                <OperationalActionButton
-                                  key="edit"
-                                  title="Edytuj klienta"
-                                  aria-label="Edytuj klienta"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    navigate(`/customers/${r.id}`);
-                                  }}
-                                >
-                                  <Pencil className="text-slate-600" strokeWidth={2} aria-hidden />
-                                </OperationalActionButton>,
-                                <OperationalActionButton
-                                  key="del"
-                                  variant="danger"
-                                  disabled={deleteBusy}
-                                  title="Usuń lub zarchiwizuj klienta"
-                                  aria-label="Usuń klienta"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setDeleteConfirm({ kind: "single", id: r.id });
-                                  }}
-                                >
-                                  <Trash2 strokeWidth={2} aria-hidden />
-                                </OperationalActionButton>,
-                              ]}
-                            />
-                          </td>
-                          <td className={`${panelListDenseTdBase} font-medium text-slate-900 ${dataTdComfort}`}>
-                            {getCustomerDisplayName(r)}
-                          </td>
-                          <td className={`${panelListDenseTdBase} text-slate-700 ${dataTdComfort}`}>
-                            <div className="flex flex-wrap items-center gap-1">
-                              <span className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[11px] font-semibold text-slate-700">
-                                {customerTypeLabel(r.customer_type)}
-                              </span>
-                              {r.flags?.vip ? (
-                                <span className="rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[11px] font-semibold text-amber-900">
-                                  VIP
-                                </span>
-                              ) : null}
-                              {r.flags?.marketplace ? (
-                                <span className="rounded border border-indigo-200 bg-indigo-50 px-1.5 py-0.5 text-[11px] font-semibold text-indigo-900">
-                                  MP
-                                </span>
-                              ) : null}
-                              {r.customer_status === "blocked" ? (
-                                <span className="rounded border border-red-200 bg-red-50 px-1.5 py-0.5 text-[11px] font-semibold text-red-800">
-                                  Blokada
-                                </span>
-                              ) : null}
-                            </div>
-                          </td>
-                          <td className={`${panelListDenseTdBase} text-slate-700 ${dataTdComfort}`}>
-                            {salesChannelLabel(r.sales_channel)}
-                          </td>
-                          <td className={`${panelListDenseTdBase} text-slate-700 ${dataTdComfort}`}>{r.email?.trim() || "—"}</td>
-                          <td className={`${panelListDenseTdBase} text-slate-700 ${dataTdComfort}`}>{r.phone?.trim() || "—"}</td>
-                          <td className={`${panelListDenseTdBase} text-slate-700 ${dataTdComfort}`}>{r.nip?.trim() || "—"}</td>
-                          <td className={`${panelListDenseTdBase} text-slate-700 ${dataTdComfort}`}>
-                            {countryLabel(r.country_code)}
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
+          }
+        />
+
+        {err && !loading && rows.length > 0 ? (
+          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">{err}</div>
+        ) : null}
+
+        <CustomerListFiltersPanel
+          expanded={filtersExpanded}
+          onToggleExpanded={toggleFiltersExpanded}
+          draft={draftFilters}
+          onChangeDraft={(patch) => setDraftFilters((d) => ({ ...d, ...patch }))}
+          onApply={applyFilters}
+          onClear={clearFilters}
+          filterLayout="embedded"
+          openFilterFieldsRef={openFilterFieldsRef}
+        />
+
+        {selectedIds.length > 0 ? (
+          <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <span className="text-sm font-medium text-slate-800">
+              Zaznaczono: <span className="tabular-nums">{selectedIds.length}</span>
+            </span>
+            <button
+              type="button"
+              disabled={deleteBusy}
+              onClick={() => setDeleteConfirm({ kind: "bulk" })}
+              className={oaBtnDanger}
+            >
+              Usuń zaznaczone
+            </button>
+            <button
+              type="button"
+              disabled={deleteBusy}
+              onClick={() => setExportOpen(true)}
+              className="inline-flex h-9 shrink-0 items-center rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-800 transition hover:border-slate-300 hover:bg-slate-50 disabled:opacity-50"
+            >
+              Eksportuj
+            </button>
+            <button
+              type="button"
+              disabled
+              title="Wkrótce"
+              className="inline-flex h-9 shrink-0 cursor-not-allowed items-center rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-400 opacity-60"
+            >
+              Przypisz typ klienta
+            </button>
+            <button
+              type="button"
+              disabled={deleteBusy}
+              onClick={() => setSelected(new Set())}
+              className="ml-auto text-sm font-medium text-slate-600 hover:text-slate-900 disabled:opacity-50"
+            >
+              Odznacz wszystko
+            </button>
+          </div>
+        ) : null}
+
+        {loading ? (
+          <div className="space-y-2 py-8" aria-busy="true" aria-label="Ładowanie listy klientów">
+            {[0, 1, 2, 3, 4].map((i) => (
+              <div key={i} className="h-14 animate-pulse rounded-md bg-slate-100" />
+            ))}
+          </div>
+        ) : err ? (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-8 text-center">
+            <p className="text-sm font-medium text-amber-900">{err}</p>
+            <button
+              type="button"
+              onClick={() => void load()}
+              className="mt-4 rounded-lg border border-amber-300 bg-white px-4 py-2 text-sm font-semibold text-amber-950 hover:bg-amber-100"
+            >
+              Spróbuj ponownie
+            </button>
+          </div>
+        ) : rows.length === 0 ? (
+          <div className="rounded-xl border border-slate-200 bg-white px-6 py-16 text-center">
+            <p className="text-sm font-medium text-slate-800">Brak klientów</p>
+            <p className="mt-1 text-sm text-slate-500">Zmień filtry lub dodaj pierwszego klienta.</p>
+            <Link
+              to="/customers/new"
+              className="mt-6 inline-flex items-center justify-center rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800"
+            >
+              {UI_STRINGS.navigation.addCustomer}
+            </Link>
+          </div>
+        ) : (
+          <div className={`${moduleTableCardClass} min-w-0`}>
+            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+              <CustomersListTable
+                rows={paginatedRows}
+                selected={selected}
+                deleteBusy={deleteBusy}
+                allPageSelected={allPageSelected}
+                somePageSelected={somePageSelected}
+                headerSelectAllRef={headerSelectAllRef}
+                onToggleOne={toggleOne}
+                onToggleAllPage={toggleAllPage}
+                onDelete={(id) => setDeleteConfirm({ kind: "single", id })}
+              />
+              <div className={`${moduleTablePaginationFooterClass} px-4`}>
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="text-sm font-medium tabular-nums text-slate-600">
+                    {startRow}–{endRow} z {totalCount}
+                  </span>
+                  <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
+                    Na stronę
+                    <select
+                      value={rowsPerPage}
+                      onChange={(e) => {
+                        setRowsPerPage(Number(e.target.value));
+                        setPage(1);
+                      }}
+                      className={`${listSellasistInputClass} !h-8 w-auto min-w-[4rem] py-0 pr-7 text-sm`}
+                    >
+                      {ROWS_PER_PAGE_OPTIONS.map((n) => (
+                        <option key={n} value={n}>
+                          {n}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <div className="flex flex-wrap items-center justify-end gap-1">
+                  <button
+                    type="button"
+                    disabled={page <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    className="rounded-md border border-transparent px-2 py-1 text-sm font-medium text-slate-600 hover:bg-slate-200/60 disabled:opacity-40"
+                  >
+                    Poprzednia
+                  </button>
+                  {pageNumbers.map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => setPage(n)}
+                      className={`min-w-[2rem] rounded-md px-1.5 py-1 text-sm font-semibold tabular-nums ${
+                        n === page ? "bg-slate-800 text-white" : "text-slate-600 hover:bg-slate-200/60"
+                      }`}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    disabled={page >= totalPages}
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    className="rounded-md border border-transparent px-2 py-1 text-sm font-medium text-slate-600 hover:bg-slate-200/60 disabled:opacity-40"
+                  >
+                    Następna
+                  </button>
+                  <button
+                    type="button"
+                    disabled={page >= totalPages}
+                    onClick={() => setPage(totalPages)}
+                    className="ml-0.5 rounded-md border border-transparent px-2 py-1 text-sm font-medium text-slate-600 hover:bg-slate-200/60 disabled:opacity-40"
+                  >
+                    Ostatnia
+                  </button>
+                </div>
               </div>
             </div>
-          )}
+          </div>
+        )}
       </PageLayout>
 
       <ExportModal
