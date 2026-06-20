@@ -9,9 +9,15 @@
 - Receptury / Historia / Analiza kosztów: filtry, KPI, sortowanie (analiza), menu akcji zamiast linków „Otwórz”
 - Badge statusów i priorytetów: `operationalSemanticBadges` (fiolet/niebieski/zielony/pomarańczowy/czerwony)
 
+## 2026-06-08 — Inwentaryzacja (ERP): poprawki layoutu i menu akcji
+
+- Dokumenty: kolumna Akcje przeniesiona na koniec tabeli (sticky right, jak Produkty)
+- Menu akcji wiersza: portal + `position: fixed` (z-index 10050) — bez obcinania pod sidebar / overflow tabeli
+- Kreator: przywrócony shell modułu (breadcrumb, tytuł, zakładki Pulpit/Dokumenty/Nowa/Raporty); kroki kreatora wewnątrz zakładki; pełna szerokość contentu
+
 ## 2026-06-08 — Inwentaryzacja (ERP): przebudowa UI na standard systemowy
 
-- `InventoryLayout`: `TabsNav` + breadcrumb (jak Dostawcy / Materiały magazynowe); pomarańczowy CTA „Nowa inwentaryzacja”; kreator pełnoekranowy bez tabów
+- `InventoryLayout`: `TabsNav` + breadcrumb (jak Dostawcy / Materiały magazynowe); pomarańczowy CTA „Nowa inwentaryzacja”
 - Pulpit: `PurchasingKpiGrid` × 6 + sekcje `PurchasingTableSection` (aktywne / do zatwierdzenia / zakończone)
 - Dokumenty: licznik wyników, filtry (szukaj / status / typ), tabela modułowa, dropdown akcji (Otwórz / Edytuj / Duplikuj / Eksportuj / Usuń)
 - Kreator: layout 2-kolumnowy (formularz + panel podsumowania), karty typu z pomarańczowym zaznaczeniem

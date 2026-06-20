@@ -90,9 +90,9 @@ export default function InventoryWizardView({
   summaryPanel,
 }: Props) {
   return (
-    <div className="mx-auto flex min-h-[calc(100vh-8rem)] w-full max-w-7xl flex-col gap-6 px-4 pb-10 lg:px-6">
+    <div className="flex w-full flex-col gap-6 pb-10">
       <div>
-        <h2 className="text-2xl font-semibold text-slate-900">Nowa inwentaryzacja</h2>
+        <h2 className="text-lg font-semibold text-slate-900">Nowa inwentaryzacja</h2>
         <p className="mt-1 text-sm text-slate-500">
           Krok {step + 1} z {stepLabels.length}: {stepLabels[step]}
         </p>

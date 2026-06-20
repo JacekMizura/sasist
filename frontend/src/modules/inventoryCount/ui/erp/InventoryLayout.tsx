@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { Plus } from "lucide-react";
 
@@ -10,31 +9,22 @@ import { filterToolbarBtnApply } from "@/components/filters/filterUiTokens";
 import { ERP_INVENTORY_COUNT_TABS } from "../../erpInventoryCountTabs";
 import { erpInventoryCountPaths } from "../../inventoryCountPaths";
 
-/** Kreator — pełnoekranowy shell bez zakładek modułu (wzorzec Materiały magazynowe). */
-const FULL_PAGE_WIZARD = /^\/inventory-count\/wizard(?:\/|$)/;
-
 /** ERP inventory — shell modułu (breadcrumb → tytuł + CTA → zakładki → treść). */
 export default function InventoryLayout() {
   const { pathname } = useLocation();
-  const fullPageWizard = useMemo(() => FULL_PAGE_WIZARD.test(pathname), [pathname]);
-
-  if (fullPageWizard) {
-    return (
-      <PageLayout fullBleed>
-        <Outlet />
-      </PageLayout>
-    );
-  }
+  const onWizard = pathname.startsWith(erpInventoryCountPaths.wizard);
 
   return (
     <PageLayout fullBleed>
       <ModuleListBreadcrumb items={[{ label: "Magazyn" }, { label: "Inwentaryzacja" }]} />
       <div className="flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-2xl font-semibold text-slate-900">Inwentaryzacja magazynowa</h1>
-        <Link to={erpInventoryCountPaths.wizard} className={filterToolbarBtnApply}>
-          <Plus className="mr-1.5 inline h-4 w-4" strokeWidth={2} aria-hidden />
-          Nowa inwentaryzacja
-        </Link>
+        {!onWizard ? (
+          <Link to={erpInventoryCountPaths.wizard} className={filterToolbarBtnApply}>
+            <Plus className="mr-1.5 inline h-4 w-4" strokeWidth={2} aria-hidden />
+            Nowa inwentaryzacja
+          </Link>
+        ) : null}
       </div>
       <TabsNav
         items={ERP_INVENTORY_COUNT_TABS}

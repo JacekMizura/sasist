@@ -6,7 +6,11 @@ import type { InventoryDocumentRead } from "@/api/inventoryCountApi";
 import { AppEmptyState } from "@/components/app-shell";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import {
-  ModuleListRowActionsCell,
+  productsListActionsCellClass,
+  productsListActionsInnerClass,
+  productsListActionsThClass,
+} from "@/components/products/productList/productsListTableTokens";
+import {
   moduleListTableClass,
   moduleListTableScrollClass,
   moduleListTdClass,
@@ -183,26 +187,17 @@ export default function InventoryDocumentsView({
             <table className={moduleListTableClass} style={{ minWidth: 720 }}>
               <thead className={moduleListTheadClass}>
                 <tr>
-                  <th className={`${moduleListThClass} w-[120px] text-center`}>Akcje</th>
                   <th className={moduleListThClass}>Numer</th>
                   <th className={moduleListThClass}>Typ</th>
                   <th className={moduleListThClass}>Status</th>
                   <th className={`${moduleListThClass} text-right`}>Pokrycie</th>
                   <th className={`${moduleListThClass} text-right`}>Różnice</th>
+                  <th className={productsListActionsThClass}>Akcje</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((doc) => (
                   <tr key={doc.id} className="group border-b border-slate-100 transition-colors hover:bg-slate-50/70">
-                    <ModuleListRowActionsCell ariaLabel={`Akcje ${doc.number}`}>
-                      <InventoryDocumentRowActions
-                        doc={doc}
-                        deleteBusy={deleteBusyId === doc.id}
-                        onDelete={onDeleteDraft ? (d) => setConfirmDoc(d) : undefined}
-                        onDuplicate={onDuplicate}
-                        onExport={onExport}
-                      />
-                    </ModuleListRowActionsCell>
                     <td className={moduleListTdClass}>
                       <Link
                         to={erpInventoryCountPaths.document(doc.id)}
@@ -221,6 +216,17 @@ export default function InventoryDocumentsView({
                     </td>
                     <td className={`${moduleListTdClass} text-right font-medium tabular-nums`}>
                       {doc.difference_lines}
+                    </td>
+                    <td className={productsListActionsCellClass} onClick={(e) => e.stopPropagation()}>
+                      <div className={productsListActionsInnerClass}>
+                        <InventoryDocumentRowActions
+                          doc={doc}
+                          deleteBusy={deleteBusyId === doc.id}
+                          onDelete={onDeleteDraft ? (d) => setConfirmDoc(d) : undefined}
+                          onDuplicate={onDuplicate}
+                          onExport={onExport}
+                        />
+                      </div>
                     </td>
                   </tr>
                 ))}
