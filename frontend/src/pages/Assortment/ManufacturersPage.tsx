@@ -6,7 +6,6 @@ import { ListPageHeader } from "../../components/listPage/ListPageHeader";
 import { UI_STRINGS } from "../../constants/uiStrings";
 import api from "../../api/axios";
 import { deleteManufacturer, listManufacturers, type ManufacturerRead } from "../../api/manufacturersApi";
-import { ManufacturerEditModal } from "./ManufacturerEditModal";
 import ExportModal from "../../components/exports/ExportModal";
 import PageLayout from "../../components/layout/PageLayout";
 import { FilterVisibilityModal } from "../../components/filters";
@@ -37,15 +36,9 @@ type Tenant = { id: number; name: string };
 
 const ROWS_PER_PAGE_OPTIONS = [25, 50, 100, 200] as const;
 
-type Props = {
-  defaultCreateOpen?: boolean;
-};
-
-export default function ManufacturersPage({ defaultCreateOpen = false }: Props) {
+export default function ManufacturersPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [modalOpen, setModalOpen] = useState(defaultCreateOpen);
-  const [editId, setEditId] = useState<number | null>(null);
   const [rows, setRows] = useState<ManufacturerRead[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -103,12 +96,9 @@ export default function ManufacturersPage({ defaultCreateOpen = false }: Props) 
     if (edit == null || edit === "") return;
     const id = Number(edit);
     if (!Number.isFinite(id) || id < 1) return;
-    setEditId(id);
-    setModalOpen(true);
-    const next = new URLSearchParams(searchParams);
-    next.delete("edit");
-    setSearchParams(next, { replace: true });
-  }, [searchParams, setSearchParams]);
+    const tid = searchParams.get("tenant_id");
+    void navigate(`/manufacturers/${id}${tid ? `?tenant_id=${tid}` : ""}`, { replace: true });
+  }, [searchParams, navigate]);
 
   useEffect(() => {
     if (!toast) return;
@@ -147,24 +137,12 @@ export default function ManufacturersPage({ defaultCreateOpen = false }: Props) 
   }, [load]);
 
   useEffect(() => {
-    setModalOpen(defaultCreateOpen);
-    if (defaultCreateOpen) setEditId(null);
-  }, [defaultCreateOpen]);
-
-  useEffect(() => {
     setSelected(new Set());
     setPage(1);
   }, [appliedFiltersKey, tenantId]);
 
-  const closeModal = () => {
-    setModalOpen(false);
-    setEditId(null);
-    if (defaultCreateOpen) navigate("/manufacturers", { replace: true });
-  };
-
   const openEdit = (id: number) => {
-    setEditId(id);
-    setModalOpen(true);
+    void navigate(`/manufacturers/${id}?tenant_id=${tenantId}`);
   };
 
   const applyFilters = () => {
@@ -468,14 +446,6 @@ export default function ManufacturersPage({ defaultCreateOpen = false }: Props) 
         catalog={MANUFACTURER_LIST_COLUMN_CATALOG}
         defaultVisibleOrder={MANUFACTURER_LIST_DEFAULT_COLUMN_ORDER}
         onSave={persistColumnOrder}
-      />
-
-      <ManufacturerEditModal
-        open={modalOpen}
-        tenantId={tenantId}
-        manufacturerId={editId}
-        onClose={closeModal}
-        onSaved={() => void load()}
       />
 
       <ExportModal

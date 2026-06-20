@@ -7,7 +7,6 @@ import { createDelivery } from "../../api/inboundDeliveriesApi";
 import { deleteSupplier, listSuppliers, type SupplierRead } from "../../api/inboundSuppliersApi";
 import { FilterVisibilityModal } from "../../components/filters";
 import { useActiveWarehouseContext, ACTIVE_WAREHOUSE_REQUIRED_MESSAGE } from "../../hooks/useActiveWarehouseContext";
-import { SupplierEditModal } from "./SupplierEditModal";
 import ExportModal from "../../components/exports/ExportModal";
 import { SupplierListFiltersPanel } from "../../components/suppliers/supplierList/SupplierListFiltersPanel";
 import { SuppliersListTable } from "../../components/suppliers/supplierList/SuppliersListTable";
@@ -36,15 +35,10 @@ import {
 type Tenant = { id: number; name: string };
 
 const ROWS_PER_PAGE_OPTIONS = [25, 50, 100, 200] as const;
-const SUPPLIER_BASE = "/suppliers";
 
-type Props = { defaultCreateOpen?: boolean };
-
-export default function SuppliersPage({ defaultCreateOpen = false }: Props) {
+export default function SuppliersPage() {
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const [modalOpen, setModalOpen] = useState(defaultCreateOpen);
-  const [editId, setEditId] = useState<number | null>(null);
+  const [searchParams] = useSearchParams();
   const [rows, setRows] = useState<SupplierRead[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -102,12 +96,9 @@ export default function SuppliersPage({ defaultCreateOpen = false }: Props) {
     if (edit == null || edit === "") return;
     const id = Number(edit);
     if (!Number.isFinite(id) || id < 1) return;
-    setEditId(id);
-    setModalOpen(true);
-    const next = new URLSearchParams(searchParams);
-    next.delete("edit");
-    setSearchParams(next, { replace: true });
-  }, [searchParams, setSearchParams]);
+    const tid = searchParams.get("tenant_id");
+    void navigate(`/suppliers/${id}${tid ? `?tenant_id=${tid}` : ""}`, { replace: true });
+  }, [searchParams, navigate]);
 
   useEffect(() => {
     if (!toast) return;
@@ -150,24 +141,16 @@ export default function SuppliersPage({ defaultCreateOpen = false }: Props) {
   }, [load]);
 
   useEffect(() => {
-    setModalOpen(defaultCreateOpen);
-    if (defaultCreateOpen) setEditId(null);
-  }, [defaultCreateOpen]);
-
-  useEffect(() => {
     setSelected(new Set());
     setPage(1);
   }, [appliedFiltersKey, tenantId]);
 
-  const closeModal = () => {
-    setModalOpen(false);
-    setEditId(null);
-    if (defaultCreateOpen) navigate(SUPPLIER_BASE, { replace: true });
+  const openEdit = (id: number) => {
+    void navigate(`/suppliers/${id}?tenant_id=${tenantId}`);
   };
 
-  const openEdit = (id: number) => {
-    setEditId(id);
-    setModalOpen(true);
+  const openProducts = (id: number) => {
+    void navigate(`/suppliers/${id}/products?tenant_id=${tenantId}`);
   };
 
   const applyFilters = () => setAppliedFilters(draftFilters);
@@ -390,7 +373,7 @@ export default function SuppliersPage({ defaultCreateOpen = false }: Props) {
                 onEdit={openEdit}
                 onDelete={(s) => void handleDelete(s)}
                 onNewOrder={(id) => void handleNewSupplierOrder(id)}
-                onProductsClick={(s) => openEdit(s.id)}
+                onProductsClick={(s) => openProducts(s.id)}
                 onOrdersClick={goToOrders}
               />
               <div className={`${moduleTablePaginationFooterClass} px-4`}>
@@ -462,14 +445,6 @@ export default function SuppliersPage({ defaultCreateOpen = false }: Props) {
         catalog={SUPPLIER_LIST_COLUMN_CATALOG}
         defaultVisibleOrder={SUPPLIER_LIST_DEFAULT_COLUMN_ORDER}
         onSave={persistColumnOrder}
-      />
-
-      <SupplierEditModal
-        open={modalOpen}
-        tenantId={tenantId}
-        supplierId={editId}
-        onClose={closeModal}
-        onSaved={() => void load()}
       />
 
       <ExportModal

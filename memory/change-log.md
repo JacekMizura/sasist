@@ -1,5 +1,13 @@
 # Change log
 
+## 2026-06-08 — Producenci i Dostawcy: pełne strony edycji (wzorzec Klienci)
+
+- Producenci: `/manufacturers/new`, `/manufacturers/:id`, `/manufacturers/:id/:tab` — breadcrumb, zakładki, shell `AssortmentEntityPageShell`
+- Dostawcy: `/suppliers/new`, `/suppliers/:id`, `/suppliers/:id/:tab` — poza `SuppliersLayout` (bez podwójnego shella modułu)
+- Zakładki dostawcy: Podstawowe (z adresem), Kontakt, Produkty, Warunki handlowe, Statystyki, Historia
+- Listy: nawigacja zamiast popupów; legacy `?edit=` → redirect na stronę encji
+- `SupplierEditModal` / `ManufacturerEditModal`: cienkie re-exporty (deprecated)
+
 ## 2026-06-08 — Zamówienia towaru: punktacja, KPI, filtry, tabela
 
 - Nazewnictwo: Scoring → Punktacja (lista, KPI, modal, badge)

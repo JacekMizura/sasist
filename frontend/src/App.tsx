@@ -207,7 +207,9 @@ import CollectingPage from "./pages/Production/CollectingPage"
 import ProductionExecutionPage from "./pages/Production/ProductionExecutionPage"
 import PutawayPage from "./pages/Production/PutawayPage"
 import ManufacturersPage from "./pages/Assortment/ManufacturersPage"
+import ManufacturerEditPage from "./pages/Assortment/ManufacturerEditPage"
 import SuppliersPage from "./pages/Assortment/SuppliersPage"
+import SupplierEditPage from "./pages/Assortment/SupplierEditPage"
 import SuppliersLayout from "./pages/Assortment/SuppliersLayout"
 import PurchasingLayout from "./pages/purchasing/PurchasingLayout"
 import PurchasingPoDetailPage from "./pages/purchasing/PurchasingPoDetailPage"
@@ -668,13 +670,17 @@ export const router = createBrowserRouter(
                   <Route path="reports" element={<InventoryCountReportsPage />} />
                 </Route>
                 <Route path="manufacturers" element={<ManufacturersPage />} />
-                <Route path="manufacturers/new" element={<ManufacturersPage defaultCreateOpen={true} />} />
+                <Route path="manufacturers/new" element={<ManufacturerEditPage />} />
+                <Route path="manufacturers/:manufacturerId/:tab" element={<ManufacturerEditPage />} />
+                <Route path="manufacturers/:manufacturerId" element={<ManufacturerEditPage />} />
                 <Route path="suppliers" element={<SuppliersLayout />}>
                   <Route index element={<SuppliersPage />} />
-                  <Route path="new" element={<SuppliersPage defaultCreateOpen={true} />} />
                   <Route path="ocena" element={<PurchasingSupplierAnalyticsPage />} />
                   <Route path="historia" element={<PurchasingCooperationHistoryPage />} />
                 </Route>
+                <Route path="suppliers/new" element={<SupplierEditPage />} />
+                <Route path="suppliers/:supplierId/:tab" element={<SupplierEditPage />} />
+                <Route path="suppliers/:supplierId" element={<SupplierEditPage />} />
                 <Route path="goods-orders/new" element={<PurchaseOrdersPage defaultCreateOpen />} />
                 <Route path="goods-orders" element={<PurchaseOrdersPage />} />
                 <Route path="suppliers/zamowienia" element={<LegacySuppliersZamowieniaRedirect />} />

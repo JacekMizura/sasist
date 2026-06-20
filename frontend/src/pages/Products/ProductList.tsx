@@ -1407,7 +1407,7 @@ export default function ProductList() {
                 <span className="text-slate-500">wczytywanie…</span>
               ) : (
                 <Link
-                  to={`/manufacturers?edit=${manufacturerFilterId}${tenantFilter != null ? `&tenant_id=${tenantFilter}` : ""}`}
+                  to={`/manufacturers/${manufacturerFilterId}${tenantFilter != null ? `?tenant_id=${tenantFilter}` : ""}`}
                   className="font-medium text-violet-800 underline decoration-violet-300 underline-offset-2 hover:text-violet-950"
                 >
                   {manufacturerFilterName?.trim() || `ID ${manufacturerFilterId}`}

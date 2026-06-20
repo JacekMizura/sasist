@@ -193,7 +193,7 @@ export default function PurchasingSupplierAnalyticsPage() {
 
   const replenishmentHref = (sid: number) =>
     `/purchasing/replenishment?tenant_id=${tenantId}&supplier_id=${sid}`;
-  const supplierEditHref = (sid: number) => `/suppliers?tenant_id=${tenantId}&edit=${sid}`;
+  const supplierEditHref = (sid: number) => `/suppliers/${sid}?tenant_id=${tenantId}`;
   const ordersHref = `/purchasing/orders?tenant_id=${tenantId}`;
 
   const pageShell = (
