@@ -1,5 +1,23 @@
 import type { OrderCustomFieldDto } from "../api/orderCustomFieldsApi";
 
+/** Etykiety głównego typu — zgodne z selectem „Typ pola” w konfiguracji (skrócone na liście). */
+export const ORDER_CUSTOM_FIELD_TYPE_LABELS: Record<string, string> = {
+  TEXT: "Tekst",
+  NUMBER: "Liczba",
+  FILES: "Pliki",
+  SELECT_SINGLE: "Lista",
+  SELECT_MULTI: "Lista",
+  SALES_DOCUMENT: "Dokument sprzedaży",
+  SHIPPING_LABEL: "List przewozowy",
+};
+
+/** Etykiety trybu plików — identyczne jak w formularzu („Typ plików”). */
+export const ORDER_CUSTOM_FIELD_FILES_MODE_LABELS: Record<string, string> = {
+  documents: "Dokumenty",
+  images: "Zdjęcia",
+  both: "Zdjęcia i dokumenty",
+};
+
 /** Wiersz administracyjny — rozszerzenia widoczności na przyszłość (bez kolumn w UI). */
 export type OrderCustomFieldAdminRow = {
   field: OrderCustomFieldDto;
@@ -27,18 +45,24 @@ export function mapOrderCustomFieldAdminRow(dto: OrderCustomFieldDto): OrderCust
 }
 
 export function orderCustomFieldTypeLabel(type: string): string {
-  const m: Record<string, string> = {
-    TEXT: "Tekst",
-    NUMBER: "Liczba",
-    FILES: "Załącznik",
-    SELECT_SINGLE: "Lista",
-    SELECT_MULTI: "Lista",
-    SALES_DOCUMENT: "Dokument sprzedaży",
-    SHIPPING_LABEL: "List przewozowy",
-  };
-  return m[type] ?? type;
+  return ORDER_CUSTOM_FIELD_TYPE_LABELS[type] ?? type;
 }
 
+function textFormatHint(subtype: string): string | null {
+  if (subtype === "email") return "E-mail";
+  if (subtype === "url") return "URL";
+  return null;
+}
+
+function filesModeDisplayLabel(mode: string): string {
+  const base = ORDER_CUSTOM_FIELD_FILES_MODE_LABELS[mode] ?? ORDER_CUSTOM_FIELD_FILES_MODE_LABELS.documents;
+  if (mode === "documents") return `${base} (PDF)`;
+  return base;
+}
+
+/**
+ * Szczegół konfiguracji typu — to samo, co w sekcji „Konfiguracja pola” edytora.
+ */
 export function orderCustomFieldKindLabel(
   type: string,
   settings: Record<string, unknown> | null | undefined,
@@ -50,22 +74,24 @@ export function orderCustomFieldKindLabel(
     case "SELECT_MULTI":
       return "Wielokrotny wybór";
     case "TEXT": {
-      const multiline = Boolean((s.text as { multiline?: boolean } | undefined)?.multiline);
-      return multiline ? "Długi tekst" : "Krótki tekst";
+      const text = s.text as { multiline?: boolean; subtype?: string } | undefined;
+      const lengthLabel = text?.multiline ? "Długi tekst" : "Krótki tekst";
+      const hint = textFormatHint(String(text?.subtype ?? "any"));
+      return hint ? `${lengthLabel} · ${hint}` : lengthLabel;
     }
     case "NUMBER": {
       const decimals = (s.number as { decimals?: number | null } | undefined)?.decimals ?? 2;
-      return decimals === 0 ? "Integer" : "Decimal";
+      if (decimals === 0) return "Liczba całkowita";
+      return `Liczba dziesiętna (${decimals})`;
     }
     case "FILES": {
       const mode = String((s.files as { mode?: string } | undefined)?.mode ?? "documents");
-      if (mode === "images") return "JPG/PNG";
-      if (mode === "both") return "Dowolny plik";
-      return "PDF";
+      return filesModeDisplayLabel(mode);
     }
     case "SALES_DOCUMENT":
+      return "Powiązanie z dokumentem sprzedaży";
     case "SHIPPING_LABEL":
-      return "—";
+      return "Powiązanie z listem przewozowym";
     default:
       return "—";
   }
@@ -89,6 +115,15 @@ export function orderCustomFieldCountLabel(count: number): string {
 export function orderCustomFieldMatchesSearch(row: OrderCustomFieldDto, query: string): boolean {
   const q = query.trim().toLowerCase();
   if (!q) return true;
-  const blob = `${row.id} ${row.name} ${row.slug} ${orderCustomFieldTypeLabel(row.type)}`.toLowerCase();
+  const settings = (row.settings_json ?? {}) as Record<string, unknown>;
+  const blob = [
+    row.id,
+    row.name,
+    row.slug,
+    orderCustomFieldTypeLabel(row.type),
+    orderCustomFieldKindLabel(row.type, settings),
+  ]
+    .join(" ")
+    .toLowerCase();
   return blob.includes(q);
 }

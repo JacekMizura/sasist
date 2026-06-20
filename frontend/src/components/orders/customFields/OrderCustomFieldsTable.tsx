@@ -7,16 +7,22 @@ import { ChevronDown, ChevronUp, GripVertical, ImageIcon, Pencil, Trash2 } from 
 import type { OrderCustomFieldDto } from "../../../api/orderCustomFieldsApi";
 import OrderCustomFieldGlyph from "../OrderCustomFieldGlyph";
 import {
-  oaRowActionBtn,
-  oaRowActionBtnDanger,
-} from "../automation/orderAutomationUiTokens";
-import {
   orderCustomFieldHasAssignedIcon,
   orderCustomFieldKindLabel,
   orderCustomFieldTypeLabel,
   type OrderCustomFieldAdminRow,
 } from "../../../utils/orderCustomFieldListPresentation";
 import {
+  ocfListActionsCellClass,
+  ocfListActionsColWidth,
+  ocfListActionsInnerClass,
+  ocfListIconCellClass,
+  ocfListIconColWidth,
+  ocfListIconInnerClass,
+  ocfListIconPlaceholderClass,
+  ocfListIconSlotClass,
+  ocfListRowActionBtn,
+  ocfListRowActionBtnDanger,
   ocfListRowClass,
   ocfListRowInnerClass,
   ocfListTableClass,
@@ -25,15 +31,11 @@ import {
   ocfListThSortClass,
 } from "./orderCustomFieldsListTokens";
 
-const ICON_BOX =
-  "flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-200/90 bg-white text-slate-400";
-const ICON_PLACEHOLDER = "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50 text-slate-300";
-
 function FieldIconCell({ row }: { row: OrderCustomFieldDto }) {
   if (!orderCustomFieldHasAssignedIcon(row)) {
     return (
-      <div className={ICON_PLACEHOLDER} title="Brak ikony">
-        <ImageIcon className="h-4 w-4" strokeWidth={1.75} aria-hidden />
+      <div className={ocfListIconPlaceholderClass} title="Brak ikony">
+        <ImageIcon className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden />
       </div>
     );
   }
@@ -41,7 +43,7 @@ function FieldIconCell({ row }: { row: OrderCustomFieldDto }) {
     <OrderCustomFieldGlyph
       type={row.type}
       settings={(row.settings_json ?? {}) as Record<string, unknown>}
-      boxClassName={ICON_BOX}
+      boxClassName={`${ocfListIconSlotClass} text-slate-500`}
       lucideClassName="h-[18px] w-[18px]"
     />
   );
@@ -141,30 +143,30 @@ function SortableFieldRow({
           {orderCustomFieldKindLabel(row.type, row.settings_json as Record<string, unknown> | null | undefined)}
         </div>
       </td>
-      <td className={`${ocfListTdClass} hidden w-[4.5rem] sm:table-cell`}>
-        <div className={ocfListRowInnerClass}>
+      <td className={`${ocfListIconCellClass} hidden sm:table-cell`} style={{ width: ocfListIconColWidth }}>
+        <div className={ocfListIconInnerClass}>
           <FieldIconCell row={row} />
         </div>
       </td>
-      <td className={`${ocfListTdClass} w-[5.5rem]`}>
-        <div className={`${ocfListRowInnerClass} justify-end gap-1`}>
+      <td className={ocfListActionsCellClass} style={{ width: ocfListActionsColWidth }}>
+        <div className={ocfListActionsInnerClass}>
           <Link
             to={`/orders/custom-fields/${row.id}/edit`}
-            className={oaRowActionBtn}
+            className={ocfListRowActionBtn}
             title="Edytuj"
             aria-label="Edytuj"
           >
-            <Pencil className="h-4 w-4" strokeWidth={2} />
+            <Pencil className="h-4 w-4 shrink-0" strokeWidth={2} />
           </Link>
           <button
             type="button"
-            className={oaRowActionBtnDanger}
+            className={ocfListRowActionBtnDanger}
             title="Usuń"
             aria-label="Usuń"
             disabled={reorderBusy}
             onClick={() => onDelete(row)}
           >
-            <Trash2 className="h-4 w-4" strokeWidth={2} />
+            <Trash2 className="h-4 w-4 shrink-0" strokeWidth={2} />
           </button>
         </div>
       </td>
@@ -217,24 +219,24 @@ function MobileFieldCard({
               <dd className="text-slate-600">{orderCustomFieldKindLabel(row.type, settings)}</dd>
             </div>
           </dl>
-          <div className="mt-4 flex gap-1">
+          <div className="mt-4 flex flex-row items-center justify-end gap-2">
             <Link
               to={`/orders/custom-fields/${row.id}/edit`}
-              className={oaRowActionBtn}
+              className={ocfListRowActionBtn}
               title="Edytuj"
               aria-label="Edytuj"
             >
-              <Pencil className="h-4 w-4" strokeWidth={2} />
+              <Pencil className="h-4 w-4 shrink-0" strokeWidth={2} />
             </Link>
             <button
               type="button"
-              className={oaRowActionBtnDanger}
+              className={ocfListRowActionBtnDanger}
               title="Usuń"
               aria-label="Usuń"
               disabled={reorderBusy}
               onClick={() => onDelete(row)}
             >
-              <Trash2 className="h-4 w-4" strokeWidth={2} />
+              <Trash2 className="h-4 w-4 shrink-0" strokeWidth={2} />
             </button>
           </div>
         </div>
@@ -287,8 +289,8 @@ export function OrderCustomFieldsTable({
             <col style={{ width: "22%" }} />
             <col className="hidden md:table-column" style={{ width: "14%" }} />
             <col className="hidden lg:table-column" style={{ width: "16%" }} />
-            <col className="hidden sm:table-column" style={{ width: "4.5rem" }} />
-            <col style={{ width: "5.5rem" }} />
+            <col className="hidden sm:table-column" style={{ width: ocfListIconColWidth }} />
+            <col style={{ width: ocfListActionsColWidth }} />
           </colgroup>
           <thead>
             <tr className="border-b border-slate-200 bg-white">
@@ -324,8 +326,12 @@ export function OrderCustomFieldsTable({
               <th className={ocfListThClass}>Nazwa pola</th>
               <th className={`${ocfListThClass} hidden md:table-cell`}>Typ pola</th>
               <th className={`${ocfListThClass} hidden lg:table-cell`}>Rodzaj pola</th>
-              <th className={`${ocfListThClass} hidden sm:table-cell`}>Ikona</th>
-              <th className={ocfListThClass}>Akcje</th>
+              <th className={`${ocfListThClass} hidden sm:table-cell text-center`} style={{ width: ocfListIconColWidth }}>
+                Ikona
+              </th>
+              <th className={ocfListThClass} style={{ width: ocfListActionsColWidth }}>
+                Akcje
+              </th>
             </tr>
           </thead>
           <tbody>
