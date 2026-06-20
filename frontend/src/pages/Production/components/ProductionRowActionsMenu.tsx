@@ -1,7 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { MoreHorizontal } from "lucide-react";
+import { createPortal } from "react-dom";
 
 import { listSellasistToolbarSquareBtn } from "@/components/listPage/listSellasistTokens";
+
+const MENU_Z = 10050;
+const MENU_MIN_WIDTH = 176;
+const MENU_ITEM_HEIGHT = 36;
 
 export type ProductionRowAction = {
   id: string;
@@ -19,11 +24,41 @@ type Props = {
 export function ProductionRowActionsMenu({ ariaLabel, actions }: Props) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
+
+  const updateMenuPos = () => {
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const left = Math.max(8, Math.min(rect.right - MENU_MIN_WIDTH, window.innerWidth - MENU_MIN_WIDTH - 8));
+    const estimatedHeight = actions.length * MENU_ITEM_HEIGHT + 8;
+    let top = rect.bottom + 4;
+    if (top + estimatedHeight > window.innerHeight - 8) {
+      top = Math.max(8, rect.top - estimatedHeight - 4);
+    }
+    setMenuPos({ top, left });
+  };
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    const id = requestAnimationFrame(updateMenuPos);
+    window.addEventListener("scroll", updateMenuPos, true);
+    window.addEventListener("resize", updateMenuPos);
+    return () => {
+      cancelAnimationFrame(id);
+      window.removeEventListener("scroll", updateMenuPos, true);
+      window.removeEventListener("resize", updateMenuPos);
+    };
+  }, [open, actions.length]);
 
   useEffect(() => {
     if (!open) return;
     const onDoc = (e: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      if (rootRef.current?.contains(t)) return;
+      if (menuRef.current?.contains(t)) return;
+      setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
@@ -38,42 +73,54 @@ export function ProductionRowActionsMenu({ ariaLabel, actions }: Props) {
 
   if (actions.length === 0) return null;
 
-  return (
-    <div className="relative flex justify-center" ref={rootRef}>
-      <button
-        type="button"
-        aria-expanded={open}
-        aria-haspopup="menu"
-        aria-label={ariaLabel}
-        onClick={() => setOpen((v) => !v)}
-        className={listSellasistToolbarSquareBtn}
+  const menu =
+    open && typeof document !== "undefined" ? (
+      <div
+        ref={menuRef}
+        role="menu"
+        className="overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-xl shadow-slate-200/60"
+        style={
+          menuPos
+            ? { position: "fixed", top: menuPos.top, left: menuPos.left, minWidth: MENU_MIN_WIDTH, zIndex: MENU_Z }
+            : { position: "fixed", visibility: "hidden", zIndex: MENU_Z }
+        }
       >
-        <MoreHorizontal className="h-4 w-4" strokeWidth={2} aria-hidden />
-      </button>
-      {open ? (
-        <div
-          role="menu"
-          className="absolute right-0 z-[80] mt-1 min-w-[11rem] overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg ring-1 ring-slate-200/60"
+        {actions.map((action) => (
+          <button
+            key={action.id}
+            type="button"
+            role="menuitem"
+            disabled={action.disabled}
+            className={`flex w-full px-3 py-2 text-left text-sm font-medium disabled:opacity-50 ${
+              action.danger ? "text-red-700 hover:bg-red-50" : "text-slate-800 hover:bg-slate-50"
+            }`}
+            onClick={() => {
+              action.onClick();
+              setOpen(false);
+            }}
+          >
+            {action.label}
+          </button>
+        ))}
+      </div>
+    ) : null;
+
+  return (
+    <>
+      <div className="flex justify-center" ref={rootRef}>
+        <button
+          ref={triggerRef}
+          type="button"
+          aria-expanded={open}
+          aria-haspopup="menu"
+          aria-label={ariaLabel}
+          onClick={() => setOpen((v) => !v)}
+          className={listSellasistToolbarSquareBtn}
         >
-          {actions.map((action) => (
-            <button
-              key={action.id}
-              type="button"
-              role="menuitem"
-              disabled={action.disabled}
-              className={`flex w-full px-3 py-2 text-left text-sm font-medium disabled:opacity-50 ${
-                action.danger ? "text-red-700 hover:bg-red-50" : "text-slate-800 hover:bg-slate-50"
-              }`}
-              onClick={() => {
-                action.onClick();
-                setOpen(false);
-              }}
-            >
-              {action.label}
-            </button>
-          ))}
-        </div>
-      ) : null}
-    </div>
+          <MoreHorizontal className="h-4 w-4" strokeWidth={2} aria-hidden />
+        </button>
+      </div>
+      {menu ? createPortal(menu, document.body) : null}
+    </>
   );
 }
