@@ -1,11 +1,11 @@
-import type { TabItem } from "../../components/TopTabsNavigation";
+import type { TabsNavItem } from "@/components/layout/TabsNav";
 
-export const BDO_TABS: TabItem[] = [
-  { path: "/warehouse/bdo/dashboard", label: "Dashboard" },
-  { path: "/warehouse/bdo/materials", label: "Materiały opakowaniowe" },
-  { path: "/warehouse/bdo/movements", label: "Historia ruchów" },
-  { path: "/warehouse/bdo/stock-count", label: "Spis z natury" },
-  { path: "/warehouse/bdo/monthly-report", label: "Raport miesięczny" },
-  { path: "/warehouse/bdo/corrections", label: "Korekty" },
-  { path: "/warehouse/bdo/settings", label: "Ustawienia" },
+export const BDO_TABS: TabsNavItem[] = [
+  { path: "/warehouse/bdo/dashboard", label: "Dashboard", end: true },
+  { path: "/warehouse/bdo/materials", label: "Materiały opakowaniowe", end: true },
+  { path: "/warehouse/bdo/movements", label: "Historia ruchów", end: true },
+  { path: "/warehouse/bdo/stock-count", label: "Spis z natury", end: true },
+  { path: "/warehouse/bdo/monthly-report", label: "Raport miesięczny", end: true },
+  { path: "/warehouse/bdo/corrections", label: "Korekty", end: true },
+  { path: "/warehouse/bdo/settings", label: "Ustawienia", end: true },
 ];

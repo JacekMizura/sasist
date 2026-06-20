@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-06-08 — BDO: pełny redesign UX/UI
+
+- Layout jak Produkcja/Magazyn: breadcrumb Asortyment → BDO → zakładka, tytuł + opis, TabsNav
+- Wspólne komponenty: `BdoKpiGrid`, `BdoReportKpiGrid` (5 KPI), `BdoFilterBar`, `AppButton`, `AppCard`
+- Wszystkie zakładki: PurchasingTableSection, AppEmptyState, filtry w pasku, formularze max-w 900–1200px
+
 ## 2026-06-08 — Produkcja: ujednolicenie siatki KPI
 
 - `ProductionKpiGrid` (4 kolumny desktop) + `ProductionKpiCard` (`density="compact"`)

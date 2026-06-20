@@ -1,32 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
-import api from "../../api/axios";
 import { getBdoSettings, putBdoSettings, type BdoSettings } from "../../api/bdoPackagingApi";
-
-type Tenant = { id: number; name: string };
+import { AppButton, AppCard, AppSection } from "../../components/app-shell";
+import { PurchasingFilterField, purchasingInputClass } from "../../modules/purchasing/ui";
+import { BdoFilterBar } from "./components/BdoFilterBar";
+import { useBdoTenant } from "./hooks/useBdoTenant";
 
 export default function BdoSettingsPage() {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const [tenants, setTenants] = useState<Tenant[]>([]);
-  const [tenantId, setTenantId] = useState(1);
+  const { tenants, tenantId, setTenantId } = useBdoTenant();
   const [s, setS] = useState<BdoSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    api
-      .get<Tenant[]>("/tenants/")
-      .then((res) => {
-        const list = Array.isArray(res.data) ? res.data : [];
-        setTenants(list);
-        const tid = searchParams.get("tenant_id");
-        if (tid != null && tid !== "") {
-          const n = Number(tid);
-          if (Number.isFinite(n) && n >= 1) setTenantId(n);
-        }
-      })
-      .catch(() => setTenants([]));
-  }, [searchParams]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -61,69 +44,58 @@ export default function BdoSettingsPage() {
   };
 
   return (
-    <div className="w-full space-y-6">
-      <div className="flex flex-wrap items-center gap-2">
-        <select
-          value={tenantId}
-          onChange={(e) => {
-            const v = Number(e.target.value);
-            setTenantId(v);
-            setSearchParams({ tenant_id: String(v) }, { replace: true });
-          }}
-          className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm"
-        >
-          {tenants.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.name}
-            </option>
-          ))}
-        </select>
-      </div>
+    <div className="space-y-5 pb-8">
+      <BdoFilterBar tenants={tenants} tenantId={tenantId} onTenantChange={setTenantId} />
 
       {loading || !s ? (
-        <p className="text-slate-500">Ładowanie…</p>
+        <p className="text-sm text-slate-500">Ładowanie…</p>
       ) : (
-        <div className="space-y-4 rounded-xl border border-slate-200 bg-slate-50/70 p-5 shadow-sm">
-          <div>
-            <label className="text-xs font-semibold text-slate-500">Nazwa firmy raportującej</label>
-            <input
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-              value={s.reporting_company_name ?? ""}
-              onChange={(e) => setS({ ...s, reporting_company_name: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-slate-500">Numery rejestrowe</label>
-            <textarea
-              className="mt-1 min-h-[80px] w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-              value={s.registration_numbers ?? ""}
-              onChange={(e) => setS({ ...s, registration_numbers: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-slate-500">Domyślny opis metodyki</label>
-            <textarea
-              className="mt-1 min-h-[100px] w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-              value={s.default_methodology_text ?? ""}
-              onChange={(e) => setS({ ...s, default_methodology_text: e.target.value })}
-            />
-          </div>
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={s.allow_negative_stock}
-              onChange={(e) => setS({ ...s, allow_negative_stock: e.target.checked })}
-            />
-            Zezwalaj na ujemny stan z księgi w podglądzie
-          </label>
-          <button
-            type="button"
-            disabled={saving}
-            onClick={() => void save()}
-            className="rounded-xl bg-sky-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-sky-700 disabled:opacity-50"
-          >
-            {saving ? "Zapisywanie…" : "Zapisz ustawienia"}
-          </button>
+        <div className="max-w-4xl">
+          <AppCard>
+            <AppSection title="Dane raportującego">
+              <PurchasingFilterField label="Nazwa firmy raportującej">
+                <input
+                  className={purchasingInputClass}
+                  value={s.reporting_company_name ?? ""}
+                  onChange={(e) => setS({ ...s, reporting_company_name: e.target.value })}
+                />
+              </PurchasingFilterField>
+              <PurchasingFilterField label="Numery rejestrowe">
+                <textarea
+                  className={`${purchasingInputClass} min-h-[80px]`}
+                  value={s.registration_numbers ?? ""}
+                  onChange={(e) => setS({ ...s, registration_numbers: e.target.value })}
+                />
+              </PurchasingFilterField>
+            </AppSection>
+
+            <AppSection title="Metodyka obliczeń" className="mt-4 border-t border-slate-100 pt-4">
+              <PurchasingFilterField label="Domyślny opis metodyki">
+                <textarea
+                  className={`${purchasingInputClass} min-h-[100px]`}
+                  value={s.default_methodology_text ?? ""}
+                  onChange={(e) => setS({ ...s, default_methodology_text: e.target.value })}
+                />
+              </PurchasingFilterField>
+            </AppSection>
+
+            <AppSection title="Opcje księgi" className="mt-4 border-t border-slate-100 pt-4">
+              <label className="flex items-center gap-2 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={s.allow_negative_stock}
+                  onChange={(e) => setS({ ...s, allow_negative_stock: e.target.checked })}
+                />
+                Zezwalaj na ujemny stan z księgi w podglądzie
+              </label>
+            </AppSection>
+
+            <div className="mt-4 border-t border-slate-100 pt-4">
+              <AppButton variant="primary" disabled={saving} onClick={() => void save()}>
+                {saving ? "Zapisywanie…" : "Zapisz ustawienia"}
+              </AppButton>
+            </div>
+          </AppCard>
         </div>
       )}
     </div>

@@ -1,11 +1,18 @@
 import { useCallback, useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
-import { Pencil } from "lucide-react";
-import api from "../../api/axios";
+import { Package, Pencil } from "lucide-react";
 import { listBdoCatalog, patchBdoWmFields, type BdoWmCatalogRow } from "../../api/bdoPackagingApi";
 import { useWarehouse } from "../../context/WarehouseContext";
-
-type Tenant = { id: number; name: string };
+import { AppButton, AppCard, AppEmptyState } from "../../components/app-shell";
+import {
+  PurchasingFilterField,
+  PurchasingInfoNotice,
+  PurchasingTableHeader,
+  PurchasingTableSection,
+  purchasingInputClass,
+  purchasingTableTdClass,
+} from "../../modules/purchasing/ui";
+import { BdoFilterBar } from "./components/BdoFilterBar";
+import { useBdoTenant } from "./hooks/useBdoTenant";
 
 type BdoForm = {
   plastic_kg_per_unit: number;
@@ -31,9 +38,7 @@ function emptyBdoForm(): BdoForm {
 
 export default function BdoMaterialsPage() {
   const { selectedWarehouseId } = useWarehouse();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const [tenants, setTenants] = useState<Tenant[]>([]);
-  const [tenantId, setTenantId] = useState(1);
+  const { tenants, tenantId, setTenantId } = useBdoTenant();
   const [rows, setRows] = useState<BdoWmCatalogRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -41,21 +46,6 @@ export default function BdoMaterialsPage() {
   const [editRow, setEditRow] = useState<BdoWmCatalogRow | null>(null);
   const [form, setForm] = useState<BdoForm>(emptyBdoForm());
   const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    api
-      .get<Tenant[]>("/tenants/")
-      .then((res) => {
-        const list = Array.isArray(res.data) ? res.data : [];
-        setTenants(list);
-        const tid = searchParams.get("tenant_id");
-        if (tid != null && tid !== "") {
-          const n = Number(tid);
-          if (Number.isFinite(n) && n >= 1) setTenantId(n);
-        }
-      })
-      .catch(() => setTenants([]));
-  }, [searchParams]);
 
   const load = useCallback(async () => {
     if (selectedWarehouseId == null) {
@@ -119,70 +109,77 @@ export default function BdoMaterialsPage() {
   const kindLabel = (k: string) => (k === "carton" ? "Karton" : "Materiał");
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <select
-            value={tenantId}
-            onChange={(e) => {
-              const v = Number(e.target.value);
-              setTenantId(v);
-              setSearchParams({ tenant_id: String(v) }, { replace: true });
-            }}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm"
-          >
-            {tenants.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
+    <div className="space-y-5 pb-8">
+      <BdoFilterBar tenants={tenants} tenantId={tenantId} onTenantChange={setTenantId} />
 
       {selectedWarehouseId == null ? (
-        <p className="text-sm text-amber-800">Wybierz magazyn w nagłówku aplikacji, aby wczytać materiały.</p>
+        <PurchasingInfoNotice tone="amber">
+          Wybierz magazyn w nagłówku aplikacji, aby wczytać materiały.
+        </PurchasingInfoNotice>
       ) : null}
 
       {err ? <p className="text-sm text-red-600">{err}</p> : null}
-      {loading ? <p className="text-slate-500">Ładowanie…</p> : null}
+      {loading ? <p className="text-sm text-slate-500">Ładowanie…</p> : null}
 
-      {!loading && selectedWarehouseId != null && (
-        <div className="overflow-x-auto rounded-xl border border-slate-200/90 bg-white shadow-sm ring-1 ring-slate-200/80">
+      {!loading && selectedWarehouseId != null && rows.length === 0 ? (
+        <AppEmptyState
+          icon={Package}
+          title="Brak materiałów BDO"
+          description="Włącz materiały magazynowe do ewidencji BDO lub dodaj pozycje w asortymencie."
+        />
+      ) : null}
+
+      {!loading && selectedWarehouseId != null && rows.length > 0 ? (
+        <PurchasingTableSection title="Materiały magazynowe">
           <table className="w-full min-w-[1100px] text-sm">
-            <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-              <tr>
-                <th className="px-3 py-3">Typ</th>
-                <th className="px-3 py-3">Nazwa</th>
-                <th className="px-3 py-3">SKU</th>
-                <th className="px-3 py-3">Kategoria</th>
-                <th className="px-3 py-3">Jednostka</th>
-                <th className="px-3 py-3 text-right">Stan</th>
-                <th className="px-3 py-3">BDO</th>
-                <th className="px-3 py-3 text-right">Tworzywo kg/j.</th>
-                <th className="px-3 py-3 text-right">Papier kg/j.</th>
-                <th className="px-3 py-3 text-right">Drewno</th>
-                <th className="px-3 py-3 text-right">Szkło</th>
-                <th className="px-3 py-3 text-right">Metal</th>
-                <th className="w-24 px-3 py-3" />
-              </tr>
-            </thead>
+            <PurchasingTableHeader
+              headers={[
+                "Typ",
+                "Nazwa",
+                "SKU",
+                "Kategoria",
+                "Jednostka",
+                "Stan",
+                "BDO",
+                "Tworzywo kg/j.",
+                "Papier kg/j.",
+                "Drewno",
+                "Szkło",
+                "Metal",
+                "",
+              ]}
+              align={[
+                "left",
+                "left",
+                "left",
+                "left",
+                "left",
+                "right",
+                "left",
+                "right",
+                "right",
+                "right",
+                "right",
+                "right",
+                "left",
+              ]}
+            />
             <tbody>
               {rows.map((m) => (
-                <tr key={m.wm_ref} className="border-t border-slate-100">
-                  <td className="px-3 py-2.5 text-slate-600">{kindLabel(m.kind)}</td>
-                  <td className="px-3 py-2.5 font-medium text-slate-900">{m.name}</td>
-                  <td className="px-3 py-2.5 text-slate-600">{m.sku ?? "—"}</td>
-                  <td className="px-3 py-2.5 text-slate-600">{m.category}</td>
-                  <td className="px-3 py-2.5 text-slate-600">{m.unit}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums text-slate-600">{m.stock}</td>
-                  <td className="px-3 py-2.5">{m.include_in_bdo ? "Tak" : "Nie"}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums">{m.plastic_kg_per_unit}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums">{m.paper_kg_per_unit}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums">{m.wood_kg_per_unit}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums">{m.glass_kg_per_unit}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums">{m.metal_kg_per_unit}</td>
-                  <td className="px-3 py-2.5">
+                <tr key={m.wm_ref} className="border-t border-slate-100 transition-colors hover:bg-slate-50/80">
+                  <td className={`${purchasingTableTdClass} text-slate-600`}>{kindLabel(m.kind)}</td>
+                  <td className={`${purchasingTableTdClass} font-medium text-slate-900`}>{m.name}</td>
+                  <td className={`${purchasingTableTdClass} text-slate-600`}>{m.sku ?? "—"}</td>
+                  <td className={`${purchasingTableTdClass} text-slate-600`}>{m.category}</td>
+                  <td className={`${purchasingTableTdClass} text-slate-600`}>{m.unit}</td>
+                  <td className={`${purchasingTableTdClass} text-right tabular-nums text-slate-600`}>{m.stock}</td>
+                  <td className={purchasingTableTdClass}>{m.include_in_bdo ? "Tak" : "Nie"}</td>
+                  <td className={`${purchasingTableTdClass} text-right tabular-nums`}>{m.plastic_kg_per_unit}</td>
+                  <td className={`${purchasingTableTdClass} text-right tabular-nums`}>{m.paper_kg_per_unit}</td>
+                  <td className={`${purchasingTableTdClass} text-right tabular-nums`}>{m.wood_kg_per_unit}</td>
+                  <td className={`${purchasingTableTdClass} text-right tabular-nums`}>{m.glass_kg_per_unit}</td>
+                  <td className={`${purchasingTableTdClass} text-right tabular-nums`}>{m.metal_kg_per_unit}</td>
+                  <td className={purchasingTableTdClass}>
                     <button
                       type="button"
                       onClick={() => openEdit(m)}
@@ -196,25 +193,26 @@ export default function BdoMaterialsPage() {
               ))}
             </tbody>
           </table>
-        </div>
-      )}
+        </PurchasingTableSection>
+      ) : null}
 
       {modalOpen && editRow ? (
         <div className="fixed inset-0 z-[400] flex items-center justify-center bg-slate-900/50 p-4" role="dialog">
-          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
+          <AppCard className="max-h-[90vh] w-full max-w-lg overflow-y-auto p-6 shadow-xl">
             <h2 className="text-lg font-semibold text-slate-900">Pola BDO</h2>
             <p className="mt-1 text-sm text-slate-600">
               {kindLabel(editRow.kind)} · <span className="font-medium text-slate-800">{editRow.name}</span>
             </p>
             <p className="mt-0.5 font-mono text-xs text-slate-500">{editRow.wm_ref}</p>
             <div className="mt-4 space-y-3">
-              <label className="block text-xs font-semibold text-slate-500">Typ opakowania (BDO)</label>
-              <input
-                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-                value={form.packaging_type}
-                onChange={(e) => setForm((f) => ({ ...f, packaging_type: e.target.value }))}
-                placeholder="np. folia, tektura…"
-              />
+              <PurchasingFilterField label="Typ opakowania (BDO)">
+                <input
+                  className={purchasingInputClass}
+                  value={form.packaging_type}
+                  onChange={(e) => setForm((f) => ({ ...f, packaging_type: e.target.value }))}
+                  placeholder="np. folia, tektura…"
+                />
+              </PurchasingFilterField>
               <label className="flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
@@ -233,33 +231,27 @@ export default function BdoMaterialsPage() {
                     ["metal_kg_per_unit", "Metal kg / j."],
                   ] as const
                 ).map(([key, label]) => (
-                  <div key={key}>
-                    <label className="block text-xs font-semibold text-slate-500">{label}</label>
+                  <PurchasingFilterField key={key} label={label}>
                     <input
                       type="number"
                       step="0.0001"
-                      className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+                      className={purchasingInputClass}
                       value={form[key]}
                       onChange={(e) => setForm((f) => ({ ...f, [key]: Number(e.target.value) }))}
                     />
-                  </div>
+                  </PurchasingFilterField>
                 ))}
               </div>
             </div>
             <div className="mt-6 flex justify-end gap-2">
-              <button type="button" className="rounded-lg border border-slate-200 px-4 py-2 text-sm" onClick={() => setModalOpen(false)}>
+              <AppButton variant="secondary" onClick={() => setModalOpen(false)}>
                 Anuluj
-              </button>
-              <button
-                type="button"
-                disabled={saving}
-                onClick={() => void save()}
-                className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700 disabled:opacity-50"
-              >
+              </AppButton>
+              <AppButton variant="primary" disabled={saving} onClick={() => void save()}>
                 {saving ? "Zapisywanie…" : "Zapisz"}
-              </button>
+              </AppButton>
             </div>
-          </div>
+          </AppCard>
         </div>
       ) : null}
     </div>

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
-import api from "../../api/axios";
+import { ClipboardList } from "lucide-react";
 import {
   createBdoStockCount,
   fetchBdoLedgerPreview,
@@ -10,8 +9,17 @@ import {
   type BdoWmCatalogRow,
 } from "../../api/bdoPackagingApi";
 import { useWarehouse } from "../../context/WarehouseContext";
-
-type Tenant = { id: number; name: string };
+import { AppButton, AppCard, AppEmptyState, AppSection } from "../../components/app-shell";
+import {
+  PurchasingFilterField,
+  PurchasingInfoNotice,
+  PurchasingTableHeader,
+  PurchasingTableSection,
+  purchasingInputClass,
+  purchasingTableTdClass,
+} from "../../modules/purchasing/ui";
+import { BdoFilterBar } from "./components/BdoFilterBar";
+import { useBdoTenant } from "./hooks/useBdoTenant";
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -19,9 +27,7 @@ function todayIso(): string {
 
 export default function BdoStockCountPage() {
   const { selectedWarehouseId } = useWarehouse();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const [tenants, setTenants] = useState<Tenant[]>([]);
-  const [tenantId, setTenantId] = useState(1);
+  const { tenants, tenantId, setTenantId } = useBdoTenant();
   const [materials, setMaterials] = useState<BdoWmCatalogRow[]>([]);
   const [ledger, setLedger] = useState<Record<string, number>>({});
   const [counts, setCounts] = useState<BdoStockCount[]>([]);
@@ -32,21 +38,6 @@ export default function BdoStockCountPage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [toastText, setToastText] = useState<string | null>(null);
-
-  useEffect(() => {
-    api
-      .get<Tenant[]>("/tenants/")
-      .then((res) => {
-        const list = Array.isArray(res.data) ? res.data : [];
-        setTenants(list);
-        const tid = searchParams.get("tenant_id");
-        if (tid != null && tid !== "") {
-          const n = Number(tid);
-          if (Number.isFinite(n) && n >= 1) setTenantId(n);
-        }
-      })
-      .catch(() => setTenants([]));
-  }, [searchParams]);
 
   const loadMaterials = useCallback(async () => {
     if (selectedWarehouseId == null) {
@@ -143,7 +134,7 @@ export default function BdoStockCountPage() {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5 pb-8">
       {toastText ? (
         <div
           className="fixed bottom-6 left-1/2 z-[400] max-w-md -translate-x-1/2 rounded-lg border border-slate-800 bg-slate-900 px-4 py-3 text-center text-sm text-white shadow-lg"
@@ -153,165 +144,143 @@ export default function BdoStockCountPage() {
         </div>
       ) : null}
 
+      <BdoFilterBar tenants={tenants} tenantId={tenantId} onTenantChange={setTenantId} />
+
       {selectedWarehouseId == null ? (
-        <p className="text-sm text-amber-800">Wybierz magazyn w nagłówku aplikacji.</p>
+        <PurchasingInfoNotice tone="amber">Wybierz magazyn w nagłówku aplikacji.</PurchasingInfoNotice>
       ) : null}
 
-      <div className="flex flex-wrap items-center gap-2">
-        <select
-          value={tenantId}
-          onChange={(e) => {
-            const v = Number(e.target.value);
-            setTenantId(v);
-            setSearchParams({ tenant_id: String(v) }, { replace: true });
-          }}
-          className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm"
-        >
-          {tenants.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.name}
-            </option>
-          ))}
-        </select>
-      </div>
-
       {err ? <p className="text-sm text-red-600">{err}</p> : null}
-      {loading ? <p className="text-slate-500">Ładowanie…</p> : null}
+      {loading ? <p className="text-sm text-slate-500">Ładowanie…</p> : null}
 
-      {selectedWarehouseId != null && (
-        <div className="rounded-xl border border-slate-200/90 bg-slate-50/80 p-5 shadow-sm">
-          <h2 className="text-base font-semibold text-slate-900">Nowy spis</h2>
-          <div className="mt-4 flex flex-wrap gap-4">
-            <div>
-              <label className="text-xs font-semibold text-slate-500">Data spisu</label>
-              <input
-                type="date"
-                className="mt-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
-                value={countDate}
-                onChange={(e) => setCountDate(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-slate-500">Osoba (opcj.)</label>
-              <input
-                className="mt-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
-                value={byUser}
-                onChange={(e) => setByUser(e.target.value)}
-                placeholder="Imię i nazwisko"
-              />
-            </div>
-            <div className="min-w-[200px] flex-1">
-              <label className="text-xs font-semibold text-slate-500">Uwagi do spisu</label>
-              <input
-                className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-              />
-            </div>
-          </div>
+      {selectedWarehouseId != null && !loading ? (
+        <div className="max-w-6xl space-y-5">
+          <AppCard>
+            <AppSection title="Nowy spis">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <PurchasingFilterField label="Data spisu">
+                  <input
+                    type="date"
+                    className={purchasingInputClass}
+                    value={countDate}
+                    onChange={(e) => setCountDate(e.target.value)}
+                  />
+                </PurchasingFilterField>
+                <PurchasingFilterField label="Osoba (opcj.)">
+                  <input
+                    className={purchasingInputClass}
+                    value={byUser}
+                    onChange={(e) => setByUser(e.target.value)}
+                    placeholder="Imię i nazwisko"
+                  />
+                </PurchasingFilterField>
+                <PurchasingFilterField label="Uwagi do spisu" className="sm:col-span-2 lg:col-span-1">
+                  <input className={purchasingInputClass} value={notes} onChange={(e) => setNotes(e.target.value)} />
+                </PurchasingFilterField>
+              </div>
 
-          <div className="mt-5 overflow-x-auto rounded-lg border border-slate-200 bg-white">
-            <table className="w-full min-w-[640px] text-sm">
-              <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                <tr>
-                  <th className="px-3 py-3">Materiał</th>
-                  <th className="px-3 py-3 text-right">Stan z księgi</th>
-                  <th className="px-3 py-3 text-right">Stan policzony</th>
-                  <th className="px-3 py-3 text-right">Różnica</th>
-                  <th className="px-3 py-3">Uwagi pozycji</th>
-                </tr>
-              </thead>
-              <tbody>
-                {materials.map((m) => {
-                  const sys = ledger[m.wm_ref] ?? 0;
-                  const li = lines[m.wm_ref] ?? { counted: "", notes: "" };
-                  const c = li.counted.trim() === "" ? NaN : Number(li.counted);
-                  const diff = Number.isFinite(c) ? c - sys : NaN;
-                  return (
-                    <tr key={m.wm_ref} className="border-t border-slate-100">
-                      <td className="px-3 py-2 font-medium text-slate-900">{m.name}</td>
-                      <td className="px-3 py-2 text-right tabular-nums text-slate-600">{sys.toLocaleString("pl-PL")}</td>
-                      <td className="px-3 py-2">
-                        <input
-                          type="number"
-                          step="0.01"
-                          className="w-28 rounded border border-slate-200 px-2 py-1 text-right text-sm"
-                          value={li.counted}
-                          onChange={(e) =>
-                            setLines((prev) => ({
-                              ...prev,
-                              [m.wm_ref]: { ...li, counted: e.target.value },
-                            }))
-                          }
-                          placeholder="—"
-                        />
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums text-slate-700">
-                        {Number.isFinite(diff) ? diff.toLocaleString("pl-PL") : "—"}
-                      </td>
-                      <td className="px-3 py-2">
-                        <input
-                          className="w-full min-w-[120px] rounded border border-slate-200 px-2 py-1 text-sm"
-                          value={li.notes}
-                          onChange={(e) =>
-                            setLines((prev) => ({
-                              ...prev,
-                              [m.wm_ref]: { ...li, notes: e.target.value },
-                            }))
-                          }
-                        />
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          <button
-            type="button"
-            onClick={() => void saveCount()}
-            className="mt-5 inline-flex rounded-xl bg-sky-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-sky-700"
-          >
-            Zapisz spis
-          </button>
+              <div className="mt-4 overflow-x-auto rounded-lg border border-slate-200">
+                <table className="w-full min-w-[640px] text-sm">
+                  <PurchasingTableHeader
+                    headers={["Materiał", "Stan z księgi", "Stan policzony", "Różnica", "Uwagi pozycji"]}
+                    align={["left", "right", "right", "right", "left"]}
+                  />
+                  <tbody>
+                    {materials.map((m) => {
+                      const sys = ledger[m.wm_ref] ?? 0;
+                      const li = lines[m.wm_ref] ?? { counted: "", notes: "" };
+                      const c = li.counted.trim() === "" ? NaN : Number(li.counted);
+                      const diff = Number.isFinite(c) ? c - sys : NaN;
+                      return (
+                        <tr key={m.wm_ref} className="border-t border-slate-100 transition-colors hover:bg-slate-50/80">
+                          <td className={`${purchasingTableTdClass} font-medium text-slate-900`}>{m.name}</td>
+                          <td className={`${purchasingTableTdClass} text-right tabular-nums text-slate-600`}>
+                            {sys.toLocaleString("pl-PL")}
+                          </td>
+                          <td className={purchasingTableTdClass}>
+                            <input
+                              type="number"
+                              step="0.01"
+                              className="w-28 rounded border border-slate-200 px-2 py-1 text-right text-sm"
+                              value={li.counted}
+                              onChange={(e) =>
+                                setLines((prev) => ({
+                                  ...prev,
+                                  [m.wm_ref]: { ...li, counted: e.target.value },
+                                }))
+                              }
+                              placeholder="—"
+                            />
+                          </td>
+                          <td className={`${purchasingTableTdClass} text-right tabular-nums text-slate-700`}>
+                            {Number.isFinite(diff) ? diff.toLocaleString("pl-PL") : "—"}
+                          </td>
+                          <td className={purchasingTableTdClass}>
+                            <input
+                              className="w-full min-w-[120px] rounded border border-slate-200 px-2 py-1 text-sm"
+                              value={li.notes}
+                              onChange={(e) =>
+                                setLines((prev) => ({
+                                  ...prev,
+                                  [m.wm_ref]: { ...li, notes: e.target.value },
+                                }))
+                              }
+                            />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="mt-4">
+                <AppButton variant="primary" onClick={() => void saveCount()}>
+                  Zapisz spis
+                </AppButton>
+              </div>
+            </AppSection>
+          </AppCard>
         </div>
-      )}
+      ) : null}
 
-      <div>
-        <h2 className="mb-3 text-base font-semibold text-slate-900">Historia spisów</h2>
+      {!loading && counts.length === 0 ? (
+        <AppEmptyState
+          icon={ClipboardList}
+          title="Brak wykonanych spisów"
+          description="Po zapisie spisu z natury historia pojawi się poniżej."
+        />
+      ) : null}
+
+      {counts.length > 0 ? (
         <div className="space-y-4">
           {counts.map((s) => (
-            <div key={s.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-              <p className="font-semibold text-slate-900">
-                {s.count_date} {s.period_label ? `· ${s.period_label}` : ""}
-              </p>
-              <p className="text-xs text-slate-500">
-                {s.created_by_label ? `Osoba: ${s.created_by_label}` : ""} {s.notes ? `· ${s.notes}` : ""}
-              </p>
-              <table className="mt-2 w-full text-xs">
-                <thead>
-                  <tr className="text-left text-slate-500">
-                    <th className="py-1">Materiał</th>
-                    <th className="py-1 text-right">Księga</th>
-                    <th className="py-1 text-right">Policzono</th>
-                    <th className="py-1 text-right">Różnica</th>
-                  </tr>
-                </thead>
+            <PurchasingTableSection
+              key={s.id}
+              title={`${s.count_date}${s.period_label ? ` · ${s.period_label}` : ""}`}
+              subtitle={[s.created_by_label ? `Osoba: ${s.created_by_label}` : null, s.notes || null]
+                .filter(Boolean)
+                .join(" · ")}
+            >
+              <table className="w-full text-sm">
+                <PurchasingTableHeader
+                  headers={["Materiał", "Księga", "Policzono", "Różnica"]}
+                  align={["left", "right", "right", "right"]}
+                />
                 <tbody>
                   {s.lines.map((ln) => (
-                    <tr key={`${s.id}-${ln.wm_ref}`} className="border-t border-slate-100">
-                      <td className="py-1">{ln.material_name}</td>
-                      <td className="py-1 text-right tabular-nums">{ln.system_stock}</td>
-                      <td className="py-1 text-right tabular-nums">{ln.counted_stock}</td>
-                      <td className="py-1 text-right tabular-nums">{ln.difference}</td>
+                    <tr key={`${s.id}-${ln.wm_ref}`} className="border-t border-slate-100 transition-colors hover:bg-slate-50/80">
+                      <td className={purchasingTableTdClass}>{ln.material_name}</td>
+                      <td className={`${purchasingTableTdClass} text-right tabular-nums`}>{ln.system_stock}</td>
+                      <td className={`${purchasingTableTdClass} text-right tabular-nums`}>{ln.counted_stock}</td>
+                      <td className={`${purchasingTableTdClass} text-right tabular-nums`}>{ln.difference}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
+            </PurchasingTableSection>
           ))}
         </div>
-      </div>
+      ) : null}
     </div>
   );
 }
