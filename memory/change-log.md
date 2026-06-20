@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-06-08 — Wózki / Wózki z koszykami: ujednolicony layout WMS
+
+- Wspólny `CartsFleetList` (BULK + MULTI): `ListPageHeader`, KPI (`PurchasingKpiGrid`), sekcje grup pełnej szerokości
+- `CartsFleetGroupActions`: Dodaj wózek (pomarańczowy), Edytuj (neutralny), Usuń grupę (czerwony)
+- `CartCard`: ten sam układ flex + ikony akcji (`OperationalActionColumn`)
+- Globalne zapełnienie w karcie zgodnej z design system
+
 ## 2026-06-08 — Regały (WMS): standard UI jak Nośniki / Produkty
 
 - `ConsolidationRacksListPage`: `ListPageHeader` (breadcrumb Magazyn → WMS → Regały), KPI (`PurchasingKpiGrid` × 5), przycisk „Nowy regał kompletacyjny”

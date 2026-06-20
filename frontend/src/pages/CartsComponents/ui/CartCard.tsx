@@ -1,16 +1,12 @@
-import { Package } from "lucide-react";
+import { Eraser, Package, Pencil, Printer, Trash2, Wand2 } from "lucide-react";
 import ProgressBar from "./ProgressBar";
 import ImagePreviewModal from "./ImagePreviewModal";
 import SimulationResultModal from "./SimulationResultModal";
 import OrderProductPreviewModal from "./OrderProductPreviewModal";
-import { CubeIcon, PencilIcon, TrashIcon, MagicWandIcon, ScaleIcon, ClearIcon, PrinterIcon } from "./Icons";
+import { CubeIcon, ScaleIcon, ClearIcon } from "./Icons";
 import { useState, useEffect, useMemo } from "react";
 import { calculateCartStats } from "../cartStats";
-import {
-  cartsBtnSecondary,
-  cartsDangerBtnClass,
-  cartsWarningBtnClass,
-} from "../../../modules/carts/cartsModuleTokens";
+import { OperationalActionButton, OperationalActionColumn } from "../../../components/operational";
 import { useTranslation } from "../../../locales";
 import api from "../../../api/axios";
 
@@ -408,10 +404,10 @@ export default function CartCard(props: CartCardProps) {
   return (
     <>
       <div
-        className={`group relative ${isBulk ? "grid grid-cols-[auto_1fr_minmax(120px,1fr)_auto] items-center gap-3 py-2.5" : "flex gap-3 py-3"} ${simulating ? "pointer-events-none opacity-70" : ""}`}
+        className={`group relative flex w-full items-start gap-3 py-3 ${simulating ? "pointer-events-none opacity-70" : ""}`}
       >
         <button
-          className={`${isBulk ? "h-10 w-10" : "h-12 w-12"} shrink-0 overflow-hidden rounded-md border border-slate-200 bg-white flex items-center justify-center text-slate-300 hover:border-slate-400 transition-colors`}
+          className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-md border border-slate-200 bg-white text-slate-300 transition-colors hover:border-slate-400"
           onClick={() => setPreviewOpen(true)}
           aria-label="Open image preview"
           type="button"
@@ -423,82 +419,37 @@ export default function CartCard(props: CartCardProps) {
           )}
         </button>
 
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0">
-              <div className="truncate text-base font-semibold text-slate-900">{name}</div>
-              {cartCodeDisplay ? (
-                <div className="mt-1.5">
-                  <div className="text-xs font-medium text-slate-500">Kod</div>
-                  <div className="font-mono text-sm font-semibold tracking-tight text-slate-700">{cartCodeDisplay}</div>
-                </div>
-              ) : null}
-              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-600">
-                <div className="flex items-center gap-1.5 font-medium">
-                  <CubeIcon className="h-4 w-4 text-slate-300" />
-                  {Number(total_volume_dm3 ?? 0).toFixed(1)} dm³
-                </div>
-                {isSectional ? (
-                  <div className="font-medium">
-                    {t.sections}: {total_baskets}
-                  </div>
-                ) : (
-                  <div className="font-medium tabular-nums">
-                    {length ?? 0}×{width ?? 0}×{height ?? 0} cm
-                  </div>
-                )}
+        <div className="min-w-0 flex-1">
+          <div className="min-w-0">
+            <div className="truncate text-base font-semibold text-slate-900">{name}</div>
+            {cartCodeDisplay ? (
+              <div className="mt-1.5">
+                <div className="text-xs font-medium text-slate-500">Kod</div>
+                <div className="font-mono text-sm font-semibold tracking-tight text-slate-700">{cartCodeDisplay}</div>
               </div>
-              {String(status).toUpperCase() === "FULL" ? (
-                <div className="mt-2">
-                  <span className="inline-flex px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 text-[11px] font-bold">
-                    Gotowe do pakowania
-                  </span>
+            ) : null}
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-600">
+              <div className="flex items-center gap-1.5 font-medium">
+                <CubeIcon className="h-4 w-4 text-slate-300" />
+                {Number(total_volume_dm3 ?? 0).toFixed(1)} dm³
+              </div>
+              {isSectional ? (
+                <div className="font-medium">
+                  {t.sections}: {total_baskets}
                 </div>
-              ) : null}
-            </div>
-
-            <div className="flex items-center gap-1.5">
-              <button onClick={() => onEdit(id)} className={cartsBtnSecondary} aria-label={t.edit} type="button">
-                Edytuj
-              </button>
-              <button onClick={() => onDelete(id)} className={cartsDangerBtnClass} aria-label={t.delete} type="button">
-                Usuń
-              </button>
-              {onPrintLabel != null && (
-                <button
-                  onClick={() => onPrintLabel({ id, name })}
-                  className={cartsBtnSecondary}
-                  aria-label="Drukuj etykietę"
-                  type="button"
-                  title="Drukuj etykietę"
-                >
-                  Drukuj
-                </button>
-              )}
-              {canClearCart && (
-                <button
-                  onClick={() => setConfirmWholeCartClearOpen(true)}
-                  disabled={clearingCart}
-                  className={cartsWarningBtnClass}
-                  aria-label={t.clear_cart}
-                  title={t.clear_cart}
-                  type="button"
-                >
-                  Wyczyść wózek
-                </button>
-              )}
-              {canSimulate && (
-                <button
-                  onClick={handleSimulate}
-                  disabled={simulating}
-                  className={cartsBtnSecondary}
-                  aria-label={t.simulation_assign_button}
-                  type="button"
-                >
-                  <MagicWandIcon className="w-4 h-4" />
-                </button>
+              ) : (
+                <div className="font-medium tabular-nums">
+                  {length ?? 0}×{width ?? 0}×{height ?? 0} cm
+                </div>
               )}
             </div>
+            {String(status).toUpperCase() === "FULL" ? (
+              <div className="mt-2">
+                <span className="inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-bold text-emerald-700">
+                  Gotowe do pakowania
+                </span>
+              </div>
+            ) : null}
           </div>
 
           <div className="mt-4" key={`${id}-${usedVol}`}>
@@ -675,6 +626,61 @@ export default function CartCard(props: CartCardProps) {
             </div>
           )}
         </div>
+
+        <div className="shrink-0 pt-0.5" onClick={(e) => e.stopPropagation()}>
+          <OperationalActionColumn
+            layout="stack"
+            aria-label="Akcje wózka"
+            slots={[
+              <OperationalActionButton key="edit" onClick={() => onEdit(id)} title={t.edit} aria-label={t.edit}>
+                <Pencil className="text-slate-600" strokeWidth={2} aria-hidden />
+              </OperationalActionButton>,
+              onPrintLabel != null ? (
+                <OperationalActionButton
+                  key="print"
+                  onClick={() => onPrintLabel({ id, name })}
+                  title="Drukuj etykietę"
+                  aria-label="Drukuj etykietę"
+                >
+                  <Printer className="text-slate-600" strokeWidth={2} aria-hidden />
+                </OperationalActionButton>
+              ) : null,
+              canClearCart ? (
+                <OperationalActionButton
+                  key="clear"
+                  disabled={clearingCart}
+                  onClick={() => setConfirmWholeCartClearOpen(true)}
+                  title={t.clear_cart}
+                  aria-label={t.clear_cart}
+                  className="!border-amber-200 !text-amber-800 hover:!border-amber-300 hover:!bg-amber-50"
+                >
+                  <Eraser strokeWidth={2} aria-hidden />
+                </OperationalActionButton>
+              ) : null,
+              <OperationalActionButton
+                key="del"
+                variant="danger"
+                onClick={() => onDelete(id)}
+                title={t.delete}
+                aria-label={t.delete}
+              >
+                <Trash2 strokeWidth={2} aria-hidden />
+              </OperationalActionButton>,
+              canSimulate ? (
+                <OperationalActionButton
+                  key="sim"
+                  disabled={simulating}
+                  onClick={() => void handleSimulate()}
+                  title={t.simulation_assign_button}
+                  aria-label={t.simulation_assign_button}
+                >
+                  <Wand2 className="text-slate-600" strokeWidth={2} aria-hidden />
+                </OperationalActionButton>
+              ) : null,
+            ]}
+          />
+        </div>
+
         {simulating && (
           <div className="absolute inset-0 rounded-lg bg-white/80 flex items-center justify-center z-10">
             <div className="w-8 h-8 border-2 border-violet-600 border-t-transparent rounded-full animate-spin" />
