@@ -4,17 +4,17 @@ import { ChevronDown, ChevronUp, ClipboardList, Pencil, Trash2 } from "lucide-re
 import type { OrderAutomationRule } from "../../../types/orderAutomation";
 import {
   compareRulesByPublicId,
-  formatConditionSentence,
+  formatConditionListLine,
   formatDelayMinutes,
   formatEffectListBlock,
   formatExecutionModeBadge,
   formatRuleDisplayId,
-  formatRuleListHeadline,
+  formatRuleListName,
+  formatRuleTriggerLabels,
 } from "../../../utils/orderAutomationPreview";
 import {
   oaListJoinBadgeClass,
   oaListLogicLineClass,
-  oaListLogicSublineClass,
   oaListRowClass,
   oaListTableClass,
   oaListTdClass,
@@ -50,12 +50,18 @@ function ConditionsCell({
   return (
     <div className="flex min-w-0 flex-col gap-2">
       {conditions.map((c, i) => {
+        const line = formatConditionListLine(c, statusNameById);
         const join =
           i > 0 ? (conditions[i - 1]?.joinToNext === "or" ? "LUB" : "ORAZ") : null;
         return (
           <div key={c.uid} className="flex min-w-0 flex-col gap-1.5">
             {join ? <span className={oaListJoinBadgeClass}>{join}</span> : null}
-            <p className={`${oaListLogicLineClass} break-words`}>{formatConditionSentence(c, statusNameById)}</p>
+            <p className={`${oaListLogicLineClass} break-words`}>
+              {line.field}{" "}
+              <span className="font-bold">
+                {line.operator} {line.value}
+              </span>
+            </p>
           </div>
         );
       })}
@@ -78,15 +84,46 @@ function EffectsCell({
     <div className="flex min-w-0 flex-col gap-3">
       {rule.effects.map((e) => {
         const block = formatEffectListBlock(e, statusNameById);
+        const hasDetail = block.primaryBold || block.secondaryDetail;
         return (
           <div key={e.uid} className="min-w-0">
             <p className={`${oaListLogicLineClass} font-medium text-slate-900`}>{block.title}</p>
-            {block.detail ? (
-              <p className={`${oaListLogicSublineClass} mt-0.5 break-words`}>{block.detail}</p>
+            {hasDetail ? (
+              <p className={`${oaListLogicLineClass} mt-0.5 break-words text-slate-700`}>
+                {block.detailPrefix}
+                {block.primaryBold ? <span className="font-bold">{block.primaryBold}</span> : null}
+                {block.secondaryDetail}
+              </p>
             ) : null}
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function ExecutionCell({ rule }: { rule: OrderAutomationRule }) {
+  const triggers = formatRuleTriggerLabels(rule);
+  const modeBadge = formatExecutionModeBadge(rule);
+
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5">
+      {triggers.length > 0 ? (
+        <ul className="space-y-0.5">
+          {triggers.map((t) => (
+            <li key={t} className="text-xs leading-snug text-slate-700">
+              {t}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <span className="text-slate-400">—</span>
+      )}
+      <span
+        className={`inline-flex w-fit items-center rounded-md border px-2 py-0.5 text-[11px] font-medium leading-tight ${modeBadge.className}`}
+      >
+        {modeBadge.label}
+      </span>
     </div>
   );
 }
@@ -103,8 +140,7 @@ type RuleRowProps = {
 function AutomationRuleTableRow({ rule, statusNameById, basePath, onToggle, onDelete, onLogs }: RuleRowProps) {
   const navigate = useNavigate();
   const displayId = formatRuleDisplayId(rule);
-  const { headline, workflow } = formatRuleListHeadline(rule, statusNameById);
-  const execBadge = formatExecutionModeBadge(rule);
+  const ruleName = formatRuleListName(rule);
 
   return (
     <tr className={`${oaListRowClass} ${rule.enabled ? "" : "opacity-55 hover:opacity-100"}`}>
@@ -122,20 +158,17 @@ function AutomationRuleTableRow({ rule, statusNameById, basePath, onToggle, onDe
       <td className={`${oaListTdClass} w-20 font-mono text-sm font-semibold tabular-nums text-slate-600`}>
         {displayId}
       </td>
-      <td className={`${oaListTdClass}`}>
+      <td className={oaListTdClass}>
         <button
           type="button"
           className={`block max-w-full text-left text-base font-bold leading-snug hover:underline ${
             rule.enabled ? "text-slate-900" : "text-slate-500 line-through"
           }`}
-          title={headline}
+          title={ruleName}
           onClick={() => navigate(`${basePath}/${rule.id}/edit`)}
         >
-          {headline}
+          {ruleName}
         </button>
-        {workflow ? (
-          <p className="mt-1 text-sm font-medium leading-snug text-slate-700">{workflow}</p>
-        ) : null}
         <p className="mt-1.5 text-xs leading-snug text-slate-500">
           Wykonano: <span className="font-semibold tabular-nums text-slate-700">{rule.stats.runCount}</span>
           <span className="mx-1.5 text-slate-300">•</span>
@@ -151,12 +184,8 @@ function AutomationRuleTableRow({ rule, statusNameById, basePath, onToggle, onDe
       <td className={`${oaListTdClass} w-24 tabular-nums text-slate-600`}>
         {formatDelayMinutes(rule.delayMinutes)}
       </td>
-      <td className={`${oaListTdClass} w-32`}>
-        <span
-          className={`inline-flex items-center rounded-md border px-2.5 py-1 text-xs font-medium leading-tight ${execBadge.className}`}
-        >
-          {execBadge.label}
-        </span>
+      <td className={`${oaListTdClass} w-36`}>
+        <ExecutionCell rule={rule} />
       </td>
       <td className={`${oaListTdClass} w-36`}>
         <div className="flex items-start gap-1">
@@ -216,11 +245,11 @@ export function AutomationRulesTable({
         <colgroup>
           <col className="w-10" />
           <col className="w-20" />
-          <col style={{ width: "16%" }} />
-          <col style={{ width: "28%" }} />
-          <col style={{ width: "28%" }} />
+          <col style={{ width: "14%" }} />
+          <col style={{ width: "30%" }} />
+          <col style={{ width: "30%" }} />
           <col className="w-24" />
-          <col className="w-32" />
+          <col className="w-36" />
           <col className="w-36" />
         </colgroup>
         <thead>

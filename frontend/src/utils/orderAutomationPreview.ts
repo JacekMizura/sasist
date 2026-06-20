@@ -84,9 +84,25 @@ export function formatConditionSentence(c: AutomationCondition, statusNameById?:
   return `${parts.field} ${op} ${parts.value}`;
 }
 
+/** Części warunku do wyświetlenia w tabeli (pole normalne, operator + wartość pogrubione). */
+export function formatConditionListLine(
+  c: AutomationCondition,
+  statusNameById?: Map<number, string>,
+): { field: string; operator: string; value: string } {
+  const parts = formatConditionDisplayParts(c, statusNameById);
+  const operator =
+    c.operator === "eq" ? "=" : c.operator === "neq" ? "≠" : c.operator === "contains" ? "zawiera" : parts.op;
+  return { field: parts.field, operator, value: parts.value };
+}
+
 export type EffectListBlock = {
   title: string;
-  detail: string | null;
+  /** Prefiks przed wartością (np. „SZABLON: ”) */
+  detailPrefix: string | null;
+  /** Najważniejsza wartość — pogrubiona w UI */
+  primaryBold: string | null;
+  /** Reszta linii szczegółów (np. „ • FV Polska • Główna”) */
+  secondaryDetail: string | null;
 };
 
 const DOC_TYPE_LABELS: Record<string, string> = {
@@ -129,67 +145,95 @@ function payloadLabel(map: Record<string, string>, value: string): string | null
   return map[v] ?? v;
 }
 
-/** Pełny opis efektu na liście — tytuł akcji + szczegóły w drugiej linii. */
+/** Pełny opis efektu na liście — tytuł akcji + szczegóły z wyróżnioną wartością. */
 export function formatEffectListBlock(e: AutomationEffect, statusNameById?: Map<number, string>): EffectListBlock {
-  const title = effectKindLabel(e.kind);
+  const title =
+    e.kind === "send_message" && String(e.payload.message_channel ?? "email") === "email"
+      ? "Wyślij e-mail"
+      : effectKindLabel(e.kind);
 
   if (e.kind === "change_status") {
     const id = Number(e.payload.order_ui_status_id);
     const name = Number.isFinite(id) && statusNameById?.get(id);
-    return { title, detail: name ?? (e.payload.order_ui_status_id ? `#${e.payload.order_ui_status_id}` : null) };
+    const primary = name ?? (e.payload.order_ui_status_id ? `#${e.payload.order_ui_status_id}` : null);
+    return { title, detailPrefix: null, primaryBold: primary, secondaryDetail: null };
   }
 
   if (e.kind === "generate_document") {
-    const parts = [
-      payloadLabel(DOC_TYPE_LABELS, String(e.payload.doc_type ?? "")),
-      payloadLabel(DOC_SERIES_LABELS, String(e.payload.doc_series ?? "")),
-      payloadLabel(PRINT_STATION_LABELS, String(e.payload.print_station ?? "")),
-    ].filter(Boolean) as string[];
+    const docType = payloadLabel(DOC_TYPE_LABELS, String(e.payload.doc_type ?? ""));
+    const series = payloadLabel(DOC_SERIES_LABELS, String(e.payload.doc_series ?? ""));
+    const station = payloadLabel(PRINT_STATION_LABELS, String(e.payload.print_station ?? ""));
+    const rest = [series, station].filter(Boolean);
     const copies = String(e.payload.copies ?? "").trim();
-    if (copies && copies !== "1") parts.push(`${copies} kopie`);
-    return { title, detail: parts.length ? parts.join(" • ") : null };
+    if (copies && copies !== "1") rest.push(`${copies} kopie`);
+    return {
+      title,
+      detailPrefix: null,
+      primaryBold: docType ? docType.toUpperCase() : null,
+      secondaryDetail: rest.length ? ` • ${rest.join(" • ")}` : null,
+    };
   }
 
   if (e.kind === "send_message") {
-    const parts = [
-      payloadLabel(MESSAGE_TEMPLATE_LABELS, String(e.payload.template ?? "")),
-      payloadLabel(MESSAGE_CHANNEL_LABELS, String(e.payload.message_channel ?? "")),
-    ].filter(Boolean) as string[];
-    return { title, detail: parts.length ? parts.join(" • ") : null };
+    const raw = String(e.payload.template ?? "").trim();
+    const template = payloadLabel(MESSAGE_TEMPLATE_LABELS, raw) ?? (raw || null);
+    return { title, detailPrefix: "SZABLON: ", primaryBold: template, secondaryDetail: null };
   }
 
   if (e.kind === "assign_courier") {
     const courier = String(e.payload.courier ?? "").trim();
     const preset = String(e.payload.courier_preset ?? "").trim();
-    return { title, detail: [courier, preset].filter(Boolean).join(" • ") || null };
+    const primary = courier || preset || null;
+    const rest = courier && preset ? ` • ${preset}` : null;
+    return { title, detailPrefix: null, primaryBold: primary, secondaryDetail: rest };
   }
 
   if (e.kind === "add_tag") {
     const tag = String(e.payload.tag ?? "").trim();
-    return { title, detail: tag || null };
+    return { title, detailPrefix: null, primaryBold: tag || null, secondaryDetail: null };
   }
 
   if (e.kind === "print") {
     const doc =
       String(e.payload.print_document ?? "").trim() || String(e.payload.template ?? "").trim();
     const printer = String(e.payload.printer ?? "").trim();
-    const copies = String(e.payload.copies ?? "").trim();
-    const parts = [doc, printer].filter(Boolean);
-    if (copies && copies !== "1") parts.push(`${copies} kopie`);
-    return { title, detail: parts.length ? parts.join(" • ") : null };
+    return {
+      title,
+      detailPrefix: null,
+      primaryBold: doc || null,
+      secondaryDetail: printer ? ` • ${printer}` : null,
+    };
   }
 
   if (e.kind === "wms_action") {
     const key = String(e.payload.action_key ?? "").trim();
-    return { title, detail: key || null };
+    return { title, detailPrefix: null, primaryBold: key || null, secondaryDetail: null };
   }
 
-  return { title, detail: null };
+  return { title, detailPrefix: null, primaryBold: null, secondaryDetail: null };
+}
+
+/** Etykiety wyzwalaczy reguły (osobne wpisy, bez duplikacji w Nazwie). */
+export function formatRuleTriggerLabels(
+  rule: Pick<OrderAutomationRule, "execution" | "manualTrigger">,
+): string[] {
+  const out: string[] = [];
+  if (rule.execution.onOrderCreated) out.push("Po utworzeniu");
+  if (rule.execution.onStatusChanged) out.push("Zmiana statusu");
+  if (rule.execution.onSchedule) out.push("Harmonogram");
+  if (rule.manualTrigger.enabled) out.push("Ręcznie");
+  return out;
+}
+
+/** Nazwa reguły do kolumny Nazwa (bez workflow). */
+export function formatRuleListName(rule: Pick<OrderAutomationRule, "name">): string {
+  const name = rule.name.trim();
+  return name || "—";
 }
 
 const GENERIC_RULE_NAMES = new Set(["nowa automatyzacja", ""]);
 
-/** Nagłówek wiersza listy: nazwa użytkownika + workflow pod spodem. */
+/** @deprecated użyj formatRuleListName — bez workflow w kolumnie Nazwa */
 export function formatRuleListHeadline(
   rule: Pick<OrderAutomationRule, "name" | "conditions" | "effects">,
   statusNameById?: Map<number, string>,
@@ -258,12 +302,7 @@ export function compareRulesByPublicId(a: OrderAutomationRule, b: OrderAutomatio
 }
 
 export function primaryTriggerLabel(r: Pick<OrderAutomationRule, "execution" | "manualTrigger">): string {
-  const parts: string[] = [];
-  if (r.execution.onOrderCreated) parts.push("Po utworzeniu");
-  if (r.execution.onStatusChanged) parts.push("Zmiana statusu");
-  if (r.execution.onSchedule) parts.push("Harmonogram");
-  if (r.manualTrigger.enabled) parts.push("Przycisk ręczny");
-  return parts.join(" · ") || "—";
+  return formatRuleTriggerLabels(r).join(" · ") || "—";
 }
 
 /** Krótki token do tabeli / chipów (np. „Status = Nowe”). */
