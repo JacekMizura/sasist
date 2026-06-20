@@ -30,6 +30,7 @@ type Props = {
   icon?: ReactNode;
   tone?: PurchasingKpiTone;
   className?: string;
+  density?: "default" | "compact";
   trend?: {
     label: string;
     sentiment?: PurchasingKpiTrendSentiment;
@@ -53,12 +54,16 @@ function PurchasingKpiCardInner({
   icon,
   tone = "default",
   className = "",
+  density = "default",
   trend,
   to,
 }: Props) {
   const hex = TONE_HEX[tone];
+  const compact = density === "compact";
   const cardClass = [
-    "relative flex min-h-[88px] flex-col rounded-xl border border-slate-100 bg-white p-4 shadow-sm transition-all duration-200",
+    compact
+      ? "relative flex min-h-[72px] flex-col rounded-xl border border-slate-100 bg-white p-3 shadow-sm transition-all duration-200"
+      : "relative flex min-h-[88px] flex-col rounded-xl border border-slate-100 bg-white p-4 shadow-sm transition-all duration-200",
     to ? "cursor-pointer hover:border-slate-200 hover:shadow-md" : "",
     className,
   ]
@@ -70,10 +75,12 @@ function PurchasingKpiCardInner({
 
   const inner = (
     <>
-      <div className="mb-2 flex items-start justify-between gap-2">
+      <div className={`flex items-start justify-between gap-2 ${compact ? "mb-1.5" : "mb-2"}`}>
         <h3 className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{title}</h3>
         <div
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg [&_svg]:h-4 [&_svg]:w-4 [&_svg]:stroke-[2]"
+          className={`flex shrink-0 items-center justify-center rounded-lg ${
+            compact ? "h-7 w-7 [&_svg]:h-3.5 [&_svg]:w-3.5" : "h-8 w-8 [&_svg]:h-4 [&_svg]:w-4"
+          } [&_svg]:stroke-[2]`}
           style={icon ? { backgroundColor: `${hex}26`, color: hex } : undefined}
           aria-hidden={!icon}
         >
@@ -82,7 +89,13 @@ function PurchasingKpiCardInner({
       </div>
       <div className="mt-auto">
         <div className="mb-0.5 flex flex-wrap items-end gap-2">
-          <div className="text-2xl font-bold leading-none tracking-tight tabular-nums text-slate-800">{value}</div>
+          <div
+            className={`font-bold leading-none tracking-tight tabular-nums text-slate-800 ${
+              compact ? "text-xl" : "text-2xl"
+            }`}
+          >
+            {value}
+          </div>
           {trend && TrendIcon ? (
             <div
               className={`mb-0.5 flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-bold ${TREND_CLASS[trendSentiment]}`}
@@ -92,7 +105,11 @@ function PurchasingKpiCardInner({
             </div>
           ) : null}
         </div>
-        {subtitle ? <div className="line-clamp-2 text-xs font-medium text-slate-400">{subtitle}</div> : null}
+        {subtitle ? (
+          <div className={`font-medium text-slate-400 ${compact ? "line-clamp-1 text-[11px]" : "line-clamp-2 text-xs"}`}>
+            {subtitle}
+          </div>
+        ) : null}
       </div>
     </>
   );

@@ -35,7 +35,8 @@ import {
   moduleTableCardClass,
 } from "../../components/listPage/moduleList";
 import { listSellasistToolbarToggleBtn } from "../../components/listPage/listSellasistTokens";
-import { PurchasingKpiCard, PurchasingKpiGrid } from "../../modules/purchasing/ui";
+import { ProductionKpiCard } from "./components/ProductionKpiCard";
+import { ProductionKpiGrid } from "./components/ProductionKpiGrid";
 import {
   DEFAULT_PRODUCTION_ANALYTICS_FILTERS,
   type ProductionAnalyticsFilters,
@@ -137,33 +138,43 @@ export default function ProductionAnalyticsPage() {
       </div>
 
       {!loading ? (
-        <PurchasingKpiGrid columns={3}>
-          <PurchasingKpiCard title="Aktywne receptury" value={activeCount} tone="indigo" icon={<Package aria-hidden />} />
-          <PurchasingKpiCard
+        <ProductionKpiGrid>
+          <ProductionKpiCard title="Aktywne receptury" value={activeCount} tone="indigo" icon={<Package aria-hidden />} />
+          <ProductionKpiCard
             title="Średni koszt produktu"
             value={avgCost > 0 ? formatProductionMoney(avgCost) : "—"}
             tone="blue"
             icon={<Banknote aria-hidden />}
           />
-          <PurchasingKpiCard
+          <ProductionKpiCard
             title="Receptury z brakami"
             value={lowStockCount}
             tone={lowStockCount > 0 ? "amber" : "emerald"}
             icon={<AlertTriangle aria-hidden />}
           />
-          <PurchasingKpiCard title="Możliwa produkcja" value={totalProducible} subtitle="Σ max. wyprodukowalność" tone="emerald" icon={<TrendingUp aria-hidden />} />
-          <PurchasingKpiCard title="Średnia marża" value="—" subtitle="Wymaga danych cen sprzedaży" tone="purple" icon={<Percent aria-hidden />} />
-          <PurchasingKpiCard
+          <ProductionKpiCard
+            title="Możliwa produkcja"
+            value={totalProducible}
+            subtitle="Σ max. wyprodukowalność"
+            tone="emerald"
+            icon={<TrendingUp aria-hidden />}
+          />
+          <ProductionKpiCard title="Średnia marża" value="—" subtitle="Wymaga danych cen sprzedaży" tone="purple" icon={<Percent aria-hidden />} />
+          <ProductionKpiCard
             title="Koszt materiałów"
             value={materialCostSum > 0 ? formatProductionMoney(materialCostSum) : "—"}
             subtitle="Szacunek na stanie WG"
             tone="default"
             icon={<Banknote aria-hidden />}
           />
-          {efficiency != null ? (
-            <PurchasingKpiCard title="Efektywność produkcji" value={`${efficiency}%`} tone="blue" icon={<Percent aria-hidden />} />
-          ) : null}
-        </PurchasingKpiGrid>
+          <ProductionKpiCard
+            title="Efektywność produkcji"
+            value={efficiency != null ? `${efficiency}%` : "—"}
+            subtitle={efficiency != null ? "Z pulpitu produkcji" : "Brak danych w API"}
+            tone="blue"
+            icon={<Percent aria-hidden />}
+          />
+        </ProductionKpiGrid>
       ) : null}
 
       <div className="flex flex-wrap items-end justify-between gap-4">

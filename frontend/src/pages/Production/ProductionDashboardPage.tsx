@@ -14,7 +14,9 @@ import { useActiveWarehouseContext } from "../../hooks/useActiveWarehouseContext
 import { fetchProductionDashboard, type ProductionBatchSummaryRead, type ProductionDashboardRead } from "../../api/productionApi";
 import { ActiveWarehouseRequiredBanner } from "../../components/layout/ActiveWarehouseRequiredBanner";
 import { AppEmptyState } from "../../components/app-shell";
-import { PurchasingKpiCard, PurchasingKpiGrid, PurchasingTableSection } from "../../modules/purchasing/ui";
+import { ProductionKpiCard } from "./components/ProductionKpiCard";
+import { ProductionKpiGrid } from "./components/ProductionKpiGrid";
+import { PurchasingTableSection } from "../../modules/purchasing/ui";
 import { erpProductionPaths, wmsProductionPaths } from "./productionPaths";
 import { BATCH_STATUS_LABEL, batchStatusBadgeClass } from "./productionUi";
 import { ProductThumb } from "./components/ProductThumb";
@@ -97,8 +99,8 @@ export default function ProductionDashboardPage() {
         <p className="text-sm text-slate-500">Wczytywanie danych…</p>
       ) : data ? (
         <>
-          <PurchasingKpiGrid columns={4}>
-            <PurchasingKpiCard
+          <ProductionKpiGrid>
+            <ProductionKpiCard
               title="Zaplanowane partie"
               value={data.planned_batches}
               subtitle="Partie w harmonogramie"
@@ -106,7 +108,7 @@ export default function ProductionDashboardPage() {
               icon={<ClipboardList aria-hidden />}
               to={erpProductionPaths.planning}
             />
-            <PurchasingKpiCard
+            <ProductionKpiCard
               title="W realizacji"
               value={data.active_batches}
               subtitle="Zbieranie, produkcja, odłożenie"
@@ -114,7 +116,7 @@ export default function ProductionDashboardPage() {
               icon={<Factory aria-hidden />}
               to={erpProductionPaths.orders}
             />
-            <PurchasingKpiCard
+            <ProductionKpiCard
               title="Braki materiałowe"
               value={data.batches_with_shortages}
               subtitle="Partie zablokowane stanem"
@@ -122,7 +124,7 @@ export default function ProductionDashboardPage() {
               icon={<AlertTriangle aria-hidden />}
               to={`${erpProductionPaths.orders}?shortages=1`}
             />
-            <PurchasingKpiCard
+            <ProductionKpiCard
               title="Ukończone dziś"
               value={data.finished_today}
               subtitle="Partie zamknięte dziś"
@@ -130,21 +132,21 @@ export default function ProductionDashboardPage() {
               icon={<CheckCircle2 aria-hidden />}
               to={erpProductionPaths.history}
             />
-            <PurchasingKpiCard
+            <ProductionKpiCard
               title="Produkcja w toku (szt.)"
               value={unitsInProgress}
               subtitle="Suma zaplanowanych sztuk w toku"
               tone="purple"
               icon={<Package aria-hidden />}
             />
-            <PurchasingKpiCard
+            <ProductionKpiCard
               title="Wartość produkcji w toku"
               value="—"
               subtitle="Wycena po kosztach receptur (wkrótce)"
               tone="amber"
               icon={<Banknote aria-hidden />}
             />
-            <PurchasingKpiCard
+            <ProductionKpiCard
               title="Średni koszt partii"
               value="—"
               subtitle="Na podstawie receptur aktywnych"
@@ -152,7 +154,7 @@ export default function ProductionDashboardPage() {
               icon={<TrendingUp aria-hidden />}
               to={erpProductionPaths.analytics}
             />
-            <PurchasingKpiCard
+            <ProductionKpiCard
               title="Efektywność"
               value={`${efficiency}%`}
               subtitle="Udział partii zakończonych dziś"
@@ -164,7 +166,7 @@ export default function ProductionDashboardPage() {
                   : undefined
               }
             />
-          </PurchasingKpiGrid>
+          </ProductionKpiGrid>
 
           {blocked.length > 0 ? (
             <div className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">

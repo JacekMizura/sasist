@@ -18,7 +18,8 @@ import {
   moduleListTheadClass,
   moduleTableCardClass,
 } from "../../components/listPage/moduleList";
-import { PurchasingKpiCard, PurchasingKpiGrid } from "../../modules/purchasing/ui";
+import { ProductionKpiCard } from "./components/ProductionKpiCard";
+import { ProductionKpiGrid } from "./components/ProductionKpiGrid";
 import { BATCH_STATUS_LABEL, batchStatusBadgeClass } from "./productionUi";
 import { erpProductionPaths } from "./productionPaths";
 import { ProgressBar } from "./components/ProgressBar";
@@ -141,12 +142,12 @@ export default function BatchesListPage({ embedded = false }: Props) {
   if (embedded) {
     return (
       <div className="space-y-6">
-        <PurchasingKpiGrid columns={4}>
-          <PurchasingKpiCard title="Partie aktywne" value={stats.total} tone="indigo" icon={<Package aria-hidden />} />
-          <PurchasingKpiCard title="Zaplanowane" value={stats.planned} tone="purple" icon={<CalendarClock aria-hidden />} />
-          <PurchasingKpiCard title="W realizacji" value={stats.active} tone="blue" icon={<Factory aria-hidden />} />
-          <PurchasingKpiCard title="Z brakami" value={stats.shortages} tone="amber" icon={<AlertTriangle aria-hidden />} />
-        </PurchasingKpiGrid>
+        <ProductionKpiGrid>
+          <ProductionKpiCard title="Partie aktywne" value={stats.total} tone="indigo" icon={<Package aria-hidden />} />
+          <ProductionKpiCard title="Zaplanowane" value={stats.planned} tone="purple" icon={<CalendarClock aria-hidden />} />
+          <ProductionKpiCard title="W realizacji" value={stats.active} tone="blue" icon={<Factory aria-hidden />} />
+          <ProductionKpiCard title="Z brakami" value={stats.shortages} tone="amber" icon={<AlertTriangle aria-hidden />} />
+        </ProductionKpiGrid>
         {table}
       </div>
     );

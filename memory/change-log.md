@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-06-08 — Produkcja: ujednolicenie siatki KPI
+
+- `ProductionKpiGrid` (4 kolumny desktop) + `ProductionKpiCard` (`density="compact"`)
+- Analiza kosztów: układ 4+3 zamiast 3+3+1; efektywność zawsze widoczna (— gdy brak danych)
+- Pulpit, Planowanie, Historia — migracja na wspólne komponenty KPI
+
 ## 2026-06-08 — Planer floty: redesign UX + nawigacja modułu Wózki
 
 - Trasa `/carts/optimizer` w shellu Wózki (breadcrumb, zakładki); redirect z `/optimizer`

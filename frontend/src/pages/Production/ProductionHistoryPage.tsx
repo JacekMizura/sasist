@@ -32,7 +32,8 @@ import {
   moduleTableCardClass,
 } from "../../components/listPage/moduleList";
 import { listSellasistToolbarToggleBtn } from "../../components/listPage/listSellasistTokens";
-import { PurchasingKpiCard, PurchasingKpiGrid } from "../../modules/purchasing/ui";
+import { ProductionKpiCard } from "./components/ProductionKpiCard";
+import { ProductionKpiGrid } from "./components/ProductionKpiGrid";
 import {
   DEFAULT_PRODUCTION_HISTORY_FILTERS,
   type ProductionHistoryFilters,
@@ -248,17 +249,17 @@ export default function ProductionHistoryPage() {
       </ListFilterEmbeddedShell>
 
       {!loading ? (
-        <PurchasingKpiGrid columns={4}>
-          <PurchasingKpiCard title="Ukończone partie" value={kpis.completedBatches} tone="emerald" icon={<Package aria-hidden />} />
-          <PurchasingKpiCard title="Wyprodukowane sztuki" value={kpis.units} tone="blue" icon={<TrendingUp aria-hidden />} />
-          <PurchasingKpiCard
+        <ProductionKpiGrid>
+          <ProductionKpiCard title="Ukończone partie" value={kpis.completedBatches} tone="emerald" icon={<Package aria-hidden />} />
+          <ProductionKpiCard title="Wyprodukowane sztuki" value={kpis.units} tone="blue" icon={<TrendingUp aria-hidden />} />
+          <ProductionKpiCard
             title="Średni koszt"
             value={kpis.avgCost != null ? formatProductionMoney(kpis.avgCost) : "—"}
             tone="indigo"
             icon={<TrendingUp aria-hidden />}
           />
-          <PurchasingKpiCard title="Średni czas realizacji" value="—" subtitle="Brak danych czasowych w API" tone="default" icon={<Clock aria-hidden />} />
-        </PurchasingKpiGrid>
+          <ProductionKpiCard title="Średni czas realizacji" value="—" subtitle="Brak danych czasowych w API" tone="default" icon={<Clock aria-hidden />} />
+        </ProductionKpiGrid>
       ) : null}
 
       {loading ? (
