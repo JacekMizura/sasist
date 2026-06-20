@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   autoUpdate,
@@ -11,29 +11,20 @@ import {
   useInteractions,
 } from "@floating-ui/react";
 import {
-  ChevronDown,
+  ArrowRight,
   Copy,
   FlaskConical,
-  GripVertical,
   MoreHorizontal,
   Pencil,
   Play,
+  Plus,
   Search,
   Trash2,
-  Plus,
 } from "lucide-react";
 import toast from "react-hot-toast";
 
-import { flatSectionDividerClass } from "../../components/layout/flatSectionTokens";
-import {
-  moduleListEmptyStateClass,
-  moduleListRowClass,
-  moduleListTdClass,
-  moduleListThClass,
-  moduleListTheadClass,
-  moduleListTableClass,
-  moduleListTableScrollClass,
-} from "../../components/listPage/moduleList";
+import { moduleEditorFullWidthClass } from "../../components/layout/flatSectionTokens";
+import { moduleListEmptyStateClass } from "../../components/listPage/moduleList";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { useAuth } from "../../context/AuthContext";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
@@ -42,13 +33,8 @@ import type { OrderAutomationRule } from "../../types/orderAutomation";
 import type { OrderAutomationScope } from "../../utils/orderAutomationLocalStore";
 import { getOrderUiStatusSummary } from "../../api/orderUiStatusApi";
 import type { OrderUiStatusPanelSummary } from "../../types/orderUiStatus";
-import {
-  formatConditionChipShort,
-  formatEffectChipShort,
-  formatEffectPill,
-} from "../../utils/orderAutomationPreview";
-import { getStatusClass } from "../../components/orders/orderList/OrderListPanelStatusBadge";
-import { oaBtn, oaBtnPri, oaChip, oaInp } from "../../components/orders/automation/orderAutomationUiTokens";
+import { formatAutomationSentencePl } from "../../utils/orderAutomationPreview";
+import { oaBtn, oaBtnPri, oaInp } from "../../components/orders/automation/orderAutomationUiTokens";
 
 const MENU_PANEL =
   "z-[100] min-w-[12rem] rounded-lg border border-slate-200 bg-white py-1 shadow-lg outline-none";
@@ -64,6 +50,15 @@ function fmtTime(iso: string | null | undefined) {
   } catch {
     return iso;
   }
+}
+
+function triggerLabels(r: OrderAutomationRule): string[] {
+  const out: string[] = [];
+  if (r.execution.onOrderCreated) out.push("Utworzenie");
+  if (r.execution.onStatusChanged) out.push("Status");
+  if (r.execution.onSchedule) out.push("Harmonogram");
+  if (r.manualTrigger.enabled) out.push("Ręczny");
+  return out;
 }
 
 function RuleRowMenu({ onTest, onLogs }: { onTest: () => void; onLogs: () => void }) {
@@ -85,11 +80,11 @@ function RuleRowMenu({ onTest, onLogs }: { onTest: () => void; onLogs: () => voi
         type="button"
         ref={refs.setReference}
         {...getReferenceProps()}
-        className={oaBtn.replace("px-4", "px-2")}
+        className={`${oaBtn} h-7 px-2`}
         aria-label="Więcej opcji"
         onClick={() => setOpen((o) => !o)}
       >
-        <MoreHorizontal className="h-4 w-4" strokeWidth={2} />
+        <MoreHorizontal className="h-3.5 w-3.5" strokeWidth={2} />
       </button>
       {open ? (
         <FloatingPortal id="floating-portal-order-automation-kebab">
@@ -109,12 +104,91 @@ function RuleRowMenu({ onTest, onLogs }: { onTest: () => void; onLogs: () => voi
   );
 }
 
-function triggerLabel(r: OrderAutomationRule): string {
-  if (r.execution.onOrderCreated) return "Po utworzeniu";
-  if (r.execution.onStatusChanged) return "Zmiana statusu";
-  if (r.execution.onSchedule) return "Harmonogram";
-  if (r.manualTrigger.enabled) return "Przycisk ręczny";
-  return "—";
+type RuleRowProps = {
+  rule: OrderAutomationRule;
+  statusNameById: Map<number, string>;
+  basePath: string;
+  onToggle: () => void;
+  onDuplicate: () => void;
+  onDelete: () => void;
+  onTest: () => void;
+  onLogs: () => void;
+};
+
+function AutomationRuleRow({
+  rule,
+  statusNameById,
+  basePath,
+  onToggle,
+  onDuplicate,
+  onDelete,
+  onTest,
+  onLogs,
+}: RuleRowProps) {
+  const navigate = useNavigate();
+  const { ifLine, thenLine } = formatAutomationSentencePl(rule, statusNameById);
+  const triggers = triggerLabels(rule);
+
+  return (
+    <div className="group grid grid-cols-[auto_minmax(10rem,16rem)_minmax(5rem,8rem)_minmax(0,1fr)_auto_auto] items-center gap-x-3 border-b border-gray-100 px-2 py-1.5 hover:bg-slate-50/80">
+      <label className="cursor-pointer" title={rule.enabled ? "Wyłącz" : "Włącz"}>
+        <input
+          type="checkbox"
+          className="h-3.5 w-3.5 rounded border-slate-300"
+          checked={rule.enabled}
+          onChange={onToggle}
+        />
+      </label>
+
+      <button
+        type="button"
+        className={`min-w-0 truncate text-left text-sm font-semibold ${rule.enabled ? "text-slate-900" : "text-slate-400"}`}
+        title={rule.name}
+        onClick={() => navigate(`${basePath}/${rule.id}/edit`)}
+      >
+        {rule.name}
+      </button>
+
+      <div className="flex min-w-0 flex-wrap gap-1">
+        {triggers.length === 0 ? (
+          <span className="text-[10px] text-slate-400">—</span>
+        ) : (
+          triggers.map((t) => (
+            <span key={t} className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
+              {t}
+            </span>
+          ))
+        )}
+      </div>
+
+      <div className="flex min-w-0 items-center gap-2 text-xs text-slate-600">
+        <span className="min-w-0 truncate" title={ifLine}>
+          <span className="font-medium text-slate-400">Jeśli</span> {ifLine}
+        </span>
+        <ArrowRight className="h-3 w-3 shrink-0 text-slate-300" aria-hidden />
+        <span className="min-w-0 truncate" title={thenLine}>
+          <span className="font-medium text-slate-400">To</span> {thenLine}
+        </span>
+      </div>
+
+      <span className="hidden shrink-0 text-[10px] tabular-nums text-slate-400 lg:inline" title={`Ostatnio: ${fmtTime(rule.stats.lastRunAt)}`}>
+        {rule.stats.runCount}×
+      </span>
+
+      <div className="flex shrink-0 items-center gap-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100">
+        <button type="button" className={`${oaBtn} h-7 px-2`} title="Edytuj" onClick={() => navigate(`${basePath}/${rule.id}/edit`)}>
+          <Pencil className="h-3.5 w-3.5" />
+        </button>
+        <button type="button" className={`${oaBtn} h-7 px-2`} title="Duplikuj" onClick={onDuplicate}>
+          <Copy className="h-3.5 w-3.5" />
+        </button>
+        <button type="button" className={`${oaBtn} h-7 px-2 text-red-600 hover:bg-red-50`} title="Usuń" onClick={onDelete}>
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+        <RuleRowMenu onTest={onTest} onLogs={onLogs} />
+      </div>
+    </div>
+  );
 }
 
 export default function OrderAutomationListPage() {
@@ -134,7 +208,6 @@ export default function OrderAutomationListPage() {
 
   const [q, setQ] = useState("");
   const [group, setGroup] = useState<string>("all");
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const [statusSummary, setStatusSummary] = useState<OrderUiStatusPanelSummary | null>(null);
   const [testRule, setTestRule] = useState<OrderAutomationRule | null>(null);
 
@@ -180,7 +253,8 @@ export default function OrderAutomationListPage() {
     return rules.filter((r) => {
       if (group !== "all" && (r.group || "—") !== group) return false;
       if (!s) return true;
-      const blob = `${r.name} ${r.group} ${r.conditions.map((c) => formatConditionChipShort(c, statusNameById)).join(" ")} ${r.effects.map((e) => formatEffectPill(e, statusNameById)).join(" ")}`.toLowerCase();
+      const { ifLine, thenLine } = formatAutomationSentencePl(r, statusNameById);
+      const blob = `${r.name} ${r.group} ${ifLine} ${thenLine}`.toLowerCase();
       return blob.includes(s);
     });
   }, [rules, q, group, statusNameById]);
@@ -194,8 +268,6 @@ export default function OrderAutomationListPage() {
     }
     return [...m.entries()].sort(([a], [b]) => a.localeCompare(b, "pl"));
   }, [filtered]);
-
-  const toggleGrp = (g: string) => setOpenGroups((prev) => ({ ...prev, [g]: !(prev[g] ?? true) }));
 
   if (wid == null) {
     return <p className="text-sm text-slate-600">Wybierz magazyn w nagłówku aplikacji.</p>;
@@ -214,171 +286,84 @@ export default function OrderAutomationListPage() {
   }
 
   return (
-    <div className="pt-6">
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+    <div className={`${moduleEditorFullWidthClass} pt-4`}>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="text-xl font-semibold text-slate-900">{pageTitle}</h2>
-          <p className="mt-1 text-sm text-slate-500">
-            {filtered.length} {filtered.length === 1 ? "akcja" : filtered.length < 5 ? "akcje" : "akcji"}
-          </p>
+          <h2 className="text-lg font-semibold text-slate-900">{pageTitle}</h2>
+          <p className="text-xs text-slate-500">{filtered.length} reguł · szybki podgląd workflow</p>
         </div>
-        <Link to={`${basePath}/new`} className={`${oaBtnPri} gap-2`}>
-          <Plus className="h-4 w-4" strokeWidth={2} aria-hidden />
-          Dodaj akcję
+        <Link to={`${basePath}/new`} className={`${oaBtnPri} h-8 gap-1.5 px-3 text-xs`}>
+          <Plus className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+          Nowa automatyzacja
         </Link>
       </div>
-      <div className={`${flatSectionDividerClass} mb-6`} aria-hidden />
 
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative min-w-0 flex-1 sm:max-w-md">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" strokeWidth={2} />
+      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+        <div className="relative min-w-0 flex-1">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" strokeWidth={2} />
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Szukaj po nazwie, warunkach…"
-            className={`${oaInp} pl-10`}
+            placeholder="Szukaj po nazwie, warunkach, akcjach…"
+            className={`${oaInp} h-8 pl-8 text-xs`}
           />
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <select value={group} onChange={(e) => setGroup(e.target.value)} className={`${oaInp} w-auto min-w-[10rem]`}>
-            <option value="all">Wszystkie grupy</option>
-            {groups.map((g) => (
-              <option key={g} value={g}>{g}</option>
-            ))}
-          </select>
-          <span className="text-sm text-slate-500">Łącznie: {filtered.length}</span>
-        </div>
+        <select value={group} onChange={(e) => setGroup(e.target.value)} className={`${oaInp} h-8 w-auto min-w-[9rem] text-xs`}>
+          <option value="all">Wszystkie grupy</option>
+          {groups.map((g) => (
+            <option key={g} value={g}>{g}</option>
+          ))}
+        </select>
       </div>
 
       {filtered.length === 0 ? (
-        <div className="py-10">
-          <p className="text-sm font-medium text-slate-800">Brak akcji</p>
-          <p className="mt-1 text-sm text-slate-500">Dodaj pierwszą akcję automatyczną lub zmień filtry wyszukiwania.</p>
-          <Link to={`${basePath}/new`} className={`${oaBtnPri} mt-4 inline-flex`}>
-            Dodaj akcję
+        <div className="py-8 text-center">
+          <p className="text-sm font-medium text-slate-800">Brak automatyzacji</p>
+          <p className="mt-1 text-xs text-slate-500">Dodaj regułę lub zmień filtry.</p>
+          <Link to={`${basePath}/new`} className={`${oaBtnPri} mt-3 inline-flex h-8 text-xs`}>
+            Nowa automatyzacja
           </Link>
         </div>
       ) : (
-        <div className="space-y-8">
-          {byGroup.map(([gName, list]) => {
-            const open = openGroups[gName] ?? true;
-            return (
-              <section key={gName}>
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-2 text-left"
-                  onClick={() => toggleGrp(gName)}
-                >
-                  <ChevronDown className={`h-4 w-4 shrink-0 text-slate-500 transition-transform ${!open ? "-rotate-90" : ""}`} />
-                  <h3 className="text-sm font-semibold text-slate-900">{gName}</h3>
-                  <span className="text-xs text-slate-500">({list.length})</span>
-                </button>
-                <div className={`${flatSectionDividerClass} mt-3`} aria-hidden />
-                {open ? (
-                  <div className={`${moduleListTableScrollClass} mt-4`}>
-                    <table className={moduleListTableClass}>
-                      <thead className={moduleListTheadClass}>
-                        <tr>
-                          <th className={`${moduleListThClass} w-8`} />
-                          <th className={moduleListThClass}>Nazwa</th>
-                          <th className={moduleListThClass}>Wyzwalacz</th>
-                          <th className={moduleListThClass}>Warunki</th>
-                          <th className={moduleListThClass}>Akcje</th>
-                          <th className={`${moduleListThClass} w-36 text-right`}>Operacje</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {list.map((r) => (
-                          <tr key={r.id} className={moduleListRowClass}>
-                            <td className={moduleListTdClass}>
-                              <GripVertical className="h-4 w-4 text-slate-300" aria-hidden />
-                            </td>
-                            <td className={moduleListTdClass}>
-                              <div className="min-w-0">
-                                <p className={`truncate font-medium ${r.enabled ? "text-slate-900" : "text-slate-500"}`}>{r.name}</p>
-                                <p className="mt-0.5 text-xs text-slate-500">
-                                  {r.enabled ? "Aktywna" : "Wyłączona"} · Wykonano: {r.stats.runCount}
-                                  {r.stats.lastRunAt ? ` · ${fmtTime(r.stats.lastRunAt)}` : ""}
-                                </p>
-                              </div>
-                            </td>
-                            <td className={`${moduleListTdClass} text-slate-600`}>{triggerLabel(r)}</td>
-                            <td className={moduleListTdClass}>
-                              <div className="flex flex-wrap gap-1">
-                                {r.conditions.length === 0 ? (
-                                  <span className="text-xs text-slate-400">Zawsze</span>
-                                ) : (
-                                  r.conditions.map((c, i) => {
-                                    const st = c.fieldKey === "order_status" && c.value && statusNameById.has(Number(c.value)) ? statusNameById.get(Number(c.value))! : null;
-                                    const cls = st ? getStatusClass(st) : "";
-                                    return (
-                                      <Fragment key={c.uid}>
-                                        <span className={`${oaChip} max-w-[14rem] truncate ${st ? `border-l-2 ${cls}` : ""}`} title={formatConditionChipShort(c, statusNameById)}>
-                                          {formatConditionChipShort(c, statusNameById)}
-                                        </span>
-                                        {i < r.conditions.length - 1 ? (
-                                          <span className="text-[10px] font-medium text-slate-400">{c.joinToNext === "or" ? "LUB" : "ORAZ"}</span>
-                                        ) : null}
-                                      </Fragment>
-                                    );
-                                  })
-                                )}
-                              </div>
-                            </td>
-                            <td className={moduleListTdClass}>
-                              <div className="flex flex-wrap gap-1">
-                                {r.effects.length === 0 ? (
-                                  <span className="text-xs text-slate-400">—</span>
-                                ) : (
-                                  r.effects.map((e) => (
-                                    <span key={e.uid} className={`${oaChip} max-w-[14rem] truncate`} title={formatEffectPill(e, statusNameById)}>
-                                      {formatEffectChipShort(e, statusNameById)}
-                                    </span>
-                                  ))
-                                )}
-                              </div>
-                            </td>
-                            <td className={`${moduleListTdClass} text-right`}>
-                              <div className="flex items-center justify-end gap-1">
-                                <label className="mr-1 cursor-pointer" title="Włącz/wyłącz">
-                                  <input
-                                    type="checkbox"
-                                    className="h-4 w-4 rounded border-slate-300"
-                                    checked={r.enabled}
-                                    onChange={() => setEnabled(r.id, !r.enabled)}
-                                  />
-                                </label>
-                                <button type="button" className={oaBtn.replace("px-4", "px-2")} title="Edytuj" onClick={() => navigate(`${basePath}/${r.id}/edit`)}>
-                                  <Pencil className="h-4 w-4" />
-                                </button>
-                                <button
-                                  type="button"
-                                  className={oaBtn.replace("px-4", "px-2")}
-                                  title="Duplikuj"
-                                  onClick={() => { duplicateRule(r.id); toast.success("Zduplikowano."); }}
-                                >
-                                  <Copy className="h-4 w-4" />
-                                </button>
-                                <button
-                                  type="button"
-                                  className={oaBtn.replace("px-4", "px-2 text-red-600 hover:bg-red-50")}
-                                  title="Usuń"
-                                  onClick={() => { if (!window.confirm(`Usunąć „${r.name}”?`)) return; deleteRule(r.id); toast.success("Usunięto."); }}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </button>
-                                <RuleRowMenu onTest={() => setTestRule(r)} onLogs={() => navigate("/orders/automation/logs")} />
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : null}
-              </section>
-            );
-          })}
+        <div className="space-y-5">
+          <div className="hidden grid-cols-[auto_minmax(10rem,16rem)_minmax(5rem,8rem)_minmax(0,1fr)_auto_auto] gap-x-3 border-b border-gray-200 px-2 pb-1 text-[10px] font-bold uppercase tracking-wide text-slate-400 lg:grid">
+            <span />
+            <span>Nazwa</span>
+            <span>Wyzwalacz</span>
+            <span>Reguła</span>
+            <span>Runs</span>
+            <span />
+          </div>
+
+          {byGroup.map(([gName, list]) => (
+            <section key={gName}>
+              <div className="sticky top-0 z-10 flex items-center gap-2 border-y border-gray-200 bg-slate-50/95 px-3 py-2 backdrop-blur-sm">
+                <h3 className="text-xs font-bold uppercase tracking-wide text-slate-700">{gName}</h3>
+                <span className="rounded-full bg-white px-1.5 py-0.5 text-[10px] font-medium text-slate-500 ring-1 ring-gray-200">
+                  {list.length}
+                </span>
+              </div>
+              <div>
+                {list.map((r) => (
+                  <AutomationRuleRow
+                    key={r.id}
+                    rule={r}
+                    statusNameById={statusNameById}
+                    basePath={basePath}
+                    onToggle={() => setEnabled(r.id, !r.enabled)}
+                    onDuplicate={() => { duplicateRule(r.id); toast.success("Zduplikowano."); }}
+                    onDelete={() => {
+                      if (!window.confirm(`Usunąć „${r.name}”?`)) return;
+                      deleteRule(r.id);
+                      toast.success("Usunięto.");
+                    }}
+                    onTest={() => setTestRule(r)}
+                    onLogs={() => navigate("/orders/automation/logs")}
+                  />
+                ))}
+              </div>
+            </section>
+          ))}
         </div>
       )}
 

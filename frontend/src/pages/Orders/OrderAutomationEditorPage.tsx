@@ -42,12 +42,12 @@ import { getManualIconComponent } from "@/modules/orders/automation/utils/orderA
 import { getOrderUiStatusSummary } from "../../api/orderUiStatusApi";
 import type { OrderUiStatusPanelSummary } from "../../types/orderUiStatus";
 import { AutomationIconGridPicker } from "../../components/orders/automation/AutomationIconGridPicker";
-import { AutomationCategoryStepMenu } from "../../components/orders/automation/AutomationCategoryStepMenu";
 import { AutomationAnchorMenu, type AutomationAnchorMenuGroup } from "../../components/orders/automation/AutomationAnchorMenu";
-import { WmsOrderedStatusPopover } from "../../components/orders/automation/WmsOrderedStatusPopover";
+import { AutomationCategoryPickerModal } from "../../components/orders/automation/AutomationCategoryPickerModal";
+import { AutomationConditionEditModal } from "../../components/orders/automation/AutomationConditionEditModal";
+import { AutomationEffectEditModal } from "../../components/orders/automation/AutomationEffectEditModal";
 import { AutomationIfThenSection } from "../../components/orders/automation/AutomationIfThenSection";
-import { FlatPageSection } from "../../components/layout/FlatPageSection";
-import { flatFormSectionsStackClass, moduleEditorFullWidthClass } from "../../components/layout/flatSectionTokens";
+import { flatSectionDividerClass, moduleEditorFullWidthClass } from "../../components/layout/flatSectionTokens";
 import { ModuleListBreadcrumb } from "../../components/listPage/moduleList";
 import { IntegrationsApiPanel } from "../Settings/returnsStatusesConfigurator/AdvancedSettingsPanel";
 import {
@@ -63,6 +63,7 @@ import {
   oaBtnPri,
   oaBtnDanger,
   oaInp,
+  oaInpDense,
   oaLbl,
   oaToggleChip,
 } from "../../components/orders/automation/orderAutomationUiTokens";
@@ -230,21 +231,15 @@ export default function OrderAutomationEditorPage() {
   const [nameTouched, setNameTouched] = useState(false);
   const [testOpen, setTestOpen] = useState(false);
 
-  const condAddRef = useRef<HTMLButtonElement>(null);
-  const effAddRef = useRef<HTMLButtonElement>(null);
-  const statusAnchorRef = useRef<HTMLElement | null>(null);
-  const condFieldAnchorRef = useRef<HTMLElement | null>(null);
-  const effectKindAnchorRef = useRef<HTMLElement | null>(null);
+  const [addCondPickerOpen, setAddCondPickerOpen] = useState(false);
+  const [addEffPickerOpen, setAddEffPickerOpen] = useState(false);
+  const [editCondUid, setEditCondUid] = useState<string | null>(null);
+  const [editEffUid, setEditEffUid] = useState<string | null>(null);
   const groupMenuAnchorRef = useRef<HTMLElement | null>(null);
   const iconPickerAnchorRef = useRef<HTMLElement | null>(null);
 
-  const [condMenuOpen, setCondMenuOpen] = useState(false);
-  const [effMenuOpen, setEffMenuOpen] = useState(false);
   const [groupMenuOpen, setGroupMenuOpen] = useState(false);
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
-  const [openConditionFieldFor, setOpenConditionFieldFor] = useState<string | null>(null);
-  const [openEffectKindFor, setOpenEffectKindFor] = useState<string | null>(null);
-  const [statusPick, setStatusPick] = useState<null | { mode: "cond"; uid: string }>(null);
 
   const seededNew = useRef(false);
 
@@ -340,22 +335,23 @@ export default function OrderAutomationEditorPage() {
 
   const addCondition = (fieldKey: string) => {
     const def = ORDER_AUTOMATION_CONDITION_FIELDS.find((f) => f.key === fieldKey);
+    const uid = newUid("c");
     const c: AutomationCondition = {
-      uid: newUid("c"),
+      uid,
       fieldKey,
       operator: def?.valueKind === "number" ? "eq" : "eq",
       value: "",
       joinToNext: "and",
     };
-    setDraft((d) => {
-      const next = [...d.conditions, c];
-      return normalizeRule({ ...d, conditions: next });
-    });
+    setDraft((d) => normalizeRule({ ...d, conditions: [...d.conditions, c] }));
+    setEditCondUid(uid);
   };
 
   const addEffect = (kind: AutomationEffectKind) => {
-    const base: AutomationEffect = { uid: newUid("e"), kind, payload: payloadForKind(kind) };
+    const uid = newUid("e");
+    const base: AutomationEffect = { uid, kind, payload: payloadForKind(kind) };
     setDraft((d) => ({ ...d, effects: [...d.effects, base] }));
+    setEditEffUid(uid);
   };
 
   const duplicateCondition = (c: AutomationCondition) => {
@@ -403,11 +399,6 @@ export default function OrderAutomationEditorPage() {
     );
   };
 
-  const openStatus = (el: HTMLElement, pick: { mode: "cond"; uid: string }) => {
-    statusAnchorRef.current = el;
-    setStatusPick(pick);
-  };
-
   const save = () => {
     setNameTouched(true);
     if (!draft.name.trim()) {
@@ -419,12 +410,11 @@ export default function OrderAutomationEditorPage() {
     if (isNew) navigate(`${baseList}/${draft.id}/edit`, { replace: true });
   };
 
-  const selectedStatusId =
-    statusPick?.mode === "cond"
-      ? Number(draft.conditions.find((c) => c.uid === statusPick.uid)?.value) || null
-      : null;
-
   const nameInvalid = nameTouched && !draft.name.trim();
+
+  const editingCondition = editCondUid ? draft.conditions.find((c) => c.uid === editCondUid) ?? null : null;
+  const editingConditionIdx = editCondUid ? draft.conditions.findIndex((c) => c.uid === editCondUid) : -1;
+  const editingEffect = editEffUid ? draft.effects.find((e) => e.uid === editEffUid) ?? null : null;
 
   const breadcrumbItems = useMemo(() => {
     const base = [
@@ -466,68 +456,73 @@ export default function OrderAutomationEditorPage() {
     <div className={`${moduleEditorFullWidthClass} min-w-0 pb-8 text-[13px] text-slate-900`}>
       <ModuleListBreadcrumb items={breadcrumbItems} />
 
-      <div className="mb-8 mt-6">
-        <h1 className="text-2xl font-semibold text-slate-900">{isNew ? "Nowa akcja automatyczna" : "Edycja akcji automatycznej"}</h1>
+      <div className="mb-4 mt-4 flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-xl font-semibold text-slate-900">{isNew ? "Nowa automatyzacja" : draft.name || "Edycja automatyzacji"}</h1>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" className={`${oaBtn} gap-2`} onClick={() => setTestOpen(true)}>
+            <FlaskConical className="h-4 w-4" /> Test
+          </button>
+          <button type="button" className={`${oaBtnPri} gap-2`} onClick={save}>
+            <Save className="h-4 w-4" /> Zapisz
+          </button>
+        </div>
       </div>
 
-      <div className={flatFormSectionsStackClass}>
-        <FlatPageSection title="Nazwa akcji" dense>
-          <div className="grid gap-5 sm:grid-cols-12 sm:items-end">
-            <div className="sm:col-span-6">
-              <label className={oaLbl}>
-                Nazwa
-                <input
-                  type="text"
-                  className={`${oaInp} mt-1 ${nameInvalid ? "border-red-400 ring-2 ring-red-200" : ""}`}
-                  value={draft.name}
-                  placeholder="np. Zmiana statusu po opłaceniu"
-                  onBlur={() => setNameTouched(true)}
-                  onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
-                />
-              </label>
-              {nameInvalid ? <span className="mt-1 block text-xs text-red-600">Pole wymagane</span> : null}
-            </div>
-            <div className="sm:col-span-4">
-              <span className={oaLbl}>Grupa akcji</span>
-              <button
-                type="button"
-                className={`${oaInp} mt-1 flex items-center justify-between text-left`}
-                onClick={(e) => {
-                  groupMenuAnchorRef.current = e.currentTarget;
-                  setGroupMenuOpen(true);
-                }}
-              >
-                <span className="truncate">{draft.group || "—"}</span>
-                <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" />
-              </button>
-            </div>
-            <label className={`${oaLbl} flex items-center gap-2 sm:col-span-2 sm:pb-2`}>
-              <input
-                type="checkbox"
-                className="h-4 w-4 rounded border-slate-300"
-                checked={draft.enabled}
-                onChange={() => setDraft((d) => ({ ...d, enabled: !d.enabled }))}
-              />
-              Aktywna
-            </label>
+      <div className="space-y-4">
+        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem_5rem] sm:items-end">
+          <label className={oaLbl}>
+            Nazwa
+            <input
+              type="text"
+              className={`${oaInp} mt-1 ${nameInvalid ? "border-red-400 ring-2 ring-red-200" : ""}`}
+              value={draft.name}
+              placeholder="np. Zmiana statusu po opłaceniu"
+              onBlur={() => setNameTouched(true)}
+              onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
+            />
+          </label>
+          <div>
+            <span className={oaLbl}>Grupa</span>
+            <button
+              type="button"
+              className={`${oaInp} mt-1 flex items-center justify-between text-left`}
+              onClick={(e) => {
+                groupMenuAnchorRef.current = e.currentTarget;
+                setGroupMenuOpen(true);
+              }}
+            >
+              <span className="truncate">{draft.group || "—"}</span>
+              <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" />
+            </button>
           </div>
-        </FlatPageSection>
+          <label className={`${oaLbl} flex h-9 items-center gap-2 pb-0.5`}>
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-slate-300"
+              checked={draft.enabled}
+              onChange={() => setDraft((d) => ({ ...d, enabled: !d.enabled }))}
+            />
+            Aktywna
+          </label>
+        </div>
+        {nameInvalid ? <span className="block text-xs text-red-600">Nazwa jest wymagana</span> : null}
 
-        <FlatPageSection title="Wyzwalacze" dense>
-          <div className="flex flex-wrap gap-2">
+        <div>
+          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Wyzwalacze</p>
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               className={oaToggleChip(draft.execution.onOrderCreated)}
               onClick={() => setDraft((d) => ({ ...d, execution: { ...d.execution, onOrderCreated: !d.execution.onOrderCreated } }))}
             >
-              <Activity className="h-4 w-4" /> Po utworzeniu
+              <Activity className="h-3.5 w-3.5" /> Po utworzeniu
             </button>
             <button
               type="button"
               className={oaToggleChip(draft.execution.onStatusChanged)}
               onClick={() => setDraft((d) => ({ ...d, execution: { ...d.execution, onStatusChanged: !d.execution.onStatusChanged } }))}
             >
-              <Activity className="h-4 w-4" /> Zmiana statusu
+              <Activity className="h-3.5 w-3.5" /> Zmiana statusu
             </button>
             <button
               type="button"
@@ -541,12 +536,73 @@ export default function OrderAutomationEditorPage() {
                 })
               }
             >
-              <Calendar className="h-4 w-4" /> Harmonogram
+              <Calendar className="h-3.5 w-3.5" /> Harmonogram
             </button>
+            <IntegrationsApiPanel title="⋯ Więcej wyzwalaczy">
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-800">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-slate-300"
+                  checked={draft.manualTrigger.enabled}
+                  onChange={() => setDraft((d) => ({ ...d, manualTrigger: { ...d.manualTrigger, enabled: !d.manualTrigger.enabled } }))}
+                />
+                <MousePointerClick className="h-4 w-4 text-slate-500" />
+                Przycisk ręczny na zamówieniu
+              </label>
+              {draft.manualTrigger.enabled ? (
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <label className={oaLbl}>
+                    Nazwa przycisku
+                    <input
+                      className={`${oaInp} mt-1`}
+                      value={draft.manualTrigger.label}
+                      onChange={(e) => setDraft((d) => ({ ...d, manualTrigger: { ...d.manualTrigger, label: e.target.value } }))}
+                    />
+                  </label>
+                  <label className={oaLbl}>
+                    Skrót (opcja)
+                    <input
+                      className={`${oaInp} mt-1`}
+                      placeholder="np. Ctrl+P"
+                      value={draft.manualTrigger.shortcut}
+                      onChange={(e) => setDraft((d) => ({ ...d, manualTrigger: { ...d.manualTrigger, shortcut: e.target.value } }))}
+                    />
+                  </label>
+                  <div>
+                    <span className={oaLbl}>Ikona</span>
+                    <button
+                      type="button"
+                      className={`${oaInp} mt-1 flex items-center justify-between`}
+                      onClick={(e) => {
+                        iconPickerAnchorRef.current = e.currentTarget;
+                        setIconPickerOpen(true);
+                      }}
+                    >
+                      <span className="flex items-center gap-2">
+                        {(() => {
+                          const Icon = getManualIconComponent(draft.manualTrigger.iconKey);
+                          return <Icon className="h-4 w-4 text-slate-600" />;
+                        })()}
+                        {draft.manualTrigger.iconKey}
+                      </span>
+                      <ChevronDown className="h-4 w-4 text-slate-400" />
+                    </button>
+                  </div>
+                  <label className={oaLbl}>
+                    Kolor
+                    <input
+                      type="color"
+                      className="mt-1 h-9 w-full cursor-pointer rounded-lg border border-slate-200 p-0.5"
+                      value={draft.manualTrigger.color?.startsWith("#") ? draft.manualTrigger.color : "#0f172a"}
+                      onChange={(e) => setDraft((d) => ({ ...d, manualTrigger: { ...d.manualTrigger, color: e.target.value } }))}
+                    />
+                  </label>
+                </div>
+              ) : null}
+            </IntegrationsApiPanel>
           </div>
-
           {draft.execution.onSchedule ? (
-            <div className={`${moduleListTableScrollClass} mt-5`}>
+            <div className={`${moduleListTableScrollClass} mt-3`}>
               <table className={moduleListTableClass}>
                 <thead className={moduleListTheadClass}>
                   <tr>
@@ -614,117 +670,27 @@ export default function OrderAutomationEditorPage() {
               </table>
             </div>
           ) : null}
+        </div>
 
-          <IntegrationsApiPanel title="⋯ Przycisk ręczny">
-            <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-800">
-              <input
-                type="checkbox"
-                className="h-4 w-4 rounded border-slate-300"
-                checked={draft.manualTrigger.enabled}
-                onChange={() => setDraft((d) => ({ ...d, manualTrigger: { ...d.manualTrigger, enabled: !d.manualTrigger.enabled } }))}
-              />
-              <MousePointerClick className="h-4 w-4 text-slate-500" />
-              Pokaż jako przycisk akcji na ekranie zamówienia
-            </label>
-            {draft.manualTrigger.enabled ? (
-              <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                <label className={oaLbl}>
-                  Nazwa przycisku
-                  <input
-                    className={`${oaInp} mt-1`}
-                    value={draft.manualTrigger.label}
-                    onChange={(e) => setDraft((d) => ({ ...d, manualTrigger: { ...d.manualTrigger, label: e.target.value } }))}
-                  />
-                </label>
-                <label className={oaLbl}>
-                  Kolor
-                  <input
-                    type="color"
-                    className="mt-1 h-9 w-full cursor-pointer rounded-lg border border-slate-200 p-0.5"
-                    value={draft.manualTrigger.color?.startsWith("#") ? draft.manualTrigger.color : "#0f172a"}
-                    onChange={(e) => setDraft((d) => ({ ...d, manualTrigger: { ...d.manualTrigger, color: e.target.value } }))}
-                  />
-                </label>
-                <div>
-                  <span className={oaLbl}>Ikona</span>
-                  <button
-                    type="button"
-                    className={`${oaInp} mt-1 flex items-center justify-between`}
-                    onClick={(e) => {
-                      iconPickerAnchorRef.current = e.currentTarget;
-                      setIconPickerOpen(true);
-                    }}
-                  >
-                    <span className="flex items-center gap-2">
-                      {(() => {
-                        const Icon = getManualIconComponent(draft.manualTrigger.iconKey);
-                        return <Icon className="h-4 w-4 text-slate-600" />;
-                      })()}
-                      {draft.manualTrigger.iconKey}
-                    </span>
-                    <ChevronDown className="h-4 w-4 text-slate-400" />
-                  </button>
-                </div>
-                <label className={oaLbl}>
-                  Skrót klawiszowy (opcja)
-                  <input
-                    className={`${oaInp} mt-1`}
-                    placeholder="np. Ctrl+P"
-                    value={draft.manualTrigger.shortcut}
-                    onChange={(e) => setDraft((d) => ({ ...d, manualTrigger: { ...d.manualTrigger, shortcut: e.target.value } }))}
-                  />
-                </label>
-              </div>
-            ) : null}
-          </IntegrationsApiPanel>
-        </FlatPageSection>
+        <div className={flatSectionDividerClass} aria-hidden />
 
         <AutomationIfThenSection
           conditions={draft.conditions}
           effects={draft.effects}
-          ops={ops}
           statusNameById={statusNameById}
-          panelStatusOptions={panelStatusOptions}
-          condAddRef={condAddRef}
-          effAddRef={effAddRef}
-          onOpenCondMenu={() => setCondMenuOpen(true)}
-          onOpenEffMenu={() => setEffMenuOpen(true)}
-          onOpenConditionField={(uid, anchor) => {
-            condFieldAnchorRef.current = anchor;
-            setOpenConditionFieldFor(uid);
-          }}
-          onOpenEffectKind={(uid, anchor) => {
-            effectKindAnchorRef.current = anchor;
-            setOpenEffectKindFor(uid);
-          }}
-          onOpenStatus={(el, uid) => openStatus(el, { mode: "cond", uid })}
-          onPatchConditionOperator={(uid, operator) =>
-            setDraft((d) =>
-              normalizeRule({
-                ...d,
-                conditions: d.conditions.map((x) => (x.uid === uid ? { ...x, operator } : x)),
-              }),
-            )
-          }
-          onPatchConditionValue={(uid, value) =>
-            setDraft((d) =>
-              normalizeRule({
-                ...d,
-                conditions: d.conditions.map((x) => (x.uid === uid ? { ...x, value } : x)),
-              }),
-            )
-          }
-          onSetJoinToNext={setJoinToNext}
+          onAddCondition={() => setAddCondPickerOpen(true)}
+          onAddEffect={() => setAddEffPickerOpen(true)}
+          onEditCondition={setEditCondUid}
+          onEditEffect={setEditEffUid}
           onDuplicateCondition={duplicateCondition}
           onRemoveCondition={(uid) =>
             setDraft((d) => normalizeRule({ ...d, conditions: d.conditions.filter((x) => x.uid !== uid) }))
           }
           onDuplicateEffect={duplicateEffect}
           onRemoveEffect={(uid) => setDraft((d) => ({ ...d, effects: d.effects.filter((x) => x.uid !== uid) }))}
-          onPatchEffectPayload={patchEffectPayload}
         />
 
-        <FlatPageSection title="Historia zmian" dense>
+        <IntegrationsApiPanel title="⋯ Historia zmian">
           <div className={moduleListTableScrollClass}>
             <table className={moduleListTableClass}>
               <thead className={moduleListTheadClass}>
@@ -745,85 +711,75 @@ export default function OrderAutomationEditorPage() {
               </tbody>
             </table>
           </div>
-        </FlatPageSection>
+        </IntegrationsApiPanel>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 pt-8">
-          <div className="flex flex-wrap gap-2">
-            <button type="button" className={oaBtn} onClick={() => navigate(baseList)}>Anuluj</button>
-            {!isNew ? (
-              <button
-                type="button"
-                className={oaBtnDanger}
-                onClick={() => {
-                  if (!window.confirm("Usunąć tę automatyzację?")) return;
-                  deleteRule(draft.id);
-                  toast.success("Usunięto.");
-                  navigate(baseList);
-                }}
-              >
-                <Trash2 className="h-4 w-4" /> Usuń
-              </button>
-            ) : null}
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button type="button" className={`${oaBtn} gap-2`} onClick={() => setTestOpen(true)}>
-              <FlaskConical className="h-4 w-4" /> Test
+        <div className="flex flex-wrap items-center gap-2 border-t border-gray-200 pt-4">
+          <button type="button" className={oaBtn} onClick={() => navigate(baseList)}>Anuluj</button>
+          {!isNew ? (
+            <button
+              type="button"
+              className={oaBtnDanger}
+              onClick={() => {
+                if (!window.confirm("Usunąć tę automatyzację?")) return;
+                deleteRule(draft.id);
+                toast.success("Usunięto.");
+                navigate(baseList);
+              }}
+            >
+              <Trash2 className="h-4 w-4" /> Usuń
             </button>
-            <button type="button" className={`${oaBtnPri} gap-2`} onClick={save}>
-              <Save className="h-4 w-4" /> Zapisz
-            </button>
-          </div>
+          ) : null}
         </div>
       </div>
 
       {/* MENU I POPOVERY */}
-      <AutomationCategoryStepMenu
-        open={condMenuOpen}
-        anchorRef={condAddRef}
+      <AutomationCategoryPickerModal
+        open={addCondPickerOpen}
         title="Dodaj warunek"
         categories={conditionCategorySteps}
-        onClose={() => setCondMenuOpen(false)}
+        onClose={() => setAddCondPickerOpen(false)}
         onPick={(id) => addCondition(id)}
       />
-      <AutomationCategoryStepMenu
-        open={effMenuOpen}
-        anchorRef={effAddRef}
+      <AutomationCategoryPickerModal
+        open={addEffPickerOpen}
         title="Dodaj akcję"
         categories={effectCategorySteps}
-        onClose={() => setEffMenuOpen(false)}
+        onClose={() => setAddEffPickerOpen(false)}
         onPick={(id) => addEffect(id as AutomationEffectKind)}
       />
-      <AutomationCategoryStepMenu
-        open={openConditionFieldFor !== null}
-        anchorRef={condFieldAnchorRef}
-        title="Wybierz pole"
-        categories={conditionCategorySteps}
-        onClose={() => setOpenConditionFieldFor(null)}
-        onPick={(id) => {
-          const uid = openConditionFieldFor;
-          if (uid) {
+      {wid != null && editingCondition ? (
+        <AutomationConditionEditModal
+          open={editCondUid !== null}
+          condition={editingCondition}
+          ops={ops}
+          statusNameById={statusNameById}
+          tenantId={DAMAGE_TENANT_ID}
+          warehouseId={wid}
+          showJoin={editingConditionIdx >= 0 && editingConditionIdx < draft.conditions.length - 1}
+          joinToNext={editingCondition.joinToNext ?? "and"}
+          onClose={() => setEditCondUid(null)}
+          onPatch={(patch) =>
             setDraft((d) =>
               normalizeRule({
                 ...d,
-                conditions: d.conditions.map((x) => (x.uid === uid ? { ...x, fieldKey: id, value: "" } : x)),
+                conditions: d.conditions.map((x) => (x.uid === editingCondition.uid ? { ...x, ...patch } : x)),
               }),
-            );
+            )
           }
-          setOpenConditionFieldFor(null);
-        }}
-      />
-      <AutomationCategoryStepMenu
-        open={openEffectKindFor !== null}
-        anchorRef={effectKindAnchorRef}
-        title="Zmień akcję"
-        categories={effectCategorySteps}
-        onClose={() => setOpenEffectKindFor(null)}
-        onPick={(id) => {
-          const uid = openEffectKindFor;
-          if (uid) patchEffectKind(uid, id as AutomationEffectKind);
-          setOpenEffectKindFor(null);
-        }}
-      />
+          onSetJoin={(join) => setJoinToNext(editingCondition.uid, join)}
+        />
+      ) : null}
+      {editingEffect ? (
+        <AutomationEffectEditModal
+          open={editEffUid !== null}
+          effect={editingEffect}
+          statusNameById={statusNameById}
+          panelStatusOptions={panelStatusOptions}
+          onClose={() => setEditEffUid(null)}
+          onChangeKind={(kind) => patchEffectKind(editingEffect.uid, kind)}
+          onPatchPayload={(partial) => patchEffectPayload(editingEffect.uid, partial)}
+        />
+      ) : null}
       <AutomationAnchorMenu
         open={groupMenuOpen}
         anchorRef={groupMenuAnchorRef}
@@ -858,21 +814,6 @@ export default function OrderAutomationEditorPage() {
         onClose={() => setIconPickerOpen(false)}
         onPick={(key) => setDraft((d) => ({ ...d, manualTrigger: { ...d.manualTrigger, iconKey: key, iconSource: "system" } }))}
       />
-      {statusPick && wid != null ? (
-        <WmsOrderedStatusPopover
-          open
-          anchorRef={statusAnchorRef}
-          tenantId={DAMAGE_TENANT_ID}
-          warehouseId={wid}
-          selectedId={selectedStatusId}
-          onClose={() => setStatusPick(null)}
-          onSelect={(sid) => {
-            setDraft((d) => normalizeRule({ ...d, conditions: d.conditions.map((c) => (c.uid === statusPick.uid ? { ...c, value: String(sid) } : c)) }));
-            setStatusPick(null);
-          }}
-        />
-      ) : null}
-
       {/* STICKY FOOTER removed — actions under form */}
 
       {/* MODAL TESTOWY */}

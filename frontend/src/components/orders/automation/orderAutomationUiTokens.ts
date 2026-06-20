@@ -43,3 +43,7 @@ export const oaWorkflowBlockBodyClass = "px-4 py-1";
 export const oaWorkflowFieldRowClass =
   "grid grid-cols-[minmax(7.5rem,9.5rem)_minmax(0,1fr)] items-center gap-x-4 border-b border-gray-100 py-2.5 last:border-b-0";
 export const oaWorkflowFieldLabelClass = "text-sm text-slate-500";
+
+/** Zwarta karta podsumowania w workflow builderze. */
+export const oaWorkflowSummaryCardClass =
+  "flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 transition hover:border-slate-300";
