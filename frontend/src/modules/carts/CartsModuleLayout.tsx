@@ -1,30 +1,52 @@
-import { Outlet } from "react-router-dom";
+import { useMemo } from "react";
+import { Outlet, useLocation } from "react-router-dom";
 
+import { flatSectionDividerClass } from "../../components/layout/flatSectionTokens";
+import PageLayout from "../../components/layout/PageLayout";
 import { TabsNav } from "../../components/layout/TabsNav";
+import { ModuleListBreadcrumb } from "../../components/listPage/moduleList";
+import { UI_STRINGS } from "../../constants/uiStrings";
 import { CARTS_TABS } from "./cartsTabs";
 
+/** Pełnoekranowy widok szczegółu / edycji — bez zakładek modułu (wzorzec Materiały magazynowe). */
+const FULL_PAGE_CONTENT =
+  /^\/carts\/(?:carriers\/[^/]+|racks\/(?:new|[^/]+(?:\/(?:edit|preview))?))$/;
+
 /**
- * Wózki module shell — one white workspace (same rhythm as Dokumenty / PageContainer).
- * Tabs sit flush under the card border; content uses dense ERP padding.
+ * Shell modułu Wózki — breadcrumb → tytuł → zakładki → treść
+ * (wzorzec Dostawcy / Materiały magazynowe / Zwroty; bez karty wokół tabów).
  */
 export default function CartsModuleLayout() {
+  const { pathname } = useLocation();
+  const fullPageContent = useMemo(() => FULL_PAGE_CONTENT.test(pathname), [pathname]);
+
+  if (fullPageContent) {
+    return (
+      <PageLayout fullBleed>
+        <Outlet />
+      </PageLayout>
+    );
+  }
+
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <div className="w-full min-w-0 flex-1 p-4 md:p-6">
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="shrink-0 border-b border-slate-200 bg-white px-4 pt-3 sm:px-5">
-            <TabsNav
-              items={CARTS_TABS}
-              exact
-              className="w-full gap-6 overflow-x-auto [-webkit-overflow-scrolling:touch]"
-              aria-label="Wózki — zakładki"
-            />
-          </div>
-          <main className="min-h-0 flex-1 overflow-auto bg-white p-4 sm:p-5">
-            <Outlet />
-          </main>
-        </div>
+    <PageLayout fullBleed>
+      <ModuleListBreadcrumb
+        items={[
+          { label: "Magazyn", to: "/carts/bulk" },
+          { label: UI_STRINGS.navigation.carts },
+        ]}
+      />
+      <h1 className="text-2xl font-semibold text-slate-900">{UI_STRINGS.navigation.carts}</h1>
+      <TabsNav
+        items={CARTS_TABS}
+        exact
+        aria-label="Wózki — zakładki"
+        className="mt-6 gap-8"
+      />
+      <div className={`${flatSectionDividerClass} mt-3`} aria-hidden />
+      <div className="pt-6">
+        <Outlet />
       </div>
-    </div>
+    </PageLayout>
   );
 }

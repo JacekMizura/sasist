@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-06-08 — Nośniki (Wózki): płaski layout modułu + KPI + tabela standard
+
+- `CartsModuleLayout`: breadcrumb → tytuł → `TabsNav` → treść (jak Materiały magazynowe); bypass pełnoekranowy dla szczegółu nośnika / edycji regału
+- `WarehouseCarriersPage`: `ListPageHeader`, kafelki KPI (`PurchasingKpiGrid`), akcje w toolbarze, sekcje grup bez zagnieżdżonych ramek
+- `CarrierGroupCard`: płaska sekcja (nagłówek + tabela), przycisk „Dodaj nośnik”
+- `CarriersGroupTable`: proporcjonalna tabela modułu, kolumna Akcje 120px sticky, `OperationalActionColumn`
+
 ## 2026-06-08 — Zestawy: standard UI jak Produkty / Producenci / Dostawcy
 
 - `BundlesPage`: `ListPageHeader` z licznikiem wyników i opisem sekcji; toolbar (Filtry, Widoczne pola, Eksport)
