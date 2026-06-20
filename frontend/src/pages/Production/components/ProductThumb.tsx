@@ -1,4 +1,4 @@
-import { Package } from "lucide-react";
+import { ImageIcon, Package } from "lucide-react";
 
 type Props = {
   imageUrl?: string | null;
@@ -13,14 +13,29 @@ const SIZE_CLASS = {
   lg: "h-20 w-20",
 };
 
+/** Miniatury produktu bez tła i ramek — czyste zdjęcie, spójne w całym ERP/WMS. */
 export function ProductThumb({ imageUrl, name, size = "md", className = "" }: Props) {
-  const box = `${SIZE_CLASS[size]} shrink-0 rounded-xl border border-slate-200 bg-slate-50 overflow-hidden flex items-center justify-center ${className}`;
-  if (imageUrl?.trim()) {
-    return <img src={imageUrl} alt={name ?? ""} className={`${box} object-contain p-1`} />;
+  const dim = SIZE_CLASS[size];
+  const src = (imageUrl ?? "").trim();
+
+  if (src) {
+    return (
+      <img
+        src={src}
+        alt={name ?? ""}
+        className={`${dim} shrink-0 object-contain ${className}`.trim()}
+        loading="lazy"
+      />
+    );
   }
+
   return (
-    <div className={`${box} text-slate-300`} aria-hidden>
-      <Package className="h-1/2 w-1/2" />
+    <div
+      className={`${dim} flex shrink-0 items-center justify-center text-slate-300 ${className}`.trim()}
+      aria-hidden={!name}
+      title={name}
+    >
+      {size === "sm" ? <Package className="h-5 w-5" strokeWidth={1.5} /> : <ImageIcon className="h-6 w-6" strokeWidth={1.5} />}
     </div>
   );
 }

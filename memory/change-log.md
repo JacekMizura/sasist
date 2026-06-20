@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-06-08 — Produkcja / Receptury: redesign listy + miniatury
+
+- `ProductThumb` bez ramek i szarego tła (Produkcja, OMS panel, WMS inwentaryzacja)
+- Receptury: ikony akcji zamiast menu „…”, drawer składników, `PurchasingTableSection`
+- `ProductionRowIconActions`, `RecipeIngredientsDrawer`
+
 ## 2026-06-08 — BDO: pełny redesign UX/UI
 
 - Layout jak Produkcja/Magazyn: breadcrumb Asortyment → BDO → zakładka, tytuł + opis, TabsNav
