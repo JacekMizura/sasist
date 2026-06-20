@@ -39,13 +39,13 @@ export default function PurchasingForecastCharts({
         title="Wolumen sprzedaży (szt. / mies.)"
         subtitle={`Ekstrapolacja: (suma szt. w oknie ${rangeDays} dni ÷ ${rangeDays}) × 30 = ${s.total_monthly_sales.toLocaleString("pl-PL")}. Wartość magazynu (szac. koszt): ${s.total_stock_value.toLocaleString("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
       >
-        <div className="h-[300px] w-full min-w-0">
+        <div className="h-[220px] w-full min-w-0">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={data.charts.sales_trend ?? []} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
               <XAxis dataKey="date" tickFormatter={fmtShortDate} tick={{ fontSize: 11 }} />
-              <YAxis yAxisId="left" tick={{ fontSize: 11 }} />
-              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} />
+              <YAxis yAxisId="left" tick={{ fontSize: 11 }} width={48} />
+              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} width={48} />
               <Tooltip
                 formatter={(value: number, name: string) => [
                   typeof value === "number" ? value.toLocaleString("pl-PL") : value,
@@ -61,12 +61,18 @@ export default function PurchasingForecastCharts({
       </PurchasingAnalysisSection>
 
       <PurchasingAnalysisSection title="Top rotacja (30 dni)" subtitle="Kliknij słupek, aby wczytać produkt w inspektorze.">
-        <div className="h-[320px] w-full min-w-0">
+        <div className="h-[240px] w-full min-w-0">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={barData} layout="vertical" margin={{ top: 8, right: 24, left: 8, bottom: 8 }}>
+            <BarChart data={barData} layout="vertical" margin={{ top: 4, right: 16, left: 4, bottom: 4 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
               <XAxis type="number" tick={{ fontSize: 11 }} />
-              <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 10 }} />
+              <YAxis
+                type="category"
+                dataKey="name"
+                width={148}
+                tick={{ fontSize: 11 }}
+                tickFormatter={(value: string) => (value.length > 18 ? `${value.slice(0, 16)}…` : value)}
+              />
               <Tooltip
                 formatter={(v: number) => [v.toLocaleString("pl-PL"), "Szt. (30 dni)"]}
                 labelFormatter={(label) => {

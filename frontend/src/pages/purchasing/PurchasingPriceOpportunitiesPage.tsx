@@ -2,8 +2,10 @@
  * Oszczędności zakupowe — okazje cenowe wyłącznie z danych systemu (bez sztucznych kwot).
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { PiggyBank } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import api from "../../api/axios";
+import { AppEmptyState } from "../../components/app-shell";
 import {
   fetchPurchasingPriceOpportunities,
   type PriceOpportunityDrawer,
@@ -340,6 +342,13 @@ export default function PurchasingPriceOpportunitiesPage() {
         }
         table={
           <PurchasingTableSection title="Okazje cenowe" indicatorClass="bg-emerald-500">
+            {!loading && wierszeWidoczne.length === 0 ? (
+              <AppEmptyState
+                icon={PiggyBank}
+                title="Brak okazji cenowych"
+                description={data?.data_message ?? "Brak wierszy spełniających kryteria — zmień filtry lub okres analizy."}
+              />
+            ) : (
             <table className="min-w-[960px] w-full border-collapse text-left text-sm">
               <PurchasingTableHeader
                 headers={[
@@ -358,14 +367,8 @@ export default function PurchasingPriceOpportunitiesPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={9} className="px-3 py-8 text-center text-slate-500">
+                <td colSpan={9} className="px-3 py-4 text-center text-slate-500">
                   Wczytywanie…
-                </td>
-              </tr>
-            ) : wierszeWidoczne.length === 0 ? (
-              <tr>
-                <td colSpan={9} className="px-3 py-8 text-center text-slate-600">
-                  {data?.data_message ?? "Brak wierszy spełniających kryteria."}
                 </td>
               </tr>
             ) : (
@@ -416,6 +419,7 @@ export default function PurchasingPriceOpportunitiesPage() {
             )}
           </tbody>
         </table>
+            )}
           </PurchasingTableSection>
         }
         footer={

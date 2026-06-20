@@ -1,5 +1,14 @@
 # Change log
 
+## 2026-06-08 — Zakupy i planowanie: kompaktowy UX/UI (10 zakładek)
+
+- Wspólne komponenty modułu: mniejsze KPI (`PurchasingKpiCard` bez min-height, p-4, text-2xl), gęstsze odstępy (`PurchasingContentArea`, `PurchasingPageShell`, `PurchasingFilterBar`, `PurchasingAnalysisSection`)
+- `PurchasingDataPanel`: usunięto `flex-grow` — sekcje dopasowują wysokość do treści
+- Pulpit, Generator, PO, Prognoza, Priorytety, Alerty, Auto-uzupełnianie, Oszczędności, Historia współpracy: `AppEmptyState` zamiast pustych kontenerów z dużym paddingiem
+- Prognoza: wykresy 220/240px, czytelniejsze etykiety osi Y (truncate + szersza oś)
+- Priorytety: kompaktowa heatmapa (mniejsze kafle, line-clamp opisów)
+- Historia współpracy: jedna sekcja podsumowania zamiast dwóch pustych kart
+
 ## 2026-06-08 — Produkcja ERP: kolumna Akcje na końcu tabel
 
 - Wszystkie listy modułu: Zlecenia, Planowanie (BatchesListPage), Receptury, Historia, Analiza kosztów — kolumna Akcje sticky right (tokens `productsListActions*`), ostatnia kolumna

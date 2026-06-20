@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useState } from "react";
-import { AlertOctagon, ArrowRight, Banknote, Clock, ShoppingCart, Truck, Users } from "lucide-react";
+import { AlertOctagon, ArrowRight, Banknote, Clock, FileText, PackageSearch, ShoppingCart, Truck, Users } from "lucide-react";
 import { Link } from "react-router-dom";
+import { AppEmptyState } from "../../../components/app-shell";
 import {
   fetchPurchasingDashboard,
   type PurchasingDashboardPayload,
@@ -61,7 +62,7 @@ function PlanningDashboardInner() {
     void load();
   }, [load, refreshSignal]);
 
-  const td = "px-4 py-3 text-sm text-slate-800 sm:px-6 sm:py-4";
+  const td = "px-4 py-2.5 text-sm text-slate-800";
   const tenantQ = `?tenant_id=${tenantId}`;
   const genHref = `/purchasing/replenishment${tenantQ}`;
   const ordersHref = `/purchasing/orders${tenantQ}`;
@@ -140,7 +141,7 @@ function PlanningDashboardInner() {
         }
         analysis={
           data ? (
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               <PurchasingTableSection
                 title="Do natychmiastowego uzupełnienia"
                 subtitle="Top 10 produktów krytycznych"
@@ -152,17 +153,21 @@ function PlanningDashboardInner() {
                 }
               >
                 {data.critical_products.length === 0 ? (
-                  <p className="px-6 py-8 text-sm text-slate-500">Brak pozycji spełniających kryterium.</p>
+                  <AppEmptyState
+                    icon={PackageSearch}
+                    title="Brak pozycji krytycznych"
+                    description="Żaden produkt nie spełnia obecnie kryterium natychmiastowego uzupełnienia."
+                  />
                 ) : (
                   <table className="w-full text-left text-sm">
                     <PurchasingTableHeader>
                       <tr>
-                        <th className="px-6 py-4 text-left">Produkt</th>
-                        <th className="px-6 py-4 text-right">Stan</th>
-                        <th className="px-6 py-4 text-right">Śr./Dzień</th>
-                        <th className="px-6 py-4 text-center">Dni</th>
-                        <th className="px-6 py-4 text-left">Dostawca</th>
-                        <th className="px-6 py-4 text-right" />
+                        <th className="px-4 py-2.5 text-left">Produkt</th>
+                        <th className="px-4 py-2.5 text-right">Stan</th>
+                        <th className="px-4 py-2.5 text-right">Śr./Dzień</th>
+                        <th className="px-4 py-2.5 text-center">Dni</th>
+                        <th className="px-4 py-2.5 text-left">Dostawca</th>
+                        <th className="px-4 py-2.5 text-right" />
                       </tr>
                     </PurchasingTableHeader>
                     <tbody className="divide-y divide-slate-100">
@@ -209,18 +214,20 @@ function PlanningDashboardInner() {
                 }
               >
                 {data.suggested_orders.length === 0 ? (
-                  <p className="px-6 py-12 text-center text-sm italic text-slate-400">
-                    Brak sugestii przy obecnych danych (sprzedaż / stany).
-                  </p>
+                  <AppEmptyState
+                    icon={ShoppingCart}
+                    title="Brak sugestii zamówień"
+                    description="Przy obecnych danych sprzedaży i stanów magazynowych nie ma propozycji do zamówienia."
+                  />
                 ) : (
                   <table className="w-full text-left text-sm">
                     <PurchasingTableHeader>
                       <tr>
-                        <th className="px-6 py-4 text-left">Produkt</th>
-                        <th className="px-6 py-4 text-right">Sug. Ilość</th>
-                        <th className="px-6 py-4 text-left">Dostawca</th>
-                        <th className="px-6 py-4 text-right">Szac. Koszt</th>
-                        <th className="px-6 py-4 text-right" />
+                        <th className="px-4 py-2.5 text-left">Produkt</th>
+                        <th className="px-4 py-2.5 text-right">Sug. Ilość</th>
+                        <th className="px-4 py-2.5 text-left">Dostawca</th>
+                        <th className="px-4 py-2.5 text-right">Szac. Koszt</th>
+                        <th className="px-4 py-2.5 text-right" />
                       </tr>
                     </PurchasingTableHeader>
                     <tbody className="divide-y divide-slate-100">
@@ -263,16 +270,20 @@ function PlanningDashboardInner() {
               }
             >
               {data.recent_orders.length === 0 ? (
-                <p className="px-6 py-8 text-sm text-slate-500">Brak dokumentów PZ w bazie.</p>
+                <AppEmptyState
+                  icon={FileText}
+                  title="Brak przyjęć PZ"
+                  description="Dokumenty przyjęcia zewnętrznego pojawią się tutaj po zaksięgowaniu w magazynie."
+                />
               ) : (
                 <table className="w-full text-left text-sm">
                   <PurchasingTableHeader>
                     <tr>
-                      <th className="px-6 py-4 text-left">Numer / Nazwa</th>
-                      <th className="px-6 py-4 text-left">Dostawca</th>
-                      <th className="px-6 py-4 text-left">Status</th>
-                      <th className="px-6 py-4 text-left">Data</th>
-                      <th className="px-6 py-4 text-right">Akcje</th>
+                      <th className="px-4 py-2.5 text-left">Numer / Nazwa</th>
+                      <th className="px-4 py-2.5 text-left">Dostawca</th>
+                      <th className="px-4 py-2.5 text-left">Status</th>
+                      <th className="px-4 py-2.5 text-left">Data</th>
+                      <th className="px-4 py-2.5 text-right">Akcje</th>
                     </tr>
                   </PurchasingTableHeader>
                   <tbody className="divide-y divide-slate-100">

@@ -3,8 +3,10 @@
  * Filtry wysyłane do API; KPI i heatmapa korzystają z `segment_counts` (pełny obraz niezależnie od filtra wierszy).
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { LayoutGrid } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import api from "../../api/axios";
+import { AppEmptyState } from "../../components/app-shell";
 import { listSuppliers, type SupplierRead } from "../../api/inboundSuppliersApi";
 import { fetchPurchasingSegments, type PurchasingSegmentsPayload } from "../../api/purchasingSegmentsApi";
 import { useWarehouse } from "../../context/WarehouseContext";
@@ -270,13 +272,13 @@ export default function PurchasingSegmentsPage() {
             title="Mapa priorytetów"
             subtitle="Kliknij pole, aby zobaczyć listę produktów w tabeli poniżej (drugi klik wyłącza filtr). Skrót w nawiasie to tylko pomoc sortowania — pod spodem masz ludzki opis."
           >
-            <div className="grid w-full grid-cols-3 gap-2">
+            <div className="grid w-full grid-cols-3 gap-1.5">
               {heatmapTiles.map(({ seg, count, active }) => (
                 <button
                   key={seg}
                   type="button"
                   onClick={() => toggleSegmentFromHeatmap(seg)}
-                  className={`rounded-xl border px-2 py-3 text-left text-xs transition ${
+                  className={`rounded-lg border px-2 py-2 text-left text-xs transition ${
                     active
                       ? "border-sky-500 bg-sky-50 ring-2 ring-sky-300"
                       : "border-slate-200 bg-slate-50/80 hover:border-slate-300 hover:bg-white"
@@ -284,8 +286,8 @@ export default function PurchasingSegmentsPage() {
                 >
                   <div className="font-mono text-sm font-bold text-slate-900">{seg}</div>
                   <div className="mt-0.5 text-[11px] font-medium leading-snug text-slate-800">{segmentBadgeLabel(seg)}</div>
-                  <div className="mt-1 text-[11px] leading-snug text-slate-600">{SEGMENT_USER_HINT[seg]}</div>
-                  <div className="mt-2 text-xs font-semibold text-slate-700">{count} produktów</div>
+                  <div className="mt-0.5 line-clamp-2 text-[10px] leading-snug text-slate-500">{SEGMENT_USER_HINT[seg]}</div>
+                  <div className="mt-1 text-[11px] font-semibold text-slate-700">{count} produktów</div>
                 </button>
               ))}
             </div>
@@ -302,19 +304,27 @@ export default function PurchasingSegmentsPage() {
               </>
             }
           >
-            <table className="min-w-full text-left text-sm">
-              <PurchasingTableHeader
-                headers={[
-                  "Produkt",
-                  "Priorytet (A–C + X–Z)",
-                  "Co rekomendujemy",
-                  "Sprzedaż",
-                  "Stan",
-                  "Wartość st.",
-                  "Dostawca",
-                  "Kolejność uzupełniania",
-                ]}
+            {(data?.rows ?? []).length === 0 && !loading ? (
+              <AppEmptyState
+                icon={LayoutGrid}
+                title="Brak produktów"
+                description="Zmień filtry lub okres sprzedaży, aby zobaczyć segmentację asortymentu."
               />
+            ) : (
+              <>
+                <table className="min-w-full text-left text-sm">
+                  <PurchasingTableHeader
+                    headers={[
+                      "Produkt",
+                      "Priorytet (A–C + X–Z)",
+                      "Co rekomendujemy",
+                      "Sprzedaż",
+                      "Stan",
+                      "Wartość st.",
+                      "Dostawca",
+                      "Kolejność uzupełniania",
+                    ]}
+                  />
           <tbody className="divide-y divide-slate-100">
             {(data?.rows ?? []).map((r) => (
               <tr key={r.product_id}>
@@ -360,9 +370,8 @@ export default function PurchasingSegmentsPage() {
             ))}
           </tbody>
         </table>
-            {!loading && (data?.rows.length ?? 0) === 0 ? (
-              <p className="px-4 py-8 text-center text-sm text-slate-500">Brak produktów spełniających kryteria.</p>
-            ) : null}
+              </>
+            )}
           </PurchasingTableSection>
         }
       />

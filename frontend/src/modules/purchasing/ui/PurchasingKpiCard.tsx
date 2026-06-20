@@ -60,7 +60,7 @@ function PurchasingKpiCardInner({
 }: Props) {
   const hex = TONE_HEX[tone];
   const cardClass = [
-    "relative flex min-h-[148px] flex-col rounded-2xl border border-slate-100 bg-white p-6 shadow-sm transition-all duration-300",
+    "relative flex flex-col rounded-xl border border-slate-100 bg-white p-4 shadow-sm transition-all duration-300",
     to ? "cursor-pointer hover:border-slate-200 hover:shadow-md" : "",
     className,
   ]
@@ -72,20 +72,20 @@ function PurchasingKpiCardInner({
 
   const inner = (
     <>
-      <div className="mb-6 flex items-center justify-between gap-3">
-        <h3 className="text-sm font-semibold text-slate-500">{title}</h3>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <h3 className="text-xs font-semibold text-slate-500">{title}</h3>
         {icon ? (
           <div
-            className="shrink-0 rounded-xl p-2.5 [&_svg]:h-5 [&_svg]:w-5 [&_svg]:stroke-[2]"
+            className="shrink-0 rounded-lg p-2 [&_svg]:h-4 [&_svg]:w-4 [&_svg]:stroke-[2]"
             style={{ backgroundColor: `${hex}26`, color: hex }}
           >
             {icon}
           </div>
         ) : null}
       </div>
-      <div className="mt-auto">
-        <div className="mb-2 flex flex-wrap items-end gap-3">
-          <div className="text-4xl font-bold tracking-tight tabular-nums text-slate-800">{value}</div>
+      <div>
+        <div className="mb-1 flex flex-wrap items-end gap-2">
+          <div className="text-2xl font-bold tracking-tight tabular-nums text-slate-800">{value}</div>
           {trend && TrendIcon ? (
             <div
               className={`mb-1 flex items-center gap-1 rounded-md px-2 py-1 text-xs font-bold ${TREND_CLASS[trendSentiment]}`}

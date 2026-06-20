@@ -26,7 +26,7 @@ function PurchasingPageShellInner({
   footer,
 }: Props) {
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {header}
       {quickActions}
       {status}

@@ -8,7 +8,7 @@ type Props = {
 /** Główny obszar treści zakładki — zgodny z prototypem (px-8 / 2xl:px-12). */
 function PurchasingContentAreaInner({ children, className = "" }: Props) {
   return (
-    <div className={`w-full space-y-8 px-4 pb-12 pt-4 md:px-8 2xl:px-12 ${className}`.trim()}>{children}</div>
+    <div className={`w-full space-y-5 px-4 pb-6 pt-4 md:px-8 2xl:px-12 ${className}`.trim()}>{children}</div>
   );
 }
 

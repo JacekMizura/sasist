@@ -9,12 +9,12 @@ type Props = {
 
 function PurchasingFilterBarInner({ children, actions, footer, className = "" }: Props) {
   return (
-    <div className={`rounded-xl border border-slate-200 bg-white p-4 shadow-sm ${className}`.trim()}>
-      <div className="flex flex-wrap items-end gap-3">
+    <div className={`rounded-xl border border-slate-200 bg-white p-3 shadow-sm ${className}`.trim()}>
+      <div className="flex flex-wrap items-end gap-2">
         {children}
         {actions ? <div className="ml-auto flex flex-wrap items-end gap-2">{actions}</div> : null}
       </div>
-      {footer ? <div className="mt-3 border-t border-slate-100 pt-3">{footer}</div> : null}
+      {footer ? <div className="mt-2 border-t border-slate-100 pt-2">{footer}</div> : null}
     </div>
   );
 }

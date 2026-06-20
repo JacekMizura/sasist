@@ -26,7 +26,7 @@ function PurchasingDataPanelInner({
         indicatorClass={indicatorClass}
         action={action}
       />
-      <div className="flex-grow">{children}</div>
+      <div>{children}</div>
     </div>
   );
 }

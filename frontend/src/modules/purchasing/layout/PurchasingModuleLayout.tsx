@@ -92,7 +92,7 @@ function PurchasingTabBar() {
 
 function PurchasingModuleLayoutInner() {
   return (
-    <div className="min-h-[600px] w-full bg-white text-slate-800">
+    <div className="w-full bg-white text-slate-800">
       <PurchasingTabBar />
       <Outlet />
     </div>

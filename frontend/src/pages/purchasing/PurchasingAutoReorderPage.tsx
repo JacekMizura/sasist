@@ -3,8 +3,10 @@
  * Konfiguracja techniczna jest składana w tle; użytkownik widzi tylko decyzje biznesowe.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Bot, History } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import api from "../../api/axios";
+import { AppEmptyState } from "../../components/app-shell";
 import { listSuppliers, type SupplierRead } from "../../api/inboundSuppliersApi";
 import {
   deleteAutoReorderRule,
@@ -426,6 +428,13 @@ export default function PurchasingAutoReorderPage() {
                 </button>
               }
             >
+              {!loading && rules.length === 0 ? (
+                <AppEmptyState
+                  icon={Bot}
+                  title="Brak automatyzacji"
+                  description="Dodaj pierwszą regułę, aby system sam przygotowywał szkice zamówień przy wykryciu braków."
+                />
+              ) : (
               <table className="min-w-full text-left text-sm">
                 <PurchasingTableHeader
                   headers={["Nazwa", "Dostawca", "Kiedy działa", "Co robi", "Status", "Akcje"]}
@@ -433,15 +442,8 @@ export default function PurchasingAutoReorderPage() {
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-3 py-6 text-center text-slate-500">
+                  <td colSpan={6} className="px-3 py-4 text-center text-slate-500">
                     Ładowanie…
-                  </td>
-                </tr>
-              ) : null}
-              {!loading && rules.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-3 py-6 text-center text-slate-500">
-                    Nie masz jeszcze automatyzacji — dodaj pierwszą, aby przyspieszyć uzupełnianie braków.
                   </td>
                 </tr>
               ) : null}
@@ -491,9 +493,17 @@ export default function PurchasingAutoReorderPage() {
               })}
             </tbody>
           </table>
+              )}
             </PurchasingTableSection>
 
             <PurchasingTableSection title="Ostatnie uruchomienia" indicatorClass="bg-indigo-500">
+              {(hist?.runs.length ?? 0) === 0 && !loading ? (
+                <AppEmptyState
+                  icon={History}
+                  title="Brak historii uruchomień"
+                  description="Uruchom automatyzację pierwszy raz, aby zobaczyć log działań."
+                />
+              ) : (
               <table className="min-w-full text-left text-sm">
                 <PurchasingTableHeader
                   headers={["Start", "Wynik", "Nowe szkice", "Pominięte pozycje", "Notatka"]}
@@ -510,9 +520,7 @@ export default function PurchasingAutoReorderPage() {
               ))}
             </tbody>
           </table>
-          {(hist?.runs.length ?? 0) === 0 && !loading ? (
-            <p className="px-4 py-6 text-center text-sm text-slate-500">Brak historii — uruchom automatyzację pierwszy raz.</p>
-          ) : null}
+              )}
             </PurchasingTableSection>
           </>
         }

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { ShoppingCart } from "lucide-react";
 import { listPurchaseOrders, type PurchaseOrderListRow } from "../../api/purchasingOrdersApi";
+import { AppEmptyState } from "../../components/app-shell";
 import { DataTablePageSizeSelect } from "../../components/table/DataTablePageSizeSelect";
 import { usePurchasingModuleContextOptional } from "../../modules/purchasing/context/PurchasingModuleContext";
 import { usePurchasingTenant } from "../../modules/purchasing/hooks/usePurchasingTenant";
@@ -70,7 +72,7 @@ export default function PurchasingPoPage() {
   }, [loadList, refreshSignal]);
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const td = "px-6 py-4 text-sm text-slate-800";
+  const td = "px-4 py-2.5 text-sm text-slate-800";
   const tenantQuery = useMemo(() => `tenant_id=${tenantId}`, [tenantId]);
 
   return (
@@ -123,28 +125,33 @@ export default function PurchasingPoPage() {
             />
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px] text-left text-sm">
-              <PurchasingTableHeader>
-                <tr>
-                  <th className="px-6 py-4 text-left">Numer</th>
-                  <th className="px-6 py-4 text-left">Dostawca</th>
-                  <th className="px-6 py-4 text-left">Utworzono</th>
-                  <th className="px-6 py-4 text-left">Oczekiwana</th>
-                  <th className="px-6 py-4 text-center">Pozycje</th>
-                  <th className="px-6 py-4 text-right">Razem</th>
-                  <th className="px-6 py-4 text-center">Status</th>
-                  <th className="px-6 py-4 text-right">Akcje</th>
-                </tr>
-              </PurchasingTableHeader>
-              <tbody className="divide-y divide-slate-100">
-                {rows.length === 0 ? (
+            {rows.length === 0 ? (
+              <AppEmptyState
+                icon={ShoppingCart}
+                title="Brak zamówień zakupowych"
+                description="Użyj generatora uzupełnień, aby utworzyć pierwsze zamówienie."
+                action={
+                  <Link to={`/purchasing/replenishment?tenant_id=${tenantId}`} className="text-sm font-medium text-blue-600 hover:underline">
+                    Przejdź do generatora
+                  </Link>
+                }
+              />
+            ) : (
+              <table className="w-full min-w-[900px] text-left text-sm">
+                <PurchasingTableHeader>
                   <tr>
-                    <td colSpan={8} className="px-6 py-12 text-center text-sm italic text-slate-400">
-                      Brak zamówień zakupowych. Użyj generatora, aby je utworzyć.
-                    </td>
+                    <th className="px-4 py-2.5 text-left">Numer</th>
+                    <th className="px-4 py-2.5 text-left">Dostawca</th>
+                    <th className="px-4 py-2.5 text-left">Utworzono</th>
+                    <th className="px-4 py-2.5 text-left">Oczekiwana</th>
+                    <th className="px-4 py-2.5 text-center">Pozycje</th>
+                    <th className="px-4 py-2.5 text-right">Razem</th>
+                    <th className="px-4 py-2.5 text-center">Status</th>
+                    <th className="px-4 py-2.5 text-right">Akcje</th>
                   </tr>
-                ) : (
-                  rows.map((r) => (
+                </PurchasingTableHeader>
+                <tbody className="divide-y divide-slate-100">
+                  {rows.map((r) => (
                     <tr key={r.id} className="transition-colors hover:bg-blue-50/30">
                       <td className={`${td} font-medium`}>{r.order_number}</td>
                       <td className={td}>{r.supplier_name}</td>
@@ -167,10 +174,10 @@ export default function PurchasingPoPage() {
                         </Link>
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </PurchasingDataPanel>
       )}

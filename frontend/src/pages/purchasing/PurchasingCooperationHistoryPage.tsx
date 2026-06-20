@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { Banknote, Clock, PackageCheck, ShoppingCart, TrendingUp, Truck } from "lucide-react";
+import { Banknote, Clock, FileText, PackageCheck, ShoppingCart, TrendingUp, Truck } from "lucide-react";
 import { useLocation, useSearchParams } from "react-router-dom";
 import api from "../../api/axios";
+import { AppEmptyState } from "../../components/app-shell";
 import { fetchPurchasingCooperationHistory, type PurchasingCooperationHistoryPayload } from "../../api/purchasingCooperationHistoryApi";
 import {
   PurchasingAnalysisSection,
@@ -100,7 +101,7 @@ export default function PurchasingCooperationHistoryPage() {
   }, [tenantId, supplierId]);
 
   const summary = data?.summary;
-  const td = "px-4 py-3 text-sm text-slate-800 sm:px-6 sm:py-4";
+  const td = "px-4 py-2.5 text-sm text-slate-800";
 
   const pageShell = (
     <PurchasingPageShell
@@ -177,20 +178,26 @@ export default function PurchasingCooperationHistoryPage() {
         }
         analysis={
           summary ? (
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-              <PurchasingAnalysisSection title="Oś czasu współpracy">
-                <p className="text-xs font-medium text-slate-500">Pierwsze zamówienie</p>
-                <p className="mt-1 text-sm text-slate-800">{fmtDate(summary.first_order_date)}</p>
-                <p className="mt-3 text-xs font-medium text-slate-500">Ostatnia dostawa</p>
-                <p className="mt-1 text-sm text-slate-800">{fmtDate(summary.last_delivery_date)}</p>
-              </PurchasingAnalysisSection>
-              <PurchasingAnalysisSection title="Trend ceny" subtitle="Wyliczone z historii przyjęć">
-                <div className="flex items-end gap-2">
-                  <p className="text-4xl font-bold tracking-tight tabular-nums text-slate-800">{fmtPct(summary.price_trend)}</p>
-                  <TrendingUp className="mb-2 h-5 w-5 text-slate-400" aria-hidden />
+            <PurchasingAnalysisSection title="Podsumowanie współpracy">
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                <div>
+                  <p className="text-xs font-medium text-slate-500">Pierwsze zamówienie</p>
+                  <p className="mt-0.5 text-sm font-medium text-slate-800">{fmtDate(summary.first_order_date)}</p>
                 </div>
-              </PurchasingAnalysisSection>
-            </div>
+                <div>
+                  <p className="text-xs font-medium text-slate-500">Ostatnia dostawa</p>
+                  <p className="mt-0.5 text-sm font-medium text-slate-800">{fmtDate(summary.last_delivery_date)}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-slate-500">Trend ceny</p>
+                  <div className="mt-0.5 flex items-center gap-1.5">
+                    <p className="text-xl font-bold tracking-tight tabular-nums text-slate-800">{fmtPct(summary.price_trend)}</p>
+                    <TrendingUp className="h-4 w-4 text-slate-400" aria-hidden />
+                  </div>
+                  <p className="mt-0.5 text-[11px] text-slate-500">Z historii przyjęć</p>
+                </div>
+              </div>
+            </PurchasingAnalysisSection>
           ) : null
         }
         table={
@@ -199,15 +206,22 @@ export default function PurchasingCooperationHistoryPage() {
             subtitle="Ostatnie PO i PZ wybranego dostawcy"
             indicatorClass="bg-slate-500"
           >
+            {!loading && !data?.recent_documents?.length ? (
+              <AppEmptyState
+                icon={FileText}
+                title="Brak dokumentów"
+                description="Wybrany dostawca nie ma jeszcze zapisanych zamówień ani przyjęć w systemie."
+              />
+            ) : (
             <table className="w-full min-w-full text-sm">
               <PurchasingTableHeader>
                 <tr>
-                  <th className="px-6 py-4 text-left">Typ</th>
-                  <th className="px-6 py-4 text-left">Dokument</th>
-                  <th className="px-6 py-4 text-left">Data</th>
-                  <th className="px-6 py-4 text-left">Status</th>
-                  <th className="px-6 py-4 text-right">Netto</th>
-                  <th className="px-6 py-4 text-right">Brutto</th>
+                  <th className="px-4 py-2.5 text-left">Typ</th>
+                  <th className="px-4 py-2.5 text-left">Dokument</th>
+                  <th className="px-4 py-2.5 text-left">Data</th>
+                  <th className="px-4 py-2.5 text-left">Status</th>
+                  <th className="px-4 py-2.5 text-right">Netto</th>
+                  <th className="px-4 py-2.5 text-right">Brutto</th>
                 </tr>
               </PurchasingTableHeader>
               <tbody className="divide-y divide-slate-100">
@@ -221,15 +235,9 @@ export default function PurchasingCooperationHistoryPage() {
                     <td className={`${td} text-right tabular-nums`}>{fmtMoney(d.total_gross)}</td>
                   </tr>
                 ))}
-                {!loading && !data?.recent_documents?.length ? (
-                  <tr>
-                    <td colSpan={6} className={`${td} text-center text-slate-500`}>
-                      Brak dokumentów.
-                    </td>
-                  </tr>
-                ) : null}
               </tbody>
             </table>
+            )}
           </PurchasingTableSection>
         }
     />

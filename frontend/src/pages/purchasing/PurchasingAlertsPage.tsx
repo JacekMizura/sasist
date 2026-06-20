@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Bell, FileText, Settings2 } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import api from "../../api/axios";
+import { AppEmptyState } from "../../components/app-shell";
 import {
   PURCHASING_ALERT_RULE_TYPES,
   fetchPurchasingAlertRules,
@@ -580,6 +582,13 @@ export default function PurchasingAlertsPage() {
         table={
           <>
             <PurchasingTableSection title="Lista problemów" indicatorClass="bg-orange-500">
+              {sortedAlerts.length === 0 && !loading ? (
+                <AppEmptyState
+                  icon={Bell}
+                  title="Brak alertów"
+                  description="Zmień filtry lub uruchom skan magazynu, aby wykryć nowe problemy."
+                />
+              ) : (
               <table className="min-w-full text-left text-sm">
                 <PurchasingTableHeader>
                   <tr>
@@ -685,9 +694,7 @@ export default function PurchasingAlertsPage() {
                   })}
                 </tbody>
               </table>
-              {sortedAlerts.length === 0 && !loading ? (
-                <p className="px-4 py-8 text-sm text-slate-500">Brak pozycji — zmień filtry lub uruchom skan.</p>
-              ) : null}
+              )}
             </PurchasingTableSection>
 
             <PurchasingTableSection
@@ -699,6 +706,13 @@ export default function PurchasingAlertsPage() {
                 </button>
               }
             >
+              {rules.length === 0 ? (
+                <AppEmptyState
+                  icon={Settings2}
+                  title="Brak reguł wykrywania"
+                  description="Dodaj pierwszą regułę, aby skan miał się czego trzymać."
+                />
+              ) : (
               <ul className="divide-y divide-slate-100 px-4 py-2 text-sm">
                 {rules.map((r) => (
                   <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
@@ -724,13 +738,18 @@ export default function PurchasingAlertsPage() {
                   </li>
                 ))}
               </ul>
-              {rules.length === 0 ? (
-                <p className="px-4 py-6 text-sm text-slate-500">Nie masz jeszcze reguł — dodaj pierwszą, aby skan miał się czego trzymać.</p>
-              ) : null}
+              )}
             </PurchasingTableSection>
 
             <PurchasingAnalysisSection title="Ostatnio utworzone szkice (automat)">
-              <ul className="space-y-3 text-sm">
+              {drafts.length === 0 ? (
+                <AppEmptyState
+                  icon={FileText}
+                  title="Brak zapisanych szkiców"
+                  description="Partie szkiców utworzone automatycznie pojawią się tutaj po pierwszym uruchomieniu."
+                />
+              ) : (
+              <ul className="space-y-2 text-sm">
                 {drafts.map((d) => (
                   <li key={d.id} className="rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2">
                     <div className="font-medium text-slate-800">{fmtDate(d.generated_at)}</div>
@@ -753,9 +772,7 @@ export default function PurchasingAlertsPage() {
                   </li>
                 ))}
               </ul>
-              {drafts.length === 0 ? (
-                <p className="text-sm text-slate-500">Jeszcze nie zapisano partii szkiców z tej ścieżki.</p>
-              ) : null}
+              )}
             </PurchasingAnalysisSection>
           </>
         }
