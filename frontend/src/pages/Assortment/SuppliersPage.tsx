@@ -2,16 +2,13 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ChevronDown, Download, TableProperties } from "lucide-react";
 
-import { ListPageHeader } from "../../components/listPage/ListPageHeader";
-import { UI_STRINGS } from "../../constants/uiStrings";
 import api from "../../api/axios";
 import { createDelivery } from "../../api/inboundDeliveriesApi";
 import { deleteSupplier, listSuppliers, type SupplierRead } from "../../api/inboundSuppliersApi";
+import { FilterVisibilityModal } from "../../components/filters";
 import { useActiveWarehouseContext, ACTIVE_WAREHOUSE_REQUIRED_MESSAGE } from "../../hooks/useActiveWarehouseContext";
 import { SupplierEditModal } from "./SupplierEditModal";
 import ExportModal from "../../components/exports/ExportModal";
-import PageLayout from "../../components/layout/PageLayout";
-import { FilterVisibilityModal } from "../../components/filters";
 import { SupplierListFiltersPanel } from "../../components/suppliers/supplierList/SupplierListFiltersPanel";
 import { SuppliersListTable } from "../../components/suppliers/supplierList/SuppliersListTable";
 import {
@@ -300,48 +297,42 @@ export default function SuppliersPage({ defaultCreateOpen = false }: Props) {
         </div>
       ) : null}
 
-      <PageLayout fullBleed>
-        <ListPageHeader
-          title={`${UI_STRINGS.navigation.suppliers}${loading ? "" : ` (${totalCount} wyników)`}`}
-          breadcrumbs={[
-            { label: "Asortyment", to: "/products/list" },
-            { label: UI_STRINGS.navigation.suppliers },
-          ]}
-          actions={
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={toggleFiltersExpanded}
-                className={listSellasistToolbarToggleBtn}
-                aria-expanded={filtersExpanded}
-              >
-                {filtersExpanded ? "Ukryj filtry" : supplierFilterToggleLabel(activeFilterCount)}
-                <ChevronDown
-                  className={`h-4 w-4 shrink-0 transition-transform ${filtersExpanded ? "rotate-180" : ""}`}
-                  aria-hidden
-                />
-              </button>
-              <button
-                type="button"
-                onClick={() => setColumnPickerOpen(true)}
-                className={listSellasistToolbarSquareBtn}
-                title="Widoczne pola"
-                aria-label="Widoczne pola"
-              >
-                <TableProperties className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
-              </button>
-              <button
-                type="button"
-                onClick={() => setExportOpen(true)}
-                className={listSellasistToolbarSquareBtn}
-                title="Eksport"
-                aria-label="Eksport"
-              >
-                <Download className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
-              </button>
-            </div>
-          }
-        />
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-slate-500">{loading ? "Ładowanie…" : `${totalCount} wyników`}</p>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={toggleFiltersExpanded}
+              className={listSellasistToolbarToggleBtn}
+              aria-expanded={filtersExpanded}
+            >
+              {filtersExpanded ? "Ukryj filtry" : supplierFilterToggleLabel(activeFilterCount)}
+              <ChevronDown
+                className={`h-4 w-4 shrink-0 transition-transform ${filtersExpanded ? "rotate-180" : ""}`}
+                aria-hidden
+              />
+            </button>
+            <button
+              type="button"
+              onClick={() => setColumnPickerOpen(true)}
+              className={listSellasistToolbarSquareBtn}
+              title="Widoczne pola"
+              aria-label="Widoczne pola"
+            >
+              <TableProperties className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
+            </button>
+            <button
+              type="button"
+              onClick={() => setExportOpen(true)}
+              className={listSellasistToolbarSquareBtn}
+              title="Eksport"
+              aria-label="Eksport"
+            >
+              <Download className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
+            </button>
+          </div>
+        </div>
 
         <SupplierListFiltersPanel
           expanded={filtersExpanded}
@@ -459,7 +450,7 @@ export default function SuppliersPage({ defaultCreateOpen = false }: Props) {
             </div>
           </div>
         )}
-      </PageLayout>
+      </div>
 
       <FilterVisibilityModal
         open={columnPickerOpen}

@@ -196,14 +196,15 @@ export default function PurchasingSupplierAnalyticsPage() {
   const supplierEditHref = (sid: number) => `/suppliers?tenant_id=${tenantId}&edit=${sid}`;
   const ordersHref = `/purchasing/orders?tenant_id=${tenantId}`;
 
-  return (
-    <PurchasingContentArea>
-      <PurchasingPageShell
+  const pageShell = (
+    <PurchasingPageShell
         header={
-          <PurchasingPageHeader
-            title={isSuppliersModule ? "Ocena" : "Ocena dostawców"}
-            subtitle="Ranking dostawców wg terminowości, cen i wolumenu zakupów."
-          />
+          isSuppliersModule ? null : (
+            <PurchasingPageHeader
+              title="Ocena dostawców"
+              subtitle="Ranking dostawców wg terminowości, cen i wolumenu zakupów."
+            />
+          )
         }
         status={
           err ? (
@@ -367,8 +368,10 @@ export default function PurchasingSupplierAnalyticsPage() {
           </PurchasingTableSection>
         }
       />
+  );
 
-      {drawerSid != null ? (
+  const drawer =
+    drawerSid != null ? (
         <div className="fixed inset-0 z-50 flex justify-end bg-black/40" role="presentation" onClick={() => setDrawerSid(null)}>
           <div
             className="h-full w-full max-w-lg overflow-y-auto bg-white shadow-2xl"
@@ -487,7 +490,21 @@ export default function PurchasingSupplierAnalyticsPage() {
             </div>
           </div>
         </div>
-      ) : null}
+    ) : null;
+
+  if (isSuppliersModule) {
+    return (
+      <>
+        {pageShell}
+        {drawer}
+      </>
+    );
+  }
+
+  return (
+    <PurchasingContentArea>
+      {pageShell}
+      {drawer}
     </PurchasingContentArea>
   );
 }

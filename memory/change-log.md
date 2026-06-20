@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-06-08 — Dostawcy: płaski shell modułu (wzorzec Zwroty)
+
+- `SuppliersLayout`: breadcrumb → tytuł → `TabsNav` (bez karty wokół tabów) → outlet; jeden `PageLayout`
+- Usunięto `WmsModuleLayout` (podwójna karta + ramka wokół tabów)
+- `SuppliersPage`: bez wewnętrznego `PageLayout` i duplikatu breadcrumb/nagłówka
+- Ocena / Historia: bez `PurchasingContentArea` i nagłówka strony w kontekście `/suppliers/*`
+
 ## 2026-06-08 — Dostawcy: Ocena i Historia w stylu Pulpitu zakupów
 
 - KPI: `PurchasingKpiCard` + `PurchasingKpiGrid` (4 / 5 kolumn), ikony, układ liczba + opis jak dashboard

@@ -102,15 +102,16 @@ export default function PurchasingCooperationHistoryPage() {
   const summary = data?.summary;
   const td = "px-4 py-3 text-sm text-slate-800 sm:px-6 sm:py-4";
 
-  return (
-    <PurchasingContentArea>
-      <PurchasingPageShell
-        header={
+  const pageShell = (
+    <PurchasingPageShell
+      header={
+        isSuppliersModule ? null : (
           <PurchasingPageHeader
-            title={isSuppliersModule ? "Historia zamówień" : "Historia współpracy"}
+            title="Historia współpracy"
             subtitle="Podsumowanie zamówień, przyjęć i trendów cenowych wybranego dostawcy."
           />
-        }
+        )
+      }
         status={
           err ? (
             <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{err}</div>
@@ -231,7 +232,12 @@ export default function PurchasingCooperationHistoryPage() {
             </table>
           </PurchasingTableSection>
         }
-      />
-    </PurchasingContentArea>
+    />
   );
+
+  if (isSuppliersModule) {
+    return pageShell;
+  }
+
+  return <PurchasingContentArea>{pageShell}</PurchasingContentArea>;
 }
