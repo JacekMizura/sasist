@@ -863,10 +863,11 @@ export const router = createBrowserRouter(
                   <Route path="baskets" element={<CartsBaskets />} />
                   <Route path="racks/*" element={<CartsRacks />} />
                   <Route path="zones" element={<CartsZones />} />
+                  <Route path="optimizer" element={<FleetPlanner />} />
                 </Route>
                 <Route path="changelog" element={<Changelog />} />
                 <Route path="carts/:id" element={<CartDetails />} />
-                <Route path="optimizer" element={<FleetPlanner />} />
+                <Route path="optimizer" element={<Navigate to="/carts/optimizer" replace />} />
                 <Route path="waves" element={<PickingWaves />} />
                 <Route path="designer" element={<WarehouseDesigner />} />
                 <Route path="warehouse-designer" element={<WarehouseDesigner />} />

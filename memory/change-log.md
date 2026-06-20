@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-06-08 — Planer floty: redesign UX + nawigacja modułu Wózki
+
+- Trasa `/carts/optimizer` w shellu Wózki (breadcrumb, zakładki); redirect z `/optimizer`
+- KPI: 4× `PurchasingKpiCard` (NEW, pojemność, sekcyjne, standardowe) + podsumowanie operacyjne po obliczeniu
+- Akcje: Primary „Oblicz”, Secondary „Zatwierdź” (disabled bez wyniku)
+- Wynik: 3 sekcje (flota, pojemność z progress bar, zamówienia z pokryciem %)
+
 ## 2026-06-08 — Zakupy i planowanie: redesign UX/UI (design system)
 
 - Wspólne tokeny: `purchasingButtonTokens` (PRIMARY/SECONDARY/GHOST/LINK), `purchasingTableTokens`, `PurchasingInfoNotice`, `PurchasingSummaryStrip`

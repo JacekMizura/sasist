@@ -6,6 +6,7 @@ export const CARTS_TABS: TabItem[] = [
   /** ``end: false`` — aktywna także na ``/carts/racks/new``, ``/carts/racks/:id/*``. */
   { path: "/carts/racks", label: "Regały", end: false },
   { path: "/carts/zones", label: "Strefy" },
+  { path: "/carts/optimizer", label: "Planer floty" },
   /** ``end: false`` — aktywna także na ``/carts/carriers/:id``. */
   { path: "/carts/carriers", label: "Nośniki", end: false },
 ];

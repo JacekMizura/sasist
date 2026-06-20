@@ -158,8 +158,8 @@ export function isNavPathActive(pathname: string, path: string): boolean {
   if (path === "/waves") {
     return pathname === "/waves" || pathname.startsWith("/waves/");
   }
-  if (path === "/optimizer") {
-    return pathname === "/optimizer" || pathname.startsWith("/optimizer/");
+  if (path === "/optimizer" || path === "/carts/optimizer") {
+    return pathname === "/optimizer" || pathname.startsWith("/optimizer/") || pathname === "/carts/optimizer" || pathname.startsWith("/carts/optimizer/");
   }
   if (path === "/warehouse-materials/cartons") {
     return pathname.startsWith("/warehouse-materials");
