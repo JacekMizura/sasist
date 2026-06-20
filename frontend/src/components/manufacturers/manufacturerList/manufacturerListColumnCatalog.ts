@@ -2,9 +2,8 @@ import type { FilterFieldCatalogItem } from "../../filters/FilterVisibilityModal
 
 export const MANUFACTURERS_LIST_COLUMNS_LAYOUT_KEY = "manufacturers_list_columns_layout";
 
+/** Kolumny konfigurowalne przez użytkownika (logo + nazwa są systemowe). */
 export const MANUFACTURER_LIST_COLUMN_CATALOG: readonly FilterFieldCatalogItem[] = [
-  { id: "logo", label: "Logo" },
-  { id: "name", label: "Nazwa" },
   { id: "country", label: "Kraj" },
   { id: "status", label: "Status" },
   { id: "products", label: "Produkty" },
@@ -18,8 +17,6 @@ export const MANUFACTURER_LIST_COLUMN_CATALOG: readonly FilterFieldCatalogItem[]
 export const MANUFACTURER_LIST_COLUMN_IDS = MANUFACTURER_LIST_COLUMN_CATALOG.map((c) => c.id);
 
 export const MANUFACTURER_LIST_DEFAULT_COLUMN_ORDER: readonly string[] = [
-  "logo",
-  "name",
   "country",
   "products",
   "status",

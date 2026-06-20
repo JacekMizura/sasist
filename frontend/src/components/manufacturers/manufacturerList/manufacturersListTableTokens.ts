@@ -1,5 +1,5 @@
 /** Tokeny tabeli listy producentów — spójne z Klientami / Polami dodatkowymi. */
-export const manufacturersListTableClass = "w-full min-w-[1080px] table-fixed text-left text-sm";
+export const manufacturersListTableClass = "w-full table-fixed text-left text-sm";
 export const manufacturersListThClass =
   "sticky top-0 z-10 whitespace-nowrap bg-white px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 shadow-[inset_0_-1px_0_0_rgb(226,232,240)]";
 export const manufacturersListTdClass = "px-4 py-0 align-middle text-sm leading-snug text-slate-800";
@@ -17,6 +17,17 @@ export const manufacturersListCheckboxInputClass =
   "h-4 w-4 shrink-0 rounded border-slate-300 accent-emerald-600";
 export const manufacturersListCheckboxThClass =
   "sticky top-0 z-10 box-border w-[56px] min-w-[56px] max-w-[56px] bg-white px-0 py-0 align-middle text-center shadow-[inset_0_-1px_0_0_rgb(226,232,240)]";
+
+/** Kolumna logo — stała szerokość 80 px. */
+export const manufacturersListLogoColWidth = "80px";
+export const manufacturersListLogoCellClass =
+  "box-border w-[80px] min-w-[80px] max-w-[80px] px-2 py-0 align-middle text-center";
+export const manufacturersListLogoThClass =
+  "sticky top-0 z-10 box-border w-[80px] min-w-[80px] max-w-[80px] bg-white px-2 py-0 align-middle text-center text-[11px] font-semibold uppercase tracking-wide text-slate-500 shadow-[inset_0_-1px_0_0_rgb(226,232,240)]";
+
+export const manufacturersListNameCellClass = "min-w-0 px-4 py-0 align-middle text-sm leading-snug text-slate-800";
+export const manufacturersListNameThClass =
+  "sticky top-0 z-10 min-w-0 bg-white px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 shadow-[inset_0_-1px_0_0_rgb(226,232,240)]";
 
 /** Kolumna akcji — stała szerokość 120 px, przyciski 36×36 px. */
 export const manufacturersListActionsColWidth = "120px";

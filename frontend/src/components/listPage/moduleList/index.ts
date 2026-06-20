@@ -36,3 +36,10 @@ export {
   moduleTableCardClass,
   moduleTablePaginationFooterClass,
 } from "./moduleListViewTokens";
+export {
+  computeProportionalTableWidths,
+  proportionalTableMinWidthPx,
+  PROPORTIONAL_TABLE_SYSTEM_WIDTHS,
+  type ProportionalTableWidths,
+} from "../proportionalTableColumns";
+export { useProportionalTableColumns } from "../useProportionalTableColumns";

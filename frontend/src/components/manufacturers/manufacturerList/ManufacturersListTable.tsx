@@ -2,6 +2,7 @@ import type { RefObject } from "react";
 import { Pencil, Trash2 } from "lucide-react";
 
 import type { ManufacturerRead } from "../../../api/manufacturersApi";
+import { useProportionalTableColumns } from "../../listPage/useProportionalTableColumns";
 import { ManufacturerLogo } from "./ManufacturerLogo";
 import { manufacturerListColumnLabel } from "./manufacturerListColumnCatalog";
 import {
@@ -10,14 +11,16 @@ import {
 } from "./manufacturerListCellPresentation";
 import {
   manufacturersListActionsCellClass,
-  manufacturersListActionsColWidth,
   manufacturersListActionsInnerClass,
   manufacturersListActionsThClass,
   manufacturersListCheckboxCellClass,
-  manufacturersListCheckboxColWidth,
   manufacturersListCheckboxInnerClass,
   manufacturersListCheckboxInputClass,
   manufacturersListCheckboxThClass,
+  manufacturersListLogoCellClass,
+  manufacturersListLogoThClass,
+  manufacturersListNameCellClass,
+  manufacturersListNameThClass,
   manufacturersListRowActionBtn,
   manufacturersListRowActionBtnDanger,
   manufacturersListRowClass,
@@ -84,7 +87,26 @@ function ManufacturerStatusBadge({ active }: { active: boolean }) {
   );
 }
 
-function ManufacturerListDataCell({
+function ManufacturerNameCell({ row }: { row: ManufacturerRead }) {
+  const nameLines = manufacturerNameLines(row);
+  return (
+    <div className={`${manufacturersListRowInnerClass} min-w-0 flex-col !items-start gap-0.5 py-2`}>
+      <span className="block max-w-full truncate text-base font-semibold text-slate-900" title={nameLines.title}>
+        {nameLines.title}
+      </span>
+      {nameLines.companyLine ? (
+        <span className="block max-w-full truncate text-xs leading-snug text-slate-500" title={nameLines.companyLine}>
+          {nameLines.companyLine}
+        </span>
+      ) : null}
+      {nameLines.nipLine ? (
+        <span className="block max-w-full truncate text-xs leading-snug text-slate-500">{nameLines.nipLine}</span>
+      ) : null}
+    </div>
+  );
+}
+
+function ManufacturerDynamicCell({
   row,
   columnId,
   onProductsClick,
@@ -93,35 +115,11 @@ function ManufacturerListDataCell({
   columnId: string;
   onProductsClick: (row: ManufacturerRead) => void;
 }) {
-  const nameLines = manufacturerNameLines(row);
-
   switch (columnId) {
-    case "logo":
-      return (
-        <div className={`${manufacturersListRowInnerClass} justify-center`}>
-          <ManufacturerLogo logoUrl={row.logo_url} />
-        </div>
-      );
-    case "name":
-      return (
-        <div className={`${manufacturersListRowInnerClass} min-w-0 flex-col !items-start gap-0.5 py-2`}>
-          <span className="block max-w-full truncate text-base font-semibold text-slate-900" title={nameLines.title}>
-            {nameLines.title}
-          </span>
-          {nameLines.companyLine ? (
-            <span className="block max-w-full truncate text-xs leading-snug text-slate-500" title={nameLines.companyLine}>
-              {nameLines.companyLine}
-            </span>
-          ) : null}
-          {nameLines.nipLine ? (
-            <span className="block max-w-full truncate text-xs leading-snug text-slate-500">{nameLines.nipLine}</span>
-          ) : null}
-        </div>
-      );
     case "country":
       return (
-        <div className={`${manufacturersListRowInnerClass} text-slate-700`}>
-          {manufacturerListCellOrDash(row.country)}
+        <div className={`${manufacturersListRowInnerClass} min-w-0 text-slate-700`}>
+          <span className="block truncate">{manufacturerListCellOrDash(row.country)}</span>
         </div>
       );
     case "status":
@@ -149,8 +147,8 @@ function ManufacturerListDataCell({
       );
     case "phone":
       return (
-        <div className={`${manufacturersListRowInnerClass} text-slate-700`}>
-          {manufacturerListCellOrDash(row.phone)}
+        <div className={`${manufacturersListRowInnerClass} min-w-0 text-slate-700`}>
+          <span className="block truncate">{manufacturerListCellOrDash(row.phone)}</span>
         </div>
       );
     case "email":
@@ -173,14 +171,14 @@ function ManufacturerListDataCell({
       );
     case "nip":
       return (
-        <div className={`${manufacturersListRowInnerClass} text-slate-700`}>
-          {manufacturerListCellOrDash(row.tax_id)}
+        <div className={`${manufacturersListRowInnerClass} min-w-0 text-slate-700`}>
+          <span className="block truncate">{manufacturerListCellOrDash(row.tax_id)}</span>
         </div>
       );
     case "city":
       return (
-        <div className={`${manufacturersListRowInnerClass} text-slate-700`}>
-          {manufacturerListCellOrDash(row.city)}
+        <div className={`${manufacturersListRowInnerClass} min-w-0 text-slate-700`}>
+          <span className="block truncate">{manufacturerListCellOrDash(row.city)}</span>
         </div>
       );
     default:
@@ -201,15 +199,19 @@ export function ManufacturersListTable({
   onDelete,
   onProductsClick,
 }: ManufacturersListTableProps) {
+  const { containerRef, widths, minWidthPx } = useProportionalTableColumns(columnOrder.length);
+
   return (
-    <div className="overflow-x-auto">
-      <table className={manufacturersListTableClass}>
+    <div ref={containerRef} className="w-full min-w-0 overflow-x-auto">
+      <table className={manufacturersListTableClass} style={{ minWidth: minWidthPx }}>
         <colgroup>
-          <col style={{ width: manufacturersListCheckboxColWidth }} />
+          <col style={{ width: widths.checkbox }} />
+          <col style={{ width: widths.logo }} />
+          <col style={{ width: widths.name }} />
           {columnOrder.map((colId) => (
-            <col key={colId} />
+            <col key={colId} style={{ width: widths.dynamic > 0 ? widths.dynamic : undefined }} />
           ))}
-          <col style={{ width: manufacturersListActionsColWidth }} />
+          <col style={{ width: widths.actions }} />
         </colgroup>
         <thead>
           <tr>
@@ -222,6 +224,8 @@ export function ManufacturersListTable({
                 ariaLabel="Zaznacz wszystkich producentów na stronie"
               />
             </th>
+            <th className={manufacturersListLogoThClass}>Logo</th>
+            <th className={manufacturersListNameThClass}>Nazwa</th>
             {columnOrder.map((colId) => (
               <th key={colId} className={manufacturersListThClass}>
                 {manufacturerListColumnLabel(colId)}
@@ -248,9 +252,17 @@ export function ManufacturersListTable({
                     ariaLabel={`Zaznacz producenta ${row.name}`}
                   />
                 </td>
+                <td className={manufacturersListLogoCellClass}>
+                  <div className={`${manufacturersListRowInnerClass} justify-center`}>
+                    <ManufacturerLogo logoUrl={row.logo_url} />
+                  </div>
+                </td>
+                <td className={manufacturersListNameCellClass}>
+                  <ManufacturerNameCell row={row} />
+                </td>
                 {columnOrder.map((colId) => (
                   <td key={colId} className={manufacturersListTdClass}>
-                    <ManufacturerListDataCell row={row} columnId={colId} onProductsClick={onProductsClick} />
+                    <ManufacturerDynamicCell row={row} columnId={colId} onProductsClick={onProductsClick} />
                   </td>
                 ))}
                 <td className={manufacturersListActionsCellClass}>
