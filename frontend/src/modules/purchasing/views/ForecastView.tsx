@@ -5,4 +5,6 @@ function ForecastViewInner() {
   return <PurchasingForecastPage />;
 }
 
-export default memo(ForecastViewInner);
+const ForecastView = memo(ForecastViewInner);
+
+export default ForecastView;

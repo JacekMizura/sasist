@@ -1,16 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import { fetchPurchasingForecast, type PurchasingForecastPayload } from "../../api/purchasingForecastApi";
 import { listSuppliers, type SupplierRead } from "../../api/inboundSuppliersApi";
 import { searchProductsCatalog, type ProductSearchHit } from "../../api/productsSearchApi";
@@ -18,7 +7,6 @@ import { useWarehouse } from "../../context/WarehouseContext";
 import { usePurchasingModuleContextOptional } from "../../modules/purchasing/context/PurchasingModuleContext";
 import { usePurchasingTenant } from "../../modules/purchasing/hooks/usePurchasingTenant";
 import {
-  PurchasingAnalysisSection,
   PurchasingContentArea,
   PurchasingFilterBar,
   PurchasingFilterField,
@@ -32,6 +20,7 @@ import {
   purchasingInputClass,
   purchasingSelectClass,
 } from "../../modules/purchasing/ui";
+import PurchasingForecastCharts from "./PurchasingForecastCharts";
 
 const FORECAST_TOOLTIP_PL =
   "Prognoza oparta na sprzedaży historycznej. Wzór 30 dni: sprzedaż_30d×0,6 + sprzedaż_poprz_30d×0,3 + sprzedaż_7d×0,1×4. Trend %: porównanie ostatnich 30 dni z poprzednimi 30 dniami.";
@@ -223,61 +212,14 @@ export default function PurchasingForecastPage() {
           ) : null
         }
         analysis={
-          s ? (
-            <>
-              <PurchasingAnalysisSection
-                title="Wolumen sprzedaży (szt. / mies.)"
-                subtitle={`Ekstrapolacja: (suma szt. w oknie ${rangeDays} dni ÷ ${rangeDays}) × 30 = ${s.total_monthly_sales.toLocaleString("pl-PL")}. Wartość magazynu (szac. koszt): ${s.total_stock_value.toLocaleString("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-              >
-                <div className="h-[300px] w-full min-w-0">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={data?.charts.sales_trend ?? []} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                      <XAxis dataKey="date" tickFormatter={fmtShortDate} tick={{ fontSize: 11 }} />
-                      <YAxis yAxisId="left" tick={{ fontSize: 11 }} />
-                      <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} />
-                      <Tooltip
-                        formatter={(value: number, name: string) => [
-                          typeof value === "number" ? value.toLocaleString("pl-PL") : value,
-                          name === "qty" ? "Ilość" : "Przychód",
-                        ]}
-                        labelFormatter={(l: string) => `Data: ${fmtShortDate(l)}`}
-                      />
-                      <Line yAxisId="left" type="monotone" dataKey="qty" name="qty" stroke="#0f766e" strokeWidth={2} dot={false} />
-                      <Line yAxisId="right" type="monotone" dataKey="revenue" name="revenue" stroke="#7c3aed" strokeWidth={2} dot={false} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              </PurchasingAnalysisSection>
-
-              <PurchasingAnalysisSection title="Top rotacja (30 dni)" subtitle="Kliknij słupek, aby wczytać produkt w inspektorze.">
-                <div className="h-[320px] w-full min-w-0">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={barData} layout="vertical" margin={{ top: 8, right: 24, left: 8, bottom: 8 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
-                      <XAxis type="number" tick={{ fontSize: 11 }} />
-                      <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 10 }} />
-                      <Tooltip
-                        formatter={(v: number) => [v.toLocaleString("pl-PL"), "Szt. (30 dni)"]}
-                        labelFormatter={(label) => {
-                          const row = barData.find((d) => d.name === label);
-                          return row ? `#${row.product_id} ${label}` : String(label);
-                        }}
-                      />
-                      <Bar
-                        dataKey="qty"
-                        fill="#334155"
-                        radius={[0, 4, 4, 0]}
-                        onClick={(state) => {
-                          const row = state?.payload as { product_id?: number } | undefined;
-                          if (row?.product_id) selectProduct(row.product_id);
-                        }}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </PurchasingAnalysisSection>
-            </>
+          s && data ? (
+            <PurchasingForecastCharts
+              data={data}
+              rangeDays={rangeDays}
+              barData={barData}
+              fmtShortDate={fmtShortDate}
+              onSelectProduct={selectProduct}
+            />
           ) : null
         }
         table={

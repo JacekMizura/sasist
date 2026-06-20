@@ -98,6 +98,15 @@ export default defineConfig(({ mode, command }) => {
       // Temporary: readable stack traces for production TDZ / circular-import crashes.
       sourcemap: true,
       minify: false,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes("node_modules/recharts") || id.includes("node_modules/victory-vendor")) {
+              return "vendor-recharts";
+            }
+          },
+        },
+      },
     },
   }
 })
