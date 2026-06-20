@@ -1,4 +1,4 @@
-import { panelTreeCountClass } from "./panelStatusTreeStyles";
+import { panelTreeCountClass, PANEL_TREE_COUNT_BASE_CLASS } from "./panelStatusTreeStyles";
 import { isValidPanelStatusHex } from "../../utils/panelStatusColor";
 
 type Props = {
@@ -9,11 +9,12 @@ type Props = {
 };
 
 export function PanelTreeCount({ value, active, colorHex }: Props) {
-  const colored = colorHex && isValidPanelStatusHex(colorHex);
+  const hex = colorHex?.trim();
+  const colored = hex && isValidPanelStatusHex(hex);
   return (
     <span
-      className={panelTreeCountClass(active)}
-      style={colored ? { color: colorHex!.trim() } : undefined}
+      className={colored ? PANEL_TREE_COUNT_BASE_CLASS : panelTreeCountClass(active)}
+      style={colored ? { color: hex.toLowerCase() } : undefined}
     >
       {value}
     </span>

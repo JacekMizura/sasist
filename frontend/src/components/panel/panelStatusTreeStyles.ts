@@ -12,9 +12,12 @@ export const PANEL_STATUS_SIDEBAR_PAGE_SHELL_BASE =
 
 export const PANEL_STATUS_SIDEBAR_PAGE_SHELL_CLASS = `hidden lg:flex ${PANEL_STATUS_SIDEBAR_PAGE_SHELL_BASE}`;
 
+/** Licznik — flex prawo, bez koloru tekstu (neutralny kolor dokłada {@link panelTreeCountClass}). */
+export const PANEL_TREE_COUNT_BASE_CLASS =
+  "ml-auto shrink-0 pl-2 text-right tabular-nums text-xs font-medium";
+
 /** Licznik — flex prawo, bez stałej szerokości kolumny. */
-export const PANEL_TREE_COUNT_CLASS =
-  "ml-auto shrink-0 pl-2 text-right tabular-nums text-xs font-medium text-slate-500";
+export const PANEL_TREE_COUNT_CLASS = `${PANEL_TREE_COUNT_BASE_CLASS} text-slate-500`;
 
 export function panelTreeCountClass(active?: boolean): string {
   return `${PANEL_TREE_COUNT_CLASS}${active ? " text-slate-700" : ""}`;

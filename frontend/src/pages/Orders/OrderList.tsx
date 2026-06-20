@@ -29,7 +29,6 @@ import type { OrderListBulkSelectionArg } from "../../components/orders/orderLis
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { dispatchOrdersOperationsUpdated } from "../wms/wmsRoutes";
 import { dispatchWmsShortagesUpdated } from "../../utils/wmsRefresh";
-import { panelStatusCounterColorResolver } from "../../hooks/usePanelStatusCounterColor";
 import { OrderStatusSidebar, type OrderPanelFilter } from "../../components/orders/OrderStatusSidebar";
 import {
   formatOrderPanelFilterLabel,
@@ -151,7 +150,7 @@ type SortKey =
 export default function OrderList() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { warehouses } = useWarehouse();
+  const { warehouses, warehouse } = useWarehouse();
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [totalCount, setTotalCount] = useState(0);
@@ -211,11 +210,8 @@ export default function OrderList() {
 
   /** Optional user filter — never derived from global WMS warehouse selector. */
   const fulfillmentWarehouseFilter = appliedFilters.warehouseIdOverride;
-
-  const statusCounterColorForId = useMemo(() => {
-    if (fulfillmentWarehouseFilter == null) return undefined;
-    return panelStatusCounterColorResolver("orders", DAMAGE_TENANT_ID, fulfillmentWarehouseFilter);
-  }, [fulfillmentWarehouseFilter]);
+  /** Magazyn panelu statusów — filtr listy lub aktywny magazyn z nagłówka (spójny z konfiguratorem). */
+  const panelStatusWarehouseId = fulfillmentWarehouseFilter ?? warehouse?.id ?? null;
 
   const appliedFiltersKey = useMemo(() => JSON.stringify(appliedFilters), [appliedFilters]);
 
@@ -914,7 +910,7 @@ export default function OrderList() {
           onStatusDrawerOpenChange={setStatusDrawerOpen}
           sidebar={
             <OrderStatusSidebar
-              warehouseId={fulfillmentWarehouseFilter}
+              warehouseId={panelStatusWarehouseId}
               panelSummary={panelSummary}
               panelSubgroups={panelSubgroups}
               panelFilter={panelFilter}
@@ -922,13 +918,13 @@ export default function OrderList() {
               chromeVariant="sellasist"
               collapsed={isStatusPanelCollapsed}
               parentScrollContainer
-              statusCounterColorForId={statusCounterColorForId}
+              counterColorModule="orders"
               onToggleCollapsed={() => setIsStatusPanelCollapsed((v) => !v)}
             />
           }
           mobileDrawerSidebar={
             <OrderStatusSidebar
-              warehouseId={fulfillmentWarehouseFilter}
+              warehouseId={panelStatusWarehouseId}
               panelSummary={panelSummary}
               panelSubgroups={panelSubgroups}
               panelFilter={panelFilter}
@@ -937,7 +933,7 @@ export default function OrderList() {
                 setStatusDrawerOpen(false);
               }}
               chromeVariant="sellasist"
-              statusCounterColorForId={statusCounterColorForId}
+              counterColorModule="orders"
             />
           }
         />

@@ -24,12 +24,14 @@ import {
   panelTreeMetaRowClass,
   panelTreeStatusBarClass,
   panelTreeStatusRowClass,
-  panelTreeCountClass,
 } from "../panel/panelStatusTreeStyles";
 import { sidebarSubStatusHex } from "../../utils/panelSidebarHierarchy";
 import { buildPanelSidebarLayout } from "../../utils/orderPanelSidebarBuckets";
 import { MAIN_PANEL_GROUP_ORDER } from "../../utils/orderPanelMainGroupOrder";
 import { panelListStatusSidebarWidthLg } from "../listPage/listSellasistTokens";
+import { panelStatusCounterColorResolver } from "../../hooks/usePanelStatusCounterColor";
+import { DAMAGE_TENANT_ID } from "../../pages/damage/damageShared";
+import type { PanelStatusCounterColorModule } from "../../utils/panelStatusCounterColorStore";
 
 export type OrderPanelFilter =
   | "all"
@@ -96,7 +98,9 @@ type OrdersPanelStatusSidebarProps = {
   returnsOperationalQueuesCollapsedSlot?: ReactNode;
   parentScrollContainer?: boolean;
   onToggleCollapsed?: () => void;
-  /** Opcjonalny kolor licznika per status (warstwa UX, localStorage). */
+  /** Moduł localStorage dla kolorów licznika (zamówienia vs zwroty). */
+  counterColorModule?: PanelStatusCounterColorModule;
+  /** Opcjonalny override lookupu koloru licznika per status. */
   statusCounterColorForId?: (statusId: number) => string | null;
 };
 
@@ -114,8 +118,15 @@ export function OrdersPanelStatusSidebar({
   returnsOperationalQueuesCollapsedSlot,
   parentScrollContainer = false,
   onToggleCollapsed,
-  statusCounterColorForId,
+  counterColorModule = "orders",
+  statusCounterColorForId: statusCounterColorForIdProp,
 }: OrdersPanelStatusSidebarProps) {
+  const statusCounterColorForIdFromStore = useMemo(() => {
+    if (warehouseId == null || warehouseId <= 0) return undefined;
+    return panelStatusCounterColorResolver(counterColorModule, DAMAGE_TENANT_ID, warehouseId);
+  }, [warehouseId, counterColorModule]);
+
+  const counterColorForId = statusCounterColorForIdProp ?? statusCounterColorForIdFromStore;
   const totalPanelOrders =
     panelSummary != null
       ? panelSummary.unassigned_count + panelSummary.groups.reduce((acc, g) => acc + g.total_count, 0)
@@ -162,7 +173,7 @@ export function OrdersPanelStatusSidebar({
         {s.image_url ? (
           <img src={s.image_url} alt="" className="mt-0.5 h-4 w-4 shrink-0 rounded object-contain" />
         ) : null}
-        <PanelTreeCount value={s.count} active={active} colorHex={statusCounterColorForId?.(s.id)} />
+        <PanelTreeCount value={s.count} active={active} colorHex={counterColorForId?.(s.id)} />
       </button>
     );
   };
@@ -248,7 +259,7 @@ export function OrdersPanelStatusSidebar({
                     style={{ backgroundColor: sidebarSubStatusHex(s.badge_color ?? s.color, block.main_group) }}
                     aria-hidden
                   />
-                  <span className={panelTreeCountClass()} style={statusCounterColorForId?.(s.id) ? { color: statusCounterColorForId(s.id)! } : undefined}>{s.count}</span>
+                  <PanelTreeCount value={s.count} colorHex={counterColorForId?.(s.id)} />
                 </button>
               ))}
             </div>,

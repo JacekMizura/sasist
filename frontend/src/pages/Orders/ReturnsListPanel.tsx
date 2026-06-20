@@ -19,7 +19,6 @@ import type {
 } from "../../types/wmsReturn";
 import type { OrderUiPanelSubgroupRead, OrderUiStatusPanelSummary } from "../../types/orderUiStatus";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
-import { panelStatusCounterColorResolver } from "../../hooks/usePanelStatusCounterColor";
 import { PanelBulkStatusConfirmModal } from "../../components/orders/panelList/PanelBulkStatusConfirmModal";
 import { deletePanelReturn, postReturnsBulkDelete, postReturnsBulkPanelStatus } from "../../api/panelBulkStatusApi";
 import type { EntityBulkDeleteResult } from "../../types/entityBulkDelete";
@@ -178,11 +177,6 @@ export default function ReturnsListPanel() {
 
   const appliedFiltersKey = useMemo(() => JSON.stringify(appliedFilters), [appliedFilters]);
   const effectiveWarehouseId = appliedFilters.listWarehouseId ?? warehouseId ?? null;
-
-  const statusCounterColorForId = useMemo(() => {
-    if (effectiveWarehouseId == null) return undefined;
-    return panelStatusCounterColorResolver("returns", DAMAGE_TENANT_ID, effectiveWarehouseId);
-  }, [effectiveWarehouseId]);
   const activeFilterLabel = useMemo(
     () => formatActiveFilterLabel(panelFilter, operationalQueue, panelSummary),
     [panelFilter, operationalQueue, panelSummary],
@@ -528,7 +522,7 @@ export default function ReturnsListPanel() {
                 manageStatusesHref="/orders/returns/panel-statuses"
                 returnsOperationalQueuesSlot={operationalQueuesSlot}
                 returnsOperationalQueuesCollapsedSlot={operationalQueuesCollapsedSlot}
-                statusCounterColorForId={statusCounterColorForId}
+                counterColorModule="returns"
               />
             }
             mobileDrawerSidebar={
@@ -544,7 +538,7 @@ export default function ReturnsListPanel() {
                 chromeVariant="sellasist"
                 manageStatusesHref="/orders/returns/panel-statuses"
                 returnsOperationalQueuesSlot={renderOperationalQueueSidebarRows(() => setStatusDrawerOpen(false))}
-                statusCounterColorForId={statusCounterColorForId}
+                counterColorModule="returns"
                 returnsOperationalQueuesCollapsedSlot={operationalQueuesCollapsedSlot}
               />
             }
