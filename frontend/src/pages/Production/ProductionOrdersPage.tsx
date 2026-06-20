@@ -13,7 +13,11 @@ import {
 import { AppEmptyState } from "../../components/app-shell";
 import { filterToolbarBtnApply } from "../../components/filters/filterUiTokens";
 import {
-  ModuleListRowActionsCell,
+  productsListActionsCellClass,
+  productsListActionsInnerClass,
+  productsListActionsThClass,
+} from "../../components/products/productList/productsListTableTokens";
+import {
   moduleListTableClass,
   moduleListTableScrollClass,
   moduleListTdClass,
@@ -169,7 +173,6 @@ export default function ProductionOrdersPage() {
             <table className={moduleListTableClass} style={{ minWidth: 960 }}>
               <thead className={moduleListTheadClass}>
                 <tr>
-                  <th className={`${moduleListThClass} w-[120px] text-center`}>Akcje</th>
                   <th className={moduleListThClass}>Zlecenie</th>
                   <th className={moduleListThClass}>Produkt</th>
                   <th className={`${moduleListThClass} text-right`}>Ilość</th>
@@ -177,39 +180,12 @@ export default function ProductionOrdersPage() {
                   <th className={moduleListThClass}>Data plan.</th>
                   <th className={moduleListThClass}>Operator</th>
                   <th className={moduleListThClass}>Priorytet</th>
+                  <th className={productsListActionsThClass}>Akcje</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((r) => (
                   <tr key={`${r.kind}-${r.id}`} className="group border-b border-slate-100 hover:bg-slate-50/70">
-                    <ModuleListRowActionsCell ariaLabel={`Akcje ${r.number}`}>
-                      <ProductionRowActionsMenu
-                        ariaLabel={`Akcje ${r.number}`}
-                        actions={[
-                          {
-                            id: "open",
-                            label: "Otwórz",
-                            onClick: () =>
-                              navigate(r.kind === "batch" ? erpProductionPaths.batch(r.id) : erpProductionPaths.orders),
-                          },
-                          {
-                            id: "edit",
-                            label: "Edytuj",
-                            onClick: () => navigate(r.kind === "batch" ? erpProductionPaths.batch(r.id) : erpProductionPaths.orders),
-                          },
-                          ...(r.kind === "batch" && (r.status === "planned" || r.status === "draft")
-                            ? [
-                                {
-                                  id: "wms",
-                                  label: "Wydaj do WMS",
-                                  onClick: () => releaseToWms(r),
-                                  disabled: r.hasShortages,
-                                },
-                              ]
-                            : []),
-                        ]}
-                      />
-                    </ModuleListRowActionsCell>
                     <td className={moduleListTdClass}>
                       <span className="font-mono font-medium text-slate-900">{r.number}</span>
                       <span className="ml-2 text-[10px] uppercase text-slate-400">{r.kind === "batch" ? "partia" : "MO"}</span>
@@ -229,6 +205,36 @@ export default function ProductionOrdersPage() {
                       <span className={productionPriorityBadgeClass(r.priority, r.hasShortages, r.numericPriority)}>
                         {productionPriorityLabel(r.priority, r.hasShortages, r.numericPriority)}
                       </span>
+                    </td>
+                    <td className={productsListActionsCellClass} onClick={(e) => e.stopPropagation()}>
+                      <div className={productsListActionsInnerClass}>
+                        <ProductionRowActionsMenu
+                          ariaLabel={`Akcje ${r.number}`}
+                          actions={[
+                            {
+                              id: "open",
+                              label: "Otwórz",
+                              onClick: () =>
+                                navigate(r.kind === "batch" ? erpProductionPaths.batch(r.id) : erpProductionPaths.orders),
+                            },
+                            {
+                              id: "edit",
+                              label: "Edytuj",
+                              onClick: () => navigate(r.kind === "batch" ? erpProductionPaths.batch(r.id) : erpProductionPaths.orders),
+                            },
+                            ...(r.kind === "batch" && (r.status === "planned" || r.status === "draft")
+                              ? [
+                                  {
+                                    id: "wms",
+                                    label: "Wydaj do WMS",
+                                    onClick: () => releaseToWms(r),
+                                    disabled: r.hasShortages,
+                                  },
+                                ]
+                              : []),
+                          ]}
+                        />
+                      </div>
                     </td>
                   </tr>
                 ))}

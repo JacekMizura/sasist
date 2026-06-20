@@ -206,7 +206,7 @@ export default function ProductionDashboardPage() {
                     <th className="px-6 py-3">Partia</th>
                     <th className="px-6 py-3">Status</th>
                     <th className="px-6 py-3 text-right">Ilość</th>
-                    <th className="px-6 py-3 text-right" />
+                    <th className="px-6 py-3 text-right">Akcje</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">

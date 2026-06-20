@@ -1,5 +1,10 @@
 # Change log
 
+## 2026-06-08 — Produkcja ERP: kolumna Akcje na końcu tabel
+
+- Wszystkie listy modułu: Zlecenia, Planowanie (BatchesListPage), Receptury, Historia, Analiza kosztów — kolumna Akcje sticky right (tokens `productsListActions*`), ostatnia kolumna
+- Pulpit: nagłówek „Akcje” w ostatniej kolumnie tabeli partii gotowych
+
 ## 2026-06-08 — Produkcja ERP (Zarządzanie produkcją): standard UI systemowy
 
 - `ProductionErpModuleLayout`: `TabsNav` + breadcrumb (jak Dostawcy / Inwentaryzacja); pełnoekranowe szczegóły partii/receptury bez tabów

@@ -6,7 +6,11 @@ import { useWarehouse } from "../../context/WarehouseContext";
 import { listProductionBatches, type ProductionBatchRead } from "../../api/productionApi";
 import { AppEmptyState } from "../../components/app-shell";
 import {
-  ModuleListRowActionsCell,
+  productsListActionsCellClass,
+  productsListActionsInnerClass,
+  productsListActionsThClass,
+} from "../../components/products/productList/productsListTableTokens";
+import {
   moduleListTableClass,
   moduleListTableScrollClass,
   moduleListTdClass,
@@ -80,7 +84,6 @@ export default function BatchesListPage({ embedded = false }: Props) {
         <table className={moduleListTableClass} style={{ minWidth: 900 }}>
           <thead className={moduleListTheadClass}>
             <tr>
-              <th className={`${moduleListThClass} w-[120px] text-center`}>Akcje</th>
               <th className={moduleListThClass}>Partia</th>
               <th className={moduleListThClass}>Produkty</th>
               <th className={`${moduleListThClass} text-right`}>Ilość</th>
@@ -89,20 +92,12 @@ export default function BatchesListPage({ embedded = false }: Props) {
               <th className={moduleListThClass}>Materiały</th>
               <th className={moduleListThClass}>Operator</th>
               <th className={moduleListThClass}>Termin</th>
+              <th className={productsListActionsThClass}>Akcje</th>
             </tr>
           </thead>
           <tbody>
             {batches.map((b) => (
               <tr key={b.id} className="group border-b border-slate-100 hover:bg-slate-50/70">
-                <ModuleListRowActionsCell ariaLabel={`Akcje ${b.number}`}>
-                  <ProductionRowActionsMenu
-                    ariaLabel={`Akcje ${b.number}`}
-                    actions={[
-                      { id: "open", label: "Otwórz", onClick: () => navigate(erpProductionPaths.batch(b.id)) },
-                      { id: "edit", label: "Edytuj", onClick: () => navigate(erpProductionPaths.batch(b.id)) },
-                    ]}
-                  />
-                </ModuleListRowActionsCell>
                 <td className={`${moduleListTdClass} font-mono font-medium text-slate-900`}>{b.number}</td>
                 <td className={moduleListTdClass}>{b.products_count ?? b.lines.length}</td>
                 <td className={`${moduleListTdClass} text-right tabular-nums`}>{b.total_planned_units ?? 0}</td>
@@ -124,6 +119,17 @@ export default function BatchesListPage({ embedded = false }: Props) {
                 </td>
                 <td className={`${moduleListTdClass} text-slate-600`}>{b.operator_name ?? "—"}</td>
                 <td className={`${moduleListTdClass} text-slate-600`}>{(b.created_at ?? "").slice(0, 10) || "—"}</td>
+                <td className={productsListActionsCellClass} onClick={(e) => e.stopPropagation()}>
+                  <div className={productsListActionsInnerClass}>
+                    <ProductionRowActionsMenu
+                      ariaLabel={`Akcje ${b.number}`}
+                      actions={[
+                        { id: "open", label: "Otwórz", onClick: () => navigate(erpProductionPaths.batch(b.id)) },
+                        { id: "edit", label: "Edytuj", onClick: () => navigate(erpProductionPaths.batch(b.id)) },
+                      ]}
+                    />
+                  </div>
+                </td>
               </tr>
             ))}
           </tbody>

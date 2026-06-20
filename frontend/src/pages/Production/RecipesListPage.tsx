@@ -20,7 +20,11 @@ import {
   filterSelectClass,
 } from "../../components/filters";
 import {
-  ModuleListRowActionsCell,
+  productsListActionsCellClass,
+  productsListActionsInnerClass,
+  productsListActionsThClass,
+} from "../../components/products/productList/productsListTableTokens";
+import {
   moduleListTableClass,
   moduleListTableScrollClass,
   moduleListTdClass,
@@ -181,7 +185,6 @@ export default function RecipesListPage() {
             <table className={moduleListTableClass} style={{ minWidth: 960 }}>
               <thead className={moduleListTheadClass}>
                 <tr>
-                  <th className={`${moduleListThClass} w-[120px] text-center`}>Akcje</th>
                   <th className={moduleListThClass}>Produkt</th>
                   <th className={moduleListThClass}>Receptura</th>
                   <th className={moduleListThClass}>Wersja</th>
@@ -189,36 +192,12 @@ export default function RecipesListPage() {
                   <th className={moduleListThClass}>Koszt/szt.</th>
                   <th className={moduleListThClass}>Można wyproduk.</th>
                   <th className={moduleListThClass}>Status</th>
+                  <th className={productsListActionsThClass}>Akcje</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((r) => (
                   <tr key={r.composition_id} className="group border-b border-slate-100 hover:bg-slate-50/70">
-                    <ModuleListRowActionsCell ariaLabel={`Akcje ${r.recipe_name}`}>
-                      <ProductionRowActionsMenu
-                        ariaLabel={`Akcje ${r.recipe_name}`}
-                        actions={[
-                          { id: "view", label: "Podgląd", onClick: () => navigate(erpProductionPaths.recipe(r.composition_id)) },
-                          { id: "edit", label: "Edytuj", onClick: () => navigate(erpProductionPaths.recipe(r.composition_id)) },
-                          {
-                            id: "dup",
-                            label: "Duplikuj",
-                            onClick: () => void handleDuplicate(r),
-                            disabled: busyId === r.composition_id,
-                          },
-                          ...(r.is_active
-                            ? [
-                                {
-                                  id: "arch",
-                                  label: "Archiwizuj",
-                                  onClick: () => void handleArchive(r),
-                                  disabled: busyId === r.composition_id,
-                                },
-                              ]
-                            : []),
-                        ]}
-                      />
-                    </ModuleListRowActionsCell>
                     <td className={moduleListTdClass}>
                       <div className="flex items-center gap-3">
                         <ProductThumb imageUrl={r.product_image_url} name={r.product_name} size="sm" />
@@ -241,6 +220,33 @@ export default function RecipesListPage() {
                     <td className={`${moduleListTdClass} tabular-nums text-slate-700`}>{Math.floor(r.max_producible)}</td>
                     <td className={moduleListTdClass}>
                       <span className={recipeStatusBadgeClass(r)}>{recipeStatusLabel(r)}</span>
+                    </td>
+                    <td className={productsListActionsCellClass} onClick={(e) => e.stopPropagation()}>
+                      <div className={productsListActionsInnerClass}>
+                        <ProductionRowActionsMenu
+                          ariaLabel={`Akcje ${r.recipe_name}`}
+                          actions={[
+                            { id: "view", label: "Podgląd", onClick: () => navigate(erpProductionPaths.recipe(r.composition_id)) },
+                            { id: "edit", label: "Edytuj", onClick: () => navigate(erpProductionPaths.recipe(r.composition_id)) },
+                            {
+                              id: "dup",
+                              label: "Duplikuj",
+                              onClick: () => void handleDuplicate(r),
+                              disabled: busyId === r.composition_id,
+                            },
+                            ...(r.is_active
+                              ? [
+                                  {
+                                    id: "arch",
+                                    label: "Archiwizuj",
+                                    onClick: () => void handleArchive(r),
+                                    disabled: busyId === r.composition_id,
+                                  },
+                                ]
+                              : []),
+                          ]}
+                        />
+                      </div>
                     </td>
                   </tr>
                 ))}

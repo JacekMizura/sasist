@@ -22,7 +22,11 @@ import {
   filterSelectClass,
 } from "../../components/filters";
 import {
-  ModuleListRowActionsCell,
+  productsListActionsCellClass,
+  productsListActionsInnerClass,
+  productsListActionsThClass,
+} from "../../components/products/productList/productsListTableTokens";
+import {
   moduleListTableClass,
   moduleListTableScrollClass,
   moduleListTdClass,
@@ -224,7 +228,6 @@ export default function ProductionAnalyticsPage() {
             <table className={moduleListTableClass} style={{ minWidth: 980 }}>
               <thead className={moduleListTheadClass}>
                 <tr>
-                  <th className={`${moduleListThClass} w-[120px] text-center`}>Akcje</th>
                   <th className={moduleListThClass}>
                     <button type="button" className="font-semibold hover:text-amber-700" onClick={() => toggleSort("product")}>
                       Produkt
@@ -243,20 +246,12 @@ export default function ProductionAnalyticsPage() {
                     </button>
                   </th>
                   <th className={moduleListThClass}>Status</th>
+                  <th className={productsListActionsThClass}>Akcje</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((r) => (
                   <tr key={r.composition_id} className="group border-b border-slate-100 hover:bg-slate-50/70">
-                    <ModuleListRowActionsCell ariaLabel={`Akcje ${r.product_name}`}>
-                      <ProductionRowActionsMenu
-                        ariaLabel={`Akcje ${r.product_name}`}
-                        actions={[
-                          { id: "view", label: "Podgląd", onClick: () => navigate(erpProductionPaths.recipe(r.composition_id)) },
-                          { id: "edit", label: "Edytuj", onClick: () => navigate(erpProductionPaths.recipe(r.composition_id)) },
-                        ]}
-                      />
-                    </ModuleListRowActionsCell>
                     <td className={moduleListTdClass}>
                       <div className="flex items-center gap-3">
                         <ProductThumb imageUrl={r.product_image_url} name={r.product_name} size="sm" />
@@ -274,6 +269,17 @@ export default function ProductionAnalyticsPage() {
                     <td className={`${moduleListTdClass} tabular-nums font-medium text-slate-800`}>{Math.floor(r.max_producible)}</td>
                     <td className={moduleListTdClass}>
                       <span className={recipeStatusBadgeClass(r)}>{recipeStatusLabel(r)}</span>
+                    </td>
+                    <td className={productsListActionsCellClass} onClick={(e) => e.stopPropagation()}>
+                      <div className={productsListActionsInnerClass}>
+                        <ProductionRowActionsMenu
+                          ariaLabel={`Akcje ${r.product_name}`}
+                          actions={[
+                            { id: "view", label: "Podgląd", onClick: () => navigate(erpProductionPaths.recipe(r.composition_id)) },
+                            { id: "edit", label: "Edytuj", onClick: () => navigate(erpProductionPaths.recipe(r.composition_id)) },
+                          ]}
+                        />
+                      </div>
                     </td>
                   </tr>
                 ))}

@@ -19,7 +19,11 @@ import {
   filterSelectClass,
 } from "../../components/filters";
 import {
-  ModuleListRowActionsCell,
+  productsListActionsCellClass,
+  productsListActionsInnerClass,
+  productsListActionsThClass,
+} from "../../components/products/productList/productsListTableTokens";
+import {
   moduleListTableClass,
   moduleListTableScrollClass,
   moduleListTdClass,
@@ -267,7 +271,6 @@ export default function ProductionHistoryPage() {
             <table className={moduleListTableClass} style={{ minWidth: 900 }}>
               <thead className={moduleListTheadClass}>
                 <tr>
-                  <th className={`${moduleListThClass} w-[120px] text-center`}>Akcje</th>
                   <th className={moduleListThClass}>Dokument</th>
                   <th className={moduleListThClass}>Produkt</th>
                   <th className={`${moduleListThClass} text-right`}>Ilość</th>
@@ -275,17 +278,12 @@ export default function ProductionHistoryPage() {
                   <th className={moduleListThClass}>Data zakończenia</th>
                   <th className={moduleListThClass}>Operator</th>
                   <th className={moduleListThClass}>Koszt jdn.</th>
+                  <th className={productsListActionsThClass}>Akcje</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((r) => (
                   <tr key={r.key} className="group border-b border-slate-100 hover:bg-slate-50/70">
-                    <ModuleListRowActionsCell ariaLabel={`Akcje ${r.number}`}>
-                      <ProductionRowActionsMenu
-                        ariaLabel={`Akcje ${r.number}`}
-                        actions={[{ id: "open", label: "Otwórz", onClick: () => navigate(r.linkTo) }]}
-                      />
-                    </ModuleListRowActionsCell>
                     <td className={`${moduleListTdClass} font-mono font-medium text-slate-900`}>
                       {r.number}
                       <span className="ml-2 text-[10px] uppercase text-slate-400">{r.kind === "batch" ? "partia" : "MO"}</span>
@@ -302,6 +300,14 @@ export default function ProductionHistoryPage() {
                     <td className={`${moduleListTdClass} text-slate-600`}>{r.completedAt}</td>
                     <td className={`${moduleListTdClass} text-slate-600`}>{r.operator}</td>
                     <td className={`${moduleListTdClass} tabular-nums text-slate-700`}>{r.unitCost}</td>
+                    <td className={productsListActionsCellClass} onClick={(e) => e.stopPropagation()}>
+                      <div className={productsListActionsInnerClass}>
+                        <ProductionRowActionsMenu
+                          ariaLabel={`Akcje ${r.number}`}
+                          actions={[{ id: "open", label: "Otwórz", onClick: () => navigate(r.linkTo) }]}
+                        />
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
