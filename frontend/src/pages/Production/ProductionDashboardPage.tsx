@@ -6,7 +6,7 @@ import { fetchProductionDashboard, type ProductionDashboardRead } from "../../ap
 import { BatchCard } from "./components/BatchCard";
 import { ErpKpiCard } from "./components/ErpKpiCard";
 import { ActiveWarehouseRequiredBanner } from "../../components/layout/ActiveWarehouseRequiredBanner";
-import { erpProductionPaths } from "./productionPaths";
+import { erpProductionPaths, wmsProductionPaths } from "./productionPaths";
 
 const DEFAULT_TENANT = 1;
 
