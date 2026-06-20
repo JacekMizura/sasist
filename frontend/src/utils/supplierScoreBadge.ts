@@ -1,4 +1,16 @@
-/** Compact label + badge style from numeric score (Purchasing supplier analytics). */
+/** Klasy badge punktacji dostawcy (0–100) — spójne z rankingiem i zamówieniami towaru. */
+export function supplierScoreBadgeClass(score: number | null | undefined): string {
+  if (score == null || !Number.isFinite(Number(score))) {
+    return "bg-slate-100 text-slate-600 ring-slate-200";
+  }
+  const s = Number(score);
+  if (s >= 90) return "bg-emerald-100 text-emerald-900 ring-emerald-200";
+  if (s >= 70) return "bg-sky-100 text-sky-900 ring-sky-200";
+  if (s >= 50) return "bg-amber-100 text-amber-950 ring-amber-200";
+  return "bg-red-100 text-red-900 ring-red-200";
+}
+
+/** Etykieta + badge z liczbową punktacją (lub „—” gdy brak danych). */
 export function supplierScoreTier(score: number | null | undefined): {
   label: string;
   badgeClass: string;
@@ -6,11 +18,9 @@ export function supplierScoreTier(score: number | null | undefined): {
   if (score == null || !Number.isFinite(Number(score))) {
     return { label: "—", badgeClass: "bg-slate-100 text-slate-600 ring-1 ring-slate-200" };
   }
-  const s = Number(score);
-  if (s >= 95) return { label: `${Math.round(s)} A+`, badgeClass: "bg-emerald-100 text-emerald-950 ring-1 ring-emerald-300" };
-  if (s >= 82) return { label: `${Math.round(s)} A`, badgeClass: "bg-emerald-50 text-emerald-900 ring-1 ring-emerald-200" };
-  if (s >= 71) return { label: `${Math.round(s)} B`, badgeClass: "bg-sky-50 text-sky-950 ring-1 ring-sky-200" };
-  if (s >= 58) return { label: `${Math.round(s)} C`, badgeClass: "bg-amber-50 text-amber-950 ring-1 ring-amber-200" };
-  if (s >= 40) return { label: `${Math.round(s)} Ryzyko`, badgeClass: "bg-orange-50 text-orange-950 ring-1 ring-orange-200" };
-  return { label: `${Math.round(s)} Ryzyko`, badgeClass: "bg-rose-100 text-rose-950 ring-1 ring-rose-300" };
+  const s = Math.round(Number(score));
+  return {
+    label: String(s),
+    badgeClass: `ring-1 ${supplierScoreBadgeClass(score)}`,
+  };
 }

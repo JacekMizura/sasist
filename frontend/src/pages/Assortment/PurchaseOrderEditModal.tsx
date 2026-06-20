@@ -874,9 +874,19 @@ export function PurchaseOrderEditModal({ open, tenantId, orderId, suppliers, onC
               <div className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm sm:min-w-[220px]">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Dostawca</span>
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${scoreTier.badgeClass}`}>
-                    {scoreTier.label}
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-medium text-slate-500">Punktacja</span>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs font-semibold ${scoreTier.badgeClass}`}
+                      title={
+                        supplierInsight.score != null
+                          ? `Punktacja dostawcy: ${supplierInsight.score}`
+                          : "Brak danych punktacji"
+                      }
+                    >
+                      {scoreTier.label}
+                    </span>
+                  </div>
                 </div>
                 <dl className="mt-2 space-y-1 text-xs text-slate-700">
                   <div className="flex justify-between gap-2">
@@ -906,7 +916,7 @@ export function PurchaseOrderEditModal({ open, tenantId, orderId, suppliers, onC
                 </dl>
               </div>
             ) : order ? (
-              <p className="text-xs text-slate-500">Brak danych scoringu dla tego dostawcy.</p>
+              <p className="text-xs text-slate-500">Brak danych punktacji dla tego dostawcy.</p>
             ) : null}
             {order ? (
               <button

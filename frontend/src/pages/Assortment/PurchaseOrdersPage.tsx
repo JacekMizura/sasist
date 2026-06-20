@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { listSellasistInputClass } from "../../components/listPage/listSellasistTokens";
-import { PageContainer } from "../../components/layout/PageLayout";
-import { ModuleListFiltersCard } from "../../components/listPage/ModuleListFiltersCard";
+import { Award, Banknote, FileText, Receipt, ShoppingCart, Star } from "lucide-react";
+import PageLayout from "../../components/layout/PageLayout";
 import { ListPageHeader } from "../../components/listPage/ListPageHeader";
+import { moduleTableCardClass, moduleTablePaginationFooterClass } from "../../components/listPage/moduleList";
+import { listSellasistInputClass } from "../../components/listPage/listSellasistTokens";
 import { PurchaseOrdersListTable } from "./PurchaseOrdersListTable";
 import api from "../../api/axios";
 import {
@@ -24,13 +25,15 @@ import { CreatePzFromDeliveryModal } from "./CreatePzFromDeliveryModal";
 import { PurchaseOrderEditModal } from "./PurchaseOrderEditModal";
 import { openPdfUrlInPrintViewer } from "../../utils/openPdfForBrowserPrint";
 import {
-  FilterField,
-  FilterGrid,
-  filterInputClass,
-  filterSelectClass,
-  filterToolbarBtnApply,
-  filterToolbarBtnSecondary,
-} from "../../components/filters";
+  PurchasingFilterBar,
+  PurchasingFilterField,
+  PurchasingKpiCard,
+  PurchasingKpiGrid,
+  purchasingFilterButtonClass,
+  purchasingFilterPrimaryButtonClass,
+  purchasingInputClass,
+  purchasingSelectClass,
+} from "../../modules/purchasing/ui";
 
 type Tenant = { id: number; name: string };
 
@@ -75,7 +78,6 @@ export default function PurchaseOrdersPage({ defaultCreateOpen = false }: Purcha
   const [err, setErr] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
-  const [newSupplierId, setNewSupplierId] = useState(0);
   const [page, setPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(25);
   const [pzForDeliveryId, setPzForDeliveryId] = useState<number | null>(null);
@@ -154,13 +156,7 @@ export default function PurchaseOrdersPage({ defaultCreateOpen = false }: Purcha
   }, [tenantId]);
 
   useEffect(() => {
-    if (suppliers.length > 0 && !suppliers.some((s) => s.id === newSupplierId)) {
-      setNewSupplierId(suppliers[0].id);
-    }
-  }, [suppliers, newSupplierId]);
-
-  useEffect(() => {
-    api
+    void api
       .get<Tenant[]>("/tenants/")
       .then((res) => {
         const list = Array.isArray(res.data) ? res.data : [];
@@ -245,7 +241,7 @@ export default function PurchaseOrdersPage({ defaultCreateOpen = false }: Purcha
         navigate("/suppliers");
         return;
       }
-      const sid = newSupplierId || suppliers[0].id;
+      const sid = suppliers[0].id;
       if (!hasActiveWarehouse || warehouseId == null) {
         window.alert(ACTIVE_WAREHOUSE_REQUIRED_MESSAGE);
         return;
@@ -266,10 +262,8 @@ export default function PurchaseOrdersPage({ defaultCreateOpen = false }: Purcha
         setErr("Nie udało się utworzyć szkicu.");
       }
     },
-    [suppliers, newSupplierId, tenantId, warehouseId, hasActiveWarehouse, navigate, load],
+    [suppliers, tenantId, warehouseId, hasActiveWarehouse, navigate, load],
   );
-
-  const createNew = () => void createDraftOrder();
 
   useEffect(() => {
     if (!defaultCreateOpen || loading) return;
@@ -400,8 +394,8 @@ export default function PurchaseOrdersPage({ defaultCreateOpen = false }: Purcha
         </div>
       ) : null}
 
-      <PageContainer fullBleed omitCard className="max-w-none p-4 md:p-5">
-        <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:space-y-4 md:p-5">
+      <PageLayout fullBleed>
+        <div className="space-y-6">
           <ListPageHeader
             title="Zamówienia towaru"
             breadcrumbs={[
@@ -410,52 +404,78 @@ export default function PurchaseOrdersPage({ defaultCreateOpen = false }: Purcha
             ]}
           />
 
-          <div className="border-t border-slate-100 pt-3">
-          <div className="grid grid-cols-2 gap-2 lg:grid-cols-6 lg:gap-3">
-            {[
-              { k: "Szkice", v: String(summary.openDrafts), sub: "otwarte" },
-              { k: "Zamówione (mies.)", v: String(summary.orderedThisMonth), sub: "w tym miesiącu" },
-              { k: "Netto (mies.)", v: `${fmtMoney(summary.netMonth)} zł`, sub: "wartość" },
-              { k: "Brutto (mies.)", v: `${fmtMoney(summary.grossMonth)} zł`, sub: "wartość" },
-              { k: "Top dostawca", v: summary.topName ?? "—", sub: "najczęściej w mies." },
-              {
-                k: "Śr. scoring",
-                v: summary.avgScore != null ? summary.avgScore.toFixed(1) : "—",
-                sub: "dostawcy (90 d.)",
-              },
-            ].map((c) => (
-              <div key={c.k}>
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{c.k}</p>
-                <p className="truncate text-lg font-bold tabular-nums text-slate-900">{c.v}</p>
-                <p className="text-xs text-slate-500">{c.sub}</p>
-              </div>
-            ))}
-          </div>
-          </div>
+          <PurchasingKpiGrid columns={6}>
+            <PurchasingKpiCard
+              title="Szkice"
+              value={summary.openDrafts}
+              subtitle="Otwarte szkice zamówień"
+              tone="default"
+              icon={<FileText aria-hidden />}
+            />
+            <PurchasingKpiCard
+              title="Zamówione (mies.)"
+              value={summary.orderedThisMonth}
+              subtitle="W bieżącym miesiącu"
+              tone="blue"
+              icon={<ShoppingCart aria-hidden />}
+            />
+            <PurchasingKpiCard
+              title="Netto (mies.)"
+              value={`${fmtMoney(summary.netMonth)} zł`}
+              subtitle="Wartość netto w miesiącu"
+              tone="emerald"
+              icon={<Banknote aria-hidden />}
+            />
+            <PurchasingKpiCard
+              title="Brutto (mies.)"
+              value={`${fmtMoney(summary.grossMonth)} zł`}
+              subtitle="Wartość brutto w miesiącu"
+              tone="indigo"
+              icon={<Receipt aria-hidden />}
+            />
+            <PurchasingKpiCard
+              title="Top dostawca"
+              value={summary.topName ?? "—"}
+              subtitle="Najczęściej w bieżącym miesiącu"
+              tone="purple"
+              icon={<Award aria-hidden />}
+            />
+            <PurchasingKpiCard
+              title="Śr. punktacja"
+              value={summary.avgScore != null ? summary.avgScore.toFixed(1) : "—"}
+              subtitle="Dostawcy z ostatnich 90 dni"
+              tone="amber"
+              icon={<Star aria-hidden />}
+            />
+          </PurchasingKpiGrid>
 
-          <div className="border-t border-slate-100 pt-3">
-          <ModuleListFiltersCard
-            filterBodyClassName="space-y-2 border-t border-slate-100 pt-3"
-            onClear={clearFilters}
-            onApply={applyFilters}
-            applyLabel="Filtruj"
-            clearLabel="Wyczyść filtry"
+          <PurchasingFilterBar
+            actions={
+              <>
+                <button type="button" className={purchasingFilterButtonClass} onClick={clearFilters}>
+                  Wyczyść filtry
+                </button>
+                <button type="button" className={purchasingFilterPrimaryButtonClass} onClick={applyFilters}>
+                  Filtruj
+                </button>
+              </>
+            }
           >
-            <FilterGrid>
-              <FilterField label="Szukaj">
+            <div className="grid w-full min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+              <PurchasingFilterField label="Szukaj" className="min-w-0">
                 <input
                   type="search"
                   value={draftSearch}
                   onChange={(e) => setDraftSearch(e.target.value)}
                   placeholder="Nazwa zamówienia lub dostawca"
-                  className={filterInputClass}
+                  className={purchasingInputClass}
                 />
-              </FilterField>
-              <FilterField label="Dostawca">
+              </PurchasingFilterField>
+              <PurchasingFilterField label="Dostawca" className="min-w-0">
                 <select
                   value={draftSupplierId || ""}
                   onChange={(e) => setDraftSupplierId(Number(e.target.value) || 0)}
-                  className={filterSelectClass}
+                  className={purchasingSelectClass}
                 >
                   <option value="">Wszyscy dostawcy</option>
                   {suppliers.map((s) => (
@@ -464,12 +484,12 @@ export default function PurchaseOrdersPage({ defaultCreateOpen = false }: Purcha
                     </option>
                   ))}
                 </select>
-              </FilterField>
-              <FilterField label="Status">
+              </PurchasingFilterField>
+              <PurchasingFilterField label="Status" className="min-w-0">
                 <select
                   value={draftStatus}
                   onChange={(e) => setDraftStatus((e.target.value || "") as "" | DeliveryStatus)}
-                  className={filterSelectClass}
+                  className={purchasingSelectClass}
                 >
                   {STATUS_OPTIONS.map((o) => (
                     <option key={o.value || "all"} value={o.value}>
@@ -477,31 +497,15 @@ export default function PurchaseOrdersPage({ defaultCreateOpen = false }: Purcha
                     </option>
                   ))}
                 </select>
-              </FilterField>
-              <FilterField label="Data od">
-                <input
-                  type="date"
-                  value={draftDateFrom}
-                  onChange={(e) => setDraftDateFrom(e.target.value)}
-                  className={filterInputClass}
-                />
-              </FilterField>
-              <FilterField label="Data do">
-                <input
-                  type="date"
-                  value={draftDateTo}
-                  onChange={(e) => setDraftDateTo(e.target.value)}
-                  className={filterInputClass}
-                />
-              </FilterField>
-              <FilterField label="Podmiot">
+              </PurchasingFilterField>
+              <PurchasingFilterField label="Podmiot" className="min-w-0">
                 <select
                   value={tenantId}
                   onChange={(e) => {
                     setTenantId(Number(e.target.value));
                     setPage(1);
                   }}
-                  className={filterSelectClass}
+                  className={purchasingSelectClass}
                 >
                   {tenants.map((t) => (
                     <option key={t.id} value={t.id}>
@@ -509,38 +513,31 @@ export default function PurchaseOrdersPage({ defaultCreateOpen = false }: Purcha
                     </option>
                   ))}
                 </select>
-              </FilterField>
-              <FilterField label="Dostawca (nowe)">
-                <select
-                  value={newSupplierId || ""}
-                  onChange={(e) => setNewSupplierId(Number(e.target.value))}
-                  className={filterSelectClass}
-                  disabled={suppliers.length === 0}
-                >
-                  {suppliers.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-              </FilterField>
-            </FilterGrid>
-            <div className="flex justify-end gap-2 sm:hidden">
-              <button type="button" onClick={clearFilters} className={filterToolbarBtnSecondary}>
-                Wyczyść filtry
-              </button>
-              <button type="button" onClick={applyFilters} className={filterToolbarBtnApply}>
-                Filtruj
-              </button>
+              </PurchasingFilterField>
+              <PurchasingFilterField label="Data od" className="min-w-0">
+                <input
+                  type="date"
+                  value={draftDateFrom}
+                  onChange={(e) => setDraftDateFrom(e.target.value)}
+                  className={purchasingInputClass}
+                />
+              </PurchasingFilterField>
+              <PurchasingFilterField label="Data do" className="min-w-0">
+                <input
+                  type="date"
+                  value={draftDateTo}
+                  onChange={(e) => setDraftDateTo(e.target.value)}
+                  className={purchasingInputClass}
+                />
+              </PurchasingFilterField>
             </div>
-          </ModuleListFiltersCard>
-          </div>
+          </PurchasingFilterBar>
 
-          {err ? <p className="border-t border-slate-100 pt-4 text-sm text-red-600">{err}</p> : null}
+          {err ? <p className="text-sm text-red-600">{err}</p> : null}
           {loading ? (
-            <p className="border-t border-slate-100 pt-4 text-slate-500">Ładowanie…</p>
+            <p className="text-sm text-slate-500">Ładowanie…</p>
           ) : rows.length === 0 ? (
-            <div className="flex flex-col items-center gap-4 border-t border-slate-100 py-8 text-center text-sm text-slate-600">
+            <div className="flex flex-col items-center gap-4 py-8 text-center text-sm text-slate-600">
               {appliedSearch.trim() || appliedSupplierId >= 1 || appliedStatus || appliedDateFrom || appliedDateTo ? (
                 <p>Brak wyników dla filtrów.</p>
               ) : (
@@ -556,27 +553,28 @@ export default function PurchaseOrdersPage({ defaultCreateOpen = false }: Purcha
               )}
             </div>
           ) : (
-            <div className="min-w-0 border-t border-slate-100 pt-3">
-              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-b border-slate-200 bg-slate-50/80 px-3 py-2 md:px-4">
-                <label className="flex items-center gap-2 text-sm font-medium text-slate-600">
-                  <span className="whitespace-nowrap">Wyników na stronę:</span>
-                  <select
-                    value={rowsPerPage}
-                    onChange={(e) => {
-                      setRowsPerPage(Number(e.target.value));
-                      setPage(1);
-                    }}
-                    className={`${listSellasistInputClass} !h-9 w-auto min-w-[4.5rem] py-0 pr-8 text-sm`}
-                  >
-                    {[25, 50, 100].map((n) => (
-                      <option key={n} value={n}>
-                        {n}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-              <PurchaseOrdersListTable
+            <div className={`${moduleTableCardClass} min-w-0`}>
+              <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-b border-slate-100 px-4 py-2">
+                  <label className="flex items-center gap-2 text-sm font-medium text-slate-600">
+                    <span className="whitespace-nowrap">Wyników na stronę:</span>
+                    <select
+                      value={rowsPerPage}
+                      onChange={(e) => {
+                        setRowsPerPage(Number(e.target.value));
+                        setPage(1);
+                      }}
+                      className={`${listSellasistInputClass} !h-9 w-auto min-w-[4.5rem] py-0 pr-8 text-sm`}
+                    >
+                      {[25, 50, 100].map((n) => (
+                        <option key={n} value={n}>
+                          {n}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <PurchaseOrdersListTable
                 rows={displayRows}
                 scoreBySupplierId={scoreBySupplierId}
                 printMenuOpenId={printMenuOpenId}
@@ -597,7 +595,7 @@ export default function PurchaseOrdersPage({ defaultCreateOpen = false }: Purcha
                 fmtMoney={fmtMoney}
               />
             {totalCount > 0 ? (
-              <div className="flex flex-col gap-2 bg-slate-50/95 px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+              <div className={`${moduleTablePaginationFooterClass} px-4`}>
                 <span className="font-medium tabular-nums text-slate-600">
                   {startRow}–{endRow} z {totalCount}
                 </span>
@@ -624,10 +622,11 @@ export default function PurchaseOrdersPage({ defaultCreateOpen = false }: Purcha
                 </div>
               </div>
             ) : null}
-          </div>
-        )}
+              </div>
+            </div>
+          )}
         </div>
-      </PageContainer>
+      </PageLayout>
 
       {editId != null ? (
         <PurchaseOrderEditModal

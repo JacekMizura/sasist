@@ -2,16 +2,33 @@ import { Pencil, Printer, Trash2 } from "lucide-react";
 
 import type { DeliveryListRow, DeliveryStatus } from "../../api/inboundDeliveriesApi";
 import {
-  OperationalActionButton,
-  OperationalActionColumn,
-  operationalActionsColumnWidthClass,
-  panelListDenseRowClass,
-  panelListDenseTableScrollWrapClass,
-  panelListDenseTdBase,
-  panelListDenseThBase,
-  panelListDenseTheadClass,
-} from "../../components/operational";
+  PROPORTIONAL_TABLE_NO_LOGO,
+  PROPORTIONAL_TABLE_SYSTEM_WIDTHS,
+} from "../../components/listPage/proportionalTableColumns";
+import { useProportionalTableColumns } from "../../components/listPage/useProportionalTableColumns";
+import {
+  poListActionsCellClass,
+  poListActionsInnerClass,
+  poListActionsThClass,
+  poListNameCellClass,
+  poListNameThClass,
+  poListRowActionBtn,
+  poListRowActionBtnDanger,
+  poListRowClass,
+  poListRowInnerClass,
+  poListTableClass,
+  poListTdClass,
+  poListThClass,
+} from "../../components/purchaseOrders/purchaseOrdersList/purchaseOrdersListTableTokens";
 import { supplierScoreTier } from "../../utils/supplierScoreBadge";
+
+const PO_DYNAMIC_COLUMN_COUNT = 9;
+
+const PO_TABLE_LAYOUT = {
+  ...PROPORTIONAL_TABLE_SYSTEM_WIDTHS,
+  ...PROPORTIONAL_TABLE_NO_LOGO,
+  checkboxPx: 0,
+};
 
 const STATUS_LABEL: Record<DeliveryStatus, string> = {
   draft: "Szkic",
@@ -47,10 +64,6 @@ function canCreatePz(row: DeliveryListRow): boolean {
   return row.item_count > 0 && row.status !== "cancelled" && row.status !== "received";
 }
 
-/** Stable layout for Zamówienia towaru — table-fixed + explicit cols (no `w-max` drift). */
-const PO_TABLE_CLASS =
-  "table-fixed w-full min-w-[1080px] border-collapse border-t border-slate-200 text-left";
-
 export type PurchaseOrdersListTableProps = {
   rows: DeliveryListRow[];
   scoreBySupplierId: Record<number, number | null>;
@@ -80,37 +93,44 @@ export function PurchaseOrdersListTable({
   formatDt,
   fmtMoney,
 }: PurchaseOrdersListTableProps) {
-  const th = panelListDenseThBase;
+  const { containerRef, widths, needsHorizontalScroll, contentMinWidthPx } = useProportionalTableColumns(
+    PO_DYNAMIC_COLUMN_COUNT,
+    PO_TABLE_LAYOUT,
+  );
+
+  const scrollClass = needsHorizontalScroll ? "overflow-x-auto" : "overflow-x-hidden";
+  const tableWidthStyle = needsHorizontalScroll ? { minWidth: contentMinWidthPx } : undefined;
+  const dynamicW = widths.dynamic;
 
   return (
-    <div className={panelListDenseTableScrollWrapClass}>
-      <table className={PO_TABLE_CLASS}>
+    <div ref={containerRef} className={`min-w-0 ${scrollClass}`}>
+      <table className={poListTableClass} style={tableWidthStyle}>
         <colgroup>
-          <col style={{ width: "6rem", minWidth: "6rem", maxWidth: "6rem" }} />
-          <col style={{ width: 90 }} />
-          <col />
-          <col />
-          <col style={{ width: 110 }} />
-          <col style={{ width: 140 }} />
-          <col style={{ width: 152 }} />
-          <col style={{ width: 152 }} />
-          <col style={{ width: 120 }} />
-          <col style={{ width: 120 }} />
-          <col style={{ width: 70 }} />
+          <col style={{ width: dynamicW }} />
+          <col style={{ width: widths.name }} />
+          <col style={{ width: dynamicW }} />
+          <col style={{ width: dynamicW }} />
+          <col style={{ width: dynamicW }} />
+          <col style={{ width: dynamicW }} />
+          <col style={{ width: dynamicW }} />
+          <col style={{ width: dynamicW }} />
+          <col style={{ width: dynamicW }} />
+          <col style={{ width: dynamicW }} />
+          <col style={{ width: widths.actions }} />
         </colgroup>
-        <thead className={panelListDenseTheadClass}>
+        <thead>
           <tr>
-            <th className={`${th} ${operationalActionsColumnWidthClass} px-1 text-center`}>Akcje</th>
-            <th className={`${th} w-[90px] text-left`}>Numer</th>
-            <th className={`${th} text-left`}>Nazwa</th>
-            <th className={`${th} text-left`}>Dostawca</th>
-            <th className={`${th} w-[110px] text-center`}>Scoring</th>
-            <th className={`${th} w-[140px] text-center`}>Status</th>
-            <th className={`${th} whitespace-nowrap text-left`}>Utworzono</th>
-            <th className={`${th} whitespace-nowrap text-left`}>Oczekiwana</th>
-            <th className={`${th} w-[120px] text-right`}>Netto</th>
-            <th className={`${th} w-[120px] text-right`}>Brutto</th>
-            <th className={`${th} w-[70px] text-right`}>Poz.</th>
+            <th className={poListThClass}>Numer</th>
+            <th className={poListNameThClass}>Nazwa</th>
+            <th className={poListThClass}>Dostawca</th>
+            <th className={`${poListThClass} text-center`}>Punktacja</th>
+            <th className={`${poListThClass} text-center`}>Status</th>
+            <th className={poListThClass}>Utworzono</th>
+            <th className={poListThClass}>Oczekiwana</th>
+            <th className={`${poListThClass} text-right`}>Netto</th>
+            <th className={`${poListThClass} text-right`}>Brutto</th>
+            <th className={`${poListThClass} text-right`}>Poz.</th>
+            <th className={poListActionsThClass}>Akcje</th>
           </tr>
         </thead>
         <tbody>
@@ -120,109 +140,141 @@ export function PurchaseOrdersListTable({
             const net = row.total_net ?? row.total_value ?? 0;
             const gross = row.total_gross ?? net + (row.total_vat ?? 0);
             return (
-              <tr key={row.id} className={panelListDenseRowClass}>
-                <td
-                  className={`${panelListDenseTdBase} ${operationalActionsColumnWidthClass} !px-1 !py-1 text-center !align-top`}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <OperationalActionColumn
-                    aria-label="Akcje zamówienia towaru"
-                    slots={[
-                      <OperationalActionButton key="edit" aria-label="Edytuj" title="Edytuj" onClick={() => onEdit(row.id)}>
-                        <Pencil className="text-slate-600" strokeWidth={2} />
-                      </OperationalActionButton>,
-                      <div key="print" className="relative flex justify-center" data-print-menu-root>
-                        <OperationalActionButton
-                          aria-label="Drukuj"
-                          title="Drukuj / PDF"
-                          onClick={() => onPrintMenuToggle(row.id)}
-                        >
-                          <Printer className="text-slate-600" strokeWidth={2} />
-                        </OperationalActionButton>
-                        {printMenuOpenId === row.id ? (
-                          <div className="absolute left-1/2 top-full z-[320] mt-1 w-44 -translate-x-1/2 rounded-lg border border-slate-200 bg-white py-1 text-left shadow-lg">
-                            <button
-                              type="button"
-                              className="block w-full px-3 py-2 text-sm text-slate-800 hover:bg-slate-50"
-                              onClick={() => {
-                                onPrintDirect(row.id);
-                              }}
-                            >
-                              Drukuj
-                            </button>
-                            <button
-                              type="button"
-                              className="block w-full px-3 py-2 text-sm text-slate-800 hover:bg-slate-50"
-                              onClick={() => {
-                                onOpenPdf(row.id);
-                              }}
-                            >
-                              Pobierz PDF
-                            </button>
-                          </div>
-                        ) : null}
-                      </div>,
-                      canCreatePz(row) ? (
-                        <OperationalActionButton
-                          key="pz"
-                          title="Przyjęcie dostawy (dokument magazynowy)"
-                          onClick={() => onPz(row.id)}
-                        >
-                          <span className="text-xs font-semibold leading-none tabular-nums">PZ</span>
-                        </OperationalActionButton>
-                      ) : null,
-                      <OperationalActionButton
-                        key="del"
-                        variant="danger"
-                        aria-label="Usuń"
-                        title={row.status === "draft" ? "Usuń" : "Tylko szkic"}
-                        onClick={() => {
-                          if (row.status !== "draft") {
-                            onToastCannotDelete();
-                            return;
-                          }
-                          onDeleteDraft(row.id);
-                        }}
-                        className={row.status !== "draft" ? "cursor-not-allowed" : ""}
-                        disabled={row.status !== "draft"}
+              <tr key={row.id} className={poListRowClass}>
+                <td className={poListTdClass}>
+                  <div className={`${poListRowInnerClass} tabular-nums font-semibold text-slate-800`}>#{row.id}</div>
+                </td>
+                <td className={poListNameCellClass}>
+                  <div className={`${poListRowInnerClass} min-w-0`}>
+                    <button
+                      type="button"
+                      onClick={() => onEdit(row.id)}
+                      className="block max-w-full truncate text-left font-medium text-sky-800 hover:underline"
+                      title={deliveryListLabel(row)}
+                    >
+                      {deliveryListLabel(row)}
+                    </button>
+                  </div>
+                </td>
+                <td className={poListTdClass}>
+                  <div className={`${poListRowInnerClass} min-w-0`}>
+                    <span className="block max-w-full truncate" title={row.supplier_name ?? undefined}>
+                      {row.supplier_name}
+                    </span>
+                  </div>
+                </td>
+                <td className={poListTdClass}>
+                  <div className={`${poListRowInnerClass} justify-center`}>
+                    <span
+                      className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${tier.badgeClass}`}
+                      title={sc != null ? `Punktacja dostawcy: ${sc}` : "Brak danych punktacji"}
+                    >
+                      {tier.label}
+                    </span>
+                  </div>
+                </td>
+                <td className={poListTdClass}>
+                  <div className={`${poListRowInnerClass} justify-center`}>
+                    <span
+                      className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${statusBadgeClass(row.status)}`}
+                    >
+                      {STATUS_LABEL[row.status] ?? row.status}
+                    </span>
+                  </div>
+                </td>
+                <td className={poListTdClass}>
+                  <div className={`${poListRowInnerClass} whitespace-nowrap tabular-nums text-slate-600`}>
+                    {formatDt(row.created_at)}
+                  </div>
+                </td>
+                <td className={poListTdClass}>
+                  <div className={`${poListRowInnerClass} whitespace-nowrap tabular-nums text-slate-600`}>
+                    {formatDt(row.expected_date)}
+                  </div>
+                </td>
+                <td className={poListTdClass}>
+                  <div className={`${poListRowInnerClass} justify-end tabular-nums font-medium text-slate-900`}>
+                    {fmtMoney(net)}
+                  </div>
+                </td>
+                <td className={poListTdClass}>
+                  <div className={`${poListRowInnerClass} justify-end tabular-nums text-slate-800`}>
+                    {fmtMoney(gross)}
+                  </div>
+                </td>
+                <td className={poListTdClass}>
+                  <div className={`${poListRowInnerClass} justify-end tabular-nums text-slate-800`}>
+                    {row.item_count}
+                  </div>
+                </td>
+                <td className={poListActionsCellClass} onClick={(e) => e.stopPropagation()}>
+                  <div className={poListActionsInnerClass}>
+                    <button
+                      type="button"
+                      className={poListRowActionBtn}
+                      aria-label="Edytuj"
+                      title="Edytuj"
+                      onClick={() => onEdit(row.id)}
+                    >
+                      <Pencil className="h-4 w-4" strokeWidth={2} aria-hidden />
+                    </button>
+                    <div className="relative flex shrink-0 justify-center" data-print-menu-root>
+                      <button
+                        type="button"
+                        className={poListRowActionBtn}
+                        aria-label="Drukuj"
+                        title="Drukuj / PDF"
+                        onClick={() => onPrintMenuToggle(row.id)}
                       >
-                        <Trash2 strokeWidth={2} />
-                      </OperationalActionButton>,
-                    ]}
-                  />
+                        <Printer className="h-4 w-4" strokeWidth={2} aria-hidden />
+                      </button>
+                      {printMenuOpenId === row.id ? (
+                        <div className="absolute right-0 top-full z-[320] mt-1 w-44 rounded-lg border border-slate-200 bg-white py-1 text-left shadow-lg">
+                          <button
+                            type="button"
+                            className="block w-full px-3 py-2 text-sm text-slate-800 hover:bg-slate-50"
+                            onClick={() => onPrintDirect(row.id)}
+                          >
+                            Drukuj
+                          </button>
+                          <button
+                            type="button"
+                            className="block w-full px-3 py-2 text-sm text-slate-800 hover:bg-slate-50"
+                            onClick={() => onOpenPdf(row.id)}
+                          >
+                            Pobierz PDF
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                    {canCreatePz(row) ? (
+                      <button
+                        type="button"
+                        className={poListRowActionBtn}
+                        title="Przyjęcie dostawy (dokument magazynowy)"
+                        onClick={() => onPz(row.id)}
+                      >
+                        <span className="text-xs font-semibold leading-none tabular-nums">PZ</span>
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      className={poListRowActionBtnDanger}
+                      aria-label="Usuń"
+                      title={row.status === "draft" ? "Usuń" : "Tylko szkic"}
+                      disabled={row.status !== "draft"}
+                      onClick={() => {
+                        if (row.status !== "draft") {
+                          onToastCannotDelete();
+                          return;
+                        }
+                        onDeleteDraft(row.id);
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" strokeWidth={2} aria-hidden />
+                    </button>
+                  </div>
                 </td>
-                <td className={`${panelListDenseTdBase} tabular-nums`}>
-                  <span className="font-mono font-semibold text-slate-800">#{row.id}</span>
-                </td>
-                <td className={`${panelListDenseTdBase} min-w-0`}>
-                  <button
-                    type="button"
-                    onClick={() => onEdit(row.id)}
-                    className="block max-w-full truncate text-left font-medium text-sky-800 hover:underline"
-                  >
-                    {deliveryListLabel(row)}
-                  </button>
-                </td>
-                <td className={`${panelListDenseTdBase} min-w-0 text-slate-800`}>
-                  <span className="block truncate" title={row.supplier_name ?? undefined}>
-                    {row.supplier_name}
-                  </span>
-                </td>
-                <td className={`${panelListDenseTdBase} text-center`}>
-                  <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${tier.badgeClass}`}>{tier.label}</span>
-                </td>
-                <td className={`${panelListDenseTdBase} text-center`}>
-                  <span
-                    className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${statusBadgeClass(row.status)}`}
-                  >
-                    {STATUS_LABEL[row.status] ?? row.status}
-                  </span>
-                </td>
-                <td className={`${panelListDenseTdBase} whitespace-nowrap tabular-nums text-slate-600`}>{formatDt(row.created_at)}</td>
-                <td className={`${panelListDenseTdBase} whitespace-nowrap tabular-nums text-slate-600`}>{formatDt(row.expected_date)}</td>
-                <td className={`${panelListDenseTdBase} text-right tabular-nums font-medium text-slate-900`}>{fmtMoney(net)}</td>
-                <td className={`${panelListDenseTdBase} text-right tabular-nums text-slate-800`}>{fmtMoney(gross)}</td>
-                <td className={`${panelListDenseTdBase} text-right tabular-nums text-slate-800`}>{row.item_count}</td>
               </tr>
             );
           })}

@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-06-08 — Zamówienia towaru: punktacja, KPI, filtry, tabela
+
+- Nazewnictwo: Scoring → Punktacja (lista, KPI, modal, badge)
+- KPI: `PurchasingKpiGrid` + `PurchasingKpiCard` (6 kafelków jak Pulpit/Ocena)
+- Filtry: `PurchasingFilterBar`, siatka 6 pól, przyciski Wyczyść/Filtruj
+- Tabela: proporcjonalne kolumny (Nazwa 2fr), Akcje 120px sticky, badge punktacji 90/70/50/0
+
 ## 2026-06-08 — Dostawcy: płaski shell modułu (wzorzec Zwroty)
 
 - `SuppliersLayout`: breadcrumb → tytuł → `TabsNav` (bez karty wokół tabów) → outlet; jeden `PageLayout`
