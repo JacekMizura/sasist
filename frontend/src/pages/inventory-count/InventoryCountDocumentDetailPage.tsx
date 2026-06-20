@@ -8,7 +8,7 @@ import { DAMAGE_TENANT_ID } from "@/pages/damage/damageShared";
 /** ERP document detail — thin route shell. */
 export default function InventoryCountDocumentDetailPage() {
   const { documentId } = useParams();
-  const { warehouseId } = useActiveWarehouseContext();
+  const { warehouseName } = useActiveWarehouseContext();
   const tenantId = DAMAGE_TENANT_ID;
   const id = Number(documentId);
   const state = useInventoryDocumentDetail(id, tenantId);
@@ -16,5 +16,5 @@ export default function InventoryCountDocumentDetailPage() {
   if (state.err) return <p className="text-xs text-rose-600">{state.err}</p>;
   if (!state.doc) return <p className="text-xs text-slate-500">Wczytywanie…</p>;
 
-  return <InventoryDocumentDetailView state={state} warehouseName={warehouse?.name} />;
+  return <InventoryDocumentDetailView state={state} warehouseName={warehouseName ?? undefined} />;
 }
