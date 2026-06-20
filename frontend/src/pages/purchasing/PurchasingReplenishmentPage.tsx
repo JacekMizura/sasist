@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
-import { Download, PackageSearch, Save } from "lucide-react";
+import { AlertTriangle, Banknote, Download, List, PackageSearch, Save, ShoppingCart } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { AppEmptyState } from "../../components/app-shell";
 import { listSuppliers, type SupplierRead } from "../../api/inboundSuppliersApi";
@@ -26,10 +26,11 @@ import {
   PurchasingPageShell,
   PurchasingTableHeader,
   PurchasingTableSection,
-  purchasingFilterButtonClass,
-  purchasingFilterPrimaryButtonClass,
+  purchasingBtnGhost,
+  purchasingBtnSecondary,
   purchasingInputClass,
   purchasingSelectClass,
+  purchasingTableTdClass,
 } from "../../modules/purchasing/ui";
 
 const PO_TOAST_KEY = "purchasing_po_toast";
@@ -354,7 +355,7 @@ export default function PurchasingReplenishmentPage() {
     return true;
   };
 
-  const td = "px-2 py-2 align-middle text-sm text-slate-800";
+  const td = purchasingTableTdClass;
 
   return (
     <PurchasingContentArea className="pb-20">
@@ -368,7 +369,7 @@ export default function PurchasingReplenishmentPage() {
             subtitle="Sugestie uzupełnień na podstawie stanów, sprzedaży i otwartych dostaw."
             actions={
               <>
-                <button type="button" disabled={loading} onClick={() => void load()} className={purchasingFilterButtonClass}>
+                <button type="button" disabled={loading} onClick={() => void load()} className={purchasingBtnSecondary}>
                   Generuj ponownie
                 </button>
                 <button
@@ -384,18 +385,18 @@ export default function PurchasingReplenishmentPage() {
                       setExporting(false);
                     }
                   }}
-                  className={`flex items-center ${purchasingFilterPrimaryButtonClass}`}
+                  className={`inline-flex items-center gap-1.5 ${purchasingBtnSecondary}`}
                 >
-                  <Download className="mr-2 h-4 w-4" />
+                  <Download className="h-4 w-4" aria-hidden />
                   {exporting ? "Eksport…" : "Eksport CSV"}
                 </button>
                 <button
                   type="button"
                   disabled
                   title="Funkcja w przygotowaniu (Etap 4 — zamówienia zakupowe)."
-                  className="flex items-center rounded-lg bg-blue-50 px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-100"
+                  className={`inline-flex items-center gap-1.5 ${purchasingBtnGhost} opacity-60`}
                 >
-                  <Save className="mr-2 h-4 w-4" />
+                  <Save className="h-4 w-4" aria-hidden />
                   Zapisz szkic
                 </button>
               </>
@@ -406,13 +407,14 @@ export default function PurchasingReplenishmentPage() {
         kpis={
           summary && !loading ? (
             <PurchasingKpiGrid columns={4}>
-              <PurchasingKpiCard title="Wiersze" value={summary.total_rows} tone="default" />
-              <PurchasingKpiCard title="Sugestie ≥ 1" value={summary.suggested_count} tone="blue" />
-              <PurchasingKpiCard title="Krytyczne" value={summary.critical_count} tone="red" />
+              <PurchasingKpiCard title="Wiersze" value={summary.total_rows} tone="default" icon={<List aria-hidden />} />
+              <PurchasingKpiCard title="Sugestie ≥ 1" value={summary.suggested_count} tone="blue" icon={<ShoppingCart aria-hidden />} />
+              <PurchasingKpiCard title="Krytyczne" value={summary.critical_count} tone="red" icon={<AlertTriangle aria-hidden />} />
               <PurchasingKpiCard
                 title="Wartość sugerowana"
                 value={numFmt(summary.total_suggested_value, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 tone="emerald"
+                icon={<Banknote aria-hidden />}
               />
             </PurchasingKpiGrid>
           ) : null
@@ -630,6 +632,7 @@ export default function PurchasingReplenishmentPage() {
                 icon={PackageSearch}
                 title="Brak pozycji do wyświetlenia"
                 description="Zmień filtry lub sprawdź, czy w wybranym podmiocie są produkty ze stanem, sprzedażą lub otwartymi dostawami."
+                density="inline"
               />
             </PurchasingTableSection>
           ) : (
@@ -768,7 +771,7 @@ export default function PurchasingReplenishmentPage() {
                 <button
                   type="button"
                   disabled={page <= 1}
-                  className={purchasingFilterButtonClass}
+                  className={purchasingBtnSecondary}
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                 >
                   Poprzednia
@@ -776,7 +779,7 @@ export default function PurchasingReplenishmentPage() {
                 <button
                   type="button"
                   disabled={page >= totalPages}
-                  className={purchasingFilterButtonClass}
+                  className={purchasingBtnSecondary}
                   onClick={() => setPage((p) => p + 1)}
                 >
                   Następna

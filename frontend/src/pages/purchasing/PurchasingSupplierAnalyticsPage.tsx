@@ -31,8 +31,10 @@ import {
   PurchasingPageShell,
   PurchasingTableHeader,
   PurchasingTableSection,
-  purchasingFilterButtonClass,
+  purchasingBtnSecondary,
   purchasingSelectClass,
+  purchasingTableTdClass,
+  purchasingTableThClass,
 } from "../../modules/purchasing/ui";
 
 type Tenant = { id: number; name: string };
@@ -187,7 +189,7 @@ export default function PurchasingSupplierAnalyticsPage() {
     return { best, worst, avgScore: avg, delayed };
   }, [data]);
 
-  const td = "px-4 py-3 text-sm text-slate-800 sm:px-6 sm:py-4";
+  const td = purchasingTableTdClass;
 
   const openDrawer = (sid: number) => setDrawerSid(sid);
 
@@ -253,7 +255,7 @@ export default function PurchasingSupplierAnalyticsPage() {
         filters={
           <PurchasingFilterBar
             actions={
-              <button type="button" className={purchasingFilterButtonClass} onClick={() => void load()} disabled={loading}>
+              <button type="button" className={purchasingBtnSecondary} onClick={() => void load()} disabled={loading}>
                 Odśwież
               </button>
             }
@@ -291,17 +293,17 @@ export default function PurchasingSupplierAnalyticsPage() {
             <table className="w-full min-w-full text-left text-sm">
               <PurchasingTableHeader>
                 <tr>
-                  <th className="px-6 py-4 text-left">#</th>
-                  <th className="px-6 py-4 text-left">Dostawca</th>
-                  <th className="px-6 py-4 text-left">Dostawy PZ</th>
-                  <th className="px-6 py-4 text-left">PO planowane</th>
-                  <th className="px-6 py-4 text-left">Terminowość (PZ)</th>
-                  <th className="px-6 py-4 text-left">Śr. interwał dostaw (dni)</th>
-                  <th className="px-6 py-4 text-left">Śr. opóźnienie (dni)</th>
-                  <th className="px-6 py-4 text-left">Trend ceny zakupu (%)</th>
-                  <th className="px-6 py-4 text-left">Wartość zakupów netto (PLN)</th>
-                  <th className="px-6 py-4 text-left">Ocena (0–100)</th>
-                  <th className="px-6 py-4 text-left">Ryzyko</th>
+                  <th className={`${purchasingTableThClass} text-left`}>#</th>
+                  <th className={`${purchasingTableThClass} text-left`}>Dostawca</th>
+                  <th className={`${purchasingTableThClass} text-left`}>Dostawy PZ</th>
+                  <th className={`${purchasingTableThClass} text-left`}>PO planowane</th>
+                  <th className={`${purchasingTableThClass} text-left`}>Terminowość (PZ)</th>
+                  <th className={`${purchasingTableThClass} text-left`}>Śr. interwał dostaw (dni)</th>
+                  <th className={`${purchasingTableThClass} text-left`}>Śr. opóźnienie (dni)</th>
+                  <th className={`${purchasingTableThClass} text-left`}>Trend ceny zakupu (%)</th>
+                  <th className={`${purchasingTableThClass} text-left`}>Wartość zakupów netto (PLN)</th>
+                  <th className={`${purchasingTableThClass} text-left`}>Ocena (0–100)</th>
+                  <th className={`${purchasingTableThClass} text-left`}>Ryzyko</th>
                 </tr>
               </PurchasingTableHeader>
           <tbody className="divide-y divide-slate-100">

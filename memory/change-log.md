@@ -1,5 +1,17 @@
 # Change log
 
+## 2026-06-08 — Zakupy i planowanie: redesign UX/UI (design system)
+
+- Wspólne tokeny: `purchasingButtonTokens` (PRIMARY/SECONDARY/GHOST/LINK), `purchasingTableTokens`, `PurchasingInfoNotice`, `PurchasingSummaryStrip`
+- KPI: ujednolicony `PurchasingKpiCard` (min-h 88px, ikony 8×8, uppercase label)
+- Nagłówki tabel: jednolite tło `bg-slate-50`, `purchasingTableThClass`
+- `AppEmptyState` density `inline` — zwarte puste stany w sekcjach tabel
+- Auto-uzupełnianie: komunikat harmonogramu poza KPI (`PurchasingInfoNotice`)
+- Alerty: akcje w `quickActions`, nie w sekcji analizy
+- Historia współpracy: `PurchasingSummaryStrip` zamiast dużych kart
+- Priorytety: mniejsza heatmapa (bez długich opisów w kafelkach)
+- Zamówienia PO: `PurchasingPageShell` + `PurchasingTableSection`
+
 ## 2026-06-08 — Zakupy i planowanie: kompaktowy UX/UI (10 zakładek)
 
 - Wspólne komponenty modułu: mniejsze KPI (`PurchasingKpiCard` bez min-height, p-4, text-2xl), gęstsze odstępy (`PurchasingContentArea`, `PurchasingPageShell`, `PurchasingFilterBar`, `PurchasingAnalysisSection`)

@@ -17,6 +17,9 @@ import {
   PurchasingStatusBadge,
   PurchasingTableHeader,
   PurchasingTableSection,
+  purchasingLinkSectionClass,
+  purchasingTableTdClass,
+  purchasingTableThClass,
 } from "../ui";
 
 function formatDate(iso: string | null | undefined): string {
@@ -62,7 +65,7 @@ function PlanningDashboardInner() {
     void load();
   }, [load, refreshSignal]);
 
-  const td = "px-4 py-2.5 text-sm text-slate-800";
+  const td = purchasingTableTdClass;
   const tenantQ = `?tenant_id=${tenantId}`;
   const genHref = `/purchasing/replenishment${tenantQ}`;
   const ordersHref = `/purchasing/orders${tenantQ}`;
@@ -147,7 +150,7 @@ function PlanningDashboardInner() {
                 subtitle="Top 10 produktów krytycznych"
                 indicatorClass="bg-red-500"
                 action={
-                  <Link to={genHref} className="text-sm font-medium text-blue-600 hover:text-blue-700">
+                  <Link to={genHref} className={purchasingLinkSectionClass}>
                     Przejdź do generatora
                   </Link>
                 }
@@ -157,17 +160,18 @@ function PlanningDashboardInner() {
                     icon={PackageSearch}
                     title="Brak pozycji krytycznych"
                     description="Żaden produkt nie spełnia obecnie kryterium natychmiastowego uzupełnienia."
+                    density="inline"
                   />
                 ) : (
                   <table className="w-full text-left text-sm">
                     <PurchasingTableHeader>
                       <tr>
-                        <th className="px-4 py-2.5 text-left">Produkt</th>
-                        <th className="px-4 py-2.5 text-right">Stan</th>
-                        <th className="px-4 py-2.5 text-right">Śr./Dzień</th>
-                        <th className="px-4 py-2.5 text-center">Dni</th>
-                        <th className="px-4 py-2.5 text-left">Dostawca</th>
-                        <th className="px-4 py-2.5 text-right" />
+                        <th className={`${purchasingTableThClass} text-left`}>Produkt</th>
+                        <th className={`${purchasingTableThClass} text-right`}>Stan</th>
+                        <th className={`${purchasingTableThClass} text-right`}>Śr./Dzień</th>
+                        <th className={`${purchasingTableThClass} text-center`}>Dni</th>
+                        <th className={`${purchasingTableThClass} text-left`}>Dostawca</th>
+                        <th className={`${purchasingTableThClass} text-right`} />
                       </tr>
                     </PurchasingTableHeader>
                     <tbody className="divide-y divide-slate-100">
@@ -208,7 +212,7 @@ function PlanningDashboardInner() {
                 subtitle="Top 10 wg szac. kosztu"
                 indicatorClass="bg-blue-500"
                 action={
-                  <Link to={genHref} className="text-sm font-medium text-blue-600 hover:text-blue-700">
+                  <Link to={genHref} className={purchasingLinkSectionClass}>
                     Przejdź do generatora
                   </Link>
                 }
@@ -218,16 +222,17 @@ function PlanningDashboardInner() {
                     icon={ShoppingCart}
                     title="Brak sugestii zamówień"
                     description="Przy obecnych danych sprzedaży i stanów magazynowych nie ma propozycji do zamówienia."
+                    density="inline"
                   />
                 ) : (
                   <table className="w-full text-left text-sm">
                     <PurchasingTableHeader>
                       <tr>
-                        <th className="px-4 py-2.5 text-left">Produkt</th>
-                        <th className="px-4 py-2.5 text-right">Sug. Ilość</th>
-                        <th className="px-4 py-2.5 text-left">Dostawca</th>
-                        <th className="px-4 py-2.5 text-right">Szac. Koszt</th>
-                        <th className="px-4 py-2.5 text-right" />
+                        <th className={`${purchasingTableThClass} text-left`}>Produkt</th>
+                        <th className={`${purchasingTableThClass} text-right`}>Sug. Ilość</th>
+                        <th className={`${purchasingTableThClass} text-left`}>Dostawca</th>
+                        <th className={`${purchasingTableThClass} text-right`}>Szac. Koszt</th>
+                        <th className={`${purchasingTableThClass} text-right`} />
                       </tr>
                     </PurchasingTableHeader>
                     <tbody className="divide-y divide-slate-100">
@@ -264,7 +269,7 @@ function PlanningDashboardInner() {
             <PurchasingTableSection
               title="Ostatnie przyjęcia (PZ)"
               action={
-                <Link to={cooperationHref} className="text-sm font-medium text-blue-600 hover:text-blue-700">
+                <Link to={cooperationHref} className={purchasingLinkSectionClass}>
                   Historia współpracy
                 </Link>
               }
@@ -274,16 +279,17 @@ function PlanningDashboardInner() {
                   icon={FileText}
                   title="Brak przyjęć PZ"
                   description="Dokumenty przyjęcia zewnętrznego pojawią się tutaj po zaksięgowaniu w magazynie."
+                  density="inline"
                 />
               ) : (
                 <table className="w-full text-left text-sm">
                   <PurchasingTableHeader>
                     <tr>
-                      <th className="px-4 py-2.5 text-left">Numer / Nazwa</th>
-                      <th className="px-4 py-2.5 text-left">Dostawca</th>
-                      <th className="px-4 py-2.5 text-left">Status</th>
-                      <th className="px-4 py-2.5 text-left">Data</th>
-                      <th className="px-4 py-2.5 text-right">Akcje</th>
+                      <th className={`${purchasingTableThClass} text-left`}>Numer / Nazwa</th>
+                      <th className={`${purchasingTableThClass} text-left`}>Dostawca</th>
+                      <th className={`${purchasingTableThClass} text-left`}>Status</th>
+                      <th className={`${purchasingTableThClass} text-left`}>Data</th>
+                      <th className={`${purchasingTableThClass} text-right`}>Akcje</th>
                     </tr>
                   </PurchasingTableHeader>
                   <tbody className="divide-y divide-slate-100">

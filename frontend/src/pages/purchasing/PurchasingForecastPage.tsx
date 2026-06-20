@@ -16,7 +16,7 @@ import {
   PurchasingPageShell,
   PurchasingTableHeader,
   PurchasingTableSection,
-  purchasingFilterButtonClass,
+  purchasingBtnSecondary,
   purchasingInputClass,
   purchasingSelectClass,
 } from "../../modules/purchasing/ui";
@@ -151,7 +151,7 @@ export default function PurchasingForecastPage() {
         filters={
           <PurchasingFilterBar
             actions={
-              <button type="button" onClick={() => void load()} disabled={loading} className={purchasingFilterButtonClass}>
+              <button type="button" onClick={() => void load()} disabled={loading} className={purchasingBtnSecondary}>
                 Odśwież
               </button>
             }
@@ -337,7 +337,7 @@ export default function PurchasingForecastPage() {
                     {selectedProductId != null ? (
                       <button
                         type="button"
-                        className={purchasingFilterButtonClass}
+                        className={purchasingBtnSecondary}
                         onClick={() => selectProduct(null)}
                       >
                         Wyczyść wybór

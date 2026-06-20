@@ -30,12 +30,10 @@ type Props = {
   icon?: ReactNode;
   tone?: PurchasingKpiTone;
   className?: string;
-  /** Opcjonalny badge trendu — tylko gdy dane są dostępne w ekranie nadrzędnym. */
   trend?: {
     label: string;
     sentiment?: PurchasingKpiTrendSentiment;
   };
-  /** Nawigacja — karta staje się klikalna (tylko UX, bez zmiany danych). */
   to?: string;
 };
 
@@ -60,7 +58,7 @@ function PurchasingKpiCardInner({
 }: Props) {
   const hex = TONE_HEX[tone];
   const cardClass = [
-    "relative flex flex-col rounded-xl border border-slate-100 bg-white p-4 shadow-sm transition-all duration-300",
+    "relative flex min-h-[88px] flex-col rounded-xl border border-slate-100 bg-white p-4 shadow-sm transition-all duration-200",
     to ? "cursor-pointer hover:border-slate-200 hover:shadow-md" : "",
     className,
   ]
@@ -72,30 +70,29 @@ function PurchasingKpiCardInner({
 
   const inner = (
     <>
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <h3 className="text-xs font-semibold text-slate-500">{title}</h3>
-        {icon ? (
-          <div
-            className="shrink-0 rounded-lg p-2 [&_svg]:h-4 [&_svg]:w-4 [&_svg]:stroke-[2]"
-            style={{ backgroundColor: `${hex}26`, color: hex }}
-          >
-            {icon}
-          </div>
-        ) : null}
+      <div className="mb-2 flex items-start justify-between gap-2">
+        <h3 className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{title}</h3>
+        <div
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg [&_svg]:h-4 [&_svg]:w-4 [&_svg]:stroke-[2]"
+          style={icon ? { backgroundColor: `${hex}26`, color: hex } : undefined}
+          aria-hidden={!icon}
+        >
+          {icon ?? null}
+        </div>
       </div>
-      <div>
-        <div className="mb-1 flex flex-wrap items-end gap-2">
-          <div className="text-2xl font-bold tracking-tight tabular-nums text-slate-800">{value}</div>
+      <div className="mt-auto">
+        <div className="mb-0.5 flex flex-wrap items-end gap-2">
+          <div className="text-2xl font-bold leading-none tracking-tight tabular-nums text-slate-800">{value}</div>
           {trend && TrendIcon ? (
             <div
-              className={`mb-1 flex items-center gap-1 rounded-md px-2 py-1 text-xs font-bold ${TREND_CLASS[trendSentiment]}`}
+              className={`mb-0.5 flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-bold ${TREND_CLASS[trendSentiment]}`}
             >
-              <TrendIcon className="h-3.5 w-3.5" strokeWidth={2.5} aria-hidden />
+              <TrendIcon className="h-3 w-3" strokeWidth={2.5} aria-hidden />
               {trend.label}
             </div>
           ) : null}
         </div>
-        {subtitle ? <div className="text-xs font-medium text-slate-400">{subtitle}</div> : null}
+        {subtitle ? <div className="line-clamp-2 text-xs font-medium text-slate-400">{subtitle}</div> : null}
       </div>
     </>
   );

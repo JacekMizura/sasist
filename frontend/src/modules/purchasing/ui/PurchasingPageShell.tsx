@@ -5,6 +5,8 @@ type Props = {
   quickActions?: ReactNode;
   status?: ReactNode;
   kpis?: ReactNode;
+  /** Komunikaty informacyjne pod KPI (nie zamiast KPI). */
+  info?: ReactNode;
   filters?: ReactNode;
   analysis?: ReactNode;
   table?: ReactNode;
@@ -13,13 +15,14 @@ type Props = {
 
 /**
  * Kanoniczny układ ekranu modułu Zakupy:
- * Header → (Quick Actions) → Status → KPI → Filtry → Analiza → Tabela
+ * Header → Quick Actions → Status → KPI → Info → Filtry → Analiza → Tabela
  */
 function PurchasingPageShellInner({
   header,
   quickActions,
   status,
   kpis,
+  info,
   filters,
   analysis,
   table,
@@ -31,6 +34,7 @@ function PurchasingPageShellInner({
       {quickActions}
       {status}
       {kpis}
+      {info}
       {filters}
       {analysis}
       {table}

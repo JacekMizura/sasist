@@ -1,11 +1,15 @@
 import { memo, type ReactNode } from "react";
+import {
+  purchasingTableThClass,
+  purchasingTableTheadClass,
+  purchasingTableThSortClass,
+} from "./purchasingTableTokens";
 
 type Align = "left" | "right" | "center";
 
 type Props = {
   headers?: string[];
   align?: Align[];
-  /** Własny wiersz nagłówka (checkbox, sortowanie) — zamiast headers/align. */
   children?: ReactNode;
   className?: string;
   sticky?: boolean;
@@ -24,9 +28,8 @@ function PurchasingTableHeaderInner({
   className = "",
   sticky = false,
 }: Props) {
-  const thPad = "px-3 py-3";
   const theadClass = [
-    "border-b border-slate-100 bg-slate-50/50 text-[11px] font-bold uppercase tracking-wider text-slate-500",
+    purchasingTableTheadClass,
     sticky ? "sticky top-0 z-10 shadow-sm" : "",
     className,
   ]
@@ -43,7 +46,7 @@ function PurchasingTableHeaderInner({
         {headers.map((h, i) => {
           const a = align[i] ?? "left";
           return (
-            <th key={`${h}-${i}`} className={`${thPad} ${ALIGN_CLASS[a]}`}>
+            <th key={`${h}-${i}`} className={`${purchasingTableThClass} ${ALIGN_CLASS[a]}`}>
               {h}
             </th>
           );
@@ -54,3 +57,9 @@ function PurchasingTableHeaderInner({
 }
 
 export const PurchasingTableHeader = memo(PurchasingTableHeaderInner);
+export {
+  purchasingTableThClass,
+  purchasingTableTheadClass,
+  purchasingTableThSortClass,
+  purchasingTableTdClass,
+} from "./purchasingTableTokens";

@@ -30,7 +30,7 @@ type FieldProps = {
 function PurchasingFilterFieldInner({ label, children, className = "" }: FieldProps) {
   return (
     <div className={`flex min-w-[140px] flex-col gap-1 ${className}`.trim()}>
-      <span className="text-xs font-medium text-slate-600">{label}</span>
+      <span className="text-[11px] font-medium text-slate-500">{label}</span>
       {children}
     </div>
   );
@@ -38,8 +38,7 @@ function PurchasingFilterFieldInner({ label, children, className = "" }: FieldPr
 
 export const PurchasingFilterField = memo(PurchasingFilterFieldInner);
 
-export const purchasingFilterButtonClass =
-  "rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50";
-
-export const purchasingFilterPrimaryButtonClass =
-  "rounded-lg border border-slate-800 bg-slate-800 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50";
+export {
+  purchasingBtnPrimary as purchasingFilterPrimaryButtonClass,
+  purchasingBtnSecondary as purchasingFilterButtonClass,
+} from "./purchasingButtonTokens";

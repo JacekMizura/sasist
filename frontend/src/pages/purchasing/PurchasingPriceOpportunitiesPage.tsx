@@ -2,7 +2,7 @@
  * Oszczędności zakupowe — okazje cenowe wyłącznie z danych systemu (bez sztucznych kwot).
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { PiggyBank } from "lucide-react";
+import { PiggyBank, Tags, TrendingDown, TrendingUp } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import api from "../../api/axios";
 import { AppEmptyState } from "../../components/app-shell";
@@ -26,7 +26,8 @@ import {
   PurchasingQuickActions,
   PurchasingTableHeader,
   PurchasingTableSection,
-  purchasingFilterButtonClass,
+  purchasingBtnSecondary,
+  purchasingLinkClass,
   purchasingSelectClass,
 } from "../../modules/purchasing/ui";
 
@@ -242,10 +243,10 @@ export default function PurchasingPriceOpportunitiesPage() {
             subtitle="Porównanie ofert, historia zakupów i progi dostaw — wyłącznie na podstawie danych z systemu."
             actions={
               <>
-                <Link to={`/purchasing/replenishment?tenant_id=${tenantId}`} className={purchasingFilterButtonClass}>
+                <Link to={`/purchasing/replenishment?tenant_id=${tenantId}`} className={purchasingBtnSecondary}>
                   Generator
                 </Link>
-                <Link to={`/purchasing/orders?tenant_id=${tenantId}`} className={purchasingFilterButtonClass}>
+                <Link to={`/purchasing/orders?tenant_id=${tenantId}`} className={purchasingBtnSecondary}>
                   Zamówienia (PO)
                 </Link>
               </>
@@ -270,17 +271,29 @@ export default function PurchasingPriceOpportunitiesPage() {
             <PurchasingKpiCard
               title="Wszystkie okazje"
               value={loading ? "—" : kpiZListy.liczba}
-              subtitle="Widoczne w tabeli (filtry + zignorowane wyłączone)"
+              subtitle="Widoczne w tabeli"
               tone="blue"
+              icon={<Tags aria-hidden />}
             />
             <PurchasingKpiCard
               title="Możliwe oszczędności / mies."
               value={`${num(kpiZListy.oszcz, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} PLN`}
-              subtitle="Suma kolumny „Potencjał” dla widocznych wierszy"
+              subtitle="Suma kolumny Potencjał"
               tone="emerald"
+              icon={<PiggyBank aria-hidden />}
             />
-            <PurchasingKpiCard title="Tańsi dostawcy (w tabeli)" value={loading ? "—" : kpiZListy.taniej} tone="indigo" />
-            <PurchasingKpiCard title="Podwyżki cen (w tabeli)" value={loading ? "—" : kpiZListy.podw} tone="amber" />
+            <PurchasingKpiCard
+              title="Tańsi dostawcy"
+              value={loading ? "—" : kpiZListy.taniej}
+              tone="indigo"
+              icon={<TrendingDown aria-hidden />}
+            />
+            <PurchasingKpiCard
+              title="Podwyżki cen"
+              value={loading ? "—" : kpiZListy.podw}
+              tone="amber"
+              icon={<TrendingUp aria-hidden />}
+            />
           </PurchasingKpiGrid>
         }
         filters={
@@ -347,6 +360,7 @@ export default function PurchasingPriceOpportunitiesPage() {
                 icon={PiggyBank}
                 title="Brak okazji cenowych"
                 description={data?.data_message ?? "Brak wierszy spełniających kryteria — zmień filtry lub okres analizy."}
+                density="inline"
               />
             ) : (
             <table className="min-w-[960px] w-full border-collapse text-left text-sm">

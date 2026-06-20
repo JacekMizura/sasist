@@ -272,22 +272,21 @@ export default function PurchasingSegmentsPage() {
             title="Mapa priorytetów"
             subtitle="Kliknij pole, aby zobaczyć listę produktów w tabeli poniżej (drugi klik wyłącza filtr). Skrót w nawiasie to tylko pomoc sortowania — pod spodem masz ludzki opis."
           >
-            <div className="grid w-full grid-cols-3 gap-1.5">
+            <div className="grid w-full grid-cols-3 gap-1">
               {heatmapTiles.map(({ seg, count, active }) => (
                 <button
                   key={seg}
                   type="button"
                   onClick={() => toggleSegmentFromHeatmap(seg)}
-                  className={`rounded-lg border px-2 py-2 text-left text-xs transition ${
+                  className={`rounded-md border px-1.5 py-1.5 text-left transition ${
                     active
-                      ? "border-sky-500 bg-sky-50 ring-2 ring-sky-300"
+                      ? "border-sky-500 bg-sky-50 ring-1 ring-sky-300"
                       : "border-slate-200 bg-slate-50/80 hover:border-slate-300 hover:bg-white"
                   }`}
                 >
-                  <div className="font-mono text-sm font-bold text-slate-900">{seg}</div>
-                  <div className="mt-0.5 text-[11px] font-medium leading-snug text-slate-800">{segmentBadgeLabel(seg)}</div>
-                  <div className="mt-0.5 line-clamp-2 text-[10px] leading-snug text-slate-500">{SEGMENT_USER_HINT[seg]}</div>
-                  <div className="mt-1 text-[11px] font-semibold text-slate-700">{count} produktów</div>
+                  <div className="font-mono text-xs font-bold text-slate-900">{seg}</div>
+                  <div className="text-[10px] font-medium leading-tight text-slate-700">{segmentBadgeLabel(seg)}</div>
+                  <div className="mt-0.5 text-[10px] font-semibold tabular-nums text-slate-600">{count}</div>
                 </button>
               ))}
             </div>
@@ -309,6 +308,7 @@ export default function PurchasingSegmentsPage() {
                 icon={LayoutGrid}
                 title="Brak produktów"
                 description="Zmień filtry lub okres sprzedaży, aby zobaczyć segmentację asortymentu."
+                density="inline"
               />
             ) : (
               <>

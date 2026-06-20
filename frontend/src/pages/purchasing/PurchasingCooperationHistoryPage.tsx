@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { Banknote, Clock, FileText, PackageCheck, ShoppingCart, TrendingUp, Truck } from "lucide-react";
+import { Banknote, Clock, FileText, PackageCheck, ShoppingCart, Truck } from "lucide-react";
 import { useLocation, useSearchParams } from "react-router-dom";
 import api from "../../api/axios";
 import { AppEmptyState } from "../../components/app-shell";
 import { fetchPurchasingCooperationHistory, type PurchasingCooperationHistoryPayload } from "../../api/purchasingCooperationHistoryApi";
 import {
-  PurchasingAnalysisSection,
   PurchasingContentArea,
   PurchasingFilterBar,
   PurchasingFilterField,
@@ -13,9 +12,12 @@ import {
   PurchasingKpiGrid,
   PurchasingPageHeader,
   PurchasingPageShell,
+  PurchasingSummaryStrip,
   PurchasingTableHeader,
   PurchasingTableSection,
   purchasingSelectClass,
+  purchasingTableTdClass,
+  purchasingTableThClass,
 } from "../../modules/purchasing/ui";
 
 type Supplier = { id: number; name: string };
@@ -101,7 +103,7 @@ export default function PurchasingCooperationHistoryPage() {
   }, [tenantId, supplierId]);
 
   const summary = data?.summary;
-  const td = "px-4 py-2.5 text-sm text-slate-800";
+  const td = purchasingTableTdClass;
 
   const pageShell = (
     <PurchasingPageShell
@@ -176,28 +178,19 @@ export default function PurchasingCooperationHistoryPage() {
             </PurchasingFilterField>
           </PurchasingFilterBar>
         }
-        analysis={
+        info={
           summary ? (
-            <PurchasingAnalysisSection title="Podsumowanie współpracy">
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                <div>
-                  <p className="text-xs font-medium text-slate-500">Pierwsze zamówienie</p>
-                  <p className="mt-0.5 text-sm font-medium text-slate-800">{fmtDate(summary.first_order_date)}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-slate-500">Ostatnia dostawa</p>
-                  <p className="mt-0.5 text-sm font-medium text-slate-800">{fmtDate(summary.last_delivery_date)}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-slate-500">Trend ceny</p>
-                  <div className="mt-0.5 flex items-center gap-1.5">
-                    <p className="text-xl font-bold tracking-tight tabular-nums text-slate-800">{fmtPct(summary.price_trend)}</p>
-                    <TrendingUp className="h-4 w-4 text-slate-400" aria-hidden />
-                  </div>
-                  <p className="mt-0.5 text-[11px] text-slate-500">Z historii przyjęć</p>
-                </div>
-              </div>
-            </PurchasingAnalysisSection>
+            <PurchasingSummaryStrip
+              items={[
+                { label: "Pierwsze zamówienie", value: fmtDate(summary.first_order_date) },
+                { label: "Ostatnia dostawa", value: fmtDate(summary.last_delivery_date) },
+                {
+                  label: "Trend ceny",
+                  value: fmtPct(summary.price_trend),
+                  hint: "Z historii przyjęć",
+                },
+              ]}
+            />
           ) : null
         }
         table={
@@ -211,17 +204,18 @@ export default function PurchasingCooperationHistoryPage() {
                 icon={FileText}
                 title="Brak dokumentów"
                 description="Wybrany dostawca nie ma jeszcze zapisanych zamówień ani przyjęć w systemie."
+                density="inline"
               />
             ) : (
             <table className="w-full min-w-full text-sm">
               <PurchasingTableHeader>
                 <tr>
-                  <th className="px-4 py-2.5 text-left">Typ</th>
-                  <th className="px-4 py-2.5 text-left">Dokument</th>
-                  <th className="px-4 py-2.5 text-left">Data</th>
-                  <th className="px-4 py-2.5 text-left">Status</th>
-                  <th className="px-4 py-2.5 text-right">Netto</th>
-                  <th className="px-4 py-2.5 text-right">Brutto</th>
+                  <th className={`${purchasingTableThClass} text-left`}>Typ</th>
+                  <th className={`${purchasingTableThClass} text-left`}>Dokument</th>
+                  <th className={`${purchasingTableThClass} text-left`}>Data</th>
+                  <th className={`${purchasingTableThClass} text-left`}>Status</th>
+                  <th className={`${purchasingTableThClass} text-right`}>Netto</th>
+                  <th className={`${purchasingTableThClass} text-right`}>Brutto</th>
                 </tr>
               </PurchasingTableHeader>
               <tbody className="divide-y divide-slate-100">

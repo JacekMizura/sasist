@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Bell, FileText, Settings2 } from "lucide-react";
+import { Bell, CheckCircle2, FileText, Settings2, TriangleAlert } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import api from "../../api/axios";
 import { AppEmptyState } from "../../components/app-shell";
@@ -31,8 +31,11 @@ import {
   PurchasingPageShell,
   PurchasingTableHeader,
   PurchasingTableSection,
-  purchasingFilterPrimaryButtonClass,
+  purchasingBtnPrimary,
+  purchasingBtnSecondary,
   purchasingSelectClass,
+  purchasingTableThClass,
+  purchasingTableThSortClass,
 } from "../../modules/purchasing/ui";
 import { listSuppliers, type SupplierRead } from "../../api/inboundSuppliersApi";
 import { useWarehouse } from "../../context/WarehouseContext";
@@ -472,8 +475,8 @@ export default function PurchasingAlertsPage() {
   };
 
   const sortMark = (key: SortKey) => (sortKey === key ? (sortDir === "asc" ? " ↑" : " ↓") : "");
-  const thSort = "cursor-pointer pb-2 pr-3 hover:text-slate-700";
-  const thStatic = "pb-2 pr-3";
+  const thSort = purchasingTableThSortClass;
+  const thStatic = purchasingTableThClass;
 
   return (
     <PurchasingContentArea>
@@ -503,51 +506,38 @@ export default function PurchasingAlertsPage() {
         kpis={
           summary ? (
             <PurchasingKpiGrid columns={4}>
-              <PurchasingKpiCard title="Otwarte problemy" value={openCount} subtitle="Wymagają decyzji lub działania." tone="default" />
-              <PurchasingKpiCard title="Pilne (wysoki priorytet)" value={criticalOpen} subtitle="Zacznij od tych pozycji w tabeli." tone="red" />
-              <PurchasingKpiCard title="Zamknięte dziś" value={resolvedToday} subtitle="Dobra robota — utrzymuj porządek na liście." tone="emerald" />
+              <PurchasingKpiCard title="Otwarte problemy" value={openCount} subtitle="Wymagają decyzji" tone="default" icon={<Bell aria-hidden />} />
+              <PurchasingKpiCard title="Pilne" value={criticalOpen} subtitle="Wysoki priorytet" tone="red" icon={<TriangleAlert aria-hidden />} />
+              <PurchasingKpiCard title="Zamknięte dziś" value={resolvedToday} subtitle="Rozwiązane alerty" tone="emerald" icon={<CheckCircle2 aria-hidden />} />
               <PurchasingKpiCard
-                title="Szkice zamówień do sprawdzenia"
+                title="Szkice do sprawdzenia"
                 value={draftsWaiting}
-                subtitle="Przejdź do zamówień zakupowych"
+                subtitle="Zamówienia zakupowe"
                 tone="purple"
+                icon={<FileText aria-hidden />}
                 to={ordersHref}
               />
             </PurchasingKpiGrid>
           ) : null
         }
-        analysis={
-          <PurchasingAnalysisSection title="Co możesz zrobić teraz">
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                disabled={actionBusy}
-                onClick={() => void runScan()}
-                className={purchasingFilterPrimaryButtonClass}
-              >
-                Przeskanuj magazyn i zamówienia
-              </button>
-              <button
-                type="button"
-                disabled={actionBusy}
-                onClick={() => void createDrafts()}
-                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 disabled:opacity-50"
-              >
-                Utwórz szkice zamówień (pozycje pilne)
-              </button>
-              <button
-                type="button"
-                disabled={actionBusy || selectedIds.size === 0}
-                onClick={() => void bulkResolve()}
-                className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-950 disabled:opacity-50"
-              >
-                Oznacz jako zamknięte ({selectedIds.size})
-              </button>
-            </div>
-            <p className="mt-2 text-xs text-slate-500">
-              Skan odczytuje reguły poniżej i odświeża listę. Szkice zawsze możesz poprawić przed wysłką do dostawcy.
-            </p>
-          </PurchasingAnalysisSection>
+        quickActions={
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm">
+            <button type="button" disabled={actionBusy} onClick={() => void runScan()} className={purchasingBtnPrimary}>
+              Przeskanuj magazyn i zamówienia
+            </button>
+            <button type="button" disabled={actionBusy} onClick={() => void createDrafts()} className={purchasingBtnSecondary}>
+              Utwórz szkice (pozycje pilne)
+            </button>
+            <button
+              type="button"
+              disabled={actionBusy || selectedIds.size === 0}
+              onClick={() => void bulkResolve()}
+              className={purchasingBtnSecondary}
+            >
+              Oznacz jako zamknięte ({selectedIds.size})
+            </button>
+            <span className="ml-auto text-xs text-slate-500">Skan odświeża listę wg reguł poniżej.</span>
+          </div>
         }
         filters={
           <PurchasingFilterBar>
@@ -587,6 +577,7 @@ export default function PurchasingAlertsPage() {
                   icon={Bell}
                   title="Brak alertów"
                   description="Zmień filtry lub uruchom skan magazynu, aby wykryć nowe problemy."
+                  density="inline"
                 />
               ) : (
               <table className="min-w-full text-left text-sm">
@@ -701,7 +692,7 @@ export default function PurchasingAlertsPage() {
               title="Reguły wykrywania (dla administratora zakupów)"
               indicatorClass="bg-slate-500"
               action={
-                <button type="button" onClick={() => setModalOpen(true)} className={purchasingFilterPrimaryButtonClass}>
+                <button type="button" onClick={() => setModalOpen(true)} className={purchasingBtnPrimary}>
                   Dodaj regułę
                 </button>
               }
@@ -711,6 +702,7 @@ export default function PurchasingAlertsPage() {
                   icon={Settings2}
                   title="Brak reguł wykrywania"
                   description="Dodaj pierwszą regułę, aby skan miał się czego trzymać."
+                  density="inline"
                 />
               ) : (
               <ul className="divide-y divide-slate-100 px-4 py-2 text-sm">
@@ -747,6 +739,7 @@ export default function PurchasingAlertsPage() {
                   icon={FileText}
                   title="Brak zapisanych szkiców"
                   description="Partie szkiców utworzone automatycznie pojawią się tutaj po pierwszym uruchomieniu."
+                  density="inline"
                 />
               ) : (
               <ul className="space-y-2 text-sm">

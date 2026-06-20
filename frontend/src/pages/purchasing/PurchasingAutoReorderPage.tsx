@@ -3,7 +3,7 @@
  * Konfiguracja techniczna jest składana w tle; użytkownik widzi tylko decyzje biznesowe.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Bot, History } from "lucide-react";
+import { Bot, Clock, FileText, History } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import api from "../../api/axios";
 import { AppEmptyState } from "../../components/app-shell";
@@ -26,13 +26,15 @@ import {
   PurchasingContentArea,
   PurchasingFilterBar,
   PurchasingFilterField,
+  PurchasingInfoNotice,
   PurchasingKpiCard,
   PurchasingKpiGrid,
   PurchasingPageHeader,
   PurchasingPageShell,
   PurchasingTableHeader,
   PurchasingTableSection,
-  purchasingFilterPrimaryButtonClass,
+  purchasingBtnPrimary,
+  purchasingBtnSecondary,
   purchasingSelectClass,
 } from "../../modules/purchasing/ui";
 import { formatApiError } from "../../utils/apiErrorMessage";
@@ -69,10 +71,12 @@ function formatWeekdayList(days: number[]): string {
   return u.map((d) => WD_LABEL[d] ?? String(d)).join(", ");
 }
 
-/** Najbliższe uruchomienie wg harmonogramu reguł (czas lokalny przeglądarki). */
-function nextScheduledRunLabel(rules: PurchaseAutoRule[]): string {
+/** Najbliższe uruchomienie — wartość KPI (krótka) + opcjonalny komunikat informacyjny. */
+function nextScheduledRunKpi(rules: PurchaseAutoRule[]): { value: string; subtitle?: string; info?: string } {
   const enabled = rules.filter((r) => r.is_enabled);
-  if (enabled.length === 0) return "Włącz co najmniej jedną automatyzację lub uruchom ręcznie.";
+  if (enabled.length === 0) {
+    return { value: "—", info: "Włącz co najmniej jedną automatyzację lub uruchom ręcznie." };
+  }
 
   const now = new Date();
   let best: Date | null = null;
@@ -98,14 +102,20 @@ function nextScheduledRunLabel(rules: PurchaseAutoRule[]): string {
     }
   }
 
-  if (!best) return "Sprawdź godzinę i dni tygodnia w automatyzacjach.";
+  if (!best) {
+    return { value: "—", info: "Sprawdź godzinę i dni tygodnia w automatyzacjach." };
+  }
+
   const today0 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const best0 = new Date(best.getFullYear(), best.getMonth(), best.getDate());
   const diffDays = Math.round((best0.getTime() - today0.getTime()) / 86400000);
-  const rel = diffDays === 1 ? "jutro " : diffDays === 0 ? "dziś " : "";
+  const rel = diffDays === 1 ? "jutro" : diffDays === 0 ? "dziś" : null;
   const time = best.toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" });
   const datePart = best.toLocaleDateString("pl-PL", { weekday: "long", day: "numeric", month: "long" });
-  return `${rel}${datePart}, ${time}`;
+  return {
+    value: time,
+    subtitle: rel ? `${rel}, ${datePart}` : datePart,
+  };
 }
 
 function parseConfig(json: string): Record<string, unknown> {
@@ -242,7 +252,7 @@ export default function PurchasingAutoReorderPage() {
 
   const kpis = hist?.kpis;
   const enabledCount = rules.filter((r) => r.is_enabled).length;
-  const nextRunText = useMemo(() => nextScheduledRunLabel(rules), [rules]);
+  const scheduleKpi = useMemo(() => nextScheduledRunKpi(rules), [rules]);
   const draftsToday = kpis?.drafts_created_today ?? 0;
   const ostatnieUruchomienie = useMemo(() => fmtDateTime(kpis?.last_run_finished_at ?? null), [kpis]);
 
@@ -380,22 +390,28 @@ export default function PurchasingAutoReorderPage() {
             <PurchasingKpiCard
               title="Włączone automatyzacje"
               value={loading ? "…" : enabledCount}
-              subtitle="Liczba aktywnych wierszy w tabeli poniżej."
+              subtitle="Aktywne reguły w tabeli"
               tone="emerald"
+              icon={<Bot aria-hidden />}
             />
             <PurchasingKpiCard
-              title="Najbliższe uruchomienie (plan)"
-              value={loading ? "…" : nextRunText}
-              subtitle="Liczone z godziny i dni tygodnia — pełny harmonogram cron można dodać na serwerze."
+              title="Najbliższe uruchomienie"
+              value={loading ? "…" : scheduleKpi.value}
+              subtitle={scheduleKpi.subtitle ?? "Godzina i dni tygodnia z reguł"}
               tone="blue"
+              icon={<Clock aria-hidden />}
             />
             <PurchasingKpiCard
-              title="Szkice utworzone dziś (cały podmiot)"
+              title="Szkice utworzone dziś"
               value={loading ? "…" : draftsToday}
-              subtitle={`Ostatnie zakończenie silnika: ${ostatnieUruchomienie}`}
+              subtitle={`Ostatnie uruchomienie: ${ostatnieUruchomienie}`}
               tone="indigo"
+              icon={<FileText aria-hidden />}
             />
           </PurchasingKpiGrid>
+        }
+        info={
+          scheduleKpi.info ? <PurchasingInfoNotice tone="blue">{scheduleKpi.info}</PurchasingInfoNotice> : null
         }
         filters={
           <PurchasingFilterBar>
@@ -422,9 +438,9 @@ export default function PurchasingAutoReorderPage() {
                     resetWizard();
                     setWizardOpen(true);
                   }}
-                  className={purchasingFilterPrimaryButtonClass}
+                  className={purchasingBtnPrimary}
                 >
-                  + Dodaj automatyzację
+                  Dodaj automatyzację
                 </button>
               }
             >
@@ -433,6 +449,7 @@ export default function PurchasingAutoReorderPage() {
                   icon={Bot}
                   title="Brak automatyzacji"
                   description="Dodaj pierwszą regułę, aby system sam przygotowywał szkice zamówień przy wykryciu braków."
+                  density="inline"
                 />
               ) : (
               <table className="min-w-full text-left text-sm">
@@ -502,6 +519,7 @@ export default function PurchasingAutoReorderPage() {
                   icon={History}
                   title="Brak historii uruchomień"
                   description="Uruchom automatyzację pierwszy raz, aby zobaczyć log działań."
+                  density="inline"
                 />
               ) : (
               <table className="min-w-full text-left text-sm">
@@ -531,13 +549,13 @@ export default function PurchasingAutoReorderPage() {
           type="button"
           disabled={busy}
           onClick={() => void uruchomTeraz(null)}
-          className={purchasingFilterPrimaryButtonClass}
+          className={purchasingBtnPrimary}
         >
           Uruchom wszystkie włączone
         </button>
         <Link
           to={`/purchasing/orders?tenant_id=${tenantId}`}
-          className="inline-flex items-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50"
+          className={purchasingBtnSecondary}
         >
           Otwórz szkice zamówień
         </Link>
