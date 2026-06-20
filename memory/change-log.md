@@ -1,5 +1,14 @@
 # Change log
 
+## 2026-06-08 — Zestawy: standard UI jak Produkty / Producenci / Dostawcy
+
+- `BundlesPage`: `ListPageHeader` z licznikiem wyników i opisem sekcji; toolbar (Filtry, Widoczne pola, Eksport)
+- Filtry: `ListFilterEmbeddedShell` + `FilterPanelBodyWithActions` (Wyczyść / pomarańczowy Filtruj) — bez `ModuleListFiltersCard`
+- Tabela proporcjonalna: checkbox 56px, zdjęcie 80px (`ProductListPhotoCell`), nazwa 2fr, akcje 120px sticky; akcje wiersza: Podgląd / Edycja / Usuń
+- Multiakcje: `ModuleBulkActionsToolbar` przez `BundlesListBulkBar` (Zaznacz… / Multiakcje / Eksport / Odznacz)
+- Pusty stan: `AppEmptyState` z przyciskiem „Dodaj pierwszy zestaw”
+- Pakiet: `frontend/src/components/bundles/bundleList/*`
+
 ## 2026-06-08 — Materiały magazynowe: nagłówek modułu jak Dostawcy
 
 - `WarehouseMaterialsLayout`: breadcrumb → tytuł → `TabsNav` → treść (bez `WmsModuleLayout` / karty tabów)
