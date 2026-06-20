@@ -3,10 +3,7 @@ import { Pencil, Trash2 } from "lucide-react";
 
 import type { ManufacturerRead } from "../../../api/manufacturersApi";
 import { ManufacturerLogo } from "./ManufacturerLogo";
-import {
-  MANUFACTURER_LIST_COLUMN_WIDTH,
-  manufacturerListColumnLabel,
-} from "./manufacturerListColumnCatalog";
+import { manufacturerListColumnLabel } from "./manufacturerListColumnCatalog";
 import {
   manufacturerListCellOrDash,
   manufacturerNameLines,
@@ -15,6 +12,7 @@ import {
   manufacturersListActionsCellClass,
   manufacturersListActionsColWidth,
   manufacturersListActionsInnerClass,
+  manufacturersListActionsThClass,
   manufacturersListCheckboxCellClass,
   manufacturersListCheckboxColWidth,
   manufacturersListCheckboxInnerClass,
@@ -100,7 +98,7 @@ function ManufacturerListDataCell({
   switch (columnId) {
     case "logo":
       return (
-        <div className={manufacturersListRowInnerClass}>
+        <div className={`${manufacturersListRowInnerClass} justify-center`}>
           <ManufacturerLogo logoUrl={row.logo_url} />
         </div>
       );
@@ -209,7 +207,7 @@ export function ManufacturersListTable({
         <colgroup>
           <col style={{ width: manufacturersListCheckboxColWidth }} />
           {columnOrder.map((colId) => (
-            <col key={colId} style={{ width: MANUFACTURER_LIST_COLUMN_WIDTH[colId] ?? "auto" }} />
+            <col key={colId} />
           ))}
           <col style={{ width: manufacturersListActionsColWidth }} />
         </colgroup>
@@ -229,9 +227,7 @@ export function ManufacturersListTable({
                 {manufacturerListColumnLabel(colId)}
               </th>
             ))}
-            <th className={manufacturersListThClass} style={{ width: manufacturersListActionsColWidth }}>
-              Akcje
-            </th>
+            <th className={manufacturersListActionsThClass}>Akcje</th>
           </tr>
         </thead>
         <tbody>
@@ -257,7 +253,7 @@ export function ManufacturersListTable({
                     <ManufacturerListDataCell row={row} columnId={colId} onProductsClick={onProductsClick} />
                   </td>
                 ))}
-                <td className={manufacturersListActionsCellClass} style={{ width: manufacturersListActionsColWidth }}>
+                <td className={manufacturersListActionsCellClass}>
                   <div className={manufacturersListActionsInnerClass}>
                     <button
                       type="button"
