@@ -2,12 +2,11 @@ import { useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ChevronDown, ChevronUp, GripVertical, ImageIcon, Pencil, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, GripVertical, Pencil, Trash2 } from "lucide-react";
 
 import type { OrderCustomFieldDto } from "../../../api/orderCustomFieldsApi";
-import OrderCustomFieldGlyph from "../OrderCustomFieldGlyph";
+import { FieldIcon } from "./FieldIcon";
 import {
-  orderCustomFieldHasAssignedIcon,
   orderCustomFieldKindLabel,
   orderCustomFieldTypeLabel,
   type OrderCustomFieldAdminRow,
@@ -19,8 +18,6 @@ import {
   ocfListIconCellClass,
   ocfListIconColWidth,
   ocfListIconInnerClass,
-  ocfListIconPlaceholderClass,
-  ocfListIconSlotClass,
   ocfListRowActionBtn,
   ocfListRowActionBtnDanger,
   ocfListRowClass,
@@ -30,24 +27,6 @@ import {
   ocfListThClass,
   ocfListThSortClass,
 } from "./orderCustomFieldsListTokens";
-
-function FieldIconCell({ row }: { row: OrderCustomFieldDto }) {
-  if (!orderCustomFieldHasAssignedIcon(row)) {
-    return (
-      <div className={ocfListIconPlaceholderClass} title="Brak ikony">
-        <ImageIcon className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden />
-      </div>
-    );
-  }
-  return (
-    <OrderCustomFieldGlyph
-      type={row.type}
-      settings={(row.settings_json ?? {}) as Record<string, unknown>}
-      boxClassName={`${ocfListIconSlotClass} text-slate-500`}
-      lucideClassName="h-[18px] w-[18px]"
-    />
-  );
-}
 
 type SortableRowProps = {
   adminRow: OrderCustomFieldAdminRow;
@@ -145,7 +124,7 @@ function SortableFieldRow({
       </td>
       <td className={`${ocfListIconCellClass} hidden sm:table-cell`} style={{ width: ocfListIconColWidth }}>
         <div className={ocfListIconInnerClass}>
-          <FieldIconCell row={row} />
+          <FieldIcon field={row} />
         </div>
       </td>
       <td className={ocfListActionsCellClass} style={{ width: ocfListActionsColWidth }}>
@@ -206,7 +185,7 @@ function MobileFieldCard({
             >
               {row.name}
             </button>
-            <FieldIconCell row={row} />
+            <FieldIcon field={row} />
           </div>
           <p className="mt-1 font-mono text-xs tabular-nums text-slate-500">ID {row.id}</p>
           <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
