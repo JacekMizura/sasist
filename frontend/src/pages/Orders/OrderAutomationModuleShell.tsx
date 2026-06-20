@@ -31,6 +31,7 @@ export default function OrderAutomationModuleShell() {
           />
           <div className="mb-4 mt-6">
             <h1 className="text-2xl font-semibold text-slate-900">Akcje automatyczne</h1>
+            <p className="mt-1 text-sm text-slate-500">Zarządzaj regułami automatyzującymi procesy w Twoim sklepie.</p>
           </div>
           <TabsNav items={AUTOMATION_TABS} aria-label="Akcje automatyczne — zakładki" tabSize="comfortable" className="gap-8 border-0" />
           <div className={`${flatSectionDividerClass} mt-3`} aria-hidden />

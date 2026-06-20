@@ -13,8 +13,10 @@ import {
 import {
   ArrowRight,
   ChevronDown,
+  ChevronUp,
   Copy,
   FlaskConical,
+  GripVertical,
   MoreHorizontal,
   Pencil,
   Play,
@@ -30,17 +32,28 @@ import { useWarehouse } from "../../context/WarehouseContext";
 import { useAuth } from "../../context/AuthContext";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { useOrderAutomationStore } from "../../hooks/useOrderAutomationStore";
-import type { OrderAutomationRule } from "../../types/orderAutomation";
+import type { AutomationCondition, AutomationEffect, OrderAutomationRule } from "../../types/orderAutomation";
 import type { OrderAutomationScope } from "../../utils/orderAutomationLocalStore";
 import { getOrderUiStatusSummary } from "../../api/orderUiStatusApi";
 import type { OrderUiStatusPanelSummary } from "../../types/orderUiStatus";
-import { formatAutomationSentencePl } from "../../utils/orderAutomationPreview";
-import { oaBtn, oaBtnPri, oaInp } from "../../components/orders/automation/orderAutomationUiTokens";
+import {
+  formatConditionDisplayParts,
+  formatEffectPill,
+  primaryTriggerLabel,
+} from "../../utils/orderAutomationPreview";
+import {
+  oaBtn,
+  oaBtnPri,
+  oaInp,
+  oaWorkflowChipClass,
+  oaWorkflowGroupHeaderClass,
+  oaWorkflowGroupSectionClass,
+} from "../../components/orders/automation/orderAutomationUiTokens";
 
 const MENU_PANEL =
   "z-[100] min-w-[12rem] rounded-lg border border-slate-200 bg-white py-1 shadow-lg outline-none";
 const menuItem =
-  "flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm font-medium text-slate-800 hover:bg-slate-50";
+  "flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm font-medium text-slate-800 hover:bg-white hover:text-slate-900";
 
 function fmtTime(iso: string | null | undefined) {
   if (!iso) return "—";
@@ -53,13 +66,8 @@ function fmtTime(iso: string | null | undefined) {
   }
 }
 
-function triggerLabels(r: OrderAutomationRule): string[] {
-  const out: string[] = [];
-  if (r.execution.onOrderCreated) out.push("Utworzenie");
-  if (r.execution.onStatusChanged) out.push("Status");
-  if (r.execution.onSchedule) out.push("Harmonogram");
-  if (r.manualTrigger.enabled) out.push("Ręczny");
-  return out;
+function WorkflowChip({ children }: { children: React.ReactNode }) {
+  return <span className={oaWorkflowChipClass}>{children}</span>;
 }
 
 function RuleRowMenu({ onTest, onLogs }: { onTest: () => void; onLogs: () => void }) {
@@ -81,11 +89,11 @@ function RuleRowMenu({ onTest, onLogs }: { onTest: () => void; onLogs: () => voi
         type="button"
         ref={refs.setReference}
         {...getReferenceProps()}
-        className={`${oaBtn} h-7 px-2`}
+        className={`${oaBtn} h-8 w-8 px-0`}
         aria-label="Więcej opcji"
         onClick={() => setOpen((o) => !o)}
       >
-        <MoreHorizontal className="h-3.5 w-3.5" strokeWidth={2} />
+        <MoreHorizontal className="h-4 w-4" strokeWidth={2} />
       </button>
       {open ? (
         <FloatingPortal id="floating-portal-order-automation-kebab">
@@ -127,80 +135,105 @@ function AutomationRuleRow({
   onLogs,
 }: RuleRowProps) {
   const navigate = useNavigate();
-  const { ifLine, thenLine } = formatAutomationSentencePl(rule, statusNameById);
-  const triggers = triggerLabels(rule);
+  const trigger = primaryTriggerLabel(rule);
 
   return (
     <div
-      className={`group/row grid min-h-11 grid-cols-[auto_minmax(10rem,16rem)_minmax(5rem,8rem)_minmax(0,1fr)_auto_auto] items-center gap-x-4 px-3 py-2 transition ${
+      className={`group/row border-b border-slate-100 px-4 py-4 transition last:border-b-0 ${
         rule.enabled
-          ? "border-l-[3px] border-l-emerald-500 bg-white hover:bg-slate-50"
-          : "border-l-[3px] border-l-slate-300 bg-slate-50/80 opacity-75 hover:bg-slate-100 hover:opacity-100"
+          ? "border-l-[3px] border-l-emerald-500 bg-white"
+          : "border-l-[3px] border-l-slate-200 bg-white opacity-60 hover:opacity-100"
       }`}
     >
-      <label className="cursor-pointer" title={rule.enabled ? "Wyłącz" : "Włącz"} onClick={(e) => e.stopPropagation()}>
-        <input
-          type="checkbox"
-          className="h-4 w-4 rounded border-slate-400 accent-emerald-600"
-          checked={rule.enabled}
-          onChange={onToggle}
-        />
-      </label>
+      <div className="flex gap-4">
+        <label className="mt-1 shrink-0 cursor-pointer" title={rule.enabled ? "Wyłącz" : "Włącz"} onClick={(e) => e.stopPropagation()}>
+          <input
+            type="checkbox"
+            className="h-4 w-4 rounded border-slate-300 accent-emerald-600"
+            checked={rule.enabled}
+            onChange={onToggle}
+          />
+        </label>
 
-      <button
-        type="button"
-        className={`min-w-0 truncate text-left text-sm font-bold ${rule.enabled ? "text-slate-900" : "text-slate-500 line-through decoration-slate-400"}`}
-        title={rule.name}
-        onClick={() => navigate(`${basePath}/${rule.id}/edit`)}
-      >
-        {rule.name}
-      </button>
-
-      <div className="flex min-w-0 flex-wrap gap-1">
-        {triggers.length === 0 ? (
-          <span className="text-xs text-slate-400">—</span>
-        ) : (
-          triggers.map((t) => (
-            <span
-              key={t}
-              className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${
-                rule.enabled ? "bg-slate-200 text-slate-700" : "bg-slate-100 text-slate-500"
+        <div className="flex min-w-0 flex-1 flex-col gap-4 xl:flex-row xl:items-start xl:gap-8">
+          {/* Nazwa + wyzwalacz + statystyki */}
+          <div className="shrink-0 xl:w-52">
+            <button
+              type="button"
+              className={`text-left text-sm font-bold leading-snug hover:underline ${
+                rule.enabled ? "text-slate-900" : "text-slate-500 line-through decoration-slate-400"
               }`}
+              title={rule.name}
+              onClick={() => navigate(`${basePath}/${rule.id}/edit`)}
             >
-              {t}
-            </span>
-          ))
-        )}
-      </div>
+              {rule.name}
+            </button>
+            <p className="mt-1.5 text-xs text-slate-500">{trigger}</p>
+            <p className="mt-2 text-[11px] text-slate-500">
+              Wykonano: <span className="font-semibold tabular-nums text-slate-700">{rule.stats.runCount}</span>
+              <span className="mx-1.5 text-slate-300">·</span>
+              Ostatnie: {fmtTime(rule.stats.lastRunAt)}
+            </p>
+          </div>
 
-      <div className={`flex min-w-0 items-center gap-2 text-sm ${rule.enabled ? "text-slate-800" : "text-slate-500"}`}>
-        <span className="min-w-0 truncate font-medium" title={ifLine}>
-          <span className="font-bold text-slate-500">Jeśli</span> {ifLine}
-        </span>
-        <ArrowRight className="h-4 w-4 shrink-0 text-slate-400" strokeWidth={2} aria-hidden />
-        <span className="min-w-0 truncate font-medium" title={thenLine}>
-          <span className="font-bold text-slate-500">To</span> {thenLine}
-        </span>
-      </div>
+          {/* Przepływ Jeśli → To */}
+          <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-start sm:gap-4">
+            <div className="min-w-0 flex-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Jeśli</span>
+              <div className="mt-1.5 flex flex-col items-start gap-1.5">
+                {rule.conditions.length === 0 ? (
+                  <span className="text-xs text-slate-400">—</span>
+                ) : (
+                  rule.conditions.map((c: AutomationCondition, i: number) => {
+                    const parts = formatConditionDisplayParts(c, statusNameById);
+                    const join = i > 0 ? (rule.conditions[i - 1]?.joinToNext === "or" ? "LUB" : "ORAZ") : null;
+                    return (
+                      <div key={c.uid} className="flex flex-col items-start gap-1">
+                        {join ? (
+                          <span className="text-[10px] font-bold uppercase text-slate-400">{join}</span>
+                        ) : null}
+                        <WorkflowChip>
+                          {parts.field} <span className="font-bold">{parts.op}</span> {parts.value}
+                        </WorkflowChip>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
 
-      <span
-        className="hidden shrink-0 text-xs font-medium tabular-nums text-slate-500 lg:inline"
-        title={`Ostatnio: ${fmtTime(rule.stats.lastRunAt)}`}
-      >
-        {rule.stats.runCount}×
-      </span>
+            <div className="flex shrink-0 items-center self-center sm:self-start sm:pt-6">
+              <ArrowRight className="h-5 w-5 text-slate-400" strokeWidth={2} aria-hidden />
+            </div>
 
-      <div className="flex shrink-0 items-center gap-1 opacity-100 lg:opacity-0 lg:group-hover/row:opacity-100">
-        <button type="button" className={`${oaBtn} h-7 px-2`} title="Edytuj" onClick={() => navigate(`${basePath}/${rule.id}/edit`)}>
-          <Pencil className="h-3.5 w-3.5" />
-        </button>
-        <button type="button" className={`${oaBtn} h-7 px-2`} title="Duplikuj" onClick={onDuplicate}>
-          <Copy className="h-3.5 w-3.5" />
-        </button>
-        <button type="button" className={`${oaBtn} h-7 px-2 text-red-600 hover:bg-red-50`} title="Usuń" onClick={onDelete}>
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
-        <RuleRowMenu onTest={onTest} onLogs={onLogs} />
+            <div className="min-w-0 flex-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">To</span>
+              <div className="mt-1.5 flex flex-col items-start gap-1.5">
+                {rule.effects.length === 0 ? (
+                  <span className="text-xs text-slate-400">—</span>
+                ) : (
+                  rule.effects.map((e: AutomationEffect) => (
+                    <WorkflowChip key={e.uid}>{formatEffectPill(e, statusNameById)}</WorkflowChip>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Akcje */}
+          <div className="flex shrink-0 items-center gap-1 self-start opacity-100 xl:opacity-0 xl:group-hover/row:opacity-100">
+            <button type="button" className={`${oaBtn} h-8 w-8 px-0`} title="Edytuj" onClick={() => navigate(`${basePath}/${rule.id}/edit`)}>
+              <Pencil className="h-4 w-4" />
+            </button>
+            <button type="button" className={`${oaBtn} h-8 w-8 px-0`} title="Duplikuj" onClick={onDuplicate}>
+              <Copy className="h-4 w-4" />
+            </button>
+            <button type="button" className={`${oaBtn} h-8 w-8 px-0 text-red-600 hover:border-red-200 hover:text-red-700`} title="Usuń" onClick={onDelete}>
+              <Trash2 className="h-4 w-4" />
+            </button>
+            <RuleRowMenu onTest={onTest} onLogs={onLogs} />
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -211,7 +244,6 @@ export default function OrderAutomationListPage() {
   const { pathname } = useLocation();
   const scope: OrderAutomationScope = pathname.includes("/orders/automation/inventory") ? "inventory" : "orders";
   const basePath = scope === "inventory" ? "/orders/automation/inventory" : "/orders/automation/orders";
-  const pageTitle = scope === "inventory" ? "Akcje dla asortymentu" : "Akcje dla zamówień";
 
   const { warehouse } = useWarehouse();
   const wid = warehouse?.id ?? null;
@@ -269,8 +301,8 @@ export default function OrderAutomationListPage() {
     return rules.filter((r) => {
       if (group !== "all" && (r.group || "—") !== group) return false;
       if (!s) return true;
-      const { ifLine, thenLine } = formatAutomationSentencePl(r, statusNameById);
-      const blob = `${r.name} ${r.group} ${ifLine} ${thenLine}`.toLowerCase();
+      const trigger = primaryTriggerLabel(r);
+      const blob = `${r.name} ${r.group} ${trigger} ${r.conditions.map((c) => formatConditionDisplayParts(c, statusNameById).field).join(" ")} ${r.effects.map((e) => formatEffectPill(e, statusNameById)).join(" ")}`.toLowerCase();
       return blob.includes(s);
     });
   }, [rules, q, group, statusNameById]);
@@ -304,93 +336,102 @@ export default function OrderAutomationListPage() {
   }
 
   return (
-    <div className={`${moduleAutomationShellClass} w-full max-w-none pt-4`}>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="text-xl font-bold text-slate-900">{pageTitle}</h2>
-          <p className="mt-0.5 text-sm text-slate-600">{filtered.length} reguł automatyzacji</p>
+    <div className={`${moduleAutomationShellClass} w-full max-w-none`}>
+      {/* Pasek narzędzi */}
+      <div className="mb-6 flex flex-col gap-3 border-b border-slate-200 pb-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="relative min-w-0 flex-1 sm:max-w-md">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" strokeWidth={2} />
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Szukaj po nazwie lub ID…"
+              className={`${oaInp} pl-10`}
+            />
+          </div>
+          <select value={group} onChange={(e) => setGroup(e.target.value)} className={`${oaInp} w-auto min-w-[11rem]`}>
+            <option value="all">Wszystkie grupy</option>
+            {groups.map((g) => (
+              <option key={g} value={g}>{g}</option>
+            ))}
+          </select>
         </div>
-        <Link to={`${basePath}/new`} className={`${oaBtnPri} gap-2`}>
+        <Link to={`${basePath}/new`} className={`${oaBtnPri} shrink-0 gap-2`}>
           <Plus className="h-4 w-4" strokeWidth={2} aria-hidden />
           Nowa automatyzacja
         </Link>
       </div>
 
-      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center">
-        <div className="relative min-w-0 flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" strokeWidth={2} />
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Szukaj po nazwie, warunkach, akcjach…"
-            className={`${oaInp} pl-10`}
-          />
-        </div>
-        <select value={group} onChange={(e) => setGroup(e.target.value)} className={`${oaInp} w-auto min-w-[11rem]`}>
-          <option value="all">Wszystkie grupy</option>
-          {groups.map((g) => (
-            <option key={g} value={g}>{g}</option>
-          ))}
-        </select>
-      </div>
-
       {filtered.length === 0 ? (
-        <div className="py-8 text-center">
+        <div className="py-12 text-center">
           <p className="text-sm font-medium text-slate-800">Brak automatyzacji</p>
           <p className="mt-1 text-xs text-slate-500">Dodaj regułę lub zmień filtry.</p>
-          <Link to={`${basePath}/new`} className={`${oaBtnPri} mt-3 inline-flex h-8 text-xs`}>
+          <Link to={`${basePath}/new`} className={`${oaBtnPri} mt-4 inline-flex`}>
             Nowa automatyzacja
           </Link>
         </div>
       ) : (
-        <div className="space-y-6">
-          <div className="hidden grid-cols-[auto_minmax(10rem,16rem)_minmax(5rem,8rem)_minmax(0,1fr)_auto_auto] gap-x-4 border-b-2 border-slate-200 px-3 pb-2 text-xs font-bold uppercase tracking-wide text-slate-500 lg:grid">
-            <span />
-            <span>Nazwa</span>
-            <span>Wyzwalacz</span>
-            <span>Reguła</span>
-            <span>Wykonania</span>
-            <span />
-          </div>
-
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
           {byGroup.map(([gName, list]) => {
             const open = openGroups[gName] ?? true;
             return (
-              <section key={gName} className="overflow-hidden rounded-xl border-2 border-slate-200 bg-white shadow-sm">
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-3 border-b border-slate-200 bg-slate-100 px-4 py-3 text-left transition hover:bg-slate-200/60"
-                  onClick={() => toggleGroup(gName)}
-                >
-                  <ChevronDown
-                    className={`h-5 w-5 shrink-0 text-slate-600 transition-transform ${open ? "" : "-rotate-90"}`}
-                    strokeWidth={2}
-                  />
-                  <h3 className="min-w-0 flex-1 truncate text-sm font-bold uppercase tracking-wide text-slate-800">{gName}</h3>
-                  <span className="rounded-md bg-white px-2.5 py-1 text-xs font-bold tabular-nums text-slate-700 ring-1 ring-slate-300">
-                    {list.length}
-                  </span>
-                </button>
-                {open ? (
-                  <div className="divide-y divide-slate-100">
-                    {list.map((r) => (
-                      <AutomationRuleRow
-                        key={r.id}
-                        rule={r}
-                        statusNameById={statusNameById}
-                        basePath={basePath}
-                        onToggle={() => setEnabled(r.id, !r.enabled)}
-                        onDuplicate={() => { duplicateRule(r.id); toast.success("Zduplikowano."); }}
-                        onDelete={() => {
-                          if (!window.confirm(`Usunąć „${r.name}”?`)) return;
-                          deleteRule(r.id);
-                          toast.success("Usunięto.");
-                        }}
-                        onTest={() => setTestRule(r)}
-                        onLogs={() => navigate("/orders/automation/logs")}
-                      />
-                    ))}
+              <section key={gName} className={oaWorkflowGroupSectionClass}>
+                <div className={oaWorkflowGroupHeaderClass}>
+                  <div className="flex min-w-0 flex-1 items-center gap-3">
+                    <h3 className="truncate text-sm font-bold uppercase tracking-wide text-slate-800">
+                      {gName}{" "}
+                      <span className="font-normal text-slate-500">({list.length})</span>
+                    </h3>
+                    <Link
+                      to={`${basePath}/new`}
+                      className={`${oaBtn} h-8 w-8 px-0`}
+                      title="Dodaj regułę w grupie"
+                      onClick={() => {
+                        /* group prefill via sessionStorage could be added later */
+                      }}
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Link>
+                    <button
+                      type="button"
+                      className={`${oaBtn} h-8 gap-1.5 px-2.5 text-xs`}
+                      onClick={() => toggleGroup(gName)}
+                    >
+                      {open ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                      {open ? "Zwiń" : "Rozwiń"}
+                    </button>
                   </div>
+                  <div className="cursor-grab p-1 text-slate-300 hover:text-slate-500" title="Zmień kolejność grupy">
+                    <GripVertical className="h-4 w-4" />
+                  </div>
+                </div>
+
+                {open ? (
+                  list.length > 0 ? (
+                    <div>
+                      {list.map((r) => (
+                        <AutomationRuleRow
+                          key={r.id}
+                          rule={r}
+                          statusNameById={statusNameById}
+                          basePath={basePath}
+                          onToggle={() => setEnabled(r.id, !r.enabled)}
+                          onDuplicate={() => { duplicateRule(r.id); toast.success("Zduplikowano."); }}
+                          onDelete={() => {
+                            if (!window.confirm(`Usunąć „${r.name}”?`)) return;
+                            deleteRule(r.id);
+                            toast.success("Usunięto.");
+                          }}
+                          onTest={() => setTestRule(r)}
+                          onLogs={() => navigate("/orders/automation/logs")}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="px-4 py-8 text-center text-sm text-slate-400">
+                      Brak akcji automatycznych w tej grupie.
+                    </div>
+                  )
                 ) : null}
               </section>
             );

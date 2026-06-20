@@ -25,6 +25,30 @@ export function formatEffectPill(e: AutomationEffect, statusNameById?: Map<numbe
   return base;
 }
 
+/** Części warunku do chipów na liście (pole + operator + wartość). */
+export function formatConditionDisplayParts(
+  c: AutomationCondition,
+  statusNameById?: Map<number, string>,
+): { field: string; op: string; value: string } {
+  const field = conditionFieldLabel(c.fieldKey);
+  const op = ORDER_AUTOMATION_OPERATOR_UI[c.operator] ?? ORDER_AUTOMATION_OPERATOR_LABELS[c.operator] ?? c.operator;
+  let value = c.value || "—";
+  if (c.fieldKey === "order_status" && statusNameById) {
+    const id = Number(c.value);
+    if (Number.isFinite(id) && statusNameById.has(id)) value = statusNameById.get(id)!;
+  }
+  return { field, op, value };
+}
+
+export function primaryTriggerLabel(r: Pick<OrderAutomationRule, "execution" | "manualTrigger">): string {
+  const parts: string[] = [];
+  if (r.execution.onOrderCreated) parts.push("Po utworzeniu");
+  if (r.execution.onStatusChanged) parts.push("Zmiana statusu");
+  if (r.execution.onSchedule) parts.push("Harmonogram");
+  if (r.manualTrigger.enabled) parts.push("Przycisk ręczny");
+  return parts.join(" · ") || "—";
+}
+
 /** Krótki token do tabeli / chipów (np. „Status = Nowe”). */
 export function formatConditionChipShort(c: AutomationCondition, statusNameById?: Map<number, string>): string {
   const field = conditionFieldLabel(c.fieldKey);

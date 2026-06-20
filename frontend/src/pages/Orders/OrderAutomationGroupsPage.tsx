@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, Pencil, Plus, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
 
-import { flatSectionDividerClass } from "../../components/layout/flatSectionTokens";
+import { moduleAutomationShellClass } from "../../components/layout/flatSectionTokens";
 import { moduleListEmptyStateClass } from "../../components/listPage/moduleList";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { useAuth } from "../../context/AuthContext";
@@ -124,9 +124,9 @@ export default function OrderAutomationGroupsPage() {
   }
 
   return (
-    <div className="pt-6">
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-        <h2 className="text-xl font-semibold text-slate-900">Grupy akcji automatycznych</h2>
+    <div className={`${moduleAutomationShellClass} w-full max-w-none`}>
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-4">
+        <p className="text-sm text-slate-500">Grupy organizują reguły na liście automatyzacji.</p>
         {!adding ? (
           <button type="button" onClick={startAdd} className={`${oaBtnPri} gap-2`}>
             <Plus className="h-4 w-4" strokeWidth={2} aria-hidden />
@@ -134,7 +134,6 @@ export default function OrderAutomationGroupsPage() {
           </button>
         ) : null}
       </div>
-      <div className={`${flatSectionDividerClass} mb-6`} aria-hidden />
 
       {adding ? (
         <div className="mb-8 max-w-md space-y-3">

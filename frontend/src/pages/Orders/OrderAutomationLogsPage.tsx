@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, Trash2 } from "lucide-react";
 
-import { flatSectionDividerClass } from "../../components/layout/flatSectionTokens";
+import { moduleAutomationShellClass } from "../../components/layout/flatSectionTokens";
 import {
   moduleListEmptyStateClass,
   moduleListRowClass,
@@ -68,12 +68,9 @@ export default function OrderAutomationLogsPage() {
   }
 
   return (
-    <div className="pt-6">
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-        <div className="min-w-0">
-          <h2 className="text-xl font-semibold text-slate-900">Dziennik wykonań</h2>
-          <p className="mt-1 text-sm text-slate-500">Ostatnie uruchomienia i testy (do 500 wpisów) · {sorted.length} wpisów</p>
-        </div>
+    <div className={`${moduleAutomationShellClass} w-full max-w-none`}>
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-4">
+        <p className="text-sm text-slate-500">Ostatnie uruchomienia i testy (do 500 wpisów) · {sorted.length} wpisów</p>
         <button
           type="button"
           className={`${oaBtnDanger} gap-2`}
@@ -86,7 +83,6 @@ export default function OrderAutomationLogsPage() {
           Wyczyść dziennik
         </button>
       </div>
-      <div className={`${flatSectionDividerClass} mb-6`} aria-hidden />
 
       {sorted.length === 0 ? (
         <div className="py-10">
@@ -129,9 +125,9 @@ export default function OrderAutomationLogsPage() {
                       <td className={`${moduleListTdClass} text-slate-600`}>{e.message}</td>
                     </tr>
                     {isOpen && e.detail ? (
-                      <tr key={`${e.id}-detail`} className="bg-slate-50/50">
-                        <td colSpan={5} className="px-4 py-3">
-                          <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words font-mono text-xs text-slate-700">{e.detail}</pre>
+                      <tr key={`${e.id}-detail`}>
+                        <td colSpan={5} className="border-t border-slate-100 px-4 py-3">
+                          <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-slate-200 bg-white p-3 font-mono text-xs text-slate-700">{e.detail}</pre>
                         </td>
                       </tr>
                     ) : null}
