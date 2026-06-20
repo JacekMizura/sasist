@@ -47,7 +47,7 @@ import { AutomationCategoryPickerModal } from "../../components/orders/automatio
 import { AutomationConditionEditModal } from "../../components/orders/automation/AutomationConditionEditModal";
 import { AutomationEffectEditModal } from "../../components/orders/automation/AutomationEffectEditModal";
 import { AutomationIfThenSection } from "../../components/orders/automation/AutomationIfThenSection";
-import { flatSectionDividerClass, moduleEditorFullWidthClass } from "../../components/layout/flatSectionTokens";
+import { flatSectionDividerClass, moduleAutomationShellClass } from "../../components/layout/flatSectionTokens";
 import { ModuleListBreadcrumb } from "../../components/listPage/moduleList";
 import { IntegrationsApiPanel } from "../Settings/returnsStatusesConfigurator/AdvancedSettingsPanel";
 import {
@@ -453,7 +453,7 @@ export default function OrderAutomationEditorPage() {
   }
 
   return (
-    <div className={`${moduleEditorFullWidthClass} min-w-0 pb-8 text-[13px] text-slate-900`}>
+    <div className={`${moduleAutomationShellClass} min-w-0 pb-8 text-[13px] text-slate-900`}>
       <ModuleListBreadcrumb items={breadcrumbItems} />
 
       <div className="mb-4 mt-4 flex flex-wrap items-center justify-between gap-3">
@@ -468,7 +468,7 @@ export default function OrderAutomationEditorPage() {
         </div>
       </div>
 
-      <div className="space-y-4">
+      <div className="w-full max-w-none space-y-4">
         <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem_5rem] sm:items-end">
           <label className={oaLbl}>
             Nazwa

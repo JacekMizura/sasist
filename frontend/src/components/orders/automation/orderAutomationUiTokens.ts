@@ -44,6 +44,20 @@ export const oaWorkflowFieldRowClass =
   "grid grid-cols-[minmax(7.5rem,9.5rem)_minmax(0,1fr)] items-center gap-x-4 border-b border-gray-100 py-2.5 last:border-b-0";
 export const oaWorkflowFieldLabelClass = "text-sm text-slate-500";
 
-/** Zwarta karta podsumowania w workflow builderze. */
-export const oaWorkflowSummaryCardClass =
-  "flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 transition hover:border-slate-300";
+/** Zwarta karta podsumowania w workflow builderze — klikalna, akcje na hover. */
+export const oaWorkflowCardClass =
+  "group/card relative flex w-full min-h-11 cursor-pointer items-center rounded-xl border-2 border-slate-200 bg-white px-4 py-2.5 text-left shadow-sm transition hover:border-slate-400 hover:bg-slate-50/50 hover:shadow-md";
+export const oaWorkflowCardTitleClass = "min-w-0 flex-1 truncate pr-16 text-sm font-semibold text-slate-900";
+export const oaWorkflowCardActionsClass =
+  "absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-0.5 rounded-lg bg-white/95 p-0.5 opacity-0 shadow-sm ring-1 ring-slate-200/80 transition group-hover/card:opacity-100";
+
+/** Duże CTA dodawania w kolumnie Jeśli / To */
+export const oaWorkflowAddCtaBase =
+  "flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed bg-white px-4 py-3 text-sm font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2";
+export const oaWorkflowAddCtaCondition =
+  `${oaWorkflowAddCtaBase} border-sky-300 text-sky-800 hover:border-sky-400 hover:bg-sky-50 focus-visible:outline-sky-400`;
+export const oaWorkflowAddCtaEffect =
+  `${oaWorkflowAddCtaBase} border-emerald-300 text-emerald-800 hover:border-emerald-400 hover:bg-emerald-50 focus-visible:outline-emerald-400`;
+
+/** @deprecated use oaWorkflowCardClass */
+export const oaWorkflowSummaryCardClass = oaWorkflowCardClass;

@@ -20,3 +20,6 @@ export const moduleSettingsPageShellClass = "w-full max-w-[87.5rem]";
 
 /** Pełna szerokość content area — edytory workflow (np. akcje automatyczne). */
 export const moduleEditorFullWidthClass = "w-full min-w-0 max-w-none";
+
+/** Shell modułu automatyzacji — zawsze pełna szerokość kolumny treści. */
+export const moduleAutomationShellClass = "w-full min-w-0 max-w-none";
