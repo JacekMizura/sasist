@@ -10,6 +10,7 @@ import {
   formatRuleDisplayId,
   formatRuleListName,
 } from "../../../utils/orderAutomationPreview";
+import type { ConditionOption } from "../../../utils/orderAutomationConditionOptions";
 import { formatExecutionListDisplay } from "../../../utils/orderAutomationExecution";
 import {
   oaListJoinBadgeClass,
@@ -42,12 +43,14 @@ function ConditionLine({
   c,
   join,
   statusNameById,
+  warehouseOptions,
 }: {
   c: AutomationCondition;
   join: string | null;
   statusNameById: Map<number, string>;
+  warehouseOptions?: ConditionOption[];
 }) {
-  const line = formatConditionListLine(c, statusNameById);
+  const line = formatConditionListLine(c, statusNameById, warehouseOptions);
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
       {join ? <span className={oaListJoinBadgeClass}>{join}</span> : null}
@@ -62,9 +65,11 @@ function ConditionLine({
 function ConditionsCell({
   rule,
   statusNameById,
+  warehouseOptions,
 }: {
   rule: OrderAutomationRule;
   statusNameById: Map<number, string>;
+  warehouseOptions?: ConditionOption[];
 }) {
   const { conditions } = rule;
 
@@ -76,7 +81,7 @@ function ConditionsCell({
     <div className="flex min-w-0 flex-col gap-2">
       {conditions.map((c, i) => {
         const join = i > 0 ? (conditions[i - 1]?.joinToNext === "or" ? "LUB" : "ORAZ") : null;
-        return <ConditionLine key={c.uid} c={c} join={join} statusNameById={statusNameById} />;
+        return <ConditionLine key={c.uid} c={c} join={join} statusNameById={statusNameById} warehouseOptions={warehouseOptions} />;
       })}
     </div>
   );
@@ -145,13 +150,14 @@ function ExecutionCell({ rule }: { rule: OrderAutomationRule }) {
 type RuleRowProps = {
   rule: OrderAutomationRule;
   statusNameById: Map<number, string>;
+  warehouseOptions?: ConditionOption[];
   basePath: string;
   onToggle: () => void;
   onDelete: () => void;
   onLogs: () => void;
 };
 
-function AutomationRuleTableRow({ rule, statusNameById, basePath, onToggle, onDelete, onLogs }: RuleRowProps) {
+function AutomationRuleTableRow({ rule, statusNameById, warehouseOptions, basePath, onToggle, onDelete, onLogs }: RuleRowProps) {
   const navigate = useNavigate();
   const displayId = formatRuleDisplayId(rule);
   const ruleName = formatRuleListName(rule);
@@ -189,7 +195,7 @@ function AutomationRuleTableRow({ rule, statusNameById, basePath, onToggle, onDe
         <p className="text-xs leading-snug text-slate-500">Ostatnie: {fmtTime(rule.stats.lastRunAt)}</p>
       </td>
       <td className={oaListTdClass} style={{ width: "28%" }}>
-        <ConditionsCell rule={rule} statusNameById={statusNameById} />
+        <ConditionsCell rule={rule} statusNameById={statusNameById} warehouseOptions={warehouseOptions} />
       </td>
       <td className={oaListTdClass} style={{ width: "28%" }}>
         <EffectsCell rule={rule} statusNameById={statusNameById} />
@@ -217,8 +223,8 @@ function AutomationRuleTableRow({ rule, statusNameById, basePath, onToggle, onDe
           <button
             type="button"
             className={oaRowActionBtn}
-            title="Dziennik wykonań"
-            aria-label="Dziennik wykonań"
+            title="Historia wykonań"
+            aria-label="Historia wykonań"
             onClick={onLogs}
           >
             <ClipboardList className="h-4 w-4" strokeWidth={2} />
@@ -232,6 +238,7 @@ function AutomationRuleTableRow({ rule, statusNameById, basePath, onToggle, onDe
 export type AutomationRulesTableProps = {
   rules: OrderAutomationRule[];
   statusNameById: Map<number, string>;
+  warehouseOptions?: ConditionOption[];
   basePath: string;
   idSort: "asc" | "desc";
   onIdSortChange: (dir: "asc" | "desc") => void;
@@ -243,6 +250,7 @@ export type AutomationRulesTableProps = {
 export function AutomationRulesTable({
   rules,
   statusNameById,
+  warehouseOptions,
   basePath,
   idSort,
   onIdSortChange,
@@ -296,6 +304,7 @@ export function AutomationRulesTable({
               key={r.id}
               rule={r}
               statusNameById={statusNameById}
+              warehouseOptions={warehouseOptions}
               basePath={basePath}
               onToggle={() => onToggle(r.id, !r.enabled)}
               onDelete={() => onDelete(r)}

@@ -2,6 +2,7 @@ import { AlertTriangle, ArrowRight, Copy, Pencil, Plus, Trash2 } from "lucide-re
 
 import type { AutomationCondition, AutomationConditionJoin, AutomationEffect } from "../../../types/orderAutomation";
 import { formatConditionDisplayParts, formatEffectListBlock } from "../../../utils/orderAutomationPreview";
+import type { ConditionOption } from "../../../utils/orderAutomationConditionOptions";
 import { conditionErrorTitle, effectErrorTitle } from "../../../utils/orderAutomationValidation";
 import { flatSectionDividerClass } from "../../layout/flatSectionTokens";
 import {
@@ -94,6 +95,7 @@ export type AutomationIfThenSectionProps = {
   conditions: AutomationCondition[];
   effects: AutomationEffect[];
   statusNameById: Map<number, string>;
+  warehouseOptions?: ConditionOption[];
   conditionErrors?: Record<string, string>;
   effectErrors?: Record<string, string>;
   onAddCondition: () => void;
@@ -110,6 +112,7 @@ export function AutomationIfThenSection({
   conditions,
   effects,
   statusNameById,
+  warehouseOptions = [],
   conditionErrors = {},
   effectErrors = {},
   onAddCondition,
@@ -143,7 +146,7 @@ export function AutomationIfThenSection({
                 {conditions.map((c, idx) => {
                   const join = c.joinToNext ?? "and";
                   const isLast = idx >= conditions.length - 1;
-                  const parts = formatConditionDisplayParts(c, statusNameById);
+                  const parts = formatConditionDisplayParts(c, statusNameById, warehouseOptions);
                   const err = conditionErrors[c.uid] ?? null;
 
                   return (

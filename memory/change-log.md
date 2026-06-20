@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-06-08 — Akcje automatyczne: warunki multi-value + historia diff
+
+- Warunki pól wyboru wielokrotnego: `value: string[]`, operatory „jest jednym z” / „nie jest jednym z”, `FilterMultiSelect` w modalu warunku
+- Historia zmian konfiguracji: model `{ type, field, before, after, userId, createdAt }` w localStorage; diff przy zapisie reguły
+- Edytor: zakładki **Historia zmian** / **Historia wykonań** (`AutomationRuleHistoryPanel`); moduł logs = tylko wykonania
+
 ## 2026-06-08 — Konfigurator zwrotów: uproszczenie UX (analiza + refaktor)
 
 - **Statusy RMZ** → zwinięta sekcja „Workflow magazynowy” z opisem 3 pojęć (etykiety / decyzje / etapy dokumentu)

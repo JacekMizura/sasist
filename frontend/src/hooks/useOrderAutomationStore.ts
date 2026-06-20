@@ -1,19 +1,23 @@
 import { useCallback, useMemo, useState } from "react";
-import type { OrderAutomationLogEntry, OrderAutomationRule } from "../types/orderAutomation";
+import type { OrderAutomationChangeLogEntry, OrderAutomationExecutionLogEntry, OrderAutomationRule } from "../types/orderAutomation";
 import type { OrderAutomationScope } from "../utils/orderAutomationLocalStore";
 import {
-  appendAutomationLog,
+  appendAutomationChangeLogs,
+  appendAutomationExecutionLog,
   allocateRulePublicId,
-  loadAutomationLogs,
-  loadAutomationRules,
+  loadAutomationChangeLogs,
+  loadAutomationExecutionLogs,
   newUid,
-  saveAutomationLogs,
+  saveAutomationChangeLogs,
+  saveAutomationExecutionLogs,
   saveAutomationRules,
+  loadAutomationRules,
 } from "../utils/orderAutomationLocalStore";
 
 export function useOrderAutomationStore(tenantId: number, warehouseId: number | null, scope: OrderAutomationScope = "orders") {
   const [rules, setRules] = useState<OrderAutomationRule[]>([]);
-  const [logs, setLogs] = useState<OrderAutomationLogEntry[]>([]);
+  const [executionLogs, setExecutionLogs] = useState<OrderAutomationExecutionLogEntry[]>([]);
+  const [changeLogs, setChangeLogs] = useState<OrderAutomationChangeLogEntry[]>([]);
   const [hydrated, setHydrated] = useState(false);
 
   const canUse = warehouseId != null;
@@ -21,12 +25,14 @@ export function useOrderAutomationStore(tenantId: number, warehouseId: number | 
   const reload = useCallback(() => {
     if (warehouseId == null) {
       setRules([]);
-      setLogs([]);
+      setExecutionLogs([]);
+      setChangeLogs([]);
       setHydrated(true);
       return;
     }
     setRules(loadAutomationRules(tenantId, warehouseId, scope));
-    setLogs(loadAutomationLogs(tenantId, warehouseId));
+    setExecutionLogs(loadAutomationExecutionLogs(tenantId, warehouseId));
+    setChangeLogs(loadAutomationChangeLogs(tenantId, warehouseId));
     setHydrated(true);
   }, [tenantId, warehouseId, scope]);
 
@@ -39,11 +45,20 @@ export function useOrderAutomationStore(tenantId: number, warehouseId: number | 
     [tenantId, warehouseId, scope],
   );
 
-  const persistLogs = useCallback(
-    (next: OrderAutomationLogEntry[]) => {
+  const persistExecutionLogs = useCallback(
+    (next: OrderAutomationExecutionLogEntry[]) => {
       if (warehouseId == null) return;
-      setLogs(next);
-      saveAutomationLogs(tenantId, warehouseId, next);
+      setExecutionLogs(next);
+      saveAutomationExecutionLogs(tenantId, warehouseId, next);
+    },
+    [tenantId, warehouseId],
+  );
+
+  const persistChangeLogs = useCallback(
+    (next: OrderAutomationChangeLogEntry[]) => {
+      if (warehouseId == null) return;
+      setChangeLogs(next);
+      saveAutomationChangeLogs(tenantId, warehouseId, next);
     },
     [tenantId, warehouseId],
   );
@@ -54,6 +69,15 @@ export function useOrderAutomationStore(tenantId: number, warehouseId: number | 
       persistRules(next);
     },
     [persistRules, rules],
+  );
+
+  const appendChangeLogs = useCallback(
+    (entries: OrderAutomationChangeLogEntry[]) => {
+      if (warehouseId == null || entries.length === 0) return;
+      appendAutomationChangeLogs(tenantId, warehouseId, entries);
+      setChangeLogs(loadAutomationChangeLogs(tenantId, warehouseId));
+    },
+    [tenantId, warehouseId],
   );
 
   const deleteRule = useCallback(
@@ -90,7 +114,7 @@ export function useOrderAutomationStore(tenantId: number, warehouseId: number | 
   const recordTestRun = useCallback(
     (rule: OrderAutomationRule, ok: boolean, message: string, detail?: string) => {
       if (warehouseId == null) return;
-      const entry: OrderAutomationLogEntry = {
+      const entry: OrderAutomationExecutionLogEntry = {
         id: newUid("log"),
         ts: new Date().toISOString(),
         ruleId: rule.id,
@@ -98,9 +122,10 @@ export function useOrderAutomationStore(tenantId: number, warehouseId: number | 
         level: ok ? "success" : "error",
         message,
         detail,
+        kind: "test",
       };
-      appendAutomationLog(tenantId, warehouseId, entry);
-      setLogs(loadAutomationLogs(tenantId, warehouseId));
+      appendAutomationExecutionLog(tenantId, warehouseId, entry);
+      setExecutionLogs(loadAutomationExecutionLogs(tenantId, warehouseId));
       const bumped = rules.map((r) =>
         r.id === rule.id
           ? {
@@ -117,25 +142,55 @@ export function useOrderAutomationStore(tenantId: number, warehouseId: number | 
     [persistRules, rules, tenantId, warehouseId, scope],
   );
 
-  const clearLogs = useCallback(() => {
+  const clearExecutionLogs = useCallback(() => {
     if (warehouseId == null) return;
-    persistLogs([]);
-  }, [persistLogs, warehouseId]);
+    persistExecutionLogs([]);
+  }, [persistExecutionLogs, warehouseId]);
 
   const byId = useMemo(() => new Map(rules.map((r) => [r.id, r])), [rules]);
+
+  const changeLogsByRuleId = useMemo(() => {
+    const m = new Map<string, OrderAutomationChangeLogEntry[]>();
+    for (const e of changeLogs) {
+      if (!m.has(e.ruleId)) m.set(e.ruleId, []);
+      m.get(e.ruleId)!.push(e);
+    }
+    for (const [, list] of m) {
+      list.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    }
+    return m;
+  }, [changeLogs]);
+
+  const executionLogsByRuleId = useMemo(() => {
+    const m = new Map<string, OrderAutomationExecutionLogEntry[]>();
+    for (const e of executionLogs) {
+      if (!m.has(e.ruleId)) m.set(e.ruleId, []);
+      m.get(e.ruleId)!.push(e);
+    }
+    for (const [, list] of m) {
+      list.sort((a, b) => b.ts.localeCompare(a.ts));
+    }
+    return m;
+  }, [executionLogs]);
 
   return {
     canUse,
     hydrated,
     rules,
-    logs,
+    logs: executionLogs,
+    executionLogs,
+    changeLogs,
     reload,
     upsertRule,
+    appendChangeLogs,
     deleteRule,
     setEnabled,
     duplicateRule,
     recordTestRun,
-    clearLogs,
+    clearLogs: clearExecutionLogs,
+    clearExecutionLogs,
     byId,
+    changeLogsByRuleId,
+    executionLogsByRuleId,
   };
 }

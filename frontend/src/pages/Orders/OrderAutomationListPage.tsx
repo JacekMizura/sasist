@@ -35,7 +35,7 @@ export default function OrderAutomationListPage() {
   const scope: OrderAutomationScope = pathname.includes("/orders/automation/inventory") ? "inventory" : "orders";
   const basePath = scope === "inventory" ? "/orders/automation/inventory" : "/orders/automation/orders";
 
-  const { warehouse } = useWarehouse();
+  const { warehouse, warehouses } = useWarehouse();
   const wid = warehouse?.id ?? null;
   const { hasPermission } = useAuth();
   const canWrite = hasPermission("settings.automation");
@@ -76,6 +76,11 @@ export default function OrderAutomationListPage() {
   }, [statusSummary]);
 
   const groups = useMemo(() => [...new Set(rules.map((r) => r.group || "—"))].sort((a, b) => a.localeCompare(b, "pl")), [rules]);
+
+  const warehouseOptions = useMemo(
+    () => warehouses.map((w) => ({ value: String(w.id), label: w.name })),
+    [warehouses],
+  );
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -199,6 +204,7 @@ export default function OrderAutomationListPage() {
                     <AutomationRulesTable
                       rules={list}
                       statusNameById={statusNameById}
+                      warehouseOptions={warehouseOptions}
                       basePath={basePath}
                       idSort={idSort}
                       onIdSortChange={setIdSort}

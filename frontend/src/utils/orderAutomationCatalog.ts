@@ -4,20 +4,24 @@ export type ConditionFieldDef = {
   key: string;
   label: string;
   category: string;
-  valueKind: "status" | "text" | "number";
+  valueKind: "status" | "text" | "number" | "multi";
 };
 
 /** Metadane pól warunków — bez listy statusów (statusy z API panelu). */
 export const ORDER_AUTOMATION_CONDITION_FIELDS: ConditionFieldDef[] = [
-  { key: "order_status", label: "Status zamówienia", category: "Zamówienie", valueKind: "status" },
-  { key: "order_source", label: "Źródło zamówienia", category: "Zamówienie", valueKind: "text" },
+  { key: "order_status", label: "Status zamówienia", category: "Zamówienie", valueKind: "multi" },
+  { key: "order_source", label: "Źródło zamówienia", category: "Zamówienie", valueKind: "multi" },
+  { key: "order_tags", label: "Tagi", category: "Zamówienie", valueKind: "multi" },
+  { key: "order_categories", label: "Kategorie", category: "Zamówienie", valueKind: "multi" },
   { key: "order_number", label: "Numer zamówienia", category: "Zamówienie", valueKind: "text" },
   { key: "customer_email", label: "E-mail klienta", category: "Klient", valueKind: "text" },
   { key: "customer_group", label: "Grupa klienta", category: "Klient", valueKind: "text" },
-  { key: "shipment_courier", label: "Przewoźnik / metoda", category: "Wysyłka", valueKind: "text" },
-  { key: "shipment_status", label: "Status przesyłki", category: "Wysyłka", valueKind: "text" },
+  { key: "shipment_courier", label: "Przewoźnik", category: "Wysyłka", valueKind: "multi" },
+  { key: "shipment_status", label: "Status przesyłki", category: "Wysyłka", valueKind: "multi" },
+  { key: "payment_method", label: "Forma płatności", category: "Płatności", valueKind: "multi" },
   { key: "payment_status", label: "Status płatności", category: "Płatności", valueKind: "text" },
   { key: "order_total", label: "Wartość zamówienia", category: "Płatności", valueKind: "number" },
+  { key: "warehouse_id", label: "Magazyn", category: "Magazyn", valueKind: "multi" },
   { key: "product_sku", label: "SKU w zamówieniu", category: "Produkty", valueKind: "text" },
   { key: "document_type", label: "Typ dokumentu", category: "Dokumenty", valueKind: "text" },
   { key: "wms_stock_state", label: "Stan magazynowy WMS", category: "WMS", valueKind: "text" },
@@ -27,13 +31,17 @@ export const ORDER_AUTOMATION_CONDITION_FIELDS: ConditionFieldDef[] = [
 ];
 
 export const ORDER_AUTOMATION_OPERATOR_LABELS: Record<string, string> = {
+  in: "jest jednym z",
+  not_in: "nie jest jednym z",
   eq: "=",
   neq: "≠",
   contains: "zawiera",
 };
 
-/** Etykiety operatorów w UI reguły (wartości zapisu bez zmian). */
+/** Etykiety operatorów w UI reguły. */
 export const ORDER_AUTOMATION_OPERATOR_UI: Record<string, string> = {
+  in: "jest jednym z",
+  not_in: "nie jest jednym z",
   eq: "jest równe",
   neq: "nie jest równe",
   contains: "zawiera",
@@ -65,6 +73,7 @@ export const CONDITION_CATEGORY_ORDER = [
   "Klient",
   "Wysyłka",
   "Płatności",
+  "Magazyn",
   "Produkty",
   "WMS",
   "Dokumenty",

@@ -2,13 +2,19 @@
  * Persystencja reguł i dziennika testów — wyłącznie frontend (localStorage).
  * Po dodaniu endpointów backendu zamień warstwę zapisu na API, zachowując kształt {@link OrderAutomationRule}.
  */
-import type { OrderAutomationLogEntry, OrderAutomationRule } from "../types/orderAutomation";
+import type {
+  OrderAutomationChangeLogEntry,
+  OrderAutomationExecutionLogEntry,
+  OrderAutomationRule,
+} from "../types/orderAutomation";
+import { normalizeCondition } from "./orderAutomationConditionUtils";
 
 const RULES_PREFIX = "orderAutomation.rules.v1";
 /** Legacy suffix — migrowane przy pierwszym odczycie magazynu (inventory). */
 const RULES_ASSORTMENT_LEGACY_SUFFIX = ".assortment";
 const RULES_INVENTORY_SUFFIX = ".inventory";
-const LOGS_PREFIX = "orderAutomation.logs.v1";
+const LOGS_PREFIX = "orderAutomation.executionLogs.v1";
+const CHANGE_LOGS_PREFIX = "orderAutomation.changeLogs.v1";
 const GROUPS_PREFIX = "orderAutomation.actionGroups.v1";
 const PUBLIC_ID_COUNTER_PREFIX = "orderAutomation.publicIdCounter.v1";
 
@@ -32,8 +38,16 @@ function rulesKeyInventoryLegacy(tenantId: number, warehouseId: number) {
   return `${RULES_PREFIX}${RULES_ASSORTMENT_LEGACY_SUFFIX}:${tenantId}:${warehouseId}`;
 }
 
-function logsKey(tenantId: number, warehouseId: number) {
+function executionLogsKey(tenantId: number, warehouseId: number) {
   return `${LOGS_PREFIX}:${tenantId}:${warehouseId}`;
+}
+
+function legacyLogsKey(tenantId: number, warehouseId: number) {
+  return `orderAutomation.logs.v1:${tenantId}:${warehouseId}`;
+}
+
+function changeLogsKey(tenantId: number, warehouseId: number) {
+  return `${CHANGE_LOGS_PREFIX}:${tenantId}:${warehouseId}`;
 }
 
 function groupsKey(tenantId: number, warehouseId: number) {
@@ -100,7 +114,10 @@ export function loadAutomationRules(
     if (!raw) return [];
     const x = JSON.parse(raw) as unknown;
     if (!Array.isArray(x)) return [];
-    const rules = x as OrderAutomationRule[];
+    const rules = (x as OrderAutomationRule[]).map((r) => ({
+      ...r,
+      conditions: (r.conditions ?? []).map((c) => normalizeCondition(c)),
+    }));
     const normalized = normalizeRulesPublicIds(rules, tenantId, warehouseId, scope);
     if (normalized.some((r, i) => r.publicId !== rules[i]?.publicId)) {
       saveAutomationRules(tenantId, warehouseId, normalized, scope);
@@ -121,26 +138,78 @@ export function saveAutomationRules(
   localStorage.setItem(key, JSON.stringify(rules));
 }
 
-export function loadAutomationLogs(tenantId: number, warehouseId: number): OrderAutomationLogEntry[] {
+export function loadAutomationExecutionLogs(tenantId: number, warehouseId: number): OrderAutomationExecutionLogEntry[] {
   try {
-    const raw = localStorage.getItem(logsKey(tenantId, warehouseId));
+    let raw = localStorage.getItem(executionLogsKey(tenantId, warehouseId));
+    if (!raw) {
+      raw = localStorage.getItem(legacyLogsKey(tenantId, warehouseId));
+      if (raw) localStorage.setItem(executionLogsKey(tenantId, warehouseId), raw);
+    }
     if (!raw) return [];
     const x = JSON.parse(raw) as unknown;
     if (!Array.isArray(x)) return [];
-    return x as OrderAutomationLogEntry[];
+    return x as OrderAutomationExecutionLogEntry[];
   } catch {
     return [];
   }
 }
 
-export function saveAutomationLogs(tenantId: number, warehouseId: number, logs: OrderAutomationLogEntry[]) {
+/** @deprecated */
+export const loadAutomationLogs = loadAutomationExecutionLogs;
+
+export function saveAutomationExecutionLogs(
+  tenantId: number,
+  warehouseId: number,
+  logs: OrderAutomationExecutionLogEntry[],
+) {
   const trimmed = logs.slice(-500);
-  localStorage.setItem(logsKey(tenantId, warehouseId), JSON.stringify(trimmed));
+  localStorage.setItem(executionLogsKey(tenantId, warehouseId), JSON.stringify(trimmed));
 }
 
-export function appendAutomationLog(tenantId: number, warehouseId: number, entry: OrderAutomationLogEntry) {
-  const prev = loadAutomationLogs(tenantId, warehouseId);
-  saveAutomationLogs(tenantId, warehouseId, [...prev, entry]);
+/** @deprecated */
+export const saveAutomationLogs = saveAutomationExecutionLogs;
+
+export function appendAutomationExecutionLog(
+  tenantId: number,
+  warehouseId: number,
+  entry: OrderAutomationExecutionLogEntry,
+) {
+  const prev = loadAutomationExecutionLogs(tenantId, warehouseId);
+  saveAutomationExecutionLogs(tenantId, warehouseId, [...prev, entry]);
+}
+
+/** @deprecated */
+export const appendAutomationLog = appendAutomationExecutionLog;
+
+export function loadAutomationChangeLogs(tenantId: number, warehouseId: number): OrderAutomationChangeLogEntry[] {
+  try {
+    const raw = localStorage.getItem(changeLogsKey(tenantId, warehouseId));
+    if (!raw) return [];
+    const x = JSON.parse(raw) as unknown;
+    if (!Array.isArray(x)) return [];
+    return x as OrderAutomationChangeLogEntry[];
+  } catch {
+    return [];
+  }
+}
+
+export function saveAutomationChangeLogs(
+  tenantId: number,
+  warehouseId: number,
+  logs: OrderAutomationChangeLogEntry[],
+) {
+  const trimmed = logs.slice(-2000);
+  localStorage.setItem(changeLogsKey(tenantId, warehouseId), JSON.stringify(trimmed));
+}
+
+export function appendAutomationChangeLogs(
+  tenantId: number,
+  warehouseId: number,
+  entries: OrderAutomationChangeLogEntry[],
+) {
+  if (entries.length === 0) return;
+  const prev = loadAutomationChangeLogs(tenantId, warehouseId);
+  saveAutomationChangeLogs(tenantId, warehouseId, [...prev, ...entries]);
 }
 
 export function loadActionGroups(tenantId: number, warehouseId: number): OrderAutomationActionGroup[] {

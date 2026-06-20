@@ -1,6 +1,6 @@
 /** Lokalny model reguł „Akcje automatyczne” (persistencja w przeglądarce do czasu dedykowanego API). */
 
-export type AutomationConditionOp = "eq" | "neq" | "contains";
+export type AutomationConditionOp = "in" | "not_in" | "eq" | "neq" | "contains";
 
 /** Łącznik do następnego warunku (ostatni wiersz ignoruje). Domyślnie: and. */
 export type AutomationConditionJoin = "and" | "or";
@@ -9,10 +9,12 @@ export type AutomationCondition = {
   uid: string;
   fieldKey: string;
   operator: AutomationConditionOp;
-  /** Interpretacja zależy od pola (np. id statusu panelu jako string). */
-  value: string;
+  /** Wartości warunku — tablica (pojedyncze pola: jeden element). */
+  value: string[];
   /** Między tym warunkiem a następnym. Brak = ORAZ. */
   joinToNext?: AutomationConditionJoin;
+  /** @deprecated migracja — stary format pojedynczego stringa */
+  legacyValue?: string;
 };
 
 export type AutomationEffectKind =
@@ -113,7 +115,8 @@ export type OrderAutomationRule = {
 
 export type OrderAutomationLogLevel = "success" | "error" | "info";
 
-export type OrderAutomationLogEntry = {
+/** Historia wykonań — uruchomienie reguły na zamówieniu / test. */
+export type OrderAutomationExecutionLogEntry = {
   id: string;
   ts: string;
   ruleId: string;
@@ -121,4 +124,36 @@ export type OrderAutomationLogEntry = {
   level: OrderAutomationLogLevel;
   message: string;
   detail?: string;
+  /** Id zamówienia — gdy uruchomienie produkcyjne */
+  orderId?: string | null;
+  /** Opis wykonanych efektów */
+  effectsExecuted?: string[];
+  kind?: "execution" | "test";
+};
+
+/** @deprecated alias */
+export type OrderAutomationLogEntry = OrderAutomationExecutionLogEntry;
+
+export type OrderAutomationChangeType =
+  | "rule_created"
+  | "field_updated"
+  | "condition_added"
+  | "condition_removed"
+  | "condition_updated"
+  | "effect_added"
+  | "effect_removed"
+  | "effect_updated";
+
+/** Historia zmian konfiguracji reguły (diff before/after). */
+export type OrderAutomationChangeLogEntry = {
+  id: string;
+  ruleId: string;
+  type: OrderAutomationChangeType;
+  /** Etykieta pola (np. „Status zamówienia”, „Nazwa”). */
+  field: string;
+  before: string | null;
+  after: string | null;
+  userId: number;
+  userName: string;
+  createdAt: string;
 };

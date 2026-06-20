@@ -10,7 +10,6 @@ import { useOrderAutomationStore } from "../../hooks/useOrderAutomationStore";
 import type {
   AutomationCondition,
   AutomationConditionJoin,
-  AutomationConditionOp,
   AutomationEffect,
   AutomationEffectKind,
   OrderAutomationManualTrigger,
@@ -18,9 +17,13 @@ import type {
 } from "../../types/orderAutomation";
 import { loadActionGroups, allocateRulePublicId, newUid, saveActionGroups } from "../../utils/orderAutomationLocalStore";
 import { defaultExecution, migrateExecution, normalizeExecution } from "../../utils/orderAutomationExecution";
+import { buildChangeLogContext, computeRuleChangeLogEntries } from "../../utils/orderAutomationChangeLog";
+import {
+  defaultOperatorForField,
+  normalizeCondition,
+} from "../../utils/orderAutomationConditionUtils";
 import { validateAutomationRule } from "../../utils/orderAutomationValidation";
 import {
-  ORDER_AUTOMATION_CONDITION_FIELDS,
   buildConditionCategorySteps,
   buildEffectCategorySteps,
 } from "../../utils/orderAutomationCatalog";
@@ -32,17 +35,9 @@ import { AutomationCategoryPickerModal } from "../../components/orders/automatio
 import { AutomationConditionEditModal } from "../../components/orders/automation/AutomationConditionEditModal";
 import { AutomationEffectEditModal } from "../../components/orders/automation/AutomationEffectEditModal";
 import { AutomationIfThenSection } from "../../components/orders/automation/AutomationIfThenSection";
+import { AutomationRuleHistoryPanel } from "../../components/orders/automation/AutomationRuleHistoryPanel";
 import { moduleAutomationShellClass } from "../../components/layout/flatSectionTokens";
 import { ModuleListBreadcrumb } from "../../components/listPage/moduleList";
-import { IntegrationsApiPanel } from "../Settings/returnsStatusesConfigurator/AdvancedSettingsPanel";
-import {
-  moduleListRowClass,
-  moduleListTableClass,
-  moduleListTableScrollClass,
-  moduleListTdClass,
-  moduleListThClass,
-  moduleListTheadClass,
-} from "../../components/listPage/moduleList";
 import {
   oaBtn,
   oaBtnPri,
@@ -132,7 +127,7 @@ function normalizeRule(r: OrderAutomationRule): OrderAutomationRule {
     manualTrigger: migrateManualTrigger(r.manualTrigger),
     execution: executionNorm,
     conditions: conditions.map((c, i) => ({
-      ...c,
+      ...normalizeCondition(c),
       joinToNext: i < conditions.length - 1 ? (c.joinToNext ?? "and") : undefined,
     })),
     effects: effects.map(ensureEffectPayload),
@@ -162,27 +157,6 @@ function payloadForKind(kind: AutomationEffectKind): Record<string, string | num
   }
 }
 
-const LOG_ROWS = [
-  {
-    when: "2026-02-04, 14:32",
-    user: "Anna Kowalska",
-    initials: "AK",
-    event: "Utworzono akcję i ustawiono tryb: Samoczynnie",
-  },
-  {
-    when: "2026-02-03, 09:15",
-    user: "Marek Nowak",
-    initials: "MN",
-    event: "Zmieniono warunek #1: Status zamówienia → jest równe → Opłacone",
-  },
-  {
-    when: "2026-02-01, 16:48",
-    user: "System",
-    initials: "SY",
-    event: "Zapisano szablon akcji (bez publikacji)",
-  },
-];
-
 export default function OrderAutomationEditorPage() {
   const { pathname } = useLocation();
   const isInventory = pathname.includes("/orders/automation/inventory");
@@ -192,13 +166,14 @@ export default function OrderAutomationEditorPage() {
 
   const { ruleId } = useParams<{ ruleId: string }>();
   const navigate = useNavigate();
-  const { warehouse } = useWarehouse();
+  const { warehouse, warehouses } = useWarehouse();
   const wid = warehouse?.id ?? null;
-  const { hasPermission } = useAuth();
+  const { hasPermission, user } = useAuth();
   const canWrite = hasPermission("settings.automation");
 
   const store = useOrderAutomationStore(DAMAGE_TENANT_ID, wid, scope);
-  const { hydrated, reload, upsertRule, deleteRule, recordTestRun, byId } = store;
+  const { hydrated, reload, upsertRule, deleteRule, recordTestRun, byId, changeLogs, executionLogs, appendChangeLogs } =
+    store;
 
   const [draft, setDraft] = useState<OrderAutomationRule>(() => defaultRule());
   const [statusSummary, setStatusSummary] = useState<OrderUiStatusPanelSummary | null>(null);
@@ -286,22 +261,35 @@ export default function OrderAutomationEditorPage() {
   const conditionCategorySteps = useMemo(() => buildConditionCategorySteps(), []);
   const effectCategorySteps = useMemo(() => buildEffectCategorySteps(), []);
 
+  const warehouseOptions = useMemo(
+    () => warehouses.map((w) => ({ value: String(w.id), label: w.name })),
+    [warehouses],
+  );
+
+  const changeLogCtx = useMemo(
+    () => buildChangeLogContext({ statusNameById, warehouses: warehouses.map((w) => ({ id: w.id, name: w.name })) }),
+    [statusNameById, warehouses],
+  );
+
+  const userDisplayName = useMemo(() => {
+    if (!user) return "System";
+    const name = [user.first_name, user.last_name].filter(Boolean).join(" ").trim();
+    return name || user.login || "Użytkownik";
+  }, [user]);
+
   const groupPickerGroups: AutomationAnchorMenuGroup[] = useMemo(() => {
     const items: AutomationAnchorMenuGroup["items"] = groupOptions.map((g) => ({ id: g, label: g }));
     items.push({ id: "__new__", label: "+ Utwórz nową grupę" });
     return [{ id: "grp", title: "", items }];
   }, [groupOptions]);
 
-  const ops: AutomationConditionOp[] = ["eq", "neq", "contains"];
-
   const addCondition = (fieldKey: string) => {
-    const def = ORDER_AUTOMATION_CONDITION_FIELDS.find((f) => f.key === fieldKey);
     const uid = newUid("c");
     const c: AutomationCondition = {
       uid,
       fieldKey,
-      operator: def?.valueKind === "number" ? "eq" : "eq",
-      value: "",
+      operator: defaultOperatorForField(fieldKey),
+      value: [],
       joinToNext: "and",
     };
     setDraft((d) => normalizeRule({ ...d, conditions: [...d.conditions, c] }));
@@ -379,7 +367,12 @@ export default function OrderAutomationEditorPage() {
       toSave = { ...toSave, publicId: allocateRulePublicId(DAMAGE_TENANT_ID, wid, scope) };
       setDraft(toSave);
     }
+    const prevRule = isNew ? null : byId.get(draft.id) ?? null;
+    const prevNormalized = prevRule ? normalizeRule({ ...prevRule }) : null;
+    const userId = user?.id ?? 0;
+    const entries = computeRuleChangeLogEntries(prevNormalized, toSave, userId, userDisplayName, changeLogCtx);
     upsertRule(toSave);
+    if (entries.length > 0) appendChangeLogs(entries);
     setSaveAttempted(false);
     toast.success("Zapisano.");
     if (isNew) navigate(`${baseList}/${draft.id}/edit`, { replace: true });
@@ -531,6 +524,7 @@ export default function OrderAutomationEditorPage() {
           conditions={draft.conditions}
           effects={draft.effects}
           statusNameById={statusNameById}
+          warehouseOptions={warehouseOptions}
           conditionErrors={validation.conditionErrors}
           effectErrors={validation.effectErrors}
           onAddCondition={() => setAddCondPickerOpen(true)}
@@ -545,28 +539,13 @@ export default function OrderAutomationEditorPage() {
           onRemoveEffect={(uid) => setDraft((d) => ({ ...d, effects: d.effects.filter((x) => x.uid !== uid) }))}
         />
 
-        <IntegrationsApiPanel title="⋯ Historia zmian">
-          <div className={moduleListTableScrollClass}>
-            <table className={moduleListTableClass}>
-              <thead className={moduleListTheadClass}>
-                <tr>
-                  <th className={moduleListThClass}>Data i godzina</th>
-                  <th className={moduleListThClass}>Użytkownik</th>
-                  <th className={moduleListThClass}>Zdarzenie</th>
-                </tr>
-              </thead>
-              <tbody>
-                {LOG_ROWS.map((row) => (
-                  <tr key={row.when} className={moduleListRowClass}>
-                    <td className={`${moduleListTdClass} whitespace-nowrap font-medium text-slate-900`}>{row.when}</td>
-                    <td className={moduleListTdClass}>{row.user}</td>
-                    <td className={`${moduleListTdClass} text-slate-600`}>{row.event}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </IntegrationsApiPanel>
+        {!isNew ? (
+          <AutomationRuleHistoryPanel
+            ruleId={draft.id}
+            changeLogs={changeLogs}
+            executionLogs={executionLogs}
+          />
+        ) : null}
 
         <div className="flex flex-wrap items-center gap-2 border-t border-gray-200 pt-4">
           <button type="button" className={oaBtn} onClick={() => navigate(baseList)}>Anuluj</button>
@@ -606,10 +585,8 @@ export default function OrderAutomationEditorPage() {
         <AutomationConditionEditModal
           open={editCondUid !== null}
           condition={editingCondition}
-          ops={ops}
           statusNameById={statusNameById}
-          tenantId={DAMAGE_TENANT_ID}
-          warehouseId={wid}
+          warehouseOptions={warehouseOptions}
           showJoin={editingConditionIdx >= 0 && editingConditionIdx < draft.conditions.length - 1}
           joinToNext={editingCondition.joinToNext ?? "and"}
           onClose={() => setEditCondUid(null)}

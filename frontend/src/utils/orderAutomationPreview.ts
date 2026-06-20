@@ -1,15 +1,56 @@
 import type { AutomationCondition, AutomationEffect, OrderAutomationRule } from "../types/orderAutomation";
 import { ORDER_AUTOMATION_OPERATOR_LABELS, ORDER_AUTOMATION_OPERATOR_UI, conditionFieldLabel, effectKindLabel } from "./orderAutomationCatalog";
+import {
+  conditionOptionsForField,
+  resolveOptionLabels,
+  type ConditionOption,
+} from "./orderAutomationConditionOptions";
+import { isMultiValueConditionField, migrateConditionValue, normalizeCondition } from "./orderAutomationConditionUtils";
 import { formatExecutionListDisplay, migrateExecution, normalizeExecution } from "./orderAutomationExecution";
+
+export type ConditionFormatContext = {
+  statusNameById?: Map<number, string>;
+  warehouseOptions?: ConditionOption[];
+};
+
+function statusOptionsFromMap(statusNameById?: Map<number, string>): ConditionOption[] {
+  if (!statusNameById) return [];
+  return [...statusNameById.entries()].map(([id, name]) => ({ value: String(id), label: name }));
+}
+
+export function formatConditionValuesDisplay(
+  c: AutomationCondition,
+  ctx?: ConditionFormatContext,
+): string {
+  const cond = normalizeCondition(c);
+  const values = cond.value;
+  if (values.length === 0) return "—";
+
+  const options = conditionOptionsForField(cond.fieldKey, {
+    statusOptions: statusOptionsFromMap(ctx?.statusNameById),
+    warehouseOptions: ctx?.warehouseOptions ?? [],
+  });
+
+  if (options.length > 0) {
+    return resolveOptionLabels(values, options).join(", ");
+  }
+
+  if (cond.fieldKey === "order_status" && ctx?.statusNameById) {
+    return values
+      .map((v) => {
+        const id = Number(v);
+        return Number.isFinite(id) && ctx.statusNameById!.has(id) ? ctx.statusNameById!.get(id)! : v;
+      })
+      .join(", ");
+  }
+
+  return values.join(", ");
+}
 
 export function formatConditionPill(c: AutomationCondition, statusNameById?: Map<number, string>): string {
   const field = conditionFieldLabel(c.fieldKey);
   const op = ORDER_AUTOMATION_OPERATOR_UI[c.operator] ?? ORDER_AUTOMATION_OPERATOR_LABELS[c.operator] ?? c.operator;
-  let val = c.value || "—";
-  if (c.fieldKey === "order_status" && statusNameById) {
-    const id = Number(c.value);
-    if (Number.isFinite(id) && statusNameById.has(id)) val = statusNameById.get(id)!;
-  }
+  const val = formatConditionValuesDisplay(c, { statusNameById });
   return `${field} ${op} ${val}`;
 }
 
@@ -30,14 +71,11 @@ export function formatEffectPill(e: AutomationEffect, statusNameById?: Map<numbe
 export function formatConditionDisplayParts(
   c: AutomationCondition,
   statusNameById?: Map<number, string>,
+  warehouseOptions?: ConditionOption[],
 ): { field: string; op: string; value: string } {
   const field = conditionFieldLabel(c.fieldKey);
   const op = ORDER_AUTOMATION_OPERATOR_UI[c.operator] ?? ORDER_AUTOMATION_OPERATOR_LABELS[c.operator] ?? c.operator;
-  let value = c.value || "—";
-  if (c.fieldKey === "order_status" && statusNameById) {
-    const id = Number(c.value);
-    if (Number.isFinite(id) && statusNameById.has(id)) value = statusNameById.get(id)!;
-  }
+  const value = formatConditionValuesDisplay(c, { statusNameById, warehouseOptions });
   return { field, op, value };
 }
 
@@ -89,10 +127,17 @@ export function formatConditionSentence(c: AutomationCondition, statusNameById?:
 export function formatConditionListLine(
   c: AutomationCondition,
   statusNameById?: Map<number, string>,
+  warehouseOptions?: ConditionOption[],
 ): { field: string; operator: string; value: string } {
-  const parts = formatConditionDisplayParts(c, statusNameById);
+  const parts = formatConditionDisplayParts(c, statusNameById, warehouseOptions);
   const operator =
-    c.operator === "eq" ? "=" : c.operator === "neq" ? "≠" : c.operator === "contains" ? "zawiera" : parts.op;
+    c.operator === "eq"
+      ? "="
+      : c.operator === "neq"
+        ? "≠"
+        : c.operator === "contains"
+          ? "zawiera"
+          : parts.op;
   return { field: parts.field, operator, value: parts.value };
 }
 
@@ -303,12 +348,9 @@ export function primaryTriggerLabel(r: Pick<OrderAutomationRule, "execution" | "
 /** Krótki token do tabeli / chipów (np. „Status = Nowe”). */
 export function formatConditionChipShort(c: AutomationCondition, statusNameById?: Map<number, string>): string {
   const field = conditionFieldLabel(c.fieldKey);
-  let val = c.value || "—";
-  if (c.fieldKey === "order_status" && statusNameById) {
-    const id = Number(c.value);
-    if (Number.isFinite(id) && statusNameById.has(id)) val = statusNameById.get(id)!;
-  }
-  return `${field} = ${val}`;
+  const op = ORDER_AUTOMATION_OPERATOR_UI[c.operator] ?? c.operator;
+  const val = formatConditionValuesDisplay(c, { statusNameById });
+  return `${field} ${op} ${val}`;
 }
 
 export function formatEffectChipShort(e: AutomationEffect, statusNameById?: Map<number, string>): string {

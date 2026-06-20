@@ -5,7 +5,7 @@
 - Dodano lekki podział sekcji: `FlatPageSection`, `FlatColumnHeader`, `flatSectionTokens` (separator `#e5e7eb`, odstępy).
 - Zastosowano w: listach modułów (toolbar/tabela/sidebar), słownikach zwrotów, konfiguratorze statusów, edytorze układu RMZ.
 - **Dodatkowe pola zamówień** (`OrderCustomFieldsListPage`, `OrderCustomFieldEditPage`): lewy shell `moduleSettingsPageShellClass`, lista jak moduły ERP, edycja z `FlatPageSection` + `IntegrationsApiPanel` (Zaawansowane), bez szarych kart.
-- **Akcje automatyczne** — model Sellasist: JEŚLI → TO → Ustawienia wykonania; uruchamianie auto/ręczne (lub oba), bez wyzwalaczy eventów; walidacja zapisu (warunki, efekty, harmonogram); lista tabelaryczna z pełnymi warunkami/efektami i badge Uruchamianie.
+- **Akcje automatyczne** — model Sellasist: JEŚLI → TO → Ustawienia wykonania; uruchamianie auto/ręczne (lub oba), bez wyzwalaczy eventów; walidacja zapisu; lista tabelaryczna z pełnymi warunkami/efektami i badge Uruchamianie. **Warunki multi-value** (status, źródło, przewoźnik, płatność, magazyn, tagi, kategorie): `value: string[]`, operatory `in`/`not_in`, multiselect z wyszukiwaniem. **Historia:** osobno zmian konfiguracji (diff before/after) i wykonań na zamówieniach — zakładki w edytorze; moduł `/orders/automation/logs` = tylko wykonania.
 
 ## Bundle STOCK B1 — UX Simplification (2026-06-08) — CLOSED
 - **Raport:** `memory/bundle-stock-b1-ux-simplification-report.md`

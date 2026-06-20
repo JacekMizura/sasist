@@ -22,14 +22,16 @@ export function isScheduleWindowValid(
 }
 
 export function validateCondition(c: AutomationCondition): string | null {
-  if (!String(c.value ?? "").trim()) {
+  const values = Array.isArray(c.value) ? c.value : [];
+  if (values.length === 0 || !values.some((v) => String(v).trim())) {
     return "Brak wybranej wartości";
   }
   if (c.fieldKey === "order_status") {
-    const id = Number(c.value);
-    if (!Number.isFinite(id) || id <= 0) {
-      return "Brak wybranej wartości";
-    }
+    const ok = values.some((v) => {
+      const id = Number(v);
+      return Number.isFinite(id) && id > 0;
+    });
+    if (!ok) return "Brak wybranej wartości";
   }
   return null;
 }

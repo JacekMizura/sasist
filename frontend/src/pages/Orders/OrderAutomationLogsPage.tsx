@@ -106,7 +106,7 @@ export default function OrderAutomationLogsPage() {
           {ruleIdFilter ? (
             <div className="flex flex-wrap items-center gap-2">
               <p className="text-sm text-slate-700">
-                Dziennik dla: <span className="font-semibold text-slate-900">{filterLabel}</span>
+                Historia wykonań dla: <span className="font-semibold text-slate-900">{filterLabel}</span>
               </p>
               <button type="button" className={`${oaBtn} h-8 gap-1.5 px-2.5 text-xs`} onClick={clearRuleFilter}>
                 <X className="h-3.5 w-3.5" strokeWidth={2} />
@@ -114,7 +114,7 @@ export default function OrderAutomationLogsPage() {
               </button>
             </div>
           ) : (
-            <p className="text-sm text-slate-500">Ostatnie uruchomienia i testy (do 500 wpisów) · {filtered.length} wpisów</p>
+            <p className="text-sm text-slate-500">Uruchomienia automatyczne i ręczne oraz testy (do 500 wpisów) · {filtered.length} wpisów</p>
           )}
         </div>
         {!ruleIdFilter ? (
@@ -122,7 +122,7 @@ export default function OrderAutomationLogsPage() {
             type="button"
             className={`${oaBtnDanger} gap-2`}
             onClick={() => {
-              if (!window.confirm("Wyczyścić cały dziennik dla tego magazynu?")) return;
+              if (!window.confirm("Wyczyścić całą historię wykonań dla tego magazynu?")) return;
               clearLogs();
             }}
           >

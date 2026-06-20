@@ -5,7 +5,7 @@ import { ModuleListBreadcrumb } from "../../components/listPage/moduleList";
 import { TabsNav } from "../../components/layout/TabsNav";
 
 const AUTOMATION_TABS = [
-  { path: "/orders/automation/logs", label: "Dziennik zdarzeń", end: true as const },
+  { path: "/orders/automation/logs", label: "Historia wykonań", end: true as const },
   { path: "/orders/automation/inventory", label: "Akcje dla asortymentu", end: false as const },
   { path: "/orders/automation/orders", label: "Akcje dla zamówień", end: false as const },
   { path: "/orders/automation/groups", label: "Grupy akcji", end: true as const },
