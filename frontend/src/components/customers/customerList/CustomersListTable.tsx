@@ -6,8 +6,13 @@ import type { CustomerListRow } from "../../../api/customersApi";
 import { countryLabel } from "../../../constants/countryCodes";
 import { customerTypeLabel, salesChannelLabel } from "../../../modules/customers/customerProfile";
 import {
+  CUSTOMER_LIST_COLUMN_WIDTH,
+  customerListColumnLabel,
+} from "./customerListColumnCatalog";
+import {
   customerListCellOrDash,
   customerListClientLines,
+  customerListExtendedColumnText,
 } from "./customerListCellPresentation";
 import {
   customersListActionsCellClass,
@@ -24,10 +29,10 @@ import {
 
 export type CustomersListTableProps = {
   rows: CustomerListRow[];
+  columnOrder: string[];
   selected: Set<number>;
   deleteBusy: boolean;
   allPageSelected: boolean;
-  somePageSelected: boolean;
   headerSelectAllRef: RefObject<HTMLInputElement | null>;
   onToggleOne: (id: number) => void;
   onToggleAllPage: () => void;
@@ -59,12 +64,97 @@ function CustomerTypeBadges({ row }: { row: CustomerListRow }) {
   );
 }
 
+function CustomerListDataCell({
+  row,
+  columnId,
+}: {
+  row: CustomerListRow;
+  columnId: string;
+}) {
+  const client = customerListClientLines(row);
+  const email = row.email?.trim() ?? "";
+
+  switch (columnId) {
+    case "id":
+      return (
+        <div className={customersListRowInnerClass}>
+          <span className="font-mono text-sm font-semibold tabular-nums text-slate-600">{row.id}</span>
+        </div>
+      );
+    case "client":
+      return (
+        <div className={`${customersListRowInnerClass} min-w-0 flex-col !items-start justify-center gap-0.5 py-2`}>
+          <Link
+            to={`/customers/${row.id}`}
+            className="block max-w-full truncate text-base font-semibold text-slate-900 hover:underline"
+            title={client.primary}
+          >
+            {client.primary}
+          </Link>
+          {client.secondary ? (
+            <p className="max-w-full truncate text-sm text-slate-500" title={client.secondary}>
+              {client.secondary}
+            </p>
+          ) : null}
+        </div>
+      );
+    case "customer_type":
+      return (
+        <div className={customersListRowInnerClass}>
+          <CustomerTypeBadges row={row} />
+        </div>
+      );
+    case "sales_channel":
+      return (
+        <div className={`${customersListRowInnerClass} text-slate-700`}>
+          {salesChannelLabel(row.sales_channel)}
+        </div>
+      );
+    case "email":
+      return (
+        <div className={customersListRowInnerClass}>
+          {email ? (
+            <span className="block max-w-full truncate" title={email}>
+              {email}
+            </span>
+          ) : (
+            <span className="text-slate-400">—</span>
+          )}
+        </div>
+      );
+    case "phone":
+      return (
+        <div className={`${customersListRowInnerClass} text-slate-700`}>
+          {customerListCellOrDash(row.phone)}
+        </div>
+      );
+    case "nip":
+      return (
+        <div className={`${customersListRowInnerClass} text-slate-700`}>
+          {customerListCellOrDash(row.nip)}
+        </div>
+      );
+    case "country":
+      return (
+        <div className={`${customersListRowInnerClass} text-slate-700`}>
+          {countryLabel(row.country_code)}
+        </div>
+      );
+    default:
+      return (
+        <div className={`${customersListRowInnerClass} tabular-nums text-slate-700`}>
+          {customerListExtendedColumnText(row, columnId)}
+        </div>
+      );
+  }
+}
+
 export function CustomersListTable({
   rows,
+  columnOrder,
   selected,
   deleteBusy,
   allPageSelected,
-  somePageSelected,
   headerSelectAllRef,
   onToggleOne,
   onToggleAllPage,
@@ -75,13 +165,9 @@ export function CustomersListTable({
       <table className={customersListTableClass}>
         <colgroup>
           <col className="w-10" />
-          <col style={{ width: "22%" }} />
-          <col style={{ width: "12%" }} />
-          <col style={{ width: "14%" }} />
-          <col style={{ width: "16%" }} />
-          <col style={{ width: "11%" }} />
-          <col style={{ width: "11%" }} />
-          <col style={{ width: "8%" }} />
+          {columnOrder.map((colId) => (
+            <col key={colId} style={{ width: CUSTOMER_LIST_COLUMN_WIDTH[colId] ?? "auto" }} />
+          ))}
           <col style={{ width: customersListActionsColWidth }} />
         </colgroup>
         <thead>
@@ -99,13 +185,11 @@ export function CustomersListTable({
                 />
               </label>
             </th>
-            <th className={customersListThClass}>Klient</th>
-            <th className={customersListThClass}>Typ</th>
-            <th className={customersListThClass}>Kanał</th>
-            <th className={customersListThClass}>E-mail</th>
-            <th className={customersListThClass}>Telefon</th>
-            <th className={customersListThClass}>NIP</th>
-            <th className={customersListThClass}>Kraj</th>
+            {columnOrder.map((colId) => (
+              <th key={colId} className={customersListThClass}>
+                {customerListColumnLabel(colId)}
+              </th>
+            ))}
             <th className={customersListThClass} style={{ width: customersListActionsColWidth }}>
               Akcje
             </th>
@@ -114,7 +198,6 @@ export function CustomersListTable({
         <tbody>
           {rows.map((r) => {
             const client = customerListClientLines(r);
-            const email = r.email?.trim() ?? "";
             const isSelected = selected.has(r.id);
 
             return (
@@ -136,50 +219,11 @@ export function CustomersListTable({
                     </label>
                   </div>
                 </td>
-                <td className={customersListTdClass}>
-                  <div className={`${customersListRowInnerClass} min-w-0 flex-col !items-start justify-center gap-0.5 py-2`}>
-                    <Link
-                      to={`/customers/${r.id}`}
-                      className="block max-w-full truncate text-base font-semibold text-slate-900 hover:underline"
-                      title={client.primary}
-                    >
-                      {client.primary}
-                    </Link>
-                    {client.secondary ? (
-                      <p className="max-w-full truncate text-sm text-slate-500" title={client.secondary}>
-                        {client.secondary}
-                      </p>
-                    ) : null}
-                  </div>
-                </td>
-                <td className={customersListTdClass}>
-                  <div className={customersListRowInnerClass}>
-                    <CustomerTypeBadges row={r} />
-                  </div>
-                </td>
-                <td className={`${customersListTdClass} text-slate-700`}>
-                  <div className={customersListRowInnerClass}>{salesChannelLabel(r.sales_channel)}</div>
-                </td>
-                <td className={`${customersListTdClass} text-slate-700`}>
-                  <div className={customersListRowInnerClass}>
-                    {email ? (
-                      <span className="block max-w-full truncate" title={email}>
-                        {email}
-                      </span>
-                    ) : (
-                      <span className="text-slate-400">—</span>
-                    )}
-                  </div>
-                </td>
-                <td className={`${customersListTdClass} text-slate-700`}>
-                  <div className={customersListRowInnerClass}>{customerListCellOrDash(r.phone)}</div>
-                </td>
-                <td className={`${customersListTdClass} text-slate-700`}>
-                  <div className={customersListRowInnerClass}>{customerListCellOrDash(r.nip)}</div>
-                </td>
-                <td className={`${customersListTdClass} text-slate-700`}>
-                  <div className={customersListRowInnerClass}>{countryLabel(r.country_code)}</div>
-                </td>
+                {columnOrder.map((colId) => (
+                  <td key={colId} className={customersListTdClass}>
+                    <CustomerListDataCell row={r} columnId={colId} />
+                  </td>
+                ))}
                 <td className={customersListActionsCellClass} style={{ width: customersListActionsColWidth }}>
                   <div className={customersListActionsInnerClass}>
                     <Link

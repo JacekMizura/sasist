@@ -14,6 +14,12 @@ type FilterVisibilityModalProps = {
   selectedOrder: string[];
   onSave: (nextOrder: string[]) => void;
   catalog: readonly FilterFieldCatalogItem[];
+  /** Nagłówek lewej kolumny — domyślnie „Wybrane”. */
+  selectedColumnLabel?: string;
+  /** Nagłówek prawej kolumny — domyślnie „Dostępne”. */
+  availableColumnLabel?: string;
+  /** Domyślna kolejność — przycisk „Przywróć domyślny układ”. */
+  defaultVisibleOrder?: readonly string[];
 };
 
 function labelFor(catalog: readonly FilterFieldCatalogItem[], id: string): string {
@@ -27,8 +33,10 @@ export function FilterVisibilityModal({
   selectedOrder,
   onSave,
   catalog,
+  selectedColumnLabel = "Wybrane",
+  availableColumnLabel = "Dostępne",
+  defaultVisibleOrder,
 }: FilterVisibilityModalProps) {
-  console.log("[CMP] VisibleFiltersSelector", { open, catalogLen: catalog.length });
   const catalogIds = useMemo(() => catalog.map((c) => c.id), [catalog]);
   const [left, setLeft] = useState<string[]>(selectedOrder);
 
@@ -87,6 +95,12 @@ export function FilterVisibilityModal({
     onClose();
   };
 
+  const handleRestoreDefault = () => {
+    if (!defaultVisibleOrder?.length) return;
+    const valid = new Set(catalogIds);
+    setLeft(defaultVisibleOrder.filter((id) => valid.has(id)));
+  };
+
   if (!open) return null;
 
   return createPortal(
@@ -115,7 +129,7 @@ export function FilterVisibilityModal({
         <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-hidden p-5 md:grid-cols-2">
           <div className="flex min-h-0 flex-col rounded-lg border border-slate-200 bg-slate-50/50">
             <div className="border-b border-slate-200 bg-white px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Wybrane ({left.length})
+              {selectedColumnLabel} ({left.length})
             </div>
             <ul className="min-h-[200px] flex-1 space-y-1 overflow-y-auto p-2">
               {left.length === 0 ? (
@@ -170,7 +184,7 @@ export function FilterVisibilityModal({
           </div>
           <div className="flex min-h-0 flex-col rounded-lg border border-slate-200 bg-slate-50/50">
             <div className="border-b border-slate-200 bg-white px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Dostępne ({right.length})
+              {availableColumnLabel} ({right.length})
             </div>
             <ul className="min-h-[200px] flex-1 space-y-1 overflow-y-auto p-2">
               {right.length === 0 ? (
@@ -196,13 +210,22 @@ export function FilterVisibilityModal({
             </ul>
           </div>
         </div>
-        <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 px-5 py-4">
-          <button type="button" onClick={onClose} className={filterToolbarBtnSecondary}>
-            Anuluj
-          </button>
-          <button type="button" onClick={handleSave} className={filterToolbarBtnPrimary}>
-            Zapisz
-          </button>
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 px-5 py-4">
+          {defaultVisibleOrder?.length ? (
+            <button type="button" onClick={handleRestoreDefault} className={filterToolbarBtnSecondary}>
+              Przywróć domyślny układ
+            </button>
+          ) : (
+            <span aria-hidden />
+          )}
+          <div className="ml-auto flex flex-wrap justify-end gap-2">
+            <button type="button" onClick={onClose} className={filterToolbarBtnSecondary}>
+              Anuluj
+            </button>
+            <button type="button" onClick={handleSave} className={filterToolbarBtnPrimary}>
+              Zapisz
+            </button>
+          </div>
         </div>
       </div>
     </div>,

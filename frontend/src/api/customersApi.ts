@@ -47,6 +47,12 @@ export type CustomerListRow = {
   flags?: CustomerFlags;
   order_count?: number;
   total_gross?: number;
+  /** Opcjonalne — gdy backend rozszerzy listę. */
+  created_at?: string | null;
+  last_order_at?: string | null;
+  total_net?: number | null;
+  returns_count?: number | null;
+  global_discount_percent?: number | null;
 };
 
 export type CustomerDetail = {

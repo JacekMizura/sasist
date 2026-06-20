@@ -1,6 +1,7 @@
 /** localStorage keys — per browser profile (extend with user id when auth exists). */
 export const ORDERS_COLUMNS_LAYOUT_KEY = "orders_columns_layout";
 export const PRODUCTS_COLUMNS_LAYOUT_KEY = "products_columns_layout";
+export const CUSTOMERS_LIST_COLUMNS_LAYOUT_KEY = "customers_list_columns_layout";
 
 export type ColumnLayoutFileV1 = {
   v: 1;

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { ChevronDown, Columns3, Download } from "lucide-react";
+import { ChevronDown, Columns3, Download, TableProperties } from "lucide-react";
 
 import PageLayout from "../../components/layout/PageLayout";
 import { PageHeader } from "../../components/layout/PageHeader";
@@ -8,6 +8,12 @@ import { PanelBulkStatusConfirmModal } from "../../components/orders/panelList/P
 import { deleteCustomer, listCustomers, postCustomersBulkDelete, type CustomerListRow } from "../../api/customersApi";
 import { CustomerListFiltersPanel } from "../../components/customers/customerList/CustomerListFiltersPanel";
 import { CustomersListTable } from "../../components/customers/customerList/CustomersListTable";
+import {
+  CUSTOMER_LIST_COLUMN_CATALOG,
+  CUSTOMER_LIST_DEFAULT_COLUMN_ORDER,
+} from "../../components/customers/customerList/customerListColumnCatalog";
+import { useCustomerListColumnOrder } from "../../components/customers/customerList/useCustomerListColumnOrder";
+import { FilterVisibilityModal } from "../../components/filters";
 import {
   DEFAULT_APPLIED_CUSTOMER_LIST_FILTERS,
   triStateToBool,
@@ -49,10 +55,12 @@ export default function CustomersListPage() {
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
+  const [columnPickerOpen, setColumnPickerOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState<number>(25);
   const headerSelectAllRef = useRef<HTMLInputElement>(null);
   const openFilterFieldsRef = useRef<(() => void) | null>(null);
+  const { columnOrder, persistColumnOrder } = useCustomerListColumnOrder();
 
   const appliedFiltersKey = useMemo(() => JSON.stringify(appliedFilters), [appliedFilters]);
 
@@ -247,6 +255,15 @@ export default function CustomersListPage() {
               </button>
               <button
                 type="button"
+                onClick={() => setColumnPickerOpen(true)}
+                className={listSellasistToolbarSquareBtn}
+                title="Kolumny tabeli"
+                aria-label="Kolumny tabeli"
+              >
+                <TableProperties className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
+              </button>
+              <button
+                type="button"
                 onClick={() => openFilterFieldsRef.current?.()}
                 className={listSellasistToolbarSquareBtn}
                 title="Widoczne pola filtrów"
@@ -355,10 +372,10 @@ export default function CustomersListPage() {
             <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
               <CustomersListTable
                 rows={paginatedRows}
+                columnOrder={columnOrder}
                 selected={selected}
                 deleteBusy={deleteBusy}
                 allPageSelected={allPageSelected}
-                somePageSelected={somePageSelected}
                 headerSelectAllRef={headerSelectAllRef}
                 onToggleOne={toggleOne}
                 onToggleAllPage={toggleAllPage}
@@ -430,6 +447,18 @@ export default function CustomersListPage() {
           </div>
         )}
       </PageLayout>
+
+      <FilterVisibilityModal
+        open={columnPickerOpen}
+        onClose={() => setColumnPickerOpen(false)}
+        title="Kolumny listy klientów"
+        selectedColumnLabel="Widoczne"
+        availableColumnLabel="Dostępne"
+        selectedOrder={columnOrder}
+        catalog={CUSTOMER_LIST_COLUMN_CATALOG}
+        defaultVisibleOrder={CUSTOMER_LIST_DEFAULT_COLUMN_ORDER}
+        onSave={persistColumnOrder}
+      />
 
       <ExportModal
         open={exportOpen}
