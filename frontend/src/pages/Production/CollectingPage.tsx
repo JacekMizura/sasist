@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { Check, ClipboardList, MapPin, ScanLine } from "lucide-react";
+import { AlertTriangle, Check, ClipboardList, MapPin, ScanLine } from "lucide-react";
+import toast from "react-hot-toast";
 import { useWarehouse } from "../../context/WarehouseContext";
 import {
   fetchCollectionState,
@@ -20,6 +21,7 @@ import { WmsProductionTerminalEmptyState } from "./WmsProductionTerminalEmptySta
 import { WmsProductionBatchQueueCard } from "./components/WmsProductionBatchQueueCard";
 import { WmsProductionActiveBatchBar } from "./components/WmsProductionActiveBatchBar";
 import { WMS_TASK_GRID, WMS_TERMINAL_LABEL } from "../../components/wms/execution/wmsLayoutTokens";
+import { START_COLLECTING_BLOCKED_TOOLTIP, formatStartCollectingError } from "./productionUi";
 
 const DEFAULT_TENANT = 1;
 
@@ -70,8 +72,17 @@ export default function CollectingPage() {
 
   const openBatch = async (b: ProductionBatchRead) => {
     if (warehouseId == null) return;
+    if (b.status === "planned" && b.has_shortages) {
+      toast.error(START_COLLECTING_BLOCKED_TOOLTIP);
+      return;
+    }
     if (b.status === "planned") {
-      await startCollectingBatch(tenantId, b.id, warehouseId);
+      try {
+        await startCollectingBatch(tenantId, b.id, warehouseId);
+      } catch (e: unknown) {
+        toast.error(formatStartCollectingError(e));
+        return;
+      }
     }
     setActiveBatchId(b.id);
     navigate(wmsProductionPaths.collecting(b.id));
@@ -125,20 +136,33 @@ export default function CollectingPage() {
             />
           ) : (
             <div className={WMS_TASK_GRID}>
-              {queue.map((b) => (
-                <WmsProductionBatchQueueCard
-                  key={b.id}
-                  label="Partia"
-                  number={b.number}
-                  productLine={b.lines?.[0]?.product_name ?? `${b.products_count ?? 0} produktów`}
-                  quantity={b.total_planned_units ?? 0}
-                  accent="amber"
-                  statusBadge={
-                    <span className={batchStatusBadgeClass(b.status)}>{BATCH_STATUS_LABEL[b.status]}</span>
-                  }
-                  onClick={() => void openBatch(b)}
-                />
-              ))}
+              {queue.map((b) => {
+                const blocked = b.status === "planned" && Boolean(b.has_shortages);
+                return (
+                  <WmsProductionBatchQueueCard
+                    key={b.id}
+                    label="Partia"
+                    number={b.number}
+                    productLine={b.lines?.[0]?.product_name ?? `${b.products_count ?? 0} produktów`}
+                    quantity={b.total_planned_units ?? 0}
+                    accent="amber"
+                    disabled={blocked}
+                    disabledTitle={blocked ? START_COLLECTING_BLOCKED_TOOLTIP : undefined}
+                    statusBadge={
+                      <>
+                        <span className={batchStatusBadgeClass(b.status)}>{BATCH_STATUS_LABEL[b.status]}</span>
+                        {blocked ? (
+                          <span className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-amber-900">
+                            <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
+                            Braki materiałów
+                          </span>
+                        ) : null}
+                      </>
+                    }
+                    onClick={() => void openBatch(b)}
+                  />
+                );
+              })}
             </div>
           )}
         </div>

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Play, ScanLine, Package } from "lucide-react";
+import toast from "react-hot-toast";
 import { useWarehouse } from "../../context/WarehouseContext";
 import {
   cancelProductionBatch,
@@ -10,7 +11,15 @@ import {
   type ProductionBatchPickPlanRead,
   type ProductionBatchRead,
 } from "../../api/productionApi";
-import { BATCH_STATUS_LABEL, batchStatusBadgeClass, stockTone, STOCK_TONE_CLASS } from "./productionUi";
+import {
+  BATCH_STATUS_LABEL,
+  START_COLLECTING_BLOCKED_TOOLTIP,
+  batchHasMaterialShortages,
+  batchStatusBadgeClass,
+  formatStartCollectingError,
+  stockTone,
+  STOCK_TONE_CLASS,
+} from "./productionUi";
 import { ProductThumb } from "./components/ProductThumb";
 import { ProgressBar } from "./components/ProgressBar";
 import { erpProductionPaths, wmsProductionPaths } from "./productionPaths";
@@ -43,11 +52,14 @@ export default function BatchDetailPage() {
   }, [load]);
 
   const startCollecting = async () => {
-    if (!batchId || warehouseId == null) return;
+    if (!batchId || warehouseId == null || !batch) return;
+    if (batchHasMaterialShortages(batch, plan)) return;
     setBusy(true);
     try {
       await startCollectingBatch(tenantId, Number(batchId), warehouseId);
       navigate(wmsProductionPaths.collecting(batchId));
+    } catch (e: unknown) {
+      toast.error(formatStartCollectingError(e));
     } finally {
       setBusy(false);
     }
@@ -60,6 +72,8 @@ export default function BatchDetailPage() {
   };
 
   if (!batch) return <p className="px-4 py-6 text-sm text-slate-500">Wczytywanie…</p>;
+
+  const collectingBlocked = batchHasMaterialShortages(batch, plan);
 
   return (
     <div className="px-4 py-6 lg:px-6 space-y-8 max-w-6xl">
@@ -79,15 +93,17 @@ export default function BatchDetailPage() {
           </div>
           <div className="flex flex-wrap gap-2">
             {(batch.status === "draft" || batch.status === "planned") && (
-              <button
-                type="button"
-                disabled={busy || plan?.has_shortages}
-                onClick={() => void startCollecting()}
-                className="inline-flex items-center gap-2 rounded-xl bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
-              >
-                <ScanLine className="h-4 w-4" aria-hidden />
-                Rozpocznij zbieranie
-              </button>
+              <span className="inline-flex" title={collectingBlocked ? START_COLLECTING_BLOCKED_TOOLTIP : undefined}>
+                <button
+                  type="button"
+                  disabled={busy || collectingBlocked}
+                  onClick={() => void startCollecting()}
+                  className="inline-flex items-center gap-2 rounded-xl bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <ScanLine className="h-4 w-4" aria-hidden />
+                  Rozpocznij zbieranie
+                </button>
+              </span>
             )}
             {batch.status === "collecting" && (
               <Link

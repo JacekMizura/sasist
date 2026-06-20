@@ -1,4 +1,5 @@
-import type { ProductionBatchStatus, ProductionOrderStatus } from "../../api/productionApi";
+import type { ProductionBatchStatus, ProductionOrderStatus, StockShortageRead } from "../../api/productionApi";
+import { formatApiError } from "../../utils/apiErrorMessage";
 import {
   operationalBadgeBase,
   operationalBadgeDangerClass,
@@ -165,4 +166,56 @@ export function rememberTargetLocation(warehouseId: number, locationId: number):
   } catch {
     /* ignore */
   }
+}
+
+export const START_COLLECTING_BLOCKED_TOOLTIP =
+  "Braki materiałów — uzupełnij stan magazynowy składników przed rozpoczęciem kompletacji.";
+
+export function batchHasMaterialShortages(
+  batch: { has_shortages?: boolean },
+  pickPlan?: { has_shortages?: boolean } | null,
+): boolean {
+  return Boolean(batch.has_shortages || pickPlan?.has_shortages);
+}
+
+type InsufficientStockDetail = {
+  message?: string;
+  shortages?: StockShortageRead[];
+};
+
+export function parseInsufficientStockDetail(e: unknown): InsufficientStockDetail | null {
+  if (!e || typeof e !== "object" || !("response" in e)) return null;
+  const status = (e as { response?: { status?: number } }).response?.status;
+  if (status !== 409) return null;
+  const detail = (e as { response?: { data?: { detail?: unknown } } }).response?.data?.detail;
+  if (!detail || typeof detail !== "object") return null;
+  const d = detail as Record<string, unknown>;
+  const shortages = Array.isArray(d.shortages)
+    ? (d.shortages as StockShortageRead[]).filter(
+        (s) => s && typeof s.product_name === "string" && typeof s.missing === "number",
+      )
+    : undefined;
+  return {
+    message: typeof d.message === "string" && d.message.trim() ? d.message.trim() : undefined,
+    shortages: shortages?.length ? shortages : undefined,
+  };
+}
+
+export function formatStockShortagesSummary(shortages: StockShortageRead[], maxItems = 4): string {
+  const parts = shortages.slice(0, maxItems).map((s) => `${s.product_name} (brakuje ${s.missing})`);
+  if (shortages.length > maxItems) parts.push(`+${shortages.length - maxItems} kolejnych`);
+  return parts.join(", ");
+}
+
+/** Komunikat toast dla POST start-collecting (409 + lista braków). */
+export function formatStartCollectingError(e: unknown): string {
+  const detail = parseInsufficientStockDetail(e);
+  if (detail) {
+    const base = detail.message ?? "Niewystarczający stan magazynowy składników.";
+    if (detail.shortages?.length) {
+      return `${base} ${formatStockShortagesSummary(detail.shortages)}`;
+    }
+    return base;
+  }
+  return formatApiError(e);
 }

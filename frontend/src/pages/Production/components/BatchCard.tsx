@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { AlertTriangle, ArrowRight, Calendar, Play, ScanLine } from "lucide-react";
 import type { ProductionBatchRead, ProductionBatchSummaryRead } from "../../../api/productionApi";
-import { BATCH_STATUS_LABEL, batchStatusBadgeClass } from "../productionUi";
+import { BATCH_STATUS_LABEL, START_COLLECTING_BLOCKED_TOOLTIP, batchStatusBadgeClass } from "../productionUi";
 import { priorityLabel, priorityStripe } from "../productionTheme";
 import { erpProductionPaths, wmsProductionPaths } from "../productionPaths";
 import { OperatorAvatar } from "./OperatorAvatar";
@@ -59,7 +59,10 @@ export function BatchCard({ batch, showActions = true, onStartCollecting, onCont
     if (["collecting", "in_progress", "putaway"].includes(status)) {
       return { label: "Kontynuuj realizację", href: continueHref(), action: "continue" as const };
     }
-    if ((status === "draft" || status === "planned") && !batch.has_shortages && onStartCollecting) {
+    if ((status === "draft" || status === "planned") && batch.has_shortages) {
+      return { label: "Rozpocznij zbieranie", href: null, action: "collect-blocked" as const };
+    }
+    if ((status === "draft" || status === "planned") && onStartCollecting) {
       return { label: "Rozpocznij zbieranie", href: null, action: "collect" as const };
     }
     return { label: "Otwórz partię", href: erpProductionPaths.batch(batch.id), action: "open" as const };
@@ -168,6 +171,17 @@ export function BatchCard({ batch, showActions = true, onStartCollecting, onCont
                 <ScanLine className="h-4 w-4" aria-hidden />
                 {cta.label}
               </button>
+            ) : cta.action === "collect-blocked" ? (
+              <span className="block w-full" title={START_COLLECTING_BLOCKED_TOOLTIP}>
+                <button
+                  type="button"
+                  disabled
+                  className="flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500/50 to-orange-500/50 px-4 py-2.5 text-sm font-bold text-white opacity-70"
+                >
+                  <ScanLine className="h-4 w-4" aria-hidden />
+                  {cta.label}
+                </button>
+              </span>
             ) : (
               <Link
                 to={cta.href ?? erpProductionPaths.batch(batch.id)}

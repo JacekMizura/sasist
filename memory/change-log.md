@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-06-08 — Produkcja: obsługa 409 przy start-collecting
+
+- Wspólne helpery w `productionUi.ts`: `formatStartCollectingError`, `batchHasMaterialShortages`, lista braków w toaście
+- `BatchDetailPage` + `CollectingPage`: try/catch → `toast.error` (bez uncaught AxiosError)
+- Blokada UX: przycisk/karta zablokowane gdy `has_shortages` (tooltip `START_COLLECTING_BLOCKED_TOOLTIP`)
+
 ## 2026-06-08 — Ustawienia → Firma: redesign UX (design system)
 
 - Moduł `companySettings`: layout full-width, `TabsNav` (pomarańczowa linia), trasy `/settings/company/*`

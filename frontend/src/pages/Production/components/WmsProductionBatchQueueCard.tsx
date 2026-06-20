@@ -18,6 +18,8 @@ type Props = {
   quantity?: number | string;
   statusBadge?: ReactNode;
   accent?: Accent;
+  disabled?: boolean;
+  disabledTitle?: string;
   onClick: () => void;
 };
 
@@ -28,10 +30,18 @@ export function WmsProductionBatchQueueCard({
   quantity,
   statusBadge,
   accent = "amber",
+  disabled = false,
+  disabledTitle,
   onClick,
 }: Props) {
   return (
-    <button type="button" onClick={onClick} className={WMS_TASK_CARD}>
+    <button
+      type="button"
+      disabled={disabled}
+      title={disabled ? disabledTitle : undefined}
+      onClick={onClick}
+      className={`${WMS_TASK_CARD} ${disabled ? "cursor-not-allowed opacity-60" : ""}`}
+    >
       <div className={`absolute bottom-0 left-0 top-0 w-1 ${ACCENT_STRIP[accent]}`} aria-hidden />
       <div className="flex flex-1 flex-col pl-2">
         <div className="mb-4 flex items-start justify-between gap-3">
