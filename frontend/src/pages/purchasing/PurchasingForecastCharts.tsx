@@ -12,15 +12,18 @@ import {
 
 import type { PurchasingForecastPayload } from "../../api/purchasingForecastApi";
 import { PurchasingAnalysisSection } from "../../modules/purchasing/ui";
-
-type BarRow = { name: string; qty: number; product_id: number };
+import {
+  PurchasingForecastBarTooltip,
+  type PurchasingForecastBarRow,
+} from "./PurchasingForecastBarTooltip";
 
 type Props = {
   data: PurchasingForecastPayload;
   rangeDays: 30 | 90 | 365;
-  barData: BarRow[];
+  barData: PurchasingForecastBarRow[];
   fmtShortDate: (iso: string) => string;
   onSelectProduct: (id: number) => void;
+  onHoverProduct?: (id: number) => void;
 };
 
 /** Wykresy prognozy — osobny chunk (recharts), ładowany po wejściu na zakładkę. */
@@ -30,6 +33,7 @@ export default function PurchasingForecastCharts({
   barData,
   fmtShortDate,
   onSelectProduct,
+  onHoverProduct,
 }: Props) {
   const s = data.summary;
 
@@ -60,7 +64,10 @@ export default function PurchasingForecastCharts({
         </div>
       </PurchasingAnalysisSection>
 
-      <PurchasingAnalysisSection title="Top rotacja (30 dni)" subtitle="Kliknij słupek, aby wczytać produkt w inspektorze.">
+      <PurchasingAnalysisSection
+        title="Top rotacja (30 dni)"
+        subtitle="Kliknij słupek, aby otworzyć inspektor produktu po prawej stronie."
+      >
         <div className="h-[240px] w-full min-w-0">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={barData} layout="vertical" margin={{ top: 4, right: 16, left: 4, bottom: 4 }}>
@@ -74,18 +81,20 @@ export default function PurchasingForecastCharts({
                 tickFormatter={(value: string) => (value.length > 18 ? `${value.slice(0, 16)}…` : value)}
               />
               <Tooltip
-                formatter={(v: number) => [v.toLocaleString("pl-PL"), "Szt. (30 dni)"]}
-                labelFormatter={(label) => {
-                  const row = barData.find((d) => d.name === label);
-                  return row ? `#${row.product_id} ${label}` : String(label);
-                }}
+                cursor={{ fill: "rgba(248, 250, 252, 0.8)" }}
+                content={(props) => <PurchasingForecastBarTooltip {...props} rows={barData} />}
               />
               <Bar
                 dataKey="qty"
                 fill="#334155"
                 radius={[0, 4, 4, 0]}
+                className="cursor-pointer"
+                onMouseEnter={(state) => {
+                  const row = state?.payload as PurchasingForecastBarRow | undefined;
+                  if (row?.product_id && onHoverProduct) onHoverProduct(row.product_id);
+                }}
                 onClick={(state) => {
-                  const row = state?.payload as { product_id?: number } | undefined;
+                  const row = state?.payload as PurchasingForecastBarRow | undefined;
                   if (row?.product_id) onSelectProduct(row.product_id);
                 }}
               />
@@ -96,3 +105,5 @@ export default function PurchasingForecastCharts({
     </>
   );
 }
+
+export type { PurchasingForecastBarRow };

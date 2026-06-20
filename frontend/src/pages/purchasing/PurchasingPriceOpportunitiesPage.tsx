@@ -23,6 +23,8 @@ import {
   PurchasingKpiGrid,
   PurchasingPageHeader,
   PurchasingPageShell,
+  PurchasingProductCell,
+  PurchasingProductThumbnail,
   PurchasingQuickActions,
   PurchasingTableHeader,
   PurchasingTableSection,
@@ -397,7 +399,9 @@ export default function PurchasingPriceOpportunitiesPage() {
                       {TYP_ETYK[r.type]}
                     </span>
                   </td>
-                  <td className="px-3 py-2 font-medium text-slate-900">{r.product_name}</td>
+                  <td className="px-3 py-2">
+                    <PurchasingProductCell name={r.product_name} />
+                  </td>
                   <td className="max-w-[180px] truncate px-3 py-2 text-slate-700" title={r.supplier_name}>
                     {r.supplier_name}
                   </td>
@@ -466,10 +470,13 @@ export default function PurchasingPriceOpportunitiesPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="sticky top-0 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
-              <div>
-                <p className="text-xs font-semibold uppercase text-slate-500">Szczegóły</p>
-                <p className="text-lg font-semibold text-slate-900">{drawerRow.product_name}</p>
-                <p className="text-sm text-slate-600">{TYP_ETYK[drawerRow.type]}</p>
+              <div className="flex min-w-0 items-start gap-3">
+                <PurchasingProductThumbnail size="md" name={drawerRow.product_name} hoverPreview={false} />
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold uppercase text-slate-500">Szczegóły</p>
+                  <p className="truncate text-lg font-semibold text-slate-900">{drawerRow.product_name}</p>
+                  <p className="text-sm text-slate-600">{TYP_ETYK[drawerRow.type]}</p>
+                </div>
               </div>
               <button
                 type="button"

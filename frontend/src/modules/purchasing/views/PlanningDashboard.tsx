@@ -14,6 +14,7 @@ import {
   PurchasingKpiGrid,
   PurchasingPageHeader,
   PurchasingPageShell,
+  PurchasingProductCell,
   PurchasingStatusBadge,
   PurchasingTableHeader,
   PurchasingTableSection,
@@ -177,11 +178,12 @@ function PlanningDashboardInner() {
                     <tbody className="divide-y divide-slate-100">
                       {data.critical_products.map((r) => (
                         <tr key={r.product_id} className="group transition-colors hover:bg-blue-50/30">
-                          <td className={`${td} w-2/5 font-medium text-slate-700`}>
-                            <div className="line-clamp-2" title={r.product_name}>
-                              {r.product_name}
-                            </div>
-                            {r.sku ? <div className="mt-0.5 text-xs text-slate-400">{r.sku}</div> : null}
+                          <td className={`${td} w-2/5`}>
+                            <PurchasingProductCell
+                              name={r.product_name}
+                              sku={r.sku}
+                              stock={r.stock}
+                            />
                           </td>
                           <td className={`${td} text-right font-semibold tabular-nums text-red-600`}>{r.stock}</td>
                           <td className={`${td} text-right tabular-nums text-slate-500`}>
@@ -238,7 +240,9 @@ function PlanningDashboardInner() {
                     <tbody className="divide-y divide-slate-100">
                       {data.suggested_orders.map((r) => (
                         <tr key={r.product_id} className="group transition-colors hover:bg-blue-50/30">
-                          <td className={`${td} font-medium text-slate-700`}>{r.product_name}</td>
+                          <td className={td}>
+                            <PurchasingProductCell name={r.product_name} />
+                          </td>
                           <td className={`${td} text-right font-semibold tabular-nums text-blue-600`}>
                             {r.suggested_qty}
                           </td>

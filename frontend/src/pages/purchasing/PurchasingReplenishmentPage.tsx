@@ -24,6 +24,8 @@ import {
   PurchasingKpiGrid,
   PurchasingPageHeader,
   PurchasingPageShell,
+  PurchasingProductCell,
+  PurchasingProductInspectorDrawer,
   PurchasingTableHeader,
   PurchasingTableSection,
   purchasingBtnGhost,
@@ -312,6 +314,10 @@ export default function PurchasingReplenishmentPage() {
   }, [inspectorProductId, tenantId, warehouseId]);
 
   const rows = data?.rows ?? [];
+  const inspectorRow = useMemo(
+    () => (inspectorProductId != null ? rows.find((r) => r.product_id === inspectorProductId) : undefined),
+    [rows, inspectorProductId],
+  );
   const summary = data?.summary;
   const totalPages = summary ? Math.max(1, Math.ceil(summary.total_rows / pageSize)) : 1;
 
@@ -692,21 +698,15 @@ export default function PurchasingReplenishmentPage() {
                     />
                   </td>
                   <td className="px-2 py-2 align-middle">
-                    <div className="flex items-center gap-2">
-                      {r.image_url ? (
-                        <img src={r.image_url} alt="" className="h-9 w-9 shrink-0 rounded-md border border-slate-200 object-cover" />
-                      ) : (
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-slate-100 text-[10px] text-slate-400">
-                          —
-                        </div>
-                      )}
-                      <div className="min-w-0">
-                        <div className="truncate font-medium text-slate-900">{r.product_name}</div>
-                        <div className="truncate text-xs text-slate-500">
-                          {[r.sku, r.ean].filter(Boolean).join(" · ") || "—"}
-                        </div>
-                      </div>
-                    </div>
+                    <PurchasingProductCell
+                      name={r.product_name}
+                      sku={r.sku}
+                      ean={r.ean}
+                      imageUrl={r.image_url}
+                      stock={r.current_stock}
+                      incomingQty={r.incoming_qty}
+                      unit={r.product_unit}
+                    />
                   </td>
                   <td className="px-2 py-2 text-right tabular-nums text-slate-800">
                     {formatPipelineQty(r.product_unit, r.current_stock)}
@@ -864,143 +864,14 @@ export default function PurchasingReplenishmentPage() {
         </div>
       ) : null}
 
-      {inspectorProductId != null ? (
-        <div
-          className="fixed inset-0 z-40 flex justify-end bg-black/30"
-          role="presentation"
-          onClick={() => setInspectorProductId(null)}
-        >
-          <aside
-            className="flex h-full w-full max-w-md flex-col border-l border-slate-200 bg-white shadow-2xl"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Inspektor produktu"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-              <h2 className="text-sm font-semibold text-slate-900">Inspektor produktu</h2>
-              <button
-                type="button"
-                className="rounded-md px-2 py-1 text-sm text-slate-600 hover:bg-slate-100"
-                onClick={() => setInspectorProductId(null)}
-              >
-                Zamknij
-              </button>
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto p-4 text-sm text-slate-700">
-              {inspectorLoading ? (
-                <p className="text-slate-500">Wczytywanie…</p>
-              ) : inspectorData?.product_detail ? (
-                (() => {
-                  const d = inspectorData.product_detail;
-                  const pr = d.product;
-                  const u = d.unit ?? null;
-                  return (
-                    <div className="space-y-4">
-                      <div className="flex gap-3">
-                        {pr.image_url ? (
-                          <img
-                            src={pr.image_url}
-                            alt=""
-                            className="h-20 w-20 shrink-0 rounded-lg border border-slate-200 object-cover"
-                          />
-                        ) : (
-                          <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-slate-100 text-xs text-slate-400">
-                            —
-                          </div>
-                        )}
-                        <div className="min-w-0">
-                          <p className="font-semibold text-slate-900">{pr.name}</p>
-                          <p className="mt-1 text-xs text-slate-500">
-                            SKU: {pr.sku ?? "—"}
-                            <br />
-                            EAN: {pr.ean ?? "—"}
-                          </p>
-                        </div>
-                      </div>
-                      <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
-                        <dt className="text-slate-500">Stan</dt>
-                        <dd className="text-right font-medium tabular-nums">{formatPipelineQty(u, d.stock)}</dd>
-                        <dt className="text-slate-500">Sprzedaż 7 dni</dt>
-                        <dd className="text-right tabular-nums">{formatPipelineQty(u, d.sales_7d)}</dd>
-                        <dt className="text-slate-500">Sprzedaż 30 dni</dt>
-                        <dd className="text-right tabular-nums">{formatPipelineQty(u, d.sales_30d)}</dd>
-                        <dt className="text-slate-500">Sprzedaż 90 dni</dt>
-                        <dd className="text-right tabular-nums">{formatPipelineQty(u, d.sales_90d)}</dd>
-                        <dt className="text-slate-500">Czas realizacji</dt>
-                        <dd className="text-right">{d.lead_time_days != null ? `${d.lead_time_days} d` : "—"}</dd>
-                        <dt className="text-slate-500">Dostawca</dt>
-                        <dd className="text-right truncate">{d.supplier_name ?? "—"}</dd>
-                        <dt className="text-slate-500">Ostatnia dostawa</dt>
-                        <dd className="text-right text-xs">
-                          {d.last_delivery_at
-                            ? new Date(d.last_delivery_at).toLocaleString("pl-PL")
-                            : "—"}
-                        </dd>
-                        <dt className="text-slate-500">Ostatnia cena zakupu</dt>
-                        <dd className="text-right tabular-nums">
-                          {d.last_purchase_price != null
-                            ? numFmt(d.last_purchase_price, { minimumFractionDigits: 2, maximumFractionDigits: 4 })
-                            : "—"}
-                        </dd>
-                        <dt className="text-slate-500">Zakup EUR</dt>
-                        <dd className="text-right tabular-nums">
-                          {d.purchase_unit_net_eur != null
-                            ? numFmt(d.purchase_unit_net_eur, { minimumFractionDigits: 2, maximumFractionDigits: 4 })
-                            : "—"}
-                        </dd>
-                        <dt className="text-slate-500">Zakup PLN netto</dt>
-                        <dd className="text-right tabular-nums">
-                          {d.purchase_unit_net_pln != null
-                            ? numFmt(d.purchase_unit_net_pln, { minimumFractionDigits: 2, maximumFractionDigits: 4 })
-                            : "—"}
-                        </dd>
-                        <dt className="text-slate-500">Sprzedaż PLN brutto (23%)</dt>
-                        <dd className="text-right tabular-nums">
-                          {d.sale_pln_gross != null
-                            ? numFmt(d.sale_pln_gross, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                            : "—"}
-                        </dd>
-                        <dt className="text-slate-500">Marża %</dt>
-                        <dd className="text-right tabular-nums">
-                          {d.margin_percent != null
-                            ? `${numFmt(d.margin_percent, { minimumFractionDigits: 1, maximumFractionDigits: 2 })}%`
-                            : "—"}
-                        </dd>
-                        <dt className="text-slate-500">Rekomendowana ilość</dt>
-                        <dd className="text-right font-semibold tabular-nums text-emerald-800">
-                          {formatQtyDisplay(u, d.suggested_qty)}
-                        </dd>
-                      </dl>
-                      <div>
-                        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                          Lokalizacje ze stanem dodatnim
-                        </p>
-                        {d.locations && d.locations.length > 0 ? (
-                          <ul className="max-h-40 space-y-1 overflow-y-auto rounded-lg border border-slate-100 bg-slate-50 p-2 text-xs">
-                            {d.locations.map((loc, i) => (
-                              <li key={`${loc.warehouse_name}-${loc.location_name}-${i}`} className="flex justify-between gap-2">
-                                <span className="truncate text-slate-700">
-                                  {loc.warehouse_name} · {loc.location_name}
-                                </span>
-                                <span className="shrink-0 tabular-nums font-medium">{formatPipelineQty(u, loc.qty)}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p className="text-xs text-slate-500">Brak pozycji magazynowych z dodatnim stanem.</p>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })()
-              ) : (
-                <p className="text-slate-500">Brak szczegółów produktu (prognoza niedostępna).</p>
-              )}
-            </div>
-          </aside>
-        </div>
-      ) : null}
+      <PurchasingProductInspectorDrawer
+        open={inspectorProductId != null}
+        loading={inspectorLoading}
+        detail={inspectorData?.product_detail ?? null}
+        onClose={() => setInspectorProductId(null)}
+        formatQty={formatPipelineQty}
+        incomingQty={inspectorRow?.incoming_qty}
+      />
 
       {supplierBlockModalOpen ? (
         <div

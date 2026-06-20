@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-06-08 — Zakupy: ujednolicone miniatury produktów + inspektor
+
+- `PurchasingProductThumbnail` / `PurchasingProductCell` — 40×40 px, `object-fit: contain`, hover preview (150 ms, preload, portal)
+- `PurchasingProductInspectorDrawer` — klik słupka Top rotacja → drawer (zdjęcie, SKU, dostawca, sprzedaż, stan, sugerowane zamówienie)
+- `PurchasingForecastBarTooltip` — karta produktu w tooltipie wykresu (miniatura 56 px, sprzedaż 30d, średnia dzienna, stan, w drodze)
+- Migracja: Generator, Prognoza, PO detail, Segmenty, Alerty, Auto-uzupełnianie, Okazje cenowe, dashboard planowania
+
 ## 2026-06-08 — Produkcja / Receptury: redesign listy + miniatury
 
 - `ProductThumb` bez ramek i szarego tła (Produkcja, OMS panel, WMS inwentaryzacja)

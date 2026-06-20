@@ -30,3 +30,15 @@ export { PurchasingQuickActions } from "./PurchasingQuickActions";
 export { PurchasingInfoNotice } from "./PurchasingInfoNotice";
 export { PurchasingSummaryStrip } from "./PurchasingSummaryStrip";
 export type { PurchasingSummaryItem } from "./PurchasingSummaryStrip";
+export {
+  PurchasingProductThumbnail,
+  PurchasingProductCell,
+} from "./PurchasingProductThumbnail";
+export type { PurchasingProductThumbnailProps } from "./PurchasingProductThumbnail";
+export { PurchasingProductInspectorDrawer } from "./PurchasingProductInspectorDrawer";
+export {
+  PURCHASING_THUMB_TABLE_PX,
+  PURCHASING_THUMB_MD_PX,
+  PURCHASING_THUMB_LG_PX,
+  type PurchasingThumbSize,
+} from "./purchasingProductThumbnailTokens";

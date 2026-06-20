@@ -19,6 +19,7 @@ import {
   toDatetimeLocalValue,
 } from "./purchasingPoCommon";
 import { PageGutter } from "../../components/layout/PageContainer";
+import { PurchasingProductThumbnail } from "../../modules/purchasing/ui";
 
 function initialTenantIdFromSearch(sp: URLSearchParams): number {
   const tid = sp.get("tenant_id");
@@ -633,14 +634,14 @@ export default function PurchasingPoDetailPage() {
                               : null;
                           return (
                             <tr key={it.id} className="hover:bg-slate-50/80">
-                              <td className={`${tdBase} w-[72px]`}>
-                                <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
-                                  {it.image_url ? (
-                                    <img src={it.image_url} alt="" className="max-h-16 max-w-16 object-contain" />
-                                  ) : (
-                                    <span className="text-[10px] text-slate-400">brak</span>
-                                  )}
-                                </div>
+                              <td className={`${tdBase} w-[52px]`}>
+                                <PurchasingProductThumbnail
+                                  size="table"
+                                  imageUrl={it.image_url}
+                                  name={it.product_name ?? `Produkt #${it.product_id}`}
+                                  sku={it.sku}
+                                  stock={it.current_stock}
+                                />
                               </td>
                               <td className={`${tdBase} min-w-[320px] max-w-md`}>
                                 <div className="line-clamp-2 min-w-[320px] font-medium leading-snug text-slate-900">

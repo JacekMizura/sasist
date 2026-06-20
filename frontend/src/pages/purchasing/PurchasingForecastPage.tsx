@@ -1,6 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { fetchPurchasingForecast, type PurchasingForecastPayload } from "../../api/purchasingForecastApi";
+import {
+  fetchPurchasingForecast,
+  type ProductForecastDetail,
+  type PurchasingForecastPayload,
+} from "../../api/purchasingForecastApi";
 import { listSuppliers, type SupplierRead } from "../../api/inboundSuppliersApi";
 import { searchProductsCatalog, type ProductSearchHit } from "../../api/productsSearchApi";
 import { useWarehouse } from "../../context/WarehouseContext";
@@ -14,16 +18,17 @@ import {
   PurchasingKpiGrid,
   PurchasingPageHeader,
   PurchasingPageShell,
+  PurchasingProductCell,
+  PurchasingProductInspectorDrawer,
   PurchasingTableHeader,
   PurchasingTableSection,
   purchasingBtnSecondary,
   purchasingInputClass,
   purchasingSelectClass,
+  purchasingTableTdClass,
 } from "../../modules/purchasing/ui";
 import PurchasingForecastCharts from "./PurchasingForecastCharts";
-
-const FORECAST_TOOLTIP_PL =
-  "Prognoza oparta na sprzedaży historycznej. Wzór 30 dni: sprzedaż_30d×0,6 + sprzedaż_poprz_30d×0,3 + sprzedaż_7d×0,1×4. Trend %: porównanie ostatnich 30 dni z poprzednimi 30 dniami.";
+import type { PurchasingForecastBarRow } from "./PurchasingForecastBarTooltip";
 
 function fmtShortDate(iso: string): string {
   try {
@@ -62,12 +67,20 @@ export default function PurchasingForecastPage() {
   const debouncedProductSearch = useDebounced(productSearch, 350);
   const [searchHits, setSearchHits] = useState<ProductSearchHit[]>([]);
   const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [metaCache, setMetaCache] = useState<Map<number, Partial<ProductForecastDetail["product"]> & { stock?: number; avg_daily?: number }>>(
+    new Map(),
+  );
+  const prefetchingRef = useRef<Set<number>>(new Set());
 
   useEffect(() => {
     const pid = searchParams.get("product_id");
     if (pid != null && pid !== "") {
       const n = Number(pid);
-      if (Number.isFinite(n) && n >= 1) setSelectedProductId(n);
+      if (Number.isFinite(n) && n >= 1) {
+        setSelectedProductId(n);
+        setDrawerOpen(true);
+      }
     }
   }, [searchParams]);
 
@@ -98,6 +111,18 @@ export default function PurchasingForecastPage() {
         range_days: rangeDays,
       });
       setData(payload);
+      if (payload.product_detail?.product.id) {
+        const pid = payload.product_detail.product.id;
+        setMetaCache((prev) => {
+          const next = new Map(prev);
+          next.set(pid, {
+            ...payload.product_detail!.product,
+            stock: payload.product_detail!.stock,
+            avg_daily: payload.product_detail!.avg_daily,
+          });
+          return next;
+        });
+      }
     } catch {
       setErr("Nie udało się wczytać prognozy zakupowej.");
       setData(null);
@@ -110,8 +135,50 @@ export default function PurchasingForecastPage() {
     void load();
   }, [load, refreshSignal]);
 
+  const prefetchProductMeta = useCallback(
+    async (productId: number) => {
+      if (prefetchingRef.current.has(productId)) return;
+      prefetchingRef.current.add(productId);
+      try {
+        const payload = await fetchPurchasingForecast({
+          tenant_id: tenantId,
+          warehouse_id: selectedWarehouseId,
+          product_id: productId,
+          range_days: 30,
+        });
+        if (payload.product_detail) {
+          const d = payload.product_detail;
+          setMetaCache((prev) => {
+            if (prev.has(productId)) return prev;
+            const next = new Map(prev);
+            next.set(productId, {
+              ...d.product,
+              stock: d.stock,
+              avg_daily: d.avg_daily,
+            });
+            return next;
+          });
+        }
+      } catch {
+        /* ignore prefetch errors */
+      } finally {
+        prefetchingRef.current.delete(productId);
+      }
+    },
+    [tenantId, selectedWarehouseId],
+  );
+
+  useEffect(() => {
+    if (!data?.charts.top_fast_moving?.length) return;
+    for (const r of data.charts.top_fast_moving) {
+      void prefetchProductMeta(r.product_id);
+    }
+  }, [data?.charts.top_fast_moving, prefetchProductMeta]);
+
   const selectProduct = (id: number | null) => {
     setSelectedProductId(id);
+    setDrawerOpen(id != null);
+    if (id != null) void prefetchProductMeta(id);
     const next = new URLSearchParams(searchParams);
     if (id == null) next.delete("product_id");
     else next.set("product_id", String(id));
@@ -119,17 +186,24 @@ export default function PurchasingForecastPage() {
     setSearchParams(next, { replace: true });
   };
 
-  const barData = useMemo(
-    () =>
-      (data?.charts.top_fast_moving ?? []).map((r) => ({
+  const barData = useMemo((): PurchasingForecastBarRow[] => {
+    const riskById = new Map((data?.charts.top_risk_products ?? []).map((r) => [r.product_id, r]));
+    return (data?.charts.top_fast_moving ?? []).map((r) => {
+      const risk = riskById.get(r.product_id);
+      const cached = metaCache.get(r.product_id);
+      return {
         name: truncate(r.name, 22),
+        fullName: r.name,
         qty: r.qty_30d,
         product_id: r.product_id,
-      })),
-    [data],
-  );
-
-  const td = "py-2 px-3 text-sm text-slate-800";
+        stock: cached?.stock ?? risk?.stock ?? null,
+        avg_daily: cached?.avg_daily ?? risk?.avg_daily_sales ?? r.qty_30d / 30,
+        sku: cached?.sku ?? null,
+        image_url: cached?.image_url ?? null,
+        incoming_qty: null,
+      };
+    });
+  }, [data, metaCache]);
 
   const s = data?.summary;
 
@@ -219,6 +293,7 @@ export default function PurchasingForecastPage() {
               barData={barData}
               fmtShortDate={fmtShortDate}
               onSelectProduct={selectProduct}
+              onHoverProduct={(id) => void prefetchProductMeta(id)}
             />
           ) : null
         }
@@ -239,15 +314,22 @@ export default function PurchasingForecastPage() {
                         </td>
                       </tr>
                     ) : (
-                      data!.charts.top_risk_products.map((r) => (
+                      data!.charts.top_risk_products.map((r) => {
+                        const cached = metaCache.get(r.product_id);
+                        return (
                         <tr key={r.product_id} className="border-b border-slate-100 hover:bg-amber-50/40">
-                          <td className={td}>
-                            <span className="font-medium">{r.name}</span>
+                          <td className={purchasingTableTdClass}>
+                            <PurchasingProductCell
+                              name={r.name}
+                              sku={cached?.sku}
+                              imageUrl={cached?.image_url}
+                              stock={r.stock}
+                            />
                           </td>
-                          <td className={`${td} text-right tabular-nums`}>{r.stock}</td>
-                          <td className={`${td} text-right tabular-nums`}>{r.avg_daily_sales.toFixed(4)}</td>
-                          <td className={`${td} text-right tabular-nums`}>{r.cover_days ?? "—"}</td>
-                          <td className={`${td} text-right`}>
+                          <td className={`${purchasingTableTdClass} text-right tabular-nums`}>{r.stock}</td>
+                          <td className={`${purchasingTableTdClass} text-right tabular-nums`}>{r.avg_daily_sales.toFixed(4)}</td>
+                          <td className={`${purchasingTableTdClass} text-right tabular-nums`}>{r.cover_days ?? "—"}</td>
+                          <td className={`${purchasingTableTdClass} text-right`}>
                             <button
                               type="button"
                               className="text-sm font-medium text-sky-700 hover:underline"
@@ -257,7 +339,8 @@ export default function PurchasingForecastPage() {
                             </button>
                           </td>
                         </tr>
-                      ))
+                        );
+                      })
                     )}
                   </tbody>
                 </table>
@@ -277,17 +360,24 @@ export default function PurchasingForecastPage() {
                         </td>
                       </tr>
                     ) : (
-                      data!.charts.dead_stock.map((r) => (
+                      data!.charts.dead_stock.map((r) => {
+                        const cached = metaCache.get(r.product_id);
+                        return (
                         <tr key={r.product_id} className="border-b border-slate-100 hover:bg-violet-50/40">
-                          <td className={td}>
-                            <span className="font-medium">{r.name}</span>
+                          <td className={purchasingTableTdClass}>
+                            <PurchasingProductCell
+                              name={r.name}
+                              sku={cached?.sku}
+                              imageUrl={cached?.image_url}
+                              stock={r.stock}
+                            />
                           </td>
-                          <td className={`${td} text-right tabular-nums`}>{r.stock}</td>
-                          <td className={`${td} text-right tabular-nums`}>{r.no_sales_days}</td>
-                          <td className={`${td} text-right tabular-nums`}>
+                          <td className={`${purchasingTableTdClass} text-right tabular-nums`}>{r.stock}</td>
+                          <td className={`${purchasingTableTdClass} text-right tabular-nums`}>{r.no_sales_days}</td>
+                          <td className={`${purchasingTableTdClass} text-right tabular-nums`}>
                             {r.stock_value.toLocaleString("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </td>
-                          <td className={`${td} text-right`}>
+                          <td className={`${purchasingTableTdClass} text-right`}>
                             <button
                               type="button"
                               className="text-sm font-medium text-sky-700 hover:underline"
@@ -297,7 +387,8 @@ export default function PurchasingForecastPage() {
                             </button>
                           </td>
                         </tr>
-                      ))
+                        );
+                      })
                     )}
                   </tbody>
                 </table>
@@ -345,64 +436,30 @@ export default function PurchasingForecastPage() {
                     ) : null}
                   </div>
 
-                  {data?.product_detail ? (
-                    <div className="mt-5 rounded-xl border border-slate-100 bg-slate-50/80 p-5">
-                      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                        <div>
-                          <p className="text-lg font-semibold text-slate-900">{data.product_detail.product.name}</p>
-                          <p className="text-sm text-slate-600">{data.product_detail.product.sku ?? "—"}</p>
-                        </div>
-                        <p className="text-sm text-slate-600">
-                          Dostawca: <span className="font-medium">{data.product_detail.supplier_name ?? "—"}</span>
-                          {data.product_detail.lead_time_days != null ? (
-                            <span className="ml-2">· Czas realizacji: {data.product_detail.lead_time_days} d</span>
-                          ) : null}
-                        </p>
-                      </div>
-                      <dl className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                        <div>
-                          <dt className="text-xs font-medium uppercase text-slate-500">Stan</dt>
-                          <dd className="text-lg font-semibold tabular-nums">{data.product_detail.stock}</dd>
-                        </div>
-                        <div>
-                          <dt className="text-xs font-medium uppercase text-slate-500">Sprzedaż 7d / 30d / 90d</dt>
-                          <dd className="text-lg font-semibold tabular-nums">
-                            {data.product_detail.sales_7d} / {data.product_detail.sales_30d} / {data.product_detail.sales_90d}
-                          </dd>
-                        </div>
-                        <div>
-                          <dt className="text-xs font-medium uppercase text-slate-500">Średnia dzienna (30d)</dt>
-                          <dd className="text-lg font-semibold tabular-nums">{data.product_detail.avg_daily.toFixed(4)}</dd>
-                        </div>
-                        <div>
-                          <dt className="text-xs font-medium uppercase text-slate-500">Sugestia uzupełnienia</dt>
-                          <dd className="text-lg font-semibold tabular-nums">{data.product_detail.suggested_qty}</dd>
-                        </div>
-                        <div title={FORECAST_TOOLTIP_PL}>
-                          <dt className="text-xs font-medium uppercase text-slate-500">Prognoza 30 dni (szt.)</dt>
-                          <dd className="text-lg font-semibold tabular-nums text-teal-800">{data.product_detail.forecast_30d}</dd>
-                        </div>
-                        <div>
-                          <dt className="text-xs font-medium uppercase text-slate-500">Trend vs poprz. 30d</dt>
-                          <dd className="text-lg font-semibold tabular-nums">
-                            {data.product_detail.trend_percent != null ? `${data.product_detail.trend_percent} %` : "—"}
-                          </dd>
-                        </div>
-                      </dl>
-                      <p className="mt-4 text-xs leading-relaxed text-slate-600" title={FORECAST_TOOLTIP_PL}>
-                        {FORECAST_TOOLTIP_PL}
-                      </p>
-                    </div>
-                  ) : selectedProductId != null ? (
-                    <p className="mt-4 text-sm text-slate-500">Brak danych szczegółowych dla tego produktu.</p>
+                  {selectedProductId != null ? (
+                    <p className="mt-4 text-sm text-slate-600">
+                      Wybrany produkt — szczegóły w panelu po prawej stronie ekranu.
+                    </p>
                   ) : (
-                    <p className="mt-4 text-sm text-slate-500">Wybierz produkt z listy lub z tabel, aby zobaczyć kartę.</p>
+                    <p className="mt-4 text-sm text-slate-500">
+                      Wybierz produkt z wykresu, tabel lub wyszukiwarki, aby otworzyć inspektor.
+                    </p>
                   )}
                 </div>
               </PurchasingTableSection>
             </>
           ) : null
         }
+      />
+
+      <PurchasingProductInspectorDrawer
+        open={drawerOpen && selectedProductId != null}
+        loading={loading && selectedProductId != null && !data?.product_detail}
+        detail={data?.product_detail ?? null}
+        onClose={() => {
+          setDrawerOpen(false);
+          selectProduct(null);
+        }}
       />
     </PurchasingContentArea>
   );

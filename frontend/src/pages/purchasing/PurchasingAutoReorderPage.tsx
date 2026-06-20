@@ -31,6 +31,7 @@ import {
   PurchasingKpiGrid,
   PurchasingPageHeader,
   PurchasingPageShell,
+  PurchasingProductCell,
   PurchasingTableHeader,
   PurchasingTableSection,
   purchasingBtnPrimary,
@@ -696,8 +697,10 @@ export default function PurchasingAutoReorderPage() {
                     {previewData.rows.map((row) => (
                       <tr key={row.product_id} className="border-t border-slate-100">
                         <td className="px-2 py-1">
-                          <div>{row.name ?? `Produkt #${row.product_id}`}</div>
-                          {row.supplier_name ? <div className="text-slate-500">{row.supplier_name}</div> : null}
+                          <PurchasingProductCell
+                            name={row.name ?? `Produkt #${row.product_id}`}
+                            sku={row.sku}
+                          />
                         </td>
                         <td className="px-2 py-1">{row.segment ?? "—"}</td>
                         <td className="px-2 py-1 tabular-nums">{row.suggested_qty}</td>

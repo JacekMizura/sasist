@@ -19,6 +19,7 @@ import {
   PurchasingKpiGrid,
   PurchasingPageHeader,
   PurchasingPageShell,
+  PurchasingProductCell,
   PurchasingTableHeader,
   PurchasingTableSection,
   purchasingSelectClass,
@@ -329,12 +330,13 @@ export default function PurchasingSegmentsPage() {
             {(data?.rows ?? []).map((r) => (
               <tr key={r.product_id}>
                 <td className="px-3 py-2">
-                  <div className="font-medium text-slate-900">{r.name}</div>
-                  <div className="text-xs text-slate-500">
-                    #{r.product_id}
-                    {r.sku ? ` · ${r.sku}` : ""}
-                    {r.ean ? ` · EAN ${r.ean}` : ""}
-                  </div>
+                  <PurchasingProductCell
+                    name={r.name}
+                    sku={r.sku}
+                    ean={r.ean}
+                    stock={r.stock}
+                    subtitle={[r.sku, r.product_id ? `#${r.product_id}` : null, r.ean ? `EAN ${r.ean}` : null].filter(Boolean).join(" · ") || undefined}
+                  />
                 </td>
                 <td className="px-3 py-2">
                   <div className="flex flex-wrap items-center gap-1">

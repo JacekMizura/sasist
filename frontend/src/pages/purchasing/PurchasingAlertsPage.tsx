@@ -29,6 +29,7 @@ import {
   PurchasingKpiGrid,
   PurchasingPageHeader,
   PurchasingPageShell,
+  PurchasingProductCell,
   PurchasingTableHeader,
   PurchasingTableSection,
   purchasingBtnPrimary,
@@ -644,8 +645,8 @@ export default function PurchasingAlertsPage() {
                         </td>
                         <td className="px-3 py-2 pr-3 text-slate-800">
                           {a.product_id != null ? (
-                            <Link className="text-sky-800 underline" to={`/products/${a.product_id}`}>
-                              {prodName}
+                            <Link className="block hover:opacity-90" to={`/products/${a.product_id}`}>
+                              <PurchasingProductCell name={prodName} />
                             </Link>
                           ) : (
                             <span className="text-slate-500">{prodName}</span>
