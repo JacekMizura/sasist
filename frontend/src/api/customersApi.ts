@@ -53,6 +53,10 @@ export type CustomerListRow = {
   total_net?: number | null;
   returns_count?: number | null;
   global_discount_percent?: number | null;
+  /** Opcjonalne — gdy backend rozszerzy listę. */
+  company_name?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
 };
 
 export type CustomerDetail = {

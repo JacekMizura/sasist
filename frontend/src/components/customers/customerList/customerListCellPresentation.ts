@@ -1,21 +1,38 @@
 import type { CustomerListRow } from "../../../api/customersApi";
 import { formatCustomerMoney } from "../../../modules/customers/customerProfile";
-import { getCustomerDisplayName } from "../../../utils/getCustomerDisplayName";
+import { safeTrim } from "../../../utils/safeStrings";
 
+export const CUSTOMER_LIST_MISSING_NAME = "— brak nazwy —";
+
+function looksLikeEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+/**
+ * Wyłącznie nazwa firmy lub imię i nazwisko — bez e-maila, NIP-u i innych pól.
+ * API listy zwraca `display_name` zgodnie z tą samą regułą (firma → osoba).
+ */
+export function customerListClientName(row: CustomerListRow): string {
+  const company = safeTrim(row.company_name);
+  if (company) return company;
+
+  const person = `${safeTrim(row.first_name)} ${safeTrim(row.last_name)}`.trim();
+  if (person) return person;
+
+  const display = safeTrim(row.display_name);
+  if (display && !/^#\d+$/.test(display) && !looksLikeEmail(display)) {
+    return display;
+  }
+
+  return CUSTOMER_LIST_MISSING_NAME;
+}
+
+/** @deprecated Użyj {@link customerListClientName}. */
 export function customerListClientLines(row: CustomerListRow): {
   primary: string;
   secondary: string | null;
 } {
-  const primary = getCustomerDisplayName(row);
-  const nip = row.nip?.trim();
-  const email = row.email?.trim();
-
-  if (nip) {
-    return { primary, secondary: `NIP: ${nip}` };
-  }
-  if (email) {
-    return { primary, secondary: email };
-  }
+  const primary = customerListClientName(row);
   return { primary, secondary: null };
 }
 

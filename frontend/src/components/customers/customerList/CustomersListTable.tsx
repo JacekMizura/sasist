@@ -10,14 +10,20 @@ import {
   customerListColumnLabel,
 } from "./customerListColumnCatalog";
 import {
+  CUSTOMER_LIST_MISSING_NAME,
   customerListCellOrDash,
-  customerListClientLines,
+  customerListClientName,
   customerListExtendedColumnText,
 } from "./customerListCellPresentation";
 import {
   customersListActionsCellClass,
   customersListActionsColWidth,
   customersListActionsInnerClass,
+  customersListCheckboxCellClass,
+  customersListCheckboxColWidth,
+  customersListCheckboxInnerClass,
+  customersListCheckboxInputClass,
+  customersListCheckboxThClass,
   customersListRowActionBtn,
   customersListRowActionBtnDanger,
   customersListRowClass,
@@ -38,6 +44,34 @@ export type CustomersListTableProps = {
   onToggleAllPage: () => void;
   onDelete: (id: number) => void;
 };
+
+function RowCheckbox({
+  checked,
+  disabled,
+  onChange,
+  ariaLabel,
+  inputRef,
+}: {
+  checked: boolean;
+  disabled?: boolean;
+  onChange: () => void;
+  ariaLabel: string;
+  inputRef?: RefObject<HTMLInputElement | null>;
+}) {
+  return (
+    <label className={customersListCheckboxInnerClass}>
+      <input
+        ref={inputRef}
+        type="checkbox"
+        className={customersListCheckboxInputClass}
+        checked={checked}
+        disabled={disabled}
+        onChange={onChange}
+        aria-label={ariaLabel}
+      />
+    </label>
+  );
+}
 
 function CustomerTypeBadges({ row }: { row: CustomerListRow }) {
   return (
@@ -71,8 +105,9 @@ function CustomerListDataCell({
   row: CustomerListRow;
   columnId: string;
 }) {
-  const client = customerListClientLines(row);
+  const clientName = customerListClientName(row);
   const email = row.email?.trim() ?? "";
+  const missingName = clientName === CUSTOMER_LIST_MISSING_NAME;
 
   switch (columnId) {
     case "id":
@@ -83,19 +118,18 @@ function CustomerListDataCell({
       );
     case "client":
       return (
-        <div className={`${customersListRowInnerClass} min-w-0 flex-col !items-start justify-center gap-0.5 py-2`}>
-          <Link
-            to={`/customers/${row.id}`}
-            className="block max-w-full truncate text-base font-semibold text-slate-900 hover:underline"
-            title={client.primary}
-          >
-            {client.primary}
-          </Link>
-          {client.secondary ? (
-            <p className="max-w-full truncate text-sm text-slate-500" title={client.secondary}>
-              {client.secondary}
-            </p>
-          ) : null}
+        <div className={`${customersListRowInnerClass} min-w-0`}>
+          {missingName ? (
+            <span className="block max-w-full truncate text-base font-semibold text-slate-400">{clientName}</span>
+          ) : (
+            <Link
+              to={`/customers/${row.id}`}
+              className="block max-w-full truncate text-base font-semibold text-slate-900 hover:underline"
+              title={clientName}
+            >
+              {clientName}
+            </Link>
+          )}
         </div>
       );
     case "customer_type":
@@ -149,6 +183,73 @@ function CustomerListDataCell({
   }
 }
 
+function MobileCustomerRow({
+  row,
+  selected,
+  deleteBusy,
+  onToggleOne,
+  onDelete,
+}: {
+  row: CustomerListRow;
+  selected: boolean;
+  deleteBusy: boolean;
+  onToggleOne: (id: number) => void;
+  onDelete: (id: number) => void;
+}) {
+  const clientName = customerListClientName(row);
+  const missingName = clientName === CUSTOMER_LIST_MISSING_NAME;
+
+  return (
+    <article
+      className={`flex items-center gap-0 border-b border-slate-100 px-2 py-0 last:border-b-0 ${
+        selected ? "bg-sky-50/40" : "even:bg-slate-50/20"
+      }`}
+    >
+      <div className={customersListCheckboxCellClass}>
+        <RowCheckbox
+          checked={selected}
+          disabled={deleteBusy}
+          onChange={() => onToggleOne(row.id)}
+          ariaLabel={`Zaznacz klienta ${clientName}`}
+        />
+      </div>
+      <div className="min-h-[3.5rem] min-w-0 flex-1 py-3">
+        {missingName ? (
+          <span className="block truncate text-base font-semibold text-slate-400">{clientName}</span>
+        ) : (
+          <Link
+            to={`/customers/${row.id}`}
+            className="block truncate text-base font-semibold text-slate-900 hover:underline"
+            title={clientName}
+          >
+            {clientName}
+          </Link>
+        )}
+      </div>
+      <div className="flex shrink-0 items-center gap-1 pr-2">
+        <Link
+          to={`/customers/${row.id}`}
+          className={customersListRowActionBtn}
+          title="Edytuj"
+          aria-label="Edytuj"
+        >
+          <Pencil className="h-4 w-4 shrink-0" strokeWidth={2} />
+        </Link>
+        <button
+          type="button"
+          className={customersListRowActionBtnDanger}
+          title="Usuń"
+          aria-label="Usuń"
+          disabled={deleteBusy}
+          onClick={() => onDelete(row.id)}
+        >
+          <Trash2 className="h-4 w-4 shrink-0" strokeWidth={2} />
+        </button>
+      </div>
+    </article>
+  );
+}
+
 export function CustomersListTable({
   rows,
   columnOrder,
@@ -161,96 +262,101 @@ export function CustomersListTable({
   onDelete,
 }: CustomersListTableProps) {
   return (
-    <div className="overflow-x-auto">
-      <table className={customersListTableClass}>
-        <colgroup>
-          <col className="w-10" />
-          {columnOrder.map((colId) => (
-            <col key={colId} style={{ width: CUSTOMER_LIST_COLUMN_WIDTH[colId] ?? "auto" }} />
-          ))}
-          <col style={{ width: customersListActionsColWidth }} />
-        </colgroup>
-        <thead>
-          <tr>
-            <th className={customersListThClass}>
-              <label className="inline-flex h-9 w-9 cursor-pointer items-center justify-center">
-                <input
-                  ref={headerSelectAllRef}
-                  type="checkbox"
-                  className="h-4 w-4 rounded border-slate-300 accent-emerald-600"
+    <>
+      <div className="hidden overflow-x-auto md:block">
+        <table className={customersListTableClass}>
+          <colgroup>
+            <col style={{ width: customersListCheckboxColWidth }} />
+            {columnOrder.map((colId) => (
+              <col key={colId} style={{ width: CUSTOMER_LIST_COLUMN_WIDTH[colId] ?? "auto" }} />
+            ))}
+            <col style={{ width: customersListActionsColWidth }} />
+          </colgroup>
+          <thead>
+            <tr>
+              <th className={customersListCheckboxThClass}>
+                <RowCheckbox
+                  inputRef={headerSelectAllRef}
                   checked={allPageSelected}
                   disabled={deleteBusy || rows.length === 0}
                   onChange={onToggleAllPage}
-                  aria-label="Zaznacz wszystkich klientów na stronie"
+                  ariaLabel="Zaznacz wszystkich klientów na stronie"
                 />
-              </label>
-            </th>
-            {columnOrder.map((colId) => (
-              <th key={colId} className={customersListThClass}>
-                {customerListColumnLabel(colId)}
               </th>
-            ))}
-            <th className={customersListThClass} style={{ width: customersListActionsColWidth }}>
-              Akcje
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => {
-            const client = customerListClientLines(r);
-            const isSelected = selected.has(r.id);
+              {columnOrder.map((colId) => (
+                <th key={colId} className={customersListThClass}>
+                  {customerListColumnLabel(colId)}
+                </th>
+              ))}
+              <th className={customersListThClass} style={{ width: customersListActionsColWidth }}>
+                Akcje
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => {
+              const clientName = customerListClientName(r);
+              const isSelected = selected.has(r.id);
 
-            return (
-              <tr
-                key={r.id}
-                className={`${customersListRowClass} ${isSelected ? "bg-sky-50/40 hover:bg-sky-50/50" : ""}`}
-              >
-                <td className={customersListTdClass}>
-                  <div className={customersListRowInnerClass}>
-                    <label className="inline-flex h-9 w-9 cursor-pointer items-center justify-center">
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 rounded border-slate-300 accent-emerald-600"
-                        checked={isSelected}
-                        disabled={deleteBusy}
-                        onChange={() => onToggleOne(r.id)}
-                        aria-label={`Zaznacz klienta ${client.primary}`}
-                      />
-                    </label>
-                  </div>
-                </td>
-                {columnOrder.map((colId) => (
-                  <td key={colId} className={customersListTdClass}>
-                    <CustomerListDataCell row={r} columnId={colId} />
-                  </td>
-                ))}
-                <td className={customersListActionsCellClass} style={{ width: customersListActionsColWidth }}>
-                  <div className={customersListActionsInnerClass}>
-                    <Link
-                      to={`/customers/${r.id}`}
-                      className={customersListRowActionBtn}
-                      title="Edytuj"
-                      aria-label="Edytuj"
-                    >
-                      <Pencil className="h-4 w-4 shrink-0" strokeWidth={2} />
-                    </Link>
-                    <button
-                      type="button"
-                      className={customersListRowActionBtnDanger}
-                      title="Usuń"
-                      aria-label="Usuń"
+              return (
+                <tr
+                  key={r.id}
+                  className={`${customersListRowClass} ${isSelected ? "bg-sky-50/40 hover:bg-sky-50/50" : ""}`}
+                >
+                  <td className={customersListCheckboxCellClass}>
+                    <RowCheckbox
+                      checked={isSelected}
                       disabled={deleteBusy}
-                      onClick={() => onDelete(r.id)}
-                    >
-                      <Trash2 className="h-4 w-4 shrink-0" strokeWidth={2} />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+                      onChange={() => onToggleOne(r.id)}
+                      ariaLabel={`Zaznacz klienta ${clientName}`}
+                    />
+                  </td>
+                  {columnOrder.map((colId) => (
+                    <td key={colId} className={customersListTdClass}>
+                      <CustomerListDataCell row={r} columnId={colId} />
+                    </td>
+                  ))}
+                  <td className={customersListActionsCellClass} style={{ width: customersListActionsColWidth }}>
+                    <div className={customersListActionsInnerClass}>
+                      <Link
+                        to={`/customers/${r.id}`}
+                        className={customersListRowActionBtn}
+                        title="Edytuj"
+                        aria-label="Edytuj"
+                      >
+                        <Pencil className="h-4 w-4 shrink-0" strokeWidth={2} />
+                      </Link>
+                      <button
+                        type="button"
+                        className={customersListRowActionBtnDanger}
+                        title="Usuń"
+                        aria-label="Usuń"
+                        disabled={deleteBusy}
+                        onClick={() => onDelete(r.id)}
+                      >
+                        <Trash2 className="h-4 w-4 shrink-0" strokeWidth={2} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="md:hidden">
+        {rows.map((r) => (
+          <MobileCustomerRow
+            key={r.id}
+            row={r}
+            selected={selected.has(r.id)}
+            deleteBusy={deleteBusy}
+            onToggleOne={onToggleOne}
+            onDelete={onDelete}
+          />
+        ))}
+      </div>
+    </>
   );
 }
