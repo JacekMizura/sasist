@@ -1,0 +1,17 @@
+export {
+  customersListTableClass as manufacturersListTableClass,
+  customersListThClass as manufacturersListThClass,
+  customersListTdClass as manufacturersListTdClass,
+  customersListRowClass as manufacturersListRowClass,
+  customersListRowInnerClass as manufacturersListRowInnerClass,
+  customersListCheckboxColWidth as manufacturersListCheckboxColWidth,
+  customersListCheckboxCellClass as manufacturersListCheckboxCellClass,
+  customersListCheckboxInnerClass as manufacturersListCheckboxInnerClass,
+  customersListCheckboxInputClass as manufacturersListCheckboxInputClass,
+  customersListCheckboxThClass as manufacturersListCheckboxThClass,
+  customersListActionsColWidth as manufacturersListActionsColWidth,
+  customersListActionsCellClass as manufacturersListActionsCellClass,
+  customersListActionsInnerClass as manufacturersListActionsInnerClass,
+  customersListRowActionBtn as manufacturersListRowActionBtn,
+  customersListRowActionBtnDanger as manufacturersListRowActionBtnDanger,
+} from "../../customers/customerList/customersListTableTokens";

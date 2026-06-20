@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-06-08 — Lista producentów: nowy standard tabel
+
+- Tabela jak Klienci/Pola dodatkowe: checkbox, kolumny konfigurowalne (localStorage), akcje 36×36
+- Filtry: Tenant, Nazwa, Kraj, Status, NIP, Miasto, E-mail, Telefon, Dostawca; licznik `Filtry (N)` w nagłówku
+- Logo: max 40×40, `ImageOff` bez ramek; kolumna Nazwa 3-liniowa; produkty jako link gdy >0
+- API listy: filtry NIP/miasto/e-mail/telefon/dostawca + `supplier_count` w odpowiedzi
+
 ## 2026-06-08 — Akcje automatyczne: warunki multi-value + historia diff
 
 - Warunki pól wyboru wielokrotnego: `value: string[]`, operatory „jest jednym z” / „nie jest jednym z”, `FilterMultiSelect` w modalu warunku

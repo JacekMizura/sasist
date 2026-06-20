@@ -31,12 +31,30 @@ def _strip_opt(s: Optional[str]) -> Optional[str]:
     return t or None
 
 
+def _supplier_counts_for_manufacturer_ids(db: Session, tenant_id: int, ids: List[int]) -> Dict[int, int]:
+    if not ids:
+        return {}
+    rows = (
+        db.query(Product.manufacturer_id, func.count(func.distinct(Supplier.id)))
+        .join(SupplierProduct, SupplierProduct.product_id == Product.id)
+        .join(Supplier, Supplier.id == SupplierProduct.supplier_id)
+        .filter(
+            Product.tenant_id == tenant_id,
+            Product.manufacturer_id.in_(ids),
+        )
+        .group_by(Product.manufacturer_id)
+        .all()
+    )
+    return {int(mid): int(c or 0) for mid, c in rows if mid is not None}
+
+
 def _serialize_row(
     m: Manufacturer,
     product_count: int,
     *,
     total_inventory_quantity: float = 0.0,
     out_of_stock_product_count: int = 0,
+    supplier_count: int = 0,
 ) -> ManufacturerRead:
     return ManufacturerRead(
         id=m.id,
@@ -56,6 +74,7 @@ def _serialize_row(
         responsible_person_name=_strip_opt(getattr(m, "responsible_person_name", None)),
         responsible_person_email=_strip_opt(getattr(m, "responsible_person_email", None)),
         product_count=int(product_count),
+        supplier_count=int(supplier_count),
         total_inventory_quantity=float(total_inventory_quantity),
         out_of_stock_product_count=int(out_of_stock_product_count),
     )
@@ -124,6 +143,11 @@ def list_manufacturers(
     tenant_id: int = Query(..., ge=1),
     name: Optional[str] = Query(None, description="Partial match on name"),
     country: Optional[str] = Query(None, description="Partial match on country"),
+    tax_id: Optional[str] = Query(None, description="Partial match on NIP / tax id"),
+    city: Optional[str] = Query(None, description="Partial match on city"),
+    email: Optional[str] = Query(None, description="Partial match on email"),
+    phone: Optional[str] = Query(None, description="Partial match on phone"),
+    supplier: Optional[str] = Query(None, description="Partial match on linked supplier name"),
     status: str = Query("all", description="all | active | inactive"),
     sort_by: str = Query("name", description="name | product_count"),
     sort_dir: str = Query("asc", description="asc | desc"),
@@ -150,16 +174,41 @@ def list_manufacturers(
         )
     if country and country.strip():
         q = q.filter(Manufacturer.country.ilike(f"%{country.strip()}%"))
+    if tax_id and tax_id.strip():
+        q = q.filter(Manufacturer.tax_id.ilike(f"%{tax_id.strip()}%"))
+    if city and city.strip():
+        q = q.filter(Manufacturer.city.ilike(f"%{city.strip()}%"))
+    if email and email.strip():
+        q = q.filter(Manufacturer.email.ilike(f"%{email.strip()}%"))
+    if phone and phone.strip():
+        q = q.filter(Manufacturer.phone.ilike(f"%{phone.strip()}%"))
+    if supplier and supplier.strip():
+        term = f"%{supplier.strip()}%"
+        linked_mids = (
+            db.query(Product.manufacturer_id)
+            .join(SupplierProduct, SupplierProduct.product_id == Product.id)
+            .join(Supplier, Supplier.id == SupplierProduct.supplier_id)
+            .filter(
+                Product.tenant_id == tenant_id,
+                Product.manufacturer_id.isnot(None),
+                Supplier.name.ilike(term),
+            )
+            .distinct()
+            .subquery()
+        )
+        q = q.filter(Manufacturer.id.in_(linked_mids))
     rows = q.all()
     mids = [m.id for m in rows]
     counts = _product_counts_for_manufacturer_ids(db, tenant_id, mids)
     inv_stats = _inventory_stats_by_manufacturer_ids(db, tenant_id, mids)
+    supplier_counts = _supplier_counts_for_manufacturer_ids(db, tenant_id, mids)
     out = [
         _serialize_row(
             m,
             counts.get(m.id, 0),
             total_inventory_quantity=inv_stats.get(m.id, (0.0, 0))[0],
             out_of_stock_product_count=inv_stats.get(m.id, (0.0, 0))[1],
+            supplier_count=supplier_counts.get(m.id, 0),
         )
         for m in rows
     ]

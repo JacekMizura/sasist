@@ -23,6 +23,8 @@ export type ManufacturerRead = {
   total_inventory_quantity?: number;
   /** Products among the above with zero or missing inventory quantity. */
   out_of_stock_product_count?: number;
+  /** Distinct suppliers linked via supplier_products. */
+  supplier_count?: number;
 };
 
 export type ManufacturerProductBrief = {
@@ -62,18 +64,40 @@ export type ManufacturerListParams = {
   tenantId: number;
   name?: string;
   country?: string;
+  taxId?: string;
+  city?: string;
+  email?: string;
+  phone?: string;
+  supplier?: string;
   status?: "all" | "active" | "inactive";
   sortBy?: "name" | "product_count";
   sortDir?: "asc" | "desc";
 };
 
 export async function listManufacturers(params: ManufacturerListParams): Promise<ManufacturerRead[]> {
-  const { tenantId, name, country, status = "all", sortBy = "name", sortDir = "asc" } = params;
+  const {
+    tenantId,
+    name,
+    country,
+    taxId,
+    city,
+    email,
+    phone,
+    supplier,
+    status = "all",
+    sortBy = "name",
+    sortDir = "asc",
+  } = params;
   const res = await api.get<ManufacturerRead[]>("/manufacturers/", {
     params: {
       tenant_id: tenantId,
       name: name?.trim() || undefined,
       country: country?.trim() || undefined,
+      tax_id: taxId?.trim() || undefined,
+      city: city?.trim() || undefined,
+      email: email?.trim() || undefined,
+      phone: phone?.trim() || undefined,
+      supplier: supplier?.trim() || undefined,
       status,
       sort_by: sortBy,
       sort_dir: sortDir,

@@ -1,69 +1,41 @@
-import { useCallback, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Pencil, Trash2 } from "lucide-react";
+import { ChevronDown, Download, TableProperties } from "lucide-react";
+
 import { ListPageHeader } from "../../components/listPage/ListPageHeader";
-import { ModuleListFiltersCard } from "../../components/listPage/ModuleListFiltersCard";
 import { UI_STRINGS } from "../../constants/uiStrings";
 import api from "../../api/axios";
 import { deleteManufacturer, listManufacturers, type ManufacturerRead } from "../../api/manufacturersApi";
 import { ManufacturerEditModal } from "./ManufacturerEditModal";
 import ExportModal from "../../components/exports/ExportModal";
-import {
-  FilterField,
-  FilterGrid,
-  FilterVisibilityModal,
-  filterInputClass,
-  filterSelectClass,
-  filterToolbarBtnApply,
-  filterToolbarBtnSecondary,
-  useFilterFieldOrder,
-  type FilterFieldCatalogItem,
-} from "../../components/filters";
-import {
-  OperationalActionButton,
-  OperationalActionColumn,
-  panelListDenseActionsOnlyCellClass,
-  panelListDenseActionsOnlyHeaderClass,
-  panelListDenseRowClass,
-  panelListDenseTableClass,
-  panelListDenseTableScrollWrapClass,
-  panelListDenseTdBase,
-  panelListDenseThBase,
-  panelListDenseThSort,
-  panelListDenseTheadClass,
-} from "../../components/operational";
 import PageLayout from "../../components/layout/PageLayout";
+import { FilterVisibilityModal } from "../../components/filters";
+import { ManufacturerListFiltersPanel } from "../../components/manufacturers/manufacturerList/ManufacturerListFiltersPanel";
+import { ManufacturersListTable } from "../../components/manufacturers/manufacturerList/ManufacturersListTable";
+import {
+  MANUFACTURER_LIST_COLUMN_CATALOG,
+  MANUFACTURER_LIST_DEFAULT_COLUMN_ORDER,
+} from "../../components/manufacturers/manufacturerList/manufacturerListColumnCatalog";
+import {
+  DEFAULT_APPLIED_MANUFACTURER_LIST_FILTERS,
+  countActiveManufacturerFilters,
+  manufacturerFilterToggleLabel,
+  type AppliedManufacturerListFilters,
+} from "../../components/manufacturers/manufacturerList/manufacturerListFilterTypes";
+import { useManufacturerListColumnOrder } from "../../components/manufacturers/manufacturerList/useManufacturerListColumnOrder";
+import {
+  moduleTableCardClass,
+  moduleTablePaginationFooterClass,
+} from "../../components/listPage/moduleList";
+import {
+  listSellasistInputClass,
+  listSellasistToolbarSquareBtn,
+  listSellasistToolbarToggleBtn,
+} from "../../components/listPage/listSellasistTokens";
 
 type Tenant = { id: number; name: string };
 
-function firstLogoUrl(url: string | null | undefined): string | null {
-  if (!url || typeof url !== "string") return null;
-  const t = url.trim();
-  if (!t) return null;
-  const first = t.split(";").map((s) => s.trim()).find(Boolean);
-  return first || null;
-}
-
-type UiFilters = {
-  name: string;
-  country: string;
-  status: "all" | "active" | "inactive";
-};
-
-const defaultFilters: UiFilters = { name: "", country: "", status: "all" };
-
 const ROWS_PER_PAGE_OPTIONS = [25, 50, 100, 200] as const;
-
-const MFR_FILTER_STORAGE_KEY = "manufacturers.list";
-const MFR_FILTER_CATALOG: FilterFieldCatalogItem[] = [
-  { id: "tenant", label: "Tenant" },
-  { id: "name", label: "Nazwa" },
-  { id: "country", label: "Kraj" },
-  { id: "status", label: "Status" },
-];
-const MFR_FILTER_IDS = MFR_FILTER_CATALOG.map((c) => c.id);
-
-type SortKey = "name" | "product_count";
 
 type Props = {
   defaultCreateOpen?: boolean;
@@ -77,22 +49,33 @@ export default function ManufacturersPage({ defaultCreateOpen = false }: Props) 
   const [rows, setRows] = useState<ManufacturerRead[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
-  const [filters, setFilters] = useState<UiFilters>(defaultFilters);
-  const [applied, setApplied] = useState<UiFilters>(defaultFilters);
+  const [draftFilters, setDraftFilters] = useState<AppliedManufacturerListFilters>(
+    DEFAULT_APPLIED_MANUFACTURER_LIST_FILTERS,
+  );
+  const [appliedFilters, setAppliedFilters] = useState<AppliedManufacturerListFilters>(
+    DEFAULT_APPLIED_MANUFACTURER_LIST_FILTERS,
+  );
+  const [filtersExpanded, setFiltersExpanded] = useState(() => {
+    try {
+      return localStorage.getItem("manufacturers.list.filtersExpanded") === "1";
+    } catch {
+      return false;
+    }
+  });
   const [page, setPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(25);
   const [deleteBusy, setDeleteBusy] = useState<number | null>(null);
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [tenantId, setTenantId] = useState(1);
-  const [sortBy, setSortBy] = useState<SortKey>("name");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [toast, setToast] = useState<string | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
-  const [mfrVisibilityOpen, setMfrVisibilityOpen] = useState(false);
-  const { order: mfrVisibleFields, setOrderFromModal: setMfrFieldOrder } = useFilterFieldOrder(
-    MFR_FILTER_STORAGE_KEY,
-    MFR_FILTER_IDS,
-  );
+  const [columnPickerOpen, setColumnPickerOpen] = useState(false);
+  const [selected, setSelected] = useState<Set<number>>(() => new Set());
+  const headerSelectAllRef = useRef<HTMLInputElement>(null);
+  const { columnOrder, persistColumnOrder } = useManufacturerListColumnOrder();
+
+  const appliedFiltersKey = useMemo(() => JSON.stringify(appliedFilters), [appliedFilters]);
+  const activeFilterCount = useMemo(() => countActiveManufacturerFilters(appliedFilters), [appliedFilters]);
 
   useEffect(() => {
     api
@@ -137,14 +120,18 @@ export default function ManufacturersPage({ defaultCreateOpen = false }: Props) 
     setLoading(true);
     setErr(null);
     try {
+      const af = appliedFilters;
       setRows(
         await listManufacturers({
-          tenantId: tenantId,
-          name: applied.name.trim() || undefined,
-          country: applied.country.trim() || undefined,
-          status: applied.status,
-          sortBy,
-          sortDir,
+          tenantId,
+          name: af.name.trim() || undefined,
+          country: af.country.trim() || undefined,
+          taxId: af.nip.trim() || undefined,
+          city: af.city.trim() || undefined,
+          email: af.email.trim() || undefined,
+          phone: af.phone.trim() || undefined,
+          supplier: af.supplier.trim() || undefined,
+          status: af.status,
         }),
       );
     } catch {
@@ -153,7 +140,7 @@ export default function ManufacturersPage({ defaultCreateOpen = false }: Props) 
     } finally {
       setLoading(false);
     }
-  }, [applied, tenantId, sortBy, sortDir]);
+  }, [appliedFilters, tenantId]);
 
   useEffect(() => {
     void load();
@@ -163,6 +150,11 @@ export default function ManufacturersPage({ defaultCreateOpen = false }: Props) 
     setModalOpen(defaultCreateOpen);
     if (defaultCreateOpen) setEditId(null);
   }, [defaultCreateOpen]);
+
+  useEffect(() => {
+    setSelected(new Set());
+    setPage(1);
+  }, [appliedFiltersKey, tenantId]);
 
   const closeModal = () => {
     setModalOpen(false);
@@ -176,90 +168,24 @@ export default function ManufacturersPage({ defaultCreateOpen = false }: Props) 
   };
 
   const applyFilters = () => {
-    setPage(1);
-    setApplied(filters);
+    setAppliedFilters(draftFilters);
   };
 
   const clearFilters = () => {
-    setFilters(defaultFilters);
-    setApplied(defaultFilters);
-    setPage(1);
+    setDraftFilters(DEFAULT_APPLIED_MANUFACTURER_LIST_FILTERS);
+    setAppliedFilters(DEFAULT_APPLIED_MANUFACTURER_LIST_FILTERS);
   };
 
-  const renderMfrFilterField = (fieldId: string, f: UiFilters, setF: Dispatch<SetStateAction<UiFilters>>) => {
-    switch (fieldId) {
-      case "tenant":
-        return (
-          <FilterField key={fieldId} label="Tenant">
-            <select
-              className={filterSelectClass}
-              value={tenantId}
-              onChange={(e) => {
-                setTenantId(Number(e.target.value));
-                setPage(1);
-              }}
-            >
-              {tenants.length === 0 ? (
-                <option value={tenantId}>Tenant #{tenantId}</option>
-              ) : (
-                tenants.map((tn) => (
-                  <option key={tn.id} value={tn.id}>
-                    {tn.name}
-                  </option>
-                ))
-              )}
-            </select>
-          </FilterField>
-        );
-      case "name":
-        return (
-          <FilterField key={fieldId} label="Nazwa">
-            <input
-              type="text"
-              className={filterInputClass}
-              value={f.name}
-              onChange={(e) => setF((prev) => ({ ...prev, name: e.target.value }))}
-              placeholder="Szukaj po nazwie…"
-            />
-          </FilterField>
-        );
-      case "country":
-        return (
-          <FilterField key={fieldId} label="Kraj">
-            <input
-              type="text"
-              className={filterInputClass}
-              value={f.country}
-              onChange={(e) => setF((prev) => ({ ...prev, country: e.target.value }))}
-              placeholder="np. Polska"
-            />
-          </FilterField>
-        );
-      case "status":
-        return (
-          <FilterField key={fieldId} label="Status">
-            <select
-              className={filterSelectClass}
-              value={f.status}
-              onChange={(e) => setF((prev) => ({ ...prev, status: e.target.value as UiFilters["status"] }))}
-            >
-              <option value="all">Wszystkie</option>
-              <option value="active">Aktywne</option>
-              <option value="inactive">Nieaktywne</option>
-            </select>
-          </FilterField>
-        );
-      default:
-        return null;
-    }
-  };
-
-  const toggleSort = (key: SortKey) => {
-    if (sortBy === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    else {
-      setSortBy(key);
-      setSortDir(key === "product_count" ? "desc" : "asc");
-    }
+  const toggleFiltersExpanded = () => {
+    setFiltersExpanded((prev) => {
+      const n = !prev;
+      try {
+        localStorage.setItem("manufacturers.list.filtersExpanded", n ? "1" : "0");
+      } catch {
+        /* ignore */
+      }
+      return n;
+    });
   };
 
   const handleDelete = async (m: ManufacturerRead) => {
@@ -291,31 +217,64 @@ export default function ManufacturersPage({ defaultCreateOpen = false }: Props) 
 
   const totalCount = rows.length;
   const totalPages = Math.max(1, Math.ceil(totalCount / rowsPerPage));
-  const displayRows = useMemo(() => {
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
+  const paginatedRows = useMemo(() => {
     const start = (page - 1) * rowsPerPage;
     return rows.slice(start, start + rowsPerPage);
   }, [rows, page, rowsPerPage]);
 
+  const pageRowIds = useMemo(() => paginatedRows.map((r) => r.id), [paginatedRows]);
+  const allPageSelected = pageRowIds.length > 0 && pageRowIds.every((id) => selected.has(id));
+  const somePageSelected = pageRowIds.some((id) => selected.has(id));
+
+  useLayoutEffect(() => {
+    const el = headerSelectAllRef.current;
+    if (el) el.indeterminate = somePageSelected && !allPageSelected;
+  }, [somePageSelected, allPageSelected]);
+
+  const toggleOne = (id: number) => {
+    setSelected((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  };
+
+  const toggleAllPage = () => {
+    setSelected((prev) => {
+      const n = new Set(prev);
+      if (allPageSelected) {
+        pageRowIds.forEach((id) => n.delete(id));
+      } else {
+        pageRowIds.forEach((id) => n.add(id));
+      }
+      return n;
+    });
+  };
+
   const startRow = totalCount === 0 ? 0 : (page - 1) * rowsPerPage + 1;
   const endRow = Math.min(page * rowsPerPage, totalCount);
 
-  const Th = ({
-    label,
-    sortKey,
-    align = "left",
-  }: {
-    label: string;
-    sortKey: SortKey;
-    align?: "left" | "center";
-  }) => (
-    <th
-      className={`${panelListDenseThSort} ${align === "center" ? "text-center" : "text-left"}`}
-      onClick={() => toggleSort(sortKey)}
-    >
-      {label}
-      {sortBy === sortKey && (sortDir === "asc" ? " ↑" : " ↓")}
-    </th>
-  );
+  const pageNumbers = useMemo(() => {
+    if (totalPages <= 1) return [1];
+    const max = 5;
+    if (totalPages <= max) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+    if (page <= 3) return [1, 2, 3, 4, 5];
+    if (page >= totalPages - 2) {
+      return Array.from({ length: 5 }, (_, i) => totalPages - 4 + i);
+    }
+    return [page - 2, page - 1, page, page + 1, page + 2];
+  }, [page, totalPages]);
+
+  const visibleIds = useMemo(() => rows.map((r) => r.id), [rows]);
+  const selectedIds = useMemo(() => Array.from(selected).sort((a, b) => a - b), [selected]);
 
   return (
     <>
@@ -329,226 +288,187 @@ export default function ManufacturersPage({ defaultCreateOpen = false }: Props) 
       ) : null}
 
       <PageLayout fullBleed>
-            <ListPageHeader
-              title={UI_STRINGS.navigation.manufacturers}
-              description="Słownik producentów, logo na listach oraz skrót do produktów przypisanych do marki."
-              breadcrumbs={[
-                { label: "Asortyment", to: "/products/list" },
-                { label: UI_STRINGS.navigation.manufacturers },
-              ]}
-              actions={
-                <button
-                  type="button"
-                  onClick={() => setExportOpen(true)}
-                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 shadow-sm hover:bg-slate-50"
-                >
-                  Eksport
-                </button>
-              }
-            />
+        <ListPageHeader
+          title={`${UI_STRINGS.navigation.manufacturers}${loading ? "" : ` (${totalCount} wyników)`}`}
+          description="Słownik producentów, logo na listach oraz skrót do produktów przypisanych do marki."
+          breadcrumbs={[
+            { label: "Asortyment", to: "/products/list" },
+            { label: UI_STRINGS.navigation.manufacturers },
+          ]}
+          actions={
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={toggleFiltersExpanded}
+                className={listSellasistToolbarToggleBtn}
+                aria-expanded={filtersExpanded}
+              >
+                {filtersExpanded ? "Ukryj filtry" : manufacturerFilterToggleLabel(activeFilterCount)}
+                <ChevronDown
+                  className={`h-4 w-4 shrink-0 transition-transform ${filtersExpanded ? "rotate-180" : ""}`}
+                  aria-hidden
+                />
+              </button>
+              <button
+                type="button"
+                onClick={() => setColumnPickerOpen(true)}
+                className={listSellasistToolbarSquareBtn}
+                title="Widoczne pola"
+                aria-label="Widoczne pola"
+              >
+                <TableProperties className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
+              </button>
+              <button
+                type="button"
+                onClick={() => setExportOpen(true)}
+                className={listSellasistToolbarSquareBtn}
+                title="Eksport"
+                aria-label="Eksport"
+              >
+                <Download className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
+              </button>
+            </div>
+          }
+        />
 
-            <ModuleListFiltersCard
-              onClear={clearFilters}
-              onApply={applyFilters}
-              applyLabel="Filtruj"
-              clearLabel="Wyczyść filtry"
-              showFieldPicker
-              onOpenFieldPicker={() => setMfrVisibilityOpen(true)}
-            >
-              <FilterGrid>
-                {mfrVisibleFields.map((id) => renderMfrFilterField(id, filters, setFilters)).filter(Boolean)}
-              </FilterGrid>
-              <div className="flex justify-end gap-2 border-t border-slate-100 pt-2.5 sm:hidden">
-                <button type="button" onClick={clearFilters} className={filterToolbarBtnSecondary}>
-                  Wyczyść filtry
-                </button>
-                <button type="button" onClick={applyFilters} className={filterToolbarBtnApply}>
-                  Filtruj
-                </button>
-              </div>
-            </ModuleListFiltersCard>
-            <FilterVisibilityModal
-              open={mfrVisibilityOpen}
-              onClose={() => setMfrVisibilityOpen(false)}
-              title="Widoczne pola — producenci"
-              selectedOrder={mfrVisibleFields}
-              catalog={MFR_FILTER_CATALOG}
-              onSave={setMfrFieldOrder}
-            />
+        <ManufacturerListFiltersPanel
+          expanded={filtersExpanded}
+          draft={draftFilters}
+          onChangeDraft={(patch) => setDraftFilters((d) => ({ ...d, ...patch }))}
+          onApply={applyFilters}
+          onClear={clearFilters}
+          tenants={tenants}
+          tenantId={tenantId}
+          onTenantChange={(id) => {
+            setTenantId(id);
+            setPage(1);
+          }}
+        />
 
-            {err ? <p className="text-sm text-red-600">{err}</p> : null}
-      {loading ? (
-        <p className="text-slate-500">Ładowanie…</p>
-      ) : rows.length === 0 ? (
-        <div className="py-10 text-center text-sm text-slate-600">
-          <p>Brak producentów — zmień filtry lub dodaj pierwszego.</p>
-          <p className="mt-3 max-w-md text-xs leading-relaxed text-slate-500">
-            Aby dodać producenta, rozwiń „Asortyment” w menu bocznym i użyj przycisku „+” przy pozycji „{UI_STRINGS.navigation.manufacturers}”.
-          </p>
-        </div>
-      ) : (
-            <div className="min-w-0 overflow-x-auto">
-          <div className="flex items-center justify-between gap-4 border-b border-slate-200 bg-slate-50/80 px-4 py-3">
-            <span className="text-sm text-slate-600">Pokaż na stronie</span>
-            <select
-              value={rowsPerPage}
-              onChange={(e) => {
-                setRowsPerPage(Number(e.target.value));
-                setPage(1);
-              }}
-              className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm"
+        {err && !loading && rows.length > 0 ? (
+          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">{err}</div>
+        ) : null}
+
+        {loading ? (
+          <div className="space-y-2 py-8" aria-busy="true" aria-label="Ładowanie listy producentów">
+            {[0, 1, 2, 3, 4].map((i) => (
+              <div key={i} className="h-14 animate-pulse rounded-md bg-slate-100" />
+            ))}
+          </div>
+        ) : err ? (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-8 text-center">
+            <p className="text-sm font-medium text-amber-900">{err}</p>
+            <button
+              type="button"
+              onClick={() => void load()}
+              className="mt-4 rounded-lg border border-amber-300 bg-white px-4 py-2 text-sm font-semibold text-amber-950 hover:bg-amber-100"
             >
-              {ROWS_PER_PAGE_OPTIONS.map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
+              Spróbuj ponownie
+            </button>
           </div>
-          <div className={panelListDenseTableScrollWrapClass}>
-            <table className={panelListDenseTableClass}>
-              <thead className={panelListDenseTheadClass}>
-                <tr>
-                  <th className={panelListDenseActionsOnlyHeaderClass}>Akcje</th>
-                  <th className={`${panelListDenseThBase} w-[4.5rem] text-left`}>Logo</th>
-                  <Th label="Nazwa" sortKey="name" />
-                  <th className={`${panelListDenseThBase} text-left`}>Kraj</th>
-                  <Th label="Produkty" sortKey="product_count" align="center" />
-                  <th className={`${panelListDenseThBase} text-left`}>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {displayRows.map((m) => {
-                  const logo = firstLogoUrl(m.logo_url ?? undefined);
-                  return (
-                    <tr key={m.id} className={panelListDenseRowClass} onClick={() => openEdit(m.id)}>
-                      <td className={panelListDenseActionsOnlyCellClass} onClick={(e) => e.stopPropagation()}>
-                        <OperationalActionColumn
-                          aria-label="Akcje producenta"
-                          slots={[
-                            <OperationalActionButton key="edit" onClick={() => openEdit(m.id)} title="Edytuj producenta" aria-label="Edytuj producenta">
-                              <Pencil className="text-slate-600" strokeWidth={2} aria-hidden />
-                            </OperationalActionButton>,
-                            <OperationalActionButton
-                              key="del"
-                              variant="danger"
-                              disabled={deleteBusy === m.id}
-                              onClick={() => void handleDelete(m)}
-                              title={
-                                m.product_count > 0
-                                  ? "Dezaktywuj producenta (są przypisane produkty)"
-                                  : "Usuń producenta z bazy"
-                              }
-                              aria-label={m.product_count > 0 ? "Dezaktywuj producenta" : "Usuń producenta"}
-                            >
-                              <Trash2 strokeWidth={2} aria-hidden />
-                            </OperationalActionButton>,
-                          ]}
-                        />
-                      </td>
-                      <td className={`${panelListDenseTdBase} align-top`} onClick={(e) => e.stopPropagation()}>
-                        <button
-                          type="button"
-                          onClick={() => openEdit(m.id)}
-                          title="Edytuj producenta"
-                          className="group flex h-16 w-16 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-lg border border-slate-200/90 bg-transparent p-0.5 text-left transition hover:border-violet-300 hover:ring-2 hover:ring-violet-200/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
-                        >
-                          {logo ? (
-                            <img
-                              src={logo}
-                              alt=""
-                              className="max-h-full max-w-full object-contain object-center"
-                              loading="lazy"
-                              onError={(e) => {
-                                (e.currentTarget as HTMLImageElement).style.visibility = "hidden";
-                              }}
-                            />
-                          ) : (
-                            <span className="text-xs text-slate-400 group-hover:text-slate-600">—</span>
-                          )}
-                        </button>
-                      </td>
-                      <td className={`${panelListDenseTdBase} min-w-[10rem] align-top`}>
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-sm font-semibold text-slate-900">{m.name}</span>
-                          {(m.company_name?.trim() || m.tax_id?.trim()) ? (
-                            <span className="text-xs leading-snug text-slate-500">
-                              {[
-                                m.company_name?.trim() || null,
-                                m.tax_id?.trim() ? `NIP: ${m.tax_id.trim()}` : null,
-                              ]
-                                .filter(Boolean)
-                                .join(" · ")}
-                            </span>
-                          ) : null}
-                        </div>
-                      </td>
-                      <td className={`${panelListDenseTdBase} align-top text-slate-700`}>{(m.country ?? "").trim() || "—"}</td>
-                      <td className={`${panelListDenseTdBase} align-top text-center tabular-nums text-slate-800`}>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            goToProductsByManufacturer(m);
-                          }}
-                          className={`inline-block max-w-full text-center text-sm ${
-                            m.product_count > 0
-                              ? "font-medium text-violet-700 underline decoration-violet-300 underline-offset-2 hover:text-violet-900"
-                              : "cursor-pointer text-slate-500 hover:text-slate-800"
-                          }`}
-                          title="Otwórz listę produktów z filtrem po tym producencie"
-                        >
-                          {m.product_count}
-                        </button>
-                      </td>
-                      <td className={`${panelListDenseTdBase} align-top`}>
-                        {m.active ? (
-                          <span className="inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-900 ring-1 ring-emerald-200">
-                            Aktywny
-                          </span>
-                        ) : (
-                          <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 ring-1 ring-slate-200">
-                            Nieaktywny
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+        ) : rows.length === 0 ? (
+          <div className="rounded-xl border border-slate-200 bg-white px-6 py-16 text-center">
+            <p className="text-sm font-medium text-slate-800">Brak producentów</p>
+            <p className="mt-1 text-sm text-slate-500">Zmień filtry lub dodaj pierwszego producenta.</p>
+            <p className="mt-3 max-w-md mx-auto text-xs leading-relaxed text-slate-500">
+              Aby dodać producenta, rozwiń „Asortyment” w menu bocznym i użyj przycisku „+” przy pozycji „
+              {UI_STRINGS.navigation.manufacturers}”.
+            </p>
           </div>
-          {totalCount > 0 && (
-            <div className="flex items-center justify-between gap-4 border-t border-gray-200 bg-gray-50/80 px-4 py-3 text-sm text-gray-600">
-              <span>
-                {startRow}–{endRow} z {totalCount}
-              </span>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  disabled={page <= 1}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  className="rounded border bg-white px-3 py-1 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Poprzednia
-                </button>
-                <span className="py-1">
-                  Strona {page} z {totalPages}
-                </span>
-                <button
-                  type="button"
-                  disabled={page >= totalPages}
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  className="rounded border bg-white px-3 py-1 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Następna
-                </button>
+        ) : (
+          <div className={`${moduleTableCardClass} min-w-0`}>
+            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+              <ManufacturersListTable
+                rows={paginatedRows}
+                columnOrder={columnOrder}
+                selected={selected}
+                deleteBusy={deleteBusy}
+                allPageSelected={allPageSelected}
+                headerSelectAllRef={headerSelectAllRef}
+                onToggleOne={toggleOne}
+                onToggleAllPage={toggleAllPage}
+                onEdit={openEdit}
+                onDelete={(m) => void handleDelete(m)}
+                onProductsClick={goToProductsByManufacturer}
+              />
+              <div className={`${moduleTablePaginationFooterClass} px-4`}>
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="text-sm font-medium tabular-nums text-slate-600">
+                    {startRow}–{endRow} z {totalCount}
+                  </span>
+                  <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
+                    Na stronę
+                    <select
+                      value={rowsPerPage}
+                      onChange={(e) => {
+                        setRowsPerPage(Number(e.target.value));
+                        setPage(1);
+                      }}
+                      className={`${listSellasistInputClass} !h-8 w-auto min-w-[4rem] py-0 pr-7 text-sm`}
+                    >
+                      {ROWS_PER_PAGE_OPTIONS.map((n) => (
+                        <option key={n} value={n}>
+                          {n}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <div className="flex flex-wrap items-center justify-end gap-1">
+                  <button
+                    type="button"
+                    disabled={page <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    className="rounded-md border border-transparent px-2 py-1 text-sm font-medium text-slate-600 hover:bg-slate-200/60 disabled:opacity-40"
+                  >
+                    Poprzednia
+                  </button>
+                  {pageNumbers.map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => setPage(n)}
+                      className={`min-w-[2rem] rounded-md px-1.5 py-1 text-sm font-semibold tabular-nums ${
+                        n === page ? "bg-slate-800 text-white" : "text-slate-600 hover:bg-slate-200/60"
+                      }`}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    disabled={page >= totalPages}
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    className="rounded-md border border-transparent px-2 py-1 text-sm font-medium text-slate-600 hover:bg-slate-200/60 disabled:opacity-40"
+                  >
+                    Następna
+                  </button>
+                  <button
+                    type="button"
+                    disabled={page >= totalPages}
+                    onClick={() => setPage(totalPages)}
+                    className="ml-0.5 rounded-md border border-transparent px-2 py-1 text-sm font-medium text-slate-600 hover:bg-slate-200/60 disabled:opacity-40"
+                  >
+                    Ostatnia
+                  </button>
+                </div>
               </div>
             </div>
-          )}
-            </div>
-      )}
+          </div>
+        )}
       </PageLayout>
+
+      <FilterVisibilityModal
+        open={columnPickerOpen}
+        onClose={() => setColumnPickerOpen(false)}
+        title="Kolumny listy producentów"
+        selectedColumnLabel="Widoczne"
+        availableColumnLabel="Dostępne"
+        selectedOrder={columnOrder}
+        catalog={MANUFACTURER_LIST_COLUMN_CATALOG}
+        defaultVisibleOrder={MANUFACTURER_LIST_DEFAULT_COLUMN_ORDER}
+        onSave={persistColumnOrder}
+      />
 
       <ManufacturerEditModal
         open={modalOpen}
@@ -563,8 +483,8 @@ export default function ManufacturersPage({ defaultCreateOpen = false }: Props) 
         onClose={() => setExportOpen(false)}
         tenantId={tenantId}
         entityType="manufacturers"
-        selectedIds={[]}
-        fallbackIds={displayRows.map((m) => m.id)}
+        selectedIds={selectedIds.length > 0 ? selectedIds : []}
+        fallbackIds={visibleIds}
       />
     </>
   );

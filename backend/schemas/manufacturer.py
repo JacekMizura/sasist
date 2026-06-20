@@ -51,6 +51,11 @@ class ManufacturerRead(BaseModel):
         0.0,
         description="Sum of inventory.quantity for those products (separate from product_count).",
     )
+    supplier_count: int = Field(
+        0,
+        ge=0,
+        description="Distinct suppliers offering at least one product of this manufacturer.",
+    )
     out_of_stock_product_count: int = Field(
         0,
         description="How many of those products have zero or missing inventory quantity.",
