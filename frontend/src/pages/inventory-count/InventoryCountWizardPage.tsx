@@ -44,16 +44,16 @@ import { DAMAGE_TENANT_ID } from "@/pages/damage/damageShared";
 const STEPS = ["Typ", "Zakres", "Ustawienia", "Podsumowanie"] as const;
 
 const INV_TYPES = [
-  { id: "FULL", label: "Pełna inwentaryzacja", hint: "Cały magazyn — wszystkie lokalizacje" },
-  { id: "PARTIAL", label: "Inwentaryzacja częściowa", hint: "Strefy, lokalizacje, produkty, nośniki…" },
-  { id: "CYCLE", label: "Liczenie rotacyjne", hint: "Rotacja ABC / filtry dynamiczne" },
+  { id: "FULL", label: "Pełna", hint: "Cały magazyn — wszystkie lokalizacje i stany" },
+  { id: "PARTIAL", label: "Częściowa", hint: "Wybrane strefy, lokalizacje, produkty lub nośniki" },
+  { id: "CYCLE", label: "Rotacyjna", hint: "Liczenie rotacyjne ABC / filtry dynamiczne" },
   { id: "CONTROL", label: "Kontrolna", hint: "Weryfikacja wybranych pozycji bez korekt stanów" },
 ] as const;
 
 export default function InventoryCountWizardPage() {
   const { documentId } = useParams();
   const navigate = useNavigate();
-  const { warehouseId, hasActiveWarehouse } = useActiveWarehouseContext();
+  const { warehouseId, hasActiveWarehouse, warehouse } = useActiveWarehouseContext();
   const tenantId = DAMAGE_TENANT_ID;
 
   const [step, setStep] = useState(0);
@@ -280,6 +280,57 @@ export default function InventoryCountWizardPage() {
       </div>
     ) : null;
 
+  const summaryPanel = (
+    <dl className="space-y-3 text-sm">
+      <div>
+        <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Typ</dt>
+        <dd className="font-medium text-slate-900">{inventoryTypeLabel(inventoryType)}</dd>
+      </div>
+      <div>
+        <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Tytuł</dt>
+        <dd className="font-medium text-slate-900">{title.trim() || "—"}</dd>
+      </div>
+      <div>
+        <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Magazyn</dt>
+        <dd className="text-slate-700">{warehouse?.name ?? "—"}</dd>
+      </div>
+      {step >= 1 ? (
+        <div>
+          <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Zakres</dt>
+          <dd className="text-slate-700">{inventoryScopeModeLabel(effectiveScope)}</dd>
+        </div>
+      ) : null}
+      {step >= 2 ? (
+        <>
+          <div>
+            <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Liczenie</dt>
+            <dd className="text-slate-700">{inventoryCountModeLabel(countMode)}</dd>
+          </div>
+          <div>
+            <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Ruchy</dt>
+            <dd className="text-slate-700">{inventoryMovementPolicyLabel(movementPolicy)}</dd>
+          </div>
+        </>
+      ) : null}
+      {step === 3 && summaryPreview ? (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-900">
+          <p className="text-xs font-semibold">Szacowany zakres</p>
+          <ul className="mt-1 space-y-0.5 text-xs">
+            <li>{summaryPreview.location_count} lokalizacji</li>
+            <li>{summaryPreview.product_count} produktów</li>
+            <li>{summaryPreview.line_count} pozycji</li>
+          </ul>
+        </div>
+      ) : null}
+      {doc?.number ? (
+        <div>
+          <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Dokument</dt>
+          <dd className="font-mono text-xs text-slate-700">{doc.number}</dd>
+        </div>
+      ) : null}
+    </dl>
+  );
+
   return (
     <InventoryWizardView
       step={step}
@@ -298,6 +349,7 @@ export default function InventoryCountWizardPage() {
       notes={notes}
       onNotesChange={setNotes}
       stepContent={stepContent}
+      summaryPanel={summaryPanel}
     />
   );
 }

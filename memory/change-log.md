@@ -1,5 +1,14 @@
 # Change log
 
+## 2026-06-08 — Inwentaryzacja (ERP): przebudowa UI na standard systemowy
+
+- `InventoryLayout`: `TabsNav` + breadcrumb (jak Dostawcy / Materiały magazynowe); pomarańczowy CTA „Nowa inwentaryzacja”; kreator pełnoekranowy bez tabów
+- Pulpit: `PurchasingKpiGrid` × 6 + sekcje `PurchasingTableSection` (aktywne / do zatwierdzenia / zakończone)
+- Dokumenty: licznik wyników, filtry (szukaj / status / typ), tabela modułowa, dropdown akcji (Otwórz / Edytuj / Duplikuj / Eksportuj / Usuń)
+- Kreator: layout 2-kolumnowy (formularz + panel podsumowania), karty typu z pomarańczowym zaznaczeniem
+- Raporty: karty raportów z badge statusu i eksportem PDF/XLSX
+- Badge statusów: `inventoryDocumentStatusBadgeClass` (operational semantics)
+
 ## 2026-06-08 — Wózki / Wózki z koszykami: ujednolicony layout WMS
 
 - Wspólny `CartsFleetList` (BULK + MULTI): `ListPageHeader`, KPI (`PurchasingKpiGrid`), sekcje grup pełnej szerokości

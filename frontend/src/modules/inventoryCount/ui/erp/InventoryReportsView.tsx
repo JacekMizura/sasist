@@ -1,23 +1,11 @@
 import { CheckCircle2, FileSpreadsheet, FileText, Loader2 } from "lucide-react";
 
 import type { InventoryDocumentRead } from "@/api/inventoryCountApi";
+import { filterInputClass, filterLabelClass, filterToolbarBtnSecondary } from "@/components/filters/filterUiTokens";
 import { inventoryReportDescription } from "../../inventoryCountUiLabels";
 import { inventoryDocOptionLabel } from "./InventoryDocListRow";
 import InventoryDocumentPicker from "./InventoryDocumentPicker";
 import InventoryStatusBadge from "./InventoryStatusBadge";
-import {
-  erpFieldLabel,
-  erpPageShell,
-  erpSurfaceCard,
-  erpTable,
-  erpTableScroll,
-  erpTableWrap,
-  erpTbody,
-  erpTd,
-  erpTh,
-  erpThead,
-  erpTr,
-} from "./theme";
 
 export type ReportRow = {
   kind: string;
@@ -35,7 +23,7 @@ type Props = {
   downloadBusy: string | null;
 };
 
-/** Reports — document picker card + export table (presentation only). */
+/** Reports — karty raportów + wybór dokumentu. */
 export default function InventoryReportsView({
   reports,
   documents,
@@ -55,104 +43,85 @@ export default function InventoryReportsView({
   const selectedDoc = documents.find((d) => d.id === selectedDocumentId);
 
   return (
-    <div className={erpPageShell}>
-      <div
-        className={`${erpSurfaceCard} mb-6 flex flex-col items-start justify-between gap-6 p-6 md:flex-row md:items-center`}
-      >
-        <div className="w-full max-w-md flex-1">
-          <label htmlFor="inventory-report-doc" className={erpFieldLabel}>
-            Dokument
-          </label>
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-lg font-semibold text-slate-900">Raporty inwentaryzacji</h2>
+        <p className="mt-1 text-sm text-slate-500">Eksport protokołów, różnic i aktywności operatorów.</p>
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <label htmlFor="inventory-report-doc" className={filterLabelClass}>
+          Dokument źródłowy
+        </label>
+        <div className="mt-2 flex flex-col gap-4 md:flex-row md:items-end">
           <InventoryDocumentPicker
             id="inventory-report-doc"
             options={pickerOptions}
             value={selectedDocumentId}
             onChange={onSelectDocument}
-            className="w-full"
-            triggerClassName="flex w-full cursor-pointer items-center justify-between rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-left text-sm text-slate-900 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-indigo-500"
+            className="min-w-0 flex-1"
+            triggerClassName={`${filterInputClass} flex w-full cursor-pointer items-center justify-between text-left`}
           />
+          {!selectedDocumentId ? (
+            <p className="text-sm text-slate-500 md:max-w-xs">Wybierz dokument, aby odblokować eksport.</p>
+          ) : (
+            <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+              <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
+              <span>
+                Załadowano: <span className="font-semibold">{selectedDoc?.number ?? selectedDocumentId}</span>
+              </span>
+            </div>
+          )}
         </div>
-
-        {!selectedDocumentId ? (
-          <div className="w-full px-4 py-3 text-sm text-slate-500 md:w-auto">
-            Wybierz dokument powyżej, aby wygenerować i pobrać raporty.
-          </div>
-        ) : (
-          <div className="flex w-full items-center gap-3 rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 md:w-auto">
-            <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-500" />
-            <p>
-              Dokument <span className="font-semibold">{selectedDoc?.number ?? selectedDocumentId}</span> załadowany.
-            </p>
-          </div>
-        )}
       </div>
 
-      <div className={erpTableWrap}>
-        <div className={erpTableScroll}>
-          <table className={erpTable}>
-            <thead className={erpThead}>
-              <tr>
-                <th className={erpTh}>Raport</th>
-                <th className={erpTh}>Opis</th>
-                <th className={erpTh}>Status</th>
-                <th className={`${erpTh} text-right`}>Eksport</th>
-              </tr>
-            </thead>
-            <tbody className={erpTbody}>
-              {reports.map((report) => (
-                <tr key={report.kind} className={`${erpTr} group`}>
-                  <td className={`${erpTd} font-medium text-slate-900`}>{report.label}</td>
-                  <td className={`${erpTd} text-slate-500`}>{inventoryReportDescription(report.kind)}</td>
-                  <td className={erpTd}>
-                    <InventoryStatusBadge status={report.status} variant="report" />
-                  </td>
-                  <td className={`${erpTd} text-right`}>
-                    <div className="flex items-center justify-end gap-3">
-                      {report.formats.includes("pdf") ? (
-                        <button
-                          type="button"
-                          disabled={!selectedDocumentId || downloadBusy != null}
-                          onClick={() => onDownload(report.kind, "pdf")}
-                          className={`inline-flex items-center gap-1.5 text-xs font-medium transition-all ${
-                            selectedDocumentId
-                              ? "cursor-pointer text-red-500 hover:text-red-700"
-                              : "cursor-not-allowed text-slate-300"
-                          }`}
-                        >
-                          {downloadBusy === `${report.kind}-pdf` ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <FileText className="h-3.5 w-3.5" />
-                          )}
-                          PDF
-                        </button>
-                      ) : null}
-                      {report.formats.includes("xlsx") ? (
-                        <button
-                          type="button"
-                          disabled={!selectedDocumentId || downloadBusy != null}
-                          onClick={() => onDownload(report.kind, "xlsx")}
-                          className={`inline-flex items-center gap-1.5 text-xs font-medium transition-all ${
-                            selectedDocumentId
-                              ? "cursor-pointer text-emerald-600 hover:text-emerald-800"
-                              : "cursor-not-allowed text-slate-300"
-                          }`}
-                        >
-                          {downloadBusy === `${report.kind}-xlsx` ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <FileSpreadsheet className="h-3.5 w-3.5" />
-                          )}
-                          XLSX
-                        </button>
-                      ) : null}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      <div className="space-y-3">
+        {reports.map((report) => (
+          <article
+            key={report.kind}
+            className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-colors hover:border-slate-300 md:flex-row md:items-center md:justify-between"
+          >
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-3">
+                <h3 className="text-base font-semibold text-slate-900">{report.label}</h3>
+                <InventoryStatusBadge status={report.status} variant="report" />
+              </div>
+              <p className="mt-1 text-sm text-slate-500">{inventoryReportDescription(report.kind)}</p>
+            </div>
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              {report.formats.includes("pdf") ? (
+                <button
+                  type="button"
+                  disabled={!selectedDocumentId || downloadBusy != null}
+                  onClick={() => onDownload(report.kind, "pdf")}
+                  className={`${filterToolbarBtnSecondary} inline-flex items-center gap-1.5 disabled:cursor-not-allowed disabled:opacity-40`}
+                >
+                  {downloadBusy === `${report.kind}-pdf` ? (
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                  ) : (
+                    <FileText className="h-4 w-4 text-red-500" aria-hidden />
+                  )}
+                  PDF
+                </button>
+              ) : null}
+              {report.formats.includes("xlsx") ? (
+                <button
+                  type="button"
+                  disabled={!selectedDocumentId || downloadBusy != null}
+                  onClick={() => onDownload(report.kind, "xlsx")}
+                  className={`${filterToolbarBtnSecondary} inline-flex items-center gap-1.5 disabled:cursor-not-allowed disabled:opacity-40`}
+                >
+                  {downloadBusy === `${report.kind}-xlsx` ? (
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                  ) : (
+                    <FileSpreadsheet className="h-4 w-4 text-emerald-600" aria-hidden />
+                  )}
+                  XLSX
+                </button>
+              ) : null}
+            </div>
+          </article>
+        ))}
       </div>
     </div>
   );

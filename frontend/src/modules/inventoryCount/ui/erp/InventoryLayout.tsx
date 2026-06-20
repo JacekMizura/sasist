@@ -1,66 +1,50 @@
-import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { useMemo } from "react";
+import { Link, Outlet, useLocation } from "react-router-dom";
 import { Plus } from "lucide-react";
 
 import PageLayout from "@/components/layout/PageLayout";
-import { PageHeader } from "@/components/layout/PageHeader";
-import { listSellasistIconBtn } from "@/components/listPage/listSellasistTokens";
+import { TabsNav } from "@/components/layout/TabsNav";
+import { flatSectionDividerClass } from "@/components/layout/flatSectionTokens";
+import { ModuleListBreadcrumb } from "@/components/listPage/moduleList";
+import { filterToolbarBtnApply } from "@/components/filters/filterUiTokens";
 import { ERP_INVENTORY_COUNT_TABS } from "../../erpInventoryCountTabs";
 import { erpInventoryCountPaths } from "../../inventoryCountPaths";
-import { erpTabIndicator, erpTabLink } from "./theme";
 
-/** ERP inventory — WMS-aligned module shell. */
+/** Kreator — pełnoekranowy shell bez zakładek modułu (wzorzec Materiały magazynowe). */
+const FULL_PAGE_WIZARD = /^\/inventory-count\/wizard(?:\/|$)/;
+
+/** ERP inventory — shell modułu (breadcrumb → tytuł + CTA → zakładki → treść). */
 export default function InventoryLayout() {
   const { pathname } = useLocation();
-  const onWizard = pathname.startsWith(erpInventoryCountPaths.wizard);
+  const fullPageWizard = useMemo(() => FULL_PAGE_WIZARD.test(pathname), [pathname]);
 
-  const primaryAction = !onWizard ? (
-    <NavLink
-      to={erpInventoryCountPaths.wizard}
-      className={listSellasistIconBtn}
-      title="Nowa inwentaryzacja"
-      aria-label="Nowa inwentaryzacja"
-    >
-      <Plus className="h-4 w-4" strokeWidth={2.25} aria-hidden />
-    </NavLink>
-  ) : null;
+  if (fullPageWizard) {
+    return (
+      <PageLayout fullBleed>
+        <Outlet />
+      </PageLayout>
+    );
+  }
 
   return (
-    <PageLayout fullBleed cardClassName="relative min-h-0 w-full">
-      <div className="min-w-0">
-        <PageHeader
-          title="Inwentaryzacja magazynowa"
-          actions={primaryAction}
-          breadcrumbs={[
-            { label: "Magazyn" },
-            { label: "Inwentaryzacja" },
-          ]}
-          className="space-y-2"
-        />
-
-        <nav
-          className="mt-2 flex gap-5 border-b border-slate-200/90 text-sm"
-          aria-label="Inwentaryzacja magazynowa"
-        >
-          {ERP_INVENTORY_COUNT_TABS.map((tab) => (
-            <NavLink
-              key={tab.path}
-              to={tab.path}
-              end={tab.end ?? false}
-              className={({ isActive }) => erpTabLink(isActive)}
-            >
-              {({ isActive }) => (
-                <>
-                  {tab.label}
-                  {isActive ? <span className={erpTabIndicator} aria-hidden /> : null}
-                </>
-              )}
-            </NavLink>
-          ))}
-        </nav>
-
-        <div className="min-w-0 pt-4">
-          <Outlet />
-        </div>
+    <PageLayout fullBleed>
+      <ModuleListBreadcrumb items={[{ label: "Magazyn" }, { label: "Inwentaryzacja" }]} />
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <h1 className="text-2xl font-semibold text-slate-900">Inwentaryzacja magazynowa</h1>
+        <Link to={erpInventoryCountPaths.wizard} className={filterToolbarBtnApply}>
+          <Plus className="mr-1.5 inline h-4 w-4" strokeWidth={2} aria-hidden />
+          Nowa inwentaryzacja
+        </Link>
+      </div>
+      <TabsNav
+        items={ERP_INVENTORY_COUNT_TABS}
+        exact
+        aria-label="Inwentaryzacja magazynowa — zakładki"
+        className="mt-6 gap-8"
+      />
+      <div className={`${flatSectionDividerClass} mt-3`} aria-hidden />
+      <div className="pt-6">
+        <Outlet />
       </div>
     </PageLayout>
   );

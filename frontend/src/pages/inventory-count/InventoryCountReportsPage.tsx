@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
 
 import {
@@ -14,6 +15,7 @@ import { ActiveWarehouseRequiredBanner } from "@/components/layout/ActiveWarehou
 import { DAMAGE_TENANT_ID } from "@/pages/damage/damageShared";
 
 export default function InventoryCountReportsPage() {
+  const [searchParams] = useSearchParams();
   const { warehouseId, hasActiveWarehouse } = useActiveWarehouseContext();
   const tenantId = DAMAGE_TENANT_ID;
   const [reports, setReports] = useState<
@@ -31,6 +33,13 @@ export default function InventoryCountReportsPage() {
       .then(setDocuments)
       .catch(() => setDocuments([]));
   }, [tenantId, warehouseId]);
+
+  useEffect(() => {
+    const raw = searchParams.get("documentId");
+    if (!raw) return;
+    const id = Number(raw);
+    if (Number.isFinite(id) && id > 0) setDocumentId(id);
+  }, [searchParams]);
 
   if (!hasActiveWarehouse) {
     return (
