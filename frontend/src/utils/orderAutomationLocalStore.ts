@@ -10,6 +10,7 @@ const RULES_ASSORTMENT_LEGACY_SUFFIX = ".assortment";
 const RULES_INVENTORY_SUFFIX = ".inventory";
 const LOGS_PREFIX = "orderAutomation.logs.v1";
 const GROUPS_PREFIX = "orderAutomation.actionGroups.v1";
+const PUBLIC_ID_COUNTER_PREFIX = "orderAutomation.publicIdCounter.v1";
 
 export type OrderAutomationScope = "orders" | "inventory";
 
@@ -39,6 +40,49 @@ function groupsKey(tenantId: number, warehouseId: number) {
   return `${GROUPS_PREFIX}:${tenantId}:${warehouseId}`;
 }
 
+function publicIdCounterKey(tenantId: number, warehouseId: number, scope: OrderAutomationScope) {
+  return `${PUBLIC_ID_COUNTER_PREFIX}:${scope}:${tenantId}:${warehouseId}`;
+}
+
+/** Przypisuje brakujące publicId regułom (migracja starych danych). */
+export function normalizeRulesPublicIds(
+  rules: OrderAutomationRule[],
+  tenantId: number,
+  warehouseId: number,
+  scope: OrderAutomationScope,
+): OrderAutomationRule[] {
+  const key = publicIdCounterKey(tenantId, warehouseId, scope);
+  let counter = Number(localStorage.getItem(key) ?? "0");
+  if (!Number.isFinite(counter) || counter < 0) counter = 0;
+
+  let changed = false;
+  const next = rules.map((r) => {
+    if (typeof r.publicId === "number" && r.publicId > 0) {
+      counter = Math.max(counter, r.publicId);
+      return r;
+    }
+    counter += 1;
+    changed = true;
+    return { ...r, publicId: counter };
+  });
+
+  if (changed || counter > Number(localStorage.getItem(key) ?? "0")) {
+    localStorage.setItem(key, String(counter));
+  }
+  return next;
+}
+
+/** Następny wolny publicId dla nowej reguły. */
+export function allocateRulePublicId(tenantId: number, warehouseId: number, scope: OrderAutomationScope): number {
+  const key = publicIdCounterKey(tenantId, warehouseId, scope);
+  const rules = loadAutomationRules(tenantId, warehouseId, scope);
+  normalizeRulesPublicIds(rules, tenantId, warehouseId, scope);
+  const current = Number(localStorage.getItem(key) ?? "0");
+  const next = current + 1;
+  localStorage.setItem(key, String(next));
+  return next;
+}
+
 export function loadAutomationRules(
   tenantId: number,
   warehouseId: number,
@@ -56,7 +100,12 @@ export function loadAutomationRules(
     if (!raw) return [];
     const x = JSON.parse(raw) as unknown;
     if (!Array.isArray(x)) return [];
-    return x as OrderAutomationRule[];
+    const rules = x as OrderAutomationRule[];
+    const normalized = normalizeRulesPublicIds(rules, tenantId, warehouseId, scope);
+    if (normalized.some((r, i) => r.publicId !== rules[i]?.publicId)) {
+      saveAutomationRules(tenantId, warehouseId, normalized, scope);
+    }
+    return normalized;
   } catch {
     return [];
   }

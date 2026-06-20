@@ -3,9 +3,13 @@
  */
 export const oaInp =
   "h-9 w-full min-w-0 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-400 focus:ring-2 focus:ring-slate-300/35";
+/** Pole wyszukiwania z ikoną lupy po lewej — bez px-3, żeby pl-10 nie kolidowało. */
+export const oaSearchInp =
+  "h-9 w-full min-w-0 rounded-lg border border-slate-200 bg-white py-0 pl-10 pr-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-400 focus:ring-2 focus:ring-slate-300/35";
 export const oaInpDense =
   "h-8 w-full min-w-0 rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-400 focus:ring-2 focus:ring-slate-300/35";
-export const oaSel = `${oaInp} cursor-pointer appearance-none pr-9`;
+export const oaSel =
+  "h-9 min-w-[12rem] shrink-0 cursor-pointer appearance-none rounded-lg border border-slate-200 bg-white py-0 pl-3 pr-8 text-sm text-slate-900 outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-300/35";
 export const oaLbl = "block text-xs font-medium text-slate-600";
 
 export const oaBtn =
@@ -17,7 +21,13 @@ export const oaBtnGhost =
 export const oaBtnDanger =
   "inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg border border-red-200 bg-white px-3 text-sm font-medium text-red-700 transition hover:bg-red-50";
 export const oaIconGhost =
-  "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-400 transition hover:border hover:border-slate-200 hover:text-slate-700";
+  "inline-flex h-9 w-9 min-h-9 min-w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 transition hover:border hover:border-slate-200 hover:text-slate-800";
+
+/** Przycisk akcji w wierszu listy — min. 36×36 px. */
+export const oaRowActionBtn =
+  "inline-flex h-9 w-9 min-h-9 min-w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:text-slate-900";
+export const oaRowActionBtnDanger =
+  `${oaRowActionBtn} text-red-600 hover:border-red-200 hover:text-red-700`;
 
 /** Toggle chip for triggers / filters */
 export const oaToggleChip = (active: boolean) =>
@@ -32,12 +42,12 @@ export const oaChip =
 export const oaWorkflowChipClass =
   "inline-block max-w-full rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs leading-snug text-slate-700 shadow-sm";
 
-/** Nagłówek grupy — sticky, białe tło */
+/** Nagłówek grupy — sticky, wyraźny kontrast */
 export const oaWorkflowGroupHeaderClass =
-  "sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3";
+  "group/header sticky top-0 z-20 flex w-full items-center gap-3 border-b border-slate-300 bg-white px-4 py-3.5 text-left transition hover:bg-white";
 
 /** Sekcja grupy */
-export const oaWorkflowGroupSectionClass = "overflow-hidden border-b border-slate-200 bg-white last:border-b-0";
+export const oaWorkflowGroupSectionClass = "border-b border-slate-200 bg-white last:border-b-0";
 
 /** @deprecated use moduleSettingsPageShellClass */
 export const oaWorkspaceMax = "w-full max-w-[87.5rem]";

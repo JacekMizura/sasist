@@ -3,6 +3,7 @@ import type { OrderAutomationLogEntry, OrderAutomationRule } from "../types/orde
 import type { OrderAutomationScope } from "../utils/orderAutomationLocalStore";
 import {
   appendAutomationLog,
+  allocateRulePublicId,
   loadAutomationLogs,
   loadAutomationRules,
   newUid,
@@ -76,13 +77,14 @@ export function useOrderAutomationStore(tenantId: number, warehouseId: number | 
       const copy: OrderAutomationRule = {
         ...src,
         id: newUid("rule"),
+        publicId: allocateRulePublicId(tenantId, warehouseId, scope),
         name: `${src.name} (kopia)`,
         enabled: false,
         stats: { lastRunAt: null, runCount: 0 },
       };
       persistRules([...rules, copy]);
     },
-    [persistRules, rules, warehouseId],
+    [persistRules, rules, warehouseId, tenantId, scope],
   );
 
   const recordTestRun = useCallback(

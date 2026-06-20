@@ -80,6 +80,8 @@ export type OrderAutomationStats = {
 
 export type OrderAutomationRule = {
   id: string;
+  /** Stały numer do supportu / logów (przypisywany przy zapisie). */
+  publicId?: number;
   name: string;
   group: string;
   enabled: boolean;

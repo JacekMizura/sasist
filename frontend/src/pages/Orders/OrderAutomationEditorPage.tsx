@@ -25,7 +25,7 @@ import type {
   OrderAutomationRule,
   OrderAutomationScheduleSpec,
 } from "../../types/orderAutomation";
-import { loadActionGroups, newUid, saveActionGroups } from "../../utils/orderAutomationLocalStore";
+import { loadActionGroups, allocateRulePublicId, newUid, saveActionGroups } from "../../utils/orderAutomationLocalStore";
 import {
   ORDER_AUTOMATION_CONDITION_FIELDS,
   buildConditionCategorySteps,
@@ -405,7 +405,12 @@ export default function OrderAutomationEditorPage() {
       toast.error("Podaj nazwę automatyzacji.");
       return;
     }
-    upsertRule(normalizeRule(draft));
+    let toSave = normalizeRule(draft);
+    if ((typeof toSave.publicId !== "number" || toSave.publicId <= 0) && wid != null) {
+      toSave = { ...toSave, publicId: allocateRulePublicId(DAMAGE_TENANT_ID, wid, scope) };
+      setDraft(toSave);
+    }
+    upsertRule(toSave);
     toast.success("Zapisano.");
     if (isNew) navigate(`${baseList}/${draft.id}/edit`, { replace: true });
   };

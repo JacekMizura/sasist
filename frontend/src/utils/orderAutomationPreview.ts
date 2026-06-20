@@ -40,6 +40,42 @@ export function formatConditionDisplayParts(
   return { field, op, value };
 }
 
+export function formatRuleDisplayId(rule: Pick<OrderAutomationRule, "id" | "publicId">): string {
+  if (typeof rule.publicId === "number" && rule.publicId > 0) {
+    return `#${rule.publicId}`;
+  }
+  const tail = rule.id.replace(/^rule_/, "").slice(0, 8);
+  return tail ? `#${tail}` : rule.id;
+}
+
+/** Główny tytuł workflow na liście (np. „Nowe → Pakowanie”). */
+export function formatRuleWorkflowTitle(
+  rule: Pick<OrderAutomationRule, "conditions" | "effects">,
+  statusNameById?: Map<number, string>,
+): string {
+  const statusCond = rule.conditions.find((c) => c.fieldKey === "order_status");
+  let from = "—";
+  if (statusCond) {
+    from = formatConditionDisplayParts(statusCond, statusNameById).value;
+  } else if (rule.conditions[0]) {
+    const p = formatConditionDisplayParts(rule.conditions[0], statusNameById);
+    from = p.value !== "—" ? p.value : p.field;
+  }
+
+  const statusEff = rule.effects.find((e) => e.kind === "change_status");
+  let to = "—";
+  if (statusEff) {
+    const id = Number(statusEff.payload.order_ui_status_id);
+    const name = Number.isFinite(id) && statusNameById?.get(id);
+    to = name ?? `#${statusEff.payload.order_ui_status_id ?? "?"}`;
+  } else if (rule.effects[0]) {
+    to = formatEffectPill(rule.effects[0], statusNameById);
+  }
+
+  if (from === "—" && to === "—") return "—";
+  return `${from} → ${to}`;
+}
+
 export function primaryTriggerLabel(r: Pick<OrderAutomationRule, "execution" | "manualTrigger">): string {
   const parts: string[] = [];
   if (r.execution.onOrderCreated) parts.push("Po utworzeniu");

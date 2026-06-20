@@ -13,10 +13,8 @@ import {
 import {
   ArrowRight,
   ChevronDown,
-  ChevronUp,
   Copy,
   FlaskConical,
-  GripVertical,
   MoreHorizontal,
   Pencil,
   Play,
@@ -39,12 +37,17 @@ import type { OrderUiStatusPanelSummary } from "../../types/orderUiStatus";
 import {
   formatConditionDisplayParts,
   formatEffectPill,
+  formatRuleDisplayId,
+  formatRuleWorkflowTitle,
   primaryTriggerLabel,
 } from "../../utils/orderAutomationPreview";
 import {
   oaBtn,
   oaBtnPri,
-  oaInp,
+  oaRowActionBtn,
+  oaRowActionBtnDanger,
+  oaSearchInp,
+  oaSel,
   oaWorkflowChipClass,
   oaWorkflowGroupHeaderClass,
   oaWorkflowGroupSectionClass,
@@ -54,6 +57,8 @@ const MENU_PANEL =
   "z-[100] min-w-[12rem] rounded-lg border border-slate-200 bg-white py-1 shadow-lg outline-none";
 const menuItem =
   "flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm font-medium text-slate-800 hover:bg-white hover:text-slate-900";
+
+const GENERIC_RULE_NAMES = new Set(["nowa automatyzacja", ""]);
 
 function fmtTime(iso: string | null | undefined) {
   if (!iso) return "—";
@@ -68,6 +73,13 @@ function fmtTime(iso: string | null | undefined) {
 
 function WorkflowChip({ children }: { children: React.ReactNode }) {
   return <span className={oaWorkflowChipClass}>{children}</span>;
+}
+
+function shouldShowCustomName(rule: OrderAutomationRule, workflowTitle: string): boolean {
+  const name = rule.name.trim();
+  if (!name || GENERIC_RULE_NAMES.has(name.toLowerCase())) return false;
+  if (workflowTitle !== "—" && name === workflowTitle) return false;
+  return true;
 }
 
 function RuleRowMenu({ onTest, onLogs }: { onTest: () => void; onLogs: () => void }) {
@@ -89,7 +101,7 @@ function RuleRowMenu({ onTest, onLogs }: { onTest: () => void; onLogs: () => voi
         type="button"
         ref={refs.setReference}
         {...getReferenceProps()}
-        className={`${oaBtn} h-8 w-8 px-0`}
+        className={oaRowActionBtn}
         aria-label="Więcej opcji"
         onClick={() => setOpen((o) => !o)}
       >
@@ -106,6 +118,50 @@ function RuleRowMenu({ onTest, onLogs }: { onTest: () => void; onLogs: () => voi
               <Play className="h-4 w-4 text-slate-600" strokeWidth={2} />
               Dziennik wykonań
             </button>
+          </div>
+        </FloatingPortal>
+      ) : null}
+    </div>
+  );
+}
+
+function GroupHeaderMenu({ basePath }: { basePath: string }) {
+  const [open, setOpen] = useState(false);
+  const { refs, floatingStyles, context } = useFloating({
+    open,
+    onOpenChange: setOpen,
+    placement: "bottom-end",
+    strategy: "fixed",
+    middleware: [offset(4), flip({ padding: 8 }), shift({ padding: 12 })],
+    whileElementsMounted: autoUpdate,
+  });
+  const dismiss = useDismiss(context, { ancestorScroll: true, outsidePress: true, escapeKey: true });
+  const { getReferenceProps, getFloatingProps } = useInteractions([dismiss]);
+
+  return (
+    <div className="relative shrink-0 opacity-0 transition group-hover/header:opacity-100 focus-within:opacity-100" onClick={(e) => e.stopPropagation()}>
+      <button
+        type="button"
+        ref={refs.setReference}
+        {...getReferenceProps()}
+        className={oaRowActionBtn}
+        aria-label="Opcje grupy"
+        onClick={() => setOpen((o) => !o)}
+      >
+        <MoreHorizontal className="h-4 w-4" strokeWidth={2} />
+      </button>
+      {open ? (
+        <FloatingPortal id="floating-portal-order-automation-group-menu">
+          <div ref={refs.setFloating} style={floatingStyles} className={MENU_PANEL} role="menu" {...getFloatingProps()}>
+            <Link
+              to={`${basePath}/new`}
+              role="menuitem"
+              className={menuItem}
+              onClick={() => setOpen(false)}
+            >
+              <Plus className="h-4 w-4 text-slate-600" strokeWidth={2} />
+              Dodaj regułę
+            </Link>
           </div>
         </FloatingPortal>
       ) : null}
@@ -136,6 +192,10 @@ function AutomationRuleRow({
 }: RuleRowProps) {
   const navigate = useNavigate();
   const trigger = primaryTriggerLabel(rule);
+  const displayId = formatRuleDisplayId(rule);
+  const workflowTitle = formatRuleWorkflowTitle(rule, statusNameById);
+  const showCustomName = shouldShowCustomName(rule, workflowTitle);
+  const primaryTitle = workflowTitle !== "—" ? workflowTitle : rule.name;
 
   return (
     <div
@@ -146,28 +206,35 @@ function AutomationRuleRow({
       }`}
     >
       <div className="flex gap-4">
-        <label className="mt-1 shrink-0 cursor-pointer" title={rule.enabled ? "Wyłącz" : "Włącz"} onClick={(e) => e.stopPropagation()}>
+        <label
+          className="flex h-9 w-9 min-h-9 min-w-9 shrink-0 cursor-pointer items-center justify-center"
+          title={rule.enabled ? "Wyłącz automatyzację" : "Włącz automatyzację"}
+          onClick={(e) => e.stopPropagation()}
+        >
           <input
             type="checkbox"
             className="h-4 w-4 rounded border-slate-300 accent-emerald-600"
             checked={rule.enabled}
             onChange={onToggle}
+            aria-label={rule.enabled ? "Aktywna" : "Wyłączona"}
           />
         </label>
 
         <div className="flex min-w-0 flex-1 flex-col gap-4 xl:flex-row xl:items-start xl:gap-8">
-          {/* Nazwa + wyzwalacz + statystyki */}
-          <div className="shrink-0 xl:w-52">
+          <div className="min-w-0 shrink-0 xl:w-56">
+            <p className="font-mono text-xs font-semibold tabular-nums text-slate-500">ID {displayId}</p>
             <button
               type="button"
-              className={`text-left text-sm font-bold leading-snug hover:underline ${
+              className={`mt-1 text-left text-sm font-bold leading-snug hover:underline ${
                 rule.enabled ? "text-slate-900" : "text-slate-500 line-through decoration-slate-400"
               }`}
-              title={rule.name}
               onClick={() => navigate(`${basePath}/${rule.id}/edit`)}
             >
-              {rule.name}
+              {primaryTitle}
             </button>
+            {showCustomName ? (
+              <p className="mt-1 text-xs text-slate-500">{rule.name}</p>
+            ) : null}
             <p className="mt-1.5 text-xs text-slate-500">{trigger}</p>
             <p className="mt-2 text-[11px] text-slate-500">
               Wykonano: <span className="font-semibold tabular-nums text-slate-700">{rule.stats.runCount}</span>
@@ -176,7 +243,6 @@ function AutomationRuleRow({
             </p>
           </div>
 
-          {/* Przepływ Jeśli → To */}
           <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-start sm:gap-4">
             <div className="min-w-0 flex-1">
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Jeśli</span>
@@ -220,16 +286,15 @@ function AutomationRuleRow({
             </div>
           </div>
 
-          {/* Akcje */}
-          <div className="flex shrink-0 items-center gap-1 self-start opacity-100 xl:opacity-0 xl:group-hover/row:opacity-100">
-            <button type="button" className={`${oaBtn} h-8 w-8 px-0`} title="Edytuj" onClick={() => navigate(`${basePath}/${rule.id}/edit`)}>
-              <Pencil className="h-4 w-4" />
+          <div className="flex shrink-0 items-center gap-1 self-start">
+            <button type="button" className={oaRowActionBtn} title="Edytuj" aria-label="Edytuj" onClick={() => navigate(`${basePath}/${rule.id}/edit`)}>
+              <Pencil className="h-4 w-4" strokeWidth={2} />
             </button>
-            <button type="button" className={`${oaBtn} h-8 w-8 px-0`} title="Duplikuj" onClick={onDuplicate}>
-              <Copy className="h-4 w-4" />
+            <button type="button" className={oaRowActionBtn} title="Duplikuj" aria-label="Duplikuj" onClick={onDuplicate}>
+              <Copy className="h-4 w-4" strokeWidth={2} />
             </button>
-            <button type="button" className={`${oaBtn} h-8 w-8 px-0 text-red-600 hover:border-red-200 hover:text-red-700`} title="Usuń" onClick={onDelete}>
-              <Trash2 className="h-4 w-4" />
+            <button type="button" className={oaRowActionBtnDanger} title="Usuń" aria-label="Usuń" onClick={onDelete}>
+              <Trash2 className="h-4 w-4" strokeWidth={2} />
             </button>
             <RuleRowMenu onTest={onTest} onLogs={onLogs} />
           </div>
@@ -302,7 +367,9 @@ export default function OrderAutomationListPage() {
       if (group !== "all" && (r.group || "—") !== group) return false;
       if (!s) return true;
       const trigger = primaryTriggerLabel(r);
-      const blob = `${r.name} ${r.group} ${trigger} ${r.conditions.map((c) => formatConditionDisplayParts(c, statusNameById).field).join(" ")} ${r.effects.map((e) => formatEffectPill(e, statusNameById)).join(" ")}`.toLowerCase();
+      const workflowTitle = formatRuleWorkflowTitle(r, statusNameById);
+      const displayId = formatRuleDisplayId(r);
+      const blob = `${r.name} ${r.group} ${trigger} ${workflowTitle} ${displayId} ${r.publicId ?? ""} ${r.conditions.map((c) => formatConditionDisplayParts(c, statusNameById).field).join(" ")} ${r.effects.map((e) => formatEffectPill(e, statusNameById)).join(" ")}`.toLowerCase();
       return blob.includes(s);
     });
   }, [rules, q, group, statusNameById]);
@@ -337,19 +404,28 @@ export default function OrderAutomationListPage() {
 
   return (
     <div className={`${moduleAutomationShellClass} w-full max-w-none`}>
-      {/* Pasek narzędzi */}
-      <div className="mb-6 flex flex-col gap-3 border-b border-slate-200 pb-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mb-6 flex flex-col gap-3 border-b border-slate-200 pb-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center">
-          <div className="relative min-w-0 flex-1 sm:max-w-md">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" strokeWidth={2} />
+          <div className="relative min-w-[12rem] flex-1 sm:max-w-lg">
+            <Search
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+              strokeWidth={2}
+              aria-hidden
+            />
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Szukaj po nazwie lub ID…"
-              className={`${oaInp} pl-10`}
+              className={oaSearchInp}
+              type="search"
             />
           </div>
-          <select value={group} onChange={(e) => setGroup(e.target.value)} className={`${oaInp} w-auto min-w-[11rem]`}>
+          <select
+            value={group}
+            onChange={(e) => setGroup(e.target.value)}
+            className={oaSel}
+            aria-label="Filtruj po grupie"
+          >
             <option value="all">Wszystkie grupy</option>
             {groups.map((g) => (
               <option key={g} value={g}>{g}</option>
@@ -371,40 +447,28 @@ export default function OrderAutomationListPage() {
           </Link>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <div className="rounded-xl border border-slate-200 bg-white">
           {byGroup.map(([gName, list]) => {
             const open = openGroups[gName] ?? true;
             return (
               <section key={gName} className={oaWorkflowGroupSectionClass}>
-                <div className={oaWorkflowGroupHeaderClass}>
-                  <div className="flex min-w-0 flex-1 items-center gap-3">
-                    <h3 className="truncate text-sm font-bold uppercase tracking-wide text-slate-800">
-                      {gName}{" "}
-                      <span className="font-normal text-slate-500">({list.length})</span>
-                    </h3>
-                    <Link
-                      to={`${basePath}/new`}
-                      className={`${oaBtn} h-8 w-8 px-0`}
-                      title="Dodaj regułę w grupie"
-                      onClick={() => {
-                        /* group prefill via sessionStorage could be added later */
-                      }}
-                    >
-                      <Plus className="h-4 w-4" />
-                    </Link>
-                    <button
-                      type="button"
-                      className={`${oaBtn} h-8 gap-1.5 px-2.5 text-xs`}
-                      onClick={() => toggleGroup(gName)}
-                    >
-                      {open ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                      {open ? "Zwiń" : "Rozwiń"}
-                    </button>
-                  </div>
-                  <div className="cursor-grab p-1 text-slate-300 hover:text-slate-500" title="Zmień kolejność grupy">
-                    <GripVertical className="h-4 w-4" />
-                  </div>
-                </div>
+                <button
+                  type="button"
+                  className={oaWorkflowGroupHeaderClass}
+                  onClick={() => toggleGroup(gName)}
+                  aria-expanded={open}
+                >
+                  <ChevronDown
+                    className={`h-5 w-5 shrink-0 text-slate-700 transition-transform ${open ? "" : "-rotate-90"}`}
+                    strokeWidth={2}
+                    aria-hidden
+                  />
+                  <h3 className="min-w-0 flex-1 truncate text-base font-extrabold uppercase tracking-wide text-slate-900">
+                    {gName}{" "}
+                    <span className="font-semibold text-slate-600">({list.length})</span>
+                  </h3>
+                  <GroupHeaderMenu basePath={basePath} />
+                </button>
 
                 {open ? (
                   list.length > 0 ? (
@@ -418,7 +482,7 @@ export default function OrderAutomationListPage() {
                           onToggle={() => setEnabled(r.id, !r.enabled)}
                           onDuplicate={() => { duplicateRule(r.id); toast.success("Zduplikowano."); }}
                           onDelete={() => {
-                            if (!window.confirm(`Usunąć „${r.name}”?`)) return;
+                            if (!window.confirm(`Usunąć „${formatRuleWorkflowTitle(r, statusNameById) !== "—" ? formatRuleWorkflowTitle(r, statusNameById) : r.name}” (ID ${formatRuleDisplayId(r)})?`)) return;
                             deleteRule(r.id);
                             toast.success("Usunięto.");
                           }}
@@ -444,7 +508,10 @@ export default function OrderAutomationListPage() {
           <div className="max-h-[90vh] w-full max-w-lg overflow-auto rounded-xl border border-slate-200 bg-white p-6 shadow-xl">
             <h2 className="text-lg font-semibold text-slate-900">Test akcji</h2>
             <p className="mt-2 text-sm text-slate-600">
-              Symulacja dla: <span className="font-medium text-slate-900">{testRule.name}</span>.
+              Symulacja dla:{" "}
+              <span className="font-medium text-slate-900">
+                ID {formatRuleDisplayId(testRule)} — {formatRuleWorkflowTitle(testRule, statusNameById) !== "—" ? formatRuleWorkflowTitle(testRule, statusNameById) : testRule.name}
+              </span>
             </p>
             <div className="mt-4 flex justify-end gap-2">
               <button type="button" className={oaBtn} onClick={() => setTestRule(null)}>Zamknij</button>

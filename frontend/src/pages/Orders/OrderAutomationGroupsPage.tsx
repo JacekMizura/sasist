@@ -9,7 +9,7 @@ import { useAuth } from "../../context/AuthContext";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import type { OrderAutomationActionGroup } from "../../utils/orderAutomationLocalStore";
 import { loadActionGroups, newUid, saveActionGroups } from "../../utils/orderAutomationLocalStore";
-import { oaBtn, oaBtnPri, oaIconGhost, oaInp, oaLbl } from "../../components/orders/automation/orderAutomationUiTokens";
+import { oaBtn, oaBtnPri, oaInp, oaLbl, oaRowActionBtn, oaRowActionBtnDanger } from "../../components/orders/automation/orderAutomationUiTokens";
 
 export default function OrderAutomationGroupsPage() {
   const { warehouse } = useWarehouse();
@@ -172,11 +172,11 @@ export default function OrderAutomationGroupsPage() {
           {sorted.map((g, i) => (
             <li key={g.id} className="flex flex-wrap items-center gap-3 py-4 first:pt-0">
               <div className="flex items-center gap-1">
-                <button type="button" aria-label="Wyżej" disabled={i === 0} className={oaIconGhost} onClick={() => move(g.id, -1)}>
-                  <ArrowUp className="h-4 w-4" />
+                <button type="button" aria-label="Wyżej" disabled={i === 0} className={oaRowActionBtn} onClick={() => move(g.id, -1)}>
+                  <ArrowUp className="h-4 w-4" strokeWidth={2} />
                 </button>
-                <button type="button" aria-label="Niżej" disabled={i === sorted.length - 1} className={oaIconGhost} onClick={() => move(g.id, 1)}>
-                  <ArrowDown className="h-4 w-4" />
+                <button type="button" aria-label="Niżej" disabled={i === sorted.length - 1} className={oaRowActionBtn} onClick={() => move(g.id, 1)}>
+                  <ArrowDown className="h-4 w-4" strokeWidth={2} />
                 </button>
               </div>
 
@@ -203,11 +203,11 @@ export default function OrderAutomationGroupsPage() {
 
               {editingId !== g.id ? (
                 <div className="flex items-center gap-1">
-                  <button type="button" className={oaIconGhost} title="Edytuj" onClick={() => startEdit(g)}>
-                    <Pencil className="h-4 w-4" />
+                  <button type="button" className={oaRowActionBtn} title="Edytuj" aria-label="Edytuj" onClick={() => startEdit(g)}>
+                    <Pencil className="h-4 w-4" strokeWidth={2} />
                   </button>
-                  <button type="button" className={`${oaIconGhost} hover:text-red-600`} title="Usuń" onClick={() => removeGroup(g.id)}>
-                    <Trash2 className="h-4 w-4" />
+                  <button type="button" className={oaRowActionBtnDanger} title="Usuń" aria-label="Usuń" onClick={() => removeGroup(g.id)}>
+                    <Trash2 className="h-4 w-4" strokeWidth={2} />
                   </button>
                 </div>
               ) : null}
