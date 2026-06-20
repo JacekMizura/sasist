@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-06-08 — Materiały magazynowe: nagłówek modułu jak Dostawcy
+
+- `WarehouseMaterialsLayout`: breadcrumb → tytuł → `TabsNav` → treść (bez `WmsModuleLayout` / karty tabów)
+- Listy kartonów i materiałów pakowych: usunięty zduplikowany `ListPageHeader`; toolbar jak na liście Dostawców
+- Formularze edycji: breadcrumb `Asortyment > Materiały magazynowe > …`
+
 ## 2026-06-08 — Produkty (lista): standard tabel + bulk bar jak Zamówienia
 
 - Pasek masowych akcji: `ModuleBulkActionsToolbar` przez `ProductsListBulkBar` (Wybierz akcję / Multiakcje / Drukuj / E-mail / Eksport / Odznacz)

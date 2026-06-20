@@ -6,7 +6,6 @@ import { bulkSetCartonSupplier, deleteCarton, duplicateCarton, getCartons, type 
 import { listSuppliers, type SupplierRead } from "../../api/inboundSuppliersApi";
 import ExportModal from "../../components/exports/ExportModal";
 import { FilterVisibilityModal } from "../../components/filters";
-import { ListPageHeader } from "../../components/listPage/ListPageHeader";
 import { moduleTableCardClass, moduleTablePaginationFooterClass } from "../../components/listPage/moduleList";
 import {
   listSellasistInputClass,
@@ -246,15 +245,9 @@ export default function CartonsListPage() {
 
   return (
     <>
-      <ListPageHeader
-        title={`Kartony i opakowania${loading ? "" : ` (${totalCount} wyników)`}`}
-        description="Kartony magazynowe powiązane z pakowaniem i metodami dostawy."
-        breadcrumbs={[
-          { label: "Asortyment", to: "/products/list" },
-          { label: "Materiały magazynowe", to: "/warehouse-materials/cartons" },
-          { label: "Kartony" },
-        ]}
-        actions={
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-slate-500">{loading ? "Ładowanie…" : `${totalCount} wyników`}</p>
           <div className="flex flex-wrap items-center justify-end gap-2">
             <button
               type="button"
@@ -297,8 +290,7 @@ export default function CartonsListPage() {
               Dodaj karton
             </Link>
           </div>
-        }
-      />
+        </div>
 
       <CartonsListFiltersPanel
         expanded={filtersExpanded}
@@ -431,6 +423,8 @@ export default function CartonsListPage() {
           </div>
         </div>
       )}
+
+      </div>
 
       <FilterVisibilityModal
         open={columnPickerOpen}

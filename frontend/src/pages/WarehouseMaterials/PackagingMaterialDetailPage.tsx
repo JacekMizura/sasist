@@ -464,7 +464,7 @@ export default function PackagingMaterialDetailPage() {
       sku={sku}
       breadcrumbs={[
         { label: "Asortyment", onClick: () => navigate("/products/list") },
-        { label: "Materiały pakowe", onClick: () => navigate("/warehouse-materials/packaging") },
+        { label: "Materiały magazynowe", onClick: () => navigate("/warehouse-materials/packaging") },
         { label: isNew ? "Nowy materiał pakowy" : title },
       ]}
       tabs={PACKAGING_EDIT_TABS}

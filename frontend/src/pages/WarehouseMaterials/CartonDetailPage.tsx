@@ -551,7 +551,7 @@ export default function CartonDetailPage() {
       sku={sku}
       breadcrumbs={[
         { label: "Asortyment", onClick: () => navigate("/products/list") },
-        { label: "Kartony i opakowania", onClick: () => navigate("/warehouse-materials/cartons") },
+        { label: "Materiały magazynowe", onClick: () => navigate("/warehouse-materials/cartons") },
         { label: isNew ? "Nowy karton" : title },
       ]}
       tabs={CARTON_EDIT_TABS}

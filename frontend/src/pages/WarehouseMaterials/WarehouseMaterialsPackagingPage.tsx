@@ -11,7 +11,6 @@ import {
 } from "../../api/packagingMaterialsApi";
 import { listSuppliers, type SupplierRead } from "../../api/inboundSuppliersApi";
 import { FilterVisibilityModal } from "../../components/filters";
-import { ListPageHeader } from "../../components/listPage/ListPageHeader";
 import { moduleTableCardClass, moduleTablePaginationFooterClass } from "../../components/listPage/moduleList";
 import {
   listSellasistInputClass,
@@ -267,15 +266,9 @@ export default function WarehouseMaterialsPackagingPage() {
 
   return (
     <>
-      <ListPageHeader
-        title={`Materiały pakowe${loading ? "" : ` (${totalCount} wyników)`}`}
-        description="Folia, taśmy, wypełniacze i inne materiały zużywalne w magazynie."
-        breadcrumbs={[
-          { label: "Asortyment", to: "/products/list" },
-          { label: "Materiały magazynowe", to: "/warehouse-materials/cartons" },
-          { label: "Materiały pakowe" },
-        ]}
-        actions={
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-slate-500">{loading ? "Ładowanie…" : `${totalCount} wyników`}</p>
           <div className="flex flex-wrap items-center justify-end gap-2">
             <button
               type="button"
@@ -308,8 +301,7 @@ export default function WarehouseMaterialsPackagingPage() {
               Dodaj materiał pakowy
             </Link>
           </div>
-        }
-      />
+        </div>
 
       <PackagingListFiltersPanel
         expanded={filtersExpanded}
@@ -443,6 +435,8 @@ export default function WarehouseMaterialsPackagingPage() {
           </div>
         </div>
       )}
+
+      </div>
 
       <FilterVisibilityModal
         open={columnPickerOpen}
