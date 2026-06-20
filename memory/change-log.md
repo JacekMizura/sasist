@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-06-08 — Produkty (lista): standard tabel + bulk bar jak Zamówienia
+
+- Pasek masowych akcji: `ModuleBulkActionsToolbar` przez `ProductsListBulkBar` (Wybierz akcję / Multiakcje / Drukuj / E-mail / Eksport / Odznacz)
+- Tabela proporcjonalna: checkbox 56px, zdjęcie 80px, nazwa 2fr max 500px, akcje 120px; konfigurator kolumn (`FilterVisibilityModal`)
+- Filtry: licznik w przycisku „Filtry (N)”, `ListPageHeader`, `TableProperties`
+- Pakiet: `frontend/src/components/products/productList/*`
+
 ## 2026-06-08 — Materiały magazynowe: wzorzec formularza produktu + tabele list
 
 - Formularze kartonów i materiałów pakowych: `WarehouseMaterialEditLayout` + `ProductLikePageLayout` (breadcrumb, hero 80px, zakładki z ikonami, Zapisz/Usuń/Duplikuj)
