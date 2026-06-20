@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-06-08 — Materiały magazynowe: wzorzec formularza produktu + tabele list
+
+- Formularze kartonów i materiałów pakowych: `WarehouseMaterialEditLayout` + `ProductLikePageLayout` (breadcrumb, hero 80px, zakładki z ikonami, Zapisz/Usuń/Duplikuj)
+- Sekcje w kartach (`WmFormSectionCard`); edycja bez zakładek modułu (jak Produkty)
+- Listy: proporcjonalne tabele z checkboxem, `ProductListPhotoCell`, konfigurator kolumn, filtry z licznikiem
+
 ## 2026-06-08 — Rentowność produktów: standard tabel + KPI zakupowe
 
 - Tabela proporcjonalna (Akcje 80px, Zdjęcie 80px, Produkt 2fr max 500px), konfigurator kolumn pod ikoną tabeli

@@ -1,9 +1,9 @@
-import axios from "axios";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   createCarton,
   deleteCarton,
+  duplicateCarton,
   getCarton,
   updateCarton,
   type CartonDto,
@@ -14,6 +14,11 @@ import api from "../../api/axios";
 import { listSuppliers, type SupplierRead } from "../../api/inboundSuppliersApi";
 import { listManufacturers, type ManufacturerRead } from "../../api/manufacturersApi";
 import { getShippingMethods, type ShippingMethodDto } from "../../api/shippingMethodsApi";
+import {
+  productLikeFieldLabelClass,
+  productLikeInputClass,
+  type ProductLikeStatCard,
+} from "../../components/catalog";
 import type { MagazynInvRowDisplay } from "../../components/products/MagazynInventoryLine";
 import {
   ProductWarehouseStockPanel,
@@ -22,64 +27,19 @@ import {
 } from "../../components/products/ProductWarehouseStockPanel";
 import { DAMAGE_TENANT_ID } from "../../constants/panelTenant";
 import { useWarehouse } from "../../context/WarehouseContext";
+import { WmFormSectionCard } from "../../modules/warehouseMaterials/components/WmFormSectionCard";
+import { WarehouseMaterialEditLayout } from "../../modules/warehouseMaterials/components/WarehouseMaterialEditLayout";
+import { CARTON_EDIT_TABS, type CartonEditTabId } from "../../modules/warehouseMaterials/warehouseMaterialEditTabs";
+import { wmApiErrorDetailMessage, wmFmtQty } from "../../modules/warehouseMaterials/warehouseMaterialFormUtils";
 import {
   normalizeWmMoneyInputString,
   numberToEditableMoneyString,
   parseMoneyToOptionalRounded,
   parseOptionalPositiveQuantity,
+  formatWmMoneyZloty,
 } from "../../modules/warehouseMaterials/warehouseMaterialsMoney";
 import { ShippingMethodLogo } from "../../components/shipping/ShippingMethodLogo";
 import PriceTiersPanel, { tiersFromDto, tiersToPayload, type TierDraft } from "./PriceTiersPanel";
-
-const PAGE_BG = "#f4f7f9";
-
-const TABS = [
-  { id: "basic", label: "Dane podstawowe" },
-  { id: "supplier", label: "Dostawca" },
-  { id: "warehouse", label: "Magazyn" },
-  { id: "costs", label: "Koszty" },
-  { id: "pricing", label: "Cennik progowy" },
-  { id: "bdo", label: "BDO" },
-  { id: "shipping", label: "Metody dostawy" },
-] as const;
-
-type TabId = (typeof TABS)[number]["id"];
-
-function IconBack() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden>
-      <path d="M15 18l-6-6 6-6" />
-    </svg>
-  );
-}
-
-function fieldCls() {
-  return "w-full border-2 border-slate-300 bg-white px-3 py-2.5 text-sm font-medium text-slate-900 outline-none focus:border-slate-800";
-}
-
-function apiErrorDetailMessage(err: unknown, fallback: string): string {
-  if (!axios.isAxiosError(err) || err.response?.data == null || typeof err.response.data !== "object") {
-    return fallback;
-  }
-  const detail = (err.response.data as { detail?: unknown }).detail;
-  if (typeof detail === "string" && detail.trim()) return detail.trim();
-  if (Array.isArray(detail)) {
-    const parts = detail
-      .map((row) => {
-        if (row && typeof row === "object" && "msg" in row && typeof (row as { msg: unknown }).msg === "string") {
-          return ((row as { msg: string }).msg || "").trim();
-        }
-        return "";
-      })
-      .filter(Boolean);
-    if (parts.length) return parts.join(" ");
-  }
-  return fallback;
-}
-
-function fmtQty(n: number): string {
-  return Number.isInteger(n) ? String(n) : n.toFixed(2);
-}
 
 export default function CartonDetailPage() {
   const { cartonId } = useParams<{ cartonId: string }>();
@@ -88,7 +48,9 @@ export default function CartonDetailPage() {
   const warehouseId = warehouse?.id ?? null;
   const isNew = cartonId === "new";
 
-  const [tab, setTab] = useState<TabId>("basic");
+  const [activeTab, setActiveTab] = useState<CartonEditTabId>("basic");
+  const headerGalleryInputRef = useRef<HTMLInputElement>(null);
+  const [dupBusy, setDupBusy] = useState(false);
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploadBusy, setUploadBusy] = useState(false);
@@ -252,9 +214,9 @@ export default function CartonDetailPage() {
 
   const availableNum = useMemo(() => Math.max(0, stockNum - reservedNum), [stockNum, reservedNum]);
 
-  const physicalStockDisplay = useMemo(() => fmtQty(stockNum), [stockNum]);
-  const reservedDisplay = useMemo(() => fmtQty(reservedNum), [reservedNum]);
-  const availableDisplay = useMemo(() => fmtQty(availableNum), [availableNum]);
+  const physicalStockDisplay = useMemo(() => wmFmtQty(stockNum), [stockNum]);
+  const reservedDisplay = useMemo(() => wmFmtQty(reservedNum), [reservedNum]);
+  const availableDisplay = useMemo(() => wmFmtQty(availableNum), [availableNum]);
 
   const cartonInventoryRows = useMemo((): MagazynInvRowDisplay[] => {
     const ll = locationLabel.trim();
@@ -421,13 +383,13 @@ export default function CartonDetailPage() {
     const nm = name.trim();
     if (!nm) {
       setLoadErr("Podaj nazwę.");
-      setTab("basic");
+      setActiveTab("basic");
       return;
     }
     const built = buildPayload();
     if (!("payload" in built)) {
       setLoadErr(built.err);
-      setTab("basic");
+      setActiveTab("basic");
       return;
     }
     const { payload } = built;
@@ -452,7 +414,7 @@ export default function CartonDetailPage() {
         console.error("[carton save] neither create nor update branch", { isNew, cartonId });
       }
     } catch (e) {
-      setLoadErr(apiErrorDetailMessage(e, "Nie udało się zapisać."));
+      setLoadErr(wmApiErrorDetailMessage(e, "Nie udało się zapisać."));
     } finally {
       setSaving(false);
     }
@@ -465,7 +427,7 @@ export default function CartonDetailPage() {
       await deleteCarton(cartonId, { tenant_id: DAMAGE_TENANT_ID, warehouse_id: warehouseId });
       navigate("/warehouse-materials/cartons");
     } catch (e) {
-      setLoadErr(apiErrorDetailMessage(e, "Nie udało się usunąć."));
+      setLoadErr(wmApiErrorDetailMessage(e, "Nie udało się usunąć."));
     }
   };
 
@@ -482,6 +444,44 @@ export default function CartonDetailPage() {
     if (isNew) return "Nowy karton";
     return name.trim() || "Karton";
   }, [isNew, name]);
+
+  const onDuplicate = async () => {
+    if (warehouseId == null || isNew || !cartonId) return;
+    setDupBusy(true);
+    setLoadErr(null);
+    try {
+      const created = await duplicateCarton(cartonId, { tenant_id: DAMAGE_TENANT_ID, warehouse_id: warehouseId });
+      navigate(`/warehouse-materials/cartons/${created.id}`);
+    } catch (e) {
+      setLoadErr(wmApiErrorDetailMessage(e, "Nie udało się zduplikować."));
+    } finally {
+      setDupBusy(false);
+    }
+  };
+
+  const statCards = useMemo((): ProductLikeStatCard[] => {
+    const cards: ProductLikeStatCard[] = [
+      { label: "Stan", value: `${wmFmtQty(stockNum)} szt.`, variant: "blue" },
+      {
+        label: "Wymiary",
+        value: `${l.trim() || "—"} × ${w.trim() || "—"} × ${h.trim() || "—"} cm`,
+        variant: "slate",
+      },
+    ];
+    const tier0 = tierSummary[0];
+    if (tier0?.unit_net != null) {
+      cards.push({ label: "Netto / szt.", value: formatWmMoneyZloty(tier0.unit_net), variant: "green" });
+    }
+    return cards;
+  }, [stockNum, l, w, h, tierSummary]);
+
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    void handleSave();
+  };
+
+  const fieldLabel = productLikeFieldLabelClass;
+  const inputClass = productLikeInputClass;
 
   const warehouseEditorSlot = (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -537,146 +537,96 @@ export default function CartonDetailPage() {
 
   if (warehouseId == null) {
     return (
-      <div className="border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950">
+      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-950">
         Wybierz magazyn w pasku u góry.
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-0 w-full flex-1 flex-col" style={{ background: PAGE_BG }}>
-      <div className="shrink-0 border-b border-slate-300/90 bg-white px-3 py-3 sm:px-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <Link
-            to="/warehouse-materials/cartons"
-            className="inline-flex h-10 w-10 shrink-0 items-center justify-center border-2 border-slate-300 bg-white text-slate-800 hover:bg-slate-50"
-            aria-label="Wstecz do listy"
-          >
-            <IconBack />
-          </Link>
-          <h1 className="min-w-0 flex-1 text-lg font-extrabold leading-tight text-[#222] sm:text-xl">{title}</h1>
-          <div className="flex w-full shrink-0 flex-wrap gap-2 sm:w-auto sm:justify-end">
-            {!isNew ? (
-              <button
-                type="button"
-                onClick={() => void onDelete()}
-                className="border-2 border-red-400 bg-white px-3 py-2 text-sm font-bold text-red-900 hover:bg-red-50"
-              >
-                Usuń
-              </button>
-            ) : null}
-            <button
-              type="button"
-              disabled={saving}
-              onClick={() => void handleSave()}
-              className="border-2 border-slate-800 bg-slate-900 px-4 py-2 text-sm font-bold text-white hover:bg-slate-800 disabled:opacity-50"
-            >
-              {saving ? "Zapisywanie…" : "Zapisz"}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {loadErr ? (
-        <div className="mx-3 mt-3 border-2 border-red-400 bg-red-50 px-3 py-2 text-sm font-semibold text-red-900 sm:mx-4">
-          {loadErr}
-        </div>
-      ) : null}
-
-      <div className="shrink-0 border-b border-slate-300/80 bg-white">
-        <div className="flex min-w-0 gap-0 overflow-x-auto px-1 sm:px-2">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setTab(t.id)}
-              className={[
-                "shrink-0 border-b-4 px-3 py-3 text-left text-xs font-extrabold uppercase tracking-wide sm:px-4 sm:text-sm",
-                tab === t.id ? "border-slate-900 text-slate-900" : "border-transparent text-slate-500 hover:text-slate-800",
-              ].join(" ")}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4 sm:px-4 sm:py-6">
-        {tab === "basic" ? (
-          <div className="w-full space-y-6">
-            <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
-              <div className="shrink-0 lg:w-[220px]">
-                <div className="aspect-square w-full max-w-[220px] overflow-hidden border-2 border-slate-300 bg-slate-50">
-                  {imageUrl?.trim() ? (
-                    <img src={imageUrl.trim()} alt="" className="h-full w-full object-contain" />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-slate-400">Brak zdjęcia</div>
-                  )}
-                </div>
-                <label className="mt-2 inline-flex cursor-pointer border-2 border-slate-400 bg-white px-3 py-2 text-xs font-bold text-slate-800 hover:bg-slate-50">
-                  {uploadBusy ? "Wgrywanie…" : "Wybierz zdjęcie"}
-                  <input type="file" accept="image/*" className="hidden" onChange={(e) => void onLogoFile(e)} />
-                </label>
-                {imageUrl?.trim() ? (
-                  <button type="button" className="mt-1 text-xs font-bold text-red-800 hover:underline" onClick={() => setImageUrl(null)}>
-                    Usuń zdjęcie
-                  </button>
-                ) : null}
-              </div>
-              <div className="min-w-0 flex-1 space-y-3">
-                <div>
-                  <label className={productWarehouseFieldLabel}>Nazwa</label>
-                  <input className={productWarehouseInputClass} value={name} onChange={(e) => setName(e.target.value)} />
+    <WarehouseMaterialEditLayout
+      isNew={isNew}
+      title={title}
+      imageUrl={imageUrl}
+      sku={sku}
+      breadcrumbs={[
+        { label: "Asortyment", onClick: () => navigate("/products/list") },
+        { label: "Kartony i opakowania", onClick: () => navigate("/warehouse-materials/cartons") },
+        { label: isNew ? "Nowy karton" : title },
+      ]}
+      tabs={CARTON_EDIT_TABS}
+      activeTab={activeTab}
+      onTabChange={setActiveTab}
+      saving={saving}
+      loadErr={loadErr}
+      uploadBusy={uploadBusy}
+      headerInputRef={headerGalleryInputRef}
+      onImageFile={(e) => void onLogoFile(e)}
+      onSubmit={handleSubmit}
+      onDelete={!isNew ? () => void onDelete() : undefined}
+      onDuplicate={!isNew ? () => void onDuplicate() : undefined}
+      duplicateBusy={dupBusy}
+      saveLabel={isNew ? "Utwórz karton" : "Zapisz zmiany"}
+      statCards={statCards}
+    >
+      <div className="space-y-5">
+        {activeTab === "basic" ? (
+          <div className="space-y-5">
+            <WmFormSectionCard title="Dane podstawowe" description="Nazwa, identyfikatory i status kartonu.">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <label className={fieldLabel}>Nazwa</label>
+                  <input className={inputClass} value={name} onChange={(e) => setName(e.target.value)} />
                 </div>
                 <div>
-                  <label className={productWarehouseFieldLabel}>SKU</label>
-                  <input className={productWarehouseInputClass} value={sku} onChange={(e) => setSku(e.target.value)} placeholder="Symbol / SKU" />
+                  <label className={fieldLabel}>SKU</label>
+                  <input className={inputClass} value={sku} onChange={(e) => setSku(e.target.value)} placeholder="Symbol / SKU" />
                 </div>
                 <div>
-                  <label className={productWarehouseFieldLabel}>Rodzaj materiału (kategoria)</label>
+                  <label className={fieldLabel}>Kod kreskowy (EAN)</label>
+                  <input className={inputClass} value={eanStr} onChange={(e) => setEanStr(e.target.value)} placeholder="EAN" />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className={fieldLabel}>Rodzaj materiału (kategoria)</label>
                   <input
-                    className={productWarehouseInputClass}
+                    className={inputClass}
                     value={materialType}
                     onChange={(e) => setMaterialType(e.target.value)}
                     placeholder="np. tektura falista, karton 3w"
                   />
                 </div>
-                <div>
-                  <label className={productWarehouseFieldLabel}>Kod kreskowy (EAN)</label>
-                  <input className={productWarehouseInputClass} value={eanStr} onChange={(e) => setEanStr(e.target.value)} placeholder="EAN" />
-                </div>
-                <label className="flex items-center gap-2 text-sm font-bold text-slate-800">
-                  <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} className="h-4 w-4" />
-                  Aktywny
+                <label className="flex items-center gap-2 sm:col-span-2">
+                  <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} className="h-4 w-4 rounded border-slate-300" />
+                  <span className="text-sm font-medium text-slate-800">Aktywny</span>
                 </label>
               </div>
-            </div>
-            <div className="border-t border-slate-200 pt-4">
-              <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Wymiary i waga</p>
-              <div className="grid gap-3 sm:grid-cols-3">
+            </WmFormSectionCard>
+            <WmFormSectionCard title="Parametry logistyczne" description="Wymiary i waga używane przy pakowaniu.">
+              <div className="grid gap-4 sm:grid-cols-3">
                 <label className="block">
-                  <span className="text-xs font-bold uppercase tracking-wide text-slate-600">Długość (cm)</span>
-                  <input className={`mt-1 ${fieldCls()}`} value={l} onChange={(e) => setL(e.target.value)} inputMode="decimal" />
+                  <span className={fieldLabel}>Długość (cm)</span>
+                  <input className={inputClass} value={l} onChange={(e) => setL(e.target.value)} inputMode="decimal" />
                 </label>
                 <label className="block">
-                  <span className="text-xs font-bold uppercase tracking-wide text-slate-600">Szerokość (cm)</span>
-                  <input className={`mt-1 ${fieldCls()}`} value={w} onChange={(e) => setW(e.target.value)} inputMode="decimal" />
+                  <span className={fieldLabel}>Szerokość (cm)</span>
+                  <input className={inputClass} value={w} onChange={(e) => setW(e.target.value)} inputMode="decimal" />
                 </label>
                 <label className="block">
-                  <span className="text-xs font-bold uppercase tracking-wide text-slate-600">Wysokość (cm)</span>
-                  <input className={`mt-1 ${fieldCls()}`} value={h} onChange={(e) => setH(e.target.value)} inputMode="decimal" />
+                  <span className={fieldLabel}>Wysokość (cm)</span>
+                  <input className={inputClass} value={h} onChange={(e) => setH(e.target.value)} inputMode="decimal" />
                 </label>
               </div>
-              <label className="mt-3 block">
-                <span className="text-xs font-bold uppercase tracking-wide text-slate-600">Waga (kg)</span>
-                <input className={`mt-1 ${fieldCls()}`} value={weight} onChange={(e) => setWeight(e.target.value)} inputMode="decimal" />
+              <label className="mt-4 block max-w-xs">
+                <span className={fieldLabel}>Waga (kg)</span>
+                <input className={inputClass} value={weight} onChange={(e) => setWeight(e.target.value)} inputMode="decimal" />
               </label>
-            </div>
+            </WmFormSectionCard>
           </div>
         ) : null}
 
-        {tab === "supplier" ? (
-          <div className="w-full space-y-4">
+        {activeTab === "supplier" ? (
+          <WmFormSectionCard title="Dostawca" description="Dane zakupowe — bez dostawcy pozycja nie trafi do zamówień.">
+            <div className="w-full space-y-4">
             {!supplierId.trim() ? (
               <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-950">
                 Brak dostawcy — materiał nie pojawi się w zamówieniach.
@@ -684,7 +634,7 @@ export default function CartonDetailPage() {
             ) : null}
             <label className="block">
               <span className="text-xs font-bold uppercase tracking-wide text-slate-600">Główny dostawca</span>
-              <select className={`mt-1 ${fieldCls()}`} value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
+              <select className={inputClass} value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
                 <option value="">— brak —</option>
                 {suppliers.map((s) => (
                   <option key={s.id} value={String(s.id)}>
@@ -695,7 +645,7 @@ export default function CartonDetailPage() {
             </label>
             <label className="block">
               <span className="text-xs font-bold uppercase tracking-wide text-slate-600">Producent / marka (opcjonalnie)</span>
-              <select className={`mt-1 ${fieldCls()}`} value={producerId} onChange={(e) => setProducerId(e.target.value)}>
+              <select className={inputClass} value={producerId} onChange={(e) => setProducerId(e.target.value)}>
                 <option value="">— brak —</option>
                 {manufacturers.map((m) => (
                   <option key={m.id} value={String(m.id)}>
@@ -708,7 +658,7 @@ export default function CartonDetailPage() {
             <label className="block">
               <span className="text-xs font-bold uppercase tracking-wide text-slate-600">Nazwa u dostawcy (override)</span>
               <input
-                className={`mt-1 ${fieldCls()}`}
+                className={inputClass}
                 value={supplierNameOverride}
                 onChange={(e) => setSupplierNameOverride(e.target.value)}
                 placeholder="Opcjonalnie — inna nazwa na zamówieniu"
@@ -716,17 +666,17 @@ export default function CartonDetailPage() {
             </label>
             <label className="block">
               <span className="text-xs font-bold uppercase tracking-wide text-slate-600">SKU u dostawcy</span>
-              <input className={`mt-1 ${fieldCls()}`} value={supplierSku} onChange={(e) => setSupplierSku(e.target.value)} />
+              <input className={inputClass} value={supplierSku} onChange={(e) => setSupplierSku(e.target.value)} />
             </label>
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="block">
                 <span className="text-xs font-bold uppercase tracking-wide text-slate-600">MOQ</span>
-                <input className={`mt-1 ${fieldCls()}`} value={moqStr} onChange={(e) => setMoqStr(e.target.value)} inputMode="decimal" />
+                <input className={inputClass} value={moqStr} onChange={(e) => setMoqStr(e.target.value)} inputMode="decimal" />
               </label>
               <label className="block">
                 <span className="text-xs font-bold uppercase tracking-wide text-slate-600">Wielopak / karton zbiorczy</span>
                 <input
-                  className={`mt-1 ${fieldCls()}`}
+                  className={inputClass}
                   value={purchasePackQtyStr}
                   onChange={(e) => setPurchasePackQtyStr(e.target.value)}
                   onBlur={() => setPurchasePackQtyStr(normalizeWmMoneyInputString(purchasePackQtyStr))}
@@ -736,7 +686,7 @@ export default function CartonDetailPage() {
               <label className="block sm:col-span-2">
                 <span className="text-xs font-bold uppercase tracking-wide text-slate-600">Darmowa dostawa od kwoty (netto)</span>
                 <input
-                  className={`mt-1 ${fieldCls()}`}
+                  className={inputClass}
                   value={freeShipNetStr}
                   onChange={(e) => setFreeShipNetStr(e.target.value)}
                   onBlur={() => setFreeShipNetStr(normalizeWmMoneyInputString(freeShipNetStr))}
@@ -746,12 +696,12 @@ export default function CartonDetailPage() {
               </label>
               <label className="block">
                 <span className="text-xs font-bold uppercase tracking-wide text-slate-600">Czas realizacji (dni)</span>
-                <input className={`mt-1 ${fieldCls()}`} value={leadTimeDays} onChange={(e) => setLeadTimeDays(e.target.value)} inputMode="numeric" />
+                <input className={inputClass} value={leadTimeDays} onChange={(e) => setLeadTimeDays(e.target.value)} inputMode="numeric" />
               </label>
               <label className="block">
                 <span className="text-xs font-bold uppercase tracking-wide text-slate-600">Ostatnia cena zakupu netto</span>
                 <input
-                  className={`mt-1 ${fieldCls()}`}
+                  className={inputClass}
                   value={lastPurchaseNetStr}
                   onChange={(e) => setLastPurchaseNetStr(e.target.value)}
                   onBlur={() => setLastPurchaseNetStr(normalizeWmMoneyInputString(lastPurchaseNetStr))}
@@ -759,10 +709,11 @@ export default function CartonDetailPage() {
                 />
               </label>
             </div>
-          </div>
+            </div>
+          </WmFormSectionCard>
         ) : null}
 
-        {tab === "warehouse" ? (
+        {activeTab === "warehouse" ? (
           <ProductWarehouseStockPanel
             physicalStockDisplay={physicalStockDisplay}
             reservedDisplay={reservedDisplay}
@@ -773,12 +724,13 @@ export default function CartonDetailPage() {
           />
         ) : null}
 
-        {tab === "costs" ? (
-          <div className="w-full space-y-4 sm:grid sm:grid-cols-2 sm:gap-4 sm:space-y-0">
-            <label className="block">
-              <span className="text-xs font-bold uppercase tracking-wide text-slate-600">Cena zakupu (netto)</span>
+        {activeTab === "costs" ? (
+          <WmFormSectionCard title="Koszty" description="Ceny zakupu i koszt jednostkowy.">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block">
+                <span className={fieldLabel}>Cena zakupu (netto)</span>
               <input
-                className={`mt-1 ${fieldCls()}`}
+                className={inputClass}
                 value={purchasePrice}
                 onChange={(e) => setPurchasePrice(e.target.value)}
                 onBlur={() => setPurchasePrice(normalizeWmMoneyInputString(purchasePrice))}
@@ -787,9 +739,9 @@ export default function CartonDetailPage() {
               />
             </label>
             <label className="block">
-              <span className="text-xs font-bold uppercase tracking-wide text-slate-600">Koszt jednostkowy</span>
+                <span className={fieldLabel}>Koszt jednostkowy</span>
               <input
-                className={`mt-1 ${fieldCls()}`}
+                className={inputClass}
                 value={unitCost}
                 onChange={(e) => setUnitCost(e.target.value)}
                 onBlur={() => setUnitCost(normalizeWmMoneyInputString(unitCost))}
@@ -797,10 +749,12 @@ export default function CartonDetailPage() {
                 placeholder="np. 2,10"
               />
             </label>
-          </div>
+            </div>
+          </WmFormSectionCard>
         ) : null}
 
-        {tab === "pricing" ? (
+        {activeTab === "pricing" ? (
+          <WmFormSectionCard title="Cennik progowy" description="VAT, opakowanie bazowe i progi wolumenowe.">
           <PriceTiersPanel
             vatRatePct={vatRatePct}
             onVatChange={setVatRatePct}
@@ -814,18 +768,20 @@ export default function CartonDetailPage() {
             onTiersChange={setTierDrafts}
             summaryReadonly={tierSummary}
           />
+          </WmFormSectionCard>
         ) : null}
 
-        {tab === "bdo" ? (
+        {activeTab === "bdo" ? (
+          <WmFormSectionCard title="BDO" description="Mapowanie mas opakowaniowych na jednostkę magazynową.">
           <div className="space-y-4">
-            <label className="flex items-center gap-2 text-sm font-bold text-slate-800">
+            <label className="flex items-center gap-2 text-sm font-medium text-slate-800">
               <input type="checkbox" checked={includeInBdo} onChange={(e) => setIncludeInBdo(e.target.checked)} className="h-4 w-4" />
               Uwzględniaj w module Magazyn → BDO
             </label>
             <label className="block">
               <span className="text-xs font-bold uppercase tracking-wide text-slate-600">Typ opakowania</span>
               <input
-                className={`mt-1 ${fieldCls()}`}
+                className={inputClass}
                 value={packagingTypeBdo}
                 onChange={(e) => setPackagingTypeBdo(e.target.value)}
                 placeholder="np. karton"
@@ -834,12 +790,12 @@ export default function CartonDetailPage() {
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="block">
                 <span className="text-xs font-bold uppercase text-slate-600">Plastik kg / szt.</span>
-                <input className={`mt-1 ${fieldCls()}`} value={plasticKg} onChange={(e) => setPlasticKg(e.target.value)} inputMode="decimal" />
+                <input className={inputClass} value={plasticKg} onChange={(e) => setPlasticKg(e.target.value)} inputMode="decimal" />
               </label>
               <label className="block">
                 <span className="text-xs font-bold uppercase text-slate-600">Papier kg / szt.</span>
                 <input
-                  className={`mt-1 ${fieldCls()}`}
+                  className={inputClass}
                   value={paperKg}
                   onChange={(e) => setPaperKg(e.target.value)}
                   inputMode="decimal"
@@ -848,21 +804,23 @@ export default function CartonDetailPage() {
               </label>
               <label className="block">
                 <span className="text-xs font-bold uppercase text-slate-600">Drewno kg / szt.</span>
-                <input className={`mt-1 ${fieldCls()}`} value={woodKg} onChange={(e) => setWoodKg(e.target.value)} inputMode="decimal" />
+                <input className={inputClass} value={woodKg} onChange={(e) => setWoodKg(e.target.value)} inputMode="decimal" />
               </label>
               <label className="block">
                 <span className="text-xs font-bold uppercase text-slate-600">Szkło kg / szt.</span>
-                <input className={`mt-1 ${fieldCls()}`} value={glassKg} onChange={(e) => setGlassKg(e.target.value)} inputMode="decimal" />
+                <input className={inputClass} value={glassKg} onChange={(e) => setGlassKg(e.target.value)} inputMode="decimal" />
               </label>
               <label className="block sm:col-span-2">
                 <span className="text-xs font-bold uppercase text-slate-600">Metal kg / szt.</span>
-                <input className={`mt-1 ${fieldCls()}`} value={metalKg} onChange={(e) => setMetalKg(e.target.value)} inputMode="decimal" />
+                <input className={inputClass} value={metalKg} onChange={(e) => setMetalKg(e.target.value)} inputMode="decimal" />
               </label>
             </div>
           </div>
+          </WmFormSectionCard>
         ) : null}
 
-        {tab === "shipping" ? (
+        {activeTab === "shipping" ? (
+          <WmFormSectionCard title="Metody dostawy" description="Wielokrotny wybór metod wysyłki powiązanych z kartonem.">
           <div className="w-full">
             <p className="mb-3 text-sm font-semibold text-slate-700">Metody dostawy (wielokrotny wybór)</p>
             <ul className="divide-y divide-slate-200 border-2 border-slate-300 bg-white">
@@ -887,8 +845,9 @@ export default function CartonDetailPage() {
               )}
             </ul>
           </div>
+          </WmFormSectionCard>
         ) : null}
       </div>
-    </div>
+    </WarehouseMaterialEditLayout>
   );
 }

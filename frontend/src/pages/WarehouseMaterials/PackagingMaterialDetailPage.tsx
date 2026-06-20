@@ -1,7 +1,5 @@
-import axios from "axios";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Copy, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import api from "../../api/axios";
 import {
   createPackagingMaterial,
@@ -14,9 +12,20 @@ import {
 import type { PriceTierDto } from "../../api/cartonsApi";
 import { listSuppliers, type SupplierRead } from "../../api/inboundSuppliersApi";
 import { listManufacturers, type ManufacturerRead } from "../../api/manufacturersApi";
+import {
+  productLikeFieldLabelClass,
+  productLikeInputClass,
+  type ProductLikeStatCard,
+} from "../../components/catalog";
 import { DAMAGE_TENANT_ID } from "../../constants/panelTenant";
 import { useWarehouse } from "../../context/WarehouseContext";
-import PriceTiersPanel, { tiersFromDto, tiersToPayload, type TierDraft } from "./PriceTiersPanel";
+import { WmFormSectionCard } from "../../modules/warehouseMaterials/components/WmFormSectionCard";
+import { WarehouseMaterialEditLayout } from "../../modules/warehouseMaterials/components/WarehouseMaterialEditLayout";
+import {
+  PACKAGING_EDIT_TABS,
+  type PackagingEditTabId,
+} from "../../modules/warehouseMaterials/warehouseMaterialEditTabs";
+import { wmApiErrorDetailMessage, wmFmtQty } from "../../modules/warehouseMaterials/warehouseMaterialFormUtils";
 import {
   formatWmMoneyZloty,
   normalizeWmMoneyInputString,
@@ -24,26 +33,7 @@ import {
   parseMoneyToOptionalRounded,
   parseOptionalPositiveQuantity,
 } from "../../modules/warehouseMaterials/warehouseMaterialsMoney";
-import {
-  wmCardClass,
-  wmInputClass,
-  wmLabelClass,
-  wmPrimaryBtnClass,
-  wmSecondaryBtnClass,
-} from "../../modules/warehouseMaterials/warehouseMaterialsUi";
-import { TabsContainer } from "../../components/layout/TabsContainer";
-import { tabsNavItemClassName } from "../../components/layout/TabsNav";
-
-const TABS = [
-  { id: "basic", label: "Dane podstawowe" },
-  { id: "technical", label: "Parametry techniczne" },
-  { id: "pricing", label: "Cennik" },
-  { id: "supplier", label: "Dostawca" },
-  { id: "warehouse", label: "Magazyn" },
-  { id: "bdo", label: "BDO" },
-] as const;
-
-type TabId = (typeof TABS)[number]["id"];
+import PriceTiersPanel, { tiersFromDto, tiersToPayload, type TierDraft } from "./PriceTiersPanel";
 
 const MATERIAL_OPTIONS: { value: string; label: string }[] = [
   { value: "stretch_foil", label: "Folia stretch" },
@@ -58,35 +48,11 @@ const MATERIAL_OPTIONS: { value: string; label: string }[] = [
   { value: "filler", label: "Wypełniacz (legacy)" },
 ];
 
-function apiErrorDetailMessage(err: unknown, fallback: string): string {
-  if (!axios.isAxiosError(err) || err.response?.data == null || typeof err.response.data !== "object") {
-    return fallback;
-  }
-  const detail = (err.response.data as { detail?: unknown }).detail;
-  if (typeof detail === "string" && detail.trim()) return detail.trim();
-  if (Array.isArray(detail)) {
-    const parts = detail
-      .map((row) => {
-        if (row && typeof row === "object" && "msg" in row && typeof (row as { msg: unknown }).msg === "string") {
-          return ((row as { msg: string }).msg || "").trim();
-        }
-        return "";
-      })
-      .filter(Boolean);
-    if (parts.length) return parts.join(" ");
-  }
-  return fallback;
-}
-
-function SectionCard({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
-  return (
-    <section className={`${wmCardClass} p-5 sm:p-6`}>
-      <h2 className="text-sm font-semibold tracking-tight text-slate-900">{title}</h2>
-      {description ? <p className="mt-1 text-xs leading-relaxed text-slate-500">{description}</p> : null}
-      <div className="mt-4">{children}</div>
-    </section>
-  );
-}
+const UNIT_DISPLAY: Record<string, string> = {
+  roll: "rol.",
+  pcs: "szt.",
+  kg: "kg",
+};
 
 export default function PackagingMaterialDetailPage() {
   const { materialId } = useParams<{ materialId: string }>();
@@ -95,7 +61,9 @@ export default function PackagingMaterialDetailPage() {
   const warehouseId = warehouse?.id ?? null;
   const isNew = materialId === "new";
 
-  const [tab, setTab] = useState<TabId>("basic");
+  const [activeTab, setActiveTab] = useState<PackagingEditTabId>("basic");
+  const headerGalleryInputRef = useRef<HTMLInputElement>(null);
+  const [dupBusy, setDupBusy] = useState(false);
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploadBusy, setUploadBusy] = useState(false);
@@ -266,6 +234,11 @@ export default function PackagingMaterialDetailPage() {
     return { unitNetPreview: un, unitGrossPreview: ug };
   }, [vatRatePct, packageQty, packageNet, packageGross]);
 
+  const stockNum = useMemo(() => {
+    const n = parseFloat(stock.replace(",", "."));
+    return Number.isFinite(n) && n >= 0 ? n : 0;
+  }, [stock]);
+
   const parseOpt = (s: string): number | null => {
     const t = s.trim();
     if (!t) return null;
@@ -379,7 +352,7 @@ export default function PackagingMaterialDetailPage() {
     const built = buildPayload();
     if (built.err) {
       setLoadErr(built.err);
-      setTab("basic");
+      setActiveTab("basic");
       return;
     }
     setSaving(true);
@@ -405,7 +378,7 @@ export default function PackagingMaterialDetailPage() {
         applyDto(r);
       }
     } catch (e) {
-      setLoadErr(apiErrorDetailMessage(e, "Nie udało się zapisać."));
+      setLoadErr(wmApiErrorDetailMessage(e, "Nie udało się zapisać."));
     } finally {
       setSaving(false);
     }
@@ -418,17 +391,21 @@ export default function PackagingMaterialDetailPage() {
       await deletePackagingMaterial(materialId, { tenant_id: DAMAGE_TENANT_ID, warehouse_id: warehouseId });
       navigate("/warehouse-materials/packaging");
     } catch (e) {
-      setLoadErr(apiErrorDetailMessage(e, "Nie udało się usunąć."));
+      setLoadErr(wmApiErrorDetailMessage(e, "Nie udało się usunąć."));
     }
   };
 
   const onDuplicate = async () => {
     if (warehouseId == null || isNew || !materialId) return;
+    setDupBusy(true);
+    setLoadErr(null);
     try {
       const d = await duplicatePackagingMaterial(materialId, { tenant_id: DAMAGE_TENANT_ID, warehouse_id: warehouseId });
       navigate(`/warehouse-materials/packaging/${d.id}`);
     } catch (e) {
-      setLoadErr(apiErrorDetailMessage(e, "Nie udało się zduplikować."));
+      setLoadErr(wmApiErrorDetailMessage(e, "Nie udało się zduplikować."));
+    } finally {
+      setDupBusy(false);
     }
   };
 
@@ -441,6 +418,36 @@ export default function PackagingMaterialDetailPage() {
     return { isStretch, isTape, isBubble, isPaper, isGeneric: !isStretch && !isTape && !isBubble && !isPaper };
   }, [mtype]);
 
+  const title = useMemo(() => {
+    if (isNew) return "Nowy materiał pakowy";
+    return name.trim() || "Materiał pakowy";
+  }, [isNew, name]);
+
+  const materialTypeLabel = useMemo(
+    () => MATERIAL_OPTIONS.find((o) => o.value === mtype)?.label ?? mtype,
+    [mtype],
+  );
+
+  const statCards = useMemo((): ProductLikeStatCard[] => {
+    const unitDisplay = UNIT_DISPLAY[unit] ?? unit;
+    const cards: ProductLikeStatCard[] = [
+      { label: "Stan", value: `${wmFmtQty(stockNum)} ${unitDisplay}`, variant: "blue" },
+      { label: "Typ materiału", value: materialTypeLabel, variant: "slate" },
+    ];
+    if (unitNetPreview != null) {
+      cards.push({ label: "Netto / j.u.", value: formatWmMoneyZloty(unitNetPreview), variant: "green" });
+    }
+    return cards;
+  }, [stockNum, unit, materialTypeLabel, unitNetPreview]);
+
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    void handleSave();
+  };
+
+  const fieldLabel = productLikeFieldLabelClass;
+  const inputClass = productLikeInputClass;
+
   if (warehouseId == null) {
     return (
       <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-950">
@@ -450,368 +457,308 @@ export default function PackagingMaterialDetailPage() {
   }
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <div className="shrink-0 border-b border-slate-200/90 bg-white px-4 py-3 sm:px-5">
-        <div className="flex flex-wrap items-center gap-3">
-          <Link
-            to="/warehouse-materials/packaging"
-            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
-            aria-label="Wstecz do listy"
+    <WarehouseMaterialEditLayout
+      isNew={isNew}
+      title={title}
+      imageUrl={imageUrl}
+      sku={sku}
+      breadcrumbs={[
+        { label: "Asortyment", onClick: () => navigate("/products/list") },
+        { label: "Materiały pakowe", onClick: () => navigate("/warehouse-materials/packaging") },
+        { label: isNew ? "Nowy materiał pakowy" : title },
+      ]}
+      tabs={PACKAGING_EDIT_TABS}
+      activeTab={activeTab}
+      onTabChange={setActiveTab}
+      saving={saving}
+      loadErr={loadErr}
+      uploadBusy={uploadBusy}
+      headerInputRef={headerGalleryInputRef}
+      onImageFile={(e) => void onLogoFile(e)}
+      onSubmit={handleSubmit}
+      onDelete={!isNew ? () => void onDelete() : undefined}
+      onDuplicate={!isNew ? () => void onDuplicate() : undefined}
+      duplicateBusy={dupBusy}
+      saveLabel={isNew ? "Utwórz materiał" : "Zapisz zmiany"}
+      statCards={statCards}
+    >
+      <div className="space-y-5">
+        {activeTab === "basic" ? (
+          <WmFormSectionCard title="Dane podstawowe" description="Nazwa, SKU, typ materiału i jednostka magazynowa.">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <label className={fieldLabel}>Nazwa</label>
+                <input className={inputClass} value={name} onChange={(e) => setName(e.target.value)} />
+              </div>
+              <div>
+                <label className={fieldLabel}>SKU</label>
+                <input className={inputClass} value={sku} onChange={(e) => setSku(e.target.value)} />
+              </div>
+              <div>
+                <label className={fieldLabel}>Typ materiału</label>
+                <select className={inputClass} value={mtype} onChange={(e) => setMtype(e.target.value)}>
+                  {MATERIAL_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={fieldLabel}>Jednostka</label>
+                <select className={inputClass} value={unit} onChange={(e) => setUnit(e.target.value)}>
+                  <option value="roll">Rolka</option>
+                  <option value="pcs">Sztuka</option>
+                  <option value="kg">Kilogram</option>
+                </select>
+              </div>
+              <label className="flex items-center gap-2 sm:col-span-2">
+                <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} className="h-4 w-4 rounded border-slate-300" />
+                <span className="text-sm font-medium text-slate-800">Aktywny w magazynie</span>
+              </label>
+              <div className="sm:col-span-2">
+                <label className={fieldLabel}>Uwagi</label>
+                <textarea className={`${inputClass} min-h-[88px] py-2`} value={notes} onChange={(e) => setNotes(e.target.value)} />
+              </div>
+            </div>
+          </WmFormSectionCard>
+        ) : null}
+
+        {activeTab === "technical" ? (
+          <WmFormSectionCard
+            title="Parametry techniczne"
+            description="Pola zależne od typu — wypełnij tylko te, które dotyczą wybranego materiału."
           >
-            <ArrowLeft className="h-5 w-5" strokeWidth={2} aria-hidden />
-          </Link>
-          <h1 className="min-w-0 flex-1 text-lg font-semibold tracking-tight text-slate-900 sm:text-xl">
-            {isNew ? "Nowy materiał pakowy" : name.trim() || "Materiał pakowy"}
-          </h1>
-          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
-            {!isNew ? (
-              <>
-                <button type="button" onClick={() => void onDuplicate()} className={wmSecondaryBtnClass}>
-                  <span className="inline-flex items-center gap-1.5">
-                    <Copy className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
-                    Duplikuj
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void onDelete()}
-                  className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-700 shadow-sm hover:bg-red-50"
-                >
-                  <Trash2 className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
-                  Usuń
-                </button>
-              </>
+            {technicalFields.isGeneric ? (
+              <p className="text-sm text-slate-600">Dla tego typu nie zdefiniowano dodatkowych pól technicznych.</p>
             ) : null}
-            <button type="button" disabled={saving} onClick={() => void handleSave()} className={wmPrimaryBtnClass}>
-              {saving ? "Zapisywanie…" : "Zapisz"}
-            </button>
-          </div>
-        </div>
-      </div>
+            {technicalFields.isStretch ? (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <label className="block">
+                  <span className={fieldLabel}>Szerokość (mm)</span>
+                  <input className={inputClass} value={widthMm} onChange={(e) => setWidthMm(e.target.value)} inputMode="decimal" />
+                </label>
+                <label className="block">
+                  <span className={fieldLabel}>Grubość (µm)</span>
+                  <input className={inputClass} value={thick} onChange={(e) => setThick(e.target.value)} inputMode="decimal" />
+                </label>
+                <label className="block">
+                  <span className={fieldLabel}>Waga folii netto (kg)</span>
+                  <input className={inputClass} value={netFoil} onChange={(e) => setNetFoil(e.target.value)} inputMode="decimal" />
+                </label>
+                <label className="block">
+                  <span className={fieldLabel}>Waga tubusu / rdzenia (kg)</span>
+                  <input className={inputClass} value={tubeKg} onChange={(e) => setTubeKg(e.target.value)} inputMode="decimal" />
+                </label>
+                <label className="block">
+                  <span className={fieldLabel}>Stretch (%)</span>
+                  <input className={inputClass} value={stretchPct} onChange={(e) => setStretchPct(e.target.value)} inputMode="decimal" />
+                </label>
+                <label className="block">
+                  <span className={fieldLabel}>Średnica rdzenia (mm)</span>
+                  <input className={inputClass} value={tubeDia} onChange={(e) => setTubeDia(e.target.value)} inputMode="decimal" />
+                </label>
+              </div>
+            ) : null}
+            {technicalFields.isTape ? (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <label className="block">
+                  <span className={fieldLabel}>Szerokość (mm)</span>
+                  <input className={inputClass} value={widthMm} onChange={(e) => setWidthMm(e.target.value)} inputMode="decimal" />
+                </label>
+                <label className="block">
+                  <span className={fieldLabel}>Długość (m)</span>
+                  <input className={inputClass} value={lengthM} onChange={(e) => setLengthM(e.target.value)} inputMode="decimal" />
+                </label>
+                <label className="block">
+                  <span className={fieldLabel}>Rodzaj kleju</span>
+                  <input className={inputClass} value={adhesive} onChange={(e) => setAdhesive(e.target.value)} />
+                </label>
+                <label className="block">
+                  <span className={fieldLabel}>Kolor</span>
+                  <input className={inputClass} value={color} onChange={(e) => setColor(e.target.value)} />
+                </label>
+                <label className="block">
+                  <span className={fieldLabel}>Waga rdzenia papierowego (kg)</span>
+                  <input className={inputClass} value={corePaper} onChange={(e) => setCorePaper(e.target.value)} inputMode="decimal" />
+                </label>
+                <label className="block">
+                  <span className={fieldLabel}>Waga taśmy (kg, opcjonalnie)</span>
+                  <input className={inputClass} value={tapeW} onChange={(e) => setTapeW(e.target.value)} inputMode="decimal" />
+                </label>
+              </div>
+            ) : null}
+            {technicalFields.isBubble ? (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <label className="block">
+                  <span className={fieldLabel}>Szerokość (cm)</span>
+                  <input className={inputClass} value={bubbleWcm} onChange={(e) => setBubbleWcm(e.target.value)} inputMode="decimal" />
+                </label>
+                <label className="block">
+                  <span className={fieldLabel}>Długość (m)</span>
+                  <input className={inputClass} value={lengthM} onChange={(e) => setLengthM(e.target.value)} inputMode="decimal" />
+                </label>
+                <label className="block">
+                  <span className={fieldLabel}>Średnica bąbla (mm)</span>
+                  <input className={inputClass} value={bubbleDia} onChange={(e) => setBubbleDia(e.target.value)} inputMode="decimal" />
+                </label>
+                <label className="block">
+                  <span className={fieldLabel}>Grubość (µm)</span>
+                  <input className={inputClass} value={thick} onChange={(e) => setThick(e.target.value)} inputMode="decimal" />
+                </label>
+                <label className="block">
+                  <span className={fieldLabel}>Tolerancja (%)</span>
+                  <input className={inputClass} value={tolerance} onChange={(e) => setTolerance(e.target.value)} inputMode="decimal" />
+                </label>
+                <label className="block">
+                  <span className={fieldLabel}>Waga (kg, opcjonalnie)</span>
+                  <input className={inputClass} value={bubbleWt} onChange={(e) => setBubbleWt(e.target.value)} inputMode="decimal" />
+                </label>
+              </div>
+            ) : null}
+            {technicalFields.isPaper ? (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <label className="block">
+                  <span className={fieldLabel}>Szerokość (mm)</span>
+                  <input className={inputClass} value={widthMm} onChange={(e) => setWidthMm(e.target.value)} inputMode="decimal" />
+                </label>
+                <label className="block">
+                  <span className={fieldLabel}>Długość rolki (m)</span>
+                  <input className={inputClass} value={lengthM} onChange={(e) => setLengthM(e.target.value)} inputMode="decimal" />
+                </label>
+                <label className="block">
+                  <span className={fieldLabel}>Gramatura (g/m²)</span>
+                  <input className={inputClass} value={grammage} onChange={(e) => setGrammage(e.target.value)} inputMode="decimal" />
+                </label>
+                <label className="block">
+                  <span className={fieldLabel}>Waga rolki (kg)</span>
+                  <input className={inputClass} value={rollWt} onChange={(e) => setRollWt(e.target.value)} inputMode="decimal" />
+                </label>
+                <label className="block">
+                  <span className={fieldLabel}>Średnica rolki (mm)</span>
+                  <input className={inputClass} value={rollDia} onChange={(e) => setRollDia(e.target.value)} inputMode="decimal" />
+                </label>
+                <label className="block">
+                  <span className={fieldLabel}>Rodzaj papieru</span>
+                  <input className={inputClass} value={paperType} onChange={(e) => setPaperType(e.target.value)} />
+                </label>
+                <label className="block sm:col-span-2">
+                  <span className={fieldLabel}>Kolor</span>
+                  <input className={inputClass} value={color} onChange={(e) => setColor(e.target.value)} />
+                </label>
+              </div>
+            ) : null}
+          </WmFormSectionCard>
+        ) : null}
 
-      {loadErr ? (
-        <div className="mx-4 mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-900">
-          {loadErr}
-        </div>
-      ) : null}
-
-      <div className="shrink-0 px-4 pt-3 sm:px-5">
-        <TabsContainer className="w-full [-webkit-overflow-scrolling:touch]">
-          <nav
-            className="flex w-full gap-6 overflow-x-auto border-b border-slate-200"
-            aria-label="Sekcje edycji"
-            role="tablist"
+        {activeTab === "pricing" ? (
+          <WmFormSectionCard
+            title="Cennik"
+            description="VAT, opakowanie bazowe i progi wolumenowe — jak w kartonach. Podgląd jednostkowy przeliczany z pól poniżej."
           >
-            {TABS.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                role="tab"
-                aria-selected={tab === t.id}
-                onClick={() => setTab(t.id)}
-                className={tabsNavItemClassName(tab === t.id)}
-              >
-                {t.label}
-              </button>
-            ))}
-          </nav>
-        </TabsContainer>
-      </div>
-
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-5 sm:py-6">
-        <div className="flex w-full flex-col gap-5">
-          {tab === "basic" ? (
-            <SectionCard title="Dane podstawowe" description="Nazwa, SKU, typ materiału i jednostka magazynowa.">
-              <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
-                <div className="space-y-3">
-                  <div className="aspect-square w-full max-w-[220px] overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
-                    {imageUrl?.trim() ? (
-                      <img src={imageUrl.trim()} alt="" className="h-full w-full object-contain" />
-                    ) : (
-                      <div className="flex h-full items-center justify-center text-xs font-medium text-slate-400">Brak zdjęcia</div>
-                    )}
-                  </div>
-                  <label className="inline-flex cursor-pointer">
-                    <span className={`${wmSecondaryBtnClass} w-full justify-center`}>
-                      {uploadBusy ? "Wgrywanie…" : "Wybierz zdjęcie"}
-                    </span>
-                    <input type="file" accept="image/*" className="hidden" onChange={(e) => void onLogoFile(e)} />
-                  </label>
-                </div>
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <label className="sm:col-span-2">
-                    <span className={wmLabelClass}>Nazwa</span>
-                    <input className={wmInputClass} value={name} onChange={(e) => setName(e.target.value)} />
-                  </label>
-                  <label>
-                    <span className={wmLabelClass}>SKU</span>
-                    <input className={wmInputClass} value={sku} onChange={(e) => setSku(e.target.value)} />
-                  </label>
-                  <label>
-                    <span className={wmLabelClass}>Typ materiału</span>
-                    <select className={wmInputClass} value={mtype} onChange={(e) => setMtype(e.target.value)}>
-                      {MATERIAL_OPTIONS.map((o) => (
-                        <option key={o.value} value={o.value}>
-                          {o.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    <span className={wmLabelClass}>Jednostka</span>
-                    <select className={wmInputClass} value={unit} onChange={(e) => setUnit(e.target.value)}>
-                      <option value="roll">Rolka</option>
-                      <option value="pcs">Sztuka</option>
-                      <option value="kg">Kilogram</option>
-                    </select>
-                  </label>
-                  <label className="flex items-center gap-2 sm:col-span-2">
-                    <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} className="h-4 w-4 rounded border-slate-300" />
-                    <span className="text-sm font-medium text-slate-800">Aktywny w magazynie</span>
-                  </label>
-                  <label className="sm:col-span-2">
-                    <span className={wmLabelClass}>Uwagi</span>
-                    <textarea className={`${wmInputClass} min-h-[88px] py-2`} value={notes} onChange={(e) => setNotes(e.target.value)} />
-                  </label>
-                </div>
+            <div className="mb-5 grid grid-cols-1 gap-3 rounded-lg border border-slate-100 bg-slate-50/80 p-4 sm:grid-cols-2">
+              <div>
+                <p className={fieldLabel}>Podgląd netto / j.u.</p>
+                <p className="font-mono text-sm font-semibold text-slate-900">{formatWmMoneyZloty(unitNetPreview)}</p>
               </div>
-            </SectionCard>
-          ) : null}
-
-          {tab === "technical" ? (
-            <SectionCard
-              title="Parametry techniczne"
-              description="Pola zależne od typu — wypełnij tylko te, które dotyczą wybranego materiału."
-            >
-              {technicalFields.isGeneric ? (
-                <p className="text-sm text-slate-600">Dla tego typu nie zdefiniowano dodatkowych pól technicznych.</p>
-              ) : null}
-              {technicalFields.isStretch ? (
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <label>
-                    <span className={wmLabelClass}>Szerokość (mm)</span>
-                    <input className={wmInputClass} value={widthMm} onChange={(e) => setWidthMm(e.target.value)} inputMode="decimal" />
-                  </label>
-                  <label>
-                    <span className={wmLabelClass}>Grubość (µm)</span>
-                    <input className={wmInputClass} value={thick} onChange={(e) => setThick(e.target.value)} inputMode="decimal" />
-                  </label>
-                  <label>
-                    <span className={wmLabelClass}>Waga folii netto (kg)</span>
-                    <input className={wmInputClass} value={netFoil} onChange={(e) => setNetFoil(e.target.value)} inputMode="decimal" />
-                  </label>
-                  <label>
-                    <span className={wmLabelClass}>Waga tubusu / rdzenia (kg)</span>
-                    <input className={wmInputClass} value={tubeKg} onChange={(e) => setTubeKg(e.target.value)} inputMode="decimal" />
-                  </label>
-                  <label>
-                    <span className={wmLabelClass}>Stretch (%)</span>
-                    <input className={wmInputClass} value={stretchPct} onChange={(e) => setStretchPct(e.target.value)} inputMode="decimal" />
-                  </label>
-                  <label>
-                    <span className={wmLabelClass}>Średnica rdzenia (mm)</span>
-                    <input className={wmInputClass} value={tubeDia} onChange={(e) => setTubeDia(e.target.value)} inputMode="decimal" />
-                  </label>
-                </div>
-              ) : null}
-              {technicalFields.isTape ? (
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <label>
-                    <span className={wmLabelClass}>Szerokość (mm)</span>
-                    <input className={wmInputClass} value={widthMm} onChange={(e) => setWidthMm(e.target.value)} inputMode="decimal" />
-                  </label>
-                  <label>
-                    <span className={wmLabelClass}>Długość (m)</span>
-                    <input className={wmInputClass} value={lengthM} onChange={(e) => setLengthM(e.target.value)} inputMode="decimal" />
-                  </label>
-                  <label>
-                    <span className={wmLabelClass}>Rodzaj kleju</span>
-                    <input className={wmInputClass} value={adhesive} onChange={(e) => setAdhesive(e.target.value)} />
-                  </label>
-                  <label>
-                    <span className={wmLabelClass}>Kolor</span>
-                    <input className={wmInputClass} value={color} onChange={(e) => setColor(e.target.value)} />
-                  </label>
-                  <label>
-                    <span className={wmLabelClass}>Waga rdzenia papierowego (kg)</span>
-                    <input className={wmInputClass} value={corePaper} onChange={(e) => setCorePaper(e.target.value)} inputMode="decimal" />
-                  </label>
-                  <label>
-                    <span className={wmLabelClass}>Waga taśmy (kg, opcjonalnie)</span>
-                    <input className={wmInputClass} value={tapeW} onChange={(e) => setTapeW(e.target.value)} inputMode="decimal" />
-                  </label>
-                </div>
-              ) : null}
-              {technicalFields.isBubble ? (
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <label>
-                    <span className={wmLabelClass}>Szerokość (cm)</span>
-                    <input className={wmInputClass} value={bubbleWcm} onChange={(e) => setBubbleWcm(e.target.value)} inputMode="decimal" />
-                  </label>
-                  <label>
-                    <span className={wmLabelClass}>Długość (m)</span>
-                    <input className={wmInputClass} value={lengthM} onChange={(e) => setLengthM(e.target.value)} inputMode="decimal" />
-                  </label>
-                  <label>
-                    <span className={wmLabelClass}>Średnica bąbla (mm)</span>
-                    <input className={wmInputClass} value={bubbleDia} onChange={(e) => setBubbleDia(e.target.value)} inputMode="decimal" />
-                  </label>
-                  <label>
-                    <span className={wmLabelClass}>Grubość (µm)</span>
-                    <input className={wmInputClass} value={thick} onChange={(e) => setThick(e.target.value)} inputMode="decimal" />
-                  </label>
-                  <label>
-                    <span className={wmLabelClass}>Tolerancja (%)</span>
-                    <input className={wmInputClass} value={tolerance} onChange={(e) => setTolerance(e.target.value)} inputMode="decimal" />
-                  </label>
-                  <label>
-                    <span className={wmLabelClass}>Waga (kg, opcjonalnie)</span>
-                    <input className={wmInputClass} value={bubbleWt} onChange={(e) => setBubbleWt(e.target.value)} inputMode="decimal" />
-                  </label>
-                </div>
-              ) : null}
-              {technicalFields.isPaper ? (
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <label>
-                    <span className={wmLabelClass}>Szerokość (mm)</span>
-                    <input className={wmInputClass} value={widthMm} onChange={(e) => setWidthMm(e.target.value)} inputMode="decimal" />
-                  </label>
-                  <label>
-                    <span className={wmLabelClass}>Długość rolki (m)</span>
-                    <input className={wmInputClass} value={lengthM} onChange={(e) => setLengthM(e.target.value)} inputMode="decimal" />
-                  </label>
-                  <label>
-                    <span className={wmLabelClass}>Gramatura (g/m²)</span>
-                    <input className={wmInputClass} value={grammage} onChange={(e) => setGrammage(e.target.value)} inputMode="decimal" />
-                  </label>
-                  <label>
-                    <span className={wmLabelClass}>Waga rolki (kg)</span>
-                    <input className={wmInputClass} value={rollWt} onChange={(e) => setRollWt(e.target.value)} inputMode="decimal" />
-                  </label>
-                  <label>
-                    <span className={wmLabelClass}>Średnica rolki (mm)</span>
-                    <input className={wmInputClass} value={rollDia} onChange={(e) => setRollDia(e.target.value)} inputMode="decimal" />
-                  </label>
-                  <label>
-                    <span className={wmLabelClass}>Rodzaj papieru</span>
-                    <input className={wmInputClass} value={paperType} onChange={(e) => setPaperType(e.target.value)} />
-                  </label>
-                  <label className="sm:col-span-2">
-                    <span className={wmLabelClass}>Kolor</span>
-                    <input className={wmInputClass} value={color} onChange={(e) => setColor(e.target.value)} />
-                  </label>
-                </div>
-              ) : null}
-            </SectionCard>
-          ) : null}
-
-          {tab === "pricing" ? (
-            <SectionCard
-              title="Cennik"
-              description="VAT, opakowanie bazowe i progi wolumenowe — jak w kartonach. Podgląd jednostkowy przeliczany z pól poniżej."
-            >
-              <div className="mb-5 grid grid-cols-1 gap-3 rounded-lg border border-slate-100 bg-slate-50/80 p-4 sm:grid-cols-2">
-                <div>
-                  <p className={wmLabelClass}>Podgląd netto / j.u.</p>
-                  <p className="font-mono text-sm font-semibold text-slate-900">{formatWmMoneyZloty(unitNetPreview)}</p>
-                </div>
-                <div>
-                  <p className={wmLabelClass}>Podgląd brutto / j.u.</p>
-                  <p className="font-mono text-sm font-semibold text-slate-900">{formatWmMoneyZloty(unitGrossPreview)}</p>
-                </div>
+              <div>
+                <p className={fieldLabel}>Podgląd brutto / j.u.</p>
+                <p className="font-mono text-sm font-semibold text-slate-900">{formatWmMoneyZloty(unitGrossPreview)}</p>
               </div>
-              <PriceTiersPanel
-                vatRatePct={vatRatePct}
-                onVatChange={setVatRatePct}
-                packageQty={packageQty}
-                onPackageQty={setPackageQty}
-                packageNet={packageNet}
-                onPackageNet={setPackageNet}
-                packageGross={packageGross}
-                onPackageGross={setPackageGross}
-                tiers={tierDrafts}
-                onTiersChange={setTierDrafts}
-                summaryReadonly={tierSummary}
-              />
-            </SectionCard>
-          ) : null}
+            </div>
+            <PriceTiersPanel
+              vatRatePct={vatRatePct}
+              onVatChange={setVatRatePct}
+              packageQty={packageQty}
+              onPackageQty={setPackageQty}
+              packageNet={packageNet}
+              onPackageNet={setPackageNet}
+              packageGross={packageGross}
+              onPackageGross={setPackageGross}
+              tiers={tierDrafts}
+              onTiersChange={setTierDrafts}
+              summaryReadonly={tierSummary}
+            />
+          </WmFormSectionCard>
+        ) : null}
 
-          {tab === "supplier" ? (
-            <SectionCard title="Dostawca" description="Dane zakupowe — bez dostawcy pozycja nie trafi do zamówień.">
-              <div className="grid w-full grid-cols-1 gap-4 sm:grid-cols-2">
-                {!supplierId.trim() ? (
-                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-950 sm:col-span-2">
-                    Brak dostawcy — materiał nie pojawi się w zamówieniach.
-                  </div>
-                ) : null}
-                <label className="sm:col-span-2">
-                  <span className={wmLabelClass}>Główny dostawca</span>
-                  <select className={wmInputClass} value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
-                    <option value="">— brak —</option>
-                    {suppliers.map((s) => (
-                      <option key={s.id} value={String(s.id)}>
-                        {s.name}
-                      </option>
-                    ))}
-                  </select>
+        {activeTab === "supplier" ? (
+          <WmFormSectionCard title="Dostawca" description="Dane zakupowe — bez dostawcy pozycja nie trafi do zamówień.">
+            <div className="w-full space-y-4">
+              {!supplierId.trim() ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-950">
+                  Brak dostawcy — materiał nie pojawi się w zamówieniach.
+                </div>
+              ) : null}
+              <label className="block">
+                <span className="text-xs font-bold uppercase tracking-wide text-slate-600">Główny dostawca</span>
+                <select className={inputClass} value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
+                  <option value="">— brak —</option>
+                  {suppliers.map((s) => (
+                    <option key={s.id} value={String(s.id)}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="text-xs font-bold uppercase tracking-wide text-slate-600">Producent / marka (opcjonalnie)</span>
+                <select className={inputClass} value={producerId} onChange={(e) => setProducerId(e.target.value)}>
+                  <option value="">— brak —</option>
+                  {manufacturers.map((m) => (
+                    <option key={m.id} value={String(m.id)}>
+                      {m.name}
+                      {!m.active ? " (nieaktywny)" : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="text-xs font-bold uppercase tracking-wide text-slate-600">Nazwa u dostawcy (override)</span>
+                <input
+                  className={inputClass}
+                  value={supplierNameOverride}
+                  onChange={(e) => setSupplierNameOverride(e.target.value)}
+                  placeholder="Opcjonalnie"
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs font-bold uppercase tracking-wide text-slate-600">SKU u dostawcy</span>
+                <input className={inputClass} value={supplierSku} onChange={(e) => setSupplierSku(e.target.value)} />
+              </label>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block">
+                  <span className="text-xs font-bold uppercase tracking-wide text-slate-600">MOQ</span>
+                  <input className={inputClass} value={moqStr} onChange={(e) => setMoqStr(e.target.value)} inputMode="decimal" />
                 </label>
-                <label className="sm:col-span-2">
-                  <span className={wmLabelClass}>Producent / marka (opcjonalnie)</span>
-                  <select className={wmInputClass} value={producerId} onChange={(e) => setProducerId(e.target.value)}>
-                    <option value="">— brak —</option>
-                    {manufacturers.map((m) => (
-                      <option key={m.id} value={String(m.id)}>
-                        {m.name}
-                        {!m.active ? " (nieaktywny)" : ""}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="sm:col-span-2">
-                  <span className={wmLabelClass}>Nazwa u dostawcy (override)</span>
+                <label className="block">
+                  <span className="text-xs font-bold uppercase tracking-wide text-slate-600">Wielopak / zbiorcze</span>
                   <input
-                    className={wmInputClass}
-                    value={supplierNameOverride}
-                    onChange={(e) => setSupplierNameOverride(e.target.value)}
-                    placeholder="Opcjonalnie"
-                  />
-                </label>
-                <label className="sm:col-span-2">
-                  <span className={wmLabelClass}>SKU u dostawcy</span>
-                  <input className={wmInputClass} value={supplierSku} onChange={(e) => setSupplierSku(e.target.value)} />
-                </label>
-                <label>
-                  <span className={wmLabelClass}>MOQ</span>
-                  <input className={wmInputClass} value={moqStr} onChange={(e) => setMoqStr(e.target.value)} inputMode="decimal" />
-                </label>
-                <label>
-                  <span className={wmLabelClass}>Wielopak / zbiorcze</span>
-                  <input
-                    className={wmInputClass}
+                    className={inputClass}
                     value={purchasePackQtyStr}
                     onChange={(e) => setPurchasePackQtyStr(e.target.value)}
                     onBlur={() => setPurchasePackQtyStr(normalizeWmMoneyInputString(purchasePackQtyStr))}
                     inputMode="decimal"
                   />
                 </label>
-                <label className="sm:col-span-2">
-                  <span className={wmLabelClass}>Darmowa dostawa od kwoty (netto)</span>
+                <label className="block sm:col-span-2">
+                  <span className="text-xs font-bold uppercase tracking-wide text-slate-600">Darmowa dostawa od kwoty (netto)</span>
                   <input
-                    className={wmInputClass}
+                    className={inputClass}
                     value={freeShipNetStr}
                     onChange={(e) => setFreeShipNetStr(e.target.value)}
                     onBlur={() => setFreeShipNetStr(normalizeWmMoneyInputString(freeShipNetStr))}
                     inputMode="decimal"
                   />
                 </label>
-                <label>
-                  <span className={wmLabelClass}>Czas realizacji (dni)</span>
-                  <input className={wmInputClass} value={leadTimeDays} onChange={(e) => setLeadTimeDays(e.target.value)} inputMode="numeric" />
+                <label className="block">
+                  <span className="text-xs font-bold uppercase tracking-wide text-slate-600">Czas realizacji (dni)</span>
+                  <input className={inputClass} value={leadTimeDays} onChange={(e) => setLeadTimeDays(e.target.value)} inputMode="numeric" />
                 </label>
-                <label>
-                  <span className={wmLabelClass}>Ostatnia cena zakupu netto</span>
+                <label className="block">
+                  <span className="text-xs font-bold uppercase tracking-wide text-slate-600">Ostatnia cena zakupu netto</span>
                   <input
-                    className={wmInputClass}
+                    className={inputClass}
                     value={lastPurchaseNetStr}
                     onChange={(e) => setLastPurchaseNetStr(e.target.value)}
                     onBlur={() => setLastPurchaseNetStr(normalizeWmMoneyInputString(lastPurchaseNetStr))}
@@ -819,72 +766,72 @@ export default function PackagingMaterialDetailPage() {
                   />
                 </label>
               </div>
-            </SectionCard>
-          ) : null}
+            </div>
+          </WmFormSectionCard>
+        ) : null}
 
-          {tab === "warehouse" ? (
-            <SectionCard title="Magazyn" description="Stan, rezerwacje, lokalizacja etykieta oraz progi alertów.">
-              <div className="grid max-w-xl grid-cols-1 gap-4 sm:grid-cols-2">
-                <label>
-                  <span className={wmLabelClass}>Stan</span>
-                  <input className={wmInputClass} value={stock} onChange={(e) => setStock(e.target.value)} inputMode="decimal" />
-                </label>
-                <label>
-                  <span className={wmLabelClass}>Zarezerwowano</span>
-                  <input className={wmInputClass} value={reservedQty} onChange={(e) => setReservedQty(e.target.value)} inputMode="decimal" />
-                </label>
-                <label className="sm:col-span-2">
-                  <span className={wmLabelClass}>Lokalizacja (etykieta)</span>
-                  <input className={wmInputClass} value={locationLabel} onChange={(e) => setLocationLabel(e.target.value)} />
-                </label>
-                <label>
-                  <span className={wmLabelClass}>Próg niskiego stanu</span>
-                  <input className={wmInputClass} value={lowStockThr} onChange={(e) => setLowStockThr(e.target.value)} inputMode="decimal" />
-                </label>
-                <label>
-                  <span className={wmLabelClass}>Sugerowane uzupełnienie</span>
-                  <input className={wmInputClass} value={reorderQty} onChange={(e) => setReorderQty(e.target.value)} inputMode="decimal" />
-                </label>
-              </div>
-            </SectionCard>
-          ) : null}
+        {activeTab === "warehouse" ? (
+          <WmFormSectionCard title="Magazyn" description="Stan, rezerwacje, lokalizacja etykieta oraz progi alertów.">
+            <div className="grid max-w-xl grid-cols-1 gap-4 sm:grid-cols-2">
+              <label className="block">
+                <span className={fieldLabel}>Stan</span>
+                <input className={inputClass} value={stock} onChange={(e) => setStock(e.target.value)} inputMode="decimal" />
+              </label>
+              <label className="block">
+                <span className={fieldLabel}>Zarezerwowano</span>
+                <input className={inputClass} value={reservedQty} onChange={(e) => setReservedQty(e.target.value)} inputMode="decimal" />
+              </label>
+              <label className="block sm:col-span-2">
+                <span className={fieldLabel}>Lokalizacja (etykieta)</span>
+                <input className={inputClass} value={locationLabel} onChange={(e) => setLocationLabel(e.target.value)} />
+              </label>
+              <label className="block">
+                <span className={fieldLabel}>Próg niskiego stanu</span>
+                <input className={inputClass} value={lowStockThr} onChange={(e) => setLowStockThr(e.target.value)} inputMode="decimal" />
+              </label>
+              <label className="block">
+                <span className={fieldLabel}>Sugerowane uzupełnienie</span>
+                <input className={inputClass} value={reorderQty} onChange={(e) => setReorderQty(e.target.value)} inputMode="decimal" />
+              </label>
+            </div>
+          </WmFormSectionCard>
+        ) : null}
 
-          {tab === "bdo" ? (
-            <SectionCard title="Mapowanie BDO" description="Masy składowe na jednostkę magazynową — widoczne w Magazyn → BDO.">
-              <label className="mb-4 flex items-center gap-2">
-                <input type="checkbox" checked={includeInBdo} onChange={(e) => setIncludeInBdo(e.target.checked)} className="h-4 w-4 rounded border-slate-300" />
-                <span className="text-sm font-medium text-slate-800">Uwzględniaj w raportach BDO</span>
+        {activeTab === "bdo" ? (
+          <WmFormSectionCard title="Mapowanie BDO" description="Masy składowe na jednostkę magazynową — widoczne w Magazyn → BDO.">
+            <label className="mb-4 flex items-center gap-2">
+              <input type="checkbox" checked={includeInBdo} onChange={(e) => setIncludeInBdo(e.target.checked)} className="h-4 w-4 rounded border-slate-300" />
+              <span className="text-sm font-medium text-slate-800">Uwzględniaj w raportach BDO</span>
+            </label>
+            <label className="mb-4 block max-w-md">
+              <span className={fieldLabel}>Typ opakowania (BDO)</span>
+              <input className={inputClass} value={packagingTypeBdo} onChange={(e) => setPackagingTypeBdo(e.target.value)} />
+            </label>
+            <div className="grid w-full grid-cols-1 gap-4 sm:grid-cols-2">
+              <label className="block">
+                <span className={fieldLabel}>Plastik (kg / j.u.)</span>
+                <input className={inputClass} value={plasticKg} onChange={(e) => setPlasticKg(e.target.value)} inputMode="decimal" />
               </label>
-              <label className="mb-4 block max-w-md">
-                <span className={wmLabelClass}>Typ opakowania (BDO)</span>
-                <input className={wmInputClass} value={packagingTypeBdo} onChange={(e) => setPackagingTypeBdo(e.target.value)} />
+              <label className="block">
+                <span className={fieldLabel}>Papier (kg / j.u.)</span>
+                <input className={inputClass} value={paperKg} onChange={(e) => setPaperKg(e.target.value)} inputMode="decimal" />
               </label>
-              <div className="grid w-full grid-cols-1 gap-4 sm:grid-cols-2">
-                <label>
-                  <span className={wmLabelClass}>Plastik (kg / j.u.)</span>
-                  <input className={wmInputClass} value={plasticKg} onChange={(e) => setPlasticKg(e.target.value)} inputMode="decimal" />
-                </label>
-                <label>
-                  <span className={wmLabelClass}>Papier (kg / j.u.)</span>
-                  <input className={wmInputClass} value={paperKg} onChange={(e) => setPaperKg(e.target.value)} inputMode="decimal" />
-                </label>
-                <label>
-                  <span className={wmLabelClass}>Drewno</span>
-                  <input className={wmInputClass} value={woodKg} onChange={(e) => setWoodKg(e.target.value)} inputMode="decimal" />
-                </label>
-                <label>
-                  <span className={wmLabelClass}>Szkło</span>
-                  <input className={wmInputClass} value={glassKg} onChange={(e) => setGlassKg(e.target.value)} inputMode="decimal" />
-                </label>
-                <label className="sm:col-span-2">
-                  <span className={wmLabelClass}>Metal</span>
-                  <input className={wmInputClass} value={metalKg} onChange={(e) => setMetalKg(e.target.value)} inputMode="decimal" />
-                </label>
-              </div>
-            </SectionCard>
-          ) : null}
-        </div>
+              <label className="block">
+                <span className={fieldLabel}>Drewno</span>
+                <input className={inputClass} value={woodKg} onChange={(e) => setWoodKg(e.target.value)} inputMode="decimal" />
+              </label>
+              <label className="block">
+                <span className={fieldLabel}>Szkło</span>
+                <input className={inputClass} value={glassKg} onChange={(e) => setGlassKg(e.target.value)} inputMode="decimal" />
+              </label>
+              <label className="block sm:col-span-2">
+                <span className={fieldLabel}>Metal</span>
+                <input className={inputClass} value={metalKg} onChange={(e) => setMetalKg(e.target.value)} inputMode="decimal" />
+              </label>
+            </div>
+          </WmFormSectionCard>
+        ) : null}
       </div>
-    </div>
+    </WarehouseMaterialEditLayout>
   );
 }
