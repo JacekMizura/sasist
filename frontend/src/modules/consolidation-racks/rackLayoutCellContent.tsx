@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 
 import {
+  CONSOLIDATION_PREVIEW_CELL,
   CONSOLIDATION_PREVIEW_SELECT,
   formatPreviewDimsCompact,
   type RackLayoutCell,
