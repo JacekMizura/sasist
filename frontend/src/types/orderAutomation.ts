@@ -45,6 +45,10 @@ export type OrderAutomationManualTrigger = {
   iconKey: string;
   /** Data URL obrazka — gdy iconSource === "custom" */
   customImageDataUrl?: string | null;
+  /** Przycisk ręczny widoczny na liście zamówień */
+  visibleOnOrderList?: boolean;
+  /** Przycisk ręczny widoczny na karcie zamówienia */
+  visibleOnOrderCard?: boolean;
 };
 
 /** Jedna linia harmonogramu (dzień tygodnia ISO: 1 = pon … 7 = nd). */

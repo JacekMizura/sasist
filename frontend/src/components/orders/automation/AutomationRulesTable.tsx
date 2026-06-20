@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronDown, ChevronUp, ClipboardList, Pencil, Trash2 } from "lucide-react";
 
@@ -23,15 +22,17 @@ import {
   oaRowActionBtnDanger,
 } from "./orderAutomationUiTokens";
 
-const MAX_VISIBLE_CONDITIONS = 3;
-const MAX_VISIBLE_EFFECTS = 2;
-
 function fmtTime(iso: string | null | undefined) {
   if (!iso) return "—";
   try {
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return iso;
-    return d.toLocaleString("pl-PL", { dateStyle: "short", timeStyle: "short" });
+    const y = d.getFullYear();
+    const mo = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    const h = String(d.getHours()).padStart(2, "0");
+    const mi = String(d.getMinutes()).padStart(2, "0");
+    return `${y}-${mo}-${day} ${h}:${mi}`;
   } catch {
     return iso;
   }
@@ -51,10 +52,8 @@ function ConditionLine({
     <div className="flex min-w-0 flex-col gap-1.5">
       {join ? <span className={oaListJoinBadgeClass}>{join}</span> : null}
       <p className={`${oaListLogicLineClass} break-words`}>
-        {line.field}{" "}
-        <span className="font-bold">
-          {line.operator} {line.value}
-        </span>
+        {line.field} {line.operator}{" "}
+        <span className="font-semibold">{line.value}</span>
       </p>
     </div>
   );
@@ -67,42 +66,18 @@ function ConditionsCell({
   rule: OrderAutomationRule;
   statusNameById: Map<number, string>;
 }) {
-  const [expanded, setExpanded] = useState(false);
   const { conditions } = rule;
 
   if (conditions.length === 0) {
     return <span className="text-slate-400">—</span>;
   }
 
-  const hiddenCount = Math.max(0, conditions.length - MAX_VISIBLE_CONDITIONS);
-  const visible = expanded ? conditions : conditions.slice(0, MAX_VISIBLE_CONDITIONS);
-
   return (
     <div className="flex min-w-0 flex-col gap-2">
-      {visible.map((c, i) => {
-        const globalIdx = expanded ? i : i;
-        const join =
-          globalIdx > 0 ? (conditions[globalIdx - 1]?.joinToNext === "or" ? "LUB" : "ORAZ") : null;
+      {conditions.map((c, i) => {
+        const join = i > 0 ? (conditions[i - 1]?.joinToNext === "or" ? "LUB" : "ORAZ") : null;
         return <ConditionLine key={c.uid} c={c} join={join} statusNameById={statusNameById} />;
       })}
-      {hiddenCount > 0 && !expanded ? (
-        <button
-          type="button"
-          className="w-fit text-left text-xs font-medium text-blue-700 hover:underline"
-          onClick={() => setExpanded(true)}
-        >
-          +{hiddenCount} więcej
-        </button>
-      ) : null}
-      {expanded && conditions.length > MAX_VISIBLE_CONDITIONS ? (
-        <button
-          type="button"
-          className="w-fit text-left text-xs font-medium text-blue-700 hover:underline"
-          onClick={() => setExpanded(false)}
-        >
-          Pokaż mniej
-        </button>
-      ) : null}
     </div>
   );
 }
@@ -122,7 +97,7 @@ function EffectBlock({
       {hasDetail ? (
         <p className={`${oaListLogicLineClass} mt-0.5 break-words text-slate-700`}>
           {block.detailPrefix}
-          {block.primaryBold ? <span className="font-bold">{block.primaryBold}</span> : null}
+          {block.primaryBold ? <span className="font-semibold">{block.primaryBold}</span> : null}
           {block.secondaryDetail}
         </p>
       ) : null}
@@ -137,60 +112,31 @@ function EffectsCell({
   rule: OrderAutomationRule;
   statusNameById: Map<number, string>;
 }) {
-  const [expanded, setExpanded] = useState(false);
-
   if (rule.effects.length === 0) {
     return <span className="text-slate-400">—</span>;
   }
 
-  const hiddenCount = Math.max(0, rule.effects.length - MAX_VISIBLE_EFFECTS);
-  const visible = expanded ? rule.effects : rule.effects.slice(0, MAX_VISIBLE_EFFECTS);
-
   return (
     <div className="flex min-w-0 flex-col gap-3">
-      {visible.map((e) => (
+      {rule.effects.map((e) => (
         <EffectBlock key={e.uid} e={e} statusNameById={statusNameById} />
       ))}
-      {hiddenCount > 0 && !expanded ? (
-        <button
-          type="button"
-          className="w-fit text-left text-xs font-medium text-blue-700 hover:underline"
-          onClick={() => setExpanded(true)}
-        >
-          +{hiddenCount} kolejne akcje
-        </button>
-      ) : null}
-      {expanded && rule.effects.length > MAX_VISIBLE_EFFECTS ? (
-        <button
-          type="button"
-          className="w-fit text-left text-xs font-medium text-blue-700 hover:underline"
-          onClick={() => setExpanded(false)}
-        >
-          Pokaż mniej
-        </button>
-      ) : null}
     </div>
   );
 }
 
 function ExecutionCell({ rule }: { rule: OrderAutomationRule }) {
-  const { lines, variant } = formatExecutionListDisplay(rule);
+  const { badges } = formatExecutionListDisplay(rule);
 
   return (
-    <div className="flex min-w-0 flex-col gap-1">
-      {lines.map((line, i) => (
-        <p
-          key={`${line}-${i}`}
-          className={`text-sm leading-snug ${
-            i === 0 && variant === "automatic" && rule.enabled
-              ? "font-medium text-emerald-800"
-              : i === 0 && variant === "manual"
-                ? "font-medium text-slate-700"
-                : "text-slate-600"
-          }`}
+    <div className="flex min-w-0 flex-col gap-1.5">
+      {badges.map((badge) => (
+        <span
+          key={badge.key}
+          className={`inline-flex w-fit items-center rounded-md border px-2 py-0.5 text-xs font-medium leading-snug ${badge.className}`}
         >
-          {line}
-        </p>
+          {badge.label}
+        </span>
       ))}
     </div>
   );

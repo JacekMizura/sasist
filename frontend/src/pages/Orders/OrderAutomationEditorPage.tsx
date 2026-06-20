@@ -18,6 +18,7 @@ import type {
 } from "../../types/orderAutomation";
 import { loadActionGroups, allocateRulePublicId, newUid, saveActionGroups } from "../../utils/orderAutomationLocalStore";
 import { defaultExecution, migrateExecution, normalizeExecution } from "../../utils/orderAutomationExecution";
+import { validateAutomationRule } from "../../utils/orderAutomationValidation";
 import {
   ORDER_AUTOMATION_CONDITION_FIELDS,
   buildConditionCategorySteps,
@@ -65,6 +66,8 @@ function defaultRule(): OrderAutomationRule {
       iconSource: "system",
       iconKey: "Zap",
       customImageDataUrl: null,
+      visibleOnOrderList: true,
+      visibleOnOrderCard: true,
     },
     conditions: [],
     effects: [],
@@ -84,6 +87,8 @@ function migrateManualTrigger(m: OrderAutomationManualTrigger | null | undefined
     iconSource: "system",
     iconKey: "Zap",
     customImageDataUrl: null,
+    visibleOnOrderList: true,
+    visibleOnOrderCard: true,
   };
   if (!m || typeof m !== "object") return defaults;
   return {
@@ -92,6 +97,8 @@ function migrateManualTrigger(m: OrderAutomationManualTrigger | null | undefined
     iconSource: m.iconSource ?? "system",
     iconKey: m.iconKey ?? "Zap",
     customImageDataUrl: m.customImageDataUrl ?? null,
+    visibleOnOrderList: m.visibleOnOrderList !== false,
+    visibleOnOrderCard: m.visibleOnOrderCard !== false,
   };
 }
 
@@ -122,7 +129,7 @@ function normalizeRule(r: OrderAutomationRule): OrderAutomationRule {
   return {
     ...def,
     ...r,
-    manualTrigger: { ...migrateManualTrigger(r.manualTrigger), enabled: !executionNorm.automatic },
+    manualTrigger: migrateManualTrigger(r.manualTrigger),
     execution: executionNorm,
     conditions: conditions.map((c, i) => ({
       ...c,
@@ -197,6 +204,7 @@ export default function OrderAutomationEditorPage() {
   const [statusSummary, setStatusSummary] = useState<OrderUiStatusPanelSummary | null>(null);
   const [groupOptions, setGroupOptions] = useState<string[]>([]);
   const [nameTouched, setNameTouched] = useState(false);
+  const [saveAttempted, setSaveAttempted] = useState(false);
   const [testOpen, setTestOpen] = useState(false);
 
   const [addCondPickerOpen, setAddCondPickerOpen] = useState(false);
@@ -352,10 +360,18 @@ export default function OrderAutomationEditorPage() {
     );
   };
 
+  const validation = useMemo(() => validateAutomationRule(draft), [draft]);
+  const canSave = validation.valid && draft.name.trim().length > 0;
+
   const save = () => {
     setNameTouched(true);
+    setSaveAttempted(true);
     if (!draft.name.trim()) {
       toast.error("Podaj nazwę automatyzacji.");
+      return;
+    }
+    if (!validation.valid) {
+      toast.error("Popraw błędy przed zapisem.");
       return;
     }
     let toSave = normalizeRule(draft);
@@ -364,6 +380,7 @@ export default function OrderAutomationEditorPage() {
       setDraft(toSave);
     }
     upsertRule(toSave);
+    setSaveAttempted(false);
     toast.success("Zapisano.");
     if (isNew) navigate(`${baseList}/${draft.id}/edit`, { replace: true });
   };
@@ -455,18 +472,67 @@ export default function OrderAutomationEditorPage() {
           <button type="button" className={`${oaBtn} gap-2`} onClick={() => setTestOpen(true)}>
             <FlaskConical className="h-4 w-4" /> Test
           </button>
-          <button type="button" className={`${oaBtnPri} gap-2`} onClick={save}>
+          <button type="button" className={`${oaBtnPri} gap-2`} onClick={save} disabled={!canSave}>
             <Save className="h-4 w-4" /> Zapisz
           </button>
         </div>
       </div>
       {nameInvalid ? <span className="-mt-2 mb-3 block text-xs text-red-600">Nazwa jest wymagana</span> : null}
 
-      <div className="w-full max-w-none space-y-6">
+      {saveAttempted && !validation.valid ? (
+        <div className="mb-4 rounded-lg border border-red-200 bg-white px-4 py-3">
+          <p className="text-sm font-semibold text-red-800">Nie można zapisać automatyzacji.</p>
+          <p className="mt-1 text-sm text-red-700">Popraw:</p>
+          <ul className="mt-2 list-inside list-disc space-y-0.5 text-sm text-red-700">
+            {validation.messages.map((msg) => (
+              <li key={msg}>{msg}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      <div className="w-full max-w-none space-y-8">
+        <AutomationExecutionSettingsSection
+          automatic={draft.execution.automatic}
+          manualEnabled={draft.manualTrigger.enabled}
+          manualTrigger={draft.manualTrigger}
+          runMode={draft.execution.runMode}
+          windowFrom={draft.execution.windowFrom}
+          windowTo={draft.execution.windowTo}
+          activeDays={draft.execution.activeDays}
+          delayMinutes={draft.delayMinutes ?? 0}
+          showValidation={saveAttempted}
+          onChange={(patch) =>
+            setDraft((d) => {
+              const nextExecution = normalizeExecution({
+                ...d.execution,
+                ...(patch.automatic !== undefined ? { automatic: patch.automatic } : {}),
+                ...(patch.runMode !== undefined ? { runMode: patch.runMode } : {}),
+                ...(patch.windowFrom !== undefined ? { windowFrom: patch.windowFrom } : {}),
+                ...(patch.windowTo !== undefined ? { windowTo: patch.windowTo } : {}),
+                ...(patch.activeDays !== undefined ? { activeDays: patch.activeDays } : {}),
+              });
+              const nextManual = {
+                ...d.manualTrigger,
+                ...(patch.manualEnabled !== undefined ? { enabled: patch.manualEnabled } : {}),
+                ...(patch.manualTrigger ?? {}),
+              };
+              return normalizeRule({
+                ...d,
+                delayMinutes: patch.delayMinutes ?? d.delayMinutes,
+                execution: nextExecution,
+                manualTrigger: nextManual,
+              });
+            })
+          }
+        />
+
         <AutomationIfThenSection
           conditions={draft.conditions}
           effects={draft.effects}
           statusNameById={statusNameById}
+          conditionErrors={validation.conditionErrors}
+          effectErrors={validation.effectErrors}
           onAddCondition={() => setAddCondPickerOpen(true)}
           onAddEffect={() => setAddEffPickerOpen(true)}
           onEditCondition={setEditCondUid}
@@ -477,25 +543,6 @@ export default function OrderAutomationEditorPage() {
           }
           onDuplicateEffect={duplicateEffect}
           onRemoveEffect={(uid) => setDraft((d) => ({ ...d, effects: d.effects.filter((x) => x.uid !== uid) }))}
-        />
-
-        <AutomationExecutionSettingsSection
-          automatic={draft.execution.automatic}
-          runMode={draft.execution.runMode}
-          windowFrom={draft.execution.windowFrom}
-          windowTo={draft.execution.windowTo}
-          activeDays={draft.execution.activeDays}
-          delayMinutes={draft.delayMinutes ?? 0}
-          onChange={(patch) =>
-            setDraft((d) => {
-              const nextExecution = normalizeExecution({ ...d.execution, ...patch });
-              return normalizeRule({
-                ...d,
-                delayMinutes: patch.delayMinutes ?? d.delayMinutes,
-                execution: nextExecution,
-              });
-            })
-          }
         />
 
         <IntegrationsApiPanel title="⋯ Historia zmian">

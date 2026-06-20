@@ -52,7 +52,7 @@ export const oaListThClass =
 export const oaListThSortClass = `${oaListThClass} cursor-pointer select-none hover:text-slate-800`;
 export const oaListTdClass = "px-4 py-4 align-top text-sm leading-relaxed text-slate-800";
 export const oaListRowClass =
-  "group border-b border-slate-100 transition-colors hover:bg-slate-50/40 last:border-b-0 [&>td]:min-h-[5.75rem]";
+  "group border-b border-slate-100 transition-colors hover:bg-slate-50/40 last:border-b-0 [&>td]:min-h-[7.5rem]";
 export const oaListTableClass = "w-full min-w-[1180px] table-fixed text-left text-sm";
 
 /** Badge ORAZ / LUB między warunkami na liście */

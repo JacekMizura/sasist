@@ -99,7 +99,7 @@ export function normalizeExecution(ex: OrderAutomationExecution): OrderAutomatio
   const windowTo = /^\d{2}:\d{2}$/.test(ex.windowTo ?? "") ? ex.windowTo! : def.windowTo;
 
   return {
-    automatic: ex.automatic !== false,
+    automatic: ex.automatic === true,
     runMode,
     windowFrom,
     windowTo,
@@ -116,36 +116,54 @@ export function formatActiveDaysRange(days: number[]): string {
   return sorted.map((d) => DAY_LABELS[d] ?? String(d)).join(", ");
 }
 
-export type ExecutionListDisplay = {
-  lines: string[];
-  variant: "automatic" | "manual";
+export type ExecutionListBadge = {
+  key: string;
+  label: string;
+  className: string;
 };
 
-/** Widok kolumny Uruchamianie — bez wyzwalaczów eventów. */
+export type ExecutionListDisplay = {
+  badges: ExecutionListBadge[];
+};
+
+/** Widok kolumny Uruchamianie — badge automatycznie / ręcznie / harmonogram. */
 export function formatExecutionListDisplay(
-  rule: Pick<OrderAutomationRule, "enabled" | "execution" | "delayMinutes" | "manualTrigger">,
+  rule: Pick<OrderAutomationRule, "execution" | "manualTrigger">,
 ): ExecutionListDisplay {
   const ex = migrateExecution(rule.execution, rule.manualTrigger);
+  const badges: ExecutionListBadge[] = [];
 
-  if (!ex.automatic) {
-    return { lines: ["Ręcznie"], variant: "manual" };
+  if (ex.automatic) {
+    badges.push({
+      key: "auto",
+      label: "✓ Automatycznie",
+      className: "border-emerald-200 bg-emerald-50 text-emerald-800",
+    });
   }
 
-  const lines: string[] = [];
-  lines.push(rule.enabled ? "✓ Automatycznie" : "Automatycznie");
-
-  const delay = Math.max(0, Math.floor(Number(rule.delayMinutes) || 0));
-  if (delay > 0) {
-    lines.push(`${delay} min`);
+  if (rule.manualTrigger?.enabled) {
+    badges.push({
+      key: "manual",
+      label: "✓ Ręcznie",
+      className: "border-slate-200 bg-white text-slate-700",
+    });
   }
 
-  if (ex.runMode === "continuous") {
-    lines.push("Ciągły");
-  } else if (ex.runMode === "hours_only") {
-    lines.push(`${ex.windowFrom}–${ex.windowTo}`);
-  } else {
-    lines.push(`${formatActiveDaysRange(ex.activeDays)} ${ex.windowFrom}–${ex.windowTo}`);
+  if (ex.automatic && ex.runMode !== "continuous") {
+    badges.push({
+      key: "schedule",
+      label: "🕒 Harmonogram",
+      className: "border-blue-200 bg-blue-50 text-blue-800",
+    });
   }
 
-  return { lines, variant: "automatic" };
+  if (badges.length === 0) {
+    badges.push({
+      key: "none",
+      label: "—",
+      className: "border-slate-200 bg-white text-slate-400",
+    });
+  }
+
+  return { badges };
 }
