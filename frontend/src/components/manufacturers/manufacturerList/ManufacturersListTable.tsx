@@ -199,11 +199,18 @@ export function ManufacturersListTable({
   onDelete,
   onProductsClick,
 }: ManufacturersListTableProps) {
-  const { containerRef, widths, minWidthPx } = useProportionalTableColumns(columnOrder.length);
+  const { containerRef, widths, contentMinWidthPx, needsHorizontalScroll } =
+    useProportionalTableColumns(columnOrder.length);
 
   return (
-    <div ref={containerRef} className="w-full min-w-0 overflow-x-auto">
-      <table className={manufacturersListTableClass} style={{ minWidth: minWidthPx }}>
+    <div
+      ref={containerRef}
+      className={`w-full min-w-0 ${needsHorizontalScroll ? "overflow-x-auto" : "overflow-x-hidden"}`}
+    >
+      <table
+        className={manufacturersListTableClass}
+        style={needsHorizontalScroll ? { width: contentMinWidthPx } : undefined}
+      >
         <colgroup>
           <col style={{ width: widths.checkbox }} />
           <col style={{ width: widths.logo }} />

@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState, type RefObject } from "react";
 
 import {
   computeProportionalTableWidths,
@@ -6,32 +6,47 @@ import {
   type ProportionalTableWidths,
 } from "./proportionalTableColumns";
 
-export function useProportionalTableColumns(dynamicColumnCount: number) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const minWidthPx = proportionalTableMinWidthPx(dynamicColumnCount);
+export type ProportionalTableLayoutState = {
+  widths: ProportionalTableWidths;
+  /** Minimalna szerokość treści — scroll tylko gdy przekracza kontener. */
+  contentMinWidthPx: number;
+  needsHorizontalScroll: boolean;
+};
 
-  const [widths, setWidths] = useState<ProportionalTableWidths>(() =>
-    computeProportionalTableWidths(minWidthPx, dynamicColumnCount),
-  );
+export function useProportionalTableColumns(dynamicColumnCount: number): ProportionalTableLayoutState & {
+  containerRef: RefObject<HTMLDivElement | null>;
+} {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const contentMinWidthPx = proportionalTableMinWidthPx(dynamicColumnCount);
+
+  const [state, setState] = useState<ProportionalTableLayoutState>(() => {
+    const widths = computeProportionalTableWidths(contentMinWidthPx, dynamicColumnCount);
+    return { widths, contentMinWidthPx, needsHorizontalScroll: false };
+  });
 
   useLayoutEffect(() => {
     const el = containerRef.current;
     if (!el) return;
 
     const measure = () => {
-      const measured = el.clientWidth > 0 ? el.clientWidth : minWidthPx;
-      setWidths(computeProportionalTableWidths(Math.max(measured, minWidthPx), dynamicColumnCount));
+      const containerWidth = el.clientWidth;
+      if (containerWidth <= 0) return;
+
+      const needsHorizontalScroll = contentMinWidthPx > containerWidth;
+      const layoutWidth = needsHorizontalScroll ? contentMinWidthPx : containerWidth;
+
+      setState({
+        widths: computeProportionalTableWidths(layoutWidth, dynamicColumnCount),
+        contentMinWidthPx,
+        needsHorizontalScroll,
+      });
     };
 
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
-    window.addEventListener("resize", measure);
-    return () => {
-      ro.disconnect();
-      window.removeEventListener("resize", measure);
-    };
-  }, [dynamicColumnCount, minWidthPx]);
+    return () => ro.disconnect();
+  }, [dynamicColumnCount, contentMinWidthPx]);
 
-  return { containerRef, widths, minWidthPx };
+  return { containerRef, ...state };
 }

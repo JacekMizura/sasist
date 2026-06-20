@@ -7,16 +7,16 @@ export const manufacturersListRowClass =
   "group border-b border-slate-100 transition-colors hover:bg-slate-50/60 last:border-b-0 even:bg-slate-50/20";
 export const manufacturersListRowInnerClass = "flex min-h-[3.5rem] items-center";
 
-/** Kolumna checkbox — stała szerokość 56 px. */
+/** Kolumna checkbox — stała 56 px, sticky lewa. */
 export const manufacturersListCheckboxColWidth = "56px";
 export const manufacturersListCheckboxCellClass =
-  "box-border w-[56px] min-w-[56px] max-w-[56px] px-0 py-0 align-middle text-center";
+  "sticky left-0 z-[2] box-border w-[56px] min-w-[56px] max-w-[56px] bg-inherit px-0 py-0 align-middle text-center";
 export const manufacturersListCheckboxInnerClass =
   "flex h-14 min-h-[3.5rem] w-full items-center justify-center";
 export const manufacturersListCheckboxInputClass =
   "h-4 w-4 shrink-0 rounded border-slate-300 accent-emerald-600";
 export const manufacturersListCheckboxThClass =
-  "sticky top-0 z-10 box-border w-[56px] min-w-[56px] max-w-[56px] bg-white px-0 py-0 align-middle text-center shadow-[inset_0_-1px_0_0_rgb(226,232,240)]";
+  "sticky left-0 top-0 z-[3] box-border w-[56px] min-w-[56px] max-w-[56px] bg-white px-0 py-0 align-middle text-center shadow-[inset_0_-1px_0_0_rgb(226,232,240)]";
 
 /** Kolumna logo — stała szerokość 80 px. */
 export const manufacturersListLogoColWidth = "80px";
@@ -29,12 +29,12 @@ export const manufacturersListNameCellClass = "min-w-0 px-4 py-0 align-middle te
 export const manufacturersListNameThClass =
   "sticky top-0 z-10 min-w-0 bg-white px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 shadow-[inset_0_-1px_0_0_rgb(226,232,240)]";
 
-/** Kolumna akcji — stała szerokość 120 px, przyciski 36×36 px. */
+/** Kolumna akcji — stała 120 px, sticky prawa, poza podziałem fr. */
 export const manufacturersListActionsColWidth = "120px";
 export const manufacturersListActionsCellClass =
-  "box-border w-[120px] min-w-[120px] max-w-[120px] px-2 py-0 align-middle";
+  "sticky right-0 z-[2] box-border w-[120px] min-w-[120px] max-w-[120px] bg-inherit px-2 py-0 align-middle";
 export const manufacturersListActionsThClass =
-  "sticky top-0 z-10 box-border w-[120px] min-w-[120px] max-w-[120px] bg-white px-2 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 shadow-[inset_0_-1px_0_0_rgb(226,232,240)]";
+  "sticky right-0 top-0 z-[3] box-border w-[120px] min-w-[120px] max-w-[120px] bg-white px-2 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 shadow-[inset_0_-1px_0_0_rgb(226,232,240)]";
 export const manufacturersListActionsInnerClass =
   "flex min-h-[3.5rem] flex-row items-center justify-end gap-2";
 export const manufacturersListRowActionBtn =
