@@ -1,11 +1,12 @@
 import {
-  PurchasingFilterBar,
-  PurchasingFilterField,
-  purchasingFilterButtonClass,
-  purchasingFilterPrimaryButtonClass,
-  purchasingSelectClass,
-} from "../../modules/purchasing/ui";
-import { filterCheckboxClass } from "../../components/filters";
+  FilterField,
+  FilterGrid,
+  FilterPanelBodyWithActions,
+  ListFilterEmbeddedShell,
+  filterCheckboxClass,
+  filterSelectClass,
+} from "../filters";
+import { listSellasistFilterGridClass4 } from "../listPage/listSellasistTokens";
 import type { AppliedProductProfitabilityFilters } from "./productProfitabilityFilterTypes";
 
 const RANGE_OPTIONS = [
@@ -40,97 +41,93 @@ export function ProductProfitabilityFiltersPanel({
   onApply,
   onClear,
 }: Props) {
-  if (!expanded) return null;
-
   return (
-    <PurchasingFilterBar
-      className="mb-4"
-      actions={
-        <>
-          <button type="button" className={purchasingFilterButtonClass} onClick={onClear}>
-            Wyczyść filtry
-          </button>
-          <button type="button" className={purchasingFilterPrimaryButtonClass} onClick={onApply}>
-            Filtruj
-          </button>
-        </>
-      }
-    >
-      <div className="grid w-full min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <PurchasingFilterField label="Zakres czasu" className="min-w-0">
-          <select
-            className={purchasingSelectClass}
-            value={draft.rangeDays}
-            onChange={(e) => onChangeDraft({ rangeDays: Number(e.target.value) })}
-          >
-            {RANGE_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-        </PurchasingFilterField>
-        <PurchasingFilterField label="Sortowanie" className="min-w-0">
-          <select
-            className={purchasingSelectClass}
-            value={draft.sort}
-            onChange={(e) => onChangeDraft({ sort: e.target.value })}
-          >
-            {SORT_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-        </PurchasingFilterField>
-      </div>
-      <div className="flex flex-wrap gap-x-5 gap-y-3 border-t border-slate-100 pt-4 text-sm text-slate-700">
-        <label className="inline-flex items-center gap-2">
-          <input
-            type="checkbox"
-            className={filterCheckboxClass}
-            checked={draft.onlyLoss}
-            onChange={(e) => onChangeDraft({ onlyLoss: e.target.checked })}
-          />
-          Tylko strata
-        </label>
-        <label className="inline-flex items-center gap-2">
-          <input
-            type="checkbox"
-            className={filterCheckboxClass}
-            checked={draft.onlyLowMargin}
-            onChange={(e) => onChangeDraft({ onlyLowMargin: e.target.checked })}
-          />
-          Tylko niska marża
-        </label>
-        <label className="inline-flex items-center gap-2">
-          <input
-            type="checkbox"
-            className={filterCheckboxClass}
-            checked={draft.onlyNoSales}
-            onChange={(e) => onChangeDraft({ onlyNoSales: e.target.checked })}
-          />
-          Tylko bez sprzedaży
-        </label>
-        <label className="inline-flex items-center gap-2">
-          <input
-            type="checkbox"
-            className={filterCheckboxClass}
-            checked={draft.onlyTopProfit}
-            onChange={(e) => onChangeDraft({ onlyTopProfit: e.target.checked })}
-          />
-          Tylko top zysk
-        </label>
-        <label className="inline-flex items-center gap-2">
-          <input
-            type="checkbox"
-            className={filterCheckboxClass}
-            checked={draft.onlyHighStock}
-            onChange={(e) => onChangeDraft({ onlyHighStock: e.target.checked })}
-          />
-          Tylko wysoki stan
-        </label>
-      </div>
-    </PurchasingFilterBar>
+    <ListFilterEmbeddedShell expanded={expanded}>
+      <FilterPanelBodyWithActions
+        onClear={onClear}
+        onApply={onApply}
+        clearLabel="Wyczyść filtry"
+        applyLabel="Filtruj"
+        footerMobileOnly={false}
+      >
+        <div className="space-y-2">
+          <FilterGrid columnsClassName={listSellasistFilterGridClass4}>
+            <FilterField label="Zakres czasu">
+              <select
+                className={filterSelectClass}
+                value={draft.rangeDays}
+                onChange={(e) => onChangeDraft({ rangeDays: Number(e.target.value) })}
+              >
+                {RANGE_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </FilterField>
+            <FilterField label="Sortowanie">
+              <select
+                className={filterSelectClass}
+                value={draft.sort}
+                onChange={(e) => onChangeDraft({ sort: e.target.value })}
+              >
+                {SORT_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </FilterField>
+          </FilterGrid>
+          <div className="flex flex-wrap gap-x-5 gap-y-3 border-t border-slate-100 pt-4 text-sm text-slate-700">
+            <label className="inline-flex items-center gap-2">
+              <input
+                type="checkbox"
+                className={filterCheckboxClass}
+                checked={draft.onlyLoss}
+                onChange={(e) => onChangeDraft({ onlyLoss: e.target.checked })}
+              />
+              Tylko strata
+            </label>
+            <label className="inline-flex items-center gap-2">
+              <input
+                type="checkbox"
+                className={filterCheckboxClass}
+                checked={draft.onlyLowMargin}
+                onChange={(e) => onChangeDraft({ onlyLowMargin: e.target.checked })}
+              />
+              Tylko niska marża
+            </label>
+            <label className="inline-flex items-center gap-2">
+              <input
+                type="checkbox"
+                className={filterCheckboxClass}
+                checked={draft.onlyNoSales}
+                onChange={(e) => onChangeDraft({ onlyNoSales: e.target.checked })}
+              />
+              Tylko bez sprzedaży
+            </label>
+            <label className="inline-flex items-center gap-2">
+              <input
+                type="checkbox"
+                className={filterCheckboxClass}
+                checked={draft.onlyTopProfit}
+                onChange={(e) => onChangeDraft({ onlyTopProfit: e.target.checked })}
+              />
+              Tylko top zysk
+            </label>
+            <label className="inline-flex items-center gap-2">
+              <input
+                type="checkbox"
+                className={filterCheckboxClass}
+                checked={draft.onlyHighStock}
+                onChange={(e) => onChangeDraft({ onlyHighStock: e.target.checked })}
+              />
+              Tylko wysoki stan
+            </label>
+          </div>
+        </div>
+      </FilterPanelBodyWithActions>
+    </ListFilterEmbeddedShell>
   );
 }

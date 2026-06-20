@@ -11,7 +11,7 @@
 - Tabela proporcjonalna (Akcje 80px, Zdjęcie 80px, Produkt 2fr max 500px), konfigurator kolumn pod ikoną tabeli
 - Miniatury: wspólny `ProductListPhotoCell` (identyczny jak Asortyment → Produkty)
 - Filtry: przycisk „Filtry” z licznikiem, panel `PurchasingFilterBar`, draft/applied
-- KPI: `PurchasingKpiGrid` × 6 + `PurchasingKpiCard`; nazewnictwo: Zysk, Marża, Zamrożony kapitał
+- KPI: `PurchasingKpiGrid` × 6 + `PurchasingKpiCard` z ikonami (jak Pulpit zakupów); filtry: `ListFilterEmbeddedShell` + pomarańczowy „Filtruj”
 
 ## 2026-06-08 — Zamówienia towaru: pełna strona edycji + tabela Akcje/Poz.
 

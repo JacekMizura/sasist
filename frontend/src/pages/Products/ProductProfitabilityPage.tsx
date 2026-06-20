@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, TableProperties } from "lucide-react";
+import { AlertOctagon, Banknote, ChevronDown, Package, Percent, TableProperties, TrendingDown, TrendingUp } from "lucide-react";
 
 import { fetchProductProfitability, type ProductProfitabilityRow } from "../../api/productProfitabilityApi";
 import { FilterVisibilityModal } from "../../components/filters";
@@ -298,27 +298,47 @@ export default function ProductProfitabilityPage() {
 
         <div className="mb-6">
           <PurchasingKpiGrid columns={6}>
-            <PurchasingKpiCard title="Przychód netto" value={loading ? "—" : money(summary?.revenue_net)} tone="blue" />
-            <PurchasingKpiCard title="Zysk" value={loading ? "—" : money(summary?.profit_gross)} tone="emerald" />
+            <PurchasingKpiCard
+              title="Przychód netto"
+              value={loading ? "—" : money(summary?.revenue_net)}
+              subtitle="Suma przychodu netto w wybranym okresie"
+              tone="blue"
+              icon={<Banknote aria-hidden />}
+            />
+            <PurchasingKpiCard
+              title="Zysk"
+              value={loading ? "—" : money(summary?.profit_gross)}
+              subtitle="Zysk brutto w wybranym okresie"
+              tone="emerald"
+              icon={<TrendingUp aria-hidden />}
+            />
             <PurchasingKpiCard
               title="Średnia marża"
               value={loading ? "—" : pct(summary?.avg_margin_percent)}
+              subtitle="Średnia marża produktów w okresie"
               tone="indigo"
+              icon={<Percent aria-hidden />}
             />
             <PurchasingKpiCard
               title="Produkty ze stratą"
               value={loading ? "—" : String(summary?.loss_products ?? 0)}
+              subtitle="Produkty z ujemnym wynikiem"
               tone="red"
+              icon={<TrendingDown aria-hidden />}
             />
             <PurchasingKpiCard
               title="Zamrożony kapitał"
               value={loading ? "—" : money(summary?.frozen_capital)}
+              subtitle="Wartość kapitału w magazynie"
               tone="amber"
+              icon={<Package aria-hidden />}
             />
             <PurchasingKpiCard
               title="Niska marża (<10%)"
               value={loading ? "—" : String(summary?.low_margin_products ?? 0)}
-              tone="amber"
+              subtitle="Produkty poniżej progu marży"
+              tone="yellow"
+              icon={<AlertOctagon aria-hidden />}
             />
           </PurchasingKpiGrid>
         </div>
