@@ -1,5 +1,6 @@
 import type { AutomationCondition, AutomationEffect, OrderAutomationRule } from "../types/orderAutomation";
 import { ORDER_AUTOMATION_OPERATOR_LABELS, ORDER_AUTOMATION_OPERATOR_UI, conditionFieldLabel, effectKindLabel } from "./orderAutomationCatalog";
+import { formatExecutionListDisplay, normalizeExecution } from "./orderAutomationExecution";
 
 export function formatConditionPill(c: AutomationCondition, statusNameById?: Map<number, string>): string {
   const field = conditionFieldLabel(c.fieldKey);
@@ -213,16 +214,13 @@ export function formatEffectListBlock(e: AutomationEffect, statusNameById?: Map<
   return { title, detailPrefix: null, primaryBold: null, secondaryDetail: null };
 }
 
-/** Etykiety wyzwalaczy reguły (osobne wpisy, bez duplikacji w Nazwie). */
+/** @deprecated Użyj formatExecutionListDisplay — bez wyzwalaczy eventów. */
 export function formatRuleTriggerLabels(
   rule: Pick<OrderAutomationRule, "execution" | "manualTrigger">,
 ): string[] {
-  const out: string[] = [];
-  if (rule.execution.onOrderCreated) out.push("Po utworzeniu");
-  if (rule.execution.onStatusChanged) out.push("Zmiana statusu");
-  if (rule.execution.onSchedule) out.push("Harmonogram");
-  if (rule.manualTrigger.enabled) out.push("Ręcznie");
-  return out;
+  const ex = normalizeExecution(rule.execution);
+  if (!ex.automatic) return ["Ręcznie"];
+  return [];
 }
 
 /** Nazwa reguły do kolumny Nazwa (bez workflow). */
@@ -263,24 +261,24 @@ export function formatDelayMinutes(minutes: number | undefined | null): string {
 export type ExecutionModeKind = "automatic" | "schedule" | "manual";
 
 export function resolveExecutionMode(rule: Pick<OrderAutomationRule, "execution" | "manualTrigger">): ExecutionModeKind {
-  if (rule.execution.onSchedule) return "schedule";
-  if (rule.execution.onOrderCreated || rule.execution.onStatusChanged) return "automatic";
-  if (rule.manualTrigger.enabled) return "manual";
-  return "manual";
+  const ex = normalizeExecution(rule.execution);
+  if (!ex.automatic) return "manual";
+  if (ex.runMode === "hours_only" || ex.runMode === "days_and_hours") return "schedule";
+  return "automatic";
 }
 
 export function formatExecutionModeBadge(
-  rule: Pick<OrderAutomationRule, "enabled" | "execution" | "manualTrigger">,
+  rule: Pick<OrderAutomationRule, "enabled" | "execution" | "manualTrigger" | "delayMinutes">,
 ): { label: string; className: string } {
-  const mode = resolveExecutionMode(rule);
-  if (mode === "schedule") {
-    return { label: "Harmonogram", className: "border-blue-200 bg-blue-50 text-blue-800" };
+  const { lines, variant } = formatExecutionListDisplay(rule);
+  const label = lines[0] ?? "—";
+  if (variant === "manual") {
+    return { label, className: "border-slate-200 bg-white text-slate-600" };
   }
-  if (mode === "automatic") {
-    const prefix = rule.enabled ? "✓ " : "";
-    return { label: `${prefix}Automatycznie`, className: "border-emerald-200 bg-emerald-50 text-emerald-800" };
+  if (variant === "automatic" && rule.enabled) {
+    return { label, className: "border-emerald-200 bg-emerald-50 text-emerald-800" };
   }
-  return { label: "Ręcznie", className: "border-slate-200 bg-white text-slate-600" };
+  return { label, className: "border-slate-200 bg-white text-slate-700" };
 }
 
 export function formatEffectsSummary(
@@ -301,8 +299,8 @@ export function compareRulesByPublicId(a: OrderAutomationRule, b: OrderAutomatio
   return dir === "asc" ? da - db : db - da;
 }
 
-export function primaryTriggerLabel(r: Pick<OrderAutomationRule, "execution" | "manualTrigger">): string {
-  return formatRuleTriggerLabels(r).join(" · ") || "—";
+export function primaryTriggerLabel(r: Pick<OrderAutomationRule, "execution" | "manualTrigger" | "enabled" | "delayMinutes">): string {
+  return formatExecutionListDisplay(r).lines.join(" ");
 }
 
 /** Krótki token do tabeli / chipów (np. „Status = Nowe”). */

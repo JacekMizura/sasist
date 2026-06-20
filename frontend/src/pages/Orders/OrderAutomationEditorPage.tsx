@@ -1,14 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
-import {
-  Activity,
-  Calendar,
-  ChevronDown,
-  FlaskConical,
-  MousePointerClick,
-  Save,
-  Trash2,
-} from "lucide-react";
+import { ChevronDown, FlaskConical, Save, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
 
 import { useWarehouse } from "../../context/WarehouseContext";
@@ -23,31 +15,23 @@ import type {
   AutomationEffectKind,
   OrderAutomationManualTrigger,
   OrderAutomationRule,
-  OrderAutomationScheduleSpec,
 } from "../../types/orderAutomation";
 import { loadActionGroups, allocateRulePublicId, newUid, saveActionGroups } from "../../utils/orderAutomationLocalStore";
+import { defaultExecution, migrateExecution, normalizeExecution } from "../../utils/orderAutomationExecution";
 import {
   ORDER_AUTOMATION_CONDITION_FIELDS,
   buildConditionCategorySteps,
   buildEffectCategorySteps,
 } from "../../utils/orderAutomationCatalog";
-import {
-  decodeScheduleCron,
-  defaultScheduleSpec,
-  defaultTimezone,
-  encodeScheduleCron,
-  normalizeScheduleRows,
-} from "../../utils/orderAutomationSchedule";
-import { getManualIconComponent } from "@/modules/orders/automation/utils/orderAutomationManualIcons";
 import { getOrderUiStatusSummary } from "../../api/orderUiStatusApi";
 import type { OrderUiStatusPanelSummary } from "../../types/orderUiStatus";
-import { AutomationIconGridPicker } from "../../components/orders/automation/AutomationIconGridPicker";
+import { AutomationExecutionSettingsSection } from "../../components/orders/automation/AutomationExecutionSettingsSection";
 import { AutomationAnchorMenu, type AutomationAnchorMenuGroup } from "../../components/orders/automation/AutomationAnchorMenu";
 import { AutomationCategoryPickerModal } from "../../components/orders/automation/AutomationCategoryPickerModal";
 import { AutomationConditionEditModal } from "../../components/orders/automation/AutomationConditionEditModal";
 import { AutomationEffectEditModal } from "../../components/orders/automation/AutomationEffectEditModal";
 import { AutomationIfThenSection } from "../../components/orders/automation/AutomationIfThenSection";
-import { flatSectionDividerClass, moduleAutomationShellClass } from "../../components/layout/flatSectionTokens";
+import { moduleAutomationShellClass } from "../../components/layout/flatSectionTokens";
 import { ModuleListBreadcrumb } from "../../components/listPage/moduleList";
 import { IntegrationsApiPanel } from "../Settings/returnsStatusesConfigurator/AdvancedSettingsPanel";
 import {
@@ -63,9 +47,7 @@ import {
   oaBtnPri,
   oaBtnDanger,
   oaInp,
-  oaInpDense,
   oaLbl,
-  oaToggleChip,
 } from "../../components/orders/automation/orderAutomationUiTokens";
 
 function defaultRule(): OrderAutomationRule {
@@ -86,12 +68,7 @@ function defaultRule(): OrderAutomationRule {
     },
     conditions: [],
     effects: [],
-    execution: {
-      onOrderCreated: true,
-      onStatusChanged: true,
-      onSchedule: false,
-      scheduleCron: "",
-    },
+    execution: defaultExecution(),
     stats: { lastRunAt: null, runCount: 0 },
     delayMinutes: 0,
   };
@@ -131,23 +108,22 @@ function normalizeRule(r: OrderAutomationRule): OrderAutomationRule {
   const def = defaultRule();
   const conditions = Array.isArray(r.conditions) ? r.conditions : [];
   const effects = Array.isArray(r.effects) ? r.effects : [];
-  const execution =
-    r.execution && typeof r.execution === "object"
-      ? r.execution
-      : { ...def.execution };
+  const execution = migrateExecution(
+    r.execution && typeof r.execution === "object" ? r.execution : undefined,
+    r.manualTrigger,
+  );
   const stats =
     r.stats && typeof r.stats === "object"
       ? { lastRunAt: r.stats.lastRunAt ?? null, runCount: Number(r.stats.runCount) || 0 }
       : { ...def.stats };
 
-  const decodedSch = decodeScheduleCron(execution.scheduleCron);
-  const scheduleCron = decodedSch ? encodeScheduleCron(decodedSch) : execution.scheduleCron ?? "";
+  const executionNorm = normalizeExecution(execution);
 
   return {
     ...def,
     ...r,
-    manualTrigger: migrateManualTrigger(r.manualTrigger),
-    execution: { ...execution, scheduleCron },
+    manualTrigger: { ...migrateManualTrigger(r.manualTrigger), enabled: !executionNorm.automatic },
+    execution: executionNorm,
     conditions: conditions.map((c, i) => ({
       ...c,
       joinToNext: i < conditions.length - 1 ? (c.joinToNext ?? "and") : undefined,
@@ -178,16 +154,6 @@ function payloadForKind(kind: AutomationEffectKind): Record<string, string | num
       return {};
   }
 }
-
-const OA_DAY_ROWS: { day: number; label: string }[] = [
-  { day: 1, label: "Pn" },
-  { day: 2, label: "Wt" },
-  { day: 3, label: "Śr" },
-  { day: 4, label: "Cz" },
-  { day: 5, label: "Pt" },
-  { day: 6, label: "So" },
-  { day: 7, label: "Nd" },
-];
 
 const LOG_ROWS = [
   {
@@ -238,10 +204,8 @@ export default function OrderAutomationEditorPage() {
   const [editCondUid, setEditCondUid] = useState<string | null>(null);
   const [editEffUid, setEditEffUid] = useState<string | null>(null);
   const groupMenuAnchorRef = useRef<HTMLElement | null>(null);
-  const iconPickerAnchorRef = useRef<HTMLElement | null>(null);
 
   const [groupMenuOpen, setGroupMenuOpen] = useState(false);
-  const [iconPickerOpen, setIconPickerOpen] = useState(false);
 
   const seededNew = useRef(false);
 
@@ -319,19 +283,6 @@ export default function OrderAutomationEditorPage() {
     items.push({ id: "__new__", label: "+ Utwórz nową grupę" });
     return [{ id: "grp", title: "", items }];
   }, [groupOptions]);
-
-  const scheduleSpec: OrderAutomationScheduleSpec = useMemo(() => {
-    const base = decodeScheduleCron(draft.execution.scheduleCron) ?? defaultScheduleSpec();
-    return { ...base, rows: normalizeScheduleRows(base.rows) };
-  }, [draft.execution.scheduleCron]);
-
-  const bumpSchedule = (fn: (s: OrderAutomationScheduleSpec) => OrderAutomationScheduleSpec) => {
-    setDraft((d) => {
-      const cur = decodeScheduleCron(d.execution.scheduleCron) ?? defaultScheduleSpec();
-      const next = fn({ ...cur, timezone: cur.timezone || defaultTimezone() });
-      return { ...d, execution: { ...d.execution, scheduleCron: encodeScheduleCron(next) } };
-    });
-  };
 
   const ops: AutomationConditionOp[] = ["eq", "neq", "contains"];
 
@@ -463,20 +414,8 @@ export default function OrderAutomationEditorPage() {
     <div className={`${moduleAutomationShellClass} min-w-0 pb-8 text-[13px] text-slate-900`}>
       <ModuleListBreadcrumb items={breadcrumbItems} />
 
-      <div className="mb-4 mt-4 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold text-slate-900">{isNew ? "Nowa automatyzacja" : draft.name || "Edycja automatyzacji"}</h1>
-        <div className="flex flex-wrap gap-2">
-          <button type="button" className={`${oaBtn} gap-2`} onClick={() => setTestOpen(true)}>
-            <FlaskConical className="h-4 w-4" /> Test
-          </button>
-          <button type="button" className={`${oaBtnPri} gap-2`} onClick={save}>
-            <Save className="h-4 w-4" /> Zapisz
-          </button>
-        </div>
-      </div>
-
-      <div className="w-full max-w-none space-y-4">
-        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem_5rem] sm:items-end">
+      <div className="mb-4 mt-4 flex flex-wrap items-end justify-between gap-3">
+        <div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-[minmax(0,1fr)_10rem_auto] sm:items-end">
           <label className={oaLbl}>
             Nazwa
             <input
@@ -505,197 +444,25 @@ export default function OrderAutomationEditorPage() {
           <label className={`${oaLbl} flex h-9 items-center gap-2 pb-0.5`}>
             <input
               type="checkbox"
-              className="h-4 w-4 rounded border-slate-300"
+              className="h-4 w-4 rounded border-slate-300 accent-emerald-600"
               checked={draft.enabled}
               onChange={() => setDraft((d) => ({ ...d, enabled: !d.enabled }))}
             />
             Aktywna
           </label>
         </div>
-        {nameInvalid ? <span className="block text-xs text-red-600">Nazwa jest wymagana</span> : null}
-
-        <div>
-          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Wyzwalacze</p>
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              className={oaToggleChip(draft.execution.onOrderCreated)}
-              onClick={() => setDraft((d) => ({ ...d, execution: { ...d.execution, onOrderCreated: !d.execution.onOrderCreated } }))}
-            >
-              <Activity className="h-3.5 w-3.5" /> Po utworzeniu
-            </button>
-            <button
-              type="button"
-              className={oaToggleChip(draft.execution.onStatusChanged)}
-              onClick={() => setDraft((d) => ({ ...d, execution: { ...d.execution, onStatusChanged: !d.execution.onStatusChanged } }))}
-            >
-              <Activity className="h-3.5 w-3.5" /> Zmiana statusu
-            </button>
-            <button
-              type="button"
-              className={oaToggleChip(draft.execution.onSchedule)}
-              onClick={() =>
-                setDraft((d) => {
-                  const on = !d.execution.onSchedule;
-                  let cron = d.execution.scheduleCron;
-                  if (on && !decodeScheduleCron(cron)) cron = encodeScheduleCron(defaultScheduleSpec());
-                  return { ...d, execution: { ...d.execution, onSchedule: on, scheduleCron: cron } };
-                })
-              }
-            >
-              <Calendar className="h-3.5 w-3.5" /> Harmonogram
-            </button>
-            <IntegrationsApiPanel title="⋯ Więcej wyzwalaczy">
-              <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-800">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 rounded border-slate-300"
-                  checked={draft.manualTrigger.enabled}
-                  onChange={() => setDraft((d) => ({ ...d, manualTrigger: { ...d.manualTrigger, enabled: !d.manualTrigger.enabled } }))}
-                />
-                <MousePointerClick className="h-4 w-4 text-slate-500" />
-                Przycisk ręczny na zamówieniu
-              </label>
-              {draft.manualTrigger.enabled ? (
-                <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  <label className={oaLbl}>
-                    Nazwa przycisku
-                    <input
-                      className={`${oaInp} mt-1`}
-                      value={draft.manualTrigger.label}
-                      onChange={(e) => setDraft((d) => ({ ...d, manualTrigger: { ...d.manualTrigger, label: e.target.value } }))}
-                    />
-                  </label>
-                  <label className={oaLbl}>
-                    Skrót (opcja)
-                    <input
-                      className={`${oaInp} mt-1`}
-                      placeholder="np. Ctrl+P"
-                      value={draft.manualTrigger.shortcut}
-                      onChange={(e) => setDraft((d) => ({ ...d, manualTrigger: { ...d.manualTrigger, shortcut: e.target.value } }))}
-                    />
-                  </label>
-                  <div>
-                    <span className={oaLbl}>Ikona</span>
-                    <button
-                      type="button"
-                      className={`${oaInp} mt-1 flex items-center justify-between`}
-                      onClick={(e) => {
-                        iconPickerAnchorRef.current = e.currentTarget;
-                        setIconPickerOpen(true);
-                      }}
-                    >
-                      <span className="flex items-center gap-2">
-                        {(() => {
-                          const Icon = getManualIconComponent(draft.manualTrigger.iconKey);
-                          return <Icon className="h-4 w-4 text-slate-600" />;
-                        })()}
-                        {draft.manualTrigger.iconKey}
-                      </span>
-                      <ChevronDown className="h-4 w-4 text-slate-400" />
-                    </button>
-                  </div>
-                  <label className={oaLbl}>
-                    Kolor
-                    <input
-                      type="color"
-                      className="mt-1 h-9 w-full cursor-pointer rounded-lg border border-slate-200 p-0.5"
-                      value={draft.manualTrigger.color?.startsWith("#") ? draft.manualTrigger.color : "#0f172a"}
-                      onChange={(e) => setDraft((d) => ({ ...d, manualTrigger: { ...d.manualTrigger, color: e.target.value } }))}
-                    />
-                  </label>
-                </div>
-              ) : null}
-            </IntegrationsApiPanel>
-          </div>
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <label className={`${oaLbl} mb-0 shrink-0`}>Opóźnij wykonanie o</label>
-            <input
-              type="number"
-              min={0}
-              step={1}
-              className={`${oaInpDense} w-24`}
-              value={draft.delayMinutes ?? 0}
-              onChange={(e) => {
-                const v = Math.max(0, Math.floor(Number(e.target.value) || 0));
-                setDraft((d) => ({ ...d, delayMinutes: v }));
-              }}
-            />
-            <span className="text-sm text-slate-600">minut</span>
-          </div>
-          {draft.execution.onSchedule ? (
-            <div className={`${moduleListTableScrollClass} mt-3`}>
-              <table className={moduleListTableClass}>
-                <thead className={moduleListTheadClass}>
-                  <tr>
-                    <th className={moduleListThClass}>Dzień</th>
-                    <th className={`${moduleListThClass} text-center`}>Aktywny</th>
-                    <th className={moduleListThClass}>Godzina</th>
-                    <th className={moduleListThClass}>Powtarzanie</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {OA_DAY_ROWS.map(({ day, label }) => {
-                    const row =
-                      scheduleSpec.rows.find((sch) => sch.day === day) ??
-                      ({ day, enabled: false, hour: 8, minute: 0, repeatEveryMin: null } as const);
-                    const tVal = `${String(row.hour).padStart(2, "0")}:${String(row.minute).padStart(2, "0")}`;
-                    return (
-                      <tr key={day} className={moduleListRowClass}>
-                        <td className={moduleListTdClass}>{label}</td>
-                        <td className={`${moduleListTdClass} text-center`}>
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4 rounded border-slate-300"
-                            checked={row.enabled}
-                            onChange={(ev) => bumpSchedule((s) => ({ ...s, rows: s.rows.map((r) => (r.day === day ? { ...r, enabled: ev.target.checked } : r)) }))}
-                          />
-                        </td>
-                        <td className={moduleListTdClass}>
-                          <input
-                            type="time"
-                            className={oaInpDense}
-                            disabled={!row.enabled}
-                            value={tVal}
-                            onChange={(ev) => {
-                              const [hs, ms] = ev.target.value.split(":");
-                              const h = Math.min(23, Math.max(0, Number(hs) || 0));
-                              const m = Math.min(59, Math.max(0, Number(ms) || 0));
-                              bumpSchedule((s) => ({ ...s, rows: s.rows.map((r) => (r.day === day ? { ...r, hour: h, minute: m } : r)) }));
-                            }}
-                          />
-                        </td>
-                        <td className={moduleListTdClass}>
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="number"
-                              min={1}
-                              placeholder="—"
-                              className={`${oaInpDense} w-20`}
-                              disabled={!row.enabled}
-                              value={row.repeatEveryMin ?? ""}
-                              onChange={(ev) => {
-                                const raw = ev.target.value;
-                                bumpSchedule((s) => ({
-                                  ...s,
-                                  rows: s.rows.map((r) => r.day === day ? { ...r, repeatEveryMin: !raw.trim() ? null : Math.max(1, Number(raw) || 1) } : r),
-                                }));
-                              }}
-                            />
-                            <span className="text-xs text-slate-500">min</span>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          ) : null}
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <button type="button" className={`${oaBtn} gap-2`} onClick={() => setTestOpen(true)}>
+            <FlaskConical className="h-4 w-4" /> Test
+          </button>
+          <button type="button" className={`${oaBtnPri} gap-2`} onClick={save}>
+            <Save className="h-4 w-4" /> Zapisz
+          </button>
         </div>
+      </div>
+      {nameInvalid ? <span className="-mt-2 mb-3 block text-xs text-red-600">Nazwa jest wymagana</span> : null}
 
-        <div className={flatSectionDividerClass} aria-hidden />
-
+      <div className="w-full max-w-none space-y-6">
         <AutomationIfThenSection
           conditions={draft.conditions}
           effects={draft.effects}
@@ -710,6 +477,25 @@ export default function OrderAutomationEditorPage() {
           }
           onDuplicateEffect={duplicateEffect}
           onRemoveEffect={(uid) => setDraft((d) => ({ ...d, effects: d.effects.filter((x) => x.uid !== uid) }))}
+        />
+
+        <AutomationExecutionSettingsSection
+          automatic={draft.execution.automatic}
+          runMode={draft.execution.runMode}
+          windowFrom={draft.execution.windowFrom}
+          windowTo={draft.execution.windowTo}
+          activeDays={draft.execution.activeDays}
+          delayMinutes={draft.delayMinutes ?? 0}
+          onChange={(patch) =>
+            setDraft((d) => {
+              const nextExecution = normalizeExecution({ ...d.execution, ...patch });
+              return normalizeRule({
+                ...d,
+                delayMinutes: patch.delayMinutes ?? d.delayMinutes,
+                execution: nextExecution,
+              });
+            })
+          }
         />
 
         <IntegrationsApiPanel title="⋯ Historia zmian">
@@ -828,13 +614,6 @@ export default function OrderAutomationEditorPage() {
           }
           setGroupMenuOpen(false);
         }}
-      />
-      <AutomationIconGridPicker
-        open={iconPickerOpen}
-        anchorRef={iconPickerAnchorRef}
-        selectedKey={draft.manualTrigger.iconKey}
-        onClose={() => setIconPickerOpen(false)}
-        onPick={(key) => setDraft((d) => ({ ...d, manualTrigger: { ...d.manualTrigger, iconKey: key, iconSource: "system" } }))}
       />
       {/* STICKY FOOTER removed — actions under form */}
 

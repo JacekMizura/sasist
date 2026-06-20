@@ -65,12 +65,25 @@ export type OrderAutomationScheduleSpec = {
   rows: OrderAutomationDayScheduleRow[];
 };
 
+/** Tryb okna czasowego wykonania reguły. */
+export type OrderAutomationRunMode = "continuous" | "hours_only" | "days_and_hours";
+
 export type OrderAutomationExecution = {
-  onOrderCreated: boolean;
-  onStatusChanged: boolean;
-  onSchedule: boolean;
-  /** JSON harmonogramu (oa_sch_v2) — patrz utils/orderAutomationSchedule */
-  scheduleCron: string;
+  /** Gdy false — reguła tylko ręczna (bez obserwacji systemu). Domyślnie true. */
+  automatic: boolean;
+  runMode: OrderAutomationRunMode;
+  /** Godzina od (HH:mm) — dla hours_only / days_and_hours */
+  windowFrom: string;
+  /** Godzina do (HH:mm) */
+  windowTo: string;
+  /** Dni tygodnia ISO 1–7 (Pn–Nd) — dla days_and_hours */
+  activeDays: number[];
+  /** @deprecated legacy — migrowane przy odczycie */
+  onOrderCreated?: boolean;
+  onStatusChanged?: boolean;
+  onSchedule?: boolean;
+  /** @deprecated legacy harmonogram — migrowany do runMode/activeDays */
+  scheduleCron?: string;
 };
 
 export type OrderAutomationStats = {

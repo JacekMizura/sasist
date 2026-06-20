@@ -1,17 +1,17 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronDown, ChevronUp, ClipboardList, Pencil, Trash2 } from "lucide-react";
 
-import type { OrderAutomationRule } from "../../../types/orderAutomation";
+import type { AutomationCondition, AutomationEffect, OrderAutomationRule } from "../../../types/orderAutomation";
 import {
   compareRulesByPublicId,
   formatConditionListLine,
   formatDelayMinutes,
   formatEffectListBlock,
-  formatExecutionModeBadge,
   formatRuleDisplayId,
   formatRuleListName,
-  formatRuleTriggerLabels,
 } from "../../../utils/orderAutomationPreview";
+import { formatExecutionListDisplay } from "../../../utils/orderAutomationExecution";
 import {
   oaListJoinBadgeClass,
   oaListLogicLineClass,
@@ -22,6 +22,9 @@ import {
   oaRowActionBtn,
   oaRowActionBtnDanger,
 } from "./orderAutomationUiTokens";
+
+const MAX_VISIBLE_CONDITIONS = 3;
+const MAX_VISIBLE_EFFECTS = 2;
 
 function fmtTime(iso: string | null | undefined) {
   if (!iso) return "—";
@@ -34,6 +37,29 @@ function fmtTime(iso: string | null | undefined) {
   }
 }
 
+function ConditionLine({
+  c,
+  join,
+  statusNameById,
+}: {
+  c: AutomationCondition;
+  join: string | null;
+  statusNameById: Map<number, string>;
+}) {
+  const line = formatConditionListLine(c, statusNameById);
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5">
+      {join ? <span className={oaListJoinBadgeClass}>{join}</span> : null}
+      <p className={`${oaListLogicLineClass} break-words`}>
+        {line.field}{" "}
+        <span className="font-bold">
+          {line.operator} {line.value}
+        </span>
+      </p>
+    </div>
+  );
+}
+
 function ConditionsCell({
   rule,
   statusNameById,
@@ -41,30 +67,65 @@ function ConditionsCell({
   rule: OrderAutomationRule;
   statusNameById: Map<number, string>;
 }) {
+  const [expanded, setExpanded] = useState(false);
   const { conditions } = rule;
 
   if (conditions.length === 0) {
     return <span className="text-slate-400">—</span>;
   }
 
+  const hiddenCount = Math.max(0, conditions.length - MAX_VISIBLE_CONDITIONS);
+  const visible = expanded ? conditions : conditions.slice(0, MAX_VISIBLE_CONDITIONS);
+
   return (
     <div className="flex min-w-0 flex-col gap-2">
-      {conditions.map((c, i) => {
-        const line = formatConditionListLine(c, statusNameById);
+      {visible.map((c, i) => {
+        const globalIdx = expanded ? i : i;
         const join =
-          i > 0 ? (conditions[i - 1]?.joinToNext === "or" ? "LUB" : "ORAZ") : null;
-        return (
-          <div key={c.uid} className="flex min-w-0 flex-col gap-1.5">
-            {join ? <span className={oaListJoinBadgeClass}>{join}</span> : null}
-            <p className={`${oaListLogicLineClass} break-words`}>
-              {line.field}{" "}
-              <span className="font-bold">
-                {line.operator} {line.value}
-              </span>
-            </p>
-          </div>
-        );
+          globalIdx > 0 ? (conditions[globalIdx - 1]?.joinToNext === "or" ? "LUB" : "ORAZ") : null;
+        return <ConditionLine key={c.uid} c={c} join={join} statusNameById={statusNameById} />;
       })}
+      {hiddenCount > 0 && !expanded ? (
+        <button
+          type="button"
+          className="w-fit text-left text-xs font-medium text-blue-700 hover:underline"
+          onClick={() => setExpanded(true)}
+        >
+          +{hiddenCount} więcej
+        </button>
+      ) : null}
+      {expanded && conditions.length > MAX_VISIBLE_CONDITIONS ? (
+        <button
+          type="button"
+          className="w-fit text-left text-xs font-medium text-blue-700 hover:underline"
+          onClick={() => setExpanded(false)}
+        >
+          Pokaż mniej
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function EffectBlock({
+  e,
+  statusNameById,
+}: {
+  e: AutomationEffect;
+  statusNameById: Map<number, string>;
+}) {
+  const block = formatEffectListBlock(e, statusNameById);
+  const hasDetail = block.primaryBold || block.secondaryDetail;
+  return (
+    <div className="min-w-0">
+      <p className={`${oaListLogicLineClass} font-medium text-slate-900`}>{block.title}</p>
+      {hasDetail ? (
+        <p className={`${oaListLogicLineClass} mt-0.5 break-words text-slate-700`}>
+          {block.detailPrefix}
+          {block.primaryBold ? <span className="font-bold">{block.primaryBold}</span> : null}
+          {block.secondaryDetail}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -76,54 +137,61 @@ function EffectsCell({
   rule: OrderAutomationRule;
   statusNameById: Map<number, string>;
 }) {
+  const [expanded, setExpanded] = useState(false);
+
   if (rule.effects.length === 0) {
     return <span className="text-slate-400">—</span>;
   }
 
+  const hiddenCount = Math.max(0, rule.effects.length - MAX_VISIBLE_EFFECTS);
+  const visible = expanded ? rule.effects : rule.effects.slice(0, MAX_VISIBLE_EFFECTS);
+
   return (
     <div className="flex min-w-0 flex-col gap-3">
-      {rule.effects.map((e) => {
-        const block = formatEffectListBlock(e, statusNameById);
-        const hasDetail = block.primaryBold || block.secondaryDetail;
-        return (
-          <div key={e.uid} className="min-w-0">
-            <p className={`${oaListLogicLineClass} font-medium text-slate-900`}>{block.title}</p>
-            {hasDetail ? (
-              <p className={`${oaListLogicLineClass} mt-0.5 break-words text-slate-700`}>
-                {block.detailPrefix}
-                {block.primaryBold ? <span className="font-bold">{block.primaryBold}</span> : null}
-                {block.secondaryDetail}
-              </p>
-            ) : null}
-          </div>
-        );
-      })}
+      {visible.map((e) => (
+        <EffectBlock key={e.uid} e={e} statusNameById={statusNameById} />
+      ))}
+      {hiddenCount > 0 && !expanded ? (
+        <button
+          type="button"
+          className="w-fit text-left text-xs font-medium text-blue-700 hover:underline"
+          onClick={() => setExpanded(true)}
+        >
+          +{hiddenCount} kolejne akcje
+        </button>
+      ) : null}
+      {expanded && rule.effects.length > MAX_VISIBLE_EFFECTS ? (
+        <button
+          type="button"
+          className="w-fit text-left text-xs font-medium text-blue-700 hover:underline"
+          onClick={() => setExpanded(false)}
+        >
+          Pokaż mniej
+        </button>
+      ) : null}
     </div>
   );
 }
 
 function ExecutionCell({ rule }: { rule: OrderAutomationRule }) {
-  const triggers = formatRuleTriggerLabels(rule);
-  const modeBadge = formatExecutionModeBadge(rule);
+  const { lines, variant } = formatExecutionListDisplay(rule);
 
   return (
-    <div className="flex min-w-0 flex-col gap-1.5">
-      {triggers.length > 0 ? (
-        <ul className="space-y-0.5">
-          {triggers.map((t) => (
-            <li key={t} className="text-xs leading-snug text-slate-700">
-              {t}
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <span className="text-slate-400">—</span>
-      )}
-      <span
-        className={`inline-flex w-fit items-center rounded-md border px-2 py-0.5 text-[11px] font-medium leading-tight ${modeBadge.className}`}
-      >
-        {modeBadge.label}
-      </span>
+    <div className="flex min-w-0 flex-col gap-1">
+      {lines.map((line, i) => (
+        <p
+          key={`${line}-${i}`}
+          className={`text-sm leading-snug ${
+            i === 0 && variant === "automatic" && rule.enabled
+              ? "font-medium text-emerald-800"
+              : i === 0 && variant === "manual"
+                ? "font-medium text-slate-700"
+                : "text-slate-600"
+          }`}
+        >
+          {line}
+        </p>
+      ))}
     </div>
   );
 }
@@ -155,10 +223,10 @@ function AutomationRuleTableRow({ rule, statusNameById, basePath, onToggle, onDe
           />
         </label>
       </td>
-      <td className={`${oaListTdClass} w-20 font-mono text-sm font-semibold tabular-nums text-slate-600`}>
+      <td className={`${oaListTdClass} font-mono text-sm font-semibold tabular-nums text-slate-600`} style={{ width: 80 }}>
         {displayId}
       </td>
-      <td className={oaListTdClass}>
+      <td className={oaListTdClass} style={{ width: "16%" }}>
         <button
           type="button"
           className={`block max-w-full text-left text-base font-bold leading-snug hover:underline ${
@@ -171,23 +239,22 @@ function AutomationRuleTableRow({ rule, statusNameById, basePath, onToggle, onDe
         </button>
         <p className="mt-1.5 text-xs leading-snug text-slate-500">
           Wykonano: <span className="font-semibold tabular-nums text-slate-700">{rule.stats.runCount}</span>
-          <span className="mx-1.5 text-slate-300">•</span>
-          Ostatnie: {fmtTime(rule.stats.lastRunAt)}
         </p>
+        <p className="text-xs leading-snug text-slate-500">Ostatnie: {fmtTime(rule.stats.lastRunAt)}</p>
       </td>
-      <td className={oaListTdClass}>
+      <td className={oaListTdClass} style={{ width: "28%" }}>
         <ConditionsCell rule={rule} statusNameById={statusNameById} />
       </td>
-      <td className={oaListTdClass}>
+      <td className={oaListTdClass} style={{ width: "28%" }}>
         <EffectsCell rule={rule} statusNameById={statusNameById} />
       </td>
-      <td className={`${oaListTdClass} w-24 tabular-nums text-slate-600`}>
+      <td className={`${oaListTdClass} tabular-nums text-slate-600`} style={{ width: 120 }}>
         {formatDelayMinutes(rule.delayMinutes)}
       </td>
-      <td className={`${oaListTdClass} w-36`}>
+      <td className={oaListTdClass} style={{ width: 180 }}>
         <ExecutionCell rule={rule} />
       </td>
-      <td className={`${oaListTdClass} w-36`}>
+      <td className={oaListTdClass} style={{ width: 180 }}>
         <div className="flex items-start gap-1">
           <button
             type="button"
@@ -244,13 +311,13 @@ export function AutomationRulesTable({
       <table className={oaListTableClass}>
         <colgroup>
           <col className="w-10" />
-          <col className="w-20" />
-          <col style={{ width: "14%" }} />
-          <col style={{ width: "30%" }} />
-          <col style={{ width: "30%" }} />
-          <col className="w-24" />
-          <col className="w-36" />
-          <col className="w-36" />
+          <col style={{ width: 80 }} />
+          <col style={{ width: "16%" }} />
+          <col style={{ width: "28%" }} />
+          <col style={{ width: "28%" }} />
+          <col style={{ width: 120 }} />
+          <col style={{ width: 180 }} />
+          <col style={{ width: 180 }} />
         </colgroup>
         <thead>
           <tr className="border-b border-slate-200 bg-white">
