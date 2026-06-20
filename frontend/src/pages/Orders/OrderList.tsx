@@ -30,6 +30,7 @@ import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { dispatchOrdersOperationsUpdated } from "../wms/wmsRoutes";
 import { dispatchWmsShortagesUpdated } from "../../utils/wmsRefresh";
 import { panelStatusCounterColorResolver } from "../../hooks/usePanelStatusCounterColor";
+import { OrderStatusSidebar, type OrderPanelFilter } from "../../components/orders/OrderStatusSidebar";
 import {
   formatOrderPanelFilterLabel,
   ModuleFilteredAllBanner,
