@@ -73,9 +73,9 @@ export type OrderAutomationManualTrigger = {
   conditionFilterMode?: ManualConditionFilterMode;
   /** Przed ręcznym wykonaniem sprawdź warunki JEŚLI */
   checkConditionsOnManualRun?: boolean;
-  /** Tryb wykonania po kliknięciu */
+  /** @deprecated przeniesione do {@link OrderAutomationModuleSettings} */
   executionMode?: ManualExecutionMode;
-  /** Treść modala / drugiego kroku potwierdzenia */
+  /** @deprecated przeniesione do {@link OrderAutomationModuleSettings} */
   confirmMessage?: string;
 };
 
@@ -83,6 +83,8 @@ export type OrderAutomationManualTrigger = {
 export type OrderAutomationModuleSettings = {
   activatorType: ManualActivatorType;
   conditionFilterMode: ManualConditionFilterMode;
+  executionMode: ManualExecutionMode;
+  confirmMessage: string;
 };
 
 /** Jedna linia harmonogramu (dzień tygodnia ISO: 1 = pon … 7 = nd). */

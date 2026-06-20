@@ -1,9 +1,10 @@
 import type { OrderAutomationManualTrigger } from "../types/orderAutomation";
 
-export const DEFAULT_MANUAL_CONFIRM_MESSAGE = "Czy na pewno chcesz wykonać tę akcję?";
-
 export const MANUAL_CONDITIONS_NOT_MET_MESSAGE =
   "Nie można wykonać akcji. Warunki nie są spełnione.";
+
+/** @deprecated użyj DEFAULT_MANUAL_CONFIRM_MESSAGE z orderAutomationModuleSettings */
+export { DEFAULT_MANUAL_CONFIRM_MESSAGE } from "./orderAutomationModuleSettings";
 
 export function defaultManualTrigger(): OrderAutomationManualTrigger {
   return {
@@ -21,8 +22,6 @@ export function defaultManualTrigger(): OrderAutomationManualTrigger {
     visibleOnMultiActions: true,
     visibleOnWmsPacking: true,
     checkConditionsOnManualRun: true,
-    executionMode: "immediate",
-    confirmMessage: DEFAULT_MANUAL_CONFIRM_MESSAGE,
   };
 }
 
@@ -30,8 +29,10 @@ export function migrateManualTrigger(m: OrderAutomationManualTrigger | null | un
   const defaults = defaultManualTrigger();
   if (!m || typeof m !== "object") return defaults;
   const {
-    activatorType: _legacyActivatorType,
-    conditionFilterMode: _legacyConditionFilterMode,
+    activatorType: _a,
+    conditionFilterMode: _c,
+    executionMode: _e,
+    confirmMessage: _m,
     ...rest
   } = m;
   return {
@@ -46,11 +47,6 @@ export function migrateManualTrigger(m: OrderAutomationManualTrigger | null | un
     visibleOnMultiActions: m.visibleOnMultiActions !== false,
     visibleOnWmsPacking: m.visibleOnWmsPacking !== false,
     checkConditionsOnManualRun: m.checkConditionsOnManualRun !== false,
-    executionMode: m.executionMode === "confirm" ? "confirm" : "immediate",
-    confirmMessage:
-      typeof m.confirmMessage === "string" && m.confirmMessage.trim()
-        ? m.confirmMessage.trim()
-        : DEFAULT_MANUAL_CONFIRM_MESSAGE,
   };
 }
 

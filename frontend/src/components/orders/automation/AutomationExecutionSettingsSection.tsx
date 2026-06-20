@@ -1,7 +1,6 @@
 import type { OrderAutomationExecution, OrderAutomationManualTrigger, OrderAutomationRunMode } from "../../../types/orderAutomation";
 import { flatSectionDividerClass } from "../../layout/flatSectionTokens";
 import { isScheduleWindowValid } from "../../../utils/orderAutomationValidation";
-import { AutomationManualConfirmSection } from "./AutomationManualConfirmSection";
 import { AutomationManualTriggerSection } from "./AutomationManualTriggerSection";
 import { oaInp, oaInpDense, oaLbl } from "./orderAutomationUiTokens";
 
@@ -208,10 +207,7 @@ export function AutomationExecutionSettingsSection({
       ) : null}
 
       {manualEnabled ? (
-        <>
-          <AutomationManualTriggerSection manualTrigger={manualTrigger} onChange={patchManual} />
-          <AutomationManualConfirmSection manualTrigger={manualTrigger} onChange={patchManual} />
-        </>
+        <AutomationManualTriggerSection manualTrigger={manualTrigger} onChange={patchManual} />
       ) : null}
     </section>
   );

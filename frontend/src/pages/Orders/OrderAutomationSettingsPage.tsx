@@ -39,21 +39,17 @@ export default function OrderAutomationSettingsPage() {
   return (
     <div className={`${moduleAutomationShellClass} w-full max-w-3xl`}>
       <div className="mb-6">
-        <h2 className="text-lg font-semibold text-slate-900">Ustawienia aktywatorów</h2>
+        <h2 className="text-lg font-semibold text-slate-900">Ustawienia</h2>
         <p className="mt-1 text-sm text-slate-600">
-          Parametry dotyczą wszystkich reguł z ręcznym uruchamianiem w tym magazynie. Zmiany zapisują się automatycznie.
+          Globalna konfiguracja ręcznych aktywatorów dla tego magazynu. Zmiany zapisują się automatycznie.
         </p>
       </div>
 
       <AutomationModuleActivatorSettingsForm
-        activatorType={settings.activatorType}
-        conditionFilterMode={settings.conditionFilterMode}
-        onChangeActivatorType={(v) => {
-          updateSettings({ activatorType: v });
-          toast.success("Zapisano.");
-        }}
-        onChangeConditionFilterMode={(v) => {
-          updateSettings({ conditionFilterMode: v });
+        settings={settings}
+        onChange={updateSettings}
+        onChangeNotified={(patch) => {
+          updateSettings(patch);
           toast.success("Zapisano.");
         }}
       />
