@@ -76,6 +76,141 @@ export function formatRuleWorkflowTitle(
   return `${from} → ${to}`;
 }
 
+/** Zdanie warunku na liście (np. „Status zamówienia = Wózki”). */
+export function formatConditionSentence(c: AutomationCondition, statusNameById?: Map<number, string>): string {
+  const parts = formatConditionDisplayParts(c, statusNameById);
+  const op =
+    c.operator === "eq" ? "=" : c.operator === "neq" ? "≠" : c.operator === "contains" ? "zawiera" : parts.op;
+  return `${parts.field} ${op} ${parts.value}`;
+}
+
+export type EffectListBlock = {
+  title: string;
+  detail: string | null;
+};
+
+const DOC_TYPE_LABELS: Record<string, string> = {
+  invoice: "Faktura",
+  receipt: "Paragon",
+  wz: "WZ",
+  label: "Etykieta",
+  other: "Inny",
+};
+
+const DOC_SERIES_LABELS: Record<string, string> = {
+  fv_poland: "FV Polska",
+  fv_ue: "FV UE",
+  proforma: "Proforma",
+  corr: "Korekta",
+};
+
+const PRINT_STATION_LABELS: Record<string, string> = {
+  main: "Główna",
+  warehouse: "Magazyn",
+  office: "Biuro",
+};
+
+const MESSAGE_TEMPLATE_LABELS: Record<string, string> = {
+  order_shipped: "Zamówienie wysłane",
+  payment_reminder: "Przypomnienie o płatności",
+  order_confirmation: "Potwierdzenie zamówienia",
+  pickup_ready: "Odbiór gotowy",
+};
+
+const MESSAGE_CHANNEL_LABELS: Record<string, string> = {
+  email: "E-mail",
+  sms: "SMS",
+  panel: "Panel",
+};
+
+function payloadLabel(map: Record<string, string>, value: string): string | null {
+  const v = value.trim();
+  if (!v) return null;
+  return map[v] ?? v;
+}
+
+/** Pełny opis efektu na liście — tytuł akcji + szczegóły w drugiej linii. */
+export function formatEffectListBlock(e: AutomationEffect, statusNameById?: Map<number, string>): EffectListBlock {
+  const title = effectKindLabel(e.kind);
+
+  if (e.kind === "change_status") {
+    const id = Number(e.payload.order_ui_status_id);
+    const name = Number.isFinite(id) && statusNameById?.get(id);
+    return { title, detail: name ?? (e.payload.order_ui_status_id ? `#${e.payload.order_ui_status_id}` : null) };
+  }
+
+  if (e.kind === "generate_document") {
+    const parts = [
+      payloadLabel(DOC_TYPE_LABELS, String(e.payload.doc_type ?? "")),
+      payloadLabel(DOC_SERIES_LABELS, String(e.payload.doc_series ?? "")),
+      payloadLabel(PRINT_STATION_LABELS, String(e.payload.print_station ?? "")),
+    ].filter(Boolean) as string[];
+    const copies = String(e.payload.copies ?? "").trim();
+    if (copies && copies !== "1") parts.push(`${copies} kopie`);
+    return { title, detail: parts.length ? parts.join(" • ") : null };
+  }
+
+  if (e.kind === "send_message") {
+    const parts = [
+      payloadLabel(MESSAGE_TEMPLATE_LABELS, String(e.payload.template ?? "")),
+      payloadLabel(MESSAGE_CHANNEL_LABELS, String(e.payload.message_channel ?? "")),
+    ].filter(Boolean) as string[];
+    return { title, detail: parts.length ? parts.join(" • ") : null };
+  }
+
+  if (e.kind === "assign_courier") {
+    const courier = String(e.payload.courier ?? "").trim();
+    const preset = String(e.payload.courier_preset ?? "").trim();
+    return { title, detail: [courier, preset].filter(Boolean).join(" • ") || null };
+  }
+
+  if (e.kind === "add_tag") {
+    const tag = String(e.payload.tag ?? "").trim();
+    return { title, detail: tag || null };
+  }
+
+  if (e.kind === "print") {
+    const doc =
+      String(e.payload.print_document ?? "").trim() || String(e.payload.template ?? "").trim();
+    const printer = String(e.payload.printer ?? "").trim();
+    const copies = String(e.payload.copies ?? "").trim();
+    const parts = [doc, printer].filter(Boolean);
+    if (copies && copies !== "1") parts.push(`${copies} kopie`);
+    return { title, detail: parts.length ? parts.join(" • ") : null };
+  }
+
+  if (e.kind === "wms_action") {
+    const key = String(e.payload.action_key ?? "").trim();
+    return { title, detail: key || null };
+  }
+
+  return { title, detail: null };
+}
+
+const GENERIC_RULE_NAMES = new Set(["nowa automatyzacja", ""]);
+
+/** Nagłówek wiersza listy: nazwa użytkownika + workflow pod spodem. */
+export function formatRuleListHeadline(
+  rule: Pick<OrderAutomationRule, "name" | "conditions" | "effects">,
+  statusNameById?: Map<number, string>,
+): { headline: string; workflow: string | null } {
+  const workflow = formatRuleWorkflowTitle(rule, statusNameById);
+  const name = rule.name.trim();
+  const generic = !name || GENERIC_RULE_NAMES.has(name.toLowerCase());
+
+  if (!generic) {
+    return {
+      headline: name,
+      workflow: workflow !== "—" ? workflow : null,
+    };
+  }
+
+  return {
+    headline: workflow !== "—" ? workflow : name || "—",
+    workflow: null,
+  };
+}
+
 export function formatDelayMinutes(minutes: number | undefined | null): string {
   const m = Math.max(0, Math.floor(Number(minutes) || 0));
   return `${m} min`;

@@ -46,14 +46,22 @@ export const oaWorkflowChipClass =
 export const oaListChipClass =
   "inline-flex max-w-full items-center rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[11px] leading-tight text-slate-700";
 
-/** Komórki tabeli listy automatyzacji — gęstość 60–72px */
+/** Komórki tabeli listy automatyzacji — wiersz 90–120px */
 export const oaListThClass =
-  "whitespace-nowrap px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500";
+  "whitespace-nowrap px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500";
 export const oaListThSortClass = `${oaListThClass} cursor-pointer select-none hover:text-slate-800`;
-export const oaListTdClass = "px-3 py-2 align-middle text-xs leading-snug text-slate-800";
+export const oaListTdClass = "px-4 py-4 align-top text-sm leading-relaxed text-slate-800";
 export const oaListRowClass =
-  "group border-b border-slate-100 transition-colors hover:bg-slate-50/40 last:border-b-0";
-export const oaListTableClass = "w-full min-w-[1100px] table-fixed text-left text-sm";
+  "group border-b border-slate-100 transition-colors hover:bg-slate-50/40 last:border-b-0 [&>td]:min-h-[5.75rem]";
+export const oaListTableClass = "w-full min-w-[1180px] table-fixed text-left text-sm";
+
+/** Badge ORAZ / LUB między warunkami na liście */
+export const oaListJoinBadgeClass =
+  "inline-flex rounded border border-slate-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-500";
+
+/** Linia warunku / szczegółu efektu na liście */
+export const oaListLogicLineClass = "text-sm leading-snug text-slate-800";
+export const oaListLogicSublineClass = "text-sm leading-snug text-slate-600";
 
 /** Nagłówek grupy — sticky, wyraźny kontrast */
 export const oaWorkflowGroupHeaderClass =
