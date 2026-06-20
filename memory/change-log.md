@@ -1,5 +1,10 @@
 # Change log
 
+## 2026-06-08 — Konfiguratory kolumn/filtrów: kierunkowe strzałki
+
+- `FilterVisibilityModal` + `ColumnSelectorModal`: ← przed nazwą (Dostępne), → po wierszu (Widoczne), układ ⋮⋮ ↑ ↓ →
+- Tooltipy: „Dodaj do widocznych” / „Usuń z widocznych” — wszystkie listy korzystające ze wspólnych komponentów
+
 ## 2026-06-08 — Lista producentów: nowy standard tabel
 
 - Tabela jak Klienci/Pola dodatkowe: checkbox, kolumny konfigurowalne (localStorage), akcje 36×36

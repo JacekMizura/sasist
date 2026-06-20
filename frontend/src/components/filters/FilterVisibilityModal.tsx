@@ -1,10 +1,18 @@
 import { useCallback, useEffect, useMemo, useState, type DragEvent } from "react";
 import { createPortal } from "react-dom";
-import { ChevronRight, GripVertical, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, GripVertical, X } from "lucide-react";
 
 import { filterToolbarBtnPrimary, filterToolbarBtnSecondary } from "./filterUiTokens";
 
 export type FilterFieldCatalogItem = { id: string; label: string };
+
+const ADD_TO_VISIBLE_LABEL = "Dodaj do widocznych";
+const REMOVE_FROM_VISIBLE_LABEL = "Usuń z widocznych";
+
+const reorderBtnClass =
+  "rounded border border-slate-200 px-1.5 py-0.5 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-40";
+const transferBtnClass =
+  "inline-flex shrink-0 items-center justify-center rounded border border-slate-200 p-1 text-slate-600 hover:bg-slate-50";
 
 type FilterVisibilityModalProps = {
   open: boolean;
@@ -54,7 +62,7 @@ export function FilterVisibilityModal({
     setLeft((prev) => prev.filter((x) => x !== id));
   }, []);
 
-  const moveLeft = useCallback((index: number) => {
+  const moveUp = useCallback((index: number) => {
     if (index <= 0) return;
     setLeft((prev) => {
       const n = [...prev];
@@ -63,7 +71,7 @@ export function FilterVisibilityModal({
     });
   }, []);
 
-  const moveRight = useCallback((index: number) => {
+  const moveDown = useCallback((index: number) => {
     if (index >= left.length - 1) return;
     setLeft((prev) => {
       const n = [...prev];
@@ -124,7 +132,7 @@ export function FilterVisibilityModal({
           </button>
         </div>
         <p className="border-b border-slate-50 px-5 py-2 text-xs text-slate-500">
-          Lewa kolumna: pola widoczne na liście (przeciągnij aby zmienić kolejność). Prawa: dostępne do dodania.
+          Lewa kolumna: pola widoczne (przeciągnij lub użyj ↑ ↓). ← dodaje z prawej, → usuwa do prawej.
         </p>
         <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-hidden p-5 md:grid-cols-2">
           <div className="flex min-h-0 flex-col rounded-lg border border-slate-200 bg-slate-50/50">
@@ -152,29 +160,32 @@ export function FilterVisibilityModal({
                     <div className="flex shrink-0 gap-0.5">
                       <button
                         type="button"
-                        className="rounded border border-slate-200 px-1.5 py-0.5 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+                        className={reorderBtnClass}
                         disabled={index === 0}
-                        onClick={() => moveLeft(index)}
+                        onClick={() => moveUp(index)}
                         aria-label="Wyżej"
+                        title="Wyżej"
                       >
                         ↑
                       </button>
                       <button
                         type="button"
-                        className="rounded border border-slate-200 px-1.5 py-0.5 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+                        className={reorderBtnClass}
                         disabled={index === left.length - 1}
-                        onClick={() => moveRight(index)}
+                        onClick={() => moveDown(index)}
                         aria-label="Niżej"
+                        title="Niżej"
                       >
                         ↓
                       </button>
                       <button
                         type="button"
-                        className="rounded border border-slate-200 px-1.5 py-0.5 text-xs text-rose-700 hover:bg-rose-50"
+                        className={transferBtnClass}
                         onClick={() => moveToAvailable(id)}
-                        aria-label="Usuń z widocznych"
+                        aria-label={REMOVE_FROM_VISIBLE_LABEL}
+                        title={REMOVE_FROM_VISIBLE_LABEL}
                       >
-                        ×
+                        <ChevronRight className="h-4 w-4" aria-hidden />
                       </button>
                     </div>
                   </li>
@@ -193,17 +204,18 @@ export function FilterVisibilityModal({
                 right.map((id) => (
                   <li
                     key={id}
-                    className="flex items-center justify-between gap-2 rounded-md border border-slate-200/80 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm"
+                    className="flex items-center gap-2 rounded-md border border-slate-200/80 bg-white px-2 py-2 text-sm text-slate-800 shadow-sm"
                   >
-                    <span className="min-w-0 truncate">{labelFor(catalog, id)}</span>
                     <button
                       type="button"
-                      className="shrink-0 rounded border border-slate-200 p-1 text-slate-600 hover:bg-slate-50"
+                      className={transferBtnClass}
                       onClick={() => moveToSelected(id)}
-                      aria-label={`Dodaj ${labelFor(catalog, id)}`}
+                      aria-label={ADD_TO_VISIBLE_LABEL}
+                      title={ADD_TO_VISIBLE_LABEL}
                     >
-                      <ChevronRight className="h-4 w-4" />
+                      <ChevronLeft className="h-4 w-4" aria-hidden />
                     </button>
+                    <span className="min-w-0 flex-1 truncate">{labelFor(catalog, id)}</span>
                   </li>
                 ))
               )}

@@ -10,13 +10,20 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { useDraggable, useDroppable } from "@dnd-kit/core";
-import { GripVertical, X } from "lucide-react";
+import { useDroppable } from "@dnd-kit/core";
+import { ChevronLeft, ChevronRight, GripVertical, X } from "lucide-react";
 
 import { filterToolbarBtnSecondary } from "../filters/filterUiTokens";
 
 const PREFIX_S = "col-sel:";
-const PREFIX_A = "col-av:";
+
+const ADD_TO_VISIBLE_LABEL = "Dodaj do widocznych";
+const REMOVE_FROM_VISIBLE_LABEL = "Usuń z widocznych";
+
+const reorderBtnClass =
+  "rounded border border-slate-200 px-1.5 py-0.5 text-[11px] text-slate-600 hover:bg-slate-50 disabled:opacity-40";
+const transferBtnClass =
+  "inline-flex shrink-0 items-center justify-center rounded border border-slate-200 p-1 text-slate-600 hover:bg-slate-50";
 
 export type ColumnCatalogItem = {
   id: string;
@@ -33,6 +40,8 @@ type ColumnSelectorModalProps = {
   selectedOrder: string[];
   /** Called on every change — persist here (e.g. localStorage). */
   onChange: (nextOrder: string[]) => void;
+  selectedColumnLabel?: string;
+  availableColumnLabel?: string;
 };
 
 function labelFor(catalog: readonly ColumnCatalogItem[], id: string): string {
@@ -46,11 +55,19 @@ function userCatalogOnly(catalog: readonly ColumnCatalogItem[]): ColumnCatalogIt
 function SortableSelectedRow({
   colId,
   label,
+  index,
+  total,
   onRemove,
+  onMoveUp,
+  onMoveDown,
 }: {
   colId: string;
   label: string;
+  index: number;
+  total: number;
   onRemove: () => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
 }) {
   const sid = `${PREFIX_S}${colId}`;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: sid });
@@ -76,46 +93,54 @@ function SortableSelectedRow({
         <GripVertical className="h-4 w-4" aria-hidden />
       </button>
       <span className="min-w-0 flex-1 truncate">{label}</span>
-      <button
-        type="button"
-        className="shrink-0 rounded border border-slate-200 p-1 text-rose-700 hover:bg-rose-50"
-        onClick={onRemove}
-        aria-label={`Usuń kolumnę ${label}`}
-      >
-        <X className="h-4 w-4" aria-hidden />
-      </button>
+      <div className="flex shrink-0 gap-0.5">
+        <button
+          type="button"
+          className={reorderBtnClass}
+          disabled={index === 0}
+          onClick={onMoveUp}
+          aria-label="Wyżej"
+          title="Wyżej"
+        >
+          ↑
+        </button>
+        <button
+          type="button"
+          className={reorderBtnClass}
+          disabled={index === total - 1}
+          onClick={onMoveDown}
+          aria-label="Niżej"
+          title="Niżej"
+        >
+          ↓
+        </button>
+        <button
+          type="button"
+          className={transferBtnClass}
+          onClick={onRemove}
+          aria-label={REMOVE_FROM_VISIBLE_LABEL}
+          title={REMOVE_FROM_VISIBLE_LABEL}
+        >
+          <ChevronRight className="h-4 w-4" aria-hidden />
+        </button>
+      </div>
     </li>
   );
 }
 
-function AvailableRow({ colId, label, onAdd }: { colId: string; label: string; onAdd: () => void }) {
-  const aid = `${PREFIX_A}${colId}`;
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: aid });
-  const style = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : undefined;
+function AvailableRow({ label, onAdd }: { label: string; onAdd: () => void }) {
   return (
-    <li
-      ref={setNodeRef}
-      style={{ ...style, opacity: isDragging ? 0.5 : undefined }}
-      className="flex items-center justify-between gap-2 rounded-md border border-slate-200/80 bg-white px-2 py-1.5 text-[13px] text-slate-800 shadow-sm"
-    >
+    <li className="flex items-center gap-2 rounded-md border border-slate-200/80 bg-white px-2 py-1.5 text-[13px] text-slate-800 shadow-sm">
       <button
         type="button"
-        className="cursor-grab touch-none rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-        title="Przeciągnij do wybranych"
-        aria-label="Przeciągnij"
-        {...attributes}
-        {...listeners}
+        className={transferBtnClass}
+        onClick={onAdd}
+        aria-label={ADD_TO_VISIBLE_LABEL}
+        title={ADD_TO_VISIBLE_LABEL}
       >
-        <GripVertical className="h-4 w-4" aria-hidden />
+        <ChevronLeft className="h-4 w-4" aria-hidden />
       </button>
       <span className="min-w-0 flex-1 truncate">{label}</span>
-      <button
-        type="button"
-        className="shrink-0 rounded border border-slate-200 px-2 py-0.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
-        onClick={onAdd}
-      >
-        Dodaj
-      </button>
     </li>
   );
 }
@@ -155,12 +180,13 @@ export function ColumnSelectorModal({
   catalog,
   selectedOrder,
   onChange,
+  selectedColumnLabel = "Widoczne",
+  availableColumnLabel = "Dostępne",
 }: ColumnSelectorModalProps) {
   const selectableCatalog = useMemo(() => userCatalogOnly([...catalog]), [catalog]);
   const catalogIds = useMemo(() => selectableCatalog.map((c) => c.id), [selectableCatalog]);
   const [left, setLeft] = useState<string[]>(selectedOrder);
 
-  /** Lista „Wybrane” musi odzwierciedlać `selectedOrder` przy każdym otwarciu i po zmianie zapisu z zewnątrz. */
   useEffect(() => {
     if (open) {
       setLeft(selectedOrder);
@@ -187,35 +213,19 @@ export function ColumnSelectorModal({
     const aid = String(active.id);
     const oid = String(over.id);
 
-    if (aid.startsWith(PREFIX_A)) {
-      const col = aid.slice(PREFIX_A.length);
-      if (left.includes(col)) return;
-      if (oid.startsWith(PREFIX_S)) {
-        const target = oid.slice(PREFIX_S.length);
-        const ti = left.indexOf(target);
-        if (ti === -1) pushChange([...left, col]);
-        else pushChange([...left.slice(0, ti), col, ...left.slice(ti)]);
-        return;
-      }
-      if (oid === "dz-selected") {
-        pushChange([...left, col]);
-      }
+    if (!aid.startsWith(PREFIX_S)) return;
+
+    const col = aid.slice(PREFIX_S.length);
+    if (oid === "dz-available") {
+      pushChange(left.filter((x) => x !== col));
       return;
     }
-
-    if (aid.startsWith(PREFIX_S)) {
-      const col = aid.slice(PREFIX_S.length);
-      if (oid === "dz-available") {
-        pushChange(left.filter((x) => x !== col));
-        return;
-      }
-      if (oid.startsWith(PREFIX_S)) {
-        const target = oid.slice(PREFIX_S.length);
-        const oldIndex = left.indexOf(col);
-        const newIndex = left.indexOf(target);
-        if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return;
-        pushChange(arrayMove(left, oldIndex, newIndex));
-      }
+    if (oid.startsWith(PREFIX_S)) {
+      const target = oid.slice(PREFIX_S.length);
+      const oldIndex = left.indexOf(col);
+      const newIndex = left.indexOf(target);
+      if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return;
+      pushChange(arrayMove(left, oldIndex, newIndex));
     }
   };
 
@@ -237,27 +247,41 @@ export function ColumnSelectorModal({
           </button>
         </div>
         <div className="border-b border-sky-100 bg-sky-50 px-4 py-2.5 text-[12px] leading-snug text-sky-950 sm:px-5">
-          Przeciągaj elementy między listami: z prawej do lewej, aby dodać kolumnę do tabeli; w lewej liście zmieniasz
-          kolejność. Ustawienia zapisują się automatycznie w tej przeglądarce.
+          Lewa kolumna: widoczne kolumny (przeciągnij lub użyj ↑ ↓). ← dodaje z prawej, → usuwa do prawej. Ustawienia
+          zapisują się automatycznie w tej przeglądarce.
         </div>
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-hidden p-4 sm:grid-cols-2 sm:p-5">
             <div className="flex min-h-0 flex-col rounded-lg border border-slate-200 bg-slate-50/50">
               <div className="border-b border-slate-200 bg-white px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                Wybrane elementy ({left.length})
+                {selectedColumnLabel} ({left.length})
               </div>
               <SelectedDropZone>
                 <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
                   <ul className="space-y-1">
                     {left.length === 0 ? (
-                      <li className="px-2 py-8 text-center text-[13px] text-slate-500">Upuść tutaj kolumny z prawej strony.</li>
+                      <li className="px-2 py-8 text-center text-[13px] text-slate-500">Dodaj kolumny z prawej strony.</li>
                     ) : (
-                      left.map((id) => (
+                      left.map((id, index) => (
                         <SortableSelectedRow
                           key={id}
                           colId={id}
                           label={labelFor(selectableCatalog, id)}
+                          index={index}
+                          total={left.length}
                           onRemove={() => pushChange(left.filter((x) => x !== id))}
+                          onMoveUp={() => {
+                            if (index <= 0) return;
+                            const n = [...left];
+                            [n[index - 1], n[index]] = [n[index], n[index - 1]];
+                            pushChange(n);
+                          }}
+                          onMoveDown={() => {
+                            if (index >= left.length - 1) return;
+                            const n = [...left];
+                            [n[index], n[index + 1]] = [n[index + 1], n[index]];
+                            pushChange(n);
+                          }}
                         />
                       ))
                     )}
@@ -267,17 +291,16 @@ export function ColumnSelectorModal({
             </div>
             <div className="flex min-h-0 flex-col rounded-lg border border-slate-200 bg-slate-50/50">
               <div className="border-b border-slate-200 bg-white px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                Dostępne elementy ({right.length})
+                {availableColumnLabel} ({right.length})
               </div>
               <AvailableDropZone>
                 <ul className="space-y-1">
                   {right.length === 0 ? (
-                    <li className="px-2 py-8 text-center text-[13px] text-slate-500">Wszystkie kolumny są już wybrane.</li>
+                    <li className="px-2 py-8 text-center text-[13px] text-slate-500">Wszystkie kolumny są już widoczne.</li>
                   ) : (
                     right.map((id) => (
                       <AvailableRow
                         key={id}
-                        colId={id}
                         label={labelFor(selectableCatalog, id)}
                         onAdd={() => {
                           if (left.includes(id)) return;
