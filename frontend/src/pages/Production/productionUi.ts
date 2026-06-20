@@ -1,4 +1,12 @@
 import type { ProductionBatchStatus, ProductionOrderStatus } from "../../api/productionApi";
+import {
+  operationalBadgeBase,
+  operationalBadgeDangerClass,
+  operationalBadgeInfoClass,
+  operationalBadgeNeutralClass,
+  operationalBadgeSuccessClass,
+  operationalBadgeWarningClass,
+} from "../../components/operational/operationalSemanticBadges";
 
 export const PRODUCTION_STATUS_LABEL: Record<ProductionOrderStatus, string> = {
   draft: "Robocze",
@@ -12,9 +20,9 @@ export const BATCH_STATUS_LABEL: Record<ProductionBatchStatus, string> = {
   draft: "Robocza",
   planned: "Zaplanowana",
   collecting: "Zbieranie",
-  in_progress: "W produkcji",
+  in_progress: "W realizacji",
   putaway: "Odłożenie",
-  completed: "Zakończona",
+  completed: "Ukończona",
   cancelled: "Anulowana",
 };
 
@@ -30,40 +38,104 @@ export const STOCK_TONE_CLASS = {
   short: "border-red-200 bg-red-50",
 } as const;
 
+const PURPLE_BADGE = `${operationalBadgeBase} border-violet-200/90 bg-violet-50 text-violet-900`;
+
 export function batchStatusBadgeClass(status: ProductionBatchStatus): string {
-  const base = "inline-flex rounded px-2 py-0.5 text-xs font-medium";
   switch (status) {
-    case "collecting":
-      return `${base} bg-amber-100 text-amber-900`;
-    case "putaway":
-      return `${base} bg-emerald-100 text-emerald-800`;
-    case "in_progress":
-      return `${base} bg-blue-100 text-blue-800`;
-    case "completed":
-      return `${base} bg-emerald-100 text-emerald-800`;
-    case "cancelled":
-      return `${base} bg-slate-200 text-slate-700`;
     case "planned":
-      return `${base} bg-violet-100 text-violet-800`;
+      return PURPLE_BADGE;
+    case "in_progress":
+    case "collecting":
+    case "putaway":
+      return operationalBadgeInfoClass;
+    case "completed":
+      return operationalBadgeSuccessClass;
+    case "cancelled":
+      return operationalBadgeDangerClass;
     default:
-      return `${base} bg-slate-100 text-slate-700`;
+      return operationalBadgeNeutralClass;
   }
 }
 
 export function productionStatusBadgeClass(status: ProductionOrderStatus): string {
-  const base = "inline-flex rounded px-2 py-0.5 text-xs font-medium";
   switch (status) {
-    case "in_progress":
-      return `${base} bg-amber-100 text-amber-900`;
-    case "completed":
-      return `${base} bg-emerald-100 text-emerald-800`;
-    case "cancelled":
-      return `${base} bg-slate-200 text-slate-700`;
     case "planned":
-      return `${base} bg-blue-100 text-blue-800`;
+      return PURPLE_BADGE;
+    case "in_progress":
+      return operationalBadgeInfoClass;
+    case "completed":
+      return operationalBadgeSuccessClass;
+    case "cancelled":
+      return operationalBadgeDangerClass;
     default:
-      return `${base} bg-slate-100 text-slate-700`;
+      return operationalBadgeNeutralClass;
   }
+}
+
+export type ProductionPriorityLevel = "low" | "normal" | "high" | "critical";
+
+export function resolveProductionPriority(
+  priority?: string | null,
+  hasShortages?: boolean,
+  numericPriority?: number,
+): ProductionPriorityLevel {
+  if (hasShortages || priority === "blocked") return "high";
+  if (priority === "urgent" || priority === "critical") return "critical";
+  if (priority === "high" || (numericPriority != null && numericPriority > 7)) return "high";
+  if (priority === "low" || (numericPriority != null && numericPriority <= 2)) return "low";
+  return "normal";
+}
+
+const PRIORITY_LABEL: Record<ProductionPriorityLevel, string> = {
+  low: "Niski",
+  normal: "Normalny",
+  high: "Wysoki",
+  critical: "Krytyczny",
+};
+
+export function productionPriorityLabel(
+  priority?: string | null,
+  hasShortages?: boolean,
+  numericPriority?: number,
+): string {
+  return PRIORITY_LABEL[resolveProductionPriority(priority, hasShortages, numericPriority)];
+}
+
+export function productionPriorityBadgeClass(
+  priority?: string | null,
+  hasShortages?: boolean,
+  numericPriority?: number,
+): string {
+  switch (resolveProductionPriority(priority, hasShortages, numericPriority)) {
+    case "low":
+      return operationalBadgeNeutralClass;
+    case "normal":
+      return operationalBadgeInfoClass;
+    case "high":
+      return operationalBadgeWarningClass;
+    case "critical":
+      return operationalBadgeDangerClass;
+  }
+}
+
+export function recipeStatusBadgeClass(recipe: {
+  is_active: boolean;
+  has_low_stock?: boolean;
+  status_badge?: string;
+}): string {
+  if (!recipe.is_active) return operationalBadgeNeutralClass;
+  if (recipe.has_low_stock || recipe.status_badge === "LOW_STOCK") return operationalBadgeWarningClass;
+  return operationalBadgeSuccessClass;
+}
+
+export function recipeStatusLabel(recipe: {
+  is_active: boolean;
+  has_low_stock?: boolean;
+  status_badge?: string;
+}): string {
+  if (!recipe.is_active) return "Archiwum";
+  if (recipe.has_low_stock || recipe.status_badge === "LOW_STOCK") return "Braki materiałów";
+  return "Aktywna";
 }
 
 export function formatProductionMoney(v: number | null | undefined): string {

@@ -1,30 +1,56 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { AlertTriangle, Search } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { ChevronDown, Filter } from "lucide-react";
+import toast from "react-hot-toast";
+
 import { useWarehouse } from "../../context/WarehouseContext";
-import { listRecipeCards, type RecipeCardRead } from "../../api/productionApi";
-import { formatProductionMoney } from "./productionUi";
+import {
+  activateRecipe,
+  cloneRecipe,
+  listRecipeCards,
+  type RecipeCardRead,
+} from "../../api/productionApi";
+import { AppEmptyState } from "../../components/app-shell";
+import {
+  FilterActionsBar,
+  ListFilterEmbeddedShell,
+  filterGridColsClass,
+  filterInputClass,
+  filterLabelClass,
+  filterSelectClass,
+} from "../../components/filters";
+import {
+  ModuleListRowActionsCell,
+  moduleListTableClass,
+  moduleListTableScrollClass,
+  moduleListTdClass,
+  moduleListThClass,
+  moduleListTheadClass,
+  moduleTableCardClass,
+} from "../../components/listPage/moduleList";
+import { listSellasistToolbarToggleBtn } from "../../components/listPage/listSellasistTokens";
+import {
+  DEFAULT_PRODUCTION_RECIPE_FILTERS,
+  type ProductionRecipeListFilters,
+} from "../../modules/production/productionListFilters";
+import { formatProductionMoney, recipeStatusBadgeClass, recipeStatusLabel } from "./productionUi";
 import { erpProductionPaths } from "./productionPaths";
 import { ProductThumb } from "./components/ProductThumb";
+import { ProductionRowActionsMenu } from "./components/ProductionRowActionsMenu";
 
 const DEFAULT_TENANT = 1;
 
-function statusBadge(r: RecipeCardRead): { label: string; className: string } {
-  if (!r.is_active) return { label: "Archiwum", className: "bg-slate-100 text-slate-600" };
-  if (r.has_low_stock || r.status_badge === "LOW_STOCK")
-    return { label: "Braki", className: "bg-amber-100 text-amber-900" };
-  if (r.status_badge === "ACTIVE") return { label: "Aktywna", className: "bg-emerald-100 text-emerald-800" };
-  return { label: r.status_badge, className: "bg-slate-100 text-slate-600" };
-}
-
 export default function RecipesListPage() {
+  const navigate = useNavigate();
   const { warehouse } = useWarehouse();
   const tenantId = warehouse?.tenant_id ?? DEFAULT_TENANT;
   const warehouseId = warehouse?.id;
   const [recipes, setRecipes] = useState<RecipeCardRead[]>([]);
-  const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<"all" | "active" | "shortages">("all");
   const [loading, setLoading] = useState(true);
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
+  const [draftFilters, setDraftFilters] = useState<ProductionRecipeListFilters>(DEFAULT_PRODUCTION_RECIPE_FILTERS);
+  const [appliedFilters, setAppliedFilters] = useState<ProductionRecipeListFilters>(DEFAULT_PRODUCTION_RECIPE_FILTERS);
+  const [busyId, setBusyId] = useState<number | null>(null);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -43,9 +69,11 @@ export default function RecipesListPage() {
 
   const filtered = useMemo(() => {
     let list = recipes;
-    if (filter === "active") list = list.filter((r) => r.is_active);
-    if (filter === "shortages") list = list.filter((r) => r.has_low_stock);
-    const q = search.trim().toLowerCase();
+    const f = appliedFilters;
+    if (f.status === "active") list = list.filter((r) => r.is_active);
+    if (f.status === "archived") list = list.filter((r) => !r.is_active);
+    if (f.status === "shortages") list = list.filter((r) => r.has_low_stock);
+    const q = f.query.trim().toLowerCase();
     if (q) {
       list = list.filter(
         (r) =>
@@ -55,73 +83,143 @@ export default function RecipesListPage() {
       );
     }
     return list;
-  }, [recipes, search, filter]);
+  }, [recipes, appliedFilters]);
+
+  const handleDuplicate = async (r: RecipeCardRead) => {
+    setBusyId(r.composition_id);
+    try {
+      const cloned = await cloneRecipe(tenantId, r.composition_id, `${r.version}-kopia`);
+      toast.success("Zduplikowano recepturę.");
+      navigate(erpProductionPaths.recipe(cloned.id));
+    } catch {
+      toast.error("Nie udało się zduplikować receptury.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleArchive = async (r: RecipeCardRead) => {
+    setBusyId(r.composition_id);
+    try {
+      await activateRecipe(tenantId, r.composition_id, false);
+      toast.success("Receptura zarchiwizowana.");
+      void reload();
+    } catch {
+      toast.error("Nie udało się zarchiwizować receptury.");
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   return (
-    <div className="space-y-4 px-4 pb-10 lg:px-6">
-      <div>
-        <h2 className="text-lg font-semibold text-slate-900">Receptury produkcyjne</h2>
-        <p className="text-sm text-slate-500">Zarządzanie wersjami, składnikami i kosztami — moduł ERP.</p>
+    <div className="space-y-4 pb-10">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-semibold text-slate-900">
+            Receptury produkcyjne
+            {!loading ? <span className="ml-2 text-base font-normal text-slate-400">{filtered.length} wyników</span> : null}
+          </h2>
+          <p className="mt-1 text-sm text-slate-500">Zarządzanie wersjami, składnikami i kosztami.</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setFiltersExpanded((v) => !v)}
+          className={`${listSellasistToolbarToggleBtn} inline-flex !h-10 items-center gap-2`}
+          aria-expanded={filtersExpanded}
+        >
+          <Filter className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
+          Filtry
+          <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${filtersExpanded ? "rotate-180" : ""}`} aria-hidden />
+        </button>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative min-w-[200px] flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden />
-          <input
-            type="search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Szukaj produktu, receptury, SKU…"
-            className="w-full rounded-lg border border-slate-200 py-2 pl-10 pr-3 text-sm"
-          />
-        </div>
-        <div className="flex gap-1 rounded-lg border border-slate-200 bg-white p-1 text-xs">
-          {(["all", "active", "shortages"] as const).map((f) => (
-            <button
-              key={f}
-              type="button"
-              onClick={() => setFilter(f)}
-              className={`rounded-md px-3 py-1.5 font-medium ${filter === f ? "bg-slate-800 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+      <ListFilterEmbeddedShell expanded={filtersExpanded}>
+        <div className={filterGridColsClass}>
+          <label className="block min-w-0 sm:col-span-2">
+            <span className={filterLabelClass}>Szukaj</span>
+            <input
+              type="search"
+              className={filterInputClass}
+              placeholder="Produkt, receptura, SKU…"
+              value={draftFilters.query}
+              onChange={(e) => setDraftFilters({ ...draftFilters, query: e.target.value })}
+            />
+          </label>
+          <label className="block min-w-0">
+            <span className={filterLabelClass}>Status</span>
+            <select
+              className={filterSelectClass}
+              value={draftFilters.status}
+              onChange={(e) =>
+                setDraftFilters({ ...draftFilters, status: e.target.value as ProductionRecipeListFilters["status"] })
+              }
             >
-              {f === "all" ? "Wszystkie" : f === "active" ? "Aktywne" : "Z brakami"}
-            </button>
-          ))}
+              <option value="">Wszystkie</option>
+              <option value="active">Aktywne</option>
+              <option value="archived">Archiwum</option>
+              <option value="shortages">Z brakami</option>
+            </select>
+          </label>
         </div>
-      </div>
+        <FilterActionsBar
+          applyLabel="Filtruj"
+          onApply={() => setAppliedFilters({ ...draftFilters })}
+          onClear={() => {
+            setDraftFilters(DEFAULT_PRODUCTION_RECIPE_FILTERS);
+            setAppliedFilters(DEFAULT_PRODUCTION_RECIPE_FILTERS);
+          }}
+        />
+      </ListFilterEmbeddedShell>
 
-      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-        <table className="min-w-full text-sm">
-          <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-            <tr>
-              <th className="px-4 py-3">Produkt</th>
-              <th className="px-4 py-3">Receptura</th>
-              <th className="px-4 py-3">Wersja</th>
-              <th className="px-4 py-3">Składniki</th>
-              <th className="px-4 py-3">Koszt/szt.</th>
-              <th className="px-4 py-3">Można wyproduk.</th>
-              <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3 text-right">Akcja</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr>
-                <td colSpan={8} className="px-4 py-8 text-slate-500">
-                  Wczytywanie…
-                </td>
-              </tr>
-            ) : filtered.length === 0 ? (
-              <tr>
-                <td colSpan={8} className="px-4 py-8 text-slate-500">
-                  Brak receptur. Utwórz recepturę produkcyjną na karcie produktu (zakładka Produkcja) lub tutaj w module ERP.
-                </td>
-              </tr>
-            ) : (
-              filtered.map((r) => {
-                const badge = statusBadge(r);
-                return (
-                  <tr key={r.composition_id} className="border-t border-slate-100 hover:bg-slate-50/80">
-                    <td className="px-4 py-3">
+      {loading ? (
+        <p className="text-sm text-slate-500">Wczytywanie…</p>
+      ) : filtered.length === 0 ? (
+        <AppEmptyState title="Brak receptur" description="Utwórz recepturę na karcie produktu (zakładka Produkcja)." />
+      ) : (
+        <div className={moduleTableCardClass}>
+          <div className={moduleListTableScrollClass}>
+            <table className={moduleListTableClass} style={{ minWidth: 960 }}>
+              <thead className={moduleListTheadClass}>
+                <tr>
+                  <th className={`${moduleListThClass} w-[120px] text-center`}>Akcje</th>
+                  <th className={moduleListThClass}>Produkt</th>
+                  <th className={moduleListThClass}>Receptura</th>
+                  <th className={moduleListThClass}>Wersja</th>
+                  <th className={moduleListThClass}>Składniki</th>
+                  <th className={moduleListThClass}>Koszt/szt.</th>
+                  <th className={moduleListThClass}>Można wyproduk.</th>
+                  <th className={moduleListThClass}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((r) => (
+                  <tr key={r.composition_id} className="group border-b border-slate-100 hover:bg-slate-50/70">
+                    <ModuleListRowActionsCell ariaLabel={`Akcje ${r.recipe_name}`}>
+                      <ProductionRowActionsMenu
+                        ariaLabel={`Akcje ${r.recipe_name}`}
+                        actions={[
+                          { id: "view", label: "Podgląd", onClick: () => navigate(erpProductionPaths.recipe(r.composition_id)) },
+                          { id: "edit", label: "Edytuj", onClick: () => navigate(erpProductionPaths.recipe(r.composition_id)) },
+                          {
+                            id: "dup",
+                            label: "Duplikuj",
+                            onClick: () => void handleDuplicate(r),
+                            disabled: busyId === r.composition_id,
+                          },
+                          ...(r.is_active
+                            ? [
+                                {
+                                  id: "arch",
+                                  label: "Archiwizuj",
+                                  onClick: () => void handleArchive(r),
+                                  disabled: busyId === r.composition_id,
+                                },
+                              ]
+                            : []),
+                        ]}
+                      />
+                    </ModuleListRowActionsCell>
+                    <td className={moduleListTdClass}>
                       <div className="flex items-center gap-3">
                         <ProductThumb imageUrl={r.product_image_url} name={r.product_name} size="sm" />
                         <div>
@@ -130,34 +228,27 @@ export default function RecipesListPage() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-slate-700">{r.recipe_name}</td>
-                    <td className="px-4 py-3">
-                      <span className="rounded bg-slate-100 px-2 py-0.5 font-mono text-xs text-slate-600">v{r.version}</span>
-                    </td>
-                    <td className="px-4 py-3 tabular-nums text-slate-600">{r.component_count}</td>
-                    <td className="px-4 py-3 tabular-nums font-medium text-slate-900">{formatProductionMoney(r.unit_cost_net)}</td>
-                    <td className="px-4 py-3 tabular-nums text-slate-700">{Math.floor(r.max_producible)}</td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium ${badge.className}`}>
-                        {r.has_low_stock ? <AlertTriangle className="h-3 w-3" aria-hidden /> : null}
-                        {badge.label}
+                    <td className={`${moduleListTdClass} text-slate-700`}>{r.recipe_name}</td>
+                    <td className={moduleListTdClass}>
+                      <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 font-mono text-xs text-slate-600">
+                        v{r.version}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-right">
-                      <Link
-                        to={erpProductionPaths.recipe(r.composition_id)}
-                        className="text-xs font-medium text-slate-800 underline hover:text-slate-600"
-                      >
-                        Otwórz
-                      </Link>
+                    <td className={`${moduleListTdClass} tabular-nums text-slate-600`}>{r.component_count}</td>
+                    <td className={`${moduleListTdClass} tabular-nums font-medium text-slate-900`}>
+                      {formatProductionMoney(r.unit_cost_net)}
+                    </td>
+                    <td className={`${moduleListTdClass} tabular-nums text-slate-700`}>{Math.floor(r.max_producible)}</td>
+                    <td className={moduleListTdClass}>
+                      <span className={recipeStatusBadgeClass(r)}>{recipeStatusLabel(r)}</span>
                     </td>
                   </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

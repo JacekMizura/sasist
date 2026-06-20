@@ -1,20 +1,33 @@
-import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { AlertTriangle } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { AlertTriangle, CalendarClock, Factory, Package } from "lucide-react";
+
 import { useWarehouse } from "../../context/WarehouseContext";
 import { listProductionBatches, type ProductionBatchRead } from "../../api/productionApi";
+import { AppEmptyState } from "../../components/app-shell";
+import {
+  ModuleListRowActionsCell,
+  moduleListTableClass,
+  moduleListTableScrollClass,
+  moduleListTdClass,
+  moduleListThClass,
+  moduleListTheadClass,
+  moduleTableCardClass,
+} from "../../components/listPage/moduleList";
+import { PurchasingKpiCard, PurchasingKpiGrid } from "../../modules/purchasing/ui";
 import { BATCH_STATUS_LABEL, batchStatusBadgeClass } from "./productionUi";
 import { erpProductionPaths } from "./productionPaths";
 import { ProgressBar } from "./components/ProgressBar";
+import { ProductionRowActionsMenu } from "./components/ProductionRowActionsMenu";
 
 const DEFAULT_TENANT = 1;
 
 type Props = {
-  /** When true, omit page title (embedded in Planning page). */
   embedded?: boolean;
 };
 
 export default function BatchesListPage({ embedded = false }: Props) {
+  const navigate = useNavigate();
   const { warehouse } = useWarehouse();
   const tenantId = warehouse?.tenant_id ?? DEFAULT_TENANT;
   const warehouseId = warehouse?.id;
@@ -37,77 +50,109 @@ export default function BatchesListPage({ embedded = false }: Props) {
     void reload();
   }, [reload]);
 
-  const content = (
-    <>
-      {loading ? (
-        <p className="text-sm text-slate-500 px-4 lg:px-6">Wczytywanie…</p>
-      ) : batches.length === 0 ? (
-        <p className="text-sm text-slate-500 px-4 lg:px-6">
-          Brak aktywnych partii.{" "}
-          <Link to={erpProductionPaths.recipes} className="font-medium text-slate-800 underline">
-            Przejdź do receptur
-          </Link>
-          .
-        </p>
-      ) : (
-        <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm mx-4 lg:mx-6">
-          <table className="min-w-full text-sm">
-            <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-              <tr>
-                <th className="px-4 py-3">Partia</th>
-                <th className="px-4 py-3">Produkty</th>
-                <th className="px-4 py-3">Ilość</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Postęp</th>
-                <th className="px-4 py-3">Operator</th>
-                <th className="px-4 py-3 text-right">Szczegóły</th>
+  const stats = useMemo(() => {
+    const planned = batches.filter((b) => b.status === "planned" || b.status === "draft").length;
+    const active = batches.filter((b) => ["collecting", "in_progress", "putaway"].includes(b.status)).length;
+    const shortages = batches.filter((b) => b.has_shortages).length;
+    const units = batches.reduce((s, b) => s + (b.total_planned_units ?? 0), 0);
+    return { planned, active, shortages, units, total: batches.length };
+  }, [batches]);
+
+  const table = loading ? (
+    <p className="text-sm text-slate-500">Wczytywanie…</p>
+  ) : batches.length === 0 ? (
+    <AppEmptyState
+      title="Brak aktywnych partii"
+      description="Utwórz partię masową, aby zaplanować produkcję wieloproduktową."
+      action={
+        <button
+          type="button"
+          className="text-sm font-semibold text-amber-700 hover:underline"
+          onClick={() => navigate(erpProductionPaths.recipes)}
+        >
+          Przejdź do receptur
+        </button>
+      }
+    />
+  ) : (
+    <div className={moduleTableCardClass}>
+      <div className={moduleListTableScrollClass}>
+        <table className={moduleListTableClass} style={{ minWidth: 900 }}>
+          <thead className={moduleListTheadClass}>
+            <tr>
+              <th className={`${moduleListThClass} w-[120px] text-center`}>Akcje</th>
+              <th className={moduleListThClass}>Partia</th>
+              <th className={moduleListThClass}>Produkty</th>
+              <th className={`${moduleListThClass} text-right`}>Ilość</th>
+              <th className={moduleListThClass}>Status</th>
+              <th className={moduleListThClass}>Postęp</th>
+              <th className={moduleListThClass}>Materiały</th>
+              <th className={moduleListThClass}>Operator</th>
+              <th className={moduleListThClass}>Termin</th>
+            </tr>
+          </thead>
+          <tbody>
+            {batches.map((b) => (
+              <tr key={b.id} className="group border-b border-slate-100 hover:bg-slate-50/70">
+                <ModuleListRowActionsCell ariaLabel={`Akcje ${b.number}`}>
+                  <ProductionRowActionsMenu
+                    ariaLabel={`Akcje ${b.number}`}
+                    actions={[
+                      { id: "open", label: "Otwórz", onClick: () => navigate(erpProductionPaths.batch(b.id)) },
+                      { id: "edit", label: "Edytuj", onClick: () => navigate(erpProductionPaths.batch(b.id)) },
+                    ]}
+                  />
+                </ModuleListRowActionsCell>
+                <td className={`${moduleListTdClass} font-mono font-medium text-slate-900`}>{b.number}</td>
+                <td className={moduleListTdClass}>{b.products_count ?? b.lines.length}</td>
+                <td className={`${moduleListTdClass} text-right tabular-nums`}>{b.total_planned_units ?? 0}</td>
+                <td className={moduleListTdClass}>
+                  <span className={batchStatusBadgeClass(b.status)}>{BATCH_STATUS_LABEL[b.status]}</span>
+                </td>
+                <td className={`${moduleListTdClass} min-w-[140px]`}>
+                  <ProgressBar value={b.progress_percent ?? 0} tone={b.has_shortages ? "amber" : "emerald"} />
+                </td>
+                <td className={moduleListTdClass}>
+                  {b.has_shortages ? (
+                    <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-800">
+                      <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
+                      Braki
+                    </span>
+                  ) : (
+                    <span className="text-xs text-emerald-700">OK</span>
+                  )}
+                </td>
+                <td className={`${moduleListTdClass} text-slate-600`}>{b.operator_name ?? "—"}</td>
+                <td className={`${moduleListTdClass} text-slate-600`}>{(b.created_at ?? "").slice(0, 10) || "—"}</td>
               </tr>
-            </thead>
-            <tbody>
-              {batches.map((b) => (
-                <tr key={b.id} className="border-t border-slate-100 hover:bg-slate-50/80">
-                  <td className="px-4 py-3 font-mono font-medium text-slate-900">{b.number}</td>
-                  <td className="px-4 py-3 text-slate-700">{b.products_count ?? b.lines.length}</td>
-                  <td className="px-4 py-3 tabular-nums">{b.total_planned_units ?? 0}</td>
-                  <td className="px-4 py-3">
-                    <span className={batchStatusBadgeClass(b.status)}>{BATCH_STATUS_LABEL[b.status]}</span>
-                    {b.has_shortages ? (
-                      <span className="ml-2 inline-flex items-center gap-0.5 text-xs text-amber-800">
-                        <AlertTriangle className="h-3 w-3" aria-hidden />
-                        Braki
-                      </span>
-                    ) : null}
-                  </td>
-                  <td className="px-4 py-3 w-40">
-                    <ProgressBar value={b.progress_percent ?? 0} tone={b.has_shortages ? "amber" : "emerald"} />
-                  </td>
-                  <td className="px-4 py-3 text-slate-600">{b.operator_name ?? "—"}</td>
-                  <td className="px-4 py-3 text-right">
-                    <Link
-                      to={erpProductionPaths.batch(b.id)}
-                      className="text-xs font-medium text-slate-800 underline hover:text-slate-600"
-                    >
-                      Otwórz
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 
-  if (embedded) return <div className="pb-6">{content}</div>;
+  if (embedded) {
+    return (
+      <div className="space-y-6">
+        <PurchasingKpiGrid columns={4}>
+          <PurchasingKpiCard title="Partie aktywne" value={stats.total} tone="indigo" icon={<Package aria-hidden />} />
+          <PurchasingKpiCard title="Zaplanowane" value={stats.planned} tone="purple" icon={<CalendarClock aria-hidden />} />
+          <PurchasingKpiCard title="W realizacji" value={stats.active} tone="blue" icon={<Factory aria-hidden />} />
+          <PurchasingKpiCard title="Z brakami" value={stats.shortages} tone="amber" icon={<AlertTriangle aria-hidden />} />
+        </PurchasingKpiGrid>
+        {table}
+      </div>
+    );
+  }
 
   return (
-    <div className="px-4 py-6 lg:px-6 space-y-6">
+    <div className="space-y-6 py-6">
       <div>
         <h1 className="text-xl font-bold text-slate-900">Partie produkcyjne</h1>
         <p className="text-sm text-slate-500">Fale produkcyjne — wiele produktów, jeden zagregowany pobór surowców.</p>
       </div>
-      {content}
+      {table}
     </div>
   );
 }

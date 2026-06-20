@@ -1,12 +1,12 @@
-import type { TabItem } from "../../components/TopTabsNavigation";
+import type { TabsNavItem } from "@/components/layout/TabsNav";
+import { erpProductionPaths } from "../../pages/Production/productionPaths";
 
-/** ERP Production module — management & planning (not WMS execution). */
-/** Orders-first workflow — recipes are supporting master data. */
-export const ERP_PRODUCTION_TABS: TabItem[] = [
-  { path: "/production", label: "Pulpit", end: true },
-  { path: "/production/orders", label: "Zlecenia produkcyjne" },
-  { path: "/production/planning", label: "Planowanie" },
-  { path: "/production/recipes", label: "Receptury" },
-  { path: "/production/history", label: "Historia" },
-  { path: "/production/analytics", label: "Analiza kosztów" },
+/** ERP Production module — shared {@link TabsNav} (Dostawcy / Inwentaryzacja). */
+export const ERP_PRODUCTION_TABS: TabsNavItem[] = [
+  { path: erpProductionPaths.home, label: "Pulpit", end: true },
+  { path: erpProductionPaths.orders, label: "Zlecenia produkcyjne", end: false },
+  { path: erpProductionPaths.planning, label: "Planowanie", end: false },
+  { path: erpProductionPaths.recipes, label: "Receptury", end: false },
+  { path: erpProductionPaths.history, label: "Historia", end: false },
+  { path: erpProductionPaths.analytics, label: "Analiza kosztów", end: true },
 ];

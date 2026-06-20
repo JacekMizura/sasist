@@ -1,26 +1,51 @@
-import { Outlet } from "react-router-dom";
+import { useMemo } from "react";
+import { Outlet, useLocation } from "react-router-dom";
 
-import { PageContainer } from "../../components/layout/PageLayout";
-import TopTabsNavigation from "../../components/TopTabsNavigation";
+import PageLayout from "@/components/layout/PageLayout";
+import { TabsNav } from "@/components/layout/TabsNav";
+import { flatSectionDividerClass } from "@/components/layout/flatSectionTokens";
+import { ModuleListBreadcrumb } from "@/components/listPage/moduleList";
 import { ERP_PRODUCTION_TABS } from "../../modules/production/erpProductionTabs";
 
-/**
- * ERP production management shell — business planning UI, not WMS terminal styling.
- */
+/** Szczegóły partii / receptury — bez zakładek modułu. */
+const FULL_PAGE_DETAIL = /^\/production\/(?:batch\/[^/]+|recipes\/[^/]+)$/;
+
+/** ERP production management shell — standard module layout. */
 export default function ProductionErpModuleLayout() {
+  const { pathname } = useLocation();
+  const fullPageDetail = useMemo(() => FULL_PAGE_DETAIL.test(pathname), [pathname]);
+
+  if (fullPageDetail) {
+    return (
+      <PageLayout fullBleed>
+        <Outlet />
+      </PageLayout>
+    );
+  }
+
   return (
-    <PageContainer className="min-h-[600px]">
-      <div className="border-b border-slate-200 bg-white -mx-4 px-4 lg:-mx-6 lg:px-6">
-        <div className="py-4">
-          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Asortyment · Produkcja</p>
-          <h1 className="mt-1 text-xl font-semibold text-slate-900">Zarządzanie produkcją</h1>
-          <p className="mt-1 text-sm text-slate-500">Zlecenia i planowanie produkcji — receptury jako dane pomocnicze. Wykonanie w terminalu WMS.</p>
-        </div>
-        <TopTabsNavigation tabs={ERP_PRODUCTION_TABS} exact={false} aria-label="Moduł produkcji ERP" />
-      </div>
-      <div className="pt-4">
+    <PageLayout fullBleed>
+      <ModuleListBreadcrumb
+        items={[
+          { label: "Asortyment", to: "/products/list" },
+          { label: "Produkcja" },
+          { label: "Zarządzanie produkcją" },
+        ]}
+      />
+      <h1 className="text-2xl font-semibold text-slate-900">Zarządzanie produkcją</h1>
+      <p className="mt-1 text-sm text-slate-500">
+        Zlecenia i planowanie produkcji — receptury jako dane pomocnicze. Wykonanie w terminalu WMS.
+      </p>
+      <TabsNav
+        items={ERP_PRODUCTION_TABS}
+        exact
+        aria-label="Zarządzanie produkcją — zakładki"
+        className="mt-6 gap-8"
+      />
+      <div className={`${flatSectionDividerClass} mt-3`} aria-hidden />
+      <div className="pt-6">
         <Outlet />
       </div>
-    </PageContainer>
+    </PageLayout>
   );
 }

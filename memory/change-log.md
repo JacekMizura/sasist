@@ -1,5 +1,14 @@
 # Change log
 
+## 2026-06-08 — Produkcja ERP (Zarządzanie produkcją): standard UI systemowy
+
+- `ProductionErpModuleLayout`: `TabsNav` + breadcrumb (jak Dostawcy / Inwentaryzacja); pełnoekranowe szczegóły partii/receptury bez tabów
+- Pulpit: 8× `PurchasingKpiCard`, alert braków z CTA „Przejdź do braków”, sekcja WMS jako `PurchasingTableSection` + `AppEmptyState`
+- Zlecenia: filtry (status, operator, produkt, daty, priorytet), licznik wyników, tabela modułowa, menu akcji
+- Planowanie: KPI nad tabelą partii (postęp, materiały, operator, termin)
+- Receptury / Historia / Analiza kosztów: filtry, KPI, sortowanie (analiza), menu akcji zamiast linków „Otwórz”
+- Badge statusów i priorytetów: `operationalSemanticBadges` (fiolet/niebieski/zielony/pomarańczowy/czerwony)
+
 ## 2026-06-08 — Inwentaryzacja (ERP): przebudowa UI na standard systemowy
 
 - `InventoryLayout`: `TabsNav` + breadcrumb (jak Dostawcy / Materiały magazynowe); pomarańczowy CTA „Nowa inwentaryzacja”; kreator pełnoekranowy bez tabów

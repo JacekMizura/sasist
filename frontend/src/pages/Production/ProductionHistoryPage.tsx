@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { Search } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { ChevronDown, Clock, Filter, Package, TrendingUp } from "lucide-react";
+
 import { useWarehouse } from "../../context/WarehouseContext";
 import {
   listProductionBatches,
@@ -8,8 +9,39 @@ import {
   type ProductionBatchRead,
   type ProductionOrderRead,
 } from "../../api/productionApi";
-import { BATCH_STATUS_LABEL, PRODUCTION_STATUS_LABEL, batchStatusBadgeClass, formatProductionMoney, productionStatusBadgeClass } from "./productionUi";
+import { AppEmptyState } from "../../components/app-shell";
+import {
+  FilterActionsBar,
+  ListFilterEmbeddedShell,
+  filterGridColsClass,
+  filterInputClass,
+  filterLabelClass,
+  filterSelectClass,
+} from "../../components/filters";
+import {
+  ModuleListRowActionsCell,
+  moduleListTableClass,
+  moduleListTableScrollClass,
+  moduleListTdClass,
+  moduleListThClass,
+  moduleListTheadClass,
+  moduleTableCardClass,
+} from "../../components/listPage/moduleList";
+import { listSellasistToolbarToggleBtn } from "../../components/listPage/listSellasistTokens";
+import { PurchasingKpiCard, PurchasingKpiGrid } from "../../modules/purchasing/ui";
+import {
+  DEFAULT_PRODUCTION_HISTORY_FILTERS,
+  type ProductionHistoryFilters,
+} from "../../modules/production/productionListFilters";
+import {
+  BATCH_STATUS_LABEL,
+  PRODUCTION_STATUS_LABEL,
+  batchStatusBadgeClass,
+  formatProductionMoney,
+  productionStatusBadgeClass,
+} from "./productionUi";
 import { erpProductionPaths } from "./productionPaths";
+import { ProductionRowActionsMenu } from "./components/ProductionRowActionsMenu";
 
 const DEFAULT_TENANT = 1;
 
@@ -58,12 +90,15 @@ function toOrderRow(o: ProductionOrderRead): HistoryRow {
 }
 
 export default function ProductionHistoryPage() {
+  const navigate = useNavigate();
   const { warehouse } = useWarehouse();
   const tenantId = warehouse?.tenant_id ?? DEFAULT_TENANT;
   const warehouseId = warehouse?.id;
   const [rows, setRows] = useState<HistoryRow[]>([]);
-  const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
+  const [draftFilters, setDraftFilters] = useState<ProductionHistoryFilters>(DEFAULT_PRODUCTION_HISTORY_FILTERS);
+  const [appliedFilters, setAppliedFilters] = useState<ProductionHistoryFilters>(DEFAULT_PRODUCTION_HISTORY_FILTERS);
 
   const reload = useCallback(async () => {
     if (warehouseId == null) return;
@@ -89,98 +124,191 @@ export default function ProductionHistoryPage() {
   }, [reload]);
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter(
-      (r) => r.number.toLowerCase().includes(q) || r.product.toLowerCase().includes(q) || r.operator.toLowerCase().includes(q),
-    );
-  }, [rows, search]);
+    const f = appliedFilters;
+    return rows.filter((r) => {
+      if (f.status && r.status !== f.status) return false;
+      if (f.operator.trim() && !r.operator.toLowerCase().includes(f.operator.trim().toLowerCase())) return false;
+      if (f.product.trim() && !r.product.toLowerCase().includes(f.product.trim().toLowerCase())) return false;
+      if (f.dateFrom && r.completedAt !== "—" && r.completedAt < f.dateFrom) return false;
+      if (f.dateTo && r.completedAt !== "—" && r.completedAt > f.dateTo) return false;
+      const q = f.query.trim().toLowerCase();
+      if (q) {
+        const hay = [r.number, r.product, r.operator].join(" ").toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [rows, appliedFilters]);
+
+  const kpis = useMemo(() => {
+    const completedBatches = filtered.filter((r) => r.kind === "batch").length;
+    const units = filtered.reduce((s, r) => s + r.qty, 0);
+    const costs = filtered.map((r) => parseFloat(r.unitCost.replace(/[^\d.,]/g, "").replace(",", "."))).filter((n) => Number.isFinite(n) && n > 0);
+    const avgCost = costs.length ? costs.reduce((a, b) => a + b, 0) / costs.length : null;
+    return { completedBatches, units, avgCost };
+  }, [filtered]);
 
   if (warehouseId == null) {
-    return <p className="px-4 py-8 text-sm text-slate-500">Wybierz magazyn, aby wyświetlić historię produkcji.</p>;
+    return <p className="py-8 text-sm text-slate-500">Wybierz magazyn, aby wyświetlić historię produkcji.</p>;
   }
 
   return (
-    <div className="space-y-4 px-4 pb-10 lg:px-6">
-      <div>
-        <h2 className="text-lg font-semibold text-slate-900">Historia produkcji</h2>
-        <p className="text-sm text-slate-500">Zakończone partie masowe i zlecenia produkcyjne (MO).</p>
+    <div className="space-y-6 pb-10">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-semibold text-slate-900">
+            Historia produkcji
+            {!loading ? <span className="ml-2 text-base font-normal text-slate-400">{filtered.length} wyników</span> : null}
+          </h2>
+          <p className="mt-1 text-sm text-slate-500">Zakończone partie masowe i zlecenia produkcyjne (MO).</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setFiltersExpanded((v) => !v)}
+          className={`${listSellasistToolbarToggleBtn} inline-flex !h-10 items-center gap-2`}
+          aria-expanded={filtersExpanded}
+        >
+          <Filter className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
+          Filtry
+          <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${filtersExpanded ? "rotate-180" : ""}`} aria-hidden />
+        </button>
       </div>
 
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden />
-        <input
-          type="search"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Szukaj numeru, produktu, operatora…"
-          className="w-full rounded-lg border border-slate-200 py-2 pl-10 pr-3 text-sm"
+      <ListFilterEmbeddedShell expanded={filtersExpanded}>
+        <div className={filterGridColsClass}>
+          <label className="block min-w-0">
+            <span className={filterLabelClass}>Szukaj</span>
+            <input
+              type="search"
+              className={filterInputClass}
+              value={draftFilters.query}
+              onChange={(e) => setDraftFilters({ ...draftFilters, query: e.target.value })}
+            />
+          </label>
+          <label className="block min-w-0">
+            <span className={filterLabelClass}>Operator</span>
+            <input
+              type="text"
+              className={filterInputClass}
+              value={draftFilters.operator}
+              onChange={(e) => setDraftFilters({ ...draftFilters, operator: e.target.value })}
+            />
+          </label>
+          <label className="block min-w-0">
+            <span className={filterLabelClass}>Produkt</span>
+            <input
+              type="text"
+              className={filterInputClass}
+              value={draftFilters.product}
+              onChange={(e) => setDraftFilters({ ...draftFilters, product: e.target.value })}
+            />
+          </label>
+          <label className="block min-w-0">
+            <span className={filterLabelClass}>Status</span>
+            <select
+              className={filterSelectClass}
+              value={draftFilters.status}
+              onChange={(e) => setDraftFilters({ ...draftFilters, status: e.target.value })}
+            >
+              <option value="">Wszystkie</option>
+              <option value="completed">Ukończone</option>
+            </select>
+          </label>
+          <label className="block min-w-0">
+            <span className={filterLabelClass}>Od</span>
+            <input
+              type="date"
+              className={filterInputClass}
+              value={draftFilters.dateFrom}
+              onChange={(e) => setDraftFilters({ ...draftFilters, dateFrom: e.target.value })}
+            />
+          </label>
+          <label className="block min-w-0">
+            <span className={filterLabelClass}>Do</span>
+            <input
+              type="date"
+              className={filterInputClass}
+              value={draftFilters.dateTo}
+              onChange={(e) => setDraftFilters({ ...draftFilters, dateTo: e.target.value })}
+            />
+          </label>
+        </div>
+        <FilterActionsBar
+          applyLabel="Filtruj"
+          onApply={() => setAppliedFilters({ ...draftFilters })}
+          onClear={() => {
+            setDraftFilters(DEFAULT_PRODUCTION_HISTORY_FILTERS);
+            setAppliedFilters(DEFAULT_PRODUCTION_HISTORY_FILTERS);
+          }}
         />
-      </div>
+      </ListFilterEmbeddedShell>
 
-      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-        <table className="min-w-full text-sm">
-          <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-            <tr>
-              <th className="px-4 py-3">Dokument</th>
-              <th className="px-4 py-3">Produkt</th>
-              <th className="px-4 py-3">Ilość</th>
-              <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3">Data zakończenia</th>
-              <th className="px-4 py-3">Operator</th>
-              <th className="px-4 py-3">Koszt jdn.</th>
-              <th className="px-4 py-3 text-right">Szczegóły</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr>
-                <td colSpan={8} className="px-4 py-8 text-slate-500">
-                  Wczytywanie…
-                </td>
-              </tr>
-            ) : filtered.length === 0 ? (
-              <tr>
-                <td colSpan={8} className="px-4 py-8 text-slate-500">
-                  Brak zakończonych zleceń w historii.
-                </td>
-              </tr>
-            ) : (
-              filtered.map((r) => (
-                <tr key={r.key} className="border-t border-slate-100 hover:bg-slate-50/80">
-                  <td className="px-4 py-3 font-mono font-medium text-slate-900">
-                    {r.number}
-                    <span className="ml-2 text-[10px] uppercase text-slate-400">{r.kind === "batch" ? "partia" : "MO"}</span>
-                  </td>
-                  <td className="px-4 py-3 max-w-[220px] truncate text-slate-700">{r.product}</td>
-                  <td className="px-4 py-3 tabular-nums">{r.qty}</td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={
-                        r.kind === "batch"
-                          ? batchStatusBadgeClass(r.status as never)
-                          : productionStatusBadgeClass(r.status as never)
-                      }
-                    >
-                      {r.kind === "batch"
-                        ? BATCH_STATUS_LABEL[r.status as keyof typeof BATCH_STATUS_LABEL]
-                        : PRODUCTION_STATUS_LABEL[r.status as keyof typeof PRODUCTION_STATUS_LABEL]}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-slate-600">{r.completedAt}</td>
-                  <td className="px-4 py-3 text-slate-600">{r.operator}</td>
-                  <td className="px-4 py-3 tabular-nums text-slate-700">{r.unitCost}</td>
-                  <td className="px-4 py-3 text-right">
-                    <Link to={r.linkTo} className="text-xs font-medium text-slate-800 underline hover:text-slate-600">
-                      Otwórz
-                    </Link>
-                  </td>
+      {!loading ? (
+        <PurchasingKpiGrid columns={4}>
+          <PurchasingKpiCard title="Ukończone partie" value={kpis.completedBatches} tone="emerald" icon={<Package aria-hidden />} />
+          <PurchasingKpiCard title="Wyprodukowane sztuki" value={kpis.units} tone="blue" icon={<TrendingUp aria-hidden />} />
+          <PurchasingKpiCard
+            title="Średni koszt"
+            value={kpis.avgCost != null ? formatProductionMoney(kpis.avgCost) : "—"}
+            tone="indigo"
+            icon={<TrendingUp aria-hidden />}
+          />
+          <PurchasingKpiCard title="Średni czas realizacji" value="—" subtitle="Brak danych czasowych w API" tone="default" icon={<Clock aria-hidden />} />
+        </PurchasingKpiGrid>
+      ) : null}
+
+      {loading ? (
+        <p className="text-sm text-slate-500">Wczytywanie…</p>
+      ) : filtered.length === 0 ? (
+        <AppEmptyState title="Brak historii" description="Zakończone zlecenia pojawią się tutaj po zamknięciu produkcji." />
+      ) : (
+        <div className={moduleTableCardClass}>
+          <div className={moduleListTableScrollClass}>
+            <table className={moduleListTableClass} style={{ minWidth: 900 }}>
+              <thead className={moduleListTheadClass}>
+                <tr>
+                  <th className={`${moduleListThClass} w-[120px] text-center`}>Akcje</th>
+                  <th className={moduleListThClass}>Dokument</th>
+                  <th className={moduleListThClass}>Produkt</th>
+                  <th className={`${moduleListThClass} text-right`}>Ilość</th>
+                  <th className={moduleListThClass}>Status</th>
+                  <th className={moduleListThClass}>Data zakończenia</th>
+                  <th className={moduleListThClass}>Operator</th>
+                  <th className={moduleListThClass}>Koszt jdn.</th>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+              </thead>
+              <tbody>
+                {filtered.map((r) => (
+                  <tr key={r.key} className="group border-b border-slate-100 hover:bg-slate-50/70">
+                    <ModuleListRowActionsCell ariaLabel={`Akcje ${r.number}`}>
+                      <ProductionRowActionsMenu
+                        ariaLabel={`Akcje ${r.number}`}
+                        actions={[{ id: "open", label: "Otwórz", onClick: () => navigate(r.linkTo) }]}
+                      />
+                    </ModuleListRowActionsCell>
+                    <td className={`${moduleListTdClass} font-mono font-medium text-slate-900`}>
+                      {r.number}
+                      <span className="ml-2 text-[10px] uppercase text-slate-400">{r.kind === "batch" ? "partia" : "MO"}</span>
+                    </td>
+                    <td className={`${moduleListTdClass} max-w-[220px] truncate text-slate-700`}>{r.product}</td>
+                    <td className={`${moduleListTdClass} text-right tabular-nums`}>{r.qty}</td>
+                    <td className={moduleListTdClass}>
+                      <span className={r.kind === "batch" ? batchStatusBadgeClass(r.status as never) : productionStatusBadgeClass(r.status as never)}>
+                        {r.kind === "batch"
+                          ? BATCH_STATUS_LABEL[r.status as keyof typeof BATCH_STATUS_LABEL]
+                          : PRODUCTION_STATUS_LABEL[r.status as keyof typeof PRODUCTION_STATUS_LABEL]}
+                      </span>
+                    </td>
+                    <td className={`${moduleListTdClass} text-slate-600`}>{r.completedAt}</td>
+                    <td className={`${moduleListTdClass} text-slate-600`}>{r.operator}</td>
+                    <td className={`${moduleListTdClass} tabular-nums text-slate-700`}>{r.unitCost}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
