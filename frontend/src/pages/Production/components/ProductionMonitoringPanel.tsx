@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { ExternalLink, Monitor, Package, XCircle } from "lucide-react";
+import { ExternalLink, FileText, Monitor, Package, XCircle } from "lucide-react";
 
 import type { ProductionBatchRead, ProductionOrderRead } from "@/api/productionApi";
 import { currentExecutionPhaseLabel } from "@/modules/production/productionExecutionTimeline";
@@ -11,9 +11,14 @@ import { formatProductionMoney } from "../productionUi";
 
 export type ProductionMonitoringActions = {
   onReleaseToWms?: () => void;
+  onStartErpExecution?: () => void;
+  onPrintProductionCard?: () => void;
+  onOpenErpExecution?: () => void;
   onCancel?: () => void;
   releaseDisabled?: boolean;
   releaseDisabledReason?: string;
+  erpDisabled?: boolean;
+  erpDisabledReason?: string;
   busy?: boolean;
 };
 
@@ -30,6 +35,8 @@ type MonitoringSource = {
   operator_name?: string | null;
   has_shortages?: boolean;
   is_released_to_wms?: boolean;
+  is_erp_interface?: boolean;
+  execution_interface?: string | null;
   released_to_wms_at?: string | null;
   started_at?: string | null;
   collecting_completed_at?: string | null;
@@ -63,14 +70,38 @@ export function ProductionMonitoringPanel({ kind, source, actions }: Props) {
   const completed = source.produced_quantity ?? source.total_completed_units ?? 0;
   const progress = source.progress_percent ?? (planned > 0 ? (completed / planned) * 100 : 0);
   const canRelease =
-    (status === "draft" || status === "planned") && !source.is_released_to_wms && actions?.onReleaseToWms;
+    (status === "draft" || status === "planned") &&
+    !source.is_released_to_wms &&
+    !source.is_erp_interface &&
+    actions?.onReleaseToWms;
+  const canStartErp =
+    (status === "draft" || status === "planned") &&
+    !source.is_released_to_wms &&
+    !source.is_erp_interface &&
+    actions?.onStartErpExecution;
+  const canPrintCard = Boolean(actions?.onPrintProductionCard);
   const canOpenWms =
-    source.is_released_to_wms || ["collecting", "in_progress", "putaway"].includes(status);
+    !source.is_erp_interface &&
+    (source.is_released_to_wms || ["collecting", "in_progress", "putaway"].includes(status));
+  const canOpenErp =
+    source.is_erp_interface &&
+    (actions?.onOpenErpExecution || ["collecting", "in_progress", "putaway"].includes(status));
   const canCancel = actions?.onCancel && status !== "completed" && status !== "cancelled";
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap gap-2">
+        {canPrintCard ? (
+          <button
+            type="button"
+            disabled={actions?.busy}
+            onClick={actions?.onPrintProductionCard}
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          >
+            <FileText className="h-4 w-4" aria-hidden />
+            Drukuj kartę
+          </button>
+        ) : null}
         {canRelease ? (
           <button
             type="button"
@@ -84,10 +115,23 @@ export function ProductionMonitoringPanel({ kind, source, actions }: Props) {
         ) : source.is_released_to_wms ? (
           <span className="inline-flex items-center rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-800">
             Wydane do WMS
-            {source.released_to_wms_at
-              ? ` · ${formatTs(source.released_to_wms_at)}`
-              : ""}
+            {source.released_to_wms_at ? ` · ${formatTs(source.released_to_wms_at)}` : ""}
           </span>
+        ) : source.is_erp_interface ? (
+          <span className="inline-flex items-center rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-900">
+            Interfejs ERP
+          </span>
+        ) : null}
+        {canStartErp ? (
+          <button
+            type="button"
+            disabled={actions?.busy || actions?.erpDisabled}
+            title={actions?.erpDisabled ? actions.erpDisabledReason : undefined}
+            onClick={actions?.onStartErpExecution}
+            className="inline-flex items-center gap-2 rounded-xl border border-amber-600 px-4 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Realizacja w ERP
+          </button>
         ) : null}
         {canOpenWms ? (
           <Link
@@ -99,6 +143,16 @@ export function ProductionMonitoringPanel({ kind, source, actions }: Props) {
             <Monitor className="h-4 w-4" aria-hidden />
             Otwórz w terminalu WMS
           </Link>
+        ) : null}
+        {canOpenErp && actions?.onOpenErpExecution ? (
+          <button
+            type="button"
+            disabled={actions?.busy}
+            onClick={actions.onOpenErpExecution}
+            className="inline-flex items-center gap-2 rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+          >
+            Otwórz realizację w ERP
+          </button>
         ) : null}
         {canCancel ? (
           <button
@@ -116,6 +170,7 @@ export function ProductionMonitoringPanel({ kind, source, actions }: Props) {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <MetaCard label="Aktualna faza" value={currentExecutionPhaseLabel(status)} />
         <MetaCard label="Typ" value={PRODUCTION_KIND_LABEL[kind]} />
+        <MetaCard label="Interfejs" value={source.execution_interface ?? "—"} />
         <MetaCard label="Operator" value={source.operator_name ?? "—"} />
         <MetaCard label="Rozpoczęcie" value={source.started_at ? formatTs(source.started_at) : "—"} />
         <MetaCard
@@ -223,6 +278,8 @@ export function orderMonitoringSource(order: ProductionOrderRead): MonitoringSou
     operator_name: order.operator_name,
     has_shortages: order.has_shortages,
     is_released_to_wms: order.is_released_to_wms,
+    is_erp_interface: order.is_erp_interface,
+    execution_interface: order.execution_interface,
     released_to_wms_at: order.released_to_wms_at,
     started_at: order.started_at,
     collecting_completed_at: order.collecting_completed_at,
@@ -249,6 +306,8 @@ export function batchMonitoringSource(batch: ProductionBatchRead): MonitoringSou
     operator_name: batch.operator_name,
     has_shortages: batch.has_shortages,
     is_released_to_wms: batch.is_released_to_wms,
+    is_erp_interface: batch.is_erp_interface,
+    execution_interface: batch.execution_interface,
     released_to_wms_at: batch.released_to_wms_at,
     started_at: batch.started_at,
     collecting_completed_at: batch.collecting_completed_at,

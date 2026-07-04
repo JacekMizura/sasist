@@ -24,11 +24,28 @@ export type ProductionTerminalRequiredSettings = {
   require_quality_control: boolean;
 };
 
+export type ProductionForecastSettings = {
+  strategy:
+    | "PERIOD_AVERAGE"
+    | "WEIGHTED_AVERAGE"
+    | "WEEKDAY_AVERAGE"
+    | "MEDIAN"
+    | "MAX_DAILY"
+    | "AI_SMART";
+  sales_lookback_days: number;
+};
+
+export type ProductionReservationSettings = {
+  allocation_strategy: "FIFO" | "FEFO" | "LIFO";
+};
+
 export type WmsProductionSettings = {
   tenant_id: number;
   warehouse_id: number;
   terminal_display: ProductionTerminalDisplaySettings;
   terminal_required: ProductionTerminalRequiredSettings;
+  forecast: ProductionForecastSettings;
+  reservation: ProductionReservationSettings;
 };
 
 export type WmsProductionSettingsSave = {
@@ -36,6 +53,8 @@ export type WmsProductionSettingsSave = {
   warehouse_id?: number | null;
   terminal_display: ProductionTerminalDisplaySettings;
   terminal_required: ProductionTerminalRequiredSettings;
+  forecast?: ProductionForecastSettings;
+  reservation?: ProductionReservationSettings;
 };
 
 export async function getWmsProductionSettings(params?: {

@@ -26,6 +26,8 @@ from . import models  # noqa: F401
 
 from .database import create_all_tables, engine
 from .db.wms_product_validation_schema import ensure_wms_product_validation_schema
+from .db.production_planning_schema import ensure_production_planning_schema
+from .db.stock_reservations_schema import ensure_stock_reservations_universal_schema
 from .db.wms_production_settings_schema import ensure_wms_production_settings_schema
 from .db.schema_upgrade import (
     ensure_locations_columns,
@@ -261,6 +263,7 @@ from .api.bundle_intelligence import router as bundle_intelligence_router
 from .api.compositions import router as compositions_router
 from .api.production import router as production_router
 from .api.production_planning import router as production_planning_router
+from .api.production_shortages import router as production_shortages_router
 from .api.manufacturer import router as manufacturer_router
 from .api.purchasing import router as purchasing_router
 from .api.supplier import router as supplier_router
@@ -1067,6 +1070,13 @@ try:
     ensure_inventory_management_policy_schema(engine)
     ensure_wms_product_validation_schema(engine)
     ensure_wms_production_settings_schema(engine)
+    ensure_stock_reservations_universal_schema(engine)
+    ensure_production_planning_schema(engine)
+    from .db.production_execution_interface_schema import ensure_production_execution_interface_schema
+    from .db.production_shortage_schema import ensure_production_shortage_schema
+
+    ensure_production_execution_interface_schema(engine)
+    ensure_production_shortage_schema(engine)
     ensure_purchase_sales_block_schema(engine)
     ensure_receiving_workflow_status_schema(engine)
     from .db.warehouse_requires_putaway_schema import ensure_warehouse_requires_putaway_schema
@@ -1493,6 +1503,13 @@ def _upgrade_schema_background() -> None:
         ensure_inventory_management_policy_schema(engine)
         ensure_wms_product_validation_schema(engine)
         ensure_wms_production_settings_schema(engine)
+        ensure_stock_reservations_universal_schema(engine)
+        ensure_production_planning_schema(engine)
+        from .db.production_execution_interface_schema import ensure_production_execution_interface_schema
+        from .db.production_shortage_schema import ensure_production_shortage_schema
+
+        ensure_production_execution_interface_schema(engine)
+        ensure_production_shortage_schema(engine)
         ensure_purchase_sales_block_schema(engine)
         ensure_tenant_warehouse_fulfillment_schema(engine)
         from .db.tenant_fulfillment_configuration_schema import ensure_tenant_fulfillment_configuration_schema
@@ -1824,6 +1841,7 @@ _API_ROUTERS = (
     compositions_router,
     production_router,
     production_planning_router,
+    production_shortages_router,
     manufacturer_router,
     purchasing_router,
     supplier_router,

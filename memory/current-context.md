@@ -1,5 +1,27 @@
 # Current context
 
+## Produkcja — interfejs wykonania (2026-07-04)
+- `execution_interface`: `WMS` | `ERP` (zamiast `execution_mode` / PAPER) — ten sam workflow backend.
+- ERP UI: `/production/erp/:kind/:id`; WMS: terminal po `release-to-wms`.
+- Karta produkcyjna PDF: zawsze dostępna (informacyjna, bez zmiany statusu); bulk z planu partii.
+
+## Produkcja — braki i zamienniki (2026-07-04)
+- Pakiet `backend/services/production_shortages/`: analiza BOM, częściowa produkcja, kolejka braków, most Zakupy.
+- Tabele: `product_material_substitutes`, `production_material_needs`.
+- UI: `/production/shortages` (Braki produkcyjne), badge materiałów w planowaniu (OK / częściowa / brak).
+- Raport: `memory/production-shortage-system-report.md`
+
+## Produkcja — rezerwacje materiałów (2026-07-04)
+- Uniwersalny `StockReservation` + pakiet `backend/services/reservations/` (allocation, availability, lifecycle, reservation_service).
+- Produkcja: `reserve_materials` przy tworzeniu partii/MO; `materials_reserved` / lock przy zbieraniu; consume przy RW.
+- Net available w planowaniu MRP — nie rekomenduje materiałów zarezerwowanych dla innych dokumentów.
+- UI: `/production/material-reservations`, checkbox w CreateBatchModal, panel na batch/order detail, strategia FIFO/FEFO/LIFO w ustawieniach WMS.
+- Raport: `memory/reservation-system-report.md`
+
+## Produkcja — tryb papierowy ERP (2026-07-04)
+- **Superseded by `execution_interface=ERP`** — ta sama ścieżka backend; patrz wyżej.
+- PDF: `GET .../production-card.pdf`; ERP UI: lokalizacja / partia / LOT / SN przed RW.
+
 ## Listy modułów — płaski layout (2026-06-08)
 - Usunięto card-in-card w Zamówienia / Zwroty / Reklamacje: sidebar bez karty, tabela bez zewnętrznej karty.
 - Dodano lekki podział sekcji: `FlatPageSection`, `FlatColumnHeader`, `flatSectionTokens` (separator `#e5e7eb`, odstępy).

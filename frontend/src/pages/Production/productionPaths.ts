@@ -13,6 +13,14 @@ export const erpProductionPaths = {
   /** @deprecated Use planning or orders */
   batches: `${ERP_PRODUCTION_BASE}/planning`,
   batch: (id: number | string) => `${ERP_PRODUCTION_BASE}/batch/${id}`,
+  erpExecution: (kind: "batch" | "order", id: number | string) =>
+    `${ERP_PRODUCTION_BASE}/erp/${kind}/${id}`,
+  /** @deprecated use erpExecution */
+  paperExecution: (kind: "batch" | "order", id: number | string) =>
+    `${ERP_PRODUCTION_BASE}/erp/${kind}/${id}`,
+  materialReservations: `${ERP_PRODUCTION_BASE}/material-reservations`,
+  shortages: `${ERP_PRODUCTION_BASE}/shortages`,
+  materialSubstitutes: `${ERP_PRODUCTION_BASE}/material-substitutes`,
 } as const;
 
 /** WMS terminal — operator execution only (collect → produce → standard putaway). */

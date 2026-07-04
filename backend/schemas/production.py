@@ -228,6 +228,10 @@ class ProductionOrderRead(BaseModel):
     completed_at: Optional[datetime] = None
     released_to_wms_at: Optional[datetime] = None
     is_released_to_wms: bool = False
+    execution_interface: Optional[ProductionExecutionInterface] = None
+    is_erp_interface: bool = False
+    materials_reserved: bool = False
+    reservations_locked: bool = False
     collection_progress_percent: float = 0.0
     progress_percent: float = 0.0
     has_shortages: Optional[bool] = None
@@ -248,6 +252,7 @@ class ProductionOrderCreateBody(BaseModel):
     priority: int = 0
     notes: Optional[str] = None
     status: ProductionOrderStatus = "planned"
+    reserve_materials: bool = False
 
     @model_validator(mode="after")
     def require_composition_reference(self) -> "ProductionOrderCreateBody":
@@ -256,10 +261,18 @@ class ProductionOrderCreateBody(BaseModel):
         return self
 
 
+ProductionExecutionInterface = Literal["WMS", "ERP"]
+# Deprecated alias
+ProductionExecutionMode = ProductionExecutionInterface
+
+
 class ComponentAllocationWrite(BaseModel):
     line_snapshot_id: int = Field(..., ge=1)
     location_id: int = Field(..., ge=1)
     quantity: float = Field(..., gt=0)
+    batch_number: Optional[str] = None
+    lot: Optional[str] = None
+    serial_number: Optional[str] = None
 
 
 class ProductionOrderCompleteBody(BaseModel):

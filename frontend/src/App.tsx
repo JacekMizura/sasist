@@ -203,6 +203,9 @@ import RecipesListPage from "./pages/Production/RecipesListPage"
 import RecipeDetailPage from "./pages/Production/RecipeDetailPage"
 import BatchesListPage from "./pages/Production/BatchesListPage"
 import BatchDetailPage from "./pages/Production/BatchDetailPage"
+import MaterialReservationsPage from "./pages/Production/MaterialReservationsPage"
+import ProductionShortagesPage from "./pages/Production/ProductionShortagesPage"
+import PaperProductionPage from "./pages/Production/PaperProductionPage"
 import ProductionOrdersPage from "./pages/Production/ProductionOrdersPage"
 import ProductionOrderDetailPage from "./pages/Production/ProductionOrderDetailPage"
 import ProductionPlanningPage from "./pages/Production/ProductionPlanningPage"
@@ -325,6 +328,12 @@ type WmsProductionPhase = "collecting" | "execute";
 function WmsProductionLegacyPhaseRedirect({ phase }: { phase: WmsProductionPhase }) {
   const { batchId } = useParams();
   return <Navigate to={`/wms/production/${phase}/batch/${batchId ?? ""}`} replace />;
+}
+
+/** Legacy /production/paper/:kind/:id → /production/erp/:kind/:id */
+function ProductionPaperLegacyRedirect() {
+  const { kind, id } = useParams();
+  return <Navigate to={`/production/erp/${kind ?? "batch"}/${id ?? ""}`} replace />;
 }
 
 /** Legacy production putaway tab → standard WMS Rozlokowanie. */
@@ -675,8 +684,12 @@ export const router = createBrowserRouter(
                   <Route path="planning" element={<ProductionPlanningPage />} />
                   <Route path="history" element={<ProductionHistoryPage />} />
                   <Route path="analytics" element={<ProductionAnalyticsPage />} />
+                  <Route path="material-reservations" element={<MaterialReservationsPage />} />
+                  <Route path="shortages" element={<ProductionShortagesPage />} />
                   <Route path="batches" element={<Navigate to="/production/planning" replace />} />
                   <Route path="batch/:batchId" element={<BatchDetailPage />} />
+                  <Route path="erp/:kind/:id" element={<PaperProductionPage />} />
+                  <Route path="paper/:kind/:id" element={<ProductionPaperLegacyRedirect />} />
                 </Route>
                 <Route
                   path="inventory-count"

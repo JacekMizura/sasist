@@ -116,17 +116,17 @@ def build_location_stock(
         zone_filter = None
 
     reserved_by_loc: dict[int, float] = defaultdict(float)
-    res_rows = (
-        db.query(StockReservation.location_id, func.sum(StockReservation.quantity))
-        .filter(
-            StockReservation.tenant_id == tid,
-            StockReservation.product_id == pid,
-            StockReservation.status == "reserved",
-            StockReservation.stock_disposition == "SALEABLE",
-        )
-        .group_by(StockReservation.location_id)
-        .all()
+    res_q = db.query(StockReservation.location_id, func.sum(StockReservation.quantity)).filter(
+        StockReservation.tenant_id == tid,
+        StockReservation.product_id == pid,
+        StockReservation.status == "reserved",
+        StockReservation.stock_disposition == "SALEABLE",
     )
+    if hasattr(StockReservation, "warehouse_id"):
+        res_q = res_q.filter(
+            (StockReservation.warehouse_id.is_(None)) | (StockReservation.warehouse_id == wid)
+        )
+    res_rows = res_q.group_by(StockReservation.location_id).all()
     for lid, qty in res_rows:
         if lid is not None:
             reserved_by_loc[int(lid)] = float(qty or 0)

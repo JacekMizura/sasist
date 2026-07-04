@@ -25,7 +25,7 @@ class StockReservation(Base, BaseModelMixin):
     order_id = Column(
         Integer,
         ForeignKey("orders.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
         index=True,
     )
     product_id = Column(
@@ -52,6 +52,23 @@ class StockReservation(Base, BaseModelMixin):
         index=True,
     )
     reservation_kind = Column(String(24), nullable=True)
+    warehouse_id = Column(Integer, ForeignKey("warehouses.id", ondelete="CASCADE"), nullable=True, index=True)
+    production_batch_id = Column(
+        Integer,
+        ForeignKey("production_batches.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    production_order_id = Column(
+        Integer,
+        ForeignKey("production_orders.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    serial_number = Column(String(128), nullable=True)
+    created_by_user_id = Column(Integer, ForeignKey("app_users.id", ondelete="SET NULL"), nullable=True)
+    locked_at = Column(DateTime, nullable=True)
+    inventory_id = Column(Integer, ForeignKey("inventory.id", ondelete="SET NULL"), nullable=True, index=True)
     stock_disposition = Column(
         String(32),
         nullable=False,

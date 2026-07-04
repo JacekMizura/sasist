@@ -112,6 +112,7 @@ def hydrate_collection_tasks(
         for key, val in _product_fields(p).items():
             if not row.get(key):
                 row[key] = val
+        row["track_serial"] = bool(getattr(p, "track_serial", False)) if p is not None else False
 
         options, wh_total = build_collection_location_options(
             db,
@@ -138,6 +139,9 @@ def hydrate_collection_tasks(
             row["available_qty"] = None
 
         row["task_key"] = str(pid)
+        for key in ("selected_batch_number", "selected_lot", "selected_serial_number"):
+            if raw.get(key):
+                row[key] = raw.get(key)
         out.append(row)
     return out
 

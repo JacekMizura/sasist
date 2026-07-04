@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertTriangle, CalendarClock, Factory, Package } from "lucide-react";
+import { AlertTriangle, CalendarClock, Factory, FileText, Package } from "lucide-react";
+import toast from "react-hot-toast";
 
 import { useWarehouse } from "../../context/WarehouseContext";
-import { listProductionBatches, type ProductionBatchRead } from "../../api/productionApi";
+import { listProductionBatches, printBulkProductionCards, type ProductionBatchRead } from "../../api/productionApi";
 import { AppEmptyState } from "../../components/app-shell";
 import {
   productsListActionsCellClass,
@@ -38,6 +39,8 @@ export default function BatchesListPage({ embedded = false }: Props) {
   const warehouseId = warehouse?.id;
   const [batches, setBatches] = useState<ProductionBatchRead[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [printBusy, setPrintBusy] = useState(false);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -63,6 +66,35 @@ export default function BatchesListPage({ embedded = false }: Props) {
     return { planned, active, shortages, units, total: batches.length };
   }, [batches]);
 
+  const toggleSelect = (id: number) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    if (selected.size === batches.length) setSelected(new Set());
+    else setSelected(new Set(batches.map((b) => b.id)));
+  };
+
+  const printSelectedCards = async () => {
+    if (warehouseId == null || selected.size === 0) return;
+    setPrintBusy(true);
+    try {
+      const blob = await printBulkProductionCards(tenantId, [...selected], warehouseId);
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank", "noopener,noreferrer");
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch {
+      toast.error("Nie udało się wygenerować kart produkcyjnych.");
+    } finally {
+      setPrintBusy(false);
+    }
+  };
+
   const table = loading ? (
     <p className="text-sm text-slate-500">Wczytywanie…</p>
   ) : batches.length === 0 ? (
@@ -82,10 +114,36 @@ export default function BatchesListPage({ embedded = false }: Props) {
     />
   ) : (
     <div className={moduleTableCardClass}>
+      {embedded && selected.size > 0 ? (
+        <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
+          <p className="text-sm text-slate-600">
+            Zaznaczono: <strong>{selected.size}</strong>
+          </p>
+          <button
+            type="button"
+            disabled={printBusy}
+            onClick={() => void printSelectedCards()}
+            className="inline-flex items-center gap-2 rounded-lg bg-slate-800 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-900 disabled:opacity-50"
+          >
+            <FileText className="h-4 w-4" aria-hidden />
+            {printBusy ? "Generowanie PDF…" : "Drukuj karty produkcyjne"}
+          </button>
+        </div>
+      ) : null}
       <div className={moduleListTableScrollClass}>
         <table className={moduleListTableClass} style={{ minWidth: 900 }}>
           <thead className={moduleListTheadClass}>
             <tr>
+              {embedded ? (
+                <th className={moduleListThClass}>
+                  <input
+                    type="checkbox"
+                    aria-label="Zaznacz wszystkie partie"
+                    checked={batches.length > 0 && selected.size === batches.length}
+                    onChange={toggleAll}
+                  />
+                </th>
+              ) : null}
               <th className={moduleListThClass}>Partia</th>
               <th className={moduleListThClass}>Produkty</th>
               <th className={`${moduleListThClass} text-right`}>Ilość</th>
@@ -100,6 +158,16 @@ export default function BatchesListPage({ embedded = false }: Props) {
           <tbody>
             {batches.map((b) => (
               <tr key={b.id} className="group border-b border-slate-100 hover:bg-slate-50/70">
+                {embedded ? (
+                  <td className={moduleListTdClass}>
+                    <input
+                      type="checkbox"
+                      aria-label={`Zaznacz partię ${b.number}`}
+                      checked={selected.has(b.id)}
+                      onChange={() => toggleSelect(b.id)}
+                    />
+                  </td>
+                ) : null}
                 <td className={`${moduleListTdClass} font-mono font-medium text-slate-900`}>{b.number}</td>
                 <td className={moduleListTdClass}>{b.products_count ?? b.lines.length}</td>
                 <td className={`${moduleListTdClass} text-right tabular-nums`}>{b.total_planned_units ?? 0}</td>

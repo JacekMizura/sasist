@@ -35,17 +35,11 @@ def _product_is_listable(product: Product | None) -> bool:
 
 
 def _warehouse_stock(db: Session, *, tenant_id: int, warehouse_id: int, product_id: int) -> float:
-    row = (
-        db.query(func.coalesce(func.sum(Inventory.quantity), 0.0))
-        .filter(
-            Inventory.tenant_id == int(tenant_id),
-            Inventory.warehouse_id == int(warehouse_id),
-            Inventory.product_id == int(product_id),
-            Inventory.quantity > 0,
-        )
-        .scalar()
+    from .reservations.availability_service import warehouse_net_available
+
+    return warehouse_net_available(
+        db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id), product_id=int(product_id)
     )
-    return float(row or 0)
 
 
 def _max_producible(

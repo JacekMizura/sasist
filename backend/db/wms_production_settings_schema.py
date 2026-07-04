@@ -10,6 +10,7 @@ from .schema_introspection import get_table_column_names, has_table
 COLUMNS: tuple[tuple[str, str], ...] = (
     ("production_terminal_display_json", "TEXT"),
     ("production_terminal_required_json", "TEXT"),
+    ("production_reservation_json", "TEXT"),
 )
 
 

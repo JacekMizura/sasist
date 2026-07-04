@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8" />
+  <title>Karta produkcyjna {{ job_number }}</title>
+  <style>
+    @page { size: A4; margin: 12mm 10mm; }
+    * { box-sizing: border-box; }
+    body { font-family: Arial, Helvetica, sans-serif; font-size: 10px; color: #111; line-height: 1.35; }
+    h1 { font-size: 18px; margin: 0 0 4px; }
+    h2 { font-size: 12px; margin: 12px 0 4px; }
+    .muted { color: #555; }
+    .header { display: flex; gap: 12px; border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; }
+    .header img.product-photo { width: 88px; height: 88px; object-fit: contain; border: 1px solid #ddd; background: #fafafa; }
+    .header-meta { flex: 1; min-width: 0; }
+    .header-barcode { text-align: center; min-width: 140px; }
+    .header-barcode img { max-width: 140px; height: 44px; object-fit: contain; }
+    .header-barcode .code-text { font-size: 9px; margin-top: 2px; font-family: monospace; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; margin-top: 6px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+    th, td { border: 1px solid #bbb; padding: 4px 5px; vertical-align: top; }
+    th { background: #f0f0f0; font-size: 9px; text-transform: uppercase; letter-spacing: 0.03em; }
+    .thumb { width: 36px; height: 36px; object-fit: contain; border: 1px solid #ddd; background: #fff; display: block; }
+    .barcode-cell img { max-width: 100px; height: 28px; object-fit: contain; display: block; }
+    .barcode-cell .code-text { font-size: 8px; font-family: monospace; color: #444; }
+    .write-field { border: 1px dashed #888; min-height: 22px; padding: 4px 6px; margin-top: 6px; }
+    .write-field label { font-weight: 700; display: block; margin-bottom: 14px; }
+    .signatures { margin-top: 10px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+    .sig-box { border: 1px solid #bbb; min-height: 56px; padding: 6px; }
+    .sig-box h3 { margin: 0 0 36px; font-size: 10px; font-weight: 600; }
+    .notes { margin-top: 8px; border: 1px solid #bbb; min-height: 40px; padding: 6px; }
+    .notes h3 { margin: 0 0 28px; font-size: 10px; font-weight: 600; }
+    .page-break { page-break-before: always; break-before: page; height: 0; }
+    .card-block { margin-bottom: 4px; }
+  </style>
+</head>
+<body>
+  <div class="card-block">
+    <h1>Karta produkcyjna</h1>
+    <p class="muted">{{ job_kind_label }} · {{ job_number }} · wydruk: {{ printed_at }}</p>
+
+    <div class="header">
+      {% if header_image_url %}
+      <img class="product-photo" src="{{ header_image_url }}" alt="" />
+      {% endif %}
+      <div class="header-meta">
+        <strong style="font-size:13px;">{{ header_product_line }}</strong>
+        <div class="grid-2">
+          <div><span class="muted">SKU:</span> {{ header_sku or "—" }}</div>
+          <div><span class="muted">EAN:</span> {{ header_ean or "—" }}</div>
+          <div><span class="muted">Ilość planowana:</span> <strong>{{ header_planned_qty }}</strong></div>
+          <div><span class="muted">Wersja receptury:</span> {{ recipe_version or "—" }}</div>
+          <div><span class="muted">Magazyn:</span> {{ warehouse_name or "—" }}</div>
+          <div><span class="muted">Operator:</span> {{ operator_name or "—" }}</div>
+          <div><span class="muted">Rozpoczęcie:</span> {{ started_at_display }}</div>
+          <div><span class="muted">Zakończenie:</span> {{ completed_at_display }}</div>
+        </div>
+      </div>
+      {% if header_barcode_image_url %}
+      <div class="header-barcode">
+        <img src="{{ header_barcode_image_url }}" alt="Kod produktu" />
+        {% if header_barcode_value %}<div class="code-text">{{ header_barcode_value }}</div>{% endif %}
+      </div>
+      {% endif %}
+    </div>
+
+    <h2>Półprodukty / składniki</h2>
+    <table>
+      <thead>
+        <tr>
+          <th style="width:40px;">Zdj.</th>
+          <th>Nazwa</th>
+          <th style="width:100px;">Kod kreskowy</th>
+          <th>Wymagana</th>
+          <th>Rzeczywiście pobrana</th>
+          <th>J.m.</th>
+          <th>Lokalizacja</th>
+          <th>Partia / LOT</th>
+          <th>Ważność</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in components %}
+        <tr>
+          <td>{% if row.image_url %}<img class="thumb" src="{{ row.image_url }}" alt="" />{% endif %}</td>
+          <td>
+            <strong>{{ row.name }}</strong>
+            {% if row.sku %}<br /><span class="muted">{{ row.sku }}</span>{% endif %}
+          </td>
+          <td class="barcode-cell">
+            {% if row.barcode_image_url %}
+            <img src="{{ row.barcode_image_url }}" alt="" />
+            {% if row.barcode_value %}<div class="code-text">{{ row.barcode_value }}</div>{% endif %}
+            {% else %}—{% endif %}
+          </td>
+          <td><strong>{{ row.required_qty }}</strong></td>
+          <td style="min-width:72px;">&nbsp;</td>
+          <td>{{ row.unit or "szt." }}</td>
+          <td>{{ row.suggested_location or "—" }}</td>
+          <td>{{ row.batch_number or "—" }}{% if row.lot and row.lot != row.batch_number %} / {{ row.lot }}{% endif %}</td>
+          <td>{{ row.expiry_date or "—" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <div class="write-field"><label>Rzeczywiście wyprodukowana ilość (szt.):</label></div>
+
+    <div class="signatures">
+      <div class="sig-box"><h3>Podpis magazyniera</h3></div>
+      <div class="sig-box"><h3>Podpis produkcji</h3></div>
+      <div class="sig-box"><h3>Kontrola jakości — podpis</h3></div>
+    </div>
+    <div class="notes"><h3>Uwagi</h3></div>
+  </div>
+</body>
+</html>

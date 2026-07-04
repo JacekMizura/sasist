@@ -182,4 +182,18 @@ def _warehouse_for_reservation(db: Session, res: StockReservation) -> int:
         order = db.query(Order).filter(Order.id == int(res.order_id)).first()
         if order and order.warehouse_id:
             return int(order.warehouse_id)
+    if getattr(res, "warehouse_id", None):
+        return int(res.warehouse_id)
+    if getattr(res, "production_batch_id", None):
+        from ...models.product_composition import ProductionBatch
+
+        batch = db.query(ProductionBatch).filter(ProductionBatch.id == int(res.production_batch_id)).first()
+        if batch:
+            return int(batch.warehouse_id)
+    if getattr(res, "production_order_id", None):
+        from ...models.production import ProductionOrder
+
+        order = db.query(ProductionOrder).filter(ProductionOrder.id == int(res.production_order_id)).first()
+        if order:
+            return int(order.warehouse_id)
     return 0

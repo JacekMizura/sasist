@@ -34,6 +34,12 @@ from ..schemas.production_batch import (
     ProductionBatchPickPlanRead,
     ProductionBatchRead,
 )
+from .production_execution.execution_interface import (
+    ERP_INTERFACE,
+    WMS_INTERFACE,
+    is_erp_interface,
+    normalized_execution_interface,
+)
 from .composition_engine_service import (
     aggregate_component_demand,
     aggregated_demand_with_availability,
@@ -46,6 +52,7 @@ from .inventory_lot_keys import NO_EXPIRY_SENTINEL
 from .location_priority_service import suggest_picking_locations
 from .location_stock_service import build_location_stock
 from .order_item_pick_allocation_service import consume_inventory_fifo_slices
+from .production_execution.material_consume_service import consume_production_material_slices
 from .product_cost_service import get_product_current_cost
 from .production_order_service import _auto_allocate_locations
 from .stock_disposition import STOCK_DISPOSITION_SALEABLE
@@ -236,6 +243,10 @@ def serialize_batch(db: Session, batch: ProductionBatch) -> ProductionBatchRead:
         collection_progress_percent=coll_pct,
         released_to_wms_at=getattr(batch, "released_to_wms_at", None),
         is_released_to_wms=getattr(batch, "released_to_wms_at", None) is not None,
+        execution_interface=normalized_execution_interface(batch),  # type: ignore[arg-type]
+        is_erp_interface=is_erp_interface(batch),
+        materials_reserved=bool(getattr(batch, "materials_reserved", False)),
+        reservations_locked=getattr(batch, "reservations_locked_at", None) is not None,
         started_at=batch.started_at,
         collecting_completed_at=getattr(batch, "collecting_completed_at", None),
         production_completed_at=getattr(batch, "production_completed_at", None),
@@ -603,6 +614,21 @@ def create_batch(
         db.flush()
         logger.info("CREATE_BATCH_STEP insert_lines_ok batch_id=%s line_count=%s", batch.id, len(batch.lines))
 
+        if getattr(body, "reserve_materials", False):
+            from .reservations.reservation_service import ReservationError, create_production_batch_reservations
+
+            totals = _aggregate_batch_components(batch)
+            try:
+                create_production_batch_reservations(
+                    db,
+                    tenant_id=int(tenant_id),
+                    batch_id=int(batch.id),
+                    component_totals=totals,
+                    created_by_user_id=created_by_user_id,
+                )
+            except ReservationError as exc:
+                raise ProductionBatchError(str(exc), code=getattr(exc, "code", "reservation_failed")) from exc
+
         logger.info("CREATE_BATCH_STEP serialize_batch batch_id=%s", batch.id)
         result = serialize_batch(db, batch)
         logger.info("CREATE_BATCH_STEP serialize_batch_ok batch_id=%s number=%s", batch.id, batch.number)
@@ -713,6 +739,11 @@ def cancel_batch(db: Session, *, tenant_id: int, batch_id: int) -> ProductionBat
         raise ProductionBatchError("Partia nie istnieje.", code="not_found")
     if str(batch.status) == "completed":
         raise ProductionBatchError("Nie można anulować ukończonej partii.", code="completed")
+    from .reservations.reservation_service import release_production_reservations
+
+    release_production_reservations(
+        db, tenant_id=int(tenant_id), production_batch_id=int(batch_id), reason="cancelled"
+    )
     batch.status = "cancelled"
     batch.updated_at = datetime.utcnow()
     db.flush()
@@ -1113,6 +1144,29 @@ def get_collection_state(db: Session, *, tenant_id: int, batch_id: int) -> Batch
         tasks_raw=tasks_raw,
         preferred_by_product=pref_by_product,
     )
+    if getattr(batch, "materials_reserved", False):
+        from .reservations.reservation_service import reservations_to_collection_hints
+
+        hints = reservations_to_collection_hints(
+            db, tenant_id=int(batch.tenant_id), production_batch_id=int(batch.id)
+        )
+        for t in tasks_raw:
+            pid = int(t.get("component_product_id") or 0)
+            rows = hints.get(pid) or []
+            if not rows:
+                continue
+            if not t.get("selected_location_id"):
+                first = rows[0]
+                t["selected_location_id"] = int(first["location_id"])
+                t["location_id"] = int(first["location_id"])
+                t["location_code"] = str(first.get("location_code") or "")
+                t["selected_batch_number"] = first.get("batch_number")
+                t["selected_lot"] = first.get("lot")
+                t["selected_serial_number"] = first.get("serial_number")
+                t["collected_qty"] = float(t.get("collected_qty") or 0)
+            pref = pref_by_product.setdefault(pid, set())
+            for r in rows:
+                pref.add(int(r["location_id"]))
     tasks = [CollectionTaskRead(**t) for t in tasks_raw]
     done = sum(1 for t in tasks if t.collected_qty >= t.required_qty - 1e-6)
     total = len(tasks)
@@ -1145,6 +1199,11 @@ def release_batch_to_wms(
         )
     if getattr(batch, "released_to_wms_at", None) is not None:
         return serialize_batch(db, batch)
+    if is_erp_interface(batch):
+        raise ProductionBatchError(
+            "Partia jest w interfejsie ERP. Użyj realizacji w ERP.",
+            code="erp_interface",
+        )
     if _batch_has_shortages(db, batch):
         shortages = []
         try:
@@ -1174,6 +1233,7 @@ def release_batch_to_wms(
             shortages=shortages,
         )
     batch.released_to_wms_at = datetime.utcnow()
+    batch.execution_interface = WMS_INTERFACE
     batch.released_by_user_id = int(released_by_user_id) if released_by_user_id else None
     batch.updated_at = datetime.utcnow()
     db.flush()
@@ -1193,7 +1253,7 @@ def start_collecting(db: Session, *, tenant_id: int, batch_id: int) -> Productio
         return serialize_batch(db, batch)
     if str(batch.status) not in ("draft", "planned"):
         raise ProductionBatchError("Nie można rozpocząć zbierania w tym statusie.", code="invalid_status")
-    if getattr(batch, "released_to_wms_at", None) is None:
+    if not is_erp_interface(batch) and getattr(batch, "released_to_wms_at", None) is None:
         raise ProductionBatchError(
             "Partia nie została wydana do WMS. Użyj akcji „Wydaj do WMS” w ERP.",
             code="not_released",
@@ -1202,6 +1262,9 @@ def start_collecting(db: Session, *, tenant_id: int, batch_id: int) -> Productio
     batch.collection_state_json = json.dumps(state, ensure_ascii=False)
     batch.status = "collecting"
     batch.started_at = batch.started_at or datetime.utcnow()
+    from .reservations.reservation_service import lock_production_reservations
+
+    lock_production_reservations(db, tenant_id=int(tenant_id), production_batch_id=int(batch_id))
     batch.updated_at = datetime.utcnow()
     db.flush()
     return serialize_batch(db, batch)
@@ -1229,12 +1292,37 @@ def update_collection_task(
             if body.location_id is not None and int(body.location_id) > 0:
                 t["selected_location_id"] = int(body.location_id)
                 t["location_id"] = int(body.location_id)
+            if body.batch_number is not None:
+                t["selected_batch_number"] = str(body.batch_number).strip()
+            if body.lot is not None:
+                t["selected_lot"] = str(body.lot).strip()
+            if body.serial_number is not None:
+                t["selected_serial_number"] = str(body.serial_number).strip()
             found = True
             break
     if not found:
         raise ProductionBatchError("Zadanie zbierania nie istnieje.", code="task_not_found")
     batch.collection_state_json = json.dumps(data, ensure_ascii=False)
     batch.updated_at = datetime.utcnow()
+    if getattr(batch, "materials_reserved", False) and is_erp_interface(batch):
+        from .reservations.reservation_service import sync_production_reservation_from_collection_task
+
+        task_pid = int(body.task_key) if str(body.task_key).isdigit() else 0
+        for t in data.get("tasks") or []:
+            if str(t.get("task_key")) == str(body.task_key) or str(t.get("component_product_id")) == str(body.task_key):
+                task_pid = int(t.get("component_product_id") or task_pid)
+                sync_production_reservation_from_collection_task(
+                    db,
+                    tenant_id=tenant_id,
+                    production_batch_id=int(batch_id),
+                    component_product_id=task_pid,
+                    location_id=int(body.location_id) if body.location_id else None,
+                    batch_number=body.batch_number,
+                    serial_number=body.serial_number,
+                    quantity=float(body.collected_qty),
+                    ignore_locked=True,
+                )
+                break
     db.flush()
     return get_collection_state(db, tenant_id=tenant_id, batch_id=batch_id)
 
@@ -1262,9 +1350,15 @@ def finish_collecting(
                     line_snapshot_id=int(t.component_product_id),
                     location_id=loc_id,
                     quantity=float(t.collected_qty),
+                    batch_number=getattr(t, "selected_batch_number", None),
+                    lot=getattr(t, "selected_lot", None),
+                    serial_number=getattr(t, "selected_serial_number", None),
                 )
             )
     _consume_batch_materials(db, batch, totals=totals, component_allocations=allocs, performed_by_user_id=performed_by_user_id)
+    from .reservations.reservation_service import consume_production_reservations
+
+    consume_production_reservations(db, tenant_id=int(tenant_id), production_batch_id=int(batch_id))
     batch.status = "in_progress"
     batch.collecting_completed_at = datetime.utcnow()
     batch.updated_at = datetime.utcnow()
@@ -1323,14 +1417,21 @@ def _consume_batch_materials(
         db.flush()
         unit_net = float(get_product_current_cost(db, int(batch.tenant_id), int(pid)).get("purchase_net") or 0)
         line.purchase_price_net = unit_net
+        alloc_meta = {
+            (int(a.line_snapshot_id), int(a.location_id)): a for a in (component_allocations or [])
+        }
         for loc_id, qty in allocs:
-            slices = consume_inventory_fifo_slices(
+            meta = alloc_meta.get((int(pid), int(loc_id)))
+            slices = consume_production_material_slices(
                 db,
                 tenant_id=int(batch.tenant_id),
                 warehouse_id=int(batch.warehouse_id),
                 product_id=int(pid),
                 location_id=int(loc_id),
                 quantity=float(qty),
+                batch_number=(meta.batch_number or meta.lot) if meta else None,
+                lot=meta.lot if meta else None,
+                serial_number=meta.serial_number if meta else None,
             )
             for sl in slices:
                 append_issue_operation(

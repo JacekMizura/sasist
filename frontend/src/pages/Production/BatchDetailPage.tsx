@@ -4,13 +4,16 @@ import { ArrowLeft } from "lucide-react";
 import toast from "react-hot-toast";
 import { useWarehouse } from "../../context/WarehouseContext";
 import {
+  batchProductionCardPdfUrl,
   cancelProductionBatch,
   fetchBatchPickPlan,
   getProductionBatch,
   releaseBatchToWms,
+  startErpExecutionBatch,
   type ProductionBatchPickPlanRead,
   type ProductionBatchRead,
 } from "../../api/productionApi";
+import { DocumentMaterialReservationsPanel } from "./components/DocumentMaterialReservationsPanel";
 import {
   batchMonitoringSource,
   ProductionMonitoringPanel,
@@ -68,6 +71,31 @@ export default function BatchDetailPage() {
     }
   };
 
+  const startErp = async () => {
+    if (!batchId || warehouseId == null || !batch) return;
+    if (batchHasMaterialShortages(batch, plan)) return;
+    setBusy(true);
+    try {
+      setBatch(await startErpExecutionBatch(tenantId, Number(batchId), warehouseId));
+      toast.success("Realizacja w ERP uruchomiona.");
+      navigate(erpProductionPaths.erpExecution("batch", batchId));
+    } catch (e: unknown) {
+      toast.error(formatStartCollectingError(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const printCard = () => {
+    if (!batchId || warehouseId == null) return;
+    window.open(batchProductionCardPdfUrl(tenantId, Number(batchId), warehouseId), "_blank", "noopener,noreferrer");
+  };
+
+  const openErp = () => {
+    if (!batchId) return;
+    navigate(erpProductionPaths.erpExecution("batch", batchId));
+  };
+
   const cancel = async () => {
     if (!batchId || !confirm("Anulować partię?") || warehouseId == null) return;
     setBusy(true);
@@ -116,9 +144,14 @@ export default function BatchDetailPage() {
             source={batchMonitoringSource(batch)}
             actions={{
               onReleaseToWms: () => void releaseToWms(),
+              onStartErpExecution: () => void startErp(),
+              onPrintProductionCard: printCard,
+              onOpenErpExecution: batch.is_erp_interface ? openErp : undefined,
               onCancel: () => void cancel(),
               releaseDisabled: collectingBlocked,
               releaseDisabledReason: START_COLLECTING_BLOCKED_TOOLTIP,
+              erpDisabled: collectingBlocked,
+              erpDisabledReason: START_COLLECTING_BLOCKED_TOOLTIP,
               busy,
             }}
           />
@@ -166,6 +199,18 @@ export default function BatchDetailPage() {
             })}
           </div>
         </section>
+      ) : null}
+
+      {warehouseId != null ? (
+        <DocumentMaterialReservationsPanel
+          tenantId={tenantId}
+          warehouseId={warehouseId}
+          batchId={Number(batchId)}
+          materialsReserved={batch.materials_reserved}
+          reservationsLocked={batch.reservations_locked}
+          status={batch.status}
+          onChanged={() => void load()}
+        />
       ) : null}
     </div>
   );

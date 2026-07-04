@@ -6,6 +6,7 @@ import logging
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -28,6 +29,7 @@ from ..schemas.production_batch import (
     ProductionBatchPickPlanRead,
     ProductionBatchPreviewRead,
     ProductionBatchRead,
+    BulkProductionCardsBody,
 )
 from ..schemas.production_recipe_card import ProductionDashboardRead, RecipeCardRead, RecipeDetailRead
 from ..schemas.production import (
@@ -59,6 +61,17 @@ from ..services.production_execution.order_execution_service import (
     start_order_collecting,
     update_order_collection_task,
     update_order_production_progress,
+)
+from ..services.production_execution.erp_execution_service import (
+    start_erp_execution_batch,
+    start_erp_execution_order,
+    start_paper_execution_batch,
+    start_paper_execution_order,
+)
+from ..services.production_execution.production_card_pdf_service import (
+    generate_batch_production_card_pdf_bytes,
+    generate_bulk_batch_production_cards_pdf_bytes,
+    generate_order_production_card_pdf_bytes,
 )
 from ..services.production_execution.wms_queue_service import list_wms_execution_queue
 from ..services.production_order_service import (
@@ -739,6 +752,111 @@ def api_release_batch_to_wms(
         raise _batch_err(exc) from exc
 
 
+@router.post("/batches/{batch_id}/start-erp-execution", response_model=ProductionBatchRead)
+def api_start_erp_execution_batch(
+    batch_id: int,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    _gate_production_batch(
+        db, user, tenant_id=tenant_id, batch_id=batch_id, warehouse_id=warehouse_id
+    )
+    try:
+        uid = int(user.id) if user is not None else None
+        row = start_erp_execution_batch(
+            db,
+            tenant_id=tenant_id,
+            batch_id=batch_id,
+            started_by_user_id=uid,
+        )
+        db.commit()
+        return row
+    except ProductionBatchError as exc:
+        db.rollback()
+        raise _batch_err(exc) from exc
+
+
+@router.post("/batches/{batch_id}/start-paper-execution", response_model=ProductionBatchRead)
+def api_start_paper_execution_batch(
+    batch_id: int,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    _gate_production_batch(
+        db, user, tenant_id=tenant_id, batch_id=batch_id, warehouse_id=warehouse_id
+    )
+    try:
+        uid = int(user.id) if user is not None else None
+        row = start_paper_execution_batch(
+            db,
+            tenant_id=tenant_id,
+            batch_id=batch_id,
+            started_by_user_id=uid,
+        )
+        db.commit()
+        return row
+    except ProductionBatchError as exc:
+        db.rollback()
+        raise _batch_err(exc) from exc
+
+
+@router.get("/batches/{batch_id}/production-card.pdf")
+def api_batch_production_card_pdf(
+    batch_id: int,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    _gate_production_batch(
+        db, user, tenant_id=tenant_id, batch_id=batch_id, warehouse_id=warehouse_id
+    )
+    try:
+        pdf = generate_batch_production_card_pdf_bytes(db, tenant_id=tenant_id, batch_id=batch_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="karta-produkcyjna-batch-{batch_id}.pdf"'},
+    )
+
+
+@router.post("/batches/production-cards.pdf")
+def api_bulk_batch_production_cards_pdf(
+    body: BulkProductionCardsBody,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    if not body.batch_ids:
+        raise HTTPException(status_code=400, detail="Wybierz co najmniej jedną partię.")
+    for bid in body.batch_ids:
+        _gate_production_batch(
+            db, user, tenant_id=tenant_id, batch_id=int(bid), warehouse_id=warehouse_id
+        )
+    try:
+        pdf = generate_bulk_batch_production_cards_pdf_bytes(
+            db, tenant_id=tenant_id, batch_ids=[int(x) for x in body.batch_ids]
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'inline; filename="karty-produkcyjne.pdf"'},
+    )
+
+
 @router.post("/batches/{batch_id}/start-collecting", response_model=ProductionBatchRead)
 def api_start_collecting(
     batch_id: int,
@@ -968,6 +1086,82 @@ def api_release_order_to_wms(
         raise _order_err(exc) from exc
 
 
+@router.post("/orders/{order_id}/start-erp-execution", response_model=ProductionOrderRead)
+def api_start_erp_execution_order(
+    order_id: int,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    _gate_production_order(
+        db, user, tenant_id=tenant_id, order_id=order_id, warehouse_id=warehouse_id
+    )
+    try:
+        uid = int(user.id) if user is not None else None
+        row = start_erp_execution_order(
+            db,
+            tenant_id=tenant_id,
+            order_id=order_id,
+            started_by_user_id=uid,
+        )
+        db.commit()
+        return row
+    except ProductionOrderError as exc:
+        db.rollback()
+        raise _order_err(exc) from exc
+
+
+@router.post("/orders/{order_id}/start-paper-execution", response_model=ProductionOrderRead)
+def api_start_paper_execution_order(
+    order_id: int,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    _gate_production_order(
+        db, user, tenant_id=tenant_id, order_id=order_id, warehouse_id=warehouse_id
+    )
+    try:
+        uid = int(user.id) if user is not None else None
+        row = start_paper_execution_order(
+            db,
+            tenant_id=tenant_id,
+            order_id=order_id,
+            started_by_user_id=uid,
+        )
+        db.commit()
+        return row
+    except ProductionOrderError as exc:
+        db.rollback()
+        raise _order_err(exc) from exc
+
+
+@router.get("/orders/{order_id}/production-card.pdf")
+def api_order_production_card_pdf(
+    order_id: int,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    _gate_production_order(
+        db, user, tenant_id=tenant_id, order_id=order_id, warehouse_id=warehouse_id
+    )
+    try:
+        pdf = generate_order_production_card_pdf_bytes(db, tenant_id=tenant_id, order_id=order_id)
+    except ProductionOrderError as exc:
+        raise _order_err(exc) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="karta-produkcyjna-order-{order_id}.pdf"'},
+    )
+
+
 @router.post("/orders/{order_id}/start-collecting", response_model=ProductionOrderRead)
 def api_start_order_collecting(
     order_id: int,
@@ -1111,15 +1305,145 @@ def api_finish_order_putaway(
     )
     try:
         uid = int(user.id) if user is not None else None
-        row = finish_order_putaway(
-            db,
-            tenant_id=tenant_id,
-            order_id=order_id,
-            body=body,
-            performed_by_user_id=uid,
-        )
         db.commit()
         return row
     except ProductionOrderError as exc:
         db.rollback()
         raise _order_err(exc) from exc
+
+
+from ..schemas.material_reservation import MaterialReservationRead, MaterialReservationUpdateBody
+from ..services.reservations.reservation_service import (
+    ReservationError,
+    create_production_batch_reservations,
+    create_production_order_reservations,
+    list_material_reservations,
+    update_production_reservation,
+)
+
+
+@router.get("/material-reservations", response_model=List[MaterialReservationRead])
+def api_list_material_reservations(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
+    batch_id: Optional[int] = Query(None, ge=1),
+    order_id: Optional[int] = Query(None, ge=1),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    del user
+    rows = list_material_reservations(
+        db,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        production_batch_id=batch_id,
+        production_order_id=order_id,
+        active_only=True,
+    )
+    return [MaterialReservationRead(**r) for r in rows]
+
+
+@router.post("/batches/{batch_id}/reserve-materials", response_model=List[MaterialReservationRead])
+def api_reserve_batch_materials(
+    batch_id: int,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    _gate_production_batch(
+        db, user, tenant_id=tenant_id, batch_id=batch_id, warehouse_id=warehouse_id
+    )
+    from ..services.production_batch_service import _aggregate_batch_components, _load_batch_entity
+
+    try:
+        batch = _load_batch_entity(db, tenant_id=tenant_id, batch_id=batch_id)
+        totals = _aggregate_batch_components(batch)
+        uid = int(user.id) if user is not None else None
+        create_production_batch_reservations(
+            db,
+            tenant_id=tenant_id,
+            batch_id=batch_id,
+            component_totals=totals,
+            created_by_user_id=uid,
+        )
+        db.commit()
+        rows = list_material_reservations(
+            db, tenant_id=tenant_id, production_batch_id=batch_id, active_only=True
+        )
+        return [MaterialReservationRead(**r) for r in rows]
+    except ReservationError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ProductionBatchError as exc:
+        db.rollback()
+        raise _batch_err(exc) from exc
+
+
+@router.post("/orders/{order_id}/reserve-materials", response_model=List[MaterialReservationRead])
+def api_reserve_order_materials(
+    order_id: int,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    _gate_production_order(
+        db, user, tenant_id=tenant_id, order_id=order_id, warehouse_id=warehouse_id
+    )
+    try:
+        order = get_production_order(db, tenant_id=tenant_id, order_id=order_id)
+        totals = {
+            int(ln.component_product_id): float(ln.total_required_quantity or 0)
+            for ln in order.lines
+        }
+        uid = int(user.id) if user is not None else None
+        create_production_order_reservations(
+            db,
+            tenant_id=tenant_id,
+            order_id=order_id,
+            component_totals=totals,
+            created_by_user_id=uid,
+        )
+        db.commit()
+        rows = list_material_reservations(
+            db, tenant_id=tenant_id, production_order_id=order_id, active_only=True
+        )
+        return [MaterialReservationRead(**r) for r in rows]
+    except ReservationError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ProductionOrderError as exc:
+        db.rollback()
+        raise _order_err(exc) from exc
+
+
+@router.patch("/material-reservations/{reservation_id}", response_model=MaterialReservationRead)
+def api_update_material_reservation(
+    reservation_id: int,
+    body: MaterialReservationUpdateBody,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    try:
+        uid = int(user.id) if user is not None else None
+        update_production_reservation(
+            db,
+            tenant_id=tenant_id,
+            reservation_id=reservation_id,
+            location_id=body.location_id,
+            quantity=body.quantity,
+            batch_number=body.batch_number,
+            serial_number=body.serial_number,
+            performed_by_user_id=uid,
+        )
+        db.commit()
+        rows = list_material_reservations(db, tenant_id=tenant_id, active_only=True)
+        match = next((r for r in rows if int(r["id"]) == int(reservation_id)), None)
+        if match is None:
+            raise HTTPException(status_code=404, detail="Rezerwacja nie istnieje.")
+        return MaterialReservationRead(**match)
+    except ReservationError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc

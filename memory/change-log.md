@@ -1,5 +1,14 @@
 # Change log
 
+## 2026-06-08 — MRP komercyjny: strategie prognozy, MOQ, symulacja
+
+- **Strategy Pattern:** `DemandForecastStrategy` — 6 strategii (średnia, ważona, dzień tygodnia, mediana, max, AI placeholder).
+- **Ustawienia:** Produkcja → Prognozowanie (`production_forecast_json` per magazyn).
+- **Produkt:** `max_total_stock`, `production_moq`, `production_batch_multiple`, `production_lead_time_days` (+ istniejące `min_total_stock`).
+- **Serwisy:** `PlanningService`, `MaterialAvailabilityService`, `ProductionRecommendationService`, `PriorityEngine`, `LeadTimeService`, `SimulationService`, `InventoryCoverageService`.
+- **API:** `POST /production/planning/simulate`, `POST /production/planning/simulate/create-batches`.
+- **UI:** KPI dashboard, kolumna „Dlaczego?”, wykres osi czasu, modal symulacji.
+
 ## 2026-06-08 — Planowanie zapotrzebowania MRP (ProductionPlanningService)
 
 - Backend: `backend/services/production_planning/` — order demand, velocity, pipeline, priority, `demand_engine_service`.

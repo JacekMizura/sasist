@@ -8,6 +8,7 @@ from ...models.product_composition import ProductionBatch, ProductionBatchLine
 from ...models.production import ProductionOrder
 from ...schemas.production_execution import ProductionExecutionJobRead, ProductionExecutionPhase
 from .constants import TERMINAL_EXECUTION_STATUSES, execution_phase_for_status
+from .execution_interface import ERP_INTERFACE
 from .job_projection_service import project_batch_job, project_order_job
 
 
@@ -41,6 +42,9 @@ def list_wms_execution_queue(
     )
     if wms_released is True:
         bq = bq.filter(ProductionBatch.released_to_wms_at.isnot(None))
+    bq = bq.filter(
+        (ProductionBatch.execution_interface.is_(None)) | (ProductionBatch.execution_interface != ERP_INTERFACE)
+    )
     for batch in bq.order_by(ProductionBatch.updated_at.desc()).all():
         jobs.append(project_batch_job(db, batch))
 
@@ -55,6 +59,9 @@ def list_wms_execution_queue(
     )
     if wms_released is True:
         oq = oq.filter(ProductionOrder.released_to_wms_at.isnot(None))
+    oq = oq.filter(
+        (ProductionOrder.execution_interface.is_(None)) | (ProductionOrder.execution_interface != ERP_INTERFACE)
+    )
     for order in oq.order_by(ProductionOrder.updated_at.desc()).all():
         jobs.append(project_order_job(db, order))
 

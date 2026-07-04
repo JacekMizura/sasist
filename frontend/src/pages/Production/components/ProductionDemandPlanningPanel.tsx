@@ -1,8 +1,22 @@
-import { Factory, Package, RefreshCw, ShoppingCart, TrendingUp } from "lucide-react";
+import {
+  AlertTriangle,
+  Factory,
+  FlaskConical,
+  Package,
+  RefreshCw,
+  ShoppingCart,
+  TrendingUp,
+} from "lucide-react";
 import type { ReactNode } from "react";
 
-import type { DemandBatchLineDraft, ProductionDemandPlanning, ProductionDemandProductRow } from "@/api/productionPlanningApi";
+import type {
+  DemandBatchLineDraft,
+  ProductionDemandPlanning,
+  ProductionDemandProductRow,
+} from "@/api/productionPlanningApi";
 import { ProductThumb } from "./ProductThumb";
+import { ProductionTimelineChart } from "./ProductionTimelineChart";
+import { MaterialProductionStatusBadge } from "./MaterialProductionStatusBadge";
 
 type Props = {
   data: ProductionDemandPlanning | null;
@@ -14,6 +28,8 @@ type Props = {
   onCustomCoverageInputChange: (v: string) => void;
   onApplyCustomCoverage: () => void;
   onReload: () => void;
+  onSimulate: () => void;
+  simulateBusy: boolean;
   onCreateBatch: (lines: DemandBatchLineDraft[], label: string) => void;
 };
 
@@ -65,9 +81,11 @@ export function ProductionDemandPlanningPanel({
   onCustomCoverageInputChange,
   onApplyCustomCoverage,
   onReload,
+  onSimulate,
+  simulateBusy,
   onCreateBatch,
 }: Props) {
-  const summary = data?.summary;
+  const dash = data?.dashboard;
   const products = data?.products ?? [];
   const presets = data?.coverage_day_presets ?? [7, 14, 21, 30, 45, 60, 90];
 
@@ -77,46 +95,60 @@ export function ProductionDemandPlanningPanel({
         <div>
           <h3 className="text-base font-bold text-slate-900">Planowanie zapotrzebowania</h3>
           <p className="mt-1 text-sm text-slate-500">
-            MRP — zapotrzebowanie z zamówień i utrzymanie zapasu na {coverageDays} dni (średnia z ostatnich{" "}
-            {data?.sales_lookback_days ?? 30} dni sprzedaży).
+            Strategia: <strong>{data?.forecast_strategy_label ?? "—"}</strong> · horyzont {coverageDays} dni · magazyn #
+            {data?.warehouse_id ?? "—"}
           </p>
         </div>
-        <button
-          type="button"
-          disabled={loading}
-          onClick={() => onReload()}
-          className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-        >
-          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} aria-hidden />
-          Odśwież
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={loading || simulateBusy}
+            onClick={onSimulate}
+            className="inline-flex items-center gap-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-sm font-semibold text-violet-800 hover:bg-violet-100 disabled:opacity-50"
+          >
+            <FlaskConical className="h-4 w-4" aria-hidden />
+            Symuluj plan produkcji
+          </button>
+          <button
+            type="button"
+            disabled={loading}
+            onClick={() => onReload()}
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} aria-hidden />
+            Odśwież
+          </button>
+        </div>
       </div>
 
       {error ? <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-800">{error}</p> : null}
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <Kpi label="Produkty krytyczne" value={dash?.critical_products ?? 0} tone="rose" />
+        <Kpi label="Do produkcji dziś" value={dash?.production_needed_today ?? 0} />
+        <Kpi label="Brak surowców" value={dash?.material_shortage_products ?? 0} tone="amber" />
+        <Kpi label="Rekom. produkcja" value={fmtQty(dash?.total_recommended_quantity ?? 0)} suffix="szt." />
+        <Kpi
+          label="Śr. pokrycie"
+          value={dash?.average_coverage_days != null ? `${dash.average_coverage_days.toFixed(0)} dni` : "—"}
+        />
+      </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
         <DemandCard
           icon={<ShoppingCart className="h-5 w-5 text-violet-600" aria-hidden />}
           title="Na zamówienia"
           subtitle="Na dzisiejsze zamówienia"
-          value={summary?.order_demand_total ?? 0}
+          value={dash?.order_demand_total ?? 0}
           unit="szt."
-          detail={
-            summary && summary.order_production_needed > 0
-              ? `Do produkcji (po stanie): ${fmtQty(summary.order_production_needed)} szt.`
-              : undefined
-          }
           loading={loading}
-          onCreate={() =>
-            onCreateBatch(linesFromRows(products, (r) => r.order_production_needed), "zamówienia")
-          }
+          onCreate={() => onCreateBatch(linesFromRows(products, (r) => r.order_production_needed), "zamówienia")}
         />
-
         <DemandCard
           icon={<TrendingUp className="h-5 w-5 text-emerald-600" aria-hidden />}
           title="Na utrzymanie zapasu"
-          subtitle={`Zapas na ${coverageDays} dni sprzedaży`}
-          value={summary?.forecast_production_needed ?? 0}
+          subtitle={`Zapas na ${coverageDays} dni`}
+          value={products.reduce((a, p) => a + p.forecast_production_needed, 0)}
           unit="szt. potrzeba"
           loading={loading}
           extra={
@@ -133,23 +165,15 @@ export function ProductionDemandPlanningPanel({
             onCreateBatch(linesFromRows(products, (r) => r.forecast_production_needed), "zapas")
           }
         />
-
         <DemandCard
           icon={<Package className="h-5 w-5 text-indigo-600" aria-hidden />}
-          title="Łączne zapotrzebowanie"
+          title="Łączna rekomendacja"
           subtitle="Brak końcowy (oba źródła)"
-          value={summary?.combined_production_needed ?? 0}
-          unit="szt. do produkcji"
+          value={dash?.total_recommended_quantity ?? 0}
+          unit="szt."
           loading={loading}
-          detail={
-            summary
-              ? `Zamówienia: ${fmtQty(summary.order_demand_total)} · Prognoza brak: ${fmtQty(
-                  summary.forecast_production_needed,
-                )} · Stan: ${fmtQty(summary.on_hand_total)} · W produkcji: ${fmtQty(summary.in_pipeline_total)}`
-              : undefined
-          }
           onCreate={() =>
-            onCreateBatch(linesFromRows(products, (r) => r.combined_production_needed), "łącznie")
+            onCreateBatch(linesFromRows(products, (r) => r.recommended_quantity), "łącznie")
           }
         />
       </div>
@@ -161,49 +185,77 @@ export function ProductionDemandPlanningPanel({
               <th className="px-3 py-3">Produkt</th>
               <th className="px-3 py-3">SKU</th>
               <th className="px-3 py-3 text-right">Stan</th>
-              <th className="px-3 py-3 text-right">Śr. / dzień</th>
-              <th className="px-3 py-3 text-right">Pokrycie</th>
               <th className="px-3 py-3 text-right">W prod.</th>
               <th className="px-3 py-3 text-right">Zamów.</th>
               <th className="px-3 py-3 text-right">Prognoza</th>
-              <th className="px-3 py-3 text-right">Do prod.</th>
+              <th className="px-3 py-3 text-right">Pokrycie</th>
+              <th className="px-3 py-3 text-right">Min</th>
+              <th className="px-3 py-3 text-right">LT</th>
+              <th className="px-3 py-3 text-right">Można</th>
+              <th className="px-3 py-3">Materiały</th>
+              <th className="px-3 py-3 text-right">Rekom.</th>
               <th className="px-3 py-3">Priorytet</th>
+              <th className="px-3 py-3">Dlaczego?</th>
+              <th className="px-3 py-3">Oś czasu</th>
               <th className="px-3 py-3">Akcje</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {loading && products.length === 0 ? (
               <tr>
-                <td colSpan={11} className="px-3 py-8 text-center text-slate-500">
+                <td colSpan={16} className="px-3 py-8 text-center text-slate-500">
                   Wczytywanie…
                 </td>
               </tr>
             ) : products.length === 0 ? (
               <tr>
-                <td colSpan={11} className="px-3 py-8 text-center text-slate-500">
-                  Brak aktywnych receptur produkcyjnych w tym magazynie.
+                <td colSpan={16} className="px-3 py-8 text-center text-slate-500">
+                  Brak aktywnych receptur produkcyjnych.
                 </td>
               </tr>
             ) : (
               products.map((row) => (
-                <tr key={row.product_id} className="hover:bg-slate-50/80">
+                <tr key={row.product_id} className="align-top hover:bg-slate-50/80">
                   <td className="px-3 py-2">
                     <div className="flex items-center gap-2">
                       <ProductThumb imageUrl={row.product_image_url} name={row.product_name} size="sm" />
-                      <span className="font-semibold text-slate-900">{row.product_name}</span>
+                      <span className="max-w-[140px] font-semibold text-slate-900">{row.product_name}</span>
                     </div>
                   </td>
                   <td className="px-3 py-2 font-mono text-xs text-slate-600">{row.product_sku ?? "—"}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{fmtQty(row.on_hand)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{row.avg_daily_sales.toFixed(2)}</td>
-                  <td className={`px-3 py-2 text-right tabular-nums font-semibold ${COVERAGE_CLASS[row.coverage_color] ?? ""}`}>
-                    {row.coverage_days != null ? `${row.coverage_days.toFixed(0)} dni` : "—"}
-                  </td>
                   <td className="px-3 py-2 text-right tabular-nums">{fmtQty(row.in_pipeline)}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{fmtQty(row.order_demand)}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{fmtQty(row.forecast_demand)}</td>
+                  <td className={`px-3 py-2 text-right tabular-nums font-semibold ${COVERAGE_CLASS[row.coverage_color] ?? ""}`}>
+                    {row.coverage_days != null ? `${row.coverage_days.toFixed(0)} d` : "—"}
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums text-slate-500">
+                    {row.min_stock != null ? fmtQty(row.min_stock) : "—"}
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums">{row.production_lead_time_days || "—"}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">
+                    {row.max_producible > 0 ? (
+                      fmtQty(row.max_producible)
+                    ) : (
+                      <span className="inline-flex items-center gap-0.5 text-amber-700">
+                        <AlertTriangle className="h-3 w-3" aria-hidden />0
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2">
+                    {row.recommended_quantity > 0 ? (
+                      <MaterialProductionStatusBadge
+                        status={row.material_status ?? "OK"}
+                        producibleNow={row.producible_now_qty}
+                        waitingQty={row.waiting_qty}
+                      />
+                    ) : (
+                      "—"
+                    )}
+                  </td>
                   <td className="px-3 py-2 text-right tabular-nums font-bold text-indigo-700">
-                    {fmtQty(row.combined_production_needed)}
+                    {fmtQty(row.recommended_quantity)}
                   </td>
                   <td className="px-3 py-2">
                     <span
@@ -212,8 +264,14 @@ export function ProductionDemandPlanningPanel({
                       {PRIORITY_LABEL[row.priority] ?? row.priority}
                     </span>
                   </td>
+                  <td className="max-w-[140px] px-3 py-2 text-xs text-slate-600">
+                    {row.recommendation_reasons.length ? row.recommendation_reasons.join(" · ") : "—"}
+                  </td>
+                  <td className="min-w-[120px] px-3 py-2">
+                    <ProductionTimelineChart points={row.timeline} />
+                  </td>
                   <td className="px-3 py-2">
-                    {row.composition_id && row.combined_production_needed > 0 ? (
+                    {row.composition_id && row.recommended_quantity > 0 ? (
                       <button
                         type="button"
                         onClick={() =>
@@ -222,19 +280,19 @@ export function ProductionDemandPlanningPanel({
                               {
                                 product_id: row.product_id,
                                 composition_id: row.composition_id!,
-                                planned_quantity: row.combined_production_needed,
+                                planned_quantity: row.recommended_quantity,
                               },
                             ],
                             row.product_name,
                           )
                         }
-                        className="inline-flex items-center gap-1 rounded-lg bg-violet-600 px-2.5 py-1.5 text-xs font-bold text-white hover:bg-violet-700"
+                        className="inline-flex items-center gap-1 rounded-lg bg-violet-600 px-2 py-1.5 text-xs font-bold text-white hover:bg-violet-700"
                       >
                         <Factory className="h-3.5 w-3.5" aria-hidden />
                         Partia
                       </button>
                     ) : (
-                      <span className="text-xs text-slate-400">—</span>
+                      "—"
                     )}
                   </td>
                 </tr>
@@ -247,13 +305,36 @@ export function ProductionDemandPlanningPanel({
   );
 }
 
+function Kpi({
+  label,
+  value,
+  suffix,
+  tone,
+}: {
+  label: string;
+  value: string | number;
+  suffix?: string;
+  tone?: "rose" | "amber";
+}) {
+  const toneClass =
+    tone === "rose" ? "border-rose-200 bg-rose-50" : tone === "amber" ? "border-amber-200 bg-amber-50" : "border-slate-200 bg-white";
+  return (
+    <div className={`rounded-xl border px-4 py-3 ${toneClass}`}>
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="mt-1 text-2xl font-black tabular-nums text-slate-900">
+        {value}
+        {suffix ? <span className="ml-1 text-sm font-semibold text-slate-500">{suffix}</span> : null}
+      </p>
+    </div>
+  );
+}
+
 function DemandCard({
   icon,
   title,
   subtitle,
   value,
   unit,
-  detail,
   extra,
   loading,
   onCreate,
@@ -263,7 +344,6 @@ function DemandCard({
   subtitle: string;
   value: number;
   unit: string;
-  detail?: string;
   extra?: ReactNode;
   loading?: boolean;
   onCreate: () => void;
@@ -282,7 +362,6 @@ function DemandCard({
         {loading ? "…" : fmtQty(value)}
         <span className="ml-1 text-sm font-semibold text-slate-500">{unit}</span>
       </p>
-      {detail ? <p className="mt-2 text-xs text-slate-600">{detail}</p> : null}
       <button
         type="button"
         disabled={loading || value <= 0}

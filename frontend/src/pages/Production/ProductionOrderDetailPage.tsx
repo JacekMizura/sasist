@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { ArrowLeft } from "lucide-react";
 
@@ -11,14 +11,15 @@ import { useWarehouse } from "../../context/WarehouseContext";
 import {
 
   cancelProductionOrder,
-
   getProductionOrder,
-
+  orderProductionCardPdfUrl,
   releaseOrderToWms,
-
+  startErpExecutionOrder,
   type ProductionOrderRead,
 
 } from "../../api/productionApi";
+
+import { DocumentMaterialReservationsPanel } from "./components/DocumentMaterialReservationsPanel";
 
 import {
   orderMonitoringSource,
@@ -28,7 +29,7 @@ import {
 import { erpProductionPaths } from "./productionPaths";
 import { ProductThumb } from "./components/ProductThumb";
 
-import { PRODUCTION_STATUS_LABEL, START_COLLECTING_BLOCKED_TOOLTIP, productionStatusBadgeClass } from "./productionUi";
+import { PRODUCTION_STATUS_LABEL, START_COLLECTING_BLOCKED_TOOLTIP, formatStartCollectingError, productionStatusBadgeClass } from "./productionUi";
 
 
 
@@ -39,6 +40,7 @@ const DEFAULT_TENANT = 1;
 export default function ProductionOrderDetailPage() {
 
   const { orderId } = useParams();
+  const navigate = useNavigate();
 
   const { warehouse } = useWarehouse();
 
@@ -120,6 +122,33 @@ export default function ProductionOrderDetailPage() {
 
     }
 
+  };
+
+
+
+  const startErp = async () => {
+    if (!order || warehouseId == null || orderId == null) return;
+    if (order.has_shortages) return;
+    setBusy(true);
+    try {
+      setOrder(await startErpExecutionOrder(tenantId, order.id, warehouseId));
+      toast.success("Realizacja w ERP uruchomiona.");
+      navigate(erpProductionPaths.erpExecution("order", orderId));
+    } catch (e: unknown) {
+      toast.error(formatStartCollectingError(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const printCard = () => {
+    if (!order || warehouseId == null) return;
+    window.open(orderProductionCardPdfUrl(tenantId, order.id, warehouseId), "_blank", "noopener,noreferrer");
+  };
+
+  const openErp = () => {
+    if (!orderId) return;
+    navigate(erpProductionPaths.erpExecution("order", orderId));
   };
 
 
@@ -290,12 +319,17 @@ export default function ProductionOrderDetailPage() {
             actions={{
 
               onReleaseToWms: () => void releaseToWms(),
+              onStartErpExecution: () => void startErp(),
+              onPrintProductionCard: printCard,
+              onOpenErpExecution: order.is_erp_interface ? openErp : undefined,
 
               onCancel: () => void cancel(),
 
               releaseDisabled: shortagesBlocked,
+              erpDisabled: shortagesBlocked,
 
               releaseDisabledReason: START_COLLECTING_BLOCKED_TOOLTIP,
+              erpDisabledReason: START_COLLECTING_BLOCKED_TOOLTIP,
 
               busy,
 
@@ -375,6 +409,18 @@ export default function ProductionOrderDetailPage() {
 
         </section>
 
+      ) : null}
+
+      {warehouseId != null && orderId ? (
+        <DocumentMaterialReservationsPanel
+          tenantId={tenantId}
+          warehouseId={warehouseId}
+          orderId={Number(orderId)}
+          materialsReserved={order.materials_reserved}
+          reservationsLocked={order.reservations_locked}
+          status={order.status}
+          onChanged={() => void load()}
+        />
       ) : null}
 
     </div>

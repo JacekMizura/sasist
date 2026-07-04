@@ -39,15 +39,18 @@ def consume_inventory_fifo_slices(
     product_id: int,
     location_id: int,
     quantity: float,
+    batch_number: str | None = None,
     stock_disposition: str = DEFAULT_STOCK_DISPOSITION,
 ) -> list[PickLotSlice]:
     """FIFO by expiry then id — returns slices actually consumed."""
     from ..models.inventory import Inventory
+    from .inventory_lot_keys import normalize_batch_number
 
     qty = float(quantity or 0)
     if qty <= 1e-12:
         return []
     sd = normalize_stock_disposition(stock_disposition)
+    batch_filter = normalize_batch_number(batch_number) if batch_number else None
     rows = (
         db.query(Inventory)
         .filter(
@@ -62,6 +65,8 @@ def consume_inventory_fifo_slices(
         .with_for_update()
         .all()
     )
+    if batch_filter is not None:
+        rows = [r for r in rows if normalize_batch_number(getattr(r, "batch_number", None)) == batch_filter]
     total_avail = sum(float(r.quantity or 0) for r in rows)
     if total_avail + 1e-9 < qty:
         raise ValueError(

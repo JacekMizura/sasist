@@ -65,6 +65,10 @@ export type RecipeUsageRead = {
   quantity: number;
 };
 
+export type ProductionExecutionInterface = "WMS" | "ERP";
+/** @deprecated use ProductionExecutionInterface */
+export type ProductionExecutionMode = ProductionExecutionInterface;
+
 export type ProductionOrderStatus =
   | "draft"
   | "planned"
@@ -120,6 +124,10 @@ export type ProductionOrderRead = {
   completed_at?: string | null;
   released_to_wms_at?: string | null;
   is_released_to_wms?: boolean;
+  execution_interface?: ProductionExecutionInterface | null;
+  is_erp_interface?: boolean;
+  materials_reserved?: boolean;
+  reservations_locked?: boolean;
   collection_progress_percent?: number;
   progress_percent?: number;
   has_shortages?: boolean;
@@ -137,6 +145,7 @@ export type ProductionOrderCreateBody = {
   priority?: number;
   notes?: string | null;
   status?: ProductionOrderStatus;
+  reserve_materials?: boolean;
   /** @deprecated Legacy production_recipes.id — use composition_id */
   recipe_id?: number;
 };
@@ -486,6 +495,10 @@ export type ProductionBatchRead = {
   collection_progress_percent?: number;
   released_to_wms_at?: string | null;
   is_released_to_wms?: boolean;
+  execution_interface?: ProductionExecutionInterface | null;
+  is_erp_interface?: boolean;
+  materials_reserved?: boolean;
+  reservations_locked?: boolean;
   started_at?: string | null;
   collecting_completed_at?: string | null;
   production_completed_at?: string | null;
@@ -506,6 +519,7 @@ export type ProductionBatchCreateBody = {
   warehouse_id: number;
   notes?: string | null;
   status?: ProductionBatchStatus;
+  reserve_materials?: boolean;
   lines: ProductionBatchLineWrite[];
 };
 
@@ -517,6 +531,7 @@ export type ProductionBatchPayloadValidation =
 export function validateProductionBatchCreateBody(
   warehouseId: number | null | undefined,
   lines: { product_id: number; composition_id: number; planned_quantity: number }[],
+  opts?: { reserve_materials?: boolean },
 ): ProductionBatchPayloadValidation {
   if (warehouseId == null || !Number.isFinite(warehouseId) || warehouseId < 1) {
     return { ok: false, message: "warehouse_id is required" };
@@ -547,6 +562,7 @@ export function validateProductionBatchCreateBody(
     body: {
       warehouse_id: warehouseId,
       status: "planned",
+      reserve_materials: Boolean(opts?.reserve_materials),
       lines: mapped,
     },
   };
@@ -824,6 +840,10 @@ export type CollectionTaskRead = {
   location_id: number;
   location_code: string;
   available_qty?: number | null;
+  selected_batch_number?: string | null;
+  selected_lot?: string | null;
+  selected_serial_number?: string | null;
+  track_serial?: boolean;
 };
 
 export type BatchCollectionStateRead = {
@@ -885,6 +905,48 @@ export async function releaseBatchToWms(
   return res.data;
 }
 
+export async function startErpExecutionBatch(
+  tenantId: number,
+  batchId: number,
+  warehouseId?: number,
+): Promise<ProductionBatchRead> {
+  const res = await api.post<ProductionBatchRead>(
+    `/production/batches/${batchId}/start-erp-execution`,
+    null,
+    { params: productionQueryParams(tenantId, warehouseId) },
+  );
+  return res.data;
+}
+
+/** @deprecated use startErpExecutionBatch */
+export const startPaperExecutionBatch = startErpExecutionBatch;
+
+export function batchProductionCardPdfUrl(
+  tenantId: number,
+  batchId: number,
+  warehouseId?: number,
+): string {
+  const params = new URLSearchParams({ tenant_id: String(tenantId) });
+  if (warehouseId != null) params.set("warehouse_id", String(warehouseId));
+  return `/api/production/batches/${batchId}/production-card.pdf?${params.toString()}`;
+}
+
+export async function printBulkProductionCards(
+  tenantId: number,
+  batchIds: number[],
+  warehouseId?: number,
+): Promise<Blob> {
+  const res = await api.post(
+    "/production/batches/production-cards.pdf",
+    { batch_ids: batchIds },
+    {
+      params: productionQueryParams(tenantId, warehouseId),
+      responseType: "blob",
+    },
+  );
+  return res.data as Blob;
+}
+
 export async function startCollectingBatch(
   tenantId: number,
   batchId: number,
@@ -910,7 +972,14 @@ export async function fetchCollectionState(
 export async function updateCollectionTask(
   tenantId: number,
   batchId: number,
-  body: { task_key: string; collected_qty: number; location_id?: number | null },
+  body: {
+    task_key: string;
+    collected_qty: number;
+    location_id?: number | null;
+    batch_number?: string | null;
+    lot?: string | null;
+    serial_number?: string | null;
+  },
   warehouseId?: number,
 ) {
   const res = await api.post<BatchCollectionStateRead>(
@@ -1014,6 +1083,32 @@ export async function releaseOrderToWms(
   return res.data;
 }
 
+export async function startErpExecutionOrder(
+  tenantId: number,
+  orderId: number,
+  warehouseId?: number,
+): Promise<ProductionOrderRead> {
+  const res = await api.post<ProductionOrderRead>(
+    `/production/orders/${orderId}/start-erp-execution`,
+    null,
+    { params: productionQueryParams(tenantId, warehouseId) },
+  );
+  return res.data;
+}
+
+/** @deprecated use startErpExecutionOrder */
+export const startPaperExecutionOrder = startErpExecutionOrder;
+
+export function orderProductionCardPdfUrl(
+  tenantId: number,
+  orderId: number,
+  warehouseId?: number,
+): string {
+  const params = new URLSearchParams({ tenant_id: String(tenantId) });
+  if (warehouseId != null) params.set("warehouse_id", String(warehouseId));
+  return `/api/production/orders/${orderId}/production-card.pdf?${params.toString()}`;
+}
+
 export type OrderCollectionStateRead = {
   order_id: number;
   status: string;
@@ -1049,7 +1144,14 @@ export async function fetchOrderCollectionState(
 export async function updateOrderCollectionTask(
   tenantId: number,
   orderId: number,
-  body: { task_key: string; collected_qty: number; location_id?: number | null },
+  body: {
+    task_key: string;
+    collected_qty: number;
+    location_id?: number | null;
+    batch_number?: string | null;
+    lot?: string | null;
+    serial_number?: string | null;
+  },
   warehouseId?: number,
 ): Promise<OrderCollectionStateRead> {
   const res = await api.post<OrderCollectionStateRead>(`/production/orders/${orderId}/collection`, body, {
@@ -1101,5 +1203,58 @@ export async function finishOrderPutaway(
   const res = await api.post<ProductionCompleteResultRead>(`/production/orders/${orderId}/finish-putaway`, body, {
     params: productionQueryParams(tenantId, warehouseId),
   });
+  return res.data;
+}
+
+export type MaterialReservationRead = {
+  id: number;
+  product_id: number;
+  product_name: string;
+  product_sku?: string | null;
+  location_id: number;
+  location_code: string;
+  quantity: number;
+  batch_number?: string | null;
+  lot?: string | null;
+  serial_number?: string | null;
+  expiry_date?: string | null;
+  status: string;
+  document_kind?: "batch" | "order" | null;
+  document_label?: string | null;
+  operator_name?: string | null;
+  created_at?: string | null;
+};
+
+export async function fetchMaterialReservations(
+  tenantId: number,
+  warehouseId?: number,
+  opts?: { batchId?: number; orderId?: number },
+) {
+  const res = await api.get<MaterialReservationRead[]>("/production/material-reservations", {
+    params: {
+      tenant_id: tenantId,
+      ...(warehouseId != null ? { warehouse_id: warehouseId } : {}),
+      ...(opts?.batchId != null ? { batch_id: opts.batchId } : {}),
+      ...(opts?.orderId != null ? { order_id: opts.orderId } : {}),
+    },
+  });
+  return res.data;
+}
+
+export async function reserveBatchMaterials(tenantId: number, batchId: number, warehouseId?: number) {
+  const res = await api.post<MaterialReservationRead[]>(
+    `/production/batches/${batchId}/reserve-materials`,
+    null,
+    { params: productionQueryParams(tenantId, warehouseId) },
+  );
+  return res.data;
+}
+
+export async function reserveOrderMaterials(tenantId: number, orderId: number, warehouseId?: number) {
+  const res = await api.post<MaterialReservationRead[]>(
+    `/production/orders/${orderId}/reserve-materials`,
+    null,
+    { params: productionQueryParams(tenantId, warehouseId) },
+  );
   return res.data;
 }

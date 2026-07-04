@@ -458,24 +458,25 @@ def aggregated_demand_with_availability(
     tenant_id: int,
     warehouse_id: int,
     component_totals: dict[int, float],
+    exclude_batch_id: int | None = None,
+    exclude_order_id: int | None = None,
 ) -> list[AggregatedComponentDemandRead]:
     if not component_totals:
         return []
+    from ..reservations.availability_service import warehouse_net_available
+
     pids = list(component_totals.keys())
     names = {p.id: p for p in db.query(Product).filter(Product.id.in_(pids)).all()}
     avail_map: dict[int, float] = {}
     for pid in pids:
-        row = (
-            db.query(func.coalesce(func.sum(Inventory.quantity), 0.0))
-            .filter(
-                Inventory.tenant_id == int(tenant_id),
-                Inventory.warehouse_id == int(warehouse_id),
-                Inventory.product_id == int(pid),
-                Inventory.quantity > 0,
-            )
-            .scalar()
+        avail_map[int(pid)] = warehouse_net_available(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            product_id=int(pid),
+            exclude_batch_id=exclude_batch_id,
+            exclude_order_id=exclude_order_id,
         )
-        avail_map[int(pid)] = float(row or 0)
     out: list[AggregatedComponentDemandRead] = []
     for pid, req in sorted(component_totals.items(), key=lambda x: x[0]):
         p = names.get(int(pid))

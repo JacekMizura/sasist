@@ -576,7 +576,9 @@ def save_wms_product_validation_settings(
 from ..schemas.wms_production_settings import (
     WmsProductionSettingsRead,
     WmsProductionSettingsSave,
+    forecast_settings_from_row,
     production_settings_from_row,
+    reservation_settings_from_row,
 )
 
 
@@ -587,6 +589,8 @@ def _production_row_to_read(row) -> WmsProductionSettingsRead:
         warehouse_id=int(row.warehouse_id),
         terminal_display=disp,
         terminal_required=req,
+        forecast=forecast_settings_from_row(row),
+        reservation=reservation_settings_from_row(row),
     )
 
 
@@ -616,6 +620,8 @@ def save_wms_production_settings(
     row = _get_or_create(db, body.tenant_id, wh_id)
     row.production_terminal_display_json = json.dumps(body.terminal_display.model_dump())
     row.production_terminal_required_json = json.dumps(body.terminal_required.model_dump())
+    row.production_forecast_json = json.dumps(body.forecast.model_dump())
+    row.production_reservation_json = json.dumps(body.reservation.model_dump())
     row.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(row)

@@ -31,6 +31,7 @@ from ..schemas.production import (
     StockShortageRead,
 )
 from .document_number_service import assign_series_number_to_stock_document, require_warehouse_series
+from .production_execution.execution_interface import is_erp_interface, normalized_execution_interface
 from .inventory_carrier_ops import upsert_dock_inventory_for_loose_receipt
 from .inventory_lot_keys import NO_EXPIRY_SENTINEL
 from .order_item_pick_allocation_service import consume_inventory_fifo_slices
@@ -392,6 +393,10 @@ def serialize_order(db: Session, order: ProductionOrder, *, with_availability: b
         completed_at=order.completed_at,
         released_to_wms_at=getattr(order, "released_to_wms_at", None),
         is_released_to_wms=getattr(order, "released_to_wms_at", None) is not None,
+        execution_interface=normalized_execution_interface(order),  # type: ignore[arg-type]
+        is_erp_interface=is_erp_interface(order),
+        materials_reserved=bool(getattr(order, "materials_reserved", False)),
+        reservations_locked=getattr(order, "reservations_locked_at", None) is not None,
         collection_progress_percent=coll_pct,
         progress_percent=progress,
         has_shortages=has_shortages,
@@ -476,6 +481,23 @@ def create_production_order(
     db.flush()
     _snapshot_composition_lines(db, order, composition, planned_quantity=float(body.planned_quantity))
     db.flush()
+    if getattr(body, "reserve_materials", False):
+        from .reservations.reservation_service import ReservationError, create_production_order_reservations
+
+        totals = {
+            int(s.component_product_id): float(s.total_required_quantity or 0)
+            for s in order.line_snapshots or []
+        }
+        try:
+            create_production_order_reservations(
+                db,
+                tenant_id=int(tenant_id),
+                order_id=int(order.id),
+                component_totals=totals,
+                created_by_user_id=created_by_user_id,
+            )
+        except ReservationError as exc:
+            raise ProductionOrderError(str(exc), code=getattr(exc, "code", "reservation_failed")) from exc
     return serialize_order(db, order, with_availability=True)
 
 
@@ -522,6 +544,11 @@ def cancel_production_order(db: Session, *, tenant_id: int, order_id: int) -> Pr
         raise ProductionOrderError("Zlecenie produkcyjne nie istnieje.", code="not_found")
     if str(order.status) == "completed":
         raise ProductionOrderError("Nie można anulować ukończonego zlecenia.", code="completed")
+    from .reservations.reservation_service import release_production_reservations
+
+    release_production_reservations(
+        db, tenant_id=int(tenant_id), production_order_id=int(order_id), reason="cancelled"
+    )
     order.status = "cancelled"
     order.updated_at = datetime.utcnow()
     db.flush()

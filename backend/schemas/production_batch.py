@@ -8,7 +8,13 @@ from typing import List, Literal, Optional
 from pydantic import BaseModel, Field, model_validator
 
 from .composition import AggregatedComponentDemandRead, CompositionLineRead
-from .production import ComponentAllocationWrite, ProductionAllocationRead, ProductionLocationSuggestionRead, StockShortageRead
+from .production import (
+    ComponentAllocationWrite,
+    ProductionAllocationRead,
+    ProductionExecutionInterface,
+    ProductionLocationSuggestionRead,
+    StockShortageRead,
+)
 
 ProductionBatchStatus = Literal[
     "draft",
@@ -51,6 +57,7 @@ class ProductionBatchCreateBody(BaseModel):
     warehouse_id: int = Field(..., ge=1, description="Target warehouse for batch execution")
     notes: Optional[str] = None
     status: ProductionBatchStatus = "planned"
+    reserve_materials: bool = False
     lines: List[ProductionBatchLineWrite] = Field(default_factory=list)
 
     @model_validator(mode="after")
@@ -99,6 +106,10 @@ class ProductionBatchRead(BaseModel):
     collection_progress_percent: float = 0.0
     released_to_wms_at: Optional[datetime] = None
     is_released_to_wms: bool = False
+    execution_interface: Optional[ProductionExecutionInterface] = None
+    is_erp_interface: bool = False
+    materials_reserved: bool = False
+    reservations_locked: bool = False
     started_at: Optional[datetime] = None
     collecting_completed_at: Optional[datetime] = None
     production_completed_at: Optional[datetime] = None
@@ -159,6 +170,10 @@ class CollectionTaskRead(BaseModel):
     location_id: int = 0
     location_code: str = ""
     available_qty: Optional[float] = None
+    selected_batch_number: Optional[str] = None
+    selected_lot: Optional[str] = None
+    selected_serial_number: Optional[str] = None
+    track_serial: bool = False
 
 
 class BatchCollectionStateRead(BaseModel):
@@ -175,6 +190,9 @@ class BatchCollectionUpdateBody(BaseModel):
     task_key: str
     collected_qty: float = Field(..., ge=0)
     location_id: Optional[int] = Field(None, ge=1)
+    batch_number: Optional[str] = None
+    lot: Optional[str] = None
+    serial_number: Optional[str] = None
 
 
 class BatchProductionProgressBody(BaseModel):
@@ -223,3 +241,7 @@ class ProductionBatchCompleteResultRead(BaseModel):
     rw_stock_document_id: Optional[int] = None
     rw_document_number: Optional[str] = None
     component_total_cost: Optional[float] = None
+
+
+class BulkProductionCardsBody(BaseModel):
+    batch_ids: List[int] = Field(..., min_length=1, max_length=100)

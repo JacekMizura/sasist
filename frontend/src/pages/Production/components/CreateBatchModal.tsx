@@ -50,6 +50,7 @@ export function CreateBatchModal({ open, tenantId, warehouseId, initialLines, on
   const [busy, setBusy] = useState(false);
   const [previewBusy, setPreviewBusy] = useState(false);
   const [search, setSearch] = useState("");
+  const [reserveMaterials, setReserveMaterials] = useState(false);
 
   const reloadRecipes = useCallback(async () => {
     const rows = await listRecipeCards(tenantId, warehouseId, { activeOnly: true });
@@ -90,7 +91,9 @@ export function CreateBatchModal({ open, tenantId, warehouseId, initialLines, on
       composition_id: l.recipe.composition_id,
       planned_quantity: l.quantity,
     }));
-    const validation = validateProductionBatchCreateBody(warehouseId, draftLines);
+    const validation = validateProductionBatchCreateBody(warehouseId, draftLines, {
+      reserve_materials: reserveMaterials,
+    });
     if (!validation.ok) {
       setPreview(null);
       return;
@@ -106,7 +109,7 @@ export function CreateBatchModal({ open, tenantId, warehouseId, initialLines, on
         .finally(() => setPreviewBusy(false));
     }, 300);
     return () => window.clearTimeout(t);
-  }, [open, lines, tenantId, warehouseId]);
+  }, [open, lines, tenantId, warehouseId, reserveMaterials]);
 
   const filteredRecipes = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -144,8 +147,9 @@ export function CreateBatchModal({ open, tenantId, warehouseId, initialLines, on
         composition_id: l.recipe.composition_id,
         planned_quantity: l.quantity,
       })),
+      { reserve_materials: reserveMaterials },
     );
-  }, [lines, warehouseId]);
+  }, [lines, warehouseId, reserveMaterials]);
 
   const canSubmit = payloadValidation.ok && !busy && !previewBusy && preview != null;
 
@@ -393,6 +397,17 @@ export function CreateBatchModal({ open, tenantId, warehouseId, initialLines, on
               )}
             </div>
 
+            <div className="shrink-0 flex gap-2 border-t border-slate-200 bg-white p-4">
+              <label className="mb-2 flex w-full items-center gap-2 rounded-lg border border-violet-100 bg-violet-50/60 px-3 py-2 text-sm text-slate-800">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-slate-300"
+                  checked={reserveMaterials}
+                  onChange={(e) => setReserveMaterials(e.target.checked)}
+                />
+                Zarezerwuj materiały przy utworzeniu partii
+              </label>
+            </div>
             <div className="shrink-0 flex gap-2 border-t border-slate-200 bg-white p-4">
               <button
                 type="button"

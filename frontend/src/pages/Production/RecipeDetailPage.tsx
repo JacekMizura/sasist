@@ -27,6 +27,7 @@ export default function RecipeDetailPage() {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [qty, setQty] = useState(10);
+  const [reserveMaterials, setReserveMaterials] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -51,13 +52,17 @@ export default function RecipeDetailPage() {
 
   const createBatch = async () => {
     if (!recipe) return;
-    const validation = validateProductionBatchCreateBody(warehouseId, [
-      {
-        product_id: recipe.product_id,
-        composition_id: recipe.composition_id,
-        planned_quantity: qty,
-      },
-    ]);
+    const validation = validateProductionBatchCreateBody(
+      warehouseId,
+      [
+        {
+          product_id: recipe.product_id,
+          composition_id: recipe.composition_id,
+          planned_quantity: qty,
+        },
+      ],
+      { reserve_materials: reserveMaterials },
+    );
     if (!validation.ok) {
       toast.error(validation.message);
       return;
@@ -146,6 +151,15 @@ export default function RecipeDetailPage() {
                   onChange={(e) => setQty(Number(e.target.value) || 1)}
                 />
               </div>
+              <label className="flex items-center gap-2 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-slate-300"
+                  checked={reserveMaterials}
+                  onChange={(e) => setReserveMaterials(e.target.checked)}
+                />
+                Zarezerwuj materiały
+              </label>
               <button
                 type="button"
                 disabled={busy || !warehouseId}

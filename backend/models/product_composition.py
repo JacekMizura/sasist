@@ -70,6 +70,10 @@ class ProductionBatch(Base):
     created_by_user_id = Column(Integer, ForeignKey("app_users.id", ondelete="SET NULL"), nullable=True)
     #: JSON: collecting tasks progress (collector-ready).
     collection_state_json = Column(Text, nullable=True)
+    materials_reserved = Column(Boolean, nullable=False, default=False, server_default=text("false"))
+    reservations_locked_at = Column(DateTime, nullable=True)
+    #: WMS | ERP — UI interface chosen at production start; same backend workflow.
+    execution_interface = Column(String(16), nullable=True, index=True)
     released_to_wms_at = Column(DateTime, nullable=True)
     released_by_user_id = Column(Integer, ForeignKey("app_users.id", ondelete="SET NULL"), nullable=True)
     started_at = Column(DateTime, nullable=True)
