@@ -56,6 +56,7 @@ export default function ProductionExecutionPage() {
                   kind={job.kind}
                   number={job.number}
                   productLine={job.product_label}
+                  productImageUrl={job.product_image_url}
                   quantity={job.planned_quantity}
                   status={job.status}
                   accent="blue"
@@ -74,6 +75,7 @@ export default function ProductionExecutionPage() {
             label="Produkcja"
             number={executionDetail.number}
             productLine={executionDetail.productLabel}
+            productImageUrl={executionDetail.lines[0]?.productImageUrl}
             accent="blue"
           />
 
@@ -88,9 +90,7 @@ export default function ProductionExecutionPage() {
                   <div className="absolute bottom-0 left-0 top-0 w-1 bg-blue-400" aria-hidden />
                   <div className="pl-3">
                     <div className="flex items-center gap-4">
-                      {display.show_product_image ? (
-                        <ProductThumb imageUrl={ln.productImageUrl} name={ln.productName} size="lg" />
-                      ) : null}
+                      <ProductThumb imageUrl={ln.productImageUrl} name={ln.productName} size="lg" />
                       <div>
                         {display.show_name ? (
                           <p className="text-xl font-bold text-slate-900">{ln.productName}</p>

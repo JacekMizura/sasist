@@ -773,6 +773,40 @@ export type ProductionBatchPreviewRead = {
   shortages: StockShortageRead[];
 };
 
+export type CollectionLocationLotRead = {
+  batch_number?: string | null;
+  lot?: string | null;
+  expiry_date?: string | null;
+  production_date?: string | null;
+  serial_number?: string | null;
+  available_qty: number;
+};
+
+export type CollectionLocationOptionRead = {
+  location_id: number;
+  location_code: string;
+  operational_zone_type?: string | null;
+  storage_type?: string | null;
+  badge_kind?: string | null;
+  available_qty: number;
+  is_preferred: boolean;
+  lots: CollectionLocationLotRead[];
+};
+
+export type CollectionOutputProductRead = {
+  product_id: number;
+  product_name: string;
+  product_sku?: string | null;
+  product_image_url?: string | null;
+  planned_quantity: number;
+};
+
+export type CollectionJobHeaderRead = {
+  job_number: string;
+  job_kind: "batch" | "order";
+  outputs: CollectionOutputProductRead[];
+};
+
 export type CollectionTaskRead = {
   task_key: string;
   component_product_id: number;
@@ -782,16 +816,20 @@ export type CollectionTaskRead = {
   product_ean?: string | null;
   product_catalog_number?: string | null;
   product_unit?: string | null;
+  required_qty: number;
+  collected_qty: number;
+  selected_location_id?: number | null;
+  warehouse_total_available?: number | null;
+  location_options: CollectionLocationOptionRead[];
   location_id: number;
   location_code: string;
-  required_qty: number;
   available_qty?: number | null;
-  collected_qty: number;
 };
 
 export type BatchCollectionStateRead = {
   batch_id: number;
   status: string;
+  header: CollectionJobHeaderRead;
   tasks: CollectionTaskRead[];
   collected_count: number;
   total_count: number;
@@ -872,7 +910,7 @@ export async function fetchCollectionState(
 export async function updateCollectionTask(
   tenantId: number,
   batchId: number,
-  body: { task_key: string; collected_qty: number },
+  body: { task_key: string; collected_qty: number; location_id?: number | null },
   warehouseId?: number,
 ) {
   const res = await api.post<BatchCollectionStateRead>(
@@ -941,6 +979,7 @@ export type ProductionExecutionJobRead = {
   status: ProductionOrderStatus | ProductionBatchStatus;
   phase?: ProductionExecutionPhase | null;
   product_label: string;
+  product_image_url?: string | null;
   planned_quantity: number;
   completed_quantity: number;
   progress_percent: number;
@@ -978,6 +1017,7 @@ export async function releaseOrderToWms(
 export type OrderCollectionStateRead = {
   order_id: number;
   status: string;
+  header: CollectionJobHeaderRead;
   tasks: CollectionTaskRead[];
   collected_count: number;
   total_count: number;
@@ -1009,7 +1049,7 @@ export async function fetchOrderCollectionState(
 export async function updateOrderCollectionTask(
   tenantId: number,
   orderId: number,
-  body: { task_key: string; collected_qty: number },
+  body: { task_key: string; collected_qty: number; location_id?: number | null },
   warehouseId?: number,
 ): Promise<OrderCollectionStateRead> {
   const res = await api.post<OrderCollectionStateRead>(`/production/orders/${orderId}/collection`, body, {

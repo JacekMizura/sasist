@@ -1077,38 +1077,21 @@ def _init_collection_tasks(db: Session, batch: ProductionBatch) -> dict[str, Any
     for comp in plan.aggregated_components:
         pid = int(comp.component_product_id)
         p = products.get(pid)
-        allocs = list(comp.auto_allocation or [])
-        if not allocs and comp.suggested_locations:
-            for s in comp.suggested_locations[:3]:
-                qty = float(s.auto_pick_qty or s.available or comp.required)
-                if qty <= 0:
-                    continue
-                allocs.append(
-                    type("_A", (), {"location_id": int(s.location_id), "location_code": str(s.code), "quantity": qty})()
-                )
-        if not allocs:
-            allocs = [
-                type("_A", (), {"location_id": 0, "location_code": "MAG", "quantity": float(comp.required)})()
-            ]
-        for alloc in allocs:
-            tasks.append(
-                build_collection_task_row(
-                    component_product_id=pid,
-                    product_name=str(comp.product_name),
-                    product_sku=comp.product_sku,
-                    product=p,
-                    location_id=int(alloc.location_id),
-                    location_code=str(alloc.location_code),
-                    required_qty=float(alloc.quantity),
-                    suggested_locations=list(comp.suggested_locations or []),
-                    warehouse_available=float(comp.available),
-                )
+        tasks.append(
+            build_collection_task_row(
+                component_product_id=pid,
+                product_name=str(comp.product_name),
+                product_sku=comp.product_sku,
+                product=p,
+                required_qty=float(comp.required),
             )
+        )
     return {"tasks": tasks}
 
 
 def get_collection_state(db: Session, *, tenant_id: int, batch_id: int) -> BatchCollectionStateRead:
-    from .production_execution.collection_task_builder import enrich_collection_tasks
+    from .production_execution.collection_task_builder import hydrate_collection_tasks
+    from .production_execution.collection_location_service import preferred_location_ids_from_plan_rows
 
     batch = _load_batch_entity(db, tenant_id=tenant_id, batch_id=batch_id)
     raw = getattr(batch, "collection_state_json", None)
@@ -1118,14 +1101,28 @@ def get_collection_state(db: Session, *, tenant_id: int, batch_id: int) -> Batch
             tasks_raw = (json.loads(str(raw)).get("tasks") or [])
         except json.JSONDecodeError:
             tasks_raw = []
-    tasks_raw = enrich_collection_tasks(db, tasks_raw)
+    plan = build_batch_pick_plan(db, tenant_id=int(batch.tenant_id), batch_id=int(batch.id))
+    pref_by_product = {
+        int(c.component_product_id): preferred_location_ids_from_plan_rows([c])
+        for c in plan.aggregated_components
+    }
+    tasks_raw = hydrate_collection_tasks(
+        db,
+        tenant_id=int(batch.tenant_id),
+        warehouse_id=int(batch.warehouse_id),
+        tasks_raw=tasks_raw,
+        preferred_by_product=pref_by_product,
+    )
     tasks = [CollectionTaskRead(**t) for t in tasks_raw]
     done = sum(1 for t in tasks if t.collected_qty >= t.required_qty - 1e-6)
     total = len(tasks)
     pct = round(100.0 * done / total, 1) if total else 0.0
+    from .production_execution.collection_job_header import build_batch_collection_header
+
     return BatchCollectionStateRead(
         batch_id=int(batch.id),
         status=str(batch.status),
+        header=build_batch_collection_header(db, batch),
         tasks=tasks,
         collected_count=done,
         total_count=total,
@@ -1227,8 +1224,11 @@ def update_collection_task(
         data = {"tasks": []}
     found = False
     for t in data.get("tasks") or []:
-        if str(t.get("task_key")) == str(body.task_key):
+        if str(t.get("task_key")) == str(body.task_key) or str(t.get("component_product_id")) == str(body.task_key):
             t["collected_qty"] = round(float(body.collected_qty), 4)
+            if body.location_id is not None and int(body.location_id) > 0:
+                t["selected_location_id"] = int(body.location_id)
+                t["location_id"] = int(body.location_id)
             found = True
             break
     if not found:
@@ -1255,11 +1255,12 @@ def finish_collecting(
     totals = _aggregate_batch_components(batch)
     allocs: list[ComponentAllocationWrite] = []
     for t in state.tasks:
-        if t.location_id > 0 and t.collected_qty > 0:
+        loc_id = int(t.selected_location_id or t.location_id or 0)
+        if loc_id > 0 and t.collected_qty > 0:
             allocs.append(
                 ComponentAllocationWrite(
                     line_snapshot_id=int(t.component_product_id),
-                    location_id=int(t.location_id),
+                    location_id=loc_id,
                     quantity=float(t.collected_qty),
                 )
             )

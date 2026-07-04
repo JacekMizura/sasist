@@ -4,6 +4,7 @@ import {
   type ProductionExecutionKind,
 } from "@/modules/production/productionExecutionTypes";
 import { operationalBadgeBase, operationalBadgeNeutralClass } from "@/components/operational/operationalSemanticBadges";
+import { ProductThumb } from "./ProductThumb";
 
 type Accent = "amber" | "blue" | "emerald";
 
@@ -18,6 +19,7 @@ type Props = {
   label: string;
   number: string;
   productLine?: string;
+  productImageUrl?: string | null;
   quantity?: number | string;
   quantitySuffix?: string;
   accent?: Accent;
@@ -29,6 +31,7 @@ export function WmsProductionActiveBatchBar({
   label,
   number,
   productLine,
+  productImageUrl,
   quantity,
   quantitySuffix = "szt.",
   accent = "amber",
@@ -36,7 +39,9 @@ export function WmsProductionActiveBatchBar({
   return (
     <div className="relative w-full overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className={`absolute bottom-0 left-0 top-0 w-1 ${ACCENT_STRIP[accent]}`} aria-hidden />
-      <div className="pl-3">
+      <div className="flex gap-4 pl-3">
+        <ProductThumb imageUrl={productImageUrl} name={productLine ?? number} size="lg" />
+        <div className="min-w-0 flex-1">
         {kind ? (
           <span className={`${operationalBadgeBase} ${operationalBadgeNeutralClass} mb-2 inline-flex text-[10px] uppercase tracking-wide`}>
             {PRODUCTION_KIND_LABEL[kind]}
@@ -51,6 +56,7 @@ export function WmsProductionActiveBatchBar({
             <span className="ml-1.5 text-sm font-semibold text-slate-500">{quantitySuffix}</span>
           </p>
         ) : null}
+        </div>
       </div>
     </div>
   );

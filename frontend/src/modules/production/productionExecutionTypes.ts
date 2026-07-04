@@ -1,5 +1,5 @@
 import type { ProductionExecutionJobRead, ProductionExecutionPhase } from "@/api/productionApi";
-import type { CollectionTaskRead } from "@/api/productionApi";
+import type { CollectionJobHeaderRead, CollectionTaskRead } from "@/api/productionApi";
 
 export type ProductionExecutionKind = "batch" | "order";
 
@@ -26,6 +26,7 @@ export const EXECUTION_STATUS_LABEL: Record<string, string> = {
 export type UnifiedCollectionState = {
   ref: ProductionExecutionRef;
   status: string;
+  header: CollectionJobHeaderRead;
   tasks: CollectionTaskRead[];
   collectedCount: number;
   totalCount: number;

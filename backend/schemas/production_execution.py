@@ -7,7 +7,7 @@ from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
-from .production_batch import CollectionTaskRead
+from .production_batch import CollectionJobHeaderRead, CollectionTaskRead
 
 ProductionExecutionKind = Literal["batch", "order"]
 ProductionExecutionPhase = Literal["collecting", "execute", "putaway"]
@@ -32,6 +32,7 @@ class ProductionExecutionJobRead(BaseModel):
     status: ProductionExecutionStatus
     phase: Optional[ProductionExecutionPhase] = None
     product_label: str = ""
+    product_image_url: Optional[str] = None
     planned_quantity: float = 0.0
     completed_quantity: float = 0.0
     progress_percent: float = 0.0
@@ -45,6 +46,7 @@ class ProductionExecutionJobRead(BaseModel):
 class OrderCollectionStateRead(BaseModel):
     order_id: int
     status: str
+    header: CollectionJobHeaderRead
     tasks: List[CollectionTaskRead] = Field(default_factory=list)
     collected_count: int = 0
     total_count: int = 0

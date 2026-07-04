@@ -107,6 +107,40 @@ class ProductionBatchRead(BaseModel):
     updated_at: Optional[datetime] = None
 
 
+class CollectionLocationLotRead(BaseModel):
+    batch_number: Optional[str] = None
+    lot: Optional[str] = None
+    expiry_date: Optional[str] = None
+    production_date: Optional[str] = None
+    serial_number: Optional[str] = None
+    available_qty: float = 0.0
+
+
+class CollectionLocationOptionRead(BaseModel):
+    location_id: int
+    location_code: str
+    operational_zone_type: Optional[str] = None
+    storage_type: Optional[str] = None
+    badge_kind: Optional[str] = None
+    available_qty: float = 0.0
+    is_preferred: bool = False
+    lots: List[CollectionLocationLotRead] = Field(default_factory=list)
+
+
+class CollectionOutputProductRead(BaseModel):
+    product_id: int
+    product_name: str
+    product_sku: Optional[str] = None
+    product_image_url: Optional[str] = None
+    planned_quantity: float
+
+
+class CollectionJobHeaderRead(BaseModel):
+    job_number: str
+    job_kind: Literal["batch", "order"]
+    outputs: List[CollectionOutputProductRead] = Field(default_factory=list)
+
+
 class CollectionTaskRead(BaseModel):
     task_key: str
     component_product_id: int
@@ -116,16 +150,21 @@ class CollectionTaskRead(BaseModel):
     product_ean: Optional[str] = None
     product_catalog_number: Optional[str] = None
     product_unit: Optional[str] = None
-    location_id: int
-    location_code: str
     required_qty: float
-    available_qty: Optional[float] = None
     collected_qty: float = 0.0
+    selected_location_id: Optional[int] = None
+    warehouse_total_available: Optional[float] = None
+    location_options: List[CollectionLocationOptionRead] = Field(default_factory=list)
+    # Flat mirror for legacy clients / finish_collecting
+    location_id: int = 0
+    location_code: str = ""
+    available_qty: Optional[float] = None
 
 
 class BatchCollectionStateRead(BaseModel):
     batch_id: int
     status: str
+    header: CollectionJobHeaderRead
     tasks: List[CollectionTaskRead] = Field(default_factory=list)
     collected_count: int = 0
     total_count: int = 0
@@ -135,6 +174,7 @@ class BatchCollectionStateRead(BaseModel):
 class BatchCollectionUpdateBody(BaseModel):
     task_key: str
     collected_qty: float = Field(..., ge=0)
+    location_id: Optional[int] = Field(None, ge=1)
 
 
 class BatchProductionProgressBody(BaseModel):

@@ -45,7 +45,8 @@ def _create_pw_for_putaway(
         production_batch_id=production_batch_id,
         production_batch_line_id=production_batch_line_id,
         production_order_id=production_order_id,
-        status="posted",
+        # Same WMS gate as PZ after finish_wms_receiving_pz: draft + receiving DONE → Rozlokowanie queue.
+        status="draft",
         receiving_status="DONE",
         putaway_status="NOT_STARTED",
         relocation_status="OPEN",
@@ -90,6 +91,9 @@ def _create_pw_for_putaway(
         stock_disposition=STOCK_DISPOSITION_SALEABLE,
     )
     append_receipt_operation(db, doc, line, float(quantity))
+    from ..stock_document_service import recompute_putaway_status_for_document
+
+    recompute_putaway_status_for_document(doc, [line], db=db)
     doc.updated_at = datetime.utcnow()
     db.flush()
     return doc

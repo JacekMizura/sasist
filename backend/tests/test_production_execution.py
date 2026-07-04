@@ -109,5 +109,22 @@ class TestLegacyOrderStatusMigration(unittest.TestCase):
         self.assertEqual(order.status, "planned")
 
 
+class TestProductionPwPutawayParity(unittest.TestCase):
+    """Production PW must enter the same WMS Rozlokowanie gate as PZ after Przyjęcie."""
+
+    def test_production_pw_draft_allows_putaway_like_pz_after_receiving(self):
+        from types import SimpleNamespace
+
+        from backend.services.stock_document_service import doc_allows_wms_putaway, wms_putaway_queue_statuses
+
+        pz_after_receiving = SimpleNamespace(document_type="PZ", status="draft", creation_source="")
+        pw_after_production = SimpleNamespace(
+            document_type="PW", status="draft", creation_source="PRODUCTION"
+        )
+        self.assertTrue(doc_allows_wms_putaway(pz_after_receiving))
+        self.assertTrue(doc_allows_wms_putaway(pw_after_production))
+        self.assertIn("draft", wms_putaway_queue_statuses())
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1,5 +1,20 @@
 # Change log
 
+## 2026-06-08 — Produkcja WMS: jeden ekran zbierania + WmsProductTaskCard + PW draft
+
+- **Zbieranie:** nagłówek z produktem końcowym (partia/MO, zdjęcie, SKU, ilość); wszystkie półprodukty na jednym ekranie; accordion — aktywna karta rozwinięta, po potwierdzeniu auto-rozwija następną; `CollectionJobHeaderRead` w API.
+- **Komponenty:** `WmsProductTaskCard` (wrapper na `WmsProductCard`) — Produkcja/Zbieranie; Przyjęcie/Rozlokowanie nadal na własnych kartach (ReceivingLineCard, PutawayLineCard) — migracja w toku.
+- **PW:** status `draft` + `receiving_status=DONE` + `putaway_status=NOT_STARTED` (jak PZ po Przyjęciu) — ta sama brama Rozlokowania.
+- **Railway 404 settings:** `/api/wms/settings/production` i `product-validation` → 404 na produkcji; `/api/wms/settings/packing` → 401 (trasa istnieje). Wniosek: Railway uruchamia commit **sprzed** `4438ab9` (trasy dodane w v3) — nie brak routera lokalnie, lecz stary deploy.
+
+## 2026-06-08 — Produkcja WMS: zbieranie z wyborem lokalizacji + fixy PW/settings
+
+- Zbieranie: jedno zadanie na półprodukt, lista lokalizacji z badge WMS, LOT/partia/ważność/S/N, wybór lokalizacji przez operatora.
+- Dostępne: ilość na wybranej lokalizacji + suma magazynowa `(X szt. w magazynie)`.
+- Zdjęcia wyrobu: kolejka WMS, pasek aktywnego zadania, karty zadań, ERP BatchCard (product_image_url z API).
+- PW: `recompute_putaway_status_for_document` po utworzeniu; po zakończeniu produkcji nawigacja do `/wms/putaway/{pwId}`.
+- WMS Settings: `_wms_settings_wh_dep` respektuje `warehouse_id` z query; log montowania tras przy starcie.
+
 ## 2026-06-08 — Produkcja WMS: PW → standardowe Rozlokowanie + ustawienia terminala
 
 - **Workflow:** zakończenie produkcji tworzy dokument PW (`creation_source=PRODUCTION`) i wrzuca go do kolejki `/wms/putaway` — bez osobnego terminala „Odłożenie wyrobów”.

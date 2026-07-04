@@ -1962,6 +1962,16 @@ def _ensure_wms_returns_router_mounted() -> None:
 
 _ensure_wms_returns_router_mounted()
 
+_WMS_SETTINGS_PATHS = (
+    f"{API_PREFIX}/wms/settings/product-validation",
+    f"{API_PREFIX}/wms/settings/production",
+)
+for _settings_path in _WMS_SETTINGS_PATHS:
+    _mounted = any(getattr(r, "path", None) == _settings_path for r in app.routes)
+    print(f"[routes] wms_settings {_settings_path} mounted={_mounted}", flush=True)
+    if not _mounted:
+        print(f"[routes] MISSING {_settings_path}", flush=True)
+
 
 _MSG_ADMIN = f"{API_PREFIX}/admin/message-templates"
 _MSG_LEGACY = f"{API_PREFIX}/message-templates"

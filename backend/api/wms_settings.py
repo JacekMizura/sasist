@@ -55,9 +55,12 @@ router = APIRouter(prefix="/wms/settings", tags=["WMS Settings"])
 
 
 def _wms_settings_wh_dep(
-    tenant_id: int = Query(...),
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int | None = Query(None, ge=1),
     db: Session = Depends(get_db),
 ) -> int:
+    if warehouse_id is not None and int(warehouse_id) > 0:
+        return int(warehouse_id)
     try:
         return resolve_tenant_default_warehouse_id(db, tenant_id)
     except ValueError:

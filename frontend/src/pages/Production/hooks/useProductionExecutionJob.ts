@@ -38,6 +38,7 @@ function normalizeBatchCollection(ref: ProductionExecutionRef, raw: Awaited<Retu
   return {
     ref,
     status: raw.status,
+    header: raw.header,
     tasks: raw.tasks,
     collectedCount: raw.collected_count,
     totalCount: raw.total_count,
@@ -49,6 +50,7 @@ function normalizeOrderCollection(ref: ProductionExecutionRef, raw: Awaited<Retu
   return {
     ref,
     status: raw.status,
+    header: raw.header,
     tasks: raw.tasks,
     collectedCount: raw.collected_count,
     totalCount: raw.total_count,
@@ -229,25 +231,20 @@ export function useProductionExecutionJob(phase: ProductionExecutionPhase, activ
   );
 
   const confirmCollectionTask = useCallback(
-    async (taskKey: string, collectedQty: number) => {
+    async (taskKey: string, collectedQty: number, locationId?: number) => {
       if (activeRef == null || warehouseId == null) return;
       setBusy(true);
       try {
+        const body = {
+          task_key: taskKey,
+          collected_qty: collectedQty,
+          ...(locationId != null && locationId > 0 ? { location_id: locationId } : {}),
+        };
         if (activeRef.kind === "batch") {
-          const next = await updateCollectionTask(
-            tenantId,
-            activeRef.id,
-            { task_key: taskKey, collected_qty: collectedQty },
-            warehouseId,
-          );
+          const next = await updateCollectionTask(tenantId, activeRef.id, body, warehouseId);
           setCollectionState(normalizeBatchCollection(activeRef, next));
         } else {
-          const next = await updateOrderCollectionTask(
-            tenantId,
-            activeRef.id,
-            { task_key: taskKey, collected_qty: collectedQty },
-            warehouseId,
-          );
+          const next = await updateOrderCollectionTask(tenantId, activeRef.id, body, warehouseId);
           setCollectionState(normalizeOrderCollection(activeRef, next));
         }
       } finally {
@@ -302,11 +299,15 @@ export function useProductionExecutionJob(phase: ProductionExecutionPhase, activ
       }
       toast.success(
         pwId
-          ? `Produkcja zakończona. Dokument PW trafił do modułu Rozlokowanie (/wms/putaway/${pwId}).`
-          : "Produkcja zakończona. Wyroby trafiły do kolejki Rozlokowanie (/wms/putaway).",
-        { duration: 8000 },
+          ? `Produkcja zakończona. Dokument PW #${pwId} jest w module Rozlokowanie.`
+          : "Produkcja zakończona. Wyroby trafiły do kolejki Rozlokowanie.",
+        { duration: 6000 },
       );
-      navigate(wmsProductionPaths.collecting());
+      if (pwId) {
+        navigate(`/wms/putaway/${pwId}`);
+      } else {
+        navigate("/wms/putaway");
+      }
       await reloadQueue();
     } finally {
       setBusy(false);
