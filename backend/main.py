@@ -260,6 +260,7 @@ from .api.bundle_intelligence import router as bundle_intelligence_router
 from .api.bundle_intelligence import router as bundle_intelligence_router
 from .api.compositions import router as compositions_router
 from .api.production import router as production_router
+from .api.production_planning import router as production_planning_router
 from .api.manufacturer import router as manufacturer_router
 from .api.purchasing import router as purchasing_router
 from .api.supplier import router as supplier_router
@@ -1822,6 +1823,7 @@ _API_ROUTERS = (
     bundle_intelligence_router,
     compositions_router,
     production_router,
+    production_planning_router,
     manufacturer_router,
     purchasing_router,
     supplier_router,

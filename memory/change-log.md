@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-06-08 — Planowanie zapotrzebowania MRP (ProductionPlanningService)
+
+- Backend: `backend/services/production_planning/` — order demand, velocity, pipeline, priority, `demand_engine_service`.
+- API: `GET /production/planning/demand?warehouse_id=&coverage_days=&sales_lookback_days=`.
+- UI: sekcja Planowanie zapotrzebowania na `/production/planning` — 3 karty + tabela; CreateBatchModal z pre-fill z MRP.
+
 ## 2026-06-08 — Produkcja WMS: jeden ekran zbierania + WmsProductTaskCard + PW draft
 
 - **Zbieranie:** nagłówek z produktem końcowym (partia/MO, zdjęcie, SKU, ilość); wszystkie półprodukty na jednym ekranie; accordion — aktywna karta rozwinięta, po potwierdzeniu auto-rozwija następną; `CollectionJobHeaderRead` w API.

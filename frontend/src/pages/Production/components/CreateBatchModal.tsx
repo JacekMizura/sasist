@@ -20,6 +20,7 @@ import {
   type ProductionBatchPreviewRead,
   type RecipeCardRead,
 } from "../../../api/productionApi";
+import type { DemandBatchLineDraft } from "../../../api/productionPlanningApi";
 import { formatDurationMinutes } from "../productionTheme";
 import { formatProductionMoney, stockTone, STOCK_TONE_CLASS } from "../productionUi";
 import { ProductThumb } from "./ProductThumb";
@@ -34,13 +35,15 @@ type Props = {
   open: boolean;
   tenantId: number;
   warehouseId: number;
+  /** Pre-filled lines from demand planning (MRP). */
+  initialLines?: DemandBatchLineDraft[];
   onClose: () => void;
   onCreated: (batchId: number) => void;
 };
 
 const STEPS = ["Produkty", "Materiały", "Plan"] as const;
 
-export function CreateBatchModal({ open, tenantId, warehouseId, onClose, onCreated }: Props) {
+export function CreateBatchModal({ open, tenantId, warehouseId, initialLines, onClose, onCreated }: Props) {
   const [recipes, setRecipes] = useState<RecipeCardRead[]>([]);
   const [lines, setLines] = useState<LineDraft[]>([]);
   const [preview, setPreview] = useState<ProductionBatchPreviewRead | null>(null);
@@ -51,11 +54,31 @@ export function CreateBatchModal({ open, tenantId, warehouseId, onClose, onCreat
   const reloadRecipes = useCallback(async () => {
     const rows = await listRecipeCards(tenantId, warehouseId, { activeOnly: true });
     setRecipes(rows);
+    return rows;
   }, [tenantId, warehouseId]);
 
   useEffect(() => {
-    if (open) void reloadRecipes();
-  }, [open, reloadRecipes]);
+    if (!open) return;
+    void (async () => {
+      const rows = await reloadRecipes();
+      if (!initialLines?.length) {
+        setLines([]);
+        return;
+      }
+      const byComp = new Map(rows.map((r) => [r.composition_id, r]));
+      const draft: LineDraft[] = [];
+      for (const il of initialLines) {
+        const rec = byComp.get(il.composition_id);
+        if (!rec) continue;
+        draft.push({
+          key: `demand-${il.composition_id}`,
+          recipe: rec,
+          quantity: Math.max(1, Math.ceil(il.planned_quantity)),
+        });
+      }
+      setLines(draft);
+    })();
+  }, [open, initialLines, reloadRecipes]);
 
   useEffect(() => {
     if (!open || lines.length === 0) {
