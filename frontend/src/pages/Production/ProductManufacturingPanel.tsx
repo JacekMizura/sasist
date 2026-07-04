@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { AlertTriangle, ExternalLink, Factory, Plus } from "lucide-react";
+import { ExternalLink, Factory, Plus } from "lucide-react";
 import {
+  activateComposition,
   listCompositionsForProduct,
   listCompositionUsages,
+  type CompositionCostEstimateRead,
   type CompositionUsageRead,
   type ProductCompositionRead,
 } from "../../api/compositionApi";
@@ -20,10 +22,7 @@ import {
   formatProductionMoney,
   PRODUCTION_STATUS_LABEL,
   productionStatusBadgeClass,
-  stockTone,
-  STOCK_TONE_CLASS,
 } from "./productionUi";
-import { ProductThumb } from "./components/ProductThumb";
 import { useWarehouse } from "../../context/WarehouseContext";
 
 type Props = {
@@ -40,6 +39,15 @@ type RwPwPreview = {
   pwId?: number | null;
 };
 
+function InfoPanelSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <h3 className="mb-3 border-b border-slate-200 pb-2 text-sm font-bold text-slate-900">{title}</h3>
+      {children}
+    </section>
+  );
+}
+
 export function ProductManufacturingPanel({ tenantId, productId, productName, onChanged }: Props) {
   const { warehouse } = useWarehouse();
   const warehouseId = warehouse?.id;
@@ -51,11 +59,17 @@ export function ProductManufacturingPanel({ tenantId, productId, productName, on
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [requestNewRecipe, setRequestNewRecipe] = useState(false);
+  const [editRecipeId, setEditRecipeId] = useState<number | null>(null);
+  const [liveCost, setLiveCost] = useState<CompositionCostEstimateRead | null>(null);
+  const [activatingId, setActivatingId] = useState<number | null>(null);
+  const [autoOpenedRecipe, setAutoOpenedRecipe] = useState(false);
 
   const activeRecipe = useMemo(
     () => recipes.find((c) => c.is_active) ?? recipes[0] ?? null,
     [recipes],
   );
+
+  const estimatedUnitCost = liveCost?.unit_cost_net ?? detail?.unit_cost_net ?? null;
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -109,9 +123,29 @@ export function ProductManufacturingPanel({ tenantId, productId, productName, on
     void reload();
   }, [reload]);
 
+  useEffect(() => {
+    if (autoOpenedRecipe || loading || recipes.length === 0) return;
+    const initial = recipes.find((c) => c.is_active) ?? recipes[0];
+    if (initial) setEditRecipeId(initial.id);
+    setAutoOpenedRecipe(true);
+  }, [autoOpenedRecipe, loading, recipes]);
+
   const handleChanged = () => {
+    setLiveCost(null);
     void reload();
     onChanged?.();
+  };
+
+  const handleActivate = async (compositionId: number) => {
+    setActivatingId(compositionId);
+    try {
+      await activateComposition(tenantId, compositionId, true);
+      handleChanged();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Aktywacja receptury nie powiodła się.");
+    } finally {
+      setActivatingId(null);
+    }
   };
 
   if (loading) {
@@ -138,9 +172,9 @@ export function ProductManufacturingPanel({ tenantId, productId, productName, on
         </p>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,13fr)_minmax(0,7fr)]">
-        <div className="min-w-0 space-y-6">
-          {!activeRecipe || !detail ? (
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,7fr)_minmax(0,3fr)]">
+        <div className="min-w-0 space-y-4">
+          {!activeRecipe && recipes.length === 0 ? (
             <section className="rounded-xl border-2 border-dashed border-slate-300 bg-white p-8 text-center shadow-sm">
               <Factory className="mx-auto h-10 w-10 text-slate-400" aria-hidden />
               <h3 className="mt-4 text-lg font-semibold text-slate-900">Ten produkt nie posiada receptury produkcyjnej</h3>
@@ -166,138 +200,48 @@ export function ProductManufacturingPanel({ tenantId, productId, productName, on
               </div>
             </section>
           ) : (
-            <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Receptura produkcyjna (BOM)</h3>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                <div className="rounded-lg border border-slate-100 bg-slate-50 px-4 py-3">
-                  <p className="text-xs text-slate-500">Szac. koszt / szt.</p>
-                  <p className="mt-1 text-lg font-semibold tabular-nums text-slate-900">{formatProductionMoney(detail.unit_cost_net)}</p>
-                </div>
-                <div className="rounded-lg border border-slate-100 bg-slate-50 px-4 py-3">
-                  <p className="text-xs text-slate-500">Można wyprodukować</p>
-                  <p className="mt-1 text-lg font-semibold text-emerald-800">{Math.floor(detail.max_producible)} szt.</p>
-                </div>
-              </div>
-              <div className="mt-4 flex flex-wrap gap-2 text-sm text-slate-600">
-                <span>
-                  <strong>{detail.recipe_name}</strong> · v{detail.version} · wydajność {detail.yield_quantity} szt.
-                </span>
-                {detail.has_shortages ? (
-                  <span className="inline-flex items-center gap-1 text-amber-800">
-                    <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
-                    Braki składników
-                  </span>
-                ) : null}
-              </div>
-              <Link
-                to={erpProductionPaths.recipe(activeRecipe.id)}
-                className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-slate-800 underline hover:text-slate-600"
-              >
-                Otwórz recepturę w ERP
-                <ExternalLink className="h-3.5 w-3.5" aria-hidden />
-              </Link>
-            </section>
+            <CompositionVisualEditor
+              tenantId={tenantId}
+              productId={productId}
+              productName={productName}
+              mode="manufacturing"
+              compositions={recipes}
+              onChanged={handleChanged}
+              sectionTitle="Receptura produkcyjna"
+              sectionHint="Dane receptury, składniki i podgląd BOM."
+              requestNewEditor={requestNewRecipe}
+              onRequestNewHandled={() => setRequestNewRecipe(false)}
+              hideCompositionCards
+              editCompositionId={editRecipeId}
+              onEditCompositionHandled={() => setEditRecipeId(null)}
+              onCostEstimateChange={setLiveCost}
+            />
           )}
-
-          <CompositionVisualEditor
-            tenantId={tenantId}
-            productId={productId}
-            productName={productName}
-            mode="manufacturing"
-            compositions={recipes}
-            onChanged={handleChanged}
-            sectionTitle="Receptury produkcyjne"
-            sectionHint="BOM — składniki, wydajność i wersje."
-            requestNewEditor={requestNewRecipe}
-            onRequestNewHandled={() => setRequestNewRecipe(false)}
-          />
-
-          {detail ? (
-            <>
-              <section>
-                <h3 className="mb-4 border-b border-slate-200 pb-2 text-lg font-bold text-slate-900">Składniki (BOM)</h3>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {detail.components.map((c) => {
-                    const tone = stockTone(c.required_per_unit, c.available);
-                    return (
-                      <div key={c.component_product_id} className={`rounded-lg border p-4 ${STOCK_TONE_CLASS[tone]}`}>
-                        <div className="flex gap-3">
-                          <ProductThumb imageUrl={c.product_image_url} name={c.product_name} size="sm" />
-                          <div className="min-w-0 flex-1 text-sm">
-                            <p className="font-medium text-slate-900">{c.product_name}</p>
-                            <p className="text-xs text-slate-500">
-                              Wymagane: {c.required_per_unit} · Dostępne: {c.available}
-                              {c.shortage > 0 ? ` · Brakuje ${c.shortage}` : ""}
-                            </p>
-                            <p className="mt-1 text-xs text-slate-600">Koszt: {formatProductionMoney(c.line_cost_net)}</p>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </section>
-
-              <section className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm">
-                <h3 className="mb-2 font-semibold text-slate-900">Podgląd dokumentów magazynowych (RW / PW)</h3>
-                <p className="text-slate-600">
-                  Po zakończeniu produkcji system generuje <strong>RW</strong> (zużycie składników) i <strong>PW</strong> (przyjęcie wyrobu gotowego).
-                </p>
-                {rwPw?.rwId || rwPw?.pwId ? (
-                  <div className="mt-3 flex flex-wrap gap-3">
-                    {rwPw.rwId ? (
-                      <Link
-                        to={`/documents/warehouse?doc=${rwPw.rwId}`}
-                        className="rounded bg-white px-3 py-1.5 text-xs font-medium text-slate-800 ring-1 ring-slate-200 hover:bg-slate-100"
-                      >
-                        RW {rwPw.rwNumber ?? `#${rwPw.rwId}`}
-                      </Link>
-                    ) : null}
-                    {rwPw.pwId ? (
-                      <Link
-                        to={`/documents/warehouse?doc=${rwPw.pwId}`}
-                        className="rounded bg-white px-3 py-1.5 text-xs font-medium text-slate-800 ring-1 ring-slate-200 hover:bg-slate-100"
-                      >
-                        PW {rwPw.pwNumber ?? `#${rwPw.pwId}`}
-                      </Link>
-                    ) : null}
-                  </div>
-                ) : (
-                  <p className="mt-2 text-xs text-slate-500">Brak zakończonych zleceń z wygenerowanymi dokumentami.</p>
-                )}
-              </section>
-            </>
-          ) : null}
         </div>
 
-        <aside className="min-w-0 space-y-6 xl:sticky xl:top-4 xl:self-start">
-          <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <h3 className="mb-3 border-b border-slate-200 pb-2 text-base font-bold text-slate-900">Zużycie materiałów</h3>
+        <aside className="min-w-0 space-y-4 xl:sticky xl:top-4 xl:self-start">
+          <InfoPanelSection title="Zużycie materiałów">
             {usages.length === 0 ? (
               <p className="text-sm text-slate-500">Ten produkt nie jest składnikiem innych receptur.</p>
             ) : (
-              <>
-                <p className="mb-3 text-sm text-slate-500">Składnik w recepturach produkcyjnych:</p>
-                <ul className="space-y-2 text-sm">
-                  {usages.map((u) => (
-                    <li
-                      key={`${u.composition_id}-${u.parent_product_id}`}
-                      className="flex justify-between gap-4 rounded-lg border border-slate-100 px-3 py-2"
-                    >
-                      <span>
-                        <span className="font-medium text-slate-900">{u.parent_product_name}</span>
-                        <span className="text-slate-500"> — {u.composition_name}</span>
-                      </span>
-                      <span className="shrink-0 text-slate-600">× {u.quantity}</span>
-                    </li>
-                  ))}
-                </ul>
-              </>
+              <ul className="space-y-1.5 text-sm">
+                {usages.map((u) => (
+                  <li
+                    key={`${u.composition_id}-${u.parent_product_id}`}
+                    className="flex justify-between gap-3 rounded-lg border border-slate-100 px-2.5 py-2"
+                  >
+                    <span className="min-w-0">
+                      <span className="font-medium text-slate-900">{u.parent_product_name}</span>
+                      <span className="block truncate text-xs text-slate-500">{u.composition_name}</span>
+                    </span>
+                    <span className="shrink-0 tabular-nums text-slate-600">× {u.quantity}</span>
+                  </li>
+                ))}
+              </ul>
             )}
-          </section>
+          </InfoPanelSection>
 
-          <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <h3 className="mb-3 border-b border-slate-200 pb-2 text-base font-bold text-slate-900">Historia produkcji produktu</h3>
+          <InfoPanelSection title="Historia produkcji produktu">
             {history.length === 0 ? (
               <p className="text-sm text-slate-500">Brak zleceń produkcyjnych dla tego produktu.</p>
             ) : (
@@ -305,23 +249,23 @@ export function ProductManufacturingPanel({ tenantId, productId, productName, on
                 <table className="min-w-full text-sm">
                   <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
                     <tr>
-                      <th className="px-2 py-2">Nr</th>
-                      <th className="px-2 py-2">Status</th>
-                      <th className="px-2 py-2 text-right">Ilość</th>
+                      <th className="px-2 py-1.5">Nr</th>
+                      <th className="px-2 py-1.5">Status</th>
+                      <th className="px-2 py-1.5 text-right">Ilość</th>
                     </tr>
                   </thead>
                   <tbody>
                     {history.slice(0, 8).map((h) => (
                       <tr key={h.id} className="border-t border-slate-100 hover:bg-slate-50/80">
-                        <td className="px-2 py-2">
+                        <td className="px-2 py-1.5">
                           <Link to={erpProductionPaths.order(h.id)} className="font-mono text-xs text-slate-800 hover:underline">
                             {h.number}
                           </Link>
                         </td>
-                        <td className="px-2 py-2">
+                        <td className="px-2 py-1.5">
                           <span className={productionStatusBadgeClass(h.status)}>{PRODUCTION_STATUS_LABEL[h.status]}</span>
                         </td>
-                        <td className="px-2 py-2 text-right tabular-nums">
+                        <td className="px-2 py-1.5 text-right tabular-nums">
                           {h.status === "completed" ? h.produced_quantity : h.planned_quantity}
                         </td>
                       </tr>
@@ -330,13 +274,104 @@ export function ProductManufacturingPanel({ tenantId, productId, productName, on
                 </table>
               </div>
             )}
+            {rwPw?.rwId || rwPw?.pwId ? (
+              <div className="mt-3 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
+                {rwPw.rwId ? (
+                  <Link
+                    to={`/documents/warehouse?doc=${rwPw.rwId}`}
+                    className="rounded bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200 hover:bg-slate-100"
+                  >
+                    RW {rwPw.rwNumber ?? `#${rwPw.rwId}`}
+                  </Link>
+                ) : null}
+                {rwPw.pwId ? (
+                  <Link
+                    to={`/documents/warehouse?doc=${rwPw.pwId}`}
+                    className="rounded bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200 hover:bg-slate-100"
+                  >
+                    PW {rwPw.pwNumber ?? `#${rwPw.pwId}`}
+                  </Link>
+                ) : null}
+              </div>
+            ) : null}
             <Link
               to={erpProductionPaths.history}
               className="mt-3 inline-block text-xs font-medium text-slate-600 underline hover:text-slate-800"
             >
               Pełna historia w module ERP →
             </Link>
-          </section>
+          </InfoPanelSection>
+
+          <InfoPanelSection title="Szacowany koszt produkcji">
+            {estimatedUnitCost != null ? (
+              <>
+                <p className="text-2xl font-semibold tabular-nums text-slate-900">{formatProductionMoney(estimatedUnitCost)}</p>
+                <p className="mt-1 text-xs text-slate-500">netto / szt. (aktywna receptura)</p>
+                {detail ? (
+                  <p className="mt-3 text-sm text-slate-600">
+                    Można wyprodukować:{" "}
+                    <strong className="text-emerald-800">{Math.floor(detail.max_producible)} szt.</strong>
+                  </p>
+                ) : null}
+              </>
+            ) : (
+              <p className="text-sm text-slate-500">Koszt pojawi się po zdefiniowaniu składników receptury.</p>
+            )}
+          </InfoPanelSection>
+
+          {recipes.length > 0 ? (
+            <InfoPanelSection title="Wersje receptury">
+              <ul className="space-y-2">
+                {recipes.map((r) => (
+                  <li
+                    key={r.id}
+                    className={`rounded-lg border px-3 py-2.5 text-sm ${
+                      r.is_active ? "border-emerald-200 bg-emerald-50/60" : "border-slate-100 bg-slate-50/40"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate font-medium text-slate-900">{r.name}</p>
+                        <p className="text-xs text-slate-500">
+                          v{r.version} · {r.lines.length} skł. · wydajność {r.yield_quantity} szt.
+                        </p>
+                      </div>
+                      {r.is_active ? (
+                        <span className="shrink-0 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-emerald-800">
+                          Aktywna
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setEditRecipeId(r.id)}
+                        className="text-xs font-medium text-slate-700 underline hover:text-slate-900"
+                      >
+                        Edytuj
+                      </button>
+                      {!r.is_active ? (
+                        <button
+                          type="button"
+                          disabled={activatingId === r.id}
+                          onClick={() => void handleActivate(r.id)}
+                          className="text-xs font-medium text-violet-700 underline hover:text-violet-900 disabled:opacity-50"
+                        >
+                          {activatingId === r.id ? "Aktywowanie…" : "Aktywuj"}
+                        </button>
+                      ) : null}
+                      <Link
+                        to={erpProductionPaths.recipe(r.id)}
+                        className="text-xs font-medium text-slate-500 underline hover:text-slate-700"
+                      >
+                        ERP →
+                      </Link>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </InfoPanelSection>
+          ) : null}
         </aside>
       </div>
     </div>

@@ -73,6 +73,13 @@ type Props = {
   /** Parent can request opening the new-recipe editor (e.g. product empty state CTA). */
   requestNewEditor?: boolean;
   onRequestNewHandled?: () => void;
+  /** Hide inline recipe version cards — parent renders them in a sidebar. */
+  hideCompositionCards?: boolean;
+  /** Open editor for an existing composition (e.g. sidebar „Edytuj”). */
+  editCompositionId?: number | null;
+  onEditCompositionHandled?: () => void;
+  /** Live cost estimate while editing (for external info panel). */
+  onCostEstimateChange?: (estimate: CompositionCostEstimateRead | null) => void;
 };
 
 function modeCopy(mode: CompositionMode) {
@@ -119,6 +126,10 @@ export function CompositionVisualEditor({
   sectionHint,
   requestNewEditor,
   onRequestNewHandled,
+  hideCompositionCards = false,
+  editCompositionId,
+  onEditCompositionHandled,
+  onCostEstimateChange,
 }: Props) {
   const copy = modeCopy(mode);
   const [err, setErr] = useState<string | null>(null);
@@ -138,6 +149,8 @@ export function CompositionVisualEditor({
 
   const inputClass = `w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:ring-2 ${copy.accentRing}`;
   const numberInputClass = `${inputClass} ${PRODUCTION_NUMBER_INPUT}`;
+  const cellInputClass = `w-full rounded border border-slate-200 px-2 py-1.5 text-sm text-slate-800 focus:ring-1 ${copy.accentRing}`;
+  const cellNumberInputClass = `${cellInputClass} ${PRODUCTION_NUMBER_INPUT}`;
   const labelClass = "block text-sm font-medium text-slate-700 mb-1";
 
   const openNew = () => {
@@ -158,6 +171,17 @@ export function CompositionVisualEditor({
     openNew();
     onRequestNewHandled?.();
   }, [requestNewEditor]);
+
+  useEffect(() => {
+    if (editCompositionId == null) return;
+    const comp = compositions.find((c) => c.id === editCompositionId);
+    if (comp) openEdit(comp);
+    onEditCompositionHandled?.();
+  }, [editCompositionId, compositions]);
+
+  useEffect(() => {
+    onCostEstimateChange?.(costEstimate);
+  }, [costEstimate, onCostEstimateChange]);
 
   const openEdit = (comp: ProductCompositionRead) => {
     setEditingId(comp.id);
@@ -323,6 +347,12 @@ export function CompositionVisualEditor({
 
       {compositions.length === 0 && !editorOpen ? (
         <p className="text-sm text-slate-500">{copy.empty}</p>
+      ) : hideCompositionCards ? (
+        !editorOpen ? (
+          <p className="rounded-lg border border-dashed border-slate-200 bg-white px-4 py-6 text-center text-sm text-slate-500">
+            Wybierz wersję receptury w panelu po prawej lub utwórz nową.
+          </p>
+        ) : null
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
           {compositions.map((comp) => (
@@ -408,97 +438,121 @@ export function CompositionVisualEditor({
             {copy.activeLabel}
           </label>
 
-          <div className="space-y-6">
-            <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Składniki</p>
-              {rows.map((row, idx) => (
-                <div key={row.rowKey} className="flex flex-wrap items-end gap-2 rounded-lg border border-slate-200 bg-white p-3">
-                  <div className="relative min-w-[160px] flex-1">
-                    <label className={labelClass}>Produkt</label>
-                    <input
-                      className={inputClass}
-                      value={row.searchText}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, searchText: v, listOpen: true } : r)));
-                        void searchProducts(v);
-                      }}
-                      onFocus={() => setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, listOpen: true } : r)))}
-                      placeholder="Szukaj SKU / nazwy…"
-                    />
-                    {row.listOpen && searchResults.length > 0 ? (
-                      <ul className="absolute z-20 mt-1 max-h-48 w-full overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg text-sm">
-                        {searchResults.map((p) => (
-                          <li key={p.id}>
-                            <button
-                              type="button"
-                              className="block w-full px-3 py-2 text-left hover:bg-slate-50"
-                              onClick={() => {
-                                setProductCache((prev) => ({ ...prev, [p.id]: p }));
+          <div className="space-y-4">
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Składniki</p>
+              <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+                    <tr>
+                      <th className="px-2 py-2 font-medium">Produkt</th>
+                      <th className="w-24 px-2 py-2 font-medium">Ilość</th>
+                      <th className="w-20 px-2 py-2 font-medium">Jednostka</th>
+                      {mode === "manufacturing" ? <th className="w-20 px-2 py-2 font-medium">Odpad %</th> : null}
+                      <th className="w-10 px-2 py-2 font-medium">
+                        <span className="sr-only">Akcje</span>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((row, idx) => (
+                      <tr key={row.rowKey} className="border-t border-slate-100 align-middle">
+                        <td className="relative px-2 py-1.5">
+                          <input
+                            className={cellInputClass}
+                            value={row.searchText}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, searchText: v, listOpen: true } : r)));
+                              void searchProducts(v);
+                            }}
+                            onFocus={() => setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, listOpen: true } : r)))}
+                            placeholder="SKU / nazwa…"
+                            aria-label="Produkt"
+                          />
+                          {row.listOpen && searchResults.length > 0 ? (
+                            <ul className="absolute left-2 right-2 z-20 mt-0.5 max-h-40 overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg text-sm">
+                              {searchResults.map((p) => (
+                                <li key={p.id}>
+                                  <button
+                                    type="button"
+                                    className="block w-full px-2 py-1.5 text-left hover:bg-slate-50"
+                                    onClick={() => {
+                                      setProductCache((prev) => ({ ...prev, [p.id]: p }));
+                                      setRows((prev) =>
+                                        prev.map((r, i) =>
+                                          i === idx
+                                            ? {
+                                                ...r,
+                                                productId: p.id,
+                                                searchText: (p.name ?? `Produkt #${p.id}`).trim(),
+                                                listOpen: false,
+                                              }
+                                            : r,
+                                        ),
+                                      );
+                                    }}
+                                  >
+                                    {(p.name ?? `#${p.id}`).trim()} · {p.sku || p.symbol || "—"}
+                                  </button>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : null}
+                        </td>
+                        <td className="px-2 py-1.5">
+                          <input
+                            type="number"
+                            min={0.001}
+                            step="any"
+                            className={cellNumberInputClass}
+                            value={row.quantity}
+                            onChange={(e) =>
+                              setRows((prev) =>
+                                prev.map((r, i) => (i === idx ? { ...r, quantity: Number(e.target.value) || 0 } : r)),
+                              )
+                            }
+                            aria-label="Ilość"
+                          />
+                        </td>
+                        <td className="px-2 py-1.5 text-slate-600">szt.</td>
+                        {mode === "manufacturing" ? (
+                          <td className="px-2 py-1.5">
+                            <input
+                              type="number"
+                              min={0}
+                              max={100}
+                              className={cellNumberInputClass}
+                              value={row.wastePercent}
+                              onChange={(e) =>
                                 setRows((prev) =>
-                                  prev.map((r, i) =>
-                                    i === idx
-                                      ? {
-                                          ...r,
-                                          productId: p.id,
-                                          searchText: (p.name ?? `Produkt #${p.id}`).trim(),
-                                          listOpen: false,
-                                        }
-                                      : r,
-                                  ),
-                                );
-                              }}
-                            >
-                              {(p.name ?? `#${p.id}`).trim()} · {p.sku || p.symbol || "—"}
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : null}
-                  </div>
-                  <div className="w-20">
-                    <label className={labelClass}>Ilość</label>
-                    <input
-                      type="number"
-                      min={0.001}
-                      step="any"
-                      className={numberInputClass}
-                      value={row.quantity}
-                      onChange={(e) =>
-                        setRows((prev) =>
-                          prev.map((r, i) => (i === idx ? { ...r, quantity: Number(e.target.value) || 0 } : r)),
-                        )
-                      }
-                    />
-                  </div>
-                  {mode === "manufacturing" ? (
-                    <div className="w-16">
-                      <label className={labelClass}>Odpad %</label>
-                      <input
-                        type="number"
-                        min={0}
-                        max={100}
-                        className={numberInputClass}
-                        value={row.wastePercent}
-                        onChange={(e) =>
-                          setRows((prev) =>
-                            prev.map((r, i) => (i === idx ? { ...r, wastePercent: Number(e.target.value) || 0 } : r)),
-                          )
-                        }
-                      />
-                    </div>
-                  ) : null}
-                  <button
-                    type="button"
-                    title="Usuń"
-                    onClick={() => setRows((prev) => (prev.length > 1 ? prev.filter((_, i) => i !== idx) : [emptyRow()]))}
-                    className="mb-0.5 rounded p-2 text-slate-400 hover:bg-red-50 hover:text-red-600"
-                  >
-                    <Trash2 className="h-4 w-4" aria-hidden />
-                  </button>
-                </div>
-              ))}
-              <button type="button" onClick={() => setRows((prev) => [...prev, emptyRow()])} className="text-sm text-violet-600 hover:underline">
+                                  prev.map((r, i) => (i === idx ? { ...r, wastePercent: Number(e.target.value) || 0 } : r)),
+                                )
+                              }
+                              aria-label="Odpad procent"
+                            />
+                          </td>
+                        ) : null}
+                        <td className="px-2 py-1.5 text-center">
+                          <button
+                            type="button"
+                            title="Usuń składnik"
+                            onClick={() => setRows((prev) => (prev.length > 1 ? prev.filter((_, i) => i !== idx) : [emptyRow()]))}
+                            className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                          >
+                            <Trash2 className="h-4 w-4" aria-hidden />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRows((prev) => [...prev, emptyRow()])}
+                className="mt-2 text-sm text-violet-600 hover:underline"
+              >
                 + Dodaj składnik
               </button>
             </div>
@@ -521,7 +575,7 @@ export function CompositionVisualEditor({
             </div>
           </div>
 
-          {mode === "manufacturing" && costEstimate ? (
+          {!hideCompositionCards && mode === "manufacturing" && costEstimate ? (
             <p className="text-sm text-slate-600">
               Szacowany koszt: <strong>{formatProductionMoney(costEstimate.unit_cost_net)}</strong> / szt.
             </p>
