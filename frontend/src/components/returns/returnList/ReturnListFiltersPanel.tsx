@@ -20,6 +20,7 @@ import {
 } from "../../filters";
 import type { AppliedReturnListFilters } from "./returnListFilterTypes";
 import { listSellasistFilterGridClass4 } from "../../listPage/listSellasistTokens";
+import type { ListViewActionsBinding } from "../../../preferences/listView/listViewActionsTypes";
 
 /** Zgodne z etykietami kubełków na liście zamówień / panelu statusów. */
 const RETURN_PANEL_GROUP_LABELS: Record<"NEW" | "IN_PROGRESS" | "DONE", string> = {
@@ -61,6 +62,9 @@ export type ReturnListFiltersPanelProps = {
   /** Jak lista zamówień: przełącznik filtrów w nagłówku, bez paska narzędzi w panelu. */
   filterLayout?: "toolbar" | "embedded";
   openFilterFieldsRef?: MutableRefObject<(() => void) | null>;
+  listView?: ListViewActionsBinding;
+  filterFieldOrder?: string[];
+  onFilterFieldOrderSave?: (order: string[]) => void;
 };
 
 export function ReturnListFiltersPanel({
@@ -76,11 +80,20 @@ export function ReturnListFiltersPanel({
   returnStatuses,
   filterLayout = "toolbar",
   openFilterFieldsRef,
+  listView,
+  filterFieldOrder: filterFieldOrderProp,
+  onFilterFieldOrderSave,
 }: ReturnListFiltersPanelProps) {
   const [visibilityOpen, setVisibilityOpen] = useState(false);
+  const controlledFieldOrder =
+    filterFieldOrderProp && onFilterFieldOrderSave
+      ? { order: filterFieldOrderProp, onChange: onFilterFieldOrderSave }
+      : undefined;
   const { order: visibleFieldOrder, setOrderFromModal } = useFilterFieldOrder(
     RETURN_LIST_FILTER_STORAGE_KEY,
     RETURN_LIST_FILTER_IDS,
+    undefined,
+    controlledFieldOrder,
   );
 
   const embedded = filterLayout === "embedded";
@@ -265,6 +278,7 @@ export function ReturnListFiltersPanel({
       clearLabel="Wyczyść filtry"
       applyLabel="Filtruj"
       footerMobileOnly={!embedded}
+      listView={listView}
     >
       <FilterGrid columnsClassName={embedded ? listSellasistFilterGridClass4 : undefined}>{orderedNodes}</FilterGrid>
     </FilterPanelBodyWithActions>
@@ -285,6 +299,7 @@ export function ReturnListFiltersPanel({
             clearLabel="Wyczyść filtry"
             showFieldPicker
             onOpenFieldPicker={() => setVisibilityOpen(true)}
+            listView={listView}
           />
           {expanded ? filterBody : null}
         </FilterPanel>

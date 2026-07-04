@@ -17,6 +17,7 @@ import {
 } from "../../components/listPage/listSellasistTokens";
 import type { ProductListUiFilters } from "./productListUiFilters";
 import { DEFAULT_PRODUCT_LIST_UI_FILTERS as defaultFilters } from "./productListUiFilters";
+import type { ListViewActionsBinding } from "../../preferences/listView/listViewActionsTypes";
 
 type Tenant = { id: number; name: string };
 
@@ -53,6 +54,7 @@ export type ProductListFiltersSectionProps = {
   openVisibilityRef?: MutableRefObject<(() => void) | null>;
   filterFieldOrder?: string[];
   onFilterFieldOrderSave?: (order: string[]) => void;
+  listView?: ListViewActionsBinding;
 };
 
 export function ProductListFiltersSection({
@@ -70,6 +72,7 @@ export function ProductListFiltersSection({
   openVisibilityRef,
   filterFieldOrder: filterFieldOrderProp,
   onFilterFieldOrderSave,
+  listView,
 }: ProductListFiltersSectionProps) {
   const [visibilityOpen, setVisibilityOpen] = useState(false);
   const controlledFieldOrder =
@@ -257,7 +260,13 @@ export function ProductListFiltersSection({
   return (
     <>
       <ListFilterEmbeddedShell expanded={expanded}>
-        <FilterPanelBodyWithActions onClear={onClear} onApply={onApply} clearLabel="Wyczyść filtry" applyLabel="Filtruj">
+        <FilterPanelBodyWithActions
+          onClear={onClear}
+          onApply={onApply}
+          clearLabel="Wyczyść filtry"
+          applyLabel="Filtruj"
+          listView={listView}
+        >
           <FilterGrid columnsClassName={listSellasistFilterGridClass4}>
             {orderedNodes}
           </FilterGrid>

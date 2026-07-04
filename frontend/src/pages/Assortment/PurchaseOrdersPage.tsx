@@ -18,13 +18,17 @@ import { listSuppliers, type SupplierRead } from "../../api/inboundSuppliersApi"
 import { fetchPurchasingSupplierAnalytics } from "../../api/purchasingSupplierAnalyticsApi";
 import { CreatePzFromDeliveryModal } from "./CreatePzFromDeliveryModal";
 import { openPdfUrlInPrintViewer } from "../../utils/openPdfForBrowserPrint";
+import { FilterApplyActions } from "../../components/filters";
+import {
+  buildPurchaseOrderListViewAdapter,
+  listViewActionsFromHook,
+  useListViewState,
+} from "../../preferences/listView";
 import {
   PurchasingFilterBar,
   PurchasingFilterField,
   PurchasingKpiCard,
   PurchasingKpiGrid,
-  purchasingFilterButtonClass,
-  purchasingFilterPrimaryButtonClass,
   purchasingInputClass,
   purchasingSelectClass,
 } from "../../modules/purchasing/ui";
@@ -58,12 +62,25 @@ export default function PurchaseOrdersPage() {
   const [searchParams] = useSearchParams();
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [tenantId, setTenantId] = useState(1);
+  const listViewAdapter = useMemo(() => buildPurchaseOrderListViewAdapter(tenantId), [tenantId]);
+  const listView = useListViewState(listViewAdapter);
+  const listViewActions = useMemo(() => listViewActionsFromHook(listView), [listView]);
+  const {
+    isHydrated,
+    draftFilters,
+    setDraftFilters,
+    appliedFilters,
+    applyFilters,
+    clearFilters,
+    page,
+    setPage,
+    pageSize: rowsPerPage,
+    setPageSize: setRowsPerPage,
+  } = listView;
   const [suppliers, setSuppliers] = useState<SupplierRead[]>([]);
   const [rows, setRows] = useState<DeliveryListRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
-  const [rowsPerPage, setRowsPerPage] = useState(25);
   const [pzForDeliveryId, setPzForDeliveryId] = useState<number | null>(null);
   const [toastPz, setToastPz] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
@@ -72,18 +89,6 @@ export default function PurchaseOrdersPage() {
   const [printMenuOpenId, setPrintMenuOpenId] = useState<number | null>(null);
   const [scoreBySupplierId, setScoreBySupplierId] = useState<Record<number, number | null>>({});
 
-  const [draftSearch, setDraftSearch] = useState("");
-  const [draftSupplierId, setDraftSupplierId] = useState(0);
-  const [draftStatus, setDraftStatus] = useState<"" | DeliveryStatus>("");
-  const [draftDateFrom, setDraftDateFrom] = useState("");
-  const [draftDateTo, setDraftDateTo] = useState("");
-
-  const [appliedSearch, setAppliedSearch] = useState("");
-  const [appliedSupplierId, setAppliedSupplierId] = useState(0);
-  const [appliedStatus, setAppliedStatus] = useState<"" | DeliveryStatus>("");
-  const [appliedDateFrom, setAppliedDateFrom] = useState("");
-  const [appliedDateTo, setAppliedDateTo] = useState("");
-
   const load = useCallback(async () => {
     setLoading(true);
     setErr(null);
@@ -91,11 +96,11 @@ export default function PurchaseOrdersPage() {
       const [sup, list] = await Promise.all([
         listSuppliers(tenantId, { status: "all" }),
         listDeliveries(tenantId, {
-          search: appliedSearch.trim() || undefined,
-          supplier_id: appliedSupplierId >= 1 ? appliedSupplierId : undefined,
-          status: appliedStatus || undefined,
-          created_from: appliedDateFrom.trim() || undefined,
-          created_to: appliedDateTo.trim() || undefined,
+          search: appliedFilters.search.trim() || undefined,
+          supplier_id: appliedFilters.supplierId >= 1 ? appliedFilters.supplierId : undefined,
+          status: appliedFilters.status || undefined,
+          created_from: appliedFilters.dateFrom.trim() || undefined,
+          created_to: appliedFilters.dateTo.trim() || undefined,
         }),
       ]);
       setSuppliers(sup);
@@ -106,11 +111,12 @@ export default function PurchaseOrdersPage() {
     } finally {
       setLoading(false);
     }
-  }, [tenantId, appliedSearch, appliedSupplierId, appliedStatus, appliedDateFrom, appliedDateTo]);
+  }, [tenantId, appliedFilters]);
 
   useEffect(() => {
+    if (!isHydrated) return;
     void load();
-  }, [load]);
+  }, [load, isHydrated]);
 
   useEffect(() => {
     let cancelled = false;
@@ -188,29 +194,6 @@ export default function PurchaseOrdersPage() {
     const tid = searchParams.get("tenant_id");
     void navigate(`/goods-orders/${id}${tid ? `?tenant_id=${tid}` : ""}`, { replace: true });
   }, [searchParams, navigate]);
-
-  const applyFilters = () => {
-    setAppliedSearch(draftSearch);
-    setAppliedSupplierId(draftSupplierId);
-    setAppliedStatus(draftStatus);
-    setAppliedDateFrom(draftDateFrom);
-    setAppliedDateTo(draftDateTo);
-    setPage(1);
-  };
-
-  const clearFilters = () => {
-    setDraftSearch("");
-    setDraftSupplierId(0);
-    setDraftStatus("");
-    setDraftDateFrom("");
-    setDraftDateTo("");
-    setAppliedSearch("");
-    setAppliedSupplierId(0);
-    setAppliedStatus("");
-    setAppliedDateFrom("");
-    setAppliedDateTo("");
-    setPage(1);
-  };
 
   const openRow = (id: number) => {
     void navigate(`/goods-orders/${id}?tenant_id=${tenantId}`);
@@ -375,30 +358,31 @@ export default function PurchaseOrdersPage() {
 
           <PurchasingFilterBar
             actions={
-              <>
-                <button type="button" className={purchasingFilterButtonClass} onClick={clearFilters}>
-                  Wyczyść filtry
-                </button>
-                <button type="button" className={purchasingFilterPrimaryButtonClass} onClick={applyFilters}>
-                  Filtruj
-                </button>
-              </>
+              <FilterApplyActions
+                onClear={clearFilters}
+                onApply={applyFilters}
+                clearLabel="Wyczyść filtry"
+                applyLabel="Filtruj"
+                listView={listViewActions}
+              />
             }
           >
             <div className="grid w-full min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
               <PurchasingFilterField label="Szukaj" className="min-w-0">
                 <input
                   type="search"
-                  value={draftSearch}
-                  onChange={(e) => setDraftSearch(e.target.value)}
+                  value={draftFilters.search}
+                  onChange={(e) => setDraftFilters((d) => ({ ...d, search: e.target.value }))}
                   placeholder="Nazwa zamówienia lub dostawca"
                   className={purchasingInputClass}
                 />
               </PurchasingFilterField>
               <PurchasingFilterField label="Dostawca" className="min-w-0">
                 <select
-                  value={draftSupplierId || ""}
-                  onChange={(e) => setDraftSupplierId(Number(e.target.value) || 0)}
+                  value={draftFilters.supplierId || ""}
+                  onChange={(e) =>
+                    setDraftFilters((d) => ({ ...d, supplierId: Number(e.target.value) || 0 }))
+                  }
                   className={purchasingSelectClass}
                 >
                   <option value="">Wszyscy dostawcy</option>
@@ -411,8 +395,10 @@ export default function PurchaseOrdersPage() {
               </PurchasingFilterField>
               <PurchasingFilterField label="Status" className="min-w-0">
                 <select
-                  value={draftStatus}
-                  onChange={(e) => setDraftStatus((e.target.value || "") as "" | DeliveryStatus)}
+                  value={draftFilters.status}
+                  onChange={(e) =>
+                    setDraftFilters((d) => ({ ...d, status: (e.target.value || "") as "" | DeliveryStatus }))
+                  }
                   className={purchasingSelectClass}
                 >
                   {STATUS_OPTIONS.map((o) => (
@@ -441,16 +427,16 @@ export default function PurchaseOrdersPage() {
               <PurchasingFilterField label="Data od" className="min-w-0">
                 <input
                   type="date"
-                  value={draftDateFrom}
-                  onChange={(e) => setDraftDateFrom(e.target.value)}
+                  value={draftFilters.dateFrom}
+                  onChange={(e) => setDraftFilters((d) => ({ ...d, dateFrom: e.target.value }))}
                   className={purchasingInputClass}
                 />
               </PurchasingFilterField>
               <PurchasingFilterField label="Data do" className="min-w-0">
                 <input
                   type="date"
-                  value={draftDateTo}
-                  onChange={(e) => setDraftDateTo(e.target.value)}
+                  value={draftFilters.dateTo}
+                  onChange={(e) => setDraftFilters((d) => ({ ...d, dateTo: e.target.value }))}
                   className={purchasingInputClass}
                 />
               </PurchasingFilterField>
@@ -462,7 +448,11 @@ export default function PurchaseOrdersPage() {
             <p className="text-sm text-slate-500">Ładowanie…</p>
           ) : rows.length === 0 ? (
             <div className="flex flex-col items-center gap-4 py-8 text-center text-sm text-slate-600">
-              {appliedSearch.trim() || appliedSupplierId >= 1 || appliedStatus || appliedDateFrom || appliedDateTo ? (
+              {appliedFilters.search.trim() ||
+              appliedFilters.supplierId >= 1 ||
+              appliedFilters.status ||
+              appliedFilters.dateFrom ||
+              appliedFilters.dateTo ? (
                 <p>Brak wyników dla filtrów.</p>
               ) : (
                 <>

@@ -11,9 +11,15 @@ import { CustomersListTable } from "../../components/customers/customerList/Cust
 import {
   CUSTOMER_LIST_COLUMN_CATALOG,
   CUSTOMER_LIST_DEFAULT_COLUMN_ORDER,
+  CUSTOMER_LIST_COLUMN_IDS,
+  CUSTOMERS_LIST_COLUMNS_LAYOUT_KEY,
 } from "../../components/customers/customerList/customerListColumnCatalog";
-import { useCustomerListColumnOrder } from "../../components/customers/customerList/useCustomerListColumnOrder";
-import { FilterVisibilityModal } from "../../components/filters";
+import {
+  buildCustomerListViewAdapter,
+  listViewActionsFromHook,
+  useListViewState,
+} from "../../preferences/listView";
+import { FilterVisibilityModal, useListColumnLayout } from "../../components/filters";
 import {
   DEFAULT_APPLIED_CUSTOMER_LIST_FILTERS,
   triStateToBool,
@@ -38,31 +44,46 @@ const ROWS_PER_PAGE_OPTIONS = [25, 50, 100, 200] as const;
 
 export default function CustomersListPage() {
   const tenantId = DAMAGE_TENANT_ID;
+  const listViewAdapter = useMemo(() => buildCustomerListViewAdapter(tenantId), [tenantId]);
+  const listView = useListViewState(listViewAdapter);
+  const listViewActions = useMemo(() => listViewActionsFromHook(listView), [listView]);
+  const {
+    isHydrated,
+    draftFilters,
+    setDraftFilters,
+    appliedFilters,
+    applyFilters,
+    clearFilters,
+    appliedFiltersKey,
+    page,
+    setPage,
+    pageSize: rowsPerPage,
+    setPageSize: setRowsPerPage,
+    filtersExpanded,
+    toggleFiltersPanel,
+    filterFieldOrder,
+    setFilterFieldOrder,
+    columnOrder: listViewColumnOrder,
+    persistColumnOrder: listViewPersistColumnOrder,
+  } = listView;
+
   const [rows, setRows] = useState<CustomerListRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
-  const [filtersExpanded, setFiltersExpanded] = useState(() => {
-    try {
-      return localStorage.getItem("customers.list.filtersExpanded") === "1";
-    } catch {
-      return false;
-    }
-  });
-  const [draftFilters, setDraftFilters] = useState<AppliedCustomerListFilters>(DEFAULT_APPLIED_CUSTOMER_LIST_FILTERS);
-  const [appliedFilters, setAppliedFilters] = useState<AppliedCustomerListFilters>(DEFAULT_APPLIED_CUSTOMER_LIST_FILTERS);
   const [selected, setSelected] = useState<Set<number>>(() => new Set());
   const [deleteConfirm, setDeleteConfirm] = useState<null | { kind: "bulk" } | { kind: "single"; id: number }>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [columnPickerOpen, setColumnPickerOpen] = useState(false);
-  const [page, setPage] = useState(1);
-  const [rowsPerPage, setRowsPerPage] = useState<number>(25);
   const headerSelectAllRef = useRef<HTMLInputElement>(null);
   const openFilterFieldsRef = useRef<(() => void) | null>(null);
-  const { columnOrder, persistColumnOrder } = useCustomerListColumnOrder();
-
-  const appliedFiltersKey = useMemo(() => JSON.stringify(appliedFilters), [appliedFilters]);
+  const { columnOrder, persistColumnOrder } = useListColumnLayout(
+    CUSTOMERS_LIST_COLUMNS_LAYOUT_KEY,
+    CUSTOMER_LIST_COLUMN_IDS,
+    CUSTOMER_LIST_DEFAULT_COLUMN_ORDER,
+    { order: listViewColumnOrder, onChange: listViewPersistColumnOrder },
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -92,8 +113,9 @@ export default function CustomersListPage() {
   }, [tenantId, appliedFilters]);
 
   useEffect(() => {
+    if (!isHydrated) return;
     void load();
-  }, [load]);
+  }, [load, isHydrated]);
 
   useEffect(() => {
     setSelected(new Set());
@@ -167,26 +189,7 @@ export default function CustomersListPage() {
     return [page - 2, page - 1, page, page + 1, page + 2];
   }, [page, totalPages]);
 
-  const toggleFiltersExpanded = () => {
-    setFiltersExpanded((prev) => {
-      const n = !prev;
-      try {
-        localStorage.setItem("customers.list.filtersExpanded", n ? "1" : "0");
-      } catch {
-        /* ignore */
-      }
-      return n;
-    });
-  };
-
-  const applyFilters = () => {
-    setAppliedFilters(draftFilters);
-  };
-
-  const clearFilters = () => {
-    setDraftFilters(DEFAULT_APPLIED_CUSTOMER_LIST_FILTERS);
-    setAppliedFilters(DEFAULT_APPLIED_CUSTOMER_LIST_FILTERS);
-  };
+  const toggleFiltersExpanded = toggleFiltersPanel;
 
   const runDelete = async () => {
     if (deleteConfirm == null) return;
@@ -297,6 +300,9 @@ export default function CustomersListPage() {
           onClear={clearFilters}
           filterLayout="embedded"
           openFilterFieldsRef={openFilterFieldsRef}
+          listView={listViewActions}
+          filterFieldOrder={filterFieldOrder}
+          onFilterFieldOrderSave={setFilterFieldOrder}
         />
 
         {selectedIds.length > 0 ? (

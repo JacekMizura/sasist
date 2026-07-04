@@ -50,7 +50,7 @@ import {
 } from "../../components/orders/orderList/orderListColumnCatalog";
 import {
   buildOrderListViewAdapter,
-  ListViewPresetsMenu,
+  listViewActionsFromHook,
   readOrderListPanelFilter,
   useListViewState,
 } from "../../preferences/listView";
@@ -149,6 +149,7 @@ export default function OrderList() {
 
   const listViewAdapter = useMemo(() => buildOrderListViewAdapter(DAMAGE_TENANT_ID), []);
   const listView = useListViewState(listViewAdapter);
+  const listViewActions = useMemo(() => listViewActionsFromHook(listView), [listView]);
   const {
     isHydrated,
     draftFilters,
@@ -171,12 +172,6 @@ export default function OrderList() {
     toggleFiltersPanel,
     extensions,
     setExtension,
-    presets,
-    applyPreset,
-    saveCurrentAsPreset,
-    deletePreset,
-    setDefaultPreset,
-    resetView,
     appliedFiltersKey,
   } = listView;
 
@@ -933,16 +928,6 @@ export default function OrderList() {
             onToggleFilters={toggleFiltersPanel}
             openFilterFieldsRef={openFilterFieldsRef}
             onOpenColumnPicker={() => setColumnPickerOpen(true)}
-            viewControls={
-              <ListViewPresetsMenu
-                presets={presets}
-                onApplyPreset={applyPreset}
-                onSavePreset={saveCurrentAsPreset}
-                onDeletePreset={deletePreset}
-                onSetDefaultPreset={setDefaultPreset}
-                onResetView={resetView}
-              />
-            }
           />
 
           {fetchError ? (
@@ -963,6 +948,7 @@ export default function OrderList() {
             openFilterFieldsRef={openFilterFieldsRef}
             filterFieldOrder={filterFieldOrder}
             onFilterFieldOrderSave={setFilterFieldOrder}
+            listView={listViewActions}
           />
 
           {bulkSelectionMode === "filtered_all" ? (

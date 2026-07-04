@@ -24,6 +24,7 @@ import {
   type FilterFieldCatalogItem,
 } from "../../filters";
 import { listSellasistFilterGridClass4 } from "../../listPage/listSellasistTokens";
+import type { ListViewActionsBinding } from "../../../preferences/listView/listViewActionsTypes";
 
 /** Bumped: domyślnie kompaktowy zestaw pól (jak zwroty/reklamacje). */
 const ORDER_LIST_FILTER_STORAGE_KEY = "orders.list.v5";
@@ -101,6 +102,7 @@ export type OrderListFiltersPanelProps = {
   openFilterFieldsRef?: MutableRefObject<(() => void) | null>;
   filterFieldOrder?: string[];
   onFilterFieldOrderSave?: (order: string[]) => void;
+  listView?: ListViewActionsBinding;
 };
 
 export function OrderListFiltersPanel({
@@ -117,6 +119,7 @@ export function OrderListFiltersPanel({
   openFilterFieldsRef,
   filterFieldOrder: filterFieldOrderProp,
   onFilterFieldOrderSave,
+  listView,
 }: OrderListFiltersPanelProps) {
   const t = useTranslation();
   const [visibilityOpen, setVisibilityOpen] = useState(false);
@@ -307,6 +310,7 @@ export function OrderListFiltersPanel({
       clearLabel="Wyczyść filtry"
       applyLabel="Filtruj"
       footerMobileOnly={!embedded}
+      listView={listView}
     >
       <FilterGrid columnsClassName={embedded ? listSellasistFilterGridClass4 : undefined}>{orderedNodes}</FilterGrid>
     </FilterPanelBodyWithActions>
@@ -327,6 +331,7 @@ export function OrderListFiltersPanel({
             clearLabel="Wyczyść filtry"
             showFieldPicker
             onOpenFieldPicker={() => setVisibilityOpen(true)}
+            listView={listView}
           />
           {expanded ? filterBody : null}
         </FilterPanel>

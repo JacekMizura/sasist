@@ -5,6 +5,11 @@ import toast from "react-hot-toast";
 
 import { useWarehouse } from "../../context/WarehouseContext";
 import {
+  buildProductionOrdersListViewAdapter,
+  listViewActionsFromHook,
+  useListViewState,
+} from "../../preferences/listView";
+import {
   listProductionBatches,
   listProductionOrders,
   type ProductionBatchRead,
@@ -55,23 +60,40 @@ export default function ProductionOrdersPage() {
   const { warehouse } = useWarehouse();
   const tenantId = warehouse?.tenant_id ?? DEFAULT_TENANT;
   const warehouseId = warehouse?.id;
+  const listViewAdapter = useMemo(() => buildProductionOrdersListViewAdapter(tenantId), [tenantId]);
+  const listView = useListViewState(listViewAdapter);
+  const listViewActions = useMemo(() => listViewActionsFromHook(listView), [listView]);
+  const {
+    isHydrated,
+    draftFilters,
+    setDraftFilters,
+    appliedFilters,
+    applyFilters,
+    clearFilters,
+    filtersExpanded,
+    toggleFiltersPanel,
+    setExtension,
+    setAppliedFilters,
+  } = listView;
   const [batches, setBatches] = useState<ProductionBatchRead[]>([]);
   const [orders, setOrders] = useState<ProductionOrderRead[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filtersExpanded, setFiltersExpanded] = useState(false);
-  const [draftFilters, setDraftFilters] = useState<ProductionOrdersListFilters>(DEFAULT_PRODUCTION_ORDERS_FILTERS);
-  const [appliedFilters, setAppliedFilters] = useState<ProductionOrdersListFilters>(DEFAULT_PRODUCTION_ORDERS_FILTERS);
 
   useEffect(() => {
+    if (warehouseId != null) setExtension("warehouseId", warehouseId);
+  }, [setExtension, warehouseId]);
+
+  useEffect(() => {
+    if (!isHydrated) return;
     if (searchParams.get("shortages") === "1") {
       const next = { ...DEFAULT_PRODUCTION_ORDERS_FILTERS, shortagesOnly: true };
       setDraftFilters(next);
       setAppliedFilters(next);
     }
-  }, [searchParams]);
+  }, [isHydrated, searchParams, setAppliedFilters, setDraftFilters]);
 
   const reload = useCallback(async () => {
-    if (warehouseId == null) return;
+    if (warehouseId == null || !isHydrated) return;
     setLoading(true);
     try {
       const [b, o] = await Promise.all([
@@ -86,7 +108,7 @@ export default function ProductionOrdersPage() {
     } finally {
       setLoading(false);
     }
-  }, [tenantId, warehouseId]);
+  }, [isHydrated, tenantId, warehouseId]);
 
   useEffect(() => {
     void reload();
@@ -134,7 +156,7 @@ export default function ProductionOrdersPage() {
       <div className="flex justify-end">
         <button
           type="button"
-          onClick={() => setFiltersExpanded((v) => !v)}
+          onClick={toggleFiltersPanel}
           className={`${listSellasistToolbarToggleBtn} inline-flex !h-10 items-center gap-2`}
           aria-expanded={filtersExpanded}
         >
@@ -148,11 +170,9 @@ export default function ProductionOrdersPage() {
         expanded={filtersExpanded}
         draft={draftFilters}
         onChange={setDraftFilters}
-        onApply={() => setAppliedFilters({ ...draftFilters })}
-        onClear={() => {
-          setDraftFilters(DEFAULT_PRODUCTION_ORDERS_FILTERS);
-          setAppliedFilters(DEFAULT_PRODUCTION_ORDERS_FILTERS);
-        }}
+        onApply={applyFilters}
+        onClear={clearFilters}
+        listView={listViewActions}
       />
 
       {loading ? (

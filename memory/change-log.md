@@ -1,6 +1,14 @@
 # Change log
 
-## 2026-06-08 — Globalny system widoków list (listView)
+## 2026-06-08 — Globalny system widoków list (listView) — faza 2
+
+- UI: split button `[Filtruj ▼]` w `FilterApplyActions` (menu: Filtruj / Zapisz / Wczytaj / Zarządzaj / Resetuj) — bez osobnego przycisku „Widoki”
+- Enter w polach filtrów → submit formularza (`FilterPanelBodyWithActions`) — jeden request
+- Wspólna fabryka adapterów `listViewAdapterFactory.ts` + adaptery per ekran
+- Migracja wszystkich głównych list z filtrami (14+ screenId) — patrz wpis fazy 1 + lista w PR/komunikacie
+- Usunięto `ListViewPresetsMenu` z toolbarów Zamówienia/Produkty
+
+## 2026-06-08 — Globalny system widoków list (listView) — faza 1
 
 - Backend: tabela `user_list_views`, REST `/api/ui/list-views/{screen_key}` (autosave + presety publiczne/prywatne)
 - Frontend: moduł `preferences/listView/` — `useListViewState`, `ListViewPresetsMenu`, adaptery per ekran

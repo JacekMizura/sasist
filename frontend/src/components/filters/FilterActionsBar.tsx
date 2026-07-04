@@ -1,15 +1,16 @@
+import type { ListViewActionsBinding } from "../../preferences/listView/listViewActionsTypes";
 import {
   filterActionsFooterClass,
   filterActionsFooterMobileOnlyClass,
-  filterToolbarBtnApply,
-  filterToolbarBtnSecondary,
 } from "./filterUiTokens";
+import { FilterApplyActions } from "./FilterApplyActions";
 
 export type FilterActionsBarProps = {
   onClear: () => void;
   onApply: () => void;
   clearLabel?: string;
   applyLabel?: string;
+  listView?: ListViewActionsBinding;
   /** When true, hidden from `sm` up (use with FilterToolbar on the same panel). */
   footerMobileOnly?: boolean;
   className?: string;
@@ -18,8 +19,9 @@ export type FilterActionsBarProps = {
 export function FilterActionsBar({
   onClear,
   onApply,
-  clearLabel = "Wyczyść",
-  applyLabel = "Zastosuj",
+  clearLabel = "Wyczyść filtry",
+  applyLabel = "Filtruj",
+  listView,
   footerMobileOnly = false,
   className,
 }: FilterActionsBarProps) {
@@ -27,13 +29,14 @@ export function FilterActionsBar({
     className ?? (footerMobileOnly ? filterActionsFooterMobileOnlyClass : filterActionsFooterClass);
 
   return (
-    <div className={footerClass}>
-      <button type="button" onClick={onClear} className={filterToolbarBtnSecondary}>
-        {clearLabel}
-      </button>
-      <button type="button" onClick={onApply} className={filterToolbarBtnApply}>
-        {applyLabel}
-      </button>
-    </div>
+    <FilterApplyActions
+      className={footerClass}
+      onClear={onClear}
+      onApply={onApply}
+      clearLabel={clearLabel}
+      applyLabel={applyLabel}
+      listView={listView}
+      applyButtonType="submit"
+    />
   );
 }

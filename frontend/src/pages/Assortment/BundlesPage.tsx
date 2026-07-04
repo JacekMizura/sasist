@@ -9,20 +9,23 @@ import { UI_STRINGS } from "../../constants/uiStrings";
 import { deleteBundle, listBundles, postBundlesBulkDelete, type BundleRead } from "../../api/bundlesApi";
 import { summarizeEntityBulkDeleteToast } from "../../types/entityBulkDelete";
 import ExportModal from "../../components/exports/ExportModal";
-import { FilterVisibilityModal, useFilterFieldOrder } from "../../components/filters";
+import { FilterVisibilityModal } from "../../components/filters";
 import {
   BUNDLE_LIST_FILTER_CATALOG,
   BUNDLE_LIST_FILTER_IDS,
   BundlesListFiltersPanel,
 } from "../../components/bundles/bundleList/BundlesListFiltersPanel";
+import {
+  buildBundleListViewAdapter,
+  listViewActionsFromHook,
+  useListViewState,
+} from "../../preferences/listView";
 import { BundlesListBulkBar } from "../../components/bundles/bundleList/BundlesListBulkBar";
 import type { BundleMultiMenuActionId } from "../../components/bundles/bundleList/BundleListMultiActionsMenu";
 import { BundlesListTable } from "../../components/bundles/bundleList/BundlesListTable";
 import {
-  DEFAULT_APPLIED_BUNDLE_LIST_FILTERS,
   bundleListFilterToggleLabel,
   countActiveBundleListFilters,
-  type AppliedBundleListFilters,
 } from "../../components/bundles/bundleList/bundleListFilterTypes";
 import {
   moduleTableCardClass,
@@ -37,36 +40,36 @@ import type { PanelBulkSelectionMode } from "../../hooks/usePanelListBulkSelecti
 import PageLayout from "../../components/layout/PageLayout";
 
 const DEFAULT_TENANT_ID = 1;
-const BUNDLE_FILTER_STORAGE_KEY = "bundles.list.v2";
 const ROWS_PER_PAGE_OPTIONS = [25, 50, 100, 200] as const;
 
 export default function BundlesPage() {
   const navigate = useNavigate();
+  const listViewAdapter = useMemo(() => buildBundleListViewAdapter(DEFAULT_TENANT_ID), []);
+  const listView = useListViewState(listViewAdapter);
+  const listViewActions = useMemo(() => listViewActionsFromHook(listView), [listView]);
+  const {
+    isHydrated,
+    draftFilters,
+    setDraftFilters,
+    appliedFilters,
+    applyFilters,
+    clearFilters,
+    appliedFiltersKey,
+    page,
+    setPage,
+    pageSize: rowsPerPage,
+    setPageSize: setRowsPerPage,
+    filtersExpanded,
+    toggleFiltersPanel,
+    filterFieldOrder,
+    setFilterFieldOrder,
+  } = listView;
   const [bundles, setBundles] = useState<BundleRead[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
-  const [draftFilters, setDraftFilters] = useState<AppliedBundleListFilters>(
-    DEFAULT_APPLIED_BUNDLE_LIST_FILTERS,
-  );
-  const [appliedFilters, setAppliedFilters] = useState<AppliedBundleListFilters>(
-    DEFAULT_APPLIED_BUNDLE_LIST_FILTERS,
-  );
-  const [page, setPage] = useState(1);
-  const [rowsPerPage, setRowsPerPage] = useState(25);
   const [previewBundle, setPreviewBundle] = useState<BundleRead | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
-  const [filtersExpanded, setFiltersExpanded] = useState(() => {
-    try {
-      return localStorage.getItem("bundles.list.filtersExpanded") === "1";
-    } catch {
-      return false;
-    }
-  });
   const [filterFieldsOpen, setFilterFieldsOpen] = useState(false);
-  const { order: filterVisibleOrder, setOrderFromModal: setFilterFieldOrder } = useFilterFieldOrder(
-    BUNDLE_FILTER_STORAGE_KEY,
-    BUNDLE_LIST_FILTER_IDS,
-  );
   const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
   const [bulkMode, setBulkMode] = useState<PanelBulkSelectionMode>("none");
   const [bulkSelectKey, setBulkSelectKey] = useState(0);
@@ -77,7 +80,6 @@ export default function BundlesPage() {
   const [toast, setToast] = useState<string | null>(null);
   const headerSelectAllRef = useRef<HTMLInputElement>(null);
 
-  const appliedFiltersKey = useMemo(() => JSON.stringify(appliedFilters), [appliedFilters]);
   const activeFilterCount = useMemo(() => countActiveBundleListFilters(appliedFilters), [appliedFilters]);
 
   const load = useCallback(async () => {
@@ -110,8 +112,9 @@ export default function BundlesPage() {
   }, [appliedFilters]);
 
   useEffect(() => {
+    if (!isHydrated) return;
     void load();
-  }, [load]);
+  }, [load, isHydrated]);
 
   const clearSelection = useCallback(() => {
     setSelectedIds(new Set());
@@ -132,24 +135,7 @@ export default function BundlesPage() {
 
   const openEdit = (id: number) => navigate(`/bundles/${id}/edit`);
 
-  const applyFilters = () => setAppliedFilters(draftFilters);
-
-  const clearFilters = () => {
-    setDraftFilters(DEFAULT_APPLIED_BUNDLE_LIST_FILTERS);
-    setAppliedFilters(DEFAULT_APPLIED_BUNDLE_LIST_FILTERS);
-  };
-
-  const toggleFiltersExpanded = () => {
-    setFiltersExpanded((prev) => {
-      const n = !prev;
-      try {
-        localStorage.setItem("bundles.list.filtersExpanded", n ? "1" : "0");
-      } catch {
-        /* ignore */
-      }
-      return n;
-    });
-  };
+  const toggleFiltersExpanded = toggleFiltersPanel;
 
   const totalCount = bundles.length;
   const totalPages = Math.max(1, Math.ceil(totalCount / rowsPerPage));
@@ -367,10 +353,12 @@ export default function BundlesPage() {
         <BundlesListFiltersPanel
           expanded={filtersExpanded}
           draft={draftFilters}
-          visibleOrder={filterVisibleOrder}
           onChangeDraft={(patch) => setDraftFilters((d) => ({ ...d, ...patch }))}
           onApply={applyFilters}
           onClear={clearFilters}
+          listView={listViewActions}
+          filterFieldOrder={filterFieldOrder}
+          onFilterFieldOrderSave={setFilterFieldOrder}
         />
 
         {err && !loading && bundles.length > 0 ? (
@@ -518,7 +506,7 @@ export default function BundlesPage() {
         open={filterFieldsOpen}
         onClose={() => setFilterFieldsOpen(false)}
         title="Widoczne pola — zestawy"
-        selectedOrder={filterVisibleOrder}
+        selectedOrder={filterFieldOrder}
         catalog={BUNDLE_LIST_FILTER_CATALOG}
         onSave={setFilterFieldOrder}
       />

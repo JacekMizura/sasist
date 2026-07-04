@@ -25,6 +25,12 @@ import {
 } from "../../components/listPage/moduleList";
 import { listSellasistInputClass } from "../../components/listPage/listSellasistTokens";
 import { usePanelListBulkSelection } from "../../hooks/usePanelListBulkSelection";
+import {
+  buildComplaintListViewAdapter,
+  listViewActionsFromHook,
+  readComplaintListPanelFilter,
+  useListViewState,
+} from "../../preferences/listView";
 
 const ROWS_PER_PAGE = 25;
 
@@ -33,26 +39,47 @@ export default function ComplaintsPanelPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { warehouseId } = useActiveWarehouseContext();
 
+  const listViewAdapter = useMemo(() => buildComplaintListViewAdapter(DAMAGE_TENANT_ID), []);
+  const listView = useListViewState(listViewAdapter);
+  const listViewActions = useMemo(() => listViewActionsFromHook(listView), [listView]);
+  const {
+    isHydrated,
+    draftFilters,
+    setDraftFilters,
+    appliedFilters,
+    applyFilters,
+    clearFilters,
+    appliedFiltersKey,
+    page,
+    setPage,
+    filtersExpanded,
+    toggleFiltersPanel,
+    filterFieldOrder,
+    setFilterFieldOrder,
+    extensions,
+    setExtension,
+  } = listView;
+  const panelFilter = readComplaintListPanelFilter(extensions) as ComplaintPanelFilter;
+  const setPanelFilter = useCallback(
+    (next: ComplaintPanelFilter) => {
+      setExtension("panelFilter", next);
+    },
+    [setExtension],
+  );
+  const isStatusPanelCollapsed = Boolean(extensions.statusPanelCollapsed);
+  const toggleStatusPanelCollapsed = useCallback(() => {
+    setExtension("statusPanelCollapsed", !isStatusPanelCollapsed);
+  }, [isStatusPanelCollapsed, setExtension]);
+
   const [rows, setRows] = useState<ComplaintListItem[]>([]);
   const [totalCount, setTotalCount] = useState(0);
-  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [q, setQ] = useState("");
-  const [panelFilter, setPanelFilter] = useState<ComplaintPanelFilter>("all");
   const [statusSummary, setStatusSummary] = useState<{ total: number; byKey: Record<string, number> } | null>(null);
   const [showNew, setShowNew] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ComplaintListItem | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [actionToast, setActionToast] = useState<string | null>(null);
-  const [filtersExpanded, setFiltersExpanded] = useState(() => {
-    try {
-      return localStorage.getItem("complaints.list.filtersExpanded") === "1";
-    } catch {
-      return false;
-    }
-  });
-  const [isStatusPanelCollapsed, setIsStatusPanelCollapsed] = useState(false);
   const [statusDrawerOpen, setStatusDrawerOpen] = useState(false);
   const openFilterFieldsRef = useRef<(() => void) | null>(null);
   const [bulkSelectMenuKey, setBulkSelectMenuKey] = useState(0);
@@ -99,7 +126,7 @@ export default function ComplaintsPanelPage() {
         sort_by: "deadline_urgency",
         sort_dir: "desc",
       };
-      if (q.trim()) params.q = q.trim();
+      if (appliedFilters.search.trim()) params.q = appliedFilters.search.trim();
       if (typeof panelFilter === "object" && panelFilter.kind === "status") {
         params.status = panelFilter.status;
       }
@@ -113,22 +140,18 @@ export default function ComplaintsPanelPage() {
     } finally {
       setLoading(false);
     }
-  }, [warehouseId, page, q, panelFilter]);
+  }, [warehouseId, page, appliedFilters, panelFilter]);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+    void fetchList();
+  }, [fetchList, isHydrated]);
 
   useEffect(() => {
     void loadStatusSummary();
   }, [loadStatusSummary]);
 
-  useEffect(() => {
-    void fetchList();
-  }, [fetchList]);
-
-  useEffect(() => {
-    setPage(1);
-  }, [panelFilter, q]);
-
   const visibleComplaintIds = useMemo(() => rows.map((r) => String(r.id)), [rows]);
-  const appliedFiltersKey = useMemo(() => `${panelFilter}:${q}`, [panelFilter, q]);
   const {
     bulkSelectionMode,
     effectiveSelectionCount,
@@ -203,17 +226,7 @@ export default function ComplaintsPanelPage() {
     }
   }, [deleteTarget, warehouseId, loadStatusSummary, fetchList]);
 
-  const toggleFiltersExpanded = () => {
-    setFiltersExpanded((prev) => {
-      const n = !prev;
-      try {
-        localStorage.setItem("complaints.list.filtersExpanded", n ? "1" : "0");
-      } catch {
-        /* ignore */
-      }
-      return n;
-    });
-  };
+  const toggleFiltersExpanded = toggleFiltersPanel;
 
   const selectionToolbarDisabled = warehouseId == null || effectiveSelectionCount === 0;
 
@@ -230,7 +243,7 @@ export default function ComplaintsPanelPage() {
         {warehouseId != null ? (
           <ModuleStatusSidebarShell
             collapsed={isStatusPanelCollapsed}
-            onToggleCollapsed={() => setIsStatusPanelCollapsed((v) => !v)}
+            onToggleCollapsed={toggleStatusPanelCollapsed}
             mobileOpenLabel="Statusy panelu"
             statusDrawerOpen={statusDrawerOpen}
             onStatusDrawerOpenChange={setStatusDrawerOpen}
@@ -244,7 +257,7 @@ export default function ComplaintsPanelPage() {
                 chromeVariant="sellasist"
                 collapsed={isStatusPanelCollapsed}
                 parentScrollContainer
-                onToggleCollapsed={() => setIsStatusPanelCollapsed((v) => !v)}
+                onToggleCollapsed={toggleStatusPanelCollapsed}
               />
             }
             mobileDrawerSidebar={
@@ -288,15 +301,15 @@ export default function ComplaintsPanelPage() {
             <ComplaintListFiltersPanel
               expanded={filtersExpanded}
               onToggleExpanded={toggleFiltersExpanded}
-              searchValue={q}
-              onSearchChange={setQ}
-              onApply={() => void fetchList()}
-              onClear={() => {
-                setQ("");
-                setPage(1);
-              }}
+              searchValue={draftFilters.search}
+              onSearchChange={(v) => setDraftFilters((d) => ({ ...d, search: v }))}
+              onApply={applyFilters}
+              onClear={clearFilters}
               filterLayout="embedded"
               openFilterFieldsRef={openFilterFieldsRef}
+              listView={listViewActions}
+              filterFieldOrder={filterFieldOrder}
+              onFilterFieldOrderSave={setFilterFieldOrder}
             />
           ) : null}
 

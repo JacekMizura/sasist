@@ -10,7 +10,7 @@ import {
   type PackagingMaterialDto,
 } from "../../api/packagingMaterialsApi";
 import { listSuppliers, type SupplierRead } from "../../api/inboundSuppliersApi";
-import { FilterVisibilityModal } from "../../components/filters";
+import { FilterVisibilityModal, useListColumnLayout } from "../../components/filters";
 import { moduleTableCardClass, moduleTablePaginationFooterClass } from "../../components/listPage/moduleList";
 import {
   listSellasistInputClass,
@@ -21,15 +21,19 @@ import { PackagingListFiltersPanel } from "../../components/warehouseMaterials/p
 import { PackagingListTable } from "../../components/warehouseMaterials/packagingList/PackagingListTable";
 import {
   PACKAGING_LIST_COLUMN_CATALOG,
+  PACKAGING_LIST_COLUMN_IDS,
   PACKAGING_LIST_DEFAULT_COLUMN_ORDER,
+  PACKAGING_LIST_COLUMNS_LAYOUT_KEY,
 } from "../../components/warehouseMaterials/packagingList/packagingListColumnCatalog";
 import {
   countActivePackagingListFilters,
-  DEFAULT_APPLIED_PACKAGING_LIST_FILTERS,
   packagingListFilterToggleLabel,
-  type AppliedPackagingListFilters,
 } from "../../components/warehouseMaterials/packagingList/packagingListFilterTypes";
-import { usePackagingListColumnOrder } from "../../components/warehouseMaterials/packagingList/usePackagingListColumnOrder";
+import {
+  buildPackagingListViewAdapter,
+  listViewActionsFromHook,
+  useListViewState,
+} from "../../preferences/listView";
 import { DAMAGE_TENANT_ID } from "../../constants/panelTenant";
 import { useWarehouse } from "../../context/WarehouseContext";
 
@@ -39,17 +43,30 @@ export default function WarehouseMaterialsPackagingPage() {
   const navigate = useNavigate();
   const { warehouse } = useWarehouse();
   const warehouseId = warehouse?.id ?? null;
+  const tenantId = DAMAGE_TENANT_ID;
 
-  const [draftFilters, setDraftFilters] = useState<AppliedPackagingListFilters>(DEFAULT_APPLIED_PACKAGING_LIST_FILTERS);
-  const [appliedFilters, setAppliedFilters] = useState<AppliedPackagingListFilters>(DEFAULT_APPLIED_PACKAGING_LIST_FILTERS);
+  const listViewAdapter = useMemo(() => buildPackagingListViewAdapter(tenantId), [tenantId]);
+  const listView = useListViewState(listViewAdapter);
+  const listViewActions = useMemo(() => listViewActionsFromHook(listView), [listView]);
+  const {
+    isHydrated,
+    draftFilters,
+    setDraftFilters,
+    appliedFilters,
+    applyFilters,
+    clearFilters,
+    appliedFiltersKey,
+    page,
+    setPage,
+    pageSize: rowsPerPage,
+    setPageSize: setRowsPerPage,
+    filtersExpanded,
+    toggleFiltersPanel,
+    columnOrder: listViewColumnOrder,
+    persistColumnOrder: listViewPersistColumnOrder,
+  } = listView;
+
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [filtersExpanded, setFiltersExpanded] = useState(() => {
-    try {
-      return localStorage.getItem("warehouse_materials.packaging.filtersExpanded") === "1";
-    } catch {
-      return false;
-    }
-  });
   const [rows, setRows] = useState<PackagingMaterialDto[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -60,12 +77,14 @@ export default function WarehouseMaterialsPackagingPage() {
   const [bulkBusy, setBulkBusy] = useState(false);
   const [dupBusy, setDupBusy] = useState<string | null>(null);
   const [deleteBusy, setDeleteBusy] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
-  const [rowsPerPage, setRowsPerPage] = useState(25);
   const headerSelectAllRef = useRef<HTMLInputElement>(null);
-  const { columnOrder, persistColumnOrder } = usePackagingListColumnOrder();
+  const { columnOrder, persistColumnOrder } = useListColumnLayout(
+    PACKAGING_LIST_COLUMNS_LAYOUT_KEY,
+    PACKAGING_LIST_COLUMN_IDS,
+    PACKAGING_LIST_DEFAULT_COLUMN_ORDER,
+    { order: listViewColumnOrder, onChange: listViewPersistColumnOrder },
+  );
 
-  const appliedFiltersKey = useMemo(() => JSON.stringify(appliedFilters), [appliedFilters]);
   const activeFilterCount = useMemo(() => countActivePackagingListFilters(appliedFilters), [appliedFilters]);
 
   useEffect(() => {
@@ -98,8 +117,9 @@ export default function WarehouseMaterialsPackagingPage() {
   }, [warehouseId, appliedFilters.status, appliedFilters.materialType, debouncedSearch]);
 
   useEffect(() => {
+    if (!isHydrated) return;
     void load();
-  }, [load]);
+  }, [load, isHydrated]);
 
   useEffect(() => {
     void listSuppliers(DAMAGE_TENANT_ID, { status: "all" }).then(setSuppliers).catch(() => setSuppliers([]));
@@ -161,23 +181,7 @@ export default function WarehouseMaterialsPackagingPage() {
     if (el) el.indeterminate = somePageSelected && !allPageSelected;
   }, [somePageSelected, allPageSelected]);
 
-  const toggleFiltersExpanded = () => {
-    setFiltersExpanded((prev) => {
-      const next = !prev;
-      try {
-        localStorage.setItem("warehouse_materials.packaging.filtersExpanded", next ? "1" : "0");
-      } catch {
-        /* ignore */
-      }
-      return next;
-    });
-  };
-
-  const applyFilters = () => setAppliedFilters(draftFilters);
-  const clearFilters = () => {
-    setDraftFilters(DEFAULT_APPLIED_PACKAGING_LIST_FILTERS);
-    setAppliedFilters(DEFAULT_APPLIED_PACKAGING_LIST_FILTERS);
-  };
+  const toggleFiltersExpanded = toggleFiltersPanel;
 
   const toggleOne = (id: string) => {
     setSelected((prev) => {
@@ -310,6 +314,7 @@ export default function WarehouseMaterialsPackagingPage() {
         onChangeDraft={(patch) => setDraftFilters((d) => ({ ...d, ...patch }))}
         onApply={applyFilters}
         onClear={clearFilters}
+        listView={listViewActions}
       />
 
       {warehouseId == null ? (

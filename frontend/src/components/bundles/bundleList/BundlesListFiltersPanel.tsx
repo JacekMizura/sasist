@@ -6,10 +6,14 @@ import {
   ListFilterEmbeddedShell,
   filterInputClass,
   filterSelectClass,
+  useFilterFieldOrder,
   type FilterFieldCatalogItem,
 } from "../../filters";
 import { listSellasistFilterGridClass4 } from "../../listPage/listSellasistTokens";
+import type { ListViewActionsBinding } from "../../../preferences/listView/listViewActionsTypes";
 import type { AppliedBundleListFilters } from "./bundleListFilterTypes";
+
+const BUNDLE_LIST_FILTER_STORAGE_KEY = "bundles.list.v2";
 
 export const BUNDLE_LIST_FILTER_CATALOG: FilterFieldCatalogItem[] = [
   { id: "name", label: "Nazwa" },
@@ -24,20 +28,35 @@ export const BUNDLE_LIST_FILTER_IDS = BUNDLE_LIST_FILTER_CATALOG.map((c) => c.id
 export type BundlesListFiltersPanelProps = {
   expanded: boolean;
   draft: AppliedBundleListFilters;
-  visibleOrder: string[];
   onChangeDraft: (patch: Partial<AppliedBundleListFilters>) => void;
   onApply: () => void;
   onClear: () => void;
+  listView?: ListViewActionsBinding;
+  filterFieldOrder?: string[];
+  onFilterFieldOrderSave?: (order: string[]) => void;
 };
 
 export function BundlesListFiltersPanel({
   expanded,
   draft,
-  visibleOrder,
   onChangeDraft,
   onApply,
   onClear,
+  listView,
+  filterFieldOrder: filterFieldOrderProp,
+  onFilterFieldOrderSave,
 }: BundlesListFiltersPanelProps) {
+  const controlledFieldOrder =
+    filterFieldOrderProp && onFilterFieldOrderSave
+      ? { order: filterFieldOrderProp, onChange: onFilterFieldOrderSave }
+      : undefined;
+  const { order: visibleOrder } = useFilterFieldOrder(
+    BUNDLE_LIST_FILTER_STORAGE_KEY,
+    BUNDLE_LIST_FILTER_IDS,
+    undefined,
+    controlledFieldOrder,
+  );
+
   const renderField = (fieldId: string) => {
     switch (fieldId) {
       case "name":
@@ -60,7 +79,7 @@ export function BundlesListFiltersPanel({
               className={filterInputClass}
               value={draft.eanSku}
               onChange={(e) => onChangeDraft({ eanSku: e.target.value })}
-              placeholder="EAN lub symbol…"
+              placeholder="EAN lub SKU…"
             />
           </FilterField>
         );
@@ -73,7 +92,6 @@ export function BundlesListFiltersPanel({
             max={draft.stockMax}
             onMinChange={(v) => onChangeDraft({ stockMin: v })}
             onMaxChange={(v) => onChangeDraft({ stockMax: v })}
-            step={1}
           />
         );
       case "price_range":
@@ -119,6 +137,7 @@ export function BundlesListFiltersPanel({
         clearLabel="Wyczyść filtry"
         applyLabel="Filtruj"
         footerMobileOnly={false}
+        listView={listView}
       >
         <FilterGrid columnsClassName={listSellasistFilterGridClass4}>{orderedNodes}</FilterGrid>
       </FilterPanelBodyWithActions>

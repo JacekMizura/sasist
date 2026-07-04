@@ -7,6 +7,7 @@ import {
   filterSelectClass,
 } from "../../filters";
 import { listSellasistFilterGridClass4 } from "../../listPage/listSellasistTokens";
+import type { ListViewActionsBinding } from "../../../preferences/listView/listViewActionsTypes";
 import type { AppliedSupplierListFilters } from "./supplierListFilterTypes";
 
 type Tenant = { id: number; name: string };
@@ -20,6 +21,7 @@ export type SupplierListFiltersPanelProps = {
   tenants: Tenant[];
   tenantId: number;
   onTenantChange: (tenantId: number) => void;
+  listView?: ListViewActionsBinding;
 };
 
 export function SupplierListFiltersPanel({
@@ -31,6 +33,7 @@ export function SupplierListFiltersPanel({
   tenants,
   tenantId,
   onTenantChange,
+  listView,
 }: SupplierListFiltersPanelProps) {
   return (
     <ListFilterEmbeddedShell expanded={expanded}>
@@ -40,6 +43,7 @@ export function SupplierListFiltersPanel({
         clearLabel="Wyczyść filtry"
         applyLabel="Filtruj"
         footerMobileOnly={false}
+        listView={listView}
       >
         <div className="space-y-2">
           <FilterGrid columnsClassName={listSellasistFilterGridClass4}>

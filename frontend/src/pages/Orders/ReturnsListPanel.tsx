@@ -26,12 +26,14 @@ import { summarizeEntityBulkDeleteToast } from "../../types/entityBulkDelete";
 import { usePanelListBulkSelection } from "../../hooks/usePanelListBulkSelection";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { ReturnListFiltersPanel } from "../../components/returns/returnList/ReturnListFiltersPanel";
-import {
-  DEFAULT_APPLIED_RETURN_LIST_FILTERS,
-  type AppliedReturnListFilters,
-} from "../../components/returns/returnList/returnListFilterTypes";
 import { ReturnsListTable } from "../../components/returns/returnList/ReturnsListTable";
 import { ReturnsListToolbar } from "../../components/returns/returnList/ReturnsListToolbar";
+import {
+  buildReturnListViewAdapter,
+  listViewActionsFromHook,
+  readReturnListPanelFilter,
+  useListViewState,
+} from "../../preferences/listView";
 import {
   OrderStatusSidebar,
   ORDERS_PANEL_GROUP_LABELS,
@@ -147,22 +149,39 @@ export default function ReturnsListPanel() {
   const { warehouse, warehouses } = useWarehouse();
   const warehouseId = warehouse?.id ?? null;
 
+  const listViewAdapter = useMemo(() => buildReturnListViewAdapter(DAMAGE_TENANT_ID), []);
+  const listView = useListViewState(listViewAdapter);
+  const listViewActions = useMemo(() => listViewActionsFromHook(listView), [listView]);
+  const {
+    isHydrated,
+    draftFilters,
+    setDraftFilters,
+    appliedFilters,
+    applyFilters,
+    clearFilters,
+    appliedFiltersKey,
+    filtersExpanded,
+    toggleFiltersPanel,
+    filterFieldOrder,
+    setFilterFieldOrder,
+    extensions,
+    setExtension,
+  } = listView;
+  const panelFilter = readReturnListPanelFilter(extensions) as OrderPanelFilter;
+  const setPanelFilter = useCallback(
+    (next: OrderPanelFilter) => {
+      setExtension("panelFilter", next);
+    },
+    [setExtension],
+  );
+  const isStatusPanelCollapsed = Boolean(extensions.statusPanelCollapsed);
+
   const [rows, setRows] = useState<WmsReturnListItem[]>([]);
   const [panelSummary, setPanelSummary] = useState<ReturnUiStatusPanelSummary | null>(null);
   const [panelSubgroups, setPanelSubgroups] = useState<ReturnUiPanelSubgroupRead[] | null>(null);
   const [queueCounts, setQueueCounts] = useState<Partial<Record<ReturnOperationalQueueKey, number>>>({});
-  const [panelFilter, setPanelFilter] = useState<OrderPanelFilter>("all");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [filtersExpanded, setFiltersExpanded] = useState(() => {
-    try {
-      return localStorage.getItem("returns.list.filtersExpanded") === "1";
-    } catch {
-      return false;
-    }
-  });
-  const [draftFilters, setDraftFilters] = useState<AppliedReturnListFilters>(DEFAULT_APPLIED_RETURN_LIST_FILTERS);
-  const [appliedFilters, setAppliedFilters] = useState<AppliedReturnListFilters>(DEFAULT_APPLIED_RETURN_LIST_FILTERS);
   const [workflowStatuses, setWorkflowStatuses] = useState<ReturnStatusRead[]>([]);
   const [shippingMethods, setShippingMethods] = useState<ShippingMethodDto[]>([]);
   const [bulkConfirm, setBulkConfirm] = useState<{ status: string; label: string } | null>(null);
@@ -172,10 +191,8 @@ export default function ReturnsListPanel() {
   const [toast, setToast] = useState<string | null>(null);
   const [bulkSelectMenuKey, setBulkSelectMenuKey] = useState(0);
   const openFilterFieldsRef = useRef<(() => void) | null>(null);
-  const [isStatusPanelCollapsed, setIsStatusPanelCollapsed] = useState(false);
   const [statusDrawerOpen, setStatusDrawerOpen] = useState(false);
 
-  const appliedFiltersKey = useMemo(() => JSON.stringify(appliedFilters), [appliedFilters]);
   const effectiveWarehouseId = appliedFilters.listWarehouseId ?? warehouseId ?? null;
   const activeFilterLabel = useMemo(
     () => formatActiveFilterLabel(panelFilter, operationalQueue, panelSummary),
@@ -312,8 +329,9 @@ export default function ReturnsListPanel() {
   }, [panelFilter, warehouseId, appliedFilters, operationalQueue]);
 
   useEffect(() => {
+    if (!isHydrated) return;
     void load();
-  }, [load]);
+  }, [load, isHydrated]);
 
   useEffect(() => {
     const onRefresh = () => {
@@ -328,7 +346,12 @@ export default function ReturnsListPanel() {
     if (panelSummary != null && panelSummary.unassigned_count === 0) {
       setPanelFilter("all");
     }
-  }, [panelFilter, panelSummary]);
+  }, [panelFilter, panelSummary, setPanelFilter]);
+
+  const toggleFiltersExpanded = toggleFiltersPanel;
+  const toggleStatusPanelCollapsed = useCallback(() => {
+    setExtension("statusPanelCollapsed", !isStatusPanelCollapsed);
+  }, [isStatusPanelCollapsed, setExtension]);
 
   const visibleReturnIds = useMemo(() => rows.map((r) => String(r.id)), [rows]);
   const {
@@ -422,28 +445,6 @@ export default function ReturnsListPanel() {
     return () => window.clearTimeout(t);
   }, [toast]);
 
-  const toggleFiltersExpanded = () => {
-    setFiltersExpanded((prev) => {
-      const n = !prev;
-      try {
-        localStorage.setItem("returns.list.filtersExpanded", n ? "1" : "0");
-      } catch {
-        /* ignore */
-      }
-      if (n) setDraftFilters({ ...appliedFilters });
-      return n;
-    });
-  };
-
-  const applyFilters = () => {
-    setAppliedFilters(draftFilters);
-  };
-
-  const clearFilters = () => {
-    setDraftFilters(DEFAULT_APPLIED_RETURN_LIST_FILTERS);
-    setAppliedFilters(DEFAULT_APPLIED_RETURN_LIST_FILTERS);
-  };
-
   const openDetail = (returnId: number) => {
     navigate(`/orders/returns/${returnId}`);
   };
@@ -504,7 +505,7 @@ export default function ReturnsListPanel() {
         {effectiveWarehouseId != null ? (
           <ModuleStatusSidebarShell
             collapsed={isStatusPanelCollapsed}
-            onToggleCollapsed={() => setIsStatusPanelCollapsed((v) => !v)}
+            onToggleCollapsed={toggleStatusPanelCollapsed}
             mobileOpenLabel="Statusy panelu"
             statusDrawerOpen={statusDrawerOpen}
             onStatusDrawerOpenChange={setStatusDrawerOpen}
@@ -518,7 +519,7 @@ export default function ReturnsListPanel() {
                 chromeVariant="sellasist"
                 collapsed={isStatusPanelCollapsed}
                 parentScrollContainer
-                onToggleCollapsed={() => setIsStatusPanelCollapsed((v) => !v)}
+                onToggleCollapsed={toggleStatusPanelCollapsed}
                 manageStatusesHref="/orders/returns/panel-statuses"
                 returnsOperationalQueuesSlot={operationalQueuesSlot}
                 returnsOperationalQueuesCollapsedSlot={operationalQueuesCollapsedSlot}
@@ -578,6 +579,9 @@ export default function ReturnsListPanel() {
             returnStatuses={workflowStatuses}
             filterLayout="embedded"
             openFilterFieldsRef={openFilterFieldsRef}
+            listView={listViewActions}
+            filterFieldOrder={filterFieldOrder}
+            onFilterFieldOrderSave={setFilterFieldOrder}
           />
 
           {bulkSelectionMode === "filtered_all" && effectiveWarehouseId != null ? (

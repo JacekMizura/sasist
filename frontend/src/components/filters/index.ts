@@ -8,6 +8,7 @@ export { FilterDateRange } from "./FilterDateRange";
 export { FilterNumberRange } from "./FilterNumberRange";
 export { FilterShippingMethodSelect } from "./FilterShippingMethodSelect";
 export { FilterActionsBar, type FilterActionsBarProps } from "./FilterActionsBar";
+export { FilterApplyActions } from "./FilterApplyActions";
 export {
   FilterPanelBodyWithActions,
   type FilterPanelBodyWithActionsProps,
@@ -31,6 +32,7 @@ export {
 } from "./filterUiTokens";
 export { loadVisibleFieldOrder, saveVisibleFieldOrder } from "./filterVisibilityStorage";
 export { useFilterFieldOrder } from "./useFilterFieldOrder";
+export { useListColumnLayout } from "./useListColumnLayout";
 export { FilterVisibilityModal, type FilterFieldCatalogItem } from "./FilterVisibilityModal";
 export { VisibleFieldsManager } from "./VisibleFieldsManager";
 export type { SavedFilterPresetPlaceholder } from "./filterPresetTypes";

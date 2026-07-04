@@ -5,7 +5,7 @@ import { ChevronDown, Download, TableProperties } from "lucide-react";
 import { bulkSetCartonSupplier, deleteCarton, duplicateCarton, getCartons, type CartonDto } from "../../api/cartonsApi";
 import { listSuppliers, type SupplierRead } from "../../api/inboundSuppliersApi";
 import ExportModal from "../../components/exports/ExportModal";
-import { FilterVisibilityModal } from "../../components/filters";
+import { FilterVisibilityModal, useListColumnLayout } from "../../components/filters";
 import { moduleTableCardClass, moduleTablePaginationFooterClass } from "../../components/listPage/moduleList";
 import {
   listSellasistInputClass,
@@ -16,15 +16,19 @@ import { CartonsListFiltersPanel } from "../../components/warehouseMaterials/car
 import { CartonsListTable } from "../../components/warehouseMaterials/cartonsList/CartonsListTable";
 import {
   CARTONS_LIST_COLUMN_CATALOG,
+  CARTONS_LIST_COLUMN_IDS,
   CARTONS_LIST_DEFAULT_COLUMN_ORDER,
+  CARTONS_LIST_COLUMNS_LAYOUT_KEY,
 } from "../../components/warehouseMaterials/cartonsList/cartonsListColumnCatalog";
 import {
   cartonsListFilterToggleLabel,
   countActiveCartonsListFilters,
-  DEFAULT_APPLIED_CARTONS_LIST_FILTERS,
-  type AppliedCartonsListFilters,
 } from "../../components/warehouseMaterials/cartonsList/cartonsListFilterTypes";
-import { useCartonsListColumnOrder } from "../../components/warehouseMaterials/cartonsList/useCartonsListColumnOrder";
+import {
+  buildCartonsListViewAdapter,
+  listViewActionsFromHook,
+  useListViewState,
+} from "../../preferences/listView";
 import { DAMAGE_TENANT_ID } from "../../constants/panelTenant";
 import { useWarehouse } from "../../context/WarehouseContext";
 
@@ -34,17 +38,30 @@ export default function CartonsListPage() {
   const navigate = useNavigate();
   const { warehouse } = useWarehouse();
   const warehouseId = warehouse?.id ?? null;
+  const tenantId = DAMAGE_TENANT_ID;
 
-  const [draftFilters, setDraftFilters] = useState<AppliedCartonsListFilters>(DEFAULT_APPLIED_CARTONS_LIST_FILTERS);
-  const [appliedFilters, setAppliedFilters] = useState<AppliedCartonsListFilters>(DEFAULT_APPLIED_CARTONS_LIST_FILTERS);
+  const listViewAdapter = useMemo(() => buildCartonsListViewAdapter(tenantId), [tenantId]);
+  const listView = useListViewState(listViewAdapter);
+  const listViewActions = useMemo(() => listViewActionsFromHook(listView), [listView]);
+  const {
+    isHydrated,
+    draftFilters,
+    setDraftFilters,
+    appliedFilters,
+    applyFilters,
+    clearFilters,
+    appliedFiltersKey,
+    page,
+    setPage,
+    pageSize: rowsPerPage,
+    setPageSize: setRowsPerPage,
+    filtersExpanded,
+    toggleFiltersPanel,
+    columnOrder: listViewColumnOrder,
+    persistColumnOrder: listViewPersistColumnOrder,
+  } = listView;
+
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [filtersExpanded, setFiltersExpanded] = useState(() => {
-    try {
-      return localStorage.getItem("warehouse_materials.cartons.filtersExpanded") === "1";
-    } catch {
-      return false;
-    }
-  });
   const [rows, setRows] = useState<CartonDto[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -56,12 +73,14 @@ export default function CartonsListPage() {
   const [bulkBusy, setBulkBusy] = useState(false);
   const [dupBusy, setDupBusy] = useState<string | null>(null);
   const [deleteBusy, setDeleteBusy] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
-  const [rowsPerPage, setRowsPerPage] = useState(25);
   const headerSelectAllRef = useRef<HTMLInputElement>(null);
-  const { columnOrder, persistColumnOrder } = useCartonsListColumnOrder();
+  const { columnOrder, persistColumnOrder } = useListColumnLayout(
+    CARTONS_LIST_COLUMNS_LAYOUT_KEY,
+    CARTONS_LIST_COLUMN_IDS,
+    CARTONS_LIST_DEFAULT_COLUMN_ORDER,
+    { order: listViewColumnOrder, onChange: listViewPersistColumnOrder },
+  );
 
-  const appliedFiltersKey = useMemo(() => JSON.stringify(appliedFilters), [appliedFilters]);
   const activeFilterCount = useMemo(() => countActiveCartonsListFilters(appliedFilters), [appliedFilters]);
 
   useEffect(() => {
@@ -93,8 +112,9 @@ export default function CartonsListPage() {
   }, [warehouseId, appliedFilters.status, debouncedSearch]);
 
   useEffect(() => {
+    if (!isHydrated) return;
     void load();
-  }, [load]);
+  }, [load, isHydrated]);
 
   useEffect(() => {
     void listSuppliers(DAMAGE_TENANT_ID, { status: "all" }).then(setSuppliers).catch(() => setSuppliers([]));
@@ -143,23 +163,7 @@ export default function CartonsListPage() {
     if (el) el.indeterminate = somePageSelected && !allPageSelected;
   }, [somePageSelected, allPageSelected]);
 
-  const toggleFiltersExpanded = () => {
-    setFiltersExpanded((prev) => {
-      const next = !prev;
-      try {
-        localStorage.setItem("warehouse_materials.cartons.filtersExpanded", next ? "1" : "0");
-      } catch {
-        /* ignore */
-      }
-      return next;
-    });
-  };
-
-  const applyFilters = () => setAppliedFilters(draftFilters);
-  const clearFilters = () => {
-    setDraftFilters(DEFAULT_APPLIED_CARTONS_LIST_FILTERS);
-    setAppliedFilters(DEFAULT_APPLIED_CARTONS_LIST_FILTERS);
-  };
+  const toggleFiltersExpanded = toggleFiltersPanel;
 
   const toggleOne = (id: string) => {
     setSelected((prev) => {
@@ -298,6 +302,7 @@ export default function CartonsListPage() {
         onChangeDraft={(patch) => setDraftFilters((d) => ({ ...d, ...patch }))}
         onApply={applyFilters}
         onClear={clearFilters}
+        listView={listViewActions}
       />
 
       {warehouseId == null ? (

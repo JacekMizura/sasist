@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
 import { ChevronDown, SlidersHorizontal } from "lucide-react";
 
+import type { ListViewActionsBinding } from "../../preferences/listView/listViewActionsTypes";
+import { FilterApplyActions } from "./FilterApplyActions";
 import {
-  filterToolbarBtnApply,
   filterToolbarBtnGhost,
   filterToolbarBtnIconSquare,
   filterToolbarBtnSecondary,
@@ -25,8 +26,8 @@ export type FilterToolbarProps = {
   onOpenFieldPicker?: () => void;
   showFieldPicker?: boolean;
   fieldPickerLabel?: string;
-  /** Optional reserved slot for future saved presets. */
-  presetsSlot?: ReactNode;
+  /** Saved list views — split „Filtruj ▼” menu. */
+  listView?: ListViewActionsBinding;
   /** Collapsible trigger copy when panel is open (e.g. „Ukryj filtry”). */
   expandedToggleLabel?: string;
   /** Collapsible trigger copy when panel is closed (e.g. „Pokaż filtry”). */
@@ -52,7 +53,7 @@ export function FilterToolbar({
   onOpenFieldPicker,
   showFieldPicker,
   fieldPickerLabel = "Widoczne pola",
-  presetsSlot,
+  listView,
   expandedToggleLabel,
   collapsedToggleLabel,
   fieldPickerIconOnly,
@@ -86,7 +87,6 @@ export function FilterToolbar({
         ) : (
           <span className="text-sm font-semibold tracking-tight text-slate-800">Filtry</span>
         )}
-        {presetsSlot}
       </div>
       <div className="flex flex-wrap items-center gap-2">
         {trailing}
@@ -103,17 +103,18 @@ export function FilterToolbar({
             {fieldPickerIconOnly ? null : fieldPickerLabel}
           </button>
         ) : null}
-        {showActions ? (
-          <>
-            <button type="button" onClick={onClear} className={filterToolbarBtnSecondary}>
-              {clearLabel}
-            </button>
-            {showApply && onApply ? (
-              <button type="button" onClick={onApply} className={filterToolbarBtnApply}>
-                {applyLabel}
-              </button>
-            ) : null}
-          </>
+        {showActions && showApply && onApply ? (
+          <FilterApplyActions
+            onClear={onClear}
+            onApply={onApply}
+            clearLabel={clearLabel}
+            applyLabel={applyLabel}
+            listView={listView}
+          />
+        ) : showActions ? (
+          <button type="button" onClick={onClear} className={filterToolbarBtnSecondary}>
+            {clearLabel}
+          </button>
         ) : null}
       </div>
     </div>

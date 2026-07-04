@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AlertOctagon, Banknote, ChevronDown, Package, Percent, TableProperties, TrendingDown, TrendingUp } from "lucide-react";
 
 import { fetchProductProfitability, type ProductProfitabilityRow } from "../../api/productProfitabilityApi";
-import { FilterVisibilityModal } from "../../components/filters";
+import { FilterVisibilityModal, useListColumnLayout } from "../../components/filters";
 import { ListPageHeader } from "../../components/listPage/ListPageHeader";
 import {
   moduleTableCardClass,
@@ -16,19 +16,22 @@ import {
 import PageLayout from "../../components/layout/PageLayout";
 import {
   PRODUCT_PROFITABILITY_COLUMN_CATALOG,
+  PRODUCT_PROFITABILITY_COLUMN_IDS,
   PRODUCT_PROFITABILITY_DEFAULT_COLUMN_ORDER,
+  PRODUCT_PROFITABILITY_COLUMNS_LAYOUT_KEY,
 } from "../../components/productProfitability/productProfitabilityColumnCatalog";
 import { ProductProfitabilityFiltersPanel } from "../../components/productProfitability/ProductProfitabilityFiltersPanel";
 import { ProductProfitabilityListTable } from "../../components/productProfitability/ProductProfitabilityListTable";
 import {
   countActiveProductProfitabilityFilters,
-  DEFAULT_APPLIED_PRODUCT_PROFITABILITY_FILTERS,
   productProfitabilityFilterToggleLabel,
-  type AppliedProductProfitabilityFilters,
 } from "../../components/productProfitability/productProfitabilityFilterTypes";
-import { useProductProfitabilityColumnOrder } from "../../components/productProfitability/useProductProfitabilityColumnOrder";
+import {
+  buildProductProfitabilityListViewAdapter,
+  listViewActionsFromHook,
+  useListViewState,
+} from "../../preferences/listView";
 import { DEFAULT_PAGE_SIZE_OPTIONS } from "../../components/table/DataTablePageSizeSelect";
-import { useLocalStorage } from "../../hooks/useLocalStorage";
 import { PurchasingKpiCard, PurchasingKpiGrid } from "../../modules/purchasing/ui";
 
 const ROWS_PER_PAGE_OPTIONS = DEFAULT_PAGE_SIZE_OPTIONS;
@@ -152,35 +155,46 @@ export default function ProductProfitabilityPage() {
     return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
   }, []);
 
-  const [draftFilters, setDraftFilters] = useState<AppliedProductProfitabilityFilters>(
-    DEFAULT_APPLIED_PRODUCT_PROFITABILITY_FILTERS,
-  );
-  const [appliedFilters, setAppliedFilters] = useState<AppliedProductProfitabilityFilters>(
-    DEFAULT_APPLIED_PRODUCT_PROFITABILITY_FILTERS,
-  );
-  const [filtersExpanded, setFiltersExpanded] = useState(() => {
-    try {
-      return localStorage.getItem("products.profitability.filtersExpanded") === "1";
-    } catch {
-      return false;
-    }
-  });
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useLocalStorage("products.profitability.pageSize", 25, ROWS_PER_PAGE_OPTIONS);
+  const listViewAdapter = useMemo(() => buildProductProfitabilityListViewAdapter(tenantId), [tenantId]);
+  const listView = useListViewState(listViewAdapter);
+  const listViewActions = useMemo(() => listViewActionsFromHook(listView), [listView]);
+  const {
+    isHydrated,
+    draftFilters,
+    setDraftFilters,
+    appliedFilters,
+    applyFilters,
+    clearFilters,
+    appliedFiltersKey,
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    filtersExpanded,
+    toggleFiltersPanel,
+    columnOrder: listViewColumnOrder,
+    persistColumnOrder: listViewPersistColumnOrder,
+  } = listView;
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<Awaited<ReturnType<typeof fetchProductProfitability>> | null>(null);
   const [active, setActive] = useState<ProductProfitabilityRow | null>(null);
   const [columnPickerOpen, setColumnPickerOpen] = useState(false);
-  const { columnOrder, persistColumnOrder } = useProductProfitabilityColumnOrder();
+  const { columnOrder, persistColumnOrder } = useListColumnLayout(
+    PRODUCT_PROFITABILITY_COLUMNS_LAYOUT_KEY,
+    PRODUCT_PROFITABILITY_COLUMN_IDS,
+    PRODUCT_PROFITABILITY_DEFAULT_COLUMN_ORDER,
+    { order: listViewColumnOrder, onChange: listViewPersistColumnOrder },
+  );
 
-  const appliedFiltersKey = useMemo(() => JSON.stringify(appliedFilters), [appliedFilters]);
   const activeFilterCount = useMemo(
     () => countActiveProductProfitabilityFilters(appliedFilters),
     [appliedFilters],
   );
 
   useEffect(() => {
+    if (!isHydrated) return;
     let cancelled = false;
     void (async () => {
       setLoading(true);
@@ -211,11 +225,9 @@ export default function ProductProfitabilityPage() {
     return () => {
       cancelled = true;
     };
-  }, [tenantId, appliedFiltersKey, page, pageSize]);
+  }, [tenantId, appliedFiltersKey, page, pageSize, isHydrated]);
 
-  useEffect(() => {
-    setPage(1);
-  }, [appliedFiltersKey, pageSize]);
+  const toggleFiltersExpanded = toggleFiltersPanel;
 
   const rows = data?.rows ?? [];
   const totalCount = data?.pagination.total ?? 0;
@@ -236,25 +248,6 @@ export default function ProductProfitabilityPage() {
     if (page >= totalPages - 2) return Array.from({ length: 5 }, (_, i) => totalPages - 4 + i);
     return [page - 2, page - 1, page, page + 1, page + 2];
   }, [page, totalPages]);
-
-  const applyFilters = () => setAppliedFilters(draftFilters);
-
-  const clearFilters = () => {
-    setDraftFilters(DEFAULT_APPLIED_PRODUCT_PROFITABILITY_FILTERS);
-    setAppliedFilters(DEFAULT_APPLIED_PRODUCT_PROFITABILITY_FILTERS);
-  };
-
-  const toggleFiltersExpanded = () => {
-    setFiltersExpanded((prev) => {
-      const next = !prev;
-      try {
-        localStorage.setItem("products.profitability.filtersExpanded", next ? "1" : "0");
-      } catch {
-        /* ignore */
-      }
-      return next;
-    });
-  };
 
   const summary = data?.summary;
 
@@ -349,6 +342,7 @@ export default function ProductProfitabilityPage() {
           onChangeDraft={(patch) => setDraftFilters((d) => ({ ...d, ...patch }))}
           onApply={applyFilters}
           onClear={clearFilters}
+          listView={listViewActions}
         />
 
         <div className={`${moduleTableCardClass} min-w-0`}>

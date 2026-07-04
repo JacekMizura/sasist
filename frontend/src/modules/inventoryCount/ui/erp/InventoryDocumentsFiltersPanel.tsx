@@ -1,11 +1,13 @@
 import {
-  FilterActionsBar,
+  FilterField,
+  FilterGrid,
+  FilterPanelBodyWithActions,
   ListFilterEmbeddedShell,
-  filterGridColsClass,
   filterInputClass,
-  filterLabelClass,
   filterSelectClass,
 } from "@/components/filters";
+import { listSellasistFilterGridClass4 } from "@/components/listPage/listSellasistTokens";
+import type { ListViewActionsBinding } from "@/preferences/listView/listViewActionsTypes";
 import type { InventoryDocumentListFilters } from "../../inventoryCountDocumentListFilters";
 import {
   INVENTORY_DOCUMENT_STATUS_FILTER_OPTIONS,
@@ -18,52 +20,65 @@ type Props = {
   onChange: (next: InventoryDocumentListFilters) => void;
   onApply: () => void;
   onClear: () => void;
+  listView?: ListViewActionsBinding;
 };
 
-export function InventoryDocumentsFiltersPanel({ expanded, draft, onChange, onApply, onClear }: Props) {
+export function InventoryDocumentsFiltersPanel({
+  expanded,
+  draft,
+  onChange,
+  onApply,
+  onClear,
+  listView,
+}: Props) {
   return (
     <ListFilterEmbeddedShell expanded={expanded}>
-      <div className={filterGridColsClass}>
-        <label className="block min-w-0">
-          <span className={filterLabelClass}>Szukaj</span>
-          <input
-            type="search"
-            className={filterInputClass}
-            placeholder="Numer, tytuł…"
-            value={draft.query}
-            onChange={(e) => onChange({ ...draft, query: e.target.value })}
-          />
-        </label>
-        <label className="block min-w-0">
-          <span className={filterLabelClass}>Status</span>
-          <select
-            className={filterSelectClass}
-            value={draft.status}
-            onChange={(e) => onChange({ ...draft, status: e.target.value })}
-          >
-            {INVENTORY_DOCUMENT_STATUS_FILTER_OPTIONS.map((o) => (
-              <option key={o.value || "all"} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="block min-w-0">
-          <span className={filterLabelClass}>Typ</span>
-          <select
-            className={filterSelectClass}
-            value={draft.type}
-            onChange={(e) => onChange({ ...draft, type: e.target.value })}
-          >
-            {INVENTORY_DOCUMENT_TYPE_FILTER_OPTIONS.map((o) => (
-              <option key={o.value || "all"} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-      <FilterActionsBar onApply={onApply} onClear={onClear} applyLabel="Filtruj" />
+      <FilterPanelBodyWithActions
+        onClear={onClear}
+        onApply={onApply}
+        applyLabel="Filtruj"
+        clearLabel="Wyczyść filtry"
+        footerMobileOnly={false}
+        listView={listView}
+      >
+        <FilterGrid columnsClassName={listSellasistFilterGridClass4}>
+          <FilterField label="Szukaj">
+            <input
+              type="search"
+              className={filterInputClass}
+              placeholder="Numer, tytuł…"
+              value={draft.query}
+              onChange={(e) => onChange({ ...draft, query: e.target.value })}
+            />
+          </FilterField>
+          <FilterField label="Status">
+            <select
+              className={filterSelectClass}
+              value={draft.status}
+              onChange={(e) => onChange({ ...draft, status: e.target.value })}
+            >
+              {INVENTORY_DOCUMENT_STATUS_FILTER_OPTIONS.map((o) => (
+                <option key={o.value || "all"} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </FilterField>
+          <FilterField label="Typ">
+            <select
+              className={filterSelectClass}
+              value={draft.type}
+              onChange={(e) => onChange({ ...draft, type: e.target.value })}
+            >
+              {INVENTORY_DOCUMENT_TYPE_FILTER_OPTIONS.map((o) => (
+                <option key={o.value || "all"} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </FilterField>
+        </FilterGrid>
+      </FilterPanelBodyWithActions>
     </ListFilterEmbeddedShell>
   );
 }

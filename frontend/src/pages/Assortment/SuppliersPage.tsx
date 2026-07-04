@@ -5,23 +5,27 @@ import { ChevronDown, Download, TableProperties } from "lucide-react";
 import api from "../../api/axios";
 import { createDelivery } from "../../api/inboundDeliveriesApi";
 import { deleteSupplier, listSuppliers, type SupplierRead } from "../../api/inboundSuppliersApi";
-import { FilterVisibilityModal } from "../../components/filters";
+import { FilterVisibilityModal, useListColumnLayout } from "../../components/filters";
 import { useActiveWarehouseContext, ACTIVE_WAREHOUSE_REQUIRED_MESSAGE } from "../../hooks/useActiveWarehouseContext";
 import ExportModal from "../../components/exports/ExportModal";
 import { SupplierListFiltersPanel } from "../../components/suppliers/supplierList/SupplierListFiltersPanel";
 import { SuppliersListTable } from "../../components/suppliers/supplierList/SuppliersListTable";
 import {
   SUPPLIER_LIST_COLUMN_CATALOG,
+  SUPPLIER_LIST_COLUMN_IDS,
   SUPPLIER_LIST_DEFAULT_COLUMN_ORDER,
+  SUPPLIERS_LIST_COLUMNS_LAYOUT_KEY,
 } from "../../components/suppliers/supplierList/supplierListColumnCatalog";
 import {
-  DEFAULT_APPLIED_SUPPLIER_LIST_FILTERS,
   countActiveSupplierFilters,
   supplierFilterToggleLabel,
   triStateToBool,
-  type AppliedSupplierListFilters,
 } from "../../components/suppliers/supplierList/supplierListFilterTypes";
-import { useSupplierListColumnOrder } from "../../components/suppliers/supplierList/useSupplierListColumnOrder";
+import {
+  buildSupplierListViewAdapter,
+  listViewActionsFromHook,
+  useListViewState,
+} from "../../preferences/listView";
 import {
   moduleTableCardClass,
   moduleTablePaginationFooterClass,
@@ -42,34 +46,42 @@ export default function SuppliersPage() {
   const [rows, setRows] = useState<SupplierRead[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
-  const [draftFilters, setDraftFilters] = useState<AppliedSupplierListFilters>(
-    DEFAULT_APPLIED_SUPPLIER_LIST_FILTERS,
-  );
-  const [appliedFilters, setAppliedFilters] = useState<AppliedSupplierListFilters>(
-    DEFAULT_APPLIED_SUPPLIER_LIST_FILTERS,
-  );
-  const [filtersExpanded, setFiltersExpanded] = useState(() => {
-    try {
-      return localStorage.getItem("suppliers.list.filtersExpanded") === "1";
-    } catch {
-      return false;
-    }
-  });
-  const [page, setPage] = useState(1);
-  const [rowsPerPage, setRowsPerPage] = useState(25);
-  const [deleteBusy, setDeleteBusy] = useState<number | null>(null);
-  const [tenants, setTenants] = useState<Tenant[]>([]);
   const [tenantId, setTenantId] = useState(1);
+  const listViewAdapter = useMemo(() => buildSupplierListViewAdapter(tenantId), [tenantId]);
+  const listView = useListViewState(listViewAdapter);
+  const listViewActions = useMemo(() => listViewActionsFromHook(listView), [listView]);
+  const {
+    isHydrated,
+    draftFilters,
+    setDraftFilters,
+    appliedFilters,
+    applyFilters,
+    clearFilters,
+    appliedFiltersKey,
+    page,
+    setPage,
+    pageSize: rowsPerPage,
+    setPageSize: setRowsPerPage,
+    filtersExpanded,
+    toggleFiltersPanel,
+    columnOrder: listViewColumnOrder,
+    persistColumnOrder: listViewPersistColumnOrder,
+  } = listView;
   const { warehouseId, hasActiveWarehouse } = useActiveWarehouseContext();
+  const [tenants, setTenants] = useState<Tenant[]>([]);
   const [toast, setToast] = useState<string | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [columnPickerOpen, setColumnPickerOpen] = useState(false);
   const [newOrderBusyId, setNewOrderBusyId] = useState<number | null>(null);
   const [selected, setSelected] = useState<Set<number>>(() => new Set());
   const headerSelectAllRef = useRef<HTMLInputElement>(null);
-  const { columnOrder, persistColumnOrder } = useSupplierListColumnOrder();
+  const { columnOrder, persistColumnOrder } = useListColumnLayout(
+    SUPPLIERS_LIST_COLUMNS_LAYOUT_KEY,
+    SUPPLIER_LIST_COLUMN_IDS,
+    SUPPLIER_LIST_DEFAULT_COLUMN_ORDER,
+    { order: listViewColumnOrder, onChange: listViewPersistColumnOrder },
+  );
 
-  const appliedFiltersKey = useMemo(() => JSON.stringify(appliedFilters), [appliedFilters]);
   const activeFilterCount = useMemo(() => countActiveSupplierFilters(appliedFilters), [appliedFilters]);
 
   useEffect(() => {
@@ -137,8 +149,9 @@ export default function SuppliersPage() {
   }, [appliedFilters, tenantId]);
 
   useEffect(() => {
+    if (!isHydrated) return;
     void load();
-  }, [load]);
+  }, [load, isHydrated]);
 
   useEffect(() => {
     setSelected(new Set());
@@ -153,24 +166,7 @@ export default function SuppliersPage() {
     void navigate(`/suppliers/${id}/products?tenant_id=${tenantId}`);
   };
 
-  const applyFilters = () => setAppliedFilters(draftFilters);
-
-  const clearFilters = () => {
-    setDraftFilters(DEFAULT_APPLIED_SUPPLIER_LIST_FILTERS);
-    setAppliedFilters(DEFAULT_APPLIED_SUPPLIER_LIST_FILTERS);
-  };
-
-  const toggleFiltersExpanded = () => {
-    setFiltersExpanded((prev) => {
-      const n = !prev;
-      try {
-        localStorage.setItem("suppliers.list.filtersExpanded", n ? "1" : "0");
-      } catch {
-        /* ignore */
-      }
-      return n;
-    });
-  };
+  const toggleFiltersExpanded = toggleFiltersPanel;
 
   const handleDelete = async (s: SupplierRead) => {
     const msg =
@@ -329,6 +325,7 @@ export default function SuppliersPage() {
             setTenantId(id);
             setPage(1);
           }}
+          listView={listViewActions}
         />
 
         {err && !loading && rows.length > 0 ? (

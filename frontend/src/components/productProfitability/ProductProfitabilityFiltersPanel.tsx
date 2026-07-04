@@ -7,6 +7,7 @@ import {
   filterSelectClass,
 } from "../filters";
 import { listSellasistFilterGridClass4 } from "../listPage/listSellasistTokens";
+import type { ListViewActionsBinding } from "../../preferences/listView/listViewActionsTypes";
 import type { AppliedProductProfitabilityFilters } from "./productProfitabilityFilterTypes";
 
 const RANGE_OPTIONS = [
@@ -32,6 +33,7 @@ type Props = {
   onChangeDraft: (patch: Partial<AppliedProductProfitabilityFilters>) => void;
   onApply: () => void;
   onClear: () => void;
+  listView?: ListViewActionsBinding;
 };
 
 export function ProductProfitabilityFiltersPanel({
@@ -40,6 +42,7 @@ export function ProductProfitabilityFiltersPanel({
   onChangeDraft,
   onApply,
   onClear,
+  listView,
 }: Props) {
   return (
     <ListFilterEmbeddedShell expanded={expanded}>
@@ -49,6 +52,7 @@ export function ProductProfitabilityFiltersPanel({
         clearLabel="Wyczyść filtry"
         applyLabel="Filtruj"
         footerMobileOnly={false}
+        listView={listView}
       >
         <div className="space-y-2">
           <FilterGrid columnsClassName={listSellasistFilterGridClass4}>

@@ -6,6 +6,11 @@ import type { InventoryDocumentRead } from "@/api/inventoryCountApi";
 import { AppEmptyState } from "@/components/app-shell";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import {
+  buildInventoryDocumentsListViewAdapter,
+  listViewActionsFromHook,
+  useListViewState,
+} from "@/preferences/listView";
+import {
   productsListActionsCellClass,
   productsListActionsInnerClass,
   productsListActionsThClass,
@@ -22,11 +27,9 @@ import {
   listSellasistToolbarToggleBtn,
 } from "@/components/listPage/listSellasistTokens";
 import {
-  DEFAULT_INVENTORY_DOCUMENT_LIST_FILTERS,
   countActiveInventoryDocumentFilters,
   filterInventoryDocuments,
   inventoryDocumentListFilterLabel,
-  type InventoryDocumentListFilters,
 } from "../../inventoryCountDocumentListFilters";
 import { erpInventoryCountPaths } from "../../inventoryCountPaths";
 import { inventoryTypeLabel } from "../../inventoryCountUiLabels";
@@ -52,20 +55,21 @@ export default function InventoryDocumentsView({
   onDuplicate,
   onExport,
 }: Props) {
+  const tenantId = 1;
+  const listViewAdapter = useMemo(() => buildInventoryDocumentsListViewAdapter(tenantId), [tenantId]);
+  const listView = useListViewState(listViewAdapter);
+  const listViewActions = useMemo(() => listViewActionsFromHook(listView), [listView]);
+  const {
+    draftFilters,
+    setDraftFilters,
+    appliedFilters,
+    applyFilters,
+    clearFilters,
+    filtersExpanded,
+    toggleFiltersPanel,
+  } = listView;
+
   const [confirmDoc, setConfirmDoc] = useState<InventoryDocumentRead | null>(null);
-  const [filtersExpanded, setFiltersExpanded] = useState(() => {
-    try {
-      return localStorage.getItem("inventory-count.documents.filtersExpanded") === "1";
-    } catch {
-      return false;
-    }
-  });
-  const [draftFilters, setDraftFilters] = useState<InventoryDocumentListFilters>(
-    DEFAULT_INVENTORY_DOCUMENT_LIST_FILTERS,
-  );
-  const [appliedFilters, setAppliedFilters] = useState<InventoryDocumentListFilters>(
-    DEFAULT_INVENTORY_DOCUMENT_LIST_FILTERS,
-  );
 
   const filtered = useMemo(() => {
     const sorted = [...documents].sort(
@@ -82,17 +86,7 @@ export default function InventoryDocumentsView({
     setConfirmDoc(null);
   };
 
-  const toggleFilters = () => {
-    setFiltersExpanded((v) => {
-      const next = !v;
-      try {
-        localStorage.setItem("inventory-count.documents.filtersExpanded", next ? "1" : "0");
-      } catch {
-        /* ignore */
-      }
-      return next;
-    });
-  };
+  const toggleFilters = toggleFiltersPanel;
 
   return (
     <div className="space-y-4">
@@ -157,11 +151,9 @@ export default function InventoryDocumentsView({
         expanded={filtersExpanded}
         draft={draftFilters}
         onChange={setDraftFilters}
-        onApply={() => setAppliedFilters({ ...draftFilters })}
-        onClear={() => {
-          setDraftFilters(DEFAULT_INVENTORY_DOCUMENT_LIST_FILTERS);
-          setAppliedFilters(DEFAULT_INVENTORY_DOCUMENT_LIST_FILTERS);
-        }}
+        onApply={applyFilters}
+        onClear={clearFilters}
+        listView={listViewActions}
       />
       {loading ? (
         <p className="text-sm text-slate-500">Wczytywanie…</p>

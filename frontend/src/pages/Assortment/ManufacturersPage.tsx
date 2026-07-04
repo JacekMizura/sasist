@@ -8,20 +8,24 @@ import api from "../../api/axios";
 import { deleteManufacturer, listManufacturers, type ManufacturerRead } from "../../api/manufacturersApi";
 import ExportModal from "../../components/exports/ExportModal";
 import PageLayout from "../../components/layout/PageLayout";
-import { FilterVisibilityModal } from "../../components/filters";
+import { FilterVisibilityModal, useListColumnLayout } from "../../components/filters";
 import { ManufacturerListFiltersPanel } from "../../components/manufacturers/manufacturerList/ManufacturerListFiltersPanel";
 import { ManufacturersListTable } from "../../components/manufacturers/manufacturerList/ManufacturersListTable";
 import {
   MANUFACTURER_LIST_COLUMN_CATALOG,
+  MANUFACTURER_LIST_COLUMN_IDS,
   MANUFACTURER_LIST_DEFAULT_COLUMN_ORDER,
+  MANUFACTURERS_LIST_COLUMNS_LAYOUT_KEY,
 } from "../../components/manufacturers/manufacturerList/manufacturerListColumnCatalog";
 import {
-  DEFAULT_APPLIED_MANUFACTURER_LIST_FILTERS,
   countActiveManufacturerFilters,
   manufacturerFilterToggleLabel,
-  type AppliedManufacturerListFilters,
 } from "../../components/manufacturers/manufacturerList/manufacturerListFilterTypes";
-import { useManufacturerListColumnOrder } from "../../components/manufacturers/manufacturerList/useManufacturerListColumnOrder";
+import {
+  buildManufacturerListViewAdapter,
+  listViewActionsFromHook,
+  useListViewState,
+} from "../../preferences/listView";
 import {
   moduleTableCardClass,
   moduleTablePaginationFooterClass,
@@ -42,32 +46,41 @@ export default function ManufacturersPage() {
   const [rows, setRows] = useState<ManufacturerRead[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
-  const [draftFilters, setDraftFilters] = useState<AppliedManufacturerListFilters>(
-    DEFAULT_APPLIED_MANUFACTURER_LIST_FILTERS,
-  );
-  const [appliedFilters, setAppliedFilters] = useState<AppliedManufacturerListFilters>(
-    DEFAULT_APPLIED_MANUFACTURER_LIST_FILTERS,
-  );
-  const [filtersExpanded, setFiltersExpanded] = useState(() => {
-    try {
-      return localStorage.getItem("manufacturers.list.filtersExpanded") === "1";
-    } catch {
-      return false;
-    }
-  });
-  const [page, setPage] = useState(1);
-  const [rowsPerPage, setRowsPerPage] = useState(25);
+  const [tenantId, setTenantId] = useState(1);
+  const listViewAdapter = useMemo(() => buildManufacturerListViewAdapter(tenantId), [tenantId]);
+  const listView = useListViewState(listViewAdapter);
+  const listViewActions = useMemo(() => listViewActionsFromHook(listView), [listView]);
+  const {
+    isHydrated,
+    draftFilters,
+    setDraftFilters,
+    appliedFilters,
+    applyFilters,
+    clearFilters,
+    appliedFiltersKey,
+    page,
+    setPage,
+    pageSize: rowsPerPage,
+    setPageSize: setRowsPerPage,
+    filtersExpanded,
+    toggleFiltersPanel,
+    columnOrder: listViewColumnOrder,
+    persistColumnOrder: listViewPersistColumnOrder,
+  } = listView;
   const [deleteBusy, setDeleteBusy] = useState<number | null>(null);
   const [tenants, setTenants] = useState<Tenant[]>([]);
-  const [tenantId, setTenantId] = useState(1);
   const [toast, setToast] = useState<string | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [columnPickerOpen, setColumnPickerOpen] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(() => new Set());
   const headerSelectAllRef = useRef<HTMLInputElement>(null);
-  const { columnOrder, persistColumnOrder } = useManufacturerListColumnOrder();
+  const { columnOrder, persistColumnOrder } = useListColumnLayout(
+    MANUFACTURERS_LIST_COLUMNS_LAYOUT_KEY,
+    MANUFACTURER_LIST_COLUMN_IDS,
+    MANUFACTURER_LIST_DEFAULT_COLUMN_ORDER,
+    { order: listViewColumnOrder, onChange: listViewPersistColumnOrder },
+  );
 
-  const appliedFiltersKey = useMemo(() => JSON.stringify(appliedFilters), [appliedFilters]);
   const activeFilterCount = useMemo(() => countActiveManufacturerFilters(appliedFilters), [appliedFilters]);
 
   useEffect(() => {
@@ -133,8 +146,9 @@ export default function ManufacturersPage() {
   }, [appliedFilters, tenantId]);
 
   useEffect(() => {
+    if (!isHydrated) return;
     void load();
-  }, [load]);
+  }, [load, isHydrated]);
 
   useEffect(() => {
     setSelected(new Set());
@@ -145,26 +159,7 @@ export default function ManufacturersPage() {
     void navigate(`/manufacturers/${id}?tenant_id=${tenantId}`);
   };
 
-  const applyFilters = () => {
-    setAppliedFilters(draftFilters);
-  };
-
-  const clearFilters = () => {
-    setDraftFilters(DEFAULT_APPLIED_MANUFACTURER_LIST_FILTERS);
-    setAppliedFilters(DEFAULT_APPLIED_MANUFACTURER_LIST_FILTERS);
-  };
-
-  const toggleFiltersExpanded = () => {
-    setFiltersExpanded((prev) => {
-      const n = !prev;
-      try {
-        localStorage.setItem("manufacturers.list.filtersExpanded", n ? "1" : "0");
-      } catch {
-        /* ignore */
-      }
-      return n;
-    });
-  };
+  const toggleFiltersExpanded = toggleFiltersPanel;
 
   const handleDelete = async (m: ManufacturerRead) => {
     const msg =
@@ -321,6 +316,7 @@ export default function ManufacturersPage() {
             setTenantId(id);
             setPage(1);
           }}
+          listView={listViewActions}
         />
 
         {err && !loading && rows.length > 0 ? (

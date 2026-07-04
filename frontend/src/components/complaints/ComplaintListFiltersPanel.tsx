@@ -13,6 +13,7 @@ import {
   type FilterFieldCatalogItem,
 } from "../filters";
 import { listSellasistFilterGridClass4 } from "../listPage/listSellasistTokens";
+import type { ListViewActionsBinding } from "../../preferences/listView/listViewActionsTypes";
 
 const STORAGE_KEY = "complaints.list.filters.v1";
 
@@ -28,6 +29,9 @@ export type ComplaintListFiltersPanelProps = {
   onClear: () => void;
   filterLayout?: "toolbar" | "embedded";
   openFilterFieldsRef?: MutableRefObject<(() => void) | null>;
+  listView?: ListViewActionsBinding;
+  filterFieldOrder?: string[];
+  onFilterFieldOrderSave?: (order: string[]) => void;
 };
 
 export function ComplaintListFiltersPanel({
@@ -39,9 +43,21 @@ export function ComplaintListFiltersPanel({
   onClear,
   filterLayout = "toolbar",
   openFilterFieldsRef,
+  listView,
+  filterFieldOrder: filterFieldOrderProp,
+  onFilterFieldOrderSave,
 }: ComplaintListFiltersPanelProps) {
   const [visibilityOpen, setVisibilityOpen] = useState(false);
-  const { order: visibleFieldOrder, setOrderFromModal } = useFilterFieldOrder(STORAGE_KEY, IDS);
+  const controlledFieldOrder =
+    filterFieldOrderProp && onFilterFieldOrderSave
+      ? { order: filterFieldOrderProp, onChange: onFilterFieldOrderSave }
+      : undefined;
+  const { order: visibleFieldOrder, setOrderFromModal } = useFilterFieldOrder(
+    STORAGE_KEY,
+    IDS,
+    undefined,
+    controlledFieldOrder,
+  );
 
   const embedded = filterLayout === "embedded";
   if (embedded) void onToggleExpanded;
@@ -76,6 +92,7 @@ export function ComplaintListFiltersPanel({
       clearLabel="Wyczyść filtry"
       applyLabel="Filtruj"
       footerMobileOnly={!embedded}
+      listView={listView}
     >
       <FilterGrid columnsClassName={embedded ? listSellasistFilterGridClass4 : undefined}>{orderedNodes}</FilterGrid>
     </FilterPanelBodyWithActions>
@@ -96,6 +113,7 @@ export function ComplaintListFiltersPanel({
             clearLabel="Wyczyść filtry"
             showFieldPicker
             onOpenFieldPicker={() => setVisibilityOpen(true)}
+            listView={listView}
           />
           {expanded ? filterBody : null}
         </FilterPanel>

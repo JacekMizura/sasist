@@ -36,7 +36,7 @@ import { physicalInventoryLocations, type OpenLocationOnMapPayload } from "../..
 import { useProductsListColumnOrder } from "../../components/products/productList/useProductsListColumnOrder";
 import {
   buildProductListViewAdapter,
-  ListViewPresetsMenu,
+  listViewActionsFromHook,
   readProductListTenantFilter,
   useListViewState,
 } from "../../preferences/listView";
@@ -211,6 +211,7 @@ export default function ProductList() {
     [listViewTenantId, allowedProductColumnIds],
   );
   const listView = useListViewState(listViewAdapter);
+  const listViewActions = useMemo(() => listViewActionsFromHook(listView), [listView]);
   const {
     isHydrated,
     draftFilters: filters,
@@ -233,12 +234,6 @@ export default function ProductList() {
     toggleFiltersPanel,
     extensions,
     setExtension,
-    presets,
-    applyPreset,
-    saveCurrentAsPreset,
-    deletePreset,
-    setDefaultPreset,
-    resetView,
   } = listView;
 
   const { columnOrder: productColumnOrder, persistColumnOrder: persistProductColumns } = useProductsListColumnOrder(
@@ -819,14 +814,6 @@ export default function ProductList() {
             >
               <TableProperties className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
             </button>
-            <ListViewPresetsMenu
-              presets={presets}
-              onApplyPreset={applyPreset}
-              onSavePreset={saveCurrentAsPreset}
-              onDeletePreset={deletePreset}
-              onSetDefaultPreset={setDefaultPreset}
-              onResetView={resetView}
-            />
             <button
               type="button"
               onClick={() => setExportOpen(true)}
@@ -915,6 +902,7 @@ export default function ProductList() {
         openVisibilityRef={openFilterFieldsRef}
         filterFieldOrder={filterFieldOrder}
         onFilterFieldOrderSave={setFilterFieldOrder}
+        listView={listViewActions}
       />
 
       {productBulkMode === "filtered_all" && tenantFilter != null ? (

@@ -20,6 +20,7 @@ import {
   type FilterFieldCatalogItem,
 } from "../../filters";
 import { listSellasistFilterGridClass4 } from "../../listPage/listSellasistTokens";
+import type { ListViewActionsBinding } from "../../../preferences/listView/listViewActionsTypes";
 import type { AppliedCustomerListFilters } from "./customerListFilterTypes";
 
 /** Bumped for CRM type/channel filters. */
@@ -48,6 +49,9 @@ export type CustomerListFiltersPanelProps = {
   /** Jak lista zamówień: pasek filtrów tylko w treści, przełącznik w nagłówku modułu. */
   filterLayout?: "toolbar" | "embedded";
   openFilterFieldsRef?: MutableRefObject<(() => void) | null>;
+  listView?: ListViewActionsBinding;
+  filterFieldOrder?: string[];
+  onFilterFieldOrderSave?: (order: string[]) => void;
 };
 
 export function CustomerListFiltersPanel({
@@ -59,11 +63,20 @@ export function CustomerListFiltersPanel({
   onClear,
   filterLayout = "toolbar",
   openFilterFieldsRef,
+  listView,
+  filterFieldOrder: filterFieldOrderProp,
+  onFilterFieldOrderSave,
 }: CustomerListFiltersPanelProps) {
   const [visibilityOpen, setVisibilityOpen] = useState(false);
+  const controlledFieldOrder =
+    filterFieldOrderProp && onFilterFieldOrderSave
+      ? { order: filterFieldOrderProp, onChange: onFilterFieldOrderSave }
+      : undefined;
   const { order: visibleFieldOrder, setOrderFromModal } = useFilterFieldOrder(
     CUSTOMER_LIST_FILTER_STORAGE_KEY,
     CUSTOMER_LIST_FILTER_IDS,
+    undefined,
+    controlledFieldOrder,
   );
 
   const embedded = filterLayout === "embedded";
@@ -218,6 +231,7 @@ export function CustomerListFiltersPanel({
       clearLabel="Wyczyść filtry"
       applyLabel="Filtruj"
       footerMobileOnly={!embedded}
+      listView={listView}
     >
       <FilterGrid columnsClassName={embedded ? listSellasistFilterGridClass4 : undefined}>{orderedNodes}</FilterGrid>
     </FilterPanelBodyWithActions>
@@ -238,6 +252,7 @@ export function CustomerListFiltersPanel({
             clearLabel="Wyczyść filtry"
             showFieldPicker
             onOpenFieldPicker={() => setVisibilityOpen(true)}
+            listView={listView}
           />
           {expanded ? filterBody : null}
         </FilterPanel>
