@@ -11,7 +11,7 @@ import {
   validateProductionBatchCreateBody,
   type RecipeDetailRead,
 } from "../../api/productionApi";
-import { formatProductionMoney, stockTone, STOCK_TONE_CLASS } from "./productionUi";
+import { formatProductionMoney, stockTone, STOCK_TONE_CLASS, PRODUCTION_NUMBER_INPUT } from "./productionUi";
 import { erpProductionPaths } from "./productionPaths";
 import { ProductThumb } from "./components/ProductThumb";
 
@@ -141,7 +141,7 @@ export default function RecipeDetailPage() {
                 <input
                   type="number"
                   min={1}
-                  className="mt-1 block w-28 rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  className={`mt-1 block w-28 rounded-lg border border-slate-200 px-3 py-2 text-sm ${PRODUCTION_NUMBER_INPUT}`}
                   value={qty}
                   onChange={(e) => setQty(Number(e.target.value) || 1)}
                 />

@@ -29,6 +29,9 @@ export const BATCH_STATUS_LABEL: Record<ProductionBatchStatus, string> = {
   cancelled: "Anulowana",
 };
 
+export const PRODUCTION_NUMBER_INPUT =
+  "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
+
 export function stockTone(required: number, available: number): "ok" | "partial" | "short" {
   if (available >= required - 1e-6) return "ok";
   if (available > 0) return "partial";

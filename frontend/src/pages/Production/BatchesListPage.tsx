@@ -67,6 +67,7 @@ export default function BatchesListPage({ embedded = false }: Props) {
     <p className="text-sm text-slate-500">Wczytywanie…</p>
   ) : batches.length === 0 ? (
     <AppEmptyState
+      icon={Package}
       title="Brak aktywnych partii"
       description="Utwórz partię masową, aby zaplanować produkcję wieloproduktową."
       action={

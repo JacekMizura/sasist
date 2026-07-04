@@ -265,7 +265,7 @@ export default function ProductionHistoryPage() {
       {loading ? (
         <p className="text-sm text-slate-500">Wczytywanie…</p>
       ) : filtered.length === 0 ? (
-        <AppEmptyState title="Brak historii" description="Zakończone zlecenia pojawią się tutaj po zamknięciu produkcji." />
+        <AppEmptyState icon={Clock} title="Brak historii" description="Zakończone zlecenia pojawią się tutaj po zamknięciu produkcji." />
       ) : (
         <div className={moduleTableCardClass}>
           <div className={moduleListTableScrollClass}>

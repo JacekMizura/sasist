@@ -232,7 +232,7 @@ export default function ProductionAnalyticsPage() {
       {loading ? (
         <p className="text-sm text-slate-500">Wczytywanie…</p>
       ) : filtered.length === 0 ? (
-        <AppEmptyState title="Brak danych" description="Brak receptur do analizy kosztów." />
+        <AppEmptyState icon={TrendingUp} title="Brak danych" description="Brak receptur do analizy kosztów." />
       ) : (
         <div className={moduleTableCardClass}>
           <div className={moduleListTableScrollClass}>

@@ -11,7 +11,7 @@ import {
   type CompositionCostEstimateRead,
   type ProductCompositionRead,
 } from "../../api/compositionApi";
-import { formatProductionMoney } from "./productionUi";
+import { formatProductionMoney, PRODUCTION_NUMBER_INPUT } from "./productionUi";
 
 type CatalogProduct = {
   id: number;
@@ -137,6 +137,7 @@ export function CompositionVisualEditor({
   const [costEstimate, setCostEstimate] = useState<CompositionCostEstimateRead | null>(null);
 
   const inputClass = `w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:ring-2 ${copy.accentRing}`;
+  const numberInputClass = `${inputClass} ${PRODUCTION_NUMBER_INPUT}`;
   const labelClass = "block text-sm font-medium text-slate-700 mb-1";
 
   const openNew = () => {
@@ -396,7 +397,7 @@ export function CompositionVisualEditor({
                 type="number"
                 min={0.001}
                 step="any"
-                className={inputClass}
+                className={numberInputClass}
                 value={yieldQty}
                 onChange={(e) => setYieldQty(Number(e.target.value) || 1)}
               />
@@ -407,7 +408,7 @@ export function CompositionVisualEditor({
             {copy.activeLabel}
           </label>
 
-          <div className="grid gap-6 lg:grid-cols-2">
+          <div className="space-y-6">
             <div className="space-y-2">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Składniki</p>
               {rows.map((row, idx) => (
@@ -461,7 +462,7 @@ export function CompositionVisualEditor({
                       type="number"
                       min={0.001}
                       step="any"
-                      className={inputClass}
+                      className={numberInputClass}
                       value={row.quantity}
                       onChange={(e) =>
                         setRows((prev) =>
@@ -477,7 +478,7 @@ export function CompositionVisualEditor({
                         type="number"
                         min={0}
                         max={100}
-                        className={inputClass}
+                        className={numberInputClass}
                         value={row.wastePercent}
                         onChange={(e) =>
                           setRows((prev) =>
@@ -503,9 +504,9 @@ export function CompositionVisualEditor({
             </div>
 
             <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-slate-200 bg-white p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Podgląd</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Podgląd BOM</p>
               {previewLines.map((ln) => (
-                <div key={ln.id} className="w-full max-w-xs rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-center shadow-sm">
+                <div key={ln.id} className="w-full max-w-md rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-center shadow-sm">
                   <p className="font-medium text-slate-800">{ln.name}</p>
                   <p className="text-sm text-slate-600">
                     {ln.qty} {ln.unit}
@@ -514,7 +515,7 @@ export function CompositionVisualEditor({
               ))}
               {previewLines.length === 0 ? <p className="text-sm text-slate-400">Dodaj składniki…</p> : null}
               <ArrowDown className="h-5 w-5 text-violet-400" aria-hidden />
-              <div className="w-full max-w-xs rounded-lg border-2 border-violet-300 bg-violet-50 px-4 py-3 text-center font-semibold text-violet-900 shadow-sm">
+              <div className="w-full max-w-md rounded-lg border-2 border-violet-300 bg-violet-50 px-4 py-3 text-center font-semibold text-violet-900 shadow-sm">
                 {productName}
               </div>
             </div>

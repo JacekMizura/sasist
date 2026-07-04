@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { ChevronDown, Filter, Plus } from "lucide-react";
+import { ChevronDown, ClipboardList, Filter, Plus } from "lucide-react";
 import toast from "react-hot-toast";
 
 import { useWarehouse } from "../../context/WarehouseContext";
@@ -203,6 +203,7 @@ export default function ProductionOrdersPage() {
         <p className="text-sm text-slate-500">Wczytywanie…</p>
       ) : rows.length === 0 ? (
         <AppEmptyState
+          icon={ClipboardList}
           title="Brak zleceń"
           description="Utwórz zlecenie lub partię w planowaniu produkcji."
           action={

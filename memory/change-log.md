@@ -1,5 +1,13 @@
 # Change log
 
+## 2026-06-08 — Produkcja UX: layout receptury + fix React #130
+
+- **React #130:** `AppEmptyState` wymaga `icon: LucideIcon`; brak `icon` na `ProductionOrdersPage` (i innych listach) powodował render `<Icon />` z `undefined` → crash przy pustej liście zleceń po utworzeniu MO.
+- Naprawiono: `ProductionOrdersPage`, `BatchesListPage`, `ProductionHistoryPage`, `ProductionAnalyticsPage` — dodano ikony.
+- **Formularz receptury:** `PRODUCTION_NUMBER_INPUT` ukrywa natywne spinnery w polach number (wydajność, ilość, odpad); wersja pozostaje polem tekstowym.
+- **Layout `ProductManufacturingPanel`:** grid 65/35 — lewa: dane receptury, edytor składników, podgląd BOM, RW/PW; prawa (sticky): zużycie materiałów + historia produkcji.
+- **`CompositionVisualEditor`:** składniki i podgląd BOM w jednej kolumnie (nie obok siebie).
+
 ## 2026-06-08 — Produkcja Faza 3: ERP monitoring-only (execution → WMS)
 
 - `ProductionOrderDetailPage` / `BatchDetailPage` — monitoring + timeline, CTA: Wydaj do WMS / Otwórz terminal / Anuluj
