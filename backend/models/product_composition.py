@@ -70,6 +70,8 @@ class ProductionBatch(Base):
     created_by_user_id = Column(Integer, ForeignKey("app_users.id", ondelete="SET NULL"), nullable=True)
     #: JSON: collecting tasks progress (collector-ready).
     collection_state_json = Column(Text, nullable=True)
+    released_to_wms_at = Column(DateTime, nullable=True)
+    released_by_user_id = Column(Integer, ForeignKey("app_users.id", ondelete="SET NULL"), nullable=True)
     started_at = Column(DateTime, nullable=True)
     collecting_completed_at = Column(DateTime, nullable=True)
     production_completed_at = Column(DateTime, nullable=True)

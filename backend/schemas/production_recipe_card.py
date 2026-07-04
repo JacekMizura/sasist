@@ -89,6 +89,8 @@ class ProductionBatchSummaryRead(BaseModel):
     priority: str = "normal"
     planned_date: Optional[str] = None
     created_at: Optional[str] = None
+    released_to_wms_at: Optional[str] = None
+    is_released_to_wms: bool = False
     product_labels: List[str] = Field(default_factory=list)
     product_image_urls: List[str] = Field(default_factory=list)
     shortage_count: int = 0

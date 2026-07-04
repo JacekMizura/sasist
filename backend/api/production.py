@@ -44,6 +44,23 @@ from ..schemas.production import (
     RecipeUsageRead,
     WarehouseLocationSearchRow,
 )
+from ..schemas.production_execution import (
+    OrderCollectionStateRead,
+    OrderProductionProgressBody,
+    OrderPutawayBody,
+    ProductionExecutionJobRead,
+)
+from ..services.production_execution.order_execution_service import (
+    finish_order_collecting,
+    finish_order_production,
+    finish_order_putaway,
+    get_order_collection_state,
+    release_order_to_wms,
+    start_order_collecting,
+    update_order_collection_task,
+    update_order_production_progress,
+)
+from ..services.production_execution.wms_queue_service import list_wms_execution_queue
 from ..services.production_order_service import (
     ProductionOrderError,
     cancel_production_order,
@@ -67,6 +84,7 @@ from ..services.production_batch_service import (
     get_collection_state,
     list_batches,
     preview_batch_demand,
+    release_batch_to_wms,
     start_batch,
     start_collecting,
     update_collection_task,
@@ -366,7 +384,7 @@ def api_create_order(
         raise _order_err(exc) from exc
 
 
-@router.post("/orders/{order_id}/start", response_model=ProductionOrderRead)
+@router.post("/orders/{order_id}/start", response_model=ProductionOrderRead, deprecated=True)
 def api_start_order(
     order_id: int,
     tenant_id: int = Query(..., ge=1),
@@ -386,7 +404,7 @@ def api_start_order(
         raise _order_err(exc) from exc
 
 
-@router.post("/orders/{order_id}/complete", response_model=ProductionCompleteResultRead)
+@router.post("/orders/{order_id}/complete", response_model=ProductionCompleteResultRead, deprecated=True)
 def api_complete_order(
     order_id: int,
     body: ProductionOrderCompleteBody,
@@ -458,10 +476,20 @@ def api_list_batches(
     tenant_id: int = Query(..., ge=1),
     status: Optional[str] = Query(None),
     warehouse_id: Optional[int] = Query(None, ge=1),
+    wms_released: Optional[bool] = Query(
+        None,
+        description="When true, only batches released to WMS terminal. When false, only unreleased.",
+    ),
     db: Session = Depends(get_db),
 ):
     try:
-        return list_batches(db, tenant_id=tenant_id, status=status, warehouse_id=warehouse_id)
+        return list_batches(
+            db,
+            tenant_id=tenant_id,
+            status=status,
+            warehouse_id=warehouse_id,
+            wms_released=wms_released,
+        )
     except Exception:
         logger.exception(
             "GET /production/batches failed tenant_id=%s status=%s warehouse_id=%s",
@@ -637,7 +665,7 @@ def api_create_batch(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@router.post("/batches/{batch_id}/start", response_model=ProductionBatchRead)
+@router.post("/batches/{batch_id}/start", response_model=ProductionBatchRead, deprecated=True)
 def api_start_batch(
     batch_id: int,
     tenant_id: int = Query(..., ge=1),
@@ -657,7 +685,7 @@ def api_start_batch(
         raise _batch_err(exc) from exc
 
 
-@router.post("/batches/{batch_id}/complete", response_model=ProductionBatchCompleteResultRead)
+@router.post("/batches/{batch_id}/complete", response_model=ProductionBatchCompleteResultRead, deprecated=True)
 def api_complete_batch(
     batch_id: int,
     body: ProductionBatchCompleteBody,
@@ -677,6 +705,32 @@ def api_complete_batch(
             batch_id=batch_id,
             body=body,
             performed_by_user_id=uid,
+        )
+        db.commit()
+        return row
+    except ProductionBatchError as exc:
+        db.rollback()
+        raise _batch_err(exc) from exc
+
+
+@router.post("/batches/{batch_id}/release-to-wms", response_model=ProductionBatchRead)
+def api_release_batch_to_wms(
+    batch_id: int,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    _gate_production_batch(
+        db, user, tenant_id=tenant_id, batch_id=batch_id, warehouse_id=warehouse_id
+    )
+    try:
+        uid = int(user.id) if user is not None else None
+        row = release_batch_to_wms(
+            db,
+            tenant_id=tenant_id,
+            batch_id=batch_id,
+            released_by_user_id=uid,
         )
         db.commit()
         return row
@@ -860,6 +914,210 @@ def api_cancel_order(
     )
     try:
         row = cancel_production_order(db, tenant_id=tenant_id, order_id=order_id)
+        db.commit()
+        return row
+    except ProductionOrderError as exc:
+        db.rollback()
+        raise _order_err(exc) from exc
+
+
+# --- MO WMS phased execution (Phase 1) ---
+
+
+@router.get("/wms-queue", response_model=List[ProductionExecutionJobRead])
+def api_wms_execution_queue(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
+    phase: str = Query(..., description="collecting | execute | putaway"),
+    db: Session = Depends(get_db),
+):
+    phase_key = str(phase or "").strip().lower()
+    if phase_key not in ("collecting", "execute", "putaway"):
+        raise HTTPException(status_code=400, detail="Invalid phase — use collecting, execute, or putaway.")
+    return list_wms_execution_queue(
+        db,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        phase=phase_key,  # type: ignore[arg-type]
+    )
+
+
+@router.post("/orders/{order_id}/release-to-wms", response_model=ProductionOrderRead)
+def api_release_order_to_wms(
+    order_id: int,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    _gate_production_order(
+        db, user, tenant_id=tenant_id, order_id=order_id, warehouse_id=warehouse_id
+    )
+    try:
+        uid = int(user.id) if user is not None else None
+        row = release_order_to_wms(
+            db,
+            tenant_id=tenant_id,
+            order_id=order_id,
+            released_by_user_id=uid,
+        )
+        db.commit()
+        return row
+    except ProductionOrderError as exc:
+        db.rollback()
+        raise _order_err(exc) from exc
+
+
+@router.post("/orders/{order_id}/start-collecting", response_model=ProductionOrderRead)
+def api_start_order_collecting(
+    order_id: int,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    _gate_production_order(
+        db, user, tenant_id=tenant_id, order_id=order_id, warehouse_id=warehouse_id
+    )
+    try:
+        row = start_order_collecting(db, tenant_id=tenant_id, order_id=order_id)
+        db.commit()
+        return row
+    except ProductionOrderError as exc:
+        db.rollback()
+        raise _order_err(exc) from exc
+
+
+@router.get("/orders/{order_id}/collection", response_model=OrderCollectionStateRead)
+def api_get_order_collection(
+    order_id: int,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    _gate_production_order(
+        db, user, tenant_id=tenant_id, order_id=order_id, warehouse_id=warehouse_id
+    )
+    try:
+        return get_order_collection_state(db, tenant_id=tenant_id, order_id=order_id)
+    except ProductionOrderError as exc:
+        raise _order_err(exc) from exc
+
+
+@router.post("/orders/{order_id}/collection", response_model=OrderCollectionStateRead)
+def api_update_order_collection(
+    order_id: int,
+    body: BatchCollectionUpdateBody,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    _gate_production_order(
+        db, user, tenant_id=tenant_id, order_id=order_id, warehouse_id=warehouse_id
+    )
+    try:
+        row = update_order_collection_task(
+            db, tenant_id=tenant_id, order_id=order_id, body=body
+        )
+        db.commit()
+        return row
+    except ProductionOrderError as exc:
+        db.rollback()
+        raise _order_err(exc) from exc
+
+
+@router.post("/orders/{order_id}/finish-collecting", response_model=ProductionOrderRead)
+def api_finish_order_collecting(
+    order_id: int,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    _gate_production_order(
+        db, user, tenant_id=tenant_id, order_id=order_id, warehouse_id=warehouse_id
+    )
+    try:
+        uid = int(user.id) if user is not None else None
+        row = finish_order_collecting(
+            db,
+            tenant_id=tenant_id,
+            order_id=order_id,
+            performed_by_user_id=uid,
+        )
+        db.commit()
+        return row
+    except ProductionOrderError as exc:
+        db.rollback()
+        raise _order_err(exc) from exc
+
+
+@router.post("/orders/{order_id}/production-progress", response_model=ProductionOrderRead)
+def api_order_production_progress(
+    order_id: int,
+    body: OrderProductionProgressBody,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    _gate_production_order(
+        db, user, tenant_id=tenant_id, order_id=order_id, warehouse_id=warehouse_id
+    )
+    try:
+        row = update_order_production_progress(
+            db, tenant_id=tenant_id, order_id=order_id, body=body
+        )
+        db.commit()
+        return row
+    except ProductionOrderError as exc:
+        db.rollback()
+        raise _order_err(exc) from exc
+
+
+@router.post("/orders/{order_id}/finish-production", response_model=ProductionOrderRead)
+def api_finish_order_production(
+    order_id: int,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    _gate_production_order(
+        db, user, tenant_id=tenant_id, order_id=order_id, warehouse_id=warehouse_id
+    )
+    try:
+        row = finish_order_production(db, tenant_id=tenant_id, order_id=order_id)
+        db.commit()
+        return row
+    except ProductionOrderError as exc:
+        db.rollback()
+        raise _order_err(exc) from exc
+
+
+@router.post("/orders/{order_id}/finish-putaway", response_model=ProductionCompleteResultRead)
+def api_finish_order_putaway(
+    order_id: int,
+    body: OrderPutawayBody,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    _gate_production_order(
+        db, user, tenant_id=tenant_id, order_id=order_id, warehouse_id=warehouse_id
+    )
+    try:
+        uid = int(user.id) if user is not None else None
+        row = finish_order_putaway(
+            db,
+            tenant_id=tenant_id,
+            order_id=order_id,
+            body=body,
+            performed_by_user_id=uid,
+        )
         db.commit()
         return row
     except ProductionOrderError as exc:

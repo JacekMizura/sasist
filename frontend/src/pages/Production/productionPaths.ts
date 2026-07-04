@@ -18,14 +18,35 @@ export const erpProductionPaths = {
 /** WMS terminal — operator execution only (collect → produce → putaway). */
 export const WMS_PRODUCTION_BASE = "/wms/production";
 
+export type WmsProductionJobKind = "batch" | "order";
+
+type WmsPhase = "collecting" | "execute" | "putaway";
+
+function wmsJobPath(
+  phase: WmsPhase,
+  kindOrId?: WmsProductionJobKind | number | string,
+  id?: number | string,
+): string {
+  if (kindOrId === "batch" || kindOrId === "order") {
+    return id != null ? `${WMS_PRODUCTION_BASE}/${phase}/${kindOrId}/${id}` : `${WMS_PRODUCTION_BASE}/${phase}`;
+  }
+  if (kindOrId != null) {
+    return `${WMS_PRODUCTION_BASE}/${phase}/batch/${kindOrId}`;
+  }
+  return `${WMS_PRODUCTION_BASE}/${phase}`;
+}
+
 export const wmsProductionPaths = {
   home: WMS_PRODUCTION_BASE,
-  collecting: (id?: number | string) =>
-    id != null ? `${WMS_PRODUCTION_BASE}/collecting/${id}` : `${WMS_PRODUCTION_BASE}/collecting`,
-  execute: (id?: number | string) =>
-    id != null ? `${WMS_PRODUCTION_BASE}/execute/${id}` : `${WMS_PRODUCTION_BASE}/execute`,
-  putaway: (id?: number | string) =>
-    id != null ? `${WMS_PRODUCTION_BASE}/putaway/${id}` : `${WMS_PRODUCTION_BASE}/putaway`,
+  collecting: (kindOrId?: WmsProductionJobKind | number | string, id?: number | string) =>
+    wmsJobPath("collecting", kindOrId, id),
+  execute: (kindOrId?: WmsProductionJobKind | number | string, id?: number | string) =>
+    wmsJobPath("execute", kindOrId, id),
+  putaway: (kindOrId?: WmsProductionJobKind | number | string, id?: number | string) =>
+    wmsJobPath("putaway", kindOrId, id),
+  /** Canonical job URL for any phase. */
+  job: (phase: WmsPhase, kind: WmsProductionJobKind, id: number | string) =>
+    `${WMS_PRODUCTION_BASE}/${phase}/${kind}/${id}`,
 } as const;
 
 /** @deprecated Use erpProductionPaths or wmsProductionPaths explicitly. */

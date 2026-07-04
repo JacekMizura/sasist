@@ -130,6 +130,19 @@ export async function activateComposition(
   return res.data;
 }
 
+export async function cloneComposition(
+  tenantId: number,
+  compositionId: number,
+  version: string,
+): Promise<ProductCompositionRead> {
+  const res = await api.post<ProductCompositionRead>(
+    `/compositions/${compositionId}/clone`,
+    null,
+    { params: { tenant_id: tenantId, version } },
+  );
+  return res.data;
+}
+
 export async function listCompositionUsages(
   tenantId: number,
   productId: number,

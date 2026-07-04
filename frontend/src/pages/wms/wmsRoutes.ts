@@ -61,15 +61,31 @@ export const WMS_ROUTES = {
   /** Szczegóły PZ — wyłącznie liczenie (``WmsReceivingCountPage``), segment ``pz`` jak w REST ``/wms/receiving/pz/{id}``. */
   receivingPz: (pzId: number | string) => `/wms/receiving/pz/${pzId}`,
   putaway: "/wms/putaway",
-  /** Warehouse production — batch waves, collecting, execution, putaway. */
+  /** Warehouse production — unified WMS terminal (batch + MO). */
   production: "/wms/production",
-  productionBatch: (batchId: number | string) => `/wms/production/batch/${batchId}`,
-  productionCollecting: (batchId?: number | string) =>
-    batchId != null ? `/wms/production/collecting/${batchId}` : "/wms/production/collecting",
-  productionExecute: (batchId?: number | string) =>
-    batchId != null ? `/wms/production/execute/${batchId}` : "/wms/production/execute",
-  productionPutaway: (batchId?: number | string) =>
-    batchId != null ? `/wms/production/putaway/${batchId}` : "/wms/production/putaway",
+  /** @deprecated Use productionCollecting("batch", batchId) */
+  productionBatch: (batchId: number | string) => `/wms/production/collecting/batch/${batchId}`,
+  productionCollecting: (kindOrId?: "batch" | "order" | number | string, id?: number | string) => {
+    if (kindOrId === "batch" || kindOrId === "order") {
+      return id != null ? `/wms/production/collecting/${kindOrId}/${id}` : "/wms/production/collecting";
+    }
+    if (kindOrId != null) return `/wms/production/collecting/batch/${kindOrId}`;
+    return "/wms/production/collecting";
+  },
+  productionExecute: (kindOrId?: "batch" | "order" | number | string, id?: number | string) => {
+    if (kindOrId === "batch" || kindOrId === "order") {
+      return id != null ? `/wms/production/execute/${kindOrId}/${id}` : "/wms/production/execute";
+    }
+    if (kindOrId != null) return `/wms/production/execute/batch/${kindOrId}`;
+    return "/wms/production/execute";
+  },
+  productionPutaway: (kindOrId?: "batch" | "order" | number | string, id?: number | string) => {
+    if (kindOrId === "batch" || kindOrId === "order") {
+      return id != null ? `/wms/production/putaway/${kindOrId}/${id}` : "/wms/production/putaway";
+    }
+    if (kindOrId != null) return `/wms/production/putaway/batch/${kindOrId}`;
+    return "/wms/production/putaway";
+  },
   /** Live operational runtime hub (Phase 5). */
   operations: "/wms/operations",
   operationsReplenishment: "/wms/operations/replenishment",

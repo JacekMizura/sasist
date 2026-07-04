@@ -16,7 +16,7 @@ from ..models.inventory import Inventory
 from ..models.location import Location
 from ..models.product import Product
 from ..models.product_composition import ProductComposition, ProductionBatch, ProductionBatchLine
-from ..models.production import ProductionOrder, ProductionOrderLineSnapshot, ProductionRecipe
+from ..models.production import ProductionOrder, ProductionOrderLineSnapshot
 from ..models.app_user import AppUser
 from ..models.stock_document import StockDocument, StockDocumentItem
 from ..models.warehouse import Warehouse
@@ -37,7 +37,6 @@ from .order_item_pick_allocation_service import consume_inventory_fifo_slices
 from .product_cost_service import get_product_current_cost
 from .composition_engine_service import calculate_required_components as calculate_composition_components
 from .composition_engine_service import resolve_composition_entity
-from .production_recipe_service import ProductionRecipeError, calculate_required_components
 from .stock_disposition import STOCK_DISPOSITION_SALEABLE
 from .stock_operation_issue_service import append_issue_operation
 from .stock_operation_receipt_service import append_receipt_operation
@@ -46,13 +45,15 @@ logger = logging.getLogger(__name__)
 
 TERMINAL_STATUSES = frozenset({"completed", "cancelled"})
 
-_VALID_SUMMARY_STATUSES = frozenset({"draft", "planned", "in_progress", "completed", "cancelled"})
+_VALID_SUMMARY_STATUSES = frozenset(
+    {"draft", "planned", "collecting", "in_progress", "putaway", "completed", "cancelled"}
+)
 _BATCH_STATUS_TO_ORDER = {
     "draft": "draft",
     "planned": "planned",
-    "collecting": "in_progress",
+    "collecting": "collecting",
     "in_progress": "in_progress",
-    "putaway": "in_progress",
+    "putaway": "putaway",
     "completed": "completed",
     "cancelled": "cancelled",
 }
@@ -273,6 +274,26 @@ def _operator_name(db: Session, user_id: int | None) -> str | None:
     return name or str(getattr(u, "email", None) or "").strip() or None
 
 
+def _order_collection_progress_percent(order: ProductionOrder) -> float:
+    raw = getattr(order, "collection_state_json", None)
+    if not raw:
+        return 0.0
+    try:
+        data = json.loads(str(raw))
+    except json.JSONDecodeError:
+        return 0.0
+    tasks = data.get("tasks") or []
+    if not tasks:
+        return 0.0
+    done = 0
+    for t in tasks:
+        req = float(t.get("required_qty") or 0)
+        col = float(t.get("collected_qty") or 0)
+        if req <= 1e-9 or col >= req - 1e-6:
+            done += 1
+    return round(100.0 * done / len(tasks), 1)
+
+
 def serialize_order(db: Session, order: ProductionOrder, *, with_availability: bool = False) -> ProductionOrderRead:
     p = db.query(Product).filter(Product.id == int(order.product_id)).first()
     wh = db.query(Warehouse).filter(Warehouse.id == int(order.warehouse_id)).first()
@@ -281,7 +302,12 @@ def serialize_order(db: Session, order: ProductionOrder, *, with_availability: b
         if order.location_id is not None
         else None
     )
-    rec = db.query(ProductionRecipe).filter(ProductionRecipe.id == int(order.recipe_id)).first()
+    comp = None
+    if order.composition_id is not None:
+        comp = db.query(ProductComposition).filter(ProductComposition.id == int(order.composition_id)).first()
+    elif order.recipe_id is not None:
+        comp = resolve_composition_entity(db, tenant_id=int(order.tenant_id), recipe_id=int(order.recipe_id))
+    recipe_name = comp.name if comp is not None else None
     lines_out: list[ProductionOrderLineSnapshotRead] = []
     for snap in order.line_snapshots or []:
         avail = miss = None
@@ -308,11 +334,26 @@ def serialize_order(db: Session, order: ProductionOrder, *, with_availability: b
                 missing=miss,
             )
         )
+    shortages = validate_stock_shortages(db, order) if str(order.status) not in TERMINAL_STATUSES else []
+    has_shortages = len(shortages) > 0
+    status = str(order.status or "draft")
+    coll_pct = _order_collection_progress_percent(order)
+    planned_q = float(order.planned_quantity or 0)
+    produced_q = float(order.produced_quantity or 0)
+    if status == "collecting":
+        progress = coll_pct
+    elif status in ("in_progress", "putaway"):
+        progress = round(100.0 * produced_q / planned_q, 1) if planned_q > 0 else 0.0
+    elif status == "completed":
+        progress = 100.0
+    else:
+        progress = 0.0
     return ProductionOrderRead(
         id=int(order.id),
         tenant_id=int(order.tenant_id),
         number=str(order.number or ""),
-        recipe_id=int(order.recipe_id),
+        composition_id=int(order.composition_id) if order.composition_id is not None else None,
+        recipe_id=int(order.recipe_id) if order.recipe_id is not None else None,
         product_id=int(order.product_id),
         warehouse_id=int(order.warehouse_id),
         location_id=int(order.location_id) if order.location_id else None,
@@ -336,10 +377,17 @@ def serialize_order(db: Session, order: ProductionOrder, *, with_availability: b
         product_sku=((p.sku or p.symbol) if p else None),
         warehouse_name=(wh.name if wh else None),
         location_name=(loc.name if loc else None),
-        recipe_name=(rec.name if rec else None),
+        recipe_name=recipe_name,
         lines=lines_out,
         started_at=order.started_at,
+        collecting_completed_at=getattr(order, "collecting_completed_at", None),
+        production_completed_at=getattr(order, "production_completed_at", None),
         completed_at=order.completed_at,
+        released_to_wms_at=getattr(order, "released_to_wms_at", None),
+        is_released_to_wms=getattr(order, "released_to_wms_at", None) is not None,
+        collection_progress_percent=coll_pct,
+        progress_percent=progress,
+        has_shortages=has_shortages,
         created_at=order.created_at,
         updated_at=order.updated_at,
     )
@@ -376,29 +424,11 @@ def _snapshot_composition_lines(
 def _snapshot_recipe_lines(
     db: Session,
     order: ProductionOrder,
-    recipe: ProductionRecipe,
+    composition: ProductComposition,
     *,
     planned_quantity: float,
 ) -> None:
-    reqs = calculate_required_components(recipe, planned_quantity=planned_quantity)
-    prod_ids = [int(r["component_product_id"]) for r in reqs]
-    names: dict[int, Product] = {}
-    if prod_ids:
-        for p in db.query(Product).filter(Product.id.in_(prod_ids)).all():
-            names[int(p.id)] = p
-    for req in reqs:
-        pid = int(req["component_product_id"])
-        p = names.get(pid)
-        order.line_snapshots.append(
-            ProductionOrderLineSnapshot(
-                component_product_id=pid,
-                quantity_per_unit=float(req["quantity_per_unit"]),
-                total_required_quantity=float(req["total_required"]),
-                consumed_quantity=0.0,
-                product_name_snapshot=str(p.name if p else f"Produkt #{pid}"),
-                product_sku_snapshot=((p.sku or p.symbol) if p else None),
-            )
-        )
+    _snapshot_composition_lines(db, order, composition, planned_quantity=planned_quantity)
 
 
 def create_production_order(
@@ -408,23 +438,25 @@ def create_production_order(
     body: ProductionOrderCreateBody,
     created_by_user_id: int | None = None,
 ) -> ProductionOrderRead:
-    recipe = (
-        db.query(ProductionRecipe)
-        .options(joinedload(ProductionRecipe.lines))
-        .filter(ProductionRecipe.id == int(body.recipe_id), ProductionRecipe.tenant_id == int(tenant_id))
-        .first()
+    composition = resolve_composition_entity(
+        db,
+        tenant_id=tenant_id,
+        composition_id=int(body.composition_id) if body.composition_id else None,
+        recipe_id=int(body.recipe_id) if body.recipe_id and not body.composition_id else None,
     )
-    if recipe is None:
-        raise ProductionOrderError("Receptura nie istnieje.", code="recipe_not_found")
-    if not recipe.lines:
+    if composition is None:
+        raise ProductionOrderError("Receptura (kompozycja) nie istnieje.", code="recipe_not_found")
+    if str(composition.composition_mode) != "manufacturing":
+        raise ProductionOrderError("Wybrana kompozycja nie jest recepturą produkcyjną.", code="invalid_mode")
+    if not composition.lines:
         raise ProductionOrderError("Receptura nie ma składników.", code="recipe_empty")
-    composition = resolve_composition_entity(db, tenant_id=tenant_id, recipe_id=int(recipe.id))
+    legacy_recipe_id = int(composition.source_recipe_id) if composition.source_recipe_id else None
     order = ProductionOrder(
         tenant_id=int(tenant_id),
         number=_next_order_number(db, tenant_id=tenant_id),
-        recipe_id=int(recipe.id),
-        composition_id=int(composition.id) if composition is not None else None,
-        product_id=int(recipe.product_id),
+        recipe_id=legacy_recipe_id,
+        composition_id=int(composition.id),
+        product_id=int(composition.product_id),
         warehouse_id=int(body.warehouse_id),
         location_id=int(body.location_id) if body.location_id else None,
         planned_quantity=float(body.planned_quantity),
@@ -435,10 +467,7 @@ def create_production_order(
     )
     db.add(order)
     db.flush()
-    if composition is not None and composition.lines:
-        _snapshot_composition_lines(db, order, composition, planned_quantity=float(body.planned_quantity))
-    else:
-        _snapshot_recipe_lines(db, order, recipe, planned_quantity=float(body.planned_quantity))
+    _snapshot_composition_lines(db, order, composition, planned_quantity=float(body.planned_quantity))
     db.flush()
     return serialize_order(db, order, with_availability=True)
 

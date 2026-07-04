@@ -270,6 +270,8 @@ def _batch_summary(db: Session, batch: ProductionBatch) -> ProductionBatchSummar
             shortage_count = sum(1 for r in (plan.aggregated_components or []) if float(r.missing or 0) > 1e-6)
         except Exception:
             shortage_count = 1
+    released_at = getattr(batch, "released_to_wms_at", None)
+    released_iso = released_at.isoformat() if released_at else None
     return ProductionBatchSummaryRead(
         id=int(batch.id),
         number=str(batch.number or ""),
@@ -282,6 +284,8 @@ def _batch_summary(db: Session, batch: ProductionBatch) -> ProductionBatchSummar
         priority=priority,
         planned_date=planned_day,
         created_at=created,
+        released_to_wms_at=released_iso,
+        is_released_to_wms=released_at is not None,
         product_labels=labels[:4],
         product_image_urls=image_urls[:3],
         shortage_count=int(shortage_count),
@@ -332,7 +336,7 @@ def get_production_dashboard(
             planned_rows.append(summary)
             if summary.has_shortages:
                 waiting_rows.append(summary)
-            else:
+            elif not summary.is_released_to_wms:
                 ready_rows.append(summary)
 
     workload = finished_today + len(active_rows) + planned_count

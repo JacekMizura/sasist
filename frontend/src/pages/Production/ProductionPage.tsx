@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import PageLayout from "../../components/layout/PageLayout";
 import { ListPageHeader } from "../../components/listPage/ListPageHeader";
 import {
@@ -18,8 +18,9 @@ import {
   type ProductionBatchRead,
   type ProductionBatchStatus,
 } from "../../api/productionApi";
-import { ProductionBatchExecutionPanel } from "./ProductionBatchExecutionPanel";
+import { erpProductionPaths } from "./productionPaths";
 import { BATCH_STATUS_LABEL, batchStatusBadgeClass } from "./productionUi";
+import { batchMonitoringSource, ProductionMonitoringPanel } from "./components/ProductionMonitoringPanel";
 
 const DEFAULT_TENANT_ID = 1;
 
@@ -227,13 +228,18 @@ export default function ProductionPage() {
             ) : detailBusy || !detail ? (
               <p className="text-sm text-slate-500">Wczytywanie szczegółów…</p>
             ) : (
-              <ProductionBatchExecutionPanel
-                tenantId={tenantId}
-                warehouseId={warehouseId}
-                batch={detail}
-                onBatchUpdated={setDetail}
-                onListRefresh={() => void reloadList()}
-              />
+              <div className="space-y-4">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="font-mono text-sm font-bold text-slate-900">{detail.number}</p>
+                  <Link
+                    to={erpProductionPaths.batch(detail.id)}
+                    className="text-xs font-semibold text-violet-700 hover:underline"
+                  >
+                    Pełny podgląd →
+                  </Link>
+                </div>
+                <ProductionMonitoringPanel kind="batch" source={batchMonitoringSource(detail)} />
+              </div>
             )}
           </div>
         </div>

@@ -1,5 +1,38 @@
 # Change log
 
+## 2026-06-08 — Produkcja Faza 3: ERP monitoring-only (execution → WMS)
+
+- `ProductionOrderDetailPage` / `BatchDetailPage` — monitoring + timeline, CTA: Wydaj do WMS / Otwórz terminal / Anuluj
+- `ProductionMonitoringPanel`, `ProductionExecutionTimeline`, `productionExecutionTimeline.ts`
+- Odłączono `ProductionOrderExecutionPanel` i `ProductionBatchExecutionPanel` od UI
+- `ProductionPage`, `BatchCard` — bez akcji wykonawczych ERP
+- Legacy API/endpoints oznaczone `@deprecated` (Phase 4 cleanup)
+
+## 2026-06-08 — Produkcja Faza 2: unified WMS terminal (frontend)
+
+- Kolejki terminala przez `GET /production/wms-queue` (partie + MO w jednej liście)
+- Hook `useProductionExecutionJob` — ukrywa różnice batch/order API
+- Routing kanoniczny: `/wms/production/{collecting|execute|putaway}/:kind/:id` + redirecty legacy
+- `WmsProductionJobQueueCard` z badge Partia/MO; strony Collecting/Execute/Putaway przebudowane
+- ERP panele execution oznaczone `@deprecated` (Phase 3)
+
+## 2026-06-08 — Produkcja Faza 1: unified WMS execution (MO + partia)
+
+- **Model MO:** `collection_state_json`, `released_to_wms_at`, `released_by_user_id`, fazy `collecting_completed_at` / `production_completed_at`; statusy `collecting` / `putaway`
+- **Pakiet `production_execution/`:** `order_execution_service`, `wms_queue_service`, `job_projection_service`, `constants`, `status_migration`
+- **Kontrakt:** `ProductionExecutionJobRead` + `GET /production/wms-queue?phase=collecting|execute|putaway`
+- **MO WMS API:** release-to-wms, start-collecting, collection, finish-collecting, production-progress, finish-production, finish-putaway
+- **Migracja:** `migrate_legacy_order_execution_statuses` w `ensure_production_schema_evolution`
+- **Frontend (minimal):** `releaseOrderToWms`, statusy MO, „Wydaj do WMS” na liście zleceń dla MO
+- **Testy:** `backend/tests/test_production_execution.py`
+
+## 2026-06-08 — Produkcja: fundamenty architektury (receptury, MO, handoff WMS)
+
+- **Receptury:** MO tworzone przez `composition_id` (`ProductComposition`); `clone_composition_version` + `POST /compositions/{id}/clone`; lista receptur używa `compositionApi` (activate/clone)
+- **MO:** ekran `/production/orders/:orderId` (`ProductionOrderDetailPage`) + `ProductionOrderExecutionPanel` (start/complete/cancel, RW/PW)
+- **Handoff WMS:** `released_to_wms_at` na partii, `POST /production/batches/{id}/release-to-wms`; kolejka WMS tylko partie wydane; `start-collecting` wymaga wydania
+- **Integracja zestawów:** `BundleProductionPanel` → `composition_id` przy tworzeniu MO
+
 ## 2026-06-08 — Globalny system widoków list (listView) — faza 2
 
 - UI: split button `[Filtruj ▼]` w `FilterApplyActions` (menu: Filtruj / Zapisz / Wczytaj / Zarządzaj / Resetuj) — bez osobnego przycisku „Widoki”

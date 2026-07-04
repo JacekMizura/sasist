@@ -5,9 +5,17 @@ from __future__ import annotations
 from datetime import datetime
 from typing import List, Literal, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
-ProductionOrderStatus = Literal["draft", "planned", "in_progress", "completed", "cancelled"]
+ProductionOrderStatus = Literal[
+    "draft",
+    "planned",
+    "collecting",
+    "in_progress",
+    "putaway",
+    "completed",
+    "cancelled",
+]
 
 
 class ProductionRecipeLineRead(BaseModel):
@@ -188,7 +196,8 @@ class ProductionOrderRead(BaseModel):
     id: int
     tenant_id: int
     number: str
-    recipe_id: int
+    composition_id: Optional[int] = None
+    recipe_id: Optional[int] = None
     product_id: int
     warehouse_id: int
     location_id: Optional[int] = None
@@ -211,19 +220,37 @@ class ProductionOrderRead(BaseModel):
     recipe_name: Optional[str] = None
     lines: List[ProductionOrderLineSnapshotRead] = Field(default_factory=list)
     started_at: Optional[datetime] = None
+    collecting_completed_at: Optional[datetime] = None
+    production_completed_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
+    released_to_wms_at: Optional[datetime] = None
+    is_released_to_wms: bool = False
+    collection_progress_percent: float = 0.0
+    progress_percent: float = 0.0
+    has_shortages: Optional[bool] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
 
 class ProductionOrderCreateBody(BaseModel):
-    recipe_id: int = Field(..., ge=1)
+    composition_id: Optional[int] = Field(None, ge=1, description="product_compositions.id (manufacturing BOM)")
+    recipe_id: Optional[int] = Field(
+        None,
+        ge=1,
+        description="Deprecated — legacy production_recipes.id; resolved via source_recipe_id mapping.",
+    )
     warehouse_id: int = Field(..., ge=1)
     location_id: Optional[int] = Field(None, ge=1)
     planned_quantity: float = Field(..., gt=0)
     priority: int = 0
     notes: Optional[str] = None
     status: ProductionOrderStatus = "planned"
+
+    @model_validator(mode="after")
+    def require_composition_reference(self) -> "ProductionOrderCreateBody":
+        if int(self.composition_id or 0) < 1 and int(self.recipe_id or 0) < 1:
+            raise ValueError("Podaj composition_id (receptura produkcyjna).")
+        return self
 
 
 class ComponentAllocationWrite(BaseModel):

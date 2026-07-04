@@ -16,6 +16,7 @@ from ..schemas.composition import (
 )
 from ..services.composition_engine_service import (
     CompositionError,
+    clone_composition_version,
     create_composition,
     estimate_composition_cost,
     get_composition,
@@ -97,6 +98,27 @@ def api_activate(
 ):
     try:
         row = set_composition_active(db, tenant_id=tenant_id, composition_id=composition_id, active=active)
+        db.commit()
+        return row
+    except CompositionError as exc:
+        db.rollback()
+        raise _err(exc) from exc
+
+
+@router.post("/{composition_id}/clone", response_model=ProductCompositionRead)
+def api_clone_composition(
+    composition_id: int,
+    tenant_id: int = Query(..., ge=1),
+    version: str = Query(..., min_length=1),
+    db: Session = Depends(get_db),
+):
+    try:
+        row = clone_composition_version(
+            db,
+            tenant_id=tenant_id,
+            composition_id=composition_id,
+            new_version=version,
+        )
         db.commit()
         return row
     except CompositionError as exc:

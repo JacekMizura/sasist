@@ -5,8 +5,10 @@ import toast from "react-hot-toast";
 
 import { useWarehouse } from "../../context/WarehouseContext";
 import {
-  activateRecipe,
-  cloneRecipe,
+  activateComposition,
+  cloneComposition,
+} from "../../api/compositionApi";
+import {
   listRecipeCards,
   type RecipeCardRead,
 } from "../../api/productionApi";
@@ -90,7 +92,7 @@ export default function RecipesListPage() {
   const handleDuplicate = async (r: RecipeCardRead) => {
     setBusyId(r.composition_id);
     try {
-      const cloned = await cloneRecipe(tenantId, r.composition_id, `${r.version}-kopia`);
+      const cloned = await cloneComposition(tenantId, r.composition_id, `${r.version}-kopia`);
       toast.success("Zduplikowano recepturę.");
       navigate(erpProductionPaths.recipe(cloned.id));
     } catch {
@@ -103,7 +105,7 @@ export default function RecipesListPage() {
   const handleArchive = async (r: RecipeCardRead) => {
     setBusyId(r.composition_id);
     try {
-      await activateRecipe(tenantId, r.composition_id, false);
+      await activateComposition(tenantId, r.composition_id, false);
       toast.success("Receptura zarchiwizowana.");
       void reload();
     } catch {

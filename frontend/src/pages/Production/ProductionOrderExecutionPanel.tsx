@@ -1,3 +1,11 @@
+/**
+ * @deprecated Phase 4 — legacy ERP MO execution. Disconnected from app UI in Phase 3.
+ * Operator workflow lives in WMS terminal only. Safe to delete in Phase 4 cleanup.
+ */
+/**
+ * @deprecated Phase 3 — ERP MO execution panel. Use WMS terminal
+ * (`/wms/production/*`) for operator workflow. Kept until migration completes.
+ */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { AlertTriangle, CheckCircle2, Play, XCircle } from "lucide-react";
@@ -305,11 +313,6 @@ export function ProductionOrderExecutionPanel({
               </Link>
             </p>
           ) : null}
-          <p>
-            <Link to={`/production?order=${order.id}`} className="text-xs text-slate-500 hover:underline">
-              MO {order.number}
-            </Link>
-          </p>
         </div>
       )}
 

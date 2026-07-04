@@ -204,6 +204,7 @@ import RecipeDetailPage from "./pages/Production/RecipeDetailPage"
 import BatchesListPage from "./pages/Production/BatchesListPage"
 import BatchDetailPage from "./pages/Production/BatchDetailPage"
 import ProductionOrdersPage from "./pages/Production/ProductionOrdersPage"
+import ProductionOrderDetailPage from "./pages/Production/ProductionOrderDetailPage"
 import ProductionPlanningPage from "./pages/Production/ProductionPlanningPage"
 import ProductionHistoryPage from "./pages/Production/ProductionHistoryPage"
 import ProductionAnalyticsPage from "./pages/Production/ProductionAnalyticsPage"
@@ -313,10 +314,18 @@ function RoutePathLogger() {
   return null;
 }
 
-/** Legacy WMS batch URL → operator collecting screen. */
+/** Legacy WMS batch URL → canonical collecting/batch/:id. */
 function WmsProductionBatchRedirect() {
   const { batchId } = useParams();
-  return <Navigate to={`/wms/production/collecting/${batchId ?? ""}`} replace />;
+  return <Navigate to={`/wms/production/collecting/batch/${batchId ?? ""}`} replace />;
+}
+
+type WmsProductionPhase = "collecting" | "execute" | "putaway";
+
+/** Legacy /wms/production/:phase/:batchId → /wms/production/:phase/batch/:batchId */
+function WmsProductionLegacyPhaseRedirect({ phase }: { phase: WmsProductionPhase }) {
+  const { batchId } = useParams();
+  return <Navigate to={`/wms/production/${phase}/batch/${batchId ?? ""}`} replace />;
 }
 
 function AppRootLayout() {
@@ -506,12 +515,15 @@ export const router = createBrowserRouter(
           }
         >
           <Route index element={<Navigate to="collecting" replace />} />
+          <Route path="collecting/:kind/:id" element={<CollectingPage />} />
+          <Route path="collecting/:batchId" element={<WmsProductionLegacyPhaseRedirect phase="collecting" />} />
           <Route path="collecting" element={<CollectingPage />} />
-          <Route path="collecting/:batchId" element={<CollectingPage />} />
+          <Route path="execute/:kind/:id" element={<ProductionExecutionPage />} />
+          <Route path="execute/:batchId" element={<WmsProductionLegacyPhaseRedirect phase="execute" />} />
           <Route path="execute" element={<ProductionExecutionPage />} />
-          <Route path="execute/:batchId" element={<ProductionExecutionPage />} />
+          <Route path="putaway/:kind/:id" element={<PutawayPage />} />
+          <Route path="putaway/:batchId" element={<WmsProductionLegacyPhaseRedirect phase="putaway" />} />
           <Route path="putaway" element={<PutawayPage />} />
-          <Route path="putaway/:batchId" element={<PutawayPage />} />
           <Route path="batch/:batchId" element={<WmsProductionBatchRedirect />} />
         </Route>
         <Route
@@ -657,6 +669,7 @@ export const router = createBrowserRouter(
                   <Route path="recipes" element={<RecipesListPage />} />
                   <Route path="recipes/:compositionId" element={<RecipeDetailPage />} />
                   <Route path="orders" element={<ProductionOrdersPage />} />
+                  <Route path="orders/:orderId" element={<ProductionOrderDetailPage />} />
                   <Route path="planning" element={<ProductionPlanningPage />} />
                   <Route path="history" element={<ProductionHistoryPage />} />
                   <Route path="analytics" element={<ProductionAnalyticsPage />} />

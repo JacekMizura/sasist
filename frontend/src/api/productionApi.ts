@@ -68,7 +68,9 @@ export type RecipeUsageRead = {
 export type ProductionOrderStatus =
   | "draft"
   | "planned"
+  | "collecting"
   | "in_progress"
+  | "putaway"
   | "completed"
   | "cancelled";
 
@@ -89,7 +91,8 @@ export type ProductionOrderRead = {
   id: number;
   tenant_id: number;
   number: string;
-  recipe_id: number;
+  composition_id?: number | null;
+  recipe_id?: number | null;
   product_id: number;
   warehouse_id: number;
   location_id?: number | null;
@@ -113,18 +116,27 @@ export type ProductionOrderRead = {
   lines: ProductionOrderLineSnapshotRead[];
   started_at?: string | null;
   completed_at?: string | null;
+  released_to_wms_at?: string | null;
+  is_released_to_wms?: boolean;
+  collection_progress_percent?: number;
+  progress_percent?: number;
+  has_shortages?: boolean;
+  collecting_completed_at?: string | null;
+  production_completed_at?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
 };
 
 export type ProductionOrderCreateBody = {
-  recipe_id: number;
+  composition_id: number;
   warehouse_id: number;
   location_id?: number | null;
   planned_quantity: number;
   priority?: number;
   notes?: string | null;
   status?: ProductionOrderStatus;
+  /** @deprecated Legacy production_recipes.id — use composition_id */
+  recipe_id?: number;
 };
 
 export type ComponentAllocationWrite = {
@@ -338,6 +350,7 @@ export async function createProductionOrder(
   return res.data;
 }
 
+/** @deprecated Phase 4 — legacy ERP one-shot start. Use WMS terminal phased workflow. */
 export async function startProductionOrder(
   tenantId: number,
   orderId: number,
@@ -351,6 +364,7 @@ export async function startProductionOrder(
   return res.data;
 }
 
+/** @deprecated Phase 4 — legacy ERP one-shot complete. Use WMS terminal phased workflow. */
 export async function completeProductionOrder(
   tenantId: number,
   orderId: number,
@@ -467,6 +481,8 @@ export type ProductionBatchRead = {
   has_shortages?: boolean;
   progress_percent?: number;
   collection_progress_percent?: number;
+  released_to_wms_at?: string | null;
+  is_released_to_wms?: boolean;
   started_at?: string | null;
   collecting_completed_at?: string | null;
   production_completed_at?: string | null;
@@ -567,7 +583,7 @@ export type ProductionBatchCompleteResultRead = {
 
 export async function listProductionBatches(
   tenantId: number,
-  opts?: { status?: ProductionBatchStatus; warehouse_id?: number },
+  opts?: { status?: ProductionBatchStatus; warehouse_id?: number; wms_released?: boolean },
 ): Promise<ProductionBatchRead[]> {
   const res = await api.get<ProductionBatchRead[]>("/production/batches", {
     params: { tenant_id: tenantId, ...opts },
@@ -618,6 +634,7 @@ export async function createProductionBatch(
   return res.data;
 }
 
+/** @deprecated Phase 4 — legacy ERP one-shot start. Use WMS terminal phased workflow. */
 export async function startProductionBatch(
   tenantId: number,
   batchId: number,
@@ -629,6 +646,7 @@ export async function startProductionBatch(
   return res.data;
 }
 
+/** @deprecated Phase 4 — legacy ERP one-shot complete. Use WMS terminal phased workflow. */
 export async function completeProductionBatch(
   tenantId: number,
   batchId: number,
@@ -808,6 +826,19 @@ export async function getRecipeDetail(
   return res.data;
 }
 
+export async function releaseBatchToWms(
+  tenantId: number,
+  batchId: number,
+  warehouseId?: number,
+): Promise<ProductionBatchRead> {
+  const res = await api.post<ProductionBatchRead>(
+    `/production/batches/${batchId}/release-to-wms`,
+    null,
+    { params: productionQueryParams(tenantId, warehouseId) },
+  );
+  return res.data;
+}
+
 export async function startCollectingBatch(
   tenantId: number,
   batchId: number,
@@ -889,5 +920,138 @@ export async function finishPutawayBatch(
     body,
     { params: productionQueryParams(tenantId, warehouseId) },
   );
+  return res.data;
+}
+
+export type ProductionExecutionPhase = "collecting" | "execute" | "putaway";
+
+export type ProductionExecutionJobRead = {
+  kind: "batch" | "order";
+  id: number;
+  number: string;
+  warehouse_id: number;
+  status: ProductionOrderStatus | ProductionBatchStatus;
+  phase?: ProductionExecutionPhase | null;
+  product_label: string;
+  planned_quantity: number;
+  completed_quantity: number;
+  progress_percent: number;
+  has_shortages: boolean;
+  is_released_to_wms: boolean;
+  released_to_wms_at?: string | null;
+  operator_name?: string | null;
+  created_at?: string | null;
+};
+
+export async function listWmsExecutionQueue(
+  tenantId: number,
+  phase: ProductionExecutionPhase,
+  warehouseId?: number,
+): Promise<ProductionExecutionJobRead[]> {
+  const res = await api.get<ProductionExecutionJobRead[]>("/production/wms-queue", {
+    params: { tenant_id: tenantId, phase, ...(warehouseId != null ? { warehouse_id: warehouseId } : {}) },
+  });
+  return res.data;
+}
+
+export async function releaseOrderToWms(
+  tenantId: number,
+  orderId: number,
+  warehouseId?: number,
+): Promise<ProductionOrderRead> {
+  const res = await api.post<ProductionOrderRead>(
+    `/production/orders/${orderId}/release-to-wms`,
+    null,
+    { params: productionQueryParams(tenantId, warehouseId) },
+  );
+  return res.data;
+}
+
+export type OrderCollectionStateRead = {
+  order_id: number;
+  status: string;
+  tasks: CollectionTaskRead[];
+  collected_count: number;
+  total_count: number;
+  progress_percent: number;
+};
+
+export async function startCollectingOrder(
+  tenantId: number,
+  orderId: number,
+  warehouseId?: number,
+): Promise<ProductionOrderRead> {
+  const res = await api.post<ProductionOrderRead>(`/production/orders/${orderId}/start-collecting`, null, {
+    params: productionQueryParams(tenantId, warehouseId),
+  });
+  return res.data;
+}
+
+export async function fetchOrderCollectionState(
+  tenantId: number,
+  orderId: number,
+  warehouseId?: number,
+): Promise<OrderCollectionStateRead> {
+  const res = await api.get<OrderCollectionStateRead>(`/production/orders/${orderId}/collection`, {
+    params: productionQueryParams(tenantId, warehouseId),
+  });
+  return res.data;
+}
+
+export async function updateOrderCollectionTask(
+  tenantId: number,
+  orderId: number,
+  body: { task_key: string; collected_qty: number },
+  warehouseId?: number,
+): Promise<OrderCollectionStateRead> {
+  const res = await api.post<OrderCollectionStateRead>(`/production/orders/${orderId}/collection`, body, {
+    params: productionQueryParams(tenantId, warehouseId),
+  });
+  return res.data;
+}
+
+export async function finishCollectingOrder(
+  tenantId: number,
+  orderId: number,
+  warehouseId?: number,
+): Promise<ProductionOrderRead> {
+  const res = await api.post<ProductionOrderRead>(`/production/orders/${orderId}/finish-collecting`, null, {
+    params: productionQueryParams(tenantId, warehouseId),
+  });
+  return res.data;
+}
+
+export async function updateOrderProductionProgress(
+  tenantId: number,
+  orderId: number,
+  body: { add_quantity: number },
+  warehouseId?: number,
+): Promise<ProductionOrderRead> {
+  const res = await api.post<ProductionOrderRead>(`/production/orders/${orderId}/production-progress`, body, {
+    params: productionQueryParams(tenantId, warehouseId),
+  });
+  return res.data;
+}
+
+export async function finishOrderProduction(
+  tenantId: number,
+  orderId: number,
+  warehouseId?: number,
+): Promise<ProductionOrderRead> {
+  const res = await api.post<ProductionOrderRead>(`/production/orders/${orderId}/finish-production`, null, {
+    params: productionQueryParams(tenantId, warehouseId),
+  });
+  return res.data;
+}
+
+export async function finishOrderPutaway(
+  tenantId: number,
+  orderId: number,
+  body: { target_location_id: number },
+  warehouseId?: number,
+): Promise<ProductionCompleteResultRead> {
+  const res = await api.post<ProductionCompleteResultRead>(`/production/orders/${orderId}/finish-putaway`, body, {
+    params: productionQueryParams(tenantId, warehouseId),
+  });
   return res.data;
 }

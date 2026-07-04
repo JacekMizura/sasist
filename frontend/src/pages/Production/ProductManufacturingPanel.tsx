@@ -327,7 +327,7 @@ export function ProductManufacturingPanel({ tenantId, productId, productName, on
                 {history.map((h) => (
                   <tr key={h.id} className="border-t border-slate-100 hover:bg-slate-50/80">
                     <td className="px-3 py-2">
-                      <Link to={erpProductionPaths.orders} className="font-mono text-slate-800 hover:underline">
+                      <Link to={erpProductionPaths.order(h.id)} className="font-mono text-slate-800 hover:underline">
                         {h.number}
                       </Link>
                     </td>

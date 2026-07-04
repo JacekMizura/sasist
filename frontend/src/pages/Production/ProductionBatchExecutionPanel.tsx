@@ -1,3 +1,11 @@
+/**
+ * @deprecated Phase 4 — legacy ERP batch execution. Disconnected from app UI in Phase 3.
+ * Operator workflow lives in WMS terminal only. Safe to delete in Phase 4 cleanup.
+ */
+/**
+ * @deprecated Phase 3 — ERP batch execution panel. Use WMS terminal
+ * (`/wms/production/*`) for operator workflow. Kept until migration completes.
+ */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { AlertTriangle, CheckCircle2, Play, XCircle } from "lucide-react";

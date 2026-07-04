@@ -90,7 +90,7 @@ function toOrderRow(o: ProductionOrderRead): HistoryRow {
     completedAt: (o.completed_at ?? o.created_at ?? "").slice(0, 10) || "—",
     operator: o.operator_name ?? "—",
     unitCost: formatProductionMoney(o.calculated_unit_cost),
-    linkTo: erpProductionPaths.orders,
+    linkTo: erpProductionPaths.order(o.id),
   };
 }
 

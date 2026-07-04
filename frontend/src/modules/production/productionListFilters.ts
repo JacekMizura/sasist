@@ -35,6 +35,7 @@ export type ProductionOrderRow =
       operator: string;
       priority?: string | null;
       hasShortages: boolean;
+      isReleasedToWms?: boolean;
       numericPriority?: number;
     }
   | {
@@ -47,7 +48,8 @@ export type ProductionOrderRow =
       date: string;
       operator: string;
       priority?: string | null;
-      hasShortages: false;
+      hasShortages: boolean;
+      isReleasedToWms?: boolean;
       numericPriority?: number;
     };
 
@@ -64,6 +66,7 @@ export function productionBatchToRow(b: ProductionBatchRead): ProductionOrderRow
     operator: b.operator_name ?? "—",
     priority: b.has_shortages ? "blocked" : null,
     hasShortages: b.has_shortages ?? false,
+    isReleasedToWms: b.is_released_to_wms ?? false,
   };
 }
 
@@ -77,8 +80,9 @@ export function productionOrderToRow(o: ProductionOrderRead): ProductionOrderRow
     status: o.status,
     date: (o.created_at ?? "").slice(0, 10) || "—",
     operator: o.operator_name ?? "—",
-    priority: o.priority > 5 ? "high" : "normal",
-    hasShortages: false,
+    priority: o.has_shortages ? "blocked" : o.priority > 5 ? "high" : "normal",
+    hasShortages: o.has_shortages ?? false,
+    isReleasedToWms: o.is_released_to_wms ?? false,
     numericPriority: o.priority,
   };
 }

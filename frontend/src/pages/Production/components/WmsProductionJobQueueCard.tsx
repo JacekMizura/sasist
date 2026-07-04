@@ -1,7 +1,13 @@
 import type { ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
 
-import { WMS_TASK_CARD, WMS_TERMINAL_LABEL } from "@/components/wms/execution/wmsLayoutTokens";
+import { WMS_TASK_CARD } from "@/components/wms/execution/wmsLayoutTokens";
+import {
+  EXECUTION_STATUS_LABEL,
+  PRODUCTION_KIND_LABEL,
+  type ProductionExecutionKind,
+} from "@/modules/production/productionExecutionTypes";
+import { operationalBadgeBase, operationalBadgeNeutralClass } from "@/components/operational/operationalSemanticBadges";
 
 type Accent = "amber" | "blue" | "emerald";
 
@@ -12,10 +18,11 @@ const ACCENT_STRIP: Record<Accent, string> = {
 };
 
 type Props = {
-  label: string;
+  kind: ProductionExecutionKind;
   number: string;
   productLine?: string;
   quantity?: number | string;
+  status?: string;
   statusBadge?: ReactNode;
   accent?: Accent;
   disabled?: boolean;
@@ -23,17 +30,21 @@ type Props = {
   onClick: () => void;
 };
 
-export function WmsProductionBatchQueueCard({
-  label,
+export function WmsProductionJobQueueCard({
+  kind,
   number,
   productLine,
   quantity,
+  status,
   statusBadge,
   accent = "amber",
   disabled = false,
   disabledTitle,
   onClick,
 }: Props) {
+  const kindLabel = PRODUCTION_KIND_LABEL[kind];
+  const statusLabel = status ? EXECUTION_STATUS_LABEL[status] ?? status : null;
+
   return (
     <button
       type="button"
@@ -46,8 +57,15 @@ export function WmsProductionBatchQueueCard({
       <div className="flex flex-1 flex-col pl-2">
         <div className="mb-4 flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className={WMS_TERMINAL_LABEL}>{label}</p>
-            <p className="mt-1 font-mono text-2xl font-black tracking-tight text-slate-900">{number}</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={`${operationalBadgeBase} ${operationalBadgeNeutralClass} text-[10px] uppercase tracking-wide`}>
+                {kindLabel}
+              </span>
+              {statusLabel ? (
+                <span className={`${operationalBadgeBase} ${operationalBadgeNeutralClass} text-[10px]`}>{statusLabel}</span>
+              ) : null}
+            </div>
+            <p className="mt-2 font-mono text-2xl font-black tracking-tight text-slate-900">{number}</p>
           </div>
           <ChevronRight className="mt-1 h-5 w-5 shrink-0 text-slate-300 transition group-hover:text-slate-500" aria-hidden />
         </div>
@@ -65,3 +83,6 @@ export function WmsProductionBatchQueueCard({
     </button>
   );
 }
+
+/** @deprecated Use WmsProductionJobQueueCard */
+export { WmsProductionJobQueueCard as WmsProductionBatchQueueCard };

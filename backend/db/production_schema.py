@@ -570,6 +570,19 @@ def ensure_production_schema_evolution(engine: Engine) -> dict[str, Any]:
         sync_cols,
         report.status,
     )
+    try:
+        from sqlalchemy.orm import sessionmaker
+
+        from ..services.production_execution.status_migration import migrate_legacy_order_execution_statuses
+
+        SessionLocal = sessionmaker(bind=engine)
+        with SessionLocal() as db:
+            migrated = migrate_legacy_order_execution_statuses(db)
+            if migrated:
+                db.commit()
+                result["legacy_order_status_migrated"] = migrated
+    except Exception as exc:
+        logger.warning("[production.schema.evolution] legacy order status migration skipped: %s", exc)
     return result
 
 

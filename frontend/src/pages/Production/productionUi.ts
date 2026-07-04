@@ -12,7 +12,9 @@ import {
 export const PRODUCTION_STATUS_LABEL: Record<ProductionOrderStatus, string> = {
   draft: "Robocze",
   planned: "Zaplanowane",
+  collecting: "Zbieranie",
   in_progress: "W produkcji",
+  putaway: "Odłożenie",
   completed: "Zakończone",
   cancelled: "Anulowane",
 };
@@ -63,6 +65,8 @@ export function productionStatusBadgeClass(status: ProductionOrderStatus): strin
     case "planned":
       return PURPLE_BADGE;
     case "in_progress":
+    case "collecting":
+    case "putaway":
       return operationalBadgeInfoClass;
     case "completed":
       return operationalBadgeSuccessClass;

@@ -298,8 +298,8 @@ class TestProductionOrdersByProduct(unittest.TestCase):
     def test_normalizes_batch_status_for_summary(self):
         from backend.services.production_order_service import _normalize_summary_status
 
-        self.assertEqual(_normalize_summary_status("collecting"), "in_progress")
-        self.assertEqual(_normalize_summary_status("putaway"), "in_progress")
+        self.assertEqual(_normalize_summary_status("collecting"), "collecting")
+        self.assertEqual(_normalize_summary_status("putaway"), "putaway")
         self.assertEqual(_normalize_summary_status("completed"), "completed")
         self.assertEqual(_normalize_summary_status("unknown"), "planned")
 

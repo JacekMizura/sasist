@@ -96,6 +96,8 @@ class ProductionBatchRead(BaseModel):
     has_shortages: bool = False
     progress_percent: float = 0.0
     collection_progress_percent: float = 0.0
+    released_to_wms_at: Optional[datetime] = None
+    is_released_to_wms: bool = False
     started_at: Optional[datetime] = None
     collecting_completed_at: Optional[datetime] = None
     production_completed_at: Optional[datetime] = None

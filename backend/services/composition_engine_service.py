@@ -285,6 +285,47 @@ def set_composition_active(
     )
 
 
+def clone_composition_version(
+    db: Session,
+    *,
+    tenant_id: int,
+    composition_id: int,
+    new_version: str,
+) -> ProductCompositionRead:
+    src = (
+        db.query(ProductComposition)
+        .options(joinedload(ProductComposition.lines))
+        .filter(ProductComposition.id == int(composition_id), ProductComposition.tenant_id == int(tenant_id))
+        .first()
+    )
+    if src is None:
+        raise CompositionError("Kompozycja nie istnieje.", code="not_found")
+    lines = [
+        CompositionLineWrite(
+            component_product_id=int(ln.component_product_id),
+            quantity=float(ln.quantity),
+            waste_percent=float(ln.waste_percent or 0),
+            sort_order=int(ln.sort_order or 0),
+            notes=ln.notes,
+        )
+        for ln in sorted(src.lines or [], key=lambda x: (x.sort_order, x.id))
+    ]
+    return create_composition(
+        db,
+        tenant_id=tenant_id,
+        body=ProductCompositionCreateBody(
+            product_id=int(src.product_id),
+            composition_mode=str(src.composition_mode),  # type: ignore[arg-type]
+            name=str(src.name),
+            version=new_version.strip(),
+            yield_quantity=float(src.yield_quantity or 1),
+            notes=src.notes,
+            is_active=False,
+            lines=lines,
+        ),
+    )
+
+
 def list_compositions_for_product(
     db: Session,
     *,

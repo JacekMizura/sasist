@@ -98,7 +98,7 @@ export function BundleProductionPanel({
     setErr(null);
     try {
       const order = await createProductionOrder(tenantId, {
-        recipe_id: activeRecipe.id,
+        composition_id: activeRecipe.id,
         warehouse_id: warehouseId,
         planned_quantity: orderQty,
         status: "planned",

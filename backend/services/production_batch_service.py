@@ -233,6 +233,8 @@ def serialize_batch(db: Session, batch: ProductionBatch) -> ProductionBatchRead:
         has_shortages=_batch_has_shortages(db, batch),
         progress_percent=progress,
         collection_progress_percent=coll_pct,
+        released_to_wms_at=getattr(batch, "released_to_wms_at", None),
+        is_released_to_wms=getattr(batch, "released_to_wms_at", None) is not None,
         started_at=batch.started_at,
         collecting_completed_at=getattr(batch, "collecting_completed_at", None),
         production_completed_at=getattr(batch, "production_completed_at", None),
@@ -633,6 +635,7 @@ def list_batches(
     tenant_id: int,
     status: str | None = None,
     warehouse_id: int | None = None,
+    wms_released: bool | None = None,
 ) -> list[ProductionBatchRead]:
     tid = int(tenant_id)
     if not _batch_schema_ready(db):
@@ -648,6 +651,10 @@ def list_batches(
             q = q.filter(ProductionBatch.status == str(status).strip().lower())
         if warehouse_id:
             q = q.filter(ProductionBatch.warehouse_id == int(warehouse_id))
+        if wms_released is True:
+            q = q.filter(ProductionBatch.released_to_wms_at.isnot(None))
+        elif wms_released is False:
+            q = q.filter(ProductionBatch.released_to_wms_at.is_(None))
         rows = q.order_by(ProductionBatch.created_at.desc()).all()
     except SQLAlchemyError as exc:
         logger.exception(
@@ -1110,6 +1117,61 @@ def get_collection_state(db: Session, *, tenant_id: int, batch_id: int) -> Batch
     )
 
 
+def release_batch_to_wms(
+    db: Session,
+    *,
+    tenant_id: int,
+    batch_id: int,
+    released_by_user_id: int | None = None,
+) -> ProductionBatchRead:
+    batch = _load_batch_entity(db, tenant_id=tenant_id, batch_id=batch_id)
+    if str(batch.status) not in ("draft", "planned"):
+        raise ProductionBatchError(
+            "Wydanie do WMS możliwe tylko dla partii zaplanowanych.",
+            code="invalid_status",
+        )
+    if getattr(batch, "released_to_wms_at", None) is not None:
+        return serialize_batch(db, batch)
+    if _batch_has_shortages(db, batch):
+        shortages = []
+        try:
+            totals = _aggregate_batch_components(batch)
+            agg = aggregated_demand_with_availability(
+                db,
+                tenant_id=int(batch.tenant_id),
+                warehouse_id=int(batch.warehouse_id),
+                component_totals=totals,
+            )
+            for r in agg:
+                if float(r.missing) > 1e-6:
+                    shortages.append(
+                        {
+                            "component_product_id": int(r.component_product_id),
+                            "product_name": str(r.product_name),
+                            "required": float(r.required),
+                            "available": float(r.available),
+                            "missing": float(r.missing),
+                        }
+                    )
+        except Exception:
+            pass
+        raise ProductionBatchError(
+            "Nie można wydać do WMS — braki materiałów.",
+            code="insufficient_stock",
+            shortages=shortages,
+        )
+    batch.released_to_wms_at = datetime.utcnow()
+    batch.released_by_user_id = int(released_by_user_id) if released_by_user_id else None
+    batch.updated_at = datetime.utcnow()
+    db.flush()
+    logger.info(
+        "[production.release_wms] batch_id=%s released_by=%s",
+        batch.id,
+        released_by_user_id,
+    )
+    return serialize_batch(db, batch)
+
+
 def start_collecting(db: Session, *, tenant_id: int, batch_id: int) -> ProductionBatchRead:
     batch = _load_batch_entity(db, tenant_id=tenant_id, batch_id=batch_id)
     if str(batch.status) in TERMINAL:
@@ -1118,6 +1180,11 @@ def start_collecting(db: Session, *, tenant_id: int, batch_id: int) -> Productio
         return serialize_batch(db, batch)
     if str(batch.status) not in ("draft", "planned"):
         raise ProductionBatchError("Nie można rozpocząć zbierania w tym statusie.", code="invalid_status")
+    if getattr(batch, "released_to_wms_at", None) is None:
+        raise ProductionBatchError(
+            "Partia nie została wydana do WMS. Użyj akcji „Wydaj do WMS” w ERP.",
+            code="not_released",
+        )
     state = _init_collection_tasks(db, batch)
     batch.collection_state_json = json.dumps(state, ensure_ascii=False)
     batch.status = "collecting"

@@ -12,6 +12,8 @@ import {
 import {
   listProductionBatches,
   listProductionOrders,
+  releaseBatchToWms,
+  releaseOrderToWms,
   type ProductionBatchRead,
   type ProductionOrderRead,
 } from "../../api/productionApi";
@@ -119,13 +121,35 @@ export default function ProductionOrdersPage() {
     return filterProductionOrderRows(all, appliedFilters);
   }, [batches, orders, appliedFilters]);
 
-  const releaseToWms = (row: (typeof rows)[number]) => {
+  const releaseToWms = async (row: (typeof rows)[number]) => {
     if (row.hasShortages) {
       toast.error("Nie można wydać do WMS — braki materiałów.");
       return;
     }
-    toast.success(`Zlecenie ${row.number} dostępne w terminalu WMS → Zbieranie.`);
-    window.open(wmsProductionPaths.collecting(), "_blank", "noopener,noreferrer");
+    if (row.isReleasedToWms) {
+      toast.success(`${row.kind === "batch" ? "Partia" : "Zlecenie"} ${row.number} jest już w kolejce WMS.`);
+      window.open(wmsProductionPaths.collecting(), "_blank", "noopener,noreferrer");
+      return;
+    }
+    if (warehouseId == null) return;
+    try {
+      if (row.kind === "batch") {
+        await releaseBatchToWms(tenantId, row.id, warehouseId);
+        toast.success(`Partia ${row.number} wydana do terminalu WMS.`);
+      } else {
+        await releaseOrderToWms(tenantId, row.id, warehouseId);
+        toast.success(`Zlecenie ${row.number} wydane do terminalu WMS.`);
+      }
+      await reload();
+    } catch (e: unknown) {
+      const msg =
+        e && typeof e === "object" && "response" in e
+          ? String((e as { response?: { data?: { detail?: unknown } } }).response?.data?.detail ?? "Wydanie nie powiodło się.")
+          : e instanceof Error
+            ? e.message
+            : "Wydanie do WMS nie powiodło się.";
+      toast.error(typeof msg === "string" ? msg : "Wydanie do WMS nie powiodło się.");
+    }
   };
 
   if (warehouseId == null) {
@@ -235,19 +259,34 @@ export default function ProductionOrdersPage() {
                               id: "open",
                               label: "Otwórz",
                               onClick: () =>
-                                navigate(r.kind === "batch" ? erpProductionPaths.batch(r.id) : erpProductionPaths.orders),
+                                navigate(
+                                  r.kind === "batch" ? erpProductionPaths.batch(r.id) : erpProductionPaths.order(r.id),
+                                ),
                             },
                             {
                               id: "edit",
                               label: "Edytuj",
-                              onClick: () => navigate(r.kind === "batch" ? erpProductionPaths.batch(r.id) : erpProductionPaths.orders),
+                              onClick: () =>
+                                navigate(
+                                  r.kind === "batch" ? erpProductionPaths.batch(r.id) : erpProductionPaths.order(r.id),
+                                ),
                             },
                             ...(r.kind === "batch" && (r.status === "planned" || r.status === "draft")
                               ? [
                                   {
                                     id: "wms",
-                                    label: "Wydaj do WMS",
-                                    onClick: () => releaseToWms(r),
+                                    label: r.isReleasedToWms ? "Otwórz WMS" : "Wydaj do WMS",
+                                    onClick: () => void releaseToWms(r),
+                                    disabled: r.hasShortages,
+                                  },
+                                ]
+                              : []),
+                            ...(r.kind === "order" && (r.status === "planned" || r.status === "draft")
+                              ? [
+                                  {
+                                    id: "wms",
+                                    label: r.isReleasedToWms ? "Otwórz WMS" : "Wydaj do WMS",
+                                    onClick: () => void releaseToWms(r),
                                     disabled: r.hasShortages,
                                   },
                                 ]

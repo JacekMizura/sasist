@@ -1,4 +1,9 @@
 import { WMS_TERMINAL_LABEL } from "@/components/wms/execution/wmsLayoutTokens";
+import {
+  PRODUCTION_KIND_LABEL,
+  type ProductionExecutionKind,
+} from "@/modules/production/productionExecutionTypes";
+import { operationalBadgeBase, operationalBadgeNeutralClass } from "@/components/operational/operationalSemanticBadges";
 
 type Accent = "amber" | "blue" | "emerald";
 
@@ -9,6 +14,7 @@ const ACCENT_STRIP: Record<Accent, string> = {
 };
 
 type Props = {
+  kind?: ProductionExecutionKind;
   label: string;
   number: string;
   productLine?: string;
@@ -17,8 +23,9 @@ type Props = {
   accent?: Accent;
 };
 
-/** Left-aligned active batch context — no centered hero banner. */
+/** Active job context bar — batch or MO. */
 export function WmsProductionActiveBatchBar({
+  kind,
   label,
   number,
   productLine,
@@ -30,6 +37,11 @@ export function WmsProductionActiveBatchBar({
     <div className="relative w-full overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className={`absolute bottom-0 left-0 top-0 w-1 ${ACCENT_STRIP[accent]}`} aria-hidden />
       <div className="pl-3">
+        {kind ? (
+          <span className={`${operationalBadgeBase} ${operationalBadgeNeutralClass} mb-2 inline-flex text-[10px] uppercase tracking-wide`}>
+            {PRODUCTION_KIND_LABEL[kind]}
+          </span>
+        ) : null}
         <p className={WMS_TERMINAL_LABEL}>{label}</p>
         <p className="mt-1 font-mono text-2xl font-black text-slate-900">{number}</p>
         {productLine ? <p className="mt-2 text-base font-semibold text-slate-800">{productLine}</p> : null}
