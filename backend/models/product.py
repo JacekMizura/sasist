@@ -135,6 +135,18 @@ class Product(Base):
     require_recv_master_carton_dims = Column(Boolean, nullable=False, default=False, server_default=text("false"))
     require_recv_master_carton_weight = Column(Boolean, nullable=False, default=False, server_default=text("false"))
 
+    # WMS: wyłączenie globalnych walidacji dla tego produktu (override)
+    validation_skip_dimensions = Column(Boolean, nullable=False, default=False, server_default=text("false"))
+    validation_skip_weight = Column(Boolean, nullable=False, default=False, server_default=text("false"))
+    validation_skip_batch = Column(Boolean, nullable=False, default=False, server_default=text("false"))
+    validation_skip_expiry = Column(Boolean, nullable=False, default=False, server_default=text("false"))
+    validation_skip_serial = Column(Boolean, nullable=False, default=False, server_default=text("false"))
+    validation_skip_master_carton = Column(Boolean, nullable=False, default=False, server_default=text("false"))
+    validation_skip_master_carton_ean = Column(Boolean, nullable=False, default=False, server_default=text("false"))
+    validation_skip_master_carton_qty = Column(Boolean, nullable=False, default=False, server_default=text("false"))
+    validation_skip_master_carton_dims = Column(Boolean, nullable=False, default=False, server_default=text("false"))
+    validation_skip_master_carton_weight = Column(Boolean, nullable=False, default=False, server_default=text("false"))
+
     # Opakowanie zbiorcze (kartony) — osobno od wymiarów pojedynczej sztuki (length/width/height/weight/volume)
     bulk_ean = Column(String, nullable=True)
     units_per_carton = Column(Float, nullable=True)

@@ -5,6 +5,7 @@ from __future__ import annotations
 from sqlalchemy.orm import Session, joinedload
 
 from ..models.location import Location
+from ..models.product import Product
 from ..models.production import ProductionOrder
 from ..schemas.production import (
     ProductionAllocationRead,
@@ -86,9 +87,14 @@ def build_production_pick_plan(
         line_auto_pairs.append((snap, auto_pairs, loc_rows, suggested, snap_stock))
 
     codes = _location_codes(db, all_loc_ids)
+    line_pids = {int(snap.component_product_id) for snap, *_ in line_auto_pairs}
+    line_products = (
+        {p.id: p for p in db.query(Product).filter(Product.id.in_(line_pids)).all()} if line_pids else {}
+    )
 
     for snap, auto_pairs, loc_rows, suggested, snap_stock in line_auto_pairs:
         pid = int(snap.component_product_id)
+        cp = line_products.get(pid)
         req = float(snap.total_required_quantity or 0)
         auto_by_loc: dict[int, float] = {}
         for lid, qty in auto_pairs:
@@ -134,6 +140,7 @@ def build_production_pick_plan(
                 component_product_id=pid,
                 product_name=str(snap.product_name_snapshot or ""),
                 product_sku=snap.product_sku_snapshot,
+                product_image_url=((cp.image_url or "").strip() or None if cp else None),
                 required=round(req, 4),
                 available=round(avail, 4),
                 missing=round(missing, 4),

@@ -124,7 +124,7 @@ def _load_putaway_pz_docs_with_lines(
     """
     q = db.query(StockDocument).filter(
         StockDocument.tenant_id == tenant_id,
-        StockDocument.document_type.in_(("PZ", "Z_PZ", "PZ_RT", "RETURN_RECEIPT")),
+        StockDocument.document_type.in_(("PZ", "Z_PZ", "PZ_RT", "RETURN_RECEIPT", "PW")),
         StockDocument.receiving_status.in_(("IN_PROGRESS", "DONE")),
         StockDocument.putaway_status.in_(("NOT_STARTED", "IN_PROGRESS", "DONE")),
         StockDocument.relocation_status != "DONE",

@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Literal
 
 ProductionExecutionKind = Literal["batch", "order"]
-ProductionExecutionPhase = Literal["collecting", "execute", "putaway"]
+ProductionExecutionPhase = Literal["collecting", "execute"]
 
 EXECUTION_STATUSES = frozenset(
     {"draft", "planned", "collecting", "in_progress", "putaway", "completed", "cancelled"}
@@ -30,8 +30,6 @@ def execution_phase_for_status(status: str | None) -> ProductionExecutionPhase |
         return "collecting"
     if key == "in_progress":
         return "execute"
-    if key == "putaway":
-        return "putaway"
     return None
 
 

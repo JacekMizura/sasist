@@ -82,6 +82,7 @@ export type ProductionOrderLineSnapshotRead = {
   consumed_quantity: number;
   product_name_snapshot: string;
   product_sku_snapshot?: string | null;
+  product_image_url?: string | null;
   available?: number | null;
   missing?: number | null;
   reserved?: number | null;
@@ -110,6 +111,7 @@ export type ProductionOrderRead = {
   operator_name?: string | null;
   product_name?: string | null;
   product_sku?: string | null;
+  product_image_url?: string | null;
   warehouse_name?: string | null;
   location_name?: string | null;
   recipe_name?: string | null;
@@ -459,6 +461,7 @@ export type ProductionBatchLineRead = {
   pw_stock_document_id?: number | null;
   product_name?: string | null;
   product_sku?: string | null;
+  product_image_url?: string | null;
   composition_name?: string | null;
   notes?: string | null;
 };
@@ -553,6 +556,7 @@ export type BatchAggregatedPickLineRead = {
   component_product_id: number;
   product_name: string;
   product_sku?: string | null;
+  product_image_url?: string | null;
   required: number;
   available: number;
   missing: number;
@@ -775,9 +779,13 @@ export type CollectionTaskRead = {
   product_name: string;
   product_sku?: string | null;
   product_image_url?: string | null;
+  product_ean?: string | null;
+  product_catalog_number?: string | null;
+  product_unit?: string | null;
   location_id: number;
   location_code: string;
   required_qty: number;
+  available_qty?: number | null;
   collected_qty: number;
 };
 
@@ -923,7 +931,7 @@ export async function finishPutawayBatch(
   return res.data;
 }
 
-export type ProductionExecutionPhase = "collecting" | "execute" | "putaway";
+export type ProductionExecutionPhase = "collecting" | "execute";
 
 export type ProductionExecutionJobRead = {
   kind: "batch" | "order";

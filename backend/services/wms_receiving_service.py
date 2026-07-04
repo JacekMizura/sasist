@@ -196,9 +196,17 @@ def _sync_po_from_pz(db: Session, tenant_id: int, pz_document_id: int) -> None:
     sync_purchase_order_status_for_stock_document_id(db, tenant_id, pz_document_id)
 
 
-def _lot_from_wms_body(product: Product, batch_number: Optional[str], expiry_date: Optional[date]) -> tuple[str, date]:
-    tb = bool(getattr(product, "track_batch", False))
-    te = bool(getattr(product, "track_expiry", False))
+def _lot_from_wms_body(
+    product: Product,
+    batch_number: Optional[str],
+    expiry_date: Optional[date],
+    wms_settings=None,
+) -> tuple[str, date]:
+    from .product_validation_policy import resolve_effective_receiving_requirements
+
+    eff = resolve_effective_receiving_requirements(product, wms_settings)
+    tb = eff.track_batch
+    te = eff.track_expiry
     bn = "" if not tb else normalize_batch_number(batch_number)
     if tb and not bn:
         raise ValueError("Numer partii wymagany")
@@ -450,10 +458,13 @@ def _pick_pz_line_for_product(rows: List[StockDocumentItem], eps: float = 1e-9) 
     return rows[0]
 
 
-def _product_needs_receiving_lot_decision(prod: Optional[Product]) -> bool:
+def _product_needs_receiving_lot_decision(prod: Optional[Product], wms_settings=None) -> bool:
     if not prod:
         return False
-    return bool(getattr(prod, "track_batch", False) or getattr(prod, "track_expiry", False))
+    from .product_validation_policy import resolve_effective_receiving_requirements
+
+    eff = resolve_effective_receiving_requirements(prod, wms_settings)
+    return bool(eff.track_batch or eff.track_expiry)
 
 
 def ensure_wms_pz_product_anchor_line(
@@ -1185,7 +1196,12 @@ def patch_wms_receiving_pz_item_quantity(
     prod = db.query(Product).filter(Product.id == anchor.product_id).first()
     if not prod:
         raise ValueError("Product not found")
-    bn, ed = _lot_from_wms_body(prod, body.batch_number, body.expiry_date)
+    from .product_validation_policy import load_wms_settings_for_product
+
+    wms_settings = load_wms_settings_for_product(
+        db, tenant_id=tenant_id, warehouse_id=getattr(doc, "warehouse_id", None)
+    )
+    bn, ed = _lot_from_wms_body(prod, body.batch_number, body.expiry_date, wms_settings)
 
     match = _find_matching_lot_row(
         db,

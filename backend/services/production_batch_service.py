@@ -161,6 +161,7 @@ def serialize_batch_line(db: Session, line: ProductionBatchLine) -> ProductionBa
         pw_stock_document_id=line.pw_stock_document_id,
         product_name=(p.name if p else None),
         product_sku=((p.sku or p.symbol) if p else None),
+        product_image_url=((p.image_url or "").strip() or None if p else None),
         composition_name=(comp.name if comp else None),
         notes=line.notes,
     )
@@ -443,8 +444,13 @@ def preview_batch_demand(
         if r.missing > 1e-6
     ]
     pick_plan_rows: list[BatchAggregatedPickLineRead] = []
+    preview_pids = {int(r.component_product_id) for r in agg_rows}
+    preview_products = (
+        {p.id: p for p in db.query(Product).filter(Product.id.in_(preview_pids)).all()} if preview_pids else {}
+    )
     for row in agg_rows:
         pid = int(row.component_product_id)
+        p_img = preview_products.get(pid)
         req = float(row.required)
         snap_stock = build_location_stock(
             db,
@@ -486,6 +492,7 @@ def preview_batch_demand(
                 component_product_id=pid,
                 product_name=row.product_name,
                 product_sku=row.product_sku,
+                product_image_url=((p_img.image_url or "").strip() or None if p_img else None),
                 required=row.required,
                 available=row.available,
                 missing=row.missing,
@@ -744,8 +751,13 @@ def build_batch_pick_plan(db: Session, *, tenant_id: int, batch_id: int) -> Prod
     pick_lines: list[BatchAggregatedPickLineRead] = []
     from ..schemas.production import ProductionAllocationRead, ProductionLocationSuggestionRead
 
+    plan_pids = {int(r.component_product_id) for r in agg_rows}
+    plan_products = (
+        {p.id: p for p in db.query(Product).filter(Product.id.in_(plan_pids)).all()} if plan_pids else {}
+    )
     for row in agg_rows:
         pid = int(row.component_product_id)
+        p_img = plan_products.get(pid)
         req = float(row.required)
         snap_stock = build_location_stock(
             db,
@@ -799,6 +811,7 @@ def build_batch_pick_plan(db: Session, *, tenant_id: int, batch_id: int) -> Prod
                 component_product_id=pid,
                 product_name=row.product_name,
                 product_sku=row.product_sku,
+                product_image_url=((p_img.image_url or "").strip() or None if p_img else None),
                 required=row.required,
                 available=row.available,
                 missing=row.missing,
@@ -1049,6 +1062,8 @@ def _load_batch_entity(db: Session, *, tenant_id: int, batch_id: int) -> Product
 
 
 def _init_collection_tasks(db: Session, batch: ProductionBatch) -> dict[str, Any]:
+    from .production_execution.collection_task_builder import build_collection_task_row
+
     plan = build_batch_pick_plan(db, tenant_id=int(batch.tenant_id), batch_id=int(batch.id))
     if plan.has_shortages:
         raise ProductionBatchError(
@@ -1076,25 +1091,25 @@ def _init_collection_tasks(db: Session, batch: ProductionBatch) -> dict[str, Any
                 type("_A", (), {"location_id": 0, "location_code": "MAG", "quantity": float(comp.required)})()
             ]
         for alloc in allocs:
-            loc_id = int(alloc.location_id)
-            key = f"{pid}-{loc_id}"
             tasks.append(
-                {
-                    "task_key": key,
-                    "component_product_id": pid,
-                    "product_name": str(comp.product_name),
-                    "product_sku": comp.product_sku,
-                    "product_image_url": (p.image_url if p else None),
-                    "location_id": loc_id,
-                    "location_code": str(alloc.location_code),
-                    "required_qty": round(float(alloc.quantity), 4),
-                    "collected_qty": 0.0,
-                }
+                build_collection_task_row(
+                    component_product_id=pid,
+                    product_name=str(comp.product_name),
+                    product_sku=comp.product_sku,
+                    product=p,
+                    location_id=int(alloc.location_id),
+                    location_code=str(alloc.location_code),
+                    required_qty=float(alloc.quantity),
+                    suggested_locations=list(comp.suggested_locations or []),
+                    warehouse_available=float(comp.available),
+                )
             )
     return {"tasks": tasks}
 
 
 def get_collection_state(db: Session, *, tenant_id: int, batch_id: int) -> BatchCollectionStateRead:
+    from .production_execution.collection_task_builder import enrich_collection_tasks
+
     batch = _load_batch_entity(db, tenant_id=tenant_id, batch_id=batch_id)
     raw = getattr(batch, "collection_state_json", None)
     tasks_raw: list[dict[str, Any]] = []
@@ -1103,6 +1118,7 @@ def get_collection_state(db: Session, *, tenant_id: int, batch_id: int) -> Batch
             tasks_raw = (json.loads(str(raw)).get("tasks") or [])
         except json.JSONDecodeError:
             tasks_raw = []
+    tasks_raw = enrich_collection_tasks(db, tasks_raw)
     tasks = [CollectionTaskRead(**t) for t in tasks_raw]
     done = sum(1 for t in tasks if t.collected_qty >= t.required_qty - 1e-6)
     total = len(tasks)
@@ -1355,14 +1371,18 @@ def update_production_progress(
 
 
 def finish_production(db: Session, *, tenant_id: int, batch_id: int) -> ProductionBatchRead:
+    from .production_execution.pw_putaway_handoff import create_batch_pw_documents_for_putaway
+
     batch = _load_batch_entity(db, tenant_id=tenant_id, batch_id=batch_id)
     if str(batch.status) != "in_progress":
         raise ProductionBatchError("Partia nie jest w produkcji.", code="invalid_status")
     for ln in batch.lines or []:
         if float(ln.completed_quantity or 0) < float(ln.planned_quantity) - 1e-6:
             raise ProductionBatchError("Nie wszystkie produkty są wyprodukowane.", code="production_incomplete")
-    batch.status = "putaway"
+    create_batch_pw_documents_for_putaway(db, batch=batch, performed_by_user_id=None)
+    batch.status = "completed"
     batch.production_completed_at = datetime.utcnow()
+    batch.completed_at = datetime.utcnow()
     batch.updated_at = datetime.utcnow()
     db.flush()
     return serialize_batch(db, batch)

@@ -91,43 +91,45 @@ export function getMissingRequiredFields(
 
 export function validateRequiredProductData(
   product: ProductReceivingValues & ProductReceivingRequirements,
+  effectiveRequirements?: ProductReceivingRequirements,
 ): ProductReceivingValidation {
+  const req = effectiveRequirements ?? product;
   const missing: MissingReceivingField[] = [];
   const forceWms = productCreatedInWms(product.metadata_json);
 
-  if (product.require_recv_height && !positive(product.height))
+  if (req.require_recv_height && !positive(product.height))
     missing.push({ key: "height", label: "Wysokość", group: "basic" });
-  if (product.require_recv_width && !positive(product.width))
+  if (req.require_recv_width && !positive(product.width))
     missing.push({ key: "width", label: "Szerokość", group: "basic" });
-  if (product.require_recv_length && !positive(product.length))
+  if (req.require_recv_length && !positive(product.length))
     missing.push({ key: "length", label: "Długość", group: "basic" });
-  if (product.require_recv_weight && !positive(product.weight))
+  if (req.require_recv_weight && !positive(product.weight))
     missing.push({ key: "weight", label: "Waga", group: "basic" });
 
   const hasCarton = nonEmpty(product.bulk_ean) || positive(product.units_per_carton);
-  if (product.require_recv_master_carton && !hasCarton)
+  if (req.require_recv_master_carton && !hasCarton)
     missing.push({ key: "master_carton", label: "Opakowanie zbiorcze", group: "carton" });
-  if (product.require_recv_master_carton_ean && !nonEmpty(product.bulk_ean))
+  if (req.require_recv_master_carton_ean && !nonEmpty(product.bulk_ean))
     missing.push({ key: "bulk_ean", label: "EAN opakowania zbiorczego", group: "carton" });
-  if (product.require_recv_master_carton_qty && !positive(product.units_per_carton))
+  if (req.require_recv_master_carton_qty && !positive(product.units_per_carton))
     missing.push({ key: "units_per_carton", label: "Ilość w opakowaniu zbiorczym", group: "carton" });
   const dimsOk =
     positive(product.carton_length_cm) && positive(product.carton_width_cm) && positive(product.carton_height_cm);
-  if (product.require_recv_master_carton_dims && !dimsOk)
+  if (req.require_recv_master_carton_dims && !dimsOk)
     missing.push({ key: "carton_dimensions", label: "Wymiary opakowania zbiorczego", group: "carton" });
-  if (product.require_recv_master_carton_weight && !positive(product.carton_weight_kg))
+  if (req.require_recv_master_carton_weight && !positive(product.carton_weight_kg))
     missing.push({ key: "carton_weight_kg", label: "Waga opakowania zbiorczego", group: "carton" });
 
   const hasRequirements = Boolean(
-    product.require_recv_height ||
-      product.require_recv_width ||
-      product.require_recv_length ||
-      product.require_recv_weight ||
-      product.require_recv_master_carton ||
-      product.require_recv_master_carton_ean ||
-      product.require_recv_master_carton_qty ||
-      product.require_recv_master_carton_dims ||
-      product.require_recv_master_carton_weight,
+    req.require_recv_height ||
+      req.require_recv_width ||
+      req.require_recv_length ||
+      req.require_recv_weight ||
+      req.require_recv_master_carton ||
+      req.require_recv_master_carton_ean ||
+      req.require_recv_master_carton_qty ||
+      req.require_recv_master_carton_dims ||
+      req.require_recv_master_carton_weight,
   );
 
   const complete = missing.length === 0;

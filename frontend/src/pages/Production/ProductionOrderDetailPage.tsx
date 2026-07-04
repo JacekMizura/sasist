@@ -26,6 +26,7 @@ import {
 } from "./components/ProductionMonitoringPanel";
 
 import { erpProductionPaths } from "./productionPaths";
+import { ProductThumb } from "./components/ProductThumb";
 
 import { PRODUCTION_STATUS_LABEL, START_COLLECTING_BLOCKED_TOOLTIP, productionStatusBadgeClass } from "./productionUi";
 
@@ -215,8 +216,9 @@ export default function ProductionOrderDetailPage() {
 
         <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 pb-4">
 
-          <div>
-
+          <div className="flex flex-wrap items-start gap-4">
+            <ProductThumb imageUrl={order.product_image_url} name={order.product_name ?? undefined} size="lg" />
+            <div>
             <p className="font-mono text-2xl font-bold text-slate-900">{order.number}</p>
 
             <p className="mt-1 text-sm text-slate-600">
@@ -242,7 +244,7 @@ export default function ProductionOrderDetailPage() {
             </span>
 
           </div>
-
+          </div>
         </div>
 
 
@@ -342,15 +344,15 @@ export default function ProductionOrderDetailPage() {
                   <tr key={ln.id} className="border-t border-slate-100">
 
                     <td className="px-4 py-2">
-
-                      <span className="font-medium text-slate-900">{ln.product_name_snapshot}</span>
-
-                      {ln.product_sku_snapshot ? (
-
-                        <span className="ml-2 text-xs text-slate-400">{ln.product_sku_snapshot}</span>
-
-                      ) : null}
-
+                      <div className="flex items-center gap-3">
+                        <ProductThumb imageUrl={ln.product_image_url} name={ln.product_name_snapshot} size="sm" />
+                        <span>
+                          <span className="font-medium text-slate-900">{ln.product_name_snapshot}</span>
+                          {ln.product_sku_snapshot ? (
+                            <span className="ml-2 text-xs text-slate-400">{ln.product_sku_snapshot}</span>
+                          ) : null}
+                        </span>
+                      </div>
                     </td>
 
                     <td className="px-4 py-2 text-right tabular-nums">{ln.quantity_per_unit}</td>

@@ -10,17 +10,22 @@ from ..models.inventory_serial import InventorySerial
 from ..schemas.wms_receiving import ReceivingScanResolveOut
 from .gs1_parse import parse_gs1_scan, scan_looks_like_gs1
 from .product_receiving_requirements import validate_required_product_data
+from .product_validation_policy import load_wms_settings_for_product, resolve_effective_receiving_requirements
 
 
-def _normalize_ean(raw: str) -> str:
-    return "".join(str(raw or "").split()).strip()
-
-
-def _enrich_product_scan(out: ReceivingScanResolveOut, product: Product) -> ReceivingScanResolveOut:
-    v = validate_required_product_data(product)
+def _enrich_product_scan(
+    out: ReceivingScanResolveOut,
+    product: Product,
+    wms_settings=None,
+) -> ReceivingScanResolveOut:
+    v = validate_required_product_data(product, wms_settings)
+    eff = resolve_effective_receiving_requirements(product, wms_settings)
     out.requires_data_completion = bool(v.show_completion_modal)
     out.receiving_data_complete = bool(v.complete)
     out.missing_data_labels = list(v.badge_labels)
+    out.track_batch = eff.track_batch
+    out.track_expiry = eff.track_expiry
+    out.track_serial = eff.track_serial
     return out
 
 
@@ -34,10 +39,16 @@ def _qty_from_carton_units(units) -> int:
     return max(1, int(round(u)))
 
 
+def _normalize_ean(raw: str) -> str:
+    return "".join(str(raw or "").split()).strip()
+
+
 def resolve_receiving_scan(db: Session, tenant_id: int, ean_raw: str) -> ReceivingScanResolveOut:
     key = _normalize_ean(ean_raw)
     if not key:
         return ReceivingScanResolveOut(found=False)
+
+    wms_settings = load_wms_settings_for_product(db, tenant_id=tenant_id)
 
     if scan_looks_like_gs1(key):
         gs1 = parse_gs1_scan(key)
@@ -64,6 +75,7 @@ def resolve_receiving_scan(db: Session, tenant_id: int, ean_raw: str) -> Receivi
                             is_gs1=True,
                         ),
                         p,
+                        wms_settings,
                     )
 
     sn_hit = (
@@ -92,6 +104,7 @@ def resolve_receiving_scan(db: Session, tenant_id: int, ean_raw: str) -> Receivi
                 parsed_serial=(ser.serial_number or "").strip() or None,
             ),
             p,
+            wms_settings,
         )
 
     row = (
@@ -117,6 +130,7 @@ def resolve_receiving_scan(db: Session, tenant_id: int, ean_raw: str) -> Receivi
                 track_serial=bool(getattr(p, "track_serial", False)),
             ),
             p,
+            wms_settings,
         )
 
     products = db.query(Product).filter(Product.tenant_id == tenant_id).all()
@@ -136,6 +150,7 @@ def resolve_receiving_scan(db: Session, tenant_id: int, ean_raw: str) -> Receivi
                     track_serial=bool(getattr(p, "track_serial", False)),
                 ),
                 p,
+                wms_settings,
             )
     for p in products:
         if _normalize_ean(p.ean) == key:
@@ -153,6 +168,7 @@ def resolve_receiving_scan(db: Session, tenant_id: int, ean_raw: str) -> Receivi
                     track_serial=bool(getattr(p, "track_serial", False)),
                 ),
                 p,
+                wms_settings,
             )
 
     return ReceivingScanResolveOut(found=False)

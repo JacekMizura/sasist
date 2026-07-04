@@ -1,5 +1,22 @@
 # Change log
 
+## 2026-06-08 — Produkcja WMS: PW → standardowe Rozlokowanie + ustawienia terminala
+
+- **Workflow:** zakończenie produkcji tworzy dokument PW (`creation_source=PRODUCTION`) i wrzuca go do kolejki `/wms/putaway` — bez osobnego terminala „Odłożenie wyrobów”.
+- **Backend:** `pw_putaway_handoff.py`, `finish_production` / `finish_order_production` → `completed` + PW; fazy terminala: tylko `collecting` | `execute`.
+- **Ustawienia:** Ustawienia → WMS → Produkcja — widok terminala + wymagane dane (`GET/PUT /wms/settings/production`).
+- **Zbieranie:** karty zadań jak inne terminale WMS (zdjęcie, SKU, EAN, lokalizacja, ilości); `CollectionTaskRead` rozszerzony o EAN/stan/jednostkę.
+- **ERP:** miniatury produktów na szczególe partii i MO (wyroby + składniki).
+- **Frontend:** usunięto zakładkę putaway z terminala produkcji; redirect legacy URL → `/wms/putaway`.
+
+## 2026-06-08 — WMS: globalna walidacja produktów + override per SKU
+
+- **Globalne ustawienia:** `wms_settings.validation_require_*` — konfiguracja w Ustawienia → WMS → Przyjęcia → Walidacja produktów.
+- **Override produktu:** `products.validation_skip_*` — wyłączenie globalnej reguły dla konkretnego SKU.
+- **SSOT:** `product_validation_policy.resolve_effective_receiving_requirements()` — effective = global && !skip (legacy per-product flags do migracji).
+- **Migracja:** `ensure_wms_product_validation_schema` — OR flag produktów → global, skip = NOT legacy per produkt.
+- **UI:** karta produktu = tylko wyłączenia; `ProductReceivingRequirementsSection` przeniesiony do ustawień WMS.
+
 ## 2026-06-08 — Produkcja UX: layout receptury + fix React #130
 
 - **React #130:** `AppEmptyState` wymaga `icon: LucideIcon`; brak `icon` na `ProductionOrdersPage` (i innych listach) powodował render `<Icon />` z `undefined` → crash przy pustej liście zleceń po utworzeniu MO.

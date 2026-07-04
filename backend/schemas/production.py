@@ -127,6 +127,7 @@ class ProductionPickLinePlanRead(BaseModel):
     component_product_id: int
     product_name: str
     product_sku: Optional[str] = None
+    product_image_url: Optional[str] = None
     required: float
     available: float
     missing: float
@@ -187,6 +188,7 @@ class ProductionOrderLineSnapshotRead(BaseModel):
     consumed_quantity: float
     product_name_snapshot: str
     product_sku_snapshot: Optional[str] = None
+    product_image_url: Optional[str] = None
     available: Optional[float] = None
     missing: Optional[float] = None
     reserved: Optional[float] = None
@@ -215,6 +217,7 @@ class ProductionOrderRead(BaseModel):
     operator_name: Optional[str] = None
     product_name: Optional[str] = None
     product_sku: Optional[str] = None
+    product_image_url: Optional[str] = None
     warehouse_name: Optional[str] = None
     location_name: Optional[str] = None
     recipe_name: Optional[str] = None

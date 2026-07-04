@@ -36,6 +36,8 @@ export type UnifiedExecutionLine = {
   lineKey: string;
   lineId?: number;
   productName: string;
+  productImageUrl?: string | null;
+  productSku?: string | null;
   plannedQuantity: number;
   completedQuantity: number;
 };

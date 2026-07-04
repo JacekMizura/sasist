@@ -23,7 +23,7 @@ class TestExecutionPhaseMapping(unittest.TestCase):
         self.assertEqual(execution_phase_for_status("planned"), "collecting")
         self.assertEqual(execution_phase_for_status("collecting"), "collecting")
         self.assertEqual(execution_phase_for_status("in_progress"), "execute")
-        self.assertEqual(execution_phase_for_status("putaway"), "putaway")
+        self.assertIsNone(execution_phase_for_status("putaway"))
         self.assertIsNone(execution_phase_for_status("completed"))
 
     def test_batch_to_legacy_summary_covers_wms_phases(self):
@@ -37,9 +37,27 @@ class TestExecutionPhaseMapping(unittest.TestCase):
 
 
 class TestLegacyOrderStatusMigration(unittest.TestCase):
-    def test_migrates_in_progress_with_rw_to_putaway(self):
+    def test_migrates_legacy_putaway_with_pw_to_completed(self):
         order = SimpleNamespace(
-            status="in_progress",
+            status="putaway",
+            rw_stock_document_id=99,
+            pw_stock_document_id=100,
+            collection_state_json=None,
+            released_to_wms_at=None,
+        )
+        db = SimpleNamespace(
+            query=lambda _model: SimpleNamespace(
+                filter=lambda *_a, **_k: SimpleNamespace(all=lambda: [order])
+            ),
+            flush=lambda: None,
+        )
+        count = migrate_legacy_order_execution_statuses(db)  # type: ignore[arg-type]
+        self.assertEqual(count, 1)
+        self.assertEqual(order.status, "completed")
+
+    def test_migrates_legacy_putaway_without_pw_to_in_progress(self):
+        order = SimpleNamespace(
+            status="putaway",
             rw_stock_document_id=99,
             pw_stock_document_id=None,
             collection_state_json=None,
@@ -53,7 +71,7 @@ class TestLegacyOrderStatusMigration(unittest.TestCase):
         )
         count = migrate_legacy_order_execution_statuses(db)  # type: ignore[arg-type]
         self.assertEqual(count, 1)
-        self.assertEqual(order.status, "putaway")
+        self.assertEqual(order.status, "in_progress")
 
     def test_migrates_in_progress_with_collection_to_collecting(self):
         order = SimpleNamespace(

@@ -57,6 +57,8 @@ def _order_component_totals(order: ProductionOrder) -> dict[int, float]:
 
 
 def _init_order_collection_tasks(db: Session, order: ProductionOrder) -> dict[str, Any]:
+    from ...services.production_execution.collection_task_builder import build_collection_task_row
+
     plan = build_production_pick_plan(db, tenant_id=int(order.tenant_id), order_id=int(order.id))
     if plan.has_shortages:
         raise ProductionOrderError(
@@ -84,20 +86,18 @@ def _init_order_collection_tasks(db: Session, order: ProductionOrder) -> dict[st
                 type("_A", (), {"location_id": 0, "location_code": "MAG", "quantity": float(line.required)})()
             ]
         for alloc in allocs:
-            loc_id = int(alloc.location_id)
-            key = f"{pid}-{loc_id}"
             tasks.append(
-                {
-                    "task_key": key,
-                    "component_product_id": pid,
-                    "product_name": str(line.product_name),
-                    "product_sku": line.product_sku,
-                    "product_image_url": (p.image_url if p else None),
-                    "location_id": loc_id,
-                    "location_code": str(alloc.location_code),
-                    "required_qty": round(float(alloc.quantity), 4),
-                    "collected_qty": 0.0,
-                }
+                build_collection_task_row(
+                    component_product_id=pid,
+                    product_name=str(line.product_name),
+                    product_sku=line.product_sku,
+                    product=p,
+                    location_id=int(alloc.location_id),
+                    location_code=str(alloc.location_code),
+                    required_qty=float(alloc.quantity),
+                    suggested_locations=list(line.suggested_locations or []),
+                    warehouse_available=float(line.available),
+                )
             )
     return {"tasks": tasks}
 
@@ -157,6 +157,8 @@ def start_order_collecting(db: Session, *, tenant_id: int, order_id: int):
 
 
 def get_order_collection_state(db: Session, *, tenant_id: int, order_id: int) -> OrderCollectionStateRead:
+    from .collection_task_builder import enrich_collection_tasks
+
     order = _load_order(db, tenant_id=tenant_id, order_id=order_id)
     raw = getattr(order, "collection_state_json", None)
     tasks_raw: list[dict[str, Any]] = []
@@ -165,6 +167,7 @@ def get_order_collection_state(db: Session, *, tenant_id: int, order_id: int) ->
             tasks_raw = json.loads(str(raw)).get("tasks") or []
         except json.JSONDecodeError:
             tasks_raw = []
+    tasks_raw = enrich_collection_tasks(db, tasks_raw)
     tasks = [CollectionTaskRead(**t) for t in tasks_raw]
     done = sum(1 for t in tasks if t.collected_qty >= t.required_qty - 1e-6)
     total = len(tasks)
@@ -328,13 +331,17 @@ def update_order_production_progress(
 
 
 def finish_order_production(db: Session, *, tenant_id: int, order_id: int):
+    from .pw_putaway_handoff import create_order_pw_document_for_putaway
+
     order = _load_order(db, tenant_id=tenant_id, order_id=order_id)
     if str(order.status) != "in_progress":
         raise ProductionOrderError("Zlecenie nie jest w produkcji.", code="invalid_status")
     if float(order.produced_quantity or 0) < float(order.planned_quantity) - 1e-6:
         raise ProductionOrderError("Nie wyprodukowano planowanej ilości.", code="production_incomplete")
-    order.status = "putaway"
+    create_order_pw_document_for_putaway(db, order=order, performed_by_user_id=None)
+    order.status = "completed"
     order.production_completed_at = datetime.utcnow()
+    order.completed_at = datetime.utcnow()
     order.updated_at = datetime.utcnow()
     db.flush()
     return serialize_order(db, order, with_availability=False)

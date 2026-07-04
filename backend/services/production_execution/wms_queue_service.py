@@ -17,8 +17,6 @@ def _phase_statuses(phase: ProductionExecutionPhase) -> tuple[set[str], bool | N
         return {"collecting", "planned"}, True
     if phase == "execute":
         return {"in_progress"}, None
-    if phase == "putaway":
-        return {"putaway"}, None
     return set(), None
 
 

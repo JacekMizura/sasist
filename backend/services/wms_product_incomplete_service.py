@@ -23,6 +23,7 @@ from .product_receiving_requirements import (
     product_to_receiving_data_dict,
     validate_required_product_data,
 )
+from .product_validation_policy import load_wms_settings_for_product
 from .wms_packing_service import _primary_location_for_product
 
 logger = logging.getLogger(__name__)
@@ -189,8 +190,8 @@ def _primary_loc_ctx_for_product(
     return _PrimaryLocCtx(label=None, location_id=None, zone=None, sort_key=_location_route_sort_key(None))
 
 
-def _missing_field_labels_from_validation(product: Product) -> Tuple[List[str], List[str]]:
-    v = validate_required_product_data(product)
+def _missing_field_labels_from_validation(product: Product, wms_settings=None) -> Tuple[List[str], List[str]]:
+    v = validate_required_product_data(product, wms_settings)
     keys = [m.key for m in v.missing]
     labels = [f"Brak {m.label.lower()}" for m in v.missing]
     return keys, labels
@@ -203,9 +204,10 @@ def _row_from_product(
     warehouse_id: Optional[int],
     product: Product,
     loc_ctx: _PrimaryLocCtx,
+    wms_settings=None,
 ) -> WmsProductIncompleteRow:
-    recv = product_to_receiving_data_dict(product)
-    missing_fields, missing_field_labels = _missing_field_labels_from_validation(product)
+    recv = product_to_receiving_data_dict(product, wms_settings)
+    missing_fields, missing_field_labels = _missing_field_labels_from_validation(product, wms_settings)
     wh_qty = 0.0
     if warehouse_id is not None:
         wh_qty = _warehouse_qty(
@@ -258,14 +260,15 @@ def list_incomplete_receiving_products(
         .all()
     )
     wh_id = int(warehouse_id) if warehouse_id is not None else None
+    wms_settings = load_wms_settings_for_product(db, tenant_id=int(tenant_id), warehouse_id=wh_id)
     candidates: List[Product] = []
     skipped = 0
 
     for p in rows:
         try:
-            if not product_has_active_receiving_requirements(p):
+            if not product_has_active_receiving_requirements(p, wms_settings):
                 continue
-            v = validate_required_product_data(p)
+            v = validate_required_product_data(p, wms_settings)
             if not v.missing:
                 continue
             candidates.append(p)
@@ -313,6 +316,7 @@ def list_incomplete_receiving_products(
                 warehouse_id=wh_id,
                 product=p,
                 loc_ctx=loc_ctx,
+                wms_settings=wms_settings,
             )
             built.append((loc_ctx.sort_key, row))
         except Exception:

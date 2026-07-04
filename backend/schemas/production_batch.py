@@ -42,6 +42,7 @@ class ProductionBatchLineRead(BaseModel):
     pw_stock_document_id: Optional[int] = None
     product_name: Optional[str] = None
     product_sku: Optional[str] = None
+    product_image_url: Optional[str] = None
     composition_name: Optional[str] = None
     notes: Optional[str] = None
 
@@ -112,9 +113,13 @@ class CollectionTaskRead(BaseModel):
     product_name: str
     product_sku: Optional[str] = None
     product_image_url: Optional[str] = None
+    product_ean: Optional[str] = None
+    product_catalog_number: Optional[str] = None
+    product_unit: Optional[str] = None
     location_id: int
     location_code: str
     required_qty: float
+    available_qty: Optional[float] = None
     collected_qty: float = 0.0
 
 
@@ -151,6 +156,7 @@ class BatchAggregatedPickLineRead(BaseModel):
     component_product_id: int
     product_name: str
     product_sku: Optional[str] = None
+    product_image_url: Optional[str] = None
     required: float
     available: float
     missing: float

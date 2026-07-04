@@ -309,8 +309,13 @@ def serialize_order(db: Session, order: ProductionOrder, *, with_availability: b
         comp = resolve_composition_entity(db, tenant_id=int(order.tenant_id), recipe_id=int(order.recipe_id))
     recipe_name = comp.name if comp is not None else None
     lines_out: list[ProductionOrderLineSnapshotRead] = []
+    comp_pids = {int(snap.component_product_id) for snap in order.line_snapshots or []}
+    comp_products = (
+        {p.id: p for p in db.query(Product).filter(Product.id.in_(comp_pids)).all()} if comp_pids else {}
+    )
     for snap in order.line_snapshots or []:
         avail = miss = None
+        cp = comp_products.get(int(snap.component_product_id))
         if with_availability:
             req = float(snap.total_required_quantity or 0)
             av = _warehouse_stock(
@@ -330,6 +335,7 @@ def serialize_order(db: Session, order: ProductionOrder, *, with_availability: b
                 consumed_quantity=float(snap.consumed_quantity or 0),
                 product_name_snapshot=str(snap.product_name_snapshot or ""),
                 product_sku_snapshot=snap.product_sku_snapshot,
+                product_image_url=((cp.image_url or "").strip() or None if cp else None),
                 available=avail,
                 missing=miss,
             )
@@ -375,6 +381,7 @@ def serialize_order(db: Session, order: ProductionOrder, *, with_availability: b
         operator_name=_operator_name(db, order.created_by_user_id),
         product_name=(p.name if p else None),
         product_sku=((p.sku or p.symbol) if p else None),
+        product_image_url=((p.image_url or "").strip() or None if p else None),
         warehouse_name=(wh.name if wh else None),
         location_name=(loc.name if loc else None),
         recipe_name=recipe_name,

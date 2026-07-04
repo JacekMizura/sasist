@@ -15,12 +15,12 @@ export const erpProductionPaths = {
   batch: (id: number | string) => `${ERP_PRODUCTION_BASE}/batch/${id}`,
 } as const;
 
-/** WMS terminal — operator execution only (collect → produce → putaway). */
+/** WMS terminal — operator execution only (collect → produce → standard putaway). */
 export const WMS_PRODUCTION_BASE = "/wms/production";
 
 export type WmsProductionJobKind = "batch" | "order";
 
-type WmsPhase = "collecting" | "execute" | "putaway";
+type WmsPhase = "collecting" | "execute";
 
 function wmsJobPath(
   phase: WmsPhase,
@@ -42,8 +42,8 @@ export const wmsProductionPaths = {
     wmsJobPath("collecting", kindOrId, id),
   execute: (kindOrId?: WmsProductionJobKind | number | string, id?: number | string) =>
     wmsJobPath("execute", kindOrId, id),
-  putaway: (kindOrId?: WmsProductionJobKind | number | string, id?: number | string) =>
-    wmsJobPath("putaway", kindOrId, id),
+  /** @deprecated Production putaway uses standard /wms/putaway (PW from finish production). */
+  putaway: (_kindOrId?: WmsProductionJobKind | number | string, _id?: number | string) => "/wms/putaway",
   /** Canonical job URL for any phase. */
   job: (phase: WmsPhase, kind: WmsProductionJobKind, id: number | string) =>
     `${WMS_PRODUCTION_BASE}/${phase}/${kind}/${id}`,

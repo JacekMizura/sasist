@@ -520,13 +520,15 @@ def doc_allows_wms_putaway(doc: StockDocument) -> bool:
         return st in ("DRAFT", "OPEN", "CLOSED", "POSTED", "ZAKONCZONE")
     if dt == "PZ":
         return st in ("DRAFT", "POSTED", "ZAKONCZONE")
+    if dt == "PW" and str(getattr(doc, "creation_source", "") or "").upper() == "PRODUCTION":
+        return st in ("DRAFT", "POSTED", "ZAKONCZONE", "COMPLETED")
     return False
 
 
 def doc_allows_putaway_status_recompute(doc: StockDocument) -> bool:
     """Same lifecycle gate as putaway execution — keeps putaway_status in sync for Z-PZ OPEN/CLOSED."""
     dt = _doc_type_upper(doc)
-    if dt not in ("PZ", "Z_PZ", "PZ_RT", "RETURN_RECEIPT", "MM"):
+    if dt not in ("PZ", "Z_PZ", "PZ_RT", "RETURN_RECEIPT", "MM", "PW"):
         return False
     return doc_allows_wms_putaway(doc)
 

@@ -530,6 +530,16 @@ class ProductBody(BaseModel):
     require_recv_master_carton_qty: Optional[bool] = None
     require_recv_master_carton_dims: Optional[bool] = None
     require_recv_master_carton_weight: Optional[bool] = None
+    validation_skip_dimensions: Optional[bool] = None
+    validation_skip_weight: Optional[bool] = None
+    validation_skip_batch: Optional[bool] = None
+    validation_skip_expiry: Optional[bool] = None
+    validation_skip_serial: Optional[bool] = None
+    validation_skip_master_carton: Optional[bool] = None
+    validation_skip_master_carton_ean: Optional[bool] = None
+    validation_skip_master_carton_qty: Optional[bool] = None
+    validation_skip_master_carton_dims: Optional[bool] = None
+    validation_skip_master_carton_weight: Optional[bool] = None
 
     @field_validator(
         "length", "width", "height", "weight", "volume",
@@ -1461,6 +1471,16 @@ def _product_to_dict(p: Product) -> dict:
         "require_recv_master_carton_qty": bool(getattr(p, "require_recv_master_carton_qty", False)),
         "require_recv_master_carton_dims": bool(getattr(p, "require_recv_master_carton_dims", False)),
         "require_recv_master_carton_weight": bool(getattr(p, "require_recv_master_carton_weight", False)),
+        "validation_skip_dimensions": bool(getattr(p, "validation_skip_dimensions", False)),
+        "validation_skip_weight": bool(getattr(p, "validation_skip_weight", False)),
+        "validation_skip_batch": bool(getattr(p, "validation_skip_batch", False)),
+        "validation_skip_expiry": bool(getattr(p, "validation_skip_expiry", False)),
+        "validation_skip_serial": bool(getattr(p, "validation_skip_serial", False)),
+        "validation_skip_master_carton": bool(getattr(p, "validation_skip_master_carton", False)),
+        "validation_skip_master_carton_ean": bool(getattr(p, "validation_skip_master_carton_ean", False)),
+        "validation_skip_master_carton_qty": bool(getattr(p, "validation_skip_master_carton_qty", False)),
+        "validation_skip_master_carton_dims": bool(getattr(p, "validation_skip_master_carton_dims", False)),
+        "validation_skip_master_carton_weight": bool(getattr(p, "validation_skip_master_carton_weight", False)),
     }
 
 
@@ -3546,6 +3566,20 @@ def update_product(
     ):
         if _rf in fields_set:
             setattr(product, _rf, bool(getattr(body, _rf)))
+    for _sf in (
+        "validation_skip_dimensions",
+        "validation_skip_weight",
+        "validation_skip_batch",
+        "validation_skip_expiry",
+        "validation_skip_serial",
+        "validation_skip_master_carton",
+        "validation_skip_master_carton_ean",
+        "validation_skip_master_carton_qty",
+        "validation_skip_master_carton_dims",
+        "validation_skip_master_carton_weight",
+    ):
+        if _sf in fields_set:
+            setattr(product, _sf, bool(getattr(body, _sf)))
 
     if "bulk_ean" in fields_set:
         product.bulk_ean = (body.bulk_ean or "").strip() or None

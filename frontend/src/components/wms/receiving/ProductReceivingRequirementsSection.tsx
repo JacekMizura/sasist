@@ -63,7 +63,7 @@ export function ProductReceivingRequirementsSection({
   return (
     <div id="wms-validation" className="rounded-xl border border-indigo-200 bg-indigo-50/40 p-4 space-y-5 scroll-mt-24">
       <div>
-        <h4 className="text-sm font-black text-slate-900">Uzupełnianie danych w WMS</h4>
+        <h4 className="text-sm font-black text-slate-900">Wymagania globalne</h4>
       </div>
 
       <div>

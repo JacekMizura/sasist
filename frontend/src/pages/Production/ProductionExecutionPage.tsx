@@ -11,6 +11,7 @@ import { WmsProductionActiveBatchBar } from "./components/WmsProductionActiveBat
 import { WMS_TASK_GRID, WMS_TERMINAL_LABEL } from "../../components/wms/execution/wmsLayoutTokens";
 import { wmsProductionPaths } from "./productionPaths";
 import { useProductionExecutionJob } from "./hooks/useProductionExecutionJob";
+import { useWmsProductionSettings } from "./hooks/useWmsProductionSettings";
 
 export default function ProductionExecutionPage() {
   const { kind, id, batchId } = useParams();
@@ -18,6 +19,7 @@ export default function ProductionExecutionPage() {
     () => parseWmsProductionRouteParams({ kind, id, batchId }),
     [kind, id, batchId],
   );
+  const { display } = useWmsProductionSettings();
 
   const {
     queue,
@@ -69,7 +71,7 @@ export default function ProductionExecutionPage() {
         <>
           <WmsProductionActiveBatchBar
             kind={activeRef.kind}
-            label="W produkcji"
+            label="Produkcja"
             number={executionDetail.number}
             productLine={executionDetail.productLabel}
             accent="blue"
@@ -86,8 +88,17 @@ export default function ProductionExecutionPage() {
                   <div className="absolute bottom-0 left-0 top-0 w-1 bg-blue-400" aria-hidden />
                   <div className="pl-3">
                     <div className="flex items-center gap-4">
-                      <ProductThumb name={ln.productName} size="lg" />
-                      <p className="text-xl font-bold text-slate-900">{ln.productName}</p>
+                      {display.show_product_image ? (
+                        <ProductThumb imageUrl={ln.productImageUrl} name={ln.productName} size="lg" />
+                      ) : null}
+                      <div>
+                        {display.show_name ? (
+                          <p className="text-xl font-bold text-slate-900">{ln.productName}</p>
+                        ) : null}
+                        {display.show_sku && ln.productSku ? (
+                          <p className="mt-1 font-mono text-sm text-slate-500">{ln.productSku}</p>
+                        ) : null}
+                      </div>
                     </div>
                     <div className="mt-4">
                       <p className={WMS_TERMINAL_LABEL}>Postęp</p>
@@ -142,12 +153,12 @@ export default function ProductionExecutionPage() {
               onClick={() => void finishProduction()}
               className="w-full max-w-xl rounded-xl bg-blue-600 py-4 text-lg font-bold text-white hover:bg-blue-700 disabled:opacity-40"
             >
-              Zakończ produkcję → odkładanie
+              Zakończ produkcję → rozlokowanie (PW)
             </button>
           ) : null}
 
           <Link to={wmsProductionPaths.collecting()} className="block text-sm text-slate-500 underline">
-            Menu zbierania
+            Kolejka zbierania
           </Link>
         </>
       ) : (

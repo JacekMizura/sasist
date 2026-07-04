@@ -8,9 +8,7 @@ import {
   finishCollectingBatch,
   finishCollectingOrder,
   finishOrderProduction,
-  finishOrderPutaway,
   finishProductionPhase,
-  finishPutawayBatch,
   getProductionBatch,
   getProductionOrder,
   listWmsExecutionQueue,
@@ -30,10 +28,9 @@ import {
   type ProductionExecutionRef,
   type UnifiedCollectionState,
   type UnifiedExecutionDetail,
-  type UnifiedPutawayDetail,
 } from "@/modules/production/productionExecutionTypes";
 import { wmsProductionPaths } from "../productionPaths";
-import { rememberTargetLocation, START_COLLECTING_BLOCKED_TOOLTIP, formatStartCollectingError } from "../productionUi";
+import { START_COLLECTING_BLOCKED_TOOLTIP, formatStartCollectingError } from "../productionUi";
 
 const DEFAULT_TENANT = 1;
 
@@ -78,6 +75,8 @@ async function loadExecutionDetail(
         lineKey: String(ln.id),
         lineId: ln.id,
         productName: ln.product_name ?? `Produkt #${ln.product_id}`,
+        productImageUrl: ln.product_image_url ?? null,
+        productSku: ln.product_sku ?? null,
         plannedQuantity: ln.planned_quantity,
         completedQuantity: ln.completed_quantity,
       })),
@@ -93,6 +92,8 @@ async function loadExecutionDetail(
       {
         lineKey: "main",
         productName: order.product_name ?? `Produkt #${order.product_id}`,
+        productImageUrl: order.product_image_url ?? null,
+        productSku: order.product_sku ?? null,
         plannedQuantity: order.planned_quantity,
         completedQuantity: order.produced_quantity,
       },
@@ -100,42 +101,19 @@ async function loadExecutionDetail(
   };
 }
 
-async function loadPutawayDetail(
-  tenantId: number,
-  warehouseId: number,
+function firstPwDocumentId(
   ref: ProductionExecutionRef,
-): Promise<UnifiedPutawayDetail | null> {
-  if (ref.kind === "batch") {
-    const batch = await getProductionBatch(tenantId, ref.id, warehouseId);
-    return {
-      ref,
-      number: batch.number,
-      warehouseId: batch.warehouse_id,
-      lines: batch.lines.map((ln) => ({
-        lineKey: String(ln.id),
-        lineId: ln.id,
-        productName: ln.product_name ?? `Produkt #${ln.product_id}`,
-        quantity: ln.completed_quantity || ln.planned_quantity,
-        targetLocationId: ln.target_location_id ?? null,
-        targetLocationName: ln.target_location_name ?? null,
-      })),
-    };
+  batch: Awaited<ReturnType<typeof getProductionBatch>> | null,
+  order: Awaited<ReturnType<typeof getProductionOrder>> | null,
+): number | null {
+  if (ref.kind === "batch" && batch) {
+    const id = batch.lines.map((l) => l.pw_stock_document_id).find((x) => x != null && x > 0);
+    return id ?? null;
   }
-  const order = await getProductionOrder(tenantId, ref.id, warehouseId);
-  return {
-    ref,
-    number: order.number,
-    warehouseId: order.warehouse_id,
-    lines: [
-      {
-        lineKey: "main",
-        productName: order.product_name ?? `Produkt #${order.product_id}`,
-        quantity: order.produced_quantity || order.planned_quantity,
-        targetLocationId: order.location_id ?? null,
-        targetLocationName: order.location_name ?? null,
-      },
-    ],
-  };
+  if (ref.kind === "order" && order?.pw_stock_document_id) {
+    return order.pw_stock_document_id;
+  }
+  return null;
 }
 
 export function useProductionExecutionJob(phase: ProductionExecutionPhase, activeRef: ProductionExecutionRef | null) {
@@ -147,8 +125,6 @@ export function useProductionExecutionJob(phase: ProductionExecutionPhase, activ
   const [queue, setQueue] = useState<ProductionExecutionJobRead[]>([]);
   const [collectionState, setCollectionState] = useState<UnifiedCollectionState | null>(null);
   const [executionDetail, setExecutionDetail] = useState<UnifiedExecutionDetail | null>(null);
-  const [putawayDetail, setPutawayDetail] = useState<UnifiedPutawayDetail | null>(null);
-  const [putawayTargets, setPutawayTargets] = useState<Record<string, { id: number | null; code: string | null }>>({});
   const [busy, setBusy] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
 
@@ -206,32 +182,6 @@ export function useProductionExecutionJob(phase: ProductionExecutionPhase, activ
     [tenantId, warehouseId],
   );
 
-  const loadPutawayDetailState = useCallback(
-    async (ref: ProductionExecutionRef) => {
-      if (warehouseId == null) {
-        setPutawayDetail(null);
-        setPutawayTargets({});
-        return;
-      }
-      setDetailLoading(true);
-      try {
-        const detail = await loadPutawayDetail(tenantId, warehouseId, ref);
-        setPutawayDetail(detail);
-        const targets: Record<string, { id: number | null; code: string | null }> = {};
-        detail?.lines.forEach((ln) => {
-          targets[ln.lineKey] = { id: ln.targetLocationId ?? null, code: ln.targetLocationName ?? null };
-        });
-        setPutawayTargets(targets);
-      } catch {
-        setPutawayDetail(null);
-        setPutawayTargets({});
-      } finally {
-        setDetailLoading(false);
-      }
-    },
-    [tenantId, warehouseId],
-  );
-
   useEffect(() => {
     void reloadQueue();
   }, [reloadQueue]);
@@ -240,18 +190,15 @@ export function useProductionExecutionJob(phase: ProductionExecutionPhase, activ
     if (activeRef == null) {
       setCollectionState(null);
       setExecutionDetail(null);
-      setPutawayDetail(null);
       return;
     }
     if (phase === "collecting") void loadCollectionDetail(activeRef);
     if (phase === "execute") void loadExecuteDetail(activeRef);
-    if (phase === "putaway") void loadPutawayDetailState(activeRef);
-  }, [activeRef, phase, loadCollectionDetail, loadExecuteDetail, loadPutawayDetailState]);
+  }, [activeRef, phase, loadCollectionDetail, loadExecuteDetail]);
 
   const pathForPhase = (p: ProductionExecutionPhase, ref: ProductionExecutionRef) => {
     if (p === "collecting") return wmsProductionPaths.collecting(ref.kind, ref.id);
-    if (p === "execute") return wmsProductionPaths.execute(ref.kind, ref.id);
-    return wmsProductionPaths.putaway(ref.kind, ref.id);
+    return wmsProductionPaths.execute(ref.kind, ref.id);
   };
 
   const openJob = useCallback(
@@ -329,18 +276,11 @@ export function useProductionExecutionJob(phase: ProductionExecutionPhase, activ
       try {
         if (activeRef.kind === "batch") {
           const lineId = Number(lineKey);
-          const updated = await updateProductionProgress(
-            tenantId,
-            activeRef.id,
-            { line_id: lineId, add_quantity: add },
-            warehouseId,
-          );
-          setExecutionDetail(await loadExecutionDetail(tenantId, warehouseId, activeRef));
-          void updated;
+          await updateProductionProgress(tenantId, activeRef.id, { line_id: lineId, add_quantity: add }, warehouseId);
         } else {
           await updateOrderProductionProgress(tenantId, activeRef.id, { add_quantity: add }, warehouseId);
-          setExecutionDetail(await loadExecutionDetail(tenantId, warehouseId, activeRef));
         }
+        setExecutionDetail(await loadExecutionDetail(tenantId, warehouseId, activeRef));
       } finally {
         setBusy(false);
       }
@@ -352,49 +292,26 @@ export function useProductionExecutionJob(phase: ProductionExecutionPhase, activ
     if (activeRef == null || warehouseId == null) return;
     setBusy(true);
     try {
-      if (activeRef.kind === "batch") await finishProductionPhase(tenantId, activeRef.id, warehouseId);
-      else await finishOrderProduction(tenantId, activeRef.id, warehouseId);
-      navigate(wmsProductionPaths.putaway(activeRef.kind, activeRef.id));
-    } finally {
-      setBusy(false);
-    }
-  }, [activeRef, warehouseId, tenantId, navigate]);
-
-  const setPutawayTarget = useCallback((lineKey: string, id: number | null, code: string | null) => {
-    setPutawayTargets((prev) => ({ ...prev, [lineKey]: { id, code } }));
-  }, []);
-
-  const finishPutaway = useCallback(async () => {
-    if (activeRef == null || !putawayDetail || warehouseId == null) return;
-    const missing = putawayDetail.lines.some((ln) => !putawayTargets[ln.lineKey]?.id);
-    if (missing) {
-      toast.error("Wybierz lokalizację docelową dla każdego produktu.");
-      return;
-    }
-    setBusy(true);
-    try {
+      let pwId: number | null = null;
       if (activeRef.kind === "batch") {
-        const lines = putawayDetail.lines.map((ln) => ({
-          line_id: ln.lineId!,
-          target_location_id: putawayTargets[ln.lineKey]!.id!,
-        }));
-        await finishPutawayBatch(tenantId, activeRef.id, { lines }, warehouseId);
-        lines.forEach((l) => rememberTargetLocation(warehouseId, l.target_location_id));
+        const batch = await finishProductionPhase(tenantId, activeRef.id, warehouseId);
+        pwId = firstPwDocumentId(activeRef, batch, null);
       } else {
-        const targetId = putawayTargets.main?.id ?? putawayTargets["main"]?.id;
-        if (!targetId) {
-          toast.error("Wybierz lokalizację docelową.");
-          return;
-        }
-        await finishOrderPutaway(tenantId, activeRef.id, { target_location_id: targetId }, warehouseId);
-        rememberTargetLocation(warehouseId, targetId);
+        const order = await finishOrderProduction(tenantId, activeRef.id, warehouseId);
+        pwId = firstPwDocumentId(activeRef, null, order);
       }
+      toast.success(
+        pwId
+          ? `Produkcja zakończona. Dokument PW trafił do modułu Rozlokowanie (/wms/putaway/${pwId}).`
+          : "Produkcja zakończona. Wyroby trafiły do kolejki Rozlokowanie (/wms/putaway).",
+        { duration: 8000 },
+      );
       navigate(wmsProductionPaths.collecting());
       await reloadQueue();
     } finally {
       setBusy(false);
     }
-  }, [activeRef, putawayDetail, putawayTargets, warehouseId, tenantId, navigate, reloadQueue]);
+  }, [activeRef, warehouseId, tenantId, navigate, reloadQueue]);
 
   return {
     tenantId,
@@ -403,8 +320,6 @@ export function useProductionExecutionJob(phase: ProductionExecutionPhase, activ
     reloadQueue,
     collectionState,
     executionDetail,
-    putawayDetail,
-    putawayTargets,
     busy,
     detailLoading,
     openJob,
@@ -412,7 +327,5 @@ export function useProductionExecutionJob(phase: ProductionExecutionPhase, activ
     finishCollecting,
     addProductionQty,
     finishProduction,
-    setPutawayTarget,
-    finishPutaway,
   };
 }

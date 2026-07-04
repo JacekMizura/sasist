@@ -25,6 +25,8 @@ from starlette.requests import Request
 from . import models  # noqa: F401
 
 from .database import create_all_tables, engine
+from .db.wms_product_validation_schema import ensure_wms_product_validation_schema
+from .db.wms_production_settings_schema import ensure_wms_production_settings_schema
 from .db.schema_upgrade import (
     ensure_locations_columns,
     ensure_warehouse_layout_identity_columns,
@@ -1062,6 +1064,8 @@ try:
 
     register_purchase_order_warehouse_guard()
     ensure_inventory_management_policy_schema(engine)
+    ensure_wms_product_validation_schema(engine)
+    ensure_wms_production_settings_schema(engine)
     ensure_purchase_sales_block_schema(engine)
     ensure_receiving_workflow_status_schema(engine)
     from .db.warehouse_requires_putaway_schema import ensure_warehouse_requires_putaway_schema
@@ -1486,6 +1490,8 @@ def _upgrade_schema_background() -> None:
 
         ensure_user_warehouse_assignment_schema(engine)
         ensure_inventory_management_policy_schema(engine)
+        ensure_wms_product_validation_schema(engine)
+        ensure_wms_production_settings_schema(engine)
         ensure_purchase_sales_block_schema(engine)
         ensure_tenant_warehouse_fulfillment_schema(engine)
         from .db.tenant_fulfillment_configuration_schema import ensure_tenant_fulfillment_configuration_schema

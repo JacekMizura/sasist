@@ -37,6 +37,8 @@ import WmsReturnsSettingsPanel from "./WmsReturnsSettingsPanel";
 import WmsInventoryManagementSettingsPanel from "./WmsInventoryManagementSettingsPanel";
 import WmsSmartMatchingSettingsPanel from "./WmsSmartMatchingSettingsPanel";
 import WmsThreeDMatchingSettingsPanel from "./WmsThreeDMatchingSettingsPanel";
+import WmsProductValidationSettingsPanel from "./WmsProductValidationSettingsPanel";
+import WmsProductionSettingsPanel from "./WmsProductionSettingsPanel";
 import StickySaveBar from "./StickySaveBar";
 import { WmsSettingsLayout } from "./WmsSettingsLayout";
 import { WMS_PICKING_SETTINGS_NAV_SECTIONS } from "./wmsPickingSettingsNavSections";
@@ -115,6 +117,7 @@ const WMS_SETTINGS_TABS = [
   { id: "returns", label: "Zwroty" },
   { id: "crossdocking", label: "Crossdocking" },
   { id: "receiving", label: "Przyjęcia" },
+  { id: "production", label: "Produkcja" },
   { id: "putaway", label: "Rozlokowania" },
   { id: "transfers", label: "Przesunięcia" },
   { id: "smart_matching", label: "Smart Matching" },
@@ -2755,13 +2758,21 @@ export default function WmsSettingsPage() {
               <div className={activeTab === "three_d_matching" ? "block" : "hidden"} aria-hidden={activeTab !== "three_d_matching"}>
                 <WmsThreeDMatchingSettingsPanel warehouseId={warehouseIdTop} sectionNavObserve={activeTab === "three_d_matching"} />
               </div>
+              <div className={activeTab === "receiving" ? "block" : "hidden"} aria-hidden={activeTab !== "receiving"}>
+                <WmsProductValidationSettingsPanel warehouseId={warehouseIdTop} />
+              </div>
+              <div className={activeTab === "production" ? "block" : "hidden"} aria-hidden={activeTab !== "production"}>
+                <WmsProductionSettingsPanel warehouseId={warehouseIdTop} />
+              </div>
               {activeTab !== "picking" &&
               activeTab !== "packing" &&
               activeTab !== "direct_sales" &&
               activeTab !== "returns" &&
               activeTab !== "common" &&
               activeTab !== "smart_matching" &&
-              activeTab !== "three_d_matching" ? (
+              activeTab !== "three_d_matching" &&
+              activeTab !== "receiving" &&
+              activeTab !== "production" ? (
                 <div className="w-full">
                   <WmsSettingsFutureTabShell label={activeLabel} tabId={activeTab} />
                 </div>

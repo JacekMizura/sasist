@@ -4,7 +4,6 @@ WMS settings: returns mode configuration per tenant + warehouse.
 
 import json
 from datetime import datetime
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -38,6 +37,10 @@ from ..schemas.wms_return import ReturnsMode, WmsSettingsRead, WmsSettingsSave, 
 from ..schemas.wms_picking_shortage_settings import WmsPickingShortageSettingsRead, WmsPickingShortageSettingsSave
 from ..services.tenant_default_warehouse import resolve_tenant_default_warehouse_id
 from ..services.inventory_management_policy_service import normalize_inventory_management_mode
+from ..schemas.wms_product_validation_settings import (
+    WmsProductValidationSettingsRead,
+    WmsProductValidationSettingsSave,
+)
 from ..schemas.direct_sales_settings import DirectSalesSettingsRead, DirectSalesSettingsSave
 from ..services.direct_sales_settings_service import (
     resolve_direct_sales_settings,
@@ -506,3 +509,111 @@ def put_wms_direct_sales_settings(
     )
     db.commit()
     return result
+
+
+def _product_validation_row_to_read(row: WmsSettings) -> WmsProductValidationSettingsRead:
+    return WmsProductValidationSettingsRead(
+        tenant_id=int(row.tenant_id),
+        warehouse_id=int(row.warehouse_id),
+        validation_policy_migrated=bool(getattr(row, "validation_policy_migrated", False)),
+        require_dimensions=bool(getattr(row, "validation_require_dimensions", False)),
+        require_weight=bool(getattr(row, "validation_require_weight", False)),
+        require_batch=bool(getattr(row, "validation_require_batch", False)),
+        require_expiry=bool(getattr(row, "validation_require_expiry", False)),
+        require_serial=bool(getattr(row, "validation_require_serial", False)),
+        require_master_carton=bool(getattr(row, "validation_require_master_carton", False)),
+        require_master_carton_ean=bool(getattr(row, "validation_require_master_carton_ean", False)),
+        require_master_carton_qty=bool(getattr(row, "validation_require_master_carton_qty", False)),
+        require_master_carton_dims=bool(getattr(row, "validation_require_master_carton_dims", False)),
+        require_master_carton_weight=bool(getattr(row, "validation_require_master_carton_weight", False)),
+    )
+
+
+@router.get("/product-validation", response_model=WmsProductValidationSettingsRead)
+def get_wms_product_validation_settings(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(_wms_settings_wh_dep),
+    db: Session = Depends(get_db),
+):
+    row = _get_or_create(db, tenant_id, warehouse_id)
+    return _product_validation_row_to_read(row)
+
+
+@router.put("/product-validation", response_model=WmsProductValidationSettingsRead)
+def save_wms_product_validation_settings(
+    body: WmsProductValidationSettingsSave,
+    db: Session = Depends(get_db),
+):
+    try:
+        wh_id = (
+            body.warehouse_id
+            if body.warehouse_id is not None
+            else resolve_tenant_default_warehouse_id(db, body.tenant_id)
+        )
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Brak skonfigurowanego magazynu")
+    row = _get_or_create(db, body.tenant_id, wh_id)
+    row.validation_require_dimensions = bool(body.require_dimensions)
+    row.validation_require_weight = bool(body.require_weight)
+    row.validation_require_batch = bool(body.require_batch)
+    row.validation_require_expiry = bool(body.require_expiry)
+    row.validation_require_serial = bool(body.require_serial)
+    row.validation_require_master_carton = bool(body.require_master_carton)
+    row.validation_require_master_carton_ean = bool(body.require_master_carton_ean)
+    row.validation_require_master_carton_qty = bool(body.require_master_carton_qty)
+    row.validation_require_master_carton_dims = bool(body.require_master_carton_dims)
+    row.validation_require_master_carton_weight = bool(body.require_master_carton_weight)
+    row.validation_policy_migrated = True
+    row.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(row)
+    return _product_validation_row_to_read(row)
+
+
+from ..schemas.wms_production_settings import (
+    WmsProductionSettingsRead,
+    WmsProductionSettingsSave,
+    production_settings_from_row,
+)
+
+
+def _production_row_to_read(row) -> WmsProductionSettingsRead:
+    disp, req = production_settings_from_row(row)
+    return WmsProductionSettingsRead(
+        tenant_id=int(row.tenant_id),
+        warehouse_id=int(row.warehouse_id),
+        terminal_display=disp,
+        terminal_required=req,
+    )
+
+
+@router.get("/production", response_model=WmsProductionSettingsRead)
+def get_wms_production_settings(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(_wms_settings_wh_dep),
+    db: Session = Depends(get_db),
+):
+    row = _get_or_create(db, tenant_id, warehouse_id)
+    return _production_row_to_read(row)
+
+
+@router.put("/production", response_model=WmsProductionSettingsRead)
+def save_wms_production_settings(
+    body: WmsProductionSettingsSave,
+    db: Session = Depends(get_db),
+):
+    try:
+        wh_id = (
+            body.warehouse_id
+            if body.warehouse_id is not None
+            else resolve_tenant_default_warehouse_id(db, body.tenant_id)
+        )
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Brak skonfigurowanego magazynu")
+    row = _get_or_create(db, body.tenant_id, wh_id)
+    row.production_terminal_display_json = json.dumps(body.terminal_display.model_dump())
+    row.production_terminal_required_json = json.dumps(body.terminal_required.model_dump())
+    row.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(row)
+    return _production_row_to_read(row)

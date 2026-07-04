@@ -210,7 +210,6 @@ import ProductionHistoryPage from "./pages/Production/ProductionHistoryPage"
 import ProductionAnalyticsPage from "./pages/Production/ProductionAnalyticsPage"
 import CollectingPage from "./pages/Production/CollectingPage"
 import ProductionExecutionPage from "./pages/Production/ProductionExecutionPage"
-import PutawayPage from "./pages/Production/PutawayPage"
 import ManufacturersPage from "./pages/Assortment/ManufacturersPage"
 import ManufacturerEditPage from "./pages/Assortment/ManufacturerEditPage"
 import SuppliersPage from "./pages/Assortment/SuppliersPage"
@@ -320,12 +319,17 @@ function WmsProductionBatchRedirect() {
   return <Navigate to={`/wms/production/collecting/batch/${batchId ?? ""}`} replace />;
 }
 
-type WmsProductionPhase = "collecting" | "execute" | "putaway";
+type WmsProductionPhase = "collecting" | "execute";
 
 /** Legacy /wms/production/:phase/:batchId → /wms/production/:phase/batch/:batchId */
 function WmsProductionLegacyPhaseRedirect({ phase }: { phase: WmsProductionPhase }) {
   const { batchId } = useParams();
   return <Navigate to={`/wms/production/${phase}/batch/${batchId ?? ""}`} replace />;
+}
+
+/** Legacy production putaway tab → standard WMS Rozlokowanie. */
+function WmsProductionPutawayRedirect() {
+  return <Navigate to="/wms/putaway" replace />;
 }
 
 function AppRootLayout() {
@@ -521,9 +525,7 @@ export const router = createBrowserRouter(
           <Route path="execute/:kind/:id" element={<ProductionExecutionPage />} />
           <Route path="execute/:batchId" element={<WmsProductionLegacyPhaseRedirect phase="execute" />} />
           <Route path="execute" element={<ProductionExecutionPage />} />
-          <Route path="putaway/:kind/:id" element={<PutawayPage />} />
-          <Route path="putaway/:batchId" element={<WmsProductionLegacyPhaseRedirect phase="putaway" />} />
-          <Route path="putaway" element={<PutawayPage />} />
+          <Route path="putaway/*" element={<WmsProductionPutawayRedirect />} />
           <Route path="batch/:batchId" element={<WmsProductionBatchRedirect />} />
         </Route>
         <Route

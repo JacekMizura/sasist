@@ -32,6 +32,22 @@ class WmsSettings(Base):
     # DOCUMENTS_ONLY | HYBRID | EXTERNAL_INVENTORY (reserved — not active in UI)
     inventory_management_mode = Column(String(32), nullable=False, default="HYBRID")
 
+    # Global product validation (WMS receiving master-data + traceability)
+    validation_policy_migrated = Column(Boolean, nullable=False, default=False, server_default="false")
+    validation_require_dimensions = Column(Boolean, nullable=False, default=False, server_default="false")
+    validation_require_weight = Column(Boolean, nullable=False, default=False, server_default="false")
+    validation_require_batch = Column(Boolean, nullable=False, default=False, server_default="false")
+    validation_require_expiry = Column(Boolean, nullable=False, default=False, server_default="false")
+    validation_require_serial = Column(Boolean, nullable=False, default=False, server_default="false")
+    validation_require_master_carton = Column(Boolean, nullable=False, default=False, server_default="false")
+    validation_require_master_carton_ean = Column(Boolean, nullable=False, default=False, server_default="false")
+    validation_require_master_carton_qty = Column(Boolean, nullable=False, default=False, server_default="false")
+    validation_require_master_carton_dims = Column(Boolean, nullable=False, default=False, server_default="false")
+    validation_require_master_carton_weight = Column(Boolean, nullable=False, default=False, server_default="false")
+
+    production_terminal_display_json = Column(String, nullable=True)
+    production_terminal_required_json = Column(String, nullable=True)
+
     created_at = Column(DateTime, nullable=True, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=True, default=datetime.utcnow)
 

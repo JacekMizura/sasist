@@ -48,7 +48,9 @@ import { ProductSalesOffersSection } from "./ProductSalesOffersSection";
 import { listCompositionsForProduct } from "../../api/compositionApi";
 import type { MagazynInvRowDisplay } from "../../components/products/MagazynInventoryLine";
 import { EditInventoryTraceabilityModal } from "../../components/products/EditInventoryTraceabilityModal";
-import { ProductReceivingRequirementsSection } from "../../components/wms/receiving/ProductReceivingRequirementsSection";
+import { ProductValidationOverridesSection } from "../../components/wms/receiving/ProductValidationOverridesSection";
+import { getWmsProductValidationSettings } from "../../api/wmsProductValidationApi";
+import type { ProductValidationGlobalSettings } from "../../components/wms/receiving/ProductValidationOverridesSection";
 import { SUPPLIER_COUNTRIES } from "../../constants/supplierTaxonomy";
 import type { ProductImageEntry, ProductLabelData } from "../../types/productLabel";
 import {
@@ -200,6 +202,16 @@ export type ProductForm = {
   require_recv_master_carton_qty?: boolean;
   require_recv_master_carton_dims?: boolean;
   require_recv_master_carton_weight?: boolean;
+  validation_skip_dimensions?: boolean;
+  validation_skip_weight?: boolean;
+  validation_skip_batch?: boolean;
+  validation_skip_expiry?: boolean;
+  validation_skip_serial?: boolean;
+  validation_skip_master_carton?: boolean;
+  validation_skip_master_carton_ean?: boolean;
+  validation_skip_master_carton_qty?: boolean;
+  validation_skip_master_carton_dims?: boolean;
+  validation_skip_master_carton_weight?: boolean;
   bulk_ean?: string | null;
   units_per_carton?: number | null;
   carton_length_cm?: number | null;
@@ -531,39 +543,38 @@ export function ProductEditModal({
   const [minTotalStock, setMinTotalStock] = useState<number | "">(
     product?.min_total_stock != null && !Number.isNaN(Number(product.min_total_stock)) ? Number(product.min_total_stock) : "",
   );
-  const [trackBatch, setTrackBatch] = useState<boolean>(Boolean(product?.track_batch));
-  const [trackExpiry, setTrackExpiry] = useState<boolean>(Boolean(product?.track_expiry));
-  const [trackSerial, setTrackSerial] = useState<boolean>(Boolean(product?.track_serial));
-  const [requireRecvHeight, setRequireRecvHeight] = useState(Boolean(product?.require_recv_height));
-  const [requireRecvWidth, setRequireRecvWidth] = useState(Boolean(product?.require_recv_width));
-  const [requireRecvLength, setRequireRecvLength] = useState(Boolean(product?.require_recv_length));
-  const [requireRecvWeight, setRequireRecvWeight] = useState(Boolean(product?.require_recv_weight));
-  const [requireRecvMasterCarton, setRequireRecvMasterCarton] = useState(Boolean(product?.require_recv_master_carton));
-  const [requireRecvMasterCartonEan, setRequireRecvMasterCartonEan] = useState(Boolean(product?.require_recv_master_carton_ean));
-  const [requireRecvMasterCartonQty, setRequireRecvMasterCartonQty] = useState(Boolean(product?.require_recv_master_carton_qty));
-  const [requireRecvMasterCartonDims, setRequireRecvMasterCartonDims] = useState(Boolean(product?.require_recv_master_carton_dims));
-  const [requireRecvMasterCartonWeight, setRequireRecvMasterCartonWeight] = useState(Boolean(product?.require_recv_master_carton_weight));
+  const [validationSkips, setValidationSkips] = useState({
+    validation_skip_dimensions: Boolean(product?.validation_skip_dimensions),
+    validation_skip_weight: Boolean(product?.validation_skip_weight),
+    validation_skip_batch: Boolean(product?.validation_skip_batch),
+    validation_skip_expiry: Boolean(product?.validation_skip_expiry),
+    validation_skip_serial: Boolean(product?.validation_skip_serial),
+    validation_skip_master_carton: Boolean(product?.validation_skip_master_carton),
+    validation_skip_master_carton_ean: Boolean(product?.validation_skip_master_carton_ean),
+    validation_skip_master_carton_qty: Boolean(product?.validation_skip_master_carton_qty),
+    validation_skip_master_carton_dims: Boolean(product?.validation_skip_master_carton_dims),
+    validation_skip_master_carton_weight: Boolean(product?.validation_skip_master_carton_weight),
+  });
+  const [globalValidation, setGlobalValidation] = useState<ProductValidationGlobalSettings | null>(null);
 
-  const requireRecvDimensions =
-    requireRecvHeight && requireRecvWidth && requireRecvLength;
-
-  const applyRequireRecvPatch = (patch: Partial<Record<string, boolean>>) => {
-    if (patch.requireDimensions !== undefined) {
-      const v = patch.requireDimensions;
-      setRequireRecvHeight(v);
-      setRequireRecvWidth(v);
-      setRequireRecvLength(v);
-    }
-    if (patch.requireWeight !== undefined) setRequireRecvWeight(patch.requireWeight);
-    if (patch.requireBatch !== undefined) setTrackBatch(patch.requireBatch);
-    if (patch.requireExpiry !== undefined) setTrackExpiry(patch.requireExpiry);
-    if (patch.requireSerial !== undefined) setTrackSerial(patch.requireSerial);
-    if (patch.requireMasterCarton !== undefined) setRequireRecvMasterCarton(patch.requireMasterCarton);
-    if (patch.requireMasterCartonEan !== undefined) setRequireRecvMasterCartonEan(patch.requireMasterCartonEan);
-    if (patch.requireMasterCartonQty !== undefined) setRequireRecvMasterCartonQty(patch.requireMasterCartonQty);
-    if (patch.requireMasterCartonDims !== undefined) setRequireRecvMasterCartonDims(patch.requireMasterCartonDims);
-    if (patch.requireMasterCartonWeight !== undefined) setRequireRecvMasterCartonWeight(patch.requireMasterCartonWeight);
-  };
+  useEffect(() => {
+    void getWmsProductValidationSettings()
+      .then((s) =>
+        setGlobalValidation({
+          require_dimensions: s.require_dimensions,
+          require_weight: s.require_weight,
+          require_batch: s.require_batch,
+          require_expiry: s.require_expiry,
+          require_serial: s.require_serial,
+          require_master_carton: s.require_master_carton,
+          require_master_carton_ean: s.require_master_carton_ean,
+          require_master_carton_qty: s.require_master_carton_qty,
+          require_master_carton_dims: s.require_master_carton_dims,
+          require_master_carton_weight: s.require_master_carton_weight,
+        }),
+      )
+      .catch(() => setGlobalValidation(null));
+  }, []);
 
   useEffect(() => {
     if (initialTab) setActiveTab(initialTab);
@@ -843,18 +854,18 @@ export function ProductEditModal({
       setMinTotalStock(
         product.min_total_stock != null && !Number.isNaN(Number(product.min_total_stock)) ? Number(product.min_total_stock) : "",
       );
-      setTrackBatch(Boolean(product.track_batch));
-      setTrackExpiry(Boolean(product.track_expiry));
-      setTrackSerial(Boolean(product.track_serial));
-      setRequireRecvHeight(Boolean(product.require_recv_height));
-      setRequireRecvWidth(Boolean(product.require_recv_width));
-      setRequireRecvLength(Boolean(product.require_recv_length));
-      setRequireRecvWeight(Boolean(product.require_recv_weight));
-      setRequireRecvMasterCarton(Boolean(product.require_recv_master_carton));
-      setRequireRecvMasterCartonEan(Boolean(product.require_recv_master_carton_ean));
-      setRequireRecvMasterCartonQty(Boolean(product.require_recv_master_carton_qty));
-      setRequireRecvMasterCartonDims(Boolean(product.require_recv_master_carton_dims));
-      setRequireRecvMasterCartonWeight(Boolean(product.require_recv_master_carton_weight));
+      setValidationSkips({
+        validation_skip_dimensions: Boolean(product.validation_skip_dimensions),
+        validation_skip_weight: Boolean(product.validation_skip_weight),
+        validation_skip_batch: Boolean(product.validation_skip_batch),
+        validation_skip_expiry: Boolean(product.validation_skip_expiry),
+        validation_skip_serial: Boolean(product.validation_skip_serial),
+        validation_skip_master_carton: Boolean(product.validation_skip_master_carton),
+        validation_skip_master_carton_ean: Boolean(product.validation_skip_master_carton_ean),
+        validation_skip_master_carton_qty: Boolean(product.validation_skip_master_carton_qty),
+        validation_skip_master_carton_dims: Boolean(product.validation_skip_master_carton_dims),
+        validation_skip_master_carton_weight: Boolean(product.validation_skip_master_carton_weight),
+      });
     } else {
       setPurchasePrice("");
       setExtraCostPackagingNet(0);
@@ -1246,18 +1257,7 @@ export function ProductEditModal({
         max_reserve_quantity: maxReserveVal ?? undefined,
         enable_stock_alert: enableStockAlert,
         ...(enableStockAlert && minTotalVal != null ? { min_total_stock: minTotalVal } : {}),
-        track_batch: trackBatch,
-        track_expiry: trackExpiry,
-        track_serial: trackSerial,
-        require_recv_height: requireRecvHeight,
-        require_recv_width: requireRecvWidth,
-        require_recv_length: requireRecvLength,
-        require_recv_weight: requireRecvWeight,
-        require_recv_master_carton: requireRecvMasterCarton,
-        require_recv_master_carton_ean: requireRecvMasterCartonEan,
-        require_recv_master_carton_qty: requireRecvMasterCartonQty,
-        require_recv_master_carton_dims: requireRecvMasterCartonDims,
-        require_recv_master_carton_weight: requireRecvMasterCartonWeight,
+        ...validationSkips,
         bulk_ean: bulkEan.trim() || null,
         units_per_carton: unitsPerCarton === "" ? null : parseNumber(unitsPerCarton),
         carton_length_cm: cartonLength === "" ? undefined : typeof cartonLength === "number" ? round2(cartonLength) : parseDecimal(String(cartonLength)),
@@ -1305,18 +1305,7 @@ export function ProductEditModal({
         min_reserve_quantity: minReserveVal ?? undefined,
         max_reserve_quantity: maxReserveVal ?? undefined,
         enable_stock_alert: enableStockAlert,
-        track_batch: trackBatch,
-        track_expiry: trackExpiry,
-        track_serial: trackSerial,
-        require_recv_height: requireRecvHeight,
-        require_recv_width: requireRecvWidth,
-        require_recv_length: requireRecvLength,
-        require_recv_weight: requireRecvWeight,
-        require_recv_master_carton: requireRecvMasterCarton,
-        require_recv_master_carton_ean: requireRecvMasterCartonEan,
-        require_recv_master_carton_qty: requireRecvMasterCartonQty,
-        require_recv_master_carton_dims: requireRecvMasterCartonDims,
-        require_recv_master_carton_weight: requireRecvMasterCartonWeight,
+        ...validationSkips,
       };
       if (enableStockAlert) {
         body.min_total_stock = minTotalVal;
@@ -1358,8 +1347,24 @@ export function ProductEditModal({
           carton_height_cm: d?.carton_height_cm != null ? Number(d.carton_height_cm) : payload.carton_height_cm,
           carton_weight_kg: d?.carton_weight_kg != null ? Number(d.carton_weight_kg) : payload.carton_weight_kg,
           carton_volume_dm3: d?.carton_volume_dm3 != null ? Number(d.carton_volume_dm3) : payload.carton_volume_dm3,
-          track_batch: Boolean(d?.track_batch ?? payload.track_batch),
-          track_expiry: Boolean(d?.track_expiry ?? payload.track_expiry),
+          validation_skip_dimensions: Boolean(d?.validation_skip_dimensions ?? validationSkips.validation_skip_dimensions),
+          validation_skip_weight: Boolean(d?.validation_skip_weight ?? validationSkips.validation_skip_weight),
+          validation_skip_batch: Boolean(d?.validation_skip_batch ?? validationSkips.validation_skip_batch),
+          validation_skip_expiry: Boolean(d?.validation_skip_expiry ?? validationSkips.validation_skip_expiry),
+          validation_skip_serial: Boolean(d?.validation_skip_serial ?? validationSkips.validation_skip_serial),
+          validation_skip_master_carton: Boolean(d?.validation_skip_master_carton ?? validationSkips.validation_skip_master_carton),
+          validation_skip_master_carton_ean: Boolean(
+            d?.validation_skip_master_carton_ean ?? validationSkips.validation_skip_master_carton_ean,
+          ),
+          validation_skip_master_carton_qty: Boolean(
+            d?.validation_skip_master_carton_qty ?? validationSkips.validation_skip_master_carton_qty,
+          ),
+          validation_skip_master_carton_dims: Boolean(
+            d?.validation_skip_master_carton_dims ?? validationSkips.validation_skip_master_carton_dims,
+          ),
+          validation_skip_master_carton_weight: Boolean(
+            d?.validation_skip_master_carton_weight ?? validationSkips.validation_skip_master_carton_weight,
+          ),
           product_orientation_type: parseOrient(d?.product_orientation_type ?? d?.orientation_type),
           product_shape_type: parseShape(d?.product_shape_type ?? d?.shape_type),
           product_stack_compressible: Boolean(d?.product_stack_compressible ?? d?.stack_compressible),
@@ -1418,8 +1423,24 @@ export function ProductEditModal({
           carton_height_cm: d?.carton_height_cm != null ? Number(d.carton_height_cm) : payload.carton_height_cm,
           carton_weight_kg: d?.carton_weight_kg != null ? Number(d.carton_weight_kg) : payload.carton_weight_kg,
           carton_volume_dm3: d?.carton_volume_dm3 != null ? Number(d.carton_volume_dm3) : payload.carton_volume_dm3,
-          track_batch: Boolean(d?.track_batch ?? payload.track_batch),
-          track_expiry: Boolean(d?.track_expiry ?? payload.track_expiry),
+          validation_skip_dimensions: Boolean(d?.validation_skip_dimensions ?? validationSkips.validation_skip_dimensions),
+          validation_skip_weight: Boolean(d?.validation_skip_weight ?? validationSkips.validation_skip_weight),
+          validation_skip_batch: Boolean(d?.validation_skip_batch ?? validationSkips.validation_skip_batch),
+          validation_skip_expiry: Boolean(d?.validation_skip_expiry ?? validationSkips.validation_skip_expiry),
+          validation_skip_serial: Boolean(d?.validation_skip_serial ?? validationSkips.validation_skip_serial),
+          validation_skip_master_carton: Boolean(d?.validation_skip_master_carton ?? validationSkips.validation_skip_master_carton),
+          validation_skip_master_carton_ean: Boolean(
+            d?.validation_skip_master_carton_ean ?? validationSkips.validation_skip_master_carton_ean,
+          ),
+          validation_skip_master_carton_qty: Boolean(
+            d?.validation_skip_master_carton_qty ?? validationSkips.validation_skip_master_carton_qty,
+          ),
+          validation_skip_master_carton_dims: Boolean(
+            d?.validation_skip_master_carton_dims ?? validationSkips.validation_skip_master_carton_dims,
+          ),
+          validation_skip_master_carton_weight: Boolean(
+            d?.validation_skip_master_carton_weight ?? validationSkips.validation_skip_master_carton_weight,
+          ),
           product_orientation_type: parseOrient(d?.product_orientation_type ?? d?.orientation_type),
           product_shape_type: parseShape(d?.product_shape_type ?? d?.shape_type),
           current_cost:
@@ -1817,19 +1838,11 @@ export function ProductEditModal({
                       <section id="wms-validation">
                         <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Walidacja</h3>
                         <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-6">
-                          <ProductReceivingRequirementsSection
-                            requireDimensions={requireRecvDimensions}
-                            requireWeight={requireRecvWeight}
-                            requireBatch={trackBatch}
-                            requireExpiry={trackExpiry}
-                            requireSerial={trackSerial}
-                            requireMasterCarton={requireRecvMasterCarton}
-                            requireMasterCartonEan={requireRecvMasterCartonEan}
-                            requireMasterCartonQty={requireRecvMasterCartonQty}
-                            requireMasterCartonDims={requireRecvMasterCartonDims}
-                            requireMasterCartonWeight={requireRecvMasterCartonWeight}
+                          <ProductValidationOverridesSection
+                            global={globalValidation}
+                            skips={validationSkips}
                             disabled={saving}
-                            onChange={applyRequireRecvPatch}
+                            onChange={(patch) => setValidationSkips((prev) => ({ ...prev, ...patch }))}
                           />
                         </div>
                       </section>
@@ -2944,9 +2957,9 @@ export function ProductEditModal({
         tenantId={tenantId ?? 1}
         productId={product?.id ?? 0}
         row={traceEditRow}
-        trackBatch={trackBatch}
-        trackExpiry={trackExpiry}
-        trackSerial={trackSerial}
+        trackBatch={Boolean(globalValidation?.require_batch && !validationSkips.validation_skip_batch)}
+        trackExpiry={Boolean(globalValidation?.require_expiry && !validationSkips.validation_skip_expiry)}
+        trackSerial={Boolean(globalValidation?.require_serial && !validationSkips.validation_skip_serial)}
         onClose={() => setTraceEditRow(null)}
         onSaved={() => setTraceEditRow(null)}
       />
