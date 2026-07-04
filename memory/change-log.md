@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-06-08 — Globalny system widoków list (listView)
+
+- Backend: tabela `user_list_views`, REST `/api/ui/list-views/{screen_key}` (autosave + presety publiczne/prywatne)
+- Frontend: moduł `preferences/listView/` — `useListViewState`, `ListViewPresetsMenu`, adaptery per ekran
+- Pilot: Zamówienia (`orders.list`) + Produkty (`products.list`)
+- Stare hooki `useFilterFieldOrder` / `useProductsListColumnOrder` — tryb `controlled` (cienkie wrappery)
+
 ## 2026-06-08 — Produkcja: obsługa 409 przy start-collecting
 
 - Wspólne helpery w `productionUi.ts`: `formatStartCollectingError`, `batchHasMaterialShortages`, lista braków w toaście

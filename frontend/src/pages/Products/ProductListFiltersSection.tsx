@@ -51,55 +51,9 @@ export type ProductListFiltersSectionProps = {
   clientMode: boolean;
   clientBatchLimit: number;
   openVisibilityRef?: MutableRefObject<(() => void) | null>;
+  filterFieldOrder?: string[];
+  onFilterFieldOrderSave?: (order: string[]) => void;
 };
-
-function ProductFilterPresetsSelect({
-  setFilters,
-  onClear,
-}: {
-  setFilters: Dispatch<SetStateAction<ProductListUiFilters>>;
-  onClear: () => void;
-}) {
-  return (
-    <select
-      aria-label="Szablony filtrów"
-      className={`${listSellasistInputClass} w-full min-w-0 max-w-full text-sm font-medium text-slate-800`}
-      defaultValue=""
-      onChange={(e) => {
-        const v = e.target.value;
-        e.currentTarget.value = "";
-        if (!v) return;
-        if (v === "reset") {
-          onClear();
-          return;
-        }
-        if (v === "incomplete_dims") {
-          setFilters(() => ({ ...defaultFilters, status: "incomplete" }));
-          return;
-        }
-        if (v === "with_locations") {
-          setFilters(() => ({ ...defaultFilters, hasLocations: "with" }));
-          return;
-        }
-        if (v === "mismatch_yes") {
-          setFilters(() => ({ ...defaultFilters, mismatch: "yes" }));
-          return;
-        }
-        if (v === "stock_positive") {
-          setFilters(() => ({ ...defaultFilters, stockMin: "1" }));
-          return;
-        }
-      }}
-    >
-      <option value="">Szablony filtrów…</option>
-      <option value="reset">Wyczyść (domyślny)</option>
-      <option value="incomplete_dims">Niepełne dane (wymiary)</option>
-      <option value="with_locations">Tylko z lokalizacją magazynową</option>
-      <option value="mismatch_yes">Niezgodność plan / stan: tak</option>
-      <option value="stock_positive">Stan magazynowy od 1</option>
-    </select>
-  );
-}
 
 export function ProductListFiltersSection({
   expanded,
@@ -114,9 +68,20 @@ export function ProductListFiltersSection({
   clientMode,
   clientBatchLimit,
   openVisibilityRef,
+  filterFieldOrder: filterFieldOrderProp,
+  onFilterFieldOrderSave,
 }: ProductListFiltersSectionProps) {
   const [visibilityOpen, setVisibilityOpen] = useState(false);
-  const { order: visibleOrder, setOrderFromModal } = useFilterFieldOrder(STORAGE_KEY, FILTER_IDS);
+  const controlledFieldOrder =
+    filterFieldOrderProp && onFilterFieldOrderSave
+      ? { order: filterFieldOrderProp, onChange: onFilterFieldOrderSave }
+      : undefined;
+  const { order: visibleOrder, setOrderFromModal } = useFilterFieldOrder(
+    STORAGE_KEY,
+    FILTER_IDS,
+    undefined,
+    controlledFieldOrder,
+  );
 
   useEffect(() => {
     if (!openVisibilityRef) return;
@@ -295,9 +260,6 @@ export function ProductListFiltersSection({
         <FilterPanelBodyWithActions onClear={onClear} onApply={onApply} clearLabel="Wyczyść filtry" applyLabel="Filtruj">
           <FilterGrid columnsClassName={listSellasistFilterGridClass4}>
             {orderedNodes}
-            <FilterField key="__filter_presets" label="Szablony filtrów" labelClassName={listSellasistLabelClass}>
-              <ProductFilterPresetsSelect setFilters={setFilters} onClear={onClear} />
-            </FilterField>
           </FilterGrid>
           {clientMode ? (
             <p className="text-[11px] leading-snug text-slate-500">

@@ -13,10 +13,22 @@ import {
   productListColumnIds,
 } from "./productListColumnCatalog";
 
-export function useProductsListColumnOrder(catalog: readonly FilterFieldCatalogItem[]) {
+type ControlledColumnOrder = {
+  order: string[];
+  onChange: (next: string[]) => void;
+};
+
+/**
+ * Product list column order — thin wrapper around column layout prefs.
+ * Pass `controlled` when using `useListViewState` (persistence via list view module).
+ */
+export function useProductsListColumnOrder(
+  catalog: readonly FilterFieldCatalogItem[],
+  controlled?: ControlledColumnOrder,
+) {
   const allowedIds = productListColumnIds(catalog);
 
-  const [columnOrder, setColumnOrder] = useState<string[]>(() =>
+  const [internalOrder, setInternalOrder] = useState<string[]>(() =>
     normalizeColumnOrder(
       migrateProductListColumnLayout(
         loadColumnLayout(PRODUCTS_COLUMNS_LAYOUT_KEY, allowedIds, PRODUCT_LIST_DEFAULT_COLUMN_ORDER),
@@ -27,10 +39,11 @@ export function useProductsListColumnOrder(catalog: readonly FilterFieldCatalogI
   );
 
   useEffect(() => {
-    setColumnOrder((prev) =>
+    if (controlled) return;
+    setInternalOrder((prev) =>
       normalizeColumnOrder(migrateProductListColumnLayout(prev), allowedIds, PRODUCT_LIST_DEFAULT_COLUMN_ORDER),
     );
-  }, [allowedIds.join("|")]);
+  }, [allowedIds.join("|"), controlled]);
 
   const persistColumnOrder = useCallback(
     (next: string[]) => {
@@ -39,11 +52,17 @@ export function useProductsListColumnOrder(catalog: readonly FilterFieldCatalogI
         allowedIds,
         PRODUCT_LIST_DEFAULT_COLUMN_ORDER,
       );
-      setColumnOrder(normalized);
+      if (controlled) {
+        controlled.onChange(normalized);
+        return;
+      }
+      setInternalOrder(normalized);
       saveColumnLayout(PRODUCTS_COLUMNS_LAYOUT_KEY, normalized);
     },
-    [allowedIds],
+    [allowedIds, controlled],
   );
+
+  const columnOrder = controlled?.order ?? internalOrder;
 
   return { columnOrder, persistColumnOrder };
 }

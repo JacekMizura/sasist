@@ -99,6 +99,8 @@ export type OrderListFiltersPanelProps = {
   /** Lista zamówień: filtry bez własnego paska — przełącznik w nagłówku strony. */
   filterLayout?: "toolbar" | "embedded";
   openFilterFieldsRef?: MutableRefObject<(() => void) | null>;
+  filterFieldOrder?: string[];
+  onFilterFieldOrderSave?: (order: string[]) => void;
 };
 
 export function OrderListFiltersPanel({
@@ -113,13 +115,20 @@ export function OrderListFiltersPanel({
   shippingMethods,
   filterLayout = "toolbar",
   openFilterFieldsRef,
+  filterFieldOrder: filterFieldOrderProp,
+  onFilterFieldOrderSave,
 }: OrderListFiltersPanelProps) {
   const t = useTranslation();
   const [visibilityOpen, setVisibilityOpen] = useState(false);
+  const controlledFieldOrder =
+    filterFieldOrderProp && onFilterFieldOrderSave
+      ? { order: filterFieldOrderProp, onChange: onFilterFieldOrderSave }
+      : undefined;
   const { order: visibleFieldOrder, setOrderFromModal } = useFilterFieldOrder(
     ORDER_LIST_FILTER_STORAGE_KEY,
     ORDER_LIST_FILTER_IDS,
     ORDER_LIST_DEFAULT_VISIBLE_FIELDS,
+    controlledFieldOrder,
   );
 
   const embedded = filterLayout === "embedded";

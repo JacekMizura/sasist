@@ -1,5 +1,5 @@
 import { Plus } from "lucide-react";
-import { memo, type MutableRefObject } from "react";
+import { memo, type MutableRefObject, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 import { ModuleListPageToolbar } from "../../listPage/moduleList";
@@ -12,9 +12,10 @@ type Props = {
   onToggleFilters: () => void;
   openFilterFieldsRef: MutableRefObject<(() => void) | null>;
   onOpenColumnPicker: () => void;
+  viewControls?: ReactNode;
 };
 
-function OrdersListToolbarInner({ onOpenColumnPicker, ...props }: Props) {
+function OrdersListToolbarInner({ onOpenColumnPicker, viewControls, ...props }: Props) {
   return (
     <ModuleListPageToolbar
       title="Zamówienia"
@@ -22,6 +23,7 @@ function OrdersListToolbarInner({ onOpenColumnPicker, ...props }: Props) {
       settingsTitle="Ustawienia statusów panelu"
       columnsDisabled={false}
       onColumnsClick={onOpenColumnPicker}
+      extraToolbarControls={viewControls}
       headerActions={
         <Link
           to="/orders/new"

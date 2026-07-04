@@ -24,6 +24,7 @@ import {
 import {
   buildProductListColumnCatalog,
   PRODUCT_LIST_DEFAULT_COLUMN_ORDER,
+  productListColumnIds,
   productListNeedsNetworkStock,
   productListNeedsWarehouseStocks,
 } from "../../components/products/productList/productListColumnCatalog";
@@ -33,6 +34,12 @@ import {
 } from "../../components/products/productList/productListFilterTypes";
 import { physicalInventoryLocations, type OpenLocationOnMapPayload } from "../../components/products/productList/productListLocationCells";
 import { useProductsListColumnOrder } from "../../components/products/productList/useProductsListColumnOrder";
+import {
+  buildProductListViewAdapter,
+  ListViewPresetsMenu,
+  readProductListTenantFilter,
+  useListViewState,
+} from "../../preferences/listView";
 import { ProductBulkActionModal } from "./ProductBulkActionModal";
 import { ProductBulkDeleteModal } from "./ProductBulkDeleteModal";
 import { ProductBulkPatchModal } from "./ProductBulkPatchModal";
@@ -48,7 +55,6 @@ import {
   listSellasistToolbarToggleBtn,
 } from "../../components/listPage/listSellasistTokens";
 import type { ProductListUiFilters as UiFilters } from "./productListUiFilters";
-import { DEFAULT_PRODUCT_LIST_UI_FILTERS as defaultFilters } from "./productListUiFilters";
 import { ProductListFiltersSection } from "./ProductListFiltersSection";
 import { warehouseService, type TenantWarehouseAssignment } from "../../services/warehouseService";
 
@@ -161,12 +167,7 @@ export default function ProductList() {
   const [catalog, setCatalog] = useState<Product[]>([]);
   const [serverTotal, setServerTotal] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [filters, setFilters] = useState<UiFilters>(defaultFilters);
-  const [appliedFilters, setAppliedFilters] = useState<UiFilters>(defaultFilters);
-  const [page, setPage] = useState(1);
-  const [rowsPerPage, setRowsPerPage] = useState(25);
-  const [sortBy, setSortBy] = useState<ProductListSortKey>("id");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [tenantFilter, setTenantFilter] = useState<number | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [productBulkMode, setProductBulkMode] = useState<"none" | "filtered_all" | "explicit">("none");
   const [productBulkSelectKey, setProductBulkSelectKey] = useState(0);
@@ -177,7 +178,6 @@ export default function ProductList() {
   const [rowDeleteBusyId, setRowDeleteBusyId] = useState<number | null>(null);
   const [rowDupBusyId, setRowDupBusyId] = useState<number | null>(null);
   const [tenants, setTenants] = useState<Tenant[]>([]);
-  const [tenantFilter, setTenantFilter] = useState<number | null>(null);
   const [locationMapModal, setLocationMapModal] = useState<null | {
     productId: number;
     productName: string;
@@ -191,28 +191,6 @@ export default function ProductList() {
   const [manufacturerFilterName, setManufacturerFilterName] = useState<string | null>(null);
   const [manufacturerFilterMetaLoading, setManufacturerFilterMetaLoading] = useState(false);
 
-  const [filtersExpanded, setFiltersExpanded] = useState(() => {
-    try {
-      const v = localStorage.getItem("products.list.filtersExpanded");
-      if (v === "0") return false;
-      return true;
-    } catch {
-      return true;
-    }
-  });
-
-  const toggleFiltersPanel = () => {
-    setFiltersExpanded((prev) => {
-      const n = !prev;
-      try {
-        localStorage.setItem("products.list.filtersExpanded", n ? "1" : "0");
-      } catch {
-        /* ignore */
-      }
-      return n;
-    });
-  };
-
   const openFilterFieldsRef = useRef<(() => void) | null>(null);
   const masterCheckboxRef = useRef<HTMLInputElement>(null);
   const [columnPickerOpen, setColumnPickerOpen] = useState(false);
@@ -223,9 +201,50 @@ export default function ProductList() {
     () => buildProductListColumnCatalog(tenantAssignments, warehouseNameById),
     [tenantAssignments, warehouseNameById],
   );
+  const allowedProductColumnIds = useMemo(
+    () => productListColumnIds(productColumnCatalog),
+    [productColumnCatalog],
+  );
+  const listViewTenantId = tenantFilter ?? 1;
+  const listViewAdapter = useMemo(
+    () => buildProductListViewAdapter(listViewTenantId, allowedProductColumnIds),
+    [listViewTenantId, allowedProductColumnIds],
+  );
+  const listView = useListViewState(listViewAdapter);
+  const {
+    isHydrated,
+    draftFilters: filters,
+    setDraftFilters: setFilters,
+    appliedFilters,
+    applyFilters: applyListViewFilters,
+    clearFilters: clearListViewFilters,
+    sortBy,
+    sortDir,
+    setSortBy,
+    setSortDir,
+    toggleSort: listViewToggleSort,
+    page,
+    setPage,
+    pageSize: rowsPerPage,
+    setPageSize: setRowsPerPage,
+    filterFieldOrder,
+    setFilterFieldOrder,
+    filtersExpanded,
+    toggleFiltersPanel,
+    extensions,
+    setExtension,
+    presets,
+    applyPreset,
+    saveCurrentAsPreset,
+    deletePreset,
+    setDefaultPreset,
+    resetView,
+  } = listView;
 
-  const { columnOrder: productColumnOrder, persistColumnOrder: persistProductColumns } =
-    useProductsListColumnOrder(productColumnCatalog);
+  const { columnOrder: productColumnOrder, persistColumnOrder: persistProductColumns } = useProductsListColumnOrder(
+    productColumnCatalog,
+    { order: listView.columnOrder, onChange: listView.persistColumnOrder },
+  );
 
   const activeFilterCount = useMemo(() => countActiveProductListFilters(appliedFilters), [appliedFilters]);
 
@@ -419,14 +438,20 @@ export default function ProductList() {
   }, [tenantFilter, manufacturerFilterId, appliedFilters, sortBy, sortDir, selectedWarehouseId, needsNetworkStockColumns, needsPerWarehouseStockColumns]);
 
   useEffect(() => {
-    if (!clientMode) return;
-    fetchClientBatch();
-  }, [clientMode, fetchClientBatch]);
+    if (!isHydrated) return;
+    const savedTenant = readProductListTenantFilter(extensions);
+    setTenantFilter((prev) => (prev === savedTenant ? prev : savedTenant));
+  }, [isHydrated, extensions.tenantFilter, extensions]);
 
   useEffect(() => {
-    if (clientMode) return;
+    if (!clientMode || !isHydrated) return;
+    fetchClientBatch();
+  }, [clientMode, fetchClientBatch, isHydrated]);
+
+  useEffect(() => {
+    if (clientMode || !isHydrated) return;
     fetchServerPage();
-  }, [clientMode, fetchServerPage]);
+  }, [clientMode, fetchServerPage, isHydrated]);
 
   const filteredCatalog = useMemo(() => {
     if (!clientMode) return catalog;
@@ -454,8 +479,7 @@ export default function ProductList() {
   }, [catalog]);
 
   const applyFilters = () => {
-    setPage(1);
-    setAppliedFilters(filters);
+    applyListViewFilters();
   };
 
   const clearManufacturerUrlFilter = useCallback(() => {
@@ -470,9 +494,7 @@ export default function ProductList() {
   }, [setSearchParams]);
 
   const clearFilters = () => {
-    setFilters(defaultFilters);
-    setAppliedFilters(defaultFilters);
-    setPage(1);
+    clearListViewFilters();
     clearManufacturerUrlFilter();
   };
 
@@ -481,8 +503,13 @@ export default function ProductList() {
       window.alert("Wybierz tenant w filtrze, aby sortować po wartości magazynowej.");
       return;
     }
-    if (sortBy === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    else setSortBy(key);
+    if (sortBy === key) {
+      listViewToggleSort(key);
+      return;
+    }
+    setSortBy(key);
+    setSortDir("asc");
+    setPage(1);
   };
 
   const toggleSelect = (id: number) => {
@@ -792,6 +819,14 @@ export default function ProductList() {
             >
               <TableProperties className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
             </button>
+            <ListViewPresetsMenu
+              presets={presets}
+              onApplyPreset={applyPreset}
+              onSavePreset={saveCurrentAsPreset}
+              onDeletePreset={deletePreset}
+              onSetDefaultPreset={setDefaultPreset}
+              onResetView={resetView}
+            />
             <button
               type="button"
               onClick={() => setExportOpen(true)}
@@ -868,6 +903,7 @@ export default function ProductList() {
         tenantFilter={tenantFilter}
         onTenantFilterChange={(next) => {
           setTenantFilter(next);
+          setExtension("tenantFilter", next);
           setPage(1);
         }}
         tenants={tenants}
@@ -877,6 +913,8 @@ export default function ProductList() {
         clientMode={clientMode}
         clientBatchLimit={CLIENT_BATCH_LIMIT}
         openVisibilityRef={openFilterFieldsRef}
+        filterFieldOrder={filterFieldOrder}
+        onFilterFieldOrderSave={setFilterFieldOrder}
       />
 
       {productBulkMode === "filtered_all" && tenantFilter != null ? (
@@ -945,7 +983,7 @@ export default function ProductList() {
               rows={displayRows}
               columnOrder={productColumnOrder}
               columnCatalog={productColumnCatalog}
-              sortBy={sortBy}
+              sortBy={sortBy as ProductListSortKey}
               sortDir={sortDir}
               onSort={toggleSort}
               isRowSelected={isProductRowSelected}

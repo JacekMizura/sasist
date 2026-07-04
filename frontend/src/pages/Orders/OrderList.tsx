@@ -13,10 +13,7 @@ import { OrderBulkMultiActionModal } from "../../components/orders/orderList/Ord
 import { OrderQuickActionModals } from "../../components/orders/orderList/OrderQuickActionModals";
 import type { OrderQuickToolbarActionKind } from "../../components/orders/orderList/orderQuickActionKinds";
 import { executeOrderBulkActions } from "../../components/orders/orderList/executeOrderBulkActions";
-import {
-  DEFAULT_APPLIED_ORDER_LIST_FILTERS,
-  type AppliedOrderListFilters,
-} from "../../components/orders/orderList/orderListFilterTypes";
+import type { AppliedOrderListFilters } from "../../components/orders/orderList/orderListFilterTypes";
 import type { BulkActionConfig, BulkActionRow } from "../../components/orders/orderList/bulkMultiActionTypes";
 import {
   postOrdersBulkDelete,
@@ -48,17 +45,15 @@ import ExportModal from "../../components/exports/ExportModal";
 import { WMS_ROUTES } from "../wms/wmsRoutes";
 import { ColumnSelectorModal } from "../../components/columnPicker";
 import {
-  loadColumnLayout,
-  normalizeColumnOrder,
-  ORDERS_COLUMNS_LAYOUT_KEY,
-  saveColumnLayout,
-} from "../../preferences/columnLayoutPreferences";
-import {
-  migrateOrderListColumnIds,
   ORDER_LIST_DEFAULT_TABLE_COLUMN_ORDER,
   ORDER_LIST_TABLE_COLUMN_CATALOG,
-  ORDER_LIST_USER_COLUMN_IDS,
 } from "../../components/orders/orderList/orderListColumnCatalog";
+import {
+  buildOrderListViewAdapter,
+  ListViewPresetsMenu,
+  readOrderListPanelFilter,
+  useListViewState,
+} from "../../preferences/listView";
 import { OrderListDenseTable } from "../../components/orders/orderList/OrderListDenseTable";
 import {
   OrderListQuickNoteModal,
@@ -152,23 +147,52 @@ export default function OrderList() {
   const location = useLocation();
   const { warehouses, warehouse } = useWarehouse();
 
+  const listViewAdapter = useMemo(() => buildOrderListViewAdapter(DAMAGE_TENANT_ID), []);
+  const listView = useListViewState(listViewAdapter);
+  const {
+    isHydrated,
+    draftFilters,
+    setDraftFilters,
+    appliedFilters,
+    applyFilters,
+    clearFilters,
+    sortBy,
+    sortDir,
+    toggleSort,
+    page,
+    setPage,
+    pageSize: rowsPerPage,
+    setPageSize: setRowsPerPage,
+    columnOrder,
+    persistColumnOrder,
+    filterFieldOrder,
+    setFilterFieldOrder,
+    filtersExpanded,
+    toggleFiltersPanel,
+    extensions,
+    setExtension,
+    presets,
+    applyPreset,
+    saveCurrentAsPreset,
+    deletePreset,
+    setDefaultPreset,
+    resetView,
+    appliedFiltersKey,
+  } = listView;
+
+  const panelFilter = readOrderListPanelFilter(extensions) as OrderPanelFilter;
+  const setPanelFilter = useCallback(
+    (next: OrderPanelFilter) => {
+      setExtension("panelFilter", next);
+    },
+    [setExtension],
+  );
+  const isStatusPanelCollapsed = Boolean(extensions.statusPanelCollapsed);
+
   const [orders, setOrders] = useState<Order[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
-  const [sortBy, setSortBy] = useState<SortKey>("order_date");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
-  const [page, setPage] = useState(1);
-  const [rowsPerPage, setRowsPerPage] = useState(25);
-  const [appliedFilters, setAppliedFilters] = useState<AppliedOrderListFilters>(DEFAULT_APPLIED_ORDER_LIST_FILTERS);
-  const [draftFilters, setDraftFilters] = useState<AppliedOrderListFilters>(DEFAULT_APPLIED_ORDER_LIST_FILTERS);
-  const [filtersExpanded, setFiltersExpanded] = useState(() => {
-    try {
-      return localStorage.getItem("orders.list.filtersExpanded") === "1";
-    } catch {
-      return false;
-    }
-  });
   const [shippingMethods, setShippingMethods] = useState<ShippingMethodDto[]>([]);
   const [deleting, setDeleting] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -177,7 +201,6 @@ export default function OrderList() {
   const [quickModal, setQuickModal] = useState<OrderQuickToolbarActionKind | null>(null);
   const [quickBusy, setQuickBusy] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
-  const [isStatusPanelCollapsed, setIsStatusPanelCollapsed] = useState(false);
   const openFilterFieldsRef = useRef<(() => void) | null>(null);
   const [columnPickerOpen, setColumnPickerOpen] = useState(false);
   const [statusDrawerOpen, setStatusDrawerOpen] = useState(false);
@@ -187,21 +210,8 @@ export default function OrderList() {
   const [quickNoteCount, setQuickNoteCount] = useState(0);
   const [customFieldModalOpen, setCustomFieldModalOpen] = useState(false);
 
-  const [columnOrder, setColumnOrder] = useState<string[]>(() =>
-    loadColumnLayout(ORDERS_COLUMNS_LAYOUT_KEY, ORDER_LIST_USER_COLUMN_IDS, ORDER_LIST_DEFAULT_TABLE_COLUMN_ORDER, {
-      migrate: migrateOrderListColumnIds,
-    }),
-  );
-
-  const persistColumnOrder = useCallback((next: string[]) => {
-    const normalized = normalizeColumnOrder(next, ORDER_LIST_USER_COLUMN_IDS, ORDER_LIST_DEFAULT_TABLE_COLUMN_ORDER);
-    setColumnOrder(normalized);
-    saveColumnLayout(ORDERS_COLUMNS_LAYOUT_KEY, normalized);
-  }, []);
-
   const [panelSummary, setPanelSummary] = useState<OrderUiStatusPanelSummary | null>(null);
   const [panelSubgroups, setPanelSubgroups] = useState<OrderUiPanelSubgroupRead[] | null>(null);
-  const [panelFilter, setPanelFilter] = useState<OrderPanelFilter>("all");
 
   const activeFilterLabel = useMemo(
     () => formatOrderPanelFilterLabel(panelFilter, panelSummary),
@@ -212,8 +222,6 @@ export default function OrderList() {
   const fulfillmentWarehouseFilter = appliedFilters.warehouseIdOverride;
   /** Magazyn panelu statusów — filtr listy lub aktywny magazyn z nagłówka (spójny z konfiguratorem). */
   const panelStatusWarehouseId = fulfillmentWarehouseFilter ?? warehouse?.id ?? null;
-
-  const appliedFiltersKey = useMemo(() => JSON.stringify(appliedFilters), [appliedFilters]);
 
   const loadPanelSummary = useCallback(async () => {
     try {
@@ -239,7 +247,7 @@ export default function OrderList() {
     if (panelSummary != null && panelSummary.unassigned_count === 0) {
       setPanelFilter("all");
     }
-  }, [panelFilter, panelSummary]);
+  }, [panelFilter, panelSummary, setPanelFilter]);
 
   useEffect(() => {
     const wh = appliedFilters.warehouseIdOverride;
@@ -407,20 +415,23 @@ export default function OrderList() {
   ]);
 
   useEffect(() => {
+    if (!isHydrated) return;
     fetchOrders();
-  }, [fetchOrders]);
+  }, [fetchOrders, isHydrated]);
 
   const openOrder = (orderId: number) => {
     const orderNavIds = orders.map((o) => o.id);
     navigate(`/orders/${orderId}`, { state: { orderNavIds } });
   };
 
-  const toggleSort = (key: SortKey) => {
-    if (sortBy === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    else {
-      setSortBy(key);
-      setSortDir(key === "order_date" ? "desc" : "asc");
+  const handleToggleSort = (key: SortKey) => {
+    if (sortBy === key) {
+      toggleSort(key);
+      return;
     }
+    listView.setSortBy(key);
+    listView.setSortDir(key === "order_date" ? "desc" : "asc");
+    setPage(1);
   };
 
   const bulkDelete = async () => {
@@ -487,31 +498,6 @@ export default function OrderList() {
     } finally {
       setDeleting(false);
     }
-  };
-
-  const toggleFiltersPanel = () => {
-    setFiltersExpanded((prev) => {
-      const n = !prev;
-      try {
-        localStorage.setItem("orders.list.filtersExpanded", n ? "1" : "0");
-      } catch {
-        /* ignore */
-      }
-      if (n) setDraftFilters({ ...appliedFilters });
-      return n;
-    });
-  };
-
-  const applyFilterDraft = () => {
-    setAppliedFilters({ ...draftFilters });
-    setPage(1);
-  };
-
-  const clearAllFilters = () => {
-    const z = { ...DEFAULT_APPLIED_ORDER_LIST_FILTERS };
-    setDraftFilters(z);
-    setAppliedFilters(z);
-    setPage(1);
   };
 
   const openMultiModal = () => {
@@ -905,7 +891,7 @@ export default function OrderList() {
       <div className={moduleListTwoColumnShellClass}>
         <ModuleStatusSidebarShell
           collapsed={isStatusPanelCollapsed}
-          onToggleCollapsed={() => setIsStatusPanelCollapsed((v) => !v)}
+          onToggleCollapsed={() => setExtension("statusPanelCollapsed", !isStatusPanelCollapsed)}
           statusDrawerOpen={statusDrawerOpen}
           onStatusDrawerOpenChange={setStatusDrawerOpen}
           sidebar={
@@ -947,6 +933,16 @@ export default function OrderList() {
             onToggleFilters={toggleFiltersPanel}
             openFilterFieldsRef={openFilterFieldsRef}
             onOpenColumnPicker={() => setColumnPickerOpen(true)}
+            viewControls={
+              <ListViewPresetsMenu
+                presets={presets}
+                onApplyPreset={applyPreset}
+                onSavePreset={saveCurrentAsPreset}
+                onDeletePreset={deletePreset}
+                onSetDefaultPreset={setDefaultPreset}
+                onResetView={resetView}
+              />
+            }
           />
 
           {fetchError ? (
@@ -958,13 +954,15 @@ export default function OrderList() {
             onToggleExpanded={toggleFiltersPanel}
             draft={draftFilters}
             onChangeDraft={(patch) => setDraftFilters((d) => ({ ...d, ...patch }))}
-            onApply={applyFilterDraft}
-            onClear={clearAllFilters}
+            onApply={applyFilters}
+            onClear={clearFilters}
             panelSummary={panelSummary}
             warehouses={warehouses}
             shippingMethods={shippingMethods}
             filterLayout="embedded"
             openFilterFieldsRef={openFilterFieldsRef}
+            filterFieldOrder={filterFieldOrder}
+            onFilterFieldOrderSave={setFilterFieldOrder}
           />
 
           {bulkSelectionMode === "filtered_all" ? (
@@ -1076,9 +1074,9 @@ export default function OrderList() {
                 <OrderListDenseTable
                   orders={orders}
                   columnOrder={columnOrder}
-                  sortBy={sortBy}
+                  sortBy={sortBy as SortKey}
                   sortDir={sortDir}
-                  onToggleSort={toggleSort}
+                  onToggleSort={handleToggleSort}
                   formatOrderDate={formatOrderDate}
                   formatMoney={formatMoney}
                   customerLabel={customerLabel}

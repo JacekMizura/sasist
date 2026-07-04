@@ -349,6 +349,7 @@ from .api.wms_consolidation import router as wms_consolidation_router
 from .api.admin_users import router as admin_users_router
 from .api.uploads import router as uploads_router
 from .api.bdo_packaging import router as bdo_packaging_router
+from .api.user_list_views import router as user_list_views_router
 
 
 # On-disk damage evidence (same path as `services/damage_image_upload.UPLOAD_ROOT`).
@@ -1792,6 +1793,7 @@ print(
 
 _API_ROUTERS = (
     auth_router,
+    user_list_views_router,
     workforce_router,
     company_profile_router,
     fulfillment_configuration_router,

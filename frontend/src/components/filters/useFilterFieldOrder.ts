@@ -2,48 +2,61 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { loadVisibleFieldOrder, saveVisibleFieldOrder } from "./filterVisibilityStorage";
 
+type ControlledFieldOrder = {
+  order: string[];
+  onChange: (next: string[]) => void;
+};
+
 /**
- * Ordered list of visible filter field ids for a page; persisted automatically.
- * @param storageKey short id e.g. `orders.list` (prefixed internally)
- * @param catalogIds stable ordered ids of all known fields
+ * Ordered list of visible filter field ids.
+ * When `controlled` is passed, persistence is delegated to list view state (no localStorage writes).
  */
 export function useFilterFieldOrder(
   storageKey: string,
   catalogIds: readonly string[],
   defaultVisibleIds?: readonly string[],
+  controlled?: ControlledFieldOrder,
 ) {
-  console.log("[HOOK] useFilterFieldOrder init", { storageKey, n: catalogIds.length });
   const catalogKey = useMemo(() => catalogIds.join("\0"), [catalogIds]);
   const defaultKey = useMemo(() => defaultVisibleIds?.join("\0") ?? "", [defaultVisibleIds]);
-  /** Avoid effect re-running every render when callers pass a new array instance with the same ids. */
   const catalogIdsRef = useRef(catalogIds);
   catalogIdsRef.current = catalogIds;
   const defaultVisibleRef = useRef(defaultVisibleIds);
   defaultVisibleRef.current = defaultVisibleIds;
 
-  const [order, setOrder] = useState<string[]>(() =>
+  const [internalOrder, setInternalOrder] = useState<string[]>(() =>
     loadVisibleFieldOrder(storageKey, catalogIds, defaultVisibleIds),
   );
 
   useEffect(() => {
-    setOrder(loadVisibleFieldOrder(storageKey, catalogIdsRef.current, defaultVisibleRef.current));
-  }, [storageKey, catalogKey, defaultKey]);
+    if (controlled) return;
+    setInternalOrder(loadVisibleFieldOrder(storageKey, catalogIdsRef.current, defaultVisibleRef.current));
+  }, [storageKey, catalogKey, defaultKey, controlled]);
 
   useEffect(() => {
-    console.log("[HOOK] usePreferences persist", { storageKey, rawLen: order.length, orderPreview: order.slice(0, 12) });
-    saveVisibleFieldOrder(storageKey, order);
-  }, [storageKey, order]);
+    if (controlled) return;
+    saveVisibleFieldOrder(storageKey, internalOrder);
+  }, [storageKey, internalOrder, controlled]);
 
-  const setOrderFromModal = useCallback((next: string[]) => {
-    const valid = new Set(catalogIds);
-    const dedup: string[] = [];
-    for (const id of next) {
-      if (valid.has(id) && !dedup.includes(id)) dedup.push(id);
-    }
-    setOrder(dedup.length === 0 ? [...catalogIds] : dedup);
-  }, [catalogIds]);
+  const setOrderFromModal = useCallback(
+    (next: string[]) => {
+      const valid = new Set(catalogIds);
+      const dedup: string[] = [];
+      for (const id of next) {
+        if (valid.has(id) && !dedup.includes(id)) dedup.push(id);
+      }
+      const normalized = dedup.length === 0 ? [...catalogIds] : dedup;
+      if (controlled) {
+        controlled.onChange(normalized);
+        return;
+      }
+      setInternalOrder(normalized);
+    },
+    [catalogIds, controlled],
+  );
 
+  const order = controlled?.order ?? internalOrder;
   const isVisible = useCallback((id: string) => order.includes(id), [order]);
 
-  return { order, setOrder, setOrderFromModal, isVisible };
+  return { order, setOrder: controlled ? controlled.onChange : setInternalOrder, setOrderFromModal, isVisible };
 }

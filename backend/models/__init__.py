@@ -201,3 +201,4 @@ from .inventory_count import (  # noqa: F401 — stock count module
     InventorySnapshotStockLine,
     InventoryTask,
 )
+from .user_list_view import UserListView  # noqa: F401
