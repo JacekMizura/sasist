@@ -9,12 +9,11 @@ import logging
 import os
 import shutil
 import subprocess
-import uuid
 from pathlib import Path
 
-logger = logging.getLogger(__name__)
+from .pdf_render_debug_store import pdf_render_debug_enabled, prepare_pdf_render_debug_dir
 
-_PDF_RENDER_DEBUG_TRUTHY = frozenset({"1", "true", "yes", "on"})
+logger = logging.getLogger(__name__)
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 RENDER_FROM_URL_SCRIPT = BACKEND_ROOT / "scripts" / "structure_report_pdf" / "render_from_url.mjs"
@@ -25,10 +24,6 @@ REPORT_TIMEOUT_MESSAGE = "Report rendering timeout - frontend not reachable or d
 _NODE_FALLBACK_PATHS = ("/usr/bin/node", "/usr/local/bin/node")
 
 
-def pdf_render_debug_enabled() -> bool:
-    return (os.getenv("PDF_RENDER_DEBUG") or "").strip().lower() in _PDF_RENDER_DEBUG_TRUTHY
-
-
 def _prepare_pdf_render_debug_env(
     *,
     html: str,
@@ -37,9 +32,7 @@ def _prepare_pdf_render_debug_env(
     if not pdf_render_debug_enabled():
         return os.environ.copy(), None
 
-    run_id = uuid.uuid4().hex[:12]
-    debug_dir = Path(f"/tmp/pdf_render_debug/{run_id}")
-    debug_dir.mkdir(parents=True, exist_ok=True)
+    debug_dir = prepare_pdf_render_debug_dir()
     (debug_dir / "00_input_html_backend_copy.html").write_text(html, encoding="utf-8")
 
     env = os.environ.copy()
@@ -49,8 +42,7 @@ def _prepare_pdf_render_debug_env(
         env["PDF_RENDER_DEBUG_LABEL"] = debug_label[:200]
 
     logger.warning(
-        "PDF_RENDER_DEBUG run_id=%s dir=%s label=%s html_chars=%d",
-        run_id,
+        "PDF_RENDER_DEBUG dir=%s label=%s html_chars=%d api=/api/document-templates/debug/pdf-render/latest",
         debug_dir,
         debug_label or "-",
         len(html),
@@ -92,8 +84,7 @@ def _log_pdf_render_debug_result(*, debug_dir: Path, proc: subprocess.CompletedP
         )
 
     logger.warning(
-        "PDF_RENDER_DEBUG compare 05_pre_pdf_screenshot.png vs 09_output.pdf in %s",
-        debug_dir,
+        "PDF_RENDER_DEBUG compare screenshot vs pdf via /api/document-templates/debug/pdf-render/latest",
     )
 
 
@@ -126,8 +117,8 @@ def html_document_to_pdf_bytes(
     Render a full HTML document to PDF via Puppeteer (stdin → stdout).
     Same stack as warehouse reports; avoids extra native deps (e.g. WeasyPrint on Windows).
 
-    Set PDF_RENDER_DEBUG=1 on the backend to write /tmp/pdf_render_debug/{run_id}/ artifacts
-    (HTML, DOM probes, screenshot before page.pdf(), output PDF, browser console/errors).
+    Set PDF_RENDER_DEBUG=1 on the backend to write uploads/pdf_render_debug/latest/ artifacts
+    and expose them at GET /api/document-templates/debug/pdf-render/latest.
     """
     if not RENDER_STDIN_SCRIPT.is_file():
         raise FileNotFoundError(
