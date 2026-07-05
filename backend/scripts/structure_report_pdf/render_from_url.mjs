@@ -40,6 +40,8 @@ async function main() {
         left: "20px",
         right: "20px",
       },
+      preferCSSPageSize: false,
+      scale: 1,
     });
     process.stdout.write(pdf);
   } catch (err) {

@@ -2,18 +2,14 @@
 
 from __future__ import annotations
 
-import html as html_module
-import json
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, Response
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..auth.deps import get_current_user
-from ..auth.tokens import decode_access_token
 from ..document_templates.errors import (
     DocumentKindNotFoundError,
     DocumentRenderError,
@@ -73,7 +69,6 @@ from ..schemas.document_template_schemas import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/document-templates", tags=["Document Templates"])
-_pdf_debug_bearer = HTTPBearer(auto_error=False)
 
 
 def _map_error(exc: DocumentTemplateError) -> HTTPException:
@@ -872,150 +867,3 @@ def api_version_replace_assignments(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-def _require_pdf_render_debug_enabled() -> None:
-    from ..services.pdf_render_debug_store import pdf_render_debug_enabled
-
-    if not pdf_render_debug_enabled():
-        raise HTTPException(status_code=404, detail="PDF render debug disabled (set PDF_RENDER_DEBUG=1)")
-
-
-def _pdf_render_debug_user(
-    cred: HTTPAuthorizationCredentials | None = Depends(_pdf_debug_bearer),
-    access_token: str | None = Query(
-        None,
-        description="JWT for browser tab access when Authorization header is unavailable (debug only)",
-    ),
-    db: Session = Depends(get_db),
-) -> AppUser:
-    _require_pdf_render_debug_enabled()
-    token = cred.credentials if cred and cred.scheme.lower() == "bearer" else (access_token or "").strip()
-    if not token:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    try:
-        payload = decode_access_token(token)
-        if payload.get("typ") != "access":
-            raise ValueError("wrong token type")
-        uid = int(payload["sub"])
-    except Exception as exc:
-        raise HTTPException(status_code=401, detail="Invalid or expired token") from exc
-    user = db.query(AppUser).filter(AppUser.id == uid).first()
-    if user is None or not user.is_active:
-        raise HTTPException(status_code=401, detail="User inactive or missing")
-    return user
-
-
-def _build_pdf_render_debug_html_page(payload: dict, *, access_token: str | None = None) -> str:
-    summary = payload.get("summary") or {}
-    stage = html_module.escape(str(summary.get("stage") or "—"))
-    interpretation = html_module.escape(str(summary.get("interpretation") or "—"))
-    screenshot_b64 = payload.get("screenshot_base64") or ""
-    html_content = payload.get("html") or ""
-    console_lines = html_module.escape(json.dumps(payload.get("console") or [], ensure_ascii=False, indent=2))
-    page_errors = html_module.escape(json.dumps(payload.get("page_errors") or [], ensure_ascii=False, indent=2))
-    request_failures = html_module.escape(
-        json.dumps(payload.get("request_failures") or [], ensure_ascii=False, indent=2)
-    )
-    summary_json = html_module.escape(json.dumps(summary, ensure_ascii=False, indent=2))
-    escaped_html = html_module.escape(html_content)
-    token_q = f"?access_token={html_module.escape(access_token)}" if access_token else ""
-    pdf_link = f"/api/document-templates/debug/pdf-render/latest/pdf{token_q}"
-    screenshot_block = (
-        f'<img alt="pre-pdf screenshot" style="max-width:100%;border:1px solid #ccc" '
-        f'src="data:image/png;base64,{screenshot_b64}" />'
-        if screenshot_b64
-        else "<p><em>Brak screenshota — wygeneruj PDF ponownie.</em></p>"
-    )
-    return f"""<!DOCTYPE html>
-<html lang="pl">
-<head>
-  <meta charset="utf-8" />
-  <title>PDF render debug</title>
-  <style>
-    body {{ font-family: system-ui, sans-serif; margin: 1.5rem; line-height: 1.45; }}
-    h1, h2 {{ margin-top: 1.5rem; }}
-    pre {{ background: #f6f8fa; padding: 1rem; overflow: auto; border: 1px solid #ddd; }}
-    .stage {{ font-size: 1.1rem; font-weight: 600; }}
-  </style>
-</head>
-<body>
-  <h1>PDF render debug (latest)</h1>
-  <p class="stage">stage: {stage}</p>
-  <p>{interpretation}</p>
-  <p><a href="{pdf_link}">09_output.pdf</a></p>
-  <h2>summary.json</h2>
-  <pre>{summary_json}</pre>
-  <h2>05_pre_pdf_screenshot.png</h2>
-  {screenshot_block}
-  <h2>00_input_html.html</h2>
-  <pre>{escaped_html}</pre>
-  <h2>06_browser_console.jsonl</h2>
-  <pre>{console_lines}</pre>
-  <h2>07_page_errors.jsonl</h2>
-  <pre>{page_errors}</pre>
-  <h2>08_failed_requests.jsonl</h2>
-  <pre>{request_failures}</pre>
-</body>
-</html>"""
-
-
-@router.get("/debug/pdf-render/latest")
-def api_pdf_render_debug_latest(
-    request: Request,
-    format: str | None = Query(None, description="html = browser viewer; default = JSON"),
-    user: AppUser = Depends(_pdf_render_debug_user),
-):
-    """Latest PDF render debug bundle — only when PDF_RENDER_DEBUG=1."""
-    _ = user
-    from ..services.pdf_render_debug_store import latest_debug_bundle_exists, load_latest_debug_payload
-
-    if not latest_debug_bundle_exists():
-        raise HTTPException(
-            status_code=404,
-            detail="No PDF render debug bundle yet. Generate a PDF first with PDF_RENDER_DEBUG=1.",
-        )
-    payload = load_latest_debug_payload(include_screenshot_base64=True)
-    if (format or "").strip().lower() == "html":
-        access_token = request.query_params.get("access_token")
-        return HTMLResponse(content=_build_pdf_render_debug_html_page(payload, access_token=access_token))
-    return payload
-
-
-@router.get("/debug/pdf-render/latest/html")
-def api_pdf_render_debug_latest_html(
-    user: AppUser = Depends(_pdf_render_debug_user),
-):
-    _ = user
-    from ..services.pdf_render_debug_store import read_latest_html
-
-    html = read_latest_html()
-    if html is None:
-        raise HTTPException(status_code=404, detail="Debug HTML not found. Generate a PDF first.")
-    return HTMLResponse(content=html)
-
-
-@router.get("/debug/pdf-render/latest/screenshot")
-def api_pdf_render_debug_latest_screenshot(
-    user: AppUser = Depends(_pdf_render_debug_user),
-):
-    _ = user
-    from ..services.pdf_render_debug_store import read_latest_screenshot_bytes
-
-    png = read_latest_screenshot_bytes()
-    if png is None:
-        raise HTTPException(status_code=404, detail="Debug screenshot not found. Generate a PDF first.")
-    return Response(content=png, media_type="image/png")
-
-
-@router.get("/debug/pdf-render/latest/pdf")
-def api_pdf_render_debug_latest_pdf(
-    user: AppUser = Depends(_pdf_render_debug_user),
-):
-    _ = user
-    from ..services.pdf_render_debug_store import read_latest_pdf_bytes
-
-    pdf = read_latest_pdf_bytes()
-    if pdf is None:
-        raise HTTPException(status_code=404, detail="Debug PDF not found. Generate a PDF first.")
-    return Response(content=pdf, media_type="application/pdf")

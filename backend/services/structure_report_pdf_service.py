@@ -4,14 +4,11 @@ HTML -> PDF for warehouse structure reports (Puppeteer via Node).
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import shutil
 import subprocess
 from pathlib import Path
-
-from .pdf_render_debug_store import pdf_render_debug_enabled, prepare_pdf_render_debug_dir
 
 logger = logging.getLogger(__name__)
 
@@ -22,70 +19,6 @@ RENDER_THUMBNAIL_SCRIPT = BACKEND_ROOT / "scripts" / "structure_report_pdf" / "r
 REPORT_TIMEOUT_MESSAGE = "Report rendering timeout - frontend not reachable or data failed to load"
 
 _NODE_FALLBACK_PATHS = ("/usr/bin/node", "/usr/local/bin/node")
-
-
-def _prepare_pdf_render_debug_env(
-    *,
-    html: str,
-    debug_label: str | None,
-) -> tuple[dict[str, str], Path | None]:
-    if not pdf_render_debug_enabled():
-        return os.environ.copy(), None
-
-    debug_dir = prepare_pdf_render_debug_dir()
-    (debug_dir / "00_input_html_backend_copy.html").write_text(html, encoding="utf-8")
-
-    env = os.environ.copy()
-    env["PDF_RENDER_DEBUG"] = "1"
-    env["PDF_RENDER_DEBUG_DIR"] = str(debug_dir)
-    if debug_label:
-        env["PDF_RENDER_DEBUG_LABEL"] = debug_label[:200]
-
-    logger.warning(
-        "PDF_RENDER_DEBUG dir=%s label=%s html_chars=%d api=/api/document-templates/debug/pdf-render/latest",
-        debug_dir,
-        debug_label or "-",
-        len(html),
-    )
-    return env, debug_dir
-
-
-def _log_pdf_render_debug_result(*, debug_dir: Path, proc: subprocess.CompletedProcess[bytes]) -> None:
-    stderr = proc.stderr.decode("utf-8", errors="replace").strip()
-    if stderr:
-        for line in stderr.splitlines():
-            if line.startswith("[PDF_RENDER_DEBUG]"):
-                logger.warning("PDF_RENDER_DEBUG %s", line)
-            else:
-                logger.warning("PDF_RENDER_DEBUG stderr: %s", line)
-
-    summary_path = debug_dir / "summary.json"
-    if summary_path.is_file():
-        try:
-            summary = json.loads(summary_path.read_text(encoding="utf-8"))
-            logger.warning(
-                "PDF_RENDER_DEBUG summary dir=%s stage=%s html_length=%s body_inner_text_length=%s "
-                "dom_node_count=%s pdf_bytes=%s pdf_pages=%s interpretation=%s",
-                debug_dir,
-                summary.get("stage"),
-                summary.get("html_length"),
-                summary.get("body_inner_text_length"),
-                summary.get("dom_node_count"),
-                summary.get("pdf_bytes"),
-                summary.get("pdf_pages"),
-                summary.get("interpretation"),
-            )
-        except (OSError, json.JSONDecodeError) as exc:
-            logger.warning("PDF_RENDER_DEBUG could not read summary.json: %s", exc)
-    else:
-        logger.warning(
-            "PDF_RENDER_DEBUG artifacts dir=%s (no summary.json — check node stderr)",
-            debug_dir,
-        )
-
-    logger.warning(
-        "PDF_RENDER_DEBUG compare screenshot vs pdf via /api/document-templates/debug/pdf-render/latest",
-    )
 
 
 def _node_executable() -> str:
@@ -107,18 +40,10 @@ def _node_executable() -> str:
     )
 
 
-def html_document_to_pdf_bytes(
-    html: str,
-    *,
-    timeout_sec: int = 120,
-    debug_label: str | None = None,
-) -> bytes:
+def html_document_to_pdf_bytes(html: str, *, timeout_sec: int = 120) -> bytes:
     """
     Render a full HTML document to PDF via Puppeteer (stdin → stdout).
     Same stack as warehouse reports; avoids extra native deps (e.g. WeasyPrint on Windows).
-
-    Set PDF_RENDER_DEBUG=1 on the backend to write uploads/pdf_render_debug/latest/ artifacts
-    and expose them at GET /api/document-templates/debug/pdf-render/latest.
     """
     if not RENDER_STDIN_SCRIPT.is_file():
         raise FileNotFoundError(
@@ -129,22 +54,21 @@ def html_document_to_pdf_bytes(
     if not html_s:
         raise ValueError("Empty HTML document")
     node_bin = _node_executable()
-    env, debug_dir = _prepare_pdf_render_debug_env(html=html_s, debug_label=debug_label)
     proc = subprocess.run(
         [node_bin, str(RENDER_STDIN_SCRIPT)],
         input=html_s.encode("utf-8"),
         capture_output=True,
         cwd=str(RENDER_STDIN_SCRIPT.parent),
         timeout=timeout_sec,
-        env=env,
     )
-    if debug_dir is not None:
-        _log_pdf_render_debug_result(debug_dir=debug_dir, proc=proc)
     if proc.returncode != 0:
         err = proc.stderr.decode("utf-8", errors="replace")
         logger.error("html_document_to_pdf_bytes node failed: %s", err)
         raise RuntimeError(f"PDF generation failed: {err or proc.stdout.decode('utf-8', errors='replace')}")
-    return proc.stdout
+    pdf = proc.stdout
+    if len(pdf) < 500:
+        logger.warning("html_document_to_pdf_bytes: suspiciously small PDF (%d bytes)", len(pdf))
+    return pdf
 
 
 def html_to_thumbnail_png_bytes(html: str, *, timeout_sec: int = 90) -> bytes:

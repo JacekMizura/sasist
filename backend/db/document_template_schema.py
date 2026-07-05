@@ -350,11 +350,7 @@ def _seed_system_layout_templates(db: Session) -> None:
             .first()
         )
         starter_base = base_path.read_text(encoding="utf-8")
-        if (
-            base_version is not None
-            and base_version.version_number == 1
-            and base_version.twig_content != starter_base
-        ):
+        if base_version is not None and base_version.twig_content != starter_base:
             base_version.twig_content = starter_base
 
     partial_versions: dict[str, int] = {}
@@ -402,7 +398,7 @@ def _seed_system_layout_templates(db: Session) -> None:
             )
             if pv is not None:
                 partial_versions[code] = int(pv.id)
-                if pv.version_number == 1 and pv.twig_content != content:
+                if pv.twig_content != content:
                     pv.twig_content = content
 
     if base_version is not None and partial_versions:
