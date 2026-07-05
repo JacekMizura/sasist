@@ -11,6 +11,7 @@ class DocumentTemplateCreateFromStarter(BaseModel):
     kind_code: str
     name: str = Field(min_length=1, max_length=256)
     starter_code: str = "default"
+    variant_code: str = "standard"
 
 
 class DocumentTemplateSaveDraft(BaseModel):

@@ -59,11 +59,12 @@ def render_document_with_legacy_fallback(
     output_format: DocumentOutputFormat = DocumentOutputFormat.HTML,
     warehouse_id: int | None = None,
     variant_code: str = "standard",
+    template_version_id: int | None = None,
     log_label: str = "",
 ) -> str | bytes:
     """Try Document Template Engine binding; on missing binding invoke legacy with warning."""
     kind = normalize_kind_code(kind_code)
-    if binding_exists(
+    if template_version_id is not None or binding_exists(
         db,
         tenant_id=int(tenant_id),
         kind_code=kind,
@@ -78,6 +79,7 @@ def render_document_with_legacy_fallback(
             output_format=output_format,
             warehouse_id=warehouse_id,
             variant_code=variant_code,
+            template_version_id=template_version_id,
         )
 
     logger.warning(

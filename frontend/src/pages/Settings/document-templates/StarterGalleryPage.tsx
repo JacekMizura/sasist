@@ -2,9 +2,22 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import toast from "react-hot-toast";
 
-import { createDocumentTemplateFromStarter, fetchStarterGallery, type StarterGalleryItem } from "../../../api/documentTemplatesApi";
+import {
+  createDocumentTemplateFromStarter,
+  fetchStarterGallery,
+  fetchStarterGalleryDetail,
+  type StarterGalleryDetailDto,
+  type StarterGalleryItem,
+} from "../../../api/documentTemplatesApi";
 import { extractApiErrorMessage } from "../../../api/apiErrorMessage";
 import { DEFAULT_TENANT_ID, LIST_BASE } from "./constants";
+import { StarterThumbnailImage } from "./components/StarterThumbnailImage";
+
+const CATEGORY_LABELS: Record<string, string> = {
+  featured: "Polecane",
+  recent: "Ostatnio dodane",
+  popular: "Najczęściej używane",
+};
 
 function fmtDt(iso: string | null | undefined) {
   if (!iso) return "—";
@@ -16,26 +29,55 @@ function fmtDt(iso: string | null | undefined) {
 }
 
 export function StarterGalleryPage() {
-  const [items, setItems] = useState<StarterGalleryItem[]>([]);
+  const [gallery, setGallery] = useState<{
+    items: StarterGalleryItem[];
+    total: number;
+    families: string[];
+    kinds: string[];
+    tags: string[];
+  } | null>(null);
+  const [search, setSearch] = useState("");
   const [familyFilter, setFamilyFilter] = useState("");
+  const [kindFilter, setKindFilter] = useState("");
+  const [tagFilter, setTagFilter] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
   const [loading, setLoading] = useState(true);
+  const [previewId, setPreviewId] = useState<number | null>(null);
+  const [preview, setPreview] = useState<StarterGalleryDetailDto | null>(null);
 
   useEffect(() => {
-    fetchStarterGallery()
-      .then(setItems)
+    fetchStarterGallery(DEFAULT_TENANT_ID)
+      .then(setGallery)
       .catch((err) => toast.error(extractApiErrorMessage(err, "Nie udało się wczytać starterów.")))
       .finally(() => setLoading(false));
   }, []);
 
-  const families = useMemo(
-    () => [...new Set(items.map((i) => i.family_name).filter(Boolean))] as string[],
-    [items],
-  );
+  useEffect(() => {
+    if (previewId == null) {
+      setPreview(null);
+      return;
+    }
+    fetchStarterGalleryDetail(DEFAULT_TENANT_ID, previewId)
+      .then(setPreview)
+      .catch((err) => toast.error(extractApiErrorMessage(err, "Nie udało się wczytać podglądu.")));
+  }, [previewId]);
 
-  const filtered = useMemo(
-    () => items.filter((i) => !familyFilter || i.family_name === familyFilter),
-    [items, familyFilter],
-  );
+  const filtered = useMemo(() => {
+    const items = gallery?.items ?? [];
+    const q = search.trim().toLowerCase();
+    return items.filter((i) => {
+      if (familyFilter && i.family_name !== familyFilter) return false;
+      if (kindFilter && i.kind_name !== kindFilter) return false;
+      if (tagFilter && !(i.tags || []).includes(tagFilter)) return false;
+      if (categoryFilter && !(i.categories || []).includes(categoryFilter)) return false;
+      if (!q) return true;
+      return (
+        i.name_pl.toLowerCase().includes(q) ||
+        (i.description || "").toLowerCase().includes(q) ||
+        (i.kind_name || "").toLowerCase().includes(q)
+      );
+    });
+  }, [gallery, search, familyFilter, kindFilter, tagFilter, categoryFilter]);
 
   async function createFromStarter(item: StarterGalleryItem) {
     try {
@@ -52,37 +94,62 @@ export function StarterGalleryPage() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl p-6">
+    <div className="mx-auto max-w-7xl p-6">
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <Link to={LIST_BASE} className="text-sm text-slate-500 hover:text-slate-800">
             ← Szablony dokumentów
           </Link>
-          <h1 className="mt-1 text-xl font-semibold text-slate-900">Biblioteka starterów</h1>
-          <p className="text-sm text-slate-500">Gotowe punkty wyjścia dla każdego typu dokumentu.</p>
+          <h1 className="mt-1 text-xl font-semibold text-slate-900">Biblioteka dokumentów</h1>
+          <p className="text-sm text-slate-500">
+            Gotowe szablony do szybkiego startu · {gallery?.total ?? 0} starterów
+          </p>
         </div>
-        <select
-          className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
-          value={familyFilter}
-          onChange={(e) => setFamilyFilter(e.target.value)}
-        >
+      </div>
+
+      <div className="mb-6 grid gap-3 rounded-xl border border-slate-200 bg-white p-4 md:grid-cols-2 lg:grid-cols-5">
+        <input
+          type="search"
+          className="rounded-lg border border-slate-200 px-3 py-2 text-sm lg:col-span-2"
+          placeholder="Szukaj starterów…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <select className="rounded-lg border border-slate-200 px-3 py-2 text-sm" value={familyFilter} onChange={(e) => setFamilyFilter(e.target.value)}>
           <option value="">Wszystkie rodziny</option>
-          {families.map((f) => (
+          {(gallery?.families || []).map((f) => (
             <option key={f} value={f}>{f}</option>
+          ))}
+        </select>
+        <select className="rounded-lg border border-slate-200 px-3 py-2 text-sm" value={kindFilter} onChange={(e) => setKindFilter(e.target.value)}>
+          <option value="">Wszystkie typy</option>
+          {(gallery?.kinds || []).map((k) => (
+            <option key={k} value={k}>{k}</option>
+          ))}
+        </select>
+        <select className="rounded-lg border border-slate-200 px-3 py-2 text-sm" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
+          <option value="">Wszystkie kategorie</option>
+          {Object.entries(CATEGORY_LABELS).map(([code, label]) => (
+            <option key={code} value={code}>{label}</option>
           ))}
         </select>
       </div>
 
       {loading ? <p className="text-slate-500">Wczytywanie…</p> : null}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
         {filtered.map((item) => (
           <article
             key={item.id}
-            className="flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"
+            className="flex cursor-pointer flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition hover:border-slate-400"
+            onClick={() => setPreviewId(item.id)}
           >
-            <div className="h-28 border-b border-slate-100 bg-gradient-to-br from-slate-50 to-slate-100 p-3">
-              <pre className="line-clamp-5 overflow-hidden font-mono text-[9px] text-slate-500">{item.preview_html}</pre>
+            <div className="aspect-[210/297] overflow-hidden border-b border-slate-100 bg-slate-50">
+              <StarterThumbnailImage
+                starterId={item.id}
+                alt={item.name_pl}
+                className="h-full w-full object-cover object-top"
+              />
             </div>
             <div className="flex flex-1 flex-col p-4">
               <div className="text-[10px] uppercase tracking-wide text-slate-400">{item.family_name}</div>
@@ -91,13 +158,16 @@ export function StarterGalleryPage() {
               <dl className="mt-3 grid grid-cols-2 gap-1 text-[10px] text-slate-500">
                 <div>Typ: {item.kind_name ?? "—"}</div>
                 <div>Data: {fmtDt(item.updated_at)}</div>
-                <div>Autor: {item.is_system ? "System" : "Własny"}</div>
-                <div>Wersja: {item.code}</div>
+                <div>Autor: {item.author_label ?? (item.is_system ? "System" : "Własny")}</div>
+                <div>Użycia: {item.usage_count ?? 0}</div>
               </dl>
               <button
                 type="button"
                 className="mt-4 rounded-lg bg-slate-900 px-3 py-2 text-xs font-medium text-white"
-                onClick={() => void createFromStarter(item)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void createFromStarter(item);
+                }}
               >
                 Utwórz szablon
               </button>
@@ -105,6 +175,55 @@ export function StarterGalleryPage() {
           </article>
         ))}
       </div>
+
+      {previewId != null && preview ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setPreviewId(null)}>
+          <div
+            className="grid max-h-[90vh] w-full max-w-5xl overflow-hidden rounded-2xl bg-white shadow-xl lg:grid-cols-2"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="overflow-auto border-r border-slate-100 bg-slate-50 p-4">
+              <iframe
+                title="Podgląd dokumentu"
+                className="mx-auto h-[70vh] w-full max-w-md rounded border border-slate-200 bg-white"
+                srcDoc={preview.preview_html}
+              />
+            </div>
+            <div className="overflow-auto p-6">
+              <h2 className="text-lg font-semibold text-slate-900">{preview.name_pl}</h2>
+              <p className="mt-2 text-sm text-slate-600">{preview.description}</p>
+              <dl className="mt-4 space-y-2 text-sm text-slate-600">
+                <div><dt className="font-medium text-slate-800">Rodzina</dt><dd>{preview.family_name}</dd></div>
+                <div><dt className="font-medium text-slate-800">Typ</dt><dd>{preview.kind_name}</dd></div>
+                <div><dt className="font-medium text-slate-800">Autor</dt><dd>{preview.author_label}</dd></div>
+                {preview.base_template ? (
+                  <div><dt className="font-medium text-slate-800">Szablon bazowy</dt><dd>{preview.base_template.template_name} v{preview.base_template.version_number}</dd></div>
+                ) : null}
+              </dl>
+              {preview.partials_used?.length ? (
+                <div className="mt-4">
+                  <h3 className="text-sm font-medium text-slate-800">Partiale</h3>
+                  <ul className="mt-1 list-inside list-disc text-sm text-slate-600">
+                    {preview.partials_used.map((p) => (
+                      <li key={p.partial_code}>{p.partial_code}: {p.template_name}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              <button
+                type="button"
+                className="mt-6 w-full rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white"
+                onClick={() => {
+                  const item = gallery?.items.find((i) => i.id === previewId);
+                  if (item) void createFromStarter(item);
+                }}
+              >
+                Utwórz na podstawie startera
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

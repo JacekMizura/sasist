@@ -34,6 +34,19 @@ import {
 } from "./documentSeriesUiLabels";
 import DocumentsEmptyState from "./DocumentsEmptyState";
 import { DocumentsSectionShell } from "./DocumentsSectionShell";
+import { DocumentTemplateSelect } from "../Settings/document-templates/components/DocumentTemplateSelect";
+
+const SUBTYPE_TO_KIND: Record<string, string> = {
+  INVOICE: "invoice",
+  RECEIPT: "receipt",
+  CORRECTION: "correction",
+  WZ: "wz",
+  PZ: "pz",
+  PW: "pw",
+  RW: "rw",
+  MM: "mm",
+  Z_PZ: "pz",
+};
 
 /** Zgodnie z {@link CompanyProfileDto} (Ustawienia → Firma) → pola `company_*` serii dokumentów. */
 function trimProfileField(v: string | null | undefined): string | null {
@@ -88,6 +101,8 @@ function dtoToWrite(d: DocumentSeriesDto): DocumentSeriesWritePayload {
     warehouse_document_series_id: d.warehouse_document_series_id ?? null,
     print_template: d.print_template,
     print_template_id: d.print_template_id ?? null,
+    document_template_version_id: d.document_template_version_id ?? null,
+    document_template_variant_code: d.document_template_variant_code ?? null,
     email_notification_enabled: d.email_notification_enabled,
     delete_mode: d.delete_mode,
     vat_source: d.vat_source ?? "FROM_ORDER",
@@ -475,6 +490,17 @@ export default function DocumentSeriesEditPage() {
                   placeholder="np. templates/invoice_v2.html"
                 />
               </label>
+              <div className="md:col-span-2">
+                <DocumentTemplateSelect
+                  tenantId={tenantId}
+                  kindCode={SUBTYPE_TO_KIND[draft.subtype] ?? null}
+                  variantCode={draft.document_template_variant_code ?? "standard"}
+                  value={draft.document_template_version_id ?? null}
+                  onChange={(versionId) =>
+                    setDraft((d) => ({ ...d, document_template_version_id: versionId }))
+                  }
+                />
+              </div>
               <label className="flex items-center gap-2 text-sm text-slate-800">
                 <input
                   type="checkbox"

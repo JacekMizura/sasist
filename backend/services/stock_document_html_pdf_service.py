@@ -55,14 +55,24 @@ def build_stock_document_html_pdf_bytes(db: Session, *, tenant_id: int, document
         render_stock_document_html,
     )
 
+    series = None
+    stock_row = db.query(StockDocument).filter(StockDocument.id == int(document_id)).first()
+    series_id = getattr(stock_row, "document_series_id", None) if stock_row else None
+    if series_id:
+        series = db.query(DocumentSeries).filter(DocumentSeries.id == str(series_id)).first()
+
+    from ..document_templates.services.document_integration_service import series_template_render_kwargs
+
     wh_id = getattr(read, "warehouse_id", None)
-    if binding_available(db, tenant_id=int(tenant_id), document_type=doc_type):
+    render_kwargs = series_template_render_kwargs(series)
+    if binding_available(db, tenant_id=int(tenant_id), document_type=doc_type, variant_code=render_kwargs.get("variant_code", "standard")) or render_kwargs.get("template_version_id"):
         html = render_stock_document_html(
             db,
             tenant_id=int(tenant_id),
             document_type=doc_type,
             params=params,
             warehouse_id=int(wh_id) if wh_id else None,
+            **render_kwargs,
         )
         from .structure_report_pdf_service import html_document_to_pdf_bytes
 
@@ -76,12 +86,6 @@ def build_stock_document_html_pdf_bytes(db: Session, *, tenant_id: int, document
         tenant_id,
         document_id,
     )
-
-    series = None
-    stock_row = db.query(StockDocument).filter(StockDocument.id == int(document_id)).first()
-    series_id = getattr(stock_row, "document_series_id", None) if stock_row else None
-    if series_id:
-        series = db.query(DocumentSeries).filter(DocumentSeries.id == str(series_id)).first()
 
     ctx = {
         "document": params["document"],

@@ -53,6 +53,9 @@ class DocumentSeries(Base):
     print_template = Column(String(512), nullable=False, default="")
     #: Preset document layout id for PDF/HTML generation (optional; falls back to ``print_template`` path/slug).
     print_template_id = Column(Integer, nullable=True, index=True)
+    #: Optional override — published Document Template version for PDF/HTML (DTE).
+    document_template_version_id = Column(Integer, nullable=True, index=True)
+    document_template_variant_code = Column(String(32), nullable=True)
 
     email_notification_enabled = Column(Boolean, nullable=False, default=False)
 

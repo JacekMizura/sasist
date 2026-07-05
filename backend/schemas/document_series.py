@@ -59,6 +59,8 @@ class DocumentSeriesBase(BaseModel):
     )
     print_template: str = Field("", max_length=512)
     print_template_id: Optional[int] = Field(None, ge=1, le=999999)
+    document_template_version_id: Optional[int] = Field(None, ge=1)
+    document_template_variant_code: Optional[str] = Field(None, max_length=32)
     email_notification_enabled: bool = False
     delete_mode: DeleteMode = "ASK"
     vat_source: Optional[VatSource] = None

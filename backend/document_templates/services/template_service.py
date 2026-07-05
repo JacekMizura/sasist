@@ -166,6 +166,7 @@ def create_template_from_starter(
     kind_code: str,
     name: str,
     starter_code: str = "default",
+    variant_code: str = DEFAULT_VARIANT_CODE,
     user_id: int | None = None,
 ) -> dict[str, Any]:
     kind = get_kind_by_code(db, kind_code=kind_code)
@@ -191,6 +192,7 @@ def create_template_from_starter(
         name=str(name).strip() or starter.name_pl,
         description=starter.description,
         is_system=False,
+        template_code=f"{kind.code}_{str(variant_code or DEFAULT_VARIANT_CODE)}",
         created_by_user_id=user_id,
     )
     db.add(template)

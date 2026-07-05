@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 RENDER_FROM_URL_SCRIPT = BACKEND_ROOT / "scripts" / "structure_report_pdf" / "render_from_url.mjs"
 RENDER_STDIN_SCRIPT = BACKEND_ROOT / "scripts" / "structure_report_pdf" / "render.mjs"
+RENDER_THUMBNAIL_SCRIPT = BACKEND_ROOT / "scripts" / "structure_report_pdf" / "render_thumbnail.mjs"
 REPORT_TIMEOUT_MESSAGE = "Report rendering timeout - frontend not reachable or data failed to load"
 
 _NODE_FALLBACK_PATHS = ("/usr/bin/node", "/usr/local/bin/node")
@@ -64,6 +65,28 @@ def html_document_to_pdf_bytes(html: str, *, timeout_sec: int = 120) -> bytes:
         err = proc.stderr.decode("utf-8", errors="replace")
         logger.error("html_document_to_pdf_bytes node failed: %s", err)
         raise RuntimeError(f"PDF generation failed: {err or proc.stdout.decode('utf-8', errors='replace')}")
+    return proc.stdout
+
+
+def html_to_thumbnail_png_bytes(html: str, *, timeout_sec: int = 90) -> bytes:
+    """Render HTML to PNG thumbnail (A4 viewport) via Puppeteer — same Node stack as PDF."""
+    if not RENDER_THUMBNAIL_SCRIPT.is_file():
+        raise FileNotFoundError(f"Thumbnail render script missing: {RENDER_THUMBNAIL_SCRIPT}")
+    html_s = (html or "").strip()
+    if not html_s:
+        raise ValueError("Empty HTML document")
+    node_bin = _node_executable()
+    proc = subprocess.run(
+        [node_bin, str(RENDER_THUMBNAIL_SCRIPT)],
+        input=html_s.encode("utf-8"),
+        capture_output=True,
+        cwd=str(RENDER_THUMBNAIL_SCRIPT.parent),
+        timeout=timeout_sec,
+    )
+    if proc.returncode != 0:
+        err = proc.stderr.decode("utf-8", errors="replace")
+        logger.error("html_to_thumbnail_png_bytes node failed: %s", err)
+        raise RuntimeError(f"Thumbnail generation failed: {err or proc.stdout.decode('utf-8', errors='replace')}")
     return proc.stdout
 
 

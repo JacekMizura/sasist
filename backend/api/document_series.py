@@ -113,6 +113,12 @@ def _series_to_read(row: DocumentSeries) -> DocumentSeriesRead:
         ),
         print_template=str(row.print_template or ""),
         print_template_id=int(row.print_template_id) if getattr(row, "print_template_id", None) is not None else None,
+        document_template_version_id=(
+            int(row.document_template_version_id)
+            if getattr(row, "document_template_version_id", None) is not None
+            else None
+        ),
+        document_template_variant_code=getattr(row, "document_template_variant_code", None),
         email_notification_enabled=bool(row.email_notification_enabled),
         delete_mode=_coerce_delete_mode(row.delete_mode),  # type: ignore[arg-type]
         vat_source=str(row.vat_source).strip().upper() if row.vat_source else None,  # type: ignore[arg-type]
@@ -284,6 +290,14 @@ def _apply_body_to_row(row: DocumentSeries, body: DocumentSeriesBase) -> None:
     if tpl_id is None and not row.print_template:
         tpl_id = _default_print_template_id_for_subtype(str(body.subtype))
     row.print_template_id = tpl_id
+    if hasattr(row, "document_template_version_id"):
+        row.document_template_version_id = (
+            int(body.document_template_version_id) if body.document_template_version_id is not None else None
+        )
+    if hasattr(row, "document_template_variant_code"):
+        row.document_template_variant_code = (
+            str(body.document_template_variant_code).strip() if body.document_template_variant_code else None
+        )
     row.email_notification_enabled = bool(body.email_notification_enabled)
     row.delete_mode = str(body.delete_mode).strip().upper()
     row.vat_source = str(body.vat_source).strip().upper() if body.vat_source else None

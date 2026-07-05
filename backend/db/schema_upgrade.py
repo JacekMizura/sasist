@@ -4353,6 +4353,8 @@ def ensure_document_series_extended_columns(engine: Engine) -> None:
             ("is_active", true_bool),
             ("last_number_period", "VARCHAR(16)"),
             ("collective_return_receipt", true_bool),
+            ("document_template_version_id", "INTEGER"),
+            ("document_template_variant_code", "VARCHAR(32)"),
         ]
         for col, typ in additions:
             if col not in cols:

@@ -29,6 +29,7 @@ def render_document(
     warehouse_id: int | None = None,
     operator_user_id: int | None = None,
     variant_code: str = "standard",
+    template_version_id: int | None = None,
 ) -> str | bytes:
     context = build_context_pipeline(
         db,
@@ -43,6 +44,10 @@ def render_document(
         resolved = resolved_template
     elif template is not None:
         resolved = resolve_plain_twig(template)
+    elif template_version_id is not None:
+        from .template_resolution_service import resolve_version_to_document_template
+
+        resolved = resolve_version_to_document_template(db, version_id=int(template_version_id))
     else:
         resolved, _ = resolve_bound_document_template(
             db,

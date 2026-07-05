@@ -29,6 +29,7 @@ def render_stock_document_html(
     params: dict[str, Any],
     warehouse_id: int | None = None,
     variant_code: str = "standard",
+    template_version_id: int | None = None,
 ) -> str:
     kind_code = KIND_BY_DOC_TYPE.get(str(document_type or "").upper())
     if not kind_code:
@@ -45,13 +46,18 @@ def render_stock_document_html(
         if key not in context or isinstance(value, (dict, list)):
             context[key] = value
 
-    resolved, _ = resolve_bound_document_template(
-        db,
-        tenant_id=int(tenant_id),
-        kind_code=kind_code,
-        warehouse_id=warehouse_id,
-        variant_code=variant_code,
-    )
+    if template_version_id is not None:
+        from ..services.template_resolution_service import resolve_version_to_document_template
+
+        resolved = resolve_version_to_document_template(db, version_id=int(template_version_id))
+    else:
+        resolved, _ = resolve_bound_document_template(
+            db,
+            tenant_id=int(tenant_id),
+            kind_code=kind_code,
+            warehouse_id=warehouse_id,
+            variant_code=variant_code,
+        )
     html = render_for_format(resolved, context, DocumentOutputFormat.HTML)
     return str(html)
 

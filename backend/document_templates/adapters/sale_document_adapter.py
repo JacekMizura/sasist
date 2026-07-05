@@ -33,6 +33,7 @@ def render_sale_document_html(
     document_subtype: str | None,
     legacy_renderer,
     variant_code: str = DEFAULT_VARIANT_CODE,
+    template_version_id: int | None = None,
 ) -> str:
     kind_code = sale_kind_for_subtype(document_subtype)
     html = render_document_with_legacy_fallback(
@@ -43,6 +44,7 @@ def render_sale_document_html(
         legacy_renderer=legacy_renderer,
         output_format=DocumentOutputFormat.HTML,
         variant_code=variant_code,
+        template_version_id=template_version_id,
         log_label=f"sale_document_id={document_id}",
     )
     return str(html)

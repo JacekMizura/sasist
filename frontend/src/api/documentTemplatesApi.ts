@@ -192,7 +192,53 @@ export type StarterGalleryItem = {
   family_name: string | null;
   is_system: boolean;
   updated_at: string | null;
+  author_label?: string;
+  tags?: string[];
+  categories?: string[];
+  thumbnail_url: string;
+  usage_count?: number;
+};
+
+export type StarterGalleryResponse = {
+  items: StarterGalleryItem[];
+  total: number;
+  families: string[];
+  kinds: string[];
+  tags: string[];
+};
+
+export type StarterGalleryDetailDto = {
+  id: number;
+  code: string;
+  name_pl: string;
+  description: string | null;
+  kind_code: string | null;
+  kind_name: string | null;
+  family_code: string | null;
+  family_name: string | null;
+  is_system: boolean;
+  author_label: string;
+  updated_at: string | null;
+  thumbnail_url: string;
   preview_html: string;
+  base_template: { template_name: string; version_id: number; version_number: number } | null;
+  partials_used: Array<{ partial_code: string; template_name: string; version_id: number }>;
+  variables: unknown[];
+};
+
+export type PublishedTemplateOptionDto = {
+  template_id: number;
+  version_id: number;
+  version_number: number;
+  template_name: string;
+  kind_code: string | null;
+  kind_name: string | null;
+  variant_code: string;
+  status: string;
+  status_label: string;
+  label: string;
+  published_at: string | null;
+  is_default_binding: boolean;
 };
 
 export type EditorImpactDto = {
@@ -470,8 +516,35 @@ export async function searchSymbolUsage(
   return data.items;
 }
 
-export async function fetchStarterGallery() {
-  const { data } = await api.get<{ items: StarterGalleryItem[] }>("/document-templates/starters/gallery");
+export async function fetchStarterGallery(tenantId: number = DEFAULT_TENANT) {
+  const { data } = await api.get<StarterGalleryResponse>("/document-templates/starters/gallery", {
+    params: { tenant_id: tenantId },
+  });
+  return data;
+}
+
+export async function fetchStarterGalleryDetail(tenantId: number, starterId: number) {
+  const { data } = await api.get<StarterGalleryDetailDto>(`/document-templates/starters/${starterId}`, {
+    params: { tenant_id: tenantId },
+  });
+  return data;
+}
+
+export async function fetchStarterThumbnailBlob(tenantId: number, starterId: number) {
+  const { data } = await api.get<Blob>(`/document-templates/starters/${starterId}/thumbnail`, {
+    params: { tenant_id: tenantId },
+    responseType: "blob",
+  });
+  return data;
+}
+
+export async function fetchPublishedTemplateOptions(
+  tenantId: number,
+  filters?: { kind_code?: string; variant_code?: string; search?: string },
+) {
+  const { data } = await api.get<{ items: PublishedTemplateOptionDto[] }>("/document-templates/published-options", {
+    params: { tenant_id: tenantId, ...filters },
+  });
   return data.items;
 }
 

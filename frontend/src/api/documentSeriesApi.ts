@@ -35,6 +35,8 @@ export type DocumentSeriesDto = {
   warehouse_document_series_id: string | null;
   print_template: string;
   print_template_id: number | null;
+  document_template_version_id?: number | null;
+  document_template_variant_code?: string | null;
   email_notification_enabled: boolean;
   delete_mode: DeleteMode;
   vat_source: VatSource | null;
@@ -116,6 +118,8 @@ export function createDefaultDocumentSeriesWrite(): DocumentSeriesWritePayload {
     warehouse_document_series_id: null,
     print_template: "",
     print_template_id: null,
+    document_template_version_id: null,
+    document_template_variant_code: null,
     email_notification_enabled: false,
     delete_mode: "ASK",
     vat_source: "FROM_ORDER",

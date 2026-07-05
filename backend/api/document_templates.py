@@ -39,9 +39,14 @@ from ..document_templates.services.template_editor_service import (
     get_version_content,
     list_layout_templates,
     list_published_versions,
-    list_starter_gallery,
     list_templates_enriched,
 )
+from ..document_templates.services.starter_gallery_service import (
+    get_starter_gallery_detail,
+    get_starter_thumbnail_bytes,
+    list_starter_gallery_enriched,
+)
+from ..document_templates.services.published_template_options_service import list_published_template_options
 from ..document_templates.services.document_migration_service import migrate_tenant_document_bindings
 from ..document_templates.services.starter_service import clone_starter, export_starter, import_starter
 from ..document_templates.services.context_schema_registry import fields_for_schema_key
@@ -206,6 +211,7 @@ def api_create_document_template_from_starter(
             kind_code=payload.kind_code,
             name=payload.name,
             starter_code=payload.starter_code,
+            variant_code=payload.variant_code,
             user_id=int(user.id),
         )
     except DocumentTemplateError as exc:
@@ -555,11 +561,68 @@ def api_usage_search(
 
 @router.get("/starters/gallery")
 def api_starter_gallery(
+    tenant_id: int = Query(1, ge=1),
     db: Session = Depends(get_db),
     user: AppUser = Depends(get_current_user),
 ):
     _ = user
-    return {"items": list_starter_gallery(db)}
+    return list_starter_gallery_enriched(db, tenant_id=int(tenant_id))
+
+
+@router.get("/starters/{starter_id}")
+def api_starter_gallery_detail(
+    starter_id: int,
+    tenant_id: int = Query(1, ge=1),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    _ = user
+    try:
+        return get_starter_gallery_detail(db, starter_id=int(starter_id), tenant_id=int(tenant_id))
+    except DocumentTemplateError as exc:
+        raise _map_error(exc) from exc
+
+
+@router.get("/starters/{starter_id}/thumbnail")
+def api_starter_thumbnail(
+    starter_id: int,
+    tenant_id: int = Query(1, ge=1),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    _ = user
+    try:
+        png, cached = get_starter_thumbnail_bytes(db, starter_id=int(starter_id), tenant_id=int(tenant_id))
+        return Response(
+            content=png,
+            media_type="image/png",
+            headers={"Cache-Control": "public, max-age=86400", "X-Starter-Thumbnail-Cached": "1" if cached else "0"},
+        )
+    except DocumentTemplateError as exc:
+        raise _map_error(exc) from exc
+    except (FileNotFoundError, RuntimeError, ValueError) as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@router.get("/published-options")
+def api_published_template_options(
+    tenant_id: int = Query(..., ge=1),
+    kind_code: str | None = None,
+    variant_code: str | None = None,
+    search: str | None = None,
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    _ = user
+    return {
+        "items": list_published_template_options(
+            db,
+            tenant_id=int(tenant_id),
+            kind_code=kind_code,
+            variant_code=variant_code,
+            search=search,
+        )
+    }
 
 
 @router.get("/templates/{template_id}/export")
