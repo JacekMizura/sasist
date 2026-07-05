@@ -1,15 +1,27 @@
 /**
  * Reads full HTML document from stdin, writes PDF bytes to stdout.
- * Puppeteer stack aligned with render_from_url.mjs (see puppeteer_pdf_shared.mjs).
+ * DTE documents (Twig HTML via setContent) — NOT aligned with render_from_url.mjs:
+ * layout/CSS is authored for screen; preferCSSPageSize stays false (@page clip → blank PDF).
  */
-import {
-  PDF_OPTIONS,
-  RENDER_TIMEOUT_MS,
-  isTimeoutError,
-  launchBrowser,
-} from "./puppeteer_pdf_shared.mjs";
+import { isTimeoutError, launchBrowser } from "./puppeteer_pdf_shared.mjs";
 
+const RENDER_TIMEOUT_MS = 120_000;
 const RENDER_TIMEOUT_MESSAGE = "HTML document rendering timeout";
+
+/** @type {import("puppeteer").PDFOptions} */
+const DTE_PDF_OPTIONS = {
+  format: "A4",
+  printBackground: true,
+  margin: {
+    top: "12mm",
+    right: "12mm",
+    bottom: "12mm",
+    left: "12mm",
+  },
+  // MUST stay false: preferCSSPageSize + @page margins clip body text → blank PDF.
+  preferCSSPageSize: false,
+  scale: 1,
+};
 
 async function main() {
   const chunks = [];
@@ -26,8 +38,11 @@ async function main() {
 
   try {
     const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: "networkidle0", timeout: RENDER_TIMEOUT_MS });
-    const pdf = await page.pdf(PDF_OPTIONS);
+    // Screen styles — DTE layout lives in global CSS, not @media print.
+    await page.emulateMediaType("screen");
+    await page.setContent(html, { waitUntil: "domcontentloaded", timeout: RENDER_TIMEOUT_MS });
+    await page.evaluate(() => document.fonts.ready);
+    const pdf = await page.pdf(DTE_PDF_OPTIONS);
     process.stdout.write(pdf);
   } catch (err) {
     if (isTimeoutError(err)) {

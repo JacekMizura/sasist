@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -19,6 +20,28 @@ RENDER_THUMBNAIL_SCRIPT = BACKEND_ROOT / "scripts" / "structure_report_pdf" / "r
 REPORT_TIMEOUT_MESSAGE = "Report rendering timeout - frontend not reachable or data failed to load"
 
 _NODE_FALLBACK_PATHS = ("/usr/bin/node", "/usr/local/bin/node")
+
+
+_UPLOADS_ROOT = BACKEND_ROOT / "uploads"
+_UPLOAD_SRC_RE = re.compile(r'src="(/uploads/[^"]+)"')
+
+
+def _inline_upload_src_urls(html: str) -> str:
+    """Map /uploads/... img src to file:// so Puppeteer setContent can load logos locally."""
+    uploads_root = _UPLOADS_ROOT.resolve()
+
+    def _repl(match: re.Match[str]) -> str:
+        rel = match.group(1)
+        disk = (uploads_root / rel.removeprefix("/uploads/").lstrip("/")).resolve()
+        try:
+            disk.relative_to(uploads_root)
+        except ValueError:
+            return match.group(0)
+        if disk.is_file():
+            return f'src="{disk.as_uri()}"'
+        return match.group(0)
+
+    return _UPLOAD_SRC_RE.sub(_repl, html)
 
 
 def _node_executable() -> str:
@@ -50,7 +73,7 @@ def html_document_to_pdf_bytes(html: str, *, timeout_sec: int = 120) -> bytes:
             f"Puppeteer render script missing: {RENDER_STDIN_SCRIPT}. "
             "Run: cd backend/scripts/structure_report_pdf && npm install"
         )
-    html_s = (html or "").strip()
+    html_s = _inline_upload_src_urls((html or "").strip())
     if not html_s:
         raise ValueError("Empty HTML document")
     node_bin = _node_executable()

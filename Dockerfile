@@ -58,7 +58,7 @@ RUN cd backend/scripts/structure_report_pdf \
     && test -f render.mjs \
     && test -d node_modules/puppeteer \
     && PROBE_PDF=/tmp/docker_render_probe.pdf \
-    && printf '%s' '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body><h1>build probe</h1></body></html>' | node render.mjs > "$PROBE_PDF" \
+    && printf '%s' '<!DOCTYPE html><html><head><meta charset="utf-8"/><style>@page{size:A4}body{font-family:Arial;color:#111}h1{font-size:18px}</style></head><body><h1>DTE probe</h1><p>content</p></body></html>' | node render.mjs > "$PROBE_PDF" \
     && test -s "$PROBE_PDF" \
     && BYTES=$(wc -c < "$PROBE_PDF" | tr -d ' ') \
     && echo "pdf pipeline ok bytes=$BYTES ls=$(ls -la "$PROBE_PDF")"

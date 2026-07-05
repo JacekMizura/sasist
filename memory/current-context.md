@@ -5,6 +5,10 @@
 - Weryfikacja techniczna przed commitem: `frontend` → `npm run build`; backend → import `backend.main`, brak błędów składni/importów.
 - Wdrożenie i testy manualne: **użytkownik** (Vercel + Railway). Regresje: screenshot + request/response + stacktrace + logi → agent poprawia kod.
 
+## Document Templates — pusty PDF Railway (2026-07-05)
+- **Przyczyna:** commit v27 zunifikował `render.mjs` z `render_from_url.mjs` — usunięto `emulateMediaType("screen")`, `domcontentloaded`+`fonts.ready`, `preferCSSPageSize:false` dla DTE (komentarz w kodzie: clip → blank PDF).
+- **Fix:** przywrócono DTE stack w `render.mjs`; `structure_report_pdf_service._inline_upload_src_urls()` mapuje `/uploads/` → `file://` dla logo w Puppeteer setContent.
+
 ## Document Templates — preview PDF deployment (2026-07-05)
 - Fix: Nixpacks `providers = ["python", "node"]` + override `node:install` → tylko `structure_report_pdf/`
 - Railway builder: **NIXPACKS** (Dockerfile pozostaje opcjonalny fallback, nieaktywny)
