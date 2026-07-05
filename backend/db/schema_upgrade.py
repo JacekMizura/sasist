@@ -31,6 +31,39 @@ def _cols(engine: Engine, table: str) -> set[str]:
     return _table_column_names(engine, table)
 
 
+
+def _is_sqlite(engine: Engine) -> bool:
+    return engine.dialect.name == "sqlite"
+
+
+def _column_nullable(bind: Engine, table: str, column: str) -> bool | None:
+    """Return nullable flag from Inspector; None if column/table missing."""
+    from sqlalchemy import inspect
+
+    from .schema_introspection import get_engine
+
+    if not _table_exists(bind, table):
+        return None
+    for col in inspect(get_engine(bind)).get_columns(table):
+        if str(col["name"]) == column:
+            return bool(col.get("nullable", True))
+    return None
+
+
+def _drop_unique_index_on_single_column(conn, table: str, column: str) -> None:
+    """Drop a single-column UNIQUE index (Inspector — works on SQLite and PostgreSQL)."""
+    from sqlalchemy import inspect
+
+    for idx in inspect(get_engine(conn)).get_indexes(table):
+        if not idx.get("unique"):
+            continue
+        col_names = list(idx.get("column_names") or [])
+        if col_names == [column]:
+            idx_name = idx.get("name")
+            if idx_name:
+                conn.execute(text(f'DROP INDEX IF EXISTS "{idx_name}"'))
+
+
 def _timestamp_column_ddl(engine: Engine, table: str, column: str) -> str:
     col_type = "TIMESTAMP" if engine.dialect.name == "postgresql" else "DATETIME"
     return f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"
@@ -55,8 +88,7 @@ def _migrate_panel_ui_status_colors_to_hex(conn, table: str) -> None:
 def ensure_locations_columns(engine: Engine) -> None:
     """Add rack_name, level, position, bin to locations table if missing."""
     with engine.connect() as conn:
-        result = conn.execute(text("PRAGMA table_info(locations)"))
-        columns = [row[1] for row in result]
+        columns = _table_column_names(conn, "locations")
 
         if "rack_name" not in columns:
             conn.execute(text("ALTER TABLE locations ADD COLUMN rack_name TEXT"))
@@ -73,8 +105,7 @@ def ensure_locations_columns(engine: Engine) -> None:
 def ensure_warehouse_layout_building_columns(engine: Engine) -> None:
     """Add building/layout JSON columns to warehouse_layouts if missing."""
     with engine.connect() as conn:
-        result = conn.execute(text("PRAGMA table_info(warehouse_layouts)"))
-        columns = [row[1] for row in result]
+        columns = _table_column_names(conn, "warehouse_layouts")
         for col, typ in [
             ("building_width_m", "REAL"),
             ("building_depth_m", "REAL"),
@@ -90,8 +121,7 @@ def ensure_warehouse_layout_building_columns(engine: Engine) -> None:
 def ensure_warehouse_layout_identity_columns(engine: Engine) -> None:
     """Add rack/bin identity and activity columns plus location.location_uuid if missing."""
     with engine.connect() as conn:
-        result = conn.execute(text("PRAGMA table_info(warehouse_layout_racks)"))
-        rack_columns = [row[1] for row in result]
+        rack_columns = _table_column_names(conn, "warehouse_layout_racks")
         if "uuid" not in rack_columns:
             conn.execute(text("ALTER TABLE warehouse_layout_racks ADD COLUMN uuid VARCHAR(64)"))
         if "is_active" not in rack_columns:
@@ -99,22 +129,19 @@ def ensure_warehouse_layout_identity_columns(engine: Engine) -> None:
         if "rack_type" not in rack_columns:
             conn.execute(text("ALTER TABLE warehouse_layout_racks ADD COLUMN rack_type VARCHAR(32) NOT NULL DEFAULT 'warehouse'"))
 
-        result = conn.execute(text("PRAGMA table_info(warehouse_bins)"))
-        bin_columns = [row[1] for row in result]
+        bin_columns = _table_column_names(conn, "warehouse_bins")
         if "location_uuid" not in bin_columns:
             conn.execute(text("ALTER TABLE warehouse_bins ADD COLUMN location_uuid VARCHAR(64)"))
         if "is_active" not in bin_columns:
             conn.execute(text("ALTER TABLE warehouse_bins ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1"))
 
-        result = conn.execute(text("PRAGMA table_info(locations)"))
-        location_columns = [row[1] for row in result]
+        location_columns = _table_column_names(conn, "locations")
         if "location_uuid" not in location_columns:
             conn.execute(text("ALTER TABLE locations ADD COLUMN location_uuid VARCHAR(64)"))
         if "is_active" not in location_columns:
             conn.execute(text("ALTER TABLE locations ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1"))
 
-        result = conn.execute(text("PRAGMA table_info(storage_locations)"))
-        storage_location_columns = [row[1] for row in result]
+        storage_location_columns = _table_column_names(conn, "storage_locations")
         if "location_id" not in storage_location_columns:
             conn.execute(text("ALTER TABLE storage_locations ADD COLUMN location_id INTEGER"))
         if "is_active" not in storage_location_columns:
@@ -135,8 +162,7 @@ def ensure_warehouse_layout_identity_columns(engine: Engine) -> None:
 def ensure_products_physical_columns(engine: Engine) -> None:
     """Add orientation_type and shape_type to products table if missing (nullable). Defaults: NULL → any/box at read time."""
     with engine.connect() as conn:
-        result = conn.execute(text("PRAGMA table_info(products)"))
-        columns = [row[1] for row in result]
+        columns = _table_column_names(conn, "products")
         if "orientation_type" not in columns:
             conn.execute(text("ALTER TABLE products ADD COLUMN orientation_type VARCHAR(20)"))
         if "shape_type" not in columns:
@@ -147,8 +173,7 @@ def ensure_products_physical_columns(engine: Engine) -> None:
 def ensure_products_stack_columns(engine: Engine) -> None:
     """Add stack_compressible, compressed_height_cm, max_stack_weight to products table if missing (nullable)."""
     with engine.connect() as conn:
-        result = conn.execute(text("PRAGMA table_info(products)"))
-        columns = [row[1] for row in result]
+        columns = _table_column_names(conn, "products")
         if "stack_compressible" not in columns:
             conn.execute(text("ALTER TABLE products ADD COLUMN stack_compressible INTEGER"))
         if "compressed_height_cm" not in columns:
@@ -161,8 +186,7 @@ def ensure_products_stack_columns(engine: Engine) -> None:
 def ensure_products_stack_behavior_column(engine: Engine) -> None:
     """Add stack_behavior to products table if missing (nullable). Default at read time: stackable."""
     with engine.connect() as conn:
-        result = conn.execute(text("PRAGMA table_info(products)"))
-        columns = [row[1] for row in result]
+        columns = _table_column_names(conn, "products")
         if "stack_behavior" not in columns:
             conn.execute(text("ALTER TABLE products ADD COLUMN stack_behavior VARCHAR(20)"))
         conn.commit()
@@ -171,8 +195,7 @@ def ensure_products_stack_behavior_column(engine: Engine) -> None:
 def ensure_products_import_metadata_columns(engine: Engine) -> None:
     """Add catalog_number and metadata_json for full CSV product import (nullable)."""
     with engine.connect() as conn:
-        result = conn.execute(text("PRAGMA table_info(products)"))
-        columns = [row[1] for row in result]
+        columns = _table_column_names(conn, "products")
         if "catalog_number" not in columns:
             conn.execute(text("ALTER TABLE products ADD COLUMN catalog_number VARCHAR(128)"))
         if "metadata_json" not in columns:
@@ -184,8 +207,7 @@ def ensure_products_import_metadata_columns(engine: Engine) -> None:
 def ensure_products_replenishment_levels_columns(engine: Engine) -> None:
     """Add min_pick_quantity / max_pick_quantity for WMS replenishment thresholds (nullable)."""
     with engine.connect() as conn:
-        result = conn.execute(text("PRAGMA table_info(products)"))
-        columns = [row[1] for row in result]
+        columns = _table_column_names(conn, "products")
         if "min_pick_quantity" not in columns:
             conn.execute(text("ALTER TABLE products ADD COLUMN min_pick_quantity REAL"))
         if "max_pick_quantity" not in columns:
@@ -196,8 +218,7 @@ def ensure_products_replenishment_levels_columns(engine: Engine) -> None:
 def ensure_products_stock_alert_columns(engine: Engine) -> None:
     """Add enable_stock_alert / min_total_stock for global low-stock threshold (nullable)."""
     with engine.connect() as conn:
-        result = conn.execute(text("PRAGMA table_info(products)"))
-        columns = [row[1] for row in result]
+        columns = _table_column_names(conn, "products")
         if "enable_stock_alert" not in columns:
             conn.execute(text("ALTER TABLE products ADD COLUMN enable_stock_alert INTEGER"))
         if "min_total_stock" not in columns:
@@ -208,8 +229,7 @@ def ensure_products_stock_alert_columns(engine: Engine) -> None:
 def ensure_products_carton_columns(engine: Engine) -> None:
     """Bulk packaging (carton) fields on products — separate from single-unit dimensions."""
     with engine.connect() as conn:
-        result = conn.execute(text("PRAGMA table_info(products)"))
-        columns = [row[1] for row in result]
+        columns = _table_column_names(conn, "products")
         specs = [
             ("bulk_ean", "TEXT"),
             ("units_per_carton", "REAL"),
@@ -228,8 +248,7 @@ def ensure_products_carton_columns(engine: Engine) -> None:
 def ensure_products_carton_stacking_columns(engine: Engine) -> None:
     """Carton orientation / stacking — separate from single-unit orientation_type / stack_behavior."""
     with engine.connect() as conn:
-        result = conn.execute(text("PRAGMA table_info(products)"))
-        columns = [row[1] for row in result]
+        columns = _table_column_names(conn, "products")
         specs = [
             ("carton_orientation_type", "VARCHAR(20)"),
             ("carton_shape_type", "VARCHAR(20)"),
@@ -251,7 +270,7 @@ def ensure_orders_deleted_at_column(engine: Engine) -> None:
         if not exists:
             conn.commit()
             return
-        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(orders)"))}
+        cols = _table_column_names(conn, "orders")
         if "deleted_at" not in cols:
             conn.execute(text("ALTER TABLE orders ADD COLUMN deleted_at DATETIME"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_orders_deleted_at ON orders(deleted_at)"))
@@ -265,7 +284,7 @@ def ensure_products_deleted_at_column(engine: Engine) -> None:
         if not exists:
             conn.commit()
             return
-        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(products)"))}
+        cols = _table_column_names(conn, "products")
         if "deleted_at" not in cols:
             conn.execute(text("ALTER TABLE products ADD COLUMN deleted_at DATETIME"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_products_deleted_at ON products(deleted_at)"))
@@ -279,7 +298,7 @@ def ensure_wms_order_returns_deleted_at_column(engine: Engine) -> None:
         if not exists:
             conn.commit()
             return
-        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(wms_order_returns)"))}
+        cols = _table_column_names(conn, "wms_order_returns")
         if "deleted_at" not in cols:
             conn.execute(text("ALTER TABLE wms_order_returns ADD COLUMN deleted_at DATETIME"))
         conn.execute(
@@ -295,7 +314,7 @@ def ensure_customers_deleted_at_column(engine: Engine) -> None:
         if not exists:
             conn.commit()
             return
-        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(customers)"))}
+        cols = _table_column_names(conn, "customers")
         if "deleted_at" not in cols:
             conn.execute(text("ALTER TABLE customers ADD COLUMN deleted_at DATETIME"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_customers_deleted_at ON customers(deleted_at)"))
@@ -309,7 +328,7 @@ def ensure_bundles_deleted_at_column(engine: Engine) -> None:
         if not exists:
             conn.commit()
             return
-        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(bundles)"))}
+        cols = _table_column_names(conn, "bundles")
         if "deleted_at" not in cols:
             conn.execute(text("ALTER TABLE bundles ADD COLUMN deleted_at DATETIME"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_bundles_deleted_at ON bundles(deleted_at)"))
@@ -341,8 +360,7 @@ def ensure_inventory_location_uuid_columns(engine: Engine) -> None:
     """Add location_uuid to stock/inventory tables and backfill from locations via location_id."""
     with engine.connect() as conn:
         for table in ("stock", "inventory"):
-            result = conn.execute(text(f"PRAGMA table_info({table})"))
-            columns = [row[1] for row in result]
+            columns = _table_column_names(conn, table)
             if "location_uuid" not in columns:
                 conn.execute(text(f"ALTER TABLE {table} ADD COLUMN location_uuid VARCHAR(64)"))
             conn.execute(
@@ -365,8 +383,7 @@ def ensure_inventory_location_uuid_columns(engine: Engine) -> None:
 def ensure_wms_refunds_columns(engine: Engine) -> None:
     """Add missing refund columns for WMS RMZ refunds."""
     with engine.connect() as conn:
-        result = conn.execute(text("PRAGMA table_info(wms_refunds)"))
-        columns = [row[1] for row in result]
+        columns = _table_column_names(conn, "wms_refunds")
         if "refund_shipping_amount" not in columns:
             conn.execute(text("ALTER TABLE wms_refunds ADD COLUMN refund_shipping_amount REAL"))
         conn.commit()
@@ -503,8 +520,7 @@ def ensure_damage_report_columns(engine: Engine) -> None:
     """Add newer damage-report columns and indexes for entry-based workflow if missing."""
     with engine.connect() as conn:
         # damage_report_items extensions
-        result = conn.execute(text("PRAGMA table_info(damage_report_items)"))
-        cols = [row[1] for row in result]
+        cols = _table_column_names(conn, "damage_report_items")
         if cols:
             if "damage_entry_id" not in cols:
                 conn.execute(text("ALTER TABLE damage_report_items ADD COLUMN damage_entry_id INTEGER"))
@@ -547,8 +563,7 @@ def ensure_damage_report_columns(engine: Engine) -> None:
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_damage_entries_status ON damage_entries(status)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_damage_entries_location_uuid ON damage_entries(location_uuid)"))
 
-        result = conn.execute(text("PRAGMA table_info(damage_entries)"))
-        de_cols = [row[1] for row in result]
+        de_cols = _table_column_names(conn, "damage_entries")
         if de_cols and "photo_urls" not in de_cols:
             conn.execute(text("ALTER TABLE damage_entries ADD COLUMN photo_urls TEXT"))
 
@@ -600,10 +615,9 @@ def ensure_return_statuses_and_rmz(engine: Engine) -> None:
         if not exists:
             return
 
-        r = conn.execute(text("PRAGMA table_info(wms_order_returns)"))
-        colmap = {row[1]: row for row in r}
-        has_status = "status" in colmap
-        has_status_id = "status_id" in colmap
+        columns = _table_column_names(conn, "wms_order_returns")
+        has_status = "status" in columns
+        has_status_id = "status_id" in columns
 
         pairs = conn.execute(
             text("SELECT DISTINCT tenant_id, warehouse_id FROM wms_order_returns")
@@ -662,7 +676,7 @@ def ensure_return_statuses_and_rmz(engine: Engine) -> None:
                 )
             has_status_id = True
 
-        if has_status_id and has_status:
+        if has_status_id and has_status and _is_sqlite(engine):
             conn.execute(
                 text(
                     """
@@ -751,8 +765,7 @@ def ensure_wms_order_returns_columns(engine: Engine) -> None:
             conn.commit()
             return
 
-        r = conn.execute(text("PRAGMA table_info(wms_order_returns)"))
-        columns = {row[1] for row in r}
+        columns = _table_column_names(conn, "wms_order_returns")
 
         if "external_id" not in columns:
             conn.execute(text("ALTER TABLE wms_order_returns ADD COLUMN external_id VARCHAR(128)"))
@@ -827,8 +840,7 @@ def ensure_return_ui_statuses_and_column(engine: Engine) -> None:
         # Legacy DBs: add main_group BEFORE any index on main_group (old tables lack the column).
         r_tab = _table_exists(conn, "return_ui_statuses")
         if r_tab:
-            r = conn.execute(text("PRAGMA table_info(return_ui_statuses)"))
-            cols = {row[1] for row in r}
+            cols = _table_column_names(conn, "return_ui_statuses")
             if "main_group" not in cols:
                 conn.execute(
                     text(
@@ -853,8 +865,7 @@ def ensure_return_ui_statuses_and_column(engine: Engine) -> None:
                 # Old DB may still have inline UNIQUE(tenant_id, warehouse_id, name); app stays up.
                 pass
 
-        r_cols = conn.execute(text("PRAGMA table_info(return_ui_statuses)"))
-        col_names = {row[1] for row in r_cols}
+        col_names = _table_column_names(conn, "return_ui_statuses")
         if "main_group" in col_names:
             conn.execute(
                 text(
@@ -864,8 +875,7 @@ def ensure_return_ui_statuses_and_column(engine: Engine) -> None:
 
         exists = _table_exists(conn, "wms_order_returns")
         if exists:
-            r = conn.execute(text("PRAGMA table_info(wms_order_returns)"))
-            cols = {row[1] for row in r}
+            cols = _table_column_names(conn, "wms_order_returns")
             if "ui_status_id" not in cols:
                 conn.execute(
                     text(
@@ -911,8 +921,7 @@ def ensure_order_ui_statuses_and_column(engine: Engine) -> None:
 
         r_tab = _table_exists(conn, "order_ui_statuses")
         if r_tab:
-            r = conn.execute(text("PRAGMA table_info(order_ui_statuses)"))
-            cols = {row[1] for row in r}
+            cols = _table_column_names(conn, "order_ui_statuses")
             if "main_group" not in cols:
                 conn.execute(
                     text(
@@ -929,8 +938,7 @@ def ensure_order_ui_statuses_and_column(engine: Engine) -> None:
             except Exception:
                 pass
 
-        r_cols = conn.execute(text("PRAGMA table_info(order_ui_statuses)"))
-        col_names = {row[1] for row in r_cols}
+        col_names = _table_column_names(conn, "order_ui_statuses")
         if "main_group" in col_names:
             conn.execute(
                 text(
@@ -940,8 +948,7 @@ def ensure_order_ui_statuses_and_column(engine: Engine) -> None:
 
         oexists = _table_exists(conn, "orders")
         if oexists:
-            r = conn.execute(text("PRAGMA table_info(orders)"))
-            cols = {row[1] for row in r}
+            cols = _table_column_names(conn, "orders")
             if "order_ui_status_id" not in cols:
                 conn.execute(
                     text(
@@ -1020,8 +1027,7 @@ def ensure_orders_complaint_origin_columns(engine: Engine) -> None:
         if not oexists:
             conn.commit()
             return
-        r = conn.execute(text("PRAGMA table_info(orders)"))
-        cols = {row[1] for row in r}
+        cols = _table_column_names(conn, "orders")
         if "order_origin" not in cols:
             conn.execute(text("ALTER TABLE orders ADD COLUMN order_origin VARCHAR(32)"))
         if "complaint_id" not in cols:
@@ -1106,12 +1112,13 @@ def ensure_complaints_and_complaint_ui_statuses(engine: Engine) -> None:
 
 
 def _complaint_shipment_table_columns(conn, table: str) -> list[str]:
-    rows = conn.execute(text(f"PRAGMA table_info({table})")).fetchall()
-    return [str(r[1]) for r in rows]
+    return sorted(_table_column_names(conn, table))
 
 
 def _complaint_shipments_single_column_unique_on_complaint_id(conn) -> bool:
     """True when only legacy UNIQUE(complaint_id) exists (blocks a second SERVICE row)."""
+    if get_engine(conn).dialect.name != "sqlite":
+        return False
     rows = conn.execute(text("PRAGMA index_list('complaint_shipments')")).fetchall()
     for row in rows:
         # seq, name, unique, origin, partial
@@ -1123,10 +1130,10 @@ def _complaint_shipments_single_column_unique_on_complaint_id(conn) -> bool:
         cols = [str(r[2]) for r in info if r[2]]
         if cols == ["complaint_id"]:
             return True
-    from .schema_introspection import get_engine as _get_engine
+    from .schema_introspection import get_engine
 
     create_sql = None
-    if _get_engine(conn).dialect.name == "sqlite":
+    if get_engine(conn).dialect.name == "sqlite":
         create_sql = conn.execute(
             text("SELECT sql FROM sqlite_master WHERE type='table' AND name='complaint_shipments'")
         ).fetchone()
@@ -1223,7 +1230,7 @@ def migrate_complaint_shipments_roles_and_uniqueness(engine: Engine) -> None:
         )
         conn.commit()
 
-        if _complaint_shipments_single_column_unique_on_complaint_id(conn):
+        if _is_sqlite(engine) and _complaint_shipments_single_column_unique_on_complaint_id(conn):
             _rebuild_complaint_shipments_composite_unique(conn)
             conn.commit()
 
@@ -1347,8 +1354,7 @@ def ensure_complaint_order_and_lines(engine: Engine) -> None:
             text("CREATE INDEX IF NOT EXISTS ix_complaint_lines_line_status ON complaint_lines(line_status)")
         )
 
-        rows = conn.execute(text("PRAGMA table_info(complaints)")).fetchall()
-        cols = {row[1] for row in rows}
+        cols = _table_column_names(conn, "complaints")
         if "order_id" not in cols:
             conn.execute(text("ALTER TABLE complaints ADD COLUMN order_id INTEGER REFERENCES orders(id)"))
         if "photo_urls_json" not in cols:
@@ -1362,8 +1368,7 @@ def ensure_complaint_order_and_lines(engine: Engine) -> None:
 def ensure_complaint_process_status_column(engine: Engine) -> None:
     """Panel: fixed process steps (Przebieg reklamacji)."""
     with engine.connect() as conn:
-        rows = conn.execute(text("PRAGMA table_info(complaints)")).fetchall()
-        cols = {row[1] for row in rows}
+        cols = _table_column_names(conn, "complaints")
         if "complaint_process_status" not in cols:
             conn.execute(
                 text(
@@ -1387,8 +1392,7 @@ def ensure_complaint_process_status_column(engine: Engine) -> None:
 def ensure_complaint_deleted_at_column(engine: Engine) -> None:
     """Soft delete dla reklamacji w panelu (deleted_at)."""
     with engine.connect() as conn:
-        rows = conn.execute(text("PRAGMA table_info(complaints)")).fetchall()
-        cols = {row[1] for row in rows}
+        cols = _table_column_names(conn, "complaints")
         if "deleted_at" not in cols:
             conn.execute(text("ALTER TABLE complaints ADD COLUMN deleted_at DATETIME"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_complaints_deleted_at ON complaints(deleted_at)"))
@@ -1398,8 +1402,7 @@ def ensure_complaint_deleted_at_column(engine: Engine) -> None:
 def ensure_complaint_defects_reason_columns(engine: Engine) -> None:
     """Lista reklamacji: defects_json (tag ids), customer_reason (powód)."""
     with engine.connect() as conn:
-        rows = conn.execute(text("PRAGMA table_info(complaints)")).fetchall()
-        cols = {row[1] for row in rows}
+        cols = _table_column_names(conn, "complaints")
         if "defects_json" not in cols:
             conn.execute(text("ALTER TABLE complaints ADD COLUMN defects_json TEXT"))
         if "customer_reason" not in cols:
@@ -1412,8 +1415,7 @@ def ensure_complaint_response_deadline_columns(engine: Engine) -> None:
     from datetime import datetime, timedelta
 
     with engine.connect() as conn:
-        rows = conn.execute(text("PRAGMA table_info(complaints)")).fetchall()
-        cols = {row[1] for row in rows}
+        cols = _table_column_names(conn, "complaints")
         if "response_deadline" not in cols:
             conn.execute(text("ALTER TABLE complaints ADD COLUMN response_deadline DATETIME"))
         if "auto_accepted" not in cols:
@@ -1443,8 +1445,7 @@ def ensure_complaint_response_deadline_columns(engine: Engine) -> None:
 def ensure_complaint_decision_hierarchy_columns(engine: Engine) -> None:
     """Pola hierarchii decyzji: naprawa/wymiana przed zwrotem, obniżeniem, odmową."""
     with engine.connect() as conn:
-        rows = conn.execute(text("PRAGMA table_info(complaints)")).fetchall()
-        cols = {row[1] for row in rows}
+        cols = _table_column_names(conn, "complaints")
         if "major_defect" not in cols:
             conn.execute(text("ALTER TABLE complaints ADD COLUMN major_defect INTEGER DEFAULT 0"))
         if "repair_failed" not in cols:
@@ -1461,8 +1462,7 @@ def ensure_complaint_decision_hierarchy_columns(engine: Engine) -> None:
 def ensure_complaint_resolution_columns(engine: Engine) -> None:
     """Rozliczenie z klientem: typ, status, kwota waluta."""
     with engine.connect() as conn:
-        rows = conn.execute(text("PRAGMA table_info(complaints)")).fetchall()
-        cols = {row[1] for row in rows}
+        cols = _table_column_names(conn, "complaints")
         if "resolution_type" not in cols:
             conn.execute(text("ALTER TABLE complaints ADD COLUMN resolution_type VARCHAR(24)"))
         if "resolution_status" not in cols:
@@ -1505,8 +1505,7 @@ def ensure_complaint_documents_table(engine: Engine) -> None:
 def ensure_complaint_logistics_columns(engine: Engine) -> None:
     """Status logistyczny reklamacji (osobno od complaint_process_status)."""
     with engine.connect() as conn:
-        rows = conn.execute(text("PRAGMA table_info(complaints)")).fetchall()
-        cols = {row[1] for row in rows}
+        cols = _table_column_names(conn, "complaints")
         if "logistics_status" not in cols:
             conn.execute(text("ALTER TABLE complaints ADD COLUMN logistics_status VARCHAR(32)"))
         if "logistics_service_rma" not in cols:
@@ -1530,8 +1529,7 @@ def ensure_complaint_logistics_columns(engine: Engine) -> None:
 def ensure_complaint_customer_snapshot_columns(engine: Engine) -> None:
     """Imię / telefon / e-mail skopiowane z zamówienia przy tworzeniu reklamacji."""
     with engine.connect() as conn:
-        rows = conn.execute(text("PRAGMA table_info(complaints)")).fetchall()
-        cols = {row[1] for row in rows}
+        cols = _table_column_names(conn, "complaints")
         if "customer_name" not in cols:
             conn.execute(text("ALTER TABLE complaints ADD COLUMN customer_name VARCHAR(256)"))
         if "customer_phone" not in cols:
@@ -1544,8 +1542,7 @@ def ensure_complaint_customer_snapshot_columns(engine: Engine) -> None:
 def ensure_complaint_production_columns(engine: Engine) -> None:
     """Snapshot klienta, oczekiwanie na produkt, audyt zdarzeń."""
     with engine.connect() as conn:
-        rows = conn.execute(text("PRAGMA table_info(complaints)")).fetchall()
-        cols = {row[1] for row in rows}
+        cols = _table_column_names(conn, "complaints")
         if "customer_address" not in cols:
             conn.execute(text("ALTER TABLE complaints ADD COLUMN customer_address TEXT"))
         if "waiting_for_product_since" not in cols:
@@ -2100,8 +2097,7 @@ def ensure_rmz_line_split_columns(engine: Engine) -> None:
             conn.commit()
             return
 
-        rows = conn.execute(text("PRAGMA table_info(rmz_lines)")).fetchall()
-        cols = {row[1] for row in rows}
+        cols = _table_column_names(conn, "rmz_lines")
         if "accepted_qty" not in cols:
             conn.execute(text("ALTER TABLE rmz_lines ADD COLUMN accepted_qty INTEGER"))
         if "damaged_b_qty" not in cols:
@@ -2138,8 +2134,7 @@ def ensure_rmz_line_damage_entries_json(engine: Engine) -> None:
             conn.commit()
             return
 
-        rows = conn.execute(text("PRAGMA table_info(rmz_lines)")).fetchall()
-        cols = {row[1] for row in rows}
+        cols = _table_column_names(conn, "rmz_lines")
         if "damage_entries_json" not in cols:
             conn.execute(text("ALTER TABLE rmz_lines ADD COLUMN damage_entries_json TEXT"))
         conn.commit()
@@ -2930,20 +2925,20 @@ def ensure_stock_operations_unit_price_net_column(engine: Engine) -> None:
 
 def migrate_stock_documents_nullable_warehouse_location(engine: Engine) -> None:
     """PZ header may exist without warehouse/location until WMS receiving (SQLite cannot DROP NOT NULL in place)."""
+    if not _is_sqlite(engine):
+        return
     ensure_stock_documents_updated_at_column(engine)
     with engine.connect() as conn:
         r = _table_exists(conn, "stock_documents")
         if not r:
             conn.commit()
             return
-        info = list(conn.execute(text("PRAGMA table_info(stock_documents)")))
-        wh = next((row for row in info if row[1] == "warehouse_id"), None)
-        loc = next((row for row in info if row[1] == "location_id"), None)
-        if not wh or not loc:
+        wh_nullable = _column_nullable(conn, "stock_documents", "warehouse_id")
+        loc_nullable = _column_nullable(conn, "stock_documents", "location_id")
+        if wh_nullable is None or loc_nullable is None:
             conn.commit()
             return
-        # PRAGMA notnull: 0 = nullable, 1 = NOT NULL
-        if int(wh[3]) == 0 and int(loc[3]) == 0:
+        if wh_nullable and loc_nullable:
             conn.commit()
             return
 
@@ -3317,6 +3312,8 @@ def ensure_stock_item_locations_table(engine: Engine) -> None:
 
 def migrate_inventory_lot_unique_sqlite(engine: Engine) -> None:
     """Replace flat inventory unique key with lot-aware unique (SQLite)."""
+    if not _is_sqlite(engine):
+        return
     with engine.connect() as conn:
         r = _table_exists(conn, "inventory")
         if not r:
@@ -3762,20 +3759,7 @@ def ensure_carts_code_column(engine: Engine) -> None:
         if "code" not in cols:
             conn.execute(text("ALTER TABLE carts ADD COLUMN code VARCHAR(64)"))
         # Usuń wyłącznie jednokolumnowy indeks UNIQUE na barcode (blokuje ten sam kod w dwóch magazynach).
-        for row in conn.execute(text("PRAGMA index_list('carts')")).fetchall():
-            idx_name = row[1]
-            is_unique = int(row[2] or 0)
-            if not is_unique:
-                continue
-            info = conn.execute(text(f'PRAGMA index_info("{idx_name}")')).fetchall()
-            col_names = []
-            for inf in info:
-                cid = inf[1]
-                if cid is None or int(cid) < 0:
-                    continue
-                col_names.append(inf[2])
-            if col_names == ["barcode"]:
-                conn.execute(text(f'DROP INDEX IF EXISTS "{idx_name}"'))
+        _drop_unique_index_on_single_column(conn, "carts", "barcode")
         # Cart ORM declares ``scan_code``; SQLite must have the column before any SELECT.
         # (``ensure_esp_scan_code_columns`` runs later and would add it, but this function uses ORM first.)
         cart_cols = _table_column_names(conn, "carts")
@@ -4838,6 +4822,8 @@ def ensure_delivery_items_warehouse_material_lines(engine: Engine) -> None:
     Rebuilds ``delivery_items``: ``product_id`` becomes nullable; adds ``wm_kind``, ``wm_id``.
     Preserves primary keys for ``stock_document_items.delivery_item_id`` FK integrity.
     """
+    if not _is_sqlite(engine):
+        return
     with engine.begin() as conn:
         t = _table_exists(conn, "delivery_items")
         if not t:
@@ -4884,12 +4870,10 @@ def ensure_delivery_items_warehouse_material_lines(engine: Engine) -> None:
 def ensure_supplier_product_tiers_and_delivery_price_manual_columns(engine: Engine) -> None:
     """supplier_products.purchase_price_tiers_json; delivery_items.purchase_price_manual (SQLite)."""
     with engine.connect() as conn:
-        r = conn.execute(text("PRAGMA table_info(supplier_products)"))
-        cols = [row[1] for row in r]
+        cols = sorted(_table_column_names(conn, "supplier_products"))
         if "purchase_price_tiers_json" not in cols:
             conn.execute(text("ALTER TABLE supplier_products ADD COLUMN purchase_price_tiers_json TEXT"))
-        r2 = conn.execute(text("PRAGMA table_info(delivery_items)"))
-        cols2 = [row[1] for row in r2]
+        cols2 = sorted(_table_column_names(conn, "delivery_items"))
         if "purchase_price_manual" not in cols2:
             conn.execute(
                 text("ALTER TABLE delivery_items ADD COLUMN purchase_price_manual INTEGER NOT NULL DEFAULT 0")
@@ -5063,12 +5047,11 @@ def ensure_stock_document_items_wm_receipt_columns(engine: Engine) -> None:
         conn.commit()
 
     with engine.connect() as conn:
-        pragma_rows = list(conn.execute(text("PRAGMA table_info(stock_document_items)")).fetchall())
-        prod_row = next((r for r in pragma_rows if r[1] == "product_id"), None)
-        if prod_row is None:
+        prod_nullable = _column_nullable(conn, "stock_document_items", "product_id")
+        if prod_nullable is None:
             conn.commit()
             return
-        if int(prod_row[3]) == 0:
+        if prod_nullable:
             conn.commit()
             return
         conn.commit()
@@ -5437,8 +5420,7 @@ def ensure_app_users_bootstrap_columns(engine: Engine) -> None:
         if not ex:
             conn.commit()
             return
-        r = conn.execute(text("PRAGMA table_info(app_users)"))
-        cols = {row[1] for row in r}
+        cols = _table_column_names(conn, "app_users")
         if "is_system_seed" not in cols:
             conn.execute(text("ALTER TABLE app_users ADD COLUMN is_system_seed INTEGER NOT NULL DEFAULT 0"))
         if "password_must_change" not in cols:
@@ -5555,8 +5537,7 @@ def ensure_user_wms_profiles_table(engine: Engine) -> None:
         else:
             _sqlite_ensure_user_wms_profiles_operational_columns(conn)
 
-        r = conn.execute(text("PRAGMA table_info(app_users)"))
-        cols = {row[1] for row in r}
+        cols = _table_column_names(conn, "app_users")
         has_wm = "wms_language" in cols
         if has_wm:
             try:
@@ -5766,8 +5747,7 @@ _STOCK_OPERATIONS_COLUMNS_ORDERED = (
 
 
 def _sqlite_tmp_col_names(conn, table: str) -> set[str]:
-    rows = conn.execute(text(f'PRAGMA table_info("{table}")')).fetchall()
-    return {str(r[1]) for r in rows}
+    return _table_column_names(conn, table)
 
 
 def _sqlite_fragment_copy_stock_document_item_col(col: str, tmp_have: set[str]) -> str:
@@ -5855,11 +5835,14 @@ def _sqlite_insert_stock_operations_from_tmp(conn, tmp_table: str) -> None:
 
 
 def _sqlite_stock_document_items_primary_key_ok(conn) -> bool:
-    rows = conn.execute(text("PRAGMA table_info(stock_document_items)")).fetchall()
-    id_row = next((r for r in rows if str(r[1]) == "id"), None)
-    if id_row is None:
+    from sqlalchemy import inspect
+
+    if not _table_exists(conn, "stock_document_items"):
         return False
-    return int(id_row[5] or 0) >= 1
+    for col in inspect(get_engine(conn)).get_columns("stock_document_items"):
+        if str(col["name"]) == "id":
+            return bool(col.get("primary_key"))
+    return False
 
 
 def repair_stock_document_items_and_stock_operations_sqlite(conn) -> None:
@@ -5979,16 +5962,19 @@ def _ensure_stock_documents_return_receipt_schema_sqlite(engine: Engine) -> None
         if not exists:
             return
 
-        info = list(conn.execute(text("PRAGMA table_info(stock_documents)")))
-        by_name = {row[1]: row for row in info}
-        tmp_col_names = [row[1] for row in sorted(info, key=lambda r: int(r[0]))]
+        from sqlalchemy import inspect
+
+        insp = inspect(get_engine(conn))
+        info = insp.get_columns("stock_documents")
+        by_name = {str(c["name"]): c for c in info}
+        tmp_col_names = [str(c["name"]) for c in info]
         tmp_set = set(tmp_col_names)
 
-        sup_nn = int(by_name["supplier_id"][3]) if "supplier_id" in by_name else 1
-        del_nn = int(by_name["delivery_id"][3]) if "delivery_id" in by_name else 1
+        sup_nn = 0 if by_name.get("supplier_id", {}).get("nullable", True) else 1
+        del_nn = 0 if by_name.get("delivery_id", {}).get("nullable", True) else 1
         has_rmz = "rmz_id" in by_name
-        dt_row = by_name.get("document_type")
-        dt_sql_type = str(dt_row[2] or "").replace(" ", "").upper() if dt_row else ""
+        dt_col = by_name.get("document_type")
+        dt_sql_type = str(dt_col.get("type") or "").replace(" ", "").upper() if dt_col else ""
         narrow_dt = dt_sql_type == "VARCHAR(8)" or dt_sql_type == "CHARACTER(8)"
 
         need_rebuild = (sup_nn == 1) or (del_nn == 1) or narrow_dt
@@ -6568,8 +6554,7 @@ def ensure_receiving_scan_logs_table(engine: Engine) -> None:
 def ensure_products_reserve_replenishment_columns(engine: Engine) -> None:
     """Add min_reserve_quantity / max_reserve_quantity for WMS buffer/reserve thresholds (nullable)."""
     with engine.connect() as conn:
-        result = conn.execute(text("PRAGMA table_info(products)"))
-        columns = [row[1] for row in result]
+        columns = _table_column_names(conn, "products")
         if "min_reserve_quantity" not in columns:
             conn.execute(text("ALTER TABLE products ADD COLUMN min_reserve_quantity REAL"))
         if "max_reserve_quantity" not in columns:
@@ -6732,8 +6717,7 @@ def ensure_replenishment_tasks_sources_json_column(engine: Engine) -> None:
     dialect = engine.dialect.name
     if dialect == "sqlite":
         with engine.connect() as conn:
-            r = conn.execute(text("PRAGMA table_info(replenishment_tasks)"))
-            cols = [row[1] for row in r]
+            cols = sorted(_table_column_names(conn, "replenishment_tasks"))
             if "sources_json" not in cols:
                 conn.execute(text("ALTER TABLE replenishment_tasks ADD COLUMN sources_json TEXT"))
             conn.commit()
@@ -7172,8 +7156,7 @@ def ensure_stock_document_item_line_warehouse_carrier_column(engine: Engine) -> 
 def ensure_products_receiving_requirements_columns(engine: Engine) -> None:
     """WMS: per-product flags for required master data at receiving."""
     with engine.connect() as conn:
-        result = conn.execute(text("PRAGMA table_info(products)"))
-        columns = {row[1] for row in result}
+        columns = _table_column_names(conn, "products")
         specs = [
             ("require_recv_height", "INTEGER NOT NULL DEFAULT 0"),
             ("require_recv_width", "INTEGER NOT NULL DEFAULT 0"),
