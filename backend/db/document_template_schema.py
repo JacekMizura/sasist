@@ -349,6 +349,13 @@ def _seed_system_layout_templates(db: Session) -> None:
             .order_by(DocumentTemplateVersion.version_number.desc())
             .first()
         )
+        starter_base = base_path.read_text(encoding="utf-8")
+        if (
+            base_version is not None
+            and base_version.version_number == 1
+            and base_version.twig_content != starter_base
+        ):
+            base_version.twig_content = starter_base
 
     partial_versions: dict[str, int] = {}
     for code in SYSTEM_PARTIAL_CODES:

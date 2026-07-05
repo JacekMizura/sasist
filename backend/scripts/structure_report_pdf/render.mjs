@@ -26,13 +26,17 @@ async function main() {
   });
   try {
     const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: "networkidle0", timeout: 120_000 });
+    // Screen styles — DTE templates define layout in global CSS, not @media print.
+    await page.emulateMediaType("screen");
+    // domcontentloaded: avoid hanging on external logo URLs; HTML is self-contained.
+    await page.setContent(html, { waitUntil: "domcontentloaded", timeout: 120_000 });
     const pdf = await page.pdf({
       format: "A4",
       printBackground: true,
       margin: { top: "12mm", right: "12mm", bottom: "12mm", left: "12mm" },
-      preferCSSPageSize: true,
-      scale: 0.94,
+      // MUST stay false: preferCSSPageSize + @page margins in base_document.twig clip body text → blank PDF.
+      preferCSSPageSize: false,
+      scale: 1,
     });
     process.stdout.write(pdf);
   } finally {

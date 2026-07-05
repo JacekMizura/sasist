@@ -5,14 +5,9 @@
   <title>{% block title %}Dokument{% endblock %}</title>
   <style>
     {% block styles %}
+    /* Page size only — margins come from Puppeteer (render.mjs). Nested @page margins + preferCSSPageSize clip content. */
     @page {
       size: A4;
-      margin: 14mm 12mm 18mm 12mm;
-      @bottom-center {
-        content: "Strona " counter(page) " / " counter(pages);
-        font-size: 8px;
-        color: {{ theme.muted_color|default('#666') }};
-      }
     }
     * { box-sizing: border-box; }
     body {

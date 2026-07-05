@@ -32,7 +32,10 @@ def barcode(value: Any, *, bar_height: float = 36.0) -> str:
     text = str(value or "").strip()
     if not text:
         return ""
-    return code128_png_data_uri(text, bar_height=bar_height) or ""
+    uri = code128_png_data_uri(text, bar_height=bar_height)
+    if not uri:
+        return ""
+    return f'<img src="{uri}" alt="" style="max-width:100%;height:auto;" />'
 
 
 def qr(value: Any, *, box_size: int = 4) -> str:
@@ -45,7 +48,8 @@ def qr(value: Any, *, box_size: int = 4) -> str:
     import base64
 
     b64 = base64.b64encode(buf.getvalue()).decode("ascii")
-    return f"data:image/png;base64,{b64}"
+    uri = f"data:image/png;base64,{b64}"
+    return f'<img src="{uri}" alt="" style="max-width:72px;height:auto;" />'
 
 
 def money(value: Any, currency: str = "PLN") -> str:
