@@ -1,11 +1,18 @@
 # Current context
 
-## Document Templates — stabilizacja pipeline (2026-07-05)
-- SSOT walidacji: `ContextSchemaRegistry` rozszerzony o pola providerów (`title`, `document_number`, raporty, magazyn, branding/theme)
-- Filtr `default` + Jinja2 builtins w live validation; fix shadowing `date`/`datetime` w helperach
-- Preview: auto-resolve BASE + partiali systemowych; normalizacja `document` z aliasów providera
-- Sample context: `products[].product` zgodne ze starterami; partials odporne na brak `document`/`summary`
-- Testy: `test_document_templates_stabilization.py` — 15 passed w module
+## Document Templates — audit pełny (2026-07-05)
+- Raport: `memory/document-templates-engine-audit-report.md` — **21/21 starterów OK**
+- Skrypt: `python -m backend.scripts.audit_document_templates_engine`
+- v2.2 stabilizacja: preview=produkcja (jawne piny BASE/partials), partial summary customer/partner/supplier, sample dla wszystkich providerów, walidator tylko składnia Twig, schema registry zsynchronizowany
+
+## Document Templates — stabilizacja pipeline v2.2 (2026-07-05)
+- Preview: `resolve_draft_template` — bez auto-resolve; `DocumentRenderError` przy braku BASE/partiali
+- Partial `document_summary`: customer / partner / supplier z `is defined`
+- Partial `document_totals`: `totals is defined` (brak crash bez totals)
+- Sample: `registry.build_domain_print_context(sample=True)` dla wszystkich provider_key
+- Walidator: `extract_twig_function_calls` / `iter_twig_syntax_regions` — bez skanowania HTML/CSS/tekstu
+- Schema: CUSTOMER/SUPPLIER/PARTNER/SUMMARY/ITEMS/TRANSFER fields; normalize `products` → `items`
+- Testy: `test_document_templates_stabilization.py`
 
 - Inspektor zmiennych (Sellasist+), walidacja live, diff wersji, historia z opisem publikacji
 - Modal publikacji, autocomplete kontekstowy, wyszukiwanie użycia zmiennych

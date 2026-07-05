@@ -11,9 +11,32 @@ from ..render.tag_registry import get_twig_tag_registry
 from ..render._engine_backend import validate_syntax
 
 _VAR_RE = re.compile(r"\{\{\s*(.*?)\s*\}\}", re.DOTALL)
+_TWIG_REGION_RE = re.compile(r"\{\{.*?\}\}|\{%.*?%\}", re.DOTALL)
 _FOR_RE = re.compile(r"\{%\s*for\s+(\w+)\s+in\s+([^%]+)%\}", re.IGNORECASE)
 _TAG_RE = re.compile(r"\{%\s*(\w+)", re.IGNORECASE)
 _FILTER_RE = re.compile(r"\|\s*(\w+)")
+_FUNC_IN_TWIG_RE = re.compile(r"\b(\w+)\s*\(")
+_SKIP_FUNC_NAMES = frozenset(
+    {
+        "if",
+        "for",
+        "set",
+        "block",
+        "extends",
+        "include",
+        "include_document",
+        "endfor",
+        "endif",
+        "else",
+        "elseif",
+        "endblock",
+        "not",
+        "and",
+        "or",
+        "is",
+        "in",
+    }
+)
 
 # Jinja2 built-in filters always available at render time (even if not in helper registry).
 JINJA2_BUILTIN_FILTERS = frozenset(
@@ -87,6 +110,37 @@ def _line_col(content: str, index: int) -> tuple[int, int]:
     last_nl = content.rfind("\n", 0, index)
     col = index - last_nl if last_nl >= 0 else index + 1
     return line, col
+
+
+def iter_twig_syntax_regions(content: str):
+    """Yield inner Twig expressions/tags — excludes raw HTML, CSS, and plain text."""
+    for m in _TWIG_REGION_RE.finditer(content or ""):
+        yield m.group(0)
+
+
+def _twig_region_inner(region: str) -> str:
+    text = region.strip()
+    if text.startswith("{{") and text.endswith("}}"):
+        return text[2:-2].strip()
+    if text.startswith("{%") and text.endswith("%}"):
+        return text[2:-2].strip()
+    return text
+
+
+def extract_twig_function_calls(content: str) -> set[str]:
+    """Detect helper/function calls only inside Twig {{ }} and {% %} syntax."""
+    found: set[str] = set()
+    for region in iter_twig_syntax_regions(content):
+        inner = _twig_region_inner(region)
+        for m in _FUNC_IN_TWIG_RE.finditer(inner):
+            fn = m.group(1)
+            if fn in _SKIP_FUNC_NAMES or fn[0].isupper():
+                continue
+            prefix = inner[: m.start()]
+            if "|" in prefix and prefix.rfind("|") > prefix.rfind("("):
+                continue
+            found.add(fn)
+    return found
 
 
 def _known_roots(fields: list[dict[str, Any]]) -> set[str]:
@@ -181,22 +235,25 @@ def validate_twig_live(
                 )
             )
 
-    for m in re.finditer(r"\b(\w+)\s*\(", content):
-        fn = m.group(1)
-        if fn in {"if", "for", "set", "block", "extends", "include"}:
-            continue
-        if fn not in helpers and fn not in tags:
-            line, col = _line_col(content, m.start())
-            if fn[0].isupper():
+    for region in iter_twig_syntax_regions(content):
+        inner = _twig_region_inner(region)
+        line, col = _line_col(content, content.find(region))
+        for m in _FUNC_IN_TWIG_RE.finditer(inner):
+            fn = m.group(1)
+            if fn in _SKIP_FUNC_NAMES or fn[0].isupper():
                 continue
-            issues.append(
-                LiveValidationIssue(
-                    line=line,
-                    column=col,
-                    code="unknown_helper",
-                    message=f"Nieznana funkcja: {fn}",
+            prefix = inner[: m.start()]
+            if "|" in prefix and prefix.rfind("|") > prefix.rfind("("):
+                continue
+            if fn not in helpers and fn not in tags:
+                issues.append(
+                    LiveValidationIssue(
+                        line=line,
+                        column=col,
+                        code="unknown_helper",
+                        message=f"Nieznana funkcja: {fn}",
+                    )
                 )
-            )
 
     return issues
 

@@ -99,6 +99,52 @@ COMMON_DOMAIN_FIELDS: list[FieldDef] = [
     _field("qr_value", "QR (alias)"),
 ]
 
+CUSTOMER_FIELDS: list[FieldDef] = [
+    _field("customer.name", "Klient → nazwa"),
+    _field("customer.email", "Klient → e-mail"),
+    _field("customer.phone", "Klient → telefon", insert="{{ customer.phone | phone }}"),
+]
+
+SUPPLIER_FIELDS: list[FieldDef] = [
+    _field("supplier.name", "Dostawca → nazwa"),
+    _field("supplier.email", "Dostawca → e-mail"),
+    _field("supplier.phone", "Dostawca → telefon", insert="{{ supplier.phone | phone }}"),
+    _field("supplier.nip", "Dostawca → NIP"),
+]
+
+PARTNER_FIELDS: list[FieldDef] = [
+    _field("partner.name", "Kontrahent → nazwa"),
+    _field("partner.nip", "Kontrahent → NIP"),
+]
+
+SUMMARY_FIELDS: list[FieldDef] = [
+    _field("summary.counted_lines", "Podsumowanie → policzone linie"),
+    _field("summary.differences", "Podsumowanie → różnice"),
+    _field("summary.gross", "Podsumowanie → brutto", vtype="money", insert="{{ summary.gross | money(currency) }}"),
+    _field("summary.total", "Podsumowanie → razem"),
+]
+
+ITEMS_FIELDS: list[FieldDef] = [
+    _field("items", "Pozycje dokumentu", vtype="array", loop_usable=True, loop_var="item"),
+    _field("items[].product.name", "Pozycja → nazwa produktu", insert="{{ item.product.name }}"),
+    _field("items[].product.sku", "Pozycja → SKU", insert="{{ item.product.sku }}"),
+    _field("items[].product.ean", "Pozycja → EAN", insert="{{ item.product.ean }}"),
+    _field("items[].quantity", "Pozycja → ilość", vtype="quantity"),
+    _field("items[].unit", "Pozycja → j.m."),
+    _field("items[].name", "Pozycja → nazwa", insert="{{ item.name }}"),
+    _field("items[].product_name", "Pozycja → nazwa (legacy)", insert="{{ item.product_name }}"),
+    _field("items[].vat_rate", "Pozycja → stawka VAT"),
+]
+
+TRANSFER_FIELDS: list[FieldDef] = [
+    _field("source.location", "Źródło → lokalizacja"),
+    _field("source.carrier", "Źródło → nośnik"),
+    _field("target.location", "Cel → lokalizacja"),
+    _field("target.carrier", "Cel → nośnik"),
+    _field("carrier.code", "Nośnik → kod"),
+    _field("carrier.name", "Nośnik → nazwa"),
+]
+
 PRODUCT_FIELDS: list[FieldDef] = [
     _field("products", "Lista produktów", vtype="array", loop_usable=True, loop_var="row"),
     _field("products[].name", "Produkt → nazwa", insert="{{ row.name }}"),
@@ -122,7 +168,8 @@ PRODUCT_FIELDS: list[FieldDef] = [
     _field("products[].price", "Produkt → cena", vtype="money", insert="{{ row.price | money(currency) }}"),
     _field("products[].value", "Produkt → wartość", vtype="money", insert="{{ row.value | money(currency) }}"),
     _field("products[].vat", "Produkt → VAT"),
-    _field("partner.name", "Kontrahent → nazwa"),
+    *PARTNER_FIELDS,
+    *SUPPLIER_FIELDS,
     _field("source_warehouse.name", "Magazyn źródłowy → nazwa"),
     _field("destination_warehouse.name", "Magazyn docelowy → nazwa"),
     _field("totals.net", "Suma netto", vtype="money", insert="{{ totals.net | money(currency) }}"),
@@ -130,32 +177,24 @@ PRODUCT_FIELDS: list[FieldDef] = [
     _field("totals.gross", "Suma brutto", vtype="money", insert="{{ totals.gross | money(currency) }}"),
 ]
 
-WAREHOUSE_FIELDS: list[FieldDef] = COMMON_DOMAIN_FIELDS + PRODUCT_FIELDS
+WAREHOUSE_FIELDS: list[FieldDef] = COMMON_DOMAIN_FIELDS + PRODUCT_FIELDS + SUMMARY_FIELDS
 
 ORDER_FIELDS: list[FieldDef] = [
     *COMMON_DOMAIN_FIELDS,
     _field("order_date", "Data zamówienia", insert="{{ order_date | date }}"),
-    _field("customer.name", "Klient → nazwa"),
-    _field("customer.email", "Klient → e-mail"),
-    _field("customer.phone", "Klient → telefon", insert="{{ customer.phone | phone }}"),
+    *CUSTOMER_FIELDS,
     _field("delivery.street", "Dostawa → ulica"),
     _field("delivery.city", "Dostawa → miasto"),
     _field("delivery.postal_code", "Dostawa → kod pocztowy"),
     _field("payment.method", "Płatność → metoda"),
     _field("shipping.carrier", "Wysyłka → przewoźnik"),
     _field("shipping.tracking_number", "Wysyłka → numer śledzenia"),
-    _field("items", "Pozycje zamówienia", vtype="array", loop_usable=True, loop_var="item"),
-    _field("items[].product.name", "Pozycja → nazwa produktu", insert="{{ item.product.name }}"),
-    _field("items[].product.sku", "Pozycja → SKU", insert="{{ item.product.sku }}"),
-    _field("items[].product.ean", "Pozycja → EAN", insert="{{ item.product.ean }}"),
-    _field("items[].quantity", "Pozycja → ilość", vtype="quantity"),
-    _field("items[].unit", "Pozycja → j.m."),
-    _field("items[].name", "Pozycja → nazwa", insert="{{ item.name }}"),
-    _field("items[].product_name", "Pozycja → nazwa (legacy)", insert="{{ item.product_name }}"),
-    _field("items[].vat_rate", "Pozycja → stawka VAT"),
+    *ITEMS_FIELDS,
     _field("totals.net", "Suma netto", vtype="money", insert="{{ totals.net | money(currency) }}"),
     _field("totals.gross", "Suma brutto", vtype="money", insert="{{ totals.gross | money(currency) }}"),
 ]
+
+TRANSFER_KIND_FIELDS: list[FieldDef] = COMMON_DOMAIN_FIELDS + PRODUCT_FIELDS + TRANSFER_FIELDS
 
 PRODUCTION_FIELDS: list[FieldDef] = [
     _field("job_number", "Numer zlecenia"),
@@ -205,13 +244,19 @@ PRODUCT_CARD_FIELDS: list[FieldDef] = [
 RETURN_FIELDS: list[FieldDef] = [
     *COMMON_DOMAIN_FIELDS,
     _field("return_number", "Numer zwrotu"),
+    *CUSTOMER_FIELDS,
+    *ITEMS_FIELDS,
     *PRODUCT_FIELDS,
+    _field("totals.net", "Suma netto", vtype="money", insert="{{ totals.net | money(currency) }}"),
+    _field("totals.gross", "Suma brutto", vtype="money", insert="{{ totals.gross | money(currency) }}"),
 ]
 
 COMPLAINT_FIELDS: list[FieldDef] = [
     *COMMON_DOMAIN_FIELDS,
     _field("complaint_number", "Numer reklamacji"),
     _field("reason", "Powód reklamacji"),
+    *CUSTOMER_FIELDS,
+    *ITEMS_FIELDS,
     *PRODUCT_FIELDS,
 ]
 
@@ -231,8 +276,8 @@ SCHEMA_BY_KEY: dict[str, list[FieldDef]] = {
     "rw": WAREHOUSE_FIELDS,
     "mm": WAREHOUSE_FIELDS,
     "inventory_count": WAREHOUSE_FIELDS,
-    "stock_transfer": WAREHOUSE_FIELDS,
-    "relocation_document": WAREHOUSE_FIELDS,
+    "stock_transfer": TRANSFER_KIND_FIELDS,
+    "relocation_document": TRANSFER_KIND_FIELDS,
     "return_document": RETURN_FIELDS,
     "complaint_document": COMPLAINT_FIELDS,
     "product_card": PRODUCT_CARD_FIELDS,

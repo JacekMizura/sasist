@@ -28,6 +28,27 @@ def build_domain_print_context(
     params: dict[str, Any],
 ) -> PrintContext:
     key = str(provider_key or "").strip().lower()
+    if params.get("sample"):
+        if key == "production":
+            from .sample_data import sample_production_context
+
+            return sample_production_context()
+        if key == "order":
+            return order_provider.build(db, tenant_id=tenant_id, kind_code=kind_code, **params)
+        if key == "warehouse_document":
+            return warehouse_document_provider.build(db, tenant_id=tenant_id, kind_code=kind_code, **params)
+        if key == "inventory":
+            return inventory_provider.build(db, tenant_id=tenant_id, **params)
+        if key == "transfer":
+            return transfer_provider.build(db, tenant_id=tenant_id, kind_code=kind_code, **params)
+        if key == "return":
+            return return_provider.build(db, tenant_id=tenant_id, **params)
+        if key == "complaint":
+            return complaint_provider.build(db, tenant_id=tenant_id, **params)
+        if key == "product":
+            return product_provider.build(db, tenant_id=tenant_id, **params)
+        if key == "report":
+            return report_provider.build(db, tenant_id=tenant_id, **params)
     if key == "production":
         if kind_code == "production_card":
             if params.get("batch_id") is not None:

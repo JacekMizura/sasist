@@ -47,6 +47,8 @@ def normalize_print_context(ctx: dict[str, Any]) -> dict[str, Any]:
         document["qr_value"] = out["qr_value"]
     if document:
         out["document"] = document
+    if "items" not in out and out.get("products"):
+        out["items"] = out["products"]
     return out
 
 

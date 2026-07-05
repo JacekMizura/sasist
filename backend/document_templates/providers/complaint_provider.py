@@ -23,6 +23,7 @@ class ComplaintProvider:
                 document=doc,
                 customer=order_ctx.customer,
                 products=sample_products(),
+                totals=order_ctx.totals,
                 reason="Uszkodzenie w transporcie",
                 notes="Klient dołączył zdjęcia.",
             )

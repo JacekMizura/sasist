@@ -177,6 +177,7 @@ class ComplaintPrintContext:
     document: dict[str, Any] = field(default_factory=dict)
     customer: dict[str, Any] = field(default_factory=dict)
     products: list[dict[str, Any]] = field(default_factory=list)
+    totals: dict[str, Any] = field(default_factory=dict)
     reason: str | None = None
     notes: str | None = None
 

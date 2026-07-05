@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from sqlalchemy.orm import Session
 
 from ..dto.resolved_document_template import ResolvedDocumentTemplate
+from ..errors import DocumentRenderError
 from ..render.output_formats import DocumentOutputFormat
 from ..render.render_pipeline import render_for_format
 from ..services.context_pipeline_orchestrator import build_context_pipeline, build_sample_context
 from ..services.template_resolution_service import resolve_plain_twig, resolve_version_to_document_template
 from ..services.template_service import resolve_bound_document_template
+from ..services.twig_parse_service import collect_all_include_codes, extract_extends_target
 
 
 def render_document(
@@ -80,9 +83,8 @@ def preview_document(
     if version_id is not None:
         resolved = resolve_version_to_document_template(db, version_id=int(version_id))
     else:
-        resolved = _resolve_draft_preview(
+        resolved = resolve_draft_template(
             db,
-            tenant_id=int(tenant_id),
             template=template,
             extends_version_id=extends_version_id,
             partial_pins_json=partial_pins_json,
@@ -91,37 +93,31 @@ def preview_document(
     return render_for_format(resolved, context, output_format)
 
 
-def _resolve_draft_preview(
+def resolve_draft_template(
     db: Session,
     *,
-    tenant_id: int,
     template: str,
     extends_version_id: int | None,
     partial_pins_json: str | None,
 ) -> ResolvedDocumentTemplate:
-    import json
-
+    """Resolve draft template — same rules as production (explicit BASE + partial pins only)."""
     from ..models import DocumentTemplateVersion
-    from ..services.document_migration_service import _default_partial_pins, _system_base_published_version
     from ..services.template_resolution_service import _load_base_chain, _load_pin_map
-    from ..services.twig_parse_service import collect_all_include_codes, extract_extends_target
 
     content = str(template)
+    extends_target = extract_extends_target(content)
+
+    if extends_target and not extends_version_id:
+        raise DocumentRenderError(
+            "Ten szablon nie ma przypiętego szablonu bazowego.",
+            code="missing_base_pin",
+        )
+
     base_chain: list[tuple[str, str]] = []
     partials: dict[str, str] = {}
 
-    base_version_id = extends_version_id
-    if base_version_id is None:
-        extends_target = extract_extends_target(content)
-        if extends_target:
-            base_version = _system_base_published_version(db, tenant_id=int(tenant_id))
-            if base_version is not None:
-                base_tpl_code = str(base_version.template.template_code or "")
-                if base_tpl_code == extends_target or extends_target == "base_document":
-                    base_version_id = int(base_version.id)
-
-    if base_version_id:
-        chain, chain_partials = _load_base_chain(db, int(base_version_id))
+    if extends_version_id:
+        chain, chain_partials = _load_base_chain(db, int(extends_version_id))
         base_chain.extend(chain)
         partials.update(chain_partials)
 
@@ -136,21 +132,12 @@ def _resolve_draft_preview(
         partials.update(_load_pin_map(db, fake_version))
 
     needed_codes = collect_all_include_codes(content, *[c for _, c in base_chain], *partials.values())
-    default_pins = _default_partial_pins(db, tenant_id=int(tenant_id))
-    missing_pins = {
-        code: int(default_pins[code])
-        for code in needed_codes
-        if code not in partials and code in default_pins
-    }
-    if missing_pins:
-        auto_version = DocumentTemplateVersion(
-            template_id=0,
-            version_number=0,
-            status="draft",
-            twig_content=content,
-            partial_pins_json=json.dumps(missing_pins),
+    missing = [code for code in needed_codes if code not in partials]
+    if missing:
+        raise DocumentRenderError(
+            f"Ten szablon nie ma przypiętych partiali: {', '.join(missing)}.",
+            code="missing_partial_pin",
         )
-        partials.update(_load_pin_map(db, auto_version))
 
     return ResolvedDocumentTemplate(
         main_template_name="__document__",
@@ -158,3 +145,7 @@ def _resolve_draft_preview(
         base_chain=tuple(base_chain),
         partials=partials,
     )
+
+
+# Backward-compatible alias used in tests / audit script
+_resolve_draft_preview = resolve_draft_template

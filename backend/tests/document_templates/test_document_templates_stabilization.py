@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -11,9 +12,14 @@ from sqlalchemy.pool import StaticPool
 
 from backend.database import Base
 from backend.db.document_template_schema import ensure_document_template_schema
+from backend.document_templates.errors import DocumentRenderError
 from backend.document_templates.render.output_formats import DocumentOutputFormat
 from backend.document_templates.services.context_schema_registry import fields_for_schema_key
-from backend.document_templates.services.document_render_service import preview_document
+from backend.document_templates.services.document_migration_service import (
+    _default_partial_pins,
+    _system_base_published_version,
+)
+from backend.document_templates.services.document_render_service import preview_document, resolve_draft_template
 from backend.document_templates.services.live_validation_service import validate_twig_live
 from backend.models.tenant import Tenant
 
@@ -41,6 +47,13 @@ def doc_db():
         db.close()
 
 
+def _production_pins(doc_db):
+    base_version = _system_base_published_version(doc_db, tenant_id=1)
+    partial_pins = _default_partial_pins(doc_db, tenant_id=1)
+    assert base_version is not None
+    return int(base_version.id), json.dumps(partial_pins)
+
+
 @pytest.mark.parametrize(
     ("kind_code", "schema_key", "starter_file"),
     [
@@ -56,9 +69,26 @@ def test_starter_live_validation_matches_schema(doc_db, kind_code, schema_key, s
     assert issues == [], [f"{i.code}: {i.message}" for i in issues]
 
 
+def test_wz_preview_requires_explicit_pins(doc_db):
+    twig = (STARTERS_DIR / "wz.twig").read_text(encoding="utf-8")
+    with pytest.raises(DocumentRenderError, match="szablonu bazowego"):
+        preview_document(doc_db, tenant_id=1, kind_code="wz", template=twig, context_mode="sample")
+    with pytest.raises(DocumentRenderError, match="szablonu bazowego"):
+        resolve_draft_template(doc_db, template=twig, extends_version_id=None, partial_pins_json=None)
+
+
 def test_wz_preview_html_and_pdf(doc_db):
     twig = (STARTERS_DIR / "wz.twig").read_text(encoding="utf-8")
-    html = preview_document(doc_db, tenant_id=1, kind_code="wz", template=twig, context_mode="sample")
+    extends_version_id, partial_pins_json = _production_pins(doc_db)
+    html = preview_document(
+        doc_db,
+        tenant_id=1,
+        kind_code="wz",
+        template=twig,
+        context_mode="sample",
+        extends_version_id=extends_version_id,
+        partial_pins_json=partial_pins_json,
+    )
     assert "WZ" in str(html)
     pdf = preview_document(
         doc_db,
@@ -67,17 +97,22 @@ def test_wz_preview_html_and_pdf(doc_db):
         template=twig,
         context_mode="sample",
         output_format=DocumentOutputFormat.PDF,
+        extends_version_id=extends_version_id,
+        partial_pins_json=partial_pins_json,
     )
     assert len(bytes(pdf)) > 1000
 
 
 def test_report_starter_uses_provider_variables(doc_db):
     twig = (STARTERS_DIR / "production_report.twig").read_text(encoding="utf-8")
+    extends_version_id, partial_pins_json = _production_pins(doc_db)
     html = preview_document(
         doc_db,
         tenant_id=1,
         kind_code="production_report",
         template=twig,
         context_mode="sample",
+        extends_version_id=extends_version_id,
+        partial_pins_json=partial_pins_json,
     )
     assert "Raport" in str(html)

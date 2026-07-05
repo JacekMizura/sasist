@@ -4,7 +4,13 @@
     {% if document is defined and document.number %}<div><span class="text-muted">Numer:</span> {{ document.number }}</div>{% endif %}
     {% if document is defined and document.created_at %}<div><span class="text-muted">Data:</span> {{ document.created_at | date }}</div>{% endif %}
     {% if document is defined and document.status %}<div><span class="text-muted">Status:</span> {{ document.status }}</div>{% endif %}
-    {% if warehouse.name %}<div><span class="text-muted">Magazyn:</span> {{ warehouse.name }}</div>{% endif %}
-    {% if partner.name %}<div><span class="text-muted">Kontrahent:</span> {{ partner.name }}</div>{% endif %}
+    {% if warehouse is defined and warehouse.name %}<div><span class="text-muted">Magazyn:</span> {{ warehouse.name }}</div>{% endif %}
+    {% if customer is defined and customer.name %}
+      <div><span class="text-muted">Klient:</span> {{ customer.name }}</div>
+    {% elif partner is defined and partner.name %}
+      <div><span class="text-muted">Kontrahent:</span> {{ partner.name }}</div>
+    {% elif supplier is defined and supplier.name %}
+      <div><span class="text-muted">Dostawca:</span> {{ supplier.name }}</div>
+    {% endif %}
   </div>
 </div>
