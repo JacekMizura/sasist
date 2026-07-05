@@ -13,7 +13,7 @@ type Props = {
  */
 function ProductionKpiGridInner({ children, className = "" }: Props) {
   return (
-    <PurchasingKpiGrid columns={4} className={`gap-3 ${className}`.trim()}>
+    <PurchasingKpiGrid columns={4} className={`items-stretch gap-2.5 ${className}`.trim()}>
       {children}
     </PurchasingKpiGrid>
   );

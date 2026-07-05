@@ -14,7 +14,6 @@ import {
 import {
   moduleListTableClass,
   moduleListTableScrollClass,
-  moduleListTdClass,
   moduleListThClass,
   moduleListTheadClass,
   moduleTableCardClass,
@@ -25,6 +24,13 @@ import { BATCH_STATUS_LABEL, batchStatusBadgeClass } from "./productionUi";
 import { erpProductionPaths } from "./productionPaths";
 import { ProgressBar } from "./components/ProgressBar";
 import { ProductionRowActionsMenu } from "./components/ProductionRowActionsMenu";
+import {
+  productionModuleListTdClass,
+  productionModuleListThClass,
+  productionPageDescClass,
+  productionPageStackClass,
+  productionPageTitleClass,
+} from "./productionLayoutTokens";
 
 const DEFAULT_TENANT = 1;
 
@@ -144,14 +150,14 @@ export default function BatchesListPage({ embedded = false }: Props) {
                   />
                 </th>
               ) : null}
-              <th className={moduleListThClass}>Partia</th>
-              <th className={moduleListThClass}>Produkty</th>
-              <th className={`${moduleListThClass} text-right`}>Ilość</th>
-              <th className={moduleListThClass}>Status</th>
-              <th className={moduleListThClass}>Postęp</th>
-              <th className={moduleListThClass}>Materiały</th>
-              <th className={moduleListThClass}>Operator</th>
-              <th className={moduleListThClass}>Termin</th>
+              <th className={productionModuleListThClass}>Partia</th>
+              <th className={productionModuleListThClass}>Produkty</th>
+              <th className={`${productionModuleListThClass} text-right`}>Ilość</th>
+              <th className={productionModuleListThClass}>Status</th>
+              <th className={productionModuleListThClass}>Postęp</th>
+              <th className={productionModuleListThClass}>Materiały</th>
+              <th className={productionModuleListThClass}>Operator</th>
+              <th className={productionModuleListThClass}>Termin</th>
               <th className={productsListActionsThClass}>Akcje</th>
             </tr>
           </thead>
@@ -159,7 +165,7 @@ export default function BatchesListPage({ embedded = false }: Props) {
             {batches.map((b) => (
               <tr key={b.id} className="group border-b border-slate-100 hover:bg-slate-50/70">
                 {embedded ? (
-                  <td className={moduleListTdClass}>
+                  <td className={productionModuleListTdClass}>
                     <input
                       type="checkbox"
                       aria-label={`Zaznacz partię ${b.number}`}
@@ -168,16 +174,16 @@ export default function BatchesListPage({ embedded = false }: Props) {
                     />
                   </td>
                 ) : null}
-                <td className={`${moduleListTdClass} font-mono font-medium text-slate-900`}>{b.number}</td>
-                <td className={moduleListTdClass}>{b.products_count ?? b.lines.length}</td>
-                <td className={`${moduleListTdClass} text-right tabular-nums`}>{b.total_planned_units ?? 0}</td>
-                <td className={moduleListTdClass}>
+                <td className={`${productionModuleListTdClass} font-mono font-medium text-slate-900`}>{b.number}</td>
+                <td className={productionModuleListTdClass}>{b.products_count ?? b.lines.length}</td>
+                <td className={`${productionModuleListTdClass} text-right tabular-nums`}>{b.total_planned_units ?? 0}</td>
+                <td className={productionModuleListTdClass}>
                   <span className={batchStatusBadgeClass(b.status)}>{BATCH_STATUS_LABEL[b.status]}</span>
                 </td>
-                <td className={`${moduleListTdClass} min-w-[140px]`}>
+                <td className={`${productionModuleListTdClass} min-w-[140px]`}>
                   <ProgressBar value={b.progress_percent ?? 0} tone={b.has_shortages ? "amber" : "emerald"} />
                 </td>
-                <td className={moduleListTdClass}>
+                <td className={productionModuleListTdClass}>
                   {b.has_shortages ? (
                     <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-800">
                       <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
@@ -187,8 +193,8 @@ export default function BatchesListPage({ embedded = false }: Props) {
                     <span className="text-xs text-emerald-700">OK</span>
                   )}
                 </td>
-                <td className={`${moduleListTdClass} text-slate-600`}>{b.operator_name ?? "—"}</td>
-                <td className={`${moduleListTdClass} text-slate-600`}>{(b.created_at ?? "").slice(0, 10) || "—"}</td>
+                <td className={`${productionModuleListTdClass} text-slate-600`}>{b.operator_name ?? "—"}</td>
+                <td className={`${productionModuleListTdClass} text-slate-600`}>{(b.created_at ?? "").slice(0, 10) || "—"}</td>
                 <td className={productsListActionsCellClass} onClick={(e) => e.stopPropagation()}>
                   <div className={productsListActionsInnerClass}>
                     <ProductionRowActionsMenu
@@ -210,12 +216,12 @@ export default function BatchesListPage({ embedded = false }: Props) {
 
   if (embedded) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-3">
         <ProductionKpiGrid>
           <ProductionKpiCard title="Partie aktywne" value={kpi.total} tone="indigo" icon={<Package aria-hidden />} />
           <ProductionKpiCard title="Zaplanowane" value={kpi.planned} tone="purple" icon={<CalendarClock aria-hidden />} />
           <ProductionKpiCard title="W realizacji" value={kpi.active} subtitle={`${kpi.units_in_production ?? 0} szt. w toku`} tone="blue" icon={<Factory aria-hidden />} />
-          <ProductionKpiCard title="Oczekuje rozlokowania" value={kpi.awaiting_putaway ?? 0} tone="emerald" icon={<Package aria-hidden />} />
+          <ProductionKpiCard title="Oczekuje na rozlokowanie" value={kpi.awaiting_putaway ?? 0} tone="emerald" icon={<Package aria-hidden />} />
           <ProductionKpiCard title="Z brakami" value={kpi.shortages} tone="amber" icon={<AlertTriangle aria-hidden />} />
         </ProductionKpiGrid>
         {table}
@@ -224,10 +230,10 @@ export default function BatchesListPage({ embedded = false }: Props) {
   }
 
   return (
-    <div className="space-y-6 py-6">
+    <div className={productionPageStackClass}>
       <div>
-        <h1 className="text-xl font-bold text-slate-900">Partie produkcyjne</h1>
-        <p className="text-sm text-slate-500">Fale produkcyjne — wiele produktów, jeden zagregowany pobór surowców.</p>
+        <h1 className={productionPageTitleClass}>Partie produkcyjne</h1>
+        <p className={productionPageDescClass}>Fale produkcyjne — wiele produktów, jeden zagregowany pobór surowców.</p>
       </div>
       {table}
     </div>

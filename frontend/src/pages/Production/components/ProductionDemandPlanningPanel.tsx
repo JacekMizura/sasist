@@ -90,7 +90,7 @@ export function ProductionDemandPlanningPanel({
   const presets = data?.coverage_day_presets ?? [7, 14, 21, 30, 45, 60, 90];
 
   return (
-    <section className="space-y-5 rounded-2xl border border-slate-200 bg-slate-50/60 p-5">
+    <section className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="text-base font-bold text-slate-900">Planowanie zapotrzebowania</h3>
@@ -104,7 +104,7 @@ export function ProductionDemandPlanningPanel({
             type="button"
             disabled={loading || simulateBusy}
             onClick={onSimulate}
-            className="inline-flex items-center gap-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-sm font-semibold text-violet-800 hover:bg-violet-100 disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-1.5 text-sm font-semibold text-violet-800 hover:bg-violet-100 disabled:opacity-50"
           >
             <FlaskConical className="h-4 w-4" aria-hidden />
             Symuluj plan produkcji
@@ -113,7 +113,7 @@ export function ProductionDemandPlanningPanel({
             type="button"
             disabled={loading}
             onClick={() => onReload()}
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} aria-hidden />
             Odśwież
@@ -121,9 +121,9 @@ export function ProductionDemandPlanningPanel({
         </div>
       </div>
 
-      {error ? <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-800">{error}</p> : null}
+      {error ? <p className="rounded-lg bg-rose-50 px-2.5 py-1.5 text-sm text-rose-800">{error}</p> : null}
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
         <Kpi label="Produkty krytyczne" value={dash?.critical_products ?? 0} tone="rose" />
         <Kpi label="Do produkcji dziś" value={dash?.production_needed_today ?? 0} />
         <Kpi label="Brak surowców" value={dash?.material_shortage_products ?? 0} tone="amber" />
@@ -134,7 +134,7 @@ export function ProductionDemandPlanningPanel({
         />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-3 lg:grid-cols-3">
         <DemandCard
           icon={<ShoppingCart className="h-5 w-5 text-violet-600" aria-hidden />}
           title="Na zamówienia"
@@ -182,59 +182,59 @@ export function ProductionDemandPlanningPanel({
         <table className="min-w-full text-left text-sm">
           <thead className="border-b border-slate-100 bg-slate-50 text-xs font-bold uppercase tracking-wide text-slate-500">
             <tr>
-              <th className="px-3 py-3">Produkt</th>
-              <th className="px-3 py-3">SKU</th>
-              <th className="px-3 py-3 text-right">Stan</th>
-              <th className="px-3 py-3 text-right">W prod.</th>
-              <th className="px-3 py-3 text-right">Zamów.</th>
-              <th className="px-3 py-3 text-right">Prognoza</th>
-              <th className="px-3 py-3 text-right">Pokrycie</th>
-              <th className="px-3 py-3 text-right">Min</th>
-              <th className="px-3 py-3 text-right">LT</th>
-              <th className="px-3 py-3 text-right">Można</th>
-              <th className="px-3 py-3">Materiały</th>
-              <th className="px-3 py-3 text-right">Rekom.</th>
-              <th className="px-3 py-3">Priorytet</th>
-              <th className="px-3 py-3">Dlaczego?</th>
-              <th className="px-3 py-3">Oś czasu</th>
-              <th className="px-3 py-3">Akcje</th>
+              <th className="px-2.5 py-2">Produkt</th>
+              <th className="px-2.5 py-2">SKU</th>
+              <th className="px-2.5 py-2 text-right">Stan</th>
+              <th className="px-2.5 py-2 text-right">W prod.</th>
+              <th className="px-2.5 py-2 text-right">Zamów.</th>
+              <th className="px-2.5 py-2 text-right">Prognoza</th>
+              <th className="px-2.5 py-2 text-right">Pokrycie</th>
+              <th className="px-2.5 py-2 text-right">Min</th>
+              <th className="px-2.5 py-2 text-right">LT</th>
+              <th className="px-2.5 py-2 text-right">Można</th>
+              <th className="px-2.5 py-2">Materiały</th>
+              <th className="px-2.5 py-2 text-right">Rekom.</th>
+              <th className="px-2.5 py-2">Priorytet</th>
+              <th className="px-2.5 py-2">Dlaczego?</th>
+              <th className="px-2.5 py-2">Oś czasu</th>
+              <th className="px-2.5 py-2">Akcje</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {loading && products.length === 0 ? (
               <tr>
-                <td colSpan={16} className="px-3 py-8 text-center text-slate-500">
+                <td colSpan={16} className="px-2.5 py-6 text-center text-slate-500">
                   Wczytywanie…
                 </td>
               </tr>
             ) : products.length === 0 ? (
               <tr>
-                <td colSpan={16} className="px-3 py-8 text-center text-slate-500">
+                <td colSpan={16} className="px-2.5 py-6 text-center text-slate-500">
                   Brak aktywnych receptur produkcyjnych.
                 </td>
               </tr>
             ) : (
               products.map((row) => (
                 <tr key={row.product_id} className="align-top hover:bg-slate-50/80">
-                  <td className="px-3 py-2">
+                  <td className="px-2.5 py-1.5">
                     <div className="flex items-center gap-2">
                       <ProductThumb imageUrl={row.product_image_url} name={row.product_name} size="sm" />
                       <span className="max-w-[140px] font-semibold text-slate-900">{row.product_name}</span>
                     </div>
                   </td>
-                  <td className="px-3 py-2 font-mono text-xs text-slate-600">{row.product_sku ?? "—"}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{fmtQty(row.on_hand)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{fmtQty(row.in_pipeline)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{fmtQty(row.order_demand)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{fmtQty(row.forecast_demand)}</td>
-                  <td className={`px-3 py-2 text-right tabular-nums font-semibold ${COVERAGE_CLASS[row.coverage_color] ?? ""}`}>
+                  <td className="px-2.5 py-1.5 font-mono text-xs text-slate-600">{row.product_sku ?? "—"}</td>
+                  <td className="px-2.5 py-1.5 text-right tabular-nums">{fmtQty(row.on_hand)}</td>
+                  <td className="px-2.5 py-1.5 text-right tabular-nums">{fmtQty(row.in_pipeline)}</td>
+                  <td className="px-2.5 py-1.5 text-right tabular-nums">{fmtQty(row.order_demand)}</td>
+                  <td className="px-2.5 py-1.5 text-right tabular-nums">{fmtQty(row.forecast_demand)}</td>
+                  <td className={`px-2.5 py-1.5 text-right tabular-nums font-semibold ${COVERAGE_CLASS[row.coverage_color] ?? ""}`}>
                     {row.coverage_days != null ? `${row.coverage_days.toFixed(0)} d` : "—"}
                   </td>
-                  <td className="px-3 py-2 text-right tabular-nums text-slate-500">
+                  <td className="px-2.5 py-1.5 text-right tabular-nums text-slate-500">
                     {row.min_stock != null ? fmtQty(row.min_stock) : "—"}
                   </td>
-                  <td className="px-3 py-2 text-right tabular-nums">{row.production_lead_time_days || "—"}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">
+                  <td className="px-2.5 py-1.5 text-right tabular-nums">{row.production_lead_time_days || "—"}</td>
+                  <td className="px-2.5 py-1.5 text-right tabular-nums">
                     {row.max_producible > 0 ? (
                       fmtQty(row.max_producible)
                     ) : (
@@ -243,7 +243,7 @@ export function ProductionDemandPlanningPanel({
                       </span>
                     )}
                   </td>
-                  <td className="px-3 py-2">
+                  <td className="px-2.5 py-1.5">
                     {row.recommended_quantity > 0 ? (
                       <MaterialProductionStatusBadge
                         status={row.material_status ?? "OK"}
@@ -256,23 +256,23 @@ export function ProductionDemandPlanningPanel({
                       "—"
                     )}
                   </td>
-                  <td className="px-3 py-2 text-right tabular-nums font-bold text-indigo-700">
+                  <td className="px-2.5 py-1.5 text-right tabular-nums font-bold text-indigo-700">
                     {fmtQty(row.recommended_quantity)}
                   </td>
-                  <td className="px-3 py-2">
+                  <td className="px-2.5 py-1.5">
                     <span
                       className={`inline-flex rounded-md px-2 py-0.5 text-[10px] font-bold uppercase ring-1 ${PRIORITY_CLASS[row.priority] ?? PRIORITY_CLASS.LOW}`}
                     >
                       {PRIORITY_LABEL[row.priority] ?? row.priority}
                     </span>
                   </td>
-                  <td className="max-w-[140px] px-3 py-2 text-xs text-slate-600">
+                  <td className="max-w-[140px] px-2.5 py-1.5 text-xs text-slate-600">
                     {row.recommendation_reasons.length ? row.recommendation_reasons.join(" · ") : "—"}
                   </td>
-                  <td className="min-w-[120px] px-3 py-2">
+                  <td className="min-w-[120px] px-2.5 py-1.5">
                     <ProductionTimelineChart points={row.timeline} />
                   </td>
-                  <td className="px-3 py-2">
+                  <td className="px-2.5 py-1.5">
                     {row.composition_id && row.recommended_quantity > 0 ? (
                       <button
                         type="button"
@@ -321,11 +321,11 @@ function Kpi({
   const toneClass =
     tone === "rose" ? "border-rose-200 bg-rose-50" : tone === "amber" ? "border-amber-200 bg-amber-50" : "border-slate-200 bg-white";
   return (
-    <div className={`rounded-xl border px-4 py-3 ${toneClass}`}>
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-1 text-2xl font-black tabular-nums text-slate-900">
+    <div className={`rounded-lg border px-3 py-2 ${toneClass}`}>
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="mt-0.5 text-xl font-bold tabular-nums text-slate-900">
         {value}
-        {suffix ? <span className="ml-1 text-sm font-semibold text-slate-500">{suffix}</span> : null}
+        {suffix ? <span className="ml-1 text-xs font-semibold text-slate-500">{suffix}</span> : null}
       </p>
     </div>
   );
@@ -351,24 +351,24 @@ function DemandCard({
   onCreate: () => void;
 }) {
   return (
-    <div className="flex flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="flex flex-col rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
       <div className="flex items-center gap-2">
         {icon}
         <div>
-          <p className="text-sm font-bold text-slate-900">{title}</p>
-          <p className="text-xs text-slate-500">{subtitle}</p>
+          <p className="text-sm font-semibold text-slate-900">{title}</p>
+          <p className="text-[11px] text-slate-500">{subtitle}</p>
         </div>
       </div>
-      {extra ? <div className="mt-3">{extra}</div> : null}
-      <p className="mt-4 text-4xl font-black tabular-nums text-slate-900">
+      {extra ? <div className="mt-2">{extra}</div> : null}
+      <p className="mt-2 text-2xl font-bold tabular-nums text-slate-900">
         {loading ? "…" : fmtQty(value)}
-        <span className="ml-1 text-sm font-semibold text-slate-500">{unit}</span>
+        <span className="ml-1 text-xs font-semibold text-slate-500">{unit}</span>
       </p>
       <button
         type="button"
         disabled={loading || value <= 0}
         onClick={onCreate}
-        className="mt-4 w-full rounded-xl bg-slate-900 py-2.5 text-sm font-bold text-white hover:bg-slate-800 disabled:opacity-40"
+        className="mt-2.5 w-full rounded-lg bg-slate-900 py-1.5 text-xs font-bold text-white hover:bg-slate-800 disabled:opacity-40"
       >
         Utwórz partię
       </button>

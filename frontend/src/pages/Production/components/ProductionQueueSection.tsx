@@ -23,15 +23,15 @@ export function ProductionQueueSection({
   const Icon = config.icon;
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm ring-1 ring-slate-100">
-      <div className={`flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4 ${config.headerClass}`}>
-        <div className="flex items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white shadow-sm ring-1 ring-slate-200/80">
-            <Icon className="h-5 w-5 text-violet-700" aria-hidden />
+    <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className={`flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-2.5 ${config.headerClass}`}>
+        <div className="flex items-center gap-2">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-white shadow-sm ring-1 ring-slate-200/80">
+            <Icon className="h-4 w-4 text-violet-700" aria-hidden />
           </span>
           <div>
-            <h2 className="text-base font-bold text-slate-900">{config.title}</h2>
-            <p className="text-xs text-slate-500">{config.subtitle}</p>
+            <h2 className="text-sm font-semibold text-slate-900">{config.title}</h2>
+            <p className="text-[11px] text-slate-500">{config.subtitle}</p>
           </div>
         </div>
         <span
@@ -42,7 +42,7 @@ export function ProductionQueueSection({
       </div>
 
       {batches.length === 0 ? (
-        <div className="p-5">
+        <div className="p-3">
           <ProductionEmptyState
             icon={Icon}
             title={config.emptyTitle}
@@ -61,7 +61,7 @@ export function ProductionQueueSection({
           />
         </div>
       ) : (
-        <div className="grid gap-4 p-5 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-2 p-3 sm:grid-cols-2 xl:grid-cols-3">
           {batches.map((b) => (
             <BatchCard
               key={b.id}

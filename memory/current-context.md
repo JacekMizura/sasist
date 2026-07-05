@@ -1,5 +1,9 @@
 # Current context
 
+## Produkcja — refaktoryzacja UX/UI (2026-06-08)
+- Wyłącznie frontend: gęstszy layout ERP, pulpitu (KPI → rozlokowanie → realizacja → uwaga → historia), empty states, grupowanie KPI analizy kosztów, tokeny `productionLayoutTokens.ts`.
+- Bez zmian backendu/API/workflow.
+
 ## Production functional fixes — Etapy 1–3 (2026-06-08)
 - Naprawiono lifecycle UI: WMS putaway queue, etykiety Rozlokowanie, multi-PW, KPI/dashboard, linki batch z produktu, monitoring koszt.
 - Bez Phase 2 refactor; testy `test_production_execution.py` + `test_production.py` — 22 passed.

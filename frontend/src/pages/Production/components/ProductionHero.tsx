@@ -72,7 +72,7 @@ export function ProductionHero({ data, warehouseName, loading, onCreateBatch }: 
             </h2>
             <p className="mt-2 text-sm leading-relaxed text-violet-100/90">
               Planuj partie masowe, monitoruj kolejki operatorów, reaguj na braki materiałów i śledź postęp
-              zbierania → wykonania → odłożenia.
+              zbierania → wykonania → rozlokowania.
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
               <button

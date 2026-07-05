@@ -18,6 +18,7 @@ import { ProductionDemandPlanningPanel } from "./components/ProductionDemandPlan
 import { ProductionSimulationModal } from "./components/ProductionSimulationModal";
 import { useProductionDemandPlanning } from "./hooks/useProductionDemandPlanning";
 import { erpProductionPaths } from "./productionPaths";
+import { productionPageDescClass, productionPageStackClass, productionPageTitleClass, productionSectionLabelClass } from "./productionLayoutTokens";
 
 const DEFAULT_TENANT = 1;
 
@@ -88,11 +89,11 @@ export default function ProductionPlanningPage() {
   }
 
   return (
-    <div className="space-y-6 pb-10">
-      <div className="flex flex-wrap items-end justify-between gap-4">
+    <div className={productionPageStackClass}>
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold text-slate-900">Planowanie produkcji</h2>
-          <p className="mt-1 text-sm text-slate-500">MRP — prognoza, rekomendacje, symulacja i partie masowe.</p>
+          <h2 className={productionPageTitleClass}>Planowanie produkcji</h2>
+          <p className={productionPageDescClass}>MRP — prognoza, rekomendacje, symulacja i partie masowe.</p>
         </div>
         <button
           type="button"
@@ -126,8 +127,10 @@ export default function ProductionPlanningPage() {
       ) : null}
 
       <div>
-        <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-500">Aktywne partie</h3>
-        <BatchesListPage embedded />
+        <h3 className={productionSectionLabelClass}>Aktywne partie</h3>
+        <div className="mt-2">
+          <BatchesListPage embedded />
+        </div>
       </div>
 
       <ProductionSimulationModal

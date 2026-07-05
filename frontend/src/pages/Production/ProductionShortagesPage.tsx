@@ -21,6 +21,14 @@ import { ProductThumb } from "./components/ProductThumb";
 import { MaterialSubstitutesFormPanel } from "./components/MaterialSubstitutesFormPanel";
 import { MaterialNeedsPanel } from "./components/MaterialNeedsPanel";
 import { erpProductionPaths } from "./productionPaths";
+import {
+  productionModuleListTdClass,
+  productionModuleListThClass,
+  productionPageDescClass,
+  productionPageStackClass,
+  productionPageTitleClass,
+} from "./productionLayoutTokens";
+import { ProductionEmptyState } from "./components/ProductionEmptyState";
 
 const DEFAULT_TENANT = 1;
 
@@ -121,11 +129,11 @@ export default function ProductionShortagesPage() {
   }
 
   return (
-    <div className="space-y-6 px-4 py-6 lg:px-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
+    <div className={productionPageStackClass}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-slate-900">Braki produkcyjne</h1>
-          <p className="text-sm text-slate-500">
+          <h1 className={productionPageTitleClass}>Braki produkcyjne</h1>
+          <p className={productionPageDescClass}>
             Zablokowane partie i zlecenia z powodu brakujących surowców. Utwórz zapotrzebowanie zakupowe lub dodaj do
             istniejącego PO.
           </p>
@@ -143,30 +151,32 @@ export default function ProductionShortagesPage() {
       {loading ? (
         <p className="text-sm text-slate-500">Wczytywanie…</p>
       ) : rows.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-emerald-200 bg-emerald-50/50 px-4 py-8 text-center text-sm text-emerald-800">
-          Brak aktywnych braków produkcyjnych — wszystkie partie i MO mają wystarczające materiały.
-        </p>
+        <ProductionEmptyState
+          icon={AlertTriangle}
+          title="Brak aktywnych braków produkcyjnych"
+          description="Wszystkie partie i zlecenia mają wystarczające materiały."
+        />
       ) : (
         <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
           <table className="min-w-full text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
               <tr>
-                <th className="px-4 py-3">Produkt końcowy</th>
-                <th className="px-4 py-3">Składnik</th>
-                <th className="px-4 py-3 text-right">Brak</th>
-                <th className="px-4 py-3 text-right">Partie</th>
-                <th className="px-4 py-3 text-right">MO</th>
-                <th className="px-4 py-3">Priorytet</th>
-                <th className="px-4 py-3">Lokalizacje</th>
-                <th className="px-4 py-3">ETA dostawy</th>
-                <th className="px-4 py-3">Zamienniki</th>
-                <th className="px-4 py-3">Zakupy</th>
+                <th className={productionModuleListThClass}>Produkt końcowy</th>
+                <th className={productionModuleListThClass}>Składnik</th>
+                <th className={`${productionModuleListThClass} text-right`}>Brak</th>
+                <th className={`${productionModuleListThClass} text-right`}>Partie</th>
+                <th className={`${productionModuleListThClass} text-right`}>MO</th>
+                <th className={productionModuleListThClass}>Priorytet</th>
+                <th className={productionModuleListThClass}>Lokalizacje</th>
+                <th className={productionModuleListThClass}>ETA dostawy</th>
+                <th className={productionModuleListThClass}>Zamienniki</th>
+                <th className={productionModuleListThClass}>Zakupy</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r) => (
                 <tr key={r.component_product_id} className="border-t border-slate-100 align-top">
-                  <td className="px-4 py-3 text-xs">
+                  <td className={`${productionModuleListTdClass} text-xs`}>
                     {(r.finished_products ?? []).slice(0, 2).map((fp, i) => (
                       <div key={i} className="flex items-center gap-1 py-0.5">
                         <ProductThumb imageUrl={fp.product_image_url} name={fp.product_name} size="sm" />
@@ -177,7 +187,7 @@ export default function ProductionShortagesPage() {
                       <span className="text-slate-400">+{(r.finished_products?.length ?? 0) - 2}</span>
                     ) : null}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className={productionModuleListTdClass}>
                     <div className="flex items-center gap-2">
                       <ProductThumb imageUrl={r.product_image_url} name={r.product_name} size="sm" />
                       <div>
@@ -189,29 +199,29 @@ export default function ProductionShortagesPage() {
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums font-bold text-rose-700">{r.missing_qty}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">
+                  <td className={`${productionModuleListTdClass} text-right tabular-nums font-bold text-rose-700">{r.missing_qty}</td>
+                  <td className={`${productionModuleListTdClass} text-right tabular-nums`}>
                     {r.blocked_batches_count > 0 ? (
                       <span className="font-semibold text-amber-800">{r.blocked_batches_count}</span>
                     ) : (
                       "—"
                     )}
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums">
+                  <td className={`${productionModuleListTdClass} text-right tabular-nums`}>
                     {r.blocked_orders_count > 0 ? (
                       <span className="font-semibold text-amber-800">{r.blocked_orders_count}</span>
                     ) : (
                       "—"
                     )}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className={productionModuleListTdClass}>
                     <span
                       className={`inline-flex rounded-md px-2 py-0.5 text-[10px] font-bold uppercase ${PRIORITY_CLASS[r.priority] ?? PRIORITY_CLASS.MEDIUM}`}
                     >
                       {r.priority}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className={productionModuleListTdClass}>
                     <div className="flex flex-wrap gap-1">
                       {r.locations.length ? (
                         r.locations.map((loc) => (
@@ -225,8 +235,8 @@ export default function ProductionShortagesPage() {
                       )}
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-xs text-slate-600">{r.expected_availability_date ?? "—"}</td>
-                  <td className="px-4 py-3 text-xs">
+                  <td className={`${productionModuleListTdClass} text-xs text-slate-600">{r.expected_availability_date ?? "—"}</td>
+                  <td className={`${productionModuleListTdClass} text-xs`}>
                     {r.substitute_proposals.length ? (
                       <ul className="space-y-1">
                         {r.substitute_proposals.slice(0, 2).map((s) => (
@@ -245,7 +255,7 @@ export default function ProductionShortagesPage() {
                       "—"
                     )}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className={productionModuleListTdClass}>
                     <div className="flex flex-col gap-1.5">
                       <button
                         type="button"

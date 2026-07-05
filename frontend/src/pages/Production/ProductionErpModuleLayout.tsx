@@ -40,10 +40,10 @@ export default function ProductionErpModuleLayout() {
         items={ERP_PRODUCTION_TABS}
         exact
         aria-label="Zarządzanie produkcją — zakładki"
-        className="mt-6 gap-8"
+        className="mt-4 gap-6"
       />
-      <div className={`${flatSectionDividerClass} mt-3`} aria-hidden />
-      <div className="pt-6">
+      <div className={`${flatSectionDividerClass} mt-2`} aria-hidden />
+      <div className="pt-4">
         <Outlet />
       </div>
     </PageLayout>

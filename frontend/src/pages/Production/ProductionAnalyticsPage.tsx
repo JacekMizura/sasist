@@ -29,8 +29,6 @@ import {
 import {
   moduleListTableClass,
   moduleListTableScrollClass,
-  moduleListTdClass,
-  moduleListThClass,
   moduleListTheadClass,
   moduleTableCardClass,
 } from "../../components/listPage/moduleList";
@@ -45,6 +43,14 @@ import { formatProductionMoney, recipeStatusBadgeClass, recipeStatusLabel } from
 import { erpProductionPaths } from "./productionPaths";
 import { ProductThumb } from "./components/ProductThumb";
 import { ProductionRowActionsMenu } from "./components/ProductionRowActionsMenu";
+import {
+  productionModuleListTdClass,
+  productionModuleListThClass,
+  productionPageDescClass,
+  productionPageStackClass,
+  productionPageTitleClass,
+  productionSectionLabelClass,
+} from "./productionLayoutTokens";
 
 const DEFAULT_TENANT = 1;
 
@@ -134,53 +140,63 @@ export default function ProductionAnalyticsPage() {
   }
 
   return (
-    <div className="space-y-6 pb-10">
+    <div className={productionPageStackClass}>
       <div>
-        <h2 className="text-lg font-semibold text-slate-900">Analiza kosztów produkcji</h2>
-        <p className="mt-1 text-sm text-slate-500">Koszty receptur, marże i dostępność składników — widok zarządczy.</p>
+        <h2 className={productionPageTitleClass}>Analiza kosztów produkcji</h2>
+        <p className={productionPageDescClass}>Koszty receptur, marże i dostępność składników — widok zarządczy.</p>
       </div>
 
       {!loading ? (
-        <ProductionKpiGrid>
-          <ProductionKpiCard title="Aktywne receptury" value={kpi.active_count} tone="indigo" icon={<Package aria-hidden />} />
-          <ProductionKpiCard
-            title="Średni koszt produktu"
-            value={kpi.avg_unit_cost > 0 ? formatProductionMoney(kpi.avg_unit_cost) : "—"}
-            tone="blue"
-            icon={<Banknote aria-hidden />}
-          />
-          <ProductionKpiCard
-            title="Receptury z brakami"
-            value={kpi.low_stock_count}
-            tone={kpi.low_stock_count > 0 ? "amber" : "emerald"}
-            icon={<AlertTriangle aria-hidden />}
-          />
-          <ProductionKpiCard
-            title="Możliwa produkcja"
-            value={kpi.total_producible}
-            subtitle="Σ max. wyprodukowalność"
-            tone="emerald"
-            icon={<TrendingUp aria-hidden />}
-          />
-          <ProductionKpiCard title="Średnia marża" value="—" subtitle="Wymaga danych cen sprzedaży" tone="purple" icon={<Percent aria-hidden />} />
-          <ProductionKpiCard
-            title="Koszt materiałów"
-            value={kpi.material_cost_sum > 0 ? formatProductionMoney(kpi.material_cost_sum) : "—"}
-            subtitle="Szacunek na stanie WG"
-            tone="default"
-            icon={<Banknote aria-hidden />}
-          />
-          <ProductionKpiCard
-            title="Efektywność produkcji"
-            value={efficiency != null ? `${efficiency}%` : "—"}
-            subtitle={efficiency != null ? "Z pulpitu produkcji" : "Brak danych w API"}
-            tone="blue"
-            icon={<Percent aria-hidden />}
-          />
-        </ProductionKpiGrid>
+        <div className="space-y-3">
+          <div>
+            <p className={productionSectionLabelClass}>Receptury i koszty jednostkowe</p>
+            <ProductionKpiGrid className="mt-2">
+              <ProductionKpiCard title="Aktywne receptury" value={kpi.active_count} tone="indigo" icon={<Package aria-hidden />} />
+              <ProductionKpiCard
+                title="Średni koszt produktu"
+                value={kpi.avg_unit_cost > 0 ? formatProductionMoney(kpi.avg_unit_cost) : "—"}
+                tone="blue"
+                icon={<Banknote aria-hidden />}
+              />
+              <ProductionKpiCard
+                title="Receptury z brakami"
+                value={kpi.low_stock_count}
+                tone={kpi.low_stock_count > 0 ? "amber" : "emerald"}
+                icon={<AlertTriangle aria-hidden />}
+              />
+              <ProductionKpiCard
+                title="Koszt materiałów"
+                value={kpi.material_cost_sum > 0 ? formatProductionMoney(kpi.material_cost_sum) : "—"}
+                subtitle="Szacunek na stanie WG"
+                tone="default"
+                icon={<Banknote aria-hidden />}
+              />
+            </ProductionKpiGrid>
+          </div>
+          <div>
+            <p className={productionSectionLabelClass}>Wydajność i możliwa produkcja</p>
+            <ProductionKpiGrid className="mt-2">
+              <ProductionKpiCard
+                title="Możliwa produkcja"
+                value={kpi.total_producible}
+                subtitle="Σ max. wyprodukowalność"
+                tone="emerald"
+                icon={<TrendingUp aria-hidden />}
+              />
+              <ProductionKpiCard title="Średnia marża" value="—" subtitle="Wymaga danych cen sprzedaży" tone="purple" icon={<Percent aria-hidden />} />
+              <ProductionKpiCard
+                title="Efektywność produkcji"
+                value={efficiency != null ? `${efficiency}%` : "—"}
+                subtitle={efficiency != null ? "Z pulpitu produkcji" : "Brak danych w API"}
+                tone="blue"
+                icon={<Percent aria-hidden />}
+              />
+            </ProductionKpiGrid>
+          </div>
+        </div>
       ) : null}
 
-      <div className="flex flex-wrap items-end justify-between gap-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <p className="text-sm text-slate-500">
           Wyniki: <span className="font-medium text-slate-800">{filtered.length}</span>
         </p>
@@ -242,32 +258,32 @@ export default function ProductionAnalyticsPage() {
             <table className={moduleListTableClass} style={{ minWidth: 980 }}>
               <thead className={moduleListTheadClass}>
                 <tr>
-                  <th className={moduleListThClass}>
+                  <th className={productionModuleListThClass}>
                     <button type="button" className="font-semibold hover:text-amber-700" onClick={() => toggleSort("product")}>
                       Produkt
                     </button>
                   </th>
-                  <th className={moduleListThClass}>Receptura</th>
-                  <th className={moduleListThClass}>
+                  <th className={productionModuleListThClass}>Receptura</th>
+                  <th className={productionModuleListThClass}>
                     <button type="button" className="font-semibold hover:text-amber-700" onClick={() => toggleSort("cost")}>
                       Koszt jednostkowy
                     </button>
                   </th>
-                  <th className={moduleListThClass}>Dostępność materiałów</th>
-                  <th className={moduleListThClass}>
+                  <th className={productionModuleListThClass}>Dostępność materiałów</th>
+                  <th className={productionModuleListThClass}>
                     <button type="button" className="font-semibold hover:text-amber-700" onClick={() => toggleSort("producible")}>
                       Możliwa produkcja
                     </button>
                   </th>
-                  <th className={moduleListThClass}>Status</th>
+                  <th className={productionModuleListThClass}>Status</th>
                   <th className={productsListActionsThClass}>Akcje</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((r) => (
                   <tr key={r.composition_id} className="group border-b border-slate-100 hover:bg-slate-50/70">
-                    <td className={moduleListTdClass}>
-                      <div className="flex items-center gap-3">
+                    <td className={productionModuleListTdClass}>
+                      <div className="flex items-center gap-2">
                         <ProductThumb imageUrl={r.product_image_url} name={r.product_name} size="sm" />
                         <div>
                           <p className="font-medium text-slate-900">{r.product_name}</p>
@@ -275,13 +291,13 @@ export default function ProductionAnalyticsPage() {
                         </div>
                       </div>
                     </td>
-                    <td className={`${moduleListTdClass} text-slate-700`}>{r.recipe_name}</td>
-                    <td className={`${moduleListTdClass} tabular-nums font-medium text-slate-900`}>
+                    <td className={`${productionModuleListTdClass} text-slate-700`}>{r.recipe_name}</td>
+                    <td className={`${productionModuleListTdClass} tabular-nums font-medium text-slate-900`}>
                       {formatProductionMoney(r.unit_cost_net)}
                     </td>
-                    <td className={`${moduleListTdClass} tabular-nums text-slate-600`}>{r.current_stock} szt. WG</td>
-                    <td className={`${moduleListTdClass} tabular-nums font-medium text-slate-800`}>{Math.floor(r.max_producible)}</td>
-                    <td className={moduleListTdClass}>
+                    <td className={`${productionModuleListTdClass} tabular-nums text-slate-600`}>{r.current_stock} szt. WG</td>
+                    <td className={`${productionModuleListTdClass} tabular-nums font-medium text-slate-800`}>{Math.floor(r.max_producible)}</td>
+                    <td className={productionModuleListTdClass}>
                       <span className={recipeStatusBadgeClass(r)}>{recipeStatusLabel(r)}</span>
                     </td>
                     <td className={productsListActionsCellClass} onClick={(e) => e.stopPropagation()}>

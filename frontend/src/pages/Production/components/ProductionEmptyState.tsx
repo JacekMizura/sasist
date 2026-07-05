@@ -11,19 +11,19 @@ type Props = {
 };
 
 export function ProductionEmptyState({ icon: Icon, title, description, action, variant = "section" }: Props) {
-  const pad = variant === "hero" ? "py-16 sm:py-20" : "py-10 sm:py-12";
+  const pad = variant === "hero" ? "py-10 sm:py-12" : "py-6 sm:py-8";
   return (
-    <div className={`relative overflow-hidden rounded-2xl border border-dashed border-violet-200/80 bg-gradient-to-b from-white to-violet-50/30 ${pad}`}>
-      <div className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-violet-200/30 blur-2xl" aria-hidden />
-      <div className="pointer-events-none absolute -bottom-10 -left-6 h-28 w-28 rounded-full bg-indigo-200/25 blur-2xl" aria-hidden />
-      <div className="relative mx-auto flex max-w-md flex-col items-center px-6 text-center">
-        <span className="relative flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-600 text-white shadow-lg shadow-violet-300/40">
-          <Icon className="h-8 w-8" strokeWidth={1.75} aria-hidden />
-          <Sparkles className="absolute -right-1 -top-1 h-4 w-4 text-amber-300" aria-hidden />
+    <div className={`relative overflow-hidden rounded-xl border border-dashed border-slate-200 bg-slate-50/50 ${pad}`}>
+      <div className="relative mx-auto flex max-w-md flex-col items-center px-4 text-center">
+        <span className="relative flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm">
+          <Icon className="h-5 w-5" strokeWidth={1.75} aria-hidden />
+          {variant === "hero" ? (
+            <Sparkles className="absolute -right-1 -top-1 h-3 w-3 text-amber-500" aria-hidden />
+          ) : null}
         </span>
-        <h3 className="mt-5 text-base font-bold text-slate-900">{title}</h3>
-        <p className="mt-2 text-sm leading-relaxed text-slate-600">{description}</p>
-        {action ? <div className="mt-6 flex flex-wrap items-center justify-center gap-3">{action}</div> : null}
+        <h3 className="mt-3 text-sm font-semibold text-slate-900">{title}</h3>
+        <p className="mt-1 text-[13px] leading-relaxed text-slate-600">{description}</p>
+        {action ? <div className="mt-3 flex flex-wrap items-center justify-center gap-2">{action}</div> : null}
       </div>
     </div>
   );

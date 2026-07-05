@@ -18,8 +18,8 @@ type Props = {
 };
 
 /** KPI modułu Produkcja — kompaktowa gęstość, spójna z pulpitami ERP. */
-function ProductionKpiCardInner(props: Props) {
-  return <PurchasingKpiCard {...props} density="compact" />;
+function ProductionKpiCardInner({ className = "", ...props }: Props) {
+  return <PurchasingKpiCard {...props} density="compact" className={`h-full ${className}`.trim()} />;
 }
 
 export const ProductionKpiCard = memo(ProductionKpiCardInner);

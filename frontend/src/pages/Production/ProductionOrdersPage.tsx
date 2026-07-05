@@ -27,8 +27,6 @@ import {
 import {
   moduleListTableClass,
   moduleListTableScrollClass,
-  moduleListTdClass,
-  moduleListThClass,
   moduleListTheadClass,
   moduleTableCardClass,
 } from "../../components/listPage/moduleList";
@@ -53,6 +51,13 @@ import {
 import { erpProductionPaths, wmsProductionPaths } from "./productionPaths";
 import { ProductionOrdersFiltersPanel } from "./components/ProductionOrdersFiltersPanel";
 import { ProductionRowActionsMenu } from "./components/ProductionRowActionsMenu";
+import {
+  productionModuleListTdClass,
+  productionModuleListThClass,
+  productionPageDescClass,
+  productionPageStackClass,
+  productionPageTitleClass,
+} from "./productionLayoutTokens";
 
 const DEFAULT_TENANT = 1;
 
@@ -157,14 +162,14 @@ export default function ProductionOrdersPage() {
   }
 
   return (
-    <div className="space-y-4 pb-10">
-      <div className="flex flex-wrap items-end justify-between gap-4">
+    <div className={productionPageStackClass}>
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold text-slate-900">
+          <h2 className={productionPageTitleClass}>
             Zlecenia produkcyjne
             {!loading ? <span className="ml-2 text-base font-normal text-slate-400">{rows.length} wyników</span> : null}
           </h2>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className={productionPageDescClass}>
             Wybrany filtr:{" "}
             <span className="inline-flex items-center rounded-md border border-slate-200 bg-white px-2.5 py-0.5 text-sm font-medium text-slate-800">
               {productionOrdersFilterLabel(appliedFilters)}
@@ -218,35 +223,35 @@ export default function ProductionOrdersPage() {
             <table className={moduleListTableClass} style={{ minWidth: 960 }}>
               <thead className={moduleListTheadClass}>
                 <tr>
-                  <th className={moduleListThClass}>Zlecenie</th>
-                  <th className={moduleListThClass}>Produkt</th>
-                  <th className={`${moduleListThClass} text-right`}>Ilość</th>
-                  <th className={moduleListThClass}>Status</th>
-                  <th className={moduleListThClass}>Data plan.</th>
-                  <th className={moduleListThClass}>Operator</th>
-                  <th className={moduleListThClass}>Priorytet</th>
+                  <th className={productionModuleListThClass}>Zlecenie</th>
+                  <th className={productionModuleListThClass}>Produkt</th>
+                  <th className={`${productionModuleListThClass} text-right`}>Ilość</th>
+                  <th className={productionModuleListThClass}>Status</th>
+                  <th className={productionModuleListThClass}>Data plan.</th>
+                  <th className={productionModuleListThClass}>Operator</th>
+                  <th className={productionModuleListThClass}>Priorytet</th>
                   <th className={productsListActionsThClass}>Akcje</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((r) => (
                   <tr key={`${r.kind}-${r.id}`} className="group border-b border-slate-100 hover:bg-slate-50/70">
-                    <td className={moduleListTdClass}>
+                    <td className={productionModuleListTdClass}>
                       <span className="font-mono font-medium text-slate-900">{r.number}</span>
                       <span className="ml-2 text-[10px] uppercase text-slate-400">{r.kind === "batch" ? "partia" : "MO"}</span>
                     </td>
-                    <td className={`${moduleListTdClass} max-w-[220px] truncate`}>{r.product}</td>
-                    <td className={`${moduleListTdClass} text-right tabular-nums`}>{r.qty}</td>
-                    <td className={moduleListTdClass}>
+                    <td className={`${productionModuleListTdClass} max-w-[220px] truncate`}>{r.product}</td>
+                    <td className={`${productionModuleListTdClass} text-right tabular-nums`}>{r.qty}</td>
+                    <td className={productionModuleListTdClass}>
                       <span className={r.kind === "batch" ? batchStatusBadgeClass(r.status as never) : productionStatusBadgeClass(r.status as never)}>
                         {r.kind === "batch"
                           ? BATCH_STATUS_LABEL[r.status as keyof typeof BATCH_STATUS_LABEL]
                           : PRODUCTION_STATUS_LABEL[r.status as keyof typeof PRODUCTION_STATUS_LABEL]}
                       </span>
                     </td>
-                    <td className={`${moduleListTdClass} text-slate-600`}>{r.date}</td>
-                    <td className={`${moduleListTdClass} text-slate-600`}>{r.operator}</td>
-                    <td className={moduleListTdClass}>
+                    <td className={`${productionModuleListTdClass} text-slate-600`}>{r.date}</td>
+                    <td className={`${productionModuleListTdClass} text-slate-600`}>{r.operator}</td>
+                    <td className={productionModuleListTdClass}>
                       <span className={productionPriorityBadgeClass(r.priority, r.hasShortages, r.numericPriority)}>
                         {productionPriorityLabel(r.priority, r.hasShortages, r.numericPriority)}
                       </span>
