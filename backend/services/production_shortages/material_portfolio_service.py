@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import date, timedelta
 from typing import Any
 
@@ -9,9 +10,12 @@ from sqlalchemy.orm import Session, joinedload
 
 from ...models.product import Product
 from ...models.product_composition import ProductComposition, ProductCompositionLine
+from ..production_planning.forecast_strategies import PeriodAverageStrategy
 from ..production_planning.sales_history_service import bulk_daily_sales_series
 from ..reservations.availability_service import warehouse_net_available, warehouse_on_hand, warehouse_reserved_qty
 from .queue_service import build_production_shortages_queue
+
+logger = logging.getLogger(__name__)
 
 
 def _depletion_date(*, on_hand: float, reserved: float, daily_usage: float) -> str | None:
@@ -22,6 +26,12 @@ def _depletion_date(*, on_hand: float, reserved: float, daily_usage: float) -> s
     if days <= 0:
         return date.today().isoformat()
     return (date.today() + timedelta(days=days)).isoformat()
+
+
+def _daily_usage_from_history(history: list[tuple[date, float]]) -> float:
+    if not history:
+        return 0.0
+    return float(PeriodAverageStrategy().daily_rate(history))
 
 
 def build_material_portfolio(
@@ -55,7 +65,15 @@ def build_material_portfolio(
     if not usage_by_component:
         return []
 
-    queue = build_production_shortages_queue(db, tenant_id=tenant_id, warehouse_id=warehouse_id)
+    try:
+        queue = build_production_shortages_queue(db, tenant_id=tenant_id, warehouse_id=warehouse_id)
+    except Exception:
+        logger.exception(
+            "build_production_shortages_queue failed tenant=%s warehouse=%s — portfolio continues without block counts",
+            tenant_id,
+            warehouse_id,
+        )
+        queue = []
     blocked_by_component = {
         int(r["component_product_id"]): int(r["blocked_batches_count"]) + int(r["blocked_orders_count"])
         for r in queue
@@ -78,7 +96,7 @@ def build_material_portfolio(
         reserved = warehouse_reserved_qty(db, tenant_id=tenant_id, warehouse_id=warehouse_id, product_id=pid)
         net = warehouse_net_available(db, tenant_id=tenant_id, warehouse_id=warehouse_id, product_id=pid)
         hist = history.get(pid, [])
-        daily = sum(hist) / len(hist) if hist else 0.0
+        daily = _daily_usage_from_history(hist)
         blocked = blocked_by_component.get(pid, 0)
         rows.append(
             {

@@ -5,6 +5,11 @@
 - ERP UI: `/production/erp/:kind/:id`; WMS: terminal po `release-to-wms`.
 - Karta produkcyjna PDF: zawsze dostępna (informacyjna, bez zmiany statusu); bulk z planu partii.
 
+## Fix material-analysis 500 (2026-07-05)
+- Przyczyna: `sum(hist)` na `list[tuple[date,float]]` w `material_portfolio_service`.
+- Naprawa: `PeriodAverageStrategy().daily_rate`, testy w `tests/production_shortages/test_material_portfolio.py`.
+- Raport: `memory/material-analysis-500-fix-report.md`
+
 ## Fix 404 — WMS settings + planning (2026-07-05)
 - Przyczyna: błędny `from ..reservations` w `production_order_service` (v7) → crash importu `main.py` → brak routerów.
 - Naprawa: `.reservations`, circular import reservations/direct_sale, log `_log_registered_api_routers()`.
