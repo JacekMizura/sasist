@@ -78,6 +78,8 @@ def list_templates_enriched(
     q = db.query(DocumentTemplate).filter(DocumentTemplate.tenant_id == int(tenant_id))
     if template_role:
         q = q.filter(DocumentTemplate.template_role == str(template_role))
+    else:
+        q = q.filter(DocumentTemplate.template_role == TEMPLATE_ROLE_DOCUMENT)
     if source:
         q = q.filter(DocumentTemplate.source == str(source))
     if kind_code:

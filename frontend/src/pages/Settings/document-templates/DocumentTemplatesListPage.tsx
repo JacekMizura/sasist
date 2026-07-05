@@ -72,6 +72,7 @@ export function DocumentTemplatesListPage() {
           variant_code: variantFilter || undefined,
           status: statusFilter || undefined,
           source: sourceFilter || undefined,
+          template_role: "DOCUMENT",
         }),
       ]);
       setFamilies(catalog);

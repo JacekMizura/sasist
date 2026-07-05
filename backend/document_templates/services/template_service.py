@@ -10,6 +10,8 @@ from sqlalchemy.orm import Session, joinedload
 
 from ..constants import (
     DEFAULT_VARIANT_CODE,
+    SOURCE_TENANT,
+    TEMPLATE_ROLE_DOCUMENT,
     VERSION_STATUS_ARCHIVED,
     VERSION_STATUS_DRAFT,
     VERSION_STATUS_PUBLISHED,
@@ -159,6 +161,26 @@ def get_template_detail(db: Session, *, tenant_id: int, template_id: int) -> dic
     return summary
 
 
+def _unique_template_code(
+    db: Session,
+    *,
+    tenant_id: int,
+    kind_code: str,
+    variant_code: str,
+) -> str:
+    base = f"{kind_code}_{variant_code or DEFAULT_VARIANT_CODE}"
+    code = base
+    suffix = 2
+    while (
+        db.query(DocumentTemplate)
+        .filter(DocumentTemplate.tenant_id == int(tenant_id), DocumentTemplate.template_code == code)
+        .first()
+    ):
+        code = f"{base}_{suffix}"
+        suffix += 1
+    return code
+
+
 def create_template_from_starter(
     db: Session,
     *,
@@ -189,10 +211,17 @@ def create_template_from_starter(
     template = DocumentTemplate(
         tenant_id=int(tenant_id),
         kind_id=int(kind.id),
+        template_role=TEMPLATE_ROLE_DOCUMENT,
+        template_code=_unique_template_code(
+            db,
+            tenant_id=int(tenant_id),
+            kind_code=str(kind.code),
+            variant_code=str(variant_code or DEFAULT_VARIANT_CODE),
+        ),
+        source=SOURCE_TENANT,
         name=str(name).strip() or starter.name_pl,
         description=starter.description,
         is_system=False,
-        template_code=f"{kind.code}_{str(variant_code or DEFAULT_VARIANT_CODE)}",
         created_by_user_id=user_id,
     )
     db.add(template)

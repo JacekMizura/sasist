@@ -86,8 +86,9 @@ def build_stock_document_html_pdf_bytes(
             tenant_id=int(tenant_id),
             document_type=doc_type,
             params=params,
-            warehouse_id=int(wh_id) if wh_id else None,
-            **render_kwargs,
+            warehouse_id=render_kwargs.get("warehouse_id") if render_kwargs.get("warehouse_id") is not None else (int(wh_id) if wh_id else None),
+            variant_code=str(render_kwargs.get("variant_code") or "standard"),
+            template_version_id=render_kwargs.get("template_version_id"),
         )
         from .structure_report_pdf_service import html_document_to_pdf_bytes
 
