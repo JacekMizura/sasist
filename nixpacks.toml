@@ -6,8 +6,14 @@ providers = ["python"]
 NIXPACKS_PYTHON_VERSION = "3.12"
 NIXPACKS_PYTHON_PACKAGE_MANAGER = "requirements"
 
+[phases.setup]
+nixPkgs = ["nodejs_20"]
+
 [phases.install]
-cmds = ["pip install -r requirements.txt"]
+cmds = [
+  "pip install -r requirements.txt",
+  "cd backend/scripts/structure_report_pdf && npm install --omit=dev",
+]
 
 [start]
 cmd = "python3 run_server.py"

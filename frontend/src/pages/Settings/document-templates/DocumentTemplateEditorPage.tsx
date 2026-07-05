@@ -57,17 +57,25 @@ export function DocumentTemplateEditorPage() {
     setCtx(data);
     setTwigContent(data.detail.twig_content ?? "");
     const draft = data.detail.draft_version;
-    setExtendsVersionId(draft?.extends_version_id ?? data.extends_base?.pinned_version?.id ?? null);
+    const previewPins = data.preview_pins;
+    setExtendsVersionId(
+      draft?.extends_version_id
+        ?? data.extends_base?.pinned_version?.id
+        ?? previewPins?.extends_version_id
+        ?? null,
+    );
     const pins: Record<string, number> = {};
-    if (draft?.partial_pins_json) {
+    const pinsJson = draft?.partial_pins_json ?? previewPins?.partial_pins_json;
+    if (pinsJson) {
       try {
-        Object.assign(pins, JSON.parse(draft.partial_pins_json));
+        Object.assign(pins, JSON.parse(pinsJson));
       } catch {
         /* ignore */
       }
     }
     for (const p of data.partials_used) {
-      if (p.pinned_version?.id) pins[p.partial_code] = p.pinned_version.id;
+      const versionId = p.pinned_version?.id ?? p.latest_published?.id;
+      if (versionId) pins[p.partial_code] = versionId;
     }
     setPartialPins(pins);
   }, [templateId]);
@@ -80,24 +88,29 @@ export function DocumentTemplateEditorPage() {
     if (!ctx?.detail.kind?.code || !twigContent.trim()) return;
     setPreviewLoading(true);
     setPreviewError(null);
+    setPreviewPdf(null);
     try {
+      const previewPins = ctx.preview_pins;
       const payload = {
         kind_code: ctx.detail.kind.code,
         twig_content: twigContent,
         context_mode: contextMode,
-        extends_version_id: extendsVersionId,
-        partial_pins_json: partialPinsJson,
+        extends_version_id: extendsVersionId ?? previewPins?.extends_version_id ?? null,
+        partial_pins_json: partialPinsJson ?? previewPins?.partial_pins_json ?? null,
         params: {},
         warehouse_id: 1,
       };
-      const [html, pdf] = await Promise.all([
-        previewDocumentHtml(DEFAULT_TENANT_ID, payload),
-        previewDocumentPdf(DEFAULT_TENANT_ID, payload),
-      ]);
+      const html = await previewDocumentHtml(DEFAULT_TENANT_ID, payload);
       setPreviewHtml(html);
-      setPreviewPdf(pdf);
+      try {
+        const pdf = await previewDocumentPdf(DEFAULT_TENANT_ID, payload);
+        setPreviewPdf(pdf);
+      } catch (pdfErr) {
+        setPreviewError(extractApiErrorMessage(pdfErr, "Błąd podglądu PDF."));
+      }
     } catch (err) {
-      setPreviewError(extractApiErrorMessage(err, "Błąd podglądu."));
+      setPreviewHtml(null);
+      setPreviewError(extractApiErrorMessage(err, "Błąd podglądu HTML."));
     } finally {
       setPreviewLoading(false);
     }

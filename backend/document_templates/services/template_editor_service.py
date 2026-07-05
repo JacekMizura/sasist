@@ -268,6 +268,14 @@ def get_editor_context(db: Session, *, tenant_id: int, template_id: int) -> dict
         graph = DependencyGraphService(db).build_dependency_graph(int(active_version_id))
         impact = get_document_editor_impact(db, version_id=int(active_version_id))
 
+    twig_for_pins = str(detail.get("twig_content") or (active_version.twig_content if active_version else ""))
+    preview_pins = _resolve_effective_preview_pins(
+        db,
+        tenant_id=int(tenant_id),
+        version=active_version,
+        twig_content=twig_for_pins,
+    )
+
     base_templates = list_layout_templates(db, tenant_id=tenant_id, role=TEMPLATE_ROLE_BASE)
     partial_templates = list_layout_templates(db, tenant_id=tenant_id, role=TEMPLATE_ROLE_PARTIAL)
 
@@ -284,6 +292,7 @@ def get_editor_context(db: Session, *, tenant_id: int, template_id: int) -> dict
         "partial_templates": partial_templates,
         "dependencies": graph,
         "impact": impact,
+        "preview_pins": preview_pins,
     }
 
 
@@ -378,6 +387,38 @@ def _impact_messages(base_info: dict | None, partials: list[dict]) -> list[str]:
                 f"przypięto v{p['pinned_version_number']}."
             )
     return msgs
+
+
+def _resolve_effective_preview_pins(
+    db: Session,
+    *,
+    tenant_id: int,
+    version: DocumentTemplateVersion | None,
+    twig_content: str,
+) -> dict[str, Any]:
+    """Pins the editor must send to preview/production — draft first, then system defaults."""
+    from .document_migration_service import _default_partial_pins, _system_base_published_version
+    from ..services.twig_parse_service import extract_extends_target
+
+    content = str(twig_content or "")
+    extends_target = extract_extends_target(content)
+    extends_version_id = int(version.extends_version_id) if version and version.extends_version_id else None
+    pins = dict(_load_version_pins(db, version)) if version else {}
+
+    if extends_target and not extends_version_id:
+        base_version = _system_base_published_version(db, tenant_id=int(tenant_id))
+        if base_version is not None:
+            extends_version_id = int(base_version.id)
+
+    default_pins = _default_partial_pins(db, tenant_id=int(tenant_id))
+    for code in extract_include_document_codes(content):
+        if code not in pins and code in default_pins:
+            pins[code] = int(default_pins[code])
+
+    return {
+        "extends_version_id": extends_version_id,
+        "partial_pins_json": json.dumps(pins) if pins else None,
+    }
 
 
 def _resolve_extends_base(db: Session, version: DocumentTemplateVersion | None) -> dict[str, Any] | None:

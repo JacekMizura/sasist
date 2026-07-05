@@ -146,6 +146,10 @@ export type EditorContextDto = {
   partial_templates: LayoutTemplateDto[];
   dependencies: DependencyGraphDto | null;
   impact: EditorImpactDto | null;
+  preview_pins?: {
+    extends_version_id: number | null;
+    partial_pins_json: string | null;
+  };
 };
 
 export type LayoutTemplateDto = {
@@ -324,11 +328,32 @@ export async function previewDocumentPdf(
     partial_pins_json?: string | null;
   },
 ) {
-  const { data } = await api.post<Blob>("/document-templates/preview/pdf", payload, {
-    params: { tenant_id: tenantId },
-    responseType: "blob",
-  });
-  return data;
+  try {
+    const { data } = await api.post<Blob>("/document-templates/preview/pdf", payload, {
+      params: { tenant_id: tenantId },
+      responseType: "blob",
+    });
+    return data;
+  } catch (err) {
+    if (err && typeof err === "object" && "response" in err) {
+      const res = (err as { response?: { data?: unknown } }).response;
+      if (res?.data instanceof Blob) {
+        const text = await res.data.text();
+        try {
+          const parsed = JSON.parse(text) as { detail?: unknown };
+          if (typeof parsed.detail === "string" && parsed.detail.trim()) {
+            throw new Error(parsed.detail.trim());
+          }
+        } catch (parseErr) {
+          if (parseErr instanceof Error && parseErr.message && parseErr.message !== text.trim()) {
+            throw parseErr;
+          }
+          if (text.trim()) throw new Error(text.trim());
+        }
+      }
+    }
+    throw err;
+  }
 }
 
 export async function bindDocumentTemplate(
