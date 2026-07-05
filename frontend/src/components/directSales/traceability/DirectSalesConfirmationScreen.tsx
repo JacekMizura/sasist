@@ -2,14 +2,11 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { CheckCircle2, Printer, FileText, ShoppingCart } from "lucide-react";
 
-import {
-  fetchSaleDocumentPdfBlob,
-  fetchStockDocumentPdfBlob,
-} from "../../../api/saleDocumentsApi";
 import { DAMAGE_TENANT_ID } from "../../../constants/panelTenant";
 import type { DirectSaleCompletion } from "../../../types/directSalesCompletion";
 import { getApiErrorMessage } from "../../../utils/apiError";
-import { openPdfBlobInPrintViewer } from "../../../utils/openPdfForBrowserPrint";
+import { useDocumentTemplatePrint } from "../../../hooks/useDocumentTemplatePrint";
+import { saleKindFromSubtype } from "../../../utils/documentTemplatePrint";
 import {
   documentSubtypePl,
   paymentMethodPl,
@@ -43,42 +40,34 @@ function formatCompletedAt(iso: string | null): string {
 }
 
 export function DirectSalesConfirmationScreen({ completion, onNewSale }: Props) {
-  const [printBusy, setPrintBusy] = useState(false);
+  const { requestPrint, pickerModal, printBusy } = useDocumentTemplatePrint({ tenantId: DAMAGE_TENANT_ID });
   const [printError, setPrintError] = useState<string | null>(null);
   const docType = completion.document_subtype === "INVOICE" ? "FV" : "PA";
   const saleDocId = completion.sale_document_id ?? completion.document?.sale_document_id ?? null;
   const stockDocId = completion.stock_document_id ?? null;
 
-  const handlePrintSaleDocument = async () => {
+  const handlePrintSaleDocument = () => {
     if (!saleDocId) return;
-    setPrintBusy(true);
     setPrintError(null);
-    try {
-      const blob = await fetchSaleDocumentPdfBlob(DAMAGE_TENANT_ID, saleDocId);
-      openPdfBlobInPrintViewer(blob, { autoPrint: true });
-    } catch (err) {
+    void requestPrint({
+      kind: "sale_document",
+      documentId: saleDocId,
+      kindCode: saleKindFromSubtype(completion.document_subtype ?? docType),
+    }).catch((err) => {
       const msg = getApiErrorMessage(err) || "Nie udało się wygenerować PDF dokumentu.";
       console.error("[DirectSales.printSale]", msg, err);
       setPrintError(msg);
-    } finally {
-      setPrintBusy(false);
-    }
+    });
   };
 
-  const handlePrintWz = async () => {
+  const handlePrintWz = () => {
     if (stockDocId == null) return;
-    setPrintBusy(true);
     setPrintError(null);
-    try {
-      const blob = await fetchStockDocumentPdfBlob(DAMAGE_TENANT_ID, stockDocId);
-      openPdfBlobInPrintViewer(blob, { autoPrint: true });
-    } catch (err) {
+    void requestPrint({ kind: "stock_document", documentId: stockDocId, kindCode: "wz" }).catch((err) => {
       const msg = getApiErrorMessage(err) || "Nie udało się wygenerować PDF dokumentu.";
       console.error("[DirectSales.printWz]", msg, err);
       setPrintError(msg);
-    } finally {
-      setPrintBusy(false);
-    }
+    });
   };
 
   return (
@@ -178,6 +167,7 @@ export function DirectSalesConfirmationScreen({ completion, onNewSale }: Props) 
           />
         </div>
       </div>
+      {pickerModal}
     </div>
   );
 }

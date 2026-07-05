@@ -60,15 +60,16 @@ import {
 } from "../../api/ordersApi";
 import { getBackendPublicOrigin } from "../../config/apiBase";
 import { formatApiError } from "../../utils/apiErrorMessage";
-import { saleDocumentPdfUrl, stockDocumentPdfUrl } from "../../api/saleDocumentsApi";
 import { isStationarySaleOrder, printButtonLabelPl } from "../../components/directSales/directSalesTerminology";
+import { OrderDocumentsPrintMenu } from "../../components/orders/OrderDocumentsPrintMenu";
+import { useDocumentTemplatePrint } from "../../hooks/useDocumentTemplatePrint";
+import { saleKindFromSubtype, stockKindFromType } from "../../utils/documentTemplatePrint";
 import { OrderDirectSalesBadge } from "../../components/orders/orderList/OrderDirectSalesBadge";
 import OrderFulfillmentWarehousePanel from "../../components/orders/OrderFulfillmentWarehousePanel";
 import OrderConsolidationPanel from "../../components/orders/OrderConsolidationPanel";
 import OrderFulfillmentAssignmentHistory from "../../components/orders/OrderFulfillmentAssignmentHistory";
 import type { FulfillmentAssignmentPhase } from "../../api/orderFulfillmentApi";
 import { formatMoney } from "../../utils/formatOrderMoney";
-import { openPdfUrlInPrintViewer } from "../../utils/openPdfForBrowserPrint";
 import OrderAdditionalFieldsSection from "../../components/orders/OrderAdditionalFieldsSection";
 import OrderMissingProductsSection from "../../components/orders/OrderMissingProductsSection";
 import { buildOrderReplacementPairs } from "../../components/orders/buildOrderReplacementSummary";
@@ -1414,6 +1415,8 @@ export default function OrderDetailPage() {
   }, [order?.order_ui_status?.id]);
 
   const isStationarySale = useMemo(() => isStationarySaleOrder(order), [order]);
+  const { requestPrint: requestOrderDocumentPrint, pickerModal: orderDocumentPickerModal, printBusy: orderDocumentPrintBusy } =
+    useDocumentTemplatePrint({ tenantId: DAMAGE_TENANT_ID });
 
   const contact = useMemo(() => {
     if (!order) return { name: "—", phone: "—", email: "—", addressLines: ["—"] as string[] };
@@ -1778,20 +1781,31 @@ export default function OrderDetailPage() {
     console.log("[download] brak URL pliku (symulacja)", row.id, row.name);
   }, []);
 
-  const handleOrderDocPrint = useCallback((row: OrderDocTableRow) => {
-    if (row.saleDocumentId) {
-      openPdfUrlInPrintViewer(saleDocumentPdfUrl(DAMAGE_TENANT_ID, row.saleDocumentId), { autoPrint: true });
-      return;
-    }
-    if (row.stockDocumentId != null) {
-      openPdfUrlInPrintViewer(stockDocumentPdfUrl(DAMAGE_TENANT_ID, row.stockDocumentId), { autoPrint: true });
-      return;
-    }
-    if (row.fileUrl) {
-      window.open(row.fileUrl, "_blank", "noopener,noreferrer");
-      return;
-    }
-  }, []);
+  const handleOrderDocPrint = useCallback(
+    (row: OrderDocTableRow) => {
+      if (!order) return;
+      if (row.saleDocumentId) {
+        void requestOrderDocumentPrint({
+          kind: "sale_document",
+          documentId: row.saleDocumentId,
+          kindCode: saleKindFromSubtype(String(row.printKind ?? order.panel_document_type ?? "INVOICE")),
+        });
+        return;
+      }
+      if (row.stockDocumentId != null) {
+        void requestOrderDocumentPrint({
+          kind: "stock_document",
+          documentId: row.stockDocumentId,
+          kindCode: stockKindFromType(String(row.printKind ?? "WZ")),
+        });
+        return;
+      }
+      if (row.fileUrl) {
+        window.open(row.fileUrl, "_blank", "noopener,noreferrer");
+      }
+    },
+    [order, requestOrderDocumentPrint],
+  );
 
   const handleOrderDocDelete = useCallback(
     (section: "docs" | "files" | "waybills", row: OrderDocTableRow) => {
@@ -1995,7 +2009,15 @@ export default function OrderDetailPage() {
                         {order?.has_customer_comment && <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>}
                       </button>
                       <div className="w-px h-6 bg-slate-200 mx-1"></div>
-                      <button type="button" onClick={() => window.print()} className={ORDER_DETAIL_HEADER_ICON_BTN}><Printer className="h-4 w-4 shrink-0" strokeWidth={2} /></button>
+                      <OrderDocumentsPrintMenu
+                        orderId={order.id}
+                        linkedDocuments={order.linked_documents}
+                        panelDocumentType={order.panel_document_type}
+                        salesDocumentNumber={order.sales_document_number}
+                        onPrint={requestOrderDocumentPrint}
+                        busy={orderDocumentPrintBusy}
+                        compact
+                      />
                       {!isStationarySale ? (
                         <Link to={WMS_ROUTES.packingOrder(order.id)} className="ml-2 inline-flex items-center justify-center rounded-md bg-blue-600 px-5 py-2 text-sm font-bold text-white shadow-sm transition-colors hover:bg-blue-700">Spakuj</Link>
                       ) : null}
@@ -2181,15 +2203,17 @@ export default function OrderDetailPage() {
                             className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50"
                             onClick={() => {
                               if (doc.kind === "sale" || doc.sale_document_id) {
-                                openPdfUrlInPrintViewer(
-                                  saleDocumentPdfUrl(DAMAGE_TENANT_ID, doc.sale_document_id ?? doc.id),
-                                  { autoPrint: true },
-                                );
+                                void requestOrderDocumentPrint({
+                                  kind: "sale_document",
+                                  documentId: String(doc.sale_document_id ?? doc.id),
+                                  kindCode: saleKindFromSubtype(doc.document_subtype ?? doc.document_type),
+                                });
                               } else if (doc.stock_document_id != null) {
-                                openPdfUrlInPrintViewer(
-                                  stockDocumentPdfUrl(DAMAGE_TENANT_ID, doc.stock_document_id),
-                                  { autoPrint: true },
-                                );
+                                void requestOrderDocumentPrint({
+                                  kind: "stock_document",
+                                  documentId: doc.stock_document_id,
+                                  kindCode: stockKindFromType(doc.document_type),
+                                });
                               }
                             }}
                           >
@@ -2532,6 +2556,7 @@ export default function OrderDetailPage() {
       {order && (
         <EditBuyerModal open={editBuyerModalOpen} onClose={() => setEditBuyerModalOpen(false)} orderId={order.id} initialFirstName={(order.first_name ?? "").trim()} initialLastName={(order.last_name ?? "").trim()} initialPhone={contact.phone === "—" ? "" : contact.phone} initialEmail={contact.email === "—" ? "" : contact.email} canSave={order != null} onSaved={() => void reloadOrderById(order.id)} />
       )}
+      {orderDocumentPickerModal}
     </div>
   );
 }

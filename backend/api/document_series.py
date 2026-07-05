@@ -352,6 +352,29 @@ def _apply_body_to_row(row: DocumentSeries, body: DocumentSeriesBase) -> None:
     row.company_email = body.company_email
 
 
+def _sync_series_template_binding(db: Session, row: DocumentSeries) -> None:
+    version_id = getattr(row, "document_template_version_id", None)
+    if version_id is None:
+        return
+    from ..document_templates.constants import DEFAULT_VARIANT_CODE
+    from ..document_templates.services.document_integration_service import (
+        ensure_series_binding_from_version,
+        kind_code_for_series_subtype,
+    )
+
+    kind = kind_code_for_series_subtype(getattr(row, "subtype", None), series_type=getattr(row, "series_type", None))
+    if not kind:
+        return
+    variant = str(getattr(row, "document_template_variant_code", None) or DEFAULT_VARIANT_CODE)
+    ensure_series_binding_from_version(
+        db,
+        tenant_id=int(row.tenant_id),
+        kind_code=str(kind),
+        version_id=int(version_id),
+        variant_code=variant,
+    )
+
+
 @router.post("/bulk-delete", response_model=DocumentSeriesBulkDeleteOut)
 def document_series_bulk_delete(body: DocumentSeriesBulkDeleteBody, db: Session = Depends(get_db)):
     q = db.query(DocumentSeries).filter(
@@ -544,6 +567,7 @@ def create_document_series(body: DocumentSeriesCreate, db: Session = Depends(get
         warehouse_id=body.warehouse_id,
     )
     _apply_body_to_row(row, body)
+    _sync_series_template_binding(db, row)
     db.add(row)
     db.commit()
     db.refresh(row)
@@ -630,6 +654,7 @@ def update_document_series(
         self_id=str(row.id),
     )
     _apply_body_to_row(row, body)
+    _sync_series_template_binding(db, row)
     db.commit()
     row = (
         db.query(DocumentSeries)

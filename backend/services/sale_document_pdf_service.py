@@ -84,7 +84,13 @@ def _build_sale_context(dto: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def build_sale_document_pdf_bytes(db: Session, *, tenant_id: int, document_id: str) -> bytes:
+def build_sale_document_pdf_bytes(
+    db: Session,
+    *,
+    tenant_id: int,
+    document_id: str,
+    template_version_id: int | None = None,
+) -> bytes:
     doc = (
         db.query(SaleDocument)
         .filter(SaleDocument.id == str(document_id), SaleDocument.tenant_id == int(tenant_id))
@@ -139,6 +145,7 @@ def build_sale_document_pdf_bytes(db: Session, *, tenant_id: int, document_id: s
         kind_code=sale_kind_for_subtype(doc_subtype),
         series=series,
         warehouse_id=getattr(order, "warehouse_id", None),
+        explicit_version_id=int(template_version_id) if template_version_id is not None else None,
     )
     render_kwargs = resolve_render_template_kwargs(db, ctx=hierarchy_ctx)
     render_kwargs.update(series_template_render_kwargs(series))

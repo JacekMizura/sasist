@@ -62,13 +62,19 @@ def get_sale_document(
 def get_sale_document_pdf(
     document_id: str,
     tenant_id: int = Query(..., ge=1),
+    template_version_id: int | None = Query(None, ge=1),
     db: Session = Depends(get_db),
 ):
     from ..services.document_print_service import PdfRendererUnavailable
     from ..services.sale_document_pdf_service import build_sale_document_pdf_bytes
 
     try:
-        pdf = build_sale_document_pdf_bytes(db, tenant_id=int(tenant_id), document_id=document_id)
+        pdf = build_sale_document_pdf_bytes(
+            db,
+            tenant_id=int(tenant_id),
+            document_id=document_id,
+            template_version_id=template_version_id,
+        )
     except ValueError as exc:
         _logger.warning(
             "[sale_document_pdf] not found document_id=%s tenant_id=%s: %s",

@@ -20,13 +20,19 @@ router = APIRouter(prefix="/supplier-orders", tags=["Supplier orders"])
 def download_supplier_order_pdf(
     order_id: int,
     tenant_id: int = Query(..., ge=1),
+    template_version_id: int | None = Query(None, ge=1),
     db: Session = Depends(get_db),
 ):
     """
     PDF dokumentu zamówienia do dostawcy (HTML → Puppeteer).
     """
     try:
-        pdf = generate_supplier_order_pdf_bytes(db, tenant_id, order_id)
+        pdf = generate_supplier_order_pdf_bytes(
+            db,
+            tenant_id,
+            order_id,
+            template_version_id=template_version_id,
+        )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except FileNotFoundError as e:

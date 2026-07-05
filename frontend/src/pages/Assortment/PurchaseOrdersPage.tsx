@@ -10,14 +10,13 @@ import api from "../../api/axios";
 import {
   deleteDelivery,
   listDeliveries,
-  supplierOrderPdfUrl,
   type DeliveryListRow,
   type DeliveryStatus,
 } from "../../api/inboundDeliveriesApi";
 import { listSuppliers, type SupplierRead } from "../../api/inboundSuppliersApi";
 import { fetchPurchasingSupplierAnalytics } from "../../api/purchasingSupplierAnalyticsApi";
 import { CreatePzFromDeliveryModal } from "./CreatePzFromDeliveryModal";
-import { openPdfUrlInPrintViewer } from "../../utils/openPdfForBrowserPrint";
+import { useDocumentTemplatePrint } from "../../hooks/useDocumentTemplatePrint";
 import { FilterApplyActions } from "../../components/filters";
 import {
   buildPurchaseOrderListViewAdapter,
@@ -62,6 +61,9 @@ export default function PurchaseOrdersPage() {
   const [searchParams] = useSearchParams();
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [tenantId, setTenantId] = useState(1);
+  const { requestPrint: requestSupplierOrderPrint, pickerModal: supplierOrderPickerModal } = useDocumentTemplatePrint({
+    tenantId,
+  });
   const listViewAdapter = useMemo(() => buildPurchaseOrderListViewAdapter(tenantId), [tenantId]);
   const listView = useListViewState(listViewAdapter);
   const listViewActions = useMemo(() => listViewActionsFromHook(listView), [listView]);
@@ -200,14 +202,11 @@ export default function PurchaseOrdersPage() {
   };
 
   const openSupplierOrderPdf = (orderId: number) => {
-    openPdfUrlInPrintViewer(supplierOrderPdfUrl(tenantId, orderId));
+    void requestSupplierOrderPrint({ kind: "supplier_order", orderId }, { autoPrint: false });
   };
 
   const printSupplierOrderPdf = (orderId: number) => {
-    openPdfUrlInPrintViewer(supplierOrderPdfUrl(tenantId, orderId), {
-      autoPrint: true,
-      autoPrintDelayMs: 1000,
-    });
+    void requestSupplierOrderPrint({ kind: "supplier_order", orderId });
   };
 
   const confirmDeleteOrder = useCallback(async () => {
@@ -590,6 +589,7 @@ export default function PurchaseOrdersPage() {
           </div>
         </div>
       ) : null}
+      {supplierOrderPickerModal}
     </>
   );
 }

@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
-import { getStockDocument, stockDocumentPdfUrl, type StockDocumentRead } from "../../api/stockDocumentsApi";
+import { getStockDocument, type StockDocumentRead } from "../../api/stockDocumentsApi";
 import { useWarehouse } from "../../context/WarehouseContext";
-import { openPdfUrlInPrintViewer } from "../../utils/openPdfForBrowserPrint";
+import { useDocumentTemplatePrint } from "../../hooks/useDocumentTemplatePrint";
+import { stockKindFromType } from "../../utils/documentTemplatePrint";
 import { DocumentsSectionShell } from "./DocumentsSectionShell";
 import { WarehouseZPzDocumentDetail } from "./WarehouseZPzDocumentDetail";
 import { warehouseDocumentListStatus } from "./warehouseDocumentsUi";
@@ -17,6 +18,7 @@ type Props = {
 export function WarehouseZPzDocumentPage({ documentId }: Props) {
   const navigate = useNavigate();
   const { warehouse } = useWarehouse();
+  const { requestPrint, pickerModal } = useDocumentTemplatePrint({ tenantId: DAMAGE_TENANT_ID });
   const [detail, setDetail] = useState<StockDocumentRead | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -75,9 +77,10 @@ export function WarehouseZPzDocumentPage({ documentId }: Props) {
               type="button"
               className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
               onClick={() =>
-                openPdfUrlInPrintViewer(stockDocumentPdfUrl(DAMAGE_TENANT_ID, documentId), {
-                  autoPrint: true,
-                  autoPrintDelayMs: 800,
+                void requestPrint({
+                  kind: "stock_document",
+                  documentId,
+                  kindCode: stockKindFromType(detail.document_type ?? "PZ"),
                 })
               }
             >
@@ -111,6 +114,7 @@ export function WarehouseZPzDocumentPage({ documentId }: Props) {
           <div className="mt-3">{backLink}</div>
         </div>
       )}
+      {pickerModal}
     </DocumentsSectionShell>
   );
 }

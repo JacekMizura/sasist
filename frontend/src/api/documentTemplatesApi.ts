@@ -267,6 +267,7 @@ export type PublishedTemplateOptionDto = {
   version_id: number;
   version_number: number;
   template_name: string;
+  description?: string | null;
   kind_code: string | null;
   kind_name: string | null;
   variant_code: string;
@@ -275,6 +276,7 @@ export type PublishedTemplateOptionDto = {
   label: string;
   published_at: string | null;
   is_default_binding: boolean;
+  thumbnail_url?: string | null;
 };
 
 export type EditorImpactDto = {
@@ -568,6 +570,14 @@ export async function fetchStarterGalleryDetail(tenantId: number, starterId: num
 
 export async function fetchStarterThumbnailBlob(tenantId: number, starterId: number) {
   const { data } = await api.get<Blob>(`/document-templates/starters/${starterId}/thumbnail`, {
+    params: { tenant_id: tenantId },
+    responseType: "blob",
+  });
+  return data;
+}
+
+export async function fetchTemplateVersionThumbnailBlob(tenantId: number, versionId: number) {
+  const { data } = await api.get<Blob>(`/document-templates/versions/${versionId}/thumbnail`, {
     params: { tenant_id: tenantId },
     responseType: "blob",
   });

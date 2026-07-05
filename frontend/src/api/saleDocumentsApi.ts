@@ -31,12 +31,20 @@ export async function getSaleDocument(params: {
   return data;
 }
 
-export function saleDocumentPdfUrl(tenantId: number, documentId: string): string {
-  return `/api/sale-documents/${encodeURIComponent(documentId)}/pdf?tenant_id=${tenantId}`;
+export function saleDocumentPdfUrl(tenantId: number, documentId: string, templateVersionId?: number | null): string {
+  const q = new URLSearchParams({ tenant_id: String(tenantId) });
+  if (templateVersionId != null) q.set("template_version_id", String(templateVersionId));
+  return `/api/sale-documents/${encodeURIComponent(documentId)}/pdf?${q}`;
 }
 
-export function stockDocumentPdfUrl(tenantId: number, stockDocumentId: number): string {
-  return `/api/stock-documents/${stockDocumentId}/pdf?tenant_id=${tenantId}`;
+export function stockDocumentPdfUrl(
+  tenantId: number,
+  stockDocumentId: number,
+  templateVersionId?: number | null,
+): string {
+  const q = new URLSearchParams({ tenant_id: String(tenantId) });
+  if (templateVersionId != null) q.set("template_version_id", String(templateVersionId));
+  return `/api/stock-documents/${stockDocumentId}/pdf?${q}`;
 }
 
 async function parsePdfBlobError(blob: Blob): Promise<string> {
@@ -73,10 +81,16 @@ async function assertPdfBlob(blob: Blob, context: string): Promise<Blob> {
 }
 
 /** Authenticated PDF fetch — avoids SPA router 404 when opening print viewer. */
-export async function fetchSaleDocumentPdfBlob(tenantId: number, documentId: string): Promise<Blob> {
+export async function fetchSaleDocumentPdfBlob(
+  tenantId: number,
+  documentId: string,
+  templateVersionId?: number | null,
+): Promise<Blob> {
   try {
+    const params: Record<string, string | number> = { tenant_id: tenantId };
+    if (templateVersionId != null) params.template_version_id = templateVersionId;
     const { data } = await api.get<Blob>(`/sale-documents/${encodeURIComponent(documentId)}/pdf`, {
-      params: { tenant_id: tenantId },
+      params,
       responseType: "blob",
     });
     return await assertPdfBlob(data, "sale-document-pdf");
@@ -87,10 +101,16 @@ export async function fetchSaleDocumentPdfBlob(tenantId: number, documentId: str
   }
 }
 
-export async function fetchStockDocumentPdfBlob(tenantId: number, stockDocumentId: number): Promise<Blob> {
+export async function fetchStockDocumentPdfBlob(
+  tenantId: number,
+  stockDocumentId: number,
+  templateVersionId?: number | null,
+): Promise<Blob> {
   try {
+    const params: Record<string, string | number> = { tenant_id: tenantId };
+    if (templateVersionId != null) params.template_version_id = templateVersionId;
     const { data } = await api.get<Blob>(`/stock-documents/${stockDocumentId}/pdf`, {
-      params: { tenant_id: tenantId },
+      params,
       responseType: "blob",
     });
     return await assertPdfBlob(data, "stock-document-pdf");

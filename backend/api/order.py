@@ -3415,12 +3415,18 @@ def get_order_details(
 def download_order_confirmation_pdf(
     order_id: int,
     tenant_id: int = Query(..., ge=1),
+    template_version_id: int | None = Query(None, ge=1),
     db: Session = Depends(get_db),
 ):
     from ..services.erp_documents_pdf_service import generate_order_confirmation_pdf_bytes
 
     try:
-        pdf = generate_order_confirmation_pdf_bytes(db, tenant_id=tenant_id, order_id=order_id)
+        pdf = generate_order_confirmation_pdf_bytes(
+            db,
+            tenant_id=tenant_id,
+            order_id=order_id,
+            template_version_id=template_version_id,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:
@@ -3436,12 +3442,18 @@ def download_order_confirmation_pdf(
 def download_picking_list_pdf(
     order_id: int,
     tenant_id: int = Query(..., ge=1),
+    template_version_id: int | None = Query(None, ge=1),
     db: Session = Depends(get_db),
 ):
     from ..services.erp_documents_pdf_service import generate_picking_list_pdf_bytes
 
     try:
-        pdf = generate_picking_list_pdf_bytes(db, tenant_id=tenant_id, order_id=order_id)
+        pdf = generate_picking_list_pdf_bytes(
+            db,
+            tenant_id=tenant_id,
+            order_id=order_id,
+            template_version_id=template_version_id,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:
@@ -3457,12 +3469,18 @@ def download_picking_list_pdf(
 def download_return_document_pdf(
     order_id: int,
     tenant_id: int = Query(..., ge=1),
+    template_version_id: int | None = Query(None, ge=1),
     db: Session = Depends(get_db),
 ):
     from ..services.erp_documents_pdf_service import generate_return_document_pdf_bytes
 
     try:
-        pdf = generate_return_document_pdf_bytes(db, tenant_id=tenant_id, order_id=order_id)
+        pdf = generate_return_document_pdf_bytes(
+            db,
+            tenant_id=tenant_id,
+            order_id=order_id,
+            template_version_id=template_version_id,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:

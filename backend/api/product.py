@@ -3863,12 +3863,18 @@ def bulk_delete_products(
 def download_product_card_pdf(
     product_id: int,
     tenant_id: int = Query(..., ge=1),
+    template_version_id: int | None = Query(None, ge=1),
     db: Session = Depends(get_db),
 ):
     from ..services.erp_documents_pdf_service import generate_product_card_pdf_bytes
 
     try:
-        pdf = generate_product_card_pdf_bytes(db, tenant_id=tenant_id, product_id=product_id)
+        pdf = generate_product_card_pdf_bytes(
+            db,
+            tenant_id=tenant_id,
+            product_id=product_id,
+            template_version_id=template_version_id,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:

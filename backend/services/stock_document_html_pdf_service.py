@@ -21,7 +21,13 @@ def _fmt_date(dt) -> str:
     return str(dt)
 
 
-def build_stock_document_html_pdf_bytes(db: Session, *, tenant_id: int, document_id: int) -> bytes:
+def build_stock_document_html_pdf_bytes(
+    db: Session,
+    *,
+    tenant_id: int,
+    document_id: int,
+    template_version_id: int | None = None,
+) -> bytes:
     read = get_stock_document_read(db, tenant_id, document_id)
     if not read:
         raise ValueError("Document not found")
@@ -71,6 +77,7 @@ def build_stock_document_html_pdf_bytes(db: Session, *, tenant_id: int, document
         kind_code=doc_type.lower(),
         series=series,
         warehouse_id=int(wh_id) if wh_id else None,
+        explicit_version_id=int(template_version_id) if template_version_id is not None else None,
     )
     render_kwargs = resolve_render_template_kwargs(db, ctx=hierarchy_ctx)
     if binding_available(db, tenant_id=int(tenant_id), document_type=doc_type, variant_code=render_kwargs.get("variant_code", "standard")) or render_kwargs.get("template_version_id"):

@@ -606,6 +606,33 @@ def api_starter_thumbnail(
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
+@router.get("/versions/{version_id}/thumbnail")
+def api_published_version_thumbnail(
+    version_id: int,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    _ = user
+    from ..document_templates.services.published_template_options_service import get_published_version_thumbnail_bytes
+
+    try:
+        png, cached = get_published_version_thumbnail_bytes(
+            db,
+            tenant_id=int(tenant_id),
+            version_id=int(version_id),
+        )
+        return Response(
+            content=png,
+            media_type="image/png",
+            headers={"Cache-Control": "public, max-age=86400", "X-Template-Thumbnail-Cached": "1" if cached else "0"},
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except (FileNotFoundError, RuntimeError) as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
 @router.get("/published-options")
 def api_published_template_options(
     tenant_id: int = Query(..., ge=1),

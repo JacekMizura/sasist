@@ -229,7 +229,12 @@ def build_supplier_order_html(
     return tpl.render(**ctx)
 
 
-def generate_supplier_order_pdf_bytes(db: Session, tenant_id: int, order_id: int) -> bytes:
+def generate_supplier_order_pdf_bytes(
+    db: Session,
+    tenant_id: int,
+    order_id: int,
+    template_version_id: int | None = None,
+) -> bytes:
     from ..api.delivery import _delivery_to_read
     from ..models.inbound_delivery import InboundDelivery
 
@@ -265,6 +270,7 @@ def generate_supplier_order_pdf_bytes(db: Session, tenant_id: int, order_id: int
             kind_code="supplier_order",
             scope_type="SUPPLIER",
             scope_id=int(d.supplier_id),
+            explicit_version_id=int(template_version_id) if template_version_id is not None else None,
         ),
         warehouse_id=getattr(d, "warehouse_id", None),
         log_label=f"supplier_order_id={order_id}",

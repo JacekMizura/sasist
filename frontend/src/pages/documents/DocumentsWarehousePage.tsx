@@ -11,7 +11,6 @@ import {
   listStockDocuments,
   patchStockDocumentItems,
   patchStockDocumentMetadata,
-  stockDocumentPdfUrl,
   type StockDocumentListRow,
   type StockDocumentRead,
 } from "../../api/stockDocumentsApi";
@@ -19,7 +18,8 @@ import { scanWmsCarrierByBarcode } from "../../api/wmsCarrierApi";
 import { CarrierAssignProductsModal } from "../../components/warehouse/carriers/CarrierAssignProductsModal";
 import { CarrierCreateModal } from "../../components/warehouse/carriers/CarrierCreateModal";
 import { formatMoneyPl } from "../../utils/formatOrderMoney";
-import { openPdfUrlInPrintViewer } from "../../utils/openPdfForBrowserPrint";
+import { useDocumentTemplatePrint } from "../../hooks/useDocumentTemplatePrint";
+import { stockKindFromType } from "../../utils/documentTemplatePrint";
 import { DataTablePageSizeSelect } from "../../components/table/DataTablePageSizeSelect";
 import { DocumentTypeBadge, ExternalStatusBadge } from "./documentsBadges";
 import WarehouseDocumentsTable from "./WarehouseDocumentsTable";
@@ -112,6 +112,9 @@ export default function DocumentsWarehousePage() {
 
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [tenantId, setTenantId] = useState(1);
+  const { requestPrint: requestStockDocumentPrint, pickerModal: stockDocumentPickerModal } = useDocumentTemplatePrint({
+    tenantId,
+  });
   const [docTab, setDocTab] = useState<DocumentTypeFilterTab>(() => routeType ?? "PZ");
   const [rows, setRows] = useState<StockDocumentListRow[]>([]);
   const [page, setPage] = useState(1);
@@ -493,14 +496,13 @@ export default function DocumentsWarehousePage() {
   };
 
   const openDocumentPdf = (id: number) => {
-    openPdfUrlInPrintViewer(stockDocumentPdfUrl(tenantId, id));
+    const kindCode = stockKindFromType(detail?.document_type ?? docTab);
+    void requestStockDocumentPrint({ kind: "stock_document", documentId: id, kindCode }, { autoPrint: false });
   };
 
   const printDocumentPdf = (id: number) => {
-    openPdfUrlInPrintViewer(stockDocumentPdfUrl(tenantId, id), {
-      autoPrint: true,
-      autoPrintDelayMs: 1000,
-    });
+    const kindCode = stockKindFromType(detail?.document_type ?? docTab);
+    void requestStockDocumentPrint({ kind: "stock_document", documentId: id, kindCode });
   };
 
   const docStatusLower = (detail?.status || "").toLowerCase();
@@ -1207,6 +1209,7 @@ export default function DocumentsWarehousePage() {
           </div>
         </div>
       ) : null}
+      {stockDocumentPickerModal}
     </>
   );
 }

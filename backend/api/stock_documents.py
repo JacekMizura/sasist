@@ -586,14 +586,24 @@ def patch_stock_document_metadata_route(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-def _stock_document_pdf_response(db: Session, tenant_id: int, document_id: int) -> Response:
+def _stock_document_pdf_response(
+    db: Session,
+    tenant_id: int,
+    document_id: int,
+    template_version_id: int | None = None,
+) -> Response:
     from ..services.document_print_service import PdfRendererUnavailable
     from ..services.pdf_deps import PdfGenerationUnavailable
     from ..services.stock_document_html_pdf_service import build_stock_document_html_pdf_bytes
 
     try:
         try:
-            pdf = build_stock_document_html_pdf_bytes(db, tenant_id=tenant_id, document_id=document_id)
+            pdf = build_stock_document_html_pdf_bytes(
+                db,
+                tenant_id=tenant_id,
+                document_id=document_id,
+                template_version_id=template_version_id,
+            )
         except PdfRendererUnavailable:
             raise
         except (FileNotFoundError, RuntimeError, OSError):
@@ -634,6 +644,7 @@ def _stock_document_pdf_response(db: Session, tenant_id: int, document_id: int) 
 def get_stock_document_pdf(
     document_id: int,
     tenant_id: int = Query(..., ge=1),
+    template_version_id: int | None = Query(None, ge=1),
     warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
     user: AppUser = Depends(get_current_user),
@@ -641,13 +652,14 @@ def get_stock_document_pdf(
     _gate_stock_document(
         db, user, tenant_id=tenant_id, document_id=document_id, warehouse_id=warehouse_id
     )
-    return _stock_document_pdf_response(db, tenant_id, document_id)
+    return _stock_document_pdf_response(db, tenant_id, document_id, template_version_id=template_version_id)
 
 
 @documents_router.get("/{document_id}/pdf")
 def get_document_pdf_alias(
     document_id: int,
     tenant_id: int = Query(..., ge=1),
+    template_version_id: int | None = Query(None, ge=1),
     warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
     db: Session = Depends(get_db),
     user: AppUser = Depends(get_current_user),
@@ -656,4 +668,4 @@ def get_document_pdf_alias(
     _gate_stock_document(
         db, user, tenant_id=tenant_id, document_id=document_id, warehouse_id=warehouse_id
     )
-    return _stock_document_pdf_response(db, tenant_id, document_id)
+    return _stock_document_pdf_response(db, tenant_id, document_id, template_version_id=template_version_id)

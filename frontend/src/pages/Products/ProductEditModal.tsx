@@ -68,6 +68,8 @@ import {
   pickMainImageUrl,
 } from "../../utils/productLabelMetadata";
 import { formatMoneyZlDisplay, resolveProductPricingDisplay } from "./productPricingDisplay";
+import { DocumentTemplateScopeSection } from "@/pages/Settings/document-templates/components/DocumentTemplateScopeSection";
+import { useDocumentTemplatePrint } from "../../hooks/useDocumentTemplatePrint";
 
 export type ProductForm = {
   id?: number;
@@ -392,6 +394,11 @@ export function ProductEditModal({
   const [stockCorrectionOpen, setStockCorrectionOpen] = useState(false);
 
   const [tenantId, setTenantId] = useState<number | null>(product?.tenant_id ?? null);
+  const effectiveTenantId = tenantId ?? product?.tenant_id ?? 1;
+  const { requestPrint: requestProductCardPrint, pickerModal: productCardPickerModal, printBusy } =
+    useDocumentTemplatePrint({
+      tenantId: effectiveTenantId,
+    });
   const [name, setName] = useState(product?.name ?? "");
   const [ean, setEan] = useState(product?.ean ?? "");
   const [symbol, setSymbol] = useState(product?.symbol ?? "");
@@ -1686,6 +1693,18 @@ export function ProductEditModal({
         }}
         headerActions={
           <>
+            {!isNew && product?.id != null ? (
+              <button
+                type="button"
+                title="Drukuj kartę produktu"
+                disabled={printBusy}
+                onClick={() => void requestProductCardPrint({ kind: "product_card", productId: product.id! })}
+                className="flex items-center gap-2 rounded border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50 disabled:opacity-50"
+              >
+                <Printer className="h-4 w-4" strokeWidth={2} aria-hidden />
+                Drukuj kartę produktu
+              </button>
+            ) : null}
             <button
               type="button"
               title="Duplikuj produkt"
@@ -1778,6 +1797,22 @@ export function ProductEditModal({
                           </div>
                         </div>
                       </section>
+
+                      {!isNew && product?.id != null ? (
+                        <section>
+                          <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">
+                            Szablon dokumentu
+                          </h3>
+                          <DocumentTemplateScopeSection
+                            tenantId={effectiveTenantId}
+                            scopeType="PRODUCT"
+                            scopeId={product.id}
+                            title="Karta produktu"
+                            description="Domyślny szablon karty produktu dla tego SKU."
+                            kinds={[{ kindCode: "product_card", label: "Karta produktu" }]}
+                          />
+                        </section>
+                      ) : null}
 
                       <section>
                         <h3 className="mb-5 text-lg font-bold text-slate-900 border-b border-slate-200 pb-2">Producent i GPSR</h3>
@@ -2970,6 +3005,7 @@ export function ProductEditModal({
         onClose={() => setTraceEditRow(null)}
         onSaved={() => setTraceEditRow(null)}
       />
+      {productCardPickerModal}
     </>
   );
 

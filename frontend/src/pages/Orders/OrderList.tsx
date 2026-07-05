@@ -62,6 +62,7 @@ import {
 import { OrderBulkCustomFieldModal } from "../../components/orders/orderList/OrderBulkCustomFieldModal";
 import { listSellasistInputClass } from "../../components/listPage/listSellasistTokens";
 import type { MultiMenuActionId } from "../../components/orders/orderList/OrderListMultiActionsMenu";
+import { useDocumentTemplatePrint } from "../../hooks/useDocumentTemplatePrint";
 
 type OrderListItemPreview = {
   quantity: number;
@@ -146,6 +147,8 @@ export default function OrderList() {
   const navigate = useNavigate();
   const location = useLocation();
   const { warehouses, warehouse } = useWarehouse();
+  const { requestPrint: requestOrderDocumentPrint, pickerModal: orderListDocumentPickerModal, printBusy: orderListDocumentPrintBusy } =
+    useDocumentTemplatePrint({ tenantId: DAMAGE_TENANT_ID });
 
   const listViewAdapter = useMemo(() => buildOrderListViewAdapter(DAMAGE_TENANT_ID), []);
   const listView = useListViewState(listViewAdapter);
@@ -799,9 +802,15 @@ export default function OrderList() {
       case "issue_document":
         openQuickAction("issue_document");
         break;
-      case "print":
-        setToast("Drukowanie — w przygotowaniu.");
+      case "print": {
+        const firstId = selectedIds[0];
+        if (!firstId) {
+          setToast("Zaznacz co najmniej jedno zamówienie.");
+          return;
+        }
+        void requestOrderDocumentPrint({ kind: "order_confirmation", orderId: Number(firstId) });
         break;
+      }
       case "export":
         setExportOpen(true);
         break;
@@ -1082,6 +1091,8 @@ export default function OrderList() {
                     openQuickAction(kind);
                   }}
                   onRowOpenMulti={(orderId) => openMultiModalForOrder(orderId)}
+                  onRequestDocumentPrint={requestOrderDocumentPrint}
+                  documentPrintBusy={orderListDocumentPrintBusy}
                 />
               )}
             </ModuleTableCard>
@@ -1169,6 +1180,7 @@ export default function OrderList() {
         selectedIds={selectedIds.length > 0 ? [...selectedIds] : []}
         fallbackIds={orders.map((o) => o.id)}
       />
+      {orderListDocumentPickerModal}
     </>
   );
 }

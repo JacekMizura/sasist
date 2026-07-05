@@ -1,12 +1,12 @@
 import { Link } from "react-router-dom";
 import { Download, FileText, Package, Printer, ScrollText } from "lucide-react";
 
-import { saleDocumentPdfUrl, stockDocumentPdfUrl } from "../../api/saleDocumentsApi";
 import { DAMAGE_TENANT_ID } from "../../constants/panelTenant";
 import { printButtonLabelPl } from "../../components/directSales/directSalesTerminology";
+import { useDocumentTemplatePrint } from "../../hooks/useDocumentTemplatePrint";
 import type { SaleDocumentDetail } from "../../types/saleDocument";
 import { formatMoneyPl } from "../../utils/formatOrderMoney";
-import { openPdfUrlInPrintViewer } from "../../utils/openPdfForBrowserPrint";
+import { saleKindFromSubtype } from "../../utils/documentTemplatePrint";
 import { DocumentTypeBadge, ExternalStatusBadge, PaymentStatusBadge } from "../../pages/documents/documentsBadges";
 
 const btnSecondary =
@@ -46,6 +46,7 @@ type Props = {
 };
 
 export default function CommercialSaleDocumentView({ doc, onPrint, onExport }: Props) {
+  const { requestPrint, pickerModal, printBusy } = useDocumentTemplatePrint({ tenantId: DAMAGE_TENANT_ID });
   const title = doc.doc_type === "PA" ? "Paragon" : "Faktura VAT";
   const legacy = doc.numbering_legacy;
   const printLabel = printButtonLabelPl(doc.document_subtype || doc.doc_type);
@@ -53,11 +54,15 @@ export default function CommercialSaleDocumentView({ doc, onPrint, onExport }: P
   const handlePrint =
     onPrint ??
     (() => {
-      openPdfUrlInPrintViewer(saleDocumentPdfUrl(DAMAGE_TENANT_ID, doc.id), { autoPrint: true });
+      void requestPrint({
+        kind: "sale_document",
+        documentId: doc.id,
+        kindCode: saleKindFromSubtype(doc.document_subtype || doc.doc_type),
+      });
     });
 
   const handlePrintWz = (wzId: number) => {
-    openPdfUrlInPrintViewer(stockDocumentPdfUrl(DAMAGE_TENANT_ID, wzId), { autoPrint: true });
+    void requestPrint({ kind: "stock_document", documentId: wzId, kindCode: "wz" });
   };
 
   return (
@@ -91,7 +96,7 @@ export default function CommercialSaleDocumentView({ doc, onPrint, onExport }: P
           </div>
         </div>
         <div className="mt-5 flex flex-wrap gap-2">
-          <button type="button" className={btnSecondary} onClick={handlePrint} disabled={!doc.print.available}>
+          <button type="button" className={btnSecondary} onClick={handlePrint} disabled={!doc.print.available || printBusy}>
             <Printer className="h-4 w-4 shrink-0" aria-hidden />
             {printLabel}
           </button>
@@ -310,6 +315,7 @@ export default function CommercialSaleDocumentView({ doc, onPrint, onExport }: P
           ))}
         </ol>
       </section>
+      {pickerModal}
     </div>
   );
 }
