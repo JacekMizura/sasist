@@ -44,7 +44,7 @@ cmds = [
   "cd backend/scripts/structure_report_pdf && npm ci --omit=dev",
   "test -f backend/scripts/structure_report_pdf/render.mjs",
   "test -d backend/scripts/structure_report_pdf/node_modules/puppeteer",
-  "bash -lc 'echo \"puppeteer import probe cwd=$(pwd)\" && node <<\"EOF\"\n(async () => {\n  try {\n    const p = await import(\"puppeteer\");\n    console.log(\"puppeteer export keys:\", Object.keys(p));\n    console.log(\"puppeteer ok\");\n  } catch (e) {\n    console.error(\"FULL ERROR:\");\n    console.error(e);\n    if (e && e.stack) console.error(e.stack);\n    console.error(\"cwd:\", process.cwd());\n    process.exit(1);\n  }\n})();\nEOF'",
+  "bash -lc 'set -euo pipefail; cd backend/scripts/structure_report_pdf; PROBE_PDF=/tmp/nixpacks_render_probe.pdf; printf \"%s\" \"<!DOCTYPE html><html><head><meta charset=\\\"utf-8\\\"></head><body><h1>build probe</h1></body></html>\" | node render.mjs > \"$PROBE_PDF\"; test -s \"$PROBE_PDF\"; BYTES=$(wc -c < \"$PROBE_PDF\" | tr -d \" \"); echo \"pdf pipeline ok bytes=$BYTES ls=$(ls -la \"$PROBE_PDF\")\"'",
   "which node",
 ]
 
