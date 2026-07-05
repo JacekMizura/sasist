@@ -29,18 +29,42 @@ async function writeJsonl(filePath, entries) {
   await fs.writeFile(filePath, lines + (lines ? "\n" : ""), "utf-8");
 }
 
-function buildInterpretation({ domAppearsEmpty, bodyInnerTextChars, bodyRectHeight }) {
-  if (domAppearsEmpty || bodyInnerTextChars < 10 || bodyRectHeight < 5) {
+function countPdfPages(pdfBuffer) {
+  const s = pdfBuffer.toString("latin1");
+  const countMatch = s.match(/\/Type\s*\/Pages[\s\S]*?\/Count\s+(\d+)/);
+  if (countMatch) {
+    return parseInt(countMatch[1], 10);
+  }
+  const pageMatches = s.match(/\/Type\s*\/Page\b/g);
+  return pageMatches ? pageMatches.length : null;
+}
+
+function buildStageAndInterpretation({
+  htmlLength,
+  bodyInnerTextLength,
+  domNodeCount,
+  bodyRect,
+}) {
+  const bodyHeight = bodyRect?.height ?? 0;
+
+  if (htmlLength < 50) {
     return {
-      stage: "BEFORE_PAGE_PDF",
-      message:
-        "DOM appears empty before page.pdf(). Open 05_pre_pdf_screenshot.png — if white, content was lost during setContent/CSS/DOM.",
+      stage: "1_INPUT_HTML_MISSING",
+      interpretation:
+        "HTML przekazany do Puppeteera jest pusty lub minimalny. Problem jest przed setContent (backend / Twig / provider).",
+    };
+  }
+  if (bodyInnerTextLength < 10 || domNodeCount < 5 || bodyHeight < 5) {
+    return {
+      stage: "2_DOM_EMPTY",
+      interpretation:
+        "HTML dociera do Puppeteera, ale DOM po setContent nie ma treści. Otwórz 05_pre_pdf_screenshot.png — jeśli biały, treść znika przed page.pdf() (setContent / CSS / DOM).",
     };
   }
   return {
-    stage: "COMPARE_SCREENSHOT_VS_PDF",
-    message:
-      "DOM has text before page.pdf(). Open 05_pre_pdf_screenshot.png: if it shows content but 09_output.pdf is blank, the failure is in page.pdf() or Chromium print settings.",
+    stage: "3_DOM_HAS_CONTENT",
+    interpretation:
+      "HTML dociera i DOM ma treść przed page.pdf(). Porównaj 05_pre_pdf_screenshot.png z 09_output.pdf: jeśli screenshot OK, a PDF biały, treść znika w page.pdf() / Chromium.",
   };
 }
 
@@ -109,9 +133,11 @@ async function main() {
       domProbe = await page.evaluate(() => {
         const body = document.body;
         const rect = body?.getBoundingClientRect();
+        const style = body ? window.getComputedStyle(body) : null;
         return {
           bodyInnerHTML: body?.innerHTML ?? "",
           bodyInnerText: body?.innerText ?? "",
+          domNodeCount: [...document.querySelectorAll("*")].length,
           bodyRect: rect
             ? {
                 x: rect.x,
@@ -124,9 +150,23 @@ async function main() {
                 bottom: rect.bottom,
               }
             : null,
+          bodyStyle: style
+            ? {
+                display: style.display,
+                visibility: style.visibility,
+                opacity: style.opacity,
+                color: style.color,
+                background: style.background,
+                fontSize: style.fontSize,
+                transform: style.transform,
+                zoom: style.zoom,
+                width: body.offsetWidth,
+                height: body.offsetHeight,
+                scrollWidth: body.scrollWidth,
+                scrollHeight: body.scrollHeight,
+              }
+            : null,
           documentElementOuterHTML: document.documentElement?.outerHTML ?? "",
-          documentElementScrollHeight: document.documentElement?.scrollHeight ?? 0,
-          title: document.title ?? "",
         };
       });
 
@@ -171,32 +211,25 @@ async function main() {
       await writeJsonl(path.join(debugDir, "07_page_errors.jsonl"), pageErrors);
       await writeJsonl(path.join(debugDir, "08_failed_requests.jsonl"), failedRequests);
 
-      const bodyInnerTextChars = domProbe.bodyInnerText.trim().length;
-      const bodyRectHeight = domProbe.bodyRect?.height ?? 0;
-      const domAppearsEmpty = bodyInnerTextChars < 10 || bodyRectHeight < 5;
-      const interpretation = buildInterpretation({
-        domAppearsEmpty,
-        bodyInnerTextChars,
-        bodyRectHeight,
+      const bodyInnerTextLength = domProbe.bodyInnerText.trim().length;
+      const { stage, interpretation } = buildStageAndInterpretation({
+        htmlLength: html.length,
+        bodyInnerTextLength,
+        domNodeCount: domProbe.domNodeCount,
+        bodyRect: domProbe.bodyRect,
       });
 
       const summary = {
-        label: (process.env.PDF_RENDER_DEBUG_LABEL || "").trim() || null,
         debug_dir: debugDir,
-        input_html_chars: html.length,
-        body_innerHTML_chars: domProbe.bodyInnerHTML.length,
-        body_innerText_chars: bodyInnerTextChars,
-        body_innerText_preview: domProbe.bodyInnerText.trim().slice(0, 500),
+        label: (process.env.PDF_RENDER_DEBUG_LABEL || "").trim() || null,
+        html_length: html.length,
+        body_inner_text_length: bodyInnerTextLength,
+        dom_node_count: domProbe.domNodeCount,
         body_rect: domProbe.bodyRect,
-        document_scroll_height: domProbe.documentElementScrollHeight,
-        document_title: domProbe.title,
-        screenshot_file: "05_pre_pdf_screenshot.png",
-        output_pdf_file: "09_output.pdf",
-        output_pdf_bytes: pdf.length,
-        console_event_count: consoleLog.length,
-        page_error_count: pageErrors.length,
-        failed_request_count: failedRequests.length,
-        dom_appears_empty: domAppearsEmpty,
+        body_style: domProbe.bodyStyle,
+        pdf_bytes: pdf.length,
+        pdf_pages: countPdfPages(pdf),
+        stage,
         interpretation,
       };
 

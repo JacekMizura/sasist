@@ -72,12 +72,16 @@ def _log_pdf_render_debug_result(*, debug_dir: Path, proc: subprocess.CompletedP
         try:
             summary = json.loads(summary_path.read_text(encoding="utf-8"))
             logger.warning(
-                "PDF_RENDER_DEBUG summary dir=%s dom_appears_empty=%s pdf_bytes=%s stage=%s message=%s",
+                "PDF_RENDER_DEBUG summary dir=%s stage=%s html_length=%s body_inner_text_length=%s "
+                "dom_node_count=%s pdf_bytes=%s pdf_pages=%s interpretation=%s",
                 debug_dir,
-                summary.get("dom_appears_empty"),
-                summary.get("output_pdf_bytes"),
-                (summary.get("interpretation") or {}).get("stage"),
-                (summary.get("interpretation") or {}).get("message"),
+                summary.get("stage"),
+                summary.get("html_length"),
+                summary.get("body_inner_text_length"),
+                summary.get("dom_node_count"),
+                summary.get("pdf_bytes"),
+                summary.get("pdf_pages"),
+                summary.get("interpretation"),
             )
         except (OSError, json.JSONDecodeError) as exc:
             logger.warning("PDF_RENDER_DEBUG could not read summary.json: %s", exc)
