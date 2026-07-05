@@ -199,7 +199,7 @@ export default function ProductionShortagesPage() {
                       </div>
                     </div>
                   </td>
-                  <td className={`${productionModuleListTdClass} text-right tabular-nums font-bold text-rose-700">{r.missing_qty}</td>
+                  <td className={`${productionModuleListTdClass} text-right tabular-nums font-bold text-rose-700`}>{r.missing_qty}</td>
                   <td className={`${productionModuleListTdClass} text-right tabular-nums`}>
                     {r.blocked_batches_count > 0 ? (
                       <span className="font-semibold text-amber-800">{r.blocked_batches_count}</span>
@@ -235,7 +235,7 @@ export default function ProductionShortagesPage() {
                       )}
                     </div>
                   </td>
-                  <td className={`${productionModuleListTdClass} text-xs text-slate-600">{r.expected_availability_date ?? "—"}</td>
+                  <td className={`${productionModuleListTdClass} text-xs text-slate-600`}>{r.expected_availability_date ?? "—"}</td>
                   <td className={`${productionModuleListTdClass} text-xs`}>
                     {r.substitute_proposals.length ? (
                       <ul className="space-y-1">

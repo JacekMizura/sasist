@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { MapPin, PackageCheck } from "lucide-react";
 
 import { parseWmsProductionRouteParams, refKey } from "@/modules/production/productionExecutionTypes";
-import { WMS_ROUTES } from "../../wms/wmsRoutes";
+import { WMS_ROUTES } from "../wms/wmsRoutes";
 import { ProductThumb } from "./components/ProductThumb";
 import {
   ProductionDocumentsSection,
