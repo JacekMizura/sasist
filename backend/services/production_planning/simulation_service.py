@@ -145,8 +145,8 @@ def simulate_production_plan(
     return ProductionPlanSimulationRead(
         tenant_id=ctx.tenant_id,
         warehouse_id=ctx.warehouse_id,
-        coverage_days=ctx.coverage_days,
-        forecast_strategy=ctx.forecast_strategy,
+        coverage_days=snap.coverage_days,
+        forecast_strategy=snap.forecast_strategy,
         lines=sim_lines,
         materials=materials,
         products_still_critical=still_critical,

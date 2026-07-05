@@ -11,6 +11,51 @@ ERR_NO_WAREHOUSE = "Brak skonfigurowanego magazynu"
 ERR_CHOOSE_WAREHOUSE_FOR_DOCUMENT = "Wybierz magazyn dla dokumentu"
 
 
+class WarehouseScopeError(ValueError):
+    """Invalid or unknown warehouse for tenant scope — map to HTTP 400/404, never 500."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        status_code: int = 404,
+        code: str = "WAREHOUSE_NOT_FOUND",
+    ) -> None:
+        super().__init__(message)
+        self.status_code = int(status_code)
+        self.code = code
+
+
+def assert_tenant_warehouse_scope(db: Session, tenant_id: int, warehouse_id: int) -> int:
+    """Warehouse must exist and be linked to tenant before FK-backed inserts."""
+    from ..models.warehouse import Warehouse
+
+    tid = int(tenant_id)
+    wid = int(warehouse_id)
+    if wid < 1:
+        raise WarehouseScopeError(
+            "Nieprawidłowy identyfikator magazynu.",
+            status_code=400,
+            code="INVALID_WAREHOUSE_ID",
+        )
+    wh = db.query(Warehouse).filter(Warehouse.id == wid).first()
+    if wh is None:
+        raise WarehouseScopeError(
+            f"Magazyn id={wid} nie istnieje.",
+            status_code=404,
+            code="WAREHOUSE_NOT_FOUND",
+        )
+    allowed = set(list_tenant_warehouse_ids(db, tid))
+    legacy_tid = int(getattr(wh, "tenant_id", 0) or 0)
+    if wid not in allowed and legacy_tid != tid:
+        raise WarehouseScopeError(
+            f"Magazyn id={wid} nie jest przypisany do tenanta.",
+            status_code=404,
+            code="WAREHOUSE_NOT_FOUND",
+        )
+    return wid
+
+
 def list_tenant_warehouse_ids(db: Session, tenant_id: int) -> list[int]:
     """All warehouse IDs linked to the tenant via TenantWarehouse, ascending order."""
     rows = (

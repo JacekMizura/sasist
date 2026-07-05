@@ -7,6 +7,7 @@ from typing import Literal
 from sqlalchemy.orm import Session
 
 from ..models.wms_settings import WmsSettings
+from .tenant_default_warehouse import assert_tenant_warehouse_scope
 
 InventoryManagementMode = Literal["DOCUMENTS_ONLY", "HYBRID", "EXTERNAL_INVENTORY"]
 
@@ -32,6 +33,7 @@ def normalize_inventory_management_mode(raw: object | None) -> InventoryManageme
 
 
 def get_or_create_wms_settings_row(db: Session, *, tenant_id: int, warehouse_id: int) -> WmsSettings:
+    assert_tenant_warehouse_scope(db, tenant_id, warehouse_id)
     row = (
         db.query(WmsSettings)
         .filter(

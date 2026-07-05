@@ -34,8 +34,11 @@ from ..schemas.wms_packing_settings import (
 )
 from ..schemas.wms_return import ReturnsMode, WmsSettingsRead, WmsSettingsSave, WmsSettingsUpsert
 from ..schemas.wms_picking_shortage_settings import WmsPickingShortageSettingsRead, WmsPickingShortageSettingsSave
-from ..services.tenant_default_warehouse import resolve_tenant_default_warehouse_id
-from ..services.inventory_management_policy_service import normalize_inventory_management_mode
+from ..services.tenant_default_warehouse import resolve_tenant_default_warehouse_id, assert_tenant_warehouse_scope
+from ..services.inventory_management_policy_service import (
+    get_or_create_wms_settings_row,
+    normalize_inventory_management_mode,
+)
 from ..schemas.wms_product_validation_settings import (
     WmsProductValidationSettingsRead,
     WmsProductValidationSettingsSave,
@@ -93,18 +96,7 @@ def _derive_flags(mode: ReturnsMode) -> tuple[bool, bool, bool]:
 
 
 def _get_or_create(db: Session, tenant_id: int, warehouse_id: int) -> WmsSettings:
-    row = (
-        db.query(WmsSettings)
-        .filter(WmsSettings.tenant_id == tenant_id, WmsSettings.warehouse_id == warehouse_id)
-        .first()
-    )
-    if row:
-        return row
-    # default: simple
-    row = WmsSettings(tenant_id=tenant_id, warehouse_id=warehouse_id, returns_mode="simple")
-    db.add(row)
-    db.flush()
-    return row
+    return get_or_create_wms_settings_row(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id))
 
 
 def _row_to_read(row: WmsSettings) -> WmsSettingsRead:
@@ -200,6 +192,7 @@ def set_returns_mode(
 
 
 def _get_or_create_packing_settings(db: Session, tenant_id: int, warehouse_id: int) -> WmsPackingSettings:
+    assert_tenant_warehouse_scope(db, tenant_id, warehouse_id)
     row = (
         db.query(WmsPackingSettings)
         .filter(

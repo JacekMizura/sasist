@@ -221,6 +221,7 @@ from .middleware.exception_logging import (
 )
 from .middleware.readiness_gate import platform_readiness_gate_middleware
 from .services.pdf_deps import PdfGenerationUnavailable
+from .services.tenant_default_warehouse import WarehouseScopeError
 
 logging.basicConfig(
     level=logging.INFO,
@@ -507,6 +508,17 @@ async def request_validation_exception_handler(request: Request, exc: RequestVal
 @app.exception_handler(PdfGenerationUnavailable)
 async def pdf_generation_unavailable_handler(request: Request, exc: PdfGenerationUnavailable):
     response = JSONResponse(status_code=503, content={"detail": str(exc)})
+    for k, v in _cors_headers_for_request(request).items():
+        response.headers[k] = v
+    return response
+
+
+@app.exception_handler(WarehouseScopeError)
+async def warehouse_scope_error_handler(request: Request, exc: WarehouseScopeError):
+    response = JSONResponse(
+        status_code=int(exc.status_code),
+        content={"detail": {"message": str(exc), "code": exc.code}},
+    )
     for k, v in _cors_headers_for_request(request).items():
         response.headers[k] = v
     return response
