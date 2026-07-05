@@ -81,4 +81,5 @@ def render_erp_document_pdf_bytes(
     )
     if isinstance(rendered, bytes):
         return rendered
-    return html_document_to_pdf_bytes(str(rendered))
+    debug_label = log_label or kind
+    return html_document_to_pdf_bytes(str(rendered), debug_label=debug_label)
