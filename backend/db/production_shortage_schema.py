@@ -111,6 +111,21 @@ def ensure_production_shortage_schema(engine: Engine) -> int:
                 )
             )
             steps += 1
+
+        from .schema_introspection import get_table_column_names
+
+        if has_table(conn, "production_material_needs"):
+            cols = get_table_column_names(conn, "production_material_needs")
+            if "covered_qty" not in cols:
+                if dialect == "postgresql":
+                    conn.execute(text("ALTER TABLE production_material_needs ADD COLUMN covered_qty DOUBLE PRECISION NOT NULL DEFAULT 0"))
+                else:
+                    conn.execute(text("ALTER TABLE production_material_needs ADD COLUMN covered_qty REAL NOT NULL DEFAULT 0"))
+                steps += 1
+            if "history_json" not in cols:
+                conn.execute(text("ALTER TABLE production_material_needs ADD COLUMN history_json TEXT"))
+                steps += 1
+
         conn.commit()
     if steps:
         logger.info("[schema.production_shortage] steps=%s", steps)

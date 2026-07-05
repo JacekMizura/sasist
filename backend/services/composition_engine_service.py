@@ -267,6 +267,10 @@ def update_composition(
             _deactivate_siblings(db, comp)
     comp.updated_at = datetime.utcnow()
     db.flush()
+    if comp.is_active and str(comp.composition_mode) == "manufacturing":
+        from ..production_shortages.recipe_variant_service import on_composition_activation
+
+        on_composition_activation(db, tenant_id=int(tenant_id), composition=comp)
     return serialize_composition(db, comp)
 
 

@@ -5,6 +5,20 @@
 - ERP UI: `/production/erp/:kind/:id`; WMS: terminal po `release-to-wms`.
 - Karta produkcyjna PDF: zawsze dostępna (informacyjna, bez zmiany statusu); bulk z planu partii.
 
+## Produkcja — dopracowanie MRP (2026-07-05)
+- Formularz zamienników: `ErpProductPicker` + `MaterialSubstitutesFormPanel` (bez ID w UI).
+- Drzewo BOM: `GET /production/shortages/bom-tree`, `BomTreeVisualization` na `RecipeDetailPage`.
+- Receptura STANDARD: auto przy jednej aktywnej recepturze; `POST /compositions/{id}/assign-variant`.
+- Zapotrzebowania: `covered_qty`, `history_json`, reconcile po PO sync i putaway; `MaterialNeedsPanel`.
+- Raport: `memory/production-mrp-refinement-report.md`
+
+## Produkcja — braki MRP (2026-07-05)
+- Rozbudowany pakiet `production_shortages/`: lot-level stany, składnik ograniczający, BOM explosion, analiza materiałowa.
+- Modele: `ProductRecipeVariant`, `ProductionMaterialSubstitutionDecision`.
+- UI: `/production/shortages`, `/production/material-analysis`, statusy z opisem w planowaniu.
+- Częściowa produkcja — start dozwolony (PARTIAL), blokada tylko przy BLOCKED.
+- Raport: `memory/production-shortage-mrp-report.md`
+
 ## Produkcja — braki i zamienniki (2026-07-04)
 - Pakiet `backend/services/production_shortages/`: analiza BOM, częściowa produkcja, kolejka braków, most Zakupy.
 - Tabele: `product_material_substitutes`, `production_material_needs`.

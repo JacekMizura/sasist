@@ -66,6 +66,10 @@ from .product_material_substitute import (  # noqa: F401 - production substitute
     ProductMaterialSubstitute,
     ProductionMaterialNeed,
 )
+from .product_recipe_variant import (  # noqa: F401 - MRP recipe variants & substitute decisions
+    ProductRecipeVariant,
+    ProductionMaterialSubstitutionDecision,
+)
 from .order import Order
 from .order_custom_field import OrderCustomField, OrderCustomFieldOption, OrderCustomFieldValue  # noqa: F401
 from .order_document import OrderDocument  # noqa: F401

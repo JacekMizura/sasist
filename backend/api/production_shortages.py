@@ -14,23 +14,33 @@ from ..models.app_user import AppUser
 from ..models.product import Product
 from ..models.product_composition import ProductComposition
 from ..schemas.production_shortage import (
+    AcceptSubstituteBody,
     AddToPurchaseOrderBody,
     CreatePurchaseRequisitionBody,
     MaterialAnalysisRead,
     MaterialAnalysisRequest,
+    MaterialPortfolioRowRead,
     MaterialSubstituteCreateBody,
     MaterialSubstituteRead,
     MaterialSubstituteUpdateBody,
+    ProductionMaterialNeedRead,
     ProductionShortageQueueRowRead,
     PurchaseBridgeResultRead,
+    RecipeVariantRead,
+    SubstituteDecisionRead,
 )
 from ..services.production_shortages.analysis_service import analyze_composition_quantity
+from ..services.production_shortages.bom_explosion_service import build_enriched_bom_tree, bom_node_to_dict, explode_composition_bom
+from ..services.production_shortages.material_need_service import list_material_needs
+from ..services.production_shortages.material_portfolio_service import build_material_portfolio
 from ..services.production_shortages.purchase_bridge_service import (
     PurchaseBridgeError,
     add_to_purchase_order,
     create_draft_purchase_requisition,
 )
 from ..services.production_shortages.queue_service import build_production_shortages_queue
+from ..services.production_shortages.recipe_variant_service import list_recipe_variants
+from ..services.production_shortages.substitute_decision_service import SubstituteDecisionError, accept_substitute
 from ..services.production_shortages.substitute_service import (
     SubstituteError,
     create_substitute,
@@ -82,8 +92,151 @@ def api_analyze_materials(
         warehouse_id=warehouse_id,
         composition=comp,
         planned_quantity=float(body.planned_quantity),
+        exclude_batch_id=body.batch_id,
+        exclude_order_id=body.order_id,
+        include_bom_explosion=body.include_bom_explosion,
+        include_ai_context=body.include_ai_context,
     )
     return MaterialAnalysisRead(**raw)
+
+
+@router.get("/material-needs", response_model=List[ProductionMaterialNeedRead])
+def api_list_material_needs(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
+    status: str | None = Query(None),
+    limit: int = Query(200, ge=1, le=500),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    del user
+    rows = list_material_needs(
+        db, tenant_id=tenant_id, warehouse_id=warehouse_id, status=status, limit=limit
+    )
+    return [ProductionMaterialNeedRead(**r) for r in rows]
+
+
+@router.get("/material-analysis", response_model=List[MaterialPortfolioRowRead])
+def api_material_portfolio(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
+    sales_lookback_days: int = Query(30, ge=7, le=365),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    del user
+    rows = build_material_portfolio(
+        db, tenant_id=tenant_id, warehouse_id=warehouse_id, sales_lookback_days=sales_lookback_days
+    )
+    return [MaterialPortfolioRowRead(**r) for r in rows]
+
+
+@router.get("/shortages/bom-tree")
+def api_bom_tree(
+    composition_id: int = Query(..., ge=1),
+    planned_quantity: float = Query(1.0, gt=0),
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    del user
+    comp = (
+        db.query(ProductComposition)
+        .filter(ProductComposition.id == int(composition_id), ProductComposition.tenant_id == int(tenant_id))
+        .first()
+    )
+    if comp is None:
+        raise HTTPException(status_code=404, detail="Receptura nie istnieje.")
+    return build_enriched_bom_tree(
+        db,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        composition=comp,
+        planned_quantity=float(planned_quantity),
+    )
+
+
+@router.get("/shortages/explode-bom")
+def api_explode_bom(
+    composition_id: int = Query(..., ge=1),
+    planned_quantity: float = Query(1.0, gt=0),
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    del user
+    comp = (
+        db.query(ProductComposition)
+        .filter(ProductComposition.id == int(composition_id), ProductComposition.tenant_id == int(tenant_id))
+        .first()
+    )
+    if comp is None:
+        raise HTTPException(status_code=404, detail="Receptura nie istnieje.")
+    tree = explode_composition_bom(db, tenant_id=tenant_id, composition=comp, planned_quantity=float(planned_quantity))
+    return bom_node_to_dict(tree)
+
+
+@router.get("/recipe-variants", response_model=List[RecipeVariantRead])
+def api_list_recipe_variants(
+    tenant_id: int = Query(..., ge=1),
+    product_id: int | None = Query(None, ge=1),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    del user
+    rows = list_recipe_variants(db, tenant_id=tenant_id, product_id=product_id)
+    return [
+        RecipeVariantRead(
+            id=int(r.id),
+            product_id=int(r.product_id),
+            composition_id=int(r.composition_id),
+            variant_code=str(r.variant_code),
+            variant_label=str(r.variant_label),
+            priority=int(r.priority),
+            is_default=bool(r.is_default),
+            is_active=bool(r.is_active),
+            notes=r.notes,
+        )
+        for r in rows
+    ]
+
+
+@router.post("/shortages/accept-substitute", response_model=SubstituteDecisionRead, status_code=201)
+def api_accept_substitute(
+    body: AcceptSubstituteBody,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    try:
+        row = accept_substitute(
+            db,
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+            original_component_product_id=body.original_component_product_id,
+            substitute_product_id=body.substitute_product_id,
+            quantity_original=body.quantity_original,
+            conversion_ratio=body.conversion_ratio,
+            production_batch_id=body.batch_id,
+            production_order_id=body.order_id,
+            decided_by_user_id=int(user.id) if user else None,
+            notes=body.notes,
+        )
+        db.commit()
+        return SubstituteDecisionRead(
+            id=int(row.id),
+            original_component_product_id=int(row.original_component_product_id),
+            substitute_product_id=int(row.substitute_product_id),
+            conversion_ratio=float(row.conversion_ratio),
+            quantity_original=float(row.quantity_original),
+            quantity_substitute=float(row.quantity_substitute),
+            status=str(row.status),
+        )
+    except SubstituteDecisionError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.get("/shortages", response_model=List[ProductionShortageQueueRowRead])

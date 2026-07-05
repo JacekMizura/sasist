@@ -50,8 +50,10 @@ export type ProductionDemandProductRow = {
   production_lead_time_days: number;
   max_producible: number;
   material_status: MaterialProductionStatus;
+  material_status_description?: string;
   producible_now_qty: number;
   waiting_qty: number;
+  limiting_component_name?: string | null;
   recommended_quantity: number;
   combined_production_needed: number;
   priority: ProductionPlanningPriority;

@@ -1,22 +1,25 @@
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, Plus, RefreshCw, ShoppingCart, Trash2 } from "lucide-react";
+import { AlertTriangle, RefreshCw, ShoppingCart } from "lucide-react";
 import toast from "react-hot-toast";
 import { Link } from "react-router-dom";
 
 import {
   addShortageToPurchaseOrder,
-  createMaterialSubstitute,
   createPurchaseRequisitionFromShortage,
-  deleteMaterialSubstitute,
+  fetchMaterialNeeds,
   fetchMaterialSubstitutes,
   fetchProductionShortagesQueue,
   type MaterialSubstitute,
+  type ProductionMaterialNeed,
   type ProductionShortageQueueRow,
 } from "@/api/productionShortageApi";
 import { listPurchaseOrders, type PurchaseOrderListRow } from "@/api/purchasingOrdersApi";
 import { extractApiErrorMessage } from "@/api/apiErrorMessage";
 import { LocationBadge } from "@/components/warehouse/LocationBadge";
 import { useWarehouse } from "@/context/WarehouseContext";
+import { ProductThumb } from "./components/ProductThumb";
+import { MaterialSubstitutesFormPanel } from "./components/MaterialSubstitutesFormPanel";
+import { MaterialNeedsPanel } from "./components/MaterialNeedsPanel";
 import { erpProductionPaths } from "./productionPaths";
 
 const DEFAULT_TENANT = 1;
@@ -35,8 +38,10 @@ export default function ProductionShortagesPage() {
 
   const [rows, setRows] = useState<ProductionShortageQueueRow[]>([]);
   const [substitutes, setSubstitutes] = useState<MaterialSubstitute[]>([]);
+  const [materialNeeds, setMaterialNeeds] = useState<ProductionMaterialNeed[]>([]);
   const [loading, setLoading] = useState(true);
   const [showSubstitutes, setShowSubstitutes] = useState(false);
+  const [showNeeds, setShowNeeds] = useState(false);
   const [poPickerFor, setPoPickerFor] = useState<ProductionShortageQueueRow | null>(null);
   const [openPos, setOpenPos] = useState<PurchaseOrderListRow[]>([]);
   const [poLoading, setPoLoading] = useState(false);
@@ -45,12 +50,14 @@ export default function ProductionShortagesPage() {
     if (warehouseId == null) return;
     setLoading(true);
     try {
-      const [queue, subs] = await Promise.all([
+      const [queue, subs, needs] = await Promise.all([
         fetchProductionShortagesQueue(tenantId, warehouseId),
         fetchMaterialSubstitutes(tenantId),
+        fetchMaterialNeeds(tenantId, warehouseId),
       ]);
       setRows(queue);
       setSubstitutes(subs);
+      setMaterialNeeds(needs);
     } catch (err: unknown) {
       toast.error(extractApiErrorMessage(err, "Nie udało się wczytać braków produkcyjnych."));
     } finally {
@@ -144,6 +151,7 @@ export default function ProductionShortagesPage() {
           <table className="min-w-full text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
               <tr>
+                <th className="px-4 py-3">Produkt końcowy</th>
                 <th className="px-4 py-3">Składnik</th>
                 <th className="px-4 py-3 text-right">Brak</th>
                 <th className="px-4 py-3 text-right">Partie</th>
@@ -158,12 +166,28 @@ export default function ProductionShortagesPage() {
             <tbody>
               {rows.map((r) => (
                 <tr key={r.component_product_id} className="border-t border-slate-100 align-top">
+                  <td className="px-4 py-3 text-xs">
+                    {(r.finished_products ?? []).slice(0, 2).map((fp, i) => (
+                      <div key={i} className="flex items-center gap-1 py-0.5">
+                        <ProductThumb imageUrl={fp.product_image_url} name={fp.product_name} size="sm" />
+                        <span>{fp.product_name}</span>
+                      </div>
+                    ))}
+                    {(r.finished_products?.length ?? 0) > 2 ? (
+                      <span className="text-slate-400">+{(r.finished_products?.length ?? 0) - 2}</span>
+                    ) : null}
+                  </td>
                   <td className="px-4 py-3">
-                    <p className="font-medium text-slate-900">{r.product_name}</p>
-                    {r.product_sku ? <p className="font-mono text-xs text-slate-500">{r.product_sku}</p> : null}
-                    <p className="mt-1 text-xs text-slate-500">
-                      Dostępne: {r.available_qty ?? "—"} / wymagane: {r.required_qty ?? "—"}
-                    </p>
+                    <div className="flex items-center gap-2">
+                      <ProductThumb imageUrl={r.product_image_url} name={r.product_name} size="sm" />
+                      <div>
+                        <p className="font-medium text-slate-900">{r.product_name}</p>
+                        {r.product_sku ? <p className="font-mono text-xs text-slate-500">{r.product_sku}</p> : null}
+                        <p className="mt-1 text-xs text-slate-500">
+                          Stan: {r.on_hand_qty ?? "—"} · rez.: {r.reserved_qty ?? "—"} · dost.: {r.available_qty ?? "—"}
+                        </p>
+                      </div>
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums font-bold text-rose-700">{r.missing_qty}</td>
                   <td className="px-4 py-3 text-right tabular-nums">
@@ -250,6 +274,35 @@ export default function ProductionShortagesPage() {
       <section className="rounded-xl border border-slate-200 bg-white p-5">
         <div className="flex items-center justify-between gap-3">
           <div>
+            <h2 className="text-base font-bold text-slate-900">Zapotrzebowania materiałowe</h2>
+            <p className="text-sm text-slate-500">
+              Status po przyjęciu na magazyn — otwarte, częściowo pokryte lub zamknięte.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowNeeds((v) => !v)}
+            className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            {showNeeds ? "Ukryj" : "Pokaż"}
+          </button>
+        </div>
+        {showNeeds ? (
+          <div className="mt-4">
+            <MaterialNeedsPanel rows={materialNeeds} />
+          </div>
+        ) : materialNeeds.length > 0 ? (
+          <p className="mt-3 text-sm text-slate-600">
+            {materialNeeds.filter((n) => n.status === "fulfilled").length} zamkniętych ·{" "}
+            {materialNeeds.filter((n) => n.status === "partial").length} częściowo pokrytych ·{" "}
+            {materialNeeds.filter((n) => ["open", "linked"].includes(n.status)).length} otwartych
+          </p>
+        ) : null}
+      </section>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-5">
+        <div className="flex items-center justify-between gap-3">
+          <div>
             <h2 className="text-base font-bold text-slate-900">Zamienniki materiałów</h2>
             <p className="text-sm text-slate-500">Priorytet, współczynnik zamiany i aktywność — propozycje w planowaniu.</p>
           </div>
@@ -262,11 +315,7 @@ export default function ProductionShortagesPage() {
           </button>
         </div>
         {showSubstitutes ? (
-          <SubstitutesPanel
-            tenantId={tenantId}
-            rows={substitutes}
-            onChanged={() => void load()}
-          />
+          <MaterialSubstitutesFormPanel tenantId={tenantId} rows={substitutes} onChanged={() => void load()} />
         ) : substitutes.length > 0 ? (
           <p className="mt-3 text-sm text-slate-600">Zdefiniowano {substitutes.length} zamienników.</p>
         ) : null}
@@ -323,151 +372,6 @@ export default function ProductionShortagesPage() {
           Zlecenia
         </Link>
       </p>
-    </div>
-  );
-}
-
-function SubstitutesPanel({
-  tenantId,
-  rows,
-  onChanged,
-}: {
-  tenantId: number;
-  rows: MaterialSubstitute[];
-  onChanged: () => void;
-}) {
-  const [productId, setProductId] = useState("");
-  const [substituteId, setSubstituteId] = useState("");
-  const [priority, setPriority] = useState("10");
-  const [ratio, setRatio] = useState("1");
-  const [busy, setBusy] = useState(false);
-
-  const add = async () => {
-    const pid = Number(productId);
-    const sid = Number(substituteId);
-    if (!pid || !sid) {
-      toast.error("Podaj ID produktu i zamiennika.");
-      return;
-    }
-    setBusy(true);
-    try {
-      await createMaterialSubstitute(tenantId, {
-        product_id: pid,
-        substitute_product_id: sid,
-        priority: Number(priority) || 10,
-        conversion_ratio: Number(ratio) || 1,
-      });
-      toast.success("Zamiennik dodany.");
-      setProductId("");
-      setSubstituteId("");
-      onChanged();
-    } catch (err: unknown) {
-      toast.error(extractApiErrorMessage(err, "Nie udało się dodać zamiennika."));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const remove = async (id: number) => {
-    try {
-      await deleteMaterialSubstitute(tenantId, id);
-      toast.success("Usunięto zamiennik.");
-      onChanged();
-    } catch (err: unknown) {
-      toast.error(extractApiErrorMessage(err, "Nie udało się usunąć zamiennika."));
-    }
-  };
-
-  return (
-    <div className="mt-4 space-y-4">
-      <div className="grid gap-2 sm:grid-cols-5">
-        <input
-          type="number"
-          placeholder="ID produktu (BOM)"
-          value={productId}
-          onChange={(e) => setProductId(e.target.value)}
-          className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
-        />
-        <input
-          type="number"
-          placeholder="ID zamiennika"
-          value={substituteId}
-          onChange={(e) => setSubstituteId(e.target.value)}
-          className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
-        />
-        <input
-          type="number"
-          placeholder="Priorytet"
-          value={priority}
-          onChange={(e) => setPriority(e.target.value)}
-          className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
-        />
-        <input
-          type="number"
-          step="0.01"
-          placeholder="Współczynnik"
-          value={ratio}
-          onChange={(e) => setRatio(e.target.value)}
-          className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
-        />
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => void add()}
-          className="inline-flex items-center justify-center gap-1 rounded-lg bg-slate-900 px-3 py-2 text-sm font-bold text-white hover:bg-slate-800 disabled:opacity-50"
-        >
-          <Plus className="h-4 w-4" aria-hidden />
-          Dodaj
-        </button>
-      </div>
-
-      {rows.length === 0 ? (
-        <p className="text-sm text-slate-500">Brak zdefiniowanych zamienników.</p>
-      ) : (
-        <div className="overflow-x-auto rounded-lg border border-slate-100">
-          <table className="min-w-full text-sm">
-            <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-              <tr>
-                <th className="px-3 py-2 text-left">Produkt</th>
-                <th className="px-3 py-2 text-left">Zamiennik</th>
-                <th className="px-3 py-2 text-right">Priorytet</th>
-                <th className="px-3 py-2 text-right">Współcz.</th>
-                <th className="px-3 py-2">Aktywny</th>
-                <th className="px-3 py-2" />
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.id} className="border-t border-slate-100">
-                  <td className="px-3 py-2">
-                    {r.product_name}
-                    {r.product_sku ? <span className="ml-1 font-mono text-xs text-slate-500">{r.product_sku}</span> : null}
-                  </td>
-                  <td className="px-3 py-2">
-                    {r.substitute_product_name}
-                    {r.substitute_product_sku ? (
-                      <span className="ml-1 font-mono text-xs text-slate-500">{r.substitute_product_sku}</span>
-                    ) : null}
-                  </td>
-                  <td className="px-3 py-2 text-right tabular-nums">{r.priority}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{r.conversion_ratio}</td>
-                  <td className="px-3 py-2">{r.is_active ? "Tak" : "Nie"}</td>
-                  <td className="px-3 py-2 text-right">
-                    <button
-                      type="button"
-                      onClick={() => void remove(r.id)}
-                      className="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600"
-                      aria-label="Usuń"
-                    >
-                      <Trash2 className="h-4 w-4" aria-hidden />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
     </div>
   );
 }

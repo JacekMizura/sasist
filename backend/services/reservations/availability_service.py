@@ -44,6 +44,51 @@ def _reservation_query(
     return q
 
 
+def warehouse_on_hand(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    product_id: int,
+) -> float:
+    row = (
+        db.query(func.coalesce(func.sum(Inventory.quantity), 0.0))
+        .filter(
+            Inventory.tenant_id == int(tenant_id),
+            Inventory.warehouse_id == int(warehouse_id),
+            Inventory.product_id == int(product_id),
+            Inventory.quantity > 0,
+            Inventory.stock_disposition == DEFAULT_STOCK_DISPOSITION,
+        )
+        .scalar()
+    )
+    return float(row or 0)
+
+
+def warehouse_reserved_qty(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    product_id: int,
+    exclude_batch_id: int | None = None,
+    exclude_order_id: int | None = None,
+) -> float:
+    row = (
+        _reservation_query(
+            db,
+            tenant_id=tenant_id,
+            product_id=product_id,
+            warehouse_id=warehouse_id,
+            exclude_batch_id=exclude_batch_id,
+            exclude_order_id=exclude_order_id,
+        )
+        .with_entities(func.coalesce(func.sum(StockReservation.quantity), 0.0))
+        .scalar()
+    )
+    return float(row or 0)
+
+
 def reserved_qty_at_lot_excluding_consumer(
     db: Session,
     *,
@@ -86,30 +131,16 @@ def warehouse_net_available(
     exclude_order_id: int | None = None,
 ) -> float:
     """Physical on-hand minus active reservations (excluding own production job)."""
-    on_hand = (
-        db.query(func.coalesce(func.sum(Inventory.quantity), 0.0))
-        .filter(
-            Inventory.tenant_id == int(tenant_id),
-            Inventory.warehouse_id == int(warehouse_id),
-            Inventory.product_id == int(product_id),
-            Inventory.quantity > 0,
-            Inventory.stock_disposition == DEFAULT_STOCK_DISPOSITION,
-        )
-        .scalar()
+    on_hand = warehouse_on_hand(db, tenant_id=tenant_id, warehouse_id=warehouse_id, product_id=product_id)
+    reserved = warehouse_reserved_qty(
+        db,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        product_id=product_id,
+        exclude_batch_id=exclude_batch_id,
+        exclude_order_id=exclude_order_id,
     )
-    reserved = (
-        _reservation_query(
-            db,
-            tenant_id=tenant_id,
-            product_id=product_id,
-            warehouse_id=warehouse_id,
-            exclude_batch_id=exclude_batch_id,
-            exclude_order_id=exclude_order_id,
-        )
-        .with_entities(func.coalesce(func.sum(StockReservation.quantity), 0.0))
-        .scalar()
-    )
-    return max(0.0, float(on_hand or 0) - float(reserved or 0))
+    return max(0.0, on_hand - reserved)
 
 
 def iter_allocatable_inventory_rows(

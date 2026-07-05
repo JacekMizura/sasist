@@ -134,6 +134,12 @@ def sync_purchase_order_status_for_po_id(db: Session, tenant_id: int, purchase_o
     po.status = derived
     po.updated_at = now
     _touch_po_timestamps(po, derived, now)
+    try:
+        from ..production_shortages.material_need_service import reconcile_material_needs_for_purchase_order
+
+        reconcile_material_needs_for_purchase_order(db, tenant_id=int(tenant_id), purchase_order_id=int(purchase_order_id))
+    except Exception:
+        pass
     return derived
 
 

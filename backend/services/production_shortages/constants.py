@@ -12,5 +12,6 @@ STATUS_BLOCKED: MaterialProductionStatus = "BLOCKED"
 
 NEED_STATUS_OPEN = "open"
 NEED_STATUS_LINKED = "linked"
+NEED_STATUS_PARTIAL = "partial"
 NEED_STATUS_FULFILLED = "fulfilled"
 NEED_STATUS_CANCELLED = "cancelled"

@@ -11,11 +11,20 @@ import {
   validateProductionBatchCreateBody,
   type RecipeDetailRead,
 } from "../../api/productionApi";
+import { assignRecipeVariant, fetchRecipeVariants, type RecipeVariant } from "../../api/productionShortageApi";
 import { formatProductionMoney, stockTone, STOCK_TONE_CLASS, PRODUCTION_NUMBER_INPUT } from "./productionUi";
 import { erpProductionPaths } from "./productionPaths";
 import { ProductThumb } from "./components/ProductThumb";
+import { BomTreeVisualization } from "./components/BomTreeVisualization";
 
 const DEFAULT_TENANT = 1;
+
+const RECIPE_VARIANTS = [
+  { code: "STANDARD", label: "Standard" },
+  { code: "ECONOMIC", label: "Ekonomiczna" },
+  { code: "EXPORT", label: "Eksportowa" },
+  { code: "EMERGENCY", label: "Awaryjna" },
+] as const;
 
 export default function RecipeDetailPage() {
   const { compositionId } = useParams();
@@ -29,15 +38,20 @@ export default function RecipeDetailPage() {
   const [qty, setQty] = useState(10);
   const [reserveMaterials, setReserveMaterials] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [variants, setVariants] = useState<RecipeVariant[]>([]);
+  const [variantBusy, setVariantBusy] = useState(false);
 
   const load = useCallback(async () => {
     if (!compositionId) return;
     setLoading(true);
     setNotFound(false);
     try {
-      setRecipe(await getRecipeDetail(tenantId, Number(compositionId), warehouseId));
+      const detail = await getRecipeDetail(tenantId, Number(compositionId), warehouseId);
+      setRecipe(detail);
+      setVariants(await fetchRecipeVariants(tenantId, detail.product_id));
     } catch (err) {
       setRecipe(null);
+      setVariants([]);
       if (axios.isAxiosError(err) && err.response?.status === 404) {
         setNotFound(true);
       }
@@ -84,6 +98,22 @@ export default function RecipeDetailPage() {
     }
   };
 
+  const currentVariant = variants.find((v) => v.composition_id === recipe?.composition_id);
+
+  const setVariant = async (code: string) => {
+    if (!recipe || !compositionId) return;
+    setVariantBusy(true);
+    try {
+      await assignRecipeVariant(tenantId, Number(compositionId), code);
+      setVariants(await fetchRecipeVariants(tenantId, recipe.product_id));
+      toast.success(`Przypisano wariant ${code}.`);
+    } catch (err: unknown) {
+      toast.error(extractApiErrorMessage(err, "Nie udało się przypisać wariantu receptury."));
+    } finally {
+      setVariantBusy(false);
+    }
+  };
+
   if (loading) {
     return <p className="px-4 py-6 text-sm text-slate-500">Wczytywanie receptury…</p>;
   }
@@ -122,9 +152,37 @@ export default function RecipeDetailPage() {
             <h1 className="text-2xl font-bold text-slate-900">{recipe.product_name}</h1>
             <p className="text-sm text-slate-500">
               {recipe.recipe_name} · v{recipe.version} · wydajność {recipe.yield_quantity}
+              {currentVariant ? (
+                <span className="ml-2 rounded bg-violet-100 px-2 py-0.5 text-xs font-bold text-violet-800">
+                  {currentVariant.variant_label}
+                </span>
+              ) : null}
               {!recipe.is_active ? (
                 <span className="ml-2 rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">Archiwum</span>
               ) : null}
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {RECIPE_VARIANTS.map((v) => {
+                const active = currentVariant?.variant_code === v.code;
+                return (
+                  <button
+                    key={v.code}
+                    type="button"
+                    disabled={variantBusy || !recipe.is_active}
+                    onClick={() => void setVariant(v.code)}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                      active
+                        ? "bg-violet-700 text-white"
+                        : "border border-slate-200 bg-white text-slate-700 hover:border-violet-300"
+                    } disabled:opacity-50`}
+                  >
+                    {v.label}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-1 text-xs text-slate-500">
+              Tylko jedna receptura może być STANDARD — pozostałe warianty mogą współistnieć.
             </p>
             <div className="mt-4 flex flex-wrap gap-4 text-sm">
               <span>
@@ -173,6 +231,21 @@ export default function RecipeDetailPage() {
           </div>
         </div>
       </div>
+
+      {warehouseId && compositionId ? (
+        <section>
+          <h2 className="mb-4 text-lg font-bold text-slate-900">Drzewo BOM</h2>
+          <p className="mb-3 text-sm text-slate-500">
+            Wielopoziomowa struktura receptury dla ilości {qty} szt. Kliknij węzeł, aby zobaczyć stany, partie i zamienniki.
+          </p>
+          <BomTreeVisualization
+            tenantId={tenantId}
+            warehouseId={warehouseId}
+            compositionId={Number(compositionId)}
+            plannedQuantity={qty}
+          />
+        </section>
+      ) : null}
 
       <section>
         <h2 className="text-lg font-bold text-slate-900 mb-4">Składniki</h2>

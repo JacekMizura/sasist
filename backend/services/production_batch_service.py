@@ -1094,14 +1094,10 @@ def _load_batch_entity(db: Session, *, tenant_id: int, batch_id: int) -> Product
 
 def _init_collection_tasks(db: Session, batch: ProductionBatch) -> dict[str, Any]:
     from .production_execution.collection_task_builder import build_collection_task_row
+    from .production_shortages.batch_analysis_service import assert_batch_can_start_collection
 
+    assert_batch_can_start_collection(db, batch)
     plan = build_batch_pick_plan(db, tenant_id=int(batch.tenant_id), batch_id=int(batch.id))
-    if plan.has_shortages:
-        raise ProductionBatchError(
-            "Niewystarczający stan magazynowy składników.",
-            code="insufficient_stock",
-            shortages=[s.model_dump() for s in plan.shortages],
-        )
     pids = {int(c.component_product_id) for c in plan.aggregated_components}
     products = {p.id: p for p in db.query(Product).filter(Product.id.in_(pids)).all()} if pids else {}
     tasks: list[dict[str, Any]] = []
@@ -1204,34 +1200,16 @@ def release_batch_to_wms(
             "Partia jest w interfejsie ERP. Użyj realizacji w ERP.",
             code="erp_interface",
         )
-    if _batch_has_shortages(db, batch):
-        shortages = []
-        try:
-            totals = _aggregate_batch_components(batch)
-            agg = aggregated_demand_with_availability(
-                db,
-                tenant_id=int(batch.tenant_id),
-                warehouse_id=int(batch.warehouse_id),
-                component_totals=totals,
-            )
-            for r in agg:
-                if float(r.missing) > 1e-6:
-                    shortages.append(
-                        {
-                            "component_product_id": int(r.component_product_id),
-                            "product_name": str(r.product_name),
-                            "required": float(r.required),
-                            "available": float(r.available),
-                            "missing": float(r.missing),
-                        }
-                    )
-        except Exception:
-            pass
+    from .production_shortages.batch_analysis_service import assert_batch_can_start_collection
+
+    try:
+        assert_batch_can_start_collection(db, batch)
+    except ProductionBatchError as exc:
         raise ProductionBatchError(
-            "Nie można wydać do WMS — braki materiałów.",
+            str(exc.message),
             code="insufficient_stock",
-            shortages=shortages,
-        )
+            shortages=getattr(exc, "shortages", None) or [],
+        ) from exc
     batch.released_to_wms_at = datetime.utcnow()
     batch.execution_interface = WMS_INTERFACE
     batch.released_by_user_id = int(released_by_user_id) if released_by_user_id else None

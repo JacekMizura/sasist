@@ -105,6 +105,29 @@ def api_activate(
         raise _err(exc) from exc
 
 
+@router.post("/{composition_id}/assign-variant", response_model=ProductCompositionRead)
+def api_assign_recipe_variant(
+    composition_id: int,
+    variant_code: str = Query(..., min_length=1),
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    from ..services.production_shortages.recipe_variant_service import RecipeVariantError, assign_recipe_variant
+
+    try:
+        assign_recipe_variant(
+            db, tenant_id=tenant_id, composition_id=composition_id, variant_code=variant_code.upper()
+        )
+        row = get_composition(db, tenant_id=tenant_id, composition_id=composition_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail="Kompozycja nie istnieje.")
+        db.commit()
+        return row
+    except RecipeVariantError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.post("/{composition_id}/clone", response_model=ProductCompositionRead)
 def api_clone_composition(
     composition_id: int,

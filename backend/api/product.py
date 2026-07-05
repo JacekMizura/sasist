@@ -1873,6 +1873,7 @@ def get_products(
                 Product.name.ilike(term),
                 Product.symbol.ilike(term),
                 Product.ean.ilike(term),
+                Product.catalog_number.ilike(term),
             )
         )
     else:

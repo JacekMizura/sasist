@@ -247,8 +247,10 @@ export function ProductionDemandPlanningPanel({
                     {row.recommended_quantity > 0 ? (
                       <MaterialProductionStatusBadge
                         status={row.material_status ?? "OK"}
+                        description={row.material_status_description}
                         producibleNow={row.producible_now_qty}
                         waitingQty={row.waiting_qty}
+                        limitingComponentName={row.limiting_component_name}
                       />
                     ) : (
                       "—"

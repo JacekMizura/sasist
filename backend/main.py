@@ -1077,6 +1077,9 @@ try:
 
     ensure_production_execution_interface_schema(engine)
     ensure_production_shortage_schema(engine)
+    from .db.production_mrp_schema import ensure_production_mrp_schema
+
+    ensure_production_mrp_schema(engine)
     ensure_purchase_sales_block_schema(engine)
     ensure_receiving_workflow_status_schema(engine)
     from .db.warehouse_requires_putaway_schema import ensure_warehouse_requires_putaway_schema
@@ -1510,6 +1513,9 @@ def _upgrade_schema_background() -> None:
 
         ensure_production_execution_interface_schema(engine)
         ensure_production_shortage_schema(engine)
+        from .db.production_mrp_schema import ensure_production_mrp_schema
+
+        ensure_production_mrp_schema(engine)
         ensure_purchase_sales_block_schema(engine)
         ensure_tenant_warehouse_fulfillment_schema(engine)
         from .db.tenant_fulfillment_configuration_schema import ensure_tenant_fulfillment_configuration_schema

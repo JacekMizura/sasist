@@ -41,6 +41,7 @@ from .composition_engine_service import resolve_composition_entity
 from .stock_disposition import STOCK_DISPOSITION_SALEABLE
 from .stock_operation_issue_service import append_issue_operation
 from .stock_operation_receipt_service import append_receipt_operation
+from ..reservations.availability_service import warehouse_net_available
 
 logger = logging.getLogger(__name__)
 
@@ -86,20 +87,6 @@ def _next_order_number(db: Session, *, tenant_id: int) -> str:
     return f"{prefix}{seq:04d}"
 
 
-def _warehouse_stock(db: Session, *, tenant_id: int, warehouse_id: int, product_id: int) -> float:
-    row = (
-        db.query(func.coalesce(func.sum(Inventory.quantity), 0.0))
-        .filter(
-            Inventory.tenant_id == int(tenant_id),
-            Inventory.warehouse_id == int(warehouse_id),
-            Inventory.product_id == int(product_id),
-            Inventory.quantity > 0,
-        )
-        .scalar()
-    )
-    return float(row or 0)
-
-
 def _location_stock(
     db: Session,
     *,
@@ -132,11 +119,12 @@ def validate_stock_shortages(
     shortages: list[StockShortageRead] = []
     for snap in order.line_snapshots or []:
         req = float(snap.total_required_quantity or 0)
-        avail = _warehouse_stock(
+        avail = warehouse_net_available(
             db,
             tenant_id=int(order.tenant_id),
             warehouse_id=wh,
             product_id=int(snap.component_product_id),
+            exclude_order_id=int(order.id),
         )
         missing = max(0.0, req - avail)
         if missing > 1e-6:
@@ -319,11 +307,12 @@ def serialize_order(db: Session, order: ProductionOrder, *, with_availability: b
         cp = comp_products.get(int(snap.component_product_id))
         if with_availability:
             req = float(snap.total_required_quantity or 0)
-            av = _warehouse_stock(
+            av = warehouse_net_available(
                 db,
                 tenant_id=int(order.tenant_id),
                 warehouse_id=int(order.warehouse_id),
                 product_id=int(snap.component_product_id),
+                exclude_order_id=int(order.id),
             )
             avail = av
             miss = max(0.0, req - av)
@@ -519,13 +508,41 @@ def start_production_order(
         raise ProductionOrderError("Zlecenie jest już zamknięte.", code="terminal_status")
     if str(order.status) == "in_progress":
         return serialize_order(db, order, with_availability=True)
-    shortages = validate_stock_shortages(db, order)
-    if shortages and str(order.status) != "draft":
-        raise ProductionOrderError(
-            "Niewystarczający stan magazynowy składników.",
-            code="insufficient_stock",
-            shortages=[s.model_dump() for s in shortages],
+
+    from .production_shortages.analysis_service import analyze_composition_quantity, can_start_with_material_status
+    from .composition_engine_service import resolve_composition_entity
+
+    comp = resolve_composition_entity(
+        db,
+        tenant_id=int(order.tenant_id),
+        composition_id=int(order.composition_id) if order.composition_id else None,
+        recipe_id=int(order.recipe_id) if order.recipe_id else None,
+    )
+    if comp is not None:
+        analysis = analyze_composition_quantity(
+            db,
+            tenant_id=int(order.tenant_id),
+            warehouse_id=int(order.warehouse_id),
+            composition=comp,
+            planned_quantity=float(order.planned_quantity or 0),
+            exclude_order_id=int(order.id),
         )
+        if not can_start_with_material_status(str(analysis.get("material_status"))):
+            block = analysis.get("block_message") or {}
+            raise ProductionOrderError(
+                str(block.get("summary") or "Niewystarczający stan magazynowy składników."),
+                code="insufficient_stock",
+                shortages=[c for c in analysis.get("components") or [] if float(c.get("missing_qty") or 0) > 1e-6],
+            )
+    else:
+        shortages = validate_stock_shortages(db, order)
+        if shortages and str(order.status) != "draft":
+            raise ProductionOrderError(
+                "Niewystarczający stan magazynowy składników.",
+                code="insufficient_stock",
+                shortages=[s.model_dump() for s in shortages],
+            )
+
     order.status = "in_progress"
     order.started_at = datetime.utcnow()
     order.updated_at = datetime.utcnow()

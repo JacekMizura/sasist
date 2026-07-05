@@ -12,6 +12,7 @@ from ...models.product_material_substitute import ProductionMaterialNeed
 from ...models.purchase_order import PurchaseOrder, PurchaseOrderItem
 from ...models.supplier import Supplier
 from ..purchasing_order_service import PO_DRAFT, recalculate_purchase_order_totals
+from .material_need_service import record_need_created
 
 
 class PurchaseBridgeError(ValueError):
@@ -111,6 +112,7 @@ def create_draft_purchase_requisition(
     need.purchase_order_item_id = int(item.id)
     need.status = "linked"
     need.updated_at = datetime.utcnow()
+    record_need_created(need)
     db.flush()
     return {
         "purchase_order_id": int(po.id),
@@ -182,6 +184,7 @@ def add_to_purchase_order(
     need.purchase_order_id = int(po.id)
     need.purchase_order_item_id = int(item.id)
     need.status = "linked"
+    record_need_created(need)
     db.flush()
     return {
         "purchase_order_id": int(po.id),

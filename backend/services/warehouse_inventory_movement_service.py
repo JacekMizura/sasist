@@ -418,8 +418,41 @@ def safe_record_putaway_movement(
 ) -> None:
     try:
         record_putaway_movement(db, **kwargs)
+        line = kwargs.get("line")
+        if line is not None and getattr(line, "product_id", None) is not None:
+            _reconcile_production_material_needs(
+                db,
+                tenant_id=int(kwargs["tenant_id"]),
+                warehouse_id=int(kwargs["warehouse_id"]),
+                product_id=int(line.product_id),
+            )
     except Exception:
         _logger.exception("record_putaway_movement failed")
+
+
+def _reconcile_production_material_needs(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    product_id: int,
+) -> None:
+    try:
+        from ..production_shortages.material_need_service import reconcile_material_needs_for_product
+
+        reconcile_material_needs_for_product(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            component_product_id=int(product_id),
+        )
+    except Exception:
+        _logger.exception(
+            "reconcile_material_needs_for_product failed tenant=%s wh=%s product=%s",
+            tenant_id,
+            warehouse_id,
+            product_id,
+        )
 
 
 def safe_record_damage_movement(

@@ -205,6 +205,7 @@ import BatchesListPage from "./pages/Production/BatchesListPage"
 import BatchDetailPage from "./pages/Production/BatchDetailPage"
 import MaterialReservationsPage from "./pages/Production/MaterialReservationsPage"
 import ProductionShortagesPage from "./pages/Production/ProductionShortagesPage"
+import MaterialAnalysisPage from "./pages/Production/MaterialAnalysisPage"
 import PaperProductionPage from "./pages/Production/PaperProductionPage"
 import ProductionOrdersPage from "./pages/Production/ProductionOrdersPage"
 import ProductionOrderDetailPage from "./pages/Production/ProductionOrderDetailPage"
@@ -686,6 +687,7 @@ export const router = createBrowserRouter(
                   <Route path="analytics" element={<ProductionAnalyticsPage />} />
                   <Route path="material-reservations" element={<MaterialReservationsPage />} />
                   <Route path="shortages" element={<ProductionShortagesPage />} />
+                  <Route path="material-analysis" element={<MaterialAnalysisPage />} />
                   <Route path="batches" element={<Navigate to="/production/planning" replace />} />
                   <Route path="batch/:batchId" element={<BatchDetailPage />} />
                   <Route path="erp/:kind/:id" element={<PaperProductionPage />} />

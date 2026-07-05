@@ -49,8 +49,10 @@ class ProductionDemandProductRowRead(BaseModel):
     production_lead_time_days: int = 0
     max_producible: float = 0.0
     material_status: MaterialProductionStatus = "OK"
+    material_status_description: str = ""
     producible_now_qty: float = 0.0
     waiting_qty: float = 0.0
+    limiting_component_name: Optional[str] = None
     recommended_quantity: float = 0.0
     order_production_needed: float = 0.0
     combined_production_needed: float = 0.0

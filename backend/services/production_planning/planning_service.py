@@ -43,6 +43,7 @@ from .recommendation_reason_service import build_recommendation_reasons
 from .sales_history_service import bulk_daily_sales_series
 from .timeline_service import build_stock_timeline
 from ..production_shortages.analysis_service import analyze_composition_quantity
+from ..production_shortages.block_message_service import material_status_description
 from ..production_shortages.constants import STATUS_BLOCKED
 
 
@@ -196,6 +197,7 @@ def build_planning_snapshot(db: Session, ctx: PlanningContext) -> ProductionDema
         material_status = "OK"
         producible_now = _round_qty(recommended)
         waiting_qty = 0.0
+        limiting_name: str | None = None
         if recommended > 1e-6 and comp is not None:
             analysis = analyze_composition_quantity(
                 db,
@@ -207,10 +209,14 @@ def build_planning_snapshot(db: Session, ctx: PlanningContext) -> ProductionDema
             material_status = str(analysis.get("material_status") or "OK")
             producible_now = _round_qty(float(analysis.get("producible_now_qty") or 0))
             waiting_qty = _round_qty(float(analysis.get("waiting_qty") or 0))
+            lim = analysis.get("limiting_component")
+            if lim:
+                limiting_name = str(lim.get("product_name") or "")
         elif recommended > 1e-6 and max_prod <= 1e-6:
             material_status = STATUS_BLOCKED
             producible_now = 0.0
             waiting_qty = _round_qty(recommended)
+        status_desc = material_status_description(material_status)
 
         if material_status != "OK":
             material_blocked += 1
@@ -258,8 +264,10 @@ def build_planning_snapshot(db: Session, ctx: PlanningContext) -> ProductionDema
                 production_lead_time_days=lt,
                 max_producible=_round_qty(max_prod),
                 material_status=material_status,  # type: ignore[arg-type]
+                material_status_description=status_desc,
                 producible_now_qty=producible_now,
                 waiting_qty=waiting_qty,
+                limiting_component_name=limiting_name,
                 recommended_quantity=_round_qty(recommended),
                 combined_production_needed=_round_qty(recommended),
                 priority=priority,

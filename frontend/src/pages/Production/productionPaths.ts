@@ -20,6 +20,7 @@ export const erpProductionPaths = {
     `${ERP_PRODUCTION_BASE}/erp/${kind}/${id}`,
   materialReservations: `${ERP_PRODUCTION_BASE}/material-reservations`,
   shortages: `${ERP_PRODUCTION_BASE}/shortages`,
+  materialAnalysis: `${ERP_PRODUCTION_BASE}/material-analysis`,
   materialSubstitutes: `${ERP_PRODUCTION_BASE}/material-substitutes`,
 } as const;
 
