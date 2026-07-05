@@ -143,3 +143,43 @@ export function stockKindFromType(docType: string | null | undefined): string {
   if (s === "MM") return "mm";
   return "wz";
 }
+
+type OrderLinkedDocumentDto = {
+  kind?: string | null;
+  document_type?: string | null;
+  stock_document_id?: number | null;
+  id?: string | number | null;
+};
+
+/** Resolve WZ stock documents for bulk order print (one WZ per order). */
+export async function resolveOrderWzBulkPrintRequests(orderIds: number[]): Promise<DocumentPrintRequest[]> {
+  const requests: DocumentPrintRequest[] = [];
+  const missing: number[] = [];
+
+  await Promise.all(
+    orderIds.map(async (orderId) => {
+      const { data } = await api.get<{ linked_documents?: OrderLinkedDocumentDto[] }>(`/orders/${orderId}/`);
+      const linked = data.linked_documents ?? [];
+      const wzDocs = linked.filter((d) => d.kind === "warehouse" || d.document_type === "WZ");
+      const doc = wzDocs[0];
+      const stockId = doc?.stock_document_id ?? Number(doc?.id);
+      if (doc && Number.isFinite(stockId) && stockId > 0) {
+        requests.push({
+          kind: "stock_document",
+          documentId: Number(stockId),
+          kindCode: stockKindFromType(doc.document_type),
+        });
+      } else {
+        missing.push(orderId);
+      }
+    }),
+  );
+
+  if (missing.length > 0) {
+    throw new Error(`Brak WZ dla zamówień: ${missing.join(", ")}`);
+  }
+  return requests.sort((a, b) => {
+    if (a.kind !== "stock_document" || b.kind !== "stock_document") return 0;
+    return a.documentId - b.documentId;
+  });
+}

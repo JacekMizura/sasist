@@ -80,5 +80,13 @@ def render_erp_document_pdf_bytes(
         log_label=log_label,
     )
     if isinstance(rendered, bytes):
+        if len(rendered) < 128:
+            raise ValueError(f"Empty PDF output ({log_label or kind})")
         return rendered
-    return html_document_to_pdf_bytes(str(rendered))
+    html = str(rendered or "").strip()
+    if len(html) < 32:
+        raise ValueError(f"Empty HTML output ({log_label or kind}, len={len(html)})")
+    pdf = html_document_to_pdf_bytes(html)
+    if len(pdf) < 128:
+        raise ValueError(f"Empty PDF output ({log_label or kind}, html_len={len(html)})")
+    return pdf

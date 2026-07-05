@@ -29,7 +29,6 @@ import {
   panelListDenseCheckboxInputClass,
 } from "../../operational";
 import { buildOrderListDocumentContextTitle } from "../../../utils/orderListDocumentContextTitle";
-import { OrderDocumentsPrintMenu } from "../OrderDocumentsPrintMenu";
 
 const TD = moduleListTdClass;
 const TH = moduleListThClass;
@@ -125,8 +124,6 @@ export type OrderListDenseTableProps = {
   openOrder: (id: number) => void;
   onRowQuickAction: (orderId: number, kind: OrderQuickToolbarActionKind) => void;
   onRowOpenMulti?: (orderId: number) => void;
-  onRequestDocumentPrint?: (req: import("@/utils/documentTemplatePrint").DocumentPrintRequest) => void;
-  documentPrintBusy?: boolean;
   /** Wiersze z domyślnie rozwiniętą listą produktów (mockup / dev). */
   initialExpandedProductOrderIds?: ReadonlySet<number>;
 };
@@ -179,8 +176,6 @@ export function OrderListDenseTable({
   openOrder,
   onRowQuickAction,
   onRowOpenMulti,
-  onRequestDocumentPrint,
-  documentPrintBusy,
   initialExpandedProductOrderIds,
 }: OrderListDenseTableProps) {
   const userColumnAllow = useMemo(() => new Set(ORDER_LIST_USER_COLUMN_IDS), []);
@@ -433,20 +428,6 @@ export function OrderListDenseTable({
                       >
                         <FileText className="text-slate-600" strokeWidth={2} aria-hidden />
                       </OperationalActionButton>,
-                      ...(onRequestDocumentPrint
-                        ? [
-                            <div key="print" onClick={(e) => e.stopPropagation()} className="flex justify-center">
-                              <OrderDocumentsPrintMenu
-                                orderId={o.id}
-                                panelDocumentType={o.has_invoice ? "INVOICE" : undefined}
-                                salesDocumentNumber={o.invoice_number}
-                                onPrint={onRequestDocumentPrint}
-                                busy={documentPrintBusy}
-                                compact
-                              />
-                            </div>,
-                          ]
-                        : []),
                       <OperationalActionButton
                         key="truck"
                         disabled={bulkBusy || !onRowOpenMulti}

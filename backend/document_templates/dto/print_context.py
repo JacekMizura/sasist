@@ -184,6 +184,8 @@ class ComplaintPrintContext:
 
 @dataclass
 class ProductPrintContext:
+    title: str = "Karta produktu"
+    document_number: str = ""
     product: dict[str, Any] = field(default_factory=dict)
     manufacturer: dict[str, Any] = field(default_factory=dict)
     stock: dict[str, Any] = field(default_factory=dict)

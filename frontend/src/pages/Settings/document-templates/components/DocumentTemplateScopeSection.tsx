@@ -27,7 +27,7 @@ export function DocumentTemplateScopeSection({
   tenantId,
   scopeType,
   scopeId,
-  title = "Szablony dokumentów",
+  title = "Szablony wydruków",
   description = "Wybierz opublikowane wersje szablonów dla tego modułu.",
   kinds,
 }: Props) {

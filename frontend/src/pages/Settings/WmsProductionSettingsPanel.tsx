@@ -298,7 +298,7 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
           tenantId={DAMAGE_TENANT_ID}
           scopeType="PRODUCTION"
           scopeId={warehouseId ?? DAMAGE_TENANT_ID}
-          title="Szablony dokumentów produkcji"
+          title="Szablony wydruków produkcji"
           kinds={PRODUCTION_SCOPE_KINDS}
         />
       </SectionCard>

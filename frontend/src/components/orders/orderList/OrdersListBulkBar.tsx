@@ -1,4 +1,4 @@
-import { Download, Mail, Printer } from "lucide-react";
+import { Download, FileText, Mail, Printer } from "lucide-react";
 
 import { PanelBulkStatusPickerDropdown } from "../../panel/PanelBulkStatusPickerDropdown";
 import type { PanelBulkSelectionMode } from "../../../hooks/usePanelListBulkSelection";
@@ -30,6 +30,7 @@ export type OrdersListBulkBarProps = {
   onBulkStatusSelect: (statusId: string) => void;
   onMultiMenuSelect: (id: MultiMenuActionId) => void;
   onQuickAction: (kind: OrderQuickToolbarActionKind) => void;
+  onPrint: () => void;
   onExport: () => void;
 };
 
@@ -51,6 +52,7 @@ export function OrdersListBulkBar({
   onBulkStatusSelect,
   onMultiMenuSelect,
   onQuickAction,
+  onPrint,
   onExport,
 }: OrdersListBulkBarProps) {
   return (
@@ -92,11 +94,21 @@ export function OrdersListBulkBar({
             type="button"
             disabled={bulkToolbarDisabled}
             className={moduleBulkIconBtnClass}
+            title="Masowy druk"
+            aria-label="Masowy druk"
+            onClick={onPrint}
+          >
+            <Printer className="h-4 w-4" strokeWidth={2} aria-hidden />
+          </button>
+          <button
+            type="button"
+            disabled={bulkToolbarDisabled}
+            className={moduleBulkIconBtnClass}
             title="Wystaw dokument"
             aria-label="Wystaw dokument"
             onClick={() => onQuickAction("issue_document")}
           >
-            <Printer className="h-4 w-4" strokeWidth={2} aria-hidden />
+            <FileText className="h-4 w-4" strokeWidth={2} aria-hidden />
           </button>
           <button
             type="button"

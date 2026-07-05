@@ -185,7 +185,7 @@ export default function ComplaintPanelUiStatusesSettingsPage() {
           tenantId={DAMAGE_TENANT_ID}
           scopeType="COMPLAINTS"
           scopeId={DAMAGE_TENANT_ID}
-          title="Szablony dokumentów reklamacji"
+          title="Szablony wydruków reklamacji"
           kinds={COMPLAINTS_SCOPE_KINDS}
         />
       </div>

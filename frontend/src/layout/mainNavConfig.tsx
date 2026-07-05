@@ -319,7 +319,7 @@ export const NAV_FLYOUT_CATEGORIES: NavCategoryConfig[] = [
           { path: "/settings/exports", label: "Eksport", Icon: FolderOpen },
           { path: "/admin/message-templates", label: "Szablony wiadomości", Icon: MessageSquare },
           { path: "/admin/print-templates", label: "Szablony wydruków (etykiety)", Icon: FileText },
-          { path: "/settings/document-templates", label: "Szablony dokumentów", Icon: FileText },
+          { path: "/settings/document-templates", label: "Szablony wydruków", Icon: FileText },
         ],
       },
       {

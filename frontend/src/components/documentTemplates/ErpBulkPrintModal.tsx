@@ -8,6 +8,7 @@ import { extractApiErrorMessage } from "@/api/apiErrorMessage";
 import { DocumentTemplatePreviewThumbnail } from "./DocumentTemplatePreviewThumbnail";
 import {
   fetchDocumentPrintPdfBlob,
+  resolveOrderWzBulkPrintRequests,
   type DocumentPrintRequest,
 } from "@/utils/documentTemplatePrint";
 import { openPdfBlobInPrintViewer } from "@/utils/openPdfForBrowserPrint";
@@ -17,6 +18,7 @@ export type BulkDocumentTypeOption = {
   label: string;
   kindCode: string;
   buildRequests: (ids: Array<number | string>) => DocumentPrintRequest[];
+  resolveRequests?: (ids: Array<number | string>) => Promise<DocumentPrintRequest[]>;
 };
 
 type Props = {
@@ -53,21 +55,18 @@ export function ErpBulkPrintModal({
   const [options, setOptions] = useState<PublishedTemplateOptionDto[]>([]);
   const [loadingOptions, setLoadingOptions] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [resolvedRequests, setResolvedRequests] = useState<DocumentPrintRequest[]>([]);
 
   const selectedType = useMemo(
     () => documentTypes.find((t) => t.id === selectedTypeId) ?? null,
     [documentTypes, selectedTypeId],
   );
 
-  const requests = useMemo(() => {
-    if (!selectedType || ids.length === 0) return [];
-    return selectedType.buildRequests(ids);
-  }, [selectedType, ids]);
-
   const reset = useCallback(() => {
     setStep("type");
     setSelectedTypeId(null);
     setOptions([]);
+    setResolvedRequests([]);
     setLoadingOptions(false);
     setBusy(false);
   }, []);
@@ -121,8 +120,19 @@ export function ErpBulkPrintModal({
     const hit = documentTypes.find((t) => t.id === typeId);
     if (!hit || ids.length === 0) return;
     setSelectedTypeId(typeId);
-    const reqs = hit.buildRequests(ids);
-    void loadTemplates(hit.kindCode, reqs);
+    void (async () => {
+      try {
+        const reqs = hit.resolveRequests ? await hit.resolveRequests(ids) : hit.buildRequests(ids);
+        if (reqs.length === 0) {
+          toast.error("Brak dokumentów do druku.");
+          return;
+        }
+        setResolvedRequests(reqs);
+        await loadTemplates(hit.kindCode, reqs);
+      } catch (err) {
+        toast.error(extractApiErrorMessage(err, "Nie udało się przygotować dokumentów do druku."));
+      }
+    })();
   };
 
   if (!open) return null;
@@ -189,7 +199,7 @@ export function ErpBulkPrintModal({
                   <button
                     type="button"
                     disabled={busy}
-                    onClick={() => void executePrint(opt.version_id, requests)}
+                    onClick={() => void executePrint(opt.version_id, resolvedRequests)}
                     className="mt-auto rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
                   >
                     Drukuj ({ids.length})
@@ -216,6 +226,14 @@ export const ORDER_BULK_DOCUMENT_TYPES: BulkDocumentTypeOption[] = [
     label: "Lista kompletacyjna",
     kindCode: "picking_list",
     buildRequests: (ids) => ids.map((id) => ({ kind: "picking_list", orderId: Number(id) })),
+  },
+  {
+    id: "wz",
+    label: "WZ",
+    kindCode: "wz",
+    buildRequests: () => [],
+    resolveRequests: async (ids) =>
+      resolveOrderWzBulkPrintRequests(ids.map((id) => Number(id)).filter((n) => Number.isFinite(n))),
   },
   {
     id: "return_document",

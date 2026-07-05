@@ -62,7 +62,6 @@ import {
 import { OrderBulkCustomFieldModal } from "../../components/orders/orderList/OrderBulkCustomFieldModal";
 import { listSellasistInputClass } from "../../components/listPage/listSellasistTokens";
 import type { MultiMenuActionId } from "../../components/orders/orderList/OrderListMultiActionsMenu";
-import { useDocumentTemplatePrint } from "../../hooks/useDocumentTemplatePrint";
 import {
   ErpBulkPrintModal,
   ORDER_BULK_DOCUMENT_TYPES,
@@ -151,8 +150,6 @@ export default function OrderList() {
   const navigate = useNavigate();
   const location = useLocation();
   const { warehouses, warehouse } = useWarehouse();
-  const { requestPrint: requestOrderDocumentPrint, pickerModal: orderListDocumentPickerModal, printBusy: orderListDocumentPrintBusy } =
-    useDocumentTemplatePrint({ tenantId: DAMAGE_TENANT_ID });
 
   const listViewAdapter = useMemo(() => buildOrderListViewAdapter(DAMAGE_TENANT_ID), []);
   const listView = useListViewState(listViewAdapter);
@@ -769,9 +766,20 @@ export default function OrderList() {
     return null;
   };
 
+  const openBulkPrint = () => {
+    if (effectiveSelectionCount === 0) {
+      setToast("Zaznacz co najmniej jedno zamówienie.");
+      return;
+    }
+    if (bulkSelectionMode === "filtered_all") {
+      setToast("Masowy druk wymaga zaznaczenia rekordów na stronie (nie „wszystkie z filtra”).");
+      return;
+    }
+    setBulkPrintOpen(true);
+  };
+
   const handleMultiMenu = (id: MultiMenuActionId) => {
-    const allowWithoutSelection =
-      id === "packing_queue" || id === "export" || id === "print";
+    const allowWithoutSelection = id === "packing_queue" || id === "export";
     if (!allowWithoutSelection && effectiveSelectionCount === 0) {
       setToast("Zaznacz zamówienia.");
       return;
@@ -807,18 +815,6 @@ export default function OrderList() {
       case "issue_document":
         openQuickAction("issue_document");
         break;
-      case "print": {
-        if (effectiveSelectionCount === 0) {
-          setToast("Zaznacz co najmniej jedno zamówienie.");
-          return;
-        }
-        if (bulkSelectionMode === "filtered_all") {
-          setToast("Masowy druk wymaga zaznaczenia rekordów na stronie (nie „wszystkie z filtra”).");
-          return;
-        }
-        setBulkPrintOpen(true);
-        break;
-      }
       case "export":
         setExportOpen(true);
         break;
@@ -1001,6 +997,7 @@ export default function OrderList() {
                   onBulkStatusSelect={(statusId) => void handleQuickChangeStatus(statusId)}
                   onMultiMenuSelect={handleMultiMenu}
                   onQuickAction={openQuickAction}
+                  onPrint={openBulkPrint}
                   onExport={() => setExportOpen(true)}
                 />
               }
@@ -1099,8 +1096,6 @@ export default function OrderList() {
                     openQuickAction(kind);
                   }}
                   onRowOpenMulti={(orderId) => openMultiModalForOrder(orderId)}
-                  onRequestDocumentPrint={requestOrderDocumentPrint}
-                  documentPrintBusy={orderListDocumentPrintBusy}
                 />
               )}
             </ModuleTableCard>
@@ -1188,7 +1183,6 @@ export default function OrderList() {
         selectedIds={selectedIds.length > 0 ? [...selectedIds] : []}
         fallbackIds={orders.map((o) => o.id)}
       />
-      {orderListDocumentPickerModal}
       <ErpBulkPrintModal
         open={bulkPrintOpen}
         onClose={() => setBulkPrintOpen(false)}

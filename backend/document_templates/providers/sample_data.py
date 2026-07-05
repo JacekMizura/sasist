@@ -148,6 +148,8 @@ def sample_production_context() -> ProductionPrintContext:
 
 def sample_product_context() -> ProductPrintContext:
     return ProductPrintContext(
+        title="Karta produktu",
+        document_number="SKU-DEMO",
         product={
             "name": "Produkt Demo",
             "sku": "SKU-DEMO",

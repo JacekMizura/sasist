@@ -72,7 +72,7 @@ export function DocumentTemplateCreatePage() {
 
   return (
     <div className="mx-auto max-w-xl rounded-xl border border-slate-200/90 bg-white p-6 shadow-sm">
-      <h2 className="text-lg font-semibold text-slate-900">Nowy szablon dokumentu</h2>
+      <h2 className="text-lg font-semibold text-slate-900">Nowy szablon wydruku</h2>
       <p className="mt-1 text-sm text-slate-500">Utwórz szablon ze startera systemowego.</p>
       <div className="mt-6 space-y-4">
         <Field label="Rodzina">

@@ -26,13 +26,13 @@ export default function DocumentTemplatesModuleFrame() {
     <SettingsModuleStack
       breadcrumbs={[
         { label: "Ustawienia", to: "/settings/company" },
-        { label: "Szablony dokumentów" },
+        { label: "Szablony wydruków" },
       ]}
-      title="Szablony dokumentów"
+      title="Szablony wydruków"
       description="Projektowanie wydruków ERP — wersje, publikacja, powiązania i podgląd. Niezależne od szablonów etykiet."
       tabs={DOCUMENT_TEMPLATES_TABS}
       tabsExact
-      tabsAriaLabel="Szablony dokumentów"
+      tabsAriaLabel="Szablony wydruków"
       actions={
         isList ? (
           <div className="flex flex-wrap items-center gap-2">

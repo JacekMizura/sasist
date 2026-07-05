@@ -10,7 +10,6 @@ export type MultiMenuActionId =
   | "change_payment_status"
   | "packing_queue"
   | "issue_document"
-  | "print"
   | "export"
   | "custom_field_value"
   | "delete"
@@ -26,7 +25,6 @@ const MENU_ROWS: { id: MultiMenuActionId; label: string }[] = [
   { id: "change_payment_status", label: "Zmień status płatności" },
   { id: "packing_queue", label: "Dodaj do kolejki pakowania" },
   { id: "issue_document", label: "Generuj dokument" },
-  { id: "print", label: "Drukuj" },
   { id: "export", label: "Eksportuj" },
   { id: "custom_field_value", label: "Zmień wartość pola dodatkowego" },
   { id: "delete", label: "Usuń" },

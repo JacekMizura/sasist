@@ -264,7 +264,7 @@ export default function WmsReturnsSettingsPanel({ warehouseId }: Props) {
           tenantId={DAMAGE_TENANT_ID}
           scopeType="RETURNS"
           scopeId={DAMAGE_TENANT_ID}
-          title="Szablony dokumentów zwrotów"
+          title="Szablony wydruków zwrotów"
           kinds={RETURNS_SCOPE_KINDS}
         />
       </SettingsSectionCard>

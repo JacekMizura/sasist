@@ -143,7 +143,7 @@ def _template_list_row(db: Session, row: DocumentTemplate) -> dict[str, Any]:
         if user:
             author_name = str(getattr(user, "display_name", None) or getattr(user, "username", None) or "")
 
-    from ..document_templates.services.template_assignment_usage_service import usage_summary_for_template
+    from .template_assignment_usage_service import usage_summary_for_template
 
     usage = usage_summary_for_template(db, tenant_id=int(row.tenant_id), template_id=int(row.id))
 
