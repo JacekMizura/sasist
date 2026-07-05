@@ -868,6 +868,12 @@ def api_batch_production_card_pdf(
         pdf = generate_batch_production_card_pdf_bytes(db, tenant_id=tenant_id, batch_id=batch_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        logging.getLogger(__name__).error("production card PDF engine missing: %s", exc)
+        raise HTTPException(
+            status_code=503,
+            detail="PDF engine not configured (install Node deps in backend/scripts/structure_report_pdf).",
+        ) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     return Response(

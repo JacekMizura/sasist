@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from backend.auth.deps import get_current_user
 from backend.main import app
@@ -30,12 +32,17 @@ from backend.services.production_execution.production_card_pdf_service import (
     build_batch_production_card_html,
     generate_batch_production_card_pdf_bytes,
 )
+from backend.services.structure_report_pdf_service import BACKEND_ROOT
 from backend.services.stock_disposition import STOCK_DISPOSITION_SALEABLE
 
 
 @pytest.fixture
 def card_db(monkeypatch):
-    engine = create_engine("sqlite:///:memory:")
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
     with engine.begin() as conn:
         conn.execute(text("CREATE TABLE tenants (id INTEGER PRIMARY KEY)"))
         conn.execute(text("INSERT INTO tenants VALUES (1)"))
@@ -147,7 +154,14 @@ def card_db(monkeypatch):
 
 
 def test_production_card_template_path():
+    assert TEMPLATES_DIR == BACKEND_ROOT / "templates"
     assert (TEMPLATES_DIR / "production_card.html.j2").is_file()
+
+
+def test_wrong_nested_backend_root_would_miss_template():
+    wrong_dir = Path(__file__).resolve().parents[1] / "services" / "templates"
+    assert wrong_dir != TEMPLATES_DIR
+    assert not (wrong_dir / "production_card.html.j2").exists()
 
 
 def test_build_batch_production_card_html_renders(card_db):
@@ -165,7 +179,7 @@ def test_generate_batch_production_card_pdf_bytes(card_db, monkeypatch):
     assert pdf.startswith(b"%PDF")
 
 
-def test_api_batch_production_card_pdf():
+def test_api_batch_production_card_pdf_endpoint():
     mark_tier0_ready()
     app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(
         id=1,

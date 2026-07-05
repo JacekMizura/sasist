@@ -5,8 +5,7 @@ from __future__ import annotations
 import io
 import logging
 import re
-from datetime import datetime
-from pathlib import Path
+from datetime import date, datetime
 from typing import Any
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -19,13 +18,12 @@ from ...models.warehouse import Warehouse
 from ..production_batch_service import ProductionBatchError, _load_batch_entity, build_batch_pick_plan
 from ..production_order_service import ProductionOrderError
 from ..production_pick_service import build_production_pick_plan
-from ..structure_report_pdf_service import html_document_to_pdf_bytes
+from ..structure_report_pdf_service import BACKEND_ROOT, html_document_to_pdf_bytes
 from .barcode_html import code128_png_data_uri, product_barcode_value
 from .collection_location_service import build_collection_location_options
 
 logger = logging.getLogger(__name__)
 
-BACKEND_ROOT = Path(__file__).resolve().parent.parent.parent
 TEMPLATES_DIR = BACKEND_ROOT / "templates"
 
 
@@ -41,6 +39,19 @@ def _fmt_qty(q: float) -> str:
     if abs(qf - round(qf)) < 1e-6:
         return str(int(round(qf)))
     return f"{qf:.4f}".rstrip("0").rstrip(".")
+
+
+def _fmt_optional_date(value: date | datetime | str | None) -> str:
+    if value is None:
+        return "—"
+    if isinstance(value, datetime):
+        return value.strftime("%d.%m.%Y")
+    if isinstance(value, date):
+        if value >= date(9999, 1, 1):
+            return "—"
+        return value.strftime("%d.%m.%Y")
+    text = str(value).strip()
+    return text or "—"
 
 
 def _fmt_ts(value: datetime | None) -> str:
@@ -100,7 +111,7 @@ def _component_row(
     avail = _fmt_qty(available_qty if available_qty is not None else wh_total)
     bn = batch_number or "—"
     lot_val = lot or "—"
-    exp = expiry_date or "—"
+    exp = _fmt_optional_date(expiry_date)
     if options and suggested_location is None:
         pref = next((o for o in options if o.get("is_preferred")), options[0])
         loc = str(pref.get("location_code") or "—")
@@ -110,7 +121,7 @@ def _component_row(
             first = lots[0]
             bn = str(first.get("batch_number") or "—")
             lot_val = str(first.get("lot") or bn)
-            exp = str(first.get("expiry_date") or "—")
+            exp = _fmt_optional_date(first.get("expiry_date"))
     image_url = (product_image_url or "").strip() or ((getattr(p, "image_url", None) or "").strip() or None)
     bc = _barcode_fields(p)
     return {
