@@ -95,6 +95,7 @@ export default function WmsPutawayItemDetailPage() {
   const [suggestions, setSuggestions] = useState<WmsPutawayLocationSuggestions>(() => emptyPutawaySuggestions());
   const [warehouseLocations, setWarehouseLocations] = useState<WarehouseLocationItem[]>([]);
   const [docLabel, setDocLabel] = useState("");
+  const [docType, setDocType] = useState("PZ");
   const [line, setLine] = useState<import("../../api/stockDocumentsApi").StockDocumentItemRead | null>(null);
   const [warehouseQty, setWarehouseQty] = useState(0);
 
@@ -117,7 +118,13 @@ export default function WmsPutawayItemDetailPage() {
       }
 
       setLine(it);
-      setDocLabel(wmsRelocationDocLabel(doc.document_type, doc.created_at, doc.id, { forceMm: isMmFlow }));
+      setDocType(String(doc.document_type ?? "PZ"));
+      setDocLabel(
+        wmsRelocationDocLabel(doc.document_type, doc.created_at, doc.id, {
+          forceMm: isMmFlow,
+          documentNumber: doc.document_number,
+        }),
+      );
       if (putawayDone(it)) { setWarn("Ta pozycja została już w pełni rozlokowana."); }
 
       if (doc.warehouse_id) {
@@ -141,18 +148,18 @@ export default function WmsPutawayItemDetailPage() {
 
   useEffect(() => {
     if (!routeIds.valid) return;
-    setActiveDocument({ kind: "pz", pzId, tenantId, label: docLabel || `PZ #${pzId}` });
+    setActiveDocument({ kind: "pz", pzId, tenantId, label: docLabel || `${docType} #${pzId}` });
     return () => setActiveDocument(null);
-  }, [pzId, tenantId, docLabel, setActiveDocument, routeIds.valid]);
+  }, [pzId, tenantId, docLabel, docType, setActiveDocument, routeIds.valid]);
 
   const goExecute = useCallback(
     (selected: PutawaySelectedLocation) => {
       if (!line || putawayDone(line)) { showScannerToast("Brak ilości do rozlokowania"); return; }
-      navigate(wmsRelocationItemExecuteRoute(isMmFlow ? "MM" : "PZ", pzId, itemId), {
+      navigate(wmsRelocationItemExecuteRoute(isMmFlow ? "MM" : docType, pzId, itemId), {
         state: { tenantId, selectedLocation: selected },
       });
     },
-    [navigate, pzId, itemId, tenantId, line, showScannerToast, isMmFlow],
+    [navigate, pzId, itemId, tenantId, line, showScannerToast, isMmFlow, docType],
   );
 
   const resolveLocationFromScan = useCallback(
@@ -222,7 +229,7 @@ export default function WmsPutawayItemDetailPage() {
   const existing = suggestions.existing_stock_locations;
 
   const backToList = () =>
-    navigate(wmsRelocationHubRoute(isMmFlow ? "MM" : "PZ", pzId), { state: { tenantId } });
+    navigate(wmsRelocationHubRoute(isMmFlow ? "MM" : docType, pzId), { state: { tenantId } });
 
   if (!routeIds.valid) {
     return (
@@ -275,7 +282,7 @@ export default function WmsPutawayItemDetailPage() {
               <div className="mt-10 flex justify-between items-end">
                 <div>
                   <span className="text-[9px] font-black text-slate-400 block uppercase tracking-widest mb-1.5">
-                    Do rozlokowania PZ
+                    Do rozlokowania
                   </span>
                   <div className="flex items-baseline gap-1">
                     <span className="text-4xl font-black text-[#5a4fcf]">{fmtQty(remaining)}</span>
@@ -488,7 +495,7 @@ export default function WmsPutawayItemDetailPage() {
             <ArrowLeft className="w-6 h-6" strokeWidth={2.5} />
           </button>
           <div>
-            <h1 className="text-xl font-black text-slate-900 tracking-tight">{docLabel || `PZ #${pzId}`}</h1>
+            <h1 className="text-xl font-black text-slate-900 tracking-tight">{docLabel || `${docType} #${pzId}`}</h1>
             <p className="text-[10px] text-slate-400 font-bold mt-0.5 uppercase tracking-wider">Wybór lokalizacji</p>
           </div>
         </div>

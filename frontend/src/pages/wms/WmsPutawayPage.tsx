@@ -23,6 +23,8 @@ function fmtQty(n: number) {
 }
 
 function PutawayPzCard({ row, tenantId }: { row: WmsReceivingPzListRow; tenantId: number }) {
+  const docType = String(row.document_type ?? "PZ").trim().toUpperCase();
+  const isPw = docType === "PW";
   const isReturnReceipt = row.is_return_receipt === true || isReturnReceiptDocumentType(row.document_type);
   const hasRmz = row.has_rmz_source === true;
   const hasComplaint = row.has_complaint_source === true;
@@ -34,8 +36,13 @@ function PutawayPzCard({ row, tenantId }: { row: WmsReceivingPzListRow; tenantId
         ? "Z-PZ · Zwrot + Reklamacja"
         : isReturnReceipt
           ? "Z-PZ · zwrot RMZ"
-          : null;
-  const docNumber = displayWarehouseDocumentNumber(row.number) || row.number?.trim() || (isReturnReceipt ? `Z-PZ #${row.id}` : `PZ #${row.id}`);
+          : isPw
+            ? "PW · Produkcja"
+            : null;
+  const docNumber =
+    displayWarehouseDocumentNumber(row.number) ||
+    row.number?.trim() ||
+    (isReturnReceipt ? `Z-PZ #${row.id}` : isPw ? `PW #${row.id}` : `PZ #${row.id}`);
   const activityIso = row.updated_at?.trim() ? row.updated_at : row.created_at;
 
   const carrierCount = row.carrier_count ?? 0;
@@ -80,7 +87,7 @@ function PutawayPzCard({ row, tenantId }: { row: WmsReceivingPzListRow; tenantId
                   : "bg-emerald-50 text-emerald-700 border-emerald-200/60"
               }`}
             >
-              {isReturnReceipt ? "Do rozlokowania Z-PZ" : "Do rozlokowania PZ"}
+              {isReturnReceipt ? "Do rozlokowania Z-PZ" : "Do rozlokowania"}
             </span>
             <PzWorkflowStatusBadges
               compact
@@ -158,8 +165,8 @@ export default function WmsPutawayPage() {
   const scanFx = useScanFeedback();
 
   useEffect(() => {
-    setActiveDocument({ kind: "custom", label: "Lista PZ — rozlokowanie PZ" });
-    setScannerInputPlaceholder("Skanuj PZ lub EAN produktu");
+    setActiveDocument({ kind: "custom", label: "Rozlokowanie — lista dokumentów" });
+    setScannerInputPlaceholder("Skanuj numer dokumentu lub EAN produktu");
     return () => {
       setActiveDocument(null);
       setScannerInputPlaceholder("Wpisz lub wklej EAN (↑↓ historia)");
@@ -167,7 +174,7 @@ export default function WmsPutawayPage() {
   }, [setActiveDocument, setScannerInputPlaceholder]);
 
   useWmsPageScanHandler(() => {
-    scanFx.warning("Wybierz PZ z listy, potem skanuj na ekranie rozlokowania.");
+    scanFx.warning("Wybierz dokument z listy, potem skanuj na ekranie rozlokowania.");
   });
 
   const [tenantId, setTenantId] = useState(1);
@@ -200,7 +207,7 @@ export default function WmsPutawayPage() {
     try {
       setRows(await listWmsPutawayPz(tenantId));
     } catch {
-      setErr("Nie udało się wczytać listy PZ.");
+      setErr("Nie udało się wczytać listy dokumentów do rozlokowania.");
       setRows([]);
     } finally {
       setLoading(false);
@@ -236,7 +243,9 @@ export default function WmsPutawayPage() {
     if (!searchTerm.trim()) return rows;
     const q = searchTerm.toLowerCase().trim();
     return rows.filter((r) => {
-      const docNumber = (r.number || `PZ #${r.id}`).toLowerCase();
+      const dt = String(r.document_type ?? "PZ").trim().toUpperCase();
+      const fallback = dt === "PW" ? `PW #${r.id}` : dt === "MM" ? `PM #${r.id}` : `PZ #${r.id}`;
+      const docNumber = (r.number || fallback).toLowerCase();
       const supplier = (r.supplier_name || "").toLowerCase();
       return docNumber.includes(q) || supplier.includes(q);
     });

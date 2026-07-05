@@ -24,6 +24,12 @@ export function wmsRelocationDocLabel(
   if (opts?.forceMm || isMmStockDocumentType(documentType)) {
     return pmDisplayLabel(createdAt, docId);
   }
+  const dt = String(documentType ?? "").trim().toUpperCase();
+  if (dt === "PW") {
+    const stored = (opts?.documentNumber ?? "").trim();
+    if (stored) return displayWarehouseDocumentNumber(stored);
+    return `PW-${docId}`;
+  }
   const stored = (opts?.documentNumber ?? "").trim();
   if (stored) return displayWarehouseDocumentNumber(stored);
   if (isReturnReceiptDocumentType(documentType)) {
@@ -87,16 +93,19 @@ export async function fetchWmsRelocationHubDocument(
   return getWmsPutawayPzDocument(tenantId, documentId);
 }
 
-export const PZ_PUTAWAY_UI = {
-  listTitle: "Rozlokowanie PZ",
-  docKind: "PZ",
-  flowName: "Rozlokowanie PZ",
+export const PUTAWAY_FLOW_UI = {
+  listTitle: "Rozlokowanie",
+  docKind: "Dokument",
+  flowName: "Rozlokowanie",
   progressDone: "Rozlokowano",
-  finalize: "Zakończ rozlokowanie PZ",
-  emptyLines: "Brak pozycji z przyjętą ilością do rozlokowania PZ.",
-  backToHub: "Wróć do listy PZ",
-  invalidDoc: "Nieprawidłowy numer PZ.",
+  finalize: "Zakończ rozlokowanie",
+  emptyLines: "Brak pozycji do rozlokowania.",
+  backToHub: "Wróć do listy",
+  invalidDoc: "Nieprawidłowy identyfikator dokumentu.",
   loadFailed: "Nie udało się wczytać dokumentu.",
-  alreadyDone: "Rozlokowanie PZ dla tego dokumentu zostało zakończone.",
-  notAllowed: "Rozlokowanie PZ niedostępne dla bieżącego statusu dokumentu.",
+  alreadyDone: "Rozlokowanie dla tego dokumentu zostało zakończone.",
+  notAllowed: "Rozlokowanie niedostępne dla bieżącego statusu dokumentu.",
 } as const;
+
+/** @deprecated Use PUTAWAY_FLOW_UI — kept for imports during migration */
+export const PZ_PUTAWAY_UI = PUTAWAY_FLOW_UI;

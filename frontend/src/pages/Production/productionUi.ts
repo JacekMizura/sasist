@@ -24,7 +24,8 @@ export const BATCH_STATUS_LABEL: Record<ProductionBatchStatus, string> = {
   planned: "Zaplanowana",
   collecting: "Zbieranie",
   in_progress: "W realizacji",
-  putaway: "Odłożenie",
+  awaiting_putaway: "Oczekuje na rozlokowanie",
+  putaway: "Gotowe do rozlokowania",
   completed: "Ukończona",
   cancelled: "Anulowana",
 };
@@ -52,6 +53,7 @@ export function batchStatusBadgeClass(status: ProductionBatchStatus): string {
       return PURPLE_BADGE;
     case "in_progress":
     case "collecting":
+    case "awaiting_putaway":
     case "putaway":
       return operationalBadgeInfoClass;
     case "completed":

@@ -18,7 +18,8 @@ export const EXECUTION_STATUS_LABEL: Record<string, string> = {
   planned: "Zaplanowana",
   collecting: "Zbieranie",
   in_progress: "W realizacji",
-  putaway: "Odłożenie",
+  awaiting_putaway: "Oczekuje na rozlokowanie",
+  putaway: "Oczekuje na rozlokowanie",
   completed: "Ukończona",
   cancelled: "Anulowana",
 };

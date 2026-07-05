@@ -241,7 +241,7 @@ def test_finish_production_creates_pw_and_putaway_queue(finish_production_db):
     result = finish_production(db, tenant_id=1, batch_id=int(batch.id))
     db.commit()
 
-    assert result.status == "completed"
+    assert result.status == "awaiting_putaway"
     assert line.pw_stock_document_id is not None
     pw = db.query(StockDocument).filter(StockDocument.id == int(line.pw_stock_document_id)).first()
     assert pw is not None
@@ -261,3 +261,25 @@ def test_create_batch_pw_documents_provisions_staging(finish_production_db):
     pw = db.query(StockDocument).filter(StockDocument.id == int(pw_ids[0])).first()
     assert pw.location_id is not None
     assert pw.putaway_status == "NOT_STARTED"
+
+
+def test_batch_completes_when_pw_putaway_done(finish_production_db):
+    from backend.services.production_execution.batch_putaway_completion import (
+        try_complete_production_batch_from_pw_document,
+    )
+
+    db, batch, line = finish_production_db
+    finish_production(db, tenant_id=1, batch_id=int(batch.id))
+    db.commit()
+
+    pw = db.query(StockDocument).filter(StockDocument.id == int(line.pw_stock_document_id)).first()
+    assert pw is not None
+    assert int(pw.production_batch_id or 0) == int(batch.id)
+
+    pw.putaway_status = "DONE"
+    pw.relocation_status = "DONE"
+    assert try_complete_production_batch_from_pw_document(db, pw) is True
+    db.commit()
+    db.refresh(batch)
+    assert batch.status == "completed"
+    assert batch.completed_at is not None

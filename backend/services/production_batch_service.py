@@ -64,7 +64,7 @@ logger = logging.getLogger(__name__)
 
 TERMINAL = frozenset({"completed", "cancelled"})
 _VALID_BATCH_STATUSES = frozenset(
-    {"draft", "planned", "collecting", "in_progress", "putaway", "completed", "cancelled"}
+    {"draft", "planned", "collecting", "in_progress", "awaiting_putaway", "putaway", "completed", "cancelled"}
 )
 
 
@@ -166,6 +166,7 @@ def serialize_batch_line(db: Session, line: ProductionBatchLine) -> ProductionBa
         status=str(line.status or "planned"),
         calculated_unit_cost=line.calculated_unit_cost,
         pw_stock_document_id=line.pw_stock_document_id,
+        pw_document_number=_doc_number(db, line.pw_stock_document_id),
         product_name=(p.name if p else None),
         product_sku=((p.sku or p.symbol) if p else None),
         product_image_url=((p.image_url or "").strip() or None if p else None),
@@ -217,7 +218,7 @@ def serialize_batch(db: Session, batch: ProductionBatch) -> ProductionBatchRead:
     status = str(batch.status or "draft")
     if status == "collecting":
         progress = coll_pct
-    elif status in ("in_progress", "putaway"):
+    elif status in ("in_progress", "awaiting_putaway", "putaway"):
         progress = round(100.0 * total_completed / total_planned, 1) if total_planned > 0 else 0.0
     elif status == "completed":
         progress = 100.0
@@ -1463,9 +1464,8 @@ def finish_production(db: Session, *, tenant_id: int, batch_id: int) -> Producti
         create_batch_pw_documents_for_putaway(db, batch=batch, performed_by_user_id=None)
     except ValueError as exc:
         raise ProductionBatchError(str(exc), code="pw_creation_failed") from exc
-    batch.status = "completed"
+    batch.status = "awaiting_putaway"
     batch.production_completed_at = datetime.utcnow()
-    batch.completed_at = datetime.utcnow()
     batch.updated_at = datetime.utcnow()
     db.flush()
     return serialize_batch(db, batch)

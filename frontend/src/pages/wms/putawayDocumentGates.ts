@@ -16,14 +16,19 @@ export function isReturnReceiptDocumentType(documentType: string | null | undefi
 export function docAllowsWmsPutaway(
   documentType: string | null | undefined,
   status: string | null | undefined,
+  creationSource?: string | null,
 ): boolean {
   const dt = normalizeDocType(documentType);
   const st = normalizeDocStatus(status);
+  const src = String(creationSource ?? "").trim().toUpperCase();
   if (dt === "MM") return st === "DRAFT";
   if (isReturnReceiptDocumentType(dt)) {
     return st === "DRAFT" || st === "OPEN" || st === "CLOSED" || st === "POSTED" || st === "ZAKONCZONE";
   }
   if (dt === "PZ") return st === "DRAFT" || st === "POSTED" || st === "ZAKONCZONE";
+  if (dt === "PW" && src === "PRODUCTION") {
+    return st === "DRAFT" || st === "POSTED" || st === "ZAKONCZONE" || st === "COMPLETED";
+  }
   return false;
 }
 
@@ -35,6 +40,10 @@ export function putawayCardsEnabled(
   documentType: string | null | undefined,
   status: string | null | undefined,
   relocationStatus: string | null | undefined,
+  creationSource?: string | null,
 ): boolean {
-  return docAllowsWmsPutaway(documentType, status) && putawayRelocationOpen(relocationStatus);
+  return (
+    docAllowsWmsPutaway(documentType, status, creationSource) &&
+    putawayRelocationOpen(relocationStatus)
+  );
 }

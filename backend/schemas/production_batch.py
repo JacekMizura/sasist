@@ -21,6 +21,7 @@ ProductionBatchStatus = Literal[
     "planned",
     "collecting",
     "in_progress",
+    "awaiting_putaway",
     "putaway",
     "completed",
     "cancelled",
@@ -46,6 +47,7 @@ class ProductionBatchLineRead(BaseModel):
     status: str
     calculated_unit_cost: Optional[float] = None
     pw_stock_document_id: Optional[int] = None
+    pw_document_number: Optional[str] = None
     product_name: Optional[str] = None
     product_sku: Optional[str] = None
     product_image_url: Optional[str] = None

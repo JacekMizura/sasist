@@ -453,6 +453,7 @@ export type ProductionBatchStatus =
   | "planned"
   | "collecting"
   | "in_progress"
+  | "awaiting_putaway"
   | "putaway"
   | "completed"
   | "cancelled";
@@ -468,6 +469,7 @@ export type ProductionBatchLineRead = {
   status: string;
   calculated_unit_cost?: number | null;
   pw_stock_document_id?: number | null;
+  pw_document_number?: string | null;
   product_name?: string | null;
   product_sku?: string | null;
   product_image_url?: string | null;

@@ -41,7 +41,12 @@ export function logPutawayDocumentRefresh(
     document_id: doc.id,
     status: String(doc.status ?? ""),
     relocation_status: String(doc.relocation_status ?? "OPEN"),
-    can_putaway: computePutawayCardsEnabled(doc.document_type, doc.status, doc.relocation_status),
+    can_putaway: computePutawayCardsEnabled(
+      doc.document_type,
+      doc.status,
+      doc.relocation_status,
+      (doc as { creation_source?: string | null }).creation_source,
+    ),
     source,
     endpoint,
     document_type: String(doc.document_type ?? ""),

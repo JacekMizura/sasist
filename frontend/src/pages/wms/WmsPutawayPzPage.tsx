@@ -198,7 +198,7 @@ function PutawayLineCard({
 
       <div className={`p-4 border-t ${done ? 'bg-emerald-50/50 border-emerald-100' : 'bg-slate-50/50 border-slate-100'}`}>
         <div className="flex items-end justify-between mb-2">
-          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Rozlokowanie PZ</span>
+          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Rozlokowanie</span>
           <div className="flex items-baseline gap-1">
             <span className={`text-xl font-black leading-none ${done ? 'text-emerald-600' : 'text-slate-900'}`}>{fmtQty(put)}</span>
             <span className="text-xs font-bold text-slate-400">/ {fmtQty(denom)} szt.</span>
@@ -260,7 +260,7 @@ export default function WmsPutawayPzPage() {
       setDoc(next);
       const docIsMm = isMmStockDocumentType(next.document_type);
       if (isMmFlow && !docIsMm) {
-        setErr("Ten adres dotyczy przesunięć magazynowych (PM), nie PZ.");
+        setErr("Ten adres dotyczy przesunięć magazynowych (PM), nie rozlokowania.");
         return;
       }
       if (!isMmFlow && docIsMm) {
@@ -303,7 +303,7 @@ export default function WmsPutawayPzPage() {
 
         const docIsMm = isMmStockDocumentType(d.document_type);
         if (isMmFlow && !docIsMm) {
-          setErr("Ten adres dotyczy przesunięć magazynowych (PM), nie PZ.");
+          setErr("Ten adres dotyczy przesunięć magazynowych (PM), nie rozlokowania.");
           setDoc(null);
           setLocations([]);
           return;
@@ -373,7 +373,7 @@ export default function WmsPutawayPzPage() {
 
   const receivingDone = !!doc && String(doc.receiving_status ?? "").toUpperCase() === "DONE";
   const relocationOpen = !!doc && String(doc.relocation_status ?? "OPEN").toUpperCase() !== "DONE";
-  const putawayCardsEnabled = !!doc && computePutawayCardsEnabled(doc.document_type, doc.status, doc.relocation_status);
+  const putawayCardsEnabled = !!doc && computePutawayCardsEnabled(doc.document_type, doc.status, doc.relocation_status, doc.creation_source);
   const isReturnReceiptDoc = !!doc && isReturnReceiptDocumentType(doc.document_type);
 
   const sortedPutawayLines = useMemo(() => {

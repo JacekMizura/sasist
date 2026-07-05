@@ -1,5 +1,13 @@
 # Current context
 
+## Fix workflow produkcji + PW + Putaway (2026-06-08)
+- Partia po finish: `awaiting_putaway` (nie `completed`); zamknięcie po putaway PW.
+- Timeline: PW utworzony → Rozlokowanie → Zakończono; sekcja Dokumenty RW/PW na detalu partii.
+- Putaway: wspólne bramki PZ/PW/MM, neutralne komunikaty UI; PW w finalize backend.
+- Dokument PW: źródło Produkcja, status rozlokowania; layout DocumentsLayout bez sticky overlap.
+- Testy: `test_production_allocation.py` (7 passed, + `test_batch_completes_when_pw_putaway_done`).
+- Raport: `memory/production-pw-workflow-fix-report.md`
+
 ## Fix regresji produkcji WMS (2026-06-08)
 - Rezerwacje: alokacja location-first; wykluczenie stref SALES/SHOWROOM (opcja admin).
 - finish-production 500: błędny import `assign_series_number_to_stock_document` w `pw_putaway_handoff.py`.

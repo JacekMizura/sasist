@@ -1644,8 +1644,13 @@ def finalize_wms_relocation_pz(db: Session, tenant_id: int, document_id: int) ->
     )
     if not doc:
         raise ValueError("Dokument nie znaleziony")
-    if str(doc.document_type or "").strip().upper() not in ("PZ", "Z_PZ", "PZ_RT", "RETURN_RECEIPT", "MM"):
-        raise ValueError("Tylko dokument PZ / PZ_RT / RETURN_RECEIPT lub MM")
+    dt = str(doc.document_type or "").strip().upper()
+    src = str(getattr(doc, "creation_source", "") or "").strip().upper()
+    allowed = dt in ("PZ", "Z_PZ", "PZ_RT", "RETURN_RECEIPT", "MM") or (
+        dt == "PW" and src == "PRODUCTION"
+    )
+    if not allowed:
+        raise ValueError("Ten typ dokumentu nie obsługuje rozlokowania WMS")
     if str(getattr(doc, "relocation_status", "") or "").strip().upper() == "DONE":
         raise ValueError("Rozlokowanie już zakończone")
     if not _doc_allows_putaway(doc):
@@ -1685,6 +1690,9 @@ def finalize_wms_relocation_pz(db: Session, tenant_id: int, document_id: int) ->
         doc.status = "zakonczone"
 
     _sync_po_from_pz(db, tenant_id, document_id)
+    from .production_execution.batch_putaway_completion import try_complete_production_batch_from_pw_document
+
+    try_complete_production_batch_from_pw_document(db, doc)
     db.commit()
     db.refresh(doc)
     return build_stock_document_read(db, doc)

@@ -57,6 +57,15 @@ export function documentSourceLabel(
 
 export function documentSourceLabelDetail(doc: StockDocumentRead): string {
   const src = String(doc.creation_source || "PANEL").trim().toUpperCase();
+  if (src === "PRODUCTION") {
+    if ((doc.production_batch_number || "").trim()) {
+      return `Produkcja · partia ${doc.production_batch_number.trim()}`;
+    }
+    if ((doc.production_order_number || "").trim()) {
+      return `Produkcja · ${doc.production_order_number.trim()}`;
+    }
+    return "Produkcja";
+  }
   if (doc.production_order_number) {
     return `Produkcja · ${doc.production_order_number}`;
   }
@@ -70,6 +79,13 @@ export function documentSourceLabelDetail(doc: StockDocumentRead): string {
     return `Sprzedaż · ${doc.linked_sale_document.document_number}`;
   }
   return CREATION_SOURCE_LABELS[src] ?? "Operacja magazynowa";
+}
+
+export function putawayStatusLabel(status?: string | null): string {
+  const s = String(status || "NOT_STARTED").trim().toUpperCase();
+  if (s === "DONE") return "Zakończono";
+  if (s === "IN_PROGRESS") return "W trakcie";
+  return "Oczekuje";
 }
 
 export function operatorLabel(row: StockDocumentListRow): string {

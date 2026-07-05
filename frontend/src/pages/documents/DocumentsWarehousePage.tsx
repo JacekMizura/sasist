@@ -37,6 +37,7 @@ import {
   shouldShowCustomerCard,
   shouldShowDocumentSourceCard,
   shouldShowSupplierCard,
+  putawayStatusLabel,
 } from "./warehouseDocumentHelpers";
 import { documentCreatedByLabel } from "../../utils/documentCreatedBy";
 import {
@@ -905,6 +906,8 @@ export default function DocumentsWarehousePage() {
                           <dd className="text-right font-medium text-slate-900">
                             {detailDocType === "MM" ? (
                               mmToLabel(detail)
+                            ) : detailDocType === "PW" ? (
+                              (detail.location_name || "").trim() || `#${detail.location_id}`
                             ) : detail.location_id == null ? (
                               <span className="text-amber-800">— (WMS → Przyjęcie)</span>
                             ) : (
@@ -912,6 +915,14 @@ export default function DocumentsWarehousePage() {
                             )}
                           </dd>
                         </div>
+                        {detailDocType === "PW" ? (
+                          <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3">
+                            <dt className="text-slate-500">Status rozlokowania</dt>
+                            <dd className="text-right font-medium text-slate-900">
+                              {putawayStatusLabel(detail.putaway_status)}
+                            </dd>
+                          </div>
+                        ) : null}
                         {detail.order_id != null ? (
                           <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3">
                             <dt className="text-slate-500">Zamówienie</dt>

@@ -70,10 +70,10 @@ function DocumentsLayoutInner() {
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="flex min-h-0 min-w-0 flex-1">
             <aside
-              className="hidden w-[210px] shrink-0 border-r border-slate-200/90 bg-slate-50/30 sm:block"
+              className="hidden h-full w-[210px] shrink-0 self-stretch overflow-y-auto border-r border-slate-200/90 bg-slate-50/30 sm:block"
               aria-label="Dokumenty — nawigacja"
             >
-              <div className="sticky top-0 max-h-[calc(100dvh-6rem)] overflow-y-auto p-2">
+              <div className="p-2">
                 <nav className="flex flex-col gap-3">
                   {sidebarSections.map((section, si) => (
                     <div key={`${section.title ?? "sec"}-${si}`}>

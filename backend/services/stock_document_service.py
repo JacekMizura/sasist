@@ -686,7 +686,7 @@ def recalculate_wms_document_completion(db: Session, tenant_id: int, document_id
     if not doc:
         return False
     dt = str(getattr(doc, "document_type", "") or "").strip().upper()
-    if dt not in ("PZ", "Z_PZ", "PZ_RT", "RETURN_RECEIPT", "MM"):
+    if dt not in ("PZ", "Z_PZ", "PZ_RT", "RETURN_RECEIPT", "MM", "PW"):
         return False
     if is_stock_document_cancelled(doc):
         return False
@@ -746,6 +746,11 @@ def recalculate_wms_document_completion(db: Session, tenant_id: int, document_id
         doc.updated_at = datetime.utcnow()
         db.add(doc)
         changed = True
+
+    if changed and dt == "PW":
+        from .production_execution.batch_putaway_completion import try_complete_production_batch_from_pw_document
+
+        try_complete_production_batch_from_pw_document(db, doc)
 
     return changed
 
