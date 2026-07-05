@@ -137,6 +137,42 @@ def _doc_number(db: Session, doc_id: int | None) -> str | None:
     return str(row[0]).strip() if row and row[0] else None
 
 
+def _append_rw_issue_with_product_audit(
+    db: Session,
+    *,
+    rw_doc: StockDocument,
+    line: StockDocumentItem,
+    slice_qty: float,
+    from_location_id: int,
+    batch_number: str,
+    expiry_date,
+    performed_by_user_id: int | None,
+    production_batch_id: int,
+    product_id: int,
+) -> None:
+    append_issue_operation(
+        db,
+        rw_doc,
+        line,
+        float(slice_qty),
+        from_location_id=int(from_location_id),
+        batch_number=batch_number,
+        expiry_date=expiry_date,
+        operator_admin_id=performed_by_user_id,
+        metadata={"production_batch_id": int(production_batch_id), "source_document_type": "RW"},
+    )
+    from .production_execution.production_warehouse_audit import record_production_rw_issue_audit
+
+    record_production_rw_issue_audit(
+        db,
+        rw_doc=rw_doc,
+        product_id=int(product_id),
+        quantity=float(slice_qty),
+        from_location_id=int(from_location_id),
+        performed_by_user_id=performed_by_user_id,
+    )
+
+
 def _aggregate_batch_components(batch: ProductionBatch) -> dict[int, float]:
     demands: list[list[dict[str, Any]]] = []
     for bl in batch.lines or []:
@@ -981,16 +1017,17 @@ def complete_batch(
                 quantity=float(qty),
             )
             for sl in slices:
-                append_issue_operation(
+                _append_rw_issue_with_product_audit(
                     db,
-                    rw_doc,
-                    line,
-                    float(sl.quantity),
+                    rw_doc=rw_doc,
+                    line=line,
+                    slice_qty=float(sl.quantity),
                     from_location_id=int(loc_id),
                     batch_number=sl.batch_number or "",
                     expiry_date=sl.expiry_date if sl.expiry_date < NO_EXPIRY_SENTINEL else None,
-                    operator_admin_id=performed_by_user_id,
-                    metadata={"production_batch_id": int(batch.id), "source_document_type": "RW"},
+                    performed_by_user_id=performed_by_user_id,
+                    production_batch_id=int(batch.id),
+                    product_id=int(pid),
                 )
         total_component_cost += unit_net * float(qty_sum)
 
@@ -1413,16 +1450,17 @@ def _consume_batch_materials(
                 serial_number=meta.serial_number if meta else None,
             )
             for sl in slices:
-                append_issue_operation(
+                _append_rw_issue_with_product_audit(
                     db,
-                    rw_doc,
-                    line,
-                    float(sl.quantity),
+                    rw_doc=rw_doc,
+                    line=line,
+                    slice_qty=float(sl.quantity),
                     from_location_id=int(loc_id),
                     batch_number=sl.batch_number or "",
                     expiry_date=sl.expiry_date if sl.expiry_date < NO_EXPIRY_SENTINEL else None,
-                    operator_admin_id=performed_by_user_id,
-                    metadata={"production_batch_id": int(batch.id), "source_document_type": "RW"},
+                    performed_by_user_id=performed_by_user_id,
+                    production_batch_id=int(batch.id),
+                    product_id=int(pid),
                 )
     batch.rw_stock_document_id = int(rw_doc.id)
     return rw_doc

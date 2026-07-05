@@ -1,5 +1,6 @@
 import {
   docAllowsWmsPutaway,
+  documentCanWmsPutaway,
   putawayCardsEnabled as computePutawayCardsEnabled,
 } from "./putawayDocumentGates";
 
@@ -14,6 +15,7 @@ export type PutawayDocumentRefreshLog = {
   document_type?: string;
   receiving_status?: string;
   can_putaway_status_only?: boolean;
+  can_wms_putaway_ssot?: boolean;
 };
 
 function isPutawayDocDebugEnabled(): boolean {
@@ -33,6 +35,8 @@ export function logPutawayDocumentRefresh(
     relocation_status?: string | null;
     document_type?: string | null;
     receiving_status?: string | null;
+    creation_source?: string | null;
+    can_wms_putaway?: boolean | null;
   },
   source: string,
   endpoint: string,
@@ -41,17 +45,17 @@ export function logPutawayDocumentRefresh(
     document_id: doc.id,
     status: String(doc.status ?? ""),
     relocation_status: String(doc.relocation_status ?? "OPEN"),
-    can_putaway: computePutawayCardsEnabled(
-      doc.document_type,
-      doc.status,
-      doc.relocation_status,
-      (doc as { creation_source?: string | null }).creation_source,
-    ),
+    can_putaway: documentCanWmsPutaway(doc),
     source,
     endpoint,
     document_type: String(doc.document_type ?? ""),
     receiving_status: String(doc.receiving_status ?? ""),
-    can_putaway_status_only: docAllowsWmsPutaway(doc.document_type, doc.status),
+    can_putaway_status_only: docAllowsWmsPutaway(
+      doc.document_type,
+      doc.status,
+      doc.creation_source,
+    ),
+    can_wms_putaway_ssot: typeof doc.can_wms_putaway === "boolean" ? doc.can_wms_putaway : undefined,
   };
   if (isPutawayDocDebugEnabled()) {
     console.info("[WMS_PUTAWAY_DOC_REFRESH]", payload);
@@ -64,12 +68,14 @@ export function putawayDocumentGateError(
     status?: string | null;
     relocation_status?: string | null;
     document_type?: string | null;
+    creation_source?: string | null;
+    can_wms_putaway?: boolean | null;
   },
   ui: { alreadyDone: string; notAllowed: string },
 ): string | null {
   const relDone = String(doc.relocation_status ?? "").toUpperCase() === "DONE";
   if (relDone) return ui.alreadyDone;
-  if (!computePutawayCardsEnabled(doc.document_type, doc.status, doc.relocation_status)) {
+  if (!documentCanWmsPutaway(doc)) {
     return ui.notAllowed;
   }
   return null;

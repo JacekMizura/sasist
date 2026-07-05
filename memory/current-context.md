@@ -1,5 +1,13 @@
 # Current context
 
+## Ujednolicenie Produkcji ERP/WMS (2026-06-08)
+- Putaway PW: SSOT `can_wms_putaway` na `StockDocumentRead`; fix gate error bez `creation_source`.
+- KPI dashboard: `units_in_production`, bez double-count; executing = collecting|in_progress only.
+- Historia produktu: audit PRODUCTION RW/PW → `wms_product_warehouse_operations`.
+- Historia produkcji: koszt z `lines[].calculated_unit_cost` (persist at finish).
+- DocumentsLayout: CSS grid sidebar + content (bez overlap).
+- Raport: `memory/production-erp-unification-report.md`
+
 ## Fix workflow produkcji + PW + Putaway (2026-06-08)
 - Partia po finish: `awaiting_putaway` (nie `completed`); zamknięcie po putaway PW.
 - Timeline: PW utworzony → Rozlokowanie → Zakończono; sekcja Dokumenty RW/PW na detalu partii.

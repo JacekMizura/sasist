@@ -294,6 +294,12 @@ def get_production_dashboard(
 ) -> ProductionDashboardRead:
     from sqlalchemy.orm import joinedload
     from ..models.product_composition import ProductionBatchLine
+    from .production_execution.constants import (
+        AWAITING_PUTAWAY_BATCH_STATUSES,
+        EXECUTING_BATCH_STATUSES,
+        PLANNED_BATCH_STATUSES,
+        TERMINAL_EXECUTION_STATUSES,
+    )
 
     q = (
         db.query(ProductionBatch)
@@ -305,17 +311,19 @@ def get_production_dashboard(
     batches = q.order_by(ProductionBatch.updated_at.desc()).all()
     today = datetime.utcnow().date()
     planned_rows: list[ProductionBatchSummaryRead] = []
-    active_rows: list[ProductionBatchSummaryRead] = []
+    executing_rows: list[ProductionBatchSummaryRead] = []
+    awaiting_putaway_rows: list[ProductionBatchSummaryRead] = []
     waiting_rows: list[ProductionBatchSummaryRead] = []
     ready_rows: list[ProductionBatchSummaryRead] = []
     completed_rows: list[ProductionBatchSummaryRead] = []
     shortage_count = 0
     planned_count = 0
     finished_today = 0
+    units_in_production = 0.0
 
     for b in batches:
         status = str(b.status or "")
-        if status in ("completed", "cancelled"):
+        if status in TERMINAL_EXECUTION_STATUSES:
             if status == "completed" and b.completed_at and b.completed_at.date() == today:
                 finished_today += 1
                 completed_rows.append(_batch_summary(db, b))
@@ -323,9 +331,16 @@ def get_production_dashboard(
         summary = _batch_summary(db, b)
         if summary.has_shortages:
             shortage_count += 1
-        if status in ("collecting", "in_progress", "putaway"):
-            active_rows.append(summary)
-        elif status in ("draft", "planned"):
+        if status in EXECUTING_BATCH_STATUSES:
+            executing_rows.append(summary)
+            remaining = sum(
+                max(0.0, float(ln.planned_quantity or 0) - float(ln.completed_quantity or 0))
+                for ln in b.lines or []
+            )
+            units_in_production += remaining
+        elif status in AWAITING_PUTAWAY_BATCH_STATUSES:
+            awaiting_putaway_rows.append(summary)
+        elif status in PLANNED_BATCH_STATUSES:
             planned_count += 1
             planned_rows.append(summary)
             if summary.has_shortages:
@@ -333,7 +348,7 @@ def get_production_dashboard(
             elif not summary.is_released_to_wms:
                 ready_rows.append(summary)
 
-    workload = finished_today + len(active_rows) + planned_count
+    workload = finished_today + len(executing_rows) + planned_count
     efficiency = round(100.0 * finished_today / workload, 1) if workload else 0.0
 
     recipe_count = (
@@ -344,23 +359,27 @@ def get_production_dashboard(
         )
         .count()
     )
-    active_operators = sorted({s.operator_name for s in active_rows if s.operator_name})
+    active_operators = sorted({s.operator_name for s in executing_rows if s.operator_name})
 
     return ProductionDashboardRead(
         planned_batches=planned_count,
-        active_batches=len(active_rows),
-        waiting_batches=planned_count,
+        active_batches=len(executing_rows),
+        awaiting_putaway_batches=len(awaiting_putaway_rows),
+        waiting_batches=len(waiting_rows),
         batches_with_shortages=shortage_count,
         finished_today=finished_today,
         production_efficiency_percent=efficiency,
+        units_in_production=round(units_in_production, 4),
         collecting_batches=sum(1 for b in batches if str(b.status) == "collecting"),
         in_production_batches=sum(1 for b in batches if str(b.status) == "in_progress"),
-        putaway_batches=sum(1 for b in batches if str(b.status) == "putaway"),
+        putaway_batches=sum(
+            1 for b in batches if str(b.status) in AWAITING_PUTAWAY_BATCH_STATUSES
+        ),
         recipe_count=int(recipe_count),
         active_operators=active_operators[:8],
         planned=planned_rows[:12],
-        in_progress=active_rows[:12],
-        active=active_rows[:12],
+        in_progress=executing_rows[:12],
+        active=executing_rows[:12],
         waiting_materials=waiting_rows[:12],
         ready_to_produce=ready_rows[:12],
         recently_completed=completed_rows[:8],

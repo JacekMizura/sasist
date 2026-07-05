@@ -63,6 +63,16 @@ type HistoryRow = {
   linkTo: string;
 };
 
+function batchUnitCostLabel(b: ProductionBatchRead): string {
+  const costs = (b.lines ?? [])
+    .map((ln) => ln.calculated_unit_cost)
+    .filter((c): c is number => c != null && Number.isFinite(c));
+  if (costs.length === 0) return "—";
+  if (costs.length === 1) return formatProductionMoney(costs[0]);
+  const avg = costs.reduce((a, c) => a + c, 0) / costs.length;
+  return formatProductionMoney(avg);
+}
+
 function toBatchRow(b: ProductionBatchRead): HistoryRow {
   const label = b.lines?.map((l) => l.product_name).filter(Boolean).join(", ") || `${b.products_count ?? b.lines.length} prod.`;
   return {
@@ -74,7 +84,7 @@ function toBatchRow(b: ProductionBatchRead): HistoryRow {
     status: b.status,
     completedAt: (b.completed_at ?? b.production_completed_at ?? b.created_at ?? "").slice(0, 10) || "—",
     operator: b.operator_name ?? "—",
-    unitCost: "—",
+    unitCost: batchUnitCostLabel(b),
     linkTo: erpProductionPaths.batch(b.id),
   };
 }

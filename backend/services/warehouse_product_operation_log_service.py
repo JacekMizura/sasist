@@ -21,6 +21,7 @@ ALLOWED_MOVEMENT_TYPES = frozenset(
         "INVENTORY",
         "RETURN",
         "COMPLAINT",
+        "PRODUCTION",
     }
 )
 ALLOWED_PACKAGING_TYPES = frozenset({"UNIT", "CARTON", "MASTER_PACK"})

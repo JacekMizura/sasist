@@ -8,9 +8,23 @@ ProductionExecutionKind = Literal["batch", "order"]
 ProductionExecutionPhase = Literal["collecting", "execute"]
 
 EXECUTION_STATUSES = frozenset(
-    {"draft", "planned", "collecting", "in_progress", "putaway", "completed", "cancelled"}
+    {
+        "draft",
+        "planned",
+        "collecting",
+        "in_progress",
+        "awaiting_putaway",
+        "putaway",
+        "completed",
+        "cancelled",
+    }
 )
 TERMINAL_EXECUTION_STATUSES = frozenset({"completed", "cancelled"})
+
+# KPI / dashboard — single vocabulary (batch + MO share the same buckets).
+PLANNED_BATCH_STATUSES = frozenset({"draft", "planned"})
+EXECUTING_BATCH_STATUSES = frozenset({"collecting", "in_progress"})
+AWAITING_PUTAWAY_BATCH_STATUSES = frozenset({"awaiting_putaway", "putaway"})
 
 # Legacy MO summary mapping (batch rows in product history only).
 BATCH_STATUS_TO_LEGACY_SUMMARY = {

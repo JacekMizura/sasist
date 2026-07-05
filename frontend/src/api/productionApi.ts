@@ -764,10 +764,12 @@ export type ProductionBatchSummaryRead = {
 export type ProductionDashboardRead = {
   planned_batches: number;
   active_batches: number;
+  awaiting_putaway_batches?: number;
   waiting_batches: number;
   batches_with_shortages: number;
   finished_today: number;
   production_efficiency_percent: number;
+  units_in_production?: number;
   collecting_batches: number;
   in_production_batches: number;
   putaway_batches: number;

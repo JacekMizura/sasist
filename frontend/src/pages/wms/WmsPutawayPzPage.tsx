@@ -35,7 +35,7 @@ import {
 import { sumPutawayProgress } from "./putawayProgressUtils";
 import { useWmsPutawayPzScan } from "./useWmsPutawayPzScan";
 import { putawayLineQualityBadge } from "./putawayLineQualityBadge";
-import { isReturnReceiptDocumentType, putawayCardsEnabled as computePutawayCardsEnabled } from "./putawayDocumentGates";
+import { isReturnReceiptDocumentType, documentCanWmsPutaway } from "./putawayDocumentGates";
 import { logPutawayDocumentRefresh, putawayDocumentGateError } from "./putawayDocumentStateDebug";
 import { putawayRelocationAudit } from "../../utils/putawayLineAudit";
 import { mePutawayOperatorDisplayName } from "../../utils/putawayOperatorDisplay";
@@ -373,7 +373,7 @@ export default function WmsPutawayPzPage() {
 
   const receivingDone = !!doc && String(doc.receiving_status ?? "").toUpperCase() === "DONE";
   const relocationOpen = !!doc && String(doc.relocation_status ?? "OPEN").toUpperCase() !== "DONE";
-  const putawayCardsEnabled = !!doc && computePutawayCardsEnabled(doc.document_type, doc.status, doc.relocation_status, doc.creation_source);
+  const putawayCardsEnabled = !!doc && documentCanWmsPutaway(doc);
   const isReturnReceiptDoc = !!doc && isReturnReceiptDocumentType(doc.document_type);
 
   const sortedPutawayLines = useMemo(() => {

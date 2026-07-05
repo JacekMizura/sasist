@@ -2795,6 +2795,11 @@ def _wms_product_operation_ui_fields(
         return (lt["name"] if lt else "—"), lf, lt, w.target_location_id, abs(q)
     if mt == "RECEIVING":
         return (lt["name"] if lt else "—"), lf, lt, w.target_location_id, abs(q)
+    if mt == "PRODUCTION":
+        mode = (getattr(w, "wms_mode", None) or "").strip().upper()
+        if mode == "RW":
+            return (lf["name"] if lf else "—"), lf, lt, w.source_location_id, -abs(q)
+        return (lt["name"] if lt else "—"), lf, lt, w.target_location_id, abs(q)
     if mt == "PICKING":
         return (lf["name"] if lf else "—"), lf, lt, w.source_location_id, -abs(q)
     if mt == "RETURN":
@@ -2866,6 +2871,13 @@ def list_product_inventory_movements(
         )
         .all()
     )
+    wms_doc_ids = sorted(
+        {int(w.stock_document_id) for w in wms_wh_ops if getattr(w, "stock_document_id", None) is not None}
+    )
+    wms_docs_by_id: dict[int, StockDocument] = {}
+    if wms_doc_ids:
+        for d in db.query(StockDocument).filter(StockDocument.id.in_(wms_doc_ids)).all():
+            wms_docs_by_id[int(d.id)] = d
     op_doc_ids = sorted({int(op.document_id) for op in op_rows if getattr(op, "document_id", None) is not None})
     op_line_ids = sorted({int(op.document_line_id) for op in op_rows if getattr(op, "document_line_id", None) is not None})
     docs_by_id: dict[int, StockDocument] = {}
@@ -2916,6 +2928,21 @@ def list_product_inventory_movements(
             doc_type_hint = None
             if ref_doc_u and "-" in ref_doc_u:
                 doc_type_hint = ref_doc_u.split("-", 1)[0].strip().upper() or None
+            sd = (
+                wms_docs_by_id.get(int(w.stock_document_id))
+                if getattr(w, "stock_document_id", None) is not None
+                else None
+            )
+            if sd is not None:
+                doc_type_hint = str(getattr(sd, "document_type", "") or doc_type_hint or "WMS").strip().upper()
+                ref_doc_u = str(getattr(sd, "document_number", "") or ref_doc_u or "").strip() or ref_doc_u
+            mt_u = str(w.movement_type or "").strip().upper()
+            ui_type = str(w.movement_type or "").lower()
+            if mt_u == "PRODUCTION":
+                prod_mode = str(getattr(w, "wms_mode", "") or "").strip().upper()
+                ui_type = "production_rw" if prod_mode == "RW" else "production_pw"
+            elif mt_u == "PUTAWAY" and doc_type_hint == "PW":
+                ui_type = "putaway_pw"
             w_batch = (getattr(w, "batch_number", None) or "").strip() or None
             w_exp = getattr(w, "expiry_date", None)
             w_exp_s = w_exp.isoformat() if w_exp is not None else None
@@ -2924,8 +2951,9 @@ def list_product_inventory_movements(
                     "id": w.id,
                     "source": "wms_product_operation",
                     "created_at": w.created_at.isoformat() + "Z" if w.created_at else None,
-                    "type": str(w.movement_type or "").lower(),
+                    "type": ui_type,
                     "movement_type": w.movement_type,
+                    "wms_mode": getattr(w, "wms_mode", None),
                     "user": {
                         "id": int(w.admin_id),
                         "login": login_u,

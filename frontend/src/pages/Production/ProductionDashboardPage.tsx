@@ -58,8 +58,12 @@ function ReadyBatchRow({ batch }: { batch: ProductionBatchSummaryRead }) {
 }
 
 function dashboardUnitsInProgress(data: ProductionDashboardRead): number {
-  const rows = [...(data.in_progress ?? []), ...(data.active ?? [])];
-  return rows.reduce((s, b) => s + (b.total_planned_units ?? 0), 0);
+  if (typeof data.units_in_production === "number") return Math.round(data.units_in_production);
+  const rows = data.in_progress ?? data.active ?? [];
+  return rows.reduce((s, b) => {
+    const planned = b.total_planned_units ?? 0;
+    return s + planned;
+  }, 0);
 }
 
 export default function ProductionDashboardPage() {

@@ -60,10 +60,15 @@ class RecipeDetailRead(BaseModel):
 class ProductionDashboardRead(BaseModel):
     planned_batches: int = 0
     active_batches: int = 0
+    awaiting_putaway_batches: int = 0
     waiting_batches: int = 0
     batches_with_shortages: int = 0
     finished_today: int = 0
     production_efficiency_percent: float = 0.0
+    units_in_production: float = Field(
+        0.0,
+        description="Suma pozostałych szt. (planned - completed) dla partii w collecting/in_progress",
+    )
     collecting_batches: int = 0
     in_production_batches: int = 0
     putaway_batches: int = 0

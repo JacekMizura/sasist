@@ -525,6 +525,14 @@ def doc_allows_wms_putaway(doc: StockDocument) -> bool:
     return False
 
 
+def compute_can_wms_putaway(doc: StockDocument) -> bool:
+    """SSOT: backend gate mirrored on StockDocumentRead.can_wms_putaway for UI."""
+    rls = str(getattr(doc, "relocation_status", "") or "OPEN").strip().upper()
+    if rls == "DONE":
+        return False
+    return doc_allows_wms_putaway(doc)
+
+
 def doc_allows_putaway_status_recompute(doc: StockDocument) -> bool:
     """Same lifecycle gate as putaway execution — keeps putaway_status in sync for Z-PZ OPEN/CLOSED."""
     dt = _doc_type_upper(doc)
@@ -1612,6 +1620,7 @@ def build_stock_document_read(
         total_vat=tv,
         edit_mode=em_lit,
         can_cancel=cc,
+        can_wms_putaway=compute_can_wms_putaway(doc),
         created_at=doc.created_at,
         updated_at=getattr(doc, "updated_at", None) or doc.created_at,
         closed_at=closed_at_val,

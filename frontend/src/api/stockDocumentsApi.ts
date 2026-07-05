@@ -218,6 +218,7 @@ export type StockDocumentRead = {
   total_vat?: number | null;
   edit_mode?: DocumentEditMode;
   can_cancel?: boolean;
+  can_wms_putaway?: boolean;
   created_at: string;
   updated_at?: string;
   closed_at?: string | null;

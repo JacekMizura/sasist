@@ -204,6 +204,14 @@ def finish_production_db(reservation_db, monkeypatch):
         "backend.services.production_batch_service._batch_has_shortages",
         lambda *_a, **_k: False,
     )
+    monkeypatch.setattr(
+        "backend.services.production_execution.production_warehouse_audit.record_production_pw_receipt_audit",
+        lambda *_a, **_k: None,
+    )
+    monkeypatch.setattr(
+        "backend.services.production_execution.production_warehouse_audit.record_production_rw_issue_audit",
+        lambda *_a, **_k: None,
+    )
     comp = ProductComposition(
         id=1,
         tenant_id=1,
@@ -248,6 +256,10 @@ def test_finish_production_creates_pw_and_putaway_queue(finish_production_db):
     assert pw.document_type == "PW"
     assert str(getattr(pw, "creation_source", "")).upper() == "PRODUCTION"
     assert doc_allows_wms_putaway(pw)
+
+    from backend.services.stock_document_service import compute_can_wms_putaway
+
+    assert compute_can_wms_putaway(pw) is True
 
     queue = list_wms_putaway_pz_documents(db, 1, warehouse_id=1)
     assert any(int(r.id) == int(pw.id) for r in queue)

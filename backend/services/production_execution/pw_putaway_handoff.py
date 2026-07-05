@@ -90,6 +90,16 @@ def _create_pw_for_putaway(
         stock_disposition=STOCK_DISPOSITION_SALEABLE,
     )
     append_receipt_operation(db, doc, line, float(quantity))
+    from .production_warehouse_audit import record_production_pw_receipt_audit
+
+    record_production_pw_receipt_audit(
+        db,
+        pw_doc=doc,
+        product_id=int(product_id),
+        quantity=float(quantity),
+        staging_location_id=staging_loc,
+        performed_by_user_id=created_by_user_id,
+    )
     from ..stock_document_service import recompute_putaway_status_for_document
 
     recompute_putaway_status_for_document(doc, [line], db=db)

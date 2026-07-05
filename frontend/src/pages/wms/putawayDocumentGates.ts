@@ -47,3 +47,20 @@ export function putawayCardsEnabled(
     putawayRelocationOpen(relocationStatus)
   );
 }
+
+/** Prefer backend SSOT `can_wms_putaway` when present on document reads. */
+export function documentCanWmsPutaway(doc: {
+  can_wms_putaway?: boolean | null;
+  document_type?: string | null;
+  status?: string | null;
+  relocation_status?: string | null;
+  creation_source?: string | null;
+}): boolean {
+  if (typeof doc.can_wms_putaway === "boolean") return doc.can_wms_putaway;
+  return putawayCardsEnabled(
+    doc.document_type,
+    doc.status,
+    doc.relocation_status,
+    doc.creation_source,
+  );
+}

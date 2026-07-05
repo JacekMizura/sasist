@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import api from "../../api/axios";
 import { DataTablePageSizeSelect } from "../../components/table/DataTablePageSizeSelect";
 import { LocationTypeBadge } from "../../components/warehouse/LocationTypeBadge";
@@ -49,7 +50,10 @@ function mapMovementTypeLabel(type: string | null | undefined): string {
   const m: Record<string, string> = {
     receive: "Przyjęcie",
     receiving: "Przyjęcie",
-    putaway: "Rozlokowanie PZ",
+    putaway: "Rozlokowanie",
+    putaway_pw: "Rozlokowanie PW",
+    production_rw: "Produkcja RW",
+    production_pw: "Produkcja PW",
     picking: "Kompletacja",
     pick: "Kompletacja",
     move: "Przesunięcie",
@@ -280,7 +284,18 @@ export function ProductWarehouseMovementsPanel({ productId, tenantId }: Props) {
                     </span>
                   </td>
                   <td className="whitespace-nowrap px-3 py-2 text-slate-700">
-                    {row.document_number?.trim() ? row.document_number : "—"}
+                    {row.document_id != null ? (
+                      <Link
+                        to={`/documents/warehouse?doc=${row.document_id}`}
+                        className="font-medium text-violet-700 underline decoration-violet-200 underline-offset-2 hover:text-violet-900"
+                      >
+                        {(row.document_number || "").trim() || `#${row.document_id}`}
+                      </Link>
+                    ) : (row.document_number || "").trim() ? (
+                      row.document_number
+                    ) : (
+                      "—"
+                    )}
                   </td>
                   <td className="px-3 py-2 text-slate-600">{row.user?.trim() ? row.user : "—"}</td>
                   <td className="max-w-[220px] px-3 py-2">

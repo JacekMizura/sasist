@@ -403,6 +403,10 @@ class StockDocumentRead(BaseModel):
     )
     edit_mode: Literal["full", "metadata", "none"] = "none"
     can_cancel: bool = False
+    can_wms_putaway: bool = Field(
+        default=False,
+        description="SSOT: doc_allows_wms_putaway && relocation_status != DONE",
+    )
     created_at: datetime
     updated_at: datetime
     closed_at: Optional[datetime] = Field(

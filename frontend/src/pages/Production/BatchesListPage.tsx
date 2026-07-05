@@ -60,7 +60,7 @@ export default function BatchesListPage({ embedded = false }: Props) {
 
   const stats = useMemo(() => {
     const planned = batches.filter((b) => b.status === "planned" || b.status === "draft").length;
-    const active = batches.filter((b) => ["collecting", "in_progress", "putaway"].includes(b.status)).length;
+    const active = batches.filter((b) => ["collecting", "in_progress"].includes(b.status)).length;
     const shortages = batches.filter((b) => b.has_shortages).length;
     const units = batches.reduce((s, b) => s + (b.total_planned_units ?? 0), 0);
     return { planned, active, shortages, units, total: batches.length };
