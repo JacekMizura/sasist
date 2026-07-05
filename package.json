@@ -1,6 +1,6 @@
 {
   "private": true,
-  "description": "Legacy root deps for PDF tooling — NOT the Railway backend app. API deploy uses nixpacks.toml providers=[python].",
+  "description": "Legacy root deps — NOT installed on Railway backend (node:install overridden in nixpacks.toml).",
   "dependencies": {
     "@react-pdf/renderer": "^4.3.2",
     "bcryptjs": "^3.0.3"

@@ -1,15 +1,21 @@
-# Fallback only — production backend uses Dockerfile (railway.json builder=DOCKERFILE).
-# If you force Nixpacks in Railway dashboard, this file must install Node + Puppeteer deps.
+# SASIST backend API — Nixpacks (Railway default builder).
+#
+# Python = główny runtime (FastAPI).
+# Node   = tylko Puppeteer PDF (backend/scripts/structure_report_pdf).
+# Root package.json jest legacy — NIE instalujemy npm w katalogu głównym
+# (node provider install jest nadpisany poniżej).
 
-providers = ["python"]
+providers = ["python", "node"]
 
 [variables]
 NIXPACKS_PYTHON_VERSION = "3.12"
 NIXPACKS_PYTHON_PACKAGE_MANAGER = "requirements"
+NIXPACKS_NODE_VERSION = "20"
 
 [phases.setup]
-nixPkgs = ["nodejs_20", "npm-9_x"]
+# Chromium/Puppeteer — biblioteki systemowe (Debian/apt w obrazie Nixpacks).
 aptPkgs = [
+  "...",
   "fonts-liberation",
   "libasound2",
   "libatk-bridge2.0-0",
@@ -30,12 +36,16 @@ aptPkgs = [
   "xdg-utils",
 ]
 
-[phases.install]
+# Zamiast npm w repo root (package.json legacy) — tylko renderer PDF.
+[phases."node:install"]
 cmds = [
-  "pip install -r requirements.txt",
-  "cd backend/scripts/structure_report_pdf && npm ci --omit=dev",
   "node --version",
+  "npm --version",
+  "cd backend/scripts/structure_report_pdf && npm ci --omit=dev",
   "test -f backend/scripts/structure_report_pdf/render.mjs",
+  "test -d backend/scripts/structure_report_pdf/node_modules/puppeteer",
+  "node --input-type=module -e \"import('puppeteer').then(() => console.log('puppeteer ok')).catch((e) => { console.error(e); process.exit(1); })\"",
+  "which node",
 ]
 
 [start]

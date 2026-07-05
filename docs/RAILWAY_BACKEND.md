@@ -25,7 +25,7 @@ That means the service is building a **Node** app (usually Root Directory = `fro
 | **Root Directory** | `/` (empty / repo root) — **not** `frontend`, **not** `backend` alone |
 | **Config file** | `/railway.toml` (path is from repo root; it does **not** follow Root Directory) |
 | **Start command** | leave empty to use config, or `python3 run_server.py` |
-| **Builder** | **Dockerfile** (`railway.json` → `"builder": "DOCKERFILE"`) — Python + Node 20 + Puppeteer |
+| **Builder** | **Nixpacks** (`railway.json` → `"builder": "NIXPACKS"`, `nixpacks.toml`) |
 
 Why not `backend/` as root? `requirements.txt` and `run_server.py` live at **repo root**. Root `backend/` alone would miss them.
 
@@ -33,29 +33,35 @@ Why not `frontend/`? Nixpacks detects `package.json` → Node 18 + `npm ci` → 
 
 ## Expected build log (correct)
 
-With **Dockerfile** builder:
+With **Nixpacks** (`providers = ["python", "node"]`, node install overridden):
 
 ```text
+setup │ python3, nodejs_20, ...
+pip install -r requirements.txt
 node --version
 npm --version
-...
-pip install -r requirements.txt
-...
-npm ci --omit=dev
+cd backend/scripts/structure_report_pdf && npm ci --omit=dev
 puppeteer ok
-...
 which node
+/usr/.../bin/node
 ```
 
-Legacy **Nixpacks-only** build (if dashboard overrides builder):
+**Wrong** — Python-only Nixpacks (brak Node w runtime):
 
 ```text
 setup │ python3
-...
 pip install -r requirements.txt
 ```
 
-Nixpacks **without** Node in the log → HTML→PDF will fail with `[Errno 2] No such file or directory: 'node'`.
+→ HTML→PDF kończy się `[Errno 2] No such file or directory: 'node'`.
+
+**Wrong** — Root Directory = `frontend`:
+
+```text
+setup │ nodejs_18, npm-9_x
+...
+python: command not found
+```
 
 ## Expected runtime log
 
@@ -77,14 +83,28 @@ If `router_routes=0` or `CRITICAL: no /api/wms/returns/*`, the router did not re
 
 | File | Role |
 |------|------|
-| `Dockerfile` | **Production build** — Python 3.12, Node 20, `npm ci` in `backend/scripts/structure_report_pdf/`, Puppeteer/Chromium system libs |
-| `railway.json` / `railway.toml` | Builder: **DOCKERFILE**, start: `python3 run_server.py`, health: `/healthz` |
-| `nixpacks.toml` | Fallback only if Railway dashboard forces Nixpacks (includes Node + apt libs) |
+| `nixpacks.toml` | **Production build** — `providers = ["python", "node"]`, `node:install` → tylko `backend/scripts/structure_report_pdf/` |
+| `railway.json` / `railway.toml` | Builder: **NIXPACKS**, start: `python3 run_server.py`, health: `/healthz` |
+| `Dockerfile` | Opcjonalny fallback (nieaktywny) — gdy Nixpacks nie wystarczy |
 | `requirements.txt` | Python dependencies |
 | `run_server.py` | Uvicorn entry (`backend.main:app`) |
 | `Procfile` | `web: python3 -m backend` (Heroku-style; Railway uses `railway.toml`) |
-| Root `package.json` | Legacy tooling — **not** used by backend Docker/Nixpacks Python deploy |
-| `backend/scripts/structure_report_pdf/` | Puppeteer renderer (`render.mjs`) — required for document PDF preview and warehouse PDF reports |
+| Root `package.json` | Legacy — **nie** instalowany w deploy (override `node:install`) |
+| `backend/scripts/structure_report_pdf/` | Puppeteer renderer (`render.mjs`) |
+
+### Dlaczego wcześniej brakowało Node
+
+Stara konfiguracja: `providers = ["python"]` **bez** node provider i **bez** `nixPkgs` z nodejs — Nixpacks budował obraz tylko z Pythonem. `subprocess.run(["node", ...])` w runtime nie miał executable.
+
+### Jak Nixpacks instaluje Node teraz
+
+| Pytanie | Odpowiedź |
+|---------|-----------|
+| Czy `providers=["python"]` blokuje Node? | Blokuje **node provider** (auto npm w root). Node można dodać przez `providers=["python","node"]` lub `nixPkgs`. |
+| Czy `python + node` działa? | **Tak**, jeśli nadpiszesz `[phases."node:install"]` — root `package.json` nie ma `package-lock.json`, domyślny `npm ci` w root by padł. |
+| Node jako nixPkgs? | Alternatywa: `providers=["python"]` + `nixPkgs = ["...", "nodejs_20"]`. Obecnie używamy node provider (pewniejszy PATH). |
+| `npm ci` w `structure_report_pdf/`? | Tak — w `[phases."node:install"]`. |
+| Puppeteer + Chromium? | `npm ci` uruchamia postinstall Puppeteer (pobiera Chromium) + `aptPkgs` dostarczają biblioteki systemowe. |
 
 ## HTML → PDF (Puppeteer)
 
@@ -95,17 +115,19 @@ Runtime chain:
 
 **Build must provide:**
 
-| Check | How verified in Docker build |
-|-------|------------------------------|
-| `node` in PATH | `node --version`, `which node` |
-| `npm ci` in `backend/scripts/structure_report_pdf/` | layer RUN before `COPY backend` |
-| Puppeteer installed | `node_modules/puppeteer` exists |
-| Chromium downloaded | Puppeteer postinstall during `npm ci`; system libs via `apt` |
-| `render.mjs` present | `test -f backend/scripts/structure_report_pdf/render.mjs` |
+| Check | Jak weryfikowane w Nixpacks build |
+|-------|-----------------------------------|
+| `node` in PATH | `node --version`, `which node` w `[phases."node:install"]` |
+| `npm ci` w `backend/scripts/structure_report_pdf/` | ten sam blok |
+| Puppeteer installed | `test -d .../node_modules/puppeteer` + import test |
+| Chromium downloaded | Puppeteer postinstall podczas `npm ci` |
+| `render.mjs` present | `test -f .../render.mjs` |
 
-If deploy uses **Nixpacks with `providers = ["python"]` only** (old config), Node is **not** installed → HTTP 503 `pdf_engine_missing` / `[Errno 2] No such file or directory: 'node'`.
+Jeśli deploy nadal używa **starego** `providers = ["python"]` bez Node → HTTP 503 / `[Errno 2] node`.
 
-**Fix:** use Dockerfile builder (repo default) or redeploy with updated `nixpacks.toml` that adds `nodejs_20` + `npm ci`.
+**Fix:** redeploy z aktualnym `nixpacks.toml`. Builder w dashboard = **Nixpacks** (zgodnie z `railway.json`).
+
+**Dockerfile** — tylko gdy Nixpacks po redeploy nadal nie dostarcza działającego Node/Puppeteer (np. limity buildu Chromium).
 
 ## Watch paths (optional)
 

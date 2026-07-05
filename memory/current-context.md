@@ -1,9 +1,8 @@
 # Current context
 
 ## Document Templates — preview PDF deployment (2026-07-05)
-- Railway backend używał **NIXPACKS** (`railway.json`) z `providers=["python"]` → brak `node` w PATH → 503 PDF
-- Fix deploy: **Dockerfile** (Node 20 + npm ci + Puppeteer libs), `railway.json` builder=DOCKERFILE
-- `nixpacks.toml` — fallback z nodejs_20 + apt libs jeśli dashboard wymusi Nixpacks
+- Fix: Nixpacks `providers = ["python", "node"]` + override `node:install` → tylko `structure_report_pdf/`
+- Railway builder: **NIXPACKS** (Dockerfile pozostaje opcjonalny fallback, nieaktywny)
 - Docs: `docs/RAILWAY_BACKEND.md` § HTML→PDF
 
 ## Document Templates — audit pełny (2026-07-05)
