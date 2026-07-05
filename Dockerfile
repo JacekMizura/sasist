@@ -1,5 +1,5 @@
 # SASIST backend API — Railway production image (Python + Node/Puppeteer for HTML→PDF).
-# Railway builder: DOCKERFILE (see railway.json). Nixpacks is not used when DOCKERFILE is set.
+# Railway backend builds exclusively from this Dockerfile.
 
 FROM python:3.12-slim-bookworm
 
@@ -47,12 +47,17 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Puppeteer PDF renderer — install before full backend copy (layer cache).
 COPY backend/scripts/structure_report_pdf/package.json \
      backend/scripts/structure_report_pdf/package-lock.json \
+     backend/scripts/structure_report_pdf/render.mjs \
      ./backend/scripts/structure_report_pdf/
 RUN cd backend/scripts/structure_report_pdf \
     && npm ci --omit=dev \
     && test -f render.mjs \
     && test -d node_modules/puppeteer \
-    && node -e "import('puppeteer').then(() => console.log('puppeteer ok')).catch(e => { console.error(e); process.exit(1); })"
+    && PROBE_PDF=/tmp/docker_render_probe.pdf \
+    && printf '%s' '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body><h1>build probe</h1></body></html>' | node render.mjs > "$PROBE_PDF" \
+    && test -s "$PROBE_PDF" \
+    && BYTES=$(wc -c < "$PROBE_PDF" | tr -d ' ') \
+    && echo "pdf pipeline ok bytes=$BYTES ls=$(ls -la "$PROBE_PDF")"
 
 COPY backend ./backend
 COPY run_server.py ./
