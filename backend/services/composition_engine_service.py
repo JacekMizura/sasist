@@ -467,7 +467,7 @@ def aggregated_demand_with_availability(
 ) -> list[AggregatedComponentDemandRead]:
     if not component_totals:
         return []
-    from ..reservations.availability_service import warehouse_net_available
+    from .reservations.availability_service import warehouse_net_available
 
     pids = list(component_totals.keys())
     names = {p.id: p for p in db.query(Product).filter(Product.id.in_(pids)).all()}

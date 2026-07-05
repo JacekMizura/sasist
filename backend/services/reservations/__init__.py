@@ -1,17 +1,3 @@
-"""Reservation lifecycle domain."""
+"""Reservation domain package — import submodules directly (availability_service, lifecycle_service, …)."""
 
-from .lifecycle_service import (
-    expire_reservation,
-    mark_reservation_consumed,
-    release_reservation,
-    release_session_reservations_lifecycle,
-    reservation_lifecycle_state,
-)
-
-__all__ = [
-    "expire_reservation",
-    "mark_reservation_consumed",
-    "release_reservation",
-    "release_session_reservations_lifecycle",
-    "reservation_lifecycle_state",
-]
+__all__: list[str] = []

@@ -196,7 +196,7 @@ export function BomTreeVisualization({ tenantId, warehouseId, compositionId, pla
   const toggle = (key: string) => {
     setExpanded((prev) => {
       const next = new Set(prev);
-      if next.has(key)) next.delete(key);
+      if (next.has(key)) next.delete(key);
       else next.add(key);
       return next;
     });

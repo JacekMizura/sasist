@@ -41,7 +41,7 @@ from .composition_engine_service import resolve_composition_entity
 from .stock_disposition import STOCK_DISPOSITION_SALEABLE
 from .stock_operation_issue_service import append_issue_operation
 from .stock_operation_receipt_service import append_receipt_operation
-from ..reservations.availability_service import warehouse_net_available
+from .reservations.availability_service import warehouse_net_available
 
 logger = logging.getLogger(__name__)
 

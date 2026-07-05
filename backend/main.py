@@ -1988,6 +1988,34 @@ def _ensure_wms_returns_router_mounted() -> None:
 
 _ensure_wms_returns_router_mounted()
 
+
+def _log_registered_api_routers() -> None:
+    """Startup diagnostics — every API router prefix and critical route presence."""
+    app_paths = {getattr(r, "path", None) for r in app.routes}
+    print(f"[routes] api_routers={len(_API_ROUTERS)} app_route_entries={len(app.routes)}", flush=True)
+    for router in _API_ROUTERS:
+        rprefix = getattr(router, "prefix", "") or ""
+        tags = getattr(router, "tags", None) or []
+        tag = tags[0] if tags else router.__class__.__name__
+        print(
+            f"[routes] router tag={tag!r} prefix={API_PREFIX}{rprefix} "
+            f"route_handlers={len(router.routes)}",
+            flush=True,
+        )
+    _critical_paths = (
+        f"{API_PREFIX}/wms/settings/product-validation",
+        f"{API_PREFIX}/wms/settings/production",
+        f"{API_PREFIX}/production/planning/demand",
+    )
+    for path in _critical_paths:
+        mounted = path in app_paths
+        print(f"[routes] critical {path} mounted={mounted}", flush=True)
+        if not mounted:
+            print(f"[routes] CRITICAL MISSING {path}", flush=True)
+
+
+_log_registered_api_routers()
+
 _WMS_SETTINGS_PATHS = (
     f"{API_PREFIX}/wms/settings/product-validation",
     f"{API_PREFIX}/wms/settings/production",
@@ -2062,6 +2090,10 @@ async def _log_backend_startup() -> None:
         _ensure_wms_returns_router_mounted()
     except Exception as exc:
         log_unhandled_exception("startup _ensure_wms_returns_router_mounted", exc)
+    try:
+        _log_registered_api_routers()
+    except Exception as exc:
+        log_unhandled_exception("startup _log_registered_api_routers", exc)
     try:
         from .database import SessionLocal
         from .services.warehouse_ownership_audit_service import log_warehouse_ownership_audit

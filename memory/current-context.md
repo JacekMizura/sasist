@@ -5,6 +5,11 @@
 - ERP UI: `/production/erp/:kind/:id`; WMS: terminal po `release-to-wms`.
 - Karta produkcyjna PDF: zawsze dostępna (informacyjna, bez zmiany statusu); bulk z planu partii.
 
+## Fix 404 — WMS settings + planning (2026-07-05)
+- Przyczyna: błędny `from ..reservations` w `production_order_service` (v7) → crash importu `main.py` → brak routerów.
+- Naprawa: `.reservations`, circular import reservations/direct_sale, log `_log_registered_api_routers()`.
+- Raport: `memory/404-endpoints-fix-report.md`
+
 ## Produkcja — dopracowanie MRP (2026-07-05)
 - Formularz zamienników: `ErpProductPicker` + `MaterialSubstitutesFormPanel` (bez ID w UI).
 - Drzewo BOM: `GET /production/shortages/bom-tree`, `BomTreeVisualization` na `RecipeDetailPage`.

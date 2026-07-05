@@ -4,10 +4,9 @@ WMS settings: returns mode configuration per tenant + warehouse.
 
 import json
 from datetime import datetime
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-
-from fastapi import Depends
 from ..auth.warehouse_deps import (
     require_operable_warehouse,
     require_active_operable_warehouse,

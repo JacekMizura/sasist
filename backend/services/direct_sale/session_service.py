@@ -10,7 +10,6 @@ from ...models.commerce_operational import DirectSaleSession
 from ..direct_sales_settings_service import resolve_direct_sales_settings
 from ..operational_sales_events import emit_operational_sales_event
 from .retail_customer_service import ensure_retail_customer
-from ..reservations.lifecycle_service import release_session_reservations_lifecycle
 from .constants import SUSPEND_TTL_MINUTES, reservation_expires_at
 from .errors import DirectSaleError
 
@@ -109,6 +108,8 @@ def suspend_session(db: Session, sess: DirectSaleSession) -> DirectSaleSession:
     sess.suspended_at = now
     sess.last_activity_at = now
     sess.expires_at = reservation_expires_at(minutes=SUSPEND_TTL_MINUTES)
+    from ..reservations.lifecycle_service import release_session_reservations_lifecycle
+
     release_session_reservations_lifecycle(db, sess=sess, reason="session_suspended")
     emit_operational_sales_event(
         db,
@@ -244,6 +245,8 @@ def cancel_session(db: Session, sess: DirectSaleSession) -> DirectSaleSession:
     if sess.status in ("COMPLETED", "CANCELLED"):
         raise DirectSaleError("Sesja jest już zamknięta.", code="session_closed")
     now = datetime.utcnow()
+    from ..reservations.lifecycle_service import release_session_reservations_lifecycle
+
     release_session_reservations_lifecycle(db, sess=sess, reason="session_cancelled")
     sess.status = "CANCELLED"
     sess.completed_at = now
