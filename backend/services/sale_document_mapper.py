@@ -97,9 +97,9 @@ def refresh_persisted_financials(db: Session, doc: SaleDocument, financials: dic
         db.flush()
 
 
-def _resolve_payment(db: Session, doc: SaleDocument, order: Order, *, gross: float) -> dict[str, Any]:
+def _resolve_payment(db: Session, doc: SaleDocument | None, order: Order, *, gross: float) -> dict[str, Any]:
     pay: Payment | None = None
-    if doc.payment_id:
+    if doc is not None and doc.payment_id:
         pay = db.query(Payment).filter(Payment.id == int(doc.payment_id)).first()
     if pay is None:
         pay = (
@@ -115,16 +115,24 @@ def _resolve_payment(db: Session, doc: SaleDocument, order: Order, *, gross: flo
         method = str(pay.method or "").strip().upper() or None
         status = str(pay.status or "").strip().upper() or None
     if not method:
-        method = str(doc.payment_method or "").strip().upper() or None
+        method = (
+            str(doc.payment_method or "").strip().upper() or None
+            if doc is not None
+            else str(getattr(order, "panel_payment_method", None) or "").strip().upper() or None
+        )
     if not status:
-        status = str(doc.payment_status or "").strip().upper() or None
+        status = (
+            str(doc.payment_status or "").strip().upper() or None
+            if doc is not None
+            else str(getattr(order, "panel_payment_status", None) or "").strip().upper() or None
+        )
 
     label_pl = payment_method_label_pl(method)
     paid = _paid_from_status(status)
 
     if pay is None:
         return {
-            "payment_id": doc.payment_id,
+            "payment_id": doc.payment_id if doc is not None else None,
             "method": method,
             "status": status,
             "payment_method": method,
@@ -133,8 +141,8 @@ def _resolve_payment(db: Session, doc: SaleDocument, order: Order, *, gross: flo
             "paid": paid,
             "amount": gross,
             "currency": str(order.currency or "PLN"),
-            "captured_at": doc.payment_captured_at.isoformat() if doc.payment_captured_at else None,
-            "external_transaction_id": doc.payment_external_transaction_id,
+            "captured_at": doc.payment_captured_at.isoformat() if doc is not None and doc.payment_captured_at else None,
+            "external_transaction_id": doc.payment_external_transaction_id if doc is not None else None,
             "authorization_reference": None,
             "transactions": [],
         }
@@ -145,7 +153,7 @@ def _resolve_payment(db: Session, doc: SaleDocument, order: Order, *, gross: flo
         .order_by(PaymentTransaction.id.asc())
         .all()
     )
-    captured = doc.payment_captured_at or pay.captured_at
+    captured = (doc.payment_captured_at if doc is not None else None) or pay.captured_at
     return {
         "payment_id": int(pay.id),
         "method": method,
@@ -157,8 +165,11 @@ def _resolve_payment(db: Session, doc: SaleDocument, order: Order, *, gross: flo
         "amount": float(pay.amount or gross),
         "currency": str(pay.currency or "PLN"),
         "captured_at": captured.isoformat() if captured else None,
-        "external_transaction_id": str(doc.payment_external_transaction_id or pay.external_transaction_id or "").strip()
-        or None,
+        "external_transaction_id": (
+            str(doc.payment_external_transaction_id or pay.external_transaction_id or "").strip() or None
+            if doc is not None
+            else str(pay.external_transaction_id or "").strip() or None
+        ),
         "authorization_reference": str(pay.authorization_reference or "").strip() or None,
         "transactions": [
             {
@@ -171,6 +182,47 @@ def _resolve_payment(db: Session, doc: SaleDocument, order: Order, *, gross: flo
             }
             for t in txns
         ],
+    }
+
+
+def map_order_for_print(
+    db: Session,
+    *,
+    order: Order,
+    customer: Customer | None = None,
+) -> dict[str, Any]:
+    """Order-only print payload (picking list, confirmation) — no SaleDocument required."""
+    order_full = order
+    if not getattr(order, "items", None):
+        loaded = _load_order_with_lines(db, int(order.id))
+        if loaded is not None:
+            order_full = loaded
+
+    financials = compute_canonical_financials(order_full)
+    payment = _resolve_payment(db, None, order_full, gross=float(financials["total_gross"]))
+    buyer = _customer_display(customer, order_full)
+    created = order_full.order_date or order_full.created_at
+
+    return {
+        "order_number": str(order_full.number or order_full.id),
+        "document_number": str(order_full.number or order_full.id),
+        "created_at": created.isoformat() if hasattr(created, "isoformat") else created,
+        "order_date": order_full.order_date.isoformat() if getattr(order_full, "order_date", None) else None,
+        "status": str(getattr(order_full, "status", None) or "—"),
+        "client": buyer["name"],
+        "buyer": buyer,
+        "financials": financials,
+        "lines": financials["lines"],
+        "payment": payment,
+        "delivery": {
+            "street": str(getattr(order_full, "street", None) or "").strip() or None,
+            "city": str(getattr(order_full, "city", None) or "").strip() or None,
+            "postal_code": str(getattr(order_full, "postal_code", None) or "").strip() or None,
+        },
+        "shipping": {
+            "carrier": str(getattr(order_full, "shipping_method", None) or "").strip() or None,
+            "tracking_number": str(getattr(order_full, "tracking_number", None) or "").strip() or None,
+        },
     }
 
 

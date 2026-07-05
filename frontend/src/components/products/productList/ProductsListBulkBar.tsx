@@ -81,8 +81,8 @@ export function ProductsListBulkBar({
             type="button"
             disabled={bulkToolbarDisabled}
             className={moduleBulkIconBtnClass}
-            title="Drukuj etykiety / listę"
-            aria-label="Drukuj"
+            title="Drukuj karty produktów (DTE)"
+            aria-label="Drukuj karty produktów"
             onClick={onPrint}
           >
             <Printer className="h-4 w-4" strokeWidth={2} aria-hidden />

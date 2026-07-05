@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-06-08 — DTE ERP: fix picking-list 503 + masowy druk
+
+- **503 picking-list:** `order_provider` wołał `map_sale_document(doc=None)` → `AttributeError` w `_resolve_payment`; naprawa: `map_order_for_print()` + guard `doc is not None` w mapperze.
+- **Masowy druk DTE:** `ErpBulkPrintModal` — zamówienia (Multiakcje → Drukuj), produkty (bulk bar), magazyn (`DocumentsWarehousePage`), sprzedaż (`DocumentsSalesPage` — checkboxy + Drukuj).
+- **Frontend build:** exit 0 po integracji.
+
 ## 2026-06-08 — MRP komercyjny: strategie prognozy, MOQ, symulacja
 
 - **Strategy Pattern:** `DemandForecastStrategy` — 6 strategii (średnia, ważona, dzień tygodnia, mediana, max, AI placeholder).

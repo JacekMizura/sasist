@@ -58,6 +58,10 @@ type Props = {
   onPrint: (id: number) => void;
   onDownloadPdf: (id: number) => void;
   onDuplicate: (id: number) => void;
+  selectedIds?: Set<number>;
+  onToggleSelect?: (id: number) => void;
+  onToggleSelectAll?: () => void;
+  allSelected?: boolean;
 };
 
 export default function WarehouseDocumentsTable({
@@ -70,7 +74,12 @@ export default function WarehouseDocumentsTable({
   onPrint,
   onDownloadPdf,
   onDuplicate,
+  selectedIds,
+  onToggleSelect,
+  onToggleSelectAll,
+  allSelected = false,
 }: Props) {
+  const selectionEnabled = selectedIds != null && onToggleSelect != null;
   const config = getWarehouseDocumentConfig(docType);
   const columns = config.columns;
 
@@ -248,6 +257,16 @@ export default function WarehouseDocumentsTable({
       <table className="w-full text-left text-base" style={{ minWidth: `${minWidth}px` }}>
         <thead className={`text-left ${documentsTableTheadCls}`}>
           <tr>
+            {selectionEnabled ? (
+              <th className="w-12 px-3 py-3.5">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={() => onToggleSelectAll?.()}
+                  aria-label="Zaznacz wszystkie"
+                />
+              </th>
+            ) : null}
             {columns.map((col) => (
               <th
                 key={col}
@@ -273,6 +292,16 @@ export default function WarehouseDocumentsTable({
               }}
               className="cursor-pointer border-t border-slate-100 transition-colors odd:bg-white even:bg-slate-50/40 hover:bg-slate-100/80"
             >
+              {selectionEnabled ? (
+                <td className="w-12 px-3 py-4 text-center" onClick={(e) => e.stopPropagation()}>
+                  <input
+                    type="checkbox"
+                    checked={selectedIds?.has(r.id) ?? false}
+                    onChange={() => onToggleSelect?.(r.id)}
+                    aria-label={`Zaznacz dokument ${r.id}`}
+                  />
+                </td>
+              ) : null}
               {columns.map((col) => (
                 <td
                   key={col}

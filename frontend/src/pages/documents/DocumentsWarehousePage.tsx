@@ -20,6 +20,10 @@ import { CarrierCreateModal } from "../../components/warehouse/carriers/CarrierC
 import { formatMoneyPl } from "../../utils/formatOrderMoney";
 import { useDocumentTemplatePrint } from "../../hooks/useDocumentTemplatePrint";
 import { stockKindFromType } from "../../utils/documentTemplatePrint";
+import {
+  ErpBulkPrintModal,
+  stockBulkDocumentType,
+} from "../../components/documentTemplates/ErpBulkPrintModal";
 import { DataTablePageSizeSelect } from "../../components/table/DataTablePageSizeSelect";
 import { DocumentTypeBadge, ExternalStatusBadge } from "./documentsBadges";
 import WarehouseDocumentsTable from "./WarehouseDocumentsTable";
@@ -143,6 +147,8 @@ export default function DocumentsWarehousePage() {
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [toastText, setToastText] = useState<string | null>(null);
   const [printMenuOpenId, setPrintMenuOpenId] = useState<number | null>(null);
+  const [selectedDocIds, setSelectedDocIds] = useState<Set<number>>(new Set());
+  const [bulkPrintOpen, setBulkPrintOpen] = useState(false);
   const [detailPrintMenuOpen, setDetailPrintMenuOpen] = useState(false);
   const docLinesRef = useRef<HTMLDivElement | null>(null);
 
@@ -722,7 +728,26 @@ export default function DocumentsWarehousePage() {
           </DocumentsTableCard>
         ) : (
           <div className="space-y-3">
-            <div className="flex justify-end">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={selectedDocIds.size === 0}
+                  onClick={() => setBulkPrintOpen(true)}
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+                >
+                  Drukuj zaznaczone ({selectedDocIds.size})
+                </button>
+                {selectedDocIds.size > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDocIds(new Set())}
+                    className="text-sm text-slate-500 hover:text-slate-800"
+                  >
+                    Odznacz
+                  </button>
+                ) : null}
+              </div>
               <DataTablePageSizeSelect
                 value={pageSize}
                 onChange={(next) => {
@@ -754,6 +779,23 @@ export default function DocumentsWarehousePage() {
                     window.alert(msg != null ? String(msg) : "Nie udało się utworzyć kopii.");
                   }
                 }}
+                selectedIds={selectedDocIds}
+                onToggleSelect={(id) =>
+                  setSelectedDocIds((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(id)) next.delete(id);
+                    else next.add(id);
+                    return next;
+                  })
+                }
+                onToggleSelectAll={() => {
+                  setSelectedDocIds((prev) => {
+                    const allOnPage = pagedRows.every((r) => prev.has(r.id));
+                    if (allOnPage) return new Set();
+                    return new Set(pagedRows.map((r) => r.id));
+                  });
+                }}
+                allSelected={pagedRows.length > 0 && pagedRows.every((r) => selectedDocIds.has(r.id))}
               />
             </DocumentsTableCard>
           <div className="flex items-center justify-between text-sm text-slate-600">
@@ -1210,6 +1252,14 @@ export default function DocumentsWarehousePage() {
         </div>
       ) : null}
       {stockDocumentPickerModal}
+      <ErpBulkPrintModal
+        open={bulkPrintOpen}
+        onClose={() => setBulkPrintOpen(false)}
+        tenantId={tenantId}
+        title="Masowy druk dokumentów magazynowych"
+        ids={Array.from(selectedDocIds)}
+        documentTypes={[stockBulkDocumentType(docTab)]}
+      />
     </>
   );
 }

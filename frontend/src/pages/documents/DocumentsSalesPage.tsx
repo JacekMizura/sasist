@@ -1,10 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Download, FileText, Plus, Upload } from "lucide-react";
+import { Download, FileText, Plus, Printer, Upload } from "lucide-react";
 
 import { listSaleDocuments } from "../../api/saleDocumentsApi";
 import { STATIONARY_SALE_TITLE } from "../../components/directSales/directSalesTerminology";
 import { DAMAGE_TENANT_ID } from "../../constants/panelTenant";
+import {
+  ErpBulkPrintModal,
+  saleBulkDocumentType,
+} from "../../components/documentTemplates/ErpBulkPrintModal";
 import { formatMoneyPl } from "../../utils/formatOrderMoney";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { DocumentTypeBadge, ExternalStatusBadge, PaymentStatusBadge } from "./documentsBadges";
@@ -48,6 +52,8 @@ export default function DocumentsSalesPage() {
   const isReceipts = pathname.endsWith("/receipts");
   const [rows, setRows] = useState<SalesRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkPrintOpen, setBulkPrintOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -139,6 +145,15 @@ export default function DocumentsSalesPage() {
             <Download className="h-4 w-4 shrink-0" aria-hidden />
             Eksport
           </button>
+          <button
+            type="button"
+            disabled={selectedIds.size === 0}
+            onClick={() => setBulkPrintOpen(true)}
+            className={`${btnSecondary} disabled:opacity-40`}
+          >
+            <Printer className="h-4 w-4 shrink-0" aria-hidden />
+            Drukuj ({selectedIds.size})
+          </button>
         </>
       }
       kpi={<DocumentsKpiRow items={kpiItems} />}
@@ -190,6 +205,19 @@ export default function DocumentsSalesPage() {
             <table className="w-full min-w-[1100px] text-left text-sm">
               <thead className={documentsTableTheadCls}>
                 <tr>
+                  <th className="w-12 px-4 py-3">
+                    <input
+                      type="checkbox"
+                      checked={rows.length > 0 && rows.every((r) => selectedIds.has(r.id))}
+                      onChange={() => {
+                        setSelectedIds((prev) => {
+                          if (rows.every((r) => prev.has(r.id))) return new Set();
+                          return new Set(rows.map((r) => r.id));
+                        });
+                      }}
+                      aria-label="Zaznacz wszystkie"
+                    />
+                  </th>
                   {[
                     "Nr dokumentu",
                     "Nr zamówienia",
@@ -227,6 +255,21 @@ export default function DocumentsSalesPage() {
                       }
                     }}
                   >
+                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(r.id)}
+                        onChange={() =>
+                          setSelectedIds((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(r.id)) next.delete(r.id);
+                            else next.add(r.id);
+                            return next;
+                          })
+                        }
+                        aria-label={`Zaznacz ${r.documentNumber}`}
+                      />
+                    </td>
                     <td className="px-4 py-3 font-mono text-sm font-semibold sm:px-5 sm:py-3.5">{r.documentNumber}</td>
                     <td className="px-4 py-3 sm:px-5 sm:py-3.5">{r.orderNumber}</td>
                     <td className="max-w-[12rem] truncate px-4 py-3 sm:px-5 sm:py-3.5" title={r.client}>
@@ -255,6 +298,14 @@ export default function DocumentsSalesPage() {
           </div>
         </DocumentsTableCard>
       )}
+      <ErpBulkPrintModal
+        open={bulkPrintOpen}
+        onClose={() => setBulkPrintOpen(false)}
+        tenantId={DAMAGE_TENANT_ID}
+        title="Masowy druk dokumentów sprzedaży"
+        ids={Array.from(selectedIds)}
+        documentTypes={[saleBulkDocumentType(isReceipts)]}
+      />
     </DocumentsSectionShell>
   );
 }

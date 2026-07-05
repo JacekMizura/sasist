@@ -18,6 +18,10 @@ import {
 } from "../../components/listPage/moduleList";
 import { ProductsListBulkBar } from "../../components/products/productList/ProductsListBulkBar";
 import {
+  ErpBulkPrintModal,
+  PRODUCT_BULK_DOCUMENT_TYPES,
+} from "../../components/documentTemplates/ErpBulkPrintModal";
+import {
   ProductsListTable,
   type ProductListSortKey,
 } from "../../components/products/productList/ProductsListTable";
@@ -187,6 +191,7 @@ export default function ProductList() {
     relatedLocationUuids: string[];
   }>(null);
   const [exportOpen, setExportOpen] = useState(false);
+  const [bulkPrintOpen, setBulkPrintOpen] = useState(false);
 
   const [manufacturerFilterName, setManufacturerFilterName] = useState<string | null>(null);
   const [manufacturerFilterMetaLoading, setManufacturerFilterMetaLoading] = useState(false);
@@ -939,7 +944,14 @@ export default function ProductList() {
               onClearSelection={clearProductSelection}
               onSelectMenuBump={() => setProductBulkSelectKey((k) => k + 1)}
               onBulkActionSelect={handleBulkActionSelect}
-              onPrint={() => window.print()}
+              onPrint={() => {
+                if (effectiveProductSelectionCount === 0) return;
+                if (productBulkMode === "filtered_all") {
+                  window.alert("Masowy druk wymaga zaznaczenia produktów na stronie (nie „wszystkie z filtra”).");
+                  return;
+                }
+                setBulkPrintOpen(true);
+              }}
               onExport={() => setExportOpen(true)}
               trailing={
                 <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
@@ -1117,6 +1129,16 @@ export default function ProductList() {
         selectedIds={selectedIds.size > 0 ? Array.from(selectedIds) : []}
         fallbackIds={displayRows.map((p) => p.id)}
       />
+      {bulkTenantId != null ? (
+        <ErpBulkPrintModal
+          open={bulkPrintOpen}
+          onClose={() => setBulkPrintOpen(false)}
+          tenantId={bulkTenantId}
+          title="Masowy druk kart produktów"
+          ids={Array.from(selectedIds)}
+          documentTypes={PRODUCT_BULK_DOCUMENT_TYPES}
+        />
+      ) : null}
     </>
   );
 }

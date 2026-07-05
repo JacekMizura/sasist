@@ -34,7 +34,7 @@ class OrderProvider:
 
         from ...models.customer import Customer
         from ...models.order import Order
-        from ...services.sale_document_mapper import map_sale_document
+        from ...services.sale_document_mapper import map_order_for_print, map_sale_document
 
         order = db.query(Order).filter(Order.id == int(order_id), Order.tenant_id == int(tenant_id)).first()
         if order is None:
@@ -44,7 +44,7 @@ class OrderProvider:
         if getattr(order, "customer_id", None):
             customer = db.query(Customer).filter(Customer.id == int(order.customer_id)).first()
 
-        dto = map_sale_document(db, doc=None, order=order, customer=customer, mode="detail", refresh_db=False)
+        dto = map_order_for_print(db, order=order, customer=customer)
         return self._from_order_dto(dto, kind_code=kind_code)
 
     def _from_sale_document(

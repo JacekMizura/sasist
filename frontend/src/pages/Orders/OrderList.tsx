@@ -63,6 +63,10 @@ import { OrderBulkCustomFieldModal } from "../../components/orders/orderList/Ord
 import { listSellasistInputClass } from "../../components/listPage/listSellasistTokens";
 import type { MultiMenuActionId } from "../../components/orders/orderList/OrderListMultiActionsMenu";
 import { useDocumentTemplatePrint } from "../../hooks/useDocumentTemplatePrint";
+import {
+  ErpBulkPrintModal,
+  ORDER_BULK_DOCUMENT_TYPES,
+} from "../../components/documentTemplates/ErpBulkPrintModal";
 
 type OrderListItemPreview = {
   quantity: number;
@@ -199,6 +203,7 @@ export default function OrderList() {
   const [quickModal, setQuickModal] = useState<OrderQuickToolbarActionKind | null>(null);
   const [quickBusy, setQuickBusy] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [bulkPrintOpen, setBulkPrintOpen] = useState(false);
   const openFilterFieldsRef = useRef<(() => void) | null>(null);
   const [columnPickerOpen, setColumnPickerOpen] = useState(false);
   const [statusDrawerOpen, setStatusDrawerOpen] = useState(false);
@@ -803,12 +808,15 @@ export default function OrderList() {
         openQuickAction("issue_document");
         break;
       case "print": {
-        const firstId = selectedIds[0];
-        if (!firstId) {
+        if (effectiveSelectionCount === 0) {
           setToast("Zaznacz co najmniej jedno zamówienie.");
           return;
         }
-        void requestOrderDocumentPrint({ kind: "order_confirmation", orderId: Number(firstId) });
+        if (bulkSelectionMode === "filtered_all") {
+          setToast("Masowy druk wymaga zaznaczenia rekordów na stronie (nie „wszystkie z filtra”).");
+          return;
+        }
+        setBulkPrintOpen(true);
         break;
       }
       case "export":
@@ -1181,6 +1189,14 @@ export default function OrderList() {
         fallbackIds={orders.map((o) => o.id)}
       />
       {orderListDocumentPickerModal}
+      <ErpBulkPrintModal
+        open={bulkPrintOpen}
+        onClose={() => setBulkPrintOpen(false)}
+        tenantId={DAMAGE_TENANT_ID}
+        title="Masowy druk zamówień"
+        ids={selectedIds.map((s) => Number(s)).filter((n) => Number.isFinite(n))}
+        documentTypes={ORDER_BULK_DOCUMENT_TYPES}
+      />
     </>
   );
 }
