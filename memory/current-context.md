@@ -1,5 +1,10 @@
 # Current context
 
+## Workflow (2026-07-05)
+- Agent: **tylko implementacja i naprawa kodu** — bez E2E, Playwright, logowania do Vercel/Railway, lokalnych serwerów.
+- Weryfikacja techniczna przed commitem: `frontend` → `npm run build`; backend → import `backend.main`, brak błędów składni/importów.
+- Wdrożenie i testy manualne: **użytkownik** (Vercel + Railway). Regresje: screenshot + request/response + stacktrace + logi → agent poprawia kod.
+
 ## Document Templates — preview PDF deployment (2026-07-05)
 - Fix: Nixpacks `providers = ["python", "node"]` + override `node:install` → tylko `structure_report_pdf/`
 - Railway builder: **NIXPACKS** (Dockerfile pozostaje opcjonalny fallback, nieaktywny)
