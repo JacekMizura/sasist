@@ -25,7 +25,7 @@ from .collection_location_service import build_collection_location_options
 
 logger = logging.getLogger(__name__)
 
-BACKEND_ROOT = Path(__file__).resolve().parent.parent
+BACKEND_ROOT = Path(__file__).resolve().parent.parent.parent
 TEMPLATES_DIR = BACKEND_ROOT / "templates"
 
 
