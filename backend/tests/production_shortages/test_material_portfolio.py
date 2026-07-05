@@ -13,10 +13,10 @@ from backend.auth.deps import get_current_user
 from backend.main import app
 from backend.platform_state import mark_tier0_ready
 from backend.schemas.production_shortage import MaterialPortfolioRowRead
-from backend.services.production_shortages.material_portfolio_service import (
-    _daily_usage_from_history,
-    build_material_portfolio,
-)
+from backend.schemas.wms_production_settings import ProductionForecastSettings
+from backend.services.production_planning.demand_rate_service import DemandForecastContext
+from backend.services.production_planning.forecast_strategies import PeriodAverageStrategy
+from backend.services.production_shortages.material_portfolio_service import build_material_portfolio
 
 
 def _history(qtys: list[float]) -> list[tuple[date, float]]:
@@ -24,38 +24,7 @@ def _history(qtys: list[float]) -> list[tuple[date, float]]:
     return [(start + timedelta(days=i), float(q)) for i, q in enumerate(qtys)]
 
 
-class TestDailyUsageFromHistory(unittest.TestCase):
-    def test_empty_history_returns_zero(self):
-        self.assertEqual(_daily_usage_from_history([]), 0.0)
-
-    def test_tuple_history_not_summed_as_raw_tuples(self):
-        """Regression: sum(history) on (date, qty) tuples raised TypeError → HTTP 500."""
-        hist = _history([10.0, 20.0, 30.0])
-        self.assertEqual(_daily_usage_from_history(hist), 20.0)
-
-
 class TestBuildMaterialPortfolio(unittest.TestCase):
-    def _mock_db_with_composition(self, component_id: int = 101):
-        db = MagicMock()
-        line = SimpleNamespace(component_product_id=component_id)
-        comp = SimpleNamespace(id=1, lines=[line])
-        comp_query = MagicMock()
-        comp_query.options.return_value.filter.return_value.all.return_value = [comp]
-        product = SimpleNamespace(
-            id=component_id,
-            name="Surowiec A",
-            sku="RAW-A",
-            symbol=None,
-            image_url=None,
-        )
-        product_query = MagicMock()
-        product_query.filter.return_value.all.return_value = [product]
-        db.query.side_effect = lambda model: {
-            ProductComposition: comp_query,
-            type(product): product_query,
-        }.get(model, MagicMock())
-        return db, component_id
-
     def test_no_active_recipes_returns_empty_list(self):
         db = MagicMock()
         db.query.return_value.options.return_value.filter.return_value.all.return_value = []
@@ -63,7 +32,7 @@ class TestBuildMaterialPortfolio(unittest.TestCase):
         self.assertEqual(rows, [])
 
     @patch("backend.services.production_shortages.material_portfolio_service.build_production_shortages_queue")
-    @patch("backend.services.production_shortages.material_portfolio_service.bulk_daily_sales_series")
+    @patch("backend.services.production_shortages.material_portfolio_service.bulk_product_daily_rates")
     @patch("backend.services.production_shortages.material_portfolio_service.warehouse_net_available", return_value=0.0)
     @patch("backend.services.production_shortages.material_portfolio_service.warehouse_on_hand", return_value=0.0)
     @patch("backend.services.production_shortages.material_portfolio_service.warehouse_reserved_qty", return_value=0.0)
@@ -72,7 +41,7 @@ class TestBuildMaterialPortfolio(unittest.TestCase):
         _reserved,
         _on_hand,
         _net,
-        bulk_history,
+        bulk_rates,
         build_queue,
     ):
         from backend.models.product import Product
@@ -95,7 +64,11 @@ class TestBuildMaterialPortfolio(unittest.TestCase):
             return MagicMock()
 
         db.query.side_effect = _query
-        bulk_history.return_value = {55: []}
+        bulk_rates.return_value = ({55: 0.0}, DemandForecastContext(
+            settings=ProductionForecastSettings(),
+            strategy=PeriodAverageStrategy(),
+            lookback_days=30,
+        ))
         build_queue.return_value = []
 
         rows = build_material_portfolio(db, tenant_id=1, warehouse_id=1)
@@ -105,7 +78,7 @@ class TestBuildMaterialPortfolio(unittest.TestCase):
         MaterialPortfolioRowRead(**rows[0])
 
     @patch("backend.services.production_shortages.material_portfolio_service.build_production_shortages_queue")
-    @patch("backend.services.production_shortages.material_portfolio_service.bulk_daily_sales_series")
+    @patch("backend.services.production_shortages.material_portfolio_service.bulk_product_daily_rates")
     @patch("backend.services.production_shortages.material_portfolio_service.warehouse_net_available", return_value=2.0)
     @patch("backend.services.production_shortages.material_portfolio_service.warehouse_on_hand", return_value=5.0)
     @patch("backend.services.production_shortages.material_portfolio_service.warehouse_reserved_qty", return_value=1.0)
@@ -114,7 +87,7 @@ class TestBuildMaterialPortfolio(unittest.TestCase):
         _reserved,
         _on_hand,
         _net,
-        bulk_history,
+        bulk_rates,
         build_queue,
     ):
         from backend.models.product import Product
@@ -137,7 +110,11 @@ class TestBuildMaterialPortfolio(unittest.TestCase):
             return MagicMock()
 
         db.query.side_effect = _query
-        bulk_history.return_value = {77: _history([4.0, 8.0])}
+        bulk_rates.return_value = ({77: 6.0}, DemandForecastContext(
+            settings=ProductionForecastSettings(strategy="PERIOD_AVERAGE"),
+            strategy=PeriodAverageStrategy(),
+            lookback_days=30,
+        ))
         build_queue.return_value = [
             {
                 "component_product_id": 77,
@@ -153,7 +130,11 @@ class TestBuildMaterialPortfolio(unittest.TestCase):
         MaterialPortfolioRowRead(**rows[0])
 
     @patch("backend.services.production_shortages.material_portfolio_service.build_production_shortages_queue", side_effect=RuntimeError("queue down"))
-    @patch("backend.services.production_shortages.material_portfolio_service.bulk_daily_sales_series", return_value={88: []})
+    @patch("backend.services.production_shortages.material_portfolio_service.bulk_product_daily_rates", return_value=({88: 0.0}, DemandForecastContext(
+        settings=ProductionForecastSettings(),
+        strategy=PeriodAverageStrategy(),
+        lookback_days=30,
+    )))
     @patch("backend.services.production_shortages.material_portfolio_service.warehouse_net_available", return_value=0.0)
     @patch("backend.services.production_shortages.material_portfolio_service.warehouse_on_hand", return_value=0.0)
     @patch("backend.services.production_shortages.material_portfolio_service.warehouse_reserved_qty", return_value=0.0)
@@ -183,6 +164,26 @@ class TestBuildMaterialPortfolio(unittest.TestCase):
         self.assertEqual(rows[0]["blocked_productions_count"], 0)
 
 
+class TestDemandRateServiceIntegration(unittest.TestCase):
+    @patch("backend.services.production_planning.demand_rate_service.bulk_daily_sales_series")
+    @patch("backend.services.production_planning.demand_rate_service.load_forecast_settings")
+    def test_bulk_product_daily_rates_uses_configured_strategy(self, load_settings, bulk_history):
+        from backend.services.production_planning.demand_rate_service import bulk_product_daily_rates
+
+        load_settings.return_value = ProductionForecastSettings(
+            strategy="PERIOD_AVERAGE",
+            sales_lookback_days=14,
+        )
+        bulk_history.return_value = {5: _history([10.0, 20.0, 30.0])}
+        db = MagicMock()
+
+        rates, ctx = bulk_product_daily_rates(db, tenant_id=1, warehouse_id=1, product_ids=[5])
+        self.assertEqual(rates[5], 20.0)
+        self.assertEqual(ctx.lookback_days, 14)
+        bulk_history.assert_called_once()
+        self.assertEqual(bulk_history.call_args.kwargs["lookback_days"], 14)
+
+
 class MaterialAnalysisApiTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -198,7 +199,7 @@ class MaterialAnalysisApiTests(unittest.TestCase):
     def test_material_analysis_endpoint_not_500(self):
         r = self.client.get(
             "/api/production/material-analysis",
-            params={"tenant_id": 1, "warehouse_id": 1, "sales_lookback_days": 30},
+            params={"tenant_id": 1, "warehouse_id": 1},
         )
         self.assertNotEqual(r.status_code, 500, r.text[:2000])
         self.assertEqual(r.status_code, 200, r.text[:2000])

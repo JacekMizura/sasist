@@ -1,17 +1,20 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Factory } from "lucide-react";
 
 import { parseWmsProductionRouteParams, refKey } from "@/modules/production/productionExecutionTypes";
-import { ProductThumb } from "./components/ProductThumb";
-import { ProgressBar } from "./components/ProgressBar";
 import { WmsProductionTerminalEmptyState } from "./WmsProductionTerminalEmptyState";
 import { WmsProductionJobQueueCard } from "./components/WmsProductionJobQueueCard";
 import { WmsProductionActiveBatchBar } from "./components/WmsProductionActiveBatchBar";
+import { WmsProductionExecuteTaskCard } from "./components/WmsProductionExecuteTaskCard";
 import { WMS_TASK_GRID, WMS_TERMINAL_LABEL } from "../../components/wms/execution/wmsLayoutTokens";
 import { wmsProductionPaths } from "./productionPaths";
 import { useProductionExecutionJob } from "./hooks/useProductionExecutionJob";
 import { useWmsProductionSettings } from "./hooks/useWmsProductionSettings";
+
+function isLineDone(planned: number, completed: number): boolean {
+  return completed >= planned - 1e-6;
+}
 
 export default function ProductionExecutionPage() {
   const { kind, id, batchId } = useParams();
@@ -32,8 +35,19 @@ export default function ProductionExecutionPage() {
     finishProduction,
   } = useProductionExecutionJob("execute", activeRef);
 
-  const allDone = executionDetail?.lines.every(
-    (ln) => ln.completedQuantity >= ln.plannedQuantity - 1e-6,
+  const [expandedLineKey, setExpandedLineKey] = useState<string | null>(null);
+
+  const firstIncompleteKey = useMemo(() => {
+    const lines = executionDetail?.lines ?? [];
+    return lines.find((ln) => !isLineDone(ln.plannedQuantity, ln.completedQuantity))?.lineKey ?? null;
+  }, [executionDetail?.lines]);
+
+  useEffect(() => {
+    setExpandedLineKey(firstIncompleteKey);
+  }, [activeRef?.kind, activeRef?.id, firstIncompleteKey]);
+
+  const allDone = executionDetail?.lines.every((ln) =>
+    isLineDone(ln.plannedQuantity, ln.completedQuantity),
   );
 
   return (
@@ -59,7 +73,7 @@ export default function ProductionExecutionPage() {
                   productImageUrl={job.product_image_url}
                   quantity={job.planned_quantity}
                   status={job.status}
-                  accent="blue"
+                  accent="amber"
                   onClick={() => void openJob(job)}
                 />
               ))}
@@ -76,72 +90,25 @@ export default function ProductionExecutionPage() {
             number={executionDetail.number}
             productLine={executionDetail.productLabel}
             productImageUrl={executionDetail.lines[0]?.productImageUrl}
-            accent="blue"
+            accent="amber"
           />
 
-          <div className="w-full space-y-4">
-            {executionDetail.lines.map((ln) => {
-              const remaining = Math.max(0, ln.plannedQuantity - ln.completedQuantity);
+          <div className="w-full space-y-3">
+            {executionDetail.lines.map((ln, idx) => {
+              const done = isLineDone(ln.plannedQuantity, ln.completedQuantity);
+              const expanded = expandedLineKey === ln.lineKey;
               return (
-                <div
+                <WmsProductionExecuteTaskCard
                   key={ln.lineKey}
-                  className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
-                >
-                  <div className="absolute bottom-0 left-0 top-0 w-1 bg-blue-400" aria-hidden />
-                  <div className="pl-3">
-                    <div className="flex items-center gap-4">
-                      <ProductThumb imageUrl={ln.productImageUrl} name={ln.productName} size="lg" />
-                      <div>
-                        {display.show_name ? (
-                          <p className="text-xl font-bold text-slate-900">{ln.productName}</p>
-                        ) : null}
-                        {display.show_sku && ln.productSku ? (
-                          <p className="mt-1 font-mono text-sm text-slate-500">{ln.productSku}</p>
-                        ) : null}
-                      </div>
-                    </div>
-                    <div className="mt-4">
-                      <p className={WMS_TERMINAL_LABEL}>Postęp</p>
-                      <p className="mt-1 text-4xl font-black tabular-nums text-slate-900">
-                        {ln.completedQuantity}
-                        <span className="text-xl font-bold text-slate-400"> / {ln.plannedQuantity}</span>
-                      </p>
-                      <div className="mt-3">
-                        <ProgressBar
-                          value={ln.completedQuantity}
-                          max={ln.plannedQuantity || 1}
-                          tone="emerald"
-                        />
-                      </div>
-                    </div>
-                    <div className="mt-5 grid grid-cols-3 gap-3">
-                      <button
-                        type="button"
-                        disabled={busy || remaining <= 0}
-                        onClick={() => void addProductionQty(ln.lineKey, 1)}
-                        className="rounded-xl bg-slate-900 py-4 text-xl font-black text-white hover:bg-slate-800 disabled:opacity-40"
-                      >
-                        +1
-                      </button>
-                      <button
-                        type="button"
-                        disabled={busy || remaining <= 0}
-                        onClick={() => void addProductionQty(ln.lineKey, 5)}
-                        className="rounded-xl bg-slate-700 py-4 text-xl font-black text-white hover:bg-slate-600 disabled:opacity-40"
-                      >
-                        +5
-                      </button>
-                      <button
-                        type="button"
-                        disabled={busy || remaining <= 0}
-                        onClick={() => void addProductionQty(ln.lineKey, remaining)}
-                        className="rounded-xl border border-emerald-300 bg-emerald-50 py-3 text-sm font-bold text-emerald-900 hover:bg-emerald-100 disabled:opacity-40"
-                      >
-                        Zakończ krok
-                      </button>
-                    </div>
-                  </div>
-                </div>
+                  index={idx + 1}
+                  line={ln}
+                  display={display}
+                  expanded={expanded}
+                  done={done}
+                  busy={busy}
+                  onToggle={() => setExpandedLineKey((k) => (k === ln.lineKey ? null : ln.lineKey))}
+                  onAddQty={(add) => void addProductionQty(ln.lineKey, add)}
+                />
               );
             })}
           </div>
@@ -151,7 +118,7 @@ export default function ProductionExecutionPage() {
               type="button"
               disabled={busy}
               onClick={() => void finishProduction()}
-              className="w-full max-w-xl rounded-xl bg-blue-600 py-4 text-lg font-bold text-white hover:bg-blue-700 disabled:opacity-40"
+              className="w-full max-w-xl rounded-xl bg-emerald-600 py-4 text-lg font-bold text-white hover:bg-emerald-700 disabled:opacity-40"
             >
               Zakończ produkcję → rozlokowanie (PW)
             </button>

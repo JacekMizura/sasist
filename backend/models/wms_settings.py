@@ -49,6 +49,8 @@ class WmsSettings(Base):
     production_terminal_required_json = Column(String, nullable=True)
     production_forecast_json = Column(String, nullable=True)
 
+    production_reservation_json = Column(String, nullable=True)
+
     created_at = Column(DateTime, nullable=True, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=True, default=datetime.utcnow)
 

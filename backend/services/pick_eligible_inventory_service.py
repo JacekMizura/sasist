@@ -13,6 +13,11 @@ from ..models.warehouse import Warehouse
 
 NON_PICK_ELIGIBLE_LOCATION_TYPES = frozenset({"PICK_START", "PACKING", "DOCK"})
 
+# Production material reservations — retail / non-storage zones (override via allow_sales_locations).
+RETAIL_OPERATIONAL_ZONE_TYPES = frozenset({"SALES", "SHOWROOM", "POS", "RETAIL", "STORE"})
+NON_STORAGE_OPERATIONAL_ZONE_TYPES = frozenset({"PICKUP"})
+RETAIL_LOCATION_NAME_TOKENS = ("POS", "SKLEP", "EKSPOZ", "SPRZEDA")
+
 SYSTEM_DOCK_IN_NAME = "DOCK-IN"
 SYSTEM_STOCK_NAME = "STOCK"
 
@@ -56,6 +61,25 @@ def is_pick_eligible_location_row(
         location_type=getattr(location, "location_type", None),
         location_name=getattr(location, "name", None),
     )
+
+
+def is_production_reservation_eligible_location(
+    location: Location | None,
+    *,
+    allow_sales_locations: bool = False,
+) -> bool:
+    """Warehouse storage for production reservations — excludes shop/showroom unless opted in."""
+    if location is None:
+        return False
+    if allow_sales_locations:
+        return True
+    zone = (getattr(location, "operational_zone_type", None) or "").strip().upper()
+    if zone in RETAIL_OPERATIONAL_ZONE_TYPES or zone in NON_STORAGE_OPERATIONAL_ZONE_TYPES:
+        return False
+    name = (getattr(location, "name", None) or "").strip().upper()
+    if name and any(token in name for token in RETAIL_LOCATION_NAME_TOKENS):
+        return False
+    return True
 
 
 def load_warehouse_requires_putaway_map(

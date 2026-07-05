@@ -16,6 +16,8 @@ from ...models.production import ProductionOrder
 from ...models.stock_reservation import StockReservation
 from ..inventory_lot_keys import normalize_batch_number
 from ..warehouse_inventory_movement_service import BUCKET_RESERVED, MOVEMENT_RESERVATION, record_inventory_movement
+from dataclasses import dataclass
+
 from .allocation_service import AllocationSlice, allocate_product_quantity
 from .constants import (
     DEFAULT_ALLOCATION_STRATEGY,
@@ -33,7 +35,15 @@ class ReservationError(ValueError):
         self.code = code
 
 
-def _load_allocation_strategy(db: Session, *, tenant_id: int, warehouse_id: int) -> str:
+@dataclass(frozen=True)
+class ProductionReservationConfig:
+    allocation_strategy: str
+    allow_sales_locations: bool
+
+
+def _load_production_reservation_config(
+    db: Session, *, tenant_id: int, warehouse_id: int
+) -> ProductionReservationConfig:
     from ...models.wms_settings import WmsSettings
 
     row = (
@@ -42,18 +52,35 @@ def _load_allocation_strategy(db: Session, *, tenant_id: int, warehouse_id: int)
         .first()
     )
     if row is None:
-        return DEFAULT_ALLOCATION_STRATEGY
+        return ProductionReservationConfig(
+            allocation_strategy=DEFAULT_ALLOCATION_STRATEGY,
+            allow_sales_locations=False,
+        )
     raw = getattr(row, "production_reservation_json", None) or ""
     if not raw:
-        return DEFAULT_ALLOCATION_STRATEGY
+        return ProductionReservationConfig(
+            allocation_strategy=DEFAULT_ALLOCATION_STRATEGY,
+            allow_sales_locations=False,
+        )
     try:
         import json
 
         data = json.loads(str(raw))
         strat = str(data.get("allocation_strategy") or DEFAULT_ALLOCATION_STRATEGY).upper()
-        return strat if strat in ("FIFO", "FEFO", "LIFO") else DEFAULT_ALLOCATION_STRATEGY
+        strat = strat if strat in ("FIFO", "FEFO", "LIFO") else DEFAULT_ALLOCATION_STRATEGY
+        return ProductionReservationConfig(
+            allocation_strategy=strat,
+            allow_sales_locations=bool(data.get("allow_sales_locations", False)),
+        )
     except Exception:
-        return DEFAULT_ALLOCATION_STRATEGY
+        return ProductionReservationConfig(
+            allocation_strategy=DEFAULT_ALLOCATION_STRATEGY,
+            allow_sales_locations=False,
+        )
+
+
+def _load_allocation_strategy(db: Session, *, tenant_id: int, warehouse_id: int) -> str:
+    return _load_production_reservation_config(db, tenant_id=tenant_id, warehouse_id=warehouse_id).allocation_strategy
 
 
 def _active_production_reservations_q(
@@ -152,7 +179,8 @@ def create_production_batch_reservations(
     ).count()
     if existing:
         raise ReservationError("Partia ma już aktywne rezerwacje.", code="already_reserved")
-    strat = strategy or _load_allocation_strategy(db, tenant_id=tenant_id, warehouse_id=int(batch.warehouse_id))
+    cfg = _load_production_reservation_config(db, tenant_id=tenant_id, warehouse_id=int(batch.warehouse_id))
+    strat = strategy or cfg.allocation_strategy
     created: list[StockReservation] = []
     for pid, qty in component_totals.items():
         if float(qty) <= 1e-9:
@@ -165,6 +193,7 @@ def create_production_batch_reservations(
             quantity=float(qty),
             strategy=strat,
             exclude_batch_id=int(batch.id),
+            allow_sales_locations=cfg.allow_sales_locations,
         )
         for sl in slices:
             created.append(
@@ -210,7 +239,8 @@ def create_production_order_reservations(
     ).count()
     if existing:
         raise ReservationError("Zlecenie ma już aktywne rezerwacje.", code="already_reserved")
-    strat = strategy or _load_allocation_strategy(db, tenant_id=tenant_id, warehouse_id=int(order.warehouse_id))
+    cfg = _load_production_reservation_config(db, tenant_id=tenant_id, warehouse_id=int(order.warehouse_id))
+    strat = strategy or cfg.allocation_strategy
     created: list[StockReservation] = []
     for pid, qty in component_totals.items():
         if float(qty) <= 1e-9:
@@ -223,6 +253,7 @@ def create_production_order_reservations(
             quantity=float(qty),
             strategy=strat,
             exclude_order_id=int(order.id),
+            allow_sales_locations=cfg.allow_sales_locations,
         )
         for sl in slices:
             created.append(
@@ -358,7 +389,7 @@ def update_production_reservation(
     pid = int(res.product_id)
     qty = float(quantity if quantity is not None else res.quantity)
     loc_id = int(location_id if location_id is not None else res.location_id)
-    strat = _load_allocation_strategy(db, tenant_id=tenant_id, warehouse_id=wh_id)
+    cfg = _load_production_reservation_config(db, tenant_id=tenant_id, warehouse_id=wh_id)
     exclude_batch = int(res.production_batch_id) if res.production_batch_id else None
     exclude_order = int(res.production_order_id) if res.production_order_id else None
     slices = allocate_product_quantity(
@@ -367,9 +398,10 @@ def update_production_reservation(
         warehouse_id=wh_id,
         product_id=pid,
         quantity=qty,
-        strategy=strat,
+        strategy=cfg.allocation_strategy,
         exclude_batch_id=exclude_batch,
         exclude_order_id=exclude_order,
+        allow_sales_locations=cfg.allow_sales_locations,
     )
     if len(slices) != 1:
         raise ReservationError("Zmiana wymaga pojedynczej alokacji — zmniejsz ilość lub zwolnij i utwórz ponownie.", code="split_required")

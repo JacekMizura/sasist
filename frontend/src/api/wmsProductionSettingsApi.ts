@@ -37,6 +37,7 @@ export type ProductionForecastSettings = {
 
 export type ProductionReservationSettings = {
   allocation_strategy: "FIFO" | "FEFO" | "LIFO";
+  allow_sales_locations: boolean;
 };
 
 export type WmsProductionSettings = {

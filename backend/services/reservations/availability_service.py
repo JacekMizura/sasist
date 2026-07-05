@@ -10,6 +10,7 @@ from ...models.stock_reservation import StockReservation
 from ..inventory_lot_keys import NO_EXPIRY_SENTINEL, normalize_batch_number
 from ..pick_eligible_inventory_service import (
     is_pick_eligible_location_row,
+    is_production_reservation_eligible_location,
     resolve_requires_putaway_for_warehouse,
 )
 from ..stock_disposition import DEFAULT_STOCK_DISPOSITION, normalize_stock_disposition
@@ -153,6 +154,7 @@ def iter_allocatable_inventory_rows(
     exclude_batch_id: int | None = None,
     exclude_order_id: int | None = None,
     stock_disposition: str = DEFAULT_STOCK_DISPOSITION,
+    allow_sales_locations: bool = False,
 ):
     """Yield (inventory_row, net_available_qty) sorted by strategy."""
     sd = normalize_stock_disposition(stock_disposition)
@@ -179,6 +181,10 @@ def iter_allocatable_inventory_rows(
         lid = int(inv.location_id)
         loc = locs.get(lid)
         if loc is None or not is_pick_eligible_location_row(loc, requires_putaway=requires_putaway):
+            continue
+        if not is_production_reservation_eligible_location(
+            loc, allow_sales_locations=allow_sales_locations
+        ):
             continue
         bn = normalize_batch_number(getattr(inv, "batch_number", None))
         ed = getattr(inv, "expiry_date", None) or NO_EXPIRY_SENTINEL

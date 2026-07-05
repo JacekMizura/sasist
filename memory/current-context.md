@@ -1,5 +1,17 @@
 # Current context
 
+## Fix regresji produkcji WMS (2026-06-08)
+- Rezerwacje: alokacja location-first; wykluczenie stref SALES/SHOWROOM (opcja admin).
+- finish-production 500: błędny import `assign_series_number_to_stock_document` w `pw_putaway_handoff.py`.
+- UI execute: `WmsProductionExecuteTaskCard` na `WmsProductTaskCard`.
+- Testy: `backend/tests/reservations/test_production_allocation.py` (6 passed).
+- Raport: `memory/production-wms-regression-fix-report.md`
+
+## Material Portfolio — SSOT prognozy (2026-06-08)
+- Usunięto `_daily_usage_from_history` (hardcoded PeriodAverage) i parametr `sales_lookback_days` z API.
+- Wspólny orchestrator: `production_planning/demand_rate_service.py`.
+- Raport: `memory/material-portfolio-forecast-ssot-report.md`
+
 ## Produkcja — interfejs wykonania (2026-07-04)
 - `execution_interface`: `WMS` | `ERP` (zamiast `execution_mode` / PAPER) — ten sam workflow backend.
 - ERP UI: `/production/erp/:kind/:id`; WMS: terminal po `release-to-wms`.

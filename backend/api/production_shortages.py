@@ -120,14 +120,11 @@ def api_list_material_needs(
 def api_material_portfolio(
     tenant_id: int = Query(..., ge=1),
     warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
-    sales_lookback_days: int = Query(30, ge=7, le=365),
     db: Session = Depends(get_db),
     user: AppUser = Depends(get_current_user),
 ):
     del user
-    rows = build_material_portfolio(
-        db, tenant_id=tenant_id, warehouse_id=warehouse_id, sales_lookback_days=sales_lookback_days
-    )
+    rows = build_material_portfolio(db, tenant_id=tenant_id, warehouse_id=warehouse_id)
     return [MaterialPortfolioRowRead(**r) for r in rows]
 
 

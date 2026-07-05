@@ -71,6 +71,7 @@ AllocationStrategyKey = Literal["FIFO", "FEFO", "LIFO"]
 
 class ProductionReservationSettings(BaseModel):
     allocation_strategy: AllocationStrategyKey = "FEFO"
+    allow_sales_locations: bool = False
 
 
 class WmsProductionSettingsRead(BaseModel):
@@ -136,6 +137,7 @@ def reservation_settings_from_row(row: Any) -> ProductionReservationSettings:
         strat = str(parsed.get("allocation_strategy") or "FEFO").upper()
         if strat not in ("FIFO", "FEFO", "LIFO"):
             strat = "FEFO"
-        return ProductionReservationSettings(allocation_strategy=strat)  # type: ignore[arg-type]
+        allow_sales = bool(parsed.get("allow_sales_locations", False))
+        return ProductionReservationSettings(allocation_strategy=strat, allow_sales_locations=allow_sales)  # type: ignore[arg-type]
     except (TypeError, ValueError, json.JSONDecodeError):
         return ProductionReservationSettings()

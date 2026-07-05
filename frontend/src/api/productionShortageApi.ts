@@ -220,10 +220,9 @@ export async function fetchProductionShortagesQueue(
 export async function fetchMaterialPortfolio(
   tenantId: number,
   warehouseId: number,
-  salesLookbackDays = 30,
 ): Promise<MaterialPortfolioRow[]> {
   const res = await api.get<MaterialPortfolioRow[]>("/production/material-analysis", {
-    params: { tenant_id: tenantId, warehouse_id: warehouseId, sales_lookback_days: salesLookbackDays },
+    params: { tenant_id: tenantId, warehouse_id: warehouseId },
   });
   return res.data;
 }

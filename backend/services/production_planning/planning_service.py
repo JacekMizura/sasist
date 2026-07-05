@@ -21,8 +21,8 @@ from .constants import (
     MAX_COVERAGE_DAYS,
     MIN_COVERAGE_DAYS,
 )
-from .forecast_settings_service import load_forecast_settings
-from .forecast_strategies import get_forecast_strategy, list_forecast_strategies
+from .demand_rate_service import resolve_demand_forecast_context
+from .forecast_strategies import list_forecast_strategies
 from .inventory_coverage_service import coverage_color, coverage_days
 from .lead_time_service import lead_time_days
 from .material_availability_service import cap_by_materials, max_producible_by_product
@@ -66,10 +66,15 @@ def _round_qty(v: float) -> float:
 
 def build_planning_snapshot(db: Session, ctx: PlanningContext) -> ProductionDemandPlanningRead:
     coverage_days_val = _clamp_coverage(ctx.coverage_days)
-    settings = load_forecast_settings(db, tenant_id=ctx.tenant_id, warehouse_id=ctx.warehouse_id)
-    strategy_key = ctx.forecast_strategy or settings.strategy
-    lookback = ctx.sales_lookback_days or settings.sales_lookback_days
-    strategy = get_forecast_strategy(strategy_key)
+    fc_ctx = resolve_demand_forecast_context(
+        db,
+        tenant_id=ctx.tenant_id,
+        warehouse_id=ctx.warehouse_id,
+        forecast_strategy=ctx.forecast_strategy,
+        sales_lookback_days=ctx.sales_lookback_days,
+    )
+    strategy = fc_ctx.strategy
+    lookback = fc_ctx.lookback_days
 
     recipes = list_recipe_cards(db, tenant_id=ctx.tenant_id, warehouse_id=ctx.warehouse_id, active_only=True)
     product_ids = [int(r.product_id) for r in recipes]

@@ -114,7 +114,7 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
       setDraftDisplay(data.terminal_display);
       setDraftRequired(data.terminal_required);
       setDraftForecast(data.forecast ?? { strategy: "PERIOD_AVERAGE", sales_lookback_days: 30 });
-      setDraftReservation(data.reservation ?? { allocation_strategy: "FEFO" });
+      setDraftReservation(data.reservation ?? { allocation_strategy: "FEFO", allow_sales_locations: false });
       setResolvedWh(data.warehouse_id);
     } catch {
       toast.error("Nie udało się wczytać ustawień produkcji WMS.");
@@ -133,7 +133,7 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
       JSON.stringify(saved.terminal_display) !== JSON.stringify(draftDisplay) ||
       JSON.stringify(saved.terminal_required) !== JSON.stringify(draftRequired) ||
       JSON.stringify(saved.forecast) !== JSON.stringify(draftForecast) ||
-      JSON.stringify(saved.reservation ?? { allocation_strategy: "FEFO" }) !== JSON.stringify(draftReservation)
+      JSON.stringify(saved.reservation ?? { allocation_strategy: "FEFO", allow_sales_locations: false }) !== JSON.stringify(draftReservation)
     );
   }, [saved, draftDisplay, draftRequired, draftForecast, draftReservation]);
 
@@ -153,7 +153,7 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
       setDraftDisplay(data.terminal_display);
       setDraftRequired(data.terminal_required);
       setDraftForecast(data.forecast);
-      setDraftReservation(data.reservation ?? { allocation_strategy: "FEFO" });
+      setDraftReservation(data.reservation ?? { allocation_strategy: "FEFO", allow_sales_locations: false });
       toast.success("Zapisano ustawienia produkcji.");
     } catch {
       toast.error("Zapis ustawień nie powiódł się.");
@@ -241,6 +241,21 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
               </option>
             ))}
           </select>
+        </label>
+        <label className="mt-4 flex max-w-md items-start gap-3">
+          <input
+            type="checkbox"
+            className="mt-1 h-4 w-4 rounded border-slate-300"
+            checked={draftReservation.allow_sales_locations}
+            onChange={(e) =>
+              setDraftReservation((prev) =>
+                prev ? { ...prev, allow_sales_locations: e.target.checked } : prev,
+              )
+            }
+          />
+          <span className="text-sm text-slate-700">
+            Dopuszczaj lokalizacje sprzedażowe (sklep, ekspozycja, POS) przy rezerwacji materiałów.
+          </span>
         </label>
       </SectionCard>
 

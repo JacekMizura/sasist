@@ -14,11 +14,10 @@ from ...models.stock_document import StockDocument, StockDocumentItem
 from ...models.warehouse import Warehouse
 from ..stock_document_service import (
     NO_EXPIRY_SENTINEL,
-    assign_series_number_to_stock_document,
     ensure_default_pz_receiving_location_if_missing,
 )
 from ..stock_operation_receipt_service import append_receipt_operation
-from ..document_number_service import require_warehouse_series
+from ..document_number_service import assign_series_number_to_stock_document, require_warehouse_series
 from ..inventory_carrier_ops import upsert_dock_inventory_for_loose_receipt
 from ..stock_disposition import STOCK_DISPOSITION_SALEABLE
 

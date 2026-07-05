@@ -1459,7 +1459,10 @@ def finish_production(db: Session, *, tenant_id: int, batch_id: int) -> Producti
     for ln in batch.lines or []:
         if float(ln.completed_quantity or 0) < float(ln.planned_quantity) - 1e-6:
             raise ProductionBatchError("Nie wszystkie produkty są wyprodukowane.", code="production_incomplete")
-    create_batch_pw_documents_for_putaway(db, batch=batch, performed_by_user_id=None)
+    try:
+        create_batch_pw_documents_for_putaway(db, batch=batch, performed_by_user_id=None)
+    except ValueError as exc:
+        raise ProductionBatchError(str(exc), code="pw_creation_failed") from exc
     batch.status = "completed"
     batch.production_completed_at = datetime.utcnow()
     batch.completed_at = datetime.utcnow()

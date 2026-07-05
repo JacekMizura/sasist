@@ -9,29 +9,23 @@ from typing import Any
 from sqlalchemy.orm import Session, joinedload
 
 from ...models.product import Product
-from ...models.product_composition import ProductComposition, ProductCompositionLine
-from ..production_planning.forecast_strategies import PeriodAverageStrategy
-from ..production_planning.sales_history_service import bulk_daily_sales_series
+from ...models.product_composition import ProductComposition
+from ..production_planning.demand_rate_service import bulk_product_daily_rates
+from ..production_planning.inventory_coverage_service import coverage_days
 from ..reservations.availability_service import warehouse_net_available, warehouse_on_hand, warehouse_reserved_qty
 from .queue_service import build_production_shortages_queue
 
 logger = logging.getLogger(__name__)
 
 
-def _depletion_date(*, on_hand: float, reserved: float, daily_usage: float) -> str | None:
-    net = max(0.0, on_hand - reserved)
-    if daily_usage <= 1e-9:
+def _depletion_date(*, net_available: float, daily_usage: float) -> str | None:
+    days_cov = coverage_days(on_hand=net_available, avg_daily=daily_usage)
+    if days_cov is None:
         return None
-    days = int(net / daily_usage)
+    days = int(days_cov)
     if days <= 0:
         return date.today().isoformat()
     return (date.today() + timedelta(days=days)).isoformat()
-
-
-def _daily_usage_from_history(history: list[tuple[date, float]]) -> float:
-    if not history:
-        return 0.0
-    return float(PeriodAverageStrategy().daily_rate(history))
 
 
 def build_material_portfolio(
@@ -39,7 +33,6 @@ def build_material_portfolio(
     *,
     tenant_id: int,
     warehouse_id: int,
-    sales_lookback_days: int = 30,
 ) -> list[dict[str, Any]]:
     """All BOM components from active manufacturing compositions."""
     compositions = (
@@ -81,12 +74,11 @@ def build_material_portfolio(
 
     pids = list(usage_by_component.keys())
     products = {p.id: p for p in db.query(Product).filter(Product.id.in_(pids)).all()}
-    history = bulk_daily_sales_series(
+    daily_rates, _fc_ctx = bulk_product_daily_rates(
         db,
         tenant_id=tenant_id,
         warehouse_id=warehouse_id,
         product_ids=pids,
-        lookback_days=sales_lookback_days,
     )
 
     rows: list[dict[str, Any]] = []
@@ -95,8 +87,7 @@ def build_material_portfolio(
         on_hand = warehouse_on_hand(db, tenant_id=tenant_id, warehouse_id=warehouse_id, product_id=pid)
         reserved = warehouse_reserved_qty(db, tenant_id=tenant_id, warehouse_id=warehouse_id, product_id=pid)
         net = warehouse_net_available(db, tenant_id=tenant_id, warehouse_id=warehouse_id, product_id=pid)
-        hist = history.get(pid, [])
-        daily = _daily_usage_from_history(hist)
+        daily = float(daily_rates.get(pid, 0.0))
         blocked = blocked_by_component.get(pid, 0)
         rows.append(
             {
@@ -111,7 +102,7 @@ def build_material_portfolio(
                 "reserved_qty": round(reserved, 4),
                 "available_qty": round(net, 4),
                 "forecast_daily_usage": round(daily, 4),
-                "forecast_depletion_date": _depletion_date(on_hand=on_hand, reserved=reserved, daily_usage=daily),
+                "forecast_depletion_date": _depletion_date(net_available=net, daily_usage=daily),
             }
         )
 
