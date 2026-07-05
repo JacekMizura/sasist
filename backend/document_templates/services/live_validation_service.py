@@ -15,6 +15,54 @@ _FOR_RE = re.compile(r"\{%\s*for\s+(\w+)\s+in\s+([^%]+)%\}", re.IGNORECASE)
 _TAG_RE = re.compile(r"\{%\s*(\w+)", re.IGNORECASE)
 _FILTER_RE = re.compile(r"\|\s*(\w+)")
 
+# Jinja2 built-in filters always available at render time (even if not in helper registry).
+JINJA2_BUILTIN_FILTERS = frozenset(
+    {
+        "default",
+        "d",
+        "safe",
+        "escape",
+        "e",
+        "trim",
+        "lower",
+        "upper",
+        "title",
+        "capitalize",
+        "striptags",
+        "replace",
+        "length",
+        "first",
+        "last",
+        "join",
+        "sort",
+        "reverse",
+        "batch",
+        "slice",
+        "abs",
+        "round",
+        "int",
+        "float",
+        "string",
+        "list",
+        "map",
+        "select",
+        "reject",
+        "unique",
+        "min",
+        "max",
+        "random",
+        "format",
+        "indent",
+        "wordcount",
+        "wordwrap",
+        "center",
+        "attr",
+        "items",
+        "urlencode",
+        "tojson",
+    }
+)
+
 
 @dataclass
 class LiveValidationIssue:
@@ -76,7 +124,11 @@ def validate_twig_live(
         )
         return issues
 
-    helpers = set(get_twig_helper_registry().functions()) | set(get_twig_helper_registry().filters())
+    helpers = (
+        set(get_twig_helper_registry().functions())
+        | set(get_twig_helper_registry().filters())
+        | JINJA2_BUILTIN_FILTERS
+    )
     tags = set(get_twig_tag_registry().known_tags())
     roots = _known_roots(known_fields) | set(extra_roots or ())
     roots |= {"loop", "row", "item", "loc", "true", "false", "none", "null"}
@@ -114,6 +166,8 @@ def validate_twig_live(
                 )
         base = re.split(r"\||\(|\s", expr.strip())[0].strip()
         if not base or base.startswith("'") or base.startswith('"'):
+            continue
+        if re.match(r"^\w+\s*\(", expr.strip()) or base in helpers:
             continue
         root = base.split(".")[0]
         if root and root not in roots and not root.isdigit():

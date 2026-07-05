@@ -1,6 +1,12 @@
 # Current context
 
-## Document Templates — produkt edytora (2026-06-08)
+## Document Templates — stabilizacja pipeline (2026-07-05)
+- SSOT walidacji: `ContextSchemaRegistry` rozszerzony o pola providerów (`title`, `document_number`, raporty, magazyn, branding/theme)
+- Filtr `default` + Jinja2 builtins w live validation; fix shadowing `date`/`datetime` w helperach
+- Preview: auto-resolve BASE + partiali systemowych; normalizacja `document` z aliasów providera
+- Sample context: `products[].product` zgodne ze starterami; partials odporne na brak `document`/`summary`
+- Testy: `test_document_templates_stabilization.py` — 15 passed w module
+
 - Inspektor zmiennych (Sellasist+), walidacja live, diff wersji, historia z opisem publikacji
 - Modal publikacji, autocomplete kontekstowy, wyszukiwanie użycia zmiennych
 - Galeria starterów, eksport ZIP (szablon/rodzina/pakiet), import z konfliktami

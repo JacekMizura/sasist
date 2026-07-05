@@ -8,8 +8,8 @@
     {% if company.nip %}<span class="text-muted">NIP: {{ company.nip }}</span>{% endif %}
   </div>
   <div class="doc-meta text-right">
-    {% if document.number %}<div><strong>{{ document.number }}</strong></div>{% endif %}
-    {% if document.created_at %}<div>{{ document.created_at | date }}</div>{% endif %}
-    {% if document.status %}<div>{{ document.status }}</div>{% endif %}
+    {% if document is defined and document.number %}<div><strong>{{ document.number }}</strong></div>{% endif %}
+    {% if document is defined and document.created_at %}<div>{{ document.created_at | date }}</div>{% endif %}
+    {% if document is defined and document.status %}<div>{{ document.status }}</div>{% endif %}
   </div>
 </div>

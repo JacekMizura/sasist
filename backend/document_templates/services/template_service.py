@@ -179,6 +179,12 @@ def create_template_from_starter(
     )
     if starter is None:
         raise DocumentTemplateError("Starter nie istnieje.", code="starter_not_found")
+    starter_content = str(starter.twig_content)
+    use_extends = "{% extends" in starter_content
+    from .document_migration_service import _default_partial_pins, _system_base_published_version
+
+    base_version = _system_base_published_version(db, tenant_id=int(tenant_id)) if use_extends else None
+    partial_pins = _default_partial_pins(db, tenant_id=int(tenant_id)) if use_extends else {}
     template = DocumentTemplate(
         tenant_id=int(tenant_id),
         kind_id=int(kind.id),
@@ -193,7 +199,9 @@ def create_template_from_starter(
         template_id=int(template.id),
         version_number=1,
         status=VERSION_STATUS_DRAFT,
-        twig_content=str(starter.twig_content),
+        twig_content=starter_content,
+        extends_version_id=int(base_version.id) if base_version and use_extends else None,
+        partial_pins_json=json.dumps(partial_pins) if partial_pins else None,
         change_summary="Utworzono ze startera",
         created_by_user_id=user_id,
     )

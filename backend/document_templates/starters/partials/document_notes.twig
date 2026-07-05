@@ -1,6 +1,6 @@
-{% if document.notes or notes %}
+{% if (document is defined and document.notes) or notes %}
 <div class="doc-notes">
   <strong>Uwagi</strong>
-  <div>{{ document.notes | default(notes) }}</div>
+  <div>{{ (document.notes if document is defined else none) | default(notes) }}</div>
 </div>
 {% endif %}

@@ -3,6 +3,6 @@
     {% if totals.net %}<tr><td>Suma netto</td><td class="text-right">{{ totals.net | money(currency) }}</td></tr>{% endif %}
     {% if totals.vat %}<tr><td>VAT</td><td class="text-right">{{ totals.vat | money(currency) }}</td></tr>{% endif %}
     {% if totals.gross %}<tr><th>Razem brutto</th><th class="text-right">{{ totals.gross | money(currency) }}</th></tr>{% endif %}
-    {% if summary.gross %}<tr><th>Razem</th><th class="text-right">{{ summary.gross | money(currency) }}</th></tr>{% endif %}
+    {% if summary is defined and summary.gross %}<tr><th>Razem</th><th class="text-right">{{ summary.gross | money(currency) }}</th></tr>{% endif %}
   </table>
 </div>

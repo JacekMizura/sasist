@@ -20,7 +20,34 @@ def merge_context_fragments(*fragments: dict[str, Any]) -> dict[str, Any]:
                 merged[key] = {**merged[key], **value}
             else:
                 merged[key] = value
-    return merged
+    return normalize_print_context(merged)
+
+
+def normalize_print_context(ctx: dict[str, Any]) -> dict[str, Any]:
+    """Map provider top-level aliases into shared `document` dict for BASE partials."""
+    out = dict(ctx)
+    document = dict(out.get("document") or {})
+    if out.get("document_number") and not document.get("number"):
+        document["number"] = out["document_number"]
+    if out.get("title") and not document.get("title"):
+        document["title"] = out["title"]
+    if out.get("document_type") and not document.get("type"):
+        document["type"] = out["document_type"]
+    if out.get("document_date") and not document.get("created_at"):
+        document["created_at"] = out["document_date"]
+    if out.get("status") and not document.get("status"):
+        document["status"] = out["status"]
+    if out.get("notes") and not document.get("notes"):
+        document["notes"] = out["notes"]
+    if out.get("generated_at") and not document.get("created_at"):
+        document["created_at"] = out["generated_at"]
+    if out.get("barcode_value") and not document.get("barcode_value"):
+        document["barcode_value"] = out["barcode_value"]
+    if out.get("qr_value") and not document.get("qr_value"):
+        document["qr_value"] = out["qr_value"]
+    if document:
+        out["document"] = document
+    return out
 
 
 def build_context_pipeline(

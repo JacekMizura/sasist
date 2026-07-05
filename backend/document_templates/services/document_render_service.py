@@ -82,6 +82,7 @@ def preview_document(
     else:
         resolved = _resolve_draft_preview(
             db,
+            tenant_id=int(tenant_id),
             template=template,
             extends_version_id=extends_version_id,
             partial_pins_json=partial_pins_json,
@@ -93,6 +94,7 @@ def preview_document(
 def _resolve_draft_preview(
     db: Session,
     *,
+    tenant_id: int,
     template: str,
     extends_version_id: int | None,
     partial_pins_json: str | None,
@@ -100,12 +102,26 @@ def _resolve_draft_preview(
     import json
 
     from ..models import DocumentTemplateVersion
+    from ..services.document_migration_service import _default_partial_pins, _system_base_published_version
     from ..services.template_resolution_service import _load_base_chain, _load_pin_map
+    from ..services.twig_parse_service import collect_all_include_codes, extract_extends_target
 
+    content = str(template)
     base_chain: list[tuple[str, str]] = []
     partials: dict[str, str] = {}
-    if extends_version_id:
-        chain, chain_partials = _load_base_chain(db, int(extends_version_id))
+
+    base_version_id = extends_version_id
+    if base_version_id is None:
+        extends_target = extract_extends_target(content)
+        if extends_target:
+            base_version = _system_base_published_version(db, tenant_id=int(tenant_id))
+            if base_version is not None:
+                base_tpl_code = str(base_version.template.template_code or "")
+                if base_tpl_code == extends_target or extends_target == "base_document":
+                    base_version_id = int(base_version.id)
+
+    if base_version_id:
+        chain, chain_partials = _load_base_chain(db, int(base_version_id))
         base_chain.extend(chain)
         partials.update(chain_partials)
 
@@ -114,14 +130,31 @@ def _resolve_draft_preview(
             template_id=0,
             version_number=0,
             status="draft",
-            twig_content=template,
+            twig_content=content,
             partial_pins_json=partial_pins_json,
         )
         partials.update(_load_pin_map(db, fake_version))
 
+    needed_codes = collect_all_include_codes(content, *[c for _, c in base_chain], *partials.values())
+    default_pins = _default_partial_pins(db, tenant_id=int(tenant_id))
+    missing_pins = {
+        code: int(default_pins[code])
+        for code in needed_codes
+        if code not in partials and code in default_pins
+    }
+    if missing_pins:
+        auto_version = DocumentTemplateVersion(
+            template_id=0,
+            version_number=0,
+            status="draft",
+            twig_content=content,
+            partial_pins_json=json.dumps(missing_pins),
+        )
+        partials.update(_load_pin_map(db, auto_version))
+
     return ResolvedDocumentTemplate(
         main_template_name="__document__",
-        main_twig_content=str(template),
+        main_twig_content=content,
         base_chain=tuple(base_chain),
         partials=partials,
     )

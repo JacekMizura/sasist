@@ -1,5 +1,5 @@
 <div class="doc-footer-row">
   <span>{{ company.name }}</span>
   {% if meta.generated_at %} · {{ meta.generated_at }}{% elif current_datetime %} · {{ current_datetime }}{% endif %}
-  {% if document.number %} · {{ document.number }}{% endif %}
+  {% if document is defined and document.number %} · {{ document.number }}{% endif %}
 </div>

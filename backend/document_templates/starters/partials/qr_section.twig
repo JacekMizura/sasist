@@ -1,5 +1,5 @@
-{% if document.qr_value or qr_value %}
+{% if (document is defined and document.qr_value) or qr_value %}
 <div class="qr-section text-center">
-  {{ qr(document.qr_value | default(qr_value)) }}
+  {{ qr((document.qr_value if document is defined else none) | default(qr_value)) }}
 </div>
 {% endif %}

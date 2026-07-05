@@ -15,7 +15,8 @@ from ..dto.print_context import (
 
 
 def sample_products() -> list[dict]:
-    return [
+    rows: list[dict] = []
+    for item in (
         {
             "name": "Przykładowy produkt A",
             "sku": "SKU-001",
@@ -28,6 +29,7 @@ def sample_products() -> list[dict]:
             "value": "99.98",
             "vat": "23%",
             "locations": "A-01-01",
+            "location": "A-01-01",
             "manufacturer": "Demo Sp. z o.o.",
         },
         {
@@ -42,9 +44,14 @@ def sample_products() -> list[dict]:
             "value": "19.99",
             "vat": "23%",
             "locations": "B-02-03",
+            "location": "B-02-03",
             "manufacturer": "Demo Sp. z o.o.",
         },
-    ]
+    ):
+        row = dict(item)
+        row["product"] = {"name": row["name"], "sku": row["sku"], "ean": row["ean"]}
+        rows.append(row)
+    return rows
 
 
 def sample_document(*, title: str, doc_type: str = "WZ") -> dict:

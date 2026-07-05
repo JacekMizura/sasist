@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import io
-from datetime import date, datetime
+from datetime import date as date_cls
+from datetime import datetime as datetime_cls
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
@@ -71,9 +72,9 @@ def quantity(value: Any, unit: str = "szt.") -> str:
 def date(value: Any, fmt: str = "%d.%m.%Y") -> str:
     if value is None:
         return "—"
-    if isinstance(value, datetime):
+    if isinstance(value, datetime_cls):
         return value.strftime(fmt)
-    if isinstance(value, date):
+    if isinstance(value, date_cls):
         return value.strftime(fmt)
     text = str(value).strip()
     return text or "—"
@@ -184,6 +185,15 @@ def percent(value: Any, digits: int = 2) -> str:
     return f"{num:.{digits}f}%".replace(".", ",")
 
 
+def twig_default(value: Any, default_value: str = "", boolean: bool = False) -> Any:
+    """Twig/Jinja-compatible default filter."""
+    if value is None:
+        return default_value
+    if boolean and not value:
+        return default_value
+    return value
+
+
 def register_builtin_twig_helpers(registry: TwigHelperRegistry | None = None) -> TwigHelperRegistry:
     reg = registry or get_twig_helper_registry()
     reg.register_function("barcode", barcode)
@@ -213,6 +223,7 @@ def register_builtin_twig_helpers(registry: TwigHelperRegistry | None = None) ->
     reg.register_filter("phone", phone)
     reg.register_filter("url", url)
     reg.register_filter("percent", percent)
+    reg.register_filter("default", twig_default)
     return reg
 
 

@@ -1,6 +1,6 @@
-{% if document.barcode_value or barcode_value %}
+{% if (document is defined and document.barcode_value) or barcode_value %}
 <div class="barcode-section text-center">
-  {{ barcode(document.barcode_value | default(barcode_value)) }}
-  <div class="text-muted" style="font-size:8px;font-family:monospace;">{{ document.barcode_value | default(barcode_value) }}</div>
+  {{ barcode((document.barcode_value if document is defined else none) | default(barcode_value)) }}
+  <div class="text-muted" style="font-size:8px;font-family:monospace;">{{ (document.barcode_value if document is defined else none) | default(barcode_value) }}</div>
 </div>
 {% endif %}

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import traceback
 from typing import Any
 
 from jinja2 import DictLoader, Environment, TemplateSyntaxError, pass_context, select_autoescape
@@ -85,7 +86,11 @@ def _render_plain(template: str, context: dict[str, Any]) -> str:
     except DocumentRenderError:
         raise
     except Exception as exc:
-        raise DocumentRenderError(f"Błąd renderowania Twig: {exc}", code="twig_error") from exc
+        tb = traceback.format_exc()
+        raise DocumentRenderError(
+            f"Błąd renderowania Twig: {exc}\n\nTraceback:\n{tb}",
+            code="twig_error",
+        ) from exc
 
 
 def _render_resolved(resolved: ResolvedDocumentTemplate, context: dict[str, Any]) -> str:
@@ -109,4 +114,8 @@ def _render_resolved(resolved: ResolvedDocumentTemplate, context: dict[str, Any]
     except DocumentRenderError:
         raise
     except Exception as exc:
-        raise DocumentRenderError(f"Błąd renderowania Twig: {exc}", code="twig_error") from exc
+        tb = traceback.format_exc()
+        raise DocumentRenderError(
+            f"Błąd renderowania Twig: {exc}\n\nTraceback:\n{tb}",
+            code="twig_error",
+        ) from exc
