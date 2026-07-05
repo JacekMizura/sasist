@@ -5,6 +5,8 @@ export type ProductDispositionStockSummaryProps = {
   disposition?: ProductDispositionStock | null;
   /** Active reservations — shows secondary line when > 0 */
   reservedQuantity?: number | null;
+  /** Production batch/order reservations — separate line when > 0 */
+  productionReservedQuantity?: number | null;
   /**
    * list: Dostępne + Fizycznie (product list column)
    * panel: full breakdown for product card / warehouse tab
@@ -32,29 +34,43 @@ function dockQty(d: ProductDispositionStock): number {
 
 function ReservedSecondary({
   reserved,
+  productionReserved,
   disposition,
 }: {
   reserved: number;
+  productionReserved: number;
   disposition: ProductDispositionStock;
 }) {
-  if (reserved <= 0) return null;
+  if (reserved <= 0 && productionReserved <= 0) return null;
   return (
-    <p className="text-xs text-slate-500 tabular-nums">
-      Zarezerwowane: {fmtDispositionQty(reserved)} szt.
-      {" · "}
-      Po rezerwacji: {fmtDispositionQty(disposition.saleable_available_qty)} szt.
-    </p>
+    <div className="space-y-1 text-xs text-slate-500 tabular-nums">
+      {reserved > 0 ? (
+        <p>
+          Zarezerwowane: {fmtDispositionQty(reserved)} szt.
+          {" · "}
+          Po rezerwacji: {fmtDispositionQty(disposition.saleable_available_qty)} szt.
+        </p>
+      ) : null}
+      {productionReserved > 0 ? (
+        <p>Zarezerwowane do produkcji: {fmtDispositionQty(productionReserved)} szt.</p>
+      ) : null}
+    </div>
   );
 }
 
 export function ProductDispositionStockSummary({
   disposition,
   reservedQuantity,
+  productionReservedQuantity,
   variant,
   className = "",
 }: ProductDispositionStockSummaryProps) {
   const d = disposition ?? EMPTY_DISPOSITION_STOCK;
   const reserved = reservedQuantity != null && Number.isFinite(reservedQuantity) ? reservedQuantity : 0;
+  const productionReserved =
+    productionReservedQuantity != null && Number.isFinite(productionReservedQuantity)
+      ? productionReservedQuantity
+      : 0;
   const available = d.saleable_available_qty;
   const physical = d.physical_qty;
   const dock = dockQty(d);
@@ -137,7 +153,11 @@ export function ProductDispositionStockSummary({
           <span className="font-semibold text-slate-900 tabular-nums">{fmtDispositionQty(p.qty)} szt.</span>
         </p>
       ))}
-      <ReservedSecondary reserved={reserved} disposition={d} />
+      <ReservedSecondary
+        reserved={reserved}
+        productionReserved={productionReserved}
+        disposition={d}
+      />
     </div>
   );
 }

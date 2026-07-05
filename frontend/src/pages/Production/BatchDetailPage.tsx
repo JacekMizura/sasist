@@ -4,7 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import toast from "react-hot-toast";
 import { useWarehouse } from "../../context/WarehouseContext";
 import {
-  batchProductionCardPdfUrl,
+  openBatchProductionCardPdf,
   cancelProductionBatch,
   fetchBatchPickPlan,
   getProductionBatch,
@@ -86,9 +86,13 @@ export default function BatchDetailPage() {
     }
   };
 
-  const printCard = () => {
+  const printCard = async () => {
     if (!batchId || warehouseId == null) return;
-    window.open(batchProductionCardPdfUrl(tenantId, Number(batchId), warehouseId), "_blank", "noopener,noreferrer");
+    try {
+      await openBatchProductionCardPdf(tenantId, Number(batchId), warehouseId);
+    } catch {
+      toast.error("Nie udało się otworzyć karty produkcji.");
+    }
   };
 
   const openErp = () => {

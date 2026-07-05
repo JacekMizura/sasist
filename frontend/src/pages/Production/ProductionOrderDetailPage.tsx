@@ -12,7 +12,7 @@ import {
 
   cancelProductionOrder,
   getProductionOrder,
-  orderProductionCardPdfUrl,
+  openOrderProductionCardPdf,
   releaseOrderToWms,
   startErpExecutionOrder,
   type ProductionOrderRead,
@@ -141,9 +141,13 @@ export default function ProductionOrderDetailPage() {
     }
   };
 
-  const printCard = () => {
+  const printCard = async () => {
     if (!order || warehouseId == null) return;
-    window.open(orderProductionCardPdfUrl(tenantId, order.id, warehouseId), "_blank", "noopener,noreferrer");
+    try {
+      await openOrderProductionCardPdf(tenantId, order.id, warehouseId);
+    } catch {
+      toast.error("Nie udało się otworzyć karty produkcji.");
+    }
   };
 
   const openErp = () => {

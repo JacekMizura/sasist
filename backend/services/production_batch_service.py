@@ -1163,23 +1163,29 @@ def update_collection_task(
     batch.collection_state_json = json.dumps(data, ensure_ascii=False)
     batch.updated_at = datetime.utcnow()
     if getattr(batch, "materials_reserved", False) and is_erp_interface(batch):
-        from .reservations.reservation_service import sync_production_reservation_from_collection_task
+        from .reservations.reservation_service import (
+            ReservationError,
+            sync_production_reservation_from_collection_task,
+        )
 
         task_pid = int(body.task_key) if str(body.task_key).isdigit() else 0
         for t in data.get("tasks") or []:
             if str(t.get("task_key")) == str(body.task_key) or str(t.get("component_product_id")) == str(body.task_key):
                 task_pid = int(t.get("component_product_id") or task_pid)
-                sync_production_reservation_from_collection_task(
-                    db,
-                    tenant_id=tenant_id,
-                    production_batch_id=int(batch_id),
-                    component_product_id=task_pid,
-                    location_id=int(body.location_id) if body.location_id else None,
-                    batch_number=body.batch_number,
-                    serial_number=body.serial_number,
-                    quantity=float(body.collected_qty),
-                    ignore_locked=True,
-                )
+                try:
+                    sync_production_reservation_from_collection_task(
+                        db,
+                        tenant_id=tenant_id,
+                        production_batch_id=int(batch_id),
+                        component_product_id=task_pid,
+                        location_id=int(body.location_id) if body.location_id else None,
+                        batch_number=body.batch_number,
+                        serial_number=body.serial_number,
+                        quantity=float(body.collected_qty),
+                        ignore_locked=True,
+                    )
+                except ReservationError as exc:
+                    raise ProductionBatchError(str(exc), code=getattr(exc, "code", "reservation_error")) from exc
                 break
     db.flush()
     return get_collection_state(db, tenant_id=tenant_id, batch_id=batch_id)

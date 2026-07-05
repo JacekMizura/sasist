@@ -1002,9 +1002,25 @@ export function batchProductionCardPdfUrl(
   batchId: number,
   warehouseId?: number,
 ): string {
+  const base = (api.defaults.baseURL || "").replace(/\/$/, "");
   const params = new URLSearchParams({ tenant_id: String(tenantId) });
   if (warehouseId != null) params.set("warehouse_id", String(warehouseId));
-  return `/api/production/batches/${batchId}/production-card.pdf?${params.toString()}`;
+  return `${base}/production/batches/${batchId}/production-card.pdf?${params.toString()}`;
+}
+
+/** Opens production card PDF with auth headers (axios blob). */
+export async function openBatchProductionCardPdf(
+  tenantId: number,
+  batchId: number,
+  warehouseId?: number,
+): Promise<void> {
+  const res = await api.get<Blob>(`/production/batches/${batchId}/production-card.pdf`, {
+    params: productionQueryParams(tenantId, warehouseId),
+    responseType: "blob",
+  });
+  const url = URL.createObjectURL(res.data);
+  window.open(url, "_blank", "noopener,noreferrer");
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 export async function printBulkProductionCards(
@@ -1180,9 +1196,24 @@ export function orderProductionCardPdfUrl(
   orderId: number,
   warehouseId?: number,
 ): string {
+  const base = (api.defaults.baseURL || "").replace(/\/$/, "");
   const params = new URLSearchParams({ tenant_id: String(tenantId) });
   if (warehouseId != null) params.set("warehouse_id", String(warehouseId));
-  return `/api/production/orders/${orderId}/production-card.pdf?${params.toString()}`;
+  return `${base}/production/orders/${orderId}/production-card.pdf?${params.toString()}`;
+}
+
+export async function openOrderProductionCardPdf(
+  tenantId: number,
+  orderId: number,
+  warehouseId?: number,
+): Promise<void> {
+  const res = await api.get<Blob>(`/production/orders/${orderId}/production-card.pdf`, {
+    params: productionQueryParams(tenantId, warehouseId),
+    responseType: "blob",
+  });
+  const url = URL.createObjectURL(res.data);
+  window.open(url, "_blank", "noopener,noreferrer");
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 export type OrderCollectionStateRead = {

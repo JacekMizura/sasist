@@ -192,6 +192,7 @@ def get_product_inventory_display_snapshot(
         "location_allocated_quantity": int(out.get("location_allocated_quantity") or 0),
         "unallocated_quantity": int(out.get("unallocated_quantity") or 0),
         "reserved_quantity": int(out.get("reserved_quantity") or 0),
+        "production_reserved_quantity": int(out.get("production_reserved_quantity") or 0),
         "available_quantity": int(out.get("available_quantity") or 0),
         "disposition_stock": out.get("disposition_stock") or empty_disposition_stock_dict(),
         "commercially_sellable_qty": float(out.get("commercially_sellable_qty") or 0.0),
@@ -207,6 +208,7 @@ _EMPTY_DISPLAY_SNAPSHOT: Dict[str, Any] = {
     "location_allocated_quantity": 0,
     "unallocated_quantity": 0,
     "reserved_quantity": 0,
+    "production_reserved_quantity": 0,
     "available_quantity": 0,
     "disposition_stock": empty_disposition_stock_dict(),
     "commercially_sellable_qty": 0.0,
@@ -227,6 +229,7 @@ def _apply_display_fields_to_dict(
     inventory: List[dict],
     reserved_quantity: int,
     available_quantity: int,
+    production_reserved_quantity: int = 0,
     disposition: Optional[dict[str, Any]] = None,
     commercial: Optional[dict[str, Any]] = None,
     locations_data_failed: bool = False,
@@ -238,6 +241,7 @@ def _apply_display_fields_to_dict(
     out["location_allocated_quantity"] = allocated
     out["unallocated_quantity"] = unallocated
     out["reserved_quantity"] = reserved_quantity
+    out["production_reserved_quantity"] = production_reserved_quantity
     out["available_quantity"] = available_quantity
     if include_disposition_stock:
         out["disposition_stock"] = disposition or empty_disposition_stock_dict()
@@ -317,6 +321,7 @@ def attach_inventory_display_to_product_dicts(
         inventory = list(inv_map.get(pid, []))
         ops = ops_by_pid.get(pid, {})
         reserved = int(round(float(ops.get("reserved") or 0)))
+        production_reserved = int(round(float(ops.get("production_reserved") or 0)))
         available = int(round(float(ops.get("available") or max(0, stock - reserved))))
         _apply_display_fields_to_dict(
             out,
@@ -327,6 +332,7 @@ def attach_inventory_display_to_product_dicts(
             inventory=inventory,
             reserved_quantity=reserved,
             available_quantity=available,
+            production_reserved_quantity=production_reserved,
             disposition=disp_by_pid.get(pid) if include_disposition_stock else None,
             commercial=commercial_by_pid.get(pid, empty_comm) if include_disposition_stock else None,
             locations_data_failed=locations_data_failed,

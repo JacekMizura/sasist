@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -40,7 +40,6 @@ function isTaskDone(required: number, collected: number): boolean {
 
 export default function PaperProductionPage() {
   const { kind, id } = useParams<{ kind: string; id: string }>();
-  const navigate = useNavigate();
   const { warehouse } = useWarehouse();
   const tenantId = warehouse?.tenant_id ?? DEFAULT_TENANT;
   const warehouseId = warehouse?.id;
@@ -223,18 +222,12 @@ export default function PaperProductionPage() {
     setBusy(true);
     try {
       if (jobKind === "batch") {
-        const batch = await finishProductionPhase(tenantId, jobId, warehouseId);
-        toast.success("Produkcja zakończona — dokumenty PW oczekują na rozlokowanie.");
-        navigate(wmsProductionPaths.putaway("batch", jobId));
-        setDocumentsSource({ kind: "batch", batch });
-        setStatus(batch.status);
-        return;
+        await finishProductionPhase(tenantId, jobId, warehouseId);
+      } else {
+        await finishOrderProduction(tenantId, jobId, warehouseId);
       }
-      const order = await finishOrderProduction(tenantId, jobId, warehouseId);
-      toast.success("Produkcja zakończona — dokument PW oczekuje na rozlokowanie.");
-      navigate(wmsProductionPaths.putaway("order", jobId));
-      setDocumentsSource({ kind: "order", order });
-      setStatus(order.status);
+      toast.success("Produkcja zakończona — dokumenty PW oczekują na rozlokowanie.");
+      await load();
     } catch (e: unknown) {
       toast.error(formatStartCollectingError(e));
     } finally {

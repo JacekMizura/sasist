@@ -91,6 +91,36 @@ def _reserved_by_product(
     return {int(pid): _nz(float(qty or 0)) for pid, qty in rows}
 
 
+def _production_reserved_by_product(
+    db: Session,
+    tenant_id: int,
+    warehouse_id: Optional[int],
+    product_ids: Optional[Sequence[int]],
+) -> Dict[int, float]:
+    from ..services.reservations.constants import (
+        RESERVATION_KIND_PRODUCTION_BATCH,
+        RESERVATION_KIND_PRODUCTION_ORDER,
+    )
+
+    q = (
+        db.query(StockReservation.product_id, func.coalesce(func.sum(StockReservation.quantity), 0.0))
+        .join(Location, Location.id == StockReservation.location_id)
+        .filter(
+            StockReservation.tenant_id == tenant_id,
+            StockReservation.status == "reserved",
+            StockReservation.reservation_kind.in_(
+                (RESERVATION_KIND_PRODUCTION_BATCH, RESERVATION_KIND_PRODUCTION_ORDER)
+            ),
+        )
+    )
+    if warehouse_id is not None:
+        q = q.filter(Location.warehouse_id == int(warehouse_id))
+    if product_ids is not None and len(product_ids) > 0:
+        q = q.filter(StockReservation.product_id.in_(tuple(int(x) for x in product_ids)))
+    rows = q.group_by(StockReservation.product_id).all()
+    return {int(pid): _nz(float(qty or 0)) for pid, qty in rows}
+
+
 def _po_ids_with_transit_delivery(db: Session, tenant_id: int) -> Set[int]:
     rows = (
         db.query(InboundDelivery.purchase_order_id)
@@ -309,6 +339,7 @@ def _inventory_snapshots_for_products_chunk(
 
     on_hand = _on_hand_visible_by_product(db, tenant_id, warehouse_id, pids)
     reserved = _reserved_by_product(db, tenant_id, warehouse_id, pids)
+    production_reserved = _production_reserved_by_product(db, tenant_id, warehouse_id, pids)
     transit_po_ids = _po_ids_with_transit_delivery(db, tenant_id)
     draft_po_ids = _po_ids_with_draft_delivery(db, tenant_id)
     conf, manual_draft = _inbound_from_transit_and_manual_drafts(db, tenant_id, warehouse_id, pids)
@@ -330,6 +361,7 @@ def _inventory_snapshots_for_products_chunk(
         out[int(pid)] = {
             "on_hand": _nz(oh),
             "reserved": _nz(rs),
+            "production_reserved": _nz(float(production_reserved.get(pid, 0.0))),
             "available": av,
             "inbound_open": _nz(io),
             "inbound_confirmed": _nz(ic),
@@ -350,6 +382,7 @@ def get_product_inventory_snapshot(
     return m.get(int(product_id), {
         "on_hand": 0.0,
         "reserved": 0.0,
+        "production_reserved": 0.0,
         "available": 0.0,
         "inbound_open": 0.0,
         "inbound_confirmed": 0.0,

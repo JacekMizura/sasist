@@ -199,6 +199,7 @@ export default function ProductEditPage() {
                 location_allocated_quantity: p.location_allocated_quantity,
                 unallocated_quantity: p.unallocated_quantity,
                 reserved_quantity: p.reserved_quantity,
+                production_reserved_quantity: p.production_reserved_quantity,
                 available_quantity: p.available_quantity,
                 disposition_stock: p.disposition_stock,
                 locations_load_incomplete: p.locations_load_incomplete,

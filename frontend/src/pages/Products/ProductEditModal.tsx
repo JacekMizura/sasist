@@ -129,6 +129,7 @@ export type ProductForm = {
   location_allocated_quantity?: number;
   unallocated_quantity?: number;
   reserved_quantity?: number;
+  production_reserved_quantity?: number;
   available_quantity?: number;
   disposition_stock?: import("../../types/productDispositionStock").ProductDispositionStock;
   commercially_sellable_qty?: number;
@@ -748,6 +749,11 @@ export function ProductEditModal({
       reserved:
         product?.reserved_quantity != null && Number.isFinite(product.reserved_quantity)
           ? String(Math.round(product.reserved_quantity))
+          : null,
+      productionReserved:
+        product?.production_reserved_quantity != null &&
+        Number.isFinite(product.production_reserved_quantity)
+          ? String(Math.round(product.production_reserved_quantity))
           : null,
       available:
         product?.available_quantity != null && Number.isFinite(product.available_quantity)
@@ -2296,6 +2302,7 @@ export function ProductEditModal({
                           allocatedStockDisplay={inventoryBreakdown?.allocated ?? null}
                           unallocatedStockDisplay={inventoryBreakdown?.unallocated ?? null}
                           reservedDisplay={inventoryBreakdown?.reserved ?? null}
+                          productionReservedDisplay={inventoryBreakdown?.productionReserved ?? null}
                           availableDisplay={inventoryBreakdown?.available ?? null}
                           dispositionStock={product?.disposition_stock ?? null}
                           commerciallySellableQty={product?.commercially_sellable_qty ?? null}

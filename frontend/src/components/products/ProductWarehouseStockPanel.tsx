@@ -17,6 +17,7 @@ export type ProductWarehouseStockPanelProps = {
   unallocatedStockDisplay?: string | null;
   /** When set with `availableDisplay`, shows three-line summary (carton). Omit for classic product copy. */
   reservedDisplay?: string | null;
+  productionReservedDisplay?: string | null;
   availableDisplay?: string | null;
   /** Etap 1 disposition breakdown — when set, replaces legacy single-line stock in product panel. */
   dispositionStock?: ProductDispositionStock | null;
@@ -47,6 +48,7 @@ export function ProductWarehouseStockPanel({
   allocatedStockDisplay,
   unallocatedStockDisplay,
   reservedDisplay,
+  productionReservedDisplay,
   availableDisplay,
   dispositionStock,
   commerciallySellableQty,
@@ -79,6 +81,11 @@ export function ProductWarehouseStockPanel({
                 reservedQuantity={
                   reservedDisplay != null && reservedDisplay !== ""
                     ? Number(reservedDisplay)
+                    : undefined
+                }
+                productionReservedQuantity={
+                  productionReservedDisplay != null && productionReservedDisplay !== ""
+                    ? Number(productionReservedDisplay)
                     : undefined
                 }
               />
@@ -161,6 +168,12 @@ export function ProductWarehouseStockPanel({
                 <span className="font-semibold text-slate-900 tabular-nums">{reservedDisplay} szt.</span>
               </p>
             ) : null}
+            {productionReservedDisplay != null ? (
+              <p>
+                Zarezerwowane do produkcji:{" "}
+                <span className="font-semibold text-slate-900 tabular-nums">{productionReservedDisplay} szt.</span>
+              </p>
+            ) : null}
             {availableDisplay != null ? (
               <p>
                 Dostępne:{" "}
@@ -182,6 +195,12 @@ export function ProductWarehouseStockPanel({
                 {reservedDisplay != null ? `${reservedDisplay} szt.` : "—"}
               </span>
             </p>
+            {productionReservedDisplay != null ? (
+              <p className="text-sm text-slate-700">
+                Zarezerwowane do produkcji:{" "}
+                <span className="font-semibold text-slate-900">{productionReservedDisplay} szt.</span>
+              </p>
+            ) : null}
             <p className="text-sm text-slate-700">
               Dostępne:{" "}
               <span className="font-semibold text-slate-900">

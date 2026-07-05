@@ -127,6 +127,71 @@ def test_single_location_when_first_covers_need(reservation_db):
     assert sum(s.quantity for s in slices) == pytest.approx(20.0)
 
 
+def test_prefers_solo_bin_even_when_other_bins_have_earlier_expiry(reservation_db):
+    """Regression: do not split across bins when one bin holds the full required qty."""
+    reservation_db.add(
+        Location(
+            id=4,
+            warehouse_id=1,
+            name="A23-A-2",
+            type="pick",
+            location_type="NORMAL",
+            operational_zone_type=None,
+            is_active=True,
+        )
+    )
+    reservation_db.query(Inventory).delete()
+    reservation_db.add_all(
+        [
+            Inventory(
+                id=201,
+                tenant_id=1,
+                warehouse_id=1,
+                location_id=1,
+                product_id=10,
+                quantity=183.0,
+                stock_disposition=STOCK_DISPOSITION_SALEABLE,
+                batch_number="",
+                expiry_date=date(2026, 12, 31),
+            ),
+            Inventory(
+                id=202,
+                tenant_id=1,
+                warehouse_id=1,
+                location_id=2,
+                product_id=10,
+                quantity=4.0,
+                stock_disposition=STOCK_DISPOSITION_SALEABLE,
+                batch_number="",
+                expiry_date=date(2026, 1, 15),
+            ),
+            Inventory(
+                id=203,
+                tenant_id=1,
+                warehouse_id=1,
+                location_id=4,
+                product_id=10,
+                quantity=10.0,
+                stock_disposition=STOCK_DISPOSITION_SALEABLE,
+                batch_number="LOT-A23",
+                expiry_date=date(2026, 2, 1),
+            ),
+        ]
+    )
+    reservation_db.commit()
+
+    slices = allocate_product_quantity(
+        reservation_db,
+        tenant_id=1,
+        warehouse_id=1,
+        product_id=10,
+        quantity=28,
+        strategy="FEFO",
+    )
+    assert {s.location_id for s in slices} == {1}
+    assert sum(s.quantity for s in slices) == pytest.approx(28.0)
+
+
 def test_multi_location_only_when_first_insufficient(reservation_db):
     slices = allocate_product_quantity(
         reservation_db,

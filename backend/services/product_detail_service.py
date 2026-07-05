@@ -245,6 +245,7 @@ def build_product_detail_payload(
         out["location_allocated_quantity"] = 0
         out["unallocated_quantity"] = 0
         out["reserved_quantity"] = 0
+        out["production_reserved_quantity"] = 0
         out["available_quantity"] = 0
         out["locations"] = []
         out["inventory"] = []
