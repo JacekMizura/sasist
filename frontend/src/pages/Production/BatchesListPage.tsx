@@ -4,7 +4,7 @@ import { AlertTriangle, CalendarClock, Factory, FileText, Package } from "lucide
 import toast from "react-hot-toast";
 
 import { useWarehouse } from "../../context/WarehouseContext";
-import { listProductionBatches, printBulkProductionCards, fetchProductionBatchListSummary, type ProductionBatchRead, type ProductionBatchListSummaryRead } from "../../api/productionApi";
+import { listProductionBatches, openBulkProductionCardsPdf, fetchProductionBatchListSummary, type ProductionBatchRead, type ProductionBatchListSummaryRead } from "../../api/productionApi";
 import { AppEmptyState } from "../../components/app-shell";
 import {
   productsListActionsCellClass,
@@ -90,12 +90,10 @@ export default function BatchesListPage({ embedded = false }: Props) {
     if (warehouseId == null || selected.size === 0) return;
     setPrintBusy(true);
     try {
-      const blob = await printBulkProductionCards(tenantId, [...selected], warehouseId);
-      const url = URL.createObjectURL(blob);
-      window.open(url, "_blank", "noopener,noreferrer");
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
-    } catch {
-      toast.error("Nie udało się wygenerować kart produkcyjnych.");
+      await openBulkProductionCardsPdf(tenantId, [...selected], warehouseId);
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "Nie udało się wygenerować kart produkcyjnych.";
+      toast.error(message);
     } finally {
       setPrintBusy(false);
     }

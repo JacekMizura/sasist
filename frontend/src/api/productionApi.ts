@@ -7,6 +7,47 @@ function productionQueryParams(tenantId: number, warehouseId?: number) {
   };
 }
 
+async function parsePdfBlobError(blob: Blob): Promise<string> {
+  const text = await blob.text();
+  try {
+    const parsed = JSON.parse(text) as { detail?: string; message?: string };
+    return parsed.detail ?? parsed.message ?? "Nie udało się pobrać PDF.";
+  } catch {
+    if (text.includes("<!DOCTYPE") || text.includes("<html")) {
+      return "Serwer zwrócił stronę HTML zamiast PDF (adres trafił do frontendu, nie backendu).";
+    }
+    return "Nie udało się pobrać PDF.";
+  }
+}
+
+async function fetchAuthenticatedProductionPdfBlob(
+  path: string,
+  params: ReturnType<typeof productionQueryParams>,
+): Promise<Blob> {
+  const res = await api.get<Blob>(path, {
+    params,
+    responseType: "blob",
+    headers: { Accept: "application/pdf,*/*" },
+  });
+  const contentType = String(res.headers["content-type"] ?? "").toLowerCase();
+  if (contentType.includes("application/json") || contentType.includes("text/html")) {
+    throw new Error(await parsePdfBlobError(res.data));
+  }
+  const raw = res.data;
+  return raw.type.includes("pdf") ? raw : new Blob([raw], { type: "application/pdf" });
+}
+
+/** Opens PDF blob in a new tab — native browser PDF viewer (Print / Save). */
+function openPdfBlobInNativeViewer(blob: Blob): void {
+  const url = URL.createObjectURL(blob);
+  const tab = window.open(url, "_blank", "noopener,noreferrer");
+  if (!tab) {
+    URL.revokeObjectURL(url);
+    throw new Error("Przeglądarka zablokowała nową kartę. Zezwól na wyskakujące okna.");
+  }
+  window.setTimeout(() => URL.revokeObjectURL(url), 120_000);
+}
+
 export type ProductionRecipeLineRead = {
   id: number;
   component_product_id: number;
@@ -997,30 +1038,16 @@ export async function startErpExecutionBatch(
 /** @deprecated use startErpExecutionBatch */
 export const startPaperExecutionBatch = startErpExecutionBatch;
 
-export function batchProductionCardPdfUrl(
-  tenantId: number,
-  batchId: number,
-  warehouseId?: number,
-): string {
-  const base = (api.defaults.baseURL || "").replace(/\/$/, "");
-  const params = new URLSearchParams({ tenant_id: String(tenantId) });
-  if (warehouseId != null) params.set("warehouse_id", String(warehouseId));
-  return `${base}/production/batches/${batchId}/production-card.pdf?${params.toString()}`;
-}
-
-/** Opens production card PDF with auth headers (axios blob). */
 export async function openBatchProductionCardPdf(
   tenantId: number,
   batchId: number,
   warehouseId?: number,
 ): Promise<void> {
-  const res = await api.get<Blob>(`/production/batches/${batchId}/production-card.pdf`, {
-    params: productionQueryParams(tenantId, warehouseId),
-    responseType: "blob",
-  });
-  const url = URL.createObjectURL(res.data);
-  window.open(url, "_blank", "noopener,noreferrer");
-  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  const blob = await fetchAuthenticatedProductionPdfBlob(
+    `/production/batches/${batchId}/production-card.pdf`,
+    productionQueryParams(tenantId, warehouseId),
+  );
+  openPdfBlobInNativeViewer(blob);
 }
 
 export async function printBulkProductionCards(
@@ -1034,9 +1061,23 @@ export async function printBulkProductionCards(
     {
       params: productionQueryParams(tenantId, warehouseId),
       responseType: "blob",
+      headers: { Accept: "application/pdf,*/*" },
     },
   );
-  return res.data as Blob;
+  const contentType = String(res.headers["content-type"] ?? "").toLowerCase();
+  if (contentType.includes("application/json") || contentType.includes("text/html")) {
+    throw new Error(await parsePdfBlobError(res.data as Blob));
+  }
+  const raw = res.data as Blob;
+  return raw.type.includes("pdf") ? raw : new Blob([raw], { type: "application/pdf" });
+}
+
+export async function openBulkProductionCardsPdf(
+  tenantId: number,
+  batchIds: number[],
+  warehouseId?: number,
+): Promise<void> {
+  openPdfBlobInNativeViewer(await printBulkProductionCards(tenantId, batchIds, warehouseId));
 }
 
 export async function startCollectingBatch(
@@ -1191,29 +1232,16 @@ export async function startErpExecutionOrder(
 /** @deprecated use startErpExecutionOrder */
 export const startPaperExecutionOrder = startErpExecutionOrder;
 
-export function orderProductionCardPdfUrl(
-  tenantId: number,
-  orderId: number,
-  warehouseId?: number,
-): string {
-  const base = (api.defaults.baseURL || "").replace(/\/$/, "");
-  const params = new URLSearchParams({ tenant_id: String(tenantId) });
-  if (warehouseId != null) params.set("warehouse_id", String(warehouseId));
-  return `${base}/production/orders/${orderId}/production-card.pdf?${params.toString()}`;
-}
-
 export async function openOrderProductionCardPdf(
   tenantId: number,
   orderId: number,
   warehouseId?: number,
 ): Promise<void> {
-  const res = await api.get<Blob>(`/production/orders/${orderId}/production-card.pdf`, {
-    params: productionQueryParams(tenantId, warehouseId),
-    responseType: "blob",
-  });
-  const url = URL.createObjectURL(res.data);
-  window.open(url, "_blank", "noopener,noreferrer");
-  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  const blob = await fetchAuthenticatedProductionPdfBlob(
+    `/production/orders/${orderId}/production-card.pdf`,
+    productionQueryParams(tenantId, warehouseId),
+  );
+  openPdfBlobInNativeViewer(blob);
 }
 
 export type OrderCollectionStateRead = {

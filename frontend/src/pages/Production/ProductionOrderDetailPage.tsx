@@ -145,8 +145,9 @@ export default function ProductionOrderDetailPage() {
     if (!order || warehouseId == null) return;
     try {
       await openOrderProductionCardPdf(tenantId, order.id, warehouseId);
-    } catch {
-      toast.error("Nie udało się otworzyć karty produkcji.");
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "Nie udało się otworzyć karty produkcji.";
+      toast.error(message);
     }
   };
 

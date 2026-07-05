@@ -90,8 +90,9 @@ export default function BatchDetailPage() {
     if (!batchId || warehouseId == null) return;
     try {
       await openBatchProductionCardPdf(tenantId, Number(batchId), warehouseId);
-    } catch {
-      toast.error("Nie udało się otworzyć karty produkcji.");
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "Nie udało się otworzyć karty produkcji.";
+      toast.error(message);
     }
   };
 
