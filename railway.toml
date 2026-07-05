@@ -1,15 +1,17 @@
 # SASIST backend API — Railway config (path from repo root: /railway.toml).
 # Backend service Root Directory MUST be / (repo root), NOT frontend/.
-# See docs/RAILWAY_BACKEND.md
+# Builder: Dockerfile (Node + Puppeteer for HTML→PDF). See docs/RAILWAY_BACKEND.md
 
 [build]
-builder = "nixpacks"
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
 watchPatterns = [
   "backend/**",
   "requirements.txt",
   "run_server.py",
-  "nixpacks.toml",
+  "Dockerfile",
   "railway.toml",
+  "railway.json",
   "Procfile",
 ]
 

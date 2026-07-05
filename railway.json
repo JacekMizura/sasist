@@ -1,12 +1,13 @@
 {
   "$schema": "https://railway.app/railway.schema.json",
   "build": {
-    "builder": "NIXPACKS",
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "Dockerfile",
     "watchPatterns": [
       "backend/**",
       "requirements.txt",
       "run_server.py",
-      "nixpacks.toml",
+      "Dockerfile",
       "railway.toml",
       "railway.json",
       "Procfile"
