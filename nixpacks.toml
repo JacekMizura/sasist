@@ -44,7 +44,7 @@ cmds = [
   "cd backend/scripts/structure_report_pdf && npm ci --omit=dev",
   "test -f backend/scripts/structure_report_pdf/render.mjs",
   "test -d backend/scripts/structure_report_pdf/node_modules/puppeteer",
-  "node --input-type=module -e \"import('puppeteer').then(() => console.log('puppeteer ok')).catch((e) => { console.error(e); process.exit(1); })\"",
+  "bash -lc 'echo \"puppeteer import probe cwd=$(pwd)\" && node <<\"EOF\"\n(async () => {\n  try {\n    const p = await import(\"puppeteer\");\n    console.log(\"puppeteer export keys:\", Object.keys(p));\n    console.log(\"puppeteer ok\");\n  } catch (e) {\n    console.error(\"FULL ERROR:\");\n    console.error(e);\n    if (e && e.stack) console.error(e.stack);\n    console.error(\"cwd:\", process.cwd());\n    process.exit(1);\n  }\n})();\nEOF'",
   "which node",
 ]
 
