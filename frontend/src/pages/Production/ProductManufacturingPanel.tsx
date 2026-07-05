@@ -18,6 +18,7 @@ import {
 } from "../../api/productionApi";
 import { CompositionVisualEditor } from "./CompositionVisualEditor";
 import { erpProductionPaths } from "./productionPaths";
+import { warehouseStockDocumentPath } from "../../utils/stockDocumentPaths";
 import {
   formatProductionMoney,
   PRODUCTION_STATUS_LABEL,
@@ -255,10 +256,12 @@ export function ProductManufacturingPanel({ tenantId, productId, productName, on
                     </tr>
                   </thead>
                   <tbody>
-                    {history.slice(0, 8).map((h) => (
+                    {history.slice(0, 8).map((h) => {
+                      const href = h.id < 0 ? erpProductionPaths.batch(-h.id) : erpProductionPaths.order(h.id);
+                      return (
                       <tr key={h.id} className="border-t border-slate-100 hover:bg-slate-50/80">
                         <td className="px-2 py-1.5">
-                          <Link to={erpProductionPaths.order(h.id)} className="font-mono text-xs text-slate-800 hover:underline">
+                          <Link to={href} className="font-mono text-xs text-slate-800 hover:underline">
                             {h.number}
                           </Link>
                         </td>
@@ -269,7 +272,8 @@ export function ProductManufacturingPanel({ tenantId, productId, productName, on
                           {h.status === "completed" ? h.produced_quantity : h.planned_quantity}
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -278,7 +282,7 @@ export function ProductManufacturingPanel({ tenantId, productId, productName, on
               <div className="mt-3 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
                 {rwPw.rwId ? (
                   <Link
-                    to={`/documents/warehouse?doc=${rwPw.rwId}`}
+                    to={warehouseStockDocumentPath("RW", rwPw.rwId)}
                     className="rounded bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200 hover:bg-slate-100"
                   >
                     RW {rwPw.rwNumber ?? `#${rwPw.rwId}`}
@@ -286,7 +290,7 @@ export function ProductManufacturingPanel({ tenantId, productId, productName, on
                 ) : null}
                 {rwPw.pwId ? (
                   <Link
-                    to={`/documents/warehouse?doc=${rwPw.pwId}`}
+                    to={warehouseStockDocumentPath("PW", rwPw.pwId)}
                     className="rounded bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200 hover:bg-slate-100"
                   >
                     PW {rwPw.pwNumber ?? `#${rwPw.pwId}`}

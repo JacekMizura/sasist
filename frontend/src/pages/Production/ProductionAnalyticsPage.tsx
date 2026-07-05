@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 
 import { useWarehouse } from "../../context/WarehouseContext";
-import { fetchProductionDashboard, listRecipeCards, type RecipeCardRead } from "../../api/productionApi";
+import { fetchProductionDashboard, fetchProductionAnalyticsSummary, listRecipeCards, type RecipeCardRead, type ProductionAnalyticsSummaryRead } from "../../api/productionApi";
 import { AppEmptyState } from "../../components/app-shell";
 import {
   FilterActionsBar,
@@ -55,6 +55,7 @@ export default function ProductionAnalyticsPage() {
   const warehouseId = warehouse?.id;
   const [recipes, setRecipes] = useState<RecipeCardRead[]>([]);
   const [efficiency, setEfficiency] = useState<number | null>(null);
+  const [summary, setSummary] = useState<ProductionAnalyticsSummaryRead | null>(null);
   const [loading, setLoading] = useState(true);
   const [filtersExpanded, setFiltersExpanded] = useState(false);
   const [draftFilters, setDraftFilters] = useState<ProductionAnalyticsFilters>(DEFAULT_PRODUCTION_ANALYTICS_FILTERS);
@@ -64,15 +65,18 @@ export default function ProductionAnalyticsPage() {
     if (warehouseId == null) return;
     setLoading(true);
     try {
-      const [cards, dash] = await Promise.all([
+      const [cards, dash, analyticsSummary] = await Promise.all([
         listRecipeCards(tenantId, warehouseId),
         fetchProductionDashboard(tenantId, warehouseId),
+        fetchProductionAnalyticsSummary(tenantId, warehouseId),
       ]);
       setRecipes(cards);
       setEfficiency(dash.production_efficiency_percent);
+      setSummary(analyticsSummary);
     } catch {
       setRecipes([]);
       setEfficiency(null);
+      setSummary(null);
     } finally {
       setLoading(false);
     }
@@ -104,14 +108,13 @@ export default function ProductionAnalyticsPage() {
     });
   }, [recipes, appliedFilters]);
 
-  const avgCost =
-    recipes.filter((r) => r.unit_cost_net != null).length > 0
-      ? recipes.reduce((s, r) => s + (r.unit_cost_net ?? 0), 0) / recipes.filter((r) => r.unit_cost_net != null).length
-      : 0;
-  const lowStockCount = recipes.filter((r) => r.has_low_stock).length;
-  const activeCount = recipes.filter((r) => r.is_active).length;
-  const totalProducible = recipes.reduce((s, r) => s + Math.floor(r.max_producible), 0);
-  const materialCostSum = recipes.reduce((s, r) => s + (r.unit_cost_net ?? 0) * Math.max(0, r.current_stock), 0);
+  const kpi = summary ?? {
+    avg_unit_cost: 0,
+    low_stock_count: 0,
+    active_count: 0,
+    total_producible: 0,
+    material_cost_sum: 0,
+  };
 
   const toggleSort = (key: ProductionAnalyticsFilters["sortKey"]) => {
     setDraftFilters((prev) => ({
@@ -139,22 +142,22 @@ export default function ProductionAnalyticsPage() {
 
       {!loading ? (
         <ProductionKpiGrid>
-          <ProductionKpiCard title="Aktywne receptury" value={activeCount} tone="indigo" icon={<Package aria-hidden />} />
+          <ProductionKpiCard title="Aktywne receptury" value={kpi.active_count} tone="indigo" icon={<Package aria-hidden />} />
           <ProductionKpiCard
             title="Średni koszt produktu"
-            value={avgCost > 0 ? formatProductionMoney(avgCost) : "—"}
+            value={kpi.avg_unit_cost > 0 ? formatProductionMoney(kpi.avg_unit_cost) : "—"}
             tone="blue"
             icon={<Banknote aria-hidden />}
           />
           <ProductionKpiCard
             title="Receptury z brakami"
-            value={lowStockCount}
-            tone={lowStockCount > 0 ? "amber" : "emerald"}
+            value={kpi.low_stock_count}
+            tone={kpi.low_stock_count > 0 ? "amber" : "emerald"}
             icon={<AlertTriangle aria-hidden />}
           />
           <ProductionKpiCard
             title="Możliwa produkcja"
-            value={totalProducible}
+            value={kpi.total_producible}
             subtitle="Σ max. wyprodukowalność"
             tone="emerald"
             icon={<TrendingUp aria-hidden />}
@@ -162,7 +165,7 @@ export default function ProductionAnalyticsPage() {
           <ProductionKpiCard title="Średnia marża" value="—" subtitle="Wymaga danych cen sprzedaży" tone="purple" icon={<Percent aria-hidden />} />
           <ProductionKpiCard
             title="Koszt materiałów"
-            value={materialCostSum > 0 ? formatProductionMoney(materialCostSum) : "—"}
+            value={kpi.material_cost_sum > 0 ? formatProductionMoney(kpi.material_cost_sum) : "—"}
             subtitle="Szacunek na stanie WG"
             tone="default"
             icon={<Banknote aria-hidden />}

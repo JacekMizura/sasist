@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../../api/axios";
+import { warehouseStockDocumentPath } from "../../utils/stockDocumentPaths";
 import { DataTablePageSizeSelect } from "../../components/table/DataTablePageSizeSelect";
 import { LocationTypeBadge } from "../../components/warehouse/LocationTypeBadge";
 import { useLocalStorage } from "../../hooks/useLocalStorage";
@@ -286,7 +287,7 @@ export function ProductWarehouseMovementsPanel({ productId, tenantId }: Props) {
                   <td className="whitespace-nowrap px-3 py-2 text-slate-700">
                     {row.document_id != null ? (
                       <Link
-                        to={`/documents/warehouse?doc=${row.document_id}`}
+                        to={warehouseStockDocumentPath(row.document_type, row.document_id)}
                         className="font-medium text-violet-700 underline decoration-violet-200 underline-offset-2 hover:text-violet-900"
                       >
                         {(row.document_number || "").trim() || `#${row.document_id}`}

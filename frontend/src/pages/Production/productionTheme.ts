@@ -56,7 +56,7 @@ export const QUEUE_SECTIONS: QueueSectionConfig[] = [
   {
     id: "in_progress",
     title: "W trakcie realizacji",
-    subtitle: "Zbieranie surowców, wykonanie lub odłożenie wyrobów",
+    subtitle: "Zbieranie surowców, wykonanie lub rozlokowanie wyrobów",
     icon: Factory,
     headerClass: "bg-gradient-to-r from-violet-50 to-indigo-50/80",
     countClass: "bg-violet-600 text-white",
@@ -81,14 +81,14 @@ export const QUEUE_SECTIONS: QueueSectionConfig[] = [
     headerClass: "bg-gradient-to-r from-emerald-50/80 to-slate-50",
     countClass: "bg-emerald-700 text-white",
     emptyTitle: "Dziś bez ukończonych partii",
-    emptyDescription: "Po zakończeniu odkładania wyrobów partie trafią tutaj jako podsumowanie dnia.",
+    emptyDescription: "Po zakończeniu rozlokowania wyrobów partie trafią tutaj jako podsumowanie dnia.",
   },
 ];
 
 export const PIPELINE_STAGES = [
   { key: "collecting", label: "Zbieranie", icon: ClipboardList, tone: "text-amber-600 bg-amber-50 border-amber-200" },
   { key: "execute", label: "Wykonanie", icon: Factory, tone: "text-blue-600 bg-blue-50 border-blue-200" },
-  { key: "putaway", label: "Odłożenie", icon: PackageCheck, tone: "text-emerald-600 bg-emerald-50 border-emerald-200" },
+  { key: "putaway", label: "Rozlokowanie", icon: PackageCheck, tone: "text-emerald-600 bg-emerald-50 border-emerald-200" },
 ] as const;
 
 export function priorityStripe(priority?: string | null, hasShortages?: boolean): string {

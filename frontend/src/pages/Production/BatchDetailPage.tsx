@@ -116,9 +116,9 @@ export default function BatchDetailPage() {
 
   return (
     <div className="px-4 py-6 lg:px-6 space-y-8 max-w-6xl">
-      <Link to={erpProductionPaths.home} className="inline-flex items-center gap-2 text-sm text-violet-600 hover:underline">
+      <Link to={erpProductionPaths.planning} className="inline-flex items-center gap-2 text-sm text-violet-600 hover:underline">
         <ArrowLeft className="h-4 w-4" aria-hidden />
-        Partie
+        Planowanie partii
       </Link>
 
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">

@@ -80,6 +80,36 @@ class ProductionDashboardRead(BaseModel):
     waiting_materials: List["ProductionBatchSummaryRead"] = Field(default_factory=list)
     ready_to_produce: List["ProductionBatchSummaryRead"] = Field(default_factory=list)
     recently_completed: List["ProductionBatchSummaryRead"] = Field(default_factory=list)
+    awaiting_putaway: List["ProductionBatchSummaryRead"] = Field(default_factory=list)
+
+
+class ProductionBatchListSummaryRead(BaseModel):
+    planned: int = 0
+    active: int = 0
+    awaiting_putaway: int = 0
+    shortages: int = 0
+    total_units: float = 0.0
+    units_in_production: float = 0.0
+    total: int = 0
+
+
+class ProductionHistorySummaryRead(BaseModel):
+    completed_batches: int = 0
+    units: float = 0.0
+    avg_unit_cost: Optional[float] = None
+
+
+class ProductionAnalyticsSummaryRead(BaseModel):
+    avg_unit_cost: float = 0.0
+    low_stock_count: int = 0
+    active_count: int = 0
+    total_producible: int = 0
+    material_cost_sum: float = 0.0
+
+
+class ProductionExecutionStatusRead(BaseModel):
+    value: str
+    label: str
 
 
 class ProductionBatchSummaryRead(BaseModel):

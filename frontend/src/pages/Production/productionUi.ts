@@ -1,4 +1,4 @@
-import type { ProductionBatchStatus, ProductionOrderStatus, StockShortageRead } from "../../api/productionApi";
+import type { ProductionBatchStatus, ProductionExecutionStatus, ProductionOrderStatus, StockShortageRead } from "../../api/productionApi";
 import { formatApiError } from "../../utils/apiErrorMessage";
 import {
   operationalBadgeBase,
@@ -9,26 +9,28 @@ import {
   operationalBadgeWarningClass,
 } from "../../components/operational/operationalSemanticBadges";
 
-export const PRODUCTION_STATUS_LABEL: Record<ProductionOrderStatus, string> = {
-  draft: "Robocze",
-  planned: "Zaplanowane",
-  collecting: "Zbieranie",
-  in_progress: "W produkcji",
-  putaway: "Odłożenie",
-  completed: "Zakończone",
-  cancelled: "Anulowane",
-};
-
-export const BATCH_STATUS_LABEL: Record<ProductionBatchStatus, string> = {
+/** Single status label map — batch + MO share backend EXECUTION_STATUS_LABELS. */
+export const EXECUTION_STATUS_LABEL: Record<ProductionExecutionStatus, string> = {
   draft: "Robocza",
   planned: "Zaplanowana",
   collecting: "Zbieranie",
   in_progress: "W realizacji",
   awaiting_putaway: "Oczekuje na rozlokowanie",
-  putaway: "Gotowe do rozlokowania",
+  putaway: "Rozlokowanie w toku",
   completed: "Ukończona",
   cancelled: "Anulowana",
 };
+
+/** @deprecated use EXECUTION_STATUS_LABEL */
+export const BATCH_STATUS_LABEL: Record<ProductionBatchStatus, string> = EXECUTION_STATUS_LABEL;
+
+/** @deprecated use EXECUTION_STATUS_LABEL */
+export const PRODUCTION_STATUS_LABEL: Record<ProductionOrderStatus, string> = EXECUTION_STATUS_LABEL;
+
+export function executionStatusLabel(status: string | null | undefined): string {
+  const key = String(status || "").trim().toLowerCase() as ProductionExecutionStatus;
+  return EXECUTION_STATUS_LABEL[key] ?? status ?? "—";
+}
 
 export const PRODUCTION_NUMBER_INPUT =
   "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
@@ -47,13 +49,14 @@ export const STOCK_TONE_CLASS = {
 
 const PURPLE_BADGE = `${operationalBadgeBase} border-violet-200/90 bg-violet-50 text-violet-900`;
 
-export function batchStatusBadgeClass(status: ProductionBatchStatus): string {
+export function executionStatusBadgeClass(status: ProductionExecutionStatus | string): string {
   switch (status) {
     case "planned":
       return PURPLE_BADGE;
     case "in_progress":
     case "collecting":
     case "awaiting_putaway":
+      return operationalBadgeWarningClass;
     case "putaway":
       return operationalBadgeInfoClass;
     case "completed":
@@ -65,21 +68,12 @@ export function batchStatusBadgeClass(status: ProductionBatchStatus): string {
   }
 }
 
+export function batchStatusBadgeClass(status: ProductionBatchStatus): string {
+  return executionStatusBadgeClass(status);
+}
+
 export function productionStatusBadgeClass(status: ProductionOrderStatus): string {
-  switch (status) {
-    case "planned":
-      return PURPLE_BADGE;
-    case "in_progress":
-    case "collecting":
-    case "putaway":
-      return operationalBadgeInfoClass;
-    case "completed":
-      return operationalBadgeSuccessClass;
-    case "cancelled":
-      return operationalBadgeDangerClass;
-    default:
-      return operationalBadgeNeutralClass;
-  }
+  return executionStatusBadgeClass(status);
 }
 
 export type ProductionPriorityLevel = "low" | "normal" | "high" | "critical";

@@ -1,5 +1,6 @@
 import type { ProductionExecutionJobRead, ProductionExecutionPhase } from "@/api/productionApi";
 import type { CollectionJobHeaderRead, CollectionTaskRead } from "@/api/productionApi";
+import { EXECUTION_STATUS_LABEL } from "@/pages/Production/productionUi";
 
 export type ProductionExecutionKind = "batch" | "order";
 
@@ -13,16 +14,7 @@ export const PRODUCTION_KIND_LABEL: Record<ProductionExecutionKind, string> = {
   order: "MO",
 };
 
-export const EXECUTION_STATUS_LABEL: Record<string, string> = {
-  draft: "Robocza",
-  planned: "Zaplanowana",
-  collecting: "Zbieranie",
-  in_progress: "W realizacji",
-  awaiting_putaway: "Oczekuje na rozlokowanie",
-  putaway: "Oczekuje na rozlokowanie",
-  completed: "Ukończona",
-  cancelled: "Anulowana",
-};
+export { EXECUTION_STATUS_LABEL };
 
 export type UnifiedCollectionState = {
   ref: ProductionExecutionRef;

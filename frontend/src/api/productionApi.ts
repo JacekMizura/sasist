@@ -74,6 +74,7 @@ export type ProductionOrderStatus =
   | "planned"
   | "collecting"
   | "in_progress"
+  | "awaiting_putaway"
   | "putaway"
   | "completed"
   | "cancelled";
@@ -111,6 +112,7 @@ export type ProductionOrderRead = {
   pw_stock_document_id?: number | null;
   rw_document_number?: string | null;
   pw_document_number?: string | null;
+  pw_putaway_status?: string | null;
   component_total_cost?: number | null;
   operator_name?: string | null;
   product_name?: string | null;
@@ -458,6 +460,9 @@ export type ProductionBatchStatus =
   | "completed"
   | "cancelled";
 
+/** Shared batch + MO lifecycle statuses (mirrors backend EXECUTION_STATUSES). */
+export type ProductionExecutionStatus = ProductionOrderStatus | ProductionBatchStatus;
+
 export type ProductionBatchLineRead = {
   id: number;
   product_id: number;
@@ -470,6 +475,7 @@ export type ProductionBatchLineRead = {
   calculated_unit_cost?: number | null;
   pw_stock_document_id?: number | null;
   pw_document_number?: string | null;
+  pw_putaway_status?: string | null;
   product_name?: string | null;
   product_sku?: string | null;
   product_image_url?: string | null;
@@ -507,6 +513,7 @@ export type ProductionBatchRead = {
   completed_at?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
+  display_unit_cost?: number | null;
 };
 
 export type ProductionBatchLineWrite = {
@@ -781,6 +788,36 @@ export type ProductionDashboardRead = {
   waiting_materials: ProductionBatchSummaryRead[];
   ready_to_produce: ProductionBatchSummaryRead[];
   recently_completed: ProductionBatchSummaryRead[];
+  awaiting_putaway?: ProductionBatchSummaryRead[];
+};
+
+export type ProductionBatchListSummaryRead = {
+  planned: number;
+  active: number;
+  awaiting_putaway?: number;
+  shortages: number;
+  total_units: number;
+  units_in_production?: number;
+  total: number;
+};
+
+export type ProductionHistorySummaryRead = {
+  completed_batches: number;
+  units: number;
+  avg_unit_cost?: number | null;
+};
+
+export type ProductionAnalyticsSummaryRead = {
+  avg_unit_cost: number;
+  low_stock_count: number;
+  active_count: number;
+  total_producible: number;
+  material_cost_sum: number;
+};
+
+export type ProductionExecutionStatusRead = {
+  value: string;
+  label: string;
 };
 
 export type ProductionBatchPreviewRead = {
@@ -867,6 +904,41 @@ export async function fetchProductionDashboard(
   const res = await api.get<ProductionDashboardRead>("/production/dashboard", {
     params: { tenant_id: tenantId, warehouse_id: warehouseId },
   });
+  return res.data;
+}
+
+export async function fetchProductionBatchListSummary(
+  tenantId: number,
+  warehouseId?: number,
+): Promise<ProductionBatchListSummaryRead> {
+  const res = await api.get<ProductionBatchListSummaryRead>("/production/batches/summary", {
+    params: { tenant_id: tenantId, warehouse_id: warehouseId },
+  });
+  return res.data;
+}
+
+export async function fetchProductionHistorySummary(
+  tenantId: number,
+  warehouseId?: number,
+): Promise<ProductionHistorySummaryRead> {
+  const res = await api.get<ProductionHistorySummaryRead>("/production/history/summary", {
+    params: { tenant_id: tenantId, warehouse_id: warehouseId },
+  });
+  return res.data;
+}
+
+export async function fetchProductionAnalyticsSummary(
+  tenantId: number,
+  warehouseId?: number,
+): Promise<ProductionAnalyticsSummaryRead> {
+  const res = await api.get<ProductionAnalyticsSummaryRead>("/production/analytics/summary", {
+    params: { tenant_id: tenantId, warehouse_id: warehouseId },
+  });
+  return res.data;
+}
+
+export async function fetchProductionExecutionStatuses(): Promise<ProductionExecutionStatusRead[]> {
+  const res = await api.get<ProductionExecutionStatusRead[]>("/production/execution-statuses");
   return res.data;
 }
 
@@ -1042,7 +1114,7 @@ export async function finishPutawayBatch(
   return res.data;
 }
 
-export type ProductionExecutionPhase = "collecting" | "execute";
+export type ProductionExecutionPhase = "collecting" | "execute" | "putaway";
 
 export type ProductionExecutionJobRead = {
   kind: "batch" | "order";

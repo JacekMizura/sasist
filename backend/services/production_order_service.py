@@ -48,13 +48,14 @@ logger = logging.getLogger(__name__)
 TERMINAL_STATUSES = frozenset({"completed", "cancelled"})
 
 _VALID_SUMMARY_STATUSES = frozenset(
-    {"draft", "planned", "collecting", "in_progress", "putaway", "completed", "cancelled"}
+    {"draft", "planned", "collecting", "in_progress", "awaiting_putaway", "putaway", "completed", "cancelled"}
 )
 _BATCH_STATUS_TO_ORDER = {
     "draft": "draft",
     "planned": "planned",
     "collecting": "collecting",
     "in_progress": "in_progress",
+    "awaiting_putaway": "awaiting_putaway",
     "putaway": "putaway",
     "completed": "completed",
     "cancelled": "cancelled",
@@ -147,6 +148,19 @@ def _document_number(db: Session, doc_id: int | None) -> str | None:
     if row is None or not row[0]:
         return None
     return str(row[0]).strip() or None
+
+
+def _pw_putaway_status(db: Session, doc_id: int | None) -> str | None:
+    if doc_id is None:
+        return None
+    pw_doc = db.query(StockDocument).filter(StockDocument.id == int(doc_id)).first()
+    if pw_doc is None:
+        return None
+    ps = str(getattr(pw_doc, "putaway_status", "") or "").strip().upper()
+    rs = str(getattr(pw_doc, "relocation_status", "") or "").strip().upper()
+    if ps == "DONE" or rs == "DONE":
+        return "DONE"
+    return ps or rs or "OPEN"
 
 
 def _normalize_summary_status(raw: str | None) -> str:
@@ -338,7 +352,7 @@ def serialize_order(db: Session, order: ProductionOrder, *, with_availability: b
     produced_q = float(order.produced_quantity or 0)
     if status == "collecting":
         progress = coll_pct
-    elif status in ("in_progress", "putaway"):
+    elif status in ("in_progress", "awaiting_putaway", "putaway"):
         progress = round(100.0 * produced_q / planned_q, 1) if planned_q > 0 else 0.0
     elif status == "completed":
         progress = 100.0
@@ -363,6 +377,7 @@ def serialize_order(db: Session, order: ProductionOrder, *, with_availability: b
         pw_stock_document_id=order.pw_stock_document_id,
         rw_document_number=_document_number(db, order.rw_stock_document_id),
         pw_document_number=_document_number(db, order.pw_stock_document_id),
+        pw_putaway_status=_pw_putaway_status(db, order.pw_stock_document_id),
         component_total_cost=(
             round(float(order.calculated_unit_cost or 0) * float(order.produced_quantity or 0), 4)
             if order.calculated_unit_cost is not None and float(order.produced_quantity or 0) > 0
@@ -698,165 +713,10 @@ def complete_production_order(
     body: ProductionOrderCompleteBody,
     performed_by_user_id: int | None = None,
 ) -> ProductionCompleteResultRead:
-    order = (
-        db.query(ProductionOrder)
-        .options(joinedload(ProductionOrder.line_snapshots))
-        .filter(ProductionOrder.id == int(order_id), ProductionOrder.tenant_id == int(tenant_id))
-        .first()
-    )
-    if order is None:
-        raise ProductionOrderError("Zlecenie produkcyjne nie istnieje.", code="not_found")
-    if str(order.status) == "completed":
-        return ProductionCompleteResultRead(
-            order=serialize_order(db, order),
-            rw_stock_document_id=order.rw_stock_document_id,
-            pw_stock_document_id=order.pw_stock_document_id,
-            calculated_unit_cost=order.calculated_unit_cost,
-        )
-    if str(order.status) == "cancelled":
-        raise ProductionOrderError("Zlecenie anulowane.", code="cancelled")
-
-    produced_qty = float(body.produced_quantity if body.produced_quantity is not None else order.planned_quantity)
-    if produced_qty <= 1e-9:
-        raise ProductionOrderError("Ilość produkowana musi być > 0.", code="invalid_qty")
-
-    shortages = validate_stock_shortages(db, order)
-    if shortages:
-        raise ProductionOrderError(
-            "Niewystarczający stan magazynowy składników.",
-            code="insufficient_stock",
-            shortages=[s.model_dump() for s in shortages],
-        )
-
-    target_loc = int(body.location_id or order.location_id or 0)
-    if target_loc < 1:
-        raise ProductionOrderError("Wybierz lokalizację docelową dla wyrobu gotowego.", code="location_required")
-
-    alloc_map = _resolve_component_allocations(db, order, component_allocations=body.component_allocations)
-
-    rw_doc = _create_production_stock_document(
-        db,
-        order=order,
-        document_type="RW",
-        location_id=None,
-        created_by_user_id=performed_by_user_id,
-    )
-    total_component_cost = 0.0
-
-    for snap in order.line_snapshots or []:
-        snap_id = int(snap.id)
-        allocs = alloc_map.get(snap_id, [])
-        if not allocs:
-            continue
-        line = StockDocumentItem(
-            document_id=int(rw_doc.id),
-            product_id=int(snap.component_product_id),
-            ordered_quantity=sum(q for _, q in allocs),
-            received_quantity=sum(q for _, q in allocs),
-            quantity=sum(q for _, q in allocs),
-            batch_number="",
-            expiry_date=date(9999, 12, 31),
-        )
-        db.add(line)
-        db.flush()
-
-        unit_cost_data = get_product_current_cost(db, int(order.tenant_id), int(snap.component_product_id))
-        unit_net = float(unit_cost_data.get("purchase_net") or 0)
-        line.purchase_price_net = unit_net
-        consumed_total = 0.0
-
-        for loc_id, qty in allocs:
-            slices = consume_inventory_fifo_slices(
-                db,
-                tenant_id=int(order.tenant_id),
-                warehouse_id=int(order.warehouse_id),
-                product_id=int(snap.component_product_id),
-                location_id=int(loc_id),
-                quantity=float(qty),
-            )
-            for sl in slices:
-                append_issue_operation(
-                    db,
-                    rw_doc,
-                    line,
-                    float(sl.quantity),
-                    from_location_id=int(loc_id),
-                    batch_number=sl.batch_number or "",
-                    expiry_date=sl.expiry_date if sl.expiry_date < NO_EXPIRY_SENTINEL else None,
-                    operator_admin_id=performed_by_user_id,
-                    metadata={"production_order_id": int(order.id), "source_document_type": "RW"},
-                )
-                consumed_total += float(sl.quantity)
-
-        snap.consumed_quantity = float(consumed_total)
-        total_component_cost += unit_net * float(consumed_total)
-
-    pw_doc = _create_production_stock_document(
-        db,
-        order=order,
-        document_type="PW",
-        location_id=target_loc,
-        created_by_user_id=performed_by_user_id,
-    )
-    unit_cost = total_component_cost / produced_qty if produced_qty > 1e-9 else 0.0
-    fg_line = StockDocumentItem(
-        document_id=int(pw_doc.id),
-        product_id=int(order.product_id),
-        ordered_quantity=produced_qty,
-        received_quantity=produced_qty,
-        quantity=produced_qty,
-        purchase_price_net=unit_cost,
-        batch_number="",
-        expiry_date=date(9999, 12, 31),
-    )
-    db.add(fg_line)
-    db.flush()
-
-    upsert_dock_inventory_for_loose_receipt(
-        db,
-        tenant_id=int(order.tenant_id),
-        warehouse_id=int(order.warehouse_id),
-        location_id=target_loc,
-        product_id=int(order.product_id),
-        add_qty=float(produced_qty),
-        batch_number="",
-        expiry_date=NO_EXPIRY_SENTINEL,
-        stock_disposition=STOCK_DISPOSITION_SALEABLE,
-    )
-    append_receipt_operation(db, pw_doc, fg_line, float(produced_qty))
-
-    order.produced_quantity = produced_qty
-    order.calculated_unit_cost = round(unit_cost, 4)
-    order.rw_stock_document_id = int(rw_doc.id)
-    order.pw_stock_document_id = int(pw_doc.id)
-    order.status = "completed"
-    order.completed_at = datetime.utcnow()
-    order.updated_at = datetime.utcnow()
-    if order.location_id is None:
-        order.location_id = target_loc
-
-    prod = db.query(Product).filter(Product.id == int(order.product_id)).first()
-    if prod is not None and unit_cost > 0:
-        prod.purchase_price = float(unit_cost)
-        prod.updated_at = datetime.utcnow()
-
-    db.flush()
-    logger.info(
-        "[production.complete] order_id=%s rw=%s pw=%s unit_cost=%s",
-        order.id,
-        rw_doc.id,
-        pw_doc.id,
-        unit_cost,
-    )
-    comp_total = round(total_component_cost, 4)
-    return ProductionCompleteResultRead(
-        order=serialize_order(db, order, with_availability=False),
-        rw_stock_document_id=int(rw_doc.id),
-        pw_stock_document_id=int(pw_doc.id),
-        rw_document_number=str(getattr(rw_doc, "document_number", None) or "").strip() or None,
-        pw_document_number=str(getattr(pw_doc, "document_number", None) or "").strip() or None,
-        calculated_unit_cost=round(unit_cost, 4),
-        component_total_cost=comp_total,
+    del db, tenant_id, order_id, body, performed_by_user_id
+    raise ProductionOrderError(
+        "Użyj przepływu WMS: zbieranie → produkcja → finish-production → rozlokowanie PW.",
+        code="deprecated_path",
     )
 
 

@@ -7,7 +7,7 @@
  * (`/wms/production/*`) for operator workflow. Kept until migration completes.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { warehouseStockDocumentPath } from "../../utils/stockDocumentPaths";
 import { AlertTriangle, CheckCircle2, Play, XCircle } from "lucide-react";
 import {
   cancelProductionOrder,
@@ -296,7 +296,7 @@ export function ProductionOrderExecutionPanel({
           {order.rw_stock_document_id ? (
             <p>
               <Link
-                to={`/documents/warehouse?doc=${order.rw_stock_document_id}`}
+                to={warehouseStockDocumentPath("RW", order.rw_stock_document_id)}
                 className="font-medium text-violet-700 hover:underline"
               >
                 RW {order.rw_document_number ?? `#${order.rw_stock_document_id}`}
@@ -306,7 +306,7 @@ export function ProductionOrderExecutionPanel({
           {order.pw_stock_document_id ? (
             <p>
               <Link
-                to={`/documents/warehouse?doc=${order.pw_stock_document_id}`}
+                to={warehouseStockDocumentPath("PW", order.pw_stock_document_id)}
                 className="font-medium text-violet-700 hover:underline"
               >
                 PW {order.pw_document_number ?? `#${order.pw_stock_document_id}`}
@@ -529,7 +529,7 @@ export function ProductionOrderExecutionPanel({
             {completeResult.rw_stock_document_id ? (
               <li>
                 <Link
-                  to={`/documents/warehouse?doc=${completeResult.rw_stock_document_id}`}
+                  to={warehouseStockDocumentPath("RW", completeResult.rw_stock_document_id)}
                   className="underline"
                 >
                   RW {completeResult.rw_document_number ?? completeResult.rw_stock_document_id}
@@ -539,7 +539,7 @@ export function ProductionOrderExecutionPanel({
             {completeResult.pw_stock_document_id ? (
               <li>
                 <Link
-                  to={`/documents/warehouse?doc=${completeResult.pw_stock_document_id}`}
+                  to={warehouseStockDocumentPath("PW", completeResult.pw_stock_document_id)}
                   className="underline"
                 >
                   PW {completeResult.pw_document_number ?? completeResult.pw_stock_document_id}

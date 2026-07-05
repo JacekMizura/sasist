@@ -329,7 +329,7 @@ def get_production_dashboard(
                 completed_rows.append(_batch_summary(db, b))
             continue
         summary = _batch_summary(db, b)
-        if summary.has_shortages:
+        if status in PLANNED_BATCH_STATUSES and summary.has_shortages:
             shortage_count += 1
         if status in EXECUTING_BATCH_STATUSES:
             executing_rows.append(summary)
@@ -348,7 +348,7 @@ def get_production_dashboard(
             elif not summary.is_released_to_wms:
                 ready_rows.append(summary)
 
-    workload = finished_today + len(executing_rows) + planned_count
+    workload = finished_today + len(executing_rows) + len(awaiting_putaway_rows) + planned_count
     efficiency = round(100.0 * finished_today / workload, 1) if workload else 0.0
 
     recipe_count = (
@@ -363,7 +363,7 @@ def get_production_dashboard(
 
     return ProductionDashboardRead(
         planned_batches=planned_count,
-        active_batches=len(executing_rows),
+        active_batches=len(executing_rows) + len(awaiting_putaway_rows),
         awaiting_putaway_batches=len(awaiting_putaway_rows),
         waiting_batches=len(waiting_rows),
         batches_with_shortages=shortage_count,
@@ -379,8 +379,9 @@ def get_production_dashboard(
         active_operators=active_operators[:8],
         planned=planned_rows[:12],
         in_progress=executing_rows[:12],
-        active=executing_rows[:12],
+        active=[*executing_rows[:8], *awaiting_putaway_rows[:4]][:12],
         waiting_materials=waiting_rows[:12],
         ready_to_produce=ready_rows[:12],
         recently_completed=completed_rows[:8],
+        awaiting_putaway=awaiting_putaway_rows[:12],
     )

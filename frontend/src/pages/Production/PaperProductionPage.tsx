@@ -23,8 +23,14 @@ import { useWarehouse } from "@/context/WarehouseContext";
 import { ProgressBar } from "./components/ProgressBar";
 import { PaperCollectTaskCard } from "./components/PaperCollectTaskCard";
 import { ProductThumb } from "./components/ProductThumb";
-import { erpProductionPaths } from "./productionPaths";
+import { erpProductionPaths, wmsProductionPaths } from "./productionPaths";
 import { formatStartCollectingError } from "./productionUi";
+import {
+  ProductionDocumentsSection,
+  pwDocumentsFromBatchLines,
+  pwDocumentsFromOrder,
+} from "./components/ProductionDocumentsSection";
+import type { ProductionBatchRead, ProductionOrderRead } from "@/api/productionApi";
 
 const DEFAULT_TENANT = 1;
 
@@ -56,6 +62,11 @@ export default function PaperProductionPage() {
     }>
   >([]);
   const [expandedTaskKey, setExpandedTaskKey] = useState<string | null>(null);
+  const [documentsSource, setDocumentsSource] = useState<
+    | { kind: "batch"; batch: ProductionBatchRead }
+    | { kind: "order"; order: ProductionOrderRead }
+    | null
+  >(null);
 
   const backHref =
     jobKind === "order" ? erpProductionPaths.order(jobId) : erpProductionPaths.batch(jobId);
@@ -69,8 +80,10 @@ export default function PaperProductionPage() {
       if (batch.status === "collecting") {
         setCollection(await fetchCollectionState(tenantId, jobId, warehouseId));
         setExecutionLines([]);
+        setDocumentsSource(null);
       } else if (batch.status === "in_progress") {
         setCollection(null);
+        setDocumentsSource(null);
         setExecutionLines(
           batch.lines.map((ln) => ({
             lineKey: String(ln.id),
@@ -81,6 +94,14 @@ export default function PaperProductionPage() {
             completedQuantity: ln.completed_quantity,
           })),
         );
+      } else if (batch.status === "awaiting_putaway" || batch.status === "putaway") {
+        setCollection(null);
+        setExecutionLines([]);
+        setDocumentsSource({ kind: "batch", batch });
+      } else {
+        setCollection(null);
+        setExecutionLines([]);
+        setDocumentsSource(null);
       }
       return;
     }
@@ -90,8 +111,10 @@ export default function PaperProductionPage() {
     if (order.status === "collecting") {
       setCollection(await fetchOrderCollectionState(tenantId, jobId, warehouseId));
       setExecutionLines([]);
+      setDocumentsSource(null);
     } else if (order.status === "in_progress") {
       setCollection(null);
+      setDocumentsSource(null);
       setExecutionLines([
         {
           lineKey: "main",
@@ -101,6 +124,14 @@ export default function PaperProductionPage() {
           completedQuantity: order.produced_quantity,
         },
       ]);
+    } else if (order.status === "awaiting_putaway" || order.status === "putaway") {
+      setCollection(null);
+      setExecutionLines([]);
+      setDocumentsSource({ kind: "order", order });
+    } else {
+      setCollection(null);
+      setExecutionLines([]);
+      setDocumentsSource(null);
     }
   }, [jobId, jobKind, tenantId, warehouseId]);
 
@@ -193,16 +224,17 @@ export default function PaperProductionPage() {
     try {
       if (jobKind === "batch") {
         const batch = await finishProductionPhase(tenantId, jobId, warehouseId);
-        const pwId = batch.lines.map((l) => l.pw_stock_document_id).find((x) => x != null && x > 0);
-        toast.success("Produkcja zakończona — PW utworzone.");
-        if (pwId) navigate(`/wms/putaway/${pwId}`);
-        else navigate(backHref);
-      } else {
-        const order = await finishOrderProduction(tenantId, jobId, warehouseId);
-        toast.success("Produkcja zakończona — PW utworzone.");
-        if (order.pw_stock_document_id) navigate(`/wms/putaway/${order.pw_stock_document_id}`);
-        else navigate(backHref);
+        toast.success("Produkcja zakończona — dokumenty PW oczekują na rozlokowanie.");
+        navigate(wmsProductionPaths.putaway("batch", jobId));
+        setDocumentsSource({ kind: "batch", batch });
+        setStatus(batch.status);
+        return;
       }
+      const order = await finishOrderProduction(tenantId, jobId, warehouseId);
+      toast.success("Produkcja zakończona — dokument PW oczekuje na rozlokowanie.");
+      navigate(wmsProductionPaths.putaway("order", jobId));
+      setDocumentsSource({ kind: "order", order });
+      setStatus(order.status);
     } catch (e: unknown) {
       toast.error(formatStartCollectingError(e));
     } finally {
@@ -232,7 +264,9 @@ export default function PaperProductionPage() {
             ? "Ręczne pobranie półproduktów — ten sam rozchód co w terminalu WMS."
             : status === "in_progress"
               ? "Rejestracja produkcji i zakończenie → PW → rozlokowanie."
-              : `Status: ${status}`}
+              : status === "awaiting_putaway" || status === "putaway"
+                ? "Produkcja zakończona — rozlokuj wszystkie dokumenty PW w WMS."
+                : `Status: ${status}`}
         </p>
       </header>
 
@@ -322,7 +356,31 @@ export default function PaperProductionPage() {
         </>
       ) : null}
 
-      {status !== "collecting" && status !== "in_progress" ? (
+      {status === "awaiting_putaway" || status === "putaway" ? (
+        <>
+          {documentsSource?.kind === "batch" ? (
+            <ProductionDocumentsSection
+              rwDocumentId={documentsSource.batch.rw_stock_document_id}
+              rwDocumentNumber={documentsSource.batch.rw_document_number}
+              pwDocuments={pwDocumentsFromBatchLines(documentsSource.batch.lines ?? [])}
+            />
+          ) : documentsSource?.kind === "order" ? (
+            <ProductionDocumentsSection
+              rwDocumentId={documentsSource.order.rw_stock_document_id}
+              rwDocumentNumber={documentsSource.order.rw_document_number}
+              pwDocuments={pwDocumentsFromOrder(documentsSource.order)}
+            />
+          ) : null}
+          <Link
+            to={wmsProductionPaths.putaway(jobKind, jobId)}
+            className="inline-flex rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white hover:bg-emerald-700"
+          >
+            Otwórz kolejkę rozlokowania WMS
+          </Link>
+        </>
+      ) : null}
+
+      {status !== "collecting" && status !== "in_progress" && status !== "awaiting_putaway" && status !== "putaway" ? (
         <p className="text-sm text-slate-500">To zadanie nie jest w fazie realizacji papierowej.</p>
       ) : null}
     </div>

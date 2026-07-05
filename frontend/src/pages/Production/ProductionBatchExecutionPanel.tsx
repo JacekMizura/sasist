@@ -7,7 +7,7 @@
  * (`/wms/production/*`) for operator workflow. Kept until migration completes.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { warehouseStockDocumentPath } from "../../utils/stockDocumentPaths";
 import { AlertTriangle, CheckCircle2, Play, XCircle } from "lucide-react";
 import {
   cancelProductionBatch,
@@ -240,7 +240,7 @@ export function ProductionBatchExecutionPanel({ tenantId, warehouseId, batch, on
                 <p className="mt-2">
                   RW:{" "}
                   <Link
-                    to={`/documents/warehouse?doc=${completeResult.rw_stock_document_id}`}
+                    to={warehouseStockDocumentPath("RW", completeResult.rw_stock_document_id)}
                     className="text-violet-700 hover:underline"
                   >
                     {completeResult.rw_document_number}

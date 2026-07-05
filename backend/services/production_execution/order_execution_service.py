@@ -332,6 +332,16 @@ def _consume_order_materials(
                     operator_admin_id=performed_by_user_id,
                     metadata={"production_order_id": int(order.id), "source_document_type": "RW"},
                 )
+                from .production_warehouse_audit import record_production_rw_issue_audit
+
+                record_production_rw_issue_audit(
+                    db,
+                    rw_doc=rw_doc,
+                    product_id=int(snap.component_product_id),
+                    quantity=float(sl.quantity),
+                    from_location_id=int(loc_id),
+                    performed_by_user_id=performed_by_user_id,
+                )
                 consumed_total += float(sl.quantity)
         snap.consumed_quantity = float(consumed_total)
     order.rw_stock_document_id = int(rw_doc.id)
@@ -408,9 +418,8 @@ def finish_order_production(db: Session, *, tenant_id: int, order_id: int):
     if float(order.produced_quantity or 0) < float(order.planned_quantity) - 1e-6:
         raise ProductionOrderError("Nie wyprodukowano planowanej ilości.", code="production_incomplete")
     create_order_pw_document_for_putaway(db, order=order, performed_by_user_id=None)
-    order.status = "completed"
+    order.status = "awaiting_putaway"
     order.production_completed_at = datetime.utcnow()
-    order.completed_at = datetime.utcnow()
     order.updated_at = datetime.utcnow()
     db.flush()
     return serialize_order(db, order, with_availability=False)
@@ -424,72 +433,8 @@ def finish_order_putaway(
     body: OrderPutawayBody,
     performed_by_user_id: int | None = None,
 ):
-    from ...schemas.production import ProductionCompleteResultRead
-
-    order = _load_order(db, tenant_id=tenant_id, order_id=order_id)
-    if str(order.status) != "putaway":
-        raise ProductionOrderError("Zlecenie nie jest w fazie odkładania.", code="invalid_status")
-    target_loc = int(body.target_location_id)
-    order.location_id = target_loc
-    produced = float(order.produced_quantity or order.planned_quantity)
-    rw_doc = (
-        db.query(StockDocument).filter(StockDocument.id == int(order.rw_stock_document_id)).first()
-        if order.rw_stock_document_id
-        else None
-    )
-    total_component_cost = 0.0
-    if rw_doc is not None:
-        for item in rw_doc.items or []:
-            total_component_cost += float(item.purchase_price_net or 0) * float(item.quantity or 0)
-    unit_cost = total_component_cost / produced if produced > 1e-9 else 0.0
-    pw_doc = _create_production_stock_document(
-        db,
-        order=order,
-        document_type="PW",
-        location_id=target_loc,
-        created_by_user_id=performed_by_user_id,
-    )
-    fg_line = StockDocumentItem(
-        document_id=int(pw_doc.id),
-        product_id=int(order.product_id),
-        ordered_quantity=produced,
-        received_quantity=produced,
-        quantity=produced,
-        purchase_price_net=unit_cost,
-        batch_number="",
-        expiry_date=date(9999, 12, 31),
-    )
-    db.add(fg_line)
-    db.flush()
-    upsert_dock_inventory_for_loose_receipt(
-        db,
-        tenant_id=int(order.tenant_id),
-        warehouse_id=int(order.warehouse_id),
-        location_id=target_loc,
-        product_id=int(order.product_id),
-        add_qty=float(produced),
-        batch_number="",
-        expiry_date=NO_EXPIRY_SENTINEL,
-        stock_disposition=STOCK_DISPOSITION_SALEABLE,
-    )
-    append_receipt_operation(db, pw_doc, fg_line, float(produced))
-    order.calculated_unit_cost = round(unit_cost, 4)
-    order.pw_stock_document_id = int(pw_doc.id)
-    order.status = "completed"
-    order.completed_at = datetime.utcnow()
-    order.updated_at = datetime.utcnow()
-    prod = db.query(Product).filter(Product.id == int(order.product_id)).first()
-    if prod is not None and unit_cost > 0:
-        prod.purchase_price = float(unit_cost)
-        prod.updated_at = datetime.utcnow()
-    db.flush()
-    comp_total = round(total_component_cost, 4)
-    return ProductionCompleteResultRead(
-        order=serialize_order(db, order, with_availability=False),
-        rw_stock_document_id=order.rw_stock_document_id,
-        pw_stock_document_id=int(pw_doc.id),
-        rw_document_number=_document_number(db, order.rw_stock_document_id),
-        pw_document_number=_document_number(db, int(pw_doc.id)),
-        calculated_unit_cost=round(unit_cost, 4),
-        component_total_cost=comp_total,
+    del db, tenant_id, order_id, body, performed_by_user_id
+    raise ProductionOrderError(
+        "Użyj modułu Rozlokowanie (WMS) dla dokumentów PW.",
+        code="deprecated_path",
     )

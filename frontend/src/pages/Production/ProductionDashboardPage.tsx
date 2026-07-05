@@ -58,12 +58,7 @@ function ReadyBatchRow({ batch }: { batch: ProductionBatchSummaryRead }) {
 }
 
 function dashboardUnitsInProgress(data: ProductionDashboardRead): number {
-  if (typeof data.units_in_production === "number") return Math.round(data.units_in_production);
-  const rows = data.in_progress ?? data.active ?? [];
-  return rows.reduce((s, b) => {
-    const planned = b.total_planned_units ?? 0;
-    return s + planned;
-  }, 0);
+  return Math.round(data.units_in_production ?? 0);
 }
 
 export default function ProductionDashboardPage() {
@@ -93,7 +88,8 @@ export default function ProductionDashboardPage() {
 
   const ready = data?.ready_to_produce ?? [];
   const blocked = data?.waiting_materials ?? [];
-  const active = data?.in_progress ?? [];
+  const active = data?.active ?? data?.in_progress ?? [];
+  const awaitingPutaway = data?.awaiting_putaway ?? [];
   const unitsInProgress = data ? dashboardUnitsInProgress(data) : 0;
   const efficiency = data?.production_efficiency_percent ?? 0;
 
@@ -115,7 +111,7 @@ export default function ProductionDashboardPage() {
             <ProductionKpiCard
               title="W realizacji"
               value={data.active_batches}
-              subtitle="Zbieranie, produkcja, odłożenie"
+              subtitle="Zbieranie, produkcja, rozlokowanie"
               tone="blue"
               icon={<Factory aria-hidden />}
               to={erpProductionPaths.orders}
@@ -223,6 +219,39 @@ export default function ProductionDashboardPage() {
               </table>
             )}
           </PurchasingTableSection>
+
+          {awaitingPutaway.length > 0 ? (
+            <PurchasingTableSection
+              title="Oczekuje na rozlokowanie"
+              subtitle={`${awaitingPutaway.length} partii · ${data.awaiting_putaway_batches ?? awaitingPutaway.length} w pulpicie KPI`}
+              indicatorClass="bg-emerald-500"
+              action={
+                <Link
+                  to={wmsProductionPaths.putaway()}
+                  className="text-sm font-medium text-amber-700 hover:text-amber-800"
+                >
+                  Terminal WMS → Rozlokowanie
+                </Link>
+              }
+            >
+              <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
+                {awaitingPutaway.slice(0, 6).map((b) => (
+                  <Link
+                    key={b.id}
+                    to={erpProductionPaths.batch(b.id)}
+                    className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-4 shadow-sm transition hover:border-emerald-300 hover:shadow-md"
+                  >
+                    <p className="font-mono text-sm font-semibold text-slate-900">{b.number}</p>
+                    <p className="mt-1 text-xs text-slate-500">{b.product_labels?.slice(0, 2).join(", ") || "—"}</p>
+                    <div className="mt-3 flex items-center justify-between gap-2">
+                      <span className={batchStatusBadgeClass(b.status)}>{BATCH_STATUS_LABEL[b.status]}</span>
+                      <span className="text-xs tabular-nums text-slate-500">{b.progress_percent ?? 0}%</span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </PurchasingTableSection>
+          ) : null}
 
           {active.length > 0 ? (
             <PurchasingTableSection

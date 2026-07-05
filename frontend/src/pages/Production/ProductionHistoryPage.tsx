@@ -6,7 +6,9 @@ import { useWarehouse } from "../../context/WarehouseContext";
 import {
   listProductionBatches,
   listProductionOrders,
+  fetchProductionHistorySummary,
   type ProductionBatchRead,
+  type ProductionHistorySummaryRead,
   type ProductionOrderRead,
 } from "../../api/productionApi";
 import { AppEmptyState } from "../../components/app-shell";
@@ -64,13 +66,13 @@ type HistoryRow = {
 };
 
 function batchUnitCostLabel(b: ProductionBatchRead): string {
+  if (b.display_unit_cost != null) return formatProductionMoney(b.display_unit_cost);
   const costs = (b.lines ?? [])
     .map((ln) => ln.calculated_unit_cost)
     .filter((c): c is number => c != null && Number.isFinite(c));
   if (costs.length === 0) return "—";
   if (costs.length === 1) return formatProductionMoney(costs[0]);
-  const avg = costs.reduce((a, c) => a + c, 0) / costs.length;
-  return formatProductionMoney(avg);
+  return formatProductionMoney(costs[0]);
 }
 
 function toBatchRow(b: ProductionBatchRead): HistoryRow {
@@ -110,6 +112,7 @@ export default function ProductionHistoryPage() {
   const tenantId = warehouse?.tenant_id ?? DEFAULT_TENANT;
   const warehouseId = warehouse?.id;
   const [rows, setRows] = useState<HistoryRow[]>([]);
+  const [summary, setSummary] = useState<ProductionHistorySummaryRead | null>(null);
   const [loading, setLoading] = useState(true);
   const [filtersExpanded, setFiltersExpanded] = useState(false);
   const [draftFilters, setDraftFilters] = useState<ProductionHistoryFilters>(DEFAULT_PRODUCTION_HISTORY_FILTERS);
@@ -119,16 +122,19 @@ export default function ProductionHistoryPage() {
     if (warehouseId == null) return;
     setLoading(true);
     try {
-      const [batches, orders] = await Promise.all([
+      const [batches, orders, historySummary] = await Promise.all([
         listProductionBatches(tenantId, { warehouse_id: warehouseId, status: "completed" }),
         listProductionOrders(tenantId, { warehouse_id: warehouseId, status: "completed" }),
+        fetchProductionHistorySummary(tenantId, warehouseId),
       ]);
       const merged = [...batches.map(toBatchRow), ...orders.map(toOrderRow)].sort((a, b) =>
         b.completedAt.localeCompare(a.completedAt),
       );
       setRows(merged);
+      setSummary(historySummary);
     } catch {
       setRows([]);
+      setSummary(null);
     } finally {
       setLoading(false);
     }
@@ -155,13 +161,7 @@ export default function ProductionHistoryPage() {
     });
   }, [rows, appliedFilters]);
 
-  const kpis = useMemo(() => {
-    const completedBatches = filtered.filter((r) => r.kind === "batch").length;
-    const units = filtered.reduce((s, r) => s + r.qty, 0);
-    const costs = filtered.map((r) => parseFloat(r.unitCost.replace(/[^\d.,]/g, "").replace(",", "."))).filter((n) => Number.isFinite(n) && n > 0);
-    const avgCost = costs.length ? costs.reduce((a, b) => a + b, 0) / costs.length : null;
-    return { completedBatches, units, avgCost };
-  }, [filtered]);
+  const kpis = summary ?? { completed_batches: 0, units: 0, avg_unit_cost: null };
 
   if (warehouseId == null) {
     return <p className="py-8 text-sm text-slate-500">Wybierz magazyn, aby wyświetlić historię produkcji.</p>;
@@ -260,11 +260,11 @@ export default function ProductionHistoryPage() {
 
       {!loading ? (
         <ProductionKpiGrid>
-          <ProductionKpiCard title="Ukończone partie" value={kpis.completedBatches} tone="emerald" icon={<Package aria-hidden />} />
+          <ProductionKpiCard title="Ukończone partie" value={kpis.completed_batches} tone="emerald" icon={<Package aria-hidden />} />
           <ProductionKpiCard title="Wyprodukowane sztuki" value={kpis.units} tone="blue" icon={<TrendingUp aria-hidden />} />
           <ProductionKpiCard
             title="Średni koszt"
-            value={kpis.avgCost != null ? formatProductionMoney(kpis.avgCost) : "—"}
+            value={kpis.avg_unit_cost != null ? formatProductionMoney(kpis.avg_unit_cost) : "—"}
             tone="indigo"
             icon={<TrendingUp aria-hidden />}
           />

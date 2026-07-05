@@ -3,9 +3,13 @@ import { Link, useParams } from "react-router-dom";
 import { MapPin, PackageCheck } from "lucide-react";
 
 import { parseWmsProductionRouteParams, refKey } from "@/modules/production/productionExecutionTypes";
+import { WMS_ROUTES } from "../../wms/wmsRoutes";
 import { ProductThumb } from "./components/ProductThumb";
-import { ProductionWarehouseLocationSearch } from "./ProductionWarehouseLocationSearch";
-import { loadRecentTargetLocations } from "./productionUi";
+import {
+  ProductionDocumentsSection,
+  putawayStatusLabel,
+  putawayStatusBadgeClass,
+} from "./components/ProductionDocumentsSection";
 import { WmsProductionTerminalEmptyState } from "./WmsProductionTerminalEmptyState";
 import { WmsProductionJobQueueCard } from "./components/WmsProductionJobQueueCard";
 import { WmsProductionActiveBatchBar } from "./components/WmsProductionActiveBatchBar";
@@ -20,30 +24,30 @@ export default function PutawayPage() {
     [kind, id, batchId],
   );
 
-  const {
-    tenantId,
-    queue,
-    reloadQueue,
-    putawayDetail,
-    putawayTargets,
-    busy,
-    detailLoading,
-    openJob,
-    setPutawayTarget,
-    finishPutaway,
-  } = useProductionExecutionJob("putaway", activeRef);
+  const { queue, reloadQueue, putawayDetail, busy, detailLoading, openJob, refreshPutawayDetail } =
+    useProductionExecutionJob("putaway", activeRef);
 
-  const recentIds = putawayDetail ? loadRecentTargetLocations(putawayDetail.warehouseId) : [];
+  const pwDocuments =
+    putawayDetail?.lines
+      .filter((ln) => ln.pwDocumentId != null && ln.pwDocumentId > 0)
+      .map((ln) => ({
+        id: ln.pwDocumentId!,
+        number: ln.pwDocumentNumber,
+        putawayStatus: ln.putawayStatus,
+        productName: ln.productName,
+      })) ?? [];
+
+  const pendingPwCount = pwDocuments.filter((pw) => String(pw.putawayStatus || "").toUpperCase() !== "DONE").length;
 
   return (
     <div className="w-full space-y-5">
       {!activeRef ? (
         <div className="w-full space-y-4">
-          <p className={WMS_TERMINAL_LABEL}>Odkładanie wyrobów</p>
+          <p className={WMS_TERMINAL_LABEL}>Rozlokowanie wyrobów</p>
           {queue.length === 0 ? (
             <WmsProductionTerminalEmptyState
-              title="Brak zadań do odłożenia"
-              description="Po zakończeniu produkcji zlecenia i partie oczekujące na odkładanie pojawią się tutaj."
+              title="Brak zadań do rozlokowania"
+              description="Po zakończeniu produkcji zlecenia i partie oczekujące na rozlokowanie pojawią się tutaj."
               icon={<PackageCheck size={22} strokeWidth={2} />}
               onRefresh={() => void reloadQueue()}
             />
@@ -70,14 +74,26 @@ export default function PutawayPage() {
         <>
           <WmsProductionActiveBatchBar
             kind={activeRef.kind}
-            label="Odkładanie wyrobów gotowych"
+            label="Rozlokowanie wyrobów gotowych"
             number={putawayDetail.number}
+            productLine={putawayDetail.productLabel}
             accent="emerald"
           />
 
+          {pendingPwCount > 0 ? (
+            <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+              Pozostało do rozlokowania: <strong>{pendingPwCount}</strong>{" "}
+              {pendingPwCount === 1 ? "dokument PW" : "dokumenty PW"}.
+            </p>
+          ) : pwDocuments.length > 0 ? (
+            <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+              Wszystkie dokumenty PW zostały rozlokowane.
+            </p>
+          ) : null}
+
           <div className="w-full space-y-4">
             {putawayDetail.lines.map((ln) => {
-              const target = putawayTargets[ln.lineKey];
+              const done = String(ln.putawayStatus || "").toUpperCase() === "DONE";
               return (
                 <div
                   key={ln.lineKey}
@@ -85,32 +101,38 @@ export default function PutawayPage() {
                 >
                   <div className="absolute bottom-0 left-0 top-0 w-1 bg-emerald-400" aria-hidden />
                   <div className="pl-3">
-                    <div className="flex items-center gap-4">
-                      <ProductThumb name={ln.productName} size="lg" />
-                      <div>
-                        <p className={WMS_TERMINAL_LABEL}>Produkt</p>
-                        <p className="text-xl font-bold text-slate-900">{ln.productName}</p>
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="flex items-center gap-4">
+                        <ProductThumb name={ln.productName} size="lg" />
+                        <div>
+                          <p className={WMS_TERMINAL_LABEL}>Produkt</p>
+                          <p className="text-xl font-bold text-slate-900">{ln.productName}</p>
+                          <p className="mt-1 text-3xl font-black tabular-nums text-slate-900">{ln.quantity}</p>
+                        </div>
                       </div>
-                    </div>
-                    <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                      <div>
-                        <p className={WMS_TERMINAL_LABEL}>Ilość</p>
-                        <p className="mt-1 text-3xl font-black tabular-nums text-slate-900">{ln.quantity}</p>
-                      </div>
-                      <div>
-                        <p className="mb-2 inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-widest text-slate-400">
-                          <MapPin className="h-3.5 w-3.5" aria-hidden />
-                          Lokacja docelowa
-                        </p>
-                        <ProductionWarehouseLocationSearch
-                          tenantId={tenantId}
-                          warehouseId={putawayDetail.warehouseId}
-                          value={target?.id ?? null}
-                          valueLabel={target?.code ?? null}
-                          recentLocationIds={recentIds}
-                          onChange={(locId, code) => setPutawayTarget(ln.lineKey, locId, code)}
-                        />
-                      </div>
+                      {ln.pwDocumentId ? (
+                        <div className="space-y-2 sm:text-right">
+                          <p className="font-mono text-sm font-semibold text-slate-800">
+                            PW {ln.pwDocumentNumber ?? ln.pwDocumentId}
+                          </p>
+                          <span
+                            className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ${putawayStatusBadgeClass(ln.putawayStatus)}`}
+                          >
+                            {putawayStatusLabel(ln.putawayStatus)}
+                          </span>
+                          {!done ? (
+                            <Link
+                              to={WMS_ROUTES.putawayPz(ln.pwDocumentId)}
+                              className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 sm:w-auto"
+                            >
+                              <MapPin className="h-4 w-4" aria-hidden />
+                              Rozlokuj w WMS
+                            </Link>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-slate-500">Brak dokumentu PW dla tej pozycji.</p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -118,20 +140,21 @@ export default function PutawayPage() {
             })}
           </div>
 
+          {pwDocuments.length > 0 ? (
+            <ProductionDocumentsSection pwDocuments={pwDocuments} />
+          ) : null}
+
           <button
             type="button"
             disabled={busy}
-            onClick={() => void finishPutaway()}
-            className="w-full max-w-xl rounded-xl bg-emerald-600 py-4 text-lg font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
+            onClick={() => void refreshPutawayDetail()}
+            className="w-full max-w-xl rounded-xl border border-slate-300 bg-white py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
           >
-            Potwierdź odkładanie
+            Odśwież status rozlokowania
           </button>
 
-          <Link
-            to={wmsProductionPaths.execute(activeRef.kind, activeRef.id)}
-            className="block text-sm text-slate-500 underline"
-          >
-            Wróć do produkcji
+          <Link to={wmsProductionPaths.putaway()} className="block text-sm text-slate-500 underline">
+            Kolejka rozlokowania
           </Link>
         </>
       ) : (

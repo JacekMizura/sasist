@@ -4,4 +4,5 @@ import type { TabItem } from "../../components/TopTabsNavigation";
 export const WMS_PRODUCTION_TABS: TabItem[] = [
   { path: "/wms/production/collecting", label: "Zbieranie surowców" },
   { path: "/wms/production/execute", label: "Produkcja" },
+  { path: "/wms/production/putaway", label: "Rozlokowanie" },
 ];

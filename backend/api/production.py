@@ -31,7 +31,15 @@ from ..schemas.production_batch import (
     ProductionBatchRead,
     BulkProductionCardsBody,
 )
-from ..schemas.production_recipe_card import ProductionDashboardRead, RecipeCardRead, RecipeDetailRead
+from ..schemas.production_recipe_card import (
+    ProductionAnalyticsSummaryRead,
+    ProductionBatchListSummaryRead,
+    ProductionDashboardRead,
+    ProductionExecutionStatusRead,
+    ProductionHistorySummaryRead,
+    RecipeCardRead,
+    RecipeDetailRead,
+)
 from ..schemas.production import (
     ProductionCompleteResultRead,
     ProductionOrderCompleteBody,
@@ -51,6 +59,12 @@ from ..schemas.production_execution import (
     OrderProductionProgressBody,
     OrderPutawayBody,
     ProductionExecutionJobRead,
+)
+from ..services.production_execution.constants import EXECUTION_STATUSES, EXECUTION_STATUS_LABELS
+from ..services.production_execution.production_kpi_service import (
+    get_open_batch_list_summary,
+    get_production_analytics_summary,
+    get_production_history_summary,
 )
 from ..services.production_execution.order_execution_service import (
     finish_order_collecting,
@@ -452,6 +466,41 @@ def api_production_dashboard(
     db: Session = Depends(get_db),
 ):
     return get_production_dashboard(db, tenant_id=tenant_id, warehouse_id=warehouse_id)
+
+
+@router.get("/execution-statuses", response_model=List[ProductionExecutionStatusRead])
+def api_production_execution_statuses():
+    return [
+        ProductionExecutionStatusRead(value=status, label=EXECUTION_STATUS_LABELS.get(status, status))
+        for status in sorted(EXECUTION_STATUSES)
+    ]
+
+
+@router.get("/batches/summary", response_model=ProductionBatchListSummaryRead)
+def api_batch_list_summary(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: Optional[int] = Query(None, ge=1),
+    db: Session = Depends(get_db),
+):
+    return get_open_batch_list_summary(db, tenant_id=tenant_id, warehouse_id=warehouse_id)
+
+
+@router.get("/history/summary", response_model=ProductionHistorySummaryRead)
+def api_production_history_summary(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: Optional[int] = Query(None, ge=1),
+    db: Session = Depends(get_db),
+):
+    return get_production_history_summary(db, tenant_id=tenant_id, warehouse_id=warehouse_id)
+
+
+@router.get("/analytics/summary", response_model=ProductionAnalyticsSummaryRead)
+def api_production_analytics_summary(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: Optional[int] = Query(None, ge=1),
+    db: Session = Depends(get_db),
+):
+    return get_production_analytics_summary(db, tenant_id=tenant_id, warehouse_id=warehouse_id)
 
 
 @router.get("/recipes", response_model=List[RecipeCardRead])
@@ -1305,6 +1354,13 @@ def api_finish_order_putaway(
     )
     try:
         uid = int(user.id) if user is not None else None
+        row = finish_order_putaway(
+            db,
+            tenant_id=tenant_id,
+            order_id=order_id,
+            body=body,
+            performed_by_user_id=uid,
+        )
         db.commit()
         return row
     except ProductionOrderError as exc:

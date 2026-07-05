@@ -141,7 +141,7 @@ export function currentExecutionPhaseLabel(status: string): string {
     case "awaiting_putaway":
       return "Oczekuje na rozlokowanie";
     case "putaway":
-      return "Oczekuje na rozlokowanie";
+      return "Rozlokowanie w toku";
     case "completed":
       return "Zakończone";
     case "cancelled":

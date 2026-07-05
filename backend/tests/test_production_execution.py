@@ -23,7 +23,8 @@ class TestExecutionPhaseMapping(unittest.TestCase):
         self.assertEqual(execution_phase_for_status("planned"), "collecting")
         self.assertEqual(execution_phase_for_status("collecting"), "collecting")
         self.assertEqual(execution_phase_for_status("in_progress"), "execute")
-        self.assertIsNone(execution_phase_for_status("putaway"))
+        self.assertEqual(execution_phase_for_status("awaiting_putaway"), "putaway")
+        self.assertEqual(execution_phase_for_status("putaway"), "putaway")
         self.assertIsNone(execution_phase_for_status("completed"))
 
     def test_batch_to_legacy_summary_covers_wms_phases(self):

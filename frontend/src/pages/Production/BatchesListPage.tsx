@@ -4,7 +4,7 @@ import { AlertTriangle, CalendarClock, Factory, FileText, Package } from "lucide
 import toast from "react-hot-toast";
 
 import { useWarehouse } from "../../context/WarehouseContext";
-import { listProductionBatches, printBulkProductionCards, type ProductionBatchRead } from "../../api/productionApi";
+import { listProductionBatches, printBulkProductionCards, fetchProductionBatchListSummary, type ProductionBatchRead, type ProductionBatchListSummaryRead } from "../../api/productionApi";
 import { AppEmptyState } from "../../components/app-shell";
 import {
   productsListActionsCellClass,
@@ -38,6 +38,7 @@ export default function BatchesListPage({ embedded = false }: Props) {
   const tenantId = warehouse?.tenant_id ?? DEFAULT_TENANT;
   const warehouseId = warehouse?.id;
   const [batches, setBatches] = useState<ProductionBatchRead[]>([]);
+  const [stats, setStats] = useState<ProductionBatchListSummaryRead | null>(null);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [printBusy, setPrintBusy] = useState(false);
@@ -45,10 +46,15 @@ export default function BatchesListPage({ embedded = false }: Props) {
   const reload = useCallback(async () => {
     setLoading(true);
     try {
-      const rows = await listProductionBatches(tenantId, { warehouse_id: warehouseId });
+      const [rows, summary] = await Promise.all([
+        listProductionBatches(tenantId, { warehouse_id: warehouseId }),
+        warehouseId != null ? fetchProductionBatchListSummary(tenantId, warehouseId) : Promise.resolve(null),
+      ]);
       setBatches(rows.filter((b) => b.status !== "completed" && b.status !== "cancelled"));
+      setStats(summary);
     } catch {
       setBatches([]);
+      setStats(null);
     } finally {
       setLoading(false);
     }
@@ -58,13 +64,7 @@ export default function BatchesListPage({ embedded = false }: Props) {
     void reload();
   }, [reload]);
 
-  const stats = useMemo(() => {
-    const planned = batches.filter((b) => b.status === "planned" || b.status === "draft").length;
-    const active = batches.filter((b) => ["collecting", "in_progress"].includes(b.status)).length;
-    const shortages = batches.filter((b) => b.has_shortages).length;
-    const units = batches.reduce((s, b) => s + (b.total_planned_units ?? 0), 0);
-    return { planned, active, shortages, units, total: batches.length };
-  }, [batches]);
+  const kpi = stats ?? { planned: 0, active: 0, awaiting_putaway: 0, shortages: 0, total_units: 0, units_in_production: 0, total: 0 };
 
   const toggleSelect = (id: number) => {
     setSelected((prev) => {
@@ -212,10 +212,11 @@ export default function BatchesListPage({ embedded = false }: Props) {
     return (
       <div className="space-y-6">
         <ProductionKpiGrid>
-          <ProductionKpiCard title="Partie aktywne" value={stats.total} tone="indigo" icon={<Package aria-hidden />} />
-          <ProductionKpiCard title="Zaplanowane" value={stats.planned} tone="purple" icon={<CalendarClock aria-hidden />} />
-          <ProductionKpiCard title="W realizacji" value={stats.active} tone="blue" icon={<Factory aria-hidden />} />
-          <ProductionKpiCard title="Z brakami" value={stats.shortages} tone="amber" icon={<AlertTriangle aria-hidden />} />
+          <ProductionKpiCard title="Partie aktywne" value={kpi.total} tone="indigo" icon={<Package aria-hidden />} />
+          <ProductionKpiCard title="Zaplanowane" value={kpi.planned} tone="purple" icon={<CalendarClock aria-hidden />} />
+          <ProductionKpiCard title="W realizacji" value={kpi.active} subtitle={`${kpi.units_in_production ?? 0} szt. w toku`} tone="blue" icon={<Factory aria-hidden />} />
+          <ProductionKpiCard title="Oczekuje rozlokowania" value={kpi.awaiting_putaway ?? 0} tone="emerald" icon={<Package aria-hidden />} />
+          <ProductionKpiCard title="Z brakami" value={kpi.shortages} tone="amber" icon={<AlertTriangle aria-hidden />} />
         </ProductionKpiGrid>
         {table}
       </div>

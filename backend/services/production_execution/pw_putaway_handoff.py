@@ -120,17 +120,17 @@ def create_batch_pw_documents_for_putaway(
         if batch.rw_stock_document_id
         else None
     )
-    total_component_cost = 0.0
-    if rw_doc is not None:
-        for item in rw_doc.items or []:
-            total_component_cost += float(item.purchase_price_net or 0) * float(item.quantity or 0)
     total_planned = sum(float(bl.planned_quantity) for bl in batch.lines or []) or 1.0
     pw_ids: list[int] = []
+    from .cost_service import compute_batch_line_unit_cost
+
     for bl in batch.lines or []:
         produced = float(bl.completed_quantity or bl.planned_quantity)
-        line_share = produced / total_planned
-        line_comp_cost = total_component_cost * line_share
-        unit_cost = line_comp_cost / produced if produced > 1e-9 else 0.0
+        unit_cost = compute_batch_line_unit_cost(
+            rw_doc,
+            produced_quantity=produced,
+            total_planned_quantity=total_planned,
+        )
         pw_doc = _create_pw_for_putaway(
             db,
             tenant_id=int(batch.tenant_id),
@@ -163,12 +163,10 @@ def create_order_pw_document_for_putaway(
         if order.rw_stock_document_id
         else None
     )
-    total_component_cost = 0.0
-    if rw_doc is not None:
-        for item in rw_doc.items or []:
-            total_component_cost += float(item.purchase_price_net or 0) * float(item.quantity or 0)
     produced = float(order.produced_quantity or order.planned_quantity)
-    unit_cost = total_component_cost / produced if produced > 1e-9 else 0.0
+    from .cost_service import compute_order_unit_cost
+
+    unit_cost = compute_order_unit_cost(rw_doc, produced_quantity=produced)
     pw_doc = _create_pw_for_putaway(
         db,
         tenant_id=int(order.tenant_id),

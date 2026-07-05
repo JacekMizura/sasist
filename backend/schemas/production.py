@@ -12,6 +12,7 @@ ProductionOrderStatus = Literal[
     "planned",
     "collecting",
     "in_progress",
+    "awaiting_putaway",
     "putaway",
     "completed",
     "cancelled",
@@ -213,6 +214,7 @@ class ProductionOrderRead(BaseModel):
     pw_stock_document_id: Optional[int] = None
     rw_document_number: Optional[str] = None
     pw_document_number: Optional[str] = None
+    pw_putaway_status: Optional[str] = None
     component_total_cost: Optional[float] = None
     operator_name: Optional[str] = None
     product_name: Optional[str] = None

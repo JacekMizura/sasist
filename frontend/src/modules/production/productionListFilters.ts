@@ -141,7 +141,8 @@ export const PRODUCTION_ORDER_STATUS_OPTIONS = [
   { value: "planned", label: "Zaplanowana" },
   { value: "collecting", label: "Zbieranie" },
   { value: "in_progress", label: "W realizacji" },
-  { value: "putaway", label: "Odłożenie" },
+  { value: "awaiting_putaway", label: "Oczekuje na rozlokowanie" },
+  { value: "putaway", label: "Rozlokowanie w toku" },
   { value: "completed", label: "Ukończona" },
   { value: "cancelled", label: "Anulowana" },
 ] as const;

@@ -48,6 +48,7 @@ class ProductionBatchLineRead(BaseModel):
     calculated_unit_cost: Optional[float] = None
     pw_stock_document_id: Optional[int] = None
     pw_document_number: Optional[str] = None
+    pw_putaway_status: Optional[str] = None
     product_name: Optional[str] = None
     product_sku: Optional[str] = None
     product_image_url: Optional[str] = None
@@ -118,6 +119,7 @@ class ProductionBatchRead(BaseModel):
     completed_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    display_unit_cost: Optional[float] = None
 
 
 class CollectionLocationLotRead(BaseModel):

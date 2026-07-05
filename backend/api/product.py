@@ -2938,6 +2938,15 @@ def list_product_inventory_movements(
                 ref_doc_u = str(getattr(sd, "document_number", "") or ref_doc_u or "").strip() or ref_doc_u
             mt_u = str(w.movement_type or "").strip().upper()
             ui_type = str(w.movement_type or "").lower()
+            unit_net = None
+            unit_gross = None
+            if sd is not None and getattr(sd, "items", None):
+                for item in sd.items or []:
+                    if int(getattr(item, "product_id", 0) or 0) == int(w.product_id):
+                        unit_net = float(item.purchase_price_net) if getattr(item, "purchase_price_net", None) is not None else None
+                        if unit_net is not None:
+                            unit_gross = unit_net * 1.23
+                        break
             if mt_u == "PRODUCTION":
                 prod_mode = str(getattr(w, "wms_mode", "") or "").strip().upper()
                 ui_type = "production_rw" if prod_mode == "RW" else "production_pw"
@@ -2973,8 +2982,8 @@ def list_product_inventory_movements(
                     "quantity_after": qty_after,
                     "delta": delta,
                     "quantity_raw": float(w.quantity or 0),
-                    "unit_cost_net": None,
-                    "unit_cost_gross": None,
+                    "unit_cost_net": unit_net,
+                    "unit_cost_gross": unit_gross,
                     "packaging_type": w.packaging_type,
                     "packaging_quantity": float(w.packaging_quantity) if w.packaging_quantity is not None else None,
                     "replenishment_task_id": int(w.replenishment_task_id)

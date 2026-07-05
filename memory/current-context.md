@@ -1,5 +1,22 @@
 # Current context
 
+## Production functional fixes — Etapy 1–3 (2026-06-08)
+- Naprawiono lifecycle UI: WMS putaway queue, etykiety Rozlokowanie, multi-PW, KPI/dashboard, linki batch z produktu, monitoring koszt.
+- Bez Phase 2 refactor; testy `test_production_execution.py` + `test_production.py` — 22 passed.
+- Raport: `memory/production-functional-fix-report.md`
+
+## Production Consistency Refactor — Phase 1 (2026-06-08)
+- Jeden lifecycle batch/MO: `awaiting_putaway` → completed po WMS PW putaway; legacy `complete_*` / `finish_putaway` → deprecated_path.
+- SSOT statusów: `constants.EXECUTION_STATUS_LABELS` + API `/production/execution-statuses`; frontend `EXECUTION_STATUS_LABEL`.
+- Koszt: `production_execution/cost_service.py`; KPI: `production_kpi_service.py` + 3 endpointy summary.
+- Linki RW/PW: `stockDocumentPaths.ts` (`?id=` + segment typu).
+- Raport: `memory/production-consistency-refactor-phase1-report.md`
+
+## Audyt spójności modułu Produkcji (2026-06-08)
+- Read-only: 10 obszarów (ERP engine, RW/PW, stany, koszty, KPI, historia, statusy, frontend, performance).
+- Kluczowe: 3 ścieżki zakończenia, MO completed przed putaway, broken doc links `?doc=` vs `?id=`, koszt ×6, KPI na froncie.
+- Raport: `memory/production-module-consistency-audit.md`
+
 ## Ujednolicenie Produkcji ERP/WMS (2026-06-08)
 - Putaway PW: SSOT `can_wms_putaway` na `StockDocumentRead`; fix gate error bez `creation_source`.
 - KPI dashboard: `units_in_production`, bez double-count; executing = collecting|in_progress only.

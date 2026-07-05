@@ -1690,9 +1690,9 @@ def finalize_wms_relocation_pz(db: Session, tenant_id: int, document_id: int) ->
         doc.status = "zakonczone"
 
     _sync_po_from_pz(db, tenant_id, document_id)
-    from .production_execution.batch_putaway_completion import try_complete_production_batch_from_pw_document
+    from .production_execution.batch_putaway_completion import try_complete_production_execution_from_pw_document
 
-    try_complete_production_batch_from_pw_document(db, doc)
+    try_complete_production_execution_from_pw_document(db, doc)
     db.commit()
     db.refresh(doc)
     return build_stock_document_read(db, doc)

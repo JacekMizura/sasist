@@ -191,6 +191,16 @@ def serialize_batch_line(db: Session, line: ProductionBatchLine) -> ProductionBa
         if line.target_location_id
         else None
     )
+    pw_putaway_status = None
+    if getattr(line, "pw_stock_document_id", None):
+        pw_doc = db.query(StockDocument).filter(StockDocument.id == int(line.pw_stock_document_id)).first()
+        if pw_doc is not None:
+            ps = str(getattr(pw_doc, "putaway_status", "") or "").strip().upper()
+            rs = str(getattr(pw_doc, "relocation_status", "") or "").strip().upper()
+            if ps == "DONE" or rs == "DONE":
+                pw_putaway_status = "DONE"
+            else:
+                pw_putaway_status = ps or rs or "OPEN"
     return ProductionBatchLineRead(
         id=int(line.id),
         product_id=int(line.product_id),
@@ -203,6 +213,7 @@ def serialize_batch_line(db: Session, line: ProductionBatchLine) -> ProductionBa
         calculated_unit_cost=line.calculated_unit_cost,
         pw_stock_document_id=line.pw_stock_document_id,
         pw_document_number=_doc_number(db, line.pw_stock_document_id),
+        pw_putaway_status=pw_putaway_status,
         product_name=(p.name if p else None),
         product_sku=((p.sku or p.symbol) if p else None),
         product_image_url=((p.image_url or "").strip() or None if p else None),
@@ -245,7 +256,7 @@ def _batch_has_shortages(db: Session, batch: ProductionBatch) -> bool:
         return False
 
 
-def serialize_batch(db: Session, batch: ProductionBatch) -> ProductionBatchRead:
+def serialize_batch(db: Session, batch: ProductionBatch, *, check_shortages: bool = True) -> ProductionBatchRead:
     wh = db.query(Warehouse).filter(Warehouse.id == int(batch.warehouse_id)).first()
     lines = batch.lines or []
     total_planned = sum(float(ln.planned_quantity or 0) for ln in lines)
@@ -260,6 +271,8 @@ def serialize_batch(db: Session, batch: ProductionBatch) -> ProductionBatchRead:
         progress = 100.0
     else:
         progress = 0.0
+    from .production_execution.cost_service import compute_batch_display_unit_cost
+
     return ProductionBatchRead(
         id=int(batch.id),
         tenant_id=int(batch.tenant_id),
@@ -275,7 +288,7 @@ def serialize_batch(db: Session, batch: ProductionBatch) -> ProductionBatchRead:
         products_count=len(lines),
         total_planned_units=round(total_planned, 4),
         total_completed_units=round(total_completed, 4),
-        has_shortages=_batch_has_shortages(db, batch),
+        has_shortages=_batch_has_shortages(db, batch) if check_shortages else False,
         progress_percent=progress,
         collection_progress_percent=coll_pct,
         released_to_wms_at=getattr(batch, "released_to_wms_at", None),
@@ -290,6 +303,7 @@ def serialize_batch(db: Session, batch: ProductionBatch) -> ProductionBatchRead:
         completed_at=batch.completed_at,
         created_at=batch.created_at,
         updated_at=batch.updated_at,
+        display_unit_cost=compute_batch_display_unit_cost(lines),
     )
 
 
@@ -742,7 +756,7 @@ def list_batches(
     out: list[ProductionBatchRead] = []
     for batch in rows:
         try:
-            out.append(serialize_batch(db, batch))
+            out.append(serialize_batch(db, batch, check_shortages=True))
         except Exception as exc:
             logger.warning("list_batches skip batch_id=%s: %s", getattr(batch, "id", None), exc)
     return out
@@ -939,182 +953,10 @@ def complete_batch(
     body: ProductionBatchCompleteBody,
     performed_by_user_id: int | None = None,
 ) -> ProductionBatchCompleteResultRead:
-    batch = (
-        db.query(ProductionBatch)
-        .options(joinedload(ProductionBatch.lines).joinedload(ProductionBatchLine.composition))
-        .filter(ProductionBatch.id == int(batch_id), ProductionBatch.tenant_id == int(tenant_id))
-        .first()
-    )
-    if batch is None:
-        raise ProductionBatchError("Partia nie istnieje.", code="not_found")
-    if str(batch.status) == "completed":
-        return ProductionBatchCompleteResultRead(
-            batch=serialize_batch(db, batch),
-            rw_stock_document_id=batch.rw_stock_document_id,
-            rw_document_number=_doc_number(db, batch.rw_stock_document_id),
-        )
-    if str(batch.status) == "cancelled":
-        raise ProductionBatchError("Partia anulowana.", code="cancelled")
-
-    plan = build_batch_pick_plan(db, tenant_id=tenant_id, batch_id=batch_id)
-    if plan.has_shortages:
-        raise ProductionBatchError(
-            "Niewystarczający stan magazynowy.",
-            code="insufficient_stock",
-            shortages=[s.model_dump() for s in plan.shortages],
-        )
-
-    totals = _aggregate_batch_components(batch)
-    alloc_map = _resolve_batch_allocations(db, batch, totals=totals, component_allocations=body.component_allocations)
-
-    try:
-        series = require_warehouse_series(db, tenant_id=int(batch.tenant_id), warehouse_id=int(batch.warehouse_id), subtype="RW")
-    except Exception:
-        series = None
-    rw_doc = StockDocument(
-        tenant_id=int(batch.tenant_id),
-        warehouse_id=int(batch.warehouse_id),
-        document_type="RW",
-        creation_source="PRODUCTION",
-        production_batch_id=int(batch.id),
-        status="completed",
-        receiving_status="DONE",
-        putaway_status="DONE",
-        relocation_status="DONE",
-        created_by_user_id=performed_by_user_id,
-    )
-    db.add(rw_doc)
-    db.flush()
-    if series is not None:
-        wh = db.query(Warehouse).filter(Warehouse.id == int(batch.warehouse_id)).first()
-        assign_series_number_to_stock_document(db, rw_doc, series, warehouse_code=str(getattr(wh, "code", None) or "") or None)
-
-    total_component_cost = 0.0
-    for pid, allocs in alloc_map.items():
-        if not allocs:
-            continue
-        qty_sum = sum(q for _, q in allocs)
-        line = StockDocumentItem(
-            document_id=int(rw_doc.id),
-            product_id=int(pid),
-            ordered_quantity=qty_sum,
-            received_quantity=qty_sum,
-            quantity=qty_sum,
-            batch_number="",
-            expiry_date=date(9999, 12, 31),
-        )
-        db.add(line)
-        db.flush()
-        unit_net = float(get_product_current_cost(db, int(batch.tenant_id), int(pid)).get("purchase_net") or 0)
-        line.purchase_price_net = unit_net
-        for loc_id, qty in allocs:
-            slices = consume_inventory_fifo_slices(
-                db,
-                tenant_id=int(batch.tenant_id),
-                warehouse_id=int(batch.warehouse_id),
-                product_id=int(pid),
-                location_id=int(loc_id),
-                quantity=float(qty),
-            )
-            for sl in slices:
-                _append_rw_issue_with_product_audit(
-                    db,
-                    rw_doc=rw_doc,
-                    line=line,
-                    slice_qty=float(sl.quantity),
-                    from_location_id=int(loc_id),
-                    batch_number=sl.batch_number or "",
-                    expiry_date=sl.expiry_date if sl.expiry_date < NO_EXPIRY_SENTINEL else None,
-                    performed_by_user_id=performed_by_user_id,
-                    production_batch_id=int(batch.id),
-                    product_id=int(pid),
-                )
-        total_component_cost += unit_net * float(qty_sum)
-
-    line_cost_pool = total_component_cost
-    total_planned = sum(float(bl.planned_quantity) for bl in batch.lines or []) or 1.0
-
-    for bl in batch.lines or []:
-        if bl.composition is None:
-            continue
-        produced = float(bl.planned_quantity)
-        target_loc = int(bl.target_location_id or 0)
-        if target_loc < 1:
-            raise ProductionBatchError(
-                f"Brak lokalizacji docelowej dla {bl.product_id}.",
-                code="location_required",
-            )
-        line_share = produced / total_planned
-        line_comp_cost = total_component_cost * line_share
-        unit_cost = line_comp_cost / produced if produced > 1e-9 else 0.0
-
-        try:
-            pw_series = require_warehouse_series(db, tenant_id=int(batch.tenant_id), warehouse_id=int(batch.warehouse_id), subtype="PW")
-        except Exception:
-            pw_series = None
-        pw_doc = StockDocument(
-            tenant_id=int(batch.tenant_id),
-            warehouse_id=int(batch.warehouse_id),
-            location_id=target_loc,
-            document_type="PW",
-            creation_source="PRODUCTION",
-            production_batch_id=int(batch.id),
-            production_batch_line_id=int(bl.id),
-            status="completed",
-            receiving_status="DONE",
-            putaway_status="DONE",
-            relocation_status="DONE",
-            created_by_user_id=performed_by_user_id,
-        )
-        db.add(pw_doc)
-        db.flush()
-        if pw_series is not None:
-            wh = db.query(Warehouse).filter(Warehouse.id == int(batch.warehouse_id)).first()
-            assign_series_number_to_stock_document(db, pw_doc, pw_series, warehouse_code=str(getattr(wh, "code", None) or "") or None)
-
-        fg_line = StockDocumentItem(
-            document_id=int(pw_doc.id),
-            product_id=int(bl.product_id),
-            ordered_quantity=produced,
-            received_quantity=produced,
-            quantity=produced,
-            purchase_price_net=unit_cost,
-            batch_number="",
-            expiry_date=date(9999, 12, 31),
-        )
-        db.add(fg_line)
-        db.flush()
-        upsert_dock_inventory_for_loose_receipt(
-            db,
-            tenant_id=int(batch.tenant_id),
-            warehouse_id=int(batch.warehouse_id),
-            location_id=target_loc,
-            product_id=int(bl.product_id),
-            add_qty=float(produced),
-            batch_number="",
-            expiry_date=NO_EXPIRY_SENTINEL,
-            stock_disposition=STOCK_DISPOSITION_SALEABLE,
-        )
-        append_receipt_operation(db, pw_doc, fg_line, float(produced))
-        bl.completed_quantity = produced
-        bl.calculated_unit_cost = round(unit_cost, 4)
-        bl.pw_stock_document_id = int(pw_doc.id)
-        bl.status = "completed"
-        prod = db.query(Product).filter(Product.id == int(bl.product_id)).first()
-        if prod is not None and unit_cost > 0:
-            prod.purchase_price = float(unit_cost)
-
-    batch.rw_stock_document_id = int(rw_doc.id)
-    batch.status = "completed"
-    batch.completed_at = datetime.utcnow()
-    batch.updated_at = datetime.utcnow()
-    db.flush()
-
-    return ProductionBatchCompleteResultRead(
-        batch=serialize_batch(db, batch),
-        rw_stock_document_id=int(rw_doc.id),
-        rw_document_number=str(getattr(rw_doc, "document_number", None) or "").strip() or None,
-        component_total_cost=round(total_component_cost, 4),
+    del db, tenant_id, batch_id, body, performed_by_user_id
+    raise ProductionBatchError(
+        "Użyj przepływu WMS: zbieranie → produkcja → finish-production → rozlokowanie PW.",
+        code="deprecated_path",
     )
 
 
@@ -1517,92 +1359,8 @@ def finish_putaway(
     body: BatchPutawayBody,
     performed_by_user_id: int | None = None,
 ) -> ProductionBatchCompleteResultRead:
-    batch = _load_batch_entity(db, tenant_id=tenant_id, batch_id=batch_id)
-    if str(batch.status) != "putaway":
-        raise ProductionBatchError("Partia nie jest w fazie odkładania.", code="invalid_status")
-    if not body.lines:
-        raise ProductionBatchError("Podaj lokalizacje docelowe.", code="putaway_required")
-    loc_map = {int(x.line_id): int(x.target_location_id) for x in body.lines}
-    for bl in batch.lines or []:
-        tid = loc_map.get(int(bl.id))
-        if tid:
-            bl.target_location_id = tid
-    db.flush()
-    totals = _aggregate_batch_components(batch)
-    rw_doc = db.query(StockDocument).filter(StockDocument.id == int(batch.rw_stock_document_id)).first() if batch.rw_stock_document_id else None
-    total_component_cost = 0.0
-    if rw_doc is not None:
-        for item in rw_doc.items or []:
-            total_component_cost += float(item.purchase_price_net or 0) * float(item.quantity or 0)
-    total_planned = sum(float(bl.planned_quantity) for bl in batch.lines or []) or 1.0
-    for bl in batch.lines or []:
-        produced = float(bl.completed_quantity or bl.planned_quantity)
-        target_loc = int(bl.target_location_id or 0)
-        if target_loc < 1:
-            raise ProductionBatchError(f"Brak lokalizacji docelowej dla {bl.product_id}.", code="location_required")
-        line_share = produced / total_planned
-        line_comp_cost = total_component_cost * line_share
-        unit_cost = line_comp_cost / produced if produced > 1e-9 else 0.0
-        try:
-            pw_series = require_warehouse_series(db, tenant_id=int(batch.tenant_id), warehouse_id=int(batch.warehouse_id), subtype="PW")
-        except Exception:
-            pw_series = None
-        pw_doc = StockDocument(
-            tenant_id=int(batch.tenant_id),
-            warehouse_id=int(batch.warehouse_id),
-            location_id=target_loc,
-            document_type="PW",
-            creation_source="PRODUCTION",
-            production_batch_id=int(batch.id),
-            production_batch_line_id=int(bl.id),
-            status="completed",
-            receiving_status="DONE",
-            putaway_status="DONE",
-            relocation_status="DONE",
-            created_by_user_id=performed_by_user_id,
-        )
-        db.add(pw_doc)
-        db.flush()
-        if pw_series is not None:
-            wh = db.query(Warehouse).filter(Warehouse.id == int(batch.warehouse_id)).first()
-            assign_series_number_to_stock_document(db, pw_doc, pw_series, warehouse_code=str(getattr(wh, "code", None) or "") or None)
-        fg_line = StockDocumentItem(
-            document_id=int(pw_doc.id),
-            product_id=int(bl.product_id),
-            ordered_quantity=produced,
-            received_quantity=produced,
-            quantity=produced,
-            purchase_price_net=unit_cost,
-            batch_number="",
-            expiry_date=date(9999, 12, 31),
-        )
-        db.add(fg_line)
-        db.flush()
-        upsert_dock_inventory_for_loose_receipt(
-            db,
-            tenant_id=int(batch.tenant_id),
-            warehouse_id=int(batch.warehouse_id),
-            location_id=target_loc,
-            product_id=int(bl.product_id),
-            add_qty=float(produced),
-            batch_number="",
-            expiry_date=NO_EXPIRY_SENTINEL,
-            stock_disposition=STOCK_DISPOSITION_SALEABLE,
-        )
-        append_receipt_operation(db, pw_doc, fg_line, float(produced))
-        bl.calculated_unit_cost = round(unit_cost, 4)
-        bl.pw_stock_document_id = int(pw_doc.id)
-        bl.status = "completed"
-        prod = db.query(Product).filter(Product.id == int(bl.product_id)).first()
-        if prod is not None and unit_cost > 0:
-            prod.purchase_price = float(unit_cost)
-    batch.status = "completed"
-    batch.completed_at = datetime.utcnow()
-    batch.updated_at = datetime.utcnow()
-    db.flush()
-    return ProductionBatchCompleteResultRead(
-        batch=serialize_batch(db, batch),
-        rw_stock_document_id=batch.rw_stock_document_id,
-        rw_document_number=_doc_number(db, batch.rw_stock_document_id),
-        component_total_cost=round(total_component_cost, 4),
+    del db, tenant_id, batch_id, body, performed_by_user_id
+    raise ProductionBatchError(
+        "Użyj modułu Rozlokowanie (WMS) dla dokumentów PW.",
+        code="deprecated_path",
     )

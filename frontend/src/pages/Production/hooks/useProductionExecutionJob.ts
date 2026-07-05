@@ -34,6 +34,23 @@ import { START_COLLECTING_BLOCKED_TOOLTIP, formatStartCollectingError } from "..
 
 const DEFAULT_TENANT = 1;
 
+export type PutawayLineDetail = {
+  lineKey: string;
+  productName: string;
+  quantity: number;
+  pwDocumentId?: number | null;
+  pwDocumentNumber?: string | null;
+  putawayStatus?: string | null;
+};
+
+export type PutawayDetail = {
+  ref: ProductionExecutionRef;
+  number: string;
+  productLabel: string;
+  warehouseId: number;
+  lines: PutawayLineDetail[];
+};
+
 function normalizeBatchCollection(ref: ProductionExecutionRef, raw: Awaited<ReturnType<typeof fetchCollectionState>>): UnifiedCollectionState {
   return {
     ref,
@@ -103,19 +120,61 @@ async function loadExecutionDetail(
   };
 }
 
-function firstPwDocumentId(
+async function loadPutawayDetail(
+  tenantId: number,
+  warehouseId: number,
   ref: ProductionExecutionRef,
-  batch: Awaited<ReturnType<typeof getProductionBatch>> | null,
-  order: Awaited<ReturnType<typeof getProductionOrder>> | null,
-): number | null {
-  if (ref.kind === "batch" && batch) {
-    const id = batch.lines.map((l) => l.pw_stock_document_id).find((x) => x != null && x > 0);
-    return id ?? null;
+): Promise<PutawayDetail | null> {
+  if (ref.kind === "batch") {
+    const batch = await getProductionBatch(tenantId, ref.id, warehouseId);
+    const productLabel =
+      batch.lines?.map((l) => l.product_name).filter(Boolean).join(", ") ||
+      `${batch.products_count ?? batch.lines.length} prod.`;
+    const lines: PutawayLineDetail[] = batch.lines
+      .filter((ln) => ln.pw_stock_document_id != null && ln.pw_stock_document_id > 0)
+      .map((ln) => ({
+        lineKey: String(ln.id),
+        productName: ln.product_name ?? `Produkt #${ln.product_id}`,
+        quantity: ln.completed_quantity || ln.planned_quantity,
+        pwDocumentId: ln.pw_stock_document_id,
+        pwDocumentNumber: ln.pw_document_number,
+        putawayStatus: ln.pw_putaway_status,
+      }));
+    return {
+      ref,
+      number: batch.number,
+      productLabel,
+      warehouseId: batch.warehouse_id,
+      lines,
+    };
   }
-  if (ref.kind === "order" && order?.pw_stock_document_id) {
-    return order.pw_stock_document_id;
-  }
-  return null;
+  const order = await getProductionOrder(tenantId, ref.id, warehouseId);
+  const lines: PutawayLineDetail[] = order.pw_stock_document_id
+    ? [
+        {
+          lineKey: "main",
+          productName: order.product_name ?? `Produkt #${order.product_id}`,
+          quantity: order.produced_quantity || order.planned_quantity,
+          pwDocumentId: order.pw_stock_document_id,
+          pwDocumentNumber: order.pw_document_number,
+          putawayStatus: order.pw_putaway_status,
+        },
+      ]
+    : [];
+  return {
+    ref,
+    number: order.number,
+    productLabel: order.product_name ?? `Produkt #${order.product_id}`,
+    warehouseId: order.warehouse_id,
+    lines,
+  };
+}
+
+function collectPwDocumentIds(detail: PutawayDetail | null): number[] {
+  if (!detail) return [];
+  return detail.lines
+    .map((ln) => ln.pwDocumentId)
+    .filter((id): id is number => id != null && id > 0);
 }
 
 export function useProductionExecutionJob(phase: ProductionExecutionPhase, activeRef: ProductionExecutionRef | null) {
@@ -127,6 +186,7 @@ export function useProductionExecutionJob(phase: ProductionExecutionPhase, activ
   const [queue, setQueue] = useState<ProductionExecutionJobRead[]>([]);
   const [collectionState, setCollectionState] = useState<UnifiedCollectionState | null>(null);
   const [executionDetail, setExecutionDetail] = useState<UnifiedExecutionDetail | null>(null);
+  const [putawayDetail, setPutawayDetail] = useState<PutawayDetail | null>(null);
   const [busy, setBusy] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
 
@@ -184,6 +244,24 @@ export function useProductionExecutionJob(phase: ProductionExecutionPhase, activ
     [tenantId, warehouseId],
   );
 
+  const loadPutawayDetailForRef = useCallback(
+    async (ref: ProductionExecutionRef) => {
+      if (warehouseId == null) {
+        setPutawayDetail(null);
+        return;
+      }
+      setDetailLoading(true);
+      try {
+        setPutawayDetail(await loadPutawayDetail(tenantId, warehouseId, ref));
+      } catch {
+        setPutawayDetail(null);
+      } finally {
+        setDetailLoading(false);
+      }
+    },
+    [tenantId, warehouseId],
+  );
+
   useEffect(() => {
     void reloadQueue();
   }, [reloadQueue]);
@@ -192,14 +270,17 @@ export function useProductionExecutionJob(phase: ProductionExecutionPhase, activ
     if (activeRef == null) {
       setCollectionState(null);
       setExecutionDetail(null);
+      setPutawayDetail(null);
       return;
     }
     if (phase === "collecting") void loadCollectionDetail(activeRef);
     if (phase === "execute") void loadExecuteDetail(activeRef);
-  }, [activeRef, phase, loadCollectionDetail, loadExecuteDetail]);
+    if (phase === "putaway") void loadPutawayDetailForRef(activeRef);
+  }, [activeRef, phase, loadCollectionDetail, loadExecuteDetail, loadPutawayDetailForRef]);
 
   const pathForPhase = (p: ProductionExecutionPhase, ref: ProductionExecutionRef) => {
     if (p === "collecting") return wmsProductionPaths.collecting(ref.kind, ref.id);
+    if (p === "putaway") return wmsProductionPaths.putaway(ref.kind, ref.id);
     return wmsProductionPaths.execute(ref.kind, ref.id);
   };
 
@@ -226,8 +307,9 @@ export function useProductionExecutionJob(phase: ProductionExecutionPhase, activ
         return;
       }
       navigate(pathForPhase(phase, ref));
+      if (phase === "putaway") await loadPutawayDetailForRef(ref);
     },
-    [warehouseId, phase, tenantId, navigate, loadCollectionDetail],
+    [warehouseId, phase, tenantId, navigate, loadCollectionDetail, loadPutawayDetailForRef],
   );
 
   const confirmCollectionTask = useCallback(
@@ -289,30 +371,34 @@ export function useProductionExecutionJob(phase: ProductionExecutionPhase, activ
     if (activeRef == null || warehouseId == null) return;
     setBusy(true);
     try {
-      let pwId: number | null = null;
       if (activeRef.kind === "batch") {
-        const batch = await finishProductionPhase(tenantId, activeRef.id, warehouseId);
-        pwId = firstPwDocumentId(activeRef, batch, null);
+        await finishProductionPhase(tenantId, activeRef.id, warehouseId);
       } else {
-        const order = await finishOrderProduction(tenantId, activeRef.id, warehouseId);
-        pwId = firstPwDocumentId(activeRef, null, order);
+        await finishOrderProduction(tenantId, activeRef.id, warehouseId);
       }
+      const detail = await loadPutawayDetail(tenantId, warehouseId, activeRef);
+      const pwIds = collectPwDocumentIds(detail);
       toast.success(
-        pwId
-          ? `Produkcja zakończona. Dokument PW #${pwId} jest w module Rozlokowanie.`
-          : "Produkcja zakończona. Wyroby trafiły do kolejki Rozlokowanie.",
+        pwIds.length > 1
+          ? `Produkcja zakończona. ${pwIds.length} dokumenty PW oczekują na rozlokowanie.`
+          : pwIds.length === 1
+            ? `Produkcja zakończona. Dokument PW #${pwIds[0]} oczekuje na rozlokowanie.`
+            : "Produkcja zakończona. Wyroby trafiły do kolejki rozlokowania.",
         { duration: 6000 },
       );
-      if (pwId) {
-        navigate(`/wms/putaway/${pwId}`);
-      } else {
-        navigate("/wms/putaway");
-      }
+      navigate(wmsProductionPaths.putaway(activeRef.kind, activeRef.id));
+      await loadPutawayDetailForRef(activeRef);
       await reloadQueue();
     } finally {
       setBusy(false);
     }
-  }, [activeRef, warehouseId, tenantId, navigate, reloadQueue]);
+  }, [activeRef, warehouseId, tenantId, navigate, reloadQueue, loadPutawayDetailForRef]);
+
+  const refreshPutawayDetail = useCallback(async () => {
+    if (activeRef == null) return;
+    await loadPutawayDetailForRef(activeRef);
+    await reloadQueue();
+  }, [activeRef, loadPutawayDetailForRef, reloadQueue]);
 
   return {
     tenantId,
@@ -321,6 +407,7 @@ export function useProductionExecutionJob(phase: ProductionExecutionPhase, activ
     reloadQueue,
     collectionState,
     executionDetail,
+    putawayDetail,
     busy,
     detailLoading,
     openJob,
@@ -328,5 +415,6 @@ export function useProductionExecutionJob(phase: ProductionExecutionPhase, activ
     finishCollecting,
     addProductionQty,
     finishProduction,
+    refreshPutawayDetail,
   };
 }

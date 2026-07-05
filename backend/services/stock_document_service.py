@@ -756,9 +756,9 @@ def recalculate_wms_document_completion(db: Session, tenant_id: int, document_id
         changed = True
 
     if changed and dt == "PW":
-        from .production_execution.batch_putaway_completion import try_complete_production_batch_from_pw_document
+        from .production_execution.batch_putaway_completion import try_complete_production_execution_from_pw_document
 
-        try_complete_production_batch_from_pw_document(db, doc)
+        try_complete_production_execution_from_pw_document(db, doc)
 
     return changed
 

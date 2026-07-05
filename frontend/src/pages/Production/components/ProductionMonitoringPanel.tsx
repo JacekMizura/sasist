@@ -1,15 +1,20 @@
 import { Link } from "react-router-dom";
-import { ExternalLink, FileText, Monitor, Package, XCircle } from "lucide-react";
+import { FileText, Monitor, XCircle } from "lucide-react";
 
 import type { ProductionBatchRead, ProductionOrderRead } from "@/api/productionApi";
 import type { TimelinePwDocument } from "@/modules/production/productionExecutionTimeline";
 import { currentExecutionPhaseLabel } from "@/modules/production/productionExecutionTimeline";
 import { PRODUCTION_KIND_LABEL, type ProductionExecutionKind } from "@/modules/production/productionExecutionTypes";
-import { WMS_ROUTES } from "../../wms/wmsRoutes";
 import { wmsProductionPaths } from "../productionPaths";
 import { ProgressBar } from "./ProgressBar";
 import { ProductionExecutionTimeline } from "./ProductionExecutionTimeline";
 import { formatProductionMoney } from "../productionUi";
+import {
+  ProductionDocumentsSection,
+  pwDocumentsFromBatchLines,
+  pwDocumentsFromOrder,
+  type ProductionPwDocumentRow,
+} from "./ProductionDocumentsSection";
 
 export type ProductionMonitoringActions = {
   onReleaseToWms?: () => void;
@@ -46,11 +51,13 @@ type MonitoringSource = {
   completed_at?: string | null;
   created_at?: string | null;
   calculated_unit_cost?: number | null;
+  display_unit_cost?: number | null;
   rw_stock_document_id?: number | null;
   pw_stock_document_id?: number | null;
   rw_document_number?: string | null;
   pw_document_number?: string | null;
   pw_documents?: TimelinePwDocument[];
+  pw_document_rows?: ProductionPwDocumentRow[];
 };
 
 type Props = {
@@ -59,19 +66,11 @@ type Props = {
   actions?: ProductionMonitoringActions;
 };
 
-function wmsTerminalHref(
-  kind: ProductionExecutionKind,
-  id: number,
-  status: string,
-  pwId?: number | null,
-): string {
+function wmsTerminalHref(kind: ProductionExecutionKind, id: number, status: string): string {
   const s = status.toLowerCase();
   if (s === "collecting") return wmsProductionPaths.collecting(kind, id);
   if (s === "in_progress") return wmsProductionPaths.execute(kind, id);
-  if (s === "awaiting_putaway" || s === "putaway") {
-    if (pwId != null && pwId >= 1) return WMS_ROUTES.putawayPz(pwId);
-    return wmsProductionPaths.putaway();
-  }
+  if (s === "awaiting_putaway" || s === "putaway") return wmsProductionPaths.putaway(kind, id);
   return wmsProductionPaths.collecting();
 }
 
@@ -122,10 +121,15 @@ export function ProductionMonitoringPanel({ kind, source, actions }: Props) {
     actions?.onCancel &&
     !["completed", "cancelled", "awaiting_putaway", "putaway"].includes(status);
   const pwDocs =
-    source.pw_documents ??
+    source.pw_document_rows ??
+    source.pw_documents?.map((pw) => ({
+      id: pw.id,
+      number: pw.number,
+    })) ??
     (source.pw_stock_document_id
       ? [{ id: source.pw_stock_document_id, number: source.pw_document_number }]
       : []);
+  const unitCost = source.display_unit_cost ?? source.calculated_unit_cost;
 
   return (
     <div className="space-y-6">
@@ -174,7 +178,7 @@ export function ProductionMonitoringPanel({ kind, source, actions }: Props) {
         ) : null}
         {canOpenWms ? (
           <Link
-            to={wmsTerminalHref(kind, source.id, status, source.pw_stock_document_id)}
+            to={wmsTerminalHref(kind, source.id, status)}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700"
@@ -224,8 +228,8 @@ export function ProductionMonitoringPanel({ kind, source, actions }: Props) {
           label="Rozlokowanie zakończone"
           value={source.completed_at ? formatTs(source.completed_at) : "—"}
         />
-        {source.calculated_unit_cost != null ? (
-          <MetaCard label="Koszt jednostkowy" value={formatProductionMoney(source.calculated_unit_cost)} />
+        {unitCost != null ? (
+          <MetaCard label="Koszt jednostkowy" value={formatProductionMoney(unitCost)} />
         ) : null}
       </div>
 
@@ -247,24 +251,11 @@ export function ProductionMonitoringPanel({ kind, source, actions }: Props) {
       </div>
 
       {(source.rw_stock_document_id || pwDocs.length > 0) && (
-        <section className="rounded-xl border border-slate-200 bg-white p-4">
-          <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-500">Dokumenty</h3>
-          <div className="flex flex-wrap gap-3">
-            {source.rw_stock_document_id ? (
-              <DocLink
-                id={source.rw_stock_document_id}
-                label={`RW ${source.rw_document_number ?? source.rw_stock_document_id}`}
-              />
-            ) : null}
-            {pwDocs.map((pw) => (
-              <DocLink
-                key={pw.id}
-                id={pw.id}
-                label={`PW ${pw.number ?? pw.id}`}
-              />
-            ))}
-          </div>
-        </section>
+        <ProductionDocumentsSection
+          rwDocumentId={source.rw_stock_document_id}
+          rwDocumentNumber={source.rw_document_number}
+          pwDocuments={pwDocs}
+        />
       )}
 
       <section>
@@ -281,19 +272,6 @@ function MetaCard({ label, value }: { label: string; value: string }) {
       <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{label}</p>
       <p className="mt-1 text-sm font-semibold text-slate-900">{value}</p>
     </div>
-  );
-}
-
-function DocLink({ id, label }: { id: number; label: string }) {
-  return (
-    <Link
-      to={`/documents/warehouse?doc=${id}`}
-      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:border-violet-200 hover:text-violet-800"
-    >
-      <Package className="h-4 w-4 text-slate-400" aria-hidden />
-      {label}
-      <ExternalLink className="h-3 w-3 text-slate-400" aria-hidden />
-    </Link>
   );
 }
 
@@ -334,10 +312,12 @@ export function orderMonitoringSource(order: ProductionOrderRead): MonitoringSou
     pw_stock_document_id: order.pw_stock_document_id,
     rw_document_number: order.rw_document_number,
     pw_document_number: order.pw_document_number,
+    pw_document_rows: pwDocumentsFromOrder(order),
   };
 }
 
 export function batchMonitoringSource(batch: ProductionBatchRead): MonitoringSource {
+  const pwRows = pwDocumentsFromBatchLines(batch.lines ?? []);
   const pw = batchPwFromLines(batch);
   return {
     id: batch.id,
@@ -358,8 +338,10 @@ export function batchMonitoringSource(batch: ProductionBatchRead): MonitoringSou
     production_completed_at: batch.production_completed_at,
     completed_at: batch.completed_at,
     created_at: batch.created_at,
+    display_unit_cost: batch.display_unit_cost,
     rw_stock_document_id: batch.rw_stock_document_id,
     rw_document_number: batch.rw_document_number,
+    pw_document_rows: pwRows,
     ...pw,
   };
 }

@@ -16,6 +16,7 @@ ProductionExecutionStatus = Literal[
     "planned",
     "collecting",
     "in_progress",
+    "awaiting_putaway",
     "putaway",
     "completed",
     "cancelled",
