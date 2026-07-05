@@ -27,6 +27,7 @@ from . import models  # noqa: F401
 from .database import create_all_tables, engine
 from .db.wms_product_validation_schema import ensure_wms_product_validation_schema
 from .db.production_planning_schema import ensure_production_planning_schema
+from .db.document_template_schema import ensure_document_template_schema
 from .db.stock_reservations_schema import ensure_stock_reservations_universal_schema
 from .db.wms_production_settings_schema import ensure_wms_production_settings_schema
 from .db.schema_upgrade import (
@@ -325,6 +326,7 @@ from .api.wms_settings import router as wms_settings_router
 from .api.inventory_management_policy_api import router as inventory_management_policy_router
 from .api.order_statuses import router as order_statuses_router
 from .api.document_series import router as document_series_router
+from .api.document_templates import router as document_templates_router
 from .api.wms_picking_config import router as wms_picking_config_router
 from .api.wms_picking_entry import router as wms_picking_entry_router
 from .api.wms_order_issue_tasks import router as wms_order_issue_tasks_router
@@ -1084,6 +1086,7 @@ try:
     ensure_wms_production_settings_schema(engine)
     ensure_stock_reservations_universal_schema(engine)
     ensure_production_planning_schema(engine)
+    ensure_document_template_schema(engine)
     from .db.production_execution_interface_schema import ensure_production_execution_interface_schema
     from .db.production_shortage_schema import ensure_production_shortage_schema
 
@@ -1520,6 +1523,7 @@ def _upgrade_schema_background() -> None:
         ensure_wms_production_settings_schema(engine)
         ensure_stock_reservations_universal_schema(engine)
         ensure_production_planning_schema(engine)
+        ensure_document_template_schema(engine)
         from .db.production_execution_interface_schema import ensure_production_execution_interface_schema
         from .db.production_shortage_schema import ensure_production_shortage_schema
 
@@ -1912,6 +1916,7 @@ _API_ROUTERS = (
     inventory_management_policy_router,
     order_statuses_router,
     document_series_router,
+    document_templates_router,
     wms_picking_config_router,
     wms_picking_entry_router,
     wms_order_issue_tasks_router,

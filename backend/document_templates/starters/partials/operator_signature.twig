@@ -1,0 +1,5 @@
+<div class="signature-box">
+  <strong>Operator</strong>
+  <div style="margin-top:28px;">{{ operator.full_name | default(operator.name) | default('—') }}</div>
+  {% if operator.email %}<div class="text-muted">{{ operator.email }}</div>{% endif %}
+</div>

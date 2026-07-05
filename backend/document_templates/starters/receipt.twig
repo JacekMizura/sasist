@@ -1,0 +1,29 @@
+{% extends "base_document" %}
+{% block title %}{{ document.type_label | default(document.title) }} {{ document.number }}{% endblock %}
+{% block header %}
+<header class="doc-header">{% include_document "document_header" %}</header>
+{% endblock %}
+{% block content %}
+<h1 class="doc-title">{{ document.type_label | default(document.title) }}</h1>
+{% include_document "document_summary" %}
+<table class="doc-table">
+  <thead><tr><th>Lp.</th><th>Nazwa</th><th>Ilość</th><th>Cena netto</th><th>Wartość</th><th>VAT</th></tr></thead>
+  <tbody>
+  {% for item in items %}
+  <tr>
+    <td>{{ loop.index }}</td>
+    <td>{{ item.name | default(item.product_name) }}</td>
+    <td>{{ item.quantity }}</td>
+    <td class="text-right">{{ item.unit_price_net | money(currency) }}</td>
+    <td class="text-right">{{ item.line_total_net | money(currency) }}</td>
+    <td>{{ item.vat_rate | default('—') }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% include_document "document_totals" %}
+<div class="signature-row">{% include_document "company_signature" %}</div>
+{% endblock %}
+{% block footer %}
+<footer class="doc-footer">{% include_document "document_footer" %}</footer>
+{% endblock %}

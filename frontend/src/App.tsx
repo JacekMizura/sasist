@@ -103,6 +103,11 @@ import PickingWaves from "./pages/PickingWaves"
 import WarehouseDesigner from "./pages/WarehouseDesigner"
 import BarcodeManagement from "./pages/BarcodeManagement"
 import LabelSystem from "./pages/LabelSystem"
+import DocumentTemplatesLayout from "./pages/settings/document-templates/DocumentTemplatesLayout";
+import DocumentTemplatesModuleFrame from "./pages/settings/document-templates/DocumentTemplatesModuleFrame";
+import { DocumentTemplateCreatePage } from "./pages/settings/document-templates/DocumentTemplateCreatePage";
+import { DocumentTemplateEditorPage } from "./pages/settings/document-templates/DocumentTemplateEditorPage";
+import { DocumentTemplatesListPage } from "./pages/settings/document-templates/DocumentTemplatesListPage";
 import MessageTemplatesModule from "./pages/admin/MessageTemplatesModule"
 import InventoryList from "./pages/InventoryList"
 import SystemLayout from "./pages/System/SystemLayout"
@@ -609,6 +614,14 @@ export const router = createBrowserRouter(
                 />
                 <Route path="admin/message-templates/*" element={<MessageTemplatesModule />} />
                 <Route path="admin/print-templates/*" element={<LabelSystem />} />
+                <Route path="settings/document-templates" element={<DocumentTemplatesLayout />}>
+                  <Route element={<DocumentTemplatesModuleFrame />}>
+                    <Route index element={<DocumentTemplatesListPage />} />
+                    <Route path="new" element={<DocumentTemplateCreatePage />} />
+                  </Route>
+                  <Route path=":templateId" element={<DocumentTemplateEditorPage />} />
+                </Route>
+                <Route path="document-templates/*" element={<Navigate to="/settings/document-templates" replace />} />
                 <Route path="dokumenty/sprzedaz/:documentId" element={<RedirectPolishSaleDocumentDetail />} />
                 <Route path="documents" element={<DocumentsLayout />}>
                   <Route index element={<Navigate to="sales/invoices" replace />} />

@@ -1,0 +1,40 @@
+{% extends "base_document" %}
+{% block title %}Inwentaryzacja {{ document.number | default(document_number) }}{% endblock %}
+{% block header %}
+<header class="doc-header">{% include_document "document_header" %}</header>
+{% endblock %}
+{% block content %}
+<h1 class="doc-title">Dokument inwentaryzacyjny</h1>
+{% include_document "document_summary" %}
+<table class="doc-table">
+  {% include_document "product_table_header" %}
+  <tbody>
+  {% for row in products %}
+  <tr>
+    <td>{{ loop.index }}</td>
+    <td>
+      <strong>{{ row.name | default(row.product.name) }}</strong>
+      {% if row.sku or row.product.sku %}<br/><span class="text-muted">{{ row.sku | default(row.product.sku) }}</span>{% endif %}
+    </td>
+    <td>{{ row.sku | default(row.product.sku) | default('—') }}</td>
+    <td>{{ row.ean | default(row.product.ean) | default('—') }}</td>
+    <td class="text-right">{{ row.quantity | quantity(row.unit | default('szt.')) }}</td>
+    <td>{{ row.unit | default('szt.') }}</td>
+    <td>{{ row.locations | default(row.location) | default('—') }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+  {% include_document "product_table_footer" %}
+</table>
+{% include_document "document_totals" %}
+{% include_document "document_notes" %}
+<div class="signature-row">
+  {% include_document "warehouse_signature" %}
+  {% include_document "operator_signature" %}
+</div>
+{% include_document "barcode_section" %}
+{% include_document "qr_section" %}
+{% endblock %}
+{% block footer %}
+<footer class="doc-footer">{% include_document "document_footer" %}</footer>
+{% endblock %}

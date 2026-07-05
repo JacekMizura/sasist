@@ -1,0 +1,5 @@
+{% if document.qr_value or qr_value %}
+<div class="qr-section text-center">
+  {{ qr(document.qr_value | default(qr_value)) }}
+</div>
+{% endif %}

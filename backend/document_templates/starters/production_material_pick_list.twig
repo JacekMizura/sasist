@@ -1,0 +1,41 @@
+{% extends "base_document" %}
+{% block title %}Lista pobrania materiałów {{ job_number }}{% endblock %}
+{% block header %}
+<header class="doc-header">{% include_document "document_header" %}</header>
+{% endblock %}
+{% block content %}
+<h1 class="doc-title">Lista pobrania materiałów</h1>
+<p class="text-muted">{{ job_kind_label }} · {{ job_number }} · {{ printed_at }}</p>
+<div class="doc-summary-grid">
+  <div><span class="text-muted">Produkt:</span> {{ header_product_line }}</div>
+  <div><span class="text-muted">SKU:</span> {{ header_sku | default('—') }}</div>
+  <div><span class="text-muted">Plan:</span> {{ header_planned_qty }}</div>
+  <div><span class="text-muted">Receptura:</span> {{ recipe_version | default('—') }}</div>
+</div>
+{% if header_barcode_value %}{{ barcode(header_barcode_value) }}{% endif %}
+<h2 class="doc-subtitle">Składniki</h2>
+<table class="doc-table">
+  <thead><tr><th>Nazwa</th><th>SKU</th><th>Wymagana</th><th>J.m.</th><th>Lokalizacja</th><th>Partia</th></tr></thead>
+  <tbody>
+  {% for row in components %}
+  <tr>
+    <td><strong>{{ row.name }}</strong></td>
+    <td>{{ row.sku | default('—') }}</td>
+    <td>{{ row.required_qty }}</td>
+    <td>{{ row.unit | default('szt.') }}</td>
+    <td>{{ row.suggested_location | default('—') }}</td>
+    <td>{{ row.batch_number | default('—') }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+<div class="signature-row">
+  {% include_document "warehouse_signature" %}
+  {% include_document "operator_signature" %}
+  {% include_document "company_signature" %}
+</div>
+{% include_document "document_notes" %}
+{% endblock %}
+{% block footer %}
+<footer class="doc-footer">{% include_document "document_footer" %}</footer>
+{% endblock %}

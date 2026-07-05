@@ -318,7 +318,8 @@ export const NAV_FLYOUT_CATEGORIES: NavCategoryConfig[] = [
           { path: "/settings/import", label: "Import", Icon: Upload },
           { path: "/settings/exports", label: "Eksport", Icon: FolderOpen },
           { path: "/admin/message-templates", label: "Szablony wiadomości", Icon: MessageSquare },
-          { path: "/admin/print-templates", label: "Szablony wydruków", Icon: FileText },
+          { path: "/admin/print-templates", label: "Szablony wydruków (etykiety)", Icon: FileText },
+          { path: "/settings/document-templates", label: "Szablony dokumentów", Icon: FileText },
         ],
       },
       {
@@ -376,6 +377,7 @@ export function isCategoryActive(category: NavCategoryConfig, pathname: string):
     if (pathname.startsWith("/settings")) return true;
     if (pathname.startsWith("/admin/message-templates")) return true;
     if (pathname.startsWith("/admin/print-templates")) return true;
+    if (pathname.startsWith("/settings/document-templates")) return true;
   }
   if (category.id === "documents") {
     if (pathname.startsWith("/documents")) return true;

@@ -293,14 +293,28 @@ def _order_card_context(db: Session, *, tenant_id: int, order_id: int) -> dict[s
 
 
 def build_batch_production_card_html(db: Session, *, tenant_id: int, batch_id: int) -> str:
+    from ...document_templates.adapters.production_card_adapter import (
+        document_engine_available,
+        render_batch_production_card_html,
+    )
+
+    if document_engine_available(db, tenant_id=int(tenant_id)):
+        return render_batch_production_card_html(db, tenant_id=tenant_id, batch_id=batch_id)
     try:
         ctx = _batch_card_context(db, tenant_id=tenant_id, batch_id=batch_id)
-    except ProductionBatchError as exc:
-        raise ValueError(str(exc)) from exc
+    except ProductionBatchError as err:
+        raise ValueError(str(err)) from err
     return _jinja_env().get_template("production_card.html.j2").render(**ctx)
 
 
 def build_order_production_card_html(db: Session, *, tenant_id: int, order_id: int) -> str:
+    from ...document_templates.adapters.production_card_adapter import (
+        document_engine_available,
+        render_order_production_card_html,
+    )
+
+    if document_engine_available(db, tenant_id=int(tenant_id)):
+        return render_order_production_card_html(db, tenant_id=tenant_id, order_id=order_id)
     ctx = _order_card_context(db, tenant_id=tenant_id, order_id=order_id)
     return _jinja_env().get_template("production_card.html.j2").render(**ctx)
 

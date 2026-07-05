@@ -115,12 +115,34 @@ def build_sale_document_pdf_bytes(db: Session, *, tenant_id: int, document_id: s
         .first()
     )
     ctx = _build_sale_context(dto)
-    return build_document_pdf_from_html(
+    doc_subtype = str(dto.get("document_subtype") or "")
+
+    from ..document_templates.adapters.legacy_render_bridge import render_document_with_legacy_fallback
+    from ..document_templates.adapters.sale_document_adapter import sale_kind_for_subtype
+    from ..document_templates.render.output_formats import DocumentOutputFormat
+
+    def _legacy_pdf() -> bytes:
+        return build_document_pdf_from_html(
+            db,
+            tenant_id=int(tenant_id),
+            print_template_id=getattr(series, "print_template_id", None) if series else None,
+            print_template_path=getattr(series, "print_template", None) if series else None,
+            document_subtype=doc_subtype,
+            context=ctx,
+            log_label=f"sale_document_id={document_id}",
+        )
+
+    rendered = render_document_with_legacy_fallback(
         db,
         tenant_id=int(tenant_id),
-        print_template_id=getattr(series, "print_template_id", None) if series else None,
-        print_template_path=getattr(series, "print_template", None) if series else None,
-        document_subtype=str(dto.get("document_subtype") or ""),
-        context=ctx,
+        kind_code=sale_kind_for_subtype(doc_subtype),
+        params={"sale_document_id": str(document_id), "document_id": str(document_id)},
+        legacy_renderer=_legacy_pdf,
+        output_format=DocumentOutputFormat.HTML,
         log_label=f"sale_document_id={document_id}",
     )
+    if isinstance(rendered, bytes):
+        return rendered
+    from .structure_report_pdf_service import html_document_to_pdf_bytes
+
+    return html_document_to_pdf_bytes(str(rendered))

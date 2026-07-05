@@ -1,5 +1,32 @@
 # Current context
 
+## Document Templates — produkt edytora (2026-06-08)
+- Inspektor zmiennych (Sellasist+), walidacja live, diff wersji, historia z opisem publikacji
+- Modal publikacji, autocomplete kontekstowy, wyszukiwanie użycia zmiennych
+- Galeria starterów, eksport ZIP (szablon/rodzina/pakiet), import z konfliktami
+- Podręcznik: `memory/document-templates-user-guide.md`
+- Label Engine **bez zmian**
+
+## Document Templates — migracja ERP (2026-06-08)
+- **21 starterów Twig** (extends BASE + 12 partiali) — zamówienia, WZ/PZ/PW/RW/MM, inwentaryzacja, przesunięcie, rozlokowanie, zwroty, reklamacje, produkcja, produkty, handel
+- Providery: order, warehouse, inventory, transfer, return, complaint, product + global; sample context w preview
+- Helpery: `page_break`, `section`, `table`, `signature`, `stamp` + istniejące
+- Binding-first: `render_document(kind, variant)`; legacy Jinja tylko z logiem ostrzegawczym (stock + sale PDF)
+- UI: eksport/import/klon startera na stronie tworzenia szablonu
+- Dokumentacja: `memory/document-templates-engine-v2-architecture.md` §13
+- Label Engine **bez zmian**
+
+## Document Templates — Faza 2 edytor (2026-07-05)
+- Moduł: **Ustawienia → Szablony dokumentów** (`/settings/document-templates`) — redirect ze starego `/document-templates`
+- Lista ERP: filtry (rodzina, typ, wariant, status, źródło), kolumny binding/autor/publikacja
+- Edytor 3-kolumnowy: zmienne/funkcje/tagi/fragmenty/baza | Monaco Twig | podgląd HTML/PDF/błędy/wpływ/zależności/historia
+- Pinowanie BASE i partiali w UI; podgląd Sample/Live; walidacja z przeskakiwaniem do linii
+- Backend: `template_editor_service`, `/templates/list`, `/templates/{id}/editor`, preview `context_mode`
+- Migracja bindingów: `document_migration_service` (production_card + kolejność kindów ze starterami)
+- WZ/PZ/…: `warehouse_document_adapter` + stock PDF przez binding gdy istnieje
+- Karta produkcyjna: bez legacy fallback gdy binding aktywny
+- Label Engine **bez zmian**
+
 ## Produkcja — refaktoryzacja UX/UI (2026-06-08)
 - Wyłącznie frontend: gęstszy layout ERP, pulpitu (KPI → rozlokowanie → realizacja → uwaga → historia), empty states, grupowanie KPI analizy kosztów, tokeny `productionLayoutTokens.ts`.
 - Bez zmian backendu/API/workflow.

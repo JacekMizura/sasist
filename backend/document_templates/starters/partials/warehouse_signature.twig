@@ -1,0 +1,5 @@
+<div class="signature-box">
+  <strong>Podpis magazynu</strong>
+  <div style="margin-top:28px;">{{ warehouse.name | default('—') }}</div>
+  {% if warehouse.code %}<div class="text-muted">{{ warehouse.code }}</div>{% endif %}
+</div>

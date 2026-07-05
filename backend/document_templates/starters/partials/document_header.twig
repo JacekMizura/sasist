@@ -1,0 +1,15 @@
+<div class="doc-header-row">
+  {% if company.logo or logo %}
+  <div class="doc-logo">{{ company_logo() }}</div>
+  {% endif %}
+  <div class="doc-company">
+    <strong>{{ company.name }}</strong><br/>
+    <span class="text-muted">{{ company.street }} · {{ company.postal_code }} {{ company.city }}</span><br/>
+    {% if company.nip %}<span class="text-muted">NIP: {{ company.nip }}</span>{% endif %}
+  </div>
+  <div class="doc-meta text-right">
+    {% if document.number %}<div><strong>{{ document.number }}</strong></div>{% endif %}
+    {% if document.created_at %}<div>{{ document.created_at | date }}</div>{% endif %}
+    {% if document.status %}<div>{{ document.status }}</div>{% endif %}
+  </div>
+</div>

@@ -95,6 +95,15 @@ from .picking_zone import PickingZone, order_zone_association  # noqa: F401 - re
 from .consolidation_rack import ConsolidationRack, ConsolidationRackLevel, RackSegment
 from .warehouse_map import WarehouseMap, MapElement, StorageBin
 from .label_template import SavedLabelTemplate  # noqa: F401
+from ..document_templates.models import (  # noqa: F401 — Document Templates engine (not labels)
+    DocumentContextSchema,
+    DocumentTemplate,
+    DocumentTemplateBinding,
+    DocumentTemplateFamily,
+    DocumentTemplateKind,
+    DocumentTemplateStarter,
+    DocumentTemplateVersion,
+)
 from .printer_profile import PrinterProfile  # noqa: F401
 from .printer import Printer  # noqa: F401
 from .warehouse_template import WarehouseTemplate  # noqa: F401

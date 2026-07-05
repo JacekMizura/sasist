@@ -1,0 +1,19 @@
+{% extends "base_document" %}
+{% block title %}{{ title }}{% endblock %}
+{% block header %}
+<header class="doc-header">{% include_document "document_header" %}</header>
+{% endblock %}
+{% block content %}
+<h1 class="doc-title">{{ title }}</h1>
+{% if subtitle %}<p class="text-muted">{{ subtitle }}</p>{% endif %}
+<table class="doc-table">
+  <tbody>
+  {% for row in rows %}
+  <tr><td>{{ row.label | default(row.name) }}</td><td>{{ row.value }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
+{% block footer %}
+<footer class="doc-footer">{% include_document "document_footer" %}</footer>
+{% endblock %}

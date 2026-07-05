@@ -1,0 +1,10 @@
+<div class="doc-summary">
+  {% if document.title %}<h2 class="doc-subtitle">{{ document.title }}</h2>{% endif %}
+  <div class="doc-summary-grid">
+    {% if document.number %}<div><span class="text-muted">Numer:</span> {{ document.number }}</div>{% endif %}
+    {% if document.created_at %}<div><span class="text-muted">Data:</span> {{ document.created_at | date }}</div>{% endif %}
+    {% if document.status %}<div><span class="text-muted">Status:</span> {{ document.status }}</div>{% endif %}
+    {% if warehouse.name %}<div><span class="text-muted">Magazyn:</span> {{ warehouse.name }}</div>{% endif %}
+    {% if partner.name %}<div><span class="text-muted">Kontrahent:</span> {{ partner.name }}</div>{% endif %}
+  </div>
+</div>

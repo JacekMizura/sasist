@@ -1,0 +1,18 @@
+{% extends "base_document" %}
+{% block title %}Katalog produktów {{ product.name }}{% endblock %}
+{% block header %}
+<header class="doc-header">{% include_document "document_header" %}</header>
+{% endblock %}
+{% block content %}
+<h1 class="doc-title">{{ product.name }}</h1>
+<div class="doc-summary-grid">
+  <div><span class="text-muted">SKU:</span> {{ product.sku | default('—') }}</div>
+  <div><span class="text-muted">EAN:</span> {{ product.ean | default('—') }}</div>
+  <div><span class="text-muted">Producent:</span> {{ manufacturer.name | default('—') }}</div>
+  <div><span class="text-muted">Stan:</span> {{ stock.available | default('—') }}</div>
+</div>
+{% if product.barcode_value %}{{ barcode(product.barcode_value) }}{% endif %}
+{% endblock %}
+{% block footer %}
+<footer class="doc-footer">{% include_document "document_footer" %}</footer>
+{% endblock %}

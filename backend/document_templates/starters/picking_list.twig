@@ -1,0 +1,38 @@
+{% extends "base_document" %}
+{% block title %}Lista kompletacyjna {{ order_number | default(document.number) }}{% endblock %}
+{% block header %}
+<header class="doc-header">{% include_document "document_header" %}</header>
+{% endblock %}
+{% block content %}
+<h1 class="doc-title">Lista kompletacyjna</h1>
+{% include_document "document_summary" %}
+{% if customer.name %}
+<p><strong>Klient:</strong> {{ customer.name }}{% if customer.phone %} · {{ customer.phone | phone }}{% endif %}</p>
+{% endif %}
+<table class="doc-table">
+  {% include_document "product_table_header" %}
+  <tbody>
+  {% for item in items %}
+  <tr>
+    <td>{{ loop.index }}</td>
+    <td><strong>{{ item.product.name }}</strong></td>
+    <td>{{ item.product.sku | default('—') }}</td>
+    <td>{{ item.product.ean | default('—') }}</td>
+    <td class="text-right">{{ item.quantity | quantity(item.unit) }}</td>
+    <td>{{ item.unit | default('szt.') }}</td>
+    <td>—</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+  {% include_document "product_table_footer" %}
+</table>
+{% include_document "document_totals" %}
+{% include_document "document_notes" %}
+<div class="signature-row">
+  {% include_document "company_signature" %}
+  {% include_document "operator_signature" %}
+</div>
+{% endblock %}
+{% block footer %}
+<footer class="doc-footer">{% include_document "document_footer" %}</footer>
+{% endblock %}

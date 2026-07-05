@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="{{ language|default('pl') }}">
+<head>
+  <meta charset="utf-8"/>
+  <title>{% block title %}Dokument{% endblock %}</title>
+  <style>
+    {% block styles %}
+    @page {
+      size: A4;
+      margin: 14mm 12mm 18mm 12mm;
+      @bottom-center {
+        content: "Strona " counter(page) " / " counter(pages);
+        font-size: 8px;
+        color: {{ theme.muted_color|default('#666') }};
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: {{ branding.font_family|default('Arial, Helvetica, sans-serif') }};
+      font-size: {{ theme.font_size_base|default('10px') }};
+      line-height: 1.4;
+      color: {{ theme.text_color|default('#111') }};
+      margin: 0;
+      padding: 0;
+    }
+    main { min-height: 200px; }
+    .doc-header { margin-bottom: 14px; padding-bottom: 10px; border-bottom: 2px solid {{ branding.primary_color|default('#2563eb') }}; }
+    .doc-footer { margin-top: 18px; padding-top: 10px; border-top: 1px solid {{ theme.border_color|default('#ccc') }}; font-size: 9px; color: {{ theme.muted_color|default('#555') }}; }
+    h1.doc-title { font-size: 18px; margin: 0 0 6px; color: {{ theme.text_color|default('#111') }}; }
+    h2.doc-subtitle { font-size: 12px; margin: 0 0 10px; font-weight: 600; color: {{ theme.muted_color|default('#444') }}; }
+    table.doc-table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+    table.doc-table th, table.doc-table td { border: 1px solid {{ theme.border_color|default('#bbb') }}; padding: 5px 6px; vertical-align: top; }
+    table.doc-table th { background: {{ theme.table_header_bg|default('#f3f4f6') }}; font-size: 9px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .text-right { text-align: right; }
+    .text-muted { color: {{ theme.muted_color|default('#555') }}; }
+    .page-break { page-break-before: always; break-before: page; height: 0; }
+    .signature-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 20px; }
+    .signature-box { border: 1px solid {{ theme.border_color|default('#bbb') }}; min-height: 52px; padding: 8px; font-size: 9px; }
+    {% endblock %}
+  </style>
+</head>
+<body>
+  {% block header %}
+  <header class="doc-header">{% include_document "document_header" %}</header>
+  {% endblock %}
+  <main>{% block content %}{% endblock %}</main>
+  {% block footer %}
+  <footer class="doc-footer">{% include_document "document_footer" %}</footer>
+  {% endblock %}
+</body>
+</html>

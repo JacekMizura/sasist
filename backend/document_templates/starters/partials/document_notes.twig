@@ -1,0 +1,6 @@
+{% if document.notes or notes %}
+<div class="doc-notes">
+  <strong>Uwagi</strong>
+  <div>{{ document.notes | default(notes) }}</div>
+</div>
+{% endif %}
