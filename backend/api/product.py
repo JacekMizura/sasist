@@ -16,7 +16,7 @@ try:
 except Exception:  # pragma: no cover - optional dependency
     _unidecode = None
 from datetime import datetime, timedelta, date
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_, case
 from sqlalchemy.sql import select
@@ -3857,3 +3857,24 @@ def bulk_delete_products(
     else:
         db.commit()
     return entity_bulk_delete_result_from_service_dict(result)
+
+
+@router.get("/{product_id}/product-card.pdf")
+def download_product_card_pdf(
+    product_id: int,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    from ..services.erp_documents_pdf_service import generate_product_card_pdf_bytes
+
+    try:
+        pdf = generate_product_card_pdf_bytes(db, tenant_id=tenant_id, product_id=product_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="product_{product_id}_card.pdf"'},
+    )

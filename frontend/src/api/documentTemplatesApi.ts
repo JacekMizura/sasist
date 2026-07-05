@@ -46,6 +46,38 @@ export type VariableFieldDto = {
   insert?: string;
 };
 
+export type TemplateUsageBadge = {
+  label: string;
+  count: number;
+};
+
+export type TemplateAssignmentItem = {
+  scope_type: string;
+  scope_type_label: string;
+  scope_id: number | string;
+  scope_label: string;
+  kind_code: string | null;
+  kind_name: string | null;
+  version_id: number | null;
+  extra?: string | null;
+  erp_link?: string | null;
+};
+
+export type ScopeAssignmentDto = {
+  id: number;
+  tenant_id: number;
+  scope_type: string;
+  scope_type_label: string;
+  scope_id: number;
+  kind_code: string | null;
+  kind_name: string | null;
+  variant_code: string;
+  version_id: number;
+  version_number: number | null;
+  template_id: number | null;
+  template_name: string | null;
+};
+
 export type DocumentTemplateListItemDto = {
   id: number;
   name: string;
@@ -62,6 +94,8 @@ export type DocumentTemplateListItemDto = {
   published_version: DocumentTemplateVersionDto | null;
   draft_version: DocumentTemplateVersionDto | null;
   binding_summary: string | null;
+  usage_summary?: TemplateUsageBadge[];
+  usage_total?: number;
   last_published_at: string | null;
   author_name: string;
   updated_at: string | null;
@@ -138,6 +172,7 @@ export type EditorContextDto = {
     warehouse_id: number | null;
     version_id: number | null;
   }>;
+  erp_assignments?: TemplateAssignmentItem[];
   versions_history: DocumentTemplateVersionDto[];
   variable_tree: VariableTreeNode[];
   variable_fields?: VariableFieldDto[];
@@ -221,6 +256,7 @@ export type StarterGalleryDetailDto = {
   updated_at: string | null;
   thumbnail_url: string;
   preview_html: string;
+  twig_content?: string;
   base_template: { template_name: string; version_id: number; version_number: number } | null;
   partials_used: Array<{ partial_code: string; template_name: string; version_id: number }>;
   variables: unknown[];
@@ -569,5 +605,87 @@ export async function exportFullPackageZip(tenantId: number) {
     params: { tenant_id: tenantId },
     responseType: "blob",
   });
+  return data;
+}
+
+export async function fetchScopeAssignments(tenantId: number, scopeType: string, scopeId: number) {
+  const { data } = await api.get<{ items: ScopeAssignmentDto[] }>("/document-templates/scope-assignments", {
+    params: { tenant_id: tenantId, scope_type: scopeType, scope_id: scopeId },
+  });
+  return data.items;
+}
+
+export async function upsertScopeAssignment(
+  tenantId: number,
+  payload: {
+    kind_code: string;
+    scope_type: string;
+    scope_id: number;
+    version_id: number | null;
+    variant_code?: string;
+  },
+) {
+  const { data } = await api.put<{ item: ScopeAssignmentDto | null }>("/document-templates/scope-assignments", payload, {
+    params: { tenant_id: tenantId },
+  });
+  return data.item;
+}
+
+export async function fetchTemplateUsage(tenantId: number, templateId: number) {
+  const { data } = await api.get<{
+    badges: TemplateUsageBadge[];
+    total: number;
+    items: TemplateAssignmentItem[];
+  }>(`/document-templates/templates/${templateId}/usage`, {
+    params: { tenant_id: tenantId },
+  });
+  return data;
+}
+
+export async function fetchVersionReplaceImpact(tenantId: number, versionId: number) {
+  const { data } = await api.get<{
+    assignment_count: number;
+    by_scope: Record<string, number>;
+    items: TemplateAssignmentItem[];
+  }>(`/document-templates/versions/${versionId}/replace-impact`, {
+    params: { tenant_id: tenantId },
+  });
+  return data;
+}
+
+export async function replaceVersionAssignments(
+  tenantId: number,
+  fromVersionId: number,
+  toVersionId: number,
+  confirm: boolean,
+) {
+  const { data } = await api.post<{ updated_count: number }>(
+    `/document-templates/versions/${fromVersionId}/replace-assignments`,
+    { to_version_id: toVersionId, confirm },
+    { params: { tenant_id: tenantId } },
+  );
+  return data;
+}
+
+export async function previewStarterDocumentPdf(
+  tenantId: number,
+  payload: {
+    kind_code: string;
+    twig_content: string;
+    extends_version_id?: number | null;
+    partial_pins_json?: string | null;
+  },
+) {
+  const { data } = await api.post<Blob>(
+    "/document-templates/preview/pdf",
+    {
+      kind_code: payload.kind_code,
+      twig_content: payload.twig_content,
+      context_mode: "sample",
+      extends_version_id: payload.extends_version_id,
+      partial_pins_json: payload.partial_pins_json,
+    },
+    { params: { tenant_id: tenantId }, responseType: "blob" },
+  );
   return data;
 }

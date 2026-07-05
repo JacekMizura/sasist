@@ -1,31 +1,36 @@
-import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 
 import {
   createDocumentTemplateFromStarter,
   fetchStarterGallery,
-  fetchStarterGalleryDetail,
-  type StarterGalleryDetailDto,
   type StarterGalleryItem,
-} from "../../../api/documentTemplatesApi";
-import { extractApiErrorMessage } from "../../../api/apiErrorMessage";
+} from "@/api/documentTemplatesApi";
+import { extractApiErrorMessage } from "@/api/apiErrorMessage";
 import { DEFAULT_TENANT_ID, LIST_BASE } from "./constants";
 import { StarterThumbnailImage } from "./components/StarterThumbnailImage";
 
 const CATEGORY_LABELS: Record<string, string> = {
   featured: "Polecane",
-  recent: "Ostatnio dodane",
-  popular: "Najczęściej używane",
+  recent: "Nowe",
+  popular: "Najpopularniejsze",
 };
 
-function fmtDt(iso: string | null | undefined) {
-  if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleDateString("pl-PL");
-  } catch {
-    return iso;
+const BADGE_STYLES: Record<string, string> = {
+  featured: "bg-violet-100 text-violet-800",
+  recent: "bg-sky-100 text-sky-800",
+  popular: "bg-amber-100 text-amber-900",
+  system: "bg-slate-100 text-slate-700",
+};
+
+function starterBadges(item: StarterGalleryItem): string[] {
+  const out: string[] = [];
+  if (item.is_system) out.push("system");
+  for (const c of item.categories ?? []) {
+    if (c in CATEGORY_LABELS) out.push(c);
   }
+  return out;
 }
 
 export function StarterGalleryPage() {
@@ -42,8 +47,6 @@ export function StarterGalleryPage() {
   const [tagFilter, setTagFilter] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [loading, setLoading] = useState(true);
-  const [previewId, setPreviewId] = useState<number | null>(null);
-  const [preview, setPreview] = useState<StarterGalleryDetailDto | null>(null);
 
   useEffect(() => {
     fetchStarterGallery(DEFAULT_TENANT_ID)
@@ -51,16 +54,6 @@ export function StarterGalleryPage() {
       .catch((err) => toast.error(extractApiErrorMessage(err, "Nie udało się wczytać starterów.")))
       .finally(() => setLoading(false));
   }, []);
-
-  useEffect(() => {
-    if (previewId == null) {
-      setPreview(null);
-      return;
-    }
-    fetchStarterGalleryDetail(DEFAULT_TENANT_ID, previewId)
-      .then(setPreview)
-      .catch((err) => toast.error(extractApiErrorMessage(err, "Nie udało się wczytać podglądu.")));
-  }, [previewId]);
 
   const filtered = useMemo(() => {
     const items = gallery?.items ?? [];
@@ -82,11 +75,11 @@ export function StarterGalleryPage() {
   async function createFromStarter(item: StarterGalleryItem) {
     try {
       const created = await createDocumentTemplateFromStarter(DEFAULT_TENANT_ID, {
-        kind_code: item.kind_code ?? "",
-        name: `${item.name_pl} — własny`,
+        kind_code: item.kind_code,
+        name: item.name_pl,
         starter_code: item.code,
       });
-      toast.success("Utworzono szablon ze startera.");
+      toast.success("Utworzono szablon.");
       window.location.href = `${LIST_BASE}/${created.id}`;
     } catch (err) {
       toast.error(extractApiErrorMessage(err, "Nie udało się utworzyć szablonu."));
@@ -94,24 +87,16 @@ export function StarterGalleryPage() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl p-6">
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <Link to={LIST_BASE} className="text-sm text-slate-500 hover:text-slate-800">
-            ← Szablony dokumentów
-          </Link>
-          <h1 className="mt-1 text-xl font-semibold text-slate-900">Biblioteka dokumentów</h1>
-          <p className="text-sm text-slate-500">
-            Gotowe szablony do szybkiego startu · {gallery?.total ?? 0} starterów
-          </p>
-        </div>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-xl font-semibold text-slate-900">Marketplace szablonów</h1>
+        <p className="mt-1 text-sm text-slate-500">Gotowe układy dokumentów ERP — bez kodu Twig na kartach.</p>
       </div>
 
-      <div className="mb-6 grid gap-3 rounded-xl border border-slate-200 bg-white p-4 md:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-5">
         <input
-          type="search"
-          className="rounded-lg border border-slate-200 px-3 py-2 text-sm lg:col-span-2"
-          placeholder="Szukaj starterów…"
+          className="rounded-lg border border-slate-200 px-3 py-2 text-sm md:col-span-2"
+          placeholder="Szukaj szablonu…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -133,97 +118,54 @@ export function StarterGalleryPage() {
             <option key={code} value={code}>{label}</option>
           ))}
         </select>
+        <select className="rounded-lg border border-slate-200 px-3 py-2 text-sm md:col-span-5 lg:col-span-1" value={tagFilter} onChange={(e) => setTagFilter(e.target.value)}>
+          <option value="">Wszystkie tagi</option>
+          {(gallery?.tags || []).map((t) => (
+            <option key={t} value={t}>{t}</option>
+          ))}
+        </select>
       </div>
 
       {loading ? <p className="text-slate-500">Wczytywanie…</p> : null}
 
-      <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
         {filtered.map((item) => (
-          <article
-            key={item.id}
-            className="flex cursor-pointer flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition hover:border-slate-400"
-            onClick={() => setPreviewId(item.id)}
-          >
-            <div className="aspect-[210/297] overflow-hidden border-b border-slate-100 bg-slate-50">
-              <StarterThumbnailImage
-                starterId={item.id}
-                alt={item.name_pl}
-                className="h-full w-full object-cover object-top"
-              />
-            </div>
-            <div className="flex flex-1 flex-col p-4">
-              <div className="text-[10px] uppercase tracking-wide text-slate-400">{item.family_name}</div>
-              <h2 className="mt-1 font-semibold text-slate-900">{item.name_pl}</h2>
-              <p className="mt-1 line-clamp-2 text-xs text-slate-500">{item.description || item.kind_name}</p>
-              <dl className="mt-3 grid grid-cols-2 gap-1 text-[10px] text-slate-500">
-                <div>Typ: {item.kind_name ?? "—"}</div>
-                <div>Data: {fmtDt(item.updated_at)}</div>
-                <div>Autor: {item.author_label ?? (item.is_system ? "System" : "Własny")}</div>
-                <div>Użycia: {item.usage_count ?? 0}</div>
-              </dl>
-              <button
-                type="button"
-                className="mt-4 rounded-lg bg-slate-900 px-3 py-2 text-xs font-medium text-white"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  void createFromStarter(item);
-                }}
-              >
-                Utwórz szablon
-              </button>
+          <article key={item.id} className="group flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:border-slate-400 hover:shadow-md">
+            <Link to={`${LIST_BASE}/starters/${item.id}`} className="block">
+              <div className="relative aspect-[210/297] overflow-hidden bg-gradient-to-b from-slate-50 to-white">
+                <StarterThumbnailImage starterId={item.id} alt={item.name_pl} className="h-full w-full object-cover object-top transition group-hover:scale-[1.02]" />
+                <div className="absolute left-3 top-3 flex flex-wrap gap-1">
+                  {starterBadges(item).map((b) => (
+                    <span key={b} className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${BADGE_STYLES[b] ?? "bg-slate-100 text-slate-700"}`}>
+                      {b === "system" ? "System" : CATEGORY_LABELS[b] ?? b}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </Link>
+            <div className="flex flex-1 flex-col p-5">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">{item.kind_name}</p>
+              <h2 className="mt-1 text-lg font-semibold text-slate-900">{item.name_pl}</h2>
+              <p className="mt-2 line-clamp-2 text-sm text-slate-500">{item.description || item.family_name}</p>
+              <div className="mt-auto flex gap-2 pt-5">
+                <Link
+                  to={`${LIST_BASE}/starters/${item.id}`}
+                  className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-center text-sm font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  Szczegóły
+                </Link>
+                <button
+                  type="button"
+                  className="flex-1 rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
+                  onClick={() => void createFromStarter(item)}
+                >
+                  Użyj szablonu
+                </button>
+              </div>
             </div>
           </article>
         ))}
       </div>
-
-      {previewId != null && preview ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setPreviewId(null)}>
-          <div
-            className="grid max-h-[90vh] w-full max-w-5xl overflow-hidden rounded-2xl bg-white shadow-xl lg:grid-cols-2"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="overflow-auto border-r border-slate-100 bg-slate-50 p-4">
-              <iframe
-                title="Podgląd dokumentu"
-                className="mx-auto h-[70vh] w-full max-w-md rounded border border-slate-200 bg-white"
-                srcDoc={preview.preview_html}
-              />
-            </div>
-            <div className="overflow-auto p-6">
-              <h2 className="text-lg font-semibold text-slate-900">{preview.name_pl}</h2>
-              <p className="mt-2 text-sm text-slate-600">{preview.description}</p>
-              <dl className="mt-4 space-y-2 text-sm text-slate-600">
-                <div><dt className="font-medium text-slate-800">Rodzina</dt><dd>{preview.family_name}</dd></div>
-                <div><dt className="font-medium text-slate-800">Typ</dt><dd>{preview.kind_name}</dd></div>
-                <div><dt className="font-medium text-slate-800">Autor</dt><dd>{preview.author_label}</dd></div>
-                {preview.base_template ? (
-                  <div><dt className="font-medium text-slate-800">Szablon bazowy</dt><dd>{preview.base_template.template_name} v{preview.base_template.version_number}</dd></div>
-                ) : null}
-              </dl>
-              {preview.partials_used?.length ? (
-                <div className="mt-4">
-                  <h3 className="text-sm font-medium text-slate-800">Partiale</h3>
-                  <ul className="mt-1 list-inside list-disc text-sm text-slate-600">
-                    {preview.partials_used.map((p) => (
-                      <li key={p.partial_code}>{p.partial_code}: {p.template_name}</li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-              <button
-                type="button"
-                className="mt-6 w-full rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white"
-                onClick={() => {
-                  const item = gallery?.items.find((i) => i.id === previewId);
-                  if (item) void createFromStarter(item);
-                }}
-              >
-                Utwórz na podstawie startera
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }

@@ -178,6 +178,29 @@ class DocumentTemplateStarter(Base, BaseModelMixin):
     kind = relationship("DocumentTemplateKind", back_populates="starters")
 
 
+class DocumentTemplateScopeAssignment(Base, BaseModelMixin):
+    __tablename__ = "document_template_scope_assignment"
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id",
+            "kind_id",
+            "scope_type",
+            "scope_id",
+            name="uq_document_template_scope_assignment",
+        ),
+    )
+
+    tenant_id = Column(Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    kind_id = Column(Integer, ForeignKey("document_template_kind.id", ondelete="CASCADE"), nullable=False, index=True)
+    scope_type = Column(String(32), nullable=False, index=True)
+    scope_id = Column(Integer, nullable=False, index=True)
+    version_id = Column(Integer, ForeignKey("document_template_version.id", ondelete="CASCADE"), nullable=False, index=True)
+    variant_code = Column(String(64), nullable=False, default="standard", index=True)
+
+    kind = relationship("DocumentTemplateKind")
+    version = relationship("DocumentTemplateVersion")
+
+
 class DocumentContextSchema(Base, BaseModelMixin):
     __tablename__ = "document_context_schema"
     __table_args__ = (UniqueConstraint("kind_id", "schema_key", name="uq_document_context_schema_kind_key"),)

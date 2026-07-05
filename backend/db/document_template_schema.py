@@ -87,6 +87,13 @@ def ensure_document_template_schema(engine: Engine) -> None:
             )
             logger.info("[document_templates] created partial_pin table")
 
+    if not has_table(engine, "document_template_scope_assignment"):
+        from ..document_templates.models import DocumentTemplateScopeAssignment
+        from ..database import Base
+
+        Base.metadata.create_all(bind=engine, tables=[DocumentTemplateScopeAssignment.__table__])
+        logger.info("[document_templates] created scope_assignment table")
+
     _seed_catalog(engine)
 
 

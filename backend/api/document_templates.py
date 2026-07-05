@@ -62,6 +62,8 @@ from ..schemas.document_template_schemas import (
     DocumentTemplateLiveValidatePayload,
     DocumentTemplateUsageSearchPayload,
     DocumentTemplateImportPayload,
+    DocumentTemplateScopeAssignmentPayload,
+    DocumentTemplateVersionReplacePayload,
 )
 
 logger = logging.getLogger(__name__)
@@ -723,3 +725,118 @@ def api_import_apply(
         )
     except DocumentTemplateError as exc:
         raise _map_error(exc) from exc
+
+
+@router.get("/scope-assignments")
+def api_list_scope_assignments(
+    tenant_id: int = Query(..., ge=1),
+    scope_type: str = Query(...),
+    scope_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    _ = user
+    from ..document_templates.services.scope_assignment_service import list_scope_assignments
+
+    return {"items": list_scope_assignments(db, tenant_id=tenant_id, scope_type=scope_type, scope_id=scope_id)}
+
+
+@router.put("/scope-assignments")
+def api_upsert_scope_assignment(
+    payload: DocumentTemplateScopeAssignmentPayload,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    _ = user
+    from ..document_templates.services.scope_assignment_service import upsert_scope_assignment
+
+    try:
+        item = upsert_scope_assignment(
+            db,
+            tenant_id=tenant_id,
+            kind_code=payload.kind_code,
+            scope_type=payload.scope_type,
+            scope_id=payload.scope_id,
+            version_id=payload.version_id,
+            variant_code=payload.variant_code,
+        )
+        return {"item": item}
+    except DocumentTemplateError as exc:
+        raise _map_error(exc) from exc
+
+
+@router.get("/templates/{template_id}/usage")
+def api_template_usage(
+    template_id: int,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    _ = user
+    from ..document_templates.services.template_assignment_usage_service import usage_summary_for_template
+
+    return usage_summary_for_template(db, tenant_id=tenant_id, template_id=template_id)
+
+
+@router.get("/templates/{template_id}/assignments")
+def api_template_assignments(
+    template_id: int,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    _ = user
+    from ..document_templates.services.template_assignment_usage_service import list_assignments_for_template
+
+    return {"items": list_assignments_for_template(db, tenant_id=tenant_id, template_id=template_id)}
+
+
+@router.get("/versions/{version_id}/assignments")
+def api_version_assignments(
+    version_id: int,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    _ = user
+    from ..document_templates.services.template_assignment_usage_service import list_assignments_for_version
+
+    return {"items": list_assignments_for_version(db, tenant_id=tenant_id, version_id=version_id)}
+
+
+@router.get("/versions/{version_id}/replace-impact")
+def api_version_replace_impact(
+    version_id: int,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    _ = user
+    from ..document_templates.services.template_assignment_usage_service import preview_version_replacement_impact
+
+    return preview_version_replacement_impact(db, tenant_id=tenant_id, from_version_id=version_id)
+
+
+@router.post("/versions/{version_id}/replace-assignments")
+def api_version_replace_assignments(
+    version_id: int,
+    payload: DocumentTemplateVersionReplacePayload,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    _ = user
+    if not payload.confirm:
+        raise HTTPException(status_code=400, detail="Wymagane potwierdzenie (confirm=true).")
+    from ..document_templates.services.template_assignment_usage_service import replace_version_assignments
+
+    try:
+        return replace_version_assignments(
+            db,
+            tenant_id=tenant_id,
+            from_version_id=version_id,
+            to_version_id=payload.to_version_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

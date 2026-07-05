@@ -196,6 +196,7 @@ def get_starter_gallery_detail(db: Session, *, starter_id: int, tenant_id: int =
         "code": starter.code,
         "name_pl": starter.name_pl,
         "description": starter.description,
+        "twig_content": content,
         "kind_code": kind.code if kind else None,
         "kind_name": kind.name_pl if kind else None,
         "family_code": family.code if family else None,

@@ -64,7 +64,15 @@ def build_stock_document_html_pdf_bytes(db: Session, *, tenant_id: int, document
     from ..document_templates.services.document_integration_service import series_template_render_kwargs
 
     wh_id = getattr(read, "warehouse_id", None)
-    render_kwargs = series_template_render_kwargs(series)
+    from ..document_templates.services.template_hierarchy_resolver import RenderTemplateContext, resolve_render_template_kwargs
+
+    hierarchy_ctx = RenderTemplateContext(
+        tenant_id=int(tenant_id),
+        kind_code=doc_type.lower(),
+        series=series,
+        warehouse_id=int(wh_id) if wh_id else None,
+    )
+    render_kwargs = resolve_render_template_kwargs(db, ctx=hierarchy_ctx)
     if binding_available(db, tenant_id=int(tenant_id), document_type=doc_type, variant_code=render_kwargs.get("variant_code", "standard")) or render_kwargs.get("template_version_id"):
         html = render_stock_document_html(
             db,

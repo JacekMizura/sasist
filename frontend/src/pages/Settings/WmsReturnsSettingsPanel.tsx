@@ -6,6 +6,8 @@ import { getWmsReturnsModeSettings, setWmsReturnsModeSettings } from "../../api/
 import type { ReturnsMode } from "../../types/wmsReturn";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { WmsSettingsLayout } from "./WmsSettingsLayout";
+import { DocumentTemplateScopeSection } from "./document-templates/components/DocumentTemplateScopeSection";
+import { RETURNS_SCOPE_KINDS } from "./document-templates/documentTemplateScopeKinds";
 import { WMS_SETTINGS_SECTION_ANCHOR_CLASS } from "./wmsSettingsSectionConstants";
 import { useWmsSettingsSectionAnchor } from "./WmsSettingsSectionRegistryContext";
 
@@ -255,6 +257,16 @@ export default function WmsReturnsSettingsPanel({ warehouseId }: Props) {
             </div>
           </div>
         )}
+      </SettingsSectionCard>
+
+      <SettingsSectionCard sectionId="wms-returns-document-templates">
+        <DocumentTemplateScopeSection
+          tenantId={DAMAGE_TENANT_ID}
+          scopeType="RETURNS"
+          scopeId={DAMAGE_TENANT_ID}
+          title="Szablony dokumentów zwrotów"
+          kinds={RETURNS_SCOPE_KINDS}
+        />
       </SettingsSectionCard>
 
       {!loading && !loadError ? (

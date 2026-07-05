@@ -19,6 +19,8 @@ import type {
 import { panelStatusChipStyle } from "../../utils/panelStatusColor";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import PageLayout from "../../components/layout/PageLayout";
+import { DocumentTemplateScopeSection } from "../Settings/document-templates/components/DocumentTemplateScopeSection";
+import { COMPLAINTS_SCOPE_KINDS } from "../Settings/document-templates/documentTemplateScopeKinds";
 
 const GROUP_ORDER: ComplaintUiMainGroup[] = ["NEW", "IN_PROGRESS", "DONE"];
 
@@ -176,6 +178,16 @@ export default function ComplaintPanelUiStatusesSettingsPage() {
           Podstatusy są wspólne dla <strong>podmiotu</strong>; liczniki obok — dla <strong>wybranego magazynu</strong>. Grupy{" "}
           <strong>Nowe reklamacje / W toku / Zakończone</strong> są stałe. Kolor: <strong>#RRGGBB</strong>.
         </p>
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <DocumentTemplateScopeSection
+          tenantId={DAMAGE_TENANT_ID}
+          scopeType="COMPLAINTS"
+          scopeId={DAMAGE_TENANT_ID}
+          title="Szablony dokumentów reklamacji"
+          kinds={COMPLAINTS_SCOPE_KINDS}
+        />
       </div>
 
       {err && (

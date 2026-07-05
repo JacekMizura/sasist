@@ -217,7 +217,7 @@ def _build_xlsx(headers: list[str], rows: list[list[Any]]) -> bytes:
     return bio.getvalue()
 
 
-def _build_pdf_html(title: str, headers: list[str], rows: list[list[Any]]) -> bytes:
+def _build_pdf_html(db: Session, tenant_id: int, document_id: int, title: str, headers: list[str], rows: list[list[Any]]) -> bytes:
     html_rows = "".join(
         "<tr>" + "".join(f"<td>{cell}</td>" for cell in row) + "</tr>" for row in rows[:500]
     )
@@ -226,12 +226,27 @@ def _build_pdf_html(title: str, headers: list[str], rows: list[list[Any]]) -> by
     th,td{{border:1px solid #ccc;padding:4px;text-align:left}}th{{background:#eee}}</style></head>
     <body><h1>{title}</h1><table><thead><tr>{"".join(f"<th>{h}</th>" for h in headers)}</tr></thead>
     <tbody>{html_rows}</tbody></table></body></html>"""
-    try:
-        from ..structure_report_pdf_service import html_document_to_pdf_bytes
 
-        return html_document_to_pdf_bytes(html)
-    except Exception:
-        return html.encode("utf-8")
+    from ..document_templates.services.erp_document_render_service import render_erp_document_pdf_bytes
+    from ..document_templates.services.template_hierarchy_resolver import RenderTemplateContext
+
+    doc = db.query(InventoryDocument).filter(InventoryDocument.id == int(document_id)).first()
+    wh_id = int(doc.warehouse_id) if doc and getattr(doc, "warehouse_id", None) else None
+
+    return render_erp_document_pdf_bytes(
+        db,
+        tenant_id=int(tenant_id),
+        kind_code="inventory_count",
+        params={"document_id": int(document_id), "report_title": title},
+        legacy_renderer=lambda: html,
+        warehouse_id=wh_id,
+        ctx=RenderTemplateContext(
+            tenant_id=int(tenant_id),
+            kind_code="inventory_count",
+            warehouse_id=wh_id,
+        ),
+        log_label=f"inventory_report doc_id={document_id}",
+    )
 
 
 def generate_inventory_report(
@@ -257,7 +272,7 @@ def generate_inventory_report(
     headers, rows = _report_rows_for_kind(db, doc, kind)
     title = REPORT_KINDS[kind]
     if report_format == REPORT_FORMAT_PDF:
-        content = _build_pdf_html(f"{title} — {doc.number}", headers, rows)
+        content = _build_pdf_html(db, int(tenant_id), int(doc.id), f"{title} — {doc.number}", headers, rows)
         ext = "pdf"
         media = "application/pdf"
     else:

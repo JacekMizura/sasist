@@ -3409,3 +3409,66 @@ def get_order_details(
             order_id,
         )
         raise
+
+
+@router.get("/{order_id}/confirmation.pdf")
+def download_order_confirmation_pdf(
+    order_id: int,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    from ..services.erp_documents_pdf_service import generate_order_confirmation_pdf_bytes
+
+    try:
+        pdf = generate_order_confirmation_pdf_bytes(db, tenant_id=tenant_id, order_id=order_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="order_{order_id}_confirmation.pdf"'},
+    )
+
+
+@router.get("/{order_id}/picking-list.pdf")
+def download_picking_list_pdf(
+    order_id: int,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    from ..services.erp_documents_pdf_service import generate_picking_list_pdf_bytes
+
+    try:
+        pdf = generate_picking_list_pdf_bytes(db, tenant_id=tenant_id, order_id=order_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="order_{order_id}_picking_list.pdf"'},
+    )
+
+
+@router.get("/{order_id}/return-document.pdf")
+def download_return_document_pdf(
+    order_id: int,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    from ..services.erp_documents_pdf_service import generate_return_document_pdf_bytes
+
+    try:
+        pdf = generate_return_document_pdf_bytes(db, tenant_id=tenant_id, order_id=order_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="order_{order_id}_return.pdf"'},
+    )

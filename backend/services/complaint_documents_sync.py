@@ -14,11 +14,7 @@ from sqlalchemy.orm import Session
 from ..models.complaint import Complaint
 from ..models.complaint_document import ComplaintDocument
 from ..models.complaint_line import ComplaintLine
-from .complaint_document_pdf import (
-    build_correction_pdf_bytes,
-    build_decision_pdf_bytes,
-    build_rma_pdf_bytes,
-)
+from .complaint_document_pdf_service import build_complaint_document_pdf_bytes
 from .complaint_audit import append_complaint_audit_event
 
 logger = logging.getLogger(__name__)
@@ -75,7 +71,12 @@ def _delete_file_if_under_complaint(url: str, complaint_id: int) -> None:
 def sync_decision_document(db: Session, c: Complaint) -> Optional[ComplaintDocument]:
     """One DECISION row per complaint — replace file when regenerating."""
     try:
-        pdf = build_decision_pdf_bytes(c)
+        pdf = build_complaint_document_pdf_bytes(
+            db,
+            tenant_id=int(c.tenant_id),
+            complaint=c,
+            document_type=DOCUMENT_TYPE_DECISION,
+        )
     except Exception:
         logger.exception("decision PDF failed complaint_id=%s", c.id)
         return None
@@ -112,7 +113,12 @@ def sync_decision_document(db: Session, c: Complaint) -> Optional[ComplaintDocum
 
 def append_correction_document(db: Session, c: Complaint) -> Optional[ComplaintDocument]:
     try:
-        pdf = build_correction_pdf_bytes(c, getattr(c, "order", None))
+        pdf = build_complaint_document_pdf_bytes(
+            db,
+            tenant_id=int(c.tenant_id),
+            complaint=c,
+            document_type=DOCUMENT_TYPE_CORRECTION,
+        )
     except Exception:
         logger.exception("correction PDF failed complaint_id=%s", c.id)
         return None
@@ -155,7 +161,12 @@ def sync_rma_document(db: Session, c: Complaint) -> Optional[ComplaintDocument]:
         return None
 
     try:
-        pdf = build_rma_pdf_bytes(c)
+        pdf = build_complaint_document_pdf_bytes(
+            db,
+            tenant_id=int(c.tenant_id),
+            complaint=c,
+            document_type=DOCUMENT_TYPE_RMA,
+        )
     except Exception:
         logger.exception("RMA PDF failed complaint_id=%s", c.id)
         return None

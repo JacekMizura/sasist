@@ -6,6 +6,7 @@ import toast from "react-hot-toast";
 import {
   fetchDocumentTemplateCatalog,
   fetchDocumentTemplatesList,
+  fetchTemplateUsage,
   type DocumentTemplateFamilyDto,
   type DocumentTemplateListItemDto,
 } from "../../../api/documentTemplatesApi";
@@ -16,6 +17,7 @@ import {
   DOC_TEMPLATE_STATUS_LABELS,
   LIST_BASE,
 } from "./constants";
+import { TemplateUsageModal } from "./components/TemplateUsageModal";
 
 function fmtDt(iso: string | null | undefined) {
   if (!iso) return "—";
@@ -48,6 +50,11 @@ export function DocumentTemplatesListPage() {
   const [variantFilter, setVariantFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [sourceFilter, setSourceFilter] = useState("");
+  const [usageModal, setUsageModal] = useState<{
+    name: string;
+    badges: DocumentTemplateListItemDto["usage_summary"];
+    items: Awaited<ReturnType<typeof fetchTemplateUsage>>["items"];
+  } | null>(null);
 
   const kinds = useMemo(() => {
     if (familyFilter) return families.find((f) => f.code === familyFilter)?.kinds ?? [];
@@ -153,6 +160,7 @@ export function DocumentTemplatesListPage() {
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Źródło</th>
                 <th className="px-4 py-3">Powiązanie</th>
+                <th className="px-4 py-3">Używane w</th>
                 <th className="px-4 py-3">Ostatnia publikacja</th>
                 <th className="px-4 py-3">Autor</th>
                 <th className="px-4 py-3 text-right">Akcje</th>
@@ -160,9 +168,9 @@ export function DocumentTemplatesListPage() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={10} className="px-4 py-12 text-center text-slate-500">Wczytywanie…</td></tr>
+                <tr><td colSpan={11} className="px-4 py-12 text-center text-slate-500">Wczytywanie…</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={10} className="px-4 py-12 text-center text-slate-500">Brak szablonów spełniających kryteria.</td></tr>
+                <tr><td colSpan={11} className="px-4 py-12 text-center text-slate-500">Brak szablonów spełniających kryteria.</td></tr>
               ) : (
                 filtered.map((row) => (
                   <tr key={row.id} className="border-b border-slate-50 hover:bg-slate-50/60">
@@ -182,6 +190,27 @@ export function DocumentTemplatesListPage() {
                     <td className="px-4 py-3 text-slate-600 max-w-[180px] truncate" title={row.binding_summary ?? undefined}>
                       {row.binding_summary ?? "—"}
                     </td>
+                    <td className="px-4 py-3">
+                      {(row.usage_summary?.length ?? 0) > 0 ? (
+                        <button
+                          type="button"
+                          className="flex flex-wrap gap-1 text-left"
+                          onClick={() => {
+                            void fetchTemplateUsage(DEFAULT_TENANT_ID, row.id).then((data) =>
+                              setUsageModal({ name: row.name, badges: data.badges, items: data.items }),
+                            );
+                          }}
+                        >
+                          {row.usage_summary!.map((b) => (
+                            <span key={b.label} className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-700">
+                              {b.label} ({b.count})
+                            </span>
+                          ))}
+                        </button>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{fmtDt(row.last_published_at)}</td>
                     <td className="px-4 py-3 text-slate-600">{row.author_name}</td>
                     <td className="px-4 py-3 text-right">
@@ -200,6 +229,14 @@ export function DocumentTemplatesListPage() {
           </table>
         </div>
       </div>
+      {usageModal ? (
+        <TemplateUsageModal
+          templateName={usageModal.name}
+          badges={usageModal.badges ?? []}
+          items={usageModal.items}
+          onClose={() => setUsageModal(null)}
+        />
+      ) : null}
     </div>
   );
 }

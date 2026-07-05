@@ -12,6 +12,7 @@ import {
 } from "../../../../api/documentTemplatesApi";
 import { LIST_BASE } from "../constants";
 import { VersionComparePanel } from "./VersionComparePanel";
+import { VersionReplacePanel } from "./VersionReplacePanel";
 
 type Tab = "html" | "pdf" | "errors" | "compare" | "usage" | "impact" | "dependencies" | "history";
 
@@ -30,6 +31,7 @@ type Props = {
   impact: EditorImpactDto | null;
   dependencies: DependencyGraphDto | null;
   versionsHistory: DocumentTemplateVersionDto[];
+  kindCode?: string | null;
   usageHits: UsageSearchHit[];
   usageQuery: string;
   onRefreshPreview: () => void;
@@ -51,6 +53,7 @@ export function EditorRightPanel({
   impact,
   dependencies,
   versionsHistory,
+  kindCode,
   usageHits,
   usageQuery,
   onRefreshPreview,
@@ -112,7 +115,7 @@ export function EditorRightPanel({
         {activeTab === "impact" && <ImpactPane impact={impact} />}
         {activeTab === "dependencies" && <DependenciesPane graph={dependencies} />}
         {activeTab === "history" && (
-          <HistoryPane versions={versionsHistory} onPreviewVersion={onPreviewVersion} onIssueClick={onIssueClick} />
+          <HistoryPane versions={versionsHistory} kindCode={kindCode} onPreviewVersion={onPreviewVersion} onIssueClick={onIssueClick} />
         )}
       </div>
     </div>
@@ -268,10 +271,12 @@ function DependenciesPane({ graph }: { graph: DependencyGraphDto | null }) {
 
 function HistoryPane({
   versions,
+  kindCode,
   onPreviewVersion,
   onIssueClick,
 }: {
   versions: DocumentTemplateVersionDto[];
+  kindCode?: string | null;
   onPreviewVersion?: (content: string) => void;
   onIssueClick: (issue: ValidationIssue) => void;
 }) {
@@ -319,6 +324,11 @@ function HistoryPane({
                 Podgląd
               </button>
             </div>
+            {v.status === "published" ? (
+              <div className="mt-3">
+                <VersionReplacePanel kindCode={kindCode} fromVersion={v} />
+              </div>
+            ) : null}
           </li>
         ))}
       </ul>

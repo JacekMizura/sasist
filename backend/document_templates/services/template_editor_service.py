@@ -143,6 +143,10 @@ def _template_list_row(db: Session, row: DocumentTemplate) -> dict[str, Any]:
         if user:
             author_name = str(getattr(user, "display_name", None) or getattr(user, "username", None) or "")
 
+    from ..document_templates.services.template_assignment_usage_service import usage_summary_for_template
+
+    usage = usage_summary_for_template(db, tenant_id=int(row.tenant_id), template_id=int(row.id))
+
     return {
         "id": int(row.id),
         "name": row.name,
@@ -159,6 +163,8 @@ def _template_list_row(db: Session, row: DocumentTemplate) -> dict[str, Any]:
         "published_version": _version_dict(published),
         "draft_version": _version_dict(draft),
         "binding_summary": ", ".join(binding_labels) if binding_labels else None,
+        "usage_summary": usage.get("badges") or [],
+        "usage_total": int(usage.get("total") or 0),
         "last_published_at": published.published_at.isoformat() if published and published.published_at else None,
         "author_name": author_name or "—",
         "updated_at": row.updated_at.isoformat() if row.updated_at else None,
@@ -279,11 +285,16 @@ def get_editor_context(db: Session, *, tenant_id: int, template_id: int) -> dict
     base_templates = list_layout_templates(db, tenant_id=tenant_id, role=TEMPLATE_ROLE_BASE)
     partial_templates = list_layout_templates(db, tenant_id=tenant_id, role=TEMPLATE_ROLE_PARTIAL)
 
+    from ..services.template_assignment_usage_service import list_assignments_for_template
+
+    erp_assignments = list_assignments_for_template(db, tenant_id=tenant_id, template_id=template_id)
+
     return {
         "detail": detail,
         "extends_base": extends_base,
         "partials_used": partials_used,
         "bindings": bindings,
+        "erp_assignments": erp_assignments,
         "versions_history": versions_history,
         "variable_tree": variable_tree,
         "variable_fields": (variable_schema or {}).get("fields") or [],

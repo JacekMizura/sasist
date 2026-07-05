@@ -247,4 +247,25 @@ def generate_supplier_order_pdf_bytes(db: Session, tenant_id: int, order_id: int
         raise ValueError("Supplier not found")
 
     html = build_supplier_order_html(read, tenant, supplier)
-    return html_document_to_pdf_bytes(html)
+
+    from ..document_templates.services.erp_document_render_service import render_erp_document_pdf_bytes
+    from ..document_templates.services.template_hierarchy_resolver import RenderTemplateContext
+
+    def _legacy_html() -> str:
+        return html
+
+    return render_erp_document_pdf_bytes(
+        db,
+        tenant_id=int(tenant_id),
+        kind_code="supplier_order",
+        params={"delivery_id": int(order_id), "order_id": int(order_id)},
+        legacy_renderer=_legacy_html,
+        ctx=RenderTemplateContext(
+            tenant_id=int(tenant_id),
+            kind_code="supplier_order",
+            scope_type="SUPPLIER",
+            scope_id=int(d.supplier_id),
+        ),
+        warehouse_id=getattr(d, "warehouse_id", None),
+        log_label=f"supplier_order_id={order_id}",
+    )

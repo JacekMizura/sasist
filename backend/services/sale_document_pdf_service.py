@@ -121,6 +121,7 @@ def build_sale_document_pdf_bytes(db: Session, *, tenant_id: int, document_id: s
     from ..document_templates.adapters.sale_document_adapter import sale_kind_for_subtype
     from ..document_templates.render.output_formats import DocumentOutputFormat
     from ..document_templates.services.document_integration_service import series_template_render_kwargs
+    from ..document_templates.services.template_hierarchy_resolver import RenderTemplateContext, resolve_render_template_kwargs
 
     def _legacy_pdf() -> bytes:
         return build_document_pdf_from_html(
@@ -133,6 +134,15 @@ def build_sale_document_pdf_bytes(db: Session, *, tenant_id: int, document_id: s
             log_label=f"sale_document_id={document_id}",
         )
 
+    hierarchy_ctx = RenderTemplateContext(
+        tenant_id=int(tenant_id),
+        kind_code=sale_kind_for_subtype(doc_subtype),
+        series=series,
+        warehouse_id=getattr(order, "warehouse_id", None),
+    )
+    render_kwargs = resolve_render_template_kwargs(db, ctx=hierarchy_ctx)
+    render_kwargs.update(series_template_render_kwargs(series))
+
     rendered = render_document_with_legacy_fallback(
         db,
         tenant_id=int(tenant_id),
@@ -141,7 +151,9 @@ def build_sale_document_pdf_bytes(db: Session, *, tenant_id: int, document_id: s
         legacy_renderer=_legacy_pdf,
         output_format=DocumentOutputFormat.HTML,
         log_label=f"sale_document_id={document_id}",
-        **series_template_render_kwargs(series),
+        warehouse_id=render_kwargs.get("warehouse_id"),
+        variant_code=str(render_kwargs.get("variant_code") or "standard"),
+        template_version_id=render_kwargs.get("template_version_id"),
     )
     if isinstance(rendered, bytes):
         return rendered

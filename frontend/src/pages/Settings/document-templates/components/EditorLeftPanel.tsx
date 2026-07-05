@@ -2,8 +2,9 @@ import { useMemo, useState } from "react";
 
 import type { EditorCatalogItem, EditorContextDto, VariableFieldDto, VariableTreeNode } from "../../../../api/documentTemplatesApi";
 import { VariableInspectorPanel } from "./VariableInspectorPanel";
+import { TemplateAssignmentsPanel } from "./TemplateAssignmentsPanel";
 
-type Tab = "variables" | "helpers" | "tags" | "partials" | "base";
+type Tab = "variables" | "helpers" | "tags" | "partials" | "base" | "assignments";
 
 type Props = {
   ctx: EditorContextDto;
@@ -34,6 +35,7 @@ export function EditorLeftPanel({
     { id: "tags", label: "Tagi" },
     { id: "partials", label: "Fragmenty" },
     { id: "base", label: "Szablon bazowy" },
+    { id: "assignments", label: "Przypisania" },
   ];
 
   return (
@@ -95,6 +97,9 @@ export function EditorLeftPanel({
             selectedVersionId={extendsVersionId}
             onVersionChange={onBaseVersionChange}
           />
+        )}
+        {tab === "assignments" && (
+          <TemplateAssignmentsPanel items={ctx.erp_assignments ?? []} />
         )}
       </div>
       {tab === "variables" && (

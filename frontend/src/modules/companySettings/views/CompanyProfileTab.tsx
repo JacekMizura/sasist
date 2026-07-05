@@ -4,9 +4,11 @@ import { AppButton } from "../../../components/app-shell";
 import { PurchasingInfoNotice, PurchasingPageShell, purchasingBtnPrimary } from "../../purchasing/ui";
 import { CompanyFormField, companyInputClass } from "../components/CompanyFormField";
 import { useCompanySettings } from "../context/CompanySettingsContext";
+import { DocumentTemplateScopeSection } from "../../../pages/Settings/document-templates/components/DocumentTemplateScopeSection";
+import { COMPANY_SCOPE_KINDS } from "../../../pages/Settings/document-templates/documentTemplateScopeKinds";
 
 export default function CompanyProfileTab() {
-  const { form, setForm, profileLoading, profileErr, profileDirty, profileSaving, saveProfile } = useCompanySettings();
+  const { form, setForm, profileLoading, profileErr, profileDirty, profileSaving, saveProfile, tenantId } = useCompanySettings();
 
   return (
     <PurchasingPageShell
@@ -90,6 +92,16 @@ export default function CompanyProfileTab() {
                   <input className={companyInputClass} value={form.website_url} onChange={(e) => setForm({ ...form, website_url: e.target.value })} placeholder="https://…" />
                 </CompanyFormField>
               </div>
+            </div>
+            <div className="border-t border-slate-100 px-4 py-5">
+              <DocumentTemplateScopeSection
+                tenantId={tenantId}
+                scopeType="COMPANY"
+                scopeId={tenantId}
+                title="Domyślne szablony firmy"
+                description="Stosowane, gdy brak przypisania w serii, magazynie lub module."
+                kinds={COMPANY_SCOPE_KINDS}
+              />
             </div>
             <div className="flex justify-end border-t border-slate-100 px-4 py-3">
               <AppButton variant="primary" className={purchasingBtnPrimary} disabled={!profileDirty || profileSaving} onClick={() => void saveProfile()}>

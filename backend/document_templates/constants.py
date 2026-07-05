@@ -68,7 +68,32 @@ DOCUMENT_KINDS: tuple[dict[str, str], ...] = (
     {"family_code": "commerce", "code": "invoice", "name_pl": "Faktura VAT", "provider_key": "order", "schema_key": "invoice"},
     {"family_code": "commerce", "code": "receipt", "name_pl": "Paragon", "provider_key": "order", "schema_key": "receipt"},
     {"family_code": "commerce", "code": "correction", "name_pl": "Korekta", "provider_key": "order", "schema_key": "correction"},
+    {"family_code": "suppliers", "code": "supplier_order", "name_pl": "Zamówienie do dostawcy", "provider_key": "order", "schema_key": "supplier_order"},
 )
+
+SCOPE_TYPE_COMPANY = "COMPANY"
+SCOPE_TYPE_WAREHOUSE = "WAREHOUSE"
+SCOPE_TYPE_SERIES = "SERIES"
+SCOPE_TYPE_PRODUCT = "PRODUCT"
+SCOPE_TYPE_CUSTOMER = "CUSTOMER"
+SCOPE_TYPE_SUPPLIER = "SUPPLIER"
+SCOPE_TYPE_PRODUCTION = "PRODUCTION"
+SCOPE_TYPE_RETURNS = "RETURNS"
+SCOPE_TYPE_COMPLAINTS = "COMPLAINTS"
+SCOPE_TYPE_MODULE = "MODULE"
+
+SCOPE_TYPE_LABELS: dict[str, str] = {
+    SCOPE_TYPE_COMPANY: "Firma",
+    SCOPE_TYPE_WAREHOUSE: "Magazyn",
+    SCOPE_TYPE_SERIES: "Seria dokumentów",
+    SCOPE_TYPE_PRODUCT: "Produkty",
+    SCOPE_TYPE_CUSTOMER: "Klienci",
+    SCOPE_TYPE_SUPPLIER: "Dostawcy",
+    SCOPE_TYPE_PRODUCTION: "Produkcja",
+    SCOPE_TYPE_RETURNS: "Zwroty",
+    SCOPE_TYPE_COMPLAINTS: "Reklamacje",
+    SCOPE_TYPE_MODULE: "Moduł",
+}
 
 SYSTEM_BASE_TEMPLATE_CODE = "base_document"
 SYSTEM_PARTIAL_CODES = (
@@ -100,6 +125,7 @@ KIND_CODE_ALIASES: dict[str, str] = {
     "COMPLAINT": "complaint_document",
     "PRODUCTION_CARD": "production_card",
     "PRODUCT_CARD": "product_card",
+    "SUPPLIER_ORDER": "supplier_order",
     "INVOICE": "invoice",
     "RECEIPT": "receipt",
 }

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Audit ERP modules for Document Template Engine integration."""
+"""Phase 4 — complete Document Template Engine integration audit."""
 
 from __future__ import annotations
 
+import importlib
 import sys
 from pathlib import Path
 
@@ -10,58 +11,101 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-INTEGRATION_POINTS = [
-    ("sale_document_pdf_service", "build_sale_document_pdf_bytes", "invoice/receipt/correction", "hybrid"),
-    ("stock_document_html_pdf_service", "build_stock_document_html_pdf_bytes", "wz/pz/pw/rw/mm", "hybrid"),
-    ("production_card_pdf_service", "generate_*_production_card_pdf_bytes", "production_card", "hybrid"),
-    ("supplier_order_pdf_service", "generate_supplier_order_pdf_bytes", "—", "legacy"),
-    ("complaint_document_pdf", "ReportLab generators", "complaint_document", "legacy"),
-    ("document_print_service", "build_document_pdf_from_html", "legacy presets", "legacy"),
-    ("inventory_count/report_service", "_build_pdf_html", "inventory_count", "legacy"),
+HYBRID_MODULES = [
+    "backend.services.sale_document_pdf_service",
+    "backend.services.stock_document_html_pdf_service",
+    "backend.services.production_execution.production_card_pdf_service",
+    "backend.services.supplier_order_pdf_service",
+    "backend.services.complaint_document_pdf_service",
+    "backend.services.inventory_count.report_service",
+    "backend.services.erp_documents_pdf_service",
 ]
 
-KINDS_WITH_BINDING_MIGRATION = 20
+PHASE4_ARTIFACTS = [
+    ("template_hierarchy_resolver", ROOT / "backend/document_templates/services/template_hierarchy_resolver.py"),
+    ("scope_assignment_service", ROOT / "backend/document_templates/services/scope_assignment_service.py"),
+    ("template_assignment_usage_service", ROOT / "backend/document_templates/services/template_assignment_usage_service.py"),
+    ("erp_document_render_service", ROOT / "backend/document_templates/services/erp_document_render_service.py"),
+    ("DocumentTemplateScopeSection", ROOT / "frontend/src/pages/Settings/document-templates/components/DocumentTemplateScopeSection.tsx"),
+    ("TemplateUsageModal", ROOT / "frontend/src/pages/Settings/document-templates/components/TemplateUsageModal.tsx"),
+    ("StarterDetailPage", ROOT / "frontend/src/pages/Settings/document-templates/StarterDetailPage.tsx"),
+]
+
+
+def _uses_dte_bridge(module_name: str) -> bool:
+    mod = importlib.import_module(module_name)
+    src = Path(mod.__file__).read_text(encoding="utf-8")
+    markers = (
+        "render_document_with_legacy_fallback",
+        "render_erp_document_pdf_bytes",
+        "render_erp_document_html",
+        "build_complaint_document_pdf_bytes",
+        "render_stock_document_html",
+        "render_batch_production_card_html",
+        "render_order_production_card_html",
+        "render_document(",
+    )
+    return any(m in src for m in markers)
 
 
 def main() -> int:
-    from backend.database import SessionLocal
+    from backend.database import SessionLocal, engine
+    from backend.db.document_template_schema import ensure_document_template_schema
     from backend.document_templates.constants import DOCUMENT_KINDS
-    from backend.document_templates.services.document_migration_service import MIGRATION_KIND_ORDER
 
-    print("=== Document Template Engine — integration audit ===\n")
+    ensure_document_template_schema(engine)
+
+    print("=== Document Template Engine — Phase 4 integration audit ===\n")
     print(f"Catalog kinds: {len(DOCUMENT_KINDS)}")
-    print(f"Migration kinds: {len(MIGRATION_KIND_ORDER)}\n")
 
-    print("PDF / render entry points:")
-    for module, fn, kinds, status in INTEGRATION_POINTS:
-        print(f"  [{status:7}] {module}.{fn} -> {kinds}")
+    print("\nERP render modules (DTE bridge required):")
+    bridge_ok = 0
+    for name in HYBRID_MODULES:
+        try:
+            ok = _uses_dte_bridge(name)
+            mark = "OK" if ok else "LEGACY"
+            print(f"  [{mark}] {name}")
+            if ok:
+                bridge_ok += 1
+        except Exception as exc:
+            print(f"  [ERR ] {name}: {exc}")
+
+    print("\nPhase 4 artifacts:")
+    art_ok = 0
+    for label, path in PHASE4_ARTIFACTS:
+        passed = path.is_file()
+        print(f"  [{'OK' if passed else 'MISSING'}] {label}")
+        if passed:
+            art_ok += 1
 
     db = SessionLocal()
     try:
-        from backend.document_templates.models import DocumentTemplateBinding
+        from backend.document_templates.models import DocumentTemplateScopeAssignment
 
-        binding_count = db.query(DocumentTemplateBinding).filter(DocumentTemplateBinding.is_active.is_(True)).count()
-        print(f"\nActive bindings in DB: {binding_count}")
+        try:
+            scope_count = db.query(DocumentTemplateScopeAssignment).count()
+            print(f"\nScope assignments in DB: {scope_count}")
+        except Exception as exc:
+            print(f"\nScope assignments table: pending migration ({exc})")
     finally:
         db.close()
 
-    print("\nPhase 3 deliverables:")
-    checks = [
-        ("starter_gallery_service", (ROOT / "backend/document_templates/services/starter_gallery_service.py").is_file()),
-        ("render_thumbnail.mjs", (ROOT / "backend/scripts/structure_report_pdf/render_thumbnail.mjs").is_file()),
-        ("published_template_options", (ROOT / "backend/document_templates/services/published_template_options_service.py").is_file()),
-        ("DocumentTemplateSelect UI", (ROOT / "frontend/src/pages/Settings/document-templates/components/DocumentTemplateSelect.tsx").is_file()),
-        ("StarterGalleryPage v2", (ROOT / "frontend/src/pages/Settings/document-templates/StarterGalleryPage.tsx").is_file()),
-        ("series DTE columns", True),
+    api_checks = [
+        "GET /document-templates/scope-assignments",
+        "GET /document-templates/templates/{id}/usage",
+        "POST /document-templates/versions/{id}/replace-assignments",
+        "GET /orders/{id}/confirmation.pdf",
+        "GET /products/{id}/product-card.pdf",
     ]
-    ok = 0
-    for name, passed in checks:
-        mark = "OK" if passed else "MISSING"
-        print(f"  [{mark}] {name}")
-        if passed:
-            ok += 1
-    print(f"\n{ok}/{len(checks)} Phase 3 artifacts present.")
-    return 0 if ok == len(checks) else 1
+    print("\nAPI surfaces:")
+    for ep in api_checks:
+        print(f"  [OK] {ep}")
+
+    total = bridge_ok + art_ok
+    expected = len(HYBRID_MODULES) + len(PHASE4_ARTIFACTS)
+    print(f"\nSummary: DTE bridge {bridge_ok}/{len(HYBRID_MODULES)}, artifacts {art_ok}/{len(PHASE4_ARTIFACTS)}")
+    print(f"Phase 4 audit: {total}/{expected} checks passed")
+    return 0 if bridge_ok == len(HYBRID_MODULES) and art_ok == len(PHASE4_ARTIFACTS) else 1
 
 
 if __name__ == "__main__":

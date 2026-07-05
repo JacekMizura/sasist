@@ -72,3 +72,16 @@ class DocumentTemplateStarterImportPayload(BaseModel):
 class DocumentTemplateStarterClonePayload(BaseModel):
     new_code: str | None = None
     name_pl: str | None = None
+
+
+class DocumentTemplateScopeAssignmentPayload(BaseModel):
+    kind_code: str
+    scope_type: str
+    scope_id: int = Field(ge=1)
+    version_id: int | None = Field(default=None, ge=1)
+    variant_code: str = "standard"
+
+
+class DocumentTemplateVersionReplacePayload(BaseModel):
+    to_version_id: int = Field(ge=1)
+    confirm: bool = False

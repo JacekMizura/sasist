@@ -12,6 +12,8 @@ import {
 } from "../../api/wmsProductionSettingsApi";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { WmsSettingsLayout } from "./WmsSettingsLayout";
+import { DocumentTemplateScopeSection } from "./document-templates/components/DocumentTemplateScopeSection";
+import { PRODUCTION_SCOPE_KINDS } from "./document-templates/documentTemplateScopeKinds";
 import { WMS_SETTINGS_SECTION_ANCHOR_CLASS } from "./wmsSettingsSectionConstants";
 import { useWmsSettingsSectionAnchor } from "./WmsSettingsSectionRegistryContext";
 
@@ -289,6 +291,16 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
             />
           ))}
         </div>
+      </SectionCard>
+
+      <SectionCard sectionId="wms-production-document-templates">
+        <DocumentTemplateScopeSection
+          tenantId={DAMAGE_TENANT_ID}
+          scopeType="PRODUCTION"
+          scopeId={warehouseId ?? DAMAGE_TENANT_ID}
+          title="Szablony dokumentów produkcji"
+          kinds={PRODUCTION_SCOPE_KINDS}
+        />
       </SectionCard>
 
       <div className="mt-6 flex justify-end gap-3">

@@ -109,6 +109,7 @@ import { DocumentTemplateCreatePage } from "./pages/Settings/document-templates/
 import { DocumentTemplateEditorPage } from "./pages/Settings/document-templates/DocumentTemplateEditorPage";
 import { DocumentTemplatesListPage } from "./pages/Settings/document-templates/DocumentTemplatesListPage";
 import { StarterGalleryPage } from "./pages/Settings/document-templates/StarterGalleryPage";
+import { StarterDetailPage } from "./pages/Settings/document-templates/StarterDetailPage";
 import MessageTemplatesModule from "./pages/admin/MessageTemplatesModule"
 import InventoryList from "./pages/InventoryList"
 import SystemLayout from "./pages/System/SystemLayout"
@@ -620,6 +621,7 @@ export const router = createBrowserRouter(
                     <Route index element={<DocumentTemplatesListPage />} />
                     <Route path="new" element={<DocumentTemplateCreatePage />} />
                     <Route path="starters" element={<StarterGalleryPage />} />
+                    <Route path="starters/:starterId" element={<StarterDetailPage />} />
                   </Route>
                   <Route path=":templateId" element={<DocumentTemplateEditorPage />} />
                 </Route>
