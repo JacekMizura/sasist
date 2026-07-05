@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 
-import type { EditorContextDto } from "../../../api/documentTemplatesApi";
+import type { EditorContextDto } from "../../../../api/documentTemplatesApi";
 import { DOC_TEMPLATE_STATUS_LABELS, LIST_BASE } from "../constants";
 
 type Props = {

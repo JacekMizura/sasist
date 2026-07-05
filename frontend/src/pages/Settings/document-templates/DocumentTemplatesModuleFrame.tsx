@@ -6,6 +6,7 @@ import { exportFullPackageZip } from "../../../api/documentTemplatesApi";
 import { extractApiErrorMessage } from "../../../api/apiErrorMessage";
 import { SettingsModuleStack } from "../../../components/layout/SettingsModuleStack";
 import { DEFAULT_TENANT_ID, LIST_BASE } from "./constants";
+import { DOCUMENT_TEMPLATES_TABS } from "./documentTemplatesTabs";
 
 async function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -29,6 +30,9 @@ export default function DocumentTemplatesModuleFrame() {
       ]}
       title="Szablony dokumentów"
       description="Projektowanie wydruków ERP — wersje, publikacja, powiązania i podgląd. Niezależne od szablonów etykiet."
+      tabs={DOCUMENT_TEMPLATES_TABS}
+      tabsExact
+      tabsAriaLabel="Szablony dokumentów"
       actions={
         isList ? (
           <div className="flex flex-wrap items-center gap-2">

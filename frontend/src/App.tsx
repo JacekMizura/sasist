@@ -103,11 +103,12 @@ import PickingWaves from "./pages/PickingWaves"
 import WarehouseDesigner from "./pages/WarehouseDesigner"
 import BarcodeManagement from "./pages/BarcodeManagement"
 import LabelSystem from "./pages/LabelSystem"
-import DocumentTemplatesLayout from "./pages/settings/document-templates/DocumentTemplatesLayout";
-import DocumentTemplatesModuleFrame from "./pages/settings/document-templates/DocumentTemplatesModuleFrame";
-import { DocumentTemplateCreatePage } from "./pages/settings/document-templates/DocumentTemplateCreatePage";
-import { DocumentTemplateEditorPage } from "./pages/settings/document-templates/DocumentTemplateEditorPage";
-import { DocumentTemplatesListPage } from "./pages/settings/document-templates/DocumentTemplatesListPage";
+import DocumentTemplatesLayout from "./pages/Settings/document-templates/DocumentTemplatesLayout";
+import DocumentTemplatesModuleFrame from "./pages/Settings/document-templates/DocumentTemplatesModuleFrame";
+import { DocumentTemplateCreatePage } from "./pages/Settings/document-templates/DocumentTemplateCreatePage";
+import { DocumentTemplateEditorPage } from "./pages/Settings/document-templates/DocumentTemplateEditorPage";
+import { DocumentTemplatesListPage } from "./pages/Settings/document-templates/DocumentTemplatesListPage";
+import { StarterGalleryPage } from "./pages/Settings/document-templates/StarterGalleryPage";
 import MessageTemplatesModule from "./pages/admin/MessageTemplatesModule"
 import InventoryList from "./pages/InventoryList"
 import SystemLayout from "./pages/System/SystemLayout"
@@ -618,6 +619,7 @@ export const router = createBrowserRouter(
                   <Route element={<DocumentTemplatesModuleFrame />}>
                     <Route index element={<DocumentTemplatesListPage />} />
                     <Route path="new" element={<DocumentTemplateCreatePage />} />
+                    <Route path="starters" element={<StarterGalleryPage />} />
                   </Route>
                   <Route path=":templateId" element={<DocumentTemplateEditorPage />} />
                 </Route>
