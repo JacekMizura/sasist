@@ -7,7 +7,9 @@ WORKDIR /app
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    NODE_ENV=production
+    NODE_ENV=production \
+    NODE_BIN=/usr/bin/node \
+    PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 # Runtime: PostgreSQL client libs, barcode, poppler, Node.js 20, Chromium libs for Puppeteer.
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -65,7 +67,8 @@ COPY run_server.py ./
 # Verify paths used by structure_report_pdf_service.py at runtime.
 RUN test -f backend/scripts/structure_report_pdf/render.mjs \
     && test -f backend/scripts/structure_report_pdf/node_modules/puppeteer/package.json \
-    && which node
+    && test -x /usr/bin/node \
+    && /usr/bin/node --version
 
 EXPOSE 8000
 
