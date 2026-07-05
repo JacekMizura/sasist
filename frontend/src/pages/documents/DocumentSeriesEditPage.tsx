@@ -34,7 +34,7 @@ import {
 } from "./documentSeriesUiLabels";
 import DocumentsEmptyState from "./DocumentsEmptyState";
 import { DocumentsSectionShell } from "./DocumentsSectionShell";
-import { DocumentTemplateSelect } from "../Settings/document-templates/components/DocumentTemplateSelect";
+import { DocumentTemplateSelect } from "@/pages/Settings/document-templates/components/DocumentTemplateSelect";
 
 const SUBTYPE_TO_KIND: Record<string, string> = {
   INVOICE: "invoice",

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { fetchStarterThumbnailBlob } from "../../../api/documentTemplatesApi";
+import { fetchStarterThumbnailBlob } from "@/api/documentTemplatesApi";
 import { DEFAULT_TENANT_ID } from "../constants";
 
 type Props = {

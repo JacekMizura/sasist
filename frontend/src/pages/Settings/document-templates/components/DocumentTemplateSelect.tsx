@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   fetchPublishedTemplateOptions,
   type PublishedTemplateOptionDto,
-} from "../../api/documentTemplatesApi";
+} from "@/api/documentTemplatesApi";
 
 type Props = {
   tenantId: number;
