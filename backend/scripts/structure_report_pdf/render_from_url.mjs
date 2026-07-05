@@ -1,10 +1,14 @@
 /**
  * Reads target URL from argv and writes PDF bytes to stdout.
- * Used by FastAPI reports endpoint for frontend-rendered HTML -> PDF.
+ * Puppeteer stack aligned with render.mjs (see puppeteer_pdf_shared.mjs).
  */
-import puppeteer from "puppeteer";
+import {
+  PDF_OPTIONS,
+  RENDER_TIMEOUT_MS,
+  isTimeoutError,
+  launchBrowser,
+} from "./puppeteer_pdf_shared.mjs";
 
-const RENDER_TIMEOUT_MS = 15_000;
 const RENDER_TIMEOUT_MESSAGE =
   "Report rendering timeout - frontend not reachable or data failed to load";
 
@@ -15,15 +19,7 @@ async function main() {
     process.exit(1);
   }
 
-  const browser = await puppeteer.launch({
-    headless: true,
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-gpu",
-    ],
-  });
+  const browser = await launchBrowser();
 
   try {
     const page = await browser.newPage();
@@ -31,26 +27,10 @@ async function main() {
     await page.waitForSelector("[data-report-ready='true']", {
       timeout: RENDER_TIMEOUT_MS,
     });
-    const pdf = await page.pdf({
-      format: "A4",
-      printBackground: true,
-      margin: {
-        top: "20px",
-        bottom: "20px",
-        left: "20px",
-        right: "20px",
-      },
-      preferCSSPageSize: false,
-      scale: 1,
-    });
+    const pdf = await page.pdf(PDF_OPTIONS);
     process.stdout.write(pdf);
   } catch (err) {
-    const isTimeout =
-      err &&
-      typeof err === "object" &&
-      "name" in err &&
-      (err.name === "TimeoutError" || String(err).toLowerCase().includes("timeout"));
-    if (isTimeout) {
+    if (isTimeoutError(err)) {
       console.error(RENDER_TIMEOUT_MESSAGE);
       process.exit(2);
     }

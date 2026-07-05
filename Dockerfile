@@ -49,7 +49,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Puppeteer PDF renderer — install before full backend copy (layer cache).
 COPY backend/scripts/structure_report_pdf/package.json \
      backend/scripts/structure_report_pdf/package-lock.json \
+     backend/scripts/structure_report_pdf/puppeteer_pdf_shared.mjs \
      backend/scripts/structure_report_pdf/render.mjs \
+     backend/scripts/structure_report_pdf/render_from_url.mjs \
      ./backend/scripts/structure_report_pdf/
 RUN cd backend/scripts/structure_report_pdf \
     && npm ci --omit=dev \
@@ -66,6 +68,7 @@ COPY run_server.py ./
 
 # Verify paths used by structure_report_pdf_service.py at runtime.
 RUN test -f backend/scripts/structure_report_pdf/render.mjs \
+    && test -f backend/scripts/structure_report_pdf/puppeteer_pdf_shared.mjs \
     && test -f backend/scripts/structure_report_pdf/node_modules/puppeteer/package.json \
     && test -x /usr/bin/node \
     && /usr/bin/node --version

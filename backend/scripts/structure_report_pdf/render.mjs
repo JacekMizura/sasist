@@ -1,15 +1,15 @@
 /**
  * Reads full HTML document from stdin, writes PDF bytes to stdout.
- * Used by the FastAPI structure-report-pdf endpoint.
+ * Puppeteer stack aligned with render_from_url.mjs (see puppeteer_pdf_shared.mjs).
  */
-import puppeteer from "puppeteer";
+import {
+  PDF_OPTIONS,
+  RENDER_TIMEOUT_MS,
+  isTimeoutError,
+  launchBrowser,
+} from "./puppeteer_pdf_shared.mjs";
 
-const LAUNCH_ARGS = [
-  "--no-sandbox",
-  "--disable-setuid-sandbox",
-  "--disable-dev-shm-usage",
-  "--disable-gpu",
-];
+const RENDER_TIMEOUT_MESSAGE = "HTML document rendering timeout";
 
 async function main() {
   const chunks = [];
@@ -22,25 +22,19 @@ async function main() {
     process.exit(1);
   }
 
-  const browser = await puppeteer.launch({
-    headless: true,
-    args: LAUNCH_ARGS,
-  });
+  const browser = await launchBrowser();
+
   try {
     const page = await browser.newPage();
-    // Screen styles — DTE layout lives in global CSS, not @media print.
-    await page.emulateMediaType("screen");
-    await page.setContent(html, { waitUntil: "domcontentloaded", timeout: 120_000 });
-    await page.evaluate(() => document.fonts.ready);
-    const pdf = await page.pdf({
-      format: "A4",
-      printBackground: true,
-      margin: { top: "12mm", right: "12mm", bottom: "12mm", left: "12mm" },
-      // MUST stay false: preferCSSPageSize + @page margins clip body text → blank PDF.
-      preferCSSPageSize: false,
-      scale: 1,
-    });
+    await page.setContent(html, { waitUntil: "networkidle0", timeout: RENDER_TIMEOUT_MS });
+    const pdf = await page.pdf(PDF_OPTIONS);
     process.stdout.write(pdf);
+  } catch (err) {
+    if (isTimeoutError(err)) {
+      console.error(RENDER_TIMEOUT_MESSAGE);
+      process.exit(2);
+    }
+    throw err;
   } finally {
     await browser.close();
   }
