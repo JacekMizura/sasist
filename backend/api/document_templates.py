@@ -619,7 +619,7 @@ def api_starter_thumbnail(
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except Exception as exc:
         _log_starter_thumbnail_failure(starter_id=starter_id, tenant_id=tenant_id, exc=exc)
-        raise
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @router.get("/versions/{version_id}/thumbnail")
