@@ -17,6 +17,7 @@ import {
 import { ElementProperties } from "./ElementProperties";
 import { snapToGrid } from "../utils/grid";
 import { Search, SlidersHorizontal } from "lucide-react";
+import { groupVariablesForDesigner } from "../labelDesignerVariableGroups";
 
 export type LabelInspectorPanelProps = {
   template: LabelTemplate;
@@ -56,29 +57,12 @@ export function LabelInspectorPanel({
 }: LabelInspectorPanelProps) {
   const [variableSearch, setVariableSearch] = useState("");
   const [variableCreateAs, setVariableCreateAs] = useState<"text" | "barcode" | "qr">("text");
+  const [groupSearch, setGroupSearch] = useState<Record<string, string>>({});
   const layerSiblings = siblingElementsForLayer ?? template.elements;
   const showVars = mode === "full" || mode === "variables";
   const showProps = mode === "full" || mode === "properties";
   const hasSearch = variableSearch.trim().length > 0;
   const searchNeedle = variableSearch.trim().toLowerCase();
-
-  const filteredCategories = useMemo(
-    () =>
-      variableCategories
-        .map((cat) => ({
-          ...cat,
-          items: cat.items.filter((v) => {
-            if (!hasSearch) return true;
-            return (
-              v.label.toLowerCase().includes(searchNeedle) ||
-              v.token.toLowerCase().includes(searchNeedle) ||
-              v.id.toLowerCase().includes(searchNeedle)
-            );
-          }),
-        }))
-        .filter((cat) => cat.items.length > 0),
-    [variableCategories, hasSearch, searchNeedle],
-  );
 
   const getVarGlyph = (token: string): string => {
     const bare = token.replace(/[{}]/g, "").toLowerCase();
@@ -98,86 +82,138 @@ export function LabelInspectorPanel({
     e.dataTransfer.effectAllowed = "copy";
   };
 
+  const groupedVariables = useMemo(() => {
+    const base = groupedLocationPalette
+      ? variableCategories.map((c) =>
+          c.id === "warehouse"
+            ? { ...c, items: filterWarehouseVariablesForGroupedLocation(c.items) }
+            : c,
+        )
+      : variableCategories;
+    return groupVariablesForDesigner(
+      base
+        .map((cat) => ({
+          ...cat,
+          items: cat.items.filter((v) => {
+            if (!hasSearch) return true;
+            return (
+              v.label.toLowerCase().includes(searchNeedle) ||
+              v.token.toLowerCase().includes(searchNeedle) ||
+              v.id.toLowerCase().includes(searchNeedle)
+            );
+          }),
+        }))
+        .filter((cat) => cat.items.length > 0),
+    );
+  }, [variableCategories, groupedLocationPalette, hasSearch, searchNeedle]);
+
   const variablesBlock = (
     <div>
       <h3 className="mb-1.5 text-[11px] font-semibold text-slate-800">{UI_STRINGS.labels.panel.variables}</h3>
       <p className="mb-2 text-[11px] leading-relaxed text-slate-500">
-        Przeciągnij zmienną na etykietę. Kody kreskowe automatycznie tworzą element kodu.
+        Przeciągnij zmienną na etykietę. Kliknięcie wstawia zmienną na środek etykiety.
       </p>
-      <label className="mb-2 flex items-center gap-2 rounded-md border border-slate-200 bg-white px-2 py-1.5">
+      <label className="mb-2 flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-2 shadow-sm">
         <Search className="h-3.5 w-3.5 text-slate-400" />
         <input
           value={variableSearch}
           onChange={(e) => setVariableSearch(e.target.value)}
-          placeholder="Szukaj zmiennej..."
+          placeholder="Szukaj we wszystkich sekcjach…"
           className="w-full border-0 bg-transparent text-[12px] text-slate-700 outline-none placeholder:text-slate-400"
         />
       </label>
       <label className="mb-2 block text-[11px] text-slate-600">
-        <span className="mb-1 block">Utwórz jako</span>
+        <span className="mb-1 block font-medium">Utwórz jako</span>
         <select
           value={variableCreateAs}
           onChange={(e) => setVariableCreateAs(e.target.value as "text" | "barcode" | "qr")}
-          className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[12px] text-slate-700"
+          className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[12px] text-slate-700"
         >
           <option value="text">Tekst</option>
           <option value="barcode">Kod kreskowy</option>
           <option value="qr">Kod QR</option>
         </select>
       </label>
-      <div className="space-y-1.5">
-        {filteredCategories.map((cat, idx) => {
-          const collapseKey = `var::${cat.id}`;
-          const isCollapsed = collapseKey in collapsedCategories ? collapsedCategories[collapseKey] : idx > 0;
-          const categoryLabel =
-            (UI_STRINGS.labels.categories as Record<string, string>)[cat.id] ?? cat.label;
-          const baseRows =
-            groupedLocationPalette && cat.id === "warehouse"
-              ? filterWarehouseVariablesForGroupedLocation(
-                  LABEL_VARIABLE_CATEGORIES.find((c) => c.id === "warehouse")?.items ?? cat.items,
-                )
-              : cat.items;
-          const grouped = partitionGroupedWarehouseItems(baseRows);
-          const rows =
-            groupedLocationPalette && cat.id === "warehouse"
-              ? [...grouped.common, ...grouped.elements, ...grouped.other]
-              : baseRows;
+      <div className="space-y-2">
+        {groupedVariables.map(({ group, items }) => {
+          const collapseKey = `var::${group.id}`;
+          const isCollapsed = collapseKey in collapsedCategories ? collapsedCategories[collapseKey] : false;
+          const sectionNeedle = (groupSearch[group.id] ?? "").trim().toLowerCase();
+          const sectionItems = items.filter(({ variable: v }) => {
+            if (!sectionNeedle) return true;
+            return (
+              v.label.toLowerCase().includes(sectionNeedle) ||
+              v.token.toLowerCase().includes(sectionNeedle) ||
+              v.id.toLowerCase().includes(sectionNeedle)
+            );
+          });
+          if (sectionItems.length === 0) return null;
+
           return (
-            <div key={cat.id} className="overflow-hidden rounded-lg border border-slate-200/80 bg-white">
+            <div key={group.id} className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm">
               <button
                 type="button"
                 onClick={() => setCollapsedCategories((prev) => ({ ...prev, [collapseKey]: !isCollapsed }))}
-                className="flex w-full items-center justify-between px-2.5 py-1.5 text-left hover:bg-slate-50"
+                className="flex w-full items-center gap-2 px-2.5 py-2 text-left transition-colors duration-150 hover:bg-slate-50"
               >
-                <span className="text-[11px] font-semibold text-slate-700">{categoryLabel}</span>
+                <span className="text-sm leading-none" aria-hidden>
+                  {group.emoji}
+                </span>
+                <span className="flex-1 text-[11px] font-semibold text-slate-800">{group.label}</span>
+                <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold tabular-nums text-slate-500">
+                  {sectionItems.length}
+                </span>
                 <span className="text-[10px] text-slate-400">{isCollapsed ? "▶" : "▼"}</span>
               </button>
               {!isCollapsed && (
                 <div className="border-t border-slate-100">
-                  {rows.map((v) => (
-                    <div
-                      key={v.id}
-                      draggable
-                      onDragStart={(e) => startVariableDrag(e, v.token)}
-                      className="group flex cursor-grab items-center gap-2 border-l-2 border-transparent px-2.5 py-1.5 transition hover:border-cyan-200 hover:bg-cyan-50/40 active:cursor-grabbing active:bg-cyan-50"
-                      title={`${v.label} — ${v.token}`}
-                    >
-                      <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded bg-slate-100 px-1 font-mono text-[9px] font-semibold text-slate-600">
-                        {getVarGlyph(v.token)}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <span className="block truncate text-[11px] font-medium text-slate-800">{v.label}</span>
-                        <span className="block truncate font-mono text-[9px] text-slate-500">{v.token}</span>
+                  <div className="border-b border-slate-50 px-2 py-1.5">
+                    <input
+                      value={groupSearch[group.id] ?? ""}
+                      onChange={(e) => setGroupSearch((prev) => ({ ...prev, [group.id]: e.target.value }))}
+                      placeholder={`Szukaj w: ${group.label}…`}
+                      className="w-full rounded-md border border-slate-100 bg-slate-50/80 px-2 py-1 text-[10px] text-slate-700 outline-none placeholder:text-slate-400"
+                    />
+                  </div>
+                  {sectionItems.map(({ variable: v, categoryId }) => {
+                    const rows =
+                      groupedLocationPalette && categoryId === "warehouse"
+                        ? partitionGroupedWarehouseItems(
+                            filterWarehouseVariablesForGroupedLocation(
+                              LABEL_VARIABLE_CATEGORIES.find((c) => c.id === "warehouse")?.items ?? [v],
+                            ),
+                          )
+                        : null;
+                    const displayLabel =
+                      groupedLocationPalette && categoryId === "warehouse" && rows
+                        ? groupedElementSlotArrowLabel(v)
+                        : v.label;
+
+                    return (
+                      <div
+                        key={`${group.id}-${v.id}`}
+                        draggable
+                        onDragStart={(e) => startVariableDrag(e, v.token)}
+                        className="group flex cursor-grab items-center gap-2 border-l-2 border-transparent px-2.5 py-1.5 transition-all duration-150 hover:border-cyan-300 hover:bg-cyan-50/50 active:cursor-grabbing"
+                        title={`${displayLabel} — ${v.token}`}
+                      >
+                        <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded bg-slate-100 px-1 font-mono text-[9px] font-semibold text-slate-600">
+                          {getVarGlyph(v.token)}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <span className="block truncate text-[11px] font-medium text-slate-800">{displayLabel}</span>
+                          <span className="block truncate font-mono text-[9px] text-slate-500">{v.token}</span>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
           );
         })}
-        {filteredCategories.length === 0 && (
-          <p className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2 text-[11px] text-slate-500">
+        {groupedVariables.length === 0 && (
+          <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-2.5 py-3 text-center text-[11px] text-slate-500">
             Brak wyników dla podanej frazy.
           </p>
         )}
@@ -191,9 +227,9 @@ export function LabelInspectorPanel({
         <div className="space-y-2">
           {"width" in selected && (
             <>
-              <details open className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-                <summary className="cursor-pointer list-none px-2.5 py-1.5 text-[11px] font-semibold text-slate-700">
-                  Pozycja i rozmiar
+              <details open className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm">
+                <summary className="cursor-pointer list-none px-3 py-2 text-[11px] font-semibold text-slate-800">
+                  Pozycja
                 </summary>
                 <div className="grid grid-cols-2 gap-1.5 border-t border-slate-100 px-2.5 py-2">
                   {[
@@ -222,8 +258,8 @@ export function LabelInspectorPanel({
                 </div>
               </details>
 
-              <details open className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-                <summary className="cursor-pointer list-none px-2.5 py-1.5 text-[11px] font-semibold text-slate-700">
+              <details open className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm">
+                <summary className="cursor-pointer list-none px-3 py-2 text-[11px] font-semibold text-slate-800">
                   Obrót i warstwa
                 </summary>
                 <div className="space-y-2 border-t border-slate-100 px-2.5 py-2">
@@ -294,8 +330,8 @@ export function LabelInspectorPanel({
           )}
 
           {"width" in selected && (
-            <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-              <div className="border-b border-slate-100 px-2.5 py-1.5 text-[11px] font-semibold text-slate-700">
+            <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm">
+              <div className="border-b border-slate-100 px-3 py-2 text-[11px] font-semibold text-slate-800">
                 Wyrównanie
               </div>
               <div className="space-y-1.5 px-2.5 py-2">
@@ -313,9 +349,9 @@ export function LabelInspectorPanel({
             </div>
           )}
 
-          <details open className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-            <summary className="cursor-pointer list-none px-2.5 py-1.5 text-[11px] font-semibold text-slate-700">
-              Styl i właściwości elementu
+          <details open className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm">
+            <summary className="cursor-pointer list-none px-3 py-2 text-[11px] font-semibold text-slate-800">
+              Treść i wygląd
             </summary>
             <div className="border-t border-slate-100 px-2.5 py-2">
               <ElementProperties

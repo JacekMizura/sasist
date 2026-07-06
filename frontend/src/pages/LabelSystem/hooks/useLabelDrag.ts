@@ -19,12 +19,14 @@ export function useLabelDrag({
   updateElement,
   PX_PER_MM,
   GRID_PX,
+  isElementLocked,
 }: {
   template: LabelTemplate;
   setLabelSelection: (sel: LabelCanvasSelection | null) => void;
   updateElement: (id: string, patch: Partial<TemplateElement>) => void;
   PX_PER_MM: number;
   GRID_PX: number;
+  isElementLocked?: (id: string) => boolean;
 }) {
   const [dragState, setDragState] = useState<{
     id: string;
@@ -47,6 +49,7 @@ export function useLabelDrag({
       if (DRAG_DEBUG) log("[LabelDesigner] element mousedown", { id, clientX: e.clientX, clientY: e.clientY });
       setLabelSelection({ id, slotIndex });
       setDragState(null);
+      if (isElementLocked?.(id)) return;
       const el = findElementById(template.elements, id);
       if (!el || !("x" in el)) return;
       const elX_px = el.x * PX_PER_MM;
@@ -59,7 +62,7 @@ export function useLabelDrag({
         elY_px,
       });
     },
-    [template.elements, setLabelSelection, PX_PER_MM]
+    [template.elements, setLabelSelection, PX_PER_MM, isElementLocked],
   );
 
   useEffect(() => {

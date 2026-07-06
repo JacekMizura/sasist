@@ -17,7 +17,7 @@ import {
 } from "../../types/labelSystem";
 import { filterWarehouseVariablesForGroupedLocation } from "../../labelSystem/locationGroupedVariables";
 import { generateId } from "./utils/id";
-import { LabelToolbar } from "./components/LabelToolbar";
+import { LabelToolbar, type DesignerViewMode } from "./components/LabelToolbar";
 import { LabelDesignerCanvasToolbar } from "./components/LabelDesignerCanvasToolbar";
 import { LabelInspectorPanel } from "./components/LabelInspectorPanel";
 import { VariableInspectorPanel } from "./components/VariableInspectorPanel";
@@ -41,9 +41,9 @@ import { importPngTemplate } from "../../labelImporter/imageImporter";
 import { LayersPanel } from "../../components/label/LayersPanel";
 import { UI_STRINGS } from "../../constants/uiStrings";
 import { LABEL_IMAGE_TOOLBAR_PLACEHOLDER_DATA_URL } from "../../labelSystem/labelImageToolbarPlaceholder";
-import { LabelDesignerPreviewModal } from "./components/LabelDesignerPreviewModal";
 import { DocumentTemplateHtmlPanel } from "./components/DocumentTemplateHtmlPanel";
 import { isDocumentPrintModuleType } from "./labelPrintModuleTypes";
+import { PanelRightClose, PanelRightOpen } from "lucide-react";
 
 const BASE_PX_PER_MM = 8;
 const GRID_PX = 5;
@@ -311,7 +311,10 @@ export function LabelTemplateDesigner({ template, onTemplateChange, templateId, 
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
   const [presetModalOpen, setPresetModalOpen] = useState(false);
-  const [previewModalOpen, setPreviewModalOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<DesignerViewMode>("edit");
+  const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
+  const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
+  const [lockedElementIds, setLockedElementIds] = useState<Set<string>>(() => new Set());
   const [zoom, setZoom] = useState(1);
   const [showGrid, setShowGrid] = useState(true);
   const [snapUiOn, setSnapUiOn] = useState(true);
@@ -549,12 +552,24 @@ export function LabelTemplateDesigner({ template, onTemplateChange, templateId, 
     [onTemplateChange]
   );
 
+  const isElementLocked = useCallback((id: string) => lockedElementIds.has(id), [lockedElementIds]);
+
+  const handleToggleElementLock = useCallback((id: string, locked: boolean) => {
+    setLockedElementIds((prev) => {
+      const next = new Set(prev);
+      if (locked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }, []);
+
   const { handleElementMouseDown, dragState } = useLabelDrag({
     template,
     setLabelSelection: setSelection,
     updateElement,
     PX_PER_MM,
     GRID_PX,
+    isElementLocked,
   });
 
   const handleCanvasMouseDown = useCallback(
@@ -967,7 +982,8 @@ export function LabelTemplateDesigner({ template, onTemplateChange, templateId, 
         isLocationTemplate={isLocationTemplate}
         handleImportSvgFileChange={handleImportSvgFileChange}
         handleImportBackgroundImageChange={handleImportBackgroundImageChange}
-        onOpenPreview={() => setPreviewModalOpen(true)}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
       />
 
       {isDocumentTemplate ? (
@@ -983,9 +999,12 @@ export function LabelTemplateDesigner({ template, onTemplateChange, templateId, 
           templateId={templateId}
           presetModalOpen={presetModalOpen}
           setPresetModalOpen={setPresetModalOpen}
+          collapsed={leftPanelCollapsed}
+          onToggleCollapsed={() => setLeftPanelCollapsed((c) => !c)}
         />
 
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+          {viewMode === "edit" ? (
           <LabelDesignerCanvasToolbar
             zoom={zoom}
             onZoomIn={() => setZoom((z) => Math.min(3, Math.max(0.08, z * 1.15)))}
@@ -999,6 +1018,7 @@ export function LabelTemplateDesigner({ template, onTemplateChange, templateId, 
             duplicateDisabled={duplicateDisabled}
             onScrollToCanvas={scrollToCanvas}
           />
+          ) : null}
           {showRepeaterTemplateDragHint && (
             <div
               className="pointer-events-none absolute bottom-6 left-1/2 z-30 max-w-sm -translate-x-1/2 rounded-lg bg-slate-900/92 px-3 py-2 text-center text-[11px] font-medium text-white shadow-lg"
@@ -1014,7 +1034,7 @@ export function LabelTemplateDesigner({ template, onTemplateChange, templateId, 
             selection={selection}
             selectedId={selectedId}
             multiSelectedIds={layerMultiSelectIds}
-            allowResizeHandles={layerMultiSelectIds.length <= 1}
+            allowResizeHandles={layerMultiSelectIds.length <= 1 && viewMode === "edit" && !isElementLocked(selectedId ?? "")}
             selectedDisplayX={selectedDisplayEntry?.displayX}
             selectedDisplayY={selectedDisplayEntry?.displayY}
             repeaterItemLabel={repeaterItemLabel}
@@ -1033,11 +1053,25 @@ export function LabelTemplateDesigner({ template, onTemplateChange, templateId, 
             isMiddlePanning={isMiddlePanning}
             onMiddlePanStart={onMiddlePanStart}
             showGrid={showGrid}
+            previewMode={viewMode === "preview"}
           />
         </div>
 
-        <aside className="flex w-[min(100%,18.5rem)] shrink-0 flex-col border-l border-slate-200/90 bg-white shadow-[inset_1px_0_0_rgba(148,163,184,0.12)]">
-          <div className="flex shrink-0 border-b border-slate-200/90 bg-slate-50/70 p-1">
+        {rightPanelCollapsed ? (
+          <aside className="flex w-10 shrink-0 flex-col items-center border-l border-slate-200/90 bg-white py-2">
+            <button
+              type="button"
+              onClick={() => setRightPanelCollapsed(false)}
+              title="Pokaż panel właściwości"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition-colors duration-150 hover:bg-slate-100 hover:text-slate-800"
+            >
+              <PanelRightOpen className="h-4 w-4" strokeWidth={2} aria-hidden />
+            </button>
+          </aside>
+        ) : (
+        <aside className="flex w-[min(100%,18.5rem)] shrink-0 flex-col border-l border-slate-200/90 bg-white shadow-[inset_1px_0_0_rgba(148,163,184,0.12)] transition-all duration-200">
+          <div className="flex shrink-0 items-center gap-1 border-b border-slate-200/90 bg-slate-50/70 p-1">
+            <div className="flex min-w-0 flex-1 gap-1">
             {(
               [
                 { id: "layers" as const, label: "Warstwy" },
@@ -1049,7 +1083,7 @@ export function LabelTemplateDesigner({ template, onTemplateChange, templateId, 
                 key={t.id}
                 type="button"
                 onClick={() => setRightTab(t.id)}
-                className={`flex-1 rounded-md py-1.5 text-[11px] font-medium transition-all ${
+                className={`flex-1 rounded-md py-1.5 text-[11px] font-medium transition-all duration-150 ${
                   rightTab === t.id
                     ? "bg-white text-cyan-800 shadow-sm ring-1 ring-slate-200/80"
                     : "text-slate-600 hover:bg-white/70 hover:text-slate-900"
@@ -1058,6 +1092,15 @@ export function LabelTemplateDesigner({ template, onTemplateChange, templateId, 
                 {t.label}
               </button>
             ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => setRightPanelCollapsed(true)}
+              title="Zwiń panel"
+              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-slate-400 transition-colors duration-150 hover:bg-white hover:text-slate-700"
+            >
+              <PanelRightClose className="h-4 w-4" strokeWidth={2} aria-hidden />
+            </button>
           </div>
           <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto p-2.5">
             {rightTab === "layers" && (
@@ -1069,6 +1112,9 @@ export function LabelTemplateDesigner({ template, onTemplateChange, templateId, 
                   onSelect={handleLayerRowSelect}
                   onReorder={handleLayersReorder}
                   onSetVisible={handleLayerSetVisible}
+                  lockedIds={lockedElementIds}
+                  onToggleLock={handleToggleElementLock}
+                  fillHeight
                 />
                 <button
                   type="button"
@@ -1144,16 +1190,8 @@ export function LabelTemplateDesigner({ template, onTemplateChange, templateId, 
             )}
           </div>
         </aside>
+        )}
       </div>
-      <LabelDesignerPreviewModal
-        open={previewModalOpen}
-        onClose={() => setPreviewModalOpen(false)}
-        labelSvg={labelSvg}
-        widthMm={template.widthMm}
-        heightMm={template.heightMm}
-        dpi={template.dpi ?? 300}
-        templateName={(template.name || "Bez nazwy").trim()}
-      />
     </div>
   );
 }

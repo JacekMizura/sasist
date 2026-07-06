@@ -24,6 +24,11 @@ import {
   Box,
   LayoutGrid,
   Warehouse,
+  ChevronDown,
+  ChevronRight,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Star,
 } from "lucide-react";
 
 export type LabelLeftPanelProps = {
@@ -34,6 +39,8 @@ export type LabelLeftPanelProps = {
   templateId?: number | null;
   presetModalOpen: boolean;
   setPresetModalOpen: (open: boolean) => void;
+  collapsed?: boolean;
+  onToggleCollapsed?: () => void;
 };
 
 function ToolBtn({
@@ -50,17 +57,47 @@ function ToolBtn({
       type="button"
       onClick={onClick}
       title={label}
-      className="flex w-full items-center gap-2 rounded-lg border border-transparent bg-white/90 px-2 py-1.5 text-left text-[11px] font-medium text-slate-700 shadow-sm ring-1 ring-slate-200/60 transition hover:border-cyan-200/80 hover:bg-cyan-50/40 hover:ring-cyan-200/50"
+      className="flex w-full items-center gap-2 rounded-lg border border-transparent bg-white px-2 py-1.5 text-left text-[11px] font-medium text-slate-700 shadow-sm ring-1 ring-slate-200/50 transition-all duration-150 hover:border-cyan-200/80 hover:bg-cyan-50/40 hover:ring-cyan-200/50"
     >
-      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-slate-100 text-slate-600">{icon}</span>
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-slate-100 text-slate-600">
+        {icon}
+      </span>
       <span className="min-w-0 leading-tight">{label}</span>
     </button>
   );
 }
 
-function SectionTitle({ children }: { children: React.ReactNode }) {
+function ToolSection({
+  emoji,
+  title,
+  defaultOpen = true,
+  children,
+}: {
+  emoji: string;
+  title: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
   return (
-    <h4 className="mb-1.5 mt-3 first:mt-0 text-[9px] font-bold uppercase tracking-wider text-slate-400 first:pt-0">{children}</h4>
+    <section className="overflow-hidden rounded-xl border border-slate-200/70 bg-white/80 shadow-sm">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center gap-2 px-2.5 py-2 text-left transition-colors duration-150 hover:bg-slate-50/80"
+      >
+        <span className="text-sm leading-none" aria-hidden>
+          {emoji}
+        </span>
+        <span className="flex-1 text-[10px] font-bold uppercase tracking-wider text-slate-600">{title}</span>
+        {open ? (
+          <ChevronDown className="h-3.5 w-3.5 text-slate-400" strokeWidth={2} aria-hidden />
+        ) : (
+          <ChevronRight className="h-3.5 w-3.5 text-slate-400" strokeWidth={2} aria-hidden />
+        )}
+      </button>
+      {open ? <div className="space-y-1 border-t border-slate-100 px-2 pb-2 pt-1.5">{children}</div> : null}
+    </section>
   );
 }
 
@@ -72,6 +109,8 @@ export function LabelLeftPanel({
   templateId,
   presetModalOpen,
   setPresetModalOpen,
+  collapsed = false,
+  onToggleCollapsed,
 }: LabelLeftPanelProps) {
   const [rackBuilderOpen, setRackBuilderOpen] = useState(false);
   const [rackLocations, setRackLocations] = useState(4);
@@ -140,15 +179,62 @@ export function LabelLeftPanel({
     setSelectedId(rep.id);
   }, [template, onTemplateChange, rackLocations, rackSegmentWidth, rackBarcodePosition, setSelectedId]);
 
+  if (collapsed) {
+    return (
+      <aside className="flex w-10 shrink-0 flex-col items-center border-r border-slate-200/90 bg-white py-2">
+        <button
+          type="button"
+          onClick={onToggleCollapsed}
+          title="Pokaż panel narzędzi"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition-colors duration-150 hover:bg-slate-100 hover:text-slate-800"
+        >
+          <PanelLeftOpen className="h-4 w-4" strokeWidth={2} aria-hidden />
+        </button>
+      </aside>
+    );
+  }
+
   return (
-    <aside className="flex w-56 shrink-0 flex-col gap-0 border-r border-slate-200/90 bg-gradient-to-b from-white to-slate-50/90 shadow-[inset_-1px_0_0_rgba(148,163,184,0.12)]">
-      <div className="border-b border-slate-200/80 px-3 py-2.5">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Narzędzia</p>
-        <p className="text-[11px] leading-snug text-slate-500">Dodaj elementy na płótno</p>
+    <aside className="flex w-56 shrink-0 flex-col border-r border-slate-200/90 bg-gradient-to-b from-white to-slate-50/90 shadow-[inset_-1px_0_0_rgba(148,163,184,0.08)] transition-all duration-200">
+      <div className="flex items-start justify-between gap-1 border-b border-slate-200/80 px-3 py-2.5">
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Narzędzia</p>
+          <p className="text-[11px] leading-snug text-slate-500">Dodaj elementy na płótno</p>
+        </div>
+        {onToggleCollapsed ? (
+          <button
+            type="button"
+            onClick={onToggleCollapsed}
+            title="Zwiń panel"
+            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-slate-400 transition-colors duration-150 hover:bg-slate-100 hover:text-slate-700"
+          >
+            <PanelLeftClose className="h-4 w-4" strokeWidth={2} aria-hidden />
+          </button>
+        ) : null}
       </div>
-      <div className="min-h-0 flex-1 space-y-1 overflow-y-auto px-2.5 py-2">
-        <SectionTitle>Elementy</SectionTitle>
-        <div className="space-y-1">
+      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-2.5 py-2">
+        <ToolSection emoji="📄" title="Tekst">
+          <ToolBtn
+            label="Tekst"
+            icon={<Type className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />}
+            onClick={() => {
+              const el: StaticTextElement = {
+                id: generateId(),
+                type: "staticText",
+                x: 2,
+                y: 2,
+                width: 46,
+                height: 4,
+                text: "Tekst",
+                fontSize: 8,
+                align: "left",
+              };
+              addElement(el);
+            }}
+          />
+        </ToolSection>
+
+        <ToolSection emoji="📦" title="Kody">
           <ToolBtn
             label="Kod kreskowy"
             icon={<Barcode className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />}
@@ -195,20 +281,22 @@ export function LabelLeftPanel({
               addElement(el);
             }}
           />
+        </ToolSection>
+
+        <ToolSection emoji="🖼" title="Grafika">
           <ToolBtn
-            label="Tekst"
-            icon={<Type className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />}
+            label="Obraz"
+            icon={<ImageIcon className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />}
             onClick={() => {
-              const el: StaticTextElement = {
+              const el: ImageElement = {
                 id: generateId(),
-                type: "staticText",
-                x: 2,
-                y: 2,
-                width: 46,
-                height: 4,
-                text: "Tekst",
-                fontSize: 8,
-                align: "left",
+                type: "image",
+                x: 4,
+                y: 4,
+                width: 30,
+                height: 14,
+                src: LABEL_IMAGE_TOOLBAR_PLACEHOLDER_DATA_URL,
+                alt: "",
               };
               addElement(el);
             }}
@@ -228,42 +316,9 @@ export function LabelLeftPanel({
               } as LabelElement)
             }
           />
-          <ToolBtn
-            label="Obraz"
-            icon={<ImageIcon className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />}
-            onClick={() => {
-              const el: ImageElement = {
-                id: generateId(),
-                type: "image",
-                x: 4,
-                y: 4,
-                width: 30,
-                height: 14,
-                src: LABEL_IMAGE_TOOLBAR_PLACEHOLDER_DATA_URL,
-                alt: "",
-              };
-              addElement(el);
-            }}
-          />
-        </div>
+        </ToolSection>
 
-        <SectionTitle>Kształty</SectionTitle>
-        <div className="space-y-1">
-          <ToolBtn
-            label="Linia"
-            icon={<Minus className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />}
-            onClick={() =>
-              addElement({
-                id: generateId(),
-                type: "line",
-                x: 2,
-                y: 10,
-                width: 46,
-                height: 0,
-                strokeWidth: 0.5,
-              })
-            }
-          />
+        <ToolSection emoji="⬜" title="Kształty">
           <ToolBtn
             label="Prostokąt"
             icon={<Square className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />}
@@ -276,6 +331,21 @@ export function LabelLeftPanel({
                 width: 46,
                 height: 4,
                 strokeWidth: 0.3,
+              })
+            }
+          />
+          <ToolBtn
+            label="Linia"
+            icon={<Minus className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />}
+            onClick={() =>
+              addElement({
+                id: generateId(),
+                type: "line",
+                x: 2,
+                y: 10,
+                width: 46,
+                height: 0,
+                strokeWidth: 0.5,
               })
             }
           />
@@ -309,10 +379,9 @@ export function LabelLeftPanel({
               } as LabelElement)
             }
           />
-        </div>
+        </ToolSection>
 
-        <SectionTitle>Układ</SectionTitle>
-        <div className="space-y-1">
+        <ToolSection emoji="📐" title="Układ">
           <ToolBtn
             label="Grupa"
             icon={<Layers className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />}
@@ -351,73 +420,85 @@ export function LabelLeftPanel({
               } as LabelElement)
             }
           />
-        </div>
+        </ToolSection>
 
-        <div className="mt-3 overflow-hidden rounded-xl border border-cyan-200/80 bg-gradient-to-br from-cyan-50/90 via-white to-slate-50 shadow-md ring-1 ring-cyan-500/10">
-          <button
-            type="button"
-            onClick={() => setRackBuilderOpen((o) => !o)}
-            className="flex w-full items-start gap-2 px-3 py-2.5 text-left transition hover:bg-white/70"
-          >
-            <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-cyan-600 text-white shadow-sm">
-              <Warehouse className="h-4 w-4" strokeWidth={2} aria-hidden />
+        <section className="overflow-hidden rounded-xl border border-violet-200/80 bg-gradient-to-br from-violet-50/90 via-white to-cyan-50/40 shadow-md ring-1 ring-violet-400/15">
+          <div className="flex items-center gap-1.5 border-b border-violet-100/80 bg-white/50 px-2.5 py-1.5">
+            <Star className="h-3.5 w-3.5 text-violet-600" strokeWidth={2} aria-hidden />
+            <span className="text-[10px] font-bold uppercase tracking-wider text-violet-800">
+              Inteligentne komponenty
             </span>
-            <span className="min-w-0">
-              <span className="block text-[11px] font-bold text-slate-900">Sekcja regałów</span>
-              <span className="mt-0.5 block text-[10px] leading-snug text-slate-600">
-                Powtarzalny pas segmentów z kodem i etykietą — idealny na regał wielostrefowy.
-              </span>
-              <span className="mt-1 inline-block text-[10px] font-semibold text-cyan-800">{rackBuilderOpen ? "Zwiń opcje ▲" : "Skonfiguruj ▼"}</span>
-            </span>
-          </button>
-          {rackBuilderOpen && (
-            <div className="space-y-2 border-t border-cyan-100/80 bg-white/80 px-3 pb-3 pt-2">
-              <div>
-                <label className="text-[10px] font-medium text-slate-500">Liczba lokalizacji</label>
-                <input
-                  type="number"
-                  min={1}
-                  max={50}
-                  value={rackLocations}
-                  onChange={(e) => setRackLocations(Math.max(1, Math.min(50, Number(e.target.value) || 1)))}
-                  className="mt-0.5 h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs shadow-inner"
-                />
-              </div>
-              <div>
-                <label className="text-[10px] font-medium text-slate-500">Szerokość segmentu (mm)</label>
-                <input
-                  type="number"
-                  min={10}
-                  value={rackSegmentWidth}
-                  onChange={(e) => setRackSegmentWidth(Math.max(10, Number(e.target.value) || 30))}
-                  className="mt-0.5 h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs shadow-inner"
-                />
-              </div>
-              <div>
-                <label className="text-[10px] font-medium text-slate-500">Pozycja kodu</label>
-                <select
-                  value={rackBarcodePosition}
-                  onChange={(e) => setRackBarcodePosition(e.target.value as "left" | "center" | "right")}
-                  className="mt-0.5 h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs"
-                >
-                  <option value="left">Lewo</option>
-                  <option value="center">Środek</option>
-                  <option value="right">Prawo</option>
-                </select>
-              </div>
+          </div>
+          <div className="p-2">
+            <div className="overflow-hidden rounded-lg border border-cyan-200/70 bg-gradient-to-br from-cyan-50/90 via-white to-slate-50 shadow-sm">
               <button
                 type="button"
-                onClick={generateRackSection}
-                className="h-9 w-full rounded-lg bg-cyan-600 text-[11px] font-bold text-white shadow-sm hover:bg-cyan-500"
+                onClick={() => setRackBuilderOpen((o) => !o)}
+                className="flex w-full items-start gap-2 px-3 py-2.5 text-left transition-colors duration-150 hover:bg-white/70"
               >
-                Generuj na płótnie
+                <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-cyan-500 to-cyan-700 text-white shadow-md">
+                  <Warehouse className="h-4 w-4" strokeWidth={2} aria-hidden />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-[11px] font-bold text-slate-900">Sekcja regałów</span>
+                  <span className="mt-0.5 block text-[10px] leading-snug text-slate-600">
+                    Powtarzalny pas segmentów z kodem i etykietą — idealny na regał wielopoziomowy.
+                  </span>
+                  <span className="mt-1 inline-block text-[10px] font-semibold text-cyan-800">
+                    {rackBuilderOpen ? "Zwiń opcje ▲" : "Skonfiguruj ▼"}
+                  </span>
+                </span>
               </button>
+              {rackBuilderOpen && (
+                <div className="space-y-2 border-t border-cyan-100/80 bg-white/80 px-3 pb-3 pt-2">
+                  <div>
+                    <label className="text-[10px] font-medium text-slate-500">Liczba lokalizacji</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={50}
+                      value={rackLocations}
+                      onChange={(e) => setRackLocations(Math.max(1, Math.min(50, Number(e.target.value) || 1)))}
+                      className="mt-0.5 h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs shadow-inner"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-medium text-slate-500">Szerokość segmentu (mm)</label>
+                    <input
+                      type="number"
+                      min={10}
+                      value={rackSegmentWidth}
+                      onChange={(e) => setRackSegmentWidth(Math.max(10, Number(e.target.value) || 30))}
+                      className="mt-0.5 h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs shadow-inner"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-medium text-slate-500">Pozycja kodu</label>
+                    <select
+                      value={rackBarcodePosition}
+                      onChange={(e) => setRackBarcodePosition(e.target.value as "left" | "center" | "right")}
+                      className="mt-0.5 h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs"
+                    >
+                      <option value="left">Lewo</option>
+                      <option value="center">Środek</option>
+                      <option value="right">Prawo</option>
+                    </select>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={generateRackSection}
+                    className="h-9 w-full rounded-lg bg-gradient-to-b from-cyan-500 to-cyan-600 text-[11px] font-bold text-white shadow-sm transition-colors duration-150 hover:from-cyan-400 hover:to-cyan-500"
+                  >
+                    Generuj na płótnie
+                  </button>
+                </div>
+              )}
             </div>
-          )}
-        </div>
+          </div>
+        </section>
 
-        <p className="pt-2 text-[10px] leading-snug text-slate-500">
-          Zmienne przeciągniesz z zakładki <span className="font-semibold text-slate-700">Zmienne</span> na prawy panel.
+        <p className="px-0.5 text-[10px] leading-snug text-slate-500">
+          Zmienne przeciągnij z zakładki <span className="font-semibold text-slate-700">Zmienne</span> na etykietę.
         </p>
 
         <TemplateLibrary

@@ -11,12 +11,14 @@ import {
   useFloating,
   useInteractions,
 } from "@floating-ui/react";
-import { ChevronDown, Settings2, Eye, ArrowLeft } from "lucide-react";
+import { ChevronDown, Settings2, ArrowLeft, Pencil, Eye } from "lucide-react";
 
 const MAX_LABEL_MM = 2000;
 
 const MORE_MENU_PANEL =
   "z-[8000] w-[min(100vw-2rem,20rem)] rounded-xl border border-slate-200/90 bg-white p-3 shadow-xl ring-1 ring-slate-900/5 outline-none";
+
+export type DesignerViewMode = "edit" | "preview";
 
 export type LabelToolbarProps = {
   template: LabelTemplate;
@@ -36,7 +38,8 @@ export type LabelToolbarProps = {
   isLocationTemplate: boolean;
   handleImportSvgFileChange: (e: ChangeEvent<HTMLInputElement>) => void;
   handleImportBackgroundImageChange: (e: ChangeEvent<HTMLInputElement>) => void;
-  onOpenPreview: () => void;
+  viewMode: DesignerViewMode;
+  onViewModeChange: (mode: DesignerViewMode) => void;
 };
 
 export function LabelToolbar({
@@ -57,7 +60,8 @@ export function LabelToolbar({
   isLocationTemplate,
   handleImportSvgFileChange,
   handleImportBackgroundImageChange,
-  onOpenPreview,
+  viewMode,
+  onViewModeChange,
 }: LabelToolbarProps) {
   const [moreOpen, setMoreOpen] = useState(false);
 
@@ -88,39 +92,41 @@ export function LabelToolbar({
   return (
     <header className="shrink-0 border-b border-slate-200/90 bg-white/95 shadow-sm backdrop-blur-sm">
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5">
+        {/* Left: back + name */}
         <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
           {onBack && (
             <button
               type="button"
               onClick={onBack}
-              className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-slate-200/90 bg-white px-2.5 text-[12px] font-medium text-slate-700 shadow-sm hover:border-slate-300 hover:bg-slate-50"
+              className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-slate-200/90 bg-white px-2.5 text-[12px] font-medium text-slate-700 shadow-sm transition-colors duration-150 hover:border-slate-300 hover:bg-slate-50"
             >
               <ArrowLeft className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
               <span className="hidden sm:inline">Szablony</span>
             </button>
           )}
-          <div className="flex min-w-0 max-w-[min(100%,14rem)] flex-col gap-0.5 sm:max-w-[18rem]">
-            <label className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">Nazwa szablonu</label>
+          <div className="flex min-w-0 max-w-[min(100%,14rem)] flex-col gap-0.5 sm:max-w-[20rem]">
             <input
               type="text"
               value={template.name}
               onChange={(e) =>
                 onTemplateChange({ ...template, name: e.target.value, updatedAt: new Date().toISOString() })
               }
-              className="h-9 w-full rounded-lg border border-slate-200/90 bg-slate-50/80 px-2.5 text-[13px] font-medium text-slate-900 shadow-inner outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-300/40"
+              placeholder="Nazwa szablonu"
+              className="h-9 w-full rounded-lg border border-slate-200/90 bg-slate-50/80 px-2.5 text-[13px] font-semibold text-slate-900 shadow-inner outline-none transition-shadow duration-150 focus:border-cyan-400 focus:ring-1 focus:ring-cyan-300/40"
             />
           </div>
           <button
             type="button"
             onClick={() => setPresetModalOpen(true)}
-            className="hidden h-9 shrink-0 items-center rounded-lg border border-dashed border-slate-300 bg-white px-3 text-[11px] font-semibold text-slate-600 hover:border-cyan-300 hover:text-cyan-800 sm:inline-flex"
+            className="hidden h-9 shrink-0 items-center rounded-lg border border-slate-200 bg-white px-3 text-[11px] font-semibold text-slate-600 transition-colors duration-150 hover:border-cyan-300 hover:text-cyan-800 lg:inline-flex"
           >
-            Utwórz z szablonu
+            Galeria szablonów
           </button>
         </div>
 
-        <div className="hidden items-center gap-3 md:flex">
-          <div className="flex items-center gap-1.5 rounded-lg bg-slate-50/90 px-2 py-1 ring-1 ring-slate-100">
+        {/* Center: type + size + DPI */}
+        <div className="hidden items-center gap-2 md:flex">
+          <div className="flex items-center gap-1.5 rounded-lg bg-slate-50/90 px-2.5 py-1.5 ring-1 ring-slate-100">
             <span className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">Typ</span>
             <select
               value={template.template_type ?? "location"}
@@ -142,11 +148,11 @@ export function LabelToolbar({
               ))}
             </select>
           </div>
-          <div className="flex items-center gap-1.5 rounded-lg bg-slate-50/90 px-2 py-1 ring-1 ring-slate-100">
-            <span className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">mm</span>
+          <div className="flex items-center gap-1.5 rounded-lg bg-slate-50/90 px-2.5 py-1.5 ring-1 ring-slate-100">
+            <span className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">Rozmiar</span>
             <input
               type="number"
-              className="w-14 rounded-md border border-slate-200/80 bg-white px-1 py-0.5 text-center text-[12px] font-medium tabular-nums"
+              className="w-12 rounded-md border border-slate-200/80 bg-white px-1 py-0.5 text-center text-[12px] font-medium tabular-nums"
               value={Math.round(template.widthMm)}
               onChange={(e) =>
                 onTemplateChange({
@@ -159,7 +165,7 @@ export function LabelToolbar({
             <span className="text-slate-400">×</span>
             <input
               type="number"
-              className="w-14 rounded-md border border-slate-200/80 bg-white px-1 py-0.5 text-center text-[12px] font-medium tabular-nums"
+              className="w-12 rounded-md border border-slate-200/80 bg-white px-1 py-0.5 text-center text-[12px] font-medium tabular-nums"
               value={Math.round(template.heightMm)}
               onChange={(e) =>
                 onTemplateChange({
@@ -169,8 +175,9 @@ export function LabelToolbar({
                 })
               }
             />
+            <span className="text-[10px] text-slate-400">mm</span>
           </div>
-          <div className="flex items-center gap-1.5 rounded-lg bg-slate-50/90 px-2 py-1 ring-1 ring-slate-100">
+          <div className="flex items-center gap-1.5 rounded-lg bg-slate-50/90 px-2.5 py-1.5 ring-1 ring-slate-100">
             <span className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">DPI</span>
             <input
               type="number"
@@ -187,21 +194,41 @@ export function LabelToolbar({
           </div>
         </div>
 
+        {/* Right: view mode + more + save */}
         <div className="flex shrink-0 items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setPresetModalOpen(true)}
-            className="inline-flex h-9 items-center rounded-lg border border-slate-200 bg-white px-2.5 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 sm:hidden"
-          >
-            Szablon
-          </button>
+          <div className="flex rounded-lg border border-slate-200/90 bg-slate-50 p-0.5 shadow-sm">
+            <button
+              type="button"
+              onClick={() => onViewModeChange("edit")}
+              className={`inline-flex h-8 items-center gap-1 rounded-md px-2.5 text-[11px] font-semibold transition-all duration-150 ${
+                viewMode === "edit"
+                  ? "bg-white text-cyan-800 shadow-sm ring-1 ring-slate-200/80"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <Pencil className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+              Edycja
+            </button>
+            <button
+              type="button"
+              onClick={() => onViewModeChange("preview")}
+              className={`inline-flex h-8 items-center gap-1 rounded-md px-2.5 text-[11px] font-semibold transition-all duration-150 ${
+                viewMode === "preview"
+                  ? "bg-white text-cyan-800 shadow-sm ring-1 ring-slate-200/80"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <Eye className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+              Podgląd
+            </button>
+          </div>
           <button
             type="button"
             ref={refs.setReference}
             onClick={() => setMoreOpen((o) => !o)}
             aria-expanded={moreOpen}
             aria-haspopup="dialog"
-            className="inline-flex list-none cursor-pointer items-center gap-1.5 rounded-lg border border-slate-200/90 bg-white px-2.5 py-2 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+            className="inline-flex list-none cursor-pointer items-center gap-1.5 rounded-lg border border-slate-200/90 bg-white px-2.5 py-2 text-[11px] font-semibold text-slate-700 shadow-sm transition-colors duration-150 hover:bg-slate-50"
           >
             <Settings2 className="h-3.5 w-3.5 text-slate-500" strokeWidth={2} aria-hidden />
             Więcej
@@ -333,20 +360,12 @@ export function LabelToolbar({
           )}
           <button
             type="button"
-            onClick={onOpenPreview}
-            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200/90 bg-white px-2.5 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
-          >
-            <Eye className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
-            Podgląd
-          </button>
-          <button
-            type="button"
             onClick={handleSave}
             disabled={saving || saveDisabled}
             title={saveDisabled ? "Popraw błędy walidacji przed zapisaniem" : undefined}
-            className="inline-flex h-9 items-center rounded-lg bg-gradient-to-b from-cyan-500 to-cyan-600 px-4 text-[12px] font-semibold text-white shadow-md shadow-cyan-900/10 hover:from-cyan-400 hover:to-cyan-500 disabled:cursor-not-allowed disabled:opacity-55"
+            className="inline-flex h-9 items-center rounded-lg bg-gradient-to-b from-cyan-500 to-cyan-600 px-4 text-[12px] font-semibold text-white shadow-md shadow-cyan-900/10 transition-all duration-150 hover:from-cyan-400 hover:to-cyan-500 disabled:cursor-not-allowed disabled:opacity-55"
           >
-            {saving ? "Zapisywanie…" : "Zapisz szablon"}
+            {saving ? "Zapisywanie…" : "Zapisz"}
           </button>
         </div>
       </div>
