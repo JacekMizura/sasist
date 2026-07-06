@@ -9,8 +9,10 @@ from sqlalchemy.orm import Session
 
 from ..models.document_series import DocumentSeries
 from ..models.stock_document import StockDocument
-from .document_print_service import build_document_pdf_from_html
-from .stock_document_service import get_stock_document_read
+from ..services.document_print_service import build_document_pdf_from_html
+from ..services.stock_document_service import get_stock_document_read
+from ..document_templates.services.erp_document_render_service import render_erp_document_pdf_bytes
+from ..document_templates.services.template_hierarchy_resolver import RenderTemplateContext
 
 
 def _fmt_date(dt) -> str:
@@ -56,22 +58,13 @@ def build_stock_document_html_pdf_bytes(
         "items": items,
     }
 
-    from ..document_templates.adapters.warehouse_document_adapter import (
-        binding_available,
-        render_stock_document_html,
-    )
-
     series = None
     stock_row = db.query(StockDocument).filter(StockDocument.id == int(document_id)).first()
     series_id = getattr(stock_row, "document_series_id", None) if stock_row else None
     if series_id:
         series = db.query(DocumentSeries).filter(DocumentSeries.id == str(series_id)).first()
 
-    from ..document_templates.services.document_integration_service import series_template_render_kwargs
-
     wh_id = getattr(read, "warehouse_id", None)
-    from ..document_templates.services.template_hierarchy_resolver import RenderTemplateContext, resolve_render_template_kwargs
-
     hierarchy_ctx = RenderTemplateContext(
         tenant_id=int(tenant_id),
         kind_code=doc_type.lower(),
@@ -79,42 +72,31 @@ def build_stock_document_html_pdf_bytes(
         warehouse_id=int(wh_id) if wh_id else None,
         explicit_version_id=int(template_version_id) if template_version_id is not None else None,
     )
-    render_kwargs = resolve_render_template_kwargs(db, ctx=hierarchy_ctx)
-    if binding_available(db, tenant_id=int(tenant_id), document_type=doc_type, variant_code=render_kwargs.get("variant_code", "standard")) or render_kwargs.get("template_version_id"):
-        html = render_stock_document_html(
+
+    def _legacy_pdf() -> bytes:
+        ctx = {
+            "document": params["document"],
+            "order_number": params["order_number"],
+            "warehouse": {"name": getattr(read, "warehouse_name", None) or "—"},
+            "items": items,
+        }
+        return build_document_pdf_from_html(
             db,
             tenant_id=int(tenant_id),
-            document_type=doc_type,
-            params=params,
-            warehouse_id=render_kwargs.get("warehouse_id") if render_kwargs.get("warehouse_id") is not None else (int(wh_id) if wh_id else None),
-            variant_code=str(render_kwargs.get("variant_code") or "standard"),
-            template_version_id=render_kwargs.get("template_version_id"),
+            print_template_id=getattr(series, "print_template_id", None) if series else None,
+            print_template_path=getattr(series, "print_template", None) if series else None,
+            document_subtype=doc_type,
+            context=ctx,
+            log_label=f"stock_document_id={document_id}",
         )
-        from .structure_report_pdf_service import html_document_to_pdf_bytes
 
-        return html_document_to_pdf_bytes(html)
-
-    import logging
-
-    logging.getLogger(__name__).warning(
-        "[document_templates] brak bindingu kind=%s tenant=%s — fallback legacy stock_document_id=%s",
-        doc_type.lower(),
-        tenant_id,
-        document_id,
-    )
-
-    ctx = {
-        "document": params["document"],
-        "order_number": params["order_number"],
-        "warehouse": {"name": getattr(read, "warehouse_name", None) or "—"},
-        "items": items,
-    }
-    return build_document_pdf_from_html(
+    return render_erp_document_pdf_bytes(
         db,
         tenant_id=int(tenant_id),
-        print_template_id=getattr(series, "print_template_id", None) if series else None,
-        print_template_path=getattr(series, "print_template", None) if series else None,
-        document_subtype=doc_type,
-        context=ctx,
+        kind_code=doc_type,
+        params=params,
+        legacy_renderer=_legacy_pdf,
+        ctx=hierarchy_ctx,
+        warehouse_id=int(wh_id) if wh_id else None,
         log_label=f"stock_document_id={document_id}",
     )

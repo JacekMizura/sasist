@@ -39,6 +39,9 @@ def render_document(
         warehouse_id=warehouse_id,
         operator_user_id=operator_user_id,
     )
+    for key, value in params.items():
+        if key not in context or isinstance(value, (dict, list)):
+            context[key] = value
     resolved: ResolvedDocumentTemplate | str
     if resolved_template is not None:
         resolved = resolved_template

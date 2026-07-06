@@ -91,53 +91,6 @@ def _log_stock_document_pdf_failure(
     )
 
 
-def _log_template_version_resolution(
-    db: Session,
-    *,
-    tenant_id: int,
-    document_id: int,
-    template_version_id: int,
-) -> None:
-    from ..document_templates.adapters.warehouse_document_adapter import KIND_BY_DOC_TYPE
-    from ..document_templates.models import DocumentTemplateVersion
-
-    ver = (
-        db.query(DocumentTemplateVersion)
-        .filter(DocumentTemplateVersion.id == int(template_version_id))
-        .first()
-    )
-    doc = (
-        db.query(StockDocument)
-        .filter(StockDocument.id == int(document_id), StockDocument.tenant_id == int(tenant_id))
-        .first()
-    )
-    if ver is None:
-        _logger.warning(
-            "[stock_document_pdf] template_version_id=%s NOT FOUND (document_id=%s tenant_id=%s)",
-            template_version_id,
-            document_id,
-            tenant_id,
-        )
-        return
-    tpl = ver.template
-    kind = str(tpl.kind.code if tpl and tpl.kind else "")
-    doc_type = str(getattr(doc, "document_type", None) or "").upper() if doc else "?"
-    expected_kind = KIND_BY_DOC_TYPE.get(doc_type, doc_type.lower() if doc_type else "")
-    _logger.info(
-        "[stock_document_pdf] template_version_id=%s status=%s template_id=%s template_code=%s "
-        "version_kind=%s doc_type=%s expected_kind=%s kind_match=%s template_tenant=%s",
-        template_version_id,
-        ver.status,
-        tpl.id if tpl else None,
-        tpl.template_code if tpl else None,
-        kind,
-        doc_type,
-        expected_kind,
-        kind == expected_kind,
-        tpl.tenant_id if tpl else None,
-    )
-
-
 def _gate_stock_document(
     db: Session,
     user: AppUser,
@@ -666,20 +619,6 @@ def _stock_document_pdf_response(
     from ..services.pdf_deps import PdfGenerationUnavailable
     from ..services.stock_document_html_pdf_service import build_stock_document_html_pdf_bytes
 
-    _logger.info(
-        "[stock_document_pdf] start document_id=%s tenant_id=%s template_version_id=%s",
-        document_id,
-        tenant_id,
-        template_version_id,
-    )
-    if template_version_id is not None:
-        _log_template_version_resolution(
-            db,
-            tenant_id=tenant_id,
-            document_id=document_id,
-            template_version_id=int(template_version_id),
-        )
-
     try:
         try:
             pdf = build_stock_document_html_pdf_bytes(
@@ -696,7 +635,7 @@ def _stock_document_pdf_response(
                 document_id=document_id,
                 tenant_id=tenant_id,
                 template_version_id=template_version_id,
-                phase="DTE html→pdf (fallback to legacy ReportLab)",
+                phase="DTE html→pdf (fallback legacy)",
             )
             pdf = build_stock_document_pdf_bytes(db, tenant_id, document_id)
     except ValueError as exc:
