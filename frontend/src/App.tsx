@@ -622,8 +622,8 @@ export const router = createBrowserRouter(
                     <Route path="new" element={<DocumentTemplateCreatePage />} />
                     <Route path="starters" element={<StarterGalleryPage />} />
                     <Route path="starters/:starterId" element={<StarterDetailPage />} />
+                    <Route path=":templateId" element={<DocumentTemplateEditorPage />} />
                   </Route>
-                  <Route path=":templateId" element={<DocumentTemplateEditorPage />} />
                 </Route>
                 <Route path="document-templates/*" element={<Navigate to="/settings/document-templates" replace />} />
                 <Route path="dokumenty/sprzedaz/:documentId" element={<RedirectPolishSaleDocumentDetail />} />

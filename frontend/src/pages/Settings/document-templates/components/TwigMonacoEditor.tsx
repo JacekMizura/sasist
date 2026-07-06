@@ -16,8 +16,6 @@ export type TwigEditorHandle = {
   goToLine: (line: number, column?: number) => void;
 };
 
-type CursorPosition = { line: number; column: number };
-
 type Props = {
   value: string;
   onChange: (value: string) => void;
@@ -26,9 +24,7 @@ type Props = {
   variableFields?: VariableFieldDto[];
   helpers?: EditorCatalogItem[];
   tags?: EditorCatalogItem[];
-  minimapEnabled?: boolean;
   onValidationChange?: (report: ValidationReport | null) => void;
-  onCursorChange?: (pos: CursorPosition) => void;
 };
 
 export const TwigMonacoEditor = forwardRef<TwigEditorHandle, Props>(function TwigMonacoEditor(
@@ -39,9 +35,7 @@ export const TwigMonacoEditor = forwardRef<TwigEditorHandle, Props>(function Twi
     variableFields = [],
     helpers = [],
     tags = [],
-    minimapEnabled = false,
     onValidationChange,
-    onCursorChange,
   },
   ref,
 ) {
@@ -51,10 +45,6 @@ export const TwigMonacoEditor = forwardRef<TwigEditorHandle, Props>(function Twi
   const [cursorLine, setCursorLine] = useState(1);
 
   const breadcrumbs = useMemo(() => computeTwigBreadcrumbs(value, cursorLine), [value, cursorLine]);
-
-  useEffect(() => {
-    editorRef.current?.updateOptions({ minimap: { enabled: minimapEnabled } });
-  }, [minimapEnabled]);
 
   useImperativeHandle(ref, () => ({
     insertSnippet(snippet: string) {
@@ -73,10 +63,6 @@ export const TwigMonacoEditor = forwardRef<TwigEditorHandle, Props>(function Twi
       editor.focus();
     },
   }));
-
-  useEffect(() => {
-    editorRef.current?.updateOptions({ minimap: { enabled: minimapEnabled } });
-  }, [minimapEnabled]);
 
   useEffect(() => {
     if (!kindCode || !onValidationChange) return;
@@ -121,7 +107,6 @@ export const TwigMonacoEditor = forwardRef<TwigEditorHandle, Props>(function Twi
       const pos = editor.getPosition();
       if (!pos) return;
       setCursorLine(pos.lineNumber);
-      onCursorChange?.({ line: pos.lineNumber, column: pos.column });
     };
     editor.onDidChangeCursorPosition(syncCursor);
     syncCursor();
@@ -196,33 +181,34 @@ export const TwigMonacoEditor = forwardRef<TwigEditorHandle, Props>(function Twi
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-[#1e1e1e]">
-      <div className="sticky top-0 z-10 flex items-center gap-1 border-b border-[#333] bg-[#252526] px-3 py-1.5 font-mono text-[11px] text-[#cccccc]">
-        {breadcrumbs.map((crumb, i) => (
-          <span key={`${crumb}-${i}`} className="flex items-center gap-1">
-            {i > 0 ? <span className="text-[#666]">›</span> : null}
-            <span className={i === breadcrumbs.length - 1 ? "text-white" : "text-[#9cdcfe]"}>{crumb}</span>
-          </span>
-        ))}
-      </div>
+    <div className="flex min-h-0 flex-1 flex-col bg-white">
+      {breadcrumbs.length > 1 ? (
+        <div className="flex items-center gap-1 border-b border-slate-100 bg-slate-50 px-3 py-1 text-[11px] text-slate-500">
+          {breadcrumbs.map((crumb, i) => (
+            <span key={`${crumb}-${i}`} className="flex items-center gap-1">
+              {i > 0 ? <span>›</span> : null}
+              <span className={i === breadcrumbs.length - 1 ? "font-medium text-slate-700" : ""}>{crumb}</span>
+            </span>
+          ))}
+        </div>
+      ) : null}
       <div className="min-h-0 flex-1">
         <Editor
           height="100%"
           defaultLanguage="html"
-          theme="vs-dark"
+          theme="vs-light"
           value={value}
           onChange={(v) => onChange(v ?? "")}
           onMount={onMount}
           options={{
-            minimap: { enabled: minimapEnabled },
+            minimap: { enabled: false },
             fontSize: 13,
-            fontFamily: "'Cascadia Code', 'Fira Code', Consolas, monospace",
             wordWrap: "on",
             automaticLayout: true,
             scrollBeyondLastLine: false,
             tabSize: 2,
             lineNumbers: "on",
-            renderLineHighlight: "all",
+            renderLineHighlight: "line",
             quickSuggestions: { other: true, strings: true },
             padding: { top: 8 },
           }}

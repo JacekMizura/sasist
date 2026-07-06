@@ -45,7 +45,7 @@ export function PageHeader({ title, actions, subtitle, breadcrumbs = [], tabs, c
       ) : null}
 
       <div className="flex items-center justify-between gap-3">
-        <h1 className="m-0 text-xl font-semibold text-slate-900 sm:text-2xl">{title}</h1>
+        {title ? <h1 className="m-0 text-xl font-semibold text-slate-900 sm:text-2xl">{title}</h1> : <span />}
         {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
       </div>
 

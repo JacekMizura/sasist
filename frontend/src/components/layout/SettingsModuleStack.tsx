@@ -42,8 +42,9 @@ export function SettingsModuleStack({
         subtitle={description}
         actions={actions}
         breadcrumbs={breadcrumbs}
-        className="space-y-2"
+        className={title ? "space-y-2" : "space-y-1"}
       />
+      {tabs.length > 0 ? (
       <div className="mt-3 border-t border-slate-100 pt-2">
         <TopTabsNavigation
           tabs={tabs}
@@ -52,6 +53,7 @@ export function SettingsModuleStack({
           aria-label={tabsAriaLabel}
         />
       </div>
+      ) : null}
       <div className="min-w-0 pt-2">{children}</div>
     </div>
   );

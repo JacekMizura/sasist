@@ -1,82 +1,69 @@
 import { useMemo, useState } from "react";
 
-import type { EditorContextDto, TemplateAssignmentItem } from "../../../../api/documentTemplatesApi";
-import { AssignmentConfigModal } from "./AssignmentConfigModal";
+import type { EditorContextDto } from "../../../../api/documentTemplatesApi";
+import { kindLabel } from "../utils/assignableDocumentKinds";
+import { TemplateAssignmentModal } from "./TemplateAssignmentModal";
 
 type Props = {
   ctx: EditorContextDto;
-  onOpenAssignmentsTab?: () => void;
+  onAssignmentsChange?: () => void;
 };
 
-type AssignmentGroup = {
-  label: string;
-  items: TemplateAssignmentItem[];
-};
-
-export function TemplateAssignmentsStrip({ ctx, onOpenAssignmentsTab }: Props) {
-  const groups = useMemo(() => buildAssignmentGroups(ctx), [ctx]);
-  const [activeGroup, setActiveGroup] = useState<AssignmentGroup | null>(null);
-
-  if (!groups.length) {
-    return (
-      <div className="border-t border-slate-100 px-4 py-2 text-xs text-slate-500">
-        <span className="text-slate-600">Użycia:</span> Brak przypisań
-      </div>
-    );
-  }
+export function TemplateAssignmentsStrip({ ctx, onAssignmentsChange }: Props) {
+  const [modalOpen, setModalOpen] = useState(false);
+  const labels = useMemo(() => collectAssignedLabels(ctx), [ctx]);
+  const publishedVersionId =
+    ctx.detail.published_version?.id ?? ctx.detail.draft_version?.id ?? null;
 
   return (
     <>
-      <div className="border-t border-slate-100 px-4 py-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs text-slate-600">Użycia:</span>
-          {groups.map((group) => (
-            <button
-              key={group.label}
-              type="button"
-              className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-800 shadow-sm transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-900"
-              onClick={() => setActiveGroup(group)}
-            >
-              {group.label}
-            </button>
-          ))}
-        </div>
+      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+        <span className="text-slate-500">Przypisany do:</span>
+        {labels.length ? (
+          <button
+            type="button"
+            className="inline-flex flex-wrap items-center gap-x-3 gap-y-1 text-left text-slate-800 hover:text-blue-800"
+            onClick={() => setModalOpen(true)}
+          >
+            {labels.map((label) => (
+              <span key={label} className="inline-flex items-center gap-1">
+                <span className="text-emerald-600" aria-hidden>
+                  ✓
+                </span>
+                {label}
+              </span>
+            ))}
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="font-medium text-amber-800 underline decoration-dotted hover:text-amber-900"
+            onClick={() => setModalOpen(true)}
+          >
+            Nieprzypisany
+          </button>
+        )}
       </div>
-      {activeGroup ? (
-        <AssignmentConfigModal
-          label={activeGroup.label}
-          items={activeGroup.items}
-          onClose={() => setActiveGroup(null)}
-          onOpenAssignmentsTab={onOpenAssignmentsTab}
-        />
-      ) : null}
+      <TemplateAssignmentModal
+        templateId={ctx.detail.id}
+        templateKindCode={ctx.detail.kind?.code ?? null}
+        publishedVersionId={publishedVersionId}
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onSaved={onAssignmentsChange}
+      />
     </>
   );
 }
 
-function buildAssignmentGroups(ctx: EditorContextDto): AssignmentGroup[] {
-  const map = new Map<string, TemplateAssignmentItem[]>();
-  const items = ctx.erp_assignments ?? [];
-
-  for (const item of items) {
-    const label = (item.kind_name || item.scope_label || item.scope_type_label || "Przypisanie").trim();
-    const list = map.get(label) ?? [];
-    list.push(item);
-    map.set(label, list);
+function collectAssignedLabels(ctx: EditorContextDto): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const item of ctx.erp_assignments ?? []) {
+    const label = (item.kind_name || kindLabel(item.kind_code) || "").trim();
+    if (!label || seen.has(label)) continue;
+    seen.add(label);
+    out.push(label);
   }
-
-  if (map.size) {
-    return [...map.entries()].map(([label, groupItems]) => ({ label, items: groupItems }));
-  }
-
-  for (const b of ctx.bindings ?? []) {
-    const label = (b.kind_name || b.kind_code || "").trim();
-    if (!label) continue;
-    map.set(label, []);
-  }
-
-  return [...map.entries()].map(([label]) => ({
-    label,
-    items: items.filter((i) => (i.kind_name || i.scope_label) === label),
-  }));
+  return out;
 }

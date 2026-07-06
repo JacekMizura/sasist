@@ -1,84 +1,78 @@
-import { Link } from "react-router-dom";
-
 import type { EditorContextDto } from "../../../../api/documentTemplatesApi";
-import { DOC_TEMPLATE_STATUS_LABELS, LIST_BASE } from "../constants";
+import { DOC_TEMPLATE_STATUS_LABELS } from "../constants";
+import { EditableTemplateName } from "./EditableTemplateName";
 import { EditorOverflowMenu } from "./EditorOverflowMenu";
 import { TemplateAssignmentsStrip } from "./TemplateAssignmentsStrip";
 import type { EditorRightTab } from "../hooks/useEditorLayoutState";
 
 type Props = {
   ctx: EditorContextDto;
+  displayName: string;
   variant: string;
   saving: boolean;
-  detailsOpen: boolean;
   leftOpen: boolean;
   rightOpen: boolean;
-  fullscreen: boolean;
+  onNameChange: (name: string) => void;
   onSave: () => void;
   onPublish: () => void;
-  onValidate: () => void;
-  onPreview: () => void;
-  onToggleDetails: () => void;
+  onAssignmentsChange: () => void;
   onToggleLeft: () => void;
   onToggleRight: () => void;
-  onEnterFullscreen: () => void;
-  onExitFullscreen: () => void;
+  onToggleDetails: () => void;
+  detailsOpen: boolean;
   onOpenRightTab: (tab: EditorRightTab) => void;
-  onOpenAssignmentsTab?: () => void;
+  onOpenUsageTab: () => void;
 };
 
 export function EditorTopBar({
   ctx,
+  displayName,
   variant,
   saving,
-  detailsOpen,
   leftOpen,
   rightOpen,
-  fullscreen,
+  onNameChange,
   onSave,
   onPublish,
-  onValidate,
-  onPreview,
-  onToggleDetails,
+  onAssignmentsChange,
   onToggleLeft,
   onToggleRight,
-  onEnterFullscreen,
-  onExitFullscreen,
+  onToggleDetails,
+  detailsOpen,
   onOpenRightTab,
-  onOpenAssignmentsTab,
+  onOpenUsageTab,
 }: Props) {
   const detail = ctx.detail;
   const status = detail.draft_version?.status ?? detail.published_version?.status ?? "draft";
   const statusLabel = DOC_TEMPLATE_STATUS_LABELS[status] ?? status;
 
   return (
-    <header className="shrink-0 border-b border-slate-200 bg-[#f9f9f9]">
-      <div className="flex flex-wrap items-center gap-3 px-3 py-2">
-        <Link to={LIST_BASE} className="text-xs text-slate-500 hover:text-slate-800">
-          ← Szablony
-        </Link>
-        <div className="min-w-0 flex-1">
+    <header className="shrink-0 border-b border-slate-200 bg-white px-4 py-3">
+      <div className="flex flex-wrap items-start gap-3">
+        <div className="min-w-0 flex-1 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="truncate font-mono text-base font-semibold text-slate-900">{detail.name}</h1>
+            <EditableTemplateName
+              templateId={detail.id}
+              serverName={displayName}
+              onNameChange={onNameChange}
+            />
             <StatusBadge status={status} label={statusLabel} />
           </div>
-          <div className="mt-0.5 flex flex-wrap gap-x-3 font-mono text-[11px] text-slate-500">
-            <span>{detail.kind?.name_pl ?? detail.template_role ?? "—"}</span>
-            <span>·</span>
-            <span>{variant}</span>
+          <div className="flex flex-wrap gap-x-4 text-xs text-slate-600">
+            <span>
+              <span className="text-slate-400">Typ:</span> {detail.kind?.name_pl ?? "—"}
+            </span>
+            <span>
+              <span className="text-slate-400">Wariant:</span> {variant}
+            </span>
           </div>
+          <TemplateAssignmentsStrip ctx={ctx} onAssignmentsChange={onAssignmentsChange} />
         </div>
-        <div className="flex flex-wrap items-center gap-1.5">
-          <button type="button" className="rounded px-2.5 py-1 text-xs text-slate-700 hover:bg-white" onClick={onPreview}>
-            Podgląd
-          </button>
-          <button type="button" className="rounded px-2.5 py-1 text-xs text-slate-700 hover:bg-white" onClick={onValidate}>
-            Waliduj
-          </button>
+        <div className="flex shrink-0 items-center gap-2">
           <button
             type="button"
             disabled={saving}
-            className="rounded px-2.5 py-1 text-xs text-slate-700 hover:bg-white disabled:opacity-50"
+            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50 disabled:opacity-50"
             onClick={onSave}
             title="Ctrl+S"
           >
@@ -86,26 +80,23 @@ export function EditorTopBar({
           </button>
           <button
             type="button"
-            className="rounded bg-[#0e639c] px-2.5 py-1 text-xs font-medium text-white hover:bg-[#1177bb]"
+            className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
             onClick={onPublish}
           >
-            Publikuj
+            Opublikuj
           </button>
           <EditorOverflowMenu
             leftOpen={leftOpen}
             rightOpen={rightOpen}
-            fullscreen={fullscreen}
             detailsOpen={detailsOpen}
             onToggleLeft={onToggleLeft}
             onToggleRight={onToggleRight}
-            onEnterFullscreen={onEnterFullscreen}
-            onExitFullscreen={onExitFullscreen}
             onToggleDetails={onToggleDetails}
             onOpenRightTab={onOpenRightTab}
+            onOpenUsageTab={onOpenUsageTab}
           />
         </div>
       </div>
-      <TemplateAssignmentsStrip ctx={ctx} onOpenAssignmentsTab={onOpenAssignmentsTab} />
     </header>
   );
 }

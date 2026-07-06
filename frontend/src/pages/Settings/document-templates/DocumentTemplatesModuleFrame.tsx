@@ -1,5 +1,5 @@
 import { BookOpen, Download, Plus } from "lucide-react";
-import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { Link, Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
 
 import { exportFullPackageZip } from "../../../api/documentTemplatesApi";
@@ -19,8 +19,30 @@ async function downloadBlob(blob: Blob, filename: string) {
 
 export default function DocumentTemplatesModuleFrame() {
   const { pathname } = useLocation();
+  const { templateId } = useParams<{ templateId?: string }>();
   const navigate = useNavigate();
   const isList = pathname === LIST_BASE || pathname === `${LIST_BASE}/`;
+  const isEditor = Boolean(templateId && /^\d+$/.test(templateId));
+
+  if (isEditor) {
+    return (
+      <SettingsModuleStack
+        breadcrumbs={[
+          { label: "Ustawienia", to: "/settings/company" },
+          { label: "Szablony wydruków", to: LIST_BASE },
+          { label: "Edycja szablonu" },
+        ]}
+        title=""
+        tabs={[]}
+        tabsAriaLabel="Szablony wydruków"
+        className="flex min-h-0 flex-1 flex-col"
+      >
+        <div className="flex min-h-0 flex-1 flex-col">
+          <Outlet />
+        </div>
+      </SettingsModuleStack>
+    );
+  }
 
   return (
     <SettingsModuleStack
@@ -29,7 +51,7 @@ export default function DocumentTemplatesModuleFrame() {
         { label: "Szablony wydruków" },
       ]}
       title="Szablony wydruków"
-      description="Projektowanie wydruków ERP — wersje, publikacja, powiązania i podgląd. Niezależne od szablonów etykiet."
+      description="Projektowanie wydruków ERP — wersje, publikacja, powiązania i podgląd."
       tabs={DOCUMENT_TEMPLATES_TABS}
       tabsExact
       tabsAriaLabel="Szablony wydruków"
@@ -65,10 +87,7 @@ export default function DocumentTemplatesModuleFrame() {
             </button>
           </div>
         ) : (
-          <Link
-            to={LIST_BASE}
-            className="text-sm font-medium text-slate-600 hover:text-slate-900"
-          >
+          <Link to={LIST_BASE} className="text-sm font-medium text-slate-600 hover:text-slate-900">
             ← Lista szablonów
           </Link>
         )
