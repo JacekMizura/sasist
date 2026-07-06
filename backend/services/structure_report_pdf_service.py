@@ -1,5 +1,6 @@
 """
-HTML -> PDF for warehouse structure reports (Puppeteer via Node).
+HTML → PDF/PNG via Puppeteer (Node subprocess).
+Used by DTE, warehouse reports, and legacy Jinja print path.
 """
 
 from __future__ import annotations
@@ -20,7 +21,6 @@ RENDER_THUMBNAIL_SCRIPT = BACKEND_ROOT / "scripts" / "structure_report_pdf" / "r
 REPORT_TIMEOUT_MESSAGE = "Report rendering timeout - frontend not reachable or data failed to load"
 
 _NODE_FALLBACK_PATHS = ("/usr/bin/node", "/usr/local/bin/node")
-
 
 _UPLOADS_ROOT = BACKEND_ROOT / "uploads"
 _UPLOAD_SRC_RE = re.compile(r'src="(/uploads/[^"]+)"')
@@ -63,100 +63,97 @@ def _node_executable() -> str:
     )
 
 
-def html_document_to_pdf_bytes(html: str, *, timeout_sec: int = 120) -> bytes:
-    """
-    Render a full HTML document to PDF via Puppeteer (stdin → stdout).
-    Same stack as warehouse reports; avoids extra native deps (e.g. WeasyPrint on Windows).
-    """
-    if not RENDER_STDIN_SCRIPT.is_file():
+def _run_node_script(
+    script: Path,
+    *,
+    timeout_sec: int,
+    failure_label: str,
+    stdin_payload: bytes | None = None,
+    args: list[str] | None = None,
+) -> bytes:
+    if not script.is_file():
         raise FileNotFoundError(
-            f"Puppeteer render script missing: {RENDER_STDIN_SCRIPT}. "
+            f"{failure_label}: script missing ({script}). "
             "Run: cd backend/scripts/structure_report_pdf && npm install"
         )
-    html_s = _inline_upload_src_urls((html or "").strip())
-    if not html_s:
-        raise ValueError("Empty HTML document")
     node_bin = _node_executable()
-    proc = subprocess.run(
-        [node_bin, str(RENDER_STDIN_SCRIPT)],
-        input=html_s.encode("utf-8"),
-        capture_output=True,
-        cwd=str(RENDER_STDIN_SCRIPT.parent),
-        timeout=timeout_sec,
-    )
-    if proc.returncode != 0:
-        err = proc.stderr.decode("utf-8", errors="replace")
-        logger.error("html_document_to_pdf_bytes node failed: %s", err)
-        raise RuntimeError(f"PDF generation failed: {err or proc.stdout.decode('utf-8', errors='replace')}")
-    pdf = proc.stdout
-    if len(pdf) < 500:
-        logger.warning("html_document_to_pdf_bytes: suspiciously small PDF (%d bytes)", len(pdf))
-    return pdf
-
-
-def _log_thumbnail_node_failure(
-    *,
-    returncode: int | None,
-    stderr: str,
-    stdout: str,
-    reason: str,
-) -> None:
-    logger.error(
-        "html_to_thumbnail_png_bytes %s: returncode=%s stderr=%r stdout=%r",
-        reason,
-        returncode,
-        stderr,
-        stdout[:2000] if stdout else "",
-        exc_info=True,
-    )
-
-
-def html_to_thumbnail_png_bytes(html: str, *, timeout_sec: int = 90) -> bytes:
-    """Render HTML to PNG thumbnail (A4 viewport) via Puppeteer — same Node stack as PDF."""
-    if not RENDER_THUMBNAIL_SCRIPT.is_file():
-        raise FileNotFoundError(f"Thumbnail render script missing: {RENDER_THUMBNAIL_SCRIPT}")
-    html_s = _inline_upload_src_urls((html or "").strip())
-    if not html_s:
-        raise ValueError("Empty HTML document")
-    node_bin = _node_executable()
-    cmd = [node_bin, str(RENDER_THUMBNAIL_SCRIPT)]
+    cmd = [node_bin, str(script), *(args or [])]
     try:
         proc = subprocess.run(
             cmd,
-            input=html_s.encode("utf-8"),
+            input=stdin_payload,
             capture_output=True,
-            cwd=str(RENDER_THUMBNAIL_SCRIPT.parent),
+            cwd=str(script.parent),
             timeout=timeout_sec,
         )
     except subprocess.TimeoutExpired as exc:
         stderr = (exc.stderr or b"").decode("utf-8", errors="replace")
         stdout = (exc.stdout or b"").decode("utf-8", errors="replace")
-        _log_thumbnail_node_failure(
-            returncode=None,
-            stderr=stderr,
-            stdout=stdout,
-            reason=f"subprocess timeout after {timeout_sec}s",
+        logger.error(
+            "%s subprocess timeout after %ss stderr=%r stdout=%r",
+            failure_label,
+            timeout_sec,
+            stderr,
+            stdout[:2000],
+            exc_info=True,
         )
-        raise RuntimeError(f"Thumbnail generation timed out after {timeout_sec}s") from exc
+        raise RuntimeError(f"{failure_label} timed out after {timeout_sec}s") from exc
+
     stderr = proc.stderr.decode("utf-8", errors="replace")
-    stdout = proc.stdout.decode("utf-8", errors="replace")
     if proc.returncode != 0:
-        _log_thumbnail_node_failure(
-            returncode=proc.returncode,
-            stderr=stderr,
-            stdout=stdout,
-            reason="node process failed",
+        stdout_hint = proc.stdout.decode("utf-8", errors="replace")
+        logger.error(
+            "%s node failed returncode=%s stderr=%r stdout=%r",
+            failure_label,
+            proc.returncode,
+            stderr,
+            stdout_hint[:2000],
+            exc_info=True,
         )
-        raise RuntimeError(f"Thumbnail generation failed: {stderr or stdout}")
+        if REPORT_TIMEOUT_MESSAGE in stderr:
+            raise RuntimeError(REPORT_TIMEOUT_MESSAGE)
+        raise RuntimeError(f"{failure_label} failed: {stderr or stdout_hint}")
     if not proc.stdout:
-        _log_thumbnail_node_failure(
-            returncode=proc.returncode,
-            stderr=stderr,
-            stdout=stdout,
-            reason="empty stdout",
+        logger.error(
+            "%s empty stdout returncode=%s stderr=%r",
+            failure_label,
+            proc.returncode,
+            stderr,
+            exc_info=True,
         )
-        raise RuntimeError("Thumbnail generation failed: empty PNG output from node")
+        raise RuntimeError(f"{failure_label} failed: empty output")
     return proc.stdout
+
+
+def html_document_to_pdf_bytes(html: str, *, timeout_sec: int = 120) -> bytes:
+    """Render a full HTML document to PDF via Puppeteer (stdin → stdout)."""
+    html_s = _inline_upload_src_urls((html or "").strip())
+    if not html_s:
+        raise ValueError("Empty HTML document")
+    pdf = _run_node_script(
+        RENDER_STDIN_SCRIPT,
+        stdin_payload=html_s.encode("utf-8"),
+        timeout_sec=timeout_sec,
+        failure_label="PDF generation",
+    )
+    if len(pdf) < 500:
+        logger.warning("html_document_to_pdf_bytes: suspiciously small PDF (%d bytes)", len(pdf))
+    if not pdf.startswith(b"%PDF"):
+        raise RuntimeError("PDF generation failed: invalid PDF header")
+    return pdf
+
+
+def html_to_thumbnail_png_bytes(html: str, *, timeout_sec: int = 90) -> bytes:
+    """Render HTML to PNG thumbnail (A4 viewport) via Puppeteer."""
+    html_s = _inline_upload_src_urls((html or "").strip())
+    if not html_s:
+        raise ValueError("Empty HTML document")
+    return _run_node_script(
+        RENDER_THUMBNAIL_SCRIPT,
+        stdin_payload=html_s.encode("utf-8"),
+        timeout_sec=timeout_sec,
+        failure_label="Thumbnail generation",
+    )
 
 
 def _frontend_report_url(path: str, warehouse_id: int, layout_id: int, tenant_id: int) -> str:
@@ -168,26 +165,13 @@ def _frontend_report_url(path: str, warehouse_id: int, layout_id: int, tenant_id
 
 
 def url_to_pdf_via_puppeteer(url: str) -> bytes:
-    if not RENDER_FROM_URL_SCRIPT.is_file():
-        raise FileNotFoundError(
-            f"Puppeteer render script missing: {RENDER_FROM_URL_SCRIPT}. "
-            "Run: cd backend/scripts/structure_report_pdf && npm install"
-        )
     logger.info("Generating warehouse structure PDF from URL: %s", url)
-    node_bin = _node_executable()
-    proc = subprocess.run(
-        [node_bin, str(RENDER_FROM_URL_SCRIPT), url],
-        capture_output=True,
-        cwd=str(RENDER_FROM_URL_SCRIPT.parent),
-        timeout=30,
+    return _run_node_script(
+        RENDER_FROM_URL_SCRIPT,
+        args=[url],
+        timeout_sec=30,
+        failure_label="URL PDF generation",
     )
-    if proc.returncode != 0:
-        err = proc.stderr.decode("utf-8", errors="replace")
-        logger.error("structure_report_pdf (url) node failed: %s", err)
-        if REPORT_TIMEOUT_MESSAGE in err:
-            raise RuntimeError(REPORT_TIMEOUT_MESSAGE)
-        raise RuntimeError(f"PDF generation failed: {err or proc.stdout.decode('utf-8', errors='replace')}")
-    return proc.stdout
 
 
 def generate_structure_report_pdf_bytes(warehouse_id: int, layout_id: int, tenant_id: int) -> bytes:
@@ -197,11 +181,7 @@ def generate_structure_report_pdf_bytes(warehouse_id: int, layout_id: int, tenan
         layout_id=layout_id,
         tenant_id=tenant_id,
     )
-    try:
-        return url_to_pdf_via_puppeteer(report_url)
-    except subprocess.TimeoutExpired as exc:
-        logger.error("structure_report_pdf subprocess timed out for URL: %s", report_url)
-        raise RuntimeError(REPORT_TIMEOUT_MESSAGE) from exc
+    return url_to_pdf_via_puppeteer(report_url)
 
 
 def generate_product_location_report_pdf_bytes(warehouse_id: int, layout_id: int, tenant_id: int) -> bytes:
@@ -211,8 +191,4 @@ def generate_product_location_report_pdf_bytes(warehouse_id: int, layout_id: int
         layout_id=layout_id,
         tenant_id=tenant_id,
     )
-    try:
-        return url_to_pdf_via_puppeteer(report_url)
-    except subprocess.TimeoutExpired as exc:
-        logger.error("product_location_report_pdf subprocess timed out for URL: %s", report_url)
-        raise RuntimeError(REPORT_TIMEOUT_MESSAGE) from exc
+    return url_to_pdf_via_puppeteer(report_url)

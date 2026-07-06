@@ -1,10 +1,10 @@
 /**
- * Reads full HTML from stdin, writes PNG thumbnail (A4 preview) to stdout.
- * Same Puppeteer stack as render.mjs — used for starter gallery miniatures.
+ * Reads full HTML from stdin, writes PNG thumbnail (A4 viewport) to stdout.
  */
-import puppeteer from "puppeteer";
+import { launchBrowser } from "./puppeteer_pdf_shared.mjs";
 
 const VIEWPORT = { width: 595, height: 842, deviceScaleFactor: 1 };
+const RENDER_TIMEOUT_MS = 90_000;
 
 async function main() {
   const chunks = [];
@@ -17,20 +17,13 @@ async function main() {
     process.exit(1);
   }
 
-  const browser = await puppeteer.launch({
-    headless: true,
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-gpu",
-    ],
-  });
+  const browser = await launchBrowser();
   try {
     const page = await browser.newPage();
     await page.setViewport(VIEWPORT);
-    // domcontentloaded — networkidle0 hangs when /uploads/ assets are unreachable (Railway).
-    await page.setContent(html, { waitUntil: "domcontentloaded", timeout: 90_000 });
+    await page.emulateMediaType("screen");
+    await page.setContent(html, { waitUntil: "domcontentloaded", timeout: RENDER_TIMEOUT_MS });
+    await page.evaluate(() => document.fonts.ready);
     const png = await page.screenshot({
       type: "png",
       clip: { x: 0, y: 0, width: VIEWPORT.width, height: VIEWPORT.height },

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import logging
-import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -18,7 +17,6 @@ from .document_print_template_catalog import (
     TEMPLATES_DIR,
     resolve_template_filename,
 )
-from .structure_report_pdf_service import RENDER_STDIN_SCRIPT
 
 logger = logging.getLogger(__name__)
 
@@ -145,39 +143,18 @@ def render_document_html(
 
 
 def html_to_pdf_bytes(html: str, *, timeout_sec: int = 120) -> bytes:
-    if not RENDER_STDIN_SCRIPT.is_file():
-        logger.error("[document_print] puppeteer script missing: %s", RENDER_STDIN_SCRIPT)
+    from .structure_report_pdf_service import html_document_to_pdf_bytes
+
+    try:
+        return html_document_to_pdf_bytes(html, timeout_sec=timeout_sec)
+    except FileNotFoundError as exc:
+        logger.error("[document_print] puppeteer script missing: %s", exc)
         raise PdfRendererUnavailable(
             "PDF renderer unavailable: run npm install in backend/scripts/structure_report_pdf"
-        )
-    html_s = (html or "").strip()
-    if not html_s:
-        raise ValueError("Empty HTML document")
-    try:
-        proc = subprocess.run(
-            ["node", str(RENDER_STDIN_SCRIPT)],
-            input=html_s.encode("utf-8"),
-            capture_output=True,
-            cwd=str(RENDER_STDIN_SCRIPT.parent),
-            timeout=timeout_sec,
-        )
-    except subprocess.TimeoutExpired as exc:
-        logger.exception("[document_print] PDF renderer timed out after %ss", timeout_sec)
-        raise PdfRendererUnavailable("PDF renderer unavailable: timeout") from exc
-    except OSError as exc:
-        logger.exception("[document_print] PDF renderer process failed to start")
-        raise PdfRendererUnavailable("PDF renderer unavailable") from exc
-
-    if proc.returncode != 0:
-        err = proc.stderr.decode("utf-8", errors="replace")
-        logger.error("[document_print] node renderer failed rc=%s stderr=%s", proc.returncode, err)
-        raise PdfRendererUnavailable(f"PDF renderer unavailable: {err or 'unknown error'}")
-
-    pdf = proc.stdout
-    if not pdf or len(pdf) < 5 or not pdf.startswith(b"%PDF"):
-        logger.error("[document_print] invalid PDF output (len=%s)", len(pdf or b""))
-        raise PdfRendererUnavailable("PDF renderer unavailable: invalid output")
-    return pdf
+        ) from exc
+    except RuntimeError as exc:
+        logger.error("[document_print] puppeteer failed: %s", exc, exc_info=True)
+        raise PdfRendererUnavailable(f"PDF renderer unavailable: {exc}") from exc
 
 
 def build_document_pdf_from_html(

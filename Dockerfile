@@ -52,22 +52,28 @@ COPY backend/scripts/structure_report_pdf/package.json \
      backend/scripts/structure_report_pdf/puppeteer_pdf_shared.mjs \
      backend/scripts/structure_report_pdf/render.mjs \
      backend/scripts/structure_report_pdf/render_from_url.mjs \
+     backend/scripts/structure_report_pdf/render_thumbnail.mjs \
      ./backend/scripts/structure_report_pdf/
 RUN cd backend/scripts/structure_report_pdf \
     && npm ci --omit=dev \
     && test -f render.mjs \
+    && test -f render_thumbnail.mjs \
     && test -d node_modules/puppeteer \
     && PROBE_PDF=/tmp/docker_render_probe.pdf \
     && printf '%s' '<!DOCTYPE html><html><head><meta charset="utf-8"/><style>@page{size:A4}body{font-family:Arial;color:#111}h1{font-size:18px}</style></head><body><h1>DTE probe</h1><p>content</p></body></html>' | node render.mjs > "$PROBE_PDF" \
     && test -s "$PROBE_PDF" \
     && BYTES=$(wc -c < "$PROBE_PDF" | tr -d ' ') \
-    && echo "pdf pipeline ok bytes=$BYTES ls=$(ls -la "$PROBE_PDF")"
+    && test "$BYTES" -gt 500 \
+    && printf '%s' '<!DOCTYPE html><html><body><h1>thumb</h1></body></html>' | node render_thumbnail.mjs > /tmp/docker_thumb_probe.png \
+    && test -s /tmp/docker_thumb_probe.png \
+    && echo "pdf pipeline ok bytes=$BYTES"
 
 COPY backend ./backend
 COPY run_server.py ./
 
 # Verify paths used by structure_report_pdf_service.py at runtime.
 RUN test -f backend/scripts/structure_report_pdf/render.mjs \
+    && test -f backend/scripts/structure_report_pdf/render_thumbnail.mjs \
     && test -f backend/scripts/structure_report_pdf/puppeteer_pdf_shared.mjs \
     && test -f backend/scripts/structure_report_pdf/node_modules/puppeteer/package.json \
     && test -x /usr/bin/node \
