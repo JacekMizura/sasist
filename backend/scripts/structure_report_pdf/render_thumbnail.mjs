@@ -29,7 +29,8 @@ async function main() {
   try {
     const page = await browser.newPage();
     await page.setViewport(VIEWPORT);
-    await page.setContent(html, { waitUntil: "networkidle0", timeout: 90_000 });
+    // domcontentloaded — networkidle0 hangs when /uploads/ assets are unreachable (Railway).
+    await page.setContent(html, { waitUntil: "domcontentloaded", timeout: 90_000 });
     const png = await page.screenshot({
       type: "png",
       clip: { x: 0, y: 0, width: VIEWPORT.width, height: VIEWPORT.height },

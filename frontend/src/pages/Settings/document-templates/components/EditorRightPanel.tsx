@@ -2,15 +2,18 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import {
+  fetchTemplateUsage,
   fetchVersionContent,
   type DependencyGraphDto,
   type DocumentTemplateVersionDto,
   type EditorImpactDto,
+  type TemplateAssignmentItem,
+  type TemplateUsageBadge,
   type UsageSearchHit,
   type ValidationIssue,
   type ValidationReport,
 } from "../../../../api/documentTemplatesApi";
-import { LIST_BASE } from "../constants";
+import { DEFAULT_TENANT_ID, LIST_BASE } from "../constants";
 import { VersionComparePanel } from "./VersionComparePanel";
 import { VersionReplacePanel } from "./VersionReplacePanel";
 
@@ -32,6 +35,8 @@ type Props = {
   dependencies: DependencyGraphDto | null;
   versionsHistory: DocumentTemplateVersionDto[];
   kindCode?: string | null;
+  templateId: number;
+  templateName: string;
   usageHits: UsageSearchHit[];
   usageQuery: string;
   onRefreshPreview: () => void;
@@ -54,6 +59,8 @@ export function EditorRightPanel({
   dependencies,
   versionsHistory,
   kindCode,
+  templateId,
+  templateName,
   usageHits,
   usageQuery,
   onRefreshPreview,
@@ -111,7 +118,14 @@ export function EditorRightPanel({
           <ErrorsPane validation={liveValidation ?? validation} onIssueClick={onIssueClick} live={!!liveValidation} />
         )}
         {activeTab === "compare" && <VersionComparePanel versions={versionsHistory} />}
-        {activeTab === "usage" && <UsagePane query={usageQuery} hits={usageHits} />}
+        {activeTab === "usage" && (
+          <TemplateUsagePane
+            templateId={templateId}
+            templateName={templateName}
+            symbolQuery={usageQuery}
+            symbolHits={usageHits}
+          />
+        )}
         {activeTab === "impact" && <ImpactPane impact={impact} />}
         {activeTab === "dependencies" && <DependenciesPane graph={dependencies} />}
         {activeTab === "history" && (
@@ -202,24 +216,114 @@ function ErrorsPane({
   );
 }
 
-function UsagePane({ query, hits }: { query: string; hits: UsageSearchHit[] }) {
-  if (!query) return <p className="text-slate-500">W inspektorze zmiennej wybierz „Gdzie używana?”.</p>;
-  if (!hits.length) return <p className="text-slate-500">Brak użyć „{query}” w szablonach.</p>;
+function TemplateUsagePane({
+  templateId,
+  templateName,
+  symbolQuery,
+  symbolHits,
+}: {
+  templateId: number;
+  templateName: string;
+  symbolQuery: string;
+  symbolHits: UsageSearchHit[];
+}) {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [badges, setBadges] = useState<TemplateUsageBadge[]>([]);
+  const [items, setItems] = useState<TemplateAssignmentItem[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    void fetchTemplateUsage(DEFAULT_TENANT_ID, templateId)
+      .then((data) => {
+        if (cancelled) return;
+        setBadges(data.badges);
+        setItems(data.items);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : "Nie udało się wczytać użyć szablonu.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [templateId]);
+
   return (
-    <ul className="space-y-2 text-xs">
-      {hits.map((hit, idx) => (
-        <li key={idx} className="rounded-lg border border-slate-200 px-3 py-2">
-          <Link to={`${LIST_BASE}/${hit.template_id}`} className="font-medium text-blue-800 hover:underline">
-            {hit.template_name}
-          </Link>
-          <div className="text-slate-500">
-            wersja {hit.version_number} · {hit.status}
-            {hit.kind_code ? ` · ${hit.kind_code}` : ""}
-          </div>
-          <div className="mt-1 text-slate-600">Linie: {hit.lines.join(", ")}</div>
-        </li>
-      ))}
-    </ul>
+    <div className="space-y-5">
+      {symbolQuery ? <SymbolUsageSection query={symbolQuery} hits={symbolHits} /> : null}
+      <section>
+        <h3 className="text-xs font-semibold text-slate-800">Przypisania: {templateName}</h3>
+        {loading ? <p className="mt-2 text-slate-500">Ładowanie użyć szablonu…</p> : null}
+        {error ? <p className="mt-2 text-rose-700">{error}</p> : null}
+        {!loading && !error ? (
+          <>
+            {badges.length > 0 ? (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {badges.map((b) => (
+                  <span key={b.label} className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700">
+                    {b.label} ({b.count})
+                  </span>
+                ))}
+              </div>
+            ) : null}
+            <ul className="mt-3 divide-y divide-slate-100">
+              {items.length === 0 ? (
+                <li className="py-4 text-slate-500">Brak przypisań tego szablonu w ERP.</li>
+              ) : (
+                items.map((item, idx) => (
+                  <li key={`${item.scope_type}-${item.scope_id}-${idx}`} className="flex items-center justify-between gap-3 py-3 text-xs">
+                    <div>
+                      <div className="font-medium text-slate-900">{item.scope_label}</div>
+                      <div className="text-slate-500">
+                        {item.scope_type_label}
+                        {item.kind_name ? ` · ${item.kind_name}` : ""}
+                      </div>
+                    </div>
+                    {item.erp_link ? (
+                      <Link to={item.erp_link} className="shrink-0 font-medium text-blue-700 hover:underline">
+                        Otwórz
+                      </Link>
+                    ) : null}
+                  </li>
+                ))
+              )}
+            </ul>
+          </>
+        ) : null}
+      </section>
+    </div>
+  );
+}
+
+function SymbolUsageSection({ query, hits }: { query: string; hits: UsageSearchHit[] }) {
+  return (
+    <section className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+      <h3 className="text-xs font-semibold text-slate-800">Wystąpienia symbolu „{query}”</h3>
+      {!hits.length ? (
+        <p className="mt-2 text-slate-500">Brak użyć w innych szablonach.</p>
+      ) : (
+        <ul className="mt-2 space-y-2 text-xs">
+          {hits.map((hit, idx) => (
+            <li key={idx} className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+              <Link to={`${LIST_BASE}/${hit.template_id}`} className="font-medium text-blue-800 hover:underline">
+                {hit.template_name}
+              </Link>
+              <div className="text-slate-500">
+                wersja {hit.version_number} · {hit.status}
+                {hit.kind_code ? ` · ${hit.kind_code}` : ""}
+              </div>
+              <div className="mt-1 text-slate-600">Linie: {hit.lines.join(", ")}</div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 

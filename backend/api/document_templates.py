@@ -69,6 +69,18 @@ from ..schemas.document_template_schemas import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/document-templates", tags=["Document Templates"])
+logger = logging.getLogger(__name__)
+
+
+def _log_starter_thumbnail_failure(*, starter_id: int, tenant_id: int, exc: BaseException) -> None:
+    logger.error(
+        "api_starter_thumbnail failed starter_id=%s tenant_id=%s exc_type=%s message=%s",
+        starter_id,
+        tenant_id,
+        type(exc).__name__,
+        exc,
+        exc_info=exc,
+    )
 
 
 def _map_error(exc: DocumentTemplateError) -> HTTPException:
@@ -603,7 +615,11 @@ def api_starter_thumbnail(
     except DocumentTemplateError as exc:
         raise _map_error(exc) from exc
     except (FileNotFoundError, RuntimeError, ValueError) as exc:
+        _log_starter_thumbnail_failure(starter_id=starter_id, tenant_id=tenant_id, exc=exc)
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:
+        _log_starter_thumbnail_failure(starter_id=starter_id, tenant_id=tenant_id, exc=exc)
+        raise
 
 
 @router.get("/versions/{version_id}/thumbnail")

@@ -94,25 +94,68 @@ def html_document_to_pdf_bytes(html: str, *, timeout_sec: int = 120) -> bytes:
     return pdf
 
 
+def _log_thumbnail_node_failure(
+    *,
+    returncode: int | None,
+    stderr: str,
+    stdout: str,
+    reason: str,
+) -> None:
+    logger.error(
+        "html_to_thumbnail_png_bytes %s: returncode=%s stderr=%r stdout=%r",
+        reason,
+        returncode,
+        stderr,
+        stdout[:2000] if stdout else "",
+        exc_info=True,
+    )
+
+
 def html_to_thumbnail_png_bytes(html: str, *, timeout_sec: int = 90) -> bytes:
     """Render HTML to PNG thumbnail (A4 viewport) via Puppeteer — same Node stack as PDF."""
     if not RENDER_THUMBNAIL_SCRIPT.is_file():
         raise FileNotFoundError(f"Thumbnail render script missing: {RENDER_THUMBNAIL_SCRIPT}")
-    html_s = (html or "").strip()
+    html_s = _inline_upload_src_urls((html or "").strip())
     if not html_s:
         raise ValueError("Empty HTML document")
     node_bin = _node_executable()
-    proc = subprocess.run(
-        [node_bin, str(RENDER_THUMBNAIL_SCRIPT)],
-        input=html_s.encode("utf-8"),
-        capture_output=True,
-        cwd=str(RENDER_THUMBNAIL_SCRIPT.parent),
-        timeout=timeout_sec,
-    )
+    cmd = [node_bin, str(RENDER_THUMBNAIL_SCRIPT)]
+    try:
+        proc = subprocess.run(
+            cmd,
+            input=html_s.encode("utf-8"),
+            capture_output=True,
+            cwd=str(RENDER_THUMBNAIL_SCRIPT.parent),
+            timeout=timeout_sec,
+        )
+    except subprocess.TimeoutExpired as exc:
+        stderr = (exc.stderr or b"").decode("utf-8", errors="replace")
+        stdout = (exc.stdout or b"").decode("utf-8", errors="replace")
+        _log_thumbnail_node_failure(
+            returncode=None,
+            stderr=stderr,
+            stdout=stdout,
+            reason=f"subprocess timeout after {timeout_sec}s",
+        )
+        raise RuntimeError(f"Thumbnail generation timed out after {timeout_sec}s") from exc
+    stderr = proc.stderr.decode("utf-8", errors="replace")
+    stdout = proc.stdout.decode("utf-8", errors="replace")
     if proc.returncode != 0:
-        err = proc.stderr.decode("utf-8", errors="replace")
-        logger.error("html_to_thumbnail_png_bytes node failed: %s", err)
-        raise RuntimeError(f"Thumbnail generation failed: {err or proc.stdout.decode('utf-8', errors='replace')}")
+        _log_thumbnail_node_failure(
+            returncode=proc.returncode,
+            stderr=stderr,
+            stdout=stdout,
+            reason="node process failed",
+        )
+        raise RuntimeError(f"Thumbnail generation failed: {stderr or stdout}")
+    if not proc.stdout:
+        _log_thumbnail_node_failure(
+            returncode=proc.returncode,
+            stderr=stderr,
+            stdout=stdout,
+            reason="empty stdout",
+        )
+        raise RuntimeError("Thumbnail generation failed: empty PNG output from node")
     return proc.stdout
 
 

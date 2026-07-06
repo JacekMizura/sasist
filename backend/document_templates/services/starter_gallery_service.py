@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -76,7 +79,17 @@ def get_starter_thumbnail_bytes(db: Session, *, starter_id: int, tenant_id: int 
         return cache_path.read_bytes(), True
     html = _resolve_starter_html(db, starter=starter, tenant_id=int(tenant_id))
     png = html_to_thumbnail_png_bytes(html)
-    cache_path.write_bytes(png)
+    try:
+        cache_path.write_bytes(png)
+    except OSError as exc:
+        logger.warning(
+            "starter thumbnail cache write failed starter_id=%s path=%s exc_type=%s message=%s",
+            starter_id,
+            cache_path,
+            type(exc).__name__,
+            exc,
+            exc_info=True,
+        )
     return png, False
 
 

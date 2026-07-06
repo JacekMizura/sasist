@@ -258,6 +258,8 @@ export function DocumentTemplateEditorPage() {
             dependencies={ctx.dependencies}
             versionsHistory={ctx.versions_history}
             kindCode={ctx.detail.kind?.code}
+            templateId={ctx.detail.id}
+            templateName={ctx.detail.name}
             usageHits={usageHits}
             usageQuery={usageQuery}
             onRefreshPreview={() => void refreshPreview()}
