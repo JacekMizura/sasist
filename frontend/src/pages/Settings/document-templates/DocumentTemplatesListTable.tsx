@@ -7,6 +7,7 @@ import {
 } from "../../../components/listPage/listSellasistTokens";
 import { ModuleListRowActionsCell } from "../../../components/listPage/moduleList";
 import {
+  moduleListChannelBadgeClass,
   moduleListRowClass,
   moduleListTableClass,
   moduleListTableScrollClass,
