@@ -18,14 +18,6 @@ async function downloadBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-function readTemplateDisplayName(templateId: string, fallback: string): string {
-  try {
-    return localStorage.getItem(`dte-template-name-${templateId}`) ?? fallback;
-  } catch {
-    return fallback;
-  }
-}
-
 export default function DocumentTemplatesModuleFrame() {
   const { pathname } = useLocation();
   const { templateId } = useParams<{ templateId?: string }>();
@@ -36,7 +28,6 @@ export default function DocumentTemplatesModuleFrame() {
 
   useEffect(() => {
     if (!isEditor || !templateId) return;
-    setEditorTitle(readTemplateDisplayName(templateId, "Edycja szablonu"));
     const onName = (e: Event) => {
       const detail = (e as CustomEvent<{ id: number; name: string }>).detail;
       if (String(detail.id) === templateId) setEditorTitle(detail.name);

@@ -21,6 +21,10 @@ class DocumentTemplateSaveDraft(BaseModel):
     partial_pins_json: str | None = None
 
 
+class DocumentTemplateUpdate(BaseModel):
+    name: str = Field(min_length=1, max_length=256)
+
+
 class DocumentTemplatePublish(BaseModel):
     version_id: int | None = None
     skip_validation: bool = False

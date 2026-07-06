@@ -27,6 +27,7 @@ from ..document_templates.services.template_service import (
     list_templates,
     publish_version,
     save_draft_version,
+    update_template_metadata,
     upsert_binding,
 )
 from ..document_templates.services.dependency_graph_service import DependencyGraphService
@@ -57,6 +58,7 @@ from ..schemas.document_template_schemas import (
     DocumentTemplatePreviewPayload,
     DocumentTemplatePublish,
     DocumentTemplateSaveDraft,
+    DocumentTemplateUpdate,
     DocumentTemplateStarterClonePayload,
     DocumentTemplateStarterImportPayload,
     DocumentTemplateLiveValidatePayload,
@@ -262,6 +264,26 @@ def api_save_document_template_draft(
             user_id=int(user.id),
         )
     except DocumentTemplateNotFoundError as exc:
+        raise _map_error(exc) from exc
+
+
+@router.patch("/templates/{template_id}")
+def api_update_document_template(
+    template_id: int,
+    payload: DocumentTemplateUpdate,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    _ = user
+    try:
+        return update_template_metadata(
+            db,
+            tenant_id=tenant_id,
+            template_id=template_id,
+            name=payload.name,
+        )
+    except DocumentTemplateError as exc:
         raise _map_error(exc) from exc
 
 

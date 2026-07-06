@@ -23,7 +23,6 @@ export type InspectorPanelBodyProps = {
   previewError: string | null;
   previewRevision: number;
   validation: ValidationReport | null;
-  liveValidation: ValidationReport | null;
   onIssueClick: (issue: ValidationIssue) => void;
   impact: EditorImpactDto | null;
   dependencies: DependencyGraphDto | null;
@@ -51,7 +50,6 @@ export function InspectorPanelBody(props: InspectorPanelBodyProps) {
     previewError,
     previewRevision,
     validation,
-    liveValidation,
     onIssueClick,
     impact,
     dependencies,
@@ -221,7 +219,7 @@ function ErrorsPane({
   }, [highlightedIndex, validation]);
 
   if (!validation) {
-    return <p className="px-2 text-slate-500">Sprawdzanie szablonu podczas edycji…</p>;
+    return <p className="px-2 text-slate-500">Walidacja uruchamia się przy zapisie lub publikacji.</p>;
   }
   if (validation.ok) {
     return <p className="px-2 text-emerald-700">Brak błędów — szablon gotowy do publikacji.</p>;

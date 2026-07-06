@@ -336,6 +336,19 @@ export async function createDocumentTemplateFromStarter(
   return data;
 }
 
+export async function updateDocumentTemplate(
+  tenantId: number,
+  templateId: number,
+  payload: { name: string },
+) {
+  const { data } = await api.patch<DocumentTemplateDetailDto>(
+    `/document-templates/templates/${templateId}`,
+    payload,
+    { params: { tenant_id: tenantId } },
+  );
+  return data;
+}
+
 export async function saveDocumentTemplateDraft(
   tenantId: number,
   templateId: number,

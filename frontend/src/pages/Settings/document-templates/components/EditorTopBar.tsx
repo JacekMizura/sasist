@@ -11,7 +11,7 @@ type Props = {
   saving: boolean;
   leftOpen: boolean;
   rightOpen: boolean;
-  onNameChange: (name: string) => void;
+  onNameSave: (name: string) => Promise<void>;
   onSave: () => void;
   onPublish: () => void;
   onAssignmentsChange: () => void;
@@ -30,7 +30,7 @@ export function EditorTopBar({
   saving,
   leftOpen,
   rightOpen,
-  onNameChange,
+  onNameSave,
   onSave,
   onPublish,
   onAssignmentsChange,
@@ -52,7 +52,7 @@ export function EditorTopBar({
             <EditableTemplateName
               templateId={detail.id}
               serverName={displayName}
-              onNameChange={onNameChange}
+              onNameSave={onNameSave}
             />
             <StatusBadge status={status} />
           </div>

@@ -23,40 +23,99 @@ class DependencyGraphService:
         version = self._get_version(version_id)
         if version is None:
             return None
-        visited: set[int] = set()
+        stack: list[int] = []
         path: list[str] = []
-        cycle = self._walk_version(int(version.id), visited, path, depth=0)
-        return cycle
+        return self._walk_version(int(version.id), stack, path, depth=0)
+
+    def describe_version_node(self, version_id: int) -> dict[str, Any] | None:
+        version = self._get_version(version_id)
+        if version is None:
+            return None
+        template = version.template
+        includes = [
+            {
+                "partial_code": str(pin.partial_code),
+                "partial_version_id": int(pin.partial_version_id),
+                "partial_template_id": int(pin.partial_template_id),
+            }
+            for pin in self._partial_pins_for_version(version)
+        ]
+        return {
+            "version_id": int(version.id),
+            "version_number": int(version.version_number),
+            "status": version.status,
+            "template_id": int(version.template_id),
+            "template_code": template.template_code,
+            "template_name": template.name,
+            "template_role": template.template_role,
+            "extends_version_id": int(version.extends_version_id) if version.extends_version_id else None,
+            "include_document": includes,
+        }
+
+    def dump_validator_walk(self, version_id: int) -> list[dict[str, Any]]:
+        """Depth-first walk identical to publication cycle validation — full branch tree."""
+        out: list[dict[str, Any]] = []
+
+        def walk(vid: int, stack: list[int], depth: int) -> None:
+            node = self.describe_version_node(vid)
+            if node is None:
+                out.append({"version_id": vid, "missing": True, "depth": depth, "stack": list(stack)})
+                return
+            node = {
+                **node,
+                "depth": depth,
+                "stack_version_ids": list(stack),
+                "on_recursion_stack": vid in stack,
+            }
+            out.append(node)
+            if depth > self.MAX_DEPTH or vid in stack:
+                return
+            stack.append(vid)
+            version = self._get_version(vid)
+            if version is None:
+                stack.pop()
+                return
+            if version.extends_version_id:
+                walk(int(version.extends_version_id), stack, depth + 1)
+            for pin in self._partial_pins_for_version(version):
+                walk(int(pin.partial_version_id), stack, depth + 1)
+            stack.pop()
+
+        walk(int(version_id), [], 0)
+        return out
 
     def _walk_version(
         self,
         version_id: int,
-        visited: set[int],
+        stack: list[int],
         path: list[str],
         *,
         depth: int,
     ) -> list[str] | None:
         if depth > self.MAX_DEPTH:
-            return path + ["…"]
-        if version_id in visited:
-            return path + [self._version_label(version_id)]
-        visited.add(version_id)
+            return path + ["…(limit głębokości)"]
+        if version_id in stack:
+            idx = stack.index(version_id)
+            return path[idx:] + [self.version_label(version_id)]
         version = self._get_version(version_id)
         if version is None:
             return None
-        template = version.template
-        label = self._version_label(version_id)
-        path.append(label)
 
-        if version.extends_version_id:
-            cycle = self._walk_version(int(version.extends_version_id), visited, path.copy(), depth=depth + 1)
-            if cycle:
-                return cycle
+        stack.append(version_id)
+        path.append(self.version_label(version_id))
+        try:
+            if version.extends_version_id:
+                cycle = self._walk_version(int(version.extends_version_id), stack, path, depth=depth + 1)
+                if cycle:
+                    return cycle
 
-        for pin in self._partial_pins_for_version(version):
-            cycle = self._walk_version(int(pin.partial_version_id), visited, path.copy(), depth=depth + 1)
-            if cycle:
-                return cycle
+            for pin in self._partial_pins_for_version(version):
+                cycle = self._walk_version(int(pin.partial_version_id), stack, path, depth=depth + 1)
+                if cycle:
+                    return cycle
+        finally:
+            stack.pop()
+            path.pop()
 
         return None
 
@@ -255,6 +314,10 @@ class DependencyGraphService:
         except (TypeError, ValueError, json.JSONDecodeError):
             return {}
 
-    @staticmethod
-    def _version_label(version_id: int) -> str:
-        return f"v#{version_id}"
+    def version_label(self, version_id: int) -> str:
+        version = self._get_version(version_id)
+        if version is None:
+            return f"v#{version_id}"
+        tpl = version.template
+        code = str(tpl.template_code or tpl.name or f"tpl#{tpl.template_id}")
+        return f"v#{version_id} ({code})"

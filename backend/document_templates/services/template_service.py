@@ -301,6 +301,29 @@ def save_draft_version(
     return get_template_detail(db, tenant_id=tenant_id, template_id=int(template_id))
 
 
+def update_template_metadata(
+    db: Session,
+    *,
+    tenant_id: int,
+    template_id: int,
+    name: str,
+) -> dict[str, Any]:
+    row = (
+        db.query(DocumentTemplate)
+        .filter(DocumentTemplate.id == int(template_id), DocumentTemplate.tenant_id == int(tenant_id))
+        .first()
+    )
+    if row is None:
+        raise DocumentTemplateNotFoundError()
+    cleaned = str(name).strip()
+    if not cleaned:
+        raise DocumentTemplateError("Nazwa szablonu nie może być pusta.", code="validation_error")
+    row.name = cleaned[:256]
+    row.updated_at = datetime.utcnow()
+    db.commit()
+    return get_template_detail(db, tenant_id=tenant_id, template_id=int(template_id))
+
+
 def publish_version(
     db: Session,
     *,

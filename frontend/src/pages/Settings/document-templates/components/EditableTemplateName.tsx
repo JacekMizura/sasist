@@ -1,50 +1,46 @@
 import { useEffect, useRef, useState } from "react";
 import { Pencil } from "lucide-react";
 
-const storageKey = (id: number) => `dte-template-name-${id}`;
-
 type Props = {
   templateId: number;
   serverName: string;
-  onNameChange: (name: string) => void;
+  onNameSave: (name: string) => Promise<void>;
 };
 
-export function EditableTemplateName({ templateId, serverName, onNameChange }: Props) {
+export function EditableTemplateName({ templateId, serverName, onNameSave }: Props) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(serverName);
-  const [display, setDisplay] = useState(() => readStored(templateId, serverName));
+  const [display, setDisplay] = useState(serverName);
+  const [saving, setSaving] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const name = readStored(templateId, serverName);
-    setDisplay(name);
-    setDraft(name);
+    setDisplay(serverName);
+    setDraft(serverName);
   }, [serverName, templateId]);
 
   useEffect(() => {
     if (editing) inputRef.current?.focus();
   }, [editing]);
 
-  function readStored(id: number, fallback: string) {
-    try {
-      return localStorage.getItem(storageKey(id)) ?? fallback;
-    } catch {
-      return fallback;
-    }
-  }
-
-  function commit() {
+  async function commit() {
     const next = draft.trim() || serverName;
-    setDisplay(next);
-    setDraft(next);
-    onNameChange(next);
-    try {
-      localStorage.setItem(storageKey(templateId), next);
-    } catch {
-      /* ignore */
+    if (next === display) {
+      setEditing(false);
+      return;
     }
-    window.dispatchEvent(new CustomEvent("dte-template-name-changed", { detail: { id: templateId, name: next } }));
-    setEditing(false);
+    setSaving(true);
+    try {
+      await onNameSave(next);
+      setDisplay(next);
+      setDraft(next);
+      setEditing(false);
+    } catch {
+      setDraft(display);
+      setEditing(false);
+    } finally {
+      setSaving(false);
+    }
   }
 
   function cancel() {
@@ -56,20 +52,21 @@ export function EditableTemplateName({ templateId, serverName, onNameChange }: P
     return (
       <input
         ref={inputRef}
-        className="min-w-[12rem] max-w-full rounded border border-blue-300 bg-white px-2 py-0.5 text-lg font-semibold text-slate-900 outline-none ring-2 ring-blue-100"
+        disabled={saving}
+        className="min-w-[12rem] max-w-full rounded border border-blue-300 bg-white px-2 py-0.5 text-lg font-semibold text-slate-900 outline-none ring-2 ring-blue-100 disabled:opacity-60"
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === "Enter") {
             e.preventDefault();
-            commit();
+            void commit();
           }
           if (e.key === "Escape") {
             e.preventDefault();
             cancel();
           }
         }}
-        onBlur={commit}
+        onBlur={() => void commit()}
       />
     );
   }

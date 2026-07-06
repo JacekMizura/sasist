@@ -35,7 +35,6 @@ export function EditorRightPanel({
   panelWidth,
   onResizeStart,
   resizing,
-  liveValidation,
   validation,
   ...bodyProps
 }: Props) {
@@ -108,7 +107,7 @@ export function EditorRightPanel({
         </button>
       </div>
       <div className="min-h-0 flex-1 overflow-auto px-1 py-2 text-sm">
-        <InspectorPanelBody activeTab={activeTab} validation={validation} liveValidation={liveValidation} {...bodyProps} />
+        <InspectorPanelBody activeTab={activeTab} validation={validation} {...bodyProps} />
       </div>
     </aside>
   );

@@ -209,3 +209,37 @@ def test_dependency_cycle_detection(doc_db):
     graph = DependencyGraphService(doc_db)
     cycle = graph.detect_cycles_for_version(int(base_a.id))
     assert cycle is not None
+
+
+def test_dependency_no_false_cycle_shared_base(doc_db):
+    """Document extends BASE and includes partial that also extends same BASE — DAG, not a cycle."""
+    base_v = _create_base(doc_db)
+    header_v = _create_partial(doc_db, "document_header", "{% block content %}HDR{% endblock %}")
+    header_v.extends_version_id = int(base_v.id)
+    doc_db.flush()
+
+    doc_tpl = DocumentTemplate(
+        tenant_id=1,
+        kind_id=None,
+        template_role=TEMPLATE_ROLE_DOCUMENT,
+        template_code="doc_cycle_diamond_test",
+        source=SOURCE_TENANT,
+        name="WZ",
+        is_system=False,
+    )
+    doc_db.add(doc_tpl)
+    doc_db.flush()
+    doc_v = DocumentTemplateVersion(
+        template_id=int(doc_tpl.id),
+        version_number=1,
+        status=VERSION_STATUS_DRAFT,
+        twig_content='{% extends "base_document" %}{% include_document "document_header" %}',
+        extends_version_id=int(base_v.id),
+        partial_pins_json=json.dumps({"document_header": int(header_v.id)}),
+    )
+    doc_db.add(doc_v)
+    doc_db.commit()
+
+    graph = DependencyGraphService(doc_db)
+    cycle = graph.detect_cycles_for_version(int(doc_v.id))
+    assert cycle is None, f"false positive cycle: {cycle}"

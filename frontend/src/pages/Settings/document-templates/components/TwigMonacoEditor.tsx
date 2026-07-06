@@ -1,14 +1,11 @@
 import Editor, { type OnMount } from "@monaco-editor/react";
-import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
+import { forwardRef, useImperativeHandle, useRef } from "react";
 
 import {
-  liveValidateDocumentTemplate,
   type EditorCatalogItem,
-  type ValidationReport,
   type VariableFieldDto,
   type VariableTreeNode,
 } from "../../../../api/documentTemplatesApi";
-import { DEFAULT_TENANT_ID } from "../constants";
 
 export type TwigEditorHandle = {
   insertSnippet: (snippet: string) => void;
@@ -23,7 +20,6 @@ type Props = {
   variableFields?: VariableFieldDto[];
   helpers?: EditorCatalogItem[];
   tags?: EditorCatalogItem[];
-  onValidationChange?: (report: ValidationReport | null) => void;
 };
 
 export const TwigMonacoEditor = forwardRef<TwigEditorHandle, Props>(function TwigMonacoEditor(
@@ -34,13 +30,11 @@ export const TwigMonacoEditor = forwardRef<TwigEditorHandle, Props>(function Twi
     variableFields = [],
     helpers = [],
     tags = [],
-    onValidationChange,
   },
   ref,
 ) {
   const editorRef = useRef<import("monaco-editor").editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<typeof import("monaco-editor") | null>(null);
-  const validateTimer = useRef<number | null>(null);
 
   useImperativeHandle(ref, () => ({
     insertSnippet(snippet: string) {
@@ -59,41 +53,6 @@ export const TwigMonacoEditor = forwardRef<TwigEditorHandle, Props>(function Twi
       editor.focus();
     },
   }));
-
-  useEffect(() => {
-    if (!kindCode || !onValidationChange) return;
-    if (validateTimer.current) window.clearTimeout(validateTimer.current);
-    validateTimer.current = window.setTimeout(() => {
-      liveValidateDocumentTemplate(DEFAULT_TENANT_ID, { kind_code: kindCode, twig_content: value })
-        .then((report) => {
-          onValidationChange(report);
-          applyMarkers(report);
-        })
-        .catch(() => onValidationChange(null));
-    }, 450);
-    return () => {
-      if (validateTimer.current) window.clearTimeout(validateTimer.current);
-    };
-  }, [value, kindCode, onValidationChange]);
-
-  function applyMarkers(report: ValidationReport) {
-    const editor = editorRef.current;
-    const monaco = monacoRef.current;
-    if (!editor || !monaco) return;
-    const model = editor.getModel();
-    if (!model) return;
-    const markers = report.issues
-      .filter((i) => i.line)
-      .map((issue) => ({
-        startLineNumber: issue.line!,
-        startColumn: issue.column ?? 1,
-        endLineNumber: issue.line!,
-        endColumn: (issue.column ?? 1) + 8,
-        message: issue.message,
-        severity: monaco.MarkerSeverity.Error,
-      }));
-    monaco.editor.setModelMarkers(model, "twig-live", markers);
-  }
 
   const onMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
