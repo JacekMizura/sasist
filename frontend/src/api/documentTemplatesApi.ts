@@ -154,6 +154,13 @@ export type ValidationReport = {
   issues: ValidationIssue[];
 };
 
+export type TemplateKindAssignmentItem = {
+  kind_code: string;
+  kind_name: string;
+  assigned: boolean;
+  is_default: boolean;
+};
+
 export type EditorContextDto = {
   detail: DocumentTemplateDetailDto;
   extends_base: {
@@ -178,6 +185,7 @@ export type EditorContextDto = {
     version_id: number | null;
   }>;
   erp_assignments?: TemplateAssignmentItem[];
+  kind_assignments?: TemplateKindAssignmentItem[];
   versions_history: DocumentTemplateVersionDto[];
   variable_tree: VariableTreeNode[];
   variable_fields?: VariableFieldDto[];
@@ -467,12 +475,34 @@ export async function bindDocumentTemplate(
     warehouse_id?: number | null;
     variant_code?: string;
     priority?: number;
+    is_default?: boolean;
   },
 ) {
   const { data } = await api.post("/document-templates/bindings", payload, {
     params: { tenant_id: tenantId },
   });
   return data;
+}
+
+export async function fetchTemplateKindAssignments(tenantId: number, templateId: number) {
+  const { data } = await api.get<{ items: TemplateKindAssignmentItem[] }>(
+    `/document-templates/templates/${templateId}/kind-assignments`,
+    { params: { tenant_id: tenantId } },
+  );
+  return data.items;
+}
+
+export async function saveTemplateKindAssignments(
+  tenantId: number,
+  templateId: number,
+  assignments: TemplateKindAssignmentItem[],
+) {
+  const { data } = await api.put<{ items: TemplateKindAssignmentItem[] }>(
+    `/document-templates/templates/${templateId}/kind-assignments`,
+    { assignments },
+    { params: { tenant_id: tenantId } },
+  );
+  return data.items;
 }
 
 export async function migrateDefaultBindings(tenantId: number) {

@@ -1,57 +1,44 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 
 import type { EditorContextDto } from "../../../../api/documentTemplatesApi";
 import { kindLabel } from "../utils/assignableDocumentKinds";
-import { TemplateAssignmentModal } from "./TemplateAssignmentModal";
 
 type Props = {
   ctx: EditorContextDto;
-  onAssignmentsChange?: () => void;
+  onOpenAssignments?: () => void;
 };
 
-export function TemplateAssignmentsStrip({ ctx, onAssignmentsChange }: Props) {
-  const [modalOpen, setModalOpen] = useState(false);
+export function TemplateAssignmentsStrip({ ctx, onOpenAssignments }: Props) {
   const labels = useMemo(() => collectAssignedLabels(ctx), [ctx]);
-  const publishedVersionId =
-    ctx.detail.published_version?.id ?? ctx.detail.draft_version?.id ?? null;
 
   return (
-    <>
-      <button
-        type="button"
-        className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-left text-sm hover:opacity-80"
-        onClick={() => setModalOpen(true)}
-      >
-        <span className="text-slate-500">Przypisany do:</span>
-        {labels.length ? (
-          <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1 text-slate-800">
-            {labels.map((label) => (
-              <span key={label} className="inline-flex items-center gap-1">
-                <span className="text-emerald-600" aria-hidden>
-                  ✓
-                </span>
-                {label}
+    <button
+      type="button"
+      className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-left text-sm hover:opacity-80"
+      onClick={onOpenAssignments}
+    >
+      <span className="text-slate-500">Przypisany do:</span>
+      {labels.length ? (
+        <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1 text-slate-800">
+          {labels.map((label) => (
+            <span key={label} className="inline-flex items-center gap-1">
+              <span className="text-emerald-600" aria-hidden>
+                ✓
               </span>
-            ))}
-          </span>
-        ) : (
-          <span className="font-medium text-amber-800 underline decoration-dotted">Nieprzypisany</span>
-        )}
-      </button>
-      <TemplateAssignmentModal
-        templateId={ctx.detail.id}
-        templateKindCode={ctx.detail.kind?.code ?? null}
-        templateKindName={ctx.detail.kind?.name_pl ?? null}
-        publishedVersionId={publishedVersionId}
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        onSaved={onAssignmentsChange}
-      />
-    </>
+              {label}
+            </span>
+          ))}
+        </span>
+      ) : (
+        <span className="font-medium text-amber-800 underline decoration-dotted">Nieprzypisany</span>
+      )}
+    </button>
   );
 }
 
 function collectAssignedLabels(ctx: EditorContextDto): string[] {
+  const fromKinds = (ctx.kind_assignments ?? []).filter((a) => a.assigned).map((a) => a.kind_name);
+  if (fromKinds.length) return fromKinds;
   const seen = new Set<string>();
   const out: string[] = [];
   for (const item of ctx.erp_assignments ?? []) {

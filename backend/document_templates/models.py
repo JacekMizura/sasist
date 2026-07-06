@@ -156,6 +156,7 @@ class DocumentTemplateBinding(Base, BaseModelMixin):
     warehouse_id = Column(Integer, ForeignKey("warehouses.id", ondelete="CASCADE"), nullable=True, index=True)
     priority = Column(Integer, nullable=False, default=100)
     is_active = Column(Boolean, nullable=False, default=True)
+    is_default = Column(Boolean, nullable=False, default=False, index=True)
 
     kind = relationship("DocumentTemplateKind", back_populates="bindings")
     template = relationship("DocumentTemplate")

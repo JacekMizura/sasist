@@ -74,12 +74,18 @@ def list_templates_enriched(
     status: str | None = None,
     source: str | None = None,
     template_role: str | None = None,
+    user_templates_only: bool = True,
 ) -> list[dict[str, Any]]:
     q = db.query(DocumentTemplate).filter(DocumentTemplate.tenant_id == int(tenant_id))
     if template_role:
         q = q.filter(DocumentTemplate.template_role == str(template_role))
     else:
         q = q.filter(DocumentTemplate.template_role == TEMPLATE_ROLE_DOCUMENT)
+    if user_templates_only:
+        q = q.filter(
+            DocumentTemplate.is_system.is_(False),
+            DocumentTemplate.source.in_([SOURCE_TENANT, SOURCE_MARKETPLACE]),
+        )
     if source:
         q = q.filter(DocumentTemplate.source == str(source))
     if kind_code:
@@ -127,23 +133,22 @@ def _template_list_row(db: Session, row: DocumentTemplate) -> dict[str, Any]:
         db.query(DocumentTemplateBinding)
         .filter(
             DocumentTemplateBinding.template_id == int(row.id),
+            DocumentTemplateBinding.tenant_id == int(row.tenant_id),
             DocumentTemplateBinding.is_active.is_(True),
         )
         .all()
     )
     binding_labels = []
-    used_as_labels: list[str] = []
-    used_as_seen: set[str] = set()
     variants: set[str] = set()
     for b in bindings:
         variants.add(str(b.variant_code or DEFAULT_VARIANT_CODE))
         kind_row = db.query(DocumentTemplateKind).filter(DocumentTemplateKind.id == int(b.kind_id)).first()
         wh = f" · mag.{b.warehouse_id}" if b.warehouse_id else ""
         binding_labels.append(f"{kind_row.name_pl if kind_row else b.kind_id} ({b.variant_code}){wh}")
-        used_label = str(kind_row.name_pl if kind_row else b.kind_id)
-        if used_label not in used_as_seen:
-            used_as_seen.add(used_label)
-            used_as_labels.append(used_label)
+
+    from .template_kind_assignment_service import used_as_labels_for_template
+
+    used_as_labels = used_as_labels_for_template(db, tenant_id=int(row.tenant_id), template_id=int(row.id))
 
     author_name = None
     if row.created_by_user_id:
@@ -319,8 +324,10 @@ def get_editor_context(db: Session, *, tenant_id: int, template_id: int) -> dict
     partial_templates = list_layout_templates(db, tenant_id=tenant_id, role=TEMPLATE_ROLE_PARTIAL)
 
     from ..services.template_assignment_usage_service import list_assignments_for_template
+    from ..services.template_kind_assignment_service import list_template_kind_assignments
 
     erp_assignments = list_assignments_for_template(db, tenant_id=tenant_id, template_id=template_id)
+    kind_assignments = list_template_kind_assignments(db, tenant_id=tenant_id, template_id=template_id)
 
     return {
         "detail": detail,
@@ -328,6 +335,7 @@ def get_editor_context(db: Session, *, tenant_id: int, template_id: int) -> dict
         "partials_used": partials_used,
         "bindings": bindings,
         "erp_assignments": erp_assignments,
+        "kind_assignments": kind_assignments,
         "versions_history": versions_history,
         "variable_tree": variable_tree,
         "variable_fields": (variable_schema or {}).get("fields") or [],
@@ -562,6 +570,7 @@ def _list_template_bindings(db: Session, *, tenant_id: int, template_id: int) ->
                 "warehouse_id": int(b.warehouse_id) if b.warehouse_id else None,
                 "version_id": int(b.version_id) if b.version_id else None,
                 "priority": int(b.priority),
+                "is_default": bool(getattr(b, "is_default", False)),
             }
         )
     return out

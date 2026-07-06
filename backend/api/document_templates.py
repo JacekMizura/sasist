@@ -66,6 +66,7 @@ from ..schemas.document_template_schemas import (
     DocumentTemplateImportPayload,
     DocumentTemplateScopeAssignmentPayload,
     DocumentTemplateVersionReplacePayload,
+    TemplateKindAssignmentsPayload,
 )
 
 logger = logging.getLogger(__name__)
@@ -123,6 +124,7 @@ def api_list_document_templates_enriched(
     status: str | None = Query(default=None),
     source: str | None = Query(default=None),
     template_role: str | None = Query(default=None),
+    user_templates_only: bool = Query(default=True),
     db: Session = Depends(get_db),
     user: AppUser = Depends(get_current_user),
 ):
@@ -137,6 +139,7 @@ def api_list_document_templates_enriched(
             status=status,
             source=source,
             template_role=template_role,
+            user_templates_only=user_templates_only,
         )
     }
 
@@ -419,7 +422,54 @@ def api_upsert_document_binding(
             warehouse_id=payload.warehouse_id,
             variant_code=payload.variant_code,
             priority=payload.priority,
+            is_default=payload.is_default,
         )
+    except DocumentTemplateError as exc:
+        raise _map_error(exc) from exc
+
+
+@router.get("/templates/{template_id}/kind-assignments")
+def api_get_template_kind_assignments(
+    template_id: int,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    _ = user
+    from ..document_templates.services.template_kind_assignment_service import list_template_kind_assignments
+
+    try:
+        return {
+            "items": list_template_kind_assignments(
+                db,
+                tenant_id=tenant_id,
+                template_id=int(template_id),
+            )
+        }
+    except DocumentTemplateNotFoundError as exc:
+        raise _map_error(exc) from exc
+
+
+@router.put("/templates/{template_id}/kind-assignments")
+def api_save_template_kind_assignments(
+    template_id: int,
+    payload: TemplateKindAssignmentsPayload,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    _ = user
+    from ..document_templates.services.template_kind_assignment_service import save_template_kind_assignments
+
+    try:
+        return {
+            "items": save_template_kind_assignments(
+                db,
+                tenant_id=tenant_id,
+                template_id=int(template_id),
+                assignments=[item.model_dump() for item in payload.assignments],
+            )
+        }
     except DocumentTemplateError as exc:
         raise _map_error(exc) from exc
 

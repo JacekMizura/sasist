@@ -6,7 +6,7 @@ import { useVariableFavorites } from "../hooks/useVariableFavorites";
 import { HelperCatalogPanel } from "./HelperCatalogPanel";
 import { VariableExplorerPanel } from "./VariableExplorerPanel";
 import { VariableInspectorPanel } from "./VariableInspectorPanel";
-import { TemplateAssignmentsPanel } from "./TemplateAssignmentsPanel";
+import { TemplateKindAssignmentsEditor } from "./TemplateKindAssignmentsEditor";
 
 const TAB_ICONS: Record<string, string> = {
   variables: "{ }",
@@ -29,6 +29,7 @@ type Props = {
   onBaseVersionChange: (versionId: number | null) => void;
   onPartialPinChange: (code: string, versionId: number | null) => void;
   onSearchUsage?: (symbol: string) => void;
+  onAssignmentsSaved?: () => void;
 };
 
 export function EditorLeftPanel({
@@ -43,6 +44,7 @@ export function EditorLeftPanel({
   onBaseVersionChange,
   onPartialPinChange,
   onSearchUsage,
+  onAssignmentsSaved,
 }: Props) {
   const { tab, setTab, expandedSections, toggleSection } = useLeftPanelPersistence(templateId);
   const [search, setSearch] = useState("");
@@ -151,7 +153,13 @@ export function EditorLeftPanel({
             onVersionChange={onBaseVersionChange}
           />
         )}
-        {tab === "assignments" && <TemplateAssignmentsPanel items={ctx.erp_assignments ?? []} />}
+        {tab === "assignments" && (
+          <TemplateKindAssignmentsEditor
+            templateId={templateId}
+            publishedVersionId={ctx.detail.published_version?.id ?? null}
+            onSaved={onAssignmentsSaved}
+          />
+        )}
       </div>
       {tab === "variables" && (
         <VariableInspectorPanel field={selectedField} onInsert={onInsert} onSearchUsage={onSearchUsage} />

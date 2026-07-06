@@ -511,28 +511,18 @@ def resolve_bound_document_template(
     variant_code: str = DEFAULT_VARIANT_CODE,
 ):
     from ..dto.resolved_document_template import ResolvedDocumentTemplate
+    from .template_kind_assignment_service import resolve_default_binding
     from .template_resolution_service import resolve_plain_twig, resolve_published_template_version
 
     kind = get_kind_by_code(db, kind_code=kind_code)
     variant = str(variant_code or DEFAULT_VARIANT_CODE)
-    binding_q = (
-        db.query(DocumentTemplateBinding)
-        .options(joinedload(DocumentTemplateBinding.version), joinedload(DocumentTemplateBinding.template))
-        .filter(
-            DocumentTemplateBinding.tenant_id == int(tenant_id),
-            DocumentTemplateBinding.kind_id == int(kind.id),
-            DocumentTemplateBinding.variant_code == variant,
-            DocumentTemplateBinding.is_active.is_(True),
-        )
-        .order_by(DocumentTemplateBinding.priority.asc(), DocumentTemplateBinding.id.desc())
+    binding = resolve_default_binding(
+        db,
+        tenant_id=int(tenant_id),
+        kind_code=kind_code,
+        variant_code=variant,
+        warehouse_id=warehouse_id,
     )
-    binding: DocumentTemplateBinding | None = None
-    if warehouse_id is not None:
-        binding = binding_q.filter(DocumentTemplateBinding.warehouse_id == int(warehouse_id)).first()
-        if binding is None:
-            binding = binding_q.filter(DocumentTemplateBinding.warehouse_id.is_(None)).first()
-    else:
-        binding = binding_q.filter(DocumentTemplateBinding.warehouse_id.is_(None)).first()
 
     if binding is not None:
         return _binding_resolved(db, binding)
@@ -569,54 +559,22 @@ def upsert_binding(
     warehouse_id: int | None = None,
     variant_code: str = DEFAULT_VARIANT_CODE,
     priority: int = 100,
+    is_default: bool = True,
 ) -> dict[str, Any]:
-    kind = get_kind_by_code(db, kind_code=kind_code)
-    variant = str(variant_code or DEFAULT_VARIANT_CODE)
-    template = (
-        db.query(DocumentTemplate)
-        .filter(DocumentTemplate.id == int(template_id), DocumentTemplate.tenant_id == int(tenant_id))
-        .first()
+    from .template_kind_assignment_service import upsert_template_kind_assignment
+
+    result = upsert_template_kind_assignment(
+        db,
+        tenant_id=tenant_id,
+        kind_code=kind_code,
+        template_id=template_id,
+        version_id=version_id,
+        warehouse_id=warehouse_id,
+        variant_code=variant_code,
+        priority=priority,
+        is_default=is_default,
+        is_active=True,
     )
-    if template is None:
-        raise DocumentTemplateNotFoundError()
-    if int(template.kind_id) != int(kind.id):
-        raise DocumentTemplateError("Szablon nie pasuje do typu dokumentu.", code="kind_mismatch")
-    row = (
-        db.query(DocumentTemplateBinding)
-        .filter(
-            DocumentTemplateBinding.tenant_id == int(tenant_id),
-            DocumentTemplateBinding.kind_id == int(kind.id),
-            DocumentTemplateBinding.variant_code == variant,
-            DocumentTemplateBinding.warehouse_id == (int(warehouse_id) if warehouse_id else None),
-        )
-        .first()
-    )
-    if row is None:
-        row = DocumentTemplateBinding(
-            tenant_id=int(tenant_id),
-            kind_id=int(kind.id),
-            variant_code=variant,
-            template_id=int(template_id),
-            version_id=version_id,
-            warehouse_id=int(warehouse_id) if warehouse_id else None,
-            priority=int(priority),
-            is_active=True,
-        )
-        db.add(row)
-    else:
-        row.template_id = int(template_id)
-        row.version_id = version_id
-        row.priority = int(priority)
-        row.is_active = True
-        row.updated_at = datetime.utcnow()
-    db.commit()
-    return {
-        "id": int(row.id),
-        "kind_code": kind.code,
-        "variant_code": row.variant_code,
-        "template_id": int(row.template_id),
-        "version_id": int(row.version_id) if row.version_id else None,
-        "warehouse_id": int(row.warehouse_id) if row.warehouse_id else None,
-        "priority": int(row.priority),
-        "is_active": bool(row.is_active),
-    }
+    result["priority"] = int(priority)
+    result["is_active"] = True
+    return result

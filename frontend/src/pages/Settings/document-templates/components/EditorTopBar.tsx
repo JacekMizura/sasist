@@ -15,6 +15,7 @@ type Props = {
   onSave: () => void;
   onPublish: () => void;
   onAssignmentsChange: () => void;
+  onOpenAssignments: () => void;
   onToggleLeft: () => void;
   onToggleRight: () => void;
   onToggleDetails: () => void;
@@ -34,6 +35,7 @@ export function EditorTopBar({
   onSave,
   onPublish,
   onAssignmentsChange,
+  onOpenAssignments,
   onToggleLeft,
   onToggleRight,
   onToggleDetails,
@@ -64,7 +66,7 @@ export function EditorTopBar({
               <span className="text-slate-400">Wariant:</span> {variant}
             </span>
           </div>
-          <TemplateAssignmentsStrip ctx={ctx} onAssignmentsChange={onAssignmentsChange} />
+          <TemplateAssignmentsStrip ctx={ctx} onOpenAssignments={onOpenAssignments} />
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <button

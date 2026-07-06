@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, X } from "lucide-react";
+import { ChevronDown, Loader2, X } from "lucide-react";
 import toast from "react-hot-toast";
 import { PDFDocument } from "pdf-lib";
 
 import { fetchPublishedTemplateOptions, type PublishedTemplateOptionDto } from "@/api/documentTemplatesApi";
 import { extractApiErrorMessage } from "@/api/apiErrorMessage";
-import { DocumentTemplatePreviewThumbnail } from "./DocumentTemplatePreviewThumbnail";
+import { listSellasistInputClass } from "@/components/listPage/listSellasistTokens";
 import {
   fetchDocumentPrintPdfBlob,
   resolveOrderWzBulkPrintRequests,
@@ -53,6 +53,7 @@ export function ErpBulkPrintModal({
   const [step, setStep] = useState<"type" | "template">("type");
   const [selectedTypeId, setSelectedTypeId] = useState<string | null>(null);
   const [options, setOptions] = useState<PublishedTemplateOptionDto[]>([]);
+  const [selectedVersionId, setSelectedVersionId] = useState<number | null>(null);
   const [loadingOptions, setLoadingOptions] = useState(false);
   const [busy, setBusy] = useState(false);
   const [resolvedRequests, setResolvedRequests] = useState<DocumentPrintRequest[]>([]);
@@ -63,21 +64,23 @@ export function ErpBulkPrintModal({
   );
 
   const reset = useCallback(() => {
-    setStep("type");
-    setSelectedTypeId(null);
+    setStep(documentTypes.length === 1 ? "template" : "type");
+    setSelectedTypeId(documentTypes.length === 1 ? documentTypes[0]!.id : null);
     setOptions([]);
+    setSelectedVersionId(null);
     setResolvedRequests([]);
     setLoadingOptions(false);
     setBusy(false);
-  }, []);
+  }, [documentTypes]);
 
   useEffect(() => {
-    if (!open) reset();
+    if (!open) return;
+    reset();
   }, [open, reset]);
 
   const executePrint = useCallback(
     async (templateVersionId: number | null, reqs: DocumentPrintRequest[]) => {
-      if (reqs.length === 0) return;
+      if (reqs.length === 0 || !templateVersionId) return;
       setBusy(true);
       try {
         const blobs = await Promise.all(
@@ -96,30 +99,50 @@ export function ErpBulkPrintModal({
   );
 
   const loadTemplates = useCallback(
-    async (kindCode: string, reqs: DocumentPrintRequest[]) => {
+    async (type: BulkDocumentTypeOption, reqs: DocumentPrintRequest[]) => {
       setLoadingOptions(true);
       try {
-        const items = await fetchPublishedTemplateOptions(tenantId, { kind_code: kindCode });
-        setOptions(items);
-        if (items.length <= 1) {
-          await executePrint(items[0]?.version_id ?? null, reqs);
+        const items = await fetchPublishedTemplateOptions(tenantId, { kind_code: type.kindCode });
+        if (items.length === 0) {
+          toast.error("Brak opublikowanych szablonów przypisanych do tego typu dokumentu.");
           return;
         }
+        const defaultItem = items.find((i) => i.is_default_binding) ?? items[0]!;
+        setOptions(items);
+        setSelectedVersionId(defaultItem.version_id);
+        setSelectedTypeId(type.id);
+        setResolvedRequests(reqs);
         setStep("template");
       } catch (err) {
         toast.error(extractApiErrorMessage(err, "Nie udało się wczytać szablonów."));
-        onClose();
       } finally {
         setLoadingOptions(false);
       }
     },
-    [tenantId, executePrint, onClose],
+    [tenantId],
   );
+
+  useEffect(() => {
+    if (!open || documentTypes.length !== 1 || selectedTypeId) return;
+    const only = documentTypes[0]!;
+    if (ids.length === 0) return;
+    void (async () => {
+      try {
+        const reqs = only.resolveRequests ? await only.resolveRequests(ids) : only.buildRequests(ids);
+        if (reqs.length === 0) {
+          toast.error("Brak dokumentów do druku.");
+          return;
+        }
+        await loadTemplates(only, reqs);
+      } catch (err) {
+        toast.error(extractApiErrorMessage(err, "Nie udało się przygotować dokumentów do druku."));
+      }
+    })();
+  }, [open, documentTypes, ids, loadTemplates, selectedTypeId]);
 
   const onPickDocumentType = (typeId: string) => {
     const hit = documentTypes.find((t) => t.id === typeId);
     if (!hit || ids.length === 0) return;
-    setSelectedTypeId(typeId);
     void (async () => {
       try {
         const reqs = hit.resolveRequests ? await hit.resolveRequests(ids) : hit.buildRequests(ids);
@@ -127,8 +150,7 @@ export function ErpBulkPrintModal({
           toast.error("Brak dokumentów do druku.");
           return;
         }
-        setResolvedRequests(reqs);
-        await loadTemplates(hit.kindCode, reqs);
+        await loadTemplates(hit, reqs);
       } catch (err) {
         toast.error(extractApiErrorMessage(err, "Nie udało się przygotować dokumentów do druku."));
       }
@@ -139,13 +161,11 @@ export function ErpBulkPrintModal({
 
   return (
     <div className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-900/50 p-4" role="dialog" aria-modal="true">
-      <div className="max-h-[90vh] w-full max-w-3xl overflow-hidden rounded-xl bg-white shadow-xl">
+      <div className="w-full max-w-lg overflow-hidden rounded-xl bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
           <div>
             <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
-            <p className="mt-0.5 text-sm text-slate-500">
-              {ids.length} pozycji · {step === "type" ? "Wybierz rodzaj dokumentu" : "Wybierz szablon"}
-            </p>
+            <p className="mt-0.5 text-sm text-slate-500">{ids.length} pozycji</p>
           </div>
           <button
             type="button"
@@ -164,7 +184,7 @@ export function ErpBulkPrintModal({
             <p className="text-sm">{busy ? "Generowanie PDF…" : "Wczytywanie szablonów…"}</p>
           </div>
         ) : step === "type" ? (
-          <div className="grid gap-2 p-5 sm:grid-cols-2">
+          <div className="grid gap-2 p-5">
             {documentTypes.map((opt) => (
               <button
                 key={opt.id}
@@ -177,36 +197,39 @@ export function ErpBulkPrintModal({
             ))}
           </div>
         ) : (
-          <div className="grid max-h-[calc(90vh-5rem)] gap-4 overflow-y-auto p-5 sm:grid-cols-2">
-            {options.map((opt) => (
-              <article
-                key={opt.version_id}
-                className="flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"
-              >
-                <DocumentTemplatePreviewThumbnail
-                  tenantId={tenantId}
-                  versionId={opt.version_id}
-                  alt={opt.template_name}
-                  className="h-40 w-full border-b border-slate-100 object-cover object-top"
-                />
-                <div className="flex flex-1 flex-col gap-2 p-4">
-                  <h3 className="text-sm font-semibold text-slate-900">{opt.template_name}</h3>
-                  {opt.description ? (
-                    <p className="line-clamp-3 text-sm text-slate-600">{opt.description}</p>
-                  ) : opt.kind_name ? (
-                    <p className="text-sm text-slate-500">{opt.kind_name}</p>
-                  ) : null}
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void executePrint(opt.version_id, resolvedRequests)}
-                    className="mt-auto rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
-                  >
-                    Drukuj ({ids.length})
-                  </button>
-                </div>
-              </article>
-            ))}
+          <div className="space-y-5 p-5">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Rodzaj dokumentu</div>
+              <div className="mt-1 text-sm font-medium text-slate-900">
+                {selectedType?.label ?? options[0]?.kind_name ?? "—"}
+              </div>
+            </div>
+            <label className="block">
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Szablon</span>
+              <div className="relative mt-1">
+                <select
+                  className={`${listSellasistInputClass} appearance-none pr-10`}
+                  value={selectedVersionId ?? ""}
+                  onChange={(e) => setSelectedVersionId(Number(e.target.value))}
+                >
+                  {options.map((opt) => (
+                    <option key={opt.version_id} value={opt.version_id}>
+                      {opt.template_name}
+                      {opt.is_default_binding ? " (domyślny)" : ""}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden />
+              </div>
+            </label>
+            <button
+              type="button"
+              disabled={busy || !selectedVersionId}
+              onClick={() => void executePrint(selectedVersionId, resolvedRequests)}
+              className="w-full rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+            >
+              Drukuj ({ids.length})
+            </button>
           </div>
         )}
       </div>

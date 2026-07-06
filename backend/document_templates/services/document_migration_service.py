@@ -79,6 +79,37 @@ def ensure_default_binding(
     if existing is not None:
         return {"kind_code": kind_code, "binding_id": int(existing.id), "created": False}
 
+    existing_tpl = (
+        db.query(DocumentTemplate)
+        .filter(
+            DocumentTemplate.tenant_id == int(tenant_id),
+            DocumentTemplate.kind_id == int(kind.id),
+            DocumentTemplate.source == SOURCE_STARTER,
+        )
+        .order_by(DocumentTemplate.id.asc())
+        .first()
+    )
+    if existing_tpl is not None:
+        published = (
+            db.query(DocumentTemplateVersion)
+            .filter(
+                DocumentTemplateVersion.template_id == int(existing_tpl.id),
+                DocumentTemplateVersion.status == VERSION_STATUS_PUBLISHED,
+            )
+            .order_by(DocumentTemplateVersion.version_number.desc())
+            .first()
+        )
+        binding = upsert_binding(
+            db,
+            tenant_id=int(tenant_id),
+            kind_code=kind_code,
+            template_id=int(existing_tpl.id),
+            version_id=int(published.id) if published else None,
+            variant_code=variant_code,
+            is_default=True,
+        )
+        return {"kind_code": kind_code, "binding_id": binding.get("id"), "created": False, "reused_template_id": int(existing_tpl.id)}
+
     starter = (
         db.query(DocumentTemplateStarter)
         .filter(DocumentTemplateStarter.kind_id == int(kind.id), DocumentTemplateStarter.code == "default")

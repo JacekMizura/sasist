@@ -174,12 +174,12 @@ function DocumentTemplateListCell({
       const labels = documentTemplateUsedAsLabels(row);
       if (labels.length === 0) return <span className="text-slate-400">—</span>;
       const [first, ...rest] = labels;
-      const tooltip = labels.join("\n");
+      const tooltip = labels.map((l) => `• ${l}`).join("\n");
       return (
-        <div className="min-w-0 max-w-[220px]" title={tooltip}>
-          <div className="truncate text-slate-700">{first}</div>
+        <div className="flex min-w-0 flex-wrap items-center gap-1" title={tooltip}>
+          <span className={moduleListChannelBadgeClass}>{first}</span>
           {rest.length > 0 ? (
-            <div className="mt-0.5 text-xs font-medium text-slate-500">+{rest.length}</div>
+            <span className={moduleListChannelBadgeClass}>+{rest.length}</span>
           ) : null}
         </div>
       );

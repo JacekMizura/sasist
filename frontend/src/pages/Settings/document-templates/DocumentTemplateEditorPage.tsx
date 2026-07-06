@@ -363,6 +363,10 @@ export function DocumentTemplateEditorPage() {
           onSave={() => void handleSave()}
           onPublish={() => void handlePublishClick()}
           onAssignmentsChange={() => void load()}
+          onOpenAssignments={() => {
+            setLeftOpen(true);
+            setAssignmentsFocusToken((t) => t + 1);
+          }}
           onToggleDetails={() => setDetailsOpen((v) => !v)}
           onToggleLeft={() => setLeftOpen((v) => !v)}
           onToggleRight={() => setRightOpen((v) => !v)}
@@ -397,6 +401,7 @@ export function DocumentTemplateEditorPage() {
               })
             }
             onSearchUsage={(sym) => void handleSearchUsage(sym)}
+            onAssignmentsSaved={() => void load()}
           />
 
           <div className="relative flex min-h-0 min-w-0 flex-1 flex-col border-x border-slate-100">

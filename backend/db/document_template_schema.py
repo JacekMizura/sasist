@@ -147,6 +147,13 @@ def _migrate_v2_columns(engine: Engine) -> None:
         "ALTER TABLE document_template_binding ADD COLUMN variant_code VARCHAR(64) NOT NULL DEFAULT 'standard'",
         "ALTER TABLE document_template_binding ADD COLUMN variant_code VARCHAR(64) NOT NULL DEFAULT 'standard'",
     )
+    _add_column(
+        engine,
+        "document_template_binding",
+        "is_default",
+        "ALTER TABLE document_template_binding ADD COLUMN is_default BOOLEAN NOT NULL DEFAULT 0",
+        "ALTER TABLE document_template_binding ADD COLUMN is_default BOOLEAN NOT NULL DEFAULT FALSE",
+    )
 
 
 def _seed_catalog(engine: Engine) -> None:

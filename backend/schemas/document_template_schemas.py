@@ -54,6 +54,17 @@ class DocumentTemplateBindingPayload(BaseModel):
     warehouse_id: int | None = None
     variant_code: str = "standard"
     priority: int = 100
+    is_default: bool = True
+
+
+class TemplateKindAssignmentItem(BaseModel):
+    kind_code: str
+    assigned: bool = False
+    is_default: bool = False
+
+
+class TemplateKindAssignmentsPayload(BaseModel):
+    assignments: list[TemplateKindAssignmentItem] = Field(default_factory=list)
 
 
 class DocumentTemplatePreviewPayload(BaseModel):
