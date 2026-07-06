@@ -1,6 +1,13 @@
 # Change log
 
-## 2026-06-08 — Galeria szablonów etykiet: miniatury + design system
+## 2026-06-08 — Dokumenty magazynowe: kompaktowy widok szczegółów (UX/UI)
+
+- Modal PZ/WZ/MM/PW/RW: nagłówek ~250px, dwie karty info, pasek finansów inline.
+- Tabela pozycji: `flex-1`, scroll wewnętrzny, gęstsze komórki.
+- Podsumowanie: jeden wiersz Netto | VAT | Brutto (+ ilości).
+- Stopka: akcje pomocnicze lewo, operacyjne prawo, tokeny `listSellasist`.
+- Z-PZ: ten sam układ kompaktowy + fix importu `documentCreatedByLabel`.
+
 
 - `LabelGalleryThumbnail` — renderuje prawdziwy podgląd SVG (`renderLabel` + `buildPreviewRecord`), cache per preset.
 - Karty: miniatury 140px, proporcje zachowane, wybór slate-900 + ✓, hover translate/shadow 150ms.

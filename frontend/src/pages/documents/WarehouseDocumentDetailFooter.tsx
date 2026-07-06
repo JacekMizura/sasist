@@ -1,3 +1,11 @@
+import { Copy, Pencil, Printer, Trash2 } from "lucide-react";
+import {
+  warehouseDocIconBtnClass,
+  warehouseDocIconBtnDangerClass,
+  warehouseDocPrimaryBtnClass,
+  warehouseDocSecondaryBtnClass,
+} from "./warehouseDocumentDetailUi";
+
 type Props = {
   detailBusy: boolean;
   detailId: number | null;
@@ -21,15 +29,6 @@ type Props = {
   onSaveDraft: () => void;
   onAccept: () => void;
 };
-
-const btnGhost =
-  "rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50";
-const btnSecondary =
-  "rounded-lg border border-slate-200 px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50";
-const btnPrimary =
-  "rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-500 disabled:opacity-50";
-const iconBtn =
-  "inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-base leading-none hover:bg-slate-50 disabled:opacity-50";
 
 export function WarehouseDocumentDetailFooter({
   detailBusy,
@@ -62,12 +61,12 @@ export function WarehouseDocumentDetailFooter({
       : "Zatwierdź przyjęcie";
 
   return (
-    <footer className="flex shrink-0 flex-wrap items-center gap-3 border-t border-slate-200 bg-white px-6 py-4">
-      <button type="button" onClick={onClose} disabled={detailBusy} className={btnGhost}>
-        Zamknij
-      </button>
+    <footer className="flex shrink-0 flex-wrap items-center gap-2 border-t border-slate-200 bg-white px-4 py-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" onClick={onClose} disabled={detailBusy} className={warehouseDocSecondaryBtnClass}>
+          Zamknij
+        </button>
 
-      <div className="flex flex-1 flex-wrap items-center justify-end gap-2 sm:gap-3">
         {detailId != null && detail ? (
           <>
             <div className="flex items-center gap-1" data-print-menu-root>
@@ -77,9 +76,9 @@ export function WarehouseDocumentDetailFooter({
                 title="Edytuj pozycje"
                 disabled={detailBusy}
                 onClick={onScrollToLines}
-                className={iconBtn}
+                className={warehouseDocIconBtnClass}
               >
-                ✏️
+                <Pencil className="h-4 w-4" strokeWidth={2} aria-hidden />
               </button>
               <div className="relative inline-flex">
                 <button
@@ -88,22 +87,22 @@ export function WarehouseDocumentDetailFooter({
                   title="Drukuj / PDF"
                   disabled={detailBusy}
                   onClick={onTogglePrintMenu}
-                  className={iconBtn}
+                  className={warehouseDocIconBtnClass}
                 >
-                  🖨
+                  <Printer className="h-4 w-4" strokeWidth={2} aria-hidden />
                 </button>
                 {detailPrintMenuOpen ? (
-                  <div className="absolute bottom-full right-0 z-[320] mb-1 w-44 rounded-lg border border-slate-200 bg-white py-1 text-left shadow-lg">
+                  <div className="absolute bottom-full right-0 z-[320] mb-1 w-44 rounded-lg border border-slate-200 bg-white py-1 text-left shadow-lg ring-1 ring-slate-900/5">
                     <button
                       type="button"
-                      className="block w-full px-3 py-2 text-sm text-slate-800 hover:bg-slate-50"
+                      className="block w-full px-3 py-2 text-left text-sm text-slate-800 hover:bg-slate-50"
                       onClick={onPrint}
                     >
                       Drukuj
                     </button>
                     <button
                       type="button"
-                      className="block w-full px-3 py-2 text-sm text-slate-800 hover:bg-slate-50"
+                      className="block w-full px-3 py-2 text-left text-sm text-slate-800 hover:bg-slate-50"
                       onClick={onDownloadPdf}
                     >
                       Pobierz PDF
@@ -117,20 +116,28 @@ export function WarehouseDocumentDetailFooter({
                 title="Usuń dokument"
                 disabled={detailBusy}
                 onClick={onDelete}
-                className={`${iconBtn} border-rose-200 text-rose-800 hover:bg-rose-50`}
+                className={warehouseDocIconBtnDangerClass}
               >
-                🗑
+                <Trash2 className="h-4 w-4" strokeWidth={2} aria-hidden />
               </button>
             </div>
 
-            <button type="button" onClick={onDuplicate} disabled={detailBusy} className={btnSecondary}>
+            <button type="button" onClick={onDuplicate} disabled={detailBusy} className={warehouseDocSecondaryBtnClass}>
+              <Copy className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
               Duplikuj
             </button>
           </>
         ) : null}
+      </div>
 
+      <div className="flex flex-1 flex-wrap items-center justify-end gap-2">
         {canEditMetadata ? (
-          <button type="button" onClick={onSaveMetadata} disabled={detailBusy || !detail} className={btnSecondary}>
+          <button
+            type="button"
+            onClick={onSaveMetadata}
+            disabled={detailBusy || !detail}
+            className={warehouseDocSecondaryBtnClass}
+          >
             {detailBusy ? "Zapisywanie…" : "Zapisz wartości"}
           </button>
         ) : null}
@@ -141,7 +148,7 @@ export function WarehouseDocumentDetailFooter({
               type="button"
               onClick={onReceiveAll}
               disabled={detailBusy || !detail || !lineEditEnabled}
-              className={btnSecondary}
+              className={warehouseDocSecondaryBtnClass}
             >
               Przyjmij wszystko
             </button>
@@ -149,7 +156,7 @@ export function WarehouseDocumentDetailFooter({
               type="button"
               onClick={onSaveDraft}
               disabled={detailBusy || !detail || !lineEditEnabled}
-              className={btnSecondary}
+              className={warehouseDocSecondaryBtnClass}
             >
               {detailBusy ? "Zapisywanie…" : "Zapisz ilości"}
             </button>
@@ -162,7 +169,7 @@ export function WarehouseDocumentDetailFooter({
                   ? "Najpierw ustaw magazyn (WMS → Przyjęcie). Lokalizacja przyjęcia zostanie uzupełniona automatycznie, jeśli jest dostępna w magazynie."
                   : undefined
               }
-              className={btnPrimary}
+              className={warehouseDocPrimaryBtnClass}
             >
               {acceptLabel}
             </button>

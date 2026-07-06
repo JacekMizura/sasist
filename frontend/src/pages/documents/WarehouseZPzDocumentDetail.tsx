@@ -1,9 +1,17 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import type { StockDocumentRead } from "../../api/stockDocumentsApi";
+import { documentCreatedByLabel } from "../../utils/documentCreatedBy";
 import { formatMoneyPl } from "../../utils/formatOrderMoney";
 import { displayWarehouseDocumentNumber } from "../../utils/warehouseDocumentNumberDisplay";
 import { ExternalStatusBadge } from "./documentsBadges";
+import {
+  WarehouseDocCompactRow,
+  WarehouseDocSummaryBar,
+  WarehouseDocSummaryItem,
+  WarehouseDocSummarySeparator,
+  warehouseDocInfoCardClass,
+} from "./warehouseDocumentDetailUi";
 import type { BusinessDocStatus } from "./warehouseDocumentsUi";
 
 function formatDt(iso: string | null | undefined) {
@@ -26,27 +34,6 @@ function fmtQty(n: number) {
   if (!Number.isFinite(n)) return "—";
   if (Math.abs(n - Math.round(n)) < 1e-9) return String(Math.round(n));
   return n.toLocaleString("pl-PL", { maximumFractionDigits: 3 });
-}
-
-type MetaItem = { label: string; value: ReactNode };
-
-function MetaGrid({ items, cols = 3 }: { items: MetaItem[]; cols?: 2 | 3 | 4 }) {
-  const colCls =
-    cols === 2
-      ? "sm:grid-cols-2"
-      : cols === 4
-        ? "sm:grid-cols-2 lg:grid-cols-4"
-        : "sm:grid-cols-2 lg:grid-cols-3";
-  return (
-    <dl className={`grid grid-cols-2 gap-x-6 gap-y-4 ${colCls}`}>
-      {items.map((item) => (
-        <div key={item.label} className="min-w-0">
-          <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{item.label}</dt>
-          <dd className="mt-1 text-sm font-medium text-slate-900">{item.value}</dd>
-        </div>
-      ))}
-    </dl>
-  );
 }
 
 type Props = {
@@ -89,40 +76,6 @@ export function WarehouseZPzDocumentDetail({
         ? valueSum
         : null;
 
-  const headerItems: MetaItem[] = [
-    {
-      label: "Magazyn",
-      value: detail.warehouse_id == null ? "—" : (detail.warehouse_name || "").trim() || `#${detail.warehouse_id}`,
-    },
-    {
-      label: "Operator",
-      value: documentCreatedByLabel(detail.created_by) || "—",
-    },
-    {
-      label: "Data utworzenia",
-      value: <span className="tabular-nums">{formatDt(detail.created_at)}</span>,
-    },
-    {
-      label: "Data zamknięcia",
-      value: <span className="tabular-nums">{formatDt(detail.closed_at ?? null)}</span>,
-    },
-  ];
-
-  const summaryItems: MetaItem[] = [
-    {
-      label: "Liczba pozycji",
-      value: <span className="tabular-nums">{lineCount}</span>,
-    },
-    {
-      label: "Liczba sztuk",
-      value: <span className="tabular-nums">{fmtQty(unitCount)}</span>,
-    },
-    {
-      label: "Wartość dokumentu",
-      value: <span className="tabular-nums text-base font-semibold">{fmtMoneyCur(docValue, currency)}</span>,
-    },
-  ];
-
   const shellCls =
     layout === "page"
       ? "flex min-h-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm"
@@ -130,52 +83,79 @@ export function WarehouseZPzDocumentDetail({
 
   return (
     <div className={shellCls}>
-      <header className="shrink-0 border-b border-slate-200 bg-white px-5 pb-5 pt-5 sm:px-6 sm:pt-6">
-        {backLink ? <div className="mb-4">{backLink}</div> : null}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <header className="shrink-0 border-b border-slate-200 bg-white px-4 py-3">
+        {backLink ? <div className="mb-2">{backLink}</div> : null}
+        <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="mb-1 text-[11px] font-bold uppercase tracking-wider text-slate-500">Dokument magazynowy · Z-PZ</p>
-            <h1 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">{docNumber}</h1>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Dokument magazynowy · Z-PZ</p>
+            <h1 className="truncate text-xl font-semibold tracking-tight text-slate-900">{docNumber}</h1>
           </div>
           <ExternalStatusBadge status={status} />
         </div>
-        <div className="mt-5 rounded-xl border border-slate-100 bg-slate-50/80 p-4">
-          <MetaGrid items={headerItems} cols={4} />
+
+        <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
+          <div className={warehouseDocInfoCardClass}>
+            <WarehouseDocCompactRow label="Numer dokumentu" value={docNumber} />
+            <WarehouseDocCompactRow label="Status" value={<ExternalStatusBadge status={status} />} />
+            <WarehouseDocCompactRow
+              label="Magazyn"
+              value={
+                detail.warehouse_id == null
+                  ? "—"
+                  : (detail.warehouse_name || "").trim() || `#${detail.warehouse_id}`
+              }
+            />
+            <WarehouseDocCompactRow label="Data zamknięcia" value={<span className="tabular-nums">{formatDt(detail.closed_at ?? null)}</span>} />
+          </div>
+          <div className={warehouseDocInfoCardClass}>
+            <WarehouseDocCompactRow label="Typ" value="Z-PZ" />
+            <WarehouseDocCompactRow label="Data" value={<span className="tabular-nums">{formatDt(detail.created_at)}</span>} />
+            <WarehouseDocCompactRow label="Autor" value={documentCreatedByLabel(detail.created_by) || "—"} />
+            <WarehouseDocCompactRow label="Seria" value={(detail.document_series_prefix || "Z-PZ").trim() || "Z-PZ"} />
+          </div>
         </div>
       </header>
 
       {error ? (
-        <div className="border-b border-red-200 bg-red-50 px-5 py-3 text-sm text-red-800 sm:px-6">{error}</div>
+        <div className="shrink-0 border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">{error}</div>
       ) : null}
 
-      <div className="shrink-0 border-b border-slate-200 bg-white px-5 py-4 sm:px-6">
-        <h2 className="mb-3 text-[11px] font-bold uppercase tracking-wide text-slate-500">Podsumowanie</h2>
-        <MetaGrid items={summaryItems} cols={3} />
-      </div>
+      <WarehouseDocSummaryBar
+        left={
+          <>
+            <WarehouseDocSummaryItem label="Pozycji" value={String(lineCount)} />
+            <WarehouseDocSummarySeparator />
+            <WarehouseDocSummaryItem label="Sztuk" value={fmtQty(unitCount)} />
+          </>
+        }
+        right={
+          <WarehouseDocSummaryItem label="Wartość netto" value={fmtMoneyCur(docValue, currency)} />
+        }
+      />
 
-      <div className={`min-h-0 flex-1 ${layout === "page" ? "overflow-y-auto" : ""} p-5 sm:p-6`}>
+      <div className={`min-h-0 flex-1 overflow-hidden px-4 py-2 ${layout === "page" ? "" : ""}`}>
         {loading ? (
-          <div className="flex items-center justify-center py-16 text-sm text-slate-500">Wczytywanie…</div>
+          <div className="flex items-center justify-center py-12 text-sm text-slate-500">Wczytywanie…</div>
         ) : (
-          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-            <div className="overflow-x-auto">
+          <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white">
+            <div className="min-h-0 flex-1 overflow-auto">
               <table className="min-w-full text-sm">
                 <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500">
-                    <th className="px-4 py-3 font-bold">Produkt</th>
-                    <th className="px-4 py-3 font-bold">SKU</th>
-                    <th className="px-4 py-3 font-bold">EAN</th>
-                    <th className="px-4 py-3 font-bold text-right">Ilość</th>
-                    <th className="px-4 py-3 font-bold text-right">Cena zakupu</th>
-                    <th className="px-4 py-3 font-bold text-right">Wartość</th>
-                    <th className="px-4 py-3 font-bold text-center">Decyzja zwrotu</th>
-                    <th className="px-4 py-3 font-bold">Źródłowy RMZ</th>
+                  <tr className="border-b border-slate-200 bg-slate-50 text-left text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                    <th className="px-2 py-1.5">Produkt</th>
+                    <th className="px-2 py-1.5">SKU</th>
+                    <th className="px-2 py-1.5">EAN</th>
+                    <th className="px-2 py-1.5 text-right">Ilość</th>
+                    <th className="px-2 py-1.5 text-right">Cena zakupu</th>
+                    <th className="px-2 py-1.5 text-right">Wartość</th>
+                    <th className="px-2 py-1.5 text-center">Decyzja zwrotu</th>
+                    <th className="px-2 py-1.5">Źródłowy RMZ</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {detail.items.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="px-4 py-10 text-center text-slate-500">
+                      <td colSpan={8} className="px-4 py-8 text-center text-slate-500">
                         Brak pozycji na dokumencie.
                       </td>
                     </tr>
@@ -187,33 +167,34 @@ export function WarehouseZPzDocumentDetail({
                       const ean = (it.product_ean || "").trim() || "—";
                       const decision = (it.return_decision_label || "").trim() || "—";
                       const rmzId = it.source_rmz_id;
-                      const rmzNum = displayWarehouseDocumentNumber(it.source_rmz_number) || (it.source_rmz_number || "").trim();
+                      const rmzNum =
+                        displayWarehouseDocumentNumber(it.source_rmz_number) || (it.source_rmz_number || "").trim();
                       return (
                         <tr key={it.id} className="hover:bg-slate-50/80">
-                          <td className="max-w-[220px] px-4 py-3 font-medium text-slate-900">{name}</td>
-                          <td className="px-4 py-3 font-mono text-xs text-slate-700">{sku}</td>
-                          <td className="px-4 py-3 font-mono text-xs text-slate-700">{ean}</td>
-                          <td className="px-4 py-3 text-right tabular-nums text-slate-900">{fmtQty(qty)}</td>
-                          <td className="px-4 py-3 text-right tabular-nums text-slate-800">
+                          <td className="max-w-[220px] px-2 py-1.5 font-medium text-slate-900">{name}</td>
+                          <td className="px-2 py-1.5 font-mono text-xs text-slate-700">{sku}</td>
+                          <td className="px-2 py-1.5 font-mono text-xs text-slate-700">{ean}</td>
+                          <td className="px-2 py-1.5 text-right tabular-nums text-slate-900">{fmtQty(qty)}</td>
+                          <td className="px-2 py-1.5 text-right tabular-nums text-slate-800">
                             {fmtMoneyCur(it.purchase_price_net ?? null, currency)}
                           </td>
-                          <td className="px-4 py-3 text-right tabular-nums font-medium text-slate-900">
+                          <td className="px-2 py-1.5 text-right tabular-nums font-medium text-slate-900">
                             {fmtMoneyCur(it.value_net, currency)}
                           </td>
-                          <td className="px-4 py-3 text-center">
+                          <td className="px-2 py-1.5 text-center">
                             {decision !== "—" ? (
-                              <span className="inline-flex h-7 min-w-[1.75rem] items-center justify-center rounded-md bg-slate-100 px-2 text-xs font-bold text-slate-800">
+                              <span className="inline-flex h-6 items-center justify-center rounded border border-slate-200 bg-slate-50 px-2 text-xs font-semibold text-slate-800">
                                 {decision}
                               </span>
                             ) : (
                               <span className="text-slate-400">—</span>
                             )}
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="px-2 py-1.5">
                             {rmzId != null && rmzId > 0 ? (
                               <Link
                                 to={`/wms/returns/process/${rmzId}`}
-                                className="font-semibold text-violet-700 underline decoration-violet-200 underline-offset-2 hover:text-violet-900"
+                                className="font-semibold text-slate-900 underline decoration-slate-300 underline-offset-2 hover:text-slate-700"
                               >
                                 {rmzNum || `RMZ #${rmzId}`}
                               </Link>

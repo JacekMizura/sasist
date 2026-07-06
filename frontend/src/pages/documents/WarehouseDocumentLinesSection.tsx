@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import type { StockDocumentItemRead, StockDocumentRead } from "../../api/stockDocumentsApi";
-import { AppStatCard } from "../../components/app-shell/AppStatCard";
 import { PurchaseSalesBlockDrawer } from "../../components/purchasing/PurchaseSalesBlockDrawer";
 import { CarrierBadge } from "../../components/warehouse/carriers/CarrierBadge";
 import { formatMoneyPl } from "../../utils/formatOrderMoney";
@@ -10,6 +9,11 @@ import {
   type LineActionKind,
 } from "./WarehouseDocumentLineActionsMenu";
 import { WarehouseDocumentLineDetailDrawer } from "./WarehouseDocumentLineDetailDrawer";
+import {
+  WarehouseDocSummaryBar,
+  WarehouseDocSummaryItem,
+  WarehouseDocSummarySeparator,
+} from "./warehouseDocumentDetailUi";
 import {
   DeliveryDifferenceAcceptedBadge,
   deliveryShortageQty,
@@ -75,6 +79,7 @@ type Props = {
   onCreateCarrier: (lineId: number) => void;
   onClearCarrier: (lineId: number) => void;
   lineSummary: WarehouseLineSummary | null;
+  className?: string;
 };
 
 export function WarehouseDocumentLinesSection({
@@ -93,11 +98,12 @@ export function WarehouseDocumentLinesSection({
   onCreateCarrier,
   onClearCarrier,
   lineSummary,
+  className = "",
 }: Props) {
   const thCls =
-    "px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500";
+    "px-2 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wide text-slate-500";
   const thRightCls = `${thCls} text-right`;
-  const tdCls = "px-3 py-2 align-middle";
+  const tdCls = "px-2 py-1.5 align-middle";
 
   type DrawerState =
     | { kind: "sales_block"; line: StockDocumentItemRead; index: number }
@@ -160,16 +166,18 @@ export function WarehouseDocumentLinesSection({
   const actionCol = showPurchaseSalesBlock && !isWzDetail;
 
   return (
-    <section className="overflow-hidden rounded-xl border border-slate-200/90 bg-white">
-      <div className="border-b border-slate-100 px-5 py-4">
-        <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500">Pozycje</h3>
+    <section
+      className={`flex min-h-0 flex-col overflow-hidden rounded-lg border border-slate-200/90 bg-white ${className}`.trim()}
+    >
+      <div className="shrink-0 border-b border-slate-100 px-4 py-2">
+        <h3 className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Pozycje</h3>
       </div>
 
       {detail.items.length === 0 ? (
-        <p className="px-5 py-8 text-sm text-slate-600">Brak pozycji na dokumencie.</p>
+        <p className="px-4 py-6 text-sm text-slate-600">Brak pozycji na dokumencie.</p>
       ) : (
         <>
-          <div className="overflow-x-auto">
+          <div className="min-h-0 flex-1 overflow-auto">
             <table className="w-full min-w-[1180px] text-sm">
               <thead>
                 <tr className="border-b border-slate-100">
@@ -584,49 +592,39 @@ function WarehouseDocumentSummaryPanel({
       ? detail.total_vat
       : lineSummary.sumVat;
 
-  const qtyCards = isWzDetail
-    ? [
-        { label: "Pozycji", value: String(lineSummary.lineCount) },
-        { label: "Suma ilości", value: fmtQty(lineSummary.sumOrdered) },
-      ]
-    : [
-        { label: "Pozycji", value: String(lineSummary.lineCount) },
-        { label: "Suma zamówiona", value: fmtQty(lineSummary.sumOrdered) },
-        { label: "Suma przyjęta", value: fmtQty(lineSummary.sumReceived) },
-        {
-          label: "Różnica",
-          value: fmtQty(lineSummary.sumDiff),
-          hint: undefined as string | undefined,
-        },
-      ];
-
-  const financialCards = [
-    { label: "Netto", value: fmtMoneyCur(netTotal, currency) },
-    { label: "VAT", value: fmtMoneyCur(vatTotal, currency) },
-    { label: "Brutto", value: fmtMoneyCur(grossTotal, currency) },
-  ];
+  const qtyLeft = isWzDetail ? (
+    <>
+      <WarehouseDocSummaryItem label="Pozycji" value={String(lineSummary.lineCount)} />
+      <WarehouseDocSummarySeparator />
+      <WarehouseDocSummaryItem label="Suma ilości" value={fmtQty(lineSummary.sumOrdered)} />
+    </>
+  ) : (
+    <>
+      <WarehouseDocSummaryItem label="Pozycji" value={String(lineSummary.lineCount)} />
+      <WarehouseDocSummarySeparator />
+      <WarehouseDocSummaryItem label="Zamówiono" value={fmtQty(lineSummary.sumOrdered)} />
+      <WarehouseDocSummarySeparator />
+      <WarehouseDocSummaryItem label="Przyjęto" value={fmtQty(lineSummary.sumReceived)} />
+      <WarehouseDocSummarySeparator />
+      <WarehouseDocSummaryItem
+        label="Różnica"
+        value={<span className={diffToneClass(lineSummary.sumDiff)}>{fmtQty(lineSummary.sumDiff)}</span>}
+      />
+    </>
+  );
 
   return (
-    <div className="border-t border-slate-100 bg-slate-50/30 px-5 py-5">
-      <p className="mb-4 text-xs font-bold uppercase tracking-wide text-slate-500">Podsumowanie</p>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
-        {qtyCards.map((c) => (
-          <AppStatCard
-            key={c.label}
-            label={c.label}
-            value={
-              c.label === "Różnica" ? (
-                <span className={diffToneClass(lineSummary.sumDiff)}>{c.value}</span>
-              ) : (
-                c.value
-              )
-            }
-          />
-        ))}
-        {financialCards.map((c) => (
-          <AppStatCard key={c.label} label={c.label} value={c.value} />
-        ))}
-      </div>
-    </div>
+    <WarehouseDocSummaryBar
+      left={qtyLeft}
+      right={
+        <>
+          <WarehouseDocSummaryItem label="Netto" value={fmtMoneyCur(netTotal, currency)} />
+          <WarehouseDocSummarySeparator />
+          <WarehouseDocSummaryItem label="VAT" value={fmtMoneyCur(vatTotal, currency)} />
+          <WarehouseDocSummarySeparator />
+          <WarehouseDocSummaryItem label="Brutto" value={fmtMoneyCur(grossTotal, currency)} />
+        </>
+      }
+    />
   );
 }

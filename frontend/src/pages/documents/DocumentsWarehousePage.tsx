@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { ClipboardList } from "lucide-react";
 import api from "../../api/axios";
@@ -25,25 +25,16 @@ import {
   stockBulkDocumentType,
 } from "../../components/documentTemplates/ErpBulkPrintModal";
 import { DataTablePageSizeSelect } from "../../components/table/DataTablePageSizeSelect";
-import { DocumentTypeBadge, ExternalStatusBadge } from "./documentsBadges";
 import WarehouseDocumentsTable from "./WarehouseDocumentsTable";
 import { WarehouseDocumentDetailFooter } from "./WarehouseDocumentDetailFooter";
+import { WarehouseDocumentDetailInfo } from "./WarehouseDocumentDetailInfo";
 import { WarehouseDocumentLinesSection } from "./WarehouseDocumentLinesSection";
 import { WarehouseZPzDocumentPage } from "./WarehouseZPzDocumentPage";
 import { getWarehouseDocumentConfig } from "./warehouseDocumentConfigs";
 import {
-  documentSourceLabelDetail,
   listValueGross,
   listValueNet,
-  mmFromLabel,
-  mmToLabel,
-  seriesCode,
-  shouldShowCustomerCard,
-  shouldShowDocumentSourceCard,
-  shouldShowSupplierCard,
-  putawayStatusLabel,
 } from "./warehouseDocumentHelpers";
-import { documentCreatedByLabel } from "../../utils/documentCreatedBy";
 import {
   logReceivingStatusDebug,
   normalizeWarehouseDocType,
@@ -63,14 +54,6 @@ import { useOperationalDocumentSeries } from "./OperationalDocumentSeriesContext
 
 type Tenant = { id: number; name: string };
 const WAREHOUSE_DOCS_PAGE_SIZE_KEY = "warehouse_docs.pageSize";
-
-function formatDt(iso: string) {
-  try {
-    return new Date(iso).toLocaleString("pl-PL", { dateStyle: "short", timeStyle: "short" });
-  } catch {
-    return iso;
-  }
-}
 
 function fmtMoney(n: number) {
   return formatMoneyPl(n);
@@ -831,327 +814,86 @@ export default function DocumentsWarehousePage() {
           onClick={() => !detailBusy && closeDetail()}
         >
           <div
-            className="flex max-h-[min(92vh,calc(100dvh-2rem))] w-full min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-2xl"
+            className="flex h-[min(92vh,calc(100dvh-2rem))] w-full min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <header className="shrink-0 border-b border-slate-200 bg-white px-6 pb-5 pt-6">
-              <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                {detail ? `Dokument magazynowy · ${normalizeWarehouseDocType(detail.document_type)}` : "Dokument magazynowy"}
-              </p>
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-                <div className="min-w-0 space-y-2">
-                  {detail ? (
-                    <DocumentTypeBadge code={detail.document_type} />
-                  ) : null}
-                  <h2 className="text-3xl font-bold tracking-tight text-slate-900">
-                    {detailId != null && detail
-                      ? `${normalizeWarehouseDocType(detail.document_type)} ${(detail.document_number || "").trim() || detailId}`
-                      : detailId != null
-                        ? `#${detailId}`
-                        : "—"}
-                  </h2>
-                  {detail ? (
-                    isDraft && isPzDetail && editMode === "full" ? (
-                      <p className="max-w-xl text-sm leading-relaxed text-slate-600">
-                        Stan <span className="font-semibold">NOWE</span>: możesz edytować przyjęte ilości i pola finansowe.
-                        Różnica liczy się automatycznie. Po zatwierdzeniu aktualizują się stany magazynowe i pozycje na
-                        zamówieniu.
-                      </p>
-                    ) : isDraft && isPzDetail && editMode === "metadata" ? (
-                      <p className="max-w-xl text-sm leading-relaxed text-amber-900">
-                        Stan <span className="font-semibold">W TRAKCIE</span>: edycja ilości na pozycjach jest zablokowana.
-                        Możesz zmieniać wyłącznie pola finansowe (waluta, sumy netto/brutto) — bez wpływu na operacje
-                        magazynowe.
-                      </p>
-                    ) : isDraft && !isPzDetail ? (
-                      <p className="max-w-xl text-sm leading-relaxed text-slate-600">
-                        Podgląd szkicu — pełna obsługa operacyjna dla typów innych niż PZ zostanie dodana w kolejnych
-                        wersjach.
-                      </p>
-                    ) : (
-                      <p className="text-sm text-slate-600">Dokument zaksięgowany lub anulowany — podgląd tylko do odczytu.</p>
-                    )
-                  ) : (
-                    <p className="text-sm text-slate-500">Wczytywanie dokumentu…</p>
-                  )}
-                </div>
-                {detail && detailBizStatus ? <ExternalStatusBadge status={detailBizStatus} /> : null}
+            {detailLoading ? (
+              <div className="flex shrink-0 items-center justify-center border-b border-slate-200 px-4 py-8 text-sm text-slate-500">
+                Wczytywanie dokumentu…
               </div>
-            </header>
+            ) : detail ? (
+              <WarehouseDocumentDetailInfo
+                detail={detail}
+                detailDocType={detailDocType}
+                detailBizStatus={detailBizStatus}
+                detailListConfig={detailListConfig}
+                isDraft={isDraft}
+                isPzDetail={isPzDetail}
+                editMode={editMode}
+                canEditMetadata={canEditMetadata}
+                metaCurrency={metaCurrency}
+                metaNet={metaNet}
+                metaGross={metaGross}
+                onMetaCurrencyChange={setMetaCurrency}
+                onMetaNetChange={setMetaNet}
+                onMetaGrossChange={setMetaGross}
+                fmtMoneyCur={fmtMoneyCur}
+                listValueNetFormatted={fmtMoneyCur(
+                  listValueNet(
+                    {
+                      total_net: detail.total_net,
+                      total_gross: detail.total_gross,
+                      currency: detail.currency,
+                    } as StockDocumentListRow,
+                    detailDocType,
+                  ),
+                  detail.currency,
+                )}
+              />
+            ) : (
+              <header className="shrink-0 border-b border-slate-200 px-4 py-3">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Dokument magazynowy</p>
+                <h2 className="text-xl font-semibold text-slate-900">
+                  {detailId != null ? `#${detailId}` : "—"}
+                </h2>
+              </header>
+            )}
 
             {detailErr ? (
-              <div className="border-b border-red-200 bg-red-50 px-6 py-3 text-sm text-red-800">{detailErr}</div>
+              <div className="shrink-0 border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">{detailErr}</div>
             ) : null}
 
-            <div className="min-h-0 flex-1 overflow-y-auto p-6">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-4 pb-0 pt-2">
               {detailLoading ? (
-                <div className="flex items-center justify-center py-16 text-sm text-slate-500">Wczytywanie…</div>
+                <div className="flex flex-1 items-center justify-center text-sm text-slate-500">Wczytywanie…</div>
               ) : detail ? (
-                <div className="flex flex-col gap-6">
-                  <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                    {detail && shouldShowSupplierCard(detailDocType, detail) ? (
-                      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                        <h3 className="mb-4 text-xs font-bold uppercase tracking-wide text-slate-500">Dostawca</h3>
-                        <p className="text-lg font-semibold text-slate-900">{(detail.supplier_name || "").trim()}</p>
-                        <p className="mt-2 text-sm text-slate-500">Identyfikator w systemie · #{detail.supplier_id}</p>
-                      </div>
-                    ) : null}
-                    {detail && shouldShowCustomerCard(detailDocType) ? (
-                      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                        <h3 className="mb-4 text-xs font-bold uppercase tracking-wide text-slate-500">Klient</h3>
-                        <p className="text-lg font-semibold text-slate-900">{(detail.customer_name || "").trim() || "—"}</p>
-                      </div>
-                    ) : null}
-                    {detail && shouldShowDocumentSourceCard(detailDocType) ? (
-                      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                        <h3 className="mb-4 text-xs font-bold uppercase tracking-wide text-slate-500">Źródło dokumentu</h3>
-                        <p className="text-lg font-semibold text-slate-900">{documentSourceLabelDetail(detail)}</p>
-                      </div>
-                    ) : null}
-                    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                      <h3 className="mb-4 text-xs font-bold uppercase tracking-wide text-slate-500">Dokument</h3>
-                      <dl className="space-y-3 text-sm">
-                        <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3">
-                          <dt className="text-slate-500">Typ</dt>
-                          <dd>
-                            <DocumentTypeBadge code={detail.document_type} />
-                          </dd>
-                        </div>
-                        <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3">
-                          <dt className="text-slate-500">Seria</dt>
-                          <dd className="font-semibold text-slate-900">{seriesCode(detail)}</dd>
-                        </div>
-                        <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3">
-                          <dt className="text-slate-500">Utworzył</dt>
-                          <dd className="text-right font-medium text-slate-900">
-                            {documentCreatedByLabel(detail.created_by)}
-                          </dd>
-                        </div>
-                        <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3">
-                          <dt className="text-slate-500">Data utworzenia</dt>
-                          <dd className="text-right font-medium tabular-nums text-slate-900">
-                            {formatDt(detail.created_at)}
-                          </dd>
-                        </div>
-                        <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3">
-                          <dt className="text-slate-500">{detailDocType === "MM" ? "Z magazynu" : "Magazyn"}</dt>
-                          <dd className="text-right font-medium text-slate-900">
-                            {detailDocType === "MM" ? (
-                              mmFromLabel(detail)
-                            ) : detail.warehouse_id == null ? (
-                              <span className="text-amber-800">— (WMS → Przyjęcie)</span>
-                            ) : (
-                              (detail.warehouse_name || "").trim() || `#${detail.warehouse_id}`
-                            )}
-                          </dd>
-                        </div>
-                        <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3">
-                          <dt className="text-slate-500">{detailDocType === "MM" ? "Do magazynu" : "Lokalizacja"}</dt>
-                          <dd className="text-right font-medium text-slate-900">
-                            {detailDocType === "MM" ? (
-                              mmToLabel(detail)
-                            ) : detailDocType === "PW" ? (
-                              (detail.location_name || "").trim() || `#${detail.location_id}`
-                            ) : detail.location_id == null ? (
-                              <span className="text-amber-800">— (WMS → Przyjęcie)</span>
-                            ) : (
-                              (detail.location_name || "").trim() || `#${detail.location_id}`
-                            )}
-                          </dd>
-                        </div>
-                        {detailDocType === "PW" ? (
-                          <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3">
-                            <dt className="text-slate-500">Status rozlokowania</dt>
-                            <dd className="text-right font-medium text-slate-900">
-                              {putawayStatusLabel(detail.putaway_status)}
-                            </dd>
-                          </div>
-                        ) : null}
-                        {detail.order_id != null ? (
-                          <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3">
-                            <dt className="text-slate-500">Zamówienie</dt>
-                            <dd>
-                              <Link
-                                to={`/orders/${detail.order_id}`}
-                                className="font-semibold text-violet-700 underline decoration-violet-200 underline-offset-2 hover:text-violet-900"
-                              >
-                                #{(detail.order_number || "").trim() || detail.order_id}
-                              </Link>
-                            </dd>
-                          </div>
-                        ) : null}
-                        {detail.production_order_id != null ? (
-                          <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3">
-                            <dt className="text-slate-500">Zlecenie produkcyjne</dt>
-                            <dd>
-                              <Link
-                                to={detail.production_order_path ?? "/production"}
-                                className="font-semibold text-violet-700 underline decoration-violet-200 underline-offset-2 hover:text-violet-900"
-                              >
-                                {(detail.production_order_number || "").trim() || `MO #${detail.production_order_id}`}
-                              </Link>
-                            </dd>
-                          </div>
-                        ) : null}
-                        {detail.production_batch_id != null ? (
-                          <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3">
-                            <dt className="text-slate-500">Partia produkcyjna</dt>
-                            <dd>
-                              <Link
-                                to={detail.production_batch_path ?? `/production/batch/${detail.production_batch_id}`}
-                                className="font-semibold text-violet-700 underline decoration-violet-200 underline-offset-2 hover:text-violet-900"
-                              >
-                                {(detail.production_batch_number || "").trim() || `BAT #${detail.production_batch_id}`}
-                              </Link>
-                            </dd>
-                          </div>
-                        ) : null}
-                        {detail.linked_sale_document ? (
-                          <div className="flex items-center justify-between gap-4 pt-1">
-                            <dt className="text-slate-500">Dokument sprzedaży</dt>
-                            <dd>
-                              <Link
-                                to={detail.linked_sale_document.detail_path}
-                                className="font-semibold text-emerald-700 underline decoration-emerald-200 underline-offset-2 hover:text-emerald-900"
-                              >
-                                {detail.linked_sale_document.document_number || detail.linked_sale_document.id}
-                              </Link>
-                            </dd>
-                          </div>
-                        ) : detail.delivery_id != null ? (
-                          <div className="flex items-center justify-between gap-4 pt-1">
-                            <dt className="text-slate-500">Dostawa</dt>
-                            <dd>
-                              <Link
-                                to={`/goods-orders/${detail.delivery_id}`}
-                                className="font-semibold text-violet-700 underline decoration-violet-200 underline-offset-2 hover:text-violet-900"
-                              >
-                                #{detail.delivery_id}
-                              </Link>
-                            </dd>
-                          </div>
-                        ) : null}
-                      </dl>
-                    </div>
-                  </div>
-
-                  {detailListConfig.financialDetail !== "none" ? (
-                  <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                    <h3 className="mb-4 text-xs font-bold uppercase tracking-wide text-slate-500">
-                      {detailListConfig.financialDetail === "netOnly" ? "Wartość dokumentu" : "Finanse dokumentu"}
-                    </h3>
-                    {canEditMetadata ? (
-                      <div>
-                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                          <label className="flex flex-col gap-1 text-sm">
-                            <span className="text-xs text-slate-500">Waluta (ISO)</span>
-                            <input
-                              value={metaCurrency}
-                              onChange={(e) => setMetaCurrency(e.target.value.toUpperCase())}
-                              maxLength={8}
-                              className="rounded-lg border border-slate-200 px-3 py-2 font-mono text-sm uppercase"
-                            />
-                          </label>
-                          <label className="flex flex-col gap-1 text-sm">
-                            <span className="text-xs text-slate-500">Suma netto</span>
-                            <input
-                              type="text"
-                              inputMode="decimal"
-                              value={metaNet}
-                              onChange={(e) => setMetaNet(e.target.value)}
-                              className="rounded-lg border border-slate-200 px-3 py-2 text-right tabular-nums"
-                            />
-                          </label>
-                          <label className="flex flex-col gap-1 text-sm">
-                            <span className="text-xs text-slate-500">Suma brutto</span>
-                            <input
-                              type="text"
-                              inputMode="decimal"
-                              value={metaGross}
-                              onChange={(e) => setMetaGross(e.target.value)}
-                              className="rounded-lg border border-slate-200 px-3 py-2 text-right tabular-nums"
-                            />
-                          </label>
-                        </div>
-                        <p className="mt-2 text-xs text-slate-500">
-                          VAT z pozycji (wyliczone): {fmtMoneyCur(detail.total_vat, detail.currency)}
-                        </p>
-                      </div>
-                    ) : detailListConfig.financialDetail === "netOnly" ? (
-                      <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2 text-sm">
-                        <div>
-                          <dt className="text-xs text-slate-500">Wartość netto</dt>
-                          <dd className="mt-1 font-semibold tabular-nums text-slate-900">
-                            {fmtMoneyCur(
-                              listValueNet(
-                                {
-                                  total_net: detail.total_net,
-                                  total_gross: detail.total_gross,
-                                  currency: detail.currency,
-                                } as StockDocumentListRow,
-                                detailDocType,
-                              ),
-                              detail.currency,
-                            )}
-                          </dd>
-                        </div>
-                      </dl>
-                    ) : (
-                      <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 text-sm">
-                        <div>
-                          <dt className="text-xs text-slate-500">Waluta</dt>
-                          <dd className="mt-1 font-semibold text-slate-900">{(detail.currency || "PLN").trim() || "PLN"}</dd>
-                        </div>
-                        <div>
-                          <dt className="text-xs text-slate-500">Suma netto</dt>
-                          <dd className="mt-1 font-semibold tabular-nums text-slate-900">
-                            {fmtMoneyCur(detail.total_net, detail.currency)}
-                          </dd>
-                        </div>
-                        <div>
-                          <dt className="text-xs text-slate-500">VAT</dt>
-                          <dd className="mt-1 font-semibold tabular-nums text-slate-900">
-                            {fmtMoneyCur(detail.total_vat, detail.currency)}
-                          </dd>
-                        </div>
-                        <div>
-                          <dt className="text-xs text-slate-500">Suma brutto</dt>
-                          <dd className="mt-1 font-semibold tabular-nums text-slate-900">
-                            {fmtMoneyCur(detail.total_gross, detail.currency)}
-                          </dd>
-                        </div>
-                      </dl>
-                    )}
-                  </div>
-                  ) : null}
-
-                  <div ref={docLinesRef}>
-                    <WarehouseDocumentLinesSection
-                      detail={detail}
-                      tenantId={tenantId}
-                      isWzDetail={isWzDetail}
-                      showPurchaseSalesBlock={isPzDetail}
-                      onSalesBlockUpdated={() => {
-                        if (detailId != null) void openDetail(detailId);
-                      }}
-                      lineEditEnabled={lineEditEnabled}
-                      inputClass={inputClass}
-                      receivedByLineId={receivedByLineId}
-                      suggestedCarrierBarcodeByLineId={suggestedCarrierBarcodeByLineId}
-                      onReceivedChange={(lineId, value) =>
-                        setReceivedByLineId((prev) => ({ ...prev, [lineId]: value }))
-                      }
-                      onSuggestedCarrierChange={(lineId, value) =>
-                        setSuggestedCarrierBarcodeByLineId((prev) => ({ ...prev, [lineId]: value }))
-                      }
-                      onAssignCarrier={setAssignPickerLineId}
-                      onCreateCarrier={setCreateCarrierLineId}
-                      onClearCarrier={(lineId) =>
-                        setSuggestedCarrierBarcodeByLineId((prev) => ({ ...prev, [lineId]: "" }))
-                      }
-                      lineSummary={lineSummary}
-                    />
-                  </div>
+                <div ref={docLinesRef} className="flex min-h-0 flex-1 flex-col">
+                  <WarehouseDocumentLinesSection
+                    className="min-h-0 flex-1"
+                    detail={detail}
+                    tenantId={tenantId}
+                    isWzDetail={isWzDetail}
+                    showPurchaseSalesBlock={isPzDetail}
+                    onSalesBlockUpdated={() => {
+                      if (detailId != null) void openDetail(detailId);
+                    }}
+                    lineEditEnabled={lineEditEnabled}
+                    inputClass={inputClass}
+                    receivedByLineId={receivedByLineId}
+                    suggestedCarrierBarcodeByLineId={suggestedCarrierBarcodeByLineId}
+                    onReceivedChange={(lineId, value) =>
+                      setReceivedByLineId((prev) => ({ ...prev, [lineId]: value }))
+                    }
+                    onSuggestedCarrierChange={(lineId, value) =>
+                      setSuggestedCarrierBarcodeByLineId((prev) => ({ ...prev, [lineId]: value }))
+                    }
+                    onAssignCarrier={setAssignPickerLineId}
+                    onCreateCarrier={setCreateCarrierLineId}
+                    onClearCarrier={(lineId) =>
+                      setSuggestedCarrierBarcodeByLineId((prev) => ({ ...prev, [lineId]: "" }))
+                    }
+                    lineSummary={lineSummary}
+                  />
                 </div>
               ) : null}
             </div>
