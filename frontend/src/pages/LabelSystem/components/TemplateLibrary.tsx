@@ -7,11 +7,14 @@ import {
   PRESET_LABELS,
   PRESET_TYPES,
   PRESET_USAGE_HINTS,
-  PRESET_CARD_META,
   type PresetType,
 } from "../../../services/labelPresets";
 import { generateId } from "../utils/id";
-import { Search, LayoutTemplate, Bookmark } from "lucide-react";
+import { Bookmark, Check, LayoutTemplate, Search } from "lucide-react";
+import { listSellasistToolbarToggleBtn } from "../../../components/listPage/listSellasistTokens";
+import { tabsNavSegmentedItemClassName } from "../../../components/layout/TabsNav";
+import { labelDesignerToolbarPrimaryBtnClass } from "../labelDesignerToolbarTokens";
+import { LabelGalleryThumbnail } from "./LabelGalleryThumbnail";
 
 const STORAGE_KEY = "label-system-templates";
 
@@ -20,8 +23,17 @@ const GALLERY_MODAL_CLASS =
   "flex h-[min(760px,90vh)] w-[min(1150px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-2xl";
 
 /** Fixed card tile — grid must not stretch single items. */
-const GALLERY_CARD_CLASS =
-  "flex h-[220px] w-[320px] max-w-full flex-col rounded-xl border bg-white p-4 text-left shadow-sm transition-all duration-150";
+const GALLERY_CARD_BASE_CLASS =
+  "relative flex h-[220px] w-[320px] max-w-full flex-col overflow-hidden rounded-xl border bg-white text-left shadow-sm transition-all duration-150";
+
+const PRESET_TEMPLATE_CACHE: Partial<Record<PresetType, LabelTemplate>> = {};
+
+function getPresetTemplate(type: PresetType): LabelTemplate {
+  if (!PRESET_TEMPLATE_CACHE[type]) {
+    PRESET_TEMPLATE_CACHE[type] = generatePreset(type);
+  }
+  return PRESET_TEMPLATE_CACHE[type]!;
+}
 
 type PresetCategory = "location" | "rack" | "fleet" | "all";
 
@@ -42,27 +54,12 @@ const CATEGORY_LABELS: Record<PresetCategory, string> = {
   fleet: "Paleta / wózek",
 };
 
-function PresetThumbnail({ type }: { type: PresetType }) {
-  const meta = PRESET_CARD_META[type];
-  const aspect = meta.widthMm / Math.max(meta.heightMm, 1);
-  const w = aspect >= 2 ? 80 : aspect >= 1 ? 64 : 48;
-  const h = Math.round(w / aspect);
-  return (
-    <div
-      className="flex h-[72px] shrink-0 items-center justify-center rounded-lg border border-slate-200/80 bg-gradient-to-br from-white to-slate-100 shadow-inner"
-      aria-hidden
-    >
-      <div
-        className="flex items-center justify-center rounded-md border border-slate-300/60 bg-white shadow-sm"
-        style={{ width: w, height: Math.min(h, 52) }}
-      >
-        <div className="h-[55%] w-[75%] rounded-sm border border-slate-200/80 bg-white">
-          <div className="m-0.5 h-1 w-3/4 rounded-sm bg-cyan-400/70" />
-          <div className="mx-0.5 mt-0.5 h-2 rounded-sm bg-slate-200" />
-        </div>
-      </div>
-    </div>
-  );
+function formatTemplateCount(count: number): string {
+  if (count === 1) return "1 szablon";
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${count} szablony`;
+  return `${count} szablonów`;
 }
 
 function applyPreset(
@@ -160,13 +157,10 @@ export function TemplateLibrary({
     [galleryCategory, runListFade],
   );
 
-  const handleSearchChange = useCallback(
-    (value: string) => {
-      setGallerySearch(value);
-      setSelectedPreset(null);
-    },
-    [],
-  );
+  const handleSearchChange = useCallback((value: string) => {
+    setGallerySearch(value);
+    setSelectedPreset(null);
+  }, []);
 
   useEffect(() => {
     if (!presetModalOpen) return;
@@ -198,7 +192,7 @@ export function TemplateLibrary({
         <button
           type="button"
           onClick={() => setPresetModalOpen(true)}
-          className="mb-2 w-full rounded-lg border border-dashed border-cyan-300/80 bg-cyan-50/40 px-2 py-2 text-[11px] font-semibold text-cyan-900 transition-colors duration-150 hover:border-cyan-400 hover:bg-cyan-50"
+          className="mb-2 w-full rounded-lg border border-dashed border-slate-300 bg-slate-50 px-2 py-2 text-[11px] font-semibold text-slate-700 transition-colors duration-150 hover:border-slate-400 hover:bg-slate-100"
         >
           Przeglądaj galerię szablonów
         </button>
@@ -219,7 +213,7 @@ export function TemplateLibrary({
                   <button
                     type="button"
                     onClick={() => load(t)}
-                    className="flex-1 truncate rounded px-1 py-0.5 text-left text-[10px] text-slate-700 transition-colors hover:bg-slate-100 hover:text-cyan-800"
+                    className="flex-1 truncate rounded px-1 py-0.5 text-left text-[10px] text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-900"
                   >
                     {t.name}
                   </button>
@@ -251,8 +245,7 @@ export function TemplateLibrary({
             aria-modal="true"
             aria-labelledby="template-gallery-title"
           >
-            {/* ── Header (pinned) ── */}
-            <header className="shrink-0 border-b border-slate-100 px-6 py-5">
+            <header className="shrink-0 border-b border-slate-200 px-6 py-5">
               <h2 id="template-gallery-title" className="text-lg font-semibold text-slate-900">
                 Galeria szablonów
               </h2>
@@ -269,17 +262,19 @@ export function TemplateLibrary({
                     className="w-full border-0 bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400"
                   />
                 </label>
-                <div className="flex flex-wrap gap-2">
+                <div
+                  className="inline-flex max-w-full flex-wrap gap-1 rounded-xl border border-slate-200/90 bg-slate-100/90 p-1 shadow-inner"
+                  role="tablist"
+                  aria-label="Kategoria szablonu"
+                >
                   {(Object.keys(CATEGORY_LABELS) as PresetCategory[]).map((cat) => (
                     <button
                       key={cat}
                       type="button"
+                      role="tab"
+                      aria-selected={galleryCategory === cat}
                       onClick={() => handleCategoryChange(cat)}
-                      className={`rounded-full px-3 py-1.5 text-[12px] font-medium transition-colors duration-150 ${
-                        galleryCategory === cat
-                          ? "bg-cyan-600 text-white shadow-sm"
-                          : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                      }`}
+                      className={tabsNavSegmentedItemClassName(galleryCategory === cat)}
                     >
                       {CATEGORY_LABELS[cat]}
                     </button>
@@ -288,18 +283,11 @@ export function TemplateLibrary({
               </div>
             </header>
 
-            {/* ── Scrollable list only ── */}
             <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-6 py-5">
-              <div
-                className="transition-opacity duration-150 ease-in-out"
-                style={{ opacity: listOpacity }}
-              >
+              <div className="transition-opacity duration-150 ease-in-out" style={{ opacity: listOpacity }}>
                 {filteredPresets.length === 0 ? (
                   <div className="flex h-full min-h-[320px] flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/60 px-6 py-12 text-center">
-                    <span className="text-4xl leading-none" aria-hidden>
-                      📄
-                    </span>
-                    <p className="mt-4 text-base font-semibold text-slate-800">Nie znaleziono szablonów</p>
+                    <p className="text-base font-semibold text-slate-800">Nie znaleziono szablonów</p>
                     <p className="mt-1 max-w-sm text-sm text-slate-500">
                       Spróbuj zmienić kategorię lub wyszukiwanie.
                     </p>
@@ -309,6 +297,7 @@ export function TemplateLibrary({
                     {filteredPresets.map((type) => {
                       const preset = type as PresetType;
                       const isSelected = selectedPreset === preset;
+                      const presetTemplate = getPresetTemplate(preset);
                       return (
                         <button
                           key={type}
@@ -318,22 +307,36 @@ export function TemplateLibrary({
                             applyPreset(preset, templateId, current, onLoad);
                             closeModal();
                           }}
-                          className={`${GALLERY_CARD_CLASS} ${
+                          className={`${GALLERY_CARD_BASE_CLASS} ${
                             isSelected
-                              ? "border-cyan-400 bg-cyan-50/30 ring-2 ring-cyan-400/40"
-                              : "border-slate-200/90 hover:border-cyan-300/80 hover:shadow-md"
+                              ? "border-slate-900 bg-slate-50/70 shadow-md ring-1 ring-slate-900/10"
+                              : "border-slate-200/90 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md"
                           }`}
                         >
-                          <PresetThumbnail type={preset} />
-                          <span className="mt-3 line-clamp-1 text-[13px] font-bold text-slate-900">
-                            {PRESET_LABELS[preset]}
-                          </span>
-                          <span className="mt-1 line-clamp-2 flex-1 text-[11px] leading-snug text-slate-500">
-                            {PRESET_USAGE_HINTS[preset]}
-                          </span>
-                          <span className="mt-2 inline-flex w-fit max-w-full truncate rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">
-                            {formatPresetSpecLine(preset)}
-                          </span>
+                          {isSelected ? (
+                            <span
+                              className="absolute right-2.5 top-2.5 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-slate-900 text-white shadow-sm"
+                              aria-hidden
+                            >
+                              <Check className="h-3 w-3" strokeWidth={2.5} />
+                            </span>
+                          ) : null}
+                          <LabelGalleryThumbnail
+                            template={presetTemplate}
+                            cacheKey={`preset:${preset}`}
+                            className="h-[140px]"
+                          />
+                          <div className="flex min-h-0 flex-1 flex-col px-4 pb-4 pt-3">
+                            <span className="line-clamp-1 text-[13px] font-bold text-slate-900">
+                              {PRESET_LABELS[preset]}
+                            </span>
+                            <span className="mt-1 line-clamp-2 flex-1 text-[11px] leading-snug text-slate-500">
+                              {PRESET_USAGE_HINTS[preset]}
+                            </span>
+                            <span className="mt-2 inline-flex w-fit max-w-full truncate rounded border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-medium text-slate-600">
+                              {formatPresetSpecLine(preset)}
+                            </span>
+                          </div>
                         </button>
                       );
                     })}
@@ -342,23 +345,23 @@ export function TemplateLibrary({
               </div>
             </div>
 
-            {/* ── Footer (pinned) ── */}
-            <footer className="flex shrink-0 items-center justify-end gap-2 border-t border-slate-100 bg-white px-6 py-4">
-              <button
-                type="button"
-                onClick={closeModal}
-                className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors duration-150 hover:bg-slate-50"
-              >
-                Anuluj
-              </button>
-              <button
-                type="button"
-                disabled={!selectedPreset}
-                onClick={handleUseSelected}
-                className="rounded-lg bg-gradient-to-b from-cyan-500 to-cyan-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all duration-150 hover:from-cyan-400 hover:to-cyan-500 disabled:cursor-not-allowed disabled:opacity-45"
-              >
-                Użyj szablonu
-              </button>
+            <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-slate-200 bg-white px-6 py-4">
+              <p className="text-sm text-slate-500">
+                <span className="font-medium text-slate-700">{formatTemplateCount(filteredPresets.length)}</span>
+              </p>
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={closeModal} className={listSellasistToolbarToggleBtn}>
+                  Anuluj
+                </button>
+                <button
+                  type="button"
+                  disabled={!selectedPreset}
+                  onClick={handleUseSelected}
+                  className={labelDesignerToolbarPrimaryBtnClass}
+                >
+                  Użyj szablonu
+                </button>
+              </div>
             </footer>
           </div>
         </div>

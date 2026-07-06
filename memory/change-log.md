@@ -1,6 +1,12 @@
 # Change log
 
-## 2026-06-08 — Projektant etykiet: refaktor paska narzędzi (UX/UI only)
+## 2026-06-08 — Galeria szablonów etykiet: miniatury + design system
+
+- `LabelGalleryThumbnail` — renderuje prawdziwy podgląd SVG (`renderLabel` + `buildPreviewRecord`), cache per preset.
+- Karty: miniatury 140px, proporcje zachowane, wybór slate-900 + ✓, hover translate/shadow 150ms.
+- Modal: segmented control (`tabsNavSegmentedItemClassName`), stopka z licznikiem + `listSellasistToolbarToggleBtn` / `labelDesignerToolbarPrimaryBtnClass`.
+- Usunięto ikony zastępcze i kolory cyan z galerii.
+
 
 - Typ etykiety: wyłącznie typy magazynowe (`LABEL_DESIGNER_TYPE_OPTIONS`), bez dokumentów ERP.
 - Pasek: `LabelDesignerToolbarSelect`, pola liczbowe bez spinbuttonów, `h-10` na wszystkich kontrolkach.
