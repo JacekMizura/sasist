@@ -1,5 +1,5 @@
 import Editor, { type OnMount } from "@monaco-editor/react";
-import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 
 import {
   liveValidateDocumentTemplate,
@@ -9,11 +9,14 @@ import {
   type VariableTreeNode,
 } from "../../../../api/documentTemplatesApi";
 import { DEFAULT_TENANT_ID } from "../constants";
+import { computeTwigBreadcrumbs } from "../utils/twigBreadcrumbs";
 
 export type TwigEditorHandle = {
   insertSnippet: (snippet: string) => void;
   goToLine: (line: number, column?: number) => void;
 };
+
+type CursorPosition = { line: number; column: number };
 
 type Props = {
   value: string;
@@ -23,7 +26,9 @@ type Props = {
   variableFields?: VariableFieldDto[];
   helpers?: EditorCatalogItem[];
   tags?: EditorCatalogItem[];
+  minimapEnabled?: boolean;
   onValidationChange?: (report: ValidationReport | null) => void;
+  onCursorChange?: (pos: CursorPosition) => void;
 };
 
 export const TwigMonacoEditor = forwardRef<TwigEditorHandle, Props>(function TwigMonacoEditor(
@@ -31,17 +36,25 @@ export const TwigMonacoEditor = forwardRef<TwigEditorHandle, Props>(function Twi
     value,
     onChange,
     kindCode,
-    variableTree = [],
     variableFields = [],
     helpers = [],
     tags = [],
+    minimapEnabled = false,
     onValidationChange,
+    onCursorChange,
   },
   ref,
 ) {
   const editorRef = useRef<import("monaco-editor").editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<typeof import("monaco-editor") | null>(null);
   const validateTimer = useRef<number | null>(null);
+  const [cursorLine, setCursorLine] = useState(1);
+
+  const breadcrumbs = useMemo(() => computeTwigBreadcrumbs(value, cursorLine), [value, cursorLine]);
+
+  useEffect(() => {
+    editorRef.current?.updateOptions({ minimap: { enabled: minimapEnabled } });
+  }, [minimapEnabled]);
 
   useImperativeHandle(ref, () => ({
     insertSnippet(snippet: string) {
@@ -60,6 +73,10 @@ export const TwigMonacoEditor = forwardRef<TwigEditorHandle, Props>(function Twi
       editor.focus();
     },
   }));
+
+  useEffect(() => {
+    editorRef.current?.updateOptions({ minimap: { enabled: minimapEnabled } });
+  }, [minimapEnabled]);
 
   useEffect(() => {
     if (!kindCode || !onValidationChange) return;
@@ -100,6 +117,15 @@ export const TwigMonacoEditor = forwardRef<TwigEditorHandle, Props>(function Twi
     editorRef.current = editor;
     monacoRef.current = monaco;
 
+    const syncCursor = () => {
+      const pos = editor.getPosition();
+      if (!pos) return;
+      setCursorLine(pos.lineNumber);
+      onCursorChange?.({ line: pos.lineNumber, column: pos.column });
+    };
+    editor.onDidChangeCursorPosition(syncCursor);
+    syncCursor();
+
     monaco.languages.registerCompletionItemProvider("html", {
       triggerCharacters: ["{", ".", "|", " "],
       provideCompletionItems: (model, position) => {
@@ -121,7 +147,6 @@ export const TwigMonacoEditor = forwardRef<TwigEditorHandle, Props>(function Twi
         const prefix = prefixMatch?.[1] ?? "";
 
         if (prefix.includes(".") || prefix.endsWith("[]")) {
-          const parentPrefix = prefix.endsWith(".") ? prefix : `${prefix}.`;
           const matches = variableFields.filter((f) => {
             const p = f.path.replace("[]", "");
             if (prefix.endsWith(".")) {
@@ -171,21 +196,27 @@ export const TwigMonacoEditor = forwardRef<TwigEditorHandle, Props>(function Twi
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-white">
-      <div className="border-b border-slate-200 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-        Edytor szablonu
+    <div className="flex min-h-0 flex-1 flex-col bg-[#1e1e1e]">
+      <div className="sticky top-0 z-10 flex items-center gap-1 border-b border-[#333] bg-[#252526] px-3 py-1.5 font-mono text-[11px] text-[#cccccc]">
+        {breadcrumbs.map((crumb, i) => (
+          <span key={`${crumb}-${i}`} className="flex items-center gap-1">
+            {i > 0 ? <span className="text-[#666]">›</span> : null}
+            <span className={i === breadcrumbs.length - 1 ? "text-white" : "text-[#9cdcfe]"}>{crumb}</span>
+          </span>
+        ))}
       </div>
       <div className="min-h-0 flex-1">
         <Editor
           height="100%"
           defaultLanguage="html"
-          theme="vs-light"
+          theme="vs-dark"
           value={value}
           onChange={(v) => onChange(v ?? "")}
           onMount={onMount}
           options={{
-            minimap: { enabled: false },
+            minimap: { enabled: minimapEnabled },
             fontSize: 13,
+            fontFamily: "'Cascadia Code', 'Fira Code', Consolas, monospace",
             wordWrap: "on",
             automaticLayout: true,
             scrollBeyondLastLine: false,
@@ -193,17 +224,10 @@ export const TwigMonacoEditor = forwardRef<TwigEditorHandle, Props>(function Twi
             lineNumbers: "on",
             renderLineHighlight: "all",
             quickSuggestions: { other: true, strings: true },
+            padding: { top: 8 },
           }}
         />
       </div>
     </div>
   );
 });
-
-function flattenVariables(nodes: VariableTreeNode[], out: { label: string; insert: string }[] = []) {
-  for (const node of nodes) {
-    if (node.insert) out.push({ label: node.label, insert: node.insert });
-    if (node.children) flattenVariables(node.children, out);
-  }
-  return out;
-}

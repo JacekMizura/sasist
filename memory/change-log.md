@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-06-08 — DTE edytor: UX IDE (12 poprawek, frontend only)
+
+- Lewy panel: persist zakładka + rozwinięte sekcje zmiennych (`useLeftPanelPersistence`).
+- Użycia: klikalne badge → `AssignmentConfigModal`; funkcje pogrupowane (`HelperCatalogPanel`).
+- Prawy panel: przypięty / odłączony (`DetachedInspectorPanel`); podgląd bez auto-refresh przy pisaniu; scroll iframe.
+- Monaco: minimap (localStorage), breadcrumbs TWIG, status bar VS Code, dark theme; responsywność &lt;1600 / &gt;2200 px.
+
 ## 2026-06-08 — DTE ERP: fix picking-list 503 + masowy druk
 
 - **503 picking-list:** `order_provider` wołał `map_sale_document(doc=None)` → `AttributeError` w `_resolve_payment`; naprawa: `map_order_for_print()` + guard `doc is not None` w mapperze.
