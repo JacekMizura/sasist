@@ -69,6 +69,75 @@ documents_router = APIRouter(prefix="/documents", tags=["Documents"])
 _logger = logging.getLogger(__name__)
 
 
+def _log_stock_document_pdf_failure(
+    exc: BaseException,
+    *,
+    document_id: int,
+    tenant_id: int,
+    template_version_id: int | None,
+    phase: str,
+) -> None:
+    """Log full traceback + exception type/message for Railway diagnosis."""
+    _logger.error(
+        "[stock_document_pdf] %s failed document_id=%s tenant_id=%s template_version_id=%s "
+        "exc_type=%s exc_msg=%s",
+        phase,
+        document_id,
+        tenant_id,
+        template_version_id,
+        type(exc).__qualname__,
+        exc,
+        exc_info=exc,
+    )
+
+
+def _log_template_version_resolution(
+    db: Session,
+    *,
+    tenant_id: int,
+    document_id: int,
+    template_version_id: int,
+) -> None:
+    from ..document_templates.adapters.warehouse_document_adapter import KIND_BY_DOC_TYPE
+    from ..document_templates.models import DocumentTemplateVersion
+
+    ver = (
+        db.query(DocumentTemplateVersion)
+        .filter(DocumentTemplateVersion.id == int(template_version_id))
+        .first()
+    )
+    doc = (
+        db.query(StockDocument)
+        .filter(StockDocument.id == int(document_id), StockDocument.tenant_id == int(tenant_id))
+        .first()
+    )
+    if ver is None:
+        _logger.warning(
+            "[stock_document_pdf] template_version_id=%s NOT FOUND (document_id=%s tenant_id=%s)",
+            template_version_id,
+            document_id,
+            tenant_id,
+        )
+        return
+    tpl = ver.template
+    kind = str(tpl.kind.code if tpl and tpl.kind else "")
+    doc_type = str(getattr(doc, "document_type", None) or "").upper() if doc else "?"
+    expected_kind = KIND_BY_DOC_TYPE.get(doc_type, doc_type.lower() if doc_type else "")
+    _logger.info(
+        "[stock_document_pdf] template_version_id=%s status=%s template_id=%s template_code=%s "
+        "version_kind=%s doc_type=%s expected_kind=%s kind_match=%s template_tenant=%s",
+        template_version_id,
+        ver.status,
+        tpl.id if tpl else None,
+        tpl.template_code if tpl else None,
+        kind,
+        doc_type,
+        expected_kind,
+        kind == expected_kind,
+        tpl.tenant_id if tpl else None,
+    )
+
+
 def _gate_stock_document(
     db: Session,
     user: AppUser,
@@ -592,9 +661,24 @@ def _stock_document_pdf_response(
     document_id: int,
     template_version_id: int | None = None,
 ) -> Response:
+    from ..document_templates.errors import DocumentTemplateError
     from ..services.document_print_service import PdfRendererUnavailable
     from ..services.pdf_deps import PdfGenerationUnavailable
     from ..services.stock_document_html_pdf_service import build_stock_document_html_pdf_bytes
+
+    _logger.info(
+        "[stock_document_pdf] start document_id=%s tenant_id=%s template_version_id=%s",
+        document_id,
+        tenant_id,
+        template_version_id,
+    )
+    if template_version_id is not None:
+        _log_template_version_resolution(
+            db,
+            tenant_id=tenant_id,
+            document_id=document_id,
+            template_version_id=int(template_version_id),
+        )
 
     try:
         try:
@@ -606,32 +690,79 @@ def _stock_document_pdf_response(
             )
         except PdfRendererUnavailable:
             raise
-        except (FileNotFoundError, RuntimeError, OSError):
+        except (FileNotFoundError, RuntimeError, OSError) as pdf_exc:
+            _log_stock_document_pdf_failure(
+                pdf_exc,
+                document_id=document_id,
+                tenant_id=tenant_id,
+                template_version_id=template_version_id,
+                phase="DTE html→pdf (fallback to legacy ReportLab)",
+            )
             pdf = build_stock_document_pdf_bytes(db, tenant_id, document_id)
-    except ValueError:
-        raise HTTPException(status_code=404, detail="Document not found")
-    except PdfRendererUnavailable as exc:
-        _logger.error(
-            "[stock_document_pdf] renderer unavailable document_id=%s tenant_id=%s: %s",
-            document_id,
-            tenant_id,
+    except ValueError as exc:
+        _log_stock_document_pdf_failure(
             exc,
-            exc_info=True,
+            document_id=document_id,
+            tenant_id=tenant_id,
+            template_version_id=template_version_id,
+            phase="document lookup",
+        )
+        raise HTTPException(status_code=404, detail="Document not found") from exc
+    except DocumentTemplateError as exc:
+        _log_stock_document_pdf_failure(
+            exc,
+            document_id=document_id,
+            tenant_id=tenant_id,
+            template_version_id=template_version_id,
+            phase="document template engine",
+        )
+        raise HTTPException(
+            status_code=422,
+            detail={"code": exc.code, "message": str(exc)},
+        ) from exc
+    except PdfRendererUnavailable as exc:
+        _log_stock_document_pdf_failure(
+            exc,
+            document_id=document_id,
+            tenant_id=tenant_id,
+            template_version_id=template_version_id,
+            phase="PDF renderer unavailable",
         )
         raise HTTPException(status_code=503, detail="PDF renderer unavailable") from exc
-    except PdfGenerationUnavailable:
+    except PdfGenerationUnavailable as exc:
+        _log_stock_document_pdf_failure(
+            exc,
+            document_id=document_id,
+            tenant_id=tenant_id,
+            template_version_id=template_version_id,
+            phase="PDF generation unavailable (ReportLab)",
+        )
         raise HTTPException(
             status_code=503,
             detail="PDF renderer unavailable",
-        )
+        ) from exc
+    except HTTPException:
+        raise
     except Exception as exc:
-        _logger.exception(
-            "[stock_document_pdf] failed document_id=%s tenant_id=%s",
+        _log_stock_document_pdf_failure(
+            exc,
+            document_id=document_id,
+            tenant_id=tenant_id,
+            template_version_id=template_version_id,
+            phase="unexpected",
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Nie udało się wygenerować PDF dokumentu.",
+        ) from exc
+    if not pdf or not pdf.startswith(b"%PDF"):
+        _logger.error(
+            "[stock_document_pdf] invalid pdf bytes document_id=%s tenant_id=%s template_version_id=%s len=%s",
             document_id,
             tenant_id,
+            template_version_id,
+            len(pdf) if pdf else 0,
         )
-        raise HTTPException(status_code=500, detail="Nie udało się wygenerować PDF dokumentu.") from exc
-    if not pdf or not pdf.startswith(b"%PDF"):
         raise HTTPException(status_code=503, detail="PDF renderer unavailable")
     return Response(
         content=pdf,
