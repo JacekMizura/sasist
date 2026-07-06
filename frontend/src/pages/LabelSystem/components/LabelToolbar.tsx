@@ -1,22 +1,21 @@
-import { useState, type ChangeEvent } from "react";
-import type { LabelTemplate, TemplateType } from "../../../types/labelSystem";
-import { TEMPLATE_TYPE_OPTIONS } from "../../../types/labelSystem";
+import { useState } from "react";
+import type { LabelTemplate } from "../../../types/labelSystem";
+import { ArrowLeft, Eye, Pencil } from "lucide-react";
 import {
-  FloatingPortal,
-  autoUpdate,
-  flip,
-  offset,
-  shift,
-  useDismiss,
-  useFloating,
-  useInteractions,
-} from "@floating-ui/react";
-import { ChevronDown, Settings2, ArrowLeft, Pencil, Eye } from "lucide-react";
+  LABEL_DESIGNER_TYPE_OPTIONS,
+  labelDesignerTypeLabel,
+  isLabelDesignerTypeValue,
+} from "../labelDesignerTypeOptions";
+import {
+  labelDesignerToolbarInputClass,
+  labelDesignerToolbarNumericClass,
+  labelDesignerToolbarPrimaryBtnClass,
+  labelDesignerToolbarSecondaryBtnClass,
+} from "../labelDesignerToolbarTokens";
+import { LabelDesignerToolbarSelect } from "./LabelDesignerToolbarSelect";
+import { LabelDesignerMoreMenu, type LabelDesignerMoreMenuHandlers } from "./LabelDesignerMoreMenu";
 
 const MAX_LABEL_MM = 2000;
-
-const MORE_MENU_PANEL =
-  "z-[8000] w-[min(100vw-2rem,20rem)] rounded-xl border border-slate-200/90 bg-white p-3 shadow-xl ring-1 ring-slate-900/5 outline-none";
 
 export type DesignerViewMode = "edit" | "preview";
 
@@ -28,19 +27,25 @@ export type LabelToolbarProps = {
   onBack?: () => void;
   setPresetModalOpen: (open: boolean) => void;
   saveDisabled?: boolean;
-  templateMeta?: { group_id: number | null };
-  onTemplateMetaChange?: (meta: { group_id: number | null }) => void;
-  groups?: Array<{ id: number; name: string }>;
-  autoSliceStrip: boolean;
-  setAutoSliceStrip: (v: boolean) => void;
-  groupedLocationVariables: boolean;
-  setGroupedLocationVariables: (v: boolean) => void;
-  isLocationTemplate: boolean;
-  handleImportSvgFileChange: (e: ChangeEvent<HTMLInputElement>) => void;
-  handleImportBackgroundImageChange: (e: ChangeEvent<HTMLInputElement>) => void;
   viewMode: DesignerViewMode;
   onViewModeChange: (mode: DesignerViewMode) => void;
+  moreMenuHandlers: LabelDesignerMoreMenuHandlers;
 };
+
+function ToolbarFieldLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-slate-400">{children}</span>
+  );
+}
+
+function ToolbarFieldGroup({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex h-10 items-center gap-2 rounded-lg border border-slate-200/90 bg-white px-2.5 shadow-sm">
+      <ToolbarFieldLabel>{label}</ToolbarFieldLabel>
+      {children}
+    </div>
+  );
+}
 
 export function LabelToolbar({
   template,
@@ -50,109 +55,75 @@ export function LabelToolbar({
   onBack,
   setPresetModalOpen,
   saveDisabled = false,
-  templateMeta,
-  onTemplateMetaChange,
-  groups = [],
-  autoSliceStrip,
-  setAutoSliceStrip,
-  groupedLocationVariables,
-  setGroupedLocationVariables,
-  isLocationTemplate,
-  handleImportSvgFileChange,
-  handleImportBackgroundImageChange,
   viewMode,
   onViewModeChange,
+  moreMenuHandlers,
 }: LabelToolbarProps) {
   const [moreOpen, setMoreOpen] = useState(false);
 
-  const { refs, floatingStyles, context } = useFloating({
-    open: moreOpen,
-    onOpenChange: setMoreOpen,
-    placement: "bottom-end",
-    strategy: "fixed",
-    middleware: [
-      offset(8),
-      flip({
-        fallbackPlacements: ["top-end", "bottom-start", "top-start"],
-        padding: 8,
-      }),
-      shift({ padding: 12 }),
-    ],
-    whileElementsMounted: autoUpdate,
-  });
+  const typeValue = isLabelDesignerTypeValue(template.template_type)
+    ? (template.template_type as string)
+    : "location";
 
-  const dismiss = useDismiss(context, {
-    ancestorScroll: true,
-    outsidePress: true,
-    escapeKey: true,
-  });
+  const typeOptions = LABEL_DESIGNER_TYPE_OPTIONS.map((o) => ({
+    value: o.value,
+    label: o.label,
+  }));
 
-  const { getFloatingProps } = useInteractions([dismiss]);
+  if (!typeOptions.some((o) => o.value === typeValue)) {
+    typeOptions.unshift({ value: typeValue, label: labelDesignerTypeLabel(typeValue) });
+  }
 
   return (
     <header className="shrink-0 border-b border-slate-200/90 bg-white/95 shadow-sm backdrop-blur-sm">
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5">
-        {/* Left: back + name */}
         <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
-          {onBack && (
-            <button
-              type="button"
-              onClick={onBack}
-              className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-slate-200/90 bg-white px-2.5 text-[12px] font-medium text-slate-700 shadow-sm transition-colors duration-150 hover:border-slate-300 hover:bg-slate-50"
-            >
-              <ArrowLeft className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+          {onBack ? (
+            <button type="button" onClick={onBack} className={`${labelDesignerToolbarSecondaryBtnClass} gap-1.5 px-3`}>
+              <ArrowLeft className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
               <span className="hidden sm:inline">Szablony</span>
             </button>
-          )}
-          <div className="flex min-w-0 max-w-[min(100%,14rem)] flex-col gap-0.5 sm:max-w-[20rem]">
-            <input
-              type="text"
-              value={template.name}
-              onChange={(e) =>
-                onTemplateChange({ ...template, name: e.target.value, updatedAt: new Date().toISOString() })
-              }
-              placeholder="Nazwa szablonu"
-              className="h-9 w-full rounded-lg border border-slate-200/90 bg-slate-50/80 px-2.5 text-[13px] font-semibold text-slate-900 shadow-inner outline-none transition-shadow duration-150 focus:border-cyan-400 focus:ring-1 focus:ring-cyan-300/40"
-            />
-          </div>
+          ) : null}
+          <input
+            type="text"
+            value={template.name}
+            onChange={(e) =>
+              onTemplateChange({ ...template, name: e.target.value, updatedAt: new Date().toISOString() })
+            }
+            placeholder="Nazwa szablonu"
+            className={`${labelDesignerToolbarInputClass} min-w-0 max-w-[min(100%,14rem)] flex-1 sm:max-w-[20rem]`}
+          />
           <button
             type="button"
             onClick={() => setPresetModalOpen(true)}
-            className="hidden h-9 shrink-0 items-center rounded-lg border border-slate-200 bg-white px-3 text-[11px] font-semibold text-slate-600 transition-colors duration-150 hover:border-cyan-300 hover:text-cyan-800 lg:inline-flex"
+            className={`${labelDesignerToolbarSecondaryBtnClass} hidden px-3 lg:inline-flex`}
           >
             Galeria szablonów
           </button>
         </div>
 
-        {/* Center: type + size + DPI */}
         <div className="hidden items-center gap-2 md:flex">
-          <div className="flex items-center gap-1.5 rounded-lg bg-slate-50/90 px-2.5 py-1.5 ring-1 ring-slate-100">
-            <span className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">Typ</span>
-            <select
-              value={template.template_type ?? "location"}
-              onChange={(e) => {
-                const nextType = e.target.value as TemplateType;
-                onTemplateMetaChange?.({ group_id: null });
+          <ToolbarFieldGroup label="Typ">
+            <LabelDesignerToolbarSelect
+              ariaLabel="Typ etykiety"
+              value={typeValue}
+              options={typeOptions}
+              minWidthClass="min-w-[9rem]"
+              className="!h-8 !border-0 !bg-transparent !px-0 !shadow-none !ring-0 focus:!ring-0"
+              onChange={(nextType) => {
                 onTemplateChange({
                   ...template,
                   template_type: nextType,
                   updatedAt: new Date().toISOString(),
                 });
               }}
-              className="max-w-[9rem] cursor-pointer rounded-md border-0 bg-transparent py-0.5 text-[12px] font-medium text-slate-800 outline-none"
-            >
-              {TEMPLATE_TYPE_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="flex items-center gap-1.5 rounded-lg bg-slate-50/90 px-2.5 py-1.5 ring-1 ring-slate-100">
-            <span className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">Rozmiar</span>
+            />
+          </ToolbarFieldGroup>
+          <ToolbarFieldGroup label="Rozmiar">
             <input
               type="number"
-              className="w-12 rounded-md border border-slate-200/80 bg-white px-1 py-0.5 text-center text-[12px] font-medium tabular-nums"
+              inputMode="numeric"
+              className={`${labelDesignerToolbarNumericClass} !h-8 w-14 !border-slate-200/80 !px-2 text-center text-[13px]`}
               value={Math.round(template.widthMm)}
               onChange={(e) =>
                 onTemplateChange({
@@ -165,7 +136,8 @@ export function LabelToolbar({
             <span className="text-slate-400">×</span>
             <input
               type="number"
-              className="w-12 rounded-md border border-slate-200/80 bg-white px-1 py-0.5 text-center text-[12px] font-medium tabular-nums"
+              inputMode="numeric"
+              className={`${labelDesignerToolbarNumericClass} !h-8 w-14 !border-slate-200/80 !px-2 text-center text-[13px]`}
               value={Math.round(template.heightMm)}
               onChange={(e) =>
                 onTemplateChange({
@@ -175,13 +147,13 @@ export function LabelToolbar({
                 })
               }
             />
-            <span className="text-[10px] text-slate-400">mm</span>
-          </div>
-          <div className="flex items-center gap-1.5 rounded-lg bg-slate-50/90 px-2.5 py-1.5 ring-1 ring-slate-100">
-            <span className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">DPI</span>
+            <span className="text-[11px] text-slate-400">mm</span>
+          </ToolbarFieldGroup>
+          <ToolbarFieldGroup label="DPI">
             <input
               type="number"
-              className="w-14 rounded-md border border-slate-200/80 bg-white px-1 py-0.5 text-center text-[12px] font-medium tabular-nums"
+              inputMode="numeric"
+              className={`${labelDesignerToolbarNumericClass} !h-8 w-16 !border-slate-200/80 !px-2 text-center text-[13px]`}
               value={template.dpi}
               onChange={(e) =>
                 onTemplateChange({
@@ -191,18 +163,17 @@ export function LabelToolbar({
                 })
               }
             />
-          </div>
+          </ToolbarFieldGroup>
         </div>
 
-        {/* Right: view mode + more + save */}
         <div className="flex shrink-0 items-center gap-2">
-          <div className="flex rounded-lg border border-slate-200/90 bg-slate-50 p-0.5 shadow-sm">
+          <div className={`flex h-10 items-center rounded-lg border border-slate-200/90 bg-slate-50 p-0.5 shadow-sm`}>
             <button
               type="button"
               onClick={() => onViewModeChange("edit")}
-              className={`inline-flex h-8 items-center gap-1 rounded-md px-2.5 text-[11px] font-semibold transition-all duration-150 ${
+              className={`inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[12px] font-semibold transition-all duration-150 ${
                 viewMode === "edit"
-                  ? "bg-white text-cyan-800 shadow-sm ring-1 ring-slate-200/80"
+                  ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-200/80"
                   : "text-slate-600 hover:text-slate-900"
               }`}
             >
@@ -212,9 +183,9 @@ export function LabelToolbar({
             <button
               type="button"
               onClick={() => onViewModeChange("preview")}
-              className={`inline-flex h-8 items-center gap-1 rounded-md px-2.5 text-[11px] font-semibold transition-all duration-150 ${
+              className={`inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[12px] font-semibold transition-all duration-150 ${
                 viewMode === "preview"
-                  ? "bg-white text-cyan-800 shadow-sm ring-1 ring-slate-200/80"
+                  ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-200/80"
                   : "text-slate-600 hover:text-slate-900"
               }`}
             >
@@ -222,148 +193,13 @@ export function LabelToolbar({
               Podgląd
             </button>
           </div>
-          <button
-            type="button"
-            ref={refs.setReference}
-            onClick={() => setMoreOpen((o) => !o)}
-            aria-expanded={moreOpen}
-            aria-haspopup="dialog"
-            className="inline-flex list-none cursor-pointer items-center gap-1.5 rounded-lg border border-slate-200/90 bg-white px-2.5 py-2 text-[11px] font-semibold text-slate-700 shadow-sm transition-colors duration-150 hover:bg-slate-50"
-          >
-            <Settings2 className="h-3.5 w-3.5 text-slate-500" strokeWidth={2} aria-hidden />
-            Więcej
-            <ChevronDown className="h-3 w-3 text-slate-400" strokeWidth={2} aria-hidden />
-          </button>
-          {moreOpen && (
-            <FloatingPortal>
-              <div ref={refs.setFloating} style={floatingStyles} {...getFloatingProps()} className={MORE_MENU_PANEL}>
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Import i opcje</p>
-                <div className="mt-2 space-y-3">
-                  <div className="flex flex-col gap-1">
-                    <span className="text-[11px] font-medium text-slate-700">Tło wektorowe (SVG)</span>
-                    <input type="file" accept=".svg" onChange={handleImportSvgFileChange} className="text-[11px] file:mr-2 file:rounded-md file:border-0 file:bg-slate-100 file:px-2 file:py-1 file:text-[11px]" />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <span className="text-[11px] font-medium text-slate-700">Tło rastrowe (PNG / JPEG)</span>
-                    <input
-                      type="file"
-                      accept="image/png,image/jpeg,image/jpg"
-                      onChange={handleImportBackgroundImageChange}
-                      className="text-[11px] file:mr-2 file:rounded-md file:border-0 file:bg-slate-100 file:px-2 file:py-1 file:text-[11px]"
-                    />
-                  </div>
-                  <label className="flex cursor-pointer items-start gap-2 text-[11px] text-slate-700">
-                    <input
-                      type="checkbox"
-                      className="mt-0.5 rounded border-slate-300"
-                      checked={autoSliceStrip}
-                      onChange={(e) => setAutoSliceStrip(e.target.checked)}
-                    />
-                    <span>Automatycznie tnij pasek etykiet (import obrazu)</span>
-                  </label>
-                  {isLocationTemplate && (
-                    <label className="flex cursor-pointer items-start gap-2 text-[11px] text-slate-700">
-                      <input
-                        type="checkbox"
-                        className="mt-0.5 rounded border-slate-300"
-                        checked={groupedLocationVariables}
-                        onChange={(e) => setGroupedLocationVariables(e.target.checked)}
-                      />
-                      <span>Podgląd: etykieta zgrupowana (CSV, piętra 1–3)</span>
-                    </label>
-                  )}
-                  {onTemplateMetaChange && (
-                    <div>
-                      <label className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Grupa szablonów</label>
-                      <select
-                        value={templateMeta?.group_id ?? ""}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          onTemplateMetaChange({ group_id: v === "" ? null : Number(v) });
-                        }}
-                        className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-[12px]"
-                      >
-                        <option value="">Bez grupy</option>
-                        {groups.map((g) => (
-                          <option key={g.id} value={g.id}>
-                            {g.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-                  <div className="border-t border-slate-100 pt-2 md:hidden">
-                    <p className="text-[10px] font-semibold text-slate-500">Typ i wymiary</p>
-                    <select
-                      value={template.template_type ?? "location"}
-                      onChange={(e) => {
-                        const nextType = e.target.value as TemplateType;
-                        onTemplateMetaChange?.({ group_id: null });
-                        onTemplateChange({
-                          ...template,
-                          template_type: nextType,
-                          updatedAt: new Date().toISOString(),
-                        });
-                      }}
-                      className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-[12px]"
-                    >
-                      {TEMPLATE_TYPE_OPTIONS.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </option>
-                      ))}
-                    </select>
-                    <div className="mt-2 flex items-center gap-2">
-                      <input
-                        type="number"
-                        className="w-full rounded-lg border border-slate-200 px-2 py-1 text-[12px]"
-                        value={Math.round(template.widthMm)}
-                        onChange={(e) =>
-                          onTemplateChange({
-                            ...template,
-                            widthMm: Math.round(Math.min(MAX_LABEL_MM, Math.max(10, Number(e.target.value) || 50))),
-                            updatedAt: new Date().toISOString(),
-                          })
-                        }
-                      />
-                      <span className="text-slate-400">×</span>
-                      <input
-                        type="number"
-                        className="w-full rounded-lg border border-slate-200 px-2 py-1 text-[12px]"
-                        value={Math.round(template.heightMm)}
-                        onChange={(e) =>
-                          onTemplateChange({
-                            ...template,
-                            heightMm: Math.round(Math.min(MAX_LABEL_MM, Math.max(10, Number(e.target.value) || 30))),
-                            updatedAt: new Date().toISOString(),
-                          })
-                        }
-                      />
-                    </div>
-                    <input
-                      type="number"
-                      className="mt-2 w-full rounded-lg border border-slate-200 px-2 py-1 text-[12px]"
-                      placeholder="DPI"
-                      value={template.dpi}
-                      onChange={(e) =>
-                        onTemplateChange({
-                          ...template,
-                          dpi: Number(e.target.value) || 300,
-                          updatedAt: new Date().toISOString(),
-                        })
-                      }
-                    />
-                  </div>
-                </div>
-              </div>
-            </FloatingPortal>
-          )}
+          <LabelDesignerMoreMenu open={moreOpen} onOpenChange={setMoreOpen} handlers={moreMenuHandlers} />
           <button
             type="button"
             onClick={handleSave}
             disabled={saving || saveDisabled}
             title={saveDisabled ? "Popraw błędy walidacji przed zapisaniem" : undefined}
-            className="inline-flex h-9 items-center rounded-lg bg-gradient-to-b from-cyan-500 to-cyan-600 px-4 text-[12px] font-semibold text-white shadow-md shadow-cyan-900/10 transition-all duration-150 hover:from-cyan-400 hover:to-cyan-500 disabled:cursor-not-allowed disabled:opacity-55"
+            className={labelDesignerToolbarPrimaryBtnClass}
           >
             {saving ? "Zapisywanie…" : "Zapisz"}
           </button>

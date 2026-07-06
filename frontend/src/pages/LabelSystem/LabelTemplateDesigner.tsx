@@ -44,6 +44,10 @@ import { LABEL_IMAGE_TOOLBAR_PLACEHOLDER_DATA_URL } from "../../labelSystem/labe
 import { DocumentTemplateHtmlPanel } from "./components/DocumentTemplateHtmlPanel";
 import { isDocumentPrintModuleType } from "./labelPrintModuleTypes";
 import { PanelRightClose, PanelRightOpen } from "lucide-react";
+import { labelDesignerVariableCategoryType } from "./labelDesignerTypeOptions";
+import { LabelDesignerProjectSettingsModal } from "./components/LabelDesignerProjectSettingsModal";
+import { exportLabelTemplatesJson } from "../../api/labelTemplatesPortabilityApi";
+import type { LabelDesignerMoreMenuHandlers } from "./components/LabelDesignerMoreMenu";
 
 const BASE_PX_PER_MM = 8;
 const GRID_PX = 5;
@@ -315,6 +319,7 @@ export function LabelTemplateDesigner({ template, onTemplateChange, templateId, 
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
   const [lockedElementIds, setLockedElementIds] = useState<Set<string>>(() => new Set());
+  const [projectSettingsOpen, setProjectSettingsOpen] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [showGrid, setShowGrid] = useState(true);
   const [snapUiOn, setSnapUiOn] = useState(true);
@@ -337,7 +342,7 @@ export function LabelTemplateDesigner({ template, onTemplateChange, templateId, 
       .catch(() => setGroups([]));
   }, [template.template_type]);
 
-  const isLocationTemplate = (template.template_type ?? "location") === "location";
+  const isLocationTemplate = labelDesignerVariableCategoryType(template.template_type ?? "location") === "location";
   const isDocumentTemplate = isDocumentPrintModuleType(String(template.template_type ?? ""));
   const groupedLocationActive = isLocationTemplate && groupedLocationVariables;
   const previewBuildOptions = useMemo(
@@ -503,53 +508,6 @@ export function LabelTemplateDesigner({ template, onTemplateChange, templateId, 
       updateElement(id, { visible });
     },
     [updateElement]
-  );
-
-  const handleImportBackgroundImageChange = useCallback(
-    async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-
-      if (!file.type.startsWith("image/")) {
-        // eslint-disable-next-line no-alert
-        alert("Nieprawidłowy plik obrazu (PNG lub JPEG).");
-        e.target.value = "";
-        return;
-      }
-
-      try {
-        const importedTemplate = await importPngTemplate(file, {
-          autoSlice: autoSliceStrip,
-        });
-        onTemplateChange(importedTemplate);
-      } catch (err) {
-        // eslint-disable-next-line no-alert
-        alert("Nie udało się wczytać obrazu. Sprawdź format pliku.");
-      }
-
-      e.target.value = "";
-    },
-    [onTemplateChange, autoSliceStrip]
-  );
-
-  const handleImportSvgFileChange = useCallback(
-    async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-
-      try {
-        const svgText = await file.text();
-        const importedTemplate = importSvgTemplate(svgText);
-        onTemplateChange(importedTemplate);
-      } catch (err) {
-        console.error("SVG import failed:", err);
-        // eslint-disable-next-line no-alert
-        alert("Nieprawidłowy plik SVG.");
-      } finally {
-        e.target.value = "";
-      }
-    },
-    [onTemplateChange]
   );
 
   const isElementLocked = useCallback((id: string) => lockedElementIds.has(id), [lockedElementIds]);
@@ -900,7 +858,7 @@ export function LabelTemplateDesigner({ template, onTemplateChange, templateId, 
     setIsMiddlePanning(true);
   }, []);
 
-  const variableCategoryIds = TEMPLATE_TYPE_CATEGORIES[template.template_type ?? "location"];
+  const variableCategoryIds = TEMPLATE_TYPE_CATEGORIES[labelDesignerVariableCategoryType(template.template_type ?? "location")];
   const variableCategories = useMemo(() => {
     const cats = LABEL_VARIABLE_CATEGORIES.filter((c) => variableCategoryIds.includes(c.id));
     if (!groupedLocationActive) return cats;
@@ -962,6 +920,154 @@ export function LabelTemplateDesigner({ template, onTemplateChange, templateId, 
     selected?.type === "group" ||
     selected?.type === "repeater";
 
+  const handleImportSvgFile = useCallback(
+    async (file: File) => {
+      try {
+        const svgText = await file.text();
+        const importedTemplate = importSvgTemplate(svgText);
+        onTemplateChange(importedTemplate);
+      } catch (err) {
+        console.error("SVG import failed:", err);
+        // eslint-disable-next-line no-alert
+        alert("Nieprawidłowy plik SVG.");
+      }
+    },
+    [onTemplateChange],
+  );
+
+  const handleImportImageFile = useCallback(
+    async (file: File) => {
+      if (!file.type.startsWith("image/")) {
+        // eslint-disable-next-line no-alert
+        alert("Nieprawidłowy plik obrazu (PNG lub JPEG).");
+        return;
+      }
+      try {
+        const importedTemplate = await importPngTemplate(file, { autoSlice: autoSliceStrip });
+        onTemplateChange(importedTemplate);
+      } catch {
+        // eslint-disable-next-line no-alert
+        alert("Nie udało się wczytać obrazu. Sprawdź format pliku.");
+      }
+    },
+    [onTemplateChange, autoSliceStrip],
+  );
+
+  const handleExportTemplate = useCallback(async () => {
+    if (templateId != null && !Number.isNaN(templateId)) {
+      await exportLabelTemplatesJson(1, [templateId]);
+      return;
+    }
+    const layoutForStorage = {
+      widthMm: template.widthMm,
+      heightMm: template.heightMm,
+      width: template.widthMm,
+      height: template.heightMm,
+      dpi: template.dpi ?? 300,
+      elements: template.elements ?? [],
+      template_type: template.template_type ?? "location",
+      name: template.name,
+      updatedAt: new Date().toISOString(),
+    };
+    const payload = {
+      schema_version: 1,
+      templates: [
+        {
+          name: template.name || "Bez nazwy",
+          template_type: template.template_type ?? "location",
+          template_json: JSON.stringify(layoutForStorage),
+        },
+      ],
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `label_template_${(template.name || "export").replace(/\s+/g, "_")}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [template, templateId]);
+
+  const handleImportTemplateFile = useCallback(
+    async (file: File) => {
+      try {
+        const raw = JSON.parse(await file.text()) as {
+          templates?: Array<{ template_json?: string; name?: string; template_type?: string }>;
+          template_json?: string;
+          name?: string;
+          template_type?: string;
+        };
+        const row = Array.isArray(raw.templates) ? raw.templates[0] : raw;
+        if (!row?.template_json) {
+          // eslint-disable-next-line no-alert
+          alert("Nie znaleziono danych szablonu w pliku JSON.");
+          return;
+        }
+        const layout = JSON.parse(row.template_json) as Partial<LabelTemplate> & {
+          width?: number;
+          height?: number;
+        };
+        onTemplateChange({
+          ...template,
+          name: row.name ?? layout.name ?? template.name,
+          template_type: (row.template_type ?? layout.template_type ?? template.template_type) as LabelTemplate["template_type"],
+          widthMm: Number(layout.widthMm ?? layout.width ?? template.widthMm),
+          heightMm: Number(layout.heightMm ?? layout.height ?? template.heightMm),
+          dpi: Number(layout.dpi ?? template.dpi ?? 300),
+          elements: Array.isArray(layout.elements) ? layout.elements : [],
+          updatedAt: new Date().toISOString(),
+        });
+        setSelectionClearMulti(null);
+      } catch {
+        // eslint-disable-next-line no-alert
+        alert("Nie udało się wczytać pliku szablonu.");
+      }
+    },
+    [template, onTemplateChange, setSelectionClearMulti],
+  );
+
+  const handleSaveTemplateAs = useCallback(() => {
+    const nextName = window.prompt("Nazwa nowego szablonu", `${template.name || "Szablon"} (kopia)`);
+    if (!nextName?.trim()) return;
+    onTemplateChange({
+      ...template,
+      id: generateId(),
+      name: nextName.trim(),
+      updatedAt: new Date().toISOString(),
+    });
+  }, [template, onTemplateChange]);
+
+  const handleDuplicateTemplate = useCallback(() => {
+    onTemplateChange({
+      ...template,
+      id: generateId(),
+      name: `${template.name || "Szablon"} (kopia)`,
+      updatedAt: new Date().toISOString(),
+    });
+  }, [template, onTemplateChange]);
+
+  const handleResetProject = useCallback(() => {
+    onTemplateChange({
+      ...template,
+      elements: [],
+      updatedAt: new Date().toISOString(),
+    });
+    setSelectionClearMulti(null);
+  }, [template, onTemplateChange, setSelectionClearMulti]);
+
+  const moreMenuHandlers: LabelDesignerMoreMenuHandlers = {
+    onImportSvg: (file) => void handleImportSvgFile(file),
+    onImportImage: (file) => void handleImportImageFile(file),
+    onExportTemplate: () => void handleExportTemplate(),
+    onImportTemplate: (file) => void handleImportTemplateFile(file),
+    onSaveAs: handleSaveTemplateAs,
+    onDuplicate: handleDuplicateTemplate,
+    onResetProject: handleResetProject,
+    onOpenProjectSettings: () => setProjectSettingsOpen(true),
+    exportDisabled: false,
+    duplicateDisabled: false,
+  };
+
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-slate-100/80">
       <LabelToolbar
@@ -972,6 +1078,14 @@ export function LabelTemplateDesigner({ template, onTemplateChange, templateId, 
         onBack={onBack}
         setPresetModalOpen={setPresetModalOpen}
         saveDisabled={!validation.valid}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+        moreMenuHandlers={moreMenuHandlers}
+      />
+
+      <LabelDesignerProjectSettingsModal
+        open={projectSettingsOpen}
+        onClose={() => setProjectSettingsOpen(false)}
         templateMeta={templateMeta}
         onTemplateMetaChange={onTemplateMetaChange}
         groups={groups}
@@ -980,10 +1094,6 @@ export function LabelTemplateDesigner({ template, onTemplateChange, templateId, 
         groupedLocationVariables={groupedLocationVariables}
         setGroupedLocationVariables={setGroupedLocationVariables}
         isLocationTemplate={isLocationTemplate}
-        handleImportSvgFileChange={handleImportSvgFileChange}
-        handleImportBackgroundImageChange={handleImportBackgroundImageChange}
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
       />
 
       {isDocumentTemplate ? (

@@ -1,5 +1,13 @@
 # Change log
 
+## 2026-06-08 — Projektant etykiet: refaktor paska narzędzi (UX/UI only)
+
+- Typ etykiety: wyłącznie typy magazynowe (`LABEL_DESIGNER_TYPE_OPTIONS`), bez dokumentów ERP.
+- Pasek: `LabelDesignerToolbarSelect`, pola liczbowe bez spinbuttonów, `h-10` na wszystkich kontrolkach.
+- Menu „Więcej”: import/eksport, zapisz jako, duplikuj, reset, ustawienia projektu (`LabelDesignerMoreMenu`).
+- Przycisk „Zapisz”: tokeny jak PrimaryButton w listach ERP (`labelDesignerToolbarTokens`).
+- Ustawienia projektu: modal z custom selectem grupy (`LabelDesignerProjectSettingsModal`).
+
 ## 2026-06-08 — DTE edytor: UX IDE (12 poprawek, frontend only)
 
 - Lewy panel: persist zakładka + rozwinięte sekcje zmiennych (`useLeftPanelPersistence`).
