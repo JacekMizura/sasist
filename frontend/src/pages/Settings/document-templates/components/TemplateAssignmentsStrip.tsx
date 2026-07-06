@@ -17,14 +17,14 @@ export function TemplateAssignmentsStrip({ ctx, onAssignmentsChange }: Props) {
 
   return (
     <>
-      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+      <button
+        type="button"
+        className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-left text-sm hover:opacity-80"
+        onClick={() => setModalOpen(true)}
+      >
         <span className="text-slate-500">Przypisany do:</span>
         {labels.length ? (
-          <button
-            type="button"
-            className="inline-flex flex-wrap items-center gap-x-3 gap-y-1 text-left text-slate-800 hover:text-blue-800"
-            onClick={() => setModalOpen(true)}
-          >
+          <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1 text-slate-800">
             {labels.map((label) => (
               <span key={label} className="inline-flex items-center gap-1">
                 <span className="text-emerald-600" aria-hidden>
@@ -33,20 +33,15 @@ export function TemplateAssignmentsStrip({ ctx, onAssignmentsChange }: Props) {
                 {label}
               </span>
             ))}
-          </button>
+          </span>
         ) : (
-          <button
-            type="button"
-            className="font-medium text-amber-800 underline decoration-dotted hover:text-amber-900"
-            onClick={() => setModalOpen(true)}
-          >
-            Nieprzypisany
-          </button>
+          <span className="font-medium text-amber-800 underline decoration-dotted">Nieprzypisany</span>
         )}
-      </div>
+      </button>
       <TemplateAssignmentModal
         templateId={ctx.detail.id}
         templateKindCode={ctx.detail.kind?.code ?? null}
+        templateKindName={ctx.detail.kind?.name_pl ?? null}
         publishedVersionId={publishedVersionId}
         open={modalOpen}
         onClose={() => setModalOpen(false)}

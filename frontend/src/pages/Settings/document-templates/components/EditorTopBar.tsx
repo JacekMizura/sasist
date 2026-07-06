@@ -1,5 +1,4 @@
 import type { EditorContextDto } from "../../../../api/documentTemplatesApi";
-import { DOC_TEMPLATE_STATUS_LABELS } from "../constants";
 import { EditableTemplateName } from "./EditableTemplateName";
 import { EditorOverflowMenu } from "./EditorOverflowMenu";
 import { TemplateAssignmentsStrip } from "./TemplateAssignmentsStrip";
@@ -44,7 +43,6 @@ export function EditorTopBar({
 }: Props) {
   const detail = ctx.detail;
   const status = detail.draft_version?.status ?? detail.published_version?.status ?? "draft";
-  const statusLabel = DOC_TEMPLATE_STATUS_LABELS[status] ?? status;
 
   return (
     <header className="shrink-0 border-b border-slate-200 bg-white px-4 py-3">
@@ -56,7 +54,7 @@ export function EditorTopBar({
               serverName={displayName}
               onNameChange={onNameChange}
             />
-            <StatusBadge status={status} label={statusLabel} />
+            <StatusBadge status={status} />
           </div>
           <div className="flex flex-wrap gap-x-4 text-xs text-slate-600">
             <span>
@@ -101,12 +99,20 @@ export function EditorTopBar({
   );
 }
 
-function StatusBadge({ status, label }: { status: string; label: string }) {
-  const tone =
-    status === "published"
-      ? "bg-emerald-100 text-emerald-800"
-      : status === "archived"
-        ? "bg-slate-100 text-slate-600"
-        : "bg-amber-100 text-amber-900";
-  return <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${tone}`}>{label}</span>;
+function StatusBadge({ status }: { status: string }) {
+  const isPublished = status === "published";
+  const isArchived = status === "archived";
+  const text = isPublished ? "Opublikowana" : isArchived ? "Archiwum" : "Wersja robocza";
+  const tone = isPublished
+    ? "text-emerald-700"
+    : isArchived
+      ? "text-slate-500"
+      : "text-amber-800";
+  const dot = isPublished ? "bg-emerald-500" : isArchived ? "bg-slate-400" : "bg-amber-500";
+  return (
+    <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${tone}`}>
+      <span className={`h-2 w-2 rounded-full ${dot}`} aria-hidden />
+      {text}
+    </span>
+  );
 }

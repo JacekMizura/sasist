@@ -2,9 +2,16 @@
 
 
 class DocumentTemplateError(Exception):
-    def __init__(self, message: str, *, code: str = "error") -> None:
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: str = "error",
+        validation: dict | None = None,
+    ) -> None:
         super().__init__(message)
         self.code = code
+        self.validation = validation
 
 
 class DocumentTemplateNotFoundError(DocumentTemplateError):

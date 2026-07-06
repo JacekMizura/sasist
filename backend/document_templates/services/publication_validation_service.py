@@ -65,6 +65,19 @@ def validate_syntax(twig_content: str) -> ValidationReport:
     return ValidationReport(ok=not issues, issues=issues)
 
 
+def kind_code_for_version(db: Session, version_id: int) -> str | None:
+    from ..models import DocumentTemplate, DocumentTemplateKind, DocumentTemplateVersion
+
+    version = db.query(DocumentTemplateVersion).filter(DocumentTemplateVersion.id == int(version_id)).first()
+    if version is None:
+        return None
+    template = db.query(DocumentTemplate).filter(DocumentTemplate.id == int(version.template_id)).first()
+    if template is None or template.kind_id is None:
+        return None
+    kind = db.query(DocumentTemplateKind).filter(DocumentTemplateKind.id == int(template.kind_id)).first()
+    return kind.code if kind else None
+
+
 def validate_publication(
     db: Session,
     *,

@@ -10,7 +10,28 @@ import {
   WAREHOUSE_SCOPE_KINDS,
 } from "../documentTemplateScopeKinds";
 
-export type AssignableKind = ScopeKindConfig & { group: string };
+export type AssignableKind = ScopeKindConfig & { group: string; description: string };
+
+const DESCRIPTIONS: Record<string, string> = {
+  product_card: "Wydruk karty produktu w module produktów.",
+  product_catalog: "Szablon katalogu produktów.",
+  picking_list: "Lista kompletacyjna do realizacji zamówień.",
+  order_confirmation: "Potwierdzenie zamówienia dla klienta.",
+  invoice: "Faktura VAT w module sprzedaży.",
+  receipt: "Paragon fiskalny.",
+  correction: "Dokument korekty sprzedaży.",
+  wz: "Wydanie zewnętrzne z magazynu.",
+  pz: "Przyjęcie zewnętrzne do magazynu.",
+  pw: "Przyjęcie wewnętrzne (produkcja).",
+  rw: "Rozchód wewnętrzny.",
+  mm: "Przesunięcie międzymagazynowe.",
+  inventory_count: "Arkusz inwentaryzacji.",
+  production_card: "Karta produkcyjna.",
+  production_material_pick_list: "Lista pobrania materiałów na produkcję.",
+  return_document: "Dokument zwrotu towaru.",
+  complaint_document: "Dokument reklamacji.",
+  supplier_order: "Zamówienie do dostawcy.",
+};
 
 const GROUPS: { group: string; kinds: ScopeKindConfig[] }[] = [
   { group: "Produkty", kinds: PRODUCT_SCOPE_KINDS },
@@ -27,7 +48,11 @@ export function allAssignableKinds(): AssignableKind[] {
   const out: AssignableKind[] = [];
   for (const g of GROUPS) {
     for (const k of g.kinds) {
-      out.push({ ...k, group: g.group });
+      out.push({
+        ...k,
+        group: g.group,
+        description: DESCRIPTIONS[k.kindCode] ?? `Wydruk typu „${k.label}”.`,
+      });
     }
   }
   return out;

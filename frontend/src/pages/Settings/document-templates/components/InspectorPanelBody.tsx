@@ -25,13 +25,13 @@ export type InspectorPanelBodyProps = {
   validation: ValidationReport | null;
   liveValidation: ValidationReport | null;
   onIssueClick: (issue: ValidationIssue) => void;
-  onRunValidation?: () => void;
   impact: EditorImpactDto | null;
   dependencies: DependencyGraphDto | null;
   versionsHistory: DocumentTemplateVersionDto[];
   kindCode?: string | null;
   templateId: number;
   templateKindCode: string | null;
+  templateKindName: string | null;
   publishedVersionId: number | null;
   usageHits: UsageSearchHit[];
   usageQuery: string;
@@ -39,6 +39,7 @@ export type InspectorPanelBodyProps = {
   onPreviewVersion?: (content: string) => void;
   onAssignmentsChange?: () => void;
   scrollRef?: MutableRefObject<number>;
+  highlightedIssueIndex?: number | null;
 };
 
 export function InspectorPanelBody(props: InspectorPanelBodyProps) {
@@ -52,13 +53,13 @@ export function InspectorPanelBody(props: InspectorPanelBodyProps) {
     validation,
     liveValidation,
     onIssueClick,
-    onRunValidation,
     impact,
     dependencies,
     versionsHistory,
     kindCode,
     templateId,
     templateKindCode,
+    templateKindName,
     publishedVersionId,
     usageHits,
     usageQuery,
@@ -66,6 +67,7 @@ export function InspectorPanelBody(props: InspectorPanelBodyProps) {
     onPreviewVersion,
     onAssignmentsChange,
     scrollRef,
+    highlightedIssueIndex,
   } = props;
 
   const pdfUrl = useMemoPdfUrl(previewPdf);
@@ -73,33 +75,21 @@ export function InspectorPanelBody(props: InspectorPanelBodyProps) {
   return (
     <>
       {(activeTab === "html" || activeTab === "pdf") && (
-        <>
-          <div className="mb-2 flex justify-end">
-            <button
-              type="button"
-              className="rounded-lg border border-slate-200 bg-white px-3 py-1 text-xs text-slate-700 hover:bg-slate-50"
-              onClick={onRefreshPreview}
-            >
-              Odśwież podgląd
-            </button>
-          </div>
-          <PreviewPane
-            mode={activeTab}
-            html={previewHtml}
-            pdfUrl={pdfUrl}
-            loading={previewLoading}
-            error={previewError}
-            revision={previewRevision}
-            scrollRef={scrollRef}
-          />
-        </>
+        <PreviewPane
+          mode={activeTab}
+          html={previewHtml}
+          pdfUrl={pdfUrl}
+          loading={previewLoading}
+          error={previewError}
+          revision={previewRevision}
+          scrollRef={scrollRef}
+        />
       )}
       {activeTab === "errors" && (
         <ErrorsPane
-          validation={liveValidation ?? validation}
+          validation={validation}
           onIssueClick={onIssueClick}
-          onRunValidation={onRunValidation}
-          live={!!liveValidation}
+          highlightedIndex={highlightedIssueIndex}
         />
       )}
       {activeTab === "compare" && <VersionComparePanel versions={versionsHistory} />}
@@ -107,6 +97,7 @@ export function InspectorPanelBody(props: InspectorPanelBodyProps) {
         <TemplateUsagePanel
           templateId={templateId}
           templateKindCode={templateKindCode}
+          templateKindName={templateKindName}
           publishedVersionId={publishedVersionId}
           onAssignmentsChange={onAssignmentsChange}
         />
@@ -164,13 +155,14 @@ export function PreviewPane({
   if (loading) return <p className="text-slate-500">Generowanie podglądu…</p>;
   if (error) return <p className="text-rose-700">{error}</p>;
   if (mode === "html" && html) {
+    const srcDoc = injectPreviewMarginsReset(html);
     return (
       <iframe
         ref={iframeRef}
         key={`html-${revision}`}
         title="Podgląd HTML"
-        className="h-[min(900px,78vh)] w-full rounded border border-slate-200 bg-white shadow-sm"
-        srcDoc={html}
+        className="h-[min(900px,78vh)] w-full border-0 bg-white"
+        srcDoc={srcDoc}
         onLoad={() => {
           const iframe = iframeRef.current;
           if (!iframe || !scrollRef) return;
@@ -186,66 +178,79 @@ export function PreviewPane({
     );
   }
   if (mode === "pdf" && pdfUrl) {
+    const src = `${pdfUrl}#view=FitH&zoom=page-width`;
     return (
       <iframe
         ref={iframeRef}
         key={`pdf-${revision}`}
         title="Podgląd PDF"
-        className="h-[min(900px,78vh)] w-full rounded border border-slate-200 bg-white shadow-sm"
-        src={pdfUrl}
+        className="h-[min(900px,78vh)] w-full border-0 bg-white"
+        src={src}
       />
     );
   }
-  return <p className="text-slate-500">Kliknij „Odśwież podgląd” lub zapisz szablon (Ctrl+S).</p>;
+  return <p className="px-2 text-slate-500">Zapisz szablon (Ctrl+S), aby wygenerować podgląd.</p>;
+}
+
+function injectPreviewMarginsReset(html: string): string {
+  const reset = "<style>html,body{margin:0!important;padding:0!important;width:100%!important;}</style>";
+  if (/<head[\s>]/i.test(html)) {
+    return html.replace(/<head([^>]*)>/i, `<head$1>${reset}`);
+  }
+  if (/<html[\s>]/i.test(html)) {
+    return html.replace(/<html([^>]*)>/i, `<html$1><head>${reset}</head>`);
+  }
+  return `${reset}${html}`;
 }
 
 function ErrorsPane({
   validation,
   onIssueClick,
-  onRunValidation,
-  live,
+  highlightedIndex,
 }: {
   validation: ValidationReport | null;
   onIssueClick: (issue: ValidationIssue) => void;
-  onRunValidation?: () => void;
-  live: boolean;
+  highlightedIndex?: number | null;
 }) {
+  const firstErrorRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (highlightedIndex === 0) {
+      firstErrorRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }, [highlightedIndex, validation]);
+
+  if (!validation) {
+    return <p className="px-2 text-slate-500">Sprawdzanie szablonu podczas edycji…</p>;
+  }
+  if (validation.ok) {
+    return <p className="px-2 text-emerald-700">Brak błędów — szablon gotowy do publikacji.</p>;
+  }
   return (
-    <div className="space-y-3">
-      {onRunValidation ? (
-        <button
-          type="button"
-          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 hover:bg-slate-50"
-          onClick={onRunValidation}
-        >
-          Waliduj przed publikacją
-        </button>
-      ) : null}
-      {!validation ? (
-        <p className="text-slate-500">Błędy składni pojawią się tutaj podczas edycji.</p>
-      ) : validation.ok ? (
-        <p className="text-emerald-700">{live ? "Brak błędów w szablonie." : "Walidacja przed publikacją — OK."}</p>
-      ) : (
-        <ul className="space-y-2">
-          {validation.issues.map((issue, idx) => {
-            const t = translateValidationIssue(issue);
-            return (
-              <li key={idx}>
-                <button
-                  type="button"
-                  className="w-full rounded-lg border border-rose-100 bg-rose-50/50 px-3 py-2 text-left hover:bg-rose-50"
-                  onClick={() => onIssueClick(issue)}
-                >
-                  {t.lineLabel ? <div className="text-xs font-medium text-rose-800">{t.lineLabel}</div> : null}
-                  <div className="mt-0.5 text-sm text-rose-900">{t.message}</div>
-                  {t.suggestion ? <div className="mt-1 text-xs text-slate-600">{t.suggestion}</div> : null}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </div>
+    <ul className="space-y-2 px-1">
+      {validation.issues.map((issue, idx) => {
+        const t = translateValidationIssue(issue);
+        const highlighted = highlightedIndex === idx;
+        return (
+          <li key={idx}>
+            <button
+              ref={idx === 0 ? firstErrorRef : undefined}
+              type="button"
+              className={`w-full rounded-lg border px-3 py-2 text-left ${
+                highlighted
+                  ? "border-rose-400 bg-rose-100 ring-2 ring-rose-300"
+                  : "border-rose-100 bg-rose-50/50 hover:bg-rose-50"
+              }`}
+              onClick={() => onIssueClick(issue)}
+            >
+              {t.lineLabel ? <div className="text-xs font-medium text-rose-800">{t.lineLabel}</div> : null}
+              <div className="mt-0.5 text-sm text-rose-900">{t.message}</div>
+              {t.suggestion ? <div className="mt-1 text-xs text-slate-600">{t.suggestion}</div> : null}
+            </button>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 

@@ -58,7 +58,7 @@ export function EditorLeftPanel({
     { id: "helpers" as const, label: "Funkcje" },
     { id: "tags" as const, label: "Tagi" },
     { id: "partials" as const, label: "Fragmenty" },
-    { id: "base" as const, label: "Baza" },
+    { id: "base" as const, label: "Szablon bazowy" },
     { id: "assignments" as const, label: "Przypisania" },
   ];
 
@@ -91,7 +91,7 @@ export function EditorLeftPanel({
   }
 
   return (
-    <aside className="flex h-full w-[280px] shrink-0 flex-col border-r border-slate-200 bg-slate-50/80 transition-[width] duration-200 ease-in-out">
+    <aside className="flex h-full w-[260px] shrink-0 flex-col border-r border-slate-200 bg-slate-50/80 transition-[width] duration-200 ease-in-out">
       <div className="flex items-center gap-1 border-b border-slate-200 px-2 py-1.5">
         {tabs.map((t) => (
           <button

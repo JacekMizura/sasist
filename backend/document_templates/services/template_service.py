@@ -355,9 +355,11 @@ def publish_version(
             run_render=bool(kind_code),
         )
         if not report.ok:
+            first_msg = report.issues[0].message if report.issues else "Walidacja przed publikacją nie powiodła się."
             raise DocumentTemplateError(
-                "Publikacja zablokowana — walidacja nie powiodła się.",
+                first_msg,
                 code="publication_blocked",
+                validation=report.to_dict(),
             )
 
     db.query(DocumentTemplateVersion).filter(

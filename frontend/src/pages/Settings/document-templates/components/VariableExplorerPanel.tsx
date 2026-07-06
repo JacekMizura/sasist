@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import type { VariableFieldDto, VariableTreeNode } from "../../../../api/documentTemplatesApi";
 
@@ -14,6 +14,8 @@ type Props = {
   onOpenDocs: (field: VariableFieldDto) => void;
   onToggleFavorite: (insert: string) => void;
 };
+
+const TOOLTIP_DELAY_MS = 300;
 
 function countLeaves(node: VariableTreeNode): number {
   if (node.insert) return 1;
@@ -235,22 +237,27 @@ function VariableRow({
   onOpenDocs: () => void;
   onToggleFavorite: () => void;
 }) {
-  const tooltip = field
-    ? [
-        field.type ? `Typ: ${field.type}` : null,
-        field.sample_value != null && field.sample_value !== "" ? `Przykład: ${String(field.sample_value)}` : null,
-        field.description ? field.description : null,
-      ]
-        .filter(Boolean)
-        .join("\n")
-    : undefined;
+  const [tooltipVisible, setTooltipVisible] = useState(false);
+  const timerRef = useRef<number | null>(null);
+
+  function showTooltip() {
+    if (!field) return;
+    timerRef.current = window.setTimeout(() => setTooltipVisible(true), TOOLTIP_DELAY_MS);
+  }
+
+  function hideTooltip() {
+    if (timerRef.current) window.clearTimeout(timerRef.current);
+    timerRef.current = null;
+    setTooltipVisible(false);
+  }
 
   return (
     <div
       className={`group relative flex items-center gap-1 rounded px-1 py-0.5 ${
         selected ? "bg-blue-50 ring-1 ring-blue-200" : "hover:bg-slate-50"
       }`}
-      title={tooltip}
+      onMouseEnter={showTooltip}
+      onMouseLeave={hideTooltip}
     >
       {node.insert ? (
         <button
@@ -270,13 +277,15 @@ function VariableRow({
       <button
         type="button"
         className="min-w-0 flex-1 text-left"
-        onClick={() => {
+        onClick={(e) => {
+          if (e.ctrlKey || e.metaKey) {
+            e.preventDefault();
+            onSelect();
+            onOpenDocs();
+            return;
+          }
           onSelect();
           onInsert();
-        }}
-        onDoubleClick={(e) => {
-          e.preventDefault();
-          onOpenDocs();
         }}
         disabled={!node.insert && !node.path}
       >
@@ -287,13 +296,14 @@ function VariableRow({
           </span>
         ) : null}
       </button>
-      {field && tooltip ? (
-        <div className="pointer-events-none absolute left-full top-0 z-20 ml-1 hidden w-48 rounded-md border border-slate-200 bg-white p-2 text-[10px] text-slate-600 shadow-lg group-hover:block">
+      {field && tooltipVisible ? (
+        <div className="pointer-events-none absolute left-full top-0 z-20 ml-1 w-48 rounded-md border border-slate-200 bg-white p-2 text-[10px] text-slate-600 shadow-lg">
           <div className="font-medium text-slate-800">{field.type ?? "string"}</div>
           {field.sample_value != null && field.sample_value !== "" ? (
             <div className="mt-1 font-mono text-slate-700">{String(field.sample_value)}</div>
           ) : null}
           {field.description ? <div className="mt-1 text-slate-500">{field.description}</div> : null}
+          <div className="mt-1 text-[9px] text-slate-400">Ctrl+klik — dokumentacja</div>
         </div>
       ) : null}
     </div>

@@ -88,6 +88,16 @@ def _map_error(exc: DocumentTemplateError) -> HTTPException:
     status = 404 if code in {"not_found", "kind_not_found", "starter_not_found"} else 400
     if code == "publication_blocked":
         status = 422
+        validation = getattr(exc, "validation", None)
+        if validation:
+            return HTTPException(
+                status_code=status,
+                detail={
+                    "message": str(exc),
+                    "code": code,
+                    "validation": validation,
+                },
+            )
     if code in {"pdf_engine_missing", "pdf_render_failed"}:
         status = 503
     return HTTPException(status_code=status, detail=str(exc))
@@ -507,7 +517,18 @@ def api_validate_version(
     user: AppUser = Depends(get_current_user),
 ):
     _ = user
-    report = validate_publication(db, version_id=int(version_id), kind_code=kind_code)
+    from ..document_templates.services.publication_validation_service import (
+        kind_code_for_version,
+        validate_publication,
+    )
+
+    resolved_kind = kind_code or kind_code_for_version(db, int(version_id))
+    report = validate_publication(
+        db,
+        version_id=int(version_id),
+        kind_code=resolved_kind,
+        run_render=bool(resolved_kind),
+    )
     return report.to_dict()
 
 

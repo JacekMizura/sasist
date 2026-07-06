@@ -1,5 +1,5 @@
 import Editor, { type OnMount } from "@monaco-editor/react";
-import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 
 import {
   liveValidateDocumentTemplate,
@@ -9,7 +9,6 @@ import {
   type VariableTreeNode,
 } from "../../../../api/documentTemplatesApi";
 import { DEFAULT_TENANT_ID } from "../constants";
-import { computeTwigBreadcrumbs } from "../utils/twigBreadcrumbs";
 
 export type TwigEditorHandle = {
   insertSnippet: (snippet: string) => void;
@@ -42,9 +41,6 @@ export const TwigMonacoEditor = forwardRef<TwigEditorHandle, Props>(function Twi
   const editorRef = useRef<import("monaco-editor").editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<typeof import("monaco-editor") | null>(null);
   const validateTimer = useRef<number | null>(null);
-  const [cursorLine, setCursorLine] = useState(1);
-
-  const breadcrumbs = useMemo(() => computeTwigBreadcrumbs(value, cursorLine), [value, cursorLine]);
 
   useImperativeHandle(ref, () => ({
     insertSnippet(snippet: string) {
@@ -102,14 +98,6 @@ export const TwigMonacoEditor = forwardRef<TwigEditorHandle, Props>(function Twi
   const onMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
-
-    const syncCursor = () => {
-      const pos = editor.getPosition();
-      if (!pos) return;
-      setCursorLine(pos.lineNumber);
-    };
-    editor.onDidChangeCursorPosition(syncCursor);
-    syncCursor();
 
     monaco.languages.registerCompletionItemProvider("html", {
       triggerCharacters: ["{", ".", "|", " "],
@@ -182,16 +170,6 @@ export const TwigMonacoEditor = forwardRef<TwigEditorHandle, Props>(function Twi
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-white">
-      {breadcrumbs.length > 1 ? (
-        <div className="flex items-center gap-1 border-b border-slate-100 bg-slate-50 px-3 py-1 text-[11px] text-slate-500">
-          {breadcrumbs.map((crumb, i) => (
-            <span key={`${crumb}-${i}`} className="flex items-center gap-1">
-              {i > 0 ? <span>›</span> : null}
-              <span className={i === breadcrumbs.length - 1 ? "font-medium text-slate-700" : ""}>{crumb}</span>
-            </span>
-          ))}
-        </div>
-      ) : null}
       <div className="min-h-0 flex-1">
         <Editor
           height="100%"

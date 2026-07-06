@@ -3,7 +3,6 @@ import { useCallback, useEffect, useState } from "react";
 import {
   fetchTemplateUsage,
   type TemplateAssignmentItem,
-  type TemplateUsageBadge,
 } from "../../../../api/documentTemplatesApi";
 import { DEFAULT_TENANT_ID } from "../constants";
 import { kindLabel } from "../utils/assignableDocumentKinds";
@@ -12,6 +11,7 @@ import { TemplateAssignmentModal } from "./TemplateAssignmentModal";
 type Props = {
   templateId: number;
   templateKindCode: string | null;
+  templateKindName: string | null;
   publishedVersionId: number | null;
   onAssignmentsChange?: () => void;
 };
@@ -19,12 +19,12 @@ type Props = {
 export function TemplateUsagePanel({
   templateId,
   templateKindCode,
+  templateKindName,
   publishedVersionId,
   onAssignmentsChange,
 }: Props) {
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<TemplateAssignmentItem[]>([]);
-  const [badges, setBadges] = useState<TemplateUsageBadge[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
 
   const load = useCallback(async () => {
@@ -32,7 +32,6 @@ export function TemplateUsagePanel({
     try {
       const data = await fetchTemplateUsage(DEFAULT_TENANT_ID, templateId);
       setItems(data.items);
-      setBadges(data.badges);
     } finally {
       setLoading(false);
     }
@@ -55,15 +54,13 @@ export function TemplateUsagePanel({
         <p className="text-sm text-slate-500">Wczytywanie przypisań…</p>
       ) : items.length === 0 ? (
         <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center">
-          <p className="text-sm text-slate-700">
-            Ten szablon nie jest jeszcze przypisany do żadnego dokumentu.
-          </p>
+          <p className="text-sm text-slate-700">Ten szablon nie jest jeszcze używany.</p>
           <button
             type="button"
             className="mt-4 rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-slate-800"
             onClick={() => setModalOpen(true)}
           >
-            Przypisz szablon
+            Przypisz do dokumentów
           </button>
         </div>
       ) : (
@@ -78,7 +75,7 @@ export function TemplateUsagePanel({
               </span>
             ))}
           </div>
-          <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+          <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white">
             {items.map((item, idx) => (
               <li key={`${item.scope_type}-${item.scope_id}-${idx}`} className="px-3 py-3 text-sm">
                 <div className="font-medium text-slate-900">
@@ -104,6 +101,7 @@ export function TemplateUsagePanel({
       <TemplateAssignmentModal
         templateId={templateId}
         templateKindCode={templateKindCode}
+        templateKindName={templateKindName}
         publishedVersionId={publishedVersionId}
         open={modalOpen}
         onClose={() => setModalOpen(false)}
