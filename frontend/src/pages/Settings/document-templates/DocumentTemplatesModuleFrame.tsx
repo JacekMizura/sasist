@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BookOpen, Download, Plus } from "lucide-react";
+import { Download, Plus } from "lucide-react";
 import { Link, Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
 
@@ -16,6 +16,30 @@ async function downloadBlob(blob: Blob, filename: string) {
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+function ListHeaderMoreMenu() {
+  return (
+    <details className="relative">
+      <summary className="cursor-pointer list-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 [&::-webkit-details-marker]:hidden">
+        Więcej ▾
+      </summary>
+      <div className="absolute right-0 z-20 mt-1 min-w-[220px] rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+        <button
+          type="button"
+          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+          onClick={() => {
+            exportFullPackageZip(DEFAULT_TENANT_ID)
+              .then((blob) => downloadBlob(blob, "szablony-pelny-pakiet.zip"))
+              .catch((err) => toast.error(extractApiErrorMessage(err, "Eksport nie powiódł się.")));
+          }}
+        >
+          <Download className="h-4 w-4 shrink-0" aria-hidden />
+          Eksport pakietu
+        </button>
+      </div>
+    </details>
+  );
 }
 
 export default function DocumentTemplatesModuleFrame() {
@@ -63,32 +87,14 @@ export default function DocumentTemplatesModuleFrame() {
         { label: "Szablony wydruków" },
       ]}
       title="Szablony wydruków"
-      description="Projektowanie wydruków ERP — wersje, publikacja, powiązania i podgląd."
+      description="Projektowanie wydruków ERP."
       tabs={DOCUMENT_TEMPLATES_TABS}
       tabsExact
       tabsAriaLabel="Szablony wydruków"
       actions={
         isList ? (
           <div className="flex flex-wrap items-center gap-2">
-            <Link
-              to={`${LIST_BASE}/starters`}
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              <BookOpen className="h-4 w-4" />
-              Startery
-            </Link>
-            <button
-              type="button"
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-              onClick={() => {
-                exportFullPackageZip(DEFAULT_TENANT_ID)
-                  .then((blob) => downloadBlob(blob, "szablony-pelny-pakiet.zip"))
-                  .catch((err) => toast.error(extractApiErrorMessage(err, "Eksport nie powiódł się.")));
-              }}
-            >
-              <Download className="h-4 w-4" />
-              Eksport pakietu
-            </button>
+            <ListHeaderMoreMenu />
             <button
               type="button"
               onClick={() => navigate(`${LIST_BASE}/new`)}

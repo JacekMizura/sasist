@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useLocation, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
 
 import {
@@ -34,6 +34,7 @@ function notifyBreadcrumbName(templateId: number, name: string) {
 
 export function DocumentTemplateEditorPage() {
   const { templateId } = useParams<{ templateId: string }>();
+  const location = useLocation();
   const editorRef = useRef<TwigEditorHandle>(null);
   const previewScrollRef = useRef(0);
   const [ctx, setCtx] = useState<EditorContextDto | null>(null);
@@ -68,6 +69,14 @@ export function DocumentTemplateEditorPage() {
   } = useEditorLayoutState();
 
   const { width: rightPanelWidth, startResize, dragging: rightPanelDragging } = useRightPanelWidth();
+
+  useEffect(() => {
+    const tab = (location.state as { editorRightTab?: string } | null)?.editorRightTab;
+    if (tab === "history") {
+      openRightTab("history");
+      setRightOpen(true);
+    }
+  }, [location.state, openRightTab, setRightOpen]);
 
   const variant = ctx?.bindings[0]?.variant_code ?? "standard";
 

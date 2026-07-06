@@ -94,10 +94,15 @@ export type DocumentTemplateListItemDto = {
   published_version: DocumentTemplateVersionDto | null;
   draft_version: DocumentTemplateVersionDto | null;
   binding_summary: string | null;
+  used_as_labels?: string[];
+  has_newer_draft?: boolean;
   usage_summary?: TemplateUsageBadge[];
   usage_total?: number;
   last_published_at: string | null;
-  author_name: string;
+  last_edited_at?: string | null;
+  last_edited_by_name?: string | null;
+  author_name: string | null;
+  can_delete?: boolean;
   updated_at: string | null;
 };
 

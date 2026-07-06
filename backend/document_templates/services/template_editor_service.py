@@ -132,22 +132,48 @@ def _template_list_row(db: Session, row: DocumentTemplate) -> dict[str, Any]:
         .all()
     )
     binding_labels = []
+    used_as_labels: list[str] = []
+    used_as_seen: set[str] = set()
     variants: set[str] = set()
     for b in bindings:
         variants.add(str(b.variant_code or DEFAULT_VARIANT_CODE))
         kind_row = db.query(DocumentTemplateKind).filter(DocumentTemplateKind.id == int(b.kind_id)).first()
         wh = f" · mag.{b.warehouse_id}" if b.warehouse_id else ""
         binding_labels.append(f"{kind_row.name_pl if kind_row else b.kind_id} ({b.variant_code}){wh}")
+        used_label = str(kind_row.name_pl if kind_row else b.kind_id)
+        if used_label not in used_as_seen:
+            used_as_seen.add(used_label)
+            used_as_labels.append(used_label)
 
     author_name = None
     if row.created_by_user_id:
         user = db.query(AppUser).filter(AppUser.id == int(row.created_by_user_id)).first()
         if user:
             author_name = str(getattr(user, "display_name", None) or getattr(user, "username", None) or "")
+    if not author_name and published and published.published_by_user_id:
+        pub_user = db.query(AppUser).filter(AppUser.id == int(published.published_by_user_id)).first()
+        if pub_user:
+            author_name = str(getattr(pub_user, "display_name", None) or getattr(pub_user, "username", None) or "")
 
+    last_edited_at = None
+    last_edited_by_name = None
+    if draft and draft.updated_at:
+        last_edited_at = draft.updated_at.isoformat()
+        if draft.created_by_user_id:
+            editor = db.query(AppUser).filter(AppUser.id == int(draft.created_by_user_id)).first()
+            if editor:
+                last_edited_by_name = str(
+                    getattr(editor, "display_name", None) or getattr(editor, "username", None) or ""
+                )
+    elif row.updated_at:
+        last_edited_at = row.updated_at.isoformat()
+        last_edited_by_name = author_name
+
+    from .dependency_graph_service import DependencyGraphService
     from .template_assignment_usage_service import usage_summary_for_template
 
     usage = usage_summary_for_template(db, tenant_id=int(row.tenant_id), template_id=int(row.id))
+    can_delete = bool(DependencyGraphService(db).can_delete_template(int(row.id)).get("can_delete"))
 
     return {
         "id": int(row.id),
@@ -165,10 +191,15 @@ def _template_list_row(db: Session, row: DocumentTemplate) -> dict[str, Any]:
         "published_version": _version_dict(published),
         "draft_version": _version_dict(draft),
         "binding_summary": ", ".join(binding_labels) if binding_labels else None,
+        "used_as_labels": used_as_labels,
+        "has_newer_draft": bool(published and draft),
         "usage_summary": usage.get("badges") or [],
         "usage_total": int(usage.get("total") or 0),
         "last_published_at": published.published_at.isoformat() if published and published.published_at else None,
-        "author_name": author_name or "—",
+        "author_name": author_name or None,
+        "last_edited_at": last_edited_at,
+        "last_edited_by_name": last_edited_by_name or None,
+        "can_delete": can_delete,
         "updated_at": row.updated_at.isoformat() if row.updated_at else None,
     }
 

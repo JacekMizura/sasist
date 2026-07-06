@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 
 import {
@@ -15,6 +15,7 @@ import { DEFAULT_TENANT_ID, LIST_BASE } from "./constants";
 
 export function DocumentTemplateCreatePage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [families, setFamilies] = useState<Awaited<ReturnType<typeof fetchDocumentTemplateCatalog>>>([]);
   const [familyCode, setFamilyCode] = useState("");
   const [kindCode, setKindCode] = useState("");
@@ -23,6 +24,12 @@ export function DocumentTemplateCreatePage() {
   const [starterCode, setStarterCode] = useState("default");
   const [starters, setStarters] = useState<{ id: number; code: string; name_pl: string }[]>([]);
   const [creating, setCreating] = useState(false);
+
+  useEffect(() => {
+    const st = location.state as { duplicateFromName?: string; kindCode?: string } | null;
+    if (st?.duplicateFromName) setName(st.duplicateFromName);
+    if (st?.kindCode) setKindCode(st.kindCode);
+  }, [location.state]);
 
   useEffect(() => {
     fetchDocumentTemplateCatalog()

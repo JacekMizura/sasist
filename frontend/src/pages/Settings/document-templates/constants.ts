@@ -1,12 +1,14 @@
 export const DOC_TEMPLATE_STATUS_LABELS: Record<string, string> = {
   draft: "Robocza",
   published: "Opublikowana",
-  archived: "Archiwum",
+  archived: "Archiwalna",
+  publication_error: "Błąd publikacji",
+  publish_failed: "Błąd publikacji",
 };
 
 export const DOC_TEMPLATE_SOURCE_LABELS: Record<string, string> = {
-  SYSTEM: "System",
-  STARTER: "Starter",
+  SYSTEM: "Systemowy",
+  STARTER: "Systemowy",
   MARKETPLACE: "Marketplace",
   TENANT: "Własny",
 };
