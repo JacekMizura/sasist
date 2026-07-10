@@ -2,7 +2,8 @@ import { Eye, Pencil, Trash2 } from "lucide-react";
 
 import { PROPORTIONAL_TABLE_SYSTEM_WIDTHS } from "../../listPage/proportionalTableColumns";
 import { useProportionalTableColumns } from "../../listPage/useProportionalTableColumns";
-import { OperationalActionButton, OperationalActionColumn } from "../../operational";
+import { FleetResourceActionBar, FleetResourceActionButton } from "../../../modules/fleetResource/FleetResourceActionBar";
+import { FleetResourceProgressBar } from "../../../modules/fleetResource/FleetResourceProgressBar";
 import {
   racksListActionsCellClass,
   racksListActionsThClass,
@@ -60,8 +61,8 @@ function DynamicCell({ row, columnId }: { row: ConsolidationRackListRow; columnI
       );
     case "utilization":
       return (
-        <div className={`${inner} justify-end tabular-nums font-semibold text-slate-900`}>
-          {row.stats.utilizationPercent}%
+        <div className={`${inner} justify-end gap-2`}>
+          <FleetResourceProgressBar percent={row.stats.utilizationPercent} className="max-w-[88px]" />
         </div>
       );
     default:
@@ -107,9 +108,9 @@ export function ConsolidationRacksListTable({
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr key={row.id} className={racksListRowClass}>
+            <tr key={row.id} className={racksListRowClass} onDoubleClick={() => onPreview(row.id)}>
               <td className={racksListNameCellClass}>
-                <div className={`${racksListRowInnerClass} min-w-0 py-2`}>
+                <div className={`${racksListRowInnerClass} min-w-0`}>
                   <span className="block max-w-full truncate font-mono text-sm font-semibold text-slate-900" title={row.name}>
                     {row.name}
                   </span>
@@ -121,27 +122,15 @@ export function ConsolidationRacksListTable({
                 </td>
               ))}
               <td className={racksListActionsCellClass} onClick={(e) => e.stopPropagation()}>
-                <OperationalActionColumn
-                  aria-label="Akcje regału"
-                  slots={[
-                    <OperationalActionButton
-                      key="preview"
-                      onClick={() => onPreview(row.id)}
-                      title="Podgląd regału"
-                      aria-label="Podgląd regału"
-                    >
-                      <Eye className="text-slate-600" strokeWidth={2} aria-hidden />
-                    </OperationalActionButton>,
-                    <OperationalActionButton
-                      key="edit"
-                      onClick={() => onEdit(row.id)}
-                      title="Edytuj regał"
-                      aria-label="Edytuj regał"
-                    >
-                      <Pencil className="text-slate-600" strokeWidth={2} aria-hidden />
-                    </OperationalActionButton>,
-                    <OperationalActionButton
-                      key="del"
+                <div className={`${racksListRowInnerClass} justify-center`}>
+                  <FleetResourceActionBar aria-label="Akcje regału">
+                    <FleetResourceActionButton onClick={() => onPreview(row.id)} title="Podgląd regału" aria-label="Podgląd regału">
+                      <Eye strokeWidth={2} aria-hidden />
+                    </FleetResourceActionButton>
+                    <FleetResourceActionButton onClick={() => onEdit(row.id)} title="Edytuj regał" aria-label="Edytuj regał">
+                      <Pencil strokeWidth={2} aria-hidden />
+                    </FleetResourceActionButton>
+                    <FleetResourceActionButton
                       variant="danger"
                       disabled={deleteBusyId === row.id}
                       onClick={() => onDelete(row)}
@@ -149,9 +138,9 @@ export function ConsolidationRacksListTable({
                       aria-label="Usuń regał"
                     >
                       <Trash2 strokeWidth={2} aria-hidden />
-                    </OperationalActionButton>,
-                  ]}
-                />
+                    </FleetResourceActionButton>
+                  </FleetResourceActionBar>
+                </div>
               </td>
             </tr>
           ))}

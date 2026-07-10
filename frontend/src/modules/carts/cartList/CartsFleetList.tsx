@@ -260,7 +260,7 @@ export function CartsFleetList({ cartType, refreshTrigger = 0, onAddNew, onEdit 
       {loading ? (
         <div className="space-y-2 py-8" aria-busy="true">
           {[0, 1, 2, 3].map((i) => (
-            <div key={i} className="h-14 animate-pulse rounded-md bg-slate-100" />
+            <div key={i} className="h-[68px] animate-pulse rounded-md bg-slate-100" />
           ))}
         </div>
       ) : (
@@ -311,8 +311,8 @@ export function CartsFleetList({ cartType, refreshTrigger = 0, onAddNew, onEdit 
                     <div className="px-6 py-10 text-center text-sm text-slate-500">{t.noCartsInGroup}</div>
                   ) : (
                     group.items.map((c) => (
-                      <div key={c.id} className="px-4">
-                        <CartCard
+                      <CartCard
+                        key={c.id}
                           id={c.id}
                           name={c.name}
                           code={c.code}
@@ -345,7 +345,6 @@ export function CartsFleetList({ cartType, refreshTrigger = 0, onAddNew, onEdit 
                           onDelete={handleDeleteCart}
                           onPrintLabel={setPrintCart}
                         />
-                      </div>
                     ))
                   )}
                 </div>

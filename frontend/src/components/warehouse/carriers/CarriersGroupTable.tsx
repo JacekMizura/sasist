@@ -6,11 +6,8 @@ import type { WarehouseCarrierGroupRead, WarehouseCarrierRead } from "../../../a
 import { patchWmsCarrier } from "../../../api/wmsCarrierApi";
 import { PROPORTIONAL_TABLE_SYSTEM_WIDTHS } from "../../listPage/proportionalTableColumns";
 import { useProportionalTableColumns } from "../../listPage/useProportionalTableColumns";
-import {
-  OperationalActionButton,
-  OperationalActionColumn,
-} from "../../operational";
-import { openCarrierLabelPrint } from "../../../utils/carrierLabelPrint";
+import { FleetResourceActionBar, FleetResourceActionButton } from "../../../modules/fleetResource/FleetResourceActionBar";
+import { fleetResourceShowContentBtnClass } from "../../../modules/fleetResource/fleetResourceTokens";
 import { CarrierStatusBadge } from "./CarrierStatusBadge";
 import { CarrierEditModal } from "./CarrierEditModal";
 import { CarrierMoveLocationModal } from "./CarrierMoveLocationModal";
@@ -62,14 +59,14 @@ function CarrierRowMenu({
 }) {
   return (
     <div className="relative">
-      <OperationalActionButton
+      <FleetResourceActionButton
         disabled={busy}
         onClick={onToggle}
         title="Więcej akcji"
         aria-label="Więcej akcji"
       >
         <MoreHorizontal strokeWidth={2} aria-hidden />
-      </OperationalActionButton>
+      </FleetResourceActionButton>
       {open ? (
         <>
           <button type="button" className="fixed inset-0 z-10 cursor-default" aria-label="Zamknij menu" onClick={onClose} />
@@ -242,9 +239,13 @@ export function CarriersGroupTable({
               {rows.map((row) => {
                 const busy = busyId === row.id;
                 return (
-                  <tr key={row.id} className={carriersListRowClass}>
+                  <tr
+                    key={row.id}
+                    className={carriersListRowClass}
+                    onDoubleClick={() => navigate(detailPath(row.id), { state: navState })}
+                  >
                     <td className={carriersListNameCellClass}>
-                      <div className={`${carriersListRowInnerClass} min-w-0 py-2`}>
+                      <div className={`${carriersListRowInnerClass} min-w-0`}>
                         <Link to={detailPath(row.id)} state={navState} className="block min-w-0 hover:opacity-90">
                           <CarrierIdentity carrier={row} size="md" />
                         </Link>
@@ -256,27 +257,23 @@ export function CarriersGroupTable({
                       </td>
                     ))}
                     <td className={carriersListActionsCellClass} onClick={(e) => e.stopPropagation()}>
-                      <OperationalActionColumn
-                        aria-label="Akcje nośnika"
-                        slots={[
-                          <OperationalActionButton
-                            key="view"
+                      <div className={`${carriersListRowInnerClass} justify-center`}>
+                        <FleetResourceActionBar aria-label="Akcje nośnika">
+                          <FleetResourceActionButton
                             onClick={() => navigate(detailPath(row.id), { state: navState })}
                             title="Podgląd"
                             aria-label="Podgląd nośnika"
                           >
-                            <Eye className="text-slate-600" strokeWidth={2} aria-hidden />
-                          </OperationalActionButton>,
-                          <OperationalActionButton
-                            key="edit"
+                            <Eye strokeWidth={2} aria-hidden />
+                          </FleetResourceActionButton>
+                          <FleetResourceActionButton
                             onClick={() => setEditRow(row)}
                             title="Edytuj"
                             aria-label="Edytuj nośnik"
                           >
-                            <Pencil className="text-slate-600" strokeWidth={2} aria-hidden />
-                          </OperationalActionButton>,
+                            <Pencil strokeWidth={2} aria-hidden />
+                          </FleetResourceActionButton>
                           <CarrierRowMenu
-                            key="more"
                             row={row}
                             busy={busy}
                             open={menuId === row.id}
@@ -284,9 +281,9 @@ export function CarriersGroupTable({
                             onClose={() => setMenuId(null)}
                             onMove={() => setMoveRow(row)}
                             onStatus={(s) => void setStatus(row, s)}
-                          />,
-                        ]}
-                      />
+                          />
+                        </FleetResourceActionBar>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -296,54 +293,41 @@ export function CarriersGroupTable({
         </div>
       </div>
 
-      <div className="grid gap-3 md:hidden">
+      <div className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white md:hidden">
         {rows.map((row) => {
           const busy = busyId === row.id;
           return (
-            <article key={row.id} className="space-y-2 rounded-xl border border-slate-200 bg-white p-3">
-              <div className="flex items-start justify-between gap-2">
-                <Link to={detailPath(row.id)} state={navState} className="min-w-0 flex-1">
-                  <CarrierIdentity carrier={row} size="lg" />
-                </Link>
-                <OperationalActionColumn
-                  aria-label="Akcje nośnika"
-                  slots={[
-                    <OperationalActionButton key="edit" onClick={() => setEditRow(row)} title="Edytuj" aria-label="Edytuj">
-                      <Pencil strokeWidth={2} aria-hidden />
-                    </OperationalActionButton>,
-                    <CarrierRowMenu
-                      key="more"
-                      row={row}
-                      busy={busy}
-                      open={menuId === row.id}
-                      onToggle={() => setMenuId((id) => (id === row.id ? null : row.id))}
-                      onClose={() => setMenuId(null)}
-                      onMove={() => setMoveRow(row)}
-                      onStatus={(s) => void setStatus(row, s)}
-                    />,
-                  ]}
+            <div
+              key={row.id}
+              className="flex h-[68px] min-h-[68px] items-center gap-2 px-3"
+              onDoubleClick={() => navigate(detailPath(row.id), { state: navState })}
+            >
+              <Link to={detailPath(row.id)} state={navState} className="min-w-0 flex-1 truncate">
+                <CarrierIdentity carrier={row} size="md" />
+              </Link>
+              <CarrierStatusBadge status={row.status} />
+              <FleetResourceActionBar aria-label="Akcje nośnika">
+                <FleetResourceActionButton onClick={() => setEditRow(row)} title="Edytuj" aria-label="Edytuj">
+                  <Pencil strokeWidth={2} aria-hidden />
+                </FleetResourceActionButton>
+                <CarrierRowMenu
+                  row={row}
+                  busy={busy}
+                  open={menuId === row.id}
+                  onToggle={() => setMenuId((id) => (id === row.id ? null : row.id))}
+                  onClose={() => setMenuId(null)}
+                  onMove={() => setMoveRow(row)}
+                  onStatus={(s) => void setStatus(row, s)}
                 />
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <CarrierStatusBadge status={row.status} />
-                <CarrierLocationLink
-                  tenantId={tenantId}
-                  locationCode={row.current_location_code}
-                  locationId={row.current_location_id}
-                  carrierId={row.id}
-                />
-              </div>
-              <CarrierContentPreview
-                tenantId={tenantId}
-                carrierId={row.id}
-                skuCount={row.sku_count}
-                totalQty={row.total_qty}
-                isMixed={row.is_mixed}
-              />
-              <p className="text-sm text-slate-500">
-                Ostatni ruch: {row.updated_at ? new Date(row.updated_at).toLocaleString("pl-PL") : "—"}
-              </p>
-            </article>
+              </FleetResourceActionBar>
+              <button
+                type="button"
+                className={fleetResourceShowContentBtnClass}
+                onClick={() => navigate(detailPath(row.id), { state: navState })}
+              >
+                Szczegóły
+              </button>
+            </div>
           );
         })}
       </div>

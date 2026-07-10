@@ -4,7 +4,7 @@ export const racksListThClass =
 export const racksListTdClass = "min-w-0 px-4 py-0 align-middle text-sm leading-snug text-slate-800";
 export const racksListRowClass =
   "group border-b border-slate-100 transition-colors hover:bg-slate-50/60 last:border-b-0 even:bg-slate-50/20";
-export const racksListRowInnerClass = "flex min-h-[3.5rem] items-center";
+export const racksListRowInnerClass = "flex h-[68px] min-h-[68px] max-h-[68px] items-center";
 
 export const racksListNameCellClass = "min-w-0 px-4 py-0 align-middle text-sm leading-snug text-slate-800";
 export const racksListNameThClass =

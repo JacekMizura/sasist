@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-06-08 — Listy floty (wózki, nośniki, regały): kompaktowe wiersze 68px
+
+- Wspólny moduł `modules/fleetResource/` — wiersz 68px, pasek zapełnienia 6px, akcje 32×32 poziomo, drawer szczegółów.
+- `CartCard` — widok zwinięty (jeden rząd); szczegóły w `CartFleetDetailPanel` (drawer z prawej).
+- `CarriersGroupTable`, `ConsolidationRacksListTable` — ta sama wysokość wiersza i poziome akcje.
+- Backend bez zmian.
+
 ## 2026-06-08 — Faza 0 layoutów + migracja Projektanta Magazynu
 
 - Nowa infrastruktura: `frontend/src/components/layout/app/*` (`AppPageLayout`, `AppContentLayout`, `AppSplitView`, `AppRightPanel`, `AppSectionCard`) + `appLayoutTokens.ts`.

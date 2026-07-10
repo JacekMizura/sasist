@@ -4,7 +4,7 @@ export const carriersListThClass =
 export const carriersListTdClass = "min-w-0 px-4 py-0 align-middle text-sm leading-snug text-slate-800";
 export const carriersListRowClass =
   "group cursor-pointer border-b border-slate-100 transition-colors hover:bg-slate-50/60 last:border-b-0 even:bg-slate-50/20";
-export const carriersListRowInnerClass = "flex min-h-[4rem] items-center";
+export const carriersListRowInnerClass = "flex h-[68px] min-h-[68px] max-h-[68px] items-center";
 
 export const carriersListNameCellClass = "min-w-0 px-4 py-0 align-middle text-sm leading-snug text-slate-800";
 export const carriersListNameThClass =
