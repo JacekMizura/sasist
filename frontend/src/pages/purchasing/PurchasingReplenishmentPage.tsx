@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
-import { AlertTriangle, Banknote, Download, List, PackageSearch, Save, ShoppingCart } from "lucide-react";
+import { AlertTriangle, Banknote, Bell, Download, LayoutGrid, LineChart, List, PackageSearch, Save, ShoppingCart } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { AppEmptyState } from "../../components/app-shell";
 import { listSuppliers, type SupplierRead } from "../../api/inboundSuppliersApi";
@@ -16,6 +16,7 @@ import { createPurchaseOrdersFromGenerator } from "../../api/purchasingOrdersApi
 import { pageContainerWidthAlignClass } from "../../components/layout/PageContainer";
 import { DataTablePageSizeSelect } from "../../components/table/DataTablePageSizeSelect";
 import { usePurchasingTenant } from "../../modules/purchasing/hooks/usePurchasingTenant";
+import type { PlanPanelId } from "./planPanelTypes";
 import {
   PurchasingContentArea,
   PurchasingFilterBar,
@@ -127,7 +128,15 @@ function TableSkeleton({ cols }: { cols: number }) {
   );
 }
 
-export default function PurchasingReplenishmentPage() {
+export type PurchasingReplenishmentPageProps = {
+  alertOpenCount?: number | null;
+  onOpenPanel?: (panel: PlanPanelId) => void;
+};
+
+export default function PurchasingReplenishmentPage({
+  alertOpenCount = null,
+  onOpenPanel,
+}: PurchasingReplenishmentPageProps = {}) {
   const navigate = useNavigate();
   const { tenantId, refreshSignal } = usePurchasingTenant();
   const { warehouseId, hasActiveWarehouse } = useActiveWarehouseContext();
@@ -371,12 +380,45 @@ export default function PurchasingReplenishmentPage() {
       <PurchasingPageShell
         header={
           <PurchasingPageHeader
-            title="Generator propozycji zakupów"
-            subtitle="Sugestie uzupełnień na podstawie stanów, sprzedaży i otwartych dostaw."
+            title="Plan zakupów"
+            subtitle="Rekomendacje uzupełnień, filtry ABC/XYZ i szybki dostęp do prognozy, segmentów i alertów."
             actions={
               <>
+                {onOpenPanel ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => onOpenPanel("alerts")}
+                      className={`relative inline-flex items-center gap-1.5 ${purchasingBtnSecondary}`}
+                    >
+                      <Bell className="h-4 w-4" aria-hidden />
+                      Alerty
+                      {alertOpenCount != null && alertOpenCount > 0 ? (
+                        <span className="ml-1 inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                          {alertOpenCount > 99 ? "99+" : alertOpenCount}
+                        </span>
+                      ) : null}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onOpenPanel("segments")}
+                      className={`inline-flex items-center gap-1.5 ${purchasingBtnSecondary}`}
+                    >
+                      <LayoutGrid className="h-4 w-4" aria-hidden />
+                      Segmenty
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onOpenPanel("forecast")}
+                      className={`inline-flex items-center gap-1.5 ${purchasingBtnSecondary}`}
+                    >
+                      <LineChart className="h-4 w-4" aria-hidden />
+                      Prognoza
+                    </button>
+                  </>
+                ) : null}
                 <button type="button" disabled={loading} onClick={() => void load()} className={purchasingBtnSecondary}>
-                  Generuj ponownie
+                  Odśwież plan
                 </button>
                 <button
                   type="button"
@@ -633,7 +675,7 @@ export default function PurchasingReplenishmentPage() {
           loading ? (
             <TableSkeleton cols={6} />
           ) : !data || data.summary.total_rows === 0 ? (
-            <PurchasingTableSection title="Propozycje uzupełnień" indicatorClass="bg-blue-500">
+            <PurchasingTableSection title="Produkty do zakupu" indicatorClass="bg-blue-500">
               <AppEmptyState
                 icon={PackageSearch}
                 title="Brak pozycji do wyświetlenia"
@@ -643,7 +685,7 @@ export default function PurchasingReplenishmentPage() {
             </PurchasingTableSection>
           ) : (
             <PurchasingTableSection
-              title="Propozycje uzupełnień"
+              title="Produkty do zakupu"
               indicatorClass="bg-blue-500"
               toolbar={
                 <div className="flex justify-end">

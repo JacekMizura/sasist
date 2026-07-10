@@ -68,10 +68,10 @@ function PlanningDashboardInner() {
 
   const td = purchasingTableTdClass;
   const tenantQ = `?tenant_id=${tenantId}`;
-  const genHref = `/purchasing/replenishment${tenantQ}`;
+  const genHref = `/purchasing/plan${tenantQ}`;
   const ordersHref = `/purchasing/orders${tenantQ}`;
-  const suppliersHref = `/purchasing/suppliers/analytics${tenantQ}`;
-  const cooperationHref = `/purchasing/cooperation-history${tenantQ}`;
+  const suppliersHref = `/purchasing/suppliers/ocena${tenantQ}`;
+  const cooperationHref = `/purchasing/suppliers/historia${tenantQ}`;
 
   return (
     <PurchasingContentArea>

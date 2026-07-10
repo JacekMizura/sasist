@@ -52,7 +52,7 @@ function useDebounced<T>(value: T, ms: number): T {
   return v;
 }
 
-export default function PurchasingForecastPage() {
+export default function PurchasingForecastPage({ variant = "page" }: { variant?: "page" | "panel" }) {
   const { selectedWarehouseId } = useWarehouse();
   const moduleCtx = usePurchasingModuleContextOptional();
   const { tenantId, refreshSignal } = usePurchasingTenant();
@@ -208,13 +208,15 @@ export default function PurchasingForecastPage() {
   const s = data?.summary;
 
   return (
-    <PurchasingContentArea>
+    <PurchasingContentArea className={variant === "panel" ? "py-0" : undefined}>
       <PurchasingPageShell
         header={
-          <PurchasingPageHeader
-            title="Prognoza / analiza zakupowa"
-            subtitle="Trend sprzedaży, ryzyka zapasowe i inspektor produktu na podstawie historii obrotu."
-          />
+          variant === "page" ? (
+            <PurchasingPageHeader
+              title="Prognoza / analiza zakupowa"
+              subtitle="Trend sprzedaży, ryzyka zapasowe i inspektor produktu na podstawie historii obrotu."
+            />
+          ) : null
         }
         status={
           <>

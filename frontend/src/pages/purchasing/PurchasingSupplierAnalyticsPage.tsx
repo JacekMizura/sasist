@@ -95,7 +95,9 @@ function riskLabel(risk: string): string {
 export default function PurchasingSupplierAnalyticsPage() {
   const moduleCtx = usePurchasingModuleContextOptional();
   const location = useLocation();
+  const isPurchasingSuppliersHub = location.pathname.startsWith("/purchasing/suppliers");
   const isSuppliersModule = location.pathname.startsWith("/suppliers");
+  const hidePageHeader = isSuppliersModule || isPurchasingSuppliersHub;
   const [searchParams] = useSearchParams();
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [tenantId, setTenantId] = useState(1);
@@ -194,14 +196,14 @@ export default function PurchasingSupplierAnalyticsPage() {
   const openDrawer = (sid: number) => setDrawerSid(sid);
 
   const replenishmentHref = (sid: number) =>
-    `/purchasing/replenishment?tenant_id=${tenantId}&supplier_id=${sid}`;
+    `/purchasing/plan?tenant_id=${tenantId}&supplier_id=${sid}`;
   const supplierEditHref = (sid: number) => `/suppliers/${sid}?tenant_id=${tenantId}`;
   const ordersHref = `/purchasing/orders?tenant_id=${tenantId}`;
 
   const pageShell = (
     <PurchasingPageShell
         header={
-          isSuppliersModule ? null : (
+          hidePageHeader ? null : (
             <PurchasingPageHeader
               title="Ocena dostawców"
               subtitle="Ranking dostawców wg terminowości, cen i wolumenu zakupów."

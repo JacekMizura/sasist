@@ -1,6 +1,7 @@
 import { lazy } from "react";
 
 export const PlanningDashboard = lazy(() => import("./PlanningDashboard"));
+export const PurchasePlanView = lazy(() => import("./PurchasePlanView"));
 export const PurchaseGeneratorView = lazy(() => import("./PurchaseGeneratorView"));
 export const PurchaseOrdersView = lazy(() => import("./PurchaseOrdersView"));
 export const ForecastView = lazy(() =>

@@ -229,17 +229,13 @@ import SupplierEditPage from "./pages/Assortment/SupplierEditPage"
 import SuppliersLayout from "./pages/Assortment/SuppliersLayout"
 import PurchasingLayout from "./pages/purchasing/PurchasingLayout"
 import PurchasingPoDetailPage from "./pages/purchasing/PurchasingPoDetailPage"
-import PurchasingSupplierAnalyticsPage from "./pages/purchasing/PurchasingSupplierAnalyticsPage"
-import PurchasingCooperationHistoryPage from "./pages/purchasing/PurchasingCooperationHistoryPage"
+import { PurchasingRedirectTo, PurchasingPlanPanelRedirect } from "./pages/purchasing/purchasingRedirects"
 import { PurchasingTabSuspense } from "./modules/purchasing/views/PurchasingTabSuspense"
+import PurchasingSuppliersTabLayout from "./modules/purchasing/layout/PurchasingSuppliersTabLayout"
 import {
-  AutoReplenishmentView,
-  ForecastView,
-  InventoryPriorityView,
   PlanningDashboard,
-  PurchaseGeneratorView,
+  PurchasePlanView,
   PurchaseOrdersView,
-  PurchasingAlertsView,
   SavingsView,
   SupplierHistoryView,
   SupplierScoreView,
@@ -736,8 +732,8 @@ export const router = createBrowserRouter(
                 <Route path="manufacturers/:manufacturerId" element={<ManufacturerEditPage />} />
                 <Route path="suppliers" element={<SuppliersLayout />}>
                   <Route index element={<SuppliersPage />} />
-                  <Route path="ocena" element={<PurchasingSupplierAnalyticsPage />} />
-                  <Route path="historia" element={<PurchasingCooperationHistoryPage />} />
+                  <Route path="ocena" element={<PurchasingRedirectTo to="/purchasing/suppliers/ocena" />} />
+                  <Route path="historia" element={<PurchasingRedirectTo to="/purchasing/suppliers/historia" />} />
                 </Route>
                 <Route path="suppliers/new" element={<SupplierEditPage />} />
                 <Route path="suppliers/:supplierId/:tab" element={<SupplierEditPage />} />
@@ -793,75 +789,54 @@ export const router = createBrowserRouter(
                     }
                   />
                   <Route
-                    path="replenishment"
+                    path="plan"
                     element={
                       <PurchasingTabSuspense>
-                        <PurchaseGeneratorView />
+                        <PurchasePlanView />
                       </PurchasingTabSuspense>
                     }
                   />
-                  <Route
-                    path="suppliers/analytics"
-                    element={
-                      <PurchasingTabSuspense>
-                        <SupplierScoreView />
-                      </PurchasingTabSuspense>
-                    }
-                  />
-                  <Route
-                    path="cooperation-history"
-                    element={
-                      <PurchasingTabSuspense>
-                        <SupplierHistoryView />
-                      </PurchasingTabSuspense>
-                    }
-                  />
+                  <Route path="replenishment" element={<PurchasingRedirectTo to="/purchasing/plan" />} />
+                  <Route path="forecast" element={<PurchasingPlanPanelRedirect panel="forecast" />} />
+                  <Route path="segments" element={<PurchasingPlanPanelRedirect panel="segments" />} />
+                  <Route path="alerts" element={<PurchasingPlanPanelRedirect panel="alerts" />} />
+                  <Route path="auto-reorder" element={<PurchasingRedirectTo to="/purchasing/plan" />} />
+                  <Route path="suppliers" element={<PurchasingSuppliersTabLayout />}>
+                    <Route index element={<Navigate to="ocena" replace />} />
+                    <Route
+                      path="ocena"
+                      element={
+                        <PurchasingTabSuspense>
+                          <SupplierScoreView />
+                        </PurchasingTabSuspense>
+                      }
+                    />
+                    <Route
+                      path="historia"
+                      element={
+                        <PurchasingTabSuspense>
+                          <SupplierHistoryView />
+                        </PurchasingTabSuspense>
+                      }
+                    />
+                    <Route
+                      path="oszczednosci"
+                      element={
+                        <PurchasingTabSuspense>
+                          <SavingsView />
+                        </PurchasingTabSuspense>
+                      }
+                    />
+                  </Route>
+                  <Route path="suppliers/analytics" element={<PurchasingRedirectTo to="/purchasing/suppliers/ocena" />} />
+                  <Route path="cooperation-history" element={<PurchasingRedirectTo to="/purchasing/suppliers/historia" />} />
+                  <Route path="price-opportunities" element={<PurchasingRedirectTo to="/purchasing/suppliers/oszczednosci" />} />
                   <Route path="orders/:id" element={<PurchasingPoDetailPage />} />
                   <Route
                     path="orders"
                     element={
                       <PurchasingTabSuspense>
                         <PurchaseOrdersView />
-                      </PurchasingTabSuspense>
-                    }
-                  />
-                  <Route
-                    path="forecast"
-                    element={
-                      <PurchasingTabSuspense>
-                        <ForecastView />
-                      </PurchasingTabSuspense>
-                    }
-                  />
-                  <Route
-                    path="alerts"
-                    element={
-                      <PurchasingTabSuspense>
-                        <PurchasingAlertsView />
-                      </PurchasingTabSuspense>
-                    }
-                  />
-                  <Route
-                    path="segments"
-                    element={
-                      <PurchasingTabSuspense>
-                        <InventoryPriorityView />
-                      </PurchasingTabSuspense>
-                    }
-                  />
-                  <Route
-                    path="auto-reorder"
-                    element={
-                      <PurchasingTabSuspense>
-                        <AutoReplenishmentView />
-                      </PurchasingTabSuspense>
-                    }
-                  />
-                  <Route
-                    path="price-opportunities"
-                    element={
-                      <PurchasingTabSuspense>
-                        <SavingsView />
                       </PurchasingTabSuspense>
                     }
                   />

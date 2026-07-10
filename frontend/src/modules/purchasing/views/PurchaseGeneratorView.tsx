@@ -1,8 +1,9 @@
 import { memo } from "react";
-import PurchasingReplenishmentPage from "../../../pages/purchasing/PurchasingReplenishmentPage";
+import PurchasingPlanPage from "../../../pages/purchasing/PurchasingPlanPage";
 
+/** Legacy alias — kanoniczna trasa: /purchasing/plan */
 function PurchaseGeneratorViewInner() {
-  return <PurchasingReplenishmentPage />;
+  return <PurchasingPlanPage />;
 }
 
 export default memo(PurchaseGeneratorViewInner);

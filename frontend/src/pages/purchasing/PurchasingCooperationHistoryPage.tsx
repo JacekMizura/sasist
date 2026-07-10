@@ -41,7 +41,9 @@ function fmtPct(v: number | null | undefined): string {
 
 export default function PurchasingCooperationHistoryPage() {
   const location = useLocation();
+  const isPurchasingSuppliersHub = location.pathname.startsWith("/purchasing/suppliers");
   const isSuppliersModule = location.pathname.startsWith("/suppliers");
+  const hidePageHeader = isSuppliersModule || isPurchasingSuppliersHub;
   const [searchParams] = useSearchParams();
   const tenantId = useMemo(() => {
     const tid = Number(searchParams.get("tenant_id"));
@@ -108,7 +110,7 @@ export default function PurchasingCooperationHistoryPage() {
   const pageShell = (
     <PurchasingPageShell
       header={
-        isSuppliersModule ? null : (
+        hidePageHeader ? null : (
           <PurchasingPageHeader
             title="Historia współpracy"
             subtitle="Podsumowanie zamówień, przyjęć i trendów cenowych wybranego dostawcy."

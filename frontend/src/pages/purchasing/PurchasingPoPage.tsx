@@ -139,7 +139,7 @@ export default function PurchasingPoPage() {
                   description="Użyj generatora uzupełnień, aby utworzyć pierwsze zamówienie."
                   density="inline"
                   action={
-                    <Link to={`/purchasing/replenishment?tenant_id=${tenantId}`} className={purchasingLinkClass}>
+                    <Link to={`/purchasing/plan?tenant_id=${tenantId}`} className={purchasingLinkClass}>
                       Przejdź do generatora
                     </Link>
                   }

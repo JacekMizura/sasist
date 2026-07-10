@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-06-08 — Zakupy i planowanie: refaktor UX (4 zakładki)
+
+- Menu: Pulpit | Plan zakupów | Zamówienia | Dostawcy (zamiast 10 zakładek).
+- `/purchasing/plan` — centrum pracy (tabela + panele prognozy/segmentów/alertów); legacy redirecty z generatora, prognozy, segmentów, alertów, auto-reorder.
+- `/purchasing/suppliers/{ocena,historia,oszczednosci}` — hub dostawców w module Zakupów; redirecty ze starych tras i `/suppliers/ocena|historia`.
+- Backend bez zmian.
+
 ## 2026-06-08 — Dokumenty magazynowe: kompaktowy widok szczegółów (UX/UI)
 
 - Modal PZ/WZ/MM/PW/RW: nagłówek ~250px, dwie karty info, pasek finansów inline.

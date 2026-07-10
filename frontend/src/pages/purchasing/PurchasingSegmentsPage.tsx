@@ -80,7 +80,7 @@ function fmtNum(n: number | null | undefined, d = 2): string {
   return n.toLocaleString("pl-PL", { maximumFractionDigits: d });
 }
 
-export default function PurchasingSegmentsPage() {
+export default function PurchasingSegmentsPage({ variant = "page" }: { variant?: "page" | "panel" }) {
   const { selectedWarehouseId } = useWarehouse();
   const [searchParams] = useSearchParams();
   const [tenants, setTenants] = useState<Tenant[]>([]);
@@ -165,13 +165,15 @@ export default function PurchasingSegmentsPage() {
   };
 
   return (
-    <PurchasingContentArea>
+    <PurchasingContentArea className={variant === "panel" ? "py-0" : undefined}>
       <PurchasingPageShell
         header={
-          <PurchasingPageHeader
-            title="Priorytety asortymentu"
-            subtitle="Produkty są pogrupowane według ważności dla obrotu (A, B, C) oraz sposobu sprzedaży (X, Y, Z). To pomaga ustalić, gdzie trzymać zapas."
-          />
+          variant === "page" ? (
+            <PurchasingPageHeader
+              title="Priorytety asortymentu"
+              subtitle="Produkty są pogrupowane według ważności dla obrotu (A, B, C) oraz sposobu sprzedaży (X, Y, Z). To pomaga ustalić, gdzie trzymać zapas."
+            />
+          ) : null
         }
         status={
           err ? (

@@ -57,32 +57,34 @@ export function isNavPathActive(pathname: string, path: string): boolean {
   if (path === "/purchasing/dashboard") {
     return pathname === "/purchasing" || pathname === "/purchasing/dashboard";
   }
-  if (path === "/purchasing/replenishment") {
-    return pathname === "/purchasing/replenishment";
+  if (path === "/purchasing/plan") {
+    return (
+      pathname === "/purchasing/plan" ||
+      pathname === "/purchasing/replenishment" ||
+      pathname === "/purchasing/forecast" ||
+      pathname === "/purchasing/segments" ||
+      pathname === "/purchasing/alerts" ||
+      pathname.startsWith("/purchasing/alerts/") ||
+      pathname === "/purchasing/auto-reorder" ||
+      pathname.startsWith("/purchasing/auto-reorder/")
+    );
   }
-  if (path === "/purchasing/suppliers/analytics") {
-    return pathname === "/purchasing/suppliers/analytics";
+  if (path === "/purchasing/suppliers") {
+    return (
+      pathname === "/purchasing/suppliers" ||
+      pathname.startsWith("/purchasing/suppliers/") ||
+      pathname === "/purchasing/suppliers/analytics" ||
+      pathname === "/purchasing/cooperation-history" ||
+      pathname.startsWith("/purchasing/cooperation-history/") ||
+      pathname === "/purchasing/price-opportunities" ||
+      pathname.startsWith("/purchasing/price-opportunities/")
+    );
+  }
+  if (path === "/purchasing/replenishment") {
+    return pathname === "/purchasing/plan" || pathname === "/purchasing/replenishment";
   }
   if (path === "/purchasing/orders") {
     return pathname === "/purchasing/orders" || pathname.startsWith("/purchasing/orders/");
-  }
-  if (path === "/purchasing/forecast") {
-    return pathname === "/purchasing/forecast";
-  }
-  if (path === "/purchasing/alerts") {
-    return pathname === "/purchasing/alerts" || pathname.startsWith("/purchasing/alerts/");
-  }
-  if (path === "/purchasing/segments") {
-    return pathname === "/purchasing/segments" || pathname.startsWith("/purchasing/segments/");
-  }
-  if (path === "/purchasing/auto-reorder") {
-    return pathname === "/purchasing/auto-reorder" || pathname.startsWith("/purchasing/auto-reorder/");
-  }
-  if (path === "/purchasing/price-opportunities") {
-    return pathname === "/purchasing/price-opportunities" || pathname.startsWith("/purchasing/price-opportunities/");
-  }
-  if (path === "/purchasing/cooperation-history") {
-    return pathname === "/purchasing/cooperation-history" || pathname.startsWith("/purchasing/cooperation-history/");
   }
   if (path === "/orders/custom-fields") {
     return pathname.startsWith("/orders/custom-fields");

@@ -167,7 +167,7 @@ type SortDir = "asc" | "desc";
 
 const SEV_ORDER: Record<string, number> = { critical: 0, warning: 1, info: 2 };
 
-export default function PurchasingAlertsPage() {
+export default function PurchasingAlertsPage({ variant = "page" }: { variant?: "page" | "panel" }) {
   const { selectedWarehouseId } = useWarehouse();
   const [searchParams] = useSearchParams();
   const [tenants, setTenants] = useState<Tenant[]>([]);
@@ -388,7 +388,7 @@ export default function PurchasingAlertsPage() {
   const replenishmentHref = (a: PurchasingAlertEvent) => {
     const q = new URLSearchParams({ tenant_id: String(tenantId) });
     if (a.supplier_id != null) q.set("supplier_id", String(a.supplier_id));
-    return `/purchasing/replenishment?${q.toString()}`;
+    return `/purchasing/plan?${q.toString()}`;
   };
 
   const openCount = summary?.open_alerts ?? 0;
@@ -480,9 +480,13 @@ export default function PurchasingAlertsPage() {
   const thStatic = purchasingTableThClass;
 
   return (
-    <PurchasingContentArea>
+    <PurchasingContentArea className={variant === "panel" ? "py-0" : undefined}>
       <PurchasingPageShell
-        header={<PurchasingPageHeader title="Problemy wymagające uwagi" subtitle="Alerty z reguł wykrywania — decyzje i szkice zamówień." />}
+        header={
+          variant === "page" ? (
+            <PurchasingPageHeader title="Problemy wymagające uwagi" subtitle="Alerty z reguł wykrywania — decyzje i szkice zamówień." />
+          ) : null
+        }
         status={
           <>
             {err ? (

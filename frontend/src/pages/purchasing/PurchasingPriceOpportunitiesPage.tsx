@@ -3,7 +3,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { PiggyBank, Tags, TrendingDown, TrendingUp } from "lucide-react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
 import api from "../../api/axios";
 import { AppEmptyState } from "../../components/app-shell";
 import {
@@ -107,6 +107,8 @@ function zapiszZignorowane(tenantId: number, s: Set<string>): void {
 }
 
 export default function PurchasingPriceOpportunitiesPage() {
+  const location = useLocation();
+  const hidePageHeader = location.pathname.startsWith("/purchasing/suppliers");
   const [searchParams] = useSearchParams();
   const { selectedWarehouseId } = useWarehouse();
   const [tenants, setTenants] = useState<Tenant[]>([]);
@@ -240,20 +242,22 @@ export default function PurchasingPriceOpportunitiesPage() {
     <PurchasingContentArea>
       <PurchasingPageShell
         header={
-          <PurchasingPageHeader
-            title="Oszczędności zakupowe"
-            subtitle="Porównanie ofert, historia zakupów i progi dostaw — wyłącznie na podstawie danych z systemu."
-            actions={
-              <>
-                <Link to={`/purchasing/replenishment?tenant_id=${tenantId}`} className={purchasingBtnSecondary}>
-                  Generator
-                </Link>
-                <Link to={`/purchasing/orders?tenant_id=${tenantId}`} className={purchasingBtnSecondary}>
-                  Zamówienia (PO)
-                </Link>
-              </>
-            }
-          />
+          hidePageHeader ? null : (
+            <PurchasingPageHeader
+              title="Oszczędności zakupowe"
+              subtitle="Porównanie ofert, historia zakupów i progi dostaw — wyłącznie na podstawie danych z systemu."
+              actions={
+                <>
+                  <Link to={`/purchasing/plan?tenant_id=${tenantId}`} className={purchasingBtnSecondary}>
+                    Plan zakupów
+                  </Link>
+                  <Link to={`/purchasing/orders?tenant_id=${tenantId}`} className={purchasingBtnSecondary}>
+                    Zamówienia (PO)
+                  </Link>
+                </>
+              }
+            />
+          )
         }
         status={
           <>
@@ -416,7 +420,7 @@ export default function PurchasingPriceOpportunitiesPage() {
                     <div className="flex flex-wrap justify-end gap-1">
                       <Link
                         className="rounded border border-slate-200 bg-white px-2 py-1 text-xs font-medium hover:bg-slate-50"
-                        to={`/purchasing/replenishment?tenant_id=${tenantId}&supplier_id=${r.supplier_id}${
+                        to={`/purchasing/plan?tenant_id=${tenantId}&supplier_id=${r.supplier_id}${
                           r.product_id != null ? `&search=${encodeURIComponent(r.product_name)}` : ""
                         }`}
                         onClick={(e) => e.stopPropagation()}
@@ -445,7 +449,7 @@ export default function PurchasingPriceOpportunitiesPage() {
             actions={[
               {
                 label: "Generator z filtrem dostawcy",
-                to: `/purchasing/replenishment?tenant_id=${tenantId}${supplierFilter ? `&supplier_id=${supplierFilter}` : ""}`,
+                to: `/purchasing/plan?tenant_id=${tenantId}${supplierFilter ? `&supplier_id=${supplierFilter}` : ""}`,
               },
               {
                 label: "Lista PO",
@@ -540,7 +544,7 @@ export default function PurchasingPriceOpportunitiesPage() {
               <div className="flex flex-col gap-2 border-t border-slate-100 pt-3">
                 <Link
                   className="rounded-lg bg-slate-900 px-3 py-2 text-center text-sm font-medium text-white hover:bg-slate-800"
-                  to={`/purchasing/replenishment?tenant_id=${tenantId}&supplier_id=${drawerRow.supplier_id}${
+                  to={`/purchasing/plan?tenant_id=${tenantId}&supplier_id=${drawerRow.supplier_id}${
                     drawerRow.product_id != null ? `&search=${encodeURIComponent(drawerRow.product_name)}` : ""
                   }`}
                 >
