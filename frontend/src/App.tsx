@@ -229,7 +229,7 @@ import SupplierEditPage from "./pages/Assortment/SupplierEditPage"
 import SuppliersLayout from "./pages/Assortment/SuppliersLayout"
 import PurchasingLayout from "./pages/purchasing/PurchasingLayout"
 import PurchasingPoDetailPage from "./pages/purchasing/PurchasingPoDetailPage"
-import { PurchasingRedirectTo, PurchasingPlanPanelRedirect } from "./pages/purchasing/purchasingRedirects"
+import { PurchasingRedirectTo } from "./pages/purchasing/purchasingRedirects"
 import { PurchasingTabSuspense } from "./modules/purchasing/views/PurchasingTabSuspense"
 import PurchasingSuppliersTabLayout from "./modules/purchasing/layout/PurchasingSuppliersTabLayout"
 import {
@@ -797,9 +797,9 @@ export const router = createBrowserRouter(
                     }
                   />
                   <Route path="replenishment" element={<PurchasingRedirectTo to="/purchasing/plan" />} />
-                  <Route path="forecast" element={<PurchasingPlanPanelRedirect panel="forecast" />} />
-                  <Route path="segments" element={<PurchasingPlanPanelRedirect panel="segments" />} />
-                  <Route path="alerts" element={<PurchasingPlanPanelRedirect panel="alerts" />} />
+                  <Route path="forecast" element={<PurchasingRedirectTo to="/purchasing/plan" />} />
+                  <Route path="segments" element={<PurchasingRedirectTo to="/purchasing/plan" />} />
+                  <Route path="alerts" element={<PurchasingRedirectTo to="/purchasing/plan" />} />
                   <Route path="auto-reorder" element={<PurchasingRedirectTo to="/purchasing/plan" />} />
                   <Route path="suppliers" element={<PurchasingSuppliersTabLayout />}>
                     <Route index element={<Navigate to="ocena" replace />} />

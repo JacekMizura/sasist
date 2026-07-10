@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-06-08 — Plan zakupów: split layout + panel produktu
+
+- `/purchasing/plan` — lewa: KPI, mini heatmapa segmentów (AX–CZ), liczniki alertów + szybkie filtry, tabela; prawa (max 420px): szczegóły po kliknięciu wiersza (prognoza, segment, alerty, historia sprzedaży, rekomendacja).
+- Usunięto osadzanie pełnych stron Alerty/Segmenty/Prognoza w sidebarze; `PlanSidePanel` / `?panel=` wycofane.
+- Backend bez zmian.
+
 ## 2026-06-08 — Zakupy i planowanie: refaktor UX (4 zakładki)
 
 - Menu: Pulpit | Plan zakupów | Zamówienia | Dostawcy (zamiast 10 zakładek).

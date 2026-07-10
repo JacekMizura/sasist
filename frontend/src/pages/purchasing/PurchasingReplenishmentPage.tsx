@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
-import { AlertTriangle, Banknote, Bell, Download, LayoutGrid, LineChart, List, PackageSearch, Save, ShoppingCart } from "lucide-react";
+import { AlertTriangle, Banknote, Download, List, PackageSearch, Save, ShoppingCart } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { AppEmptyState } from "../../components/app-shell";
 import { listSuppliers, type SupplierRead } from "../../api/inboundSuppliersApi";
@@ -10,13 +10,27 @@ import {
   type ReplenishmentRow,
 } from "../../api/purchasingReplenishmentApi";
 import { fetchPurchasingForecast, type PurchasingForecastPayload } from "../../api/purchasingForecastApi";
+import {
+  fetchPurchasingAlerts,
+  fetchPurchasingAlertsSummary,
+  postPurchasingAlertsRunScan,
+  type PurchasingAlertEvent,
+  type PurchasingAlertSummary,
+} from "../../api/purchasingAlertsApi";
+import {
+  fetchPurchasingSegments,
+  type PurchasingSegmentRow,
+  type PurchasingSegmentsPayload,
+} from "../../api/purchasingSegmentsApi";
 import { useActiveWarehouseContext, ACTIVE_WAREHOUSE_REQUIRED_MESSAGE } from "../../hooks/useActiveWarehouseContext";
 import { ActiveWarehouseRequiredBanner } from "../../components/layout/ActiveWarehouseRequiredBanner";
 import { createPurchaseOrdersFromGenerator } from "../../api/purchasingOrdersApi";
 import { pageContainerWidthAlignClass } from "../../components/layout/PageContainer";
 import { DataTablePageSizeSelect } from "../../components/table/DataTablePageSizeSelect";
 import { usePurchasingTenant } from "../../modules/purchasing/hooks/usePurchasingTenant";
-import type { PlanPanelId } from "./planPanelTypes";
+import { PlanAlertStrip, type PlanAlertQuickFilter } from "./plan/PlanAlertStrip";
+import { PlanProductDetailPanel } from "./plan/PlanProductDetailPanel";
+import { PlanSegmentHeatmap } from "./plan/PlanSegmentHeatmap";
 import {
   PurchasingContentArea,
   PurchasingFilterBar,
@@ -129,14 +143,11 @@ function TableSkeleton({ cols }: { cols: number }) {
 }
 
 export type PurchasingReplenishmentPageProps = {
-  alertOpenCount?: number | null;
-  onOpenPanel?: (panel: PlanPanelId) => void;
+  variant?: "plan" | "standalone";
 };
 
-export default function PurchasingReplenishmentPage({
-  alertOpenCount = null,
-  onOpenPanel,
-}: PurchasingReplenishmentPageProps = {}) {
+export default function PurchasingReplenishmentPage({ variant = "standalone" }: PurchasingReplenishmentPageProps = {}) {
+  const isPlan = variant === "plan";
   const navigate = useNavigate();
   const { tenantId, refreshSignal } = usePurchasingTenant();
   const { warehouseId, hasActiveWarehouse } = useActiveWarehouseContext();
@@ -176,6 +187,14 @@ export default function PurchasingReplenishmentPage({
   const [inspectorData, setInspectorData] = useState<PurchasingForecastPayload | null>(null);
   const [inspectorLoading, setInspectorLoading] = useState(false);
 
+  const [segmentFilter, setSegmentFilter] = useState("");
+  const [segmentsMeta, setSegmentsMeta] = useState<PurchasingSegmentsPayload | null>(null);
+  const [alertSummary, setAlertSummary] = useState<PurchasingAlertSummary | null>(null);
+  const [alertQuickFilter, setAlertQuickFilter] = useState<PlanAlertQuickFilter>("");
+  const [alertsByProduct, setAlertsByProduct] = useState<Map<number, PurchasingAlertEvent[]>>(() => new Map());
+  const [scanBusy, setScanBusy] = useState(false);
+  const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
+
   useEffect(() => {
     const sid = searchParams.get("supplier_id");
     if (sid != null && sid !== "") {
@@ -192,6 +211,41 @@ export default function PurchasingReplenishmentPage({
       .then(setSuppliers)
       .catch(() => setSuppliers([]));
   }, [tenantId]);
+
+  const loadPlanMeta = useCallback(async () => {
+    if (!isPlan || !tenantId) return;
+    try {
+      const [seg, sum, alerts] = await Promise.all([
+        fetchPurchasingSegments({ tenantId, warehouseId: warehouseId ?? null, rangeDays: 90 }),
+        fetchPurchasingAlertsSummary(tenantId),
+        fetchPurchasingAlerts({ tenantId, status: "open", limit: 500 }),
+      ]);
+      setSegmentsMeta(seg);
+      setAlertSummary(sum);
+      const m = new Map<number, PurchasingAlertEvent[]>();
+      for (const a of alerts) {
+        if (a.product_id == null) continue;
+        const arr = m.get(a.product_id) ?? [];
+        arr.push(a);
+        m.set(a.product_id, arr);
+      }
+      setAlertsByProduct(m);
+    } catch {
+      setSegmentsMeta(null);
+      setAlertSummary(null);
+      setAlertsByProduct(new Map());
+    }
+  }, [isPlan, tenantId, warehouseId]);
+
+  useEffect(() => {
+    void loadPlanMeta();
+  }, [loadPlanMeta, refreshSignal]);
+
+  const handleAlertQuickFilter = (f: PlanAlertQuickFilter) => {
+    setAlertQuickFilter(f);
+    if (f === "critical") setCriticalOnly(true);
+    else if (f !== "with_alerts") setCriticalOnly(false);
+  };
 
   useEffect(() => {
     localStorage.setItem(PURCHASE_GENERATOR_PAGE_SIZE_KEY, String(pageSize));
@@ -275,6 +329,19 @@ export default function PurchasingReplenishmentPage({
     void load();
   }, [load, refreshSignal]);
 
+  const runAlertScan = async () => {
+    setScanBusy(true);
+    try {
+      await postPurchasingAlertsRunScan(tenantId, warehouseId ?? null);
+      await loadPlanMeta();
+      await load();
+    } catch {
+      setErr("Skan alertów nie powiódł się.");
+    } finally {
+      setScanBusy(false);
+    }
+  };
+
   useLayoutEffect(() => {
     setPage(1);
   }, [
@@ -296,8 +363,8 @@ export default function PurchasingReplenishmentPage({
   ]);
 
   useEffect(() => {
-    if (inspectorProductId == null) {
-      setInspectorData(null);
+    if (isPlan || inspectorProductId == null) {
+      if (!isPlan) setInspectorData(null);
       return;
     }
     let cancelled = false;
@@ -320,9 +387,39 @@ export default function PurchasingReplenishmentPage({
     return () => {
       cancelled = true;
     };
-  }, [inspectorProductId, tenantId, warehouseId]);
+  }, [inspectorProductId, tenantId, warehouseId, isPlan]);
+
+  const segmentByProduct = useMemo(() => {
+    const m = new Map<number, PurchasingSegmentRow>();
+    for (const r of segmentsMeta?.rows ?? []) m.set(r.product_id, r);
+    return m;
+  }, [segmentsMeta]);
 
   const rows = data?.rows ?? [];
+  const displayRows = useMemo(() => {
+    let out = rows;
+    if (segmentFilter) {
+      out = out.filter((r) => segmentByProduct.get(r.product_id)?.segment === segmentFilter);
+    }
+    if (alertQuickFilter === "with_alerts") {
+      out = out.filter((r) => alertsByProduct.has(r.product_id));
+    }
+    return out;
+  }, [rows, segmentFilter, segmentByProduct, alertQuickFilter, alertsByProduct]);
+
+  const selectedRow = useMemo(
+    () => (selectedProductId != null ? displayRows.find((r) => r.product_id === selectedProductId) ?? rows.find((r) => r.product_id === selectedProductId) ?? null : null),
+    [selectedProductId, displayRows, rows],
+  );
+
+  const handleRowActivate = (productId: number) => {
+    if (isPlan) {
+      setSelectedProductId((prev) => (prev === productId ? null : productId));
+      return;
+    }
+    setInspectorProductId(productId);
+  };
+
   const inspectorRow = useMemo(
     () => (inspectorProductId != null ? rows.find((r) => r.product_id === inspectorProductId) : undefined),
     [rows, inspectorProductId],
@@ -340,7 +437,7 @@ export default function PurchasingReplenishmentPage({
   };
 
   const togglePage = () => {
-    const ids = rows.map((r) => r.product_id);
+    const ids = displayRows.map((r) => r.product_id);
     const allOn = ids.length > 0 && ids.every((id) => selected.has(id));
     setSelected((prev) => {
       const next = new Set(prev);
@@ -380,45 +477,16 @@ export default function PurchasingReplenishmentPage({
       <PurchasingPageShell
         header={
           <PurchasingPageHeader
-            title="Plan zakupów"
-            subtitle="Rekomendacje uzupełnień, filtry ABC/XYZ i szybki dostęp do prognozy, segmentów i alertów."
+            title={isPlan ? "Plan zakupów" : "Generator propozycji zakupów"}
+            subtitle={
+              isPlan
+                ? "Tabela rekomendacji po lewej — po kliknięciu produktu panel szczegółów po prawej."
+                : "Sugestie uzupełnień na podstawie stanów, sprzedaży i otwartych dostaw."
+            }
             actions={
               <>
-                {onOpenPanel ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => onOpenPanel("alerts")}
-                      className={`relative inline-flex items-center gap-1.5 ${purchasingBtnSecondary}`}
-                    >
-                      <Bell className="h-4 w-4" aria-hidden />
-                      Alerty
-                      {alertOpenCount != null && alertOpenCount > 0 ? (
-                        <span className="ml-1 inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
-                          {alertOpenCount > 99 ? "99+" : alertOpenCount}
-                        </span>
-                      ) : null}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onOpenPanel("segments")}
-                      className={`inline-flex items-center gap-1.5 ${purchasingBtnSecondary}`}
-                    >
-                      <LayoutGrid className="h-4 w-4" aria-hidden />
-                      Segmenty
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onOpenPanel("forecast")}
-                      className={`inline-flex items-center gap-1.5 ${purchasingBtnSecondary}`}
-                    >
-                      <LineChart className="h-4 w-4" aria-hidden />
-                      Prognoza
-                    </button>
-                  </>
-                ) : null}
                 <button type="button" disabled={loading} onClick={() => void load()} className={purchasingBtnSecondary}>
-                  Odśwież plan
+                  {isPlan ? "Odśwież plan" : "Generuj ponownie"}
                 </button>
                 <button
                   type="button"
@@ -454,21 +522,43 @@ export default function PurchasingReplenishmentPage({
         status={err ? <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{err}</p> : null}
         kpis={
           summary && !loading ? (
-            <PurchasingKpiGrid columns={4}>
-              <PurchasingKpiCard title="Wiersze" value={summary.total_rows} tone="default" icon={<List aria-hidden />} />
-              <PurchasingKpiCard title="Sugestie ≥ 1" value={summary.suggested_count} tone="blue" icon={<ShoppingCart aria-hidden />} />
-              <PurchasingKpiCard title="Krytyczne" value={summary.critical_count} tone="red" icon={<AlertTriangle aria-hidden />} />
-              <PurchasingKpiCard
-                title="Wartość sugerowana"
-                value={numFmt(summary.total_suggested_value, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                tone="emerald"
-                icon={<Banknote aria-hidden />}
-              />
-            </PurchasingKpiGrid>
+            <div className="space-y-3">
+              <PurchasingKpiGrid columns={4}>
+                <PurchasingKpiCard title="Wiersze" value={summary.total_rows} tone="default" icon={<List aria-hidden />} />
+                <PurchasingKpiCard title="Sugestie ≥ 1" value={summary.suggested_count} tone="blue" icon={<ShoppingCart aria-hidden />} />
+                <PurchasingKpiCard title="Krytyczne" value={summary.critical_count} tone="red" icon={<AlertTriangle aria-hidden />} />
+                <PurchasingKpiCard
+                  title="Wartość sugerowana"
+                  value={numFmt(summary.total_suggested_value, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  tone="emerald"
+                  icon={<Banknote aria-hidden />}
+                />
+              </PurchasingKpiGrid>
+              {isPlan && segmentsMeta ? (
+                <PlanSegmentHeatmap
+                  counts={segmentsMeta.summary.segment_counts}
+                  activeSegment={segmentFilter}
+                  onSelect={(seg) => {
+                    setSegmentFilter(seg);
+                    setPage(1);
+                  }}
+                />
+              ) : null}
+            </div>
           ) : null
         }
         filters={
-          <PurchasingFilterBar
+          <>
+            {isPlan ? (
+              <PlanAlertStrip
+                summary={alertSummary}
+                quickFilter={alertQuickFilter}
+                onQuickFilter={handleAlertQuickFilter}
+                onRunScan={() => void runAlertScan()}
+                scanBusy={scanBusy}
+              />
+            ) : null}
+            <PurchasingFilterBar
             footer={
               <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-slate-700">
                 <label className="flex cursor-pointer items-center gap-2">
@@ -670,6 +760,7 @@ export default function PurchasingReplenishmentPage({
               </select>
             </PurchasingFilterField>
           </PurchasingFilterBar>
+          </>
         }
         table={
           loading ? (
@@ -684,11 +775,18 @@ export default function PurchasingReplenishmentPage({
               />
             </PurchasingTableSection>
           ) : (
+            <div className={isPlan ? "flex min-h-[480px] items-stretch" : undefined}>
+              <div className={isPlan ? "min-w-0 flex-1" : undefined}>
             <PurchasingTableSection
               title="Produkty do zakupu"
               indicatorClass="bg-blue-500"
               toolbar={
-                <div className="flex justify-end">
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  {isPlan && (segmentFilter || alertQuickFilter === "with_alerts") ? (
+                    <span className="text-xs text-slate-500">
+                      Widoczne po filtrach: <strong>{displayRows.length}</strong>
+                    </span>
+                  ) : null}
                   <DataTablePageSizeSelect
                     value={pageSize}
                     onChange={(next) => {
@@ -699,6 +797,14 @@ export default function PurchasingReplenishmentPage({
                 </div>
               }
             >
+              {displayRows.length === 0 ? (
+                <AppEmptyState
+                  icon={PackageSearch}
+                  title="Brak wierszy na tej stronie"
+                  description="Aktywne filtry segmentu lub alertów nie pasują do produktów na bieżącej stronie."
+                  density="inline"
+                />
+              ) : (
               <table className="w-full min-w-[1100px] border-collapse text-sm">
                 <PurchasingTableHeader sticky className="bg-white">
                   <tr>
@@ -706,10 +812,13 @@ export default function PurchasingReplenishmentPage({
                       <input
                         type="checkbox"
                         aria-label="Zaznacz stronę"
-                        checked={rows.length > 0 && rows.every((r) => selected.has(r.product_id))}
+                        checked={displayRows.length > 0 && displayRows.every((r) => selected.has(r.product_id))}
                         onChange={togglePage}
                       />
                     </th>
+                    {isPlan ? (
+                      <th className={`${td} text-left font-semibold uppercase tracking-wide text-slate-500`}>Seg.</th>
+                    ) : null}
                     <th className={`${td} text-left font-semibold uppercase tracking-wide text-slate-500`}>Produkt</th>
                     <th className={`${td} text-right font-semibold uppercase tracking-wide text-slate-500`}>Stan</th>
                     <th className={`${td} text-right font-semibold uppercase tracking-wide text-slate-500`}>W drodze</th>
@@ -725,11 +834,13 @@ export default function PurchasingReplenishmentPage({
                   </tr>
                 </PurchasingTableHeader>
                 <tbody>
-              {rows.map((r, idx) => (
+              {displayRows.map((r, idx) => (
                 <tr
                   key={r.product_id}
-                  className={`border-b border-slate-100 ${rowTone(r, idx)}`}
-                  onClick={() => setInspectorProductId(r.product_id)}
+                  className={`border-b border-slate-100 ${rowTone(r, idx)} ${
+                    isPlan && selectedProductId === r.product_id ? "bg-orange-50/80 ring-1 ring-inset ring-orange-300" : ""
+                  } ${isPlan ? "cursor-pointer" : ""}`}
+                  onClick={() => handleRowActivate(r.product_id)}
                 >
                   <td className="px-2 py-2 text-center align-middle">
                     <input
@@ -739,6 +850,11 @@ export default function PurchasingReplenishmentPage({
                       onClick={(e) => e.stopPropagation()}
                     />
                   </td>
+                  {isPlan ? (
+                    <td className="px-2 py-2 align-middle font-mono text-xs text-slate-700">
+                      {segmentByProduct.get(r.product_id)?.segment ?? "—"}
+                    </td>
+                  ) : null}
                   <td className="px-2 py-2 align-middle">
                     <PurchasingProductCell
                       name={r.product_name}
@@ -800,7 +916,21 @@ export default function PurchasingReplenishmentPage({
               ))}
                 </tbody>
               </table>
+              )}
             </PurchasingTableSection>
+              </div>
+              {isPlan && selectedRow ? (
+                <PlanProductDetailPanel
+                  row={selectedRow}
+                  segment={segmentByProduct.get(selectedRow.product_id) ?? null}
+                  alerts={alertsByProduct.get(selectedRow.product_id) ?? []}
+                  tenantId={tenantId}
+                  warehouseId={warehouseId}
+                  onClose={() => setSelectedProductId(null)}
+                  formatQty={formatQtyDisplay}
+                />
+              ) : null}
+            </div>
           )
         }
         footer={
@@ -906,6 +1036,7 @@ export default function PurchasingReplenishmentPage({
         </div>
       ) : null}
 
+      {!isPlan ? (
       <PurchasingProductInspectorDrawer
         open={inspectorProductId != null}
         loading={inspectorLoading}
@@ -914,6 +1045,7 @@ export default function PurchasingReplenishmentPage({
         formatQty={formatPipelineQty}
         incomingQty={inspectorRow?.incoming_qty}
       />
+      ) : null}
 
       {supplierBlockModalOpen ? (
         <div
