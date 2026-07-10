@@ -1,10 +1,9 @@
 import { warn } from "../../utils/logger";
-import type { LayoutState, WarehouseProduct } from "../../types/warehouse";
+import type { LayoutState } from "../../types/warehouse";
 import type { InternalStructure, BinState } from "./warehouseTypes";
-import { ElevationPanel } from "./ElevationPanel";
 import { InternalLayoutModal } from "./InternalLayoutModal";
 import { EditProductModal, type EditProductModalProps } from "./EditProductModal";
-import { findRackForInternalLayoutModal, getRackDisplayId } from "./warehouseUtils";
+import { findRackForInternalLayoutModal } from "./warehouseUtils";
 import { UI_STRINGS } from "../../constants/uiStrings";
 
 export type WarehouseModalsProps = {
@@ -15,15 +14,8 @@ export type WarehouseModalsProps = {
   onNewWarehouseNameChange: (value: string) => void;
   onCreateWarehouse: () => void;
 
-  /** Elevation side panel (fixed right-0 block with ElevationPanel) */
   mainView: "magazyn" | "layout";
-  showElevationForRackId: number | string | null;
   layout: LayoutState;
-  setShowElevationForRackId: (id: number | string | null) => void;
-  setSelectedBinForFilter: (v: { level_index: number; segment_index: number } | null) => void;
-  products: WarehouseProduct[];
-  selectedBinForFilter: { level_index: number; segment_index: number } | null;
-  setEditingProductId: (id: string | null) => void;
 
   /** InternalLayoutModal */
   internalLayoutRackId: number | string | null;
@@ -46,13 +38,7 @@ export function WarehouseModals(props: WarehouseModalsProps) {
     onNewWarehouseNameChange,
     onCreateWarehouse,
     mainView,
-    showElevationForRackId,
     layout,
-    setShowElevationForRackId,
-    setSelectedBinForFilter,
-    products,
-    selectedBinForFilter,
-    setEditingProductId,
     internalLayoutRackId,
     onSaveInternalLayout,
     onCloseInternalLayout,
@@ -82,25 +68,6 @@ export function WarehouseModals(props: WarehouseModalsProps) {
         </div>
       )}
 
-      {mainView === "layout" && showElevationForRackId != null && (() => {
-        const rack = layout.racks.find((r) => (r.id ?? r.rack_index) === showElevationForRackId);
-        return rack ? (
-          <div
-            className="fixed right-0 z-40 flex w-96 max-h-[calc(100vh-7.5rem)] flex-col overflow-hidden rounded-l-xl border-l border-[#E2E8F0] bg-white shadow-xl"
-            style={{ top: "7.5rem" }}
-          >
-            <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b border-[#E2E8F0]">
-              <h3 className="font-bold text-[#1E293B]">Widok z boku – {getRackDisplayId(rack, layout)}</h3>
-              <button type="button" onClick={() => { setShowElevationForRackId(null); setSelectedBinForFilter(null); }} className="p-2 rounded-lg hover:bg-slate-100 text-[#1E293B]">✕</button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4">
-              <ElevationPanel layout={layout} rack={rack} products={products} selectedBinForFilter={selectedBinForFilter} setSelectedBinForFilter={setSelectedBinForFilter} onAddProduct={() => setEditingProductId("new")} onEditProduct={setEditingProductId} />
-            </div>
-          </div>
-        ) : null;
-      })()}
-
-      {/* Single “Układ wewnętrzny” UI: `InternalLayoutModal` only (no duplicate). */}
       {(mainView === "magazyn" || mainView === "layout") && internalLayoutRackId != null && (() => {
         const rack = findRackForInternalLayoutModal(layout, internalLayoutRackId);
         if (!rack) {

@@ -7,13 +7,14 @@ import UserAccountMenu from "../components/layout/UserAccountMenu";
 import { useAuth } from "../context/AuthContext";
 import { useWmsPinnedModes } from "../hooks/useWmsPinnedModes";
 import { WMS_ROUTES } from "../pages/wms/wmsRoutes";
+import { appLayoutTokens } from "./appLayoutTokens";
 
 export default function WmsTopBar() {
   const { user } = useAuth();
   const { pinnedTabsInOrder, reorderPinned } = useWmsPinnedModes(user?.id ?? null);
 
   return (
-    <header className="sticky top-0 z-40 shrink-0 select-none border-b border-slate-200 bg-white shadow-sm">
+    <header className={`sticky top-0 z-40 shrink-0 select-none border-b ${appLayoutTokens.appBorder} ${appLayoutTokens.appBackground}`}>
       <div className="flex h-16 items-stretch">
         <div className="flex shrink-0 items-center border-r border-slate-200 px-4">
           <NavLink

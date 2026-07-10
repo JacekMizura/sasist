@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-06-08 — Faza 0 layoutów + migracja Projektanta Magazynu
+
+- Nowa infrastruktura: `frontend/src/components/layout/app/*` (`AppPageLayout`, `AppContentLayout`, `AppSplitView`, `AppRightPanel`, `AppSectionCard`) + `appLayoutTokens.ts`.
+- Shell: `ErpShellLayout`, `WmsOperationalLayout`, `WmsTopBar` — jedno tło `bg-slate-50`, border-only (bez shadow / overlay).
+- Projektant: `WarehouseDesigner` → `AppPageLayout` + `AppSplitView`; prawy panel regału/elewacji in-flow (`WarehouseMainView`, `ElevationSidePanel`, `RackPropertiesSidebar`); usunięto `fixed right-0` z `WarehouseModals`.
+- Backend bez zmian.
+
 ## 2026-06-08 — Purchasing API: schema sync PostgreSQL + orders N+1
 
 - `ensure_purchasing_orm_schema` — cross-dialect sync Supplier / PurchaseOrder ORM (Railway Postgres).

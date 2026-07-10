@@ -17,10 +17,7 @@ import { UI_STRINGS } from "../../constants/uiStrings";
 import { logRackRename } from "./rackRenameLog";
 import { syncRackBinsDisplayFields } from "../../utils/resolvedWarehouseLocation";
 
-const DEFAULT_WIDTH = 420;
-const MIN_WIDTH = 320;
-const MAX_WIDTH = 480;
-const WIDTH_STORAGE_KEY = "wms.rackPropertiesSidebarWidth";
+import { appLayoutTokens } from "../../layout/appLayoutTokens";
 
 export type RackPropertiesSidebarProps = {
   layout: LayoutState;
@@ -58,16 +55,6 @@ function racksMatchIdentity(a: RackState, b: RackState): boolean {
   return String(a.id ?? a.rack_index) === String(b.id ?? b.rack_index);
 }
 
-function readStoredWidth(): number {
-  try {
-    const n = Number(localStorage.getItem(WIDTH_STORAGE_KEY));
-    if (Number.isFinite(n) && n >= MIN_WIDTH && n <= MAX_WIDTH) return n;
-  } catch {
-    /* ignore */
-  }
-  return DEFAULT_WIDTH;
-}
-
 export function RackPropertiesSidebar({
   layout,
   selectedRack,
@@ -98,7 +85,7 @@ export function RackPropertiesSidebar({
   lastSavedAt = null,
   warehouseLabel,
 }: RackPropertiesSidebarProps) {
-  const asideScrollRef = useRef<HTMLElement>(null);
+  const asideScrollRef = useRef<HTMLDivElement>(null);
   const scrollKey = `${selectedRack?.id ?? selectedRack?.rack_index ?? ""}-${routeStepIndex}-${isRouteActive}-${selectedRackIds.join(",")}`;
   useWheelScrollBoundaryContain(asideScrollRef, true, scrollKey);
 
@@ -106,8 +93,6 @@ export function RackPropertiesSidebar({
   const [nameError, setNameError] = useState<string | null>(null);
   const [nameSaveHint, setNameSaveHint] = useState<"idle" | "dirty" | "saved" | "error">("idle");
   const [compact, setCompact] = useState(false);
-  const [panelWidth, setPanelWidth] = useState(readStoredWidth);
-  const resizeRef = useRef<{ startX: number; startW: number } | null>(null);
   const lastCommittedNameRef = useRef<string | null>(null);
 
   const rackSelKey = selectedRack ? `${selectedRack.uuid ?? ""}-${selectedRack.id ?? selectedRack.rack_index}` : "";
@@ -183,30 +168,6 @@ export function RackPropertiesSidebar({
     [layout, selectedRack, setLayout]
   );
 
-  useEffect(() => {
-    const onMove = (e: MouseEvent) => {
-      if (!resizeRef.current) return;
-      const delta = resizeRef.current.startX - e.clientX;
-      const next = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, resizeRef.current.startW + delta));
-      setPanelWidth(next);
-    };
-    const onUp = () => {
-      if (!resizeRef.current) return;
-      resizeRef.current = null;
-      try {
-        localStorage.setItem(WIDTH_STORAGE_KEY, String(panelWidth));
-      } catch {
-        /* ignore */
-      }
-    };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-    return () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    };
-  }, [panelWidth]);
-
   const requestClose = useCallback(() => {
     if (nameSaveHint === "dirty" && !window.confirm("Masz niezapisane zmiany nazwy regału. Zamknąć panel bez zapisu układu?")) {
       return;
@@ -238,25 +199,13 @@ export function RackPropertiesSidebar({
           : null;
 
   return (
-    <aside
+    <div
       ref={asideScrollRef}
-      className={`fixed right-0 top-0 z-[40] flex h-screen min-h-0 w-full max-w-[100vw] flex-col overflow-hidden border-l border-slate-200 bg-white shadow-2xl md:max-w-none ${
+      className={`flex h-full min-h-0 w-full flex-col overflow-hidden ${appLayoutTokens.appPanelBackground} ${
         compact ? "text-[11px]" : ""
       }`}
-      style={{ width: `min(100vw, ${panelWidth}px)`, overscrollBehavior: "contain" }}
-      role="dialog"
-      aria-label="Właściwości regału"
     >
-      <div
-        role="separator"
-        aria-orientation="vertical"
-        className="absolute left-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-blue-200/60"
-        onMouseDown={(e) => {
-          e.preventDefault();
-          resizeRef.current = { startX: e.clientX, startW: panelWidth };
-        }}
-      />
-      <header className="flex shrink-0 items-start justify-between gap-2 border-b border-slate-100 px-3 py-2">
+      <header className={`flex shrink-0 items-start justify-between gap-2 border-b ${appLayoutTokens.appBorder} px-3 py-2`}>
         <div className="min-w-0 pl-1">
           <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
             {warehouseLabel ? `Magazyn / ${warehouseLabel}` : "Magazyn"} / {rackTitle}
@@ -567,7 +516,7 @@ export function RackPropertiesSidebar({
           </button>
         </div>
       )}
-    </aside>
+    </div>
   );
 }
 

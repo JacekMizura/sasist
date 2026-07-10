@@ -43,7 +43,8 @@ import { TopProductsSidebar } from "../components/warehouse/magazyn/TopProductsS
 import { WarehouseReportsPanel } from "../components/warehouse/magazyn/WarehouseReportsPanel";
 import { DamageReportsPanel, type DamagePrefill } from "../components/warehouse/magazyn/DamageReportsPanel";
 import { UI_STRINGS } from "../constants/uiStrings";
-import PageLayout from "../components/layout/PageLayout";
+import { AppContentLayout, AppPageLayout, AppSectionCard, AppSplitView } from "../components/layout/app";
+import { appLayoutTokens } from "../layout/appLayoutTokens";
 import { TabsContainer } from "../components/layout/TabsContainer";
 import { tabsNavItemClassName } from "../components/layout/TabsNav";
 import { ConfirmModal } from "../components/ui/ConfirmModal";
@@ -3512,11 +3513,8 @@ export default function WarehouseDesigner() {
   });
 
   return (
-    <PageLayout
-      fillHeight
-      fullBleed
-      cardClassName="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden !space-y-0"
-    >
+    <AppPageLayout fillHeight>
+      <AppContentLayout className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
       <div className="flex shrink-0 flex-col gap-0">
         <div className="mb-3 flex flex-wrap items-start justify-between gap-2.5">
           <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
@@ -3600,13 +3598,7 @@ export default function WarehouseDesigner() {
         onNewWarehouseNameChange={setNewWarehouseName}
         onCreateWarehouse={createWarehouse}
         mainView={mainView}
-        showElevationForRackId={showElevationForRackId}
         layout={layout}
-        setShowElevationForRackId={setShowElevationForRackId}
-        setSelectedBinForFilter={setSelectedBinForFilter}
-        products={products}
-        selectedBinForFilter={selectedBinForFilter}
-        setEditingProductId={setEditingProductId}
         internalLayoutRackId={internalLayoutRackId}
         onSaveInternalLayout={onSaveInternalLayout}
         onCloseInternalLayout={() => setInternalLayoutRackId(null)}
@@ -3693,15 +3685,11 @@ export default function WarehouseDesigner() {
         getTemplatePreviewRackCount={getTemplatePreviewRackCount}
       />
 
-      <div
-        id="warehouse-designer-panel"
-        role="tabpanel"
-        aria-labelledby={mainView === "magazyn" ? "warehouse-designer-tab-magazyn" : "warehouse-designer-tab-layout"}
-        className="flex min-h-0 min-w-0 flex-1 basis-0 flex-row gap-3 overflow-hidden"
-        style={mainView === "magazyn" ? { overscrollBehavior: "contain" } : undefined}
-      >
-        {mainView === "magazyn" ? (
-          <div className="flex h-full min-h-0 w-[300px] shrink-0 flex-none flex-col gap-2 overflow-x-hidden overflow-y-auto overscroll-y-contain border-r border-slate-200/70 pr-3">
+      <AppSplitView
+        className="min-h-0 flex-1"
+        left={
+          mainView === "magazyn" ? (
+          <div className={`flex h-full min-h-0 w-[300px] shrink-0 flex-none flex-col gap-2 overflow-x-hidden overflow-y-auto overscroll-y-contain border-r ${appLayoutTokens.appBorder} pr-3`}>
             <MagazynDashboardPanel
               layout={layout}
               customTemplates={customTemplates}
@@ -3770,8 +3758,15 @@ export default function WarehouseDesigner() {
             setWallElementTool={setWallElementTool}
             selectedRowContainerId={selectedRowContainerId}
           />
-        ) : null}
-
+        ) : null
+      }
+    >
+      <div
+        id="warehouse-designer-panel"
+        role="tabpanel"
+        aria-labelledby={mainView === "magazyn" ? "warehouse-designer-tab-magazyn" : "warehouse-designer-tab-layout"}
+        className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
+      >
         {mainView === "magazyn" ? (
           <>
             <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-slate-200/80">
@@ -4277,10 +4272,21 @@ export default function WarehouseDesigner() {
               saving,
               lastSavedAt,
               warehouseLabel: layout.warehouse_name || activeWarehouse?.name || undefined,
+              showElevationForRackId,
+              products,
+              selectedBinForFilter,
+              setSelectedBinForFilter,
+              onCloseElevation: () => {
+                setShowElevationForRackId(null);
+                setSelectedBinForFilter(null);
+              },
+              onAddProduct: () => setEditingProductId("new"),
+              onEditProduct: setEditingProductId,
             }}
           />
         ) : null}
       </div>
+      </AppSplitView>
 
       {showGateTypeModal && pendingGatePlacement && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-labelledby="gate-type-title">
@@ -4368,6 +4374,7 @@ export default function WarehouseDesigner() {
         candidates={damageCandidates}
         prefill={damagePrefill}
       />
-    </PageLayout>
+    </AppContentLayout>
+    </AppPageLayout>
   );
 }

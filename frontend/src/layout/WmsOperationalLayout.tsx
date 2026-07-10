@@ -8,6 +8,7 @@ import { WarehouseExecutionProvider } from "../context/WarehouseExecutionContext
 import { WmsScannerProvider } from "../context/WmsScannerContext";
 import WmsTopBar from "./WmsTopBar";
 import WmsWarehouseAccessGate from "./WmsWarehouseAccessGate";
+import { appLayoutTokens } from "./appLayoutTokens";
 
 /**
  * Unified WMS shell — one top navigation for every mode (picking, recovery, braki, packing, …).
@@ -15,12 +16,12 @@ import WmsWarehouseAccessGate from "./WmsWarehouseAccessGate";
  */
 function WmsLayoutChrome() {
   return (
-    <div className="flex h-screen min-h-0 w-full flex-1 flex-col overflow-hidden bg-slate-50/50">
+    <div className={`flex h-screen min-h-0 w-full flex-1 flex-col overflow-hidden ${appLayoutTokens.appBackground}`}>
       <div className="shrink-0" style={{ zIndex: WMS_Z.topNav }}>
         <WmsTopBar />
       </div>
       <ScanFeedbackOverlay />
-      <main className="min-h-0 w-full max-w-none flex-1 overflow-y-auto bg-slate-50/50">
+      <main className={`min-h-0 w-full max-w-none flex-1 overflow-y-auto ${appLayoutTokens.appBackground}`}>
         <WmsWarehouseAccessGate>
           <Outlet />
         </WmsWarehouseAccessGate>

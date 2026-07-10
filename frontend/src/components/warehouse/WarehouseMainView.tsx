@@ -5,7 +5,10 @@ import { GRID_UNIT_CM } from "../../types/warehouse";
 import { useWheelScrollBoundaryContain } from "../../hooks/useWheelScrollBoundaryContain";
 import { WarehouseCanvas, type WarehouseCanvasProps } from "./WarehouseCanvas";
 import { RackPropertiesSidebar } from "./RackPropertiesSidebar";
+import { ElevationSidePanel, VisualElementPanelShell } from "./ElevationSidePanel";
+import { AppRightPanel, AppSplitView } from "../layout/app";
 import { UI_STRINGS } from "../../constants/uiStrings";
+import type { WarehouseProduct } from "../../types/warehouse";
 
 export type WarehouseMainViewProps = WarehouseCanvasProps & {
   setSelectedVisualId: React.Dispatch<React.SetStateAction<string | null>>;
@@ -35,6 +38,14 @@ export type WarehouseMainViewProps = WarehouseCanvasProps & {
   saving?: boolean;
   lastSavedAt?: number | null;
   warehouseLabel?: string;
+  /** Elevation (side view) panel — layout designer only. */
+  showElevationForRackId?: number | string | null;
+  products?: WarehouseProduct[];
+  selectedBinForFilter?: { level_index: number; segment_index: number } | null;
+  setSelectedBinForFilter?: (v: { level_index: number; segment_index: number } | null) => void;
+  onCloseElevation?: () => void;
+  onAddProduct?: () => void;
+  onEditProduct?: (id: string) => void;
 };
 
 export function WarehouseMainView(props: WarehouseMainViewProps) {
@@ -68,6 +79,13 @@ export function WarehouseMainView(props: WarehouseMainViewProps) {
     saving,
     lastSavedAt,
     warehouseLabel,
+    showElevationForRackId = null,
+    products = [],
+    selectedBinForFilter = null,
+    setSelectedBinForFilter,
+    onCloseElevation,
+    onAddProduct,
+    onEditProduct,
     isMultiSelect,
     selectedRackIds,
     setShowElevationForRackId,
@@ -87,20 +105,31 @@ export function WarehouseMainView(props: WarehouseMainViewProps) {
     scrollResubKey
   );
 
-  return (
-    <div className="flex min-h-0 min-w-0 max-w-full flex-1 flex-row items-stretch overflow-hidden">
-      <div className="m-0 flex min-h-0 min-w-0 max-w-full flex-1 basis-0 flex-col overflow-hidden p-0">
-        <div
-          data-warehouse-canvas-scroll
-          className="flex min-h-0 min-w-0 max-w-full w-full flex-1 flex-col overflow-auto"
-        >
-          <WarehouseCanvas {...canvasProps} />
-        </div>
-      </div>
-      {/* Right: WŁAŚCIWOŚCI (Properties) – only in Projekt Layoutu */}
-      {selectedVisualIds.length > 0 && (() => {
-          const ve = (layout.visual_elements ?? []).find((v) => v.id === selectedVisualIds[0]);
-          if (!ve) return null;
+  const showRackPanel =
+    rackPanelOpen &&
+    ((propertiesRack ?? selectedRack) || routePanelVisible) &&
+    selectedAisleIndex == null &&
+    selectedVisualIds.length === 0 &&
+    showElevationForRackId == null;
+
+  let rightPanel: React.ReactNode = null;
+
+  if (showElevationForRackId != null && onCloseElevation && setSelectedBinForFilter) {
+    rightPanel = (
+      <ElevationSidePanel
+        layout={layout}
+        rackId={showElevationForRackId}
+        products={products}
+        selectedBinForFilter={selectedBinForFilter}
+        setSelectedBinForFilter={setSelectedBinForFilter}
+        onClose={onCloseElevation}
+        onAddProduct={onAddProduct ?? (() => {})}
+        onEditProduct={onEditProduct ?? (() => {})}
+      />
+    );
+  } else if (selectedVisualIds.length > 0) {
+    const ve = (layout.visual_elements ?? []).find((v) => v.id === selectedVisualIds[0]);
+    if (ve) {
           const typeLabels: Record<VisualElementType, string> = {
             column: "Słupy", mezzanine: "Antresole", packing_station: "Stanowiska pakowania", cart: "Wózki",
             wall: "Ściany", door: "Drzwi", zone: "Strefa",
@@ -120,12 +149,8 @@ export function WarehouseMainView(props: WarehouseMainViewProps) {
           const defaultColor = (t: VisualElementType) => t === "zone" ? "#3b82f640" : (t === "wall" ? "#64748b" : (t === "door" ? "#94a3b8" : "#64748b"));
           const fillColor = ve.color ?? defaultColor(ve.type);
           const hex6 = fillColor.length >= 7 ? fillColor.slice(0, 7) : fillColor;
-          return (
-            <aside
-              ref={visualAsideRef}
-              className="flex h-full min-h-0 w-[320px] flex-none flex-col self-stretch overflow-y-auto overscroll-y-contain bg-white/95 p-4"
-              style={{ borderLeft: "1px solid rgba(0,0,0,0.06)", overscrollBehavior: "contain" }}
-            >
+      rightPanel = (
+            <VisualElementPanelShell>
               <h3 className="text-[11px] font-medium uppercase tracking-[0.08em] text-[#6b7280] mb-4">Element wizualny – Edycja</h3>
               {selectedVisualIds.length > 1 && <p className="text-[10px] text-slate-600 mb-1">Zaznaczono {selectedVisualIds.length} elementów</p>}
               <p className="text-[#1E293B] text-sm font-semibold">{typeLabels[ve.type]}</p>
@@ -251,18 +276,14 @@ export function WarehouseMainView(props: WarehouseMainViewProps) {
                 <button type="button" onClick={() => { const minZ = Math.min(0, ...(layout.visual_elements ?? []).map((x) => x.zIndex)); setLayout((prev) => ({ ...prev, visual_elements: (prev.visual_elements ?? []).map((el) => (el.id === ve.id ? { ...el, zIndex: minZ - 1 } : el)) })); }} className="px-2 py-1.5 rounded-lg bg-slate-100 text-[#1E293B] text-xs font-semibold hover:bg-slate-200 border border-slate-100">{UI_STRINGS.warehouse.visuals.toBack}</button>
                 <button type="button" onClick={() => { setLayout((prev) => ({ ...prev, visual_elements: (prev.visual_elements ?? []).filter((el) => !selectedVisualIds.includes(el.id)) })); setSelectedVisualId(null); setSelectedVisualIds([]); }} className="px-2 py-1.5 rounded-lg bg-red-100 text-red-700 text-xs font-semibold hover:bg-red-200 border border-red-200">{UI_STRINGS.warehouse.visuals.delete}</button>
               </div>
-            </aside>
-          );
-        })()}
-        {selectedAisleIndex != null && selectedVisualIds.length === 0 && (() => {
+            </VisualElementPanelShell>
+      );
+    }
+  } else if (selectedAisleIndex != null && selectedVisualIds.length === 0) {
           const aisle = layout.aisles[selectedAisleIndex];
-          if (!aisle) return null;
-          return (
-            <aside
-              ref={aisleAsideRef}
-              className="flex h-full min-h-0 w-[320px] flex-none flex-col self-stretch overflow-y-auto overscroll-y-contain border-l border-[#E2E8F0] bg-white p-3"
-              style={{ overscrollBehavior: "contain" }}
-            >
+          if (aisle) {
+      rightPanel = (
+            <VisualElementPanelShell className="p-3">
               <h3 className="text-xs font-black uppercase text-slate-600 mb-1">Strefa wizualna</h3>
               <p className="text-[10px] text-slate-500 mb-2 leading-snug" title="Strefa to element wizualny – nie wpływa na routing ani logistykę">
                 Element pomocniczy na planie — wyłącznie do oznaczeń; nie steruje trasami ani kompletacją.
@@ -358,52 +379,62 @@ export function WarehouseMainView(props: WarehouseMainViewProps) {
                   {UI_STRINGS.warehouse.visuals.deleteAisle}
                 </button>
               </div>
-            </aside>
-          );
-        })()}
-        {rackPanelOpen &&
-          ((propertiesRack ?? selectedRack) || routePanelVisible) &&
-          selectedAisleIndex == null &&
-          selectedVisualIds.length === 0 && (
-            <>
-              <button
-                type="button"
-                aria-label="Zamknij panel właściwości"
-                className="fixed inset-0 z-[35] bg-black/20 md:bg-black/15"
-                onClick={onCloseRackPanel}
-              />
-              <RackPropertiesSidebar
-                layout={layout}
-                selectedRack={propertiesRack ?? selectedRack ?? null}
-                editingRackId={editingRackId ?? null}
-                onEditingRackIdChange={setEditingRackId}
-                selectedRacks={selectedRacks}
-                isMultiSelect={isMultiSelect}
-                selectedRackIds={selectedRackIds}
-                setLayout={setLayout}
-                setShowElevationForRackId={setShowElevationForRackId}
-                setInternalLayoutRackId={setInternalLayoutRackId}
-                setSelectedRackId={setSelectedRackId}
-                setSelectedRackIds={setSelectedRackIds}
-                routeRackIds={routeRackIds}
-                routeRackLabels={routeRackLabels}
-                routeLengthMeters={routeLengthMeters}
-                routeLegMeters={routeLegMeters}
-                routeStepIndex={routeStepIndex}
-                routeStepCount={routeStepCount}
-                onRouteStepNext={onRouteStepNext}
-                isRouteActive={isRouteActive}
-                clearRoute={clearRoute}
-                optimizeRoute={optimizeRoute}
-                finishRoute={finishRoute}
-                onClose={onCloseRackPanel}
-                onSaveLayout={onSaveLayout}
-                saving={saving}
-                lastSavedAt={lastSavedAt}
-                warehouseLabel={warehouseLabel}
-              />
-            </>
-          )}
-    </div>
+            </VisualElementPanelShell>
+      );
+    }
+  } else if (showRackPanel) {
+    rightPanel = (
+      <AppRightPanel
+        open
+        bare
+        resizable
+        widthStorageKey="wms.rackPropertiesSidebarWidth"
+        aria-label="Właściwości regału"
+      >
+        <RackPropertiesSidebar
+          layout={layout}
+          selectedRack={propertiesRack ?? selectedRack ?? null}
+          editingRackId={editingRackId ?? null}
+          onEditingRackIdChange={setEditingRackId}
+          selectedRacks={selectedRacks}
+          isMultiSelect={isMultiSelect}
+          selectedRackIds={selectedRackIds}
+          setLayout={setLayout}
+          setShowElevationForRackId={setShowElevationForRackId}
+          setInternalLayoutRackId={setInternalLayoutRackId}
+          setSelectedRackId={setSelectedRackId}
+          setSelectedRackIds={setSelectedRackIds}
+          routeRackIds={routeRackIds}
+          routeRackLabels={routeRackLabels}
+          routeLengthMeters={routeLengthMeters}
+          routeLegMeters={routeLegMeters}
+          routeStepIndex={routeStepIndex}
+          routeStepCount={routeStepCount}
+          onRouteStepNext={onRouteStepNext}
+          isRouteActive={isRouteActive}
+          clearRoute={clearRoute}
+          optimizeRoute={optimizeRoute}
+          finishRoute={finishRoute}
+          onClose={onCloseRackPanel}
+          onSaveLayout={onSaveLayout}
+          saving={saving}
+          lastSavedAt={lastSavedAt}
+          warehouseLabel={warehouseLabel}
+        />
+      </AppRightPanel>
+    );
+  }
+
+  return (
+    <AppSplitView right={rightPanel ?? undefined}>
+      <div className="m-0 flex min-h-0 min-w-0 max-w-full flex-1 basis-0 flex-col overflow-hidden p-0">
+        <div
+          data-warehouse-canvas-scroll
+          className="flex min-h-0 min-w-0 max-w-full w-full flex-1 flex-col overflow-auto"
+        >
+          <WarehouseCanvas {...canvasProps} />
+        </div>
+      </div>
+    </AppSplitView>
   );
 }

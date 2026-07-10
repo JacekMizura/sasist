@@ -33,6 +33,7 @@ function formatMeters(value: number | undefined): number | null {
 import { TemplateCreator, RackPreview } from "./TemplateCreator";
 import { GenerateWarehouseLayoutModal } from "./GenerateWarehouseLayoutModal";
 import { UI_STRINGS } from "../../constants/uiStrings";
+import { appLayoutTokens } from "../../layout/appLayoutTokens";
 import { normalizeBinTypeMap } from "../../utils/storageTypes";
 import { buildTemplateUsageData } from "./templateUsage";
 
@@ -180,7 +181,7 @@ export function RackSidebar({
 
   return (
     <aside
-      className="flex h-full min-h-0 w-[300px] flex-none flex-col self-stretch overflow-hidden overscroll-y-contain border-r border-slate-200/70 bg-white px-3.5 py-3"
+      className={`flex h-full min-h-0 w-[300px] flex-none flex-col self-stretch overflow-hidden overscroll-y-contain border-r ${appLayoutTokens.appBorder} ${appLayoutTokens.appPanelBackground} px-3.5 py-3`}
     >
       {!showOnlyCatalog && (
       <div className="mb-2.5 flex shrink-0 rounded-md bg-slate-100/80 p-0.5">

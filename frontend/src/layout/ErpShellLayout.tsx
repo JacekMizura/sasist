@@ -20,6 +20,7 @@ import {
   getNavCategoryAccent,
   type NavCategoryAccent,
 } from "./erpSidebarStyles";
+import { appLayoutTokens } from "./appLayoutTokens";
 
 const CATEGORY_ICON = 20;
 
@@ -120,9 +121,9 @@ export default function ErpShellLayout({ children, headerMode }: ErpShellLayoutP
   const WmsIcon = WMS_SIDEBAR_DIRECT.Icon;
 
   return (
-    <div className="flex h-screen min-h-0 overflow-hidden bg-slate-50">
+    <div className={`flex h-screen min-h-0 overflow-hidden ${appLayoutTokens.appBackground}`}>
       <aside
-        className={`${ERP_SIDEBAR_WIDTH_CLASS} z-20 flex shrink-0 flex-col border-r border-slate-200/80 bg-white shadow-[4px_0_24px_rgba(0,0,0,0.02)]`}
+        className={`${ERP_SIDEBAR_WIDTH_CLASS} z-20 flex shrink-0 flex-col border-r ${appLayoutTokens.appBorder} ${appLayoutTokens.appBackground}`}
       >
         <div className="flex h-[52px] shrink-0 items-center px-2.5">
           <ErpCompactBrandLink />
@@ -191,11 +192,11 @@ export default function ErpShellLayout({ children, headerMode }: ErpShellLayoutP
       <div
         className={`relative z-0 flex min-h-0 min-w-0 flex-1 flex-col ${wmsSettingsShellScroll ? "overflow-y-auto" : ""}`}
       >
-        <header className="flex shrink-0 flex-col border-b border-slate-200/90 bg-white">
+        <header className={`flex shrink-0 flex-col border-b ${appLayoutTokens.appBorder} ${appLayoutTokens.appBackground}`}>
           <PanelGlobalStatusStrip />
         </header>
         <main
-          className={`flex min-h-0 min-w-0 flex-1 flex-col bg-slate-50 ${designerFill ? "overflow-hidden" : wmsSettingsShellScroll ? "overflow-visible" : "overflow-y-auto"}`}
+          className={`flex min-h-0 min-w-0 flex-1 flex-col ${appLayoutTokens.appBackground} ${designerFill ? "overflow-hidden" : wmsSettingsShellScroll ? "overflow-visible" : "overflow-y-auto"}`}
         >
           {children}
         </main>
