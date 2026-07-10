@@ -947,6 +947,12 @@ try:
 except Exception:
     logging.getLogger(__name__).exception("ensure_purchase_order_tax_invoice_columns failed at import")
 try:
+    from .db.purchasing_schema import ensure_purchasing_orm_schema
+
+    ensure_purchasing_orm_schema(engine)
+except Exception:
+    logging.getLogger(__name__).exception("ensure_purchasing_orm_schema failed at import")
+try:
     ensure_products_purchase_snapshot_columns(engine)
 except Exception:
     logging.getLogger(__name__).exception("ensure_products_purchase_snapshot_columns failed at import")
@@ -1369,6 +1375,12 @@ def _upgrade_schema_background() -> None:
         pass
     try:
         ensure_purchase_order_tax_invoice_columns(engine)
+    except Exception:
+        pass
+    try:
+        from .db.purchasing_schema import ensure_purchasing_orm_schema
+
+        ensure_purchasing_orm_schema(engine)
     except Exception:
         pass
     try:

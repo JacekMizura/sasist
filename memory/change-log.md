@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-06-08 — Purchasing API: schema sync PostgreSQL + orders N+1
+
+- `ensure_purchasing_orm_schema` — cross-dialect sync Supplier / PurchaseOrder ORM (Railway Postgres).
+- `ensure_supplier_purchasing_columns`, `ensure_purchase_order_tax_invoice_columns` — działają też na PostgreSQL (wcześniej sqlite-only → potencjalne HTTP 500).
+- `list_purchase_orders` — `joinedload(supplier)` + batch `item_count` (eliminacja N+1).
+- `purchasing_segments_service` — agregacja tygodniowa w SQL (ISO year/week) zamiast GROUP BY dzień.
+
 ## 2026-06-08 — Plan zakupów: split layout + panel produktu
 
 - `/purchasing/plan` — lewa: KPI, mini heatmapa segmentów (AX–CZ), liczniki alertów + szybkie filtry, tabela; prawa (max 420px): szczegóły po kliknięciu wiersza (prognoza, segment, alerty, historia sprzedaży, rekomendacja).

@@ -2379,26 +2379,33 @@ def ensure_supplier_products_table(engine: Engine) -> None:
 def ensure_supplier_purchasing_columns(engine: Engine) -> None:
     """
     Extra supplier fields for purchasing / replenishment (MOQ, free-shipping threshold).
-    SQLite-only ALTERs (same pattern as other helpers; PostgreSQL would use migrations).
     """
-    if engine.dialect.name != "sqlite":
+    if not _table_exists(engine, "suppliers"):
         return
-    with engine.connect() as conn:
-        r = _table_exists(conn, "suppliers")
-        if not r:
-            conn.commit()
-            return
-        cols = _table_column_names(conn, "suppliers")
+    cols = _cols(engine, "suppliers")
+    is_pg = engine.dialect.name == "postgresql"
+    with engine.begin() as conn:
         if "minimum_order_qty" not in cols:
             conn.execute(text("ALTER TABLE suppliers ADD COLUMN minimum_order_qty INTEGER"))
         if "free_shipping_threshold" not in cols:
-            conn.execute(text("ALTER TABLE suppliers ADD COLUMN free_shipping_threshold NUMERIC(12, 2)"))
+            typ = "NUMERIC(12, 2)" if is_pg else "NUMERIC(12, 2)"
+            conn.execute(text(f"ALTER TABLE suppliers ADD COLUMN free_shipping_threshold {typ}"))
         added_supplier_flags = False
         if "offers_free_shipping" not in cols:
-            conn.execute(text("ALTER TABLE suppliers ADD COLUMN offers_free_shipping BOOLEAN NOT NULL DEFAULT true"))
+            conn.execute(
+                text(
+                    "ALTER TABLE suppliers ADD COLUMN offers_free_shipping BOOLEAN "
+                    + ("NOT NULL DEFAULT true" if is_pg else "NOT NULL DEFAULT 1")
+                )
+            )
             added_supplier_flags = True
         if "requires_moq" not in cols:
-            conn.execute(text("ALTER TABLE suppliers ADD COLUMN requires_moq BOOLEAN NOT NULL DEFAULT true"))
+            conn.execute(
+                text(
+                    "ALTER TABLE suppliers ADD COLUMN requires_moq BOOLEAN "
+                    + ("NOT NULL DEFAULT true" if is_pg else "NOT NULL DEFAULT 1")
+                )
+            )
             added_supplier_flags = True
         if added_supplier_flags:
             conn.execute(
@@ -2418,12 +2425,14 @@ def ensure_supplier_purchasing_columns(engine: Engine) -> None:
                     """
                 )
             )
-        conn.commit()
 
 
 def ensure_purchase_orders_tables(engine: Engine) -> None:
     """Formal purchase orders + lines (separate workflow from inbound `deliveries`)."""
     if engine.dialect.name != "sqlite":
+        from .purchasing_schema import ensure_purchasing_orm_schema
+
+        ensure_purchasing_orm_schema(engine)
         return
     with engine.connect() as conn:
         po = _table_exists(conn, "purchase_orders")
@@ -5190,21 +5199,20 @@ def ensure_currency_exchange_rates_table(engine: Engine) -> None:
 
 def ensure_purchase_order_tax_invoice_columns(engine: Engine) -> None:
     """PO tax mode + optional invoice date for FX basis."""
-    if engine.dialect.name != "sqlite":
+    if not _table_exists(engine, "purchase_orders"):
         return
-    with engine.connect() as conn:
-        po = _table_exists(conn, "purchase_orders")
-        if not po:
-            conn.commit()
-            return
-        cols = _table_column_names(conn, "purchase_orders")
+    cols = _cols(engine, "purchase_orders")
+    is_pg = engine.dialect.name == "postgresql"
+    with engine.begin() as conn:
         if "tax_mode" not in cols:
             conn.execute(
-                text("ALTER TABLE purchase_orders ADD COLUMN tax_mode VARCHAR(48) NOT NULL DEFAULT 'domestic_vat'")
+                text(
+                    "ALTER TABLE purchase_orders ADD COLUMN tax_mode VARCHAR(48) "
+                    + ("NOT NULL DEFAULT 'domestic_vat'" if is_pg else "NOT NULL DEFAULT 'domestic_vat'")
+                )
             )
         if "invoice_date" not in cols:
             conn.execute(text("ALTER TABLE purchase_orders ADD COLUMN invoice_date DATE"))
-        conn.commit()
 
 
 def ensure_products_purchase_snapshot_columns(engine: Engine) -> None:

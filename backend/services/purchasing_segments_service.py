@@ -9,7 +9,7 @@ from collections import defaultdict
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from sqlalchemy import func
+from sqlalchemy import func, Integer
 from sqlalchemy.orm import Session
 
 from ..models.order import Order
@@ -51,6 +51,18 @@ def _iso_weeks_in_range(start_d: date, end_d: date) -> List[Tuple[int, int]]:
     return sorted(seen)
 
 
+def _iso_week_group_exprs(db: Session, day_col):
+    """Dialect-specific ISO year + week expressions for GROUP BY."""
+    bind = db.get_bind()
+    if bind.dialect.name == "postgresql":
+        iso_year = func.cast(func.to_char(day_col, "IYYY"), Integer)
+        iso_week = func.cast(func.to_char(day_col, "IW"), Integer)
+    else:
+        iso_year = func.cast(func.strftime("%G", day_col), Integer)
+        iso_week = func.cast(func.strftime("%V", day_col), Integer)
+    return iso_year, iso_week
+
+
 def _weekly_qty_vectors(
     db: Session,
     tenant_id: int,
@@ -65,8 +77,14 @@ def _weekly_qty_vectors(
         return {pid: [0.0] * len(week_keys) for pid in product_ids}
 
     day_col = func.date(_order_ts_expr())
+    iso_year, iso_week = _iso_week_group_exprs(db, day_col)
     q = (
-        db.query(OrderItem.product_id, day_col, func.coalesce(func.sum(OrderItem.quantity), 0))
+        db.query(
+            OrderItem.product_id,
+            iso_year,
+            iso_week,
+            func.coalesce(func.sum(OrderItem.quantity), 0),
+        )
         .join(Order, Order.id == OrderItem.order_id)
         .filter(Order.tenant_id == tenant_id)
         .filter(Order.deleted_at.is_(None))
@@ -77,24 +95,13 @@ def _weekly_qty_vectors(
     )
     if warehouse_id is not None:
         q = q.filter(Order.warehouse_id == int(warehouse_id))
-    q = q.group_by(OrderItem.product_id, day_col)
+    q = q.group_by(OrderItem.product_id, iso_year, iso_week)
 
-    # product_id -> (iso_year, iso_week) -> sum qty
     acc: Dict[int, Dict[Tuple[int, int], float]] = defaultdict(lambda: defaultdict(float))
-    for pid, d, qty in q.all():
-        if pid is None or d is None:
+    for pid, y, w, qty in q.all():
+        if pid is None or y is None or w is None:
             continue
-        if isinstance(d, datetime):
-            dd = d.date()
-        elif isinstance(d, date):
-            dd = d
-        else:
-            try:
-                dd = datetime.fromisoformat(str(d)[:10]).date()
-            except ValueError:
-                continue
-        y, w, _ = dd.isocalendar()
-        acc[int(pid)][(y, w)] += float(qty or 0)
+        acc[int(pid)][(int(y), int(w))] += float(qty or 0)
 
     idx = {wk: i for i, wk in enumerate(week_keys)}
     out: Dict[int, List[float]] = {}

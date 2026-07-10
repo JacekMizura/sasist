@@ -268,11 +268,35 @@ def create_orders_from_generator(
     }
 
 
-def purchase_order_to_list_dict(db: Session, po: PurchaseOrder) -> Dict[str, Any]:
-    sup = po.supplier or db.query(Supplier).filter(Supplier.id == po.supplier_id).first()
-    item_count = (
-        db.query(func.count(PurchaseOrderItem.id)).filter(PurchaseOrderItem.purchase_order_id == po.id).scalar() or 0
+def _purchase_order_item_counts(db: Session, po_ids: Sequence[int]) -> Dict[int, int]:
+    ids = [int(x) for x in po_ids if x is not None]
+    if not ids:
+        return {}
+    rows = (
+        db.query(PurchaseOrderItem.purchase_order_id, func.count(PurchaseOrderItem.id))
+        .filter(PurchaseOrderItem.purchase_order_id.in_(ids))
+        .group_by(PurchaseOrderItem.purchase_order_id)
+        .all()
     )
+    return {int(po_id): int(cnt or 0) for po_id, cnt in rows if po_id is not None}
+
+
+def purchase_order_to_list_dict(
+    db: Session,
+    po: PurchaseOrder,
+    *,
+    item_count: Optional[int] = None,
+) -> Dict[str, Any]:
+    sup = po.supplier
+    if sup is None and po.supplier_id is not None:
+        sup = db.query(Supplier).filter(Supplier.id == po.supplier_id).first()
+    if item_count is None:
+        item_count = (
+            db.query(func.count(PurchaseOrderItem.id))
+            .filter(PurchaseOrderItem.purchase_order_id == po.id)
+            .scalar()
+            or 0
+        )
     return {
         "id": po.id,
         "tenant_id": po.tenant_id,
@@ -511,12 +535,16 @@ def list_purchase_orders(
         q = q.filter(PurchaseOrder.status == st)
     total = q.count()
     rows = (
-        q.order_by(PurchaseOrder.created_at.desc())
+        q.options(joinedload(PurchaseOrder.supplier))
+        .order_by(PurchaseOrder.created_at.desc())
         .offset((page - 1) * page_size)
         .limit(page_size)
         .all()
     )
-    return [purchase_order_to_list_dict(db, po) for po in rows], total
+    item_counts = _purchase_order_item_counts(db, [po.id for po in rows])
+    return [
+        purchase_order_to_list_dict(db, po, item_count=item_counts.get(int(po.id), 0)) for po in rows
+    ], total
 
 
 def get_purchase_order(db: Session, tenant_id: int, order_id: int) -> Dict[str, Any]:
