@@ -1,6 +1,7 @@
 import { memo, type ReactNode } from "react";
 import { Minus, TrendingDown, TrendingUp } from "lucide-react";
 import { Link } from "react-router-dom";
+import { dashboardKpiMinHeight } from "../../../components/dashboard/dashboardDensityPrimitives";
 
 export type PurchasingKpiTone = "default" | "red" | "amber" | "blue" | "emerald" | "indigo" | "purple" | "yellow";
 
@@ -62,8 +63,8 @@ function PurchasingKpiCardInner({
   const compact = density === "compact";
   const cardClass = [
     compact
-      ? "relative flex min-h-[72px] flex-col rounded-xl border border-slate-100 bg-white p-3 shadow-sm transition-all duration-200"
-      : "relative flex min-h-[88px] flex-col rounded-xl border border-slate-100 bg-white p-4 shadow-sm transition-all duration-200",
+      ? `relative flex min-h-[56px] flex-col rounded-xl border border-slate-100 bg-white p-2.5 shadow-sm transition-all duration-200`
+      : `relative flex ${dashboardKpiMinHeight} flex-col rounded-xl border border-slate-100 bg-white p-3 shadow-sm transition-all duration-200`,
     to ? "cursor-pointer hover:border-slate-200 hover:shadow-md" : "",
     className,
   ]
@@ -75,7 +76,7 @@ function PurchasingKpiCardInner({
 
   const inner = (
     <>
-      <div className={`flex items-start justify-between gap-2 ${compact ? "mb-1.5" : "mb-2"}`}>
+      <div className={`flex items-start justify-between gap-2 ${compact ? "mb-1" : "mb-1.5"}`}>
         <h3 className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{title}</h3>
         <div
           className={`flex shrink-0 items-center justify-center rounded-lg ${
@@ -91,7 +92,7 @@ function PurchasingKpiCardInner({
         <div className="mb-0.5 flex flex-wrap items-end gap-2">
           <div
             className={`font-bold leading-none tracking-tight tabular-nums text-slate-800 ${
-              compact ? "text-xl" : "text-2xl"
+              compact ? "text-lg" : "text-xl"
             }`}
           >
             {value}

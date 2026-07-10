@@ -74,7 +74,7 @@ export type NavCategoryConfig = {
   activePathPrefix?: string;
 };
 
-/** Direct WMS sidebar link — rendered inline after System in {@link ErpShellLayout}. */
+/** Direct WMS entry — used by {@link NAV_FLYOUT_CATEGORIES} WMS section (path unchanged). */
 export const WMS_SIDEBAR_DIRECT = {
   id: "wms" as const,
   path: "/wms/menu",
@@ -82,7 +82,7 @@ export const WMS_SIDEBAR_DIRECT = {
   Icon: Tablet,
 };
 
-/** Categories that open a hover fly-out. WMS is a direct link after System — see ErpShellLayout. */
+/** Categories that open a hover fly-out (WMS is a normal section between Etykiety and Dokumenty). */
 export const NAV_FLYOUT_CATEGORIES: NavCategoryConfig[] = [
   {
     id: "orders",
@@ -267,6 +267,23 @@ export const NAV_FLYOUT_CATEGORIES: NavCategoryConfig[] = [
     label: UI_STRINGS.navigation.labelSystem,
     Icon: Tag,
     flyoutSections: [{ items: [{ path: "/labels", label: UI_STRINGS.navigation.labelSystem, Icon: Tag }] }],
+  },
+  {
+    id: "wms",
+    label: WMS_SIDEBAR_DIRECT.label,
+    Icon: WMS_SIDEBAR_DIRECT.Icon,
+    activePathPrefix: "/wms",
+    flyoutSections: [
+      {
+        items: [
+          {
+            path: WMS_SIDEBAR_DIRECT.path,
+            label: "Menu główne WMS",
+            Icon: WMS_SIDEBAR_DIRECT.Icon,
+          },
+        ],
+      },
+    ],
   },
   {
     id: "documents",

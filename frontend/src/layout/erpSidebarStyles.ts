@@ -86,6 +86,13 @@ export const ERP_NAV_CATEGORY_ACCENT: Record<string, NavCategoryAccent> = {
     activeIconClass: "text-slate-700",
     hoverBgClass: "hover:bg-slate-50",
   },
+  wms: {
+    barClass: "bg-orange-500",
+    activeBgClass: "bg-orange-50",
+    activeTextClass: "text-orange-900",
+    activeIconClass: "text-orange-600",
+    hoverBgClass: "hover:bg-orange-50/80",
+  },
 };
 
 export function getNavCategoryAccent(categoryId: string): NavCategoryAccent {
@@ -108,5 +115,6 @@ export const ERP_SIDEBAR_WIDTH_CLASS = "w-56";
 export const ERP_SIDEBAR_NAV_SCROLL =
   "[scrollbar-width:thin] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-transparent hover:[&::-webkit-scrollbar-thumb]:bg-slate-300";
 
-export const ERP_SIDEBAR_ACTIVE_BAR =
-  "absolute left-0 top-1/2 h-7 w-1.5 -translate-y-1/2 rounded-r-full";
+import { erpDensityClasses } from "./erpDensityTokens";
+
+export const ERP_SIDEBAR_ACTIVE_BAR = erpDensityClasses.sidebarActiveBar;

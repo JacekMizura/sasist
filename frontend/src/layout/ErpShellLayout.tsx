@@ -1,28 +1,20 @@
 import type { ReactNode } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import { type LucideIcon } from "lucide-react";
 import ErpCompactBrandLink from "../components/layout/ErpCompactBrandLink";
 import PanelGlobalStatusStrip from "../components/layout/PanelGlobalStatusStrip";
-import {
-  NAV_FLYOUT_CATEGORIES,
-  WMS_SIDEBAR_DIRECT,
-  isCategoryActive,
-  type NavCategoryConfig,
-} from "./mainNavConfig";
-import { isNavPathActive } from "./navActive";
+import { NAV_FLYOUT_CATEGORIES, isCategoryActive, type NavCategoryConfig } from "./mainNavConfig";
 import NavFlyoutPanel from "./NavFlyoutPanel";
 import { useNavFlyout } from "./useNavFlyout";
 import {
   ERP_SIDEBAR_ACTIVE_BAR,
   ERP_SIDEBAR_NAV_SCROLL,
   ERP_SIDEBAR_WIDTH_CLASS,
-  WMS_NAV_ACCENT,
   getNavCategoryAccent,
   type NavCategoryAccent,
 } from "./erpSidebarStyles";
 import { appLayoutTokens } from "./appLayoutTokens";
-
-const CATEGORY_ICON = 20;
+import { erpDensityClasses } from "./erpDensityTokens";
 
 export type ErpShellHeaderMode = "panel" | "settings";
 
@@ -42,8 +34,8 @@ function categoryContainsCurrentRoute(cat: NavCategoryConfig, pathname: string):
 
 function sidebarItemClass(active: boolean, accent: NavCategoryAccent, hovered: boolean): string {
   return [
-    "group relative flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors duration-150",
-    "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500",
+    erpDensityClasses.sidebarItemBase,
+    erpDensityClasses.sidebarItemFocus,
     active
       ? `${accent.activeBgClass} ${accent.activeTextClass}`
       : `text-slate-500 ${accent.hoverBgClass} hover:text-slate-900`,
@@ -81,15 +73,13 @@ function SidebarNavButton({
     >
       {active ? <span className={`${ERP_SIDEBAR_ACTIVE_BAR} ${accent.barClass}`} aria-hidden /> : null}
       <Icon
-        size={CATEGORY_ICON}
+        size={erpDensityClasses.sidebarIconSize}
         strokeWidth={active ? 2.25 : 1.5}
-        className={`shrink-0 transition-colors ${
+        className={`${erpDensityClasses.sidebarIcon} ${
           active ? accent.activeIconClass : "text-slate-400 group-hover:text-slate-600"
         }`}
       />
-      <span className={`min-w-0 flex-1 truncate text-[13px] leading-tight ${active ? "font-semibold" : "font-medium"}`}>
-        {label}
-      </span>
+      <span className={`${erpDensityClasses.sidebarLabel} ${active ? "font-semibold" : "font-medium"}`}>{label}</span>
     </button>
   );
 }
@@ -117,23 +107,17 @@ export default function ErpShellLayout({ children, headerMode }: ErpShellLayoutP
   const wmsSettingsShellScroll =
     headerMode === "settings" && (pathname === "/settings/wms" || pathname.startsWith("/settings/wms/"));
 
-  const wmsActive = isNavPathActive(pathname, "/wms");
-  const WmsIcon = WMS_SIDEBAR_DIRECT.Icon;
-
   return (
     <div className={`flex h-screen min-h-0 overflow-hidden ${appLayoutTokens.appBackground}`}>
       <aside
         className={`${ERP_SIDEBAR_WIDTH_CLASS} z-20 flex shrink-0 flex-col border-r ${appLayoutTokens.appBorder} ${appLayoutTokens.appBackground}`}
       >
-        <div className="flex h-[52px] shrink-0 items-center px-2.5">
+        <div className={erpDensityClasses.sidebarBrand}>
           <ErpCompactBrandLink />
         </div>
 
-        <nav
-          className={`min-h-0 flex-1 overflow-y-auto px-2.5 py-1.5 ${ERP_SIDEBAR_NAV_SCROLL}`}
-          aria-label="Menu główne"
-        >
-          <div className="flex flex-col gap-0.5">
+        <nav className={`${erpDensityClasses.sidebarNav} ${ERP_SIDEBAR_NAV_SCROLL}`} aria-label="Menu główne">
+          <div className={erpDensityClasses.sidebarSectionList}>
             {NAV_FLYOUT_CATEGORIES.map((cat) => {
               const contained = categoryContainsCurrentRoute(cat, pathname);
               const isHovered = hoveredCategoryId === cat.id;
@@ -152,32 +136,6 @@ export default function ErpShellLayout({ children, headerMode }: ErpShellLayoutP
               );
             })}
           </div>
-
-          <div className="my-2 border-t border-slate-200/90" role="separator" />
-
-          <Link
-            to={WMS_SIDEBAR_DIRECT.path}
-            className={[
-              sidebarItemClass(wmsActive, WMS_NAV_ACCENT, false),
-              "focus-visible:outline-orange-500",
-            ].join(" ")}
-          >
-            {wmsActive ? (
-              <span className={`${ERP_SIDEBAR_ACTIVE_BAR} ${WMS_NAV_ACCENT.barClass}`} aria-hidden />
-            ) : null}
-            <WmsIcon
-              size={CATEGORY_ICON}
-              strokeWidth={wmsActive ? 2.25 : 1.5}
-              className={`shrink-0 transition-colors ${
-                wmsActive ? WMS_NAV_ACCENT.activeIconClass : "text-slate-400 group-hover:text-orange-600"
-              }`}
-            />
-            <span
-              className={`min-w-0 flex-1 truncate text-[13px] leading-tight ${wmsActive ? "font-semibold" : "font-medium"}`}
-            >
-              {WMS_SIDEBAR_DIRECT.label}
-            </span>
-          </Link>
         </nav>
       </aside>
 

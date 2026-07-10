@@ -20,6 +20,17 @@ import { getBackendPublicOrigin } from "../config/apiBase";
 import { DAMAGE_TENANT_ID } from "./damage/damageShared";
 import { ORDERS_OPERATIONS_UPDATED_EVENT, WMS_ROUTES, WMS_SHORTAGES_UPDATED_EVENT } from "./wms/wmsRoutes";
 import DashboardWarehouseNetworkSection from "../components/dashboard/DashboardWarehouseNetworkSection";
+import {
+  dashboardCardPadding,
+  dashboardCardPaddingMd,
+  dashboardKpiPadding,
+  dashboardPagePadding,
+  dashboardSectionGapTop,
+  dashboardSectionGapTopLg,
+  dashboardSectionMargin,
+  dashboardSurfaceCard,
+  dashboardSurfaceCardHover,
+} from "../components/dashboard/dashboardDensityPrimitives";
 
 /** Polski plural: „1 zamówienie”, „2 zamówienia”, „5 zamówień”, „24 zamówienia”. */
 function ordersCountLabel(n: number): string {
@@ -100,9 +111,8 @@ function LiveClock() {
 }
 
 /** Jasne karty — spójne z resztą panelu (Sellasist / ERP). */
-const surfaceCard = "rounded-xl border border-slate-200/80 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]";
-const surfaceCardHover =
-  "transition-shadow duration-200 hover:border-slate-300 hover:shadow-[0_4px_12px_rgba(15,23,42,0.06)]";
+const surfaceCard = dashboardSurfaceCard;
+const surfaceCardHover = dashboardSurfaceCardHover;
 
 function BusinessKpiMini({
   label,
@@ -114,9 +124,9 @@ function BusinessKpiMini({
   hint?: string;
 }) {
   return (
-    <div className={`${surfaceCard} ${surfaceCardHover} flex min-w-[7.5rem] flex-1 flex-col gap-0.5 px-3 py-2.5 sm:min-w-0`}>
+    <div className={`${surfaceCard} ${surfaceCardHover} flex min-w-[7.5rem] flex-1 flex-col gap-0.5 ${dashboardKpiPadding} sm:min-w-0`}>
       <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="text-lg font-bold tabular-nums leading-tight text-slate-900">{value}</p>
+      <p className="text-base font-bold tabular-nums leading-tight text-slate-900">{value}</p>
       {hint ? <p className="text-[10px] text-slate-400">{hint}</p> : null}
     </div>
   );
@@ -190,7 +200,7 @@ export default function Dashboard() {
 
   return (
     <div className="-mx-4 -mt-4 min-h-0 min-w-0 flex-1 bg-white sm:-mx-6">
-      <div className="w-full px-4 py-6 sm:px-6 sm:py-8">
+      <div className={`w-full ${dashboardPagePadding}`}>
         {err ? (
           <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-900">
             {err}
@@ -207,7 +217,7 @@ export default function Dashboard() {
         {kpi ? (
           <>
             {/* ——— Business KPIs (first) ——— */}
-            <section className="mb-8">
+            <section className={dashboardSectionMargin}>
               <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
                 Podsumowanie biznesowe
               </p>
@@ -223,7 +233,7 @@ export default function Dashboard() {
                   <BusinessKpiMini label="Śr. wartość zam." value={fmtMoney(kpi.avg_order_value_today, 2)} />
                 </div>
                 <div
-                  className={`${surfaceCard} ${surfaceCardHover} flex min-w-[12rem] flex-1 flex-col gap-1.5 px-3 py-2.5 sm:max-w-xs sm:flex-none lg:max-w-sm`}
+                  className={`${surfaceCard} ${surfaceCardHover} flex min-w-[12rem] flex-1 flex-col gap-1 ${dashboardKpiPadding} sm:max-w-xs sm:flex-none lg:max-w-sm`}
                 >
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Wczoraj</p>
                   <p className="text-sm tabular-nums text-slate-800">
@@ -235,7 +245,7 @@ export default function Dashboard() {
               </div>
             </section>
 
-            <section className="mb-8">
+            <section className={dashboardSectionMargin}>
               <DashboardWarehouseNetworkSection tenantId={DAMAGE_TENANT_ID} />
             </section>
           </>
@@ -248,12 +258,12 @@ export default function Dashboard() {
         ) : null}
 
         {wms && warehouseId != null ? (
-            <div className="mb-6 border-t border-slate-100 pt-8">
+            <div className={`mb-5 border-t border-slate-100 pt-5`}>
               <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Magazyn</p>
-              <header className={`${surfaceCard} mb-8 p-5 sm:p-6`}>
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <header className={`${surfaceCard} ${dashboardSectionMargin} ${dashboardCardPaddingMd}`}>
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div>
-                    <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Centrum operacyjne</h1>
+                    <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">Centrum operacyjne</h1>
                     <p className="mt-1 text-sm text-slate-600">
                       {warehouse?.name ?? "—"}
                       <span className="text-slate-400"> · ID {warehouseId}</span>
@@ -296,12 +306,12 @@ export default function Dashboard() {
                 <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
                   <Link
                     to={WMS_ROUTES.picking}
-                    className={`${surfaceCard} ${surfaceCardHover} border-l-[3px] border-l-blue-500 p-4`}
+                    className={`${surfaceCard} ${surfaceCardHover} border-l-[3px] border-l-blue-500 ${dashboardCardPadding}`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <p className="text-[11px] font-bold uppercase tracking-wide text-blue-700">Do zebrania</p>
-                        <p className="mt-2 text-3xl font-black tabular-nums leading-none text-slate-900">
+                        <p className="mt-1.5 text-2xl font-black tabular-nums leading-none text-slate-900">
                           {wms.orders_to_collect}
                         </p>
                         <p className="mt-2 text-[11px] font-medium text-slate-500">zamówień w kolejce zbierania</p>
@@ -314,12 +324,12 @@ export default function Dashboard() {
 
                   <Link
                     to={WMS_ROUTES.packing}
-                    className={`${surfaceCard} ${surfaceCardHover} border-l-[3px] border-l-violet-500 p-4`}
+                    className={`${surfaceCard} ${surfaceCardHover} border-l-[3px] border-l-violet-500 ${dashboardCardPadding}`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <p className="text-[11px] font-bold uppercase tracking-wide text-violet-700">Do spakowania</p>
-                        <p className="mt-2 text-3xl font-black tabular-nums leading-none text-slate-900">
+                        <p className="mt-1.5 text-2xl font-black tabular-nums leading-none text-slate-900">
                           {wms.packing_do_spakowania}
                         </p>
                         <p className="mt-2 text-[11px] font-medium text-slate-500">oczekuje na start pakowania</p>
@@ -332,12 +342,12 @@ export default function Dashboard() {
 
                   <Link
                     to={WMS_ROUTES.packing}
-                    className={`${surfaceCard} ${surfaceCardHover} border-l-[3px] border-l-sky-500 p-4`}
+                    className={`${surfaceCard} ${surfaceCardHover} border-l-[3px] border-l-sky-500 ${dashboardCardPadding}`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <p className="text-[11px] font-bold uppercase tracking-wide text-sky-700">W toku</p>
-                        <p className="mt-2 text-3xl font-black tabular-nums leading-none text-slate-900">
+                        <p className="mt-1.5 text-2xl font-black tabular-nums leading-none text-slate-900">
                           {wms.packing_w_trakcie}
                         </p>
                         <p className="mt-2 text-[11px] font-medium text-slate-500">pakowanie rozpoczęte</p>
@@ -350,12 +360,12 @@ export default function Dashboard() {
 
                   <Link
                     to={WMS_ROUTES.packing}
-                    className={`${surfaceCard} ${surfaceCardHover} border-l-[3px] border-l-amber-500 p-4`}
+                    className={`${surfaceCard} ${surfaceCardHover} border-l-[3px] border-l-amber-500 ${dashboardCardPadding}`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <p className="text-[11px] font-bold uppercase tracking-wide text-amber-800">Braki</p>
-                        <p className="mt-2 text-3xl font-black tabular-nums leading-none text-slate-900">
+                        <p className="mt-1.5 text-2xl font-black tabular-nums leading-none text-slate-900">
                           {wms.packing_braki}
                         </p>
                         <p className="mt-2 text-[11px] font-medium text-slate-500">wymagają decyzji / towaru</p>
@@ -368,12 +378,12 @@ export default function Dashboard() {
 
                   <Link
                     to="/orders/list"
-                    className={`${surfaceCard} ${surfaceCardHover} border-l-[3px] border-l-rose-500 p-4`}
+                    className={`${surfaceCard} ${surfaceCardHover} border-l-[3px] border-l-rose-500 ${dashboardCardPadding}`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <p className="text-[11px] font-bold uppercase tracking-wide text-rose-700">Opóźnione</p>
-                        <p className="mt-2 text-3xl font-black tabular-nums leading-none text-slate-900">
+                        <p className="mt-1.5 text-2xl font-black tabular-nums leading-none text-slate-900">
                           {wms.orders_delayed ?? 0}
                         </p>
                         <p className="mt-2 text-[11px] font-medium text-slate-500">&gt;48h bez statusu DONE</p>
@@ -386,7 +396,7 @@ export default function Dashboard() {
                 </div>
               </section>
 
-              <section className={`${surfaceCard} mt-8 p-5 sm:p-6`}>
+              <section className={`${surfaceCard} ${dashboardSectionGapTop} ${dashboardCardPaddingMd}`}>
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                   <div>
                     <h2 className="text-sm font-bold uppercase tracking-wide text-slate-600">Przepływ dzienny</h2>
@@ -408,7 +418,7 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                <div className="mt-6 flex h-3 overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200/80">
+                <div className="mt-4 flex h-3 overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200/80">
                   <div
                     className="bg-emerald-500 transition-all"
                     style={{ width: `${pipeline.segments[0]}%` }}
@@ -431,7 +441,7 @@ export default function Dashboard() {
                   />
                 </div>
 
-                <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   {[
                     {
                       label: "Zebrane",
@@ -479,7 +489,7 @@ export default function Dashboard() {
                   ].map((step) => (
                     <div
                       key={step.label}
-                      className="rounded-xl border border-slate-100 bg-white p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]"
+                      className={`rounded-xl border border-slate-100 bg-white ${dashboardCardPadding} shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]`}
                     >
                       <div className="flex items-center justify-between gap-2">
                         <div>
@@ -488,7 +498,7 @@ export default function Dashboard() {
                         </div>
                         <step.icon className="h-5 w-5 text-slate-400" strokeWidth={2} aria-hidden />
                       </div>
-                      <p className="mt-3 text-2xl font-black tabular-nums text-slate-900">{step.value}</p>
+                      <p className="mt-2 text-xl font-black tabular-nums text-slate-900">{step.value}</p>
                       <p className="mt-1 text-[11px] leading-snug text-slate-500">{step.extra}</p>
                       <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
                         <div className={`h-full rounded-full ${step.fill}`} style={{ width: `${step.bar}%` }} />
@@ -498,15 +508,15 @@ export default function Dashboard() {
                 </div>
               </section>
 
-              <section className="mt-10">
-                <h2 className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500">Alerty i blokady</h2>
+              <section className={dashboardSectionGapTopLg}>
+                <h2 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Alerty i blokady</h2>
                 <div className="grid gap-3 lg:grid-cols-3">
-                  <div className={`${surfaceCard} border-amber-100 bg-amber-50/40 p-4`}>
+                  <div className={`${surfaceCard} border-amber-100 bg-amber-50/40 ${dashboardCardPadding}`}>
                     <div className="flex items-center gap-2 text-amber-950">
                       <Boxes className="h-5 w-5 shrink-0 text-amber-600" strokeWidth={2} aria-hidden />
                       <span className="text-sm font-bold">Braki magazynowe</span>
                     </div>
-                    <p className="mt-3 text-3xl font-black tabular-nums text-slate-900">{wms.packing_braki}</p>
+                    <p className="mt-2 text-2xl font-black tabular-nums text-slate-900">{wms.packing_braki}</p>
                     <p className="mt-1 text-xs text-amber-900/85">Zamówienia w kolejce pakowania z niedoborem towaru</p>
                     <Link
                       to={WMS_ROUTES.packing}
@@ -516,12 +526,12 @@ export default function Dashboard() {
                     </Link>
                   </div>
 
-                  <div className={`${surfaceCard} border-rose-100 bg-rose-50/40 p-4`}>
+                  <div className={`${surfaceCard} border-rose-100 bg-rose-50/40 ${dashboardCardPadding}`}>
                     <div className="flex items-center gap-2 text-rose-950">
                       <AlertTriangle className="h-5 w-5 shrink-0 text-rose-600" strokeWidth={2} aria-hidden />
                       <span className="text-sm font-bold">Opóźnione zamówienia</span>
                     </div>
-                    <p className="mt-3 text-3xl font-black tabular-nums text-slate-900">{wms.orders_delayed ?? 0}</p>
+                    <p className="mt-2 text-2xl font-black tabular-nums text-slate-900">{wms.orders_delayed ?? 0}</p>
                     <p className="mt-1 text-xs text-rose-900/85">
                       Ponad 48 h od daty zamówienia bez statusu panelu DONE
                     </p>
@@ -533,7 +543,7 @@ export default function Dashboard() {
                     </Link>
                   </div>
 
-                  <div className={`${surfaceCard} p-4`}>
+                  <div className={`${surfaceCard} ${dashboardCardPadding}`}>
                     <div className="flex items-center gap-2 text-slate-800">
                       <Radio className="h-5 w-5 shrink-0 text-slate-400" strokeWidth={2} aria-hidden />
                       <span className="text-sm font-bold">Integracje</span>
@@ -571,8 +581,8 @@ export default function Dashboard() {
                 )}
               </section>
 
-              <section className="mt-12">
-                <div className="mb-4 flex items-end justify-between gap-3">
+              <section className="mt-8">
+                <div className="mb-3 flex items-end justify-between gap-3">
                   <div>
                     <h2 className="text-sm font-bold uppercase tracking-wide text-slate-600">Najczęściej zbierane</h2>
                     <p className="text-xs text-slate-500">14 dni · kliknięcie otwiera edycję produktu</p>
@@ -607,8 +617,8 @@ export default function Dashboard() {
                               {Number.isInteger(p.pick_qty) ? p.pick_qty : p.pick_qty.toFixed(1)} szt.
                             </span>
                           </div>
-                          <div className="border-t border-slate-100 px-4 py-3.5">
-                            <p className="line-clamp-2 min-h-[2.75rem] text-[13px] font-semibold leading-snug text-slate-900">
+                          <div className="border-t border-slate-100 px-3 py-2.5">
+                            <p className="line-clamp-2 text-[13px] font-semibold leading-snug text-slate-900">
                               {p.name}
                             </p>
                             <p className="mt-2 text-[10px] font-medium uppercase tracking-wide text-slate-400">

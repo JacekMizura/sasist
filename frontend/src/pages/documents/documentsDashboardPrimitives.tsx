@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { dashboardCardPadding } from "../../components/dashboard/dashboardDensityPrimitives";
 
 /** KPI strip — same rhythm as {@link ../CartsComponents/ui/SummaryDashboard}. */
 export function DocumentsKpiRow({
@@ -13,12 +14,12 @@ export function DocumentsKpiRow({
     amber: "text-amber-600",
   };
   return (
-    <div className="border-b border-slate-100 bg-slate-50/50 p-4">
-      <div className="grid grid-cols-2 gap-x-6 gap-y-3 md:grid-cols-4">
+    <div className={`border-b border-slate-100 bg-slate-50/50 ${dashboardCardPadding}`}>
+      <div className={`grid grid-cols-2 gap-x-4 gap-y-2 md:grid-cols-4`}>
         {items.map((it) => (
-          <div key={it.label} className="flex flex-col gap-1">
+          <div key={it.label} className="flex flex-col gap-0.5">
             <div className="text-xs font-medium text-slate-500">{it.label}</div>
-            <div className={`text-2xl font-semibold tabular-nums tracking-tight ${toneValue[it.tone ?? "slate"]}`}>
+            <div className={`text-xl font-semibold tabular-nums tracking-tight ${toneValue[it.tone ?? "slate"]}`}>
               {it.value}
             </div>
           </div>

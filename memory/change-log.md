@@ -1,5 +1,14 @@
 # Change log
 
+## 2026-06-08 — Sidebar ERP + dashboardy: gęstość informacji (design tokens)
+
+- `erpDensityTokens.ts` — globalne tokeny: `sidebarItemHeight`, `sidebarItemGap`, `dashboardCardPadding`, `dashboardSectionGap`, `kpiCardHeight` + klasy Tailwind.
+- `dashboardDensityPrimitives.ts` — wspólne klasy kart/sekcji dashboardów.
+- Lewy sidebar (`ErpShellLayout`, `NavFlyoutPanel`): wiersze 36px, `px-3 py-1.5`, ikony 17px, ciaśniejszy fly-out.
+- WMS w menu jako normalna kategoria (między Etykietami a Dokumentami) — bez separatora na dole; routing `/wms/menu` bez zmian.
+- Dashboardy: główny (`Dashboard.tsx`), zakupy (`PurchasingKpi*`, `PlanningDashboard` shell), analityka, WMS supervisor, flota wózków, magazyn, dokumenty KPI — mniejsze paddingi i odstępy.
+- Backend / routing / logika / uprawnienia bez zmian.
+
 ## 2026-06-08 — Listy floty (wózki, nośniki, regały): kompaktowe wiersze 68px
 
 - Wspólny moduł `modules/fleetResource/` — wiersz 68px, pasek zapełnienia 6px, akcje 32×32 poziomo, drawer szczegółów.

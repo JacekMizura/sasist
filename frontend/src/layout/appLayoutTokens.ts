@@ -1,3 +1,5 @@
+import { erpDensityClasses } from "./erpDensityTokens";
+
 /**
  * Global app layout tokens — single source for shell, page gutters, and panels.
  */
@@ -6,7 +8,7 @@ export const appLayoutTokens = {
   appBackground: "bg-slate-50",
   appPanelBackground: "bg-white",
   appBorder: "border-slate-200",
-  appPagePadding: "p-6",
+  appPagePadding: erpDensityClasses.dashboardPagePadding,
   appSidebarWidth: "w-56",
   appRightPanelWidth: "w-[400px]",
   appRightPanelMaxWidth: "max-w-[420px]",

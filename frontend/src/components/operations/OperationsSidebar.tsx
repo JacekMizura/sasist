@@ -14,13 +14,13 @@ export function OperationsSidebar({ replenishmentCount, alertCount }: Props) {
     { to: "/wms/direct-sales", label: "Sprzedaż stacjonarna", badge: null },
   ];
   return (
-    <aside className="w-full shrink-0 space-y-1 md:w-44">
-      <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Operacje</div>
+    <aside className="w-full shrink-0 space-y-0.5 md:w-44">
+      <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Operacje</div>
       {items.map((it) => (
         <Link
           key={it.to}
           to={it.to}
-          className="flex items-center justify-between rounded-md border border-transparent px-2 py-1.5 text-sm text-slate-700 hover:border-slate-200 hover:bg-slate-50"
+          className="flex h-9 min-h-9 items-center justify-between rounded-md border border-transparent px-2.5 py-1.5 text-[13px] text-slate-700 hover:border-slate-200 hover:bg-slate-50"
         >
           <span>{it.label}</span>
           {it.badge != null && it.badge > 0 ? (

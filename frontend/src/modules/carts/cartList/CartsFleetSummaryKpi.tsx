@@ -16,7 +16,7 @@ export function CartsFleetSummaryKpi({ summary }: Props) {
     globalFillPercent >= 96 ? "bg-red-500" : globalFillPercent >= 81 ? "bg-amber-500" : "bg-emerald-600";
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <PurchasingKpiGrid columns={4}>
         <PurchasingKpiCard title={t.totalUnits} value={summary.totalUnits} tone="indigo" icon={<Layers aria-hidden />} />
         <PurchasingKpiCard title={t.inUse} value={summary.inUse} tone="amber" icon={<Package aria-hidden />} />
@@ -34,7 +34,7 @@ export function CartsFleetSummaryKpi({ summary }: Props) {
         />
       </PurchasingKpiGrid>
 
-      <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+      <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="text-sm font-medium text-slate-600">{t.simulation_global_fill}</span>
           <span className="text-sm font-semibold tabular-nums text-slate-900">{globalFillPercent}%</span>

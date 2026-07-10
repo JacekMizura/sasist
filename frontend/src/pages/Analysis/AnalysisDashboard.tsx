@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react";
 import { getTenantInventoryValue } from "../../api/analysisApi";
 import { getSystemHealth } from "../../api/systemApi";
+import {
+  dashboardCardPadding,
+  dashboardKpiGridGap,
+  dashboardSurfaceCard,
+} from "../../components/dashboard/dashboardDensityPrimitives";
 
 const DEFAULT_TENANT_ID = 1;
 
@@ -54,27 +59,27 @@ export default function AnalysisDashboard() {
 
   return (
     <div className="min-w-0">
-      <p className="text-slate-600 mb-6">Przegląd wskaźników analitycznych (tenant {DEFAULT_TENANT_ID}).</p>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+      <p className="text-slate-600 mb-4">Przegląd wskaźników analitycznych (tenant {DEFAULT_TENANT_ID}).</p>
+      <div className={`grid ${dashboardKpiGridGap} sm:grid-cols-2 lg:grid-cols-3`}>
+        <div className={`${dashboardSurfaceCard} ${dashboardCardPadding}`}>
           <p className="text-xs font-medium uppercase text-slate-400">Wartość magazynowa (tenant)</p>
-          <p className="mt-1 text-2xl font-bold text-slate-800">
+          <p className="mt-1 text-xl font-bold text-slate-800">
             {inventoryValue != null ? `${inventoryValue.toFixed(2)} zł` : "—"}
           </p>
         </div>
-        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <div className={`${dashboardSurfaceCard} ${dashboardCardPadding}`}>
           <p className="text-xs font-medium uppercase text-slate-400">Backend</p>
-          <p className="mt-1 text-lg font-semibold text-slate-800">
+          <p className="mt-1 text-base font-semibold text-slate-800">
             {healthStatus === "ok" ? "Działa" : "—"}
           </p>
         </div>
       </div>
       {warehousesBreakdown.length > 0 && (
-        <div className="mt-6">
+        <div className="mt-4">
           <h3 className="text-sm font-semibold text-slate-700 mb-2">Wartość per magazyn</h3>
-          <ul className="rounded-lg border border-slate-200 bg-white divide-y divide-slate-100">
+          <ul className={`${dashboardSurfaceCard} divide-y divide-slate-100`}>
             {warehousesBreakdown.map((w) => (
-              <li key={w.warehouse_id} className="px-4 py-2 flex justify-between text-sm">
+              <li key={w.warehouse_id} className="px-3 py-1.5 flex justify-between text-sm">
                 <span>Magazyn {w.warehouse_id}</span>
                 <span className="font-medium">{w.value.toFixed(2)} zł</span>
               </li>

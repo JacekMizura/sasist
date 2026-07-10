@@ -47,10 +47,10 @@ export function MagazynDashboardPanel({
 
   return (
     <div
-      className="shrink-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+      className="shrink-0 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm"
       onClick={() => onClearTemplateSelection?.()}
     >
-      <h2 className="text-xs font-black uppercase text-slate-500 mb-3">Pulpit magazynu</h2>
+      <h2 className="text-xs font-black uppercase text-slate-500 mb-2">Pulpit magazynu</h2>
       {onOpenReports && (
         <button
           type="button"

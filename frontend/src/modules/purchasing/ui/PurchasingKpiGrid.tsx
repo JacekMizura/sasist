@@ -1,4 +1,5 @@
 import { memo, type ReactNode } from "react";
+import { dashboardKpiGridGap } from "../../../components/dashboard/dashboardDensityPrimitives";
 
 type Props = {
   children: ReactNode;
@@ -16,7 +17,7 @@ const COL_CLASS: Record<NonNullable<Props["columns"]>, string> = {
 
 function PurchasingKpiGridInner({ children, columns = 4, className = "" }: Props) {
   return (
-    <div className={`grid grid-cols-1 gap-4 ${COL_CLASS[columns]} ${className}`.trim()}>{children}</div>
+    <div className={`grid grid-cols-1 ${dashboardKpiGridGap} ${COL_CLASS[columns]} ${className}`.trim()}>{children}</div>
   );
 }
 
