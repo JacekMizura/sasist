@@ -10,6 +10,14 @@ import { AppRightPanel, AppSplitView } from "../layout/app";
 import { UI_STRINGS } from "../../constants/uiStrings";
 import type { WarehouseProduct } from "../../types/warehouse";
 
+/** Return keyboard focus to the layout canvas after closing a side panel. */
+export function focusWarehouseCanvasScroll() {
+  requestAnimationFrame(() => {
+    const el = document.querySelector<HTMLElement>("[data-warehouse-canvas-scroll]");
+    el?.focus({ preventScroll: true });
+  });
+}
+
 export type WarehouseMainViewProps = WarehouseCanvasProps & {
   setSelectedVisualId: React.Dispatch<React.SetStateAction<string | null>>;
   setSelectedVisualIds: React.Dispatch<React.SetStateAction<string[]>>;
@@ -430,7 +438,8 @@ export function WarehouseMainView(props: WarehouseMainViewProps) {
       <div className="m-0 flex min-h-0 min-w-0 max-w-full flex-1 basis-0 flex-col overflow-hidden p-0">
         <div
           data-warehouse-canvas-scroll
-          className="flex min-h-0 min-w-0 max-w-full w-full flex-1 flex-col overflow-auto"
+          tabIndex={-1}
+          className="flex min-h-0 min-w-0 max-w-full w-full flex-1 flex-col overflow-auto outline-none"
         >
           <WarehouseCanvas {...canvasProps} />
         </div>

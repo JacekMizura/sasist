@@ -93,6 +93,7 @@ import { generateTopVolumeReportPDF } from "../pdf/generateTopVolumeReportPDF";
 import { useDesignerKeyboard } from "./WarehouseDesigner/DesignerKeyboard";
 import { DesignerToolbar } from "./WarehouseDesigner/DesignerToolbar";
 import { DesignerGrid } from "./WarehouseDesigner/DesignerGrid";
+import { focusWarehouseCanvasScroll } from "../components/warehouse/WarehouseMainView";
 import { useDesignerMouseHandlers } from "./WarehouseDesigner/useDesignerMouseHandlers";
 import { useDesignerRowOperations } from "./WarehouseDesigner/useDesignerRowOperations";
 import { useDesignerRackPlacement } from "./WarehouseDesigner/useDesignerRackPlacement";
@@ -3156,6 +3157,7 @@ export default function WarehouseDesigner() {
     setEditingRackId(null);
     setSelectedRackId(null);
     setSelectedRackIds([]);
+    focusWarehouseCanvasScroll();
   }, []);
 
   useEffect(() => {
@@ -4279,6 +4281,7 @@ export default function WarehouseDesigner() {
               onCloseElevation: () => {
                 setShowElevationForRackId(null);
                 setSelectedBinForFilter(null);
+                focusWarehouseCanvasScroll();
               },
               onAddProduct: () => setEditingProductId("new"),
               onEditProduct: setEditingProductId,

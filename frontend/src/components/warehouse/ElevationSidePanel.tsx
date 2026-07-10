@@ -3,7 +3,6 @@ import type { LayoutState, WarehouseProduct } from "../../types/warehouse";
 import { ElevationPanel } from "./ElevationPanel";
 import { getRackDisplayId } from "./warehouseUtils";
 import { AppRightPanel } from "../layout/app";
-import { appLayoutTokens } from "../../layout/appLayoutTokens";
 
 export type ElevationSidePanelProps = {
   layout: LayoutState;
@@ -52,7 +51,7 @@ export function ElevationSidePanel({
   );
 }
 
-/** Compact visual-element editor shell matching app right panel tokens. */
+/** Visual-element editor — same width tokens as rack properties panel. */
 export function VisualElementPanelShell({
   children,
   className,
@@ -61,19 +60,15 @@ export function VisualElementPanelShell({
   className?: string;
 }) {
   return (
-    <aside
-      className={[
-        "flex h-full min-h-0 w-[320px] max-w-[420px] shrink-0 flex-col self-stretch overflow-y-auto overscroll-y-contain border-l",
-        appLayoutTokens.appBorder,
-        appLayoutTokens.appPanelBackground,
-        "p-4",
-        className ?? "",
-      ]
-        .filter(Boolean)
-        .join(" ")}
-      style={{ overscrollBehavior: "contain" }}
-    >
-      {children}
-    </aside>
+    <AppRightPanel open bare aria-label="Element wizualny">
+      <div
+        className={["min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-4", className ?? ""]
+          .filter(Boolean)
+          .join(" ")}
+        style={{ overscrollBehavior: "contain" }}
+      >
+        {children}
+      </div>
+    </AppRightPanel>
   );
 }
