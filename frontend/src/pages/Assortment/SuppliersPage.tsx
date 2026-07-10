@@ -73,6 +73,7 @@ export default function SuppliersPage() {
   const [exportOpen, setExportOpen] = useState(false);
   const [columnPickerOpen, setColumnPickerOpen] = useState(false);
   const [newOrderBusyId, setNewOrderBusyId] = useState<number | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState<number | null>(null);
   const [selected, setSelected] = useState<Set<number>>(() => new Set());
   const headerSelectAllRef = useRef<HTMLInputElement>(null);
   const { columnOrder, persistColumnOrder } = useListColumnLayout(
