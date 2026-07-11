@@ -5,6 +5,12 @@ import { TabsNav } from "../../components/layout/TabsNav";
 import { DOCUMENTS_TAB_ITEMS } from "./documentsTabConfig";
 import { buildDocumentsSidebarFromCatalog } from "./buildDocumentsNavFromCatalog";
 import {
+  DocumentContent,
+  DocumentLayout,
+  DocumentMobileNav,
+  DocumentSidebar,
+} from "./DocumentLayout";
+import {
   OperationalDocumentSeriesProvider,
   useOperationalDocumentSeries,
 } from "./OperationalDocumentSeriesContext";
@@ -24,10 +30,6 @@ function sideLinkCls(active: boolean) {
   ].join(" ");
 }
 
-/**
- * Dokumenty — layout modułu: sidebar wyznacza szerokość treści (flex row, bez fixed overlay).
- * Jedno przewijanie — w kolumnie treści; bez sticky sidebar nachodzącego na listę.
- */
 function DocumentsLayoutInner() {
   const { pathname } = useLocation();
   const { catalog } = useOperationalDocumentSeries();
@@ -63,46 +65,43 @@ function DocumentsLayoutInner() {
     if (ctx) rememberDocumentsSeriesListContext(ctx);
   }, [pathname]);
 
-  return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col p-4 md:p-6">
-        <div className="grid min-h-0 min-w-0 flex-1 grid-rows-[1fr_auto] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm sm:grid-rows-1 sm:grid-cols-[200px_minmax(0,1fr)]">
-          <aside
-            className="relative z-10 hidden min-h-0 min-w-0 overflow-y-auto border-r border-slate-200/90 bg-slate-50/40 sm:block"
-            aria-label="Dokumenty — nawigacja"
-          >
-            <div className="p-1.5">
-              <nav className="flex flex-col gap-2">
-                {sidebarSections.map((section, si) => (
-                  <div key={`${section.title ?? "sec"}-${si}`}>
-                    {section.title ? (
-                      <div className="mb-1 px-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                        {section.title}
-                      </div>
-                    ) : null}
-                    <ul className="flex flex-col gap-0.5">
-                      {section.items.map((item) => {
-                        const active = isNavPathActive(pathname, item.path);
-                        return (
-                          <li key={item.path}>
-                            <NavLink
-                              to={item.path}
-                              className={() => sideLinkCls(active)}
-                              aria-current={active ? "page" : undefined}
-                            >
-                              <span className="min-w-0 truncate">{item.label}</span>
-                            </NavLink>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </div>
-                ))}
-              </nav>
+  const sidebarNav = (
+    <nav className="flex flex-col gap-2 p-1.5">
+      {sidebarSections.map((section, si) => (
+        <div key={`${section.title ?? "sec"}-${si}`}>
+          {section.title ? (
+            <div className="mb-1 px-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              {section.title}
             </div>
-          </aside>
+          ) : null}
+          <ul className="flex flex-col gap-0.5">
+            {section.items.map((item) => {
+              const active = isNavPathActive(pathname, item.path);
+              return (
+                <li key={item.path}>
+                  <NavLink
+                    to={item.path}
+                    className={() => sideLinkCls(active)}
+                    aria-current={active ? "page" : undefined}
+                  >
+                    <span className="min-w-0 truncate">{item.label}</span>
+                  </NavLink>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ))}
+    </nav>
+  );
 
-          <div className="relative z-0 flex min-h-0 min-w-0 flex-col">
+  return (
+    <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
+      <div className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col p-4 md:p-6">
+        <DocumentLayout>
+          <DocumentSidebar aria-label="Dokumenty — nawigacja">{sidebarNav}</DocumentSidebar>
+
+          <DocumentContent>
             <div className="shrink-0 border-b border-slate-200 bg-white px-5 pt-4">
               <div className="flex w-full flex-wrap items-end gap-x-6 gap-y-2">
                 <TabsNav
@@ -126,15 +125,12 @@ function DocumentsLayoutInner() {
                 ) : null}
               </div>
             </div>
-            <main className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto bg-white p-4">
+            <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden bg-white p-4">
               <Outlet />
             </main>
-          </div>
+          </DocumentContent>
 
-          <nav
-            className="col-span-full shrink-0 border-t border-slate-200 bg-white px-3 py-2.5 sm:hidden"
-            aria-label="Dokumenty — skróty"
-          >
+          <DocumentMobileNav aria-label="Dokumenty — skróty">
             <ul className="flex flex-wrap gap-1.5">
               {sidebarSections.flatMap((s) => s.items).map((item) => {
                 const active = isNavPathActive(pathname, item.path);
@@ -152,8 +148,8 @@ function DocumentsLayoutInner() {
                 );
               })}
             </ul>
-          </nav>
-        </div>
+          </DocumentMobileNav>
+        </DocumentLayout>
       </div>
     </div>
   );

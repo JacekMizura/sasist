@@ -73,7 +73,7 @@ export function WarehouseZPzDocumentPage({ documentId }: Props) {
     (loading ? "Wczytywanie…" : `Z-PZ #${documentId}`);
 
   return (
-    <div className="flex min-h-[calc(100dvh-11rem)] flex-col">
+    <div className="flex h-full min-h-0 flex-col">
       <div className="mb-2 shrink-0">
         <h2 className="text-base font-semibold tracking-tight text-slate-900">{title}</h2>
       </div>

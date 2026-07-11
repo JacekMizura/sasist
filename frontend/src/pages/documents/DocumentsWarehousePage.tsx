@@ -1,5 +1,6 @@
 import { log } from "../../utils/logger";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useWarehouse } from "../../context/WarehouseContext";
@@ -848,13 +849,14 @@ export default function DocumentsWarehousePage() {
         )}
       </DocumentsSectionShell>
 
-      {(detailOpen || detailLoading || (detailErr != null && detailId != null)) ? (
+      {(detailOpen || detailLoading || (detailErr != null && detailId != null))
+        ? createPortal(
         <div
           className="fixed inset-0 z-[270] flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-[2px]"
           onClick={() => !detailBusy && closeDetail()}
         >
           <div
-            className="flex h-[min(92vh,calc(100dvh-2rem))] w-full min-w-0 flex-col overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-2xl"
+            className="flex h-[min(92vh,calc(100dvh-2rem))] w-full max-w-[min(100%,96rem)] min-w-0 flex-col overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             {detailLoading ? (
@@ -903,7 +905,7 @@ export default function DocumentsWarehousePage() {
               <div className="shrink-0 border-b border-red-200 bg-red-50 px-3 py-1.5 text-sm text-red-800">{detailErr}</div>
             ) : null}
 
-            <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
               {detailLoading ? (
                 <div className="flex flex-1 items-center justify-center text-sm text-slate-500">Wczytywanie…</div>
               ) : detail ? (
@@ -968,8 +970,10 @@ export default function DocumentsWarehousePage() {
             />
             </div>
           </div>
-        </div>
-      ) : null}
+        </div>,
+        document.body,
+      )
+        : null}
 
       <CarrierAssignProductsModal
         tenantId={resolvedTenantId}
