@@ -5,6 +5,7 @@ import toast from "react-hot-toast";
 import { error as logError, log } from "../../utils/logger";
 import { extractApiErrorMessage } from "../../api/authApi";
 import api from "../../api/axios";
+import { fetchTenantsList } from "../../api/tenantsApi";
 import { duplicateProduct } from "../../api/productsApi";
 import { getManufacturer } from "../../api/manufacturersApi";
 import { mapProductListRow, type ProductListRow } from "./productListMapper";
@@ -361,7 +362,7 @@ export default function ProductList() {
   );
 
   useEffect(() => {
-    api.get<Tenant[]>("/tenants/").then((res) => setTenants(Array.isArray(res.data) ? res.data : [])).catch(() => setTenants([]));
+    void fetchTenantsList().then(setTenants).catch(() => setTenants([]));
   }, []);
 
   const fetchServerPage = useCallback(() => {
@@ -512,7 +513,7 @@ export default function ProductList() {
     setPage(1);
   };
 
-  const toggleSelect = (id: number) => {
+  const toggleSelect = useCallback((id: number) => {
     if (productBulkMode === "filtered_all") {
       setProductBulkMode("explicit");
       setSelectedIds(new Set([id]));
@@ -525,7 +526,7 @@ export default function ProductList() {
       else next.add(id);
       return next;
     });
-  };
+  }, [productBulkMode]);
 
   const selectAllProductsOnPage = () => {
     setProductBulkMode("explicit");
@@ -669,7 +670,7 @@ export default function ProductList() {
     }
   };
 
-  const duplicateOneProduct = async (p: Product) => {
+  const duplicateOneProduct = useCallback(async (p: Product) => {
     const tid = tenantFilter ?? p.tenant_id ?? null;
     if (tid == null) {
       toast.error("Ustal filtr „Tenant”, aby skopiować produkt.");
@@ -678,7 +679,6 @@ export default function ProductList() {
     setRowDupBusyId(p.id);
     try {
       const created = await duplicateProduct(p.id, tid);
-      console.log("duplicate response", created);
       const newId = Number(created?.id);
       if (!Number.isFinite(newId) || newId < 1) {
         toast.error("Kopia mogła powstać, ale API nie zwróciło poprawnego ID produktu.");
@@ -698,9 +698,9 @@ export default function ProductList() {
     } finally {
       setRowDupBusyId(null);
     }
-  };
+  }, [tenantFilter, clientMode, fetchClientBatch, fetchServerPage, navigate]);
 
-  const deleteOneProduct = async (p: Product) => {
+  const deleteOneProduct = useCallback(async (p: Product) => {
     const tid = tenantFilter ?? p.tenant_id ?? null;
     if (tid == null) {
       window.alert("Ustal filtr „Tenant”, aby usunąć produkt.");
@@ -727,7 +727,7 @@ export default function ProductList() {
     } finally {
       setRowDeleteBusyId(null);
     }
-  };
+  }, [tenantFilter, clientMode, fetchClientBatch, fetchServerPage, clearProductSelection]);
 
   const totalPages = Math.max(1, Math.ceil(totalCount / rowsPerPage));
   const startRow = totalCount === 0 ? 0 : (page - 1) * rowsPerPage + 1;
@@ -765,14 +765,14 @@ export default function ProductList() {
       productBulkMode !== "filtered_all" && selectionOnPage.some && !selectionOnPage.all;
   }, [productBulkMode, selectionOnPage]);
 
-  const toggleAllPage = () => {
+  const toggleAllPage = useCallback(() => {
     if (productBulkMode === "filtered_all") {
       clearProductSelection();
       return;
     }
     if (selectionOnPage.all) deselectAllOnPage();
     else selectAllProductsOnPage();
-  };
+  }, [productBulkMode, selectionOnPage.all, clearProductSelection, deselectAllOnPage, selectAllProductsOnPage]);
 
   const headerChecked = productBulkMode === "filtered_all" || selectionOnPage.all;
   const headerIndeterminate =
@@ -992,8 +992,8 @@ export default function ProductList() {
               onToggleOne={toggleSelect}
               onToggleAllPage={toggleAllPage}
               onRowOpen={openProductEdit}
-              onDuplicate={(p) => void duplicateOneProduct(p)}
-              onDelete={(p) => void deleteOneProduct(p)}
+              onDuplicate={duplicateOneProduct}
+              onDelete={deleteOneProduct}
               onOpenLocationOnMap={openProductLocationOnMap}
               rowDupBusyId={rowDupBusyId}
               rowDeleteBusyId={rowDeleteBusyId}

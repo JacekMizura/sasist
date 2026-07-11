@@ -20,6 +20,7 @@ import { getBackendPublicOrigin } from "../config/apiBase";
 import { DAMAGE_TENANT_ID } from "./damage/damageShared";
 import { ORDERS_OPERATIONS_UPDATED_EVENT, WMS_ROUTES, WMS_SHORTAGES_UPDATED_EVENT } from "./wms/wmsRoutes";
 import DashboardWarehouseNetworkSection from "../components/dashboard/DashboardWarehouseNetworkSection";
+import { DashboardLiveClock } from "../components/dashboard/DashboardLiveClock";
 import {
   dashboardCardPadding,
   dashboardCardPaddingMd,
@@ -88,26 +89,6 @@ function healthLabel(h: WmsDashboardSummary["operational_health"]): { text: stri
     default:
       return { text: "Rytm nominalny", className: "border-emerald-200 bg-emerald-50 text-emerald-900" };
   }
-}
-
-function LiveClock() {
-  const [now, setNow] = useState(() => new Date());
-  useEffect(() => {
-    const t = window.setInterval(() => setNow(new Date()), 1000);
-    return () => window.clearInterval(t);
-  }, []);
-  return (
-    <time className="tabular-nums text-slate-800" dateTime={now.toISOString()}>
-      {new Intl.DateTimeFormat("pl-PL", {
-        weekday: "short",
-        day: "numeric",
-        month: "short",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-      }).format(now)}
-    </time>
-  );
 }
 
 /** Jasne karty — spójne z resztą panelu (Sellasist / ERP). */
@@ -272,7 +253,7 @@ export default function Dashboard() {
                   <div className="grid gap-3 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-center lg:justify-end lg:gap-x-6 lg:gap-y-2">
                     <div className="flex items-center gap-2 text-sm text-slate-700">
                       <Clock3 className="h-4 w-4 shrink-0 text-slate-400" strokeWidth={2} aria-hidden />
-                      <LiveClock />
+                      <DashboardLiveClock />
                     </div>
                     <div className="flex items-center gap-2 text-sm text-slate-700">
                       <Radio className="h-4 w-4 shrink-0 text-slate-400" strokeWidth={2} aria-hidden />

@@ -4,7 +4,7 @@ import { ChevronDown, Download, TableProperties } from "lucide-react";
 
 import { ListPageHeader } from "../../components/listPage/ListPageHeader";
 import { UI_STRINGS } from "../../constants/uiStrings";
-import api from "../../api/axios";
+import { fetchTenantsList } from "../../api/tenantsApi";
 import { deleteManufacturer, listManufacturers, type ManufacturerRead } from "../../api/manufacturersApi";
 import ExportModal from "../../components/exports/ExportModal";
 import PageLayout from "../../components/layout/PageLayout";
@@ -84,10 +84,8 @@ export default function ManufacturersPage() {
   const activeFilterCount = useMemo(() => countActiveManufacturerFilters(appliedFilters), [appliedFilters]);
 
   useEffect(() => {
-    api
-      .get<Tenant[]>("/tenants/")
-      .then((res) => {
-        const list = Array.isArray(res.data) ? res.data : [];
+    void fetchTenantsList()
+      .then((list) => {
         setTenants(list);
         if (list.length > 0 && !list.some((t) => t.id === tenantId)) {
           setTenantId(list[0].id);

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, useMemo } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Clock, MapPin, Package, User, ScanLine } from "lucide-react";
-import api from "../../api/axios";
+import { fetchTenantsList } from "../../api/tenantsApi";
 import { useWmsScanner } from "../../context/WmsScannerContext";
 import { useWmsPageScanHandler } from "../../components/wms/execution/useWmsPageScanHandler";
 import { useScanFeedback } from "../../components/wms/execution/useScanFeedback";
@@ -186,10 +186,8 @@ export default function WmsPutawayPage() {
   const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
-    api
-      .get<Tenant[]>("/tenants/")
-      .then((res) => {
-        const list = Array.isArray(res.data) ? res.data : [];
+    void fetchTenantsList()
+      .then((list) => {
         const savedRaw = localStorage.getItem(TENANT_STORAGE_KEY);
         const saved = savedRaw != null ? Number(savedRaw) : NaN;
         const pick = list.find((t) => t.id === saved)?.id ?? list[0]?.id ?? 1;

@@ -1,4 +1,5 @@
 import api from "../api/axios";
+import { fetchTenantsList, invalidateTenantsCache } from "../api/tenantsApi";
 
 export type Warehouse = {
   id: number;
@@ -82,10 +83,13 @@ export const warehouseService = {
   },
 
   listTenants() {
-    return api.get<TenantDto[]>("/tenants/");
+    return fetchTenantsList().then((data) => ({ data }));
   },
 
   createTenant(name: string) {
-    return api.post<TenantDto>("/tenants/", { name });
+    return api.post<TenantDto>("/tenants/", { name }).then((res) => {
+      invalidateTenantsCache();
+      return res;
+    });
   },
 };

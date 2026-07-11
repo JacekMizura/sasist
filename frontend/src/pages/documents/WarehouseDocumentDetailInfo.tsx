@@ -1,7 +1,6 @@
 import { Link } from "react-router-dom";
 import type { StockDocumentRead } from "../../api/stockDocumentsApi";
-import { documentCreatedByLabel } from "../../utils/documentCreatedBy";
-import { DocumentTypeBadge, ExternalStatusBadge } from "./documentsBadges";
+import { ExternalStatusBadge } from "./documentsBadges";
 import type { WarehouseDocumentListConfig } from "./warehouseDocumentConfigs";
 import type { WarehouseDocType } from "./warehouseDocumentConfigs";
 import {
@@ -16,18 +15,14 @@ import {
 import type { BusinessDocStatus } from "./warehouseDocumentsUi";
 import { normalizeWarehouseDocType } from "./warehouseDocumentsUi";
 import {
-  WarehouseDocCompactRow,
-  WarehouseDocFinancialCompactBar,
   warehouseDocFinancialInputClass,
   WarehouseDocFinancialItem,
-  WarehouseDocFinancialSeparator,
-  warehouseDocInfoCardClass,
 } from "./warehouseDocumentDetailUi";
 
-function formatDt(iso: string | null | undefined) {
+function formatDateShort(iso: string | null | undefined) {
   if (!iso) return "—";
   try {
-    return new Date(iso).toLocaleString("pl-PL", { dateStyle: "short", timeStyle: "short" });
+    return new Date(iso).toLocaleDateString("pl-PL", { dateStyle: "short" });
   } catch {
     return iso;
   }
@@ -52,24 +47,7 @@ type Props = {
   listValueNetFormatted?: string;
 };
 
-function statusHintText(isDraft: boolean, isPzDetail: boolean, editMode: string): string | null {
-  if (isDraft && isPzDetail && editMode === "full") {
-    return "Szkic — edycja ilości i pól finansowych. Po zatwierdzeniu aktualizują się stany magazynowe.";
-  }
-  if (isDraft && isPzDetail && editMode === "metadata") {
-    return "W trakcie — edycja tylko pól finansowych (bez wpływu na operacje magazynowe).";
-  }
-  if (isDraft && !isPzDetail) {
-    return "Podgląd szkicu — pełna obsługa operacyjna dla innych typów w kolejnych wersjach.";
-  }
-  if (isDraft) return null;
-  return "Dokument zaksięgowany lub anulowany — podgląd tylko do odczytu.";
-}
-
-function kontrahentValue(
-  detailDocType: WarehouseDocType,
-  detail: StockDocumentRead,
-): React.ReactNode {
+function kontrahentValue(detailDocType: WarehouseDocType, detail: StockDocumentRead): React.ReactNode {
   if (shouldShowSupplierCard(detailDocType, detail)) {
     const name = (detail.supplier_name || "").trim();
     return name || (detail.supplier_id != null ? `#${detail.supplier_id}` : "—");
@@ -78,50 +56,6 @@ function kontrahentValue(
     return (detail.customer_name || "").trim() || "—";
   }
   return "—";
-}
-
-function dostawaValue(detail: StockDocumentRead): React.ReactNode {
-  if (detail.linked_sale_document) {
-    return (
-      <Link
-        to={detail.linked_sale_document.detail_path}
-        className="font-semibold text-slate-900 underline decoration-slate-300 underline-offset-2 hover:text-slate-700"
-      >
-        {detail.linked_sale_document.document_number || detail.linked_sale_document.id}
-      </Link>
-    );
-  }
-  if (detail.delivery_id != null) {
-    return (
-      <Link
-        to={`/goods-orders/${detail.delivery_id}`}
-        className="font-semibold text-slate-900 underline decoration-slate-300 underline-offset-2 hover:text-slate-700"
-      >
-        #{detail.delivery_id}
-      </Link>
-    );
-  }
-  if (detail.order_id != null) {
-    return (
-      <Link
-        to={`/orders/${detail.order_id}`}
-        className="font-semibold text-slate-900 underline decoration-slate-300 underline-offset-2 hover:text-slate-700"
-      >
-        Zam. #{(detail.order_number || "").trim() || detail.order_id}
-      </Link>
-    );
-  }
-  if (detail.production_order_id != null) {
-    return (
-      <Link
-        to={detail.production_order_path ?? "/production"}
-        className="font-semibold text-slate-900 underline decoration-slate-300 underline-offset-2 hover:text-slate-700"
-      >
-        {(detail.production_order_number || "").trim() || `MO #${detail.production_order_id}`}
-      </Link>
-    );
-  }
-  return documentSourceLabelDetail(detail);
 }
 
 function magazynValue(detailDocType: WarehouseDocType, detail: StockDocumentRead): React.ReactNode {
@@ -143,14 +77,20 @@ function lokalizacjaValue(detailDocType: WarehouseDocType, detail: StockDocument
   return (detail.location_name || "").trim() || `#${detail.location_id}`;
 }
 
+function HeaderMetaCell({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="min-w-0 truncate text-[12px] leading-tight">
+      <span className="text-slate-500">{label} </span>
+      <span className="font-medium text-slate-900">{value}</span>
+    </div>
+  );
+}
+
 export function WarehouseDocumentDetailInfo({
   detail,
   detailDocType,
   detailBizStatus,
   detailListConfig,
-  isDraft,
-  isPzDetail,
-  editMode,
   canEditMetadata,
   metaCurrency,
   metaNet,
@@ -162,119 +102,101 @@ export function WarehouseDocumentDetailInfo({
   listValueNetFormatted,
 }: Props) {
   const docTypeLabel = normalizeWarehouseDocType(detail.document_type);
-  const docNumber =
-    `${docTypeLabel} ${(detail.document_number || "").trim() || detail.id}`.trim();
-  const hint = statusHintText(isDraft, isPzDetail, editMode);
+  const docNumber = `${docTypeLabel} ${(detail.document_number || "").trim() || detail.id}`.trim();
   const showFinancial = detailListConfig.financialDetail !== "none";
+  const warehouseLabel = detailDocType === "MM" ? "Z magazynu" : "Magazyn";
+  const locationLabel = detailDocType === "MM" ? "Do magazynu" : "Lokalizacja";
+  const kontrahentLabel =
+    shouldShowSupplierCard(detailDocType, detail) || shouldShowCustomerCard(detailDocType)
+      ? "Kontrahent"
+      : "Źródło";
+
+  const kontrahent =
+    shouldShowSupplierCard(detailDocType, detail) || shouldShowCustomerCard(detailDocType)
+      ? kontrahentValue(detailDocType, detail)
+      : documentSourceLabelDetail(detail);
 
   return (
-    <header className="shrink-0 border-b border-slate-200 bg-white px-4 py-3">
+    <header className="max-h-[140px] shrink-0 overflow-hidden border-b border-slate-200 bg-white px-3 py-2">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-            Dokument magazynowy · {docTypeLabel}
-          </p>
-          <h2 className="truncate text-xl font-semibold tracking-tight text-slate-900">{docNumber}</h2>
-          {hint ? <p className="mt-0.5 line-clamp-2 text-xs leading-snug text-slate-500">{hint}</p> : null}
-        </div>
-      </div>
-
-      <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
-        <div className={warehouseDocInfoCardClass}>
-          <WarehouseDocCompactRow label="Numer dokumentu" value={docNumber} />
-          <WarehouseDocCompactRow
-            label="Status"
-            value={detailBizStatus ? <ExternalStatusBadge status={detailBizStatus} /> : "—"}
-          />
-          <WarehouseDocCompactRow
-            label={detailDocType === "MM" ? "Z magazynu" : "Magazyn"}
-            value={magazynValue(detailDocType, detail)}
-          />
-          <WarehouseDocCompactRow label="Kontrahent" value={kontrahentValue(detailDocType, detail)} />
-          <WarehouseDocCompactRow label="Dostawa" value={dostawaValue(detail)} />
-        </div>
-
-        <div className={warehouseDocInfoCardClass}>
-          <WarehouseDocCompactRow label="Typ" value={<DocumentTypeBadge code={detail.document_type} />} />
-          <WarehouseDocCompactRow
-            label="Data"
-            value={<span className="tabular-nums">{formatDt(detail.created_at)}</span>}
-          />
-          <WarehouseDocCompactRow label="Autor" value={documentCreatedByLabel(detail.created_by)} />
-          <WarehouseDocCompactRow
-            label={detailDocType === "MM" ? "Do magazynu" : "Lokalizacja"}
-            value={lokalizacjaValue(detailDocType, detail)}
-          />
-          <WarehouseDocCompactRow label="Seria" value={seriesCode(detail)} />
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="truncate text-base font-semibold tracking-tight text-slate-900">{docNumber}</h2>
+            {detailBizStatus ? <ExternalStatusBadge status={detailBizStatus} /> : null}
+          </div>
+          <div className="mt-1 grid grid-cols-1 gap-x-6 gap-y-0.5 sm:grid-cols-2">
+            <HeaderMetaCell label={`${warehouseLabel}:`} value={magazynValue(detailDocType, detail)} />
+            <HeaderMetaCell label={`${kontrahentLabel}:`} value={kontrahent} />
+            <HeaderMetaCell
+              label="Data:"
+              value={<span className="tabular-nums">{formatDateShort(detail.created_at)}</span>}
+            />
+            <HeaderMetaCell label={`${locationLabel}:`} value={lokalizacjaValue(detailDocType, detail)} />
+          </div>
           {detailDocType === "PW" ? (
-            <WarehouseDocCompactRow label="Rozlokowanie" value={putawayStatusLabel(detail.putaway_status)} />
+            <p className="mt-0.5 truncate text-[11px] text-slate-500">
+              Rozlokowanie: {putawayStatusLabel(detail.putaway_status)} · Seria: {seriesCode(detail)}
+            </p>
           ) : null}
         </div>
-      </div>
 
-      {showFinancial ? (
-        <WarehouseDocFinancialCompactBar>
-          {canEditMetadata ? (
-            <>
-              <label className="inline-flex items-center gap-2">
-                <span className="text-xs text-slate-500">Waluta</span>
-                <input
-                  value={metaCurrency}
-                  onChange={(e) => onMetaCurrencyChange(e.target.value.toUpperCase())}
-                  maxLength={8}
-                  className={`${warehouseDocFinancialInputClass} !w-20 uppercase`}
-                />
-              </label>
-              <WarehouseDocFinancialSeparator />
-              <label className="inline-flex items-center gap-2">
-                <span className="text-xs text-slate-500">Netto</span>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={metaNet}
-                  onChange={(e) => onMetaNetChange(e.target.value)}
-                  className={`${warehouseDocFinancialInputClass} !w-28 text-right`}
-                />
-              </label>
-              <WarehouseDocFinancialSeparator />
-              <label className="inline-flex items-center gap-2">
-                <span className="text-xs text-slate-500">Brutto</span>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={metaGross}
-                  onChange={(e) => onMetaGrossChange(e.target.value)}
-                  className={`${warehouseDocFinancialInputClass} !w-28 text-right`}
-                />
-              </label>
-              <WarehouseDocFinancialSeparator />
-              <WarehouseDocFinancialItem
-                label="VAT"
-                value={fmtMoneyCur(detail.total_vat, detail.currency)}
-              />
-            </>
-          ) : detailListConfig.financialDetail === "netOnly" ? (
-            <WarehouseDocFinancialItem
-              label="Wartość netto"
-              value={listValueNetFormatted ?? fmtMoneyCur(detail.total_net, detail.currency)}
-            />
-          ) : (
-            <>
-              <WarehouseDocFinancialItem
-                label="Netto"
-                value={fmtMoneyCur(detail.total_net, detail.currency)}
-              />
-              <WarehouseDocFinancialSeparator />
-              <WarehouseDocFinancialItem label="VAT" value={fmtMoneyCur(detail.total_vat, detail.currency)} />
-              <WarehouseDocFinancialSeparator />
-              <WarehouseDocFinancialItem
-                label="Brutto"
-                value={fmtMoneyCur(detail.total_gross, detail.currency)}
-              />
-            </>
-          )}
-        </WarehouseDocFinancialCompactBar>
-      ) : null}
+        {showFinancial ? (
+          <div className="shrink-0 text-right text-[11px] leading-snug">
+            {canEditMetadata ? (
+              <div className="flex flex-col items-end gap-1">
+                <label className="inline-flex items-center gap-1.5">
+                  <span className="text-slate-500">Waluta</span>
+                  <input
+                    value={metaCurrency}
+                    onChange={(e) => onMetaCurrencyChange(e.target.value.toUpperCase())}
+                    maxLength={8}
+                    className={`${warehouseDocFinancialInputClass} !h-7 !w-16 !py-0 uppercase`}
+                  />
+                </label>
+                <label className="inline-flex items-center gap-1.5">
+                  <span className="text-slate-500">Netto</span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={metaNet}
+                    onChange={(e) => onMetaNetChange(e.target.value)}
+                    className={`${warehouseDocFinancialInputClass} !h-7 !w-24 text-right`}
+                  />
+                </label>
+                <label className="inline-flex items-center gap-1.5">
+                  <span className="text-slate-500">Brutto</span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={metaGross}
+                    onChange={(e) => onMetaGrossChange(e.target.value)}
+                    className={`${warehouseDocFinancialInputClass} !h-7 !w-24 text-right`}
+                  />
+                </label>
+                <span className="text-slate-600">
+                  VAT{" "}
+                  <span className="font-semibold tabular-nums text-slate-900">
+                    {fmtMoneyCur(detail.total_vat, detail.currency)}
+                  </span>
+                </span>
+              </div>
+            ) : detailListConfig.financialDetail === "netOnly" ? (
+              <div className="space-y-0.5">
+                <div className="text-slate-500">Netto</div>
+                <div className="text-sm font-semibold tabular-nums text-slate-900">
+                  {listValueNetFormatted ?? fmtMoneyCur(detail.total_net, detail.currency)}
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-end gap-0.5 tabular-nums">
+                <WarehouseDocFinancialItem compact label="Netto" value={fmtMoneyCur(detail.total_net, detail.currency)} />
+                <WarehouseDocFinancialItem compact label="VAT" value={fmtMoneyCur(detail.total_vat, detail.currency)} />
+                <WarehouseDocFinancialItem compact label="Brutto" value={fmtMoneyCur(detail.total_gross, detail.currency)} />
+              </div>
+            )}
+          </div>
+        ) : null}
+      </div>
     </header>
   );
 }

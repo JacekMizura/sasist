@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ChevronDown, Download, TableProperties } from "lucide-react";
 
-import api from "../../api/axios";
+import { fetchTenantsList } from "../../api/tenantsApi";
 import { createDelivery } from "../../api/inboundDeliveriesApi";
 import { deleteSupplier, listSuppliers, type SupplierRead } from "../../api/inboundSuppliersApi";
 import { FilterVisibilityModal, useListColumnLayout } from "../../components/filters";
@@ -86,10 +86,8 @@ export default function SuppliersPage() {
   const activeFilterCount = useMemo(() => countActiveSupplierFilters(appliedFilters), [appliedFilters]);
 
   useEffect(() => {
-    api
-      .get<Tenant[]>("/tenants/")
-      .then((res) => {
-        const list = Array.isArray(res.data) ? res.data : [];
+    void fetchTenantsList()
+      .then((list) => {
         setTenants(list);
         if (list.length > 0 && !list.some((t) => t.id === tenantId)) setTenantId(list[0].id);
       })

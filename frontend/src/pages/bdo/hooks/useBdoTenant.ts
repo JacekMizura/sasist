@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
-import api from "../../../api/axios";
+import { fetchTenantsList } from "../../../api/tenantsApi";
 
 export type BdoTenant = { id: number; name: string };
 
@@ -11,10 +11,8 @@ export function useBdoTenant() {
   const [tenantId, setTenantIdState] = useState(1);
 
   useEffect(() => {
-    api
-      .get<BdoTenant[]>("/tenants/")
-      .then((res) => {
-        const list = Array.isArray(res.data) ? res.data : [];
+    void fetchTenantsList()
+      .then((list) => {
         setTenants(list);
         const tid = searchParams.get("tenant_id");
         if (tid != null && tid !== "") {

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import api from "../../../api/axios";
+import { fetchTenantsList } from "../../../api/tenantsApi";
 import {
   usePurchasingModuleContextOptional,
   type PurchasingTenant,
@@ -24,10 +24,8 @@ export function usePurchasingTenant() {
 
   useEffect(() => {
     if (moduleCtx) return;
-    void api
-      .get<PurchasingTenant[]>("/tenants/")
-      .then((res) => {
-        const list = Array.isArray(res.data) ? res.data : [];
+    void fetchTenantsList()
+      .then((list) => {
         setLocalTenants(list);
         if (list.length > 0) {
           setLocalTenantId((prev) => (list.some((t) => t.id === prev) ? prev : list[0].id));

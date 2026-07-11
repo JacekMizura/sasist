@@ -5,7 +5,6 @@ import type {
   CustomerType,
   SalesChannel,
 } from "../modules/customers/customerProfile";
-import { getAxiosRequestDebugUrl, logApiBaseDebug } from "../config/apiBase";
 import api from "./axios";
 import type { EntityBulkDeleteResult } from "../types/entityBulkDelete";
 
@@ -146,16 +145,6 @@ export async function listCustomers(params: ListCustomersParams): Promise<Custom
 
   /** Must match backend `@router.get("")` — trailing slash triggers 307 → often `http://` Location on Railway. */
   const url = "customers";
-  const previewUrl = getAxiosRequestDebugUrl({
-    baseURL: api.defaults.baseURL,
-    url,
-    params: p,
-    method: "GET",
-  });
-  console.trace("CUSTOMERS REQUEST", previewUrl);
-  console.log("FULL REQUEST CONFIG", { baseURL: api.defaults.baseURL, url, params: p, method: "GET" });
-  logApiBaseDebug("listCustomers");
-
   const res = await api.get<CustomerListRow[]>(url, { params: p });
   return Array.isArray(res.data) ? res.data : [];
 }

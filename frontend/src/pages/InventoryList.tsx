@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import api from "../api/axios";
+import { fetchTenantsList } from "../api/tenantsApi";
 import { UI_STRINGS } from "../constants/uiStrings";
 import PageLayout from "../components/layout/PageLayout";
 import { PageModuleHeader } from "../components/layout/PageModuleHeader";
@@ -73,7 +74,7 @@ export default function InventoryList() {
   }, [validTenantFromUrl]);
 
   useEffect(() => {
-    api.get<Tenant[]>("/tenants/").then((r) => setTenants(Array.isArray(r.data) ? r.data : [])).catch(() => setTenants([]));
+    void fetchTenantsList().then(setTenants).catch(() => setTenants([]));
   }, []);
 
   return (

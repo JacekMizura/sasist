@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import api from "../../api/axios";
+import { fetchTenantsList } from "../../api/tenantsApi";
 import { CatalogEntityPageShell } from "../../components/catalog";
 import { ProductEditModal } from "./ProductEditModal";
 
@@ -15,10 +15,7 @@ export default function ProductNewPage() {
   const [tenants, setTenants] = useState<Tenant[]>([]);
 
   useEffect(() => {
-    api
-      .get<Tenant[]>("/tenants/")
-      .then((res) => setTenants(Array.isArray(res.data) ? res.data : []))
-      .catch(() => setTenants([]));
+    void fetchTenantsList().then(setTenants).catch(() => setTenants([]));
   }, []);
 
   const goProducts = () => navigate("/products", { replace: true });

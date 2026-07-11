@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Bot, Clock, FileText, History } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
-import api from "../../api/axios";
+import { fetchTenantsList } from "../../api/tenantsApi";
 import { AppEmptyState } from "../../components/app-shell";
 import { listSuppliers, type SupplierRead } from "../../api/inboundSuppliersApi";
 import {
@@ -200,10 +200,8 @@ export default function PurchasingAutoReorderPage() {
   const [previewLoading, setPreviewLoading] = useState(false);
 
   useEffect(() => {
-    void api
-      .get<Tenant[]>("/tenants/")
-      .then((res) => {
-        const list = Array.isArray(res.data) ? res.data : [];
+    void fetchTenantsList()
+      .then((list) => {
         setTenants(list);
         if (list.length > 0 && !list.some((t) => t.id === tenantId)) setTenantId(list[0].id);
       })

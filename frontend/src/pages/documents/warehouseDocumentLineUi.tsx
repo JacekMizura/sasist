@@ -168,16 +168,18 @@ export function WarehouseLineLocationCell({
   return <LocationBadge code={code} type={locType} className="max-w-[10rem]" />;
 }
 
-export function WarehouseLineProductThumb({ url }: { url?: string | null }) {
+export function WarehouseLineProductThumb({ url, compact }: { url?: string | null; compact?: boolean }) {
   const [bad, setBad] = useState(false);
   const src = url && !bad ? url : null;
+  const sizeCls = compact ? "h-8 w-8" : "h-10 w-10";
+  const imgCls = compact ? "max-h-8 max-w-8" : "max-h-10 max-w-10";
   return (
-    <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden">
+    <div className={`flex ${sizeCls} shrink-0 items-center justify-center overflow-hidden`}>
       {src ? (
         <img
           src={src}
           alt=""
-          className="max-h-10 max-w-10 object-contain object-center mix-blend-multiply"
+          className={`${imgCls} object-contain object-center mix-blend-multiply`}
           onError={() => setBad(true)}
           loading="lazy"
         />

@@ -9,6 +9,7 @@ import {
   logApiBaseDebug,
   resolveAxiosBaseURL,
 } from "../config/apiBase";
+import { log, error as logError } from "../utils/logger";
 import {
   clearStoredTokens,
   getStoredAccessToken,
@@ -36,10 +37,9 @@ const refreshClient = axios.create({
 });
 
 logApiBaseDebug("axios module init");
-console.log("API BASE URL", api.defaults.baseURL);
 
 if (import.meta.env.PROD && String(api.defaults.baseURL).startsWith("http://")) {
-  console.error("[api] INSECURE baseURL in production bundle:", api.defaults.baseURL);
+  logError("[api] INSECURE baseURL in production bundle:", api.defaults.baseURL);
 }
 
 let refreshInFlight: Promise<string | null> | null = null;
@@ -69,7 +69,7 @@ async function refreshAccessToken(): Promise<string | null> {
 
       return access_token;
     } catch (err) {
-      console.error("[auth] refresh failed", err);
+      logError("[auth] refresh failed", err);
       clearStoredTokens();
       emitAuthSessionExpired();
       return null;
@@ -97,11 +97,6 @@ type RetryConfig = InternalAxiosRequestConfig & {
   _retryAfterRefresh?: boolean;
 };
 
-function isCustomersApiRequest(config: InternalAxiosRequestConfig): boolean {
-  const path = String(config.url ?? "");
-  return path === "customers" || path.startsWith("customers/") || path.startsWith("/customers");
-}
-
 function isDirectSalesApiRequest(config: InternalAxiosRequestConfig): boolean {
   const path = String(config.url ?? "").replace(/^\/+/, "");
   return path === "direct-sales" || path.startsWith("direct-sales/");
@@ -112,12 +107,8 @@ api.interceptors.request.use(
     applySecureApiBaseToConfig(config);
 
     const finalUrl = getAxiosRequestDebugUrl(config);
-    if (isCustomersApiRequest(config)) {
-      console.trace("CUSTOMERS REQUEST (axios)", finalUrl);
-      console.log("FULL REQUEST CONFIG", config);
-    }
-    if (isDirectSalesApiRequest(config)) {
-      console.log("[direct-sales.request]", {
+    if (import.meta.env.DEV && isDirectSalesApiRequest(config)) {
+      log("[direct-sales.request]", {
         url: finalUrl,
         method: (config.method ?? "get").toUpperCase(),
         params: config.params,
@@ -126,7 +117,7 @@ api.interceptors.request.use(
       });
     }
     if (finalUrl.startsWith("http://")) {
-      console.error("[api] BLOCKED insecure request URL:", finalUrl, {
+      logError("[api] BLOCKED insecure request URL:", finalUrl, {
         viteApiUrlEnv: import.meta.env.VITE_API_URL,
         baseURL: config.baseURL,
         path: config.url,
@@ -153,26 +144,12 @@ api.interceptors.request.use(
 );
 
 api.interceptors.response.use(
-  (response) => {
-    const cfg = response.config;
-    if (cfg && isCustomersApiRequest(cfg)) {
-      const responseUrl =
-        typeof response.request?.responseURL === "string" ? response.request.responseURL : null;
-      if (response.status >= 300 && response.status < 400) {
-        console.warn("[api] customers redirect response", {
-          status: response.status,
-          location: response.headers?.location,
-          responseURL: responseUrl,
-        });
-      }
-    }
-    return response;
-  },
+  (response) => response,
   async (error: AxiosError) => {
     const status = error.response?.status;
     const original = error.config as RetryConfig | undefined;
 
-    console.error(
+    logError(
       "[API] Request failed:",
       original ? getAxiosRequestDebugUrl(original) : original?.url,
       status,

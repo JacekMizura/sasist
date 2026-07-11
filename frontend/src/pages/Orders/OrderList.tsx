@@ -419,10 +419,13 @@ export default function OrderList() {
     fetchOrders();
   }, [fetchOrders, isHydrated]);
 
-  const openOrder = (orderId: number) => {
-    const orderNavIds = orders.map((o) => o.id);
-    navigate(`/orders/${orderId}`, { state: { orderNavIds } });
-  };
+  const openOrder = useCallback(
+    (orderId: number) => {
+      const orderNavIds = orders.map((o) => o.id);
+      navigate(`/orders/${orderId}`, { state: { orderNavIds } });
+    },
+    [navigate, orders],
+  );
 
   const handleToggleSort = (key: SortKey) => {
     if (sortBy === key) {
@@ -505,11 +508,14 @@ export default function OrderList() {
     setMultiModalOpen(true);
   };
 
-  const openMultiModalForOrder = (orderId: number) => {
-    selectOnly(String(orderId));
-    setQuickModal(null);
-    setMultiModalOpen(true);
-  };
+  const openMultiModalForOrder = useCallback(
+    (orderId: number) => {
+      selectOnly(String(orderId));
+      setQuickModal(null);
+      setMultiModalOpen(true);
+    },
+    [selectOnly],
+  );
 
   const openQuickAction = (kind: OrderQuickToolbarActionKind) => {
     setMultiModalOpen(false);
@@ -526,6 +532,20 @@ export default function OrderList() {
     }
     setQuickModal(kind);
   };
+
+  const handleRowQuickAction = useCallback(
+    (orderId: number, kind: OrderQuickToolbarActionKind) => {
+      if (kind === "operational_notes") {
+        setQuickNoteSelection({ mode: "explicit_ids", ids: [orderId] });
+        setQuickNoteCount(1);
+        setQuickNoteOpen(true);
+        return;
+      }
+      selectOnly(String(orderId));
+      openQuickAction(kind);
+    },
+    [selectOnly, openQuickAction],
+  );
 
   const rowId = () => `quick-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -1085,17 +1105,8 @@ export default function OrderList() {
                   toggleOne={toggleOne}
                   bulkBusy={bulkBusy}
                   openOrder={openOrder}
-                  onRowQuickAction={(orderId, kind) => {
-                    if (kind === "operational_notes") {
-                      setQuickNoteSelection({ mode: "explicit_ids", ids: [orderId] });
-                      setQuickNoteCount(1);
-                      setQuickNoteOpen(true);
-                      return;
-                    }
-                    selectOnly(String(orderId));
-                    openQuickAction(kind);
-                  }}
-                  onRowOpenMulti={(orderId) => openMultiModalForOrder(orderId)}
+                  onRowQuickAction={handleRowQuickAction}
+                  onRowOpenMulti={openMultiModalForOrder}
                 />
               )}
             </ModuleTableCard>

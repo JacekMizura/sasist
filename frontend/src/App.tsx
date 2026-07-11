@@ -306,21 +306,6 @@ function LegacySuppliersZamowieniaRedirect() {
   return <Navigate to={`/goods-orders${search}`} replace />
 }
 
-function RouterMountLogger() {
-  useEffect(() => {
-    console.log("[ROUTER] mounted");
-  }, []);
-  return null;
-}
-
-function RoutePathLogger() {
-  const { pathname, search, hash } = useLocation();
-  useEffect(() => {
-    console.log("[route.render]", pathname, search || "", hash || "");
-  }, [pathname, search, hash]);
-  return null;
-}
-
 /** Legacy WMS batch URL → canonical collecting/batch/:id. */
 function WmsProductionBatchRedirect() {
   const { batchId } = useParams();
@@ -347,13 +332,10 @@ function WmsProductionPutawayRedirect() {
 }
 
 function AppRootLayout() {
-  console.log("[APP] render")
   return (
     <AuthProvider>
       <WarehouseProvider>
         <CartsRefreshProvider>
-          <RouterMountLogger />
-          <RoutePathLogger />
           <Toaster position="top-right" toastOptions={{ duration: 3000 }} />
           <PasswordChangeGate />
           <ErrorBoundary>

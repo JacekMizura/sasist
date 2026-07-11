@@ -1,3 +1,5 @@
+import { log, error as logError } from "../../utils/logger";
+
 const STORAGE_PREFIX = "ui.filterFields.v1:";
 
 /**
@@ -15,7 +17,7 @@ export function loadVisibleFieldOrder(
   const lsKey = STORAGE_PREFIX + storageKey;
   try {
     const raw = localStorage.getItem(lsKey);
-    console.log("[LS]", lsKey, raw);
+    log("[LS]", lsKey, raw);
     if (raw == null || raw === "") {
       if (defaultVisibleIds?.length) {
         const subset = defaultVisibleIds.filter((id) => valid.has(id));
@@ -27,7 +29,7 @@ export function loadVisibleFieldOrder(
     try {
       parsed = JSON.parse(raw) as unknown;
     } catch (e) {
-      console.error("[LS] filterVisibility JSON.parse failed", lsKey, e);
+      logError("[LS] filterVisibility JSON.parse failed", lsKey, e);
       return [...catalogIds];
     }
     if (!Array.isArray(parsed)) return [...catalogIds];

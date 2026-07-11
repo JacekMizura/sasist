@@ -6,7 +6,7 @@ import { ListPageHeader } from "../../components/listPage/ListPageHeader";
 import { moduleTableCardClass, moduleTablePaginationFooterClass } from "../../components/listPage/moduleList";
 import { listSellasistInputClass } from "../../components/listPage/listSellasistTokens";
 import { PurchaseOrdersListTable } from "./PurchaseOrdersListTable";
-import api from "../../api/axios";
+import { fetchTenantsList } from "../../api/tenantsApi";
 import {
   deleteDelivery,
   listDeliveries,
@@ -145,10 +145,8 @@ export default function PurchaseOrdersPage() {
   }, [tenantId]);
 
   useEffect(() => {
-    void api
-      .get<Tenant[]>("/tenants/")
-      .then((res) => {
-        const list = Array.isArray(res.data) ? res.data : [];
+    void fetchTenantsList()
+      .then((list) => {
         setTenants(list);
         if (list.length > 0 && !list.some((t) => t.id === tenantId)) setTenantId(list[0].id);
       })

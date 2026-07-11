@@ -13,6 +13,7 @@ import {
   WarehouseDocSummaryBar,
   WarehouseDocSummaryItem,
   WarehouseDocSummarySeparator,
+  warehouseDocDetailScrollClass,
 } from "./warehouseDocumentDetailUi";
 import {
   DeliveryDifferenceAcceptedBadge,
@@ -42,13 +43,6 @@ function fmtQty(n: number) {
 
 function fmtMoney(n: number) {
   return formatMoneyPl(n);
-}
-
-function fmtMoneyCur(n: number | null | undefined, currency: string | undefined) {
-  const c = (currency || "PLN").trim() || "PLN";
-  if (n == null || !Number.isFinite(n)) return "—";
-  if (c === "PLN" || c === "zł") return formatMoneyPl(n);
-  return formatMoneyPl(n, { currency: c });
 }
 
 function diffToneClass(diff: number) {
@@ -101,9 +95,10 @@ export function WarehouseDocumentLinesSection({
   className = "",
 }: Props) {
   const thCls =
-    "px-2 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wide text-slate-500";
+    "px-1.5 py-1 text-left text-[10px] font-semibold uppercase tracking-wide text-slate-500";
   const thRightCls = `${thCls} text-right`;
-  const tdCls = "px-2 py-1.5 align-middle";
+  const tdCls = "px-1.5 py-1 align-middle";
+  const rowCls = "h-11 max-h-12 transition-colors hover:bg-slate-50/40";
 
   type DrawerState =
     | { kind: "sales_block"; line: StockDocumentItemRead; index: number }
@@ -167,19 +162,15 @@ export function WarehouseDocumentLinesSection({
 
   return (
     <section
-      className={`flex min-h-0 flex-col overflow-hidden rounded-lg border border-slate-200/90 bg-white ${className}`.trim()}
+      className={`flex h-full min-h-0 flex-col overflow-hidden bg-white ${className}`.trim()}
     >
-      <div className="shrink-0 border-b border-slate-100 px-4 py-2">
-        <h3 className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Pozycje</h3>
-      </div>
-
       {detail.items.length === 0 ? (
-        <p className="px-4 py-6 text-sm text-slate-600">Brak pozycji na dokumencie.</p>
+        <p className="px-3 py-6 text-sm text-slate-600">Brak pozycji na dokumencie.</p>
       ) : (
         <>
-          <div className="min-h-0 flex-1 overflow-auto">
-            <table className="w-full min-w-[1180px] text-sm">
-              <thead>
+          <div className={warehouseDocDetailScrollClass}>
+            <table className="w-full min-w-[1180px] text-[13px]">
+              <thead className="sticky top-0 z-[1] bg-white shadow-[0_1px_0_0_rgb(241_245_249)]">
                 <tr className="border-b border-slate-100">
                   <th className={`${thCls} w-10 text-center`}>#</th>
                   <th className={`${thCls} pl-2`}>Nazwa</th>
@@ -208,6 +199,7 @@ export function WarehouseDocumentLinesSection({
                     key={it.id}
                     index={index}
                     it={it}
+                    rowCls={rowCls}
                     isWzDetail={isWzDetail}
                     lineEditEnabled={lineEditEnabled}
                     inputClass={inputClass}
@@ -266,11 +258,7 @@ export function WarehouseDocumentLinesSection({
           />
 
           {lineSummary ? (
-            <WarehouseDocumentSummaryPanel
-              detail={detail}
-              isWzDetail={isWzDetail}
-              lineSummary={lineSummary}
-            />
+            <WarehouseDocumentSummaryPanel isWzDetail={isWzDetail} lineSummary={lineSummary} />
           ) : null}
         </>
       )}
@@ -295,6 +283,7 @@ function LineRow({
   deliveryDiffAccepted,
   onLineAction,
   tdCls,
+  rowCls,
 }: {
   index: number;
   it: StockDocumentItemRead;
@@ -312,6 +301,7 @@ function LineRow({
   deliveryDiffAccepted: boolean;
   onLineAction: (kind: LineActionKind, received: number) => void;
   tdCls: string;
+  rowCls: string;
 }) {
   const parseQty = (s: string | undefined): number | null => {
     const t = (s ?? "").trim().replace(",", ".");
@@ -343,16 +333,18 @@ function LineRow({
   const canAcceptDeliveryDiff = hasQtyDiff && !deliveryDiffAccepted;
 
   return (
-    <tr className="transition-colors hover:bg-slate-50/40">
-      <td className={`${tdCls} text-center tabular-nums text-xs font-semibold text-slate-500`}>
+    <tr className={rowCls}>
+      <td className={`${tdCls} text-center tabular-nums text-[11px] font-semibold text-slate-500`}>
         {index + 1}
       </td>
-      <td className={`${tdCls} pl-2`}>
-        <div className="flex items-center gap-2.5">
-          <WarehouseLineProductThumb url={wmsReceiptLineImageUrl(it)} />
+      <td className={`${tdCls} pl-1.5`}>
+        <div className="flex items-center gap-2">
+          <WarehouseLineProductThumb url={wmsReceiptLineImageUrl(it)} compact />
           <div className="min-w-0 flex-1">
-            <div className="text-sm font-medium leading-tight text-slate-900">{receiptLineDisplayName(it)}</div>
-            <div className="mt-0.5 text-[11px] leading-tight text-slate-500">
+            <div className="truncate text-[13px] font-medium leading-tight text-slate-900">
+              {receiptLineDisplayName(it)}
+            </div>
+            <div className="truncate text-[10px] leading-tight text-slate-500">
               {ean ? `EAN ${ean}` : "EAN —"}
               {sku ? ` · SKU ${sku}` : " · SKU —"}
             </div>
@@ -366,7 +358,7 @@ function LineRow({
             <input
               type="text"
               inputMode="decimal"
-              className={`${inputClass} inline-block w-[5.5rem] py-1.5 text-sm`}
+              className={`${inputClass} inline-block w-[5rem] !py-1 text-[13px]`}
               value={receivedRaw ?? ""}
               onChange={(e) => onReceivedChange(it.id, e.target.value)}
               aria-label={`Przyjęto dla pozycji ${index + 1}`}
@@ -570,28 +562,12 @@ function DeliveryDiffConfirmDialog({
 }
 
 function WarehouseDocumentSummaryPanel({
-  detail,
   isWzDetail,
   lineSummary,
 }: {
-  detail: StockDocumentRead;
   isWzDetail: boolean;
   lineSummary: WarehouseLineSummary;
 }) {
-  const currency = detail.currency;
-  const netTotal =
-    detail.total_net != null && Number.isFinite(detail.total_net)
-      ? detail.total_net
-      : lineSummary.sumValueNet;
-  const grossTotal =
-    detail.total_gross != null && Number.isFinite(detail.total_gross)
-      ? detail.total_gross
-      : lineSummary.sumValueGross;
-  const vatTotal =
-    detail.total_vat != null && Number.isFinite(detail.total_vat)
-      ? detail.total_vat
-      : lineSummary.sumVat;
-
   const qtyLeft = isWzDetail ? (
     <>
       <WarehouseDocSummaryItem label="Pozycji" value={String(lineSummary.lineCount)} />
@@ -616,15 +592,7 @@ function WarehouseDocumentSummaryPanel({
   return (
     <WarehouseDocSummaryBar
       left={qtyLeft}
-      right={
-        <>
-          <WarehouseDocSummaryItem label="Netto" value={fmtMoneyCur(netTotal, currency)} />
-          <WarehouseDocSummarySeparator />
-          <WarehouseDocSummaryItem label="VAT" value={fmtMoneyCur(vatTotal, currency)} />
-          <WarehouseDocSummarySeparator />
-          <WarehouseDocSummaryItem label="Brutto" value={fmtMoneyCur(grossTotal, currency)} />
-        </>
-      }
+      className="shrink-0 border-t border-slate-200 bg-slate-50/60 px-3 py-1.5 text-[12px]"
     />
   );
 }

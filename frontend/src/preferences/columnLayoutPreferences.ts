@@ -1,4 +1,6 @@
 /** localStorage keys — per browser profile (extend with user id when auth exists). */
+import { log, error as logError } from "../utils/logger";
+
 export const ORDERS_COLUMNS_LAYOUT_KEY = "orders_columns_layout";
 export const PRODUCTS_COLUMNS_LAYOUT_KEY = "products_columns_layout";
 export const CUSTOMERS_LIST_COLUMNS_LAYOUT_KEY = "customers_list_columns_layout";
@@ -9,7 +11,7 @@ export type ColumnLayoutFileV1 = {
 };
 
 function parseStored(key: string, raw: string | null): string[] | null {
-  console.log("[LS]", key, raw);
+  log("[LS]", key, raw);
   if (!raw) return null;
   try {
     const j = JSON.parse(raw) as unknown;
@@ -18,7 +20,7 @@ function parseStored(key: string, raw: string | null): string[] | null {
     }
     if (Array.isArray(j)) return j.map(String);
   } catch (e) {
-    console.error("[LS] columnLayout JSON.parse failed", key, e);
+    logError("[LS] columnLayout JSON.parse failed", key, e);
     return null;
   }
   return null;
@@ -63,7 +65,7 @@ export function loadColumnLayout(
     const migrated = options?.migrate ? options.migrate(parsed ?? []) : (parsed ?? []);
     return normalizeColumnOrder(migrated.length > 0 ? migrated : null, allowedIds, defaultOrder);
   } catch (e) {
-    console.error("[LS] loadColumnLayout failed", key, e);
+    logError("[LS] loadColumnLayout failed", key, e);
     return normalizeColumnOrder(null, allowedIds, defaultOrder);
   }
 }

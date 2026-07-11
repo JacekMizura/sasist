@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { PiggyBank, Tags, TrendingDown, TrendingUp } from "lucide-react";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
-import api from "../../api/axios";
+import { fetchTenantsList } from "../../api/tenantsApi";
 import { AppEmptyState } from "../../components/app-shell";
 import {
   fetchPurchasingPriceOpportunities,
@@ -128,10 +128,8 @@ export default function PurchasingPriceOpportunitiesPage() {
   const [zignorowane, setZignorowane] = useState<Set<string>>(() => new Set());
 
   useEffect(() => {
-    void api
-      .get<Tenant[]>("/tenants/")
-      .then((res) => {
-        const list = Array.isArray(res.data) ? res.data : [];
+    void fetchTenantsList()
+      .then((list) => {
         setTenants(list);
         if (list.length > 0 && !list.some((t) => t.id === tenantId)) setTenantId(list[0].id);
       })

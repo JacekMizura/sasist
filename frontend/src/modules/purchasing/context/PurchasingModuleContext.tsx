@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { useSearchParams } from "react-router-dom";
-import api from "../../../api/axios";
+import { fetchTenantsList } from "../../../api/tenantsApi";
 
 export type PurchasingTenant = { id: number; name: string };
 
@@ -36,10 +36,8 @@ export function PurchasingModuleProvider({ children }: { children: ReactNode }) 
   const [refreshSignal, setRefreshSignal] = useState(0);
 
   useEffect(() => {
-    void api
-      .get<PurchasingTenant[]>("/tenants/")
-      .then((res) => {
-        const list = Array.isArray(res.data) ? res.data : [];
+    void fetchTenantsList()
+      .then((list) => {
         setTenants(list);
         if (list.length > 0) {
           setTenantIdState((prev) => (list.some((t) => t.id === prev) ? prev : list[0].id));

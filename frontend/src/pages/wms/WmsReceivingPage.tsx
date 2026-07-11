@@ -6,7 +6,7 @@ import { WmsDockPutawayBanner } from "../../components/wms/WmsPutawayProfileGate
 import { Clock, Plus, RotateCcw, Truck, CheckCircle2, ScanLine, User } from "lucide-react";
 import PzWorkflowStatusBadges from "../../components/wms/PzWorkflowStatusBadges";
 import { WmsNewDeliveryModal } from "../../components/wms/receiving/WmsNewDeliveryModal";
-import api from "../../api/axios";
+import { fetchTenantsList } from "../../api/tenantsApi";
 import { useWmsScanner } from "../../context/WmsScannerContext";
 import { useWmsPageScanHandler } from "../../components/wms/execution/useWmsPageScanHandler";
 import { useScanFeedback } from "../../components/wms/execution/useScanFeedback";
@@ -139,10 +139,8 @@ export default function WmsReceivingPage() {
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    api
-      .get<Tenant[]>("/tenants/")
-      .then((res) => {
-        const list = Array.isArray(res.data) ? res.data : [];
+    void fetchTenantsList()
+      .then((list) => {
         const savedRaw = localStorage.getItem(TENANT_STORAGE_KEY);
         const saved = savedRaw != null ? Number(savedRaw) : NaN;
         const pick = list.find((t) => t.id === saved)?.id ?? list[0]?.id ?? 1;

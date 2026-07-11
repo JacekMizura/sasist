@@ -149,16 +149,16 @@ export default function CustomersListPage() {
     if (el) el.indeterminate = somePageSelected && !allPageSelected;
   }, [somePageSelected, allPageSelected]);
 
-  const toggleOne = (id: number) => {
+  const toggleOne = useCallback((id: number) => {
     setSelected((prev) => {
       const n = new Set(prev);
       if (n.has(id)) n.delete(id);
       else n.add(id);
       return n;
     });
-  };
+  }, []);
 
-  const toggleAllPage = () => {
+  const toggleAllPage = useCallback(() => {
     setSelected((prev) => {
       const n = new Set(prev);
       if (allPageSelected) {
@@ -168,7 +168,11 @@ export default function CustomersListPage() {
       }
       return n;
     });
-  };
+  }, [allPageSelected, pageRowIds]);
+
+  const handleDeleteOne = useCallback((id: number) => {
+    setDeleteConfirm({ kind: "single", id });
+  }, []);
 
   const selectedIds = useMemo(() => Array.from(selected).sort((a, b) => a - b), [selected]);
   const visibleIds = useMemo(() => rows.map((r) => r.id), [rows]);
@@ -385,7 +389,7 @@ export default function CustomersListPage() {
                 headerSelectAllRef={headerSelectAllRef}
                 onToggleOne={toggleOne}
                 onToggleAllPage={toggleAllPage}
-                onDelete={(id) => setDeleteConfirm({ kind: "single", id })}
+                onDelete={handleDeleteOne}
               />
               <div className={`${moduleTablePaginationFooterClass} px-4`}>
                 <div className="flex flex-wrap items-center gap-3">

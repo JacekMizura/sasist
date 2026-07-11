@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import type { RefObject } from "react";
+import { memo, type RefObject } from "react";
 import { Pencil, Trash2 } from "lucide-react";
 
 import type { CustomerListRow } from "../../../api/customersApi";
@@ -250,6 +250,70 @@ function MobileCustomerRow({
   );
 }
 
+const MemoMobileCustomerRow = memo(MobileCustomerRow);
+
+type CustomerTableRowProps = {
+  row: CustomerListRow;
+  columnOrder: string[];
+  isSelected: boolean;
+  deleteBusy: boolean;
+  onToggleOne: (id: number) => void;
+  onDelete: (id: number) => void;
+};
+
+const CustomerTableRow = memo(function CustomerTableRow({
+  row,
+  columnOrder,
+  isSelected,
+  deleteBusy,
+  onToggleOne,
+  onDelete,
+}: CustomerTableRowProps) {
+  const clientName = customerListClientName(row);
+
+  return (
+    <tr
+      className={`${customersListRowClass} ${isSelected ? "bg-sky-50/40 hover:bg-sky-50/50" : ""}`}
+    >
+      <td className={customersListCheckboxCellClass}>
+        <RowCheckbox
+          checked={isSelected}
+          disabled={deleteBusy}
+          onChange={() => onToggleOne(row.id)}
+          ariaLabel={`Zaznacz klienta ${clientName}`}
+        />
+      </td>
+      {columnOrder.map((colId) => (
+        <td key={colId} className={customersListTdClass}>
+          <CustomerListDataCell row={row} columnId={colId} />
+        </td>
+      ))}
+      <td className={customersListActionsCellClass} style={{ width: customersListActionsColWidth }}>
+        <div className={customersListActionsInnerClass}>
+          <Link
+            to={`/customers/${row.id}`}
+            className={customersListRowActionBtn}
+            title="Edytuj"
+            aria-label="Edytuj"
+          >
+            <Pencil className="h-4 w-4 shrink-0" strokeWidth={2} />
+          </Link>
+          <button
+            type="button"
+            className={customersListRowActionBtnDanger}
+            title="Usuń"
+            aria-label="Usuń"
+            disabled={deleteBusy}
+            onClick={() => onDelete(row.id)}
+          >
+            <Trash2 className="h-4 w-4 shrink-0" strokeWidth={2} />
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
+});
+
 export function CustomersListTable({
   rows,
   columnOrder,
@@ -294,60 +358,24 @@ export function CustomersListTable({
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => {
-              const clientName = customerListClientName(r);
-              const isSelected = selected.has(r.id);
-
-              return (
-                <tr
-                  key={r.id}
-                  className={`${customersListRowClass} ${isSelected ? "bg-sky-50/40 hover:bg-sky-50/50" : ""}`}
-                >
-                  <td className={customersListCheckboxCellClass}>
-                    <RowCheckbox
-                      checked={isSelected}
-                      disabled={deleteBusy}
-                      onChange={() => onToggleOne(r.id)}
-                      ariaLabel={`Zaznacz klienta ${clientName}`}
-                    />
-                  </td>
-                  {columnOrder.map((colId) => (
-                    <td key={colId} className={customersListTdClass}>
-                      <CustomerListDataCell row={r} columnId={colId} />
-                    </td>
-                  ))}
-                  <td className={customersListActionsCellClass} style={{ width: customersListActionsColWidth }}>
-                    <div className={customersListActionsInnerClass}>
-                      <Link
-                        to={`/customers/${r.id}`}
-                        className={customersListRowActionBtn}
-                        title="Edytuj"
-                        aria-label="Edytuj"
-                      >
-                        <Pencil className="h-4 w-4 shrink-0" strokeWidth={2} />
-                      </Link>
-                      <button
-                        type="button"
-                        className={customersListRowActionBtnDanger}
-                        title="Usuń"
-                        aria-label="Usuń"
-                        disabled={deleteBusy}
-                        onClick={() => onDelete(r.id)}
-                      >
-                        <Trash2 className="h-4 w-4 shrink-0" strokeWidth={2} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
+            {rows.map((r) => (
+              <CustomerTableRow
+                key={r.id}
+                row={r}
+                columnOrder={columnOrder}
+                isSelected={selected.has(r.id)}
+                deleteBusy={deleteBusy}
+                onToggleOne={onToggleOne}
+                onDelete={onDelete}
+              />
+            ))}
           </tbody>
         </table>
       </div>
 
       <div className="md:hidden">
         {rows.map((r) => (
-          <MobileCustomerRow
+          <MemoMobileCustomerRow
             key={r.id}
             row={r}
             selected={selected.has(r.id)}

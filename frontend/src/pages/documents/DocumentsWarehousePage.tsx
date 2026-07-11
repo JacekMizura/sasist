@@ -1,8 +1,10 @@
+import { log } from "../../utils/logger";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { ClipboardList } from "lucide-react";
-import api from "../../api/axios";
+import { fetchTenantsList } from "../../api/tenantsApi";
 import {
   acceptStockDocument,
   deleteStockDocument,
@@ -78,7 +80,8 @@ export default function DocumentsWarehousePage() {
   const { docSegment } = useParams<{ docSegment: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { warehouse } = useWarehouse();
+  const { sessionReady } = useAuth();
+  const { warehouse, warehousesLoading } = useWarehouse();
   const warehouseId = warehouse?.id ?? null;
   const { warehouseTypes, firstWarehousePath, loading: seriesLoading, hasWarehouseType } = useOperationalDocumentSeries();
 
@@ -98,9 +101,10 @@ export default function DocumentsWarehousePage() {
   }, [routeType, searchParams]);
 
   const [tenants, setTenants] = useState<Tenant[]>([]);
-  const [tenantId, setTenantId] = useState(1);
+  const [tenantId, setTenantId] = useState<number | null>(null);
+  const resolvedTenantId = tenantId ?? 1;
   const { requestPrint: requestStockDocumentPrint, pickerModal: stockDocumentPickerModal } = useDocumentTemplatePrint({
-    tenantId,
+    tenantId: resolvedTenantId,
   });
   const [docTab, setDocTab] = useState<DocumentTypeFilterTab>(() => routeType ?? "PZ");
   const [rows, setRows] = useState<StockDocumentListRow[]>([]);
@@ -147,25 +151,36 @@ export default function DocumentsWarehousePage() {
   }, [pageSize]);
 
   useEffect(() => {
-    api
-      .get<Tenant[]>("/tenants/")
-      .then((res) => {
-        const list = Array.isArray(res.data) ? res.data : [];
+    void fetchTenantsList()
+      .then((list) => {
         setTenants(list);
-        if (list.length > 0 && !list.some((t) => t.id === tenantId)) setTenantId(list[0].id);
+        if (list.length > 0) {
+          setTenantId((prev) => {
+            if (prev != null && list.some((t) => t.id === prev)) return prev;
+            return list[0].id;
+          });
+        } else {
+          setTenantId(1);
+        }
       })
-      .catch(() => setTenants([]));
+      .catch(() => {
+        setTenants([]);
+        setTenantId(1);
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- load tenants once on mount
   }, []);
 
   const load = useCallback(async () => {
+    if (!sessionReady || warehousesLoading || warehouseId == null || tenantId == null) {
+      return;
+    }
     setLoading(true);
     setErr(null);
     try {
       setRows(
         await listStockDocuments(tenantId, {
           document_type: docTab,
-          warehouse_id: warehouseId ?? undefined,
+          warehouse_id: warehouseId,
         }),
       );
     } catch {
@@ -174,7 +189,7 @@ export default function DocumentsWarehousePage() {
     } finally {
       setLoading(false);
     }
-  }, [tenantId, docTab, warehouseId]);
+  }, [tenantId, docTab, warehouseId, sessionReady, warehousesLoading]);
 
   useEffect(() => {
     void load();
@@ -227,15 +242,25 @@ export default function DocumentsWarehousePage() {
         navigate(`/documents/warehouse/z-pz?id=${id}`);
         return;
       }
-      setDetailOpen(true);
+      log("[stock-document]", {
+        sessionReady,
+        tenantId,
+        warehouseId,
+        warehousesLoading,
+        documentId: id,
+      });
+      if (!sessionReady || warehousesLoading || warehouseId == null || tenantId == null) {
+        return;
+      }
       setDetailId(id);
       setDetail(null);
       setDetailErr(null);
       setReceivedByLineId({});
       setDetailLoading(true);
       try {
-        const d = await getStockDocument(tenantId, id, warehouseId ?? undefined);
+        const d = await getStockDocument(tenantId, id, warehouseId);
         setDetail(d);
+        setDetailOpen(true);
         const init: Record<number, string> = {};
         const carrierInit: Record<number, string> = {};
         for (const it of d.items) {
@@ -246,11 +271,12 @@ export default function DocumentsWarehousePage() {
         setSuggestedCarrierBarcodeByLineId(carrierInit);
       } catch {
         setDetailErr("Nie udało się wczytać dokumentu.");
+        setDetailOpen(false);
       } finally {
         setDetailLoading(false);
       }
     },
-    [tenantId, docTab, routeType, navigate],
+    [tenantId, warehouseId, sessionReady, warehousesLoading, docTab, routeType, navigate],
   );
 
   useEffect(() => {
@@ -258,9 +284,23 @@ export default function DocumentsWarehousePage() {
     const raw = searchParams.get("id");
     const openId = raw ? Number(raw) : NaN;
     if (!Number.isFinite(openId) || openId <= 0) return;
-    if (detailId === openId && detailOpen) return;
+    if (!sessionReady || warehousesLoading || warehouse?.id == null || tenantId == null) return;
+    if (detailId === openId && detailOpen && !detailErr) return;
+    if (detailId === openId && detailLoading) return;
     void openDetail(openId);
-  }, [searchParams, openDetail, detailId, detailOpen, routeType]);
+  }, [
+    searchParams,
+    openDetail,
+    detailId,
+    detailOpen,
+    detailErr,
+    detailLoading,
+    routeType,
+    sessionReady,
+    warehousesLoading,
+    warehouse?.id,
+    tenantId,
+  ]);
 
   const receiveAll = useCallback(() => {
     if (!detail) return;
@@ -307,7 +347,7 @@ export default function DocumentsWarehousePage() {
           continue;
         }
         try {
-          const sc = await scanWmsCarrierByBarcode(tenantId, bc);
+          const sc = await scanWmsCarrierByBarcode(resolvedTenantId, bc);
           if (!sc.found || !sc.carrier) {
             window.alert(`Nie znaleziono nośnika o kodzie: ${bc}`);
             return;
@@ -321,7 +361,7 @@ export default function DocumentsWarehousePage() {
     }
     setDetailBusy(true);
     try {
-      const updated = await patchStockDocumentItems(tenantId, detailId, { items: itemsPayload });
+      const updated = await patchStockDocumentItems(resolvedTenantId, detailId, { items: itemsPayload });
       setDetail(updated);
       const init: Record<number, string> = {};
       const cInit: Record<number, string> = {};
@@ -373,7 +413,7 @@ export default function DocumentsWarehousePage() {
             continue;
           }
           try {
-            const sc = await scanWmsCarrierByBarcode(tenantId, bc);
+            const sc = await scanWmsCarrierByBarcode(resolvedTenantId, bc);
             if (!sc.found || !sc.carrier) {
               window.alert(`Nie znaleziono nośnika o kodzie: ${bc}`);
               return;
@@ -392,9 +432,9 @@ export default function DocumentsWarehousePage() {
     setDetailBusy(true);
     try {
       if (linePatch) {
-        await patchStockDocumentItems(tenantId, detailId, { items: linePatch });
+        await patchStockDocumentItems(resolvedTenantId, detailId, { items: linePatch });
       }
-      const updated = await acceptStockDocument(tenantId, detailId);
+      const updated = await acceptStockDocument(resolvedTenantId, detailId);
       setDetail(updated);
       const init: Record<number, string> = {};
       const cInit: Record<number, string> = {};
@@ -429,7 +469,7 @@ export default function DocumentsWarehousePage() {
     };
     setDetailBusy(true);
     try {
-      const updated = await patchStockDocumentMetadata(tenantId, detailId, {
+      const updated = await patchStockDocumentMetadata(resolvedTenantId, detailId, {
         currency: metaCurrency.trim() || undefined,
         total_net: parseOpt(metaNet),
         total_gross: parseOpt(metaGross),
@@ -453,7 +493,7 @@ export default function DocumentsWarehousePage() {
     const id = deleteConfirmId;
     setDeleteBusy(true);
     try {
-      await deleteStockDocument(tenantId, id);
+      await deleteStockDocument(resolvedTenantId, id);
       setDeleteConfirmId(null);
       setRows((prev) => prev.filter((r) => r.id !== id));
       if (detailId === id) closeDetail();
@@ -463,13 +503,13 @@ export default function DocumentsWarehousePage() {
     } finally {
       setDeleteBusy(false);
     }
-  }, [deleteConfirmId, tenantId, detailId, closeDetail, load]);
+  }, [deleteConfirmId, resolvedTenantId, detailId, closeDetail, load]);
 
   const handleDuplicateDocument = async () => {
     if (!detail || detailId === null) return;
     setDetailBusy(true);
     try {
-      const newDoc = await duplicateStockDocument(tenantId, detailId);
+      const newDoc = await duplicateStockDocument(resolvedTenantId, detailId);
       closeDetail();
       void openDetail(newDoc.id);
       void load();
@@ -678,12 +718,12 @@ export default function DocumentsWarehousePage() {
             <div className="flex w-full min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
               <select
                 aria-label="Wybór organizacji"
-                value={tenantId}
+                value={tenantId ?? resolvedTenantId}
                 onChange={(e) => setTenantId(Number(e.target.value))}
                 className={`${documentsTableSelectCls} min-w-[14rem]`}
               >
                 {tenants.length === 0 ? (
-                  <option value={tenantId}>#{tenantId}</option>
+                  <option value={resolvedTenantId}>#{resolvedTenantId}</option>
                 ) : (
                   tenants.map((t) => (
                     <option key={t.id} value={t.id}>
@@ -751,7 +791,7 @@ export default function DocumentsWarehousePage() {
                 onDownloadPdf={openDocumentPdf}
                 onDuplicate={async (id) => {
                   try {
-                    const d = await duplicateStockDocument(tenantId, id);
+                    const d = await duplicateStockDocument(resolvedTenantId, id);
                     void openDetail(d.id);
                     void load();
                   } catch (err: unknown) {
@@ -808,17 +848,17 @@ export default function DocumentsWarehousePage() {
         )}
       </DocumentsSectionShell>
 
-      {detailOpen ? (
+      {(detailOpen || detailLoading || (detailErr != null && detailId != null)) ? (
         <div
           className="fixed inset-0 z-[270] flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-[2px]"
           onClick={() => !detailBusy && closeDetail()}
         >
           <div
-            className="flex h-[min(92vh,calc(100dvh-2rem))] w-full min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-2xl"
+            className="flex h-[min(92vh,calc(100dvh-2rem))] w-full min-w-0 flex-col overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             {detailLoading ? (
-              <div className="flex shrink-0 items-center justify-center border-b border-slate-200 px-4 py-8 text-sm text-slate-500">
+              <div className="flex shrink-0 items-center justify-center border-b border-slate-200 px-4 py-6 text-sm text-slate-500">
                 Wczytywanie dokumentu…
               </div>
             ) : detail ? (
@@ -860,18 +900,18 @@ export default function DocumentsWarehousePage() {
             )}
 
             {detailErr ? (
-              <div className="shrink-0 border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">{detailErr}</div>
+              <div className="shrink-0 border-b border-red-200 bg-red-50 px-3 py-1.5 text-sm text-red-800">{detailErr}</div>
             ) : null}
 
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-4 pb-0 pt-2">
+            <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
               {detailLoading ? (
                 <div className="flex flex-1 items-center justify-center text-sm text-slate-500">Wczytywanie…</div>
               ) : detail ? (
-                <div ref={docLinesRef} className="flex min-h-0 flex-1 flex-col">
+                <div ref={docLinesRef} className="flex min-h-0 flex-1 flex-col overflow-hidden">
                   <WarehouseDocumentLinesSection
                     className="min-h-0 flex-1"
                     detail={detail}
-                    tenantId={tenantId}
+                    tenantId={resolvedTenantId}
                     isWzDetail={isWzDetail}
                     showPurchaseSalesBlock={isPzDetail}
                     onSalesBlockUpdated={() => {
@@ -896,9 +936,8 @@ export default function DocumentsWarehousePage() {
                   />
                 </div>
               ) : null}
-            </div>
 
-            <WarehouseDocumentDetailFooter
+              <WarehouseDocumentDetailFooter
               detailBusy={detailBusy}
               detailId={detailId}
               detail={detail}
@@ -927,12 +966,13 @@ export default function DocumentsWarehousePage() {
               onSaveDraft={() => void handleSaveDraft()}
               onAccept={() => void handleAccept()}
             />
+            </div>
           </div>
         </div>
       ) : null}
 
       <CarrierAssignProductsModal
-        tenantId={tenantId}
+        tenantId={resolvedTenantId}
         open={assignPickerLineId != null}
         onClose={() => setAssignPickerLineId(null)}
         onPick={(carrier) => {
@@ -945,7 +985,7 @@ export default function DocumentsWarehousePage() {
         }}
       />
       <CarrierCreateModal
-        tenantId={tenantId}
+        tenantId={resolvedTenantId}
         open={createCarrierLineId != null}
         onClose={() => setCreateCarrierLineId(null)}
         onCreated={(carrier) => {
@@ -997,7 +1037,7 @@ export default function DocumentsWarehousePage() {
       <ErpBulkPrintModal
         open={bulkPrintOpen}
         onClose={() => setBulkPrintOpen(false)}
-        tenantId={tenantId}
+        tenantId={resolvedTenantId}
         title="Masowy druk dokumentów magazynowych"
         ids={Array.from(selectedDocIds)}
         documentTypes={[stockBulkDocumentType(docTab)]}

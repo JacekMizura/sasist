@@ -17,10 +17,10 @@ import {
 
 function sideLinkCls(active: boolean) {
   return [
-    "flex min-h-[34px] items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13px] font-semibold transition-all [&_svg]:h-4 [&_svg]:w-4 [&_svg]:shrink-0",
+    "flex min-h-[30px] items-center gap-1.5 rounded-md px-2 py-1 text-[13px] font-medium transition-colors",
     active
-      ? "bg-cyan-50/90 text-cyan-950 ring-1 ring-cyan-200/70"
-      : "text-slate-600 hover:bg-white/80 hover:text-slate-900 hover:ring-1 hover:ring-slate-200/50",
+      ? "bg-cyan-50 text-cyan-950 ring-1 ring-cyan-200/70"
+      : "text-slate-600 hover:bg-white/80 hover:text-slate-900",
   ].join(" ");
 }
 
@@ -65,24 +65,23 @@ function DocumentsLayoutInner() {
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <div className="w-full min-w-0 flex-1 p-4 md:p-6">
-        <div className="grid min-h-0 min-w-0 flex-1 grid-rows-[1fr_auto] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm sm:grid-rows-1 sm:grid-cols-[210px_minmax(0,1fr)]">
+      <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col p-4 md:p-6">
+        <div className="grid min-h-0 min-w-0 flex-1 grid-rows-[1fr_auto] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm sm:grid-rows-1 sm:grid-cols-[200px_minmax(0,1fr)]">
           <aside
-            className="relative z-10 hidden min-h-0 min-w-0 overflow-y-auto border-r border-slate-200/90 bg-slate-50/30 sm:block"
+            className="relative z-10 hidden min-h-0 min-w-0 overflow-y-auto border-r border-slate-200/90 bg-slate-50/40 sm:block"
             aria-label="Dokumenty — nawigacja"
           >
-            <div className="p-2">
-              <nav className="flex flex-col gap-3">
+            <div className="p-1.5">
+              <nav className="flex flex-col gap-2">
                 {sidebarSections.map((section, si) => (
                   <div key={`${section.title ?? "sec"}-${si}`}>
                     {section.title ? (
-                      <div className="mb-1.5 px-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      <div className="mb-1 px-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
                         {section.title}
                       </div>
                     ) : null}
                     <ul className="flex flex-col gap-0.5">
                       {section.items.map((item) => {
-                        const Icon = item.Icon;
                         const active = isNavPathActive(pathname, item.path);
                         return (
                           <li key={item.path}>
@@ -91,9 +90,6 @@ function DocumentsLayoutInner() {
                               className={() => sideLinkCls(active)}
                               aria-current={active ? "page" : undefined}
                             >
-                              <span className={active ? "text-cyan-700" : "text-slate-400"}>
-                                <Icon aria-hidden />
-                              </span>
                               <span className="min-w-0 truncate">{item.label}</span>
                             </NavLink>
                           </li>
@@ -130,7 +126,7 @@ function DocumentsLayoutInner() {
                 ) : null}
               </div>
             </div>
-            <main className="relative min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-white p-5">
+            <main className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto bg-white p-4">
               <Outlet />
             </main>
           </div>

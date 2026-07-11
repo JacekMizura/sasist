@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
-import api from "../../api/axios";
+import { fetchTenantsList } from "../../api/tenantsApi";
 
 type Tenant = { id: number; name: string };
 
@@ -32,10 +32,8 @@ export function useWarehouseCarriersTenant(surface: WarehouseCarriersSurface) {
 
   useEffect(() => {
     if (surface !== "erp") return;
-    api
-      .get<Tenant[]>("/tenants/")
-      .then((res) => {
-        const list = Array.isArray(res.data) ? res.data : [];
+    void fetchTenantsList()
+      .then((list) => {
         setTenants(list);
         if (list.length > 0 && !list.some((t) => t.id === tenantId)) setTenantId(list[0].id);
       })

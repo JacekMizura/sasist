@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams, useLocation } from "react-router-dom";
 import api from "../../api/axios";
+import { fetchTenantsList } from "../../api/tenantsApi";
 import { CatalogEntityPageShell } from "../../components/catalog";
 import { ProductEditModal, type ProductEditTabId } from "./ProductEditModal";
 import { mapProductListRow } from "./productListMapper";
@@ -63,10 +64,7 @@ export default function ProductEditPage() {
   const [productRow, setProductRow] = useState<ReturnType<typeof mapProductListRow> | null>(null);
 
   useEffect(() => {
-    api
-      .get<Tenant[]>("/tenants/")
-      .then((res) => setTenants(Array.isArray(res.data) ? res.data : []))
-      .catch(() => setTenants([]));
+    void fetchTenantsList().then(setTenants).catch(() => setTenants([]));
   }, []);
 
   useEffect(() => {

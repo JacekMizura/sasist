@@ -9,7 +9,9 @@ export const warehouseDocInfoCardClass =
   "rounded-lg border border-slate-200/90 bg-white p-3 shadow-sm";
 
 export const warehouseDocPrimaryBtnClass =
-  "inline-flex h-10 items-center justify-center rounded-lg bg-slate-900 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/50 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50";
+  "inline-flex h-9 items-center justify-center rounded-lg bg-slate-900 px-3.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/50 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50";
+
+export const warehouseDocDetailScrollClass = "min-h-0 flex-1 overflow-auto pb-[72px]";
 
 export const warehouseDocSecondaryBtnClass = listSellasistToolbarToggleBtn;
 
@@ -51,11 +53,23 @@ export function WarehouseDocFinancialItem({
   label,
   value,
   tone,
+  compact,
 }: {
   label: string;
   value: ReactNode;
   tone?: "default" | "diff";
+  compact?: boolean;
 }) {
+  if (compact) {
+    return (
+      <span className="inline-flex items-center gap-1 text-slate-600">
+        <span className="text-[11px] text-slate-500">{label}</span>
+        <span className={`text-[12px] font-semibold tabular-nums ${tone === "diff" ? "" : "text-slate-900"}`}>
+          {value}
+        </span>
+      </span>
+    );
+  }
   return (
     <span className="inline-flex items-center gap-1.5 text-slate-600">
       <span className="text-xs text-slate-500">{label}</span>
@@ -77,12 +91,16 @@ export function WarehouseDocFinancialSeparator() {
 export function WarehouseDocSummaryBar({
   left,
   right,
+  className = "",
 }: {
   left: ReactNode;
   right?: ReactNode;
+  className?: string;
 }) {
   return (
-    <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-slate-200 bg-slate-50/80 px-4 py-2.5 text-[13px]">
+    <div
+      className={`flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-slate-200 bg-slate-50/80 px-4 py-2.5 text-[13px] ${className}`.trim()}
+    >
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-slate-600">{left}</div>
       {right ? (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-slate-600">{right}</div>

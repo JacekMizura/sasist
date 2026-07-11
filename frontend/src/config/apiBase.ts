@@ -6,6 +6,8 @@
 import axios from "axios";
 import type { InternalAxiosRequestConfig } from "axios";
 
+import { log } from "../utils/logger";
+
 const LOCAL_API_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
 function isLocalApiHost(hostname: string): boolean {
@@ -154,8 +156,9 @@ export function getAxiosRequestDebugUrl(config: InternalAxiosRequestConfig): str
 }
 
 export function logApiBaseDebug(context: string): void {
+  if (!import.meta.env.DEV) return;
   const resolved = resolveAxiosBaseURL().replace(/\/+$/, "") + "/";
-  console.log(`[api] ${context}`, {
+  log(`[api] ${context}`, {
     viteApiUrlEnv: import.meta.env.VITE_API_URL,
     resolvedBaseURL: resolved,
     mode: import.meta.env.MODE,

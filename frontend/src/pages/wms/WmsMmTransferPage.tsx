@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Image as ImageIcon, ListOrdered, MapPin, Minus, Plus, ScanLine } from "lucide-react";
-import api from "../../api/axios";
+import { fetchTenantsList } from "../../api/tenantsApi";
 import { patchReplenishmentTaskExecute } from "../../api/wmsReplenishmentApi";
 import type { WmsReplenishmentTaskRead } from "../../api/wmsReplenishmentApi";
 import { resolveWmsReceivingScan, type ReceivingScanResolve } from "../../api/wmsReceivingApi";
@@ -150,10 +150,8 @@ export default function WmsMmTransferPage() {
     (productId != null ? `Produkt #${productId}` : "");
 
   useEffect(() => {
-    api
-      .get<Tenant[]>("/tenants/")
-      .then((res) => {
-        const list = Array.isArray(res.data) ? res.data : [];
+    void fetchTenantsList()
+      .then((list) => {
         const savedRaw = localStorage.getItem(TENANT_STORAGE_KEY);
         const saved = savedRaw != null ? Number(savedRaw) : NaN;
         const pick = list.find((t) => t.id === saved)?.id ?? list[0]?.id ?? 1;

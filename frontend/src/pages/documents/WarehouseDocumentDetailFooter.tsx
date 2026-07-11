@@ -61,8 +61,8 @@ export function WarehouseDocumentDetailFooter({
       : "Zatwierdź przyjęcie";
 
   return (
-    <footer className="flex shrink-0 flex-wrap items-center gap-2 border-t border-slate-200 bg-white px-4 py-3">
-      <div className="flex flex-wrap items-center gap-2">
+    <footer className="sticky bottom-0 z-10 flex h-14 shrink-0 items-center gap-2 border-t border-slate-200 bg-white px-3 shadow-[0_-1px_0_0_rgb(226_232_240)]">
+      <div className="flex min-w-0 flex-wrap items-center gap-1.5">
         <button type="button" onClick={onClose} disabled={detailBusy} className={warehouseDocSecondaryBtnClass}>
           Zamknij
         </button>
@@ -76,7 +76,7 @@ export function WarehouseDocumentDetailFooter({
                 title="Edytuj pozycje"
                 disabled={detailBusy}
                 onClick={onScrollToLines}
-                className={warehouseDocIconBtnClass}
+                className={`${warehouseDocIconBtnClass} !h-9 !w-9`}
               >
                 <Pencil className="h-4 w-4" strokeWidth={2} aria-hidden />
               </button>
@@ -87,7 +87,7 @@ export function WarehouseDocumentDetailFooter({
                   title="Drukuj / PDF"
                   disabled={detailBusy}
                   onClick={onTogglePrintMenu}
-                  className={warehouseDocIconBtnClass}
+                  className={`${warehouseDocIconBtnClass} !h-9 !w-9`}
                 >
                   <Printer className="h-4 w-4" strokeWidth={2} aria-hidden />
                 </button>
@@ -116,7 +116,7 @@ export function WarehouseDocumentDetailFooter({
                 title="Usuń dokument"
                 disabled={detailBusy}
                 onClick={onDelete}
-                className={warehouseDocIconBtnDangerClass}
+                className={`${warehouseDocIconBtnDangerClass} !h-9 !w-9`}
               >
                 <Trash2 className="h-4 w-4" strokeWidth={2} aria-hidden />
               </button>
@@ -130,7 +130,7 @@ export function WarehouseDocumentDetailFooter({
         ) : null}
       </div>
 
-      <div className="flex flex-1 flex-wrap items-center justify-end gap-2">
+      <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1.5">
         {canEditMetadata ? (
           <button
             type="button"

@@ -1,4 +1,4 @@
-import { useMemo, type CSSProperties } from "react";
+import { memo, useMemo, type CSSProperties } from "react";
 import { Eye, FileText, Mail, Truck } from "lucide-react";
 
 import type { OrderUiStatusBrief } from "../../../types/orderUiStatus";
@@ -160,6 +160,265 @@ function StaticTh({ label, align }: { label: string; align?: "left" | "right" | 
   return <th className={`${TH} ${alignClass}`}>{label}</th>;
 }
 
+function renderOrderListCell(
+  col: string,
+  o: OrderListDenseOrder,
+  ctx: {
+    formatOrderDate: OrderListDenseTableProps["formatOrderDate"];
+    formatMoney: OrderListDenseTableProps["formatMoney"];
+    customerLabel: OrderListDenseTableProps["customerLabel"];
+    deriveOrderListPaymentBadgeRow: OrderListDenseTableProps["deriveOrderListPaymentBadgeRow"];
+    initialExpandedProductOrderIds?: ReadonlySet<number>;
+  },
+) {
+  const displayLines = (o.items_display_lines?.length ? o.items_display_lines : o.items_preview) ?? [];
+  const payRow = ctx.deriveOrderListPaymentBadgeRow({
+    panel_payment_status: o.panel_payment_status,
+    panel_payment_method: o.panel_payment_method,
+  });
+  const shipMethod = (o.shipping_method ?? "").trim();
+  const tracking = (o.tracking_number ?? "").trim();
+  const uiStatus = o.order_ui_status ?? null;
+  const uiTerminal = uiStatus?.main_group === "DONE";
+
+  switch (col) {
+    case "order_core":
+      return (
+        <td key={col} className={`${TD} min-w-[11rem]`}>
+          <div
+            className="inline-flex items-center gap-1 font-medium text-slate-900"
+            title={buildOrderListDocumentContextTitle({
+              orderNumber: o.number,
+              orderId: o.id,
+              orderChannel: o.order_channel,
+              fulfillmentMode: o.fulfillment_mode,
+              workflowPhase: o.wms_workflow_phase,
+              packedAtIso: o.wms_packed_at,
+              packedByLabel: o.wms_packed_by_label,
+              missingLineCount: o.wms_missing_line_count,
+            })}
+          >
+            <OrderPriorityFlameIcon priorityColor={o.priority_color} />
+            #{o.number ?? o.id}
+          </div>
+          <div className="mt-1 text-xs text-slate-400">{ctx.formatOrderDate(o.order_date)}</div>
+        </td>
+      );
+    case "panel_status":
+      return (
+        <td key={col} className={`${TD} min-w-[10rem]`}>
+          <ModuleListStatusPill
+            status={uiStatus}
+            terminal={uiTerminal}
+            terminalPositive={uiTerminal}
+          />
+        </td>
+      );
+    case "products":
+      return (
+        <td key={col} className={`${TD} min-w-[14rem] whitespace-normal !py-3`}>
+          <ReturnsListProductCell
+            lines={displayLines}
+            initialExpanded={ctx.initialExpandedProductOrderIds?.has(o.id) ?? false}
+          />
+        </td>
+      );
+    case "customer":
+      return (
+        <td key={col} className={`${TD} min-w-[10rem] whitespace-normal break-words text-slate-600`}>
+          {ctx.customerLabel(o)}
+        </td>
+      );
+    case "value":
+      return (
+        <td key={col} className={`${TD} text-right`}>
+          <div className="font-medium tabular-nums text-slate-900">{ctx.formatMoney(o.value, o.currency)}</div>
+          {payRow ? <div className="mt-1 text-xs text-slate-400">{payRow.label}</div> : null}
+        </td>
+      );
+    case "carrier": {
+      const shipEmpty = !shipMethod;
+      return (
+        <td key={col} className={TD}>
+          <div className="flex flex-col items-start gap-1.5">
+            <ShippingMethodLogo
+              logoUrl={o.shipping_method_logo_url}
+              methodName={o.shipping_method}
+              size="orderList"
+              placeholder="package"
+            />
+            <span className={shipEmpty ? moduleListChannelBadgeEmptyClass : moduleListChannelBadgeClass}>
+              {shipEmpty ? "—" : shipMethod}
+            </span>
+            {tracking ? (
+              <span className="text-xs tabular-nums text-slate-500" title={tracking}>
+                {tracking}
+              </span>
+            ) : null}
+          </div>
+        </td>
+      );
+    }
+    case "gross_profit": {
+      const gp = o.gross_profit;
+      const margin = o.margin_percent;
+      const tone =
+        gp == null || Number.isNaN(Number(gp))
+          ? "text-slate-500"
+          : Number(gp) < 0
+            ? "text-red-700"
+            : margin != null && Number.isFinite(Number(margin)) && Number(margin) < 10
+              ? "text-amber-700"
+              : "text-emerald-700";
+      return (
+        <td key={col} className={`${TD} text-right`}>
+          <div className={`font-medium tabular-nums ${tone}`}>{ctx.formatMoney(gp, o.currency)}</div>
+        </td>
+      );
+    }
+    case "margin_percent":
+      return (
+        <td key={col} className={`${TD} text-right`}>
+          <div className="font-medium tabular-nums text-slate-900">
+            {o.margin_percent != null && Number.isFinite(Number(o.margin_percent))
+              ? `${Number(o.margin_percent).toFixed(2)}%`
+              : "—"}
+          </div>
+        </td>
+      );
+    default:
+      return null;
+  }
+}
+
+type OrderListDenseTableRowProps = {
+  order: OrderListDenseOrder;
+  tableColumns: string[];
+  selected: boolean;
+  bulkBusy: boolean;
+  formatOrderDate: OrderListDenseTableProps["formatOrderDate"];
+  formatMoney: OrderListDenseTableProps["formatMoney"];
+  customerLabel: OrderListDenseTableProps["customerLabel"];
+  deriveOrderListPaymentBadgeRow: OrderListDenseTableProps["deriveOrderListPaymentBadgeRow"];
+  initialExpandedProductOrderIds?: ReadonlySet<number>;
+  toggleOne: (id: string, shift: boolean) => void;
+  openOrder: (id: number) => void;
+  onRowQuickAction: (orderId: number, kind: OrderQuickToolbarActionKind) => void;
+  onRowOpenMulti?: (orderId: number) => void;
+};
+
+const OrderListDenseTableRow = memo(function OrderListDenseTableRow({
+  order: o,
+  tableColumns,
+  selected,
+  bulkBusy,
+  formatOrderDate,
+  formatMoney,
+  customerLabel,
+  deriveOrderListPaymentBadgeRow,
+  initialExpandedProductOrderIds,
+  toggleOne,
+  openOrder,
+  onRowQuickAction,
+  onRowOpenMulti,
+}: OrderListDenseTableRowProps) {
+  const cellCtx = useMemo(
+    () => ({
+      formatOrderDate,
+      formatMoney,
+      customerLabel,
+      deriveOrderListPaymentBadgeRow,
+      initialExpandedProductOrderIds,
+    }),
+    [
+      formatOrderDate,
+      formatMoney,
+      customerLabel,
+      deriveOrderListPaymentBadgeRow,
+      initialExpandedProductOrderIds,
+    ],
+  );
+
+  return (
+    <tr
+      className={`${moduleListRowClass} ${selected ? moduleListRowSelectedClass : ""}`}
+      onClick={() => openOrder(o.id)}
+    >
+      <td className={`${TD} w-12 text-center`} onClick={(e) => e.stopPropagation()}>
+        <input
+          type="checkbox"
+          checked={selected}
+          disabled={bulkBusy}
+          onChange={(e) => toggleOne(String(o.id), (e.nativeEvent as MouseEvent).shiftKey ?? false)}
+          className={panelListDenseCheckboxInputClass}
+          aria-label={`Zaznacz zamówienie ${o.number ?? o.id}`}
+        />
+      </td>
+      {tableColumns.map((c) => renderOrderListCell(c, o, cellCtx))}
+      <ModuleListRowActionsCell ariaLabel="Akcje zamówienia">
+        <OperationalActionColumn
+          layout="stack"
+          aria-label="Akcje zamówienia"
+          slots={[
+            <OperationalActionButton
+              key="eye"
+              disabled={bulkBusy}
+              title="Szczegóły"
+              aria-label="Szczegóły zamówienia"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                openOrder(o.id);
+              }}
+            >
+              <Eye className="text-slate-600" strokeWidth={2} aria-hidden />
+            </OperationalActionButton>,
+            <OperationalActionButton
+              key="doc"
+              disabled={bulkBusy}
+              title="Wystaw dokument"
+              aria-label="Wystaw dokument"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onRowQuickAction(o.id, "issue_document");
+              }}
+            >
+              <FileText className="text-slate-600" strokeWidth={2} aria-hidden />
+            </OperationalActionButton>,
+            <OperationalActionButton
+              key="truck"
+              disabled={bulkBusy || !onRowOpenMulti}
+              title="Multiakcje"
+              aria-label="Multiakcje"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onRowOpenMulti?.(o.id);
+              }}
+            >
+              <Truck className="text-slate-600" strokeWidth={2} aria-hidden />
+            </OperationalActionButton>,
+            <OperationalActionButton
+              key="mail"
+              disabled={bulkBusy}
+              title="Wiadomość"
+              aria-label="Wyślij wiadomość"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onRowQuickAction(o.id, "send_message");
+              }}
+            >
+              <Mail className="text-slate-600" strokeWidth={2} aria-hidden />
+            </OperationalActionButton>,
+          ]}
+        />
+      </ModuleListRowActionsCell>
+    </tr>
+  );
+});
+
 export function OrderListDenseTable({
   orders,
   columnOrder,
@@ -242,129 +501,6 @@ export function OrderListDenseTable({
     }
   };
 
-  const renderCell = (col: string, o: OrderListDenseOrder) => {
-    const displayLines = (o.items_display_lines?.length ? o.items_display_lines : o.items_preview) ?? [];
-    const payRow = deriveOrderListPaymentBadgeRow({
-      panel_payment_status: o.panel_payment_status,
-      panel_payment_method: o.panel_payment_method,
-    });
-    const shipMethod = (o.shipping_method ?? "").trim();
-    const tracking = (o.tracking_number ?? "").trim();
-    const uiStatus = o.order_ui_status ?? null;
-    const uiTerminal = uiStatus?.main_group === "DONE";
-
-    switch (col) {
-      case "order_core":
-        return (
-          <td key={col} className={`${TD} min-w-[11rem]`}>
-            <div
-              className="inline-flex items-center gap-1 font-medium text-slate-900"
-              title={buildOrderListDocumentContextTitle({
-                orderNumber: o.number,
-                orderId: o.id,
-                orderChannel: o.order_channel,
-                fulfillmentMode: o.fulfillment_mode,
-                workflowPhase: o.wms_workflow_phase,
-                packedAtIso: o.wms_packed_at,
-                packedByLabel: o.wms_packed_by_label,
-                missingLineCount: o.wms_missing_line_count,
-              })}
-            >
-              <OrderPriorityFlameIcon priorityColor={o.priority_color} />
-              #{o.number ?? o.id}
-            </div>
-            <div className="mt-1 text-xs text-slate-400">{formatOrderDate(o.order_date)}</div>
-          </td>
-        );
-      case "panel_status":
-        return (
-          <td key={col} className={`${TD} min-w-[10rem]`}>
-            <ModuleListStatusPill
-              status={uiStatus}
-              terminal={uiTerminal}
-              terminalPositive={uiTerminal}
-            />
-          </td>
-        );
-      case "products":
-        return (
-          <td key={col} className={`${TD} min-w-[14rem] whitespace-normal !py-3`}>
-            <ReturnsListProductCell
-              lines={displayLines}
-              initialExpanded={initialExpandedProductOrderIds?.has(o.id) ?? false}
-            />
-          </td>
-        );
-      case "customer":
-        return (
-          <td key={col} className={`${TD} min-w-[10rem] whitespace-normal break-words text-slate-600`}>
-            {customerLabel(o)}
-          </td>
-        );
-      case "value":
-        return (
-          <td key={col} className={`${TD} text-right`}>
-            <div className="font-medium tabular-nums text-slate-900">{formatMoney(o.value, o.currency)}</div>
-            {payRow ? (
-              <div className="mt-1 text-xs text-slate-400">{payRow.label}</div>
-            ) : null}
-          </td>
-        );
-      case "carrier": {
-        const shipEmpty = !shipMethod;
-        return (
-          <td key={col} className={TD}>
-            <div className="flex flex-col items-start gap-1.5">
-              <ShippingMethodLogo
-                logoUrl={o.shipping_method_logo_url}
-                methodName={o.shipping_method}
-                size="orderList"
-                placeholder="package"
-              />
-              <span className={shipEmpty ? moduleListChannelBadgeEmptyClass : moduleListChannelBadgeClass}>
-                {shipEmpty ? "—" : shipMethod}
-              </span>
-              {tracking ? (
-                <span className="text-xs tabular-nums text-slate-500" title={tracking}>
-                  {tracking}
-                </span>
-              ) : null}
-            </div>
-          </td>
-        );
-      }
-      case "gross_profit": {
-        const gp = o.gross_profit;
-        const margin = o.margin_percent;
-        const tone =
-          gp == null || Number.isNaN(Number(gp))
-            ? "text-slate-500"
-            : Number(gp) < 0
-              ? "text-red-700"
-              : margin != null && Number.isFinite(Number(margin)) && Number(margin) < 10
-                ? "text-amber-700"
-                : "text-emerald-700";
-        return (
-          <td key={col} className={`${TD} text-right`}>
-            <div className={`font-medium tabular-nums ${tone}`}>{formatMoney(gp, o.currency)}</div>
-          </td>
-        );
-      }
-      case "margin_percent":
-        return (
-          <td key={col} className={`${TD} text-right`}>
-            <div className="font-medium tabular-nums text-slate-900">
-              {o.margin_percent != null && Number.isFinite(Number(o.margin_percent))
-                ? `${Number(o.margin_percent).toFixed(2)}%`
-                : "—"}
-            </div>
-          </td>
-        );
-      default:
-        return null;
-    }
-  };
-
   return (
     <div className={moduleListTableScrollClass}>
       <table className={moduleListTableClass}>
@@ -378,88 +514,24 @@ export function OrderListDenseTable({
           </tr>
         </thead>
         <tbody>
-          {orders.map((o) => {
-            const selected = isRowSelected(String(o.id));
-            return (
-              <tr
-                key={o.id}
-                className={`${moduleListRowClass} ${selected ? moduleListRowSelectedClass : ""}`}
-                onClick={() => openOrder(o.id)}
-              >
-                <td className={`${TD} w-12 text-center`} onClick={(e) => e.stopPropagation()}>
-                  <input
-                    type="checkbox"
-                    checked={selected}
-                    disabled={bulkBusy}
-                    onChange={(e) => toggleOne(String(o.id), (e.nativeEvent as MouseEvent).shiftKey ?? false)}
-                    className={panelListDenseCheckboxInputClass}
-                    aria-label={`Zaznacz zamówienie ${o.number ?? o.id}`}
-                  />
-                </td>
-                {tableColumns.map((c) => renderCell(c, o))}
-                <ModuleListRowActionsCell ariaLabel="Akcje zamówienia">
-                  <OperationalActionColumn
-                    layout="stack"
-                    aria-label="Akcje zamówienia"
-                    slots={[
-                      <OperationalActionButton
-                        key="eye"
-                        disabled={bulkBusy}
-                        title="Szczegóły"
-                        aria-label="Szczegóły zamówienia"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          openOrder(o.id);
-                        }}
-                      >
-                        <Eye className="text-slate-600" strokeWidth={2} aria-hidden />
-                      </OperationalActionButton>,
-                      <OperationalActionButton
-                        key="doc"
-                        disabled={bulkBusy}
-                        title="Wystaw dokument"
-                        aria-label="Wystaw dokument"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          onRowQuickAction(o.id, "issue_document");
-                        }}
-                      >
-                        <FileText className="text-slate-600" strokeWidth={2} aria-hidden />
-                      </OperationalActionButton>,
-                      <OperationalActionButton
-                        key="truck"
-                        disabled={bulkBusy || !onRowOpenMulti}
-                        title="Multiakcje"
-                        aria-label="Multiakcje"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          onRowOpenMulti?.(o.id);
-                        }}
-                      >
-                        <Truck className="text-slate-600" strokeWidth={2} aria-hidden />
-                      </OperationalActionButton>,
-                      <OperationalActionButton
-                        key="mail"
-                        disabled={bulkBusy}
-                        title="Wiadomość"
-                        aria-label="Wyślij wiadomość"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          onRowQuickAction(o.id, "send_message");
-                        }}
-                      >
-                        <Mail className="text-slate-600" strokeWidth={2} aria-hidden />
-                      </OperationalActionButton>,
-                    ]}
-                  />
-                </ModuleListRowActionsCell>
-              </tr>
-            );
-          })}
+          {orders.map((o) => (
+            <OrderListDenseTableRow
+              key={o.id}
+              order={o}
+              tableColumns={tableColumns}
+              selected={isRowSelected(String(o.id))}
+              bulkBusy={bulkBusy}
+              formatOrderDate={formatOrderDate}
+              formatMoney={formatMoney}
+              customerLabel={customerLabel}
+              deriveOrderListPaymentBadgeRow={deriveOrderListPaymentBadgeRow}
+              initialExpandedProductOrderIds={initialExpandedProductOrderIds}
+              toggleOne={toggleOne}
+              openOrder={openOrder}
+              onRowQuickAction={onRowQuickAction}
+              onRowOpenMulti={onRowOpenMulti}
+            />
+          ))}
         </tbody>
       </table>
     </div>

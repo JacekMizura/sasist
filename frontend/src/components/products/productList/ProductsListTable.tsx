@@ -1,4 +1,4 @@
-import type { RefObject, ReactNode } from "react";
+import { memo, type RefObject, type ReactNode } from "react";
 import { Copy, Pencil, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
@@ -237,6 +237,115 @@ function DynamicCell({
   }
 }
 
+type ProductTableRowProps = {
+  row: ProductListRow;
+  columnOrder: string[];
+  columnCatalog?: readonly FilterFieldCatalogItem[];
+  selected: boolean;
+  onToggleOne: (id: number) => void;
+  onRowOpen: (row: ProductListRow) => void;
+  onDuplicate: (row: ProductListRow) => void;
+  onDelete: (row: ProductListRow) => void;
+  onOpenLocationOnMap: (payload: OpenLocationOnMapPayload) => void;
+  rowDupBusyId: number | null;
+  rowDeleteBusyId: number | null;
+};
+
+const ProductTableRow = memo(function ProductTableRow({
+  row,
+  columnOrder,
+  columnCatalog,
+  selected,
+  onToggleOne,
+  onRowOpen,
+  onDuplicate,
+  onDelete,
+  onOpenLocationOnMap,
+  rowDupBusyId,
+  rowDeleteBusyId,
+}: ProductTableRowProps) {
+  const mismatch = hasPlanVersusPhysicalMismatch(row);
+
+  return (
+    <tr className={productsListRowClass} onClick={() => onRowOpen(row)}>
+      <td className={productsListCheckboxCellClass} onClick={(e) => e.stopPropagation()}>
+        <div className={productsListCheckboxInnerClass}>
+          <input
+            type="checkbox"
+            className={productsListCheckboxInputClass}
+            checked={selected}
+            onChange={() => onToggleOne(row.id)}
+            aria-label={`Zaznacz ${row.name ?? row.id}`}
+          />
+        </div>
+      </td>
+      <td className={productsListPhotoCellClass}>
+        <ProductListPhotoCell imageUrl={row.image_url} />
+      </td>
+      <td className={productsListNameCellClass}>
+        <div className={`${productsListRowInnerClass} min-w-0 flex-col !items-start gap-1 py-2`}>
+          <span
+            className="block max-w-full truncate text-sm font-medium text-slate-900"
+            title={row.name?.trim() || undefined}
+          >
+            {row.name?.trim() || "—"}
+          </span>
+          {mismatch ? (
+            <span className="inline-flex w-fit max-w-full items-center rounded border border-amber-200/80 bg-amber-50/50 px-1.5 py-0.5 text-xs font-medium leading-snug text-amber-900/90">
+              Niezgodność plan / stan
+            </span>
+          ) : null}
+          <ProductListLogisticsBadges product={row} />
+        </div>
+      </td>
+      {columnOrder.map((colId) => (
+        <td key={colId} className={productsListTdClass}>
+          <DynamicCell
+            row={row}
+            columnId={colId}
+            columnCatalog={columnCatalog}
+            onOpenLocationOnMap={onOpenLocationOnMap}
+          />
+        </td>
+      ))}
+      <td className={productsListActionsCellClass} onClick={(e) => e.stopPropagation()}>
+        <OperationalActionColumn
+          aria-label="Akcje produktu"
+          slots={[
+            <OperationalActionButton
+              key="dup"
+              disabled={rowDupBusyId === row.id}
+              title="Duplikuj produkt"
+              aria-label="Duplikuj produkt"
+              onClick={() => onDuplicate(row)}
+            >
+              <Copy strokeWidth={2} aria-hidden />
+            </OperationalActionButton>,
+            <OperationalActionButton
+              key="edit"
+              title="Edytuj produkt"
+              aria-label="Edytuj produkt"
+              onClick={() => onRowOpen(row)}
+            >
+              <Pencil strokeWidth={2} aria-hidden />
+            </OperationalActionButton>,
+            <OperationalActionButton
+              key="del"
+              variant="danger"
+              disabled={rowDeleteBusyId === row.id}
+              onClick={() => onDelete(row)}
+              title="Usuń / zarchiwizuj"
+              aria-label="Usuń produkt"
+            >
+              <Trash2 strokeWidth={2} aria-hidden />
+            </OperationalActionButton>,
+          ]}
+        />
+      </td>
+    </tr>
+  );
+});
+
 export function ProductsListTable({
   rows,
   columnOrder,
@@ -335,87 +444,22 @@ export function ProductsListTable({
               </td>
             </tr>
           ) : (
-            rows.map((row) => {
-              const mismatch = hasPlanVersusPhysicalMismatch(row);
-              return (
-                <tr key={row.id} className={productsListRowClass} onClick={() => onRowOpen(row)}>
-                  <td className={productsListCheckboxCellClass} onClick={(e) => e.stopPropagation()}>
-                    <div className={productsListCheckboxInnerClass}>
-                      <input
-                        type="checkbox"
-                        className={productsListCheckboxInputClass}
-                        checked={isRowSelected(row.id)}
-                        onChange={() => onToggleOne(row.id)}
-                        aria-label={`Zaznacz ${row.name ?? row.id}`}
-                      />
-                    </div>
-                  </td>
-                  <td className={productsListPhotoCellClass}>
-                    <ProductListPhotoCell imageUrl={row.image_url} />
-                  </td>
-                  <td className={productsListNameCellClass}>
-                    <div className={`${productsListRowInnerClass} min-w-0 flex-col !items-start gap-1 py-2`}>
-                      <span
-                        className="block max-w-full truncate text-sm font-medium text-slate-900"
-                        title={row.name?.trim() || undefined}
-                      >
-                        {row.name?.trim() || "—"}
-                      </span>
-                      {mismatch ? (
-                        <span className="inline-flex w-fit max-w-full items-center rounded border border-amber-200/80 bg-amber-50/50 px-1.5 py-0.5 text-xs font-medium leading-snug text-amber-900/90">
-                          Niezgodność plan / stan
-                        </span>
-                      ) : null}
-                      <ProductListLogisticsBadges product={row} />
-                    </div>
-                  </td>
-                  {columnOrder.map((colId) => (
-                    <td key={colId} className={productsListTdClass}>
-                      <DynamicCell
-                        row={row}
-                        columnId={colId}
-                        columnCatalog={columnCatalog}
-                        onOpenLocationOnMap={onOpenLocationOnMap}
-                      />
-                    </td>
-                  ))}
-                  <td className={productsListActionsCellClass} onClick={(e) => e.stopPropagation()}>
-                    <OperationalActionColumn
-                      aria-label="Akcje produktu"
-                      slots={[
-                        <OperationalActionButton
-                          key="dup"
-                          disabled={rowDupBusyId === row.id}
-                          title="Duplikuj produkt"
-                          aria-label="Duplikuj produkt"
-                          onClick={() => onDuplicate(row)}
-                        >
-                          <Copy strokeWidth={2} aria-hidden />
-                        </OperationalActionButton>,
-                        <OperationalActionButton
-                          key="edit"
-                          title="Edytuj produkt"
-                          aria-label="Edytuj produkt"
-                          onClick={() => onRowOpen(row)}
-                        >
-                          <Pencil strokeWidth={2} aria-hidden />
-                        </OperationalActionButton>,
-                        <OperationalActionButton
-                          key="del"
-                          variant="danger"
-                          disabled={rowDeleteBusyId === row.id}
-                          onClick={() => onDelete(row)}
-                          title="Usuń / zarchiwizuj"
-                          aria-label="Usuń produkt"
-                        >
-                          <Trash2 strokeWidth={2} aria-hidden />
-                        </OperationalActionButton>,
-                      ]}
-                    />
-                  </td>
-                </tr>
-              );
-            })
+            rows.map((row) => (
+              <ProductTableRow
+                key={row.id}
+                row={row}
+                columnOrder={columnOrder}
+                columnCatalog={columnCatalog}
+                selected={isRowSelected(row.id)}
+                onToggleOne={onToggleOne}
+                onRowOpen={onRowOpen}
+                onDuplicate={onDuplicate}
+                onDelete={onDelete}
+                onOpenLocationOnMap={onOpenLocationOnMap}
+                rowDupBusyId={rowDupBusyId}
+                rowDeleteBusyId={rowDeleteBusyId}
+              />
+            ))
           )}
         </tbody>
       </table>
