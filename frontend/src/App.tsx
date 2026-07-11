@@ -279,6 +279,7 @@ import DocumentsSalesPage from "./pages/documents/DocumentsSalesPage"
 import DocumentsSalesDetailPage from "./pages/documents/DocumentsSalesDetailPage"
 import DocumentsCorrectingPage from "./pages/documents/DocumentsCorrectingPage"
 import DocumentsWarehousePage from "./pages/documents/DocumentsWarehousePage"
+import DocumentsWarehouseDetailPage from "./pages/documents/DocumentsWarehouseDetailPage"
 import DocumentsPlaceholderPage from "./pages/documents/DocumentsPlaceholderPage"
 import DocumentsExportsHubPage from "./pages/documents/DocumentsExportsHubPage"
 
@@ -618,7 +619,10 @@ export const router = createBrowserRouter(
                   <Route path="returns" element={<Navigate to="/documents/correcting" replace />} />
                   <Route path="warehouse" element={<Outlet />}>
                     <Route index element={<Navigate to="pz" replace />} />
-                    <Route path=":docSegment" element={<DocumentsWarehousePage />} />
+                    <Route path=":docSegment" element={<Outlet />}>
+                      <Route index element={<DocumentsWarehousePage />} />
+                      <Route path=":documentId" element={<DocumentsWarehouseDetailPage />} />
+                    </Route>
                   </Route>
                   <Route path="exports" element={<DocumentsExportsHubPage />} />
                   <Route path="series" element={<DocumentSeriesListPage />} />

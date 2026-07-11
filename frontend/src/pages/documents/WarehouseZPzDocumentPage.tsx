@@ -113,7 +113,7 @@ export function WarehouseZPzDocumentPage({ documentId }: Props) {
       </div>
 
       {detail ? (
-        <footer className="sticky bottom-0 z-10 mt-2 flex h-14 shrink-0 items-center justify-end gap-1.5 border-t border-slate-200 bg-white px-1">
+        <footer className="mt-2 flex h-14 shrink-0 items-center justify-end gap-1.5 border-t border-slate-200 bg-white px-1">
           <button type="button" className={warehouseDocSecondaryBtnClass} onClick={() => navigate("/documents/warehouse/z-pz")}>
             Zamknij
           </button>

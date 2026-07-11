@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { MoreHorizontal } from "lucide-react";
 
+import { WarehouseDocumentFloatingMenu } from "./WarehouseDocumentFloatingMenu";
+
 export type LineActionKind =
   | "sales_block"
   | "block_history"
@@ -25,41 +27,46 @@ export function WarehouseDocumentLineActionsMenu({
   onAction,
 }: Props) {
   const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!open) return;
     function onDocClick(e: MouseEvent) {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
+      const el = e.target;
+      if (!(el instanceof Element)) return;
+      if (triggerRef.current?.contains(el)) return;
+      if (el.closest("[data-wh-doc-floating-menu]")) return;
+      setOpen(false);
     }
     document.addEventListener("mousedown", onDocClick);
     return () => document.removeEventListener("mousedown", onDocClick);
   }, [open]);
 
   return (
-    <div ref={rootRef} className="relative inline-flex">
+    <div className="inline-flex">
       <button
+        ref={triggerRef}
         type="button"
         aria-label={`Akcje pozycji ${lineId}`}
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+        className="relative inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
       >
         <MoreHorizontal className="h-4 w-4" aria-hidden />
+        {hasActiveBlock ? (
+          <span
+            className="pointer-events-none absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-amber-500 ring-2 ring-white"
+            title="Aktywna blokada sprzedaży"
+          />
+        ) : null}
       </button>
-      {hasActiveBlock ? (
-        <span
-          className="pointer-events-none absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-amber-500 ring-2 ring-white"
-          title="Aktywna blokada sprzedaży"
-        />
-      ) : null}
-      {open ? (
-        <div
-          className="absolute right-0 top-full z-20 mt-1 min-w-[12rem] rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
-          role="menu"
-        >
+      <WarehouseDocumentFloatingMenu
+        open={open}
+        anchorRef={triggerRef}
+        onClose={() => setOpen(false)}
+        placement="bottom-end"
+      >
+        <div data-wh-doc-floating-menu role="menu">
           {canAcceptDeliveryDiff ? (
             <MenuButton
               label="Zaakceptuj różnicę dostawy"
@@ -93,7 +100,7 @@ export function WarehouseDocumentLineActionsMenu({
             }}
           />
         </div>
-      ) : null}
+      </WarehouseDocumentFloatingMenu>
     </div>
   );
 }

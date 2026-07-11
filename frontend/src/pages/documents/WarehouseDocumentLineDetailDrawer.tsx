@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
+import { useEffect } from "react";
 import type { StockDocumentItemRead } from "../../api/stockDocumentsApi";
 import { formatMoneyPl } from "../../utils/formatOrderMoney";
+import { WarehouseDocumentOverlayPortal } from "./WarehouseDocumentOverlayPortal";
 import {
   DeliveryDifferenceAcceptedBadge,
   deliveryShortageQty,
@@ -36,6 +38,18 @@ export function WarehouseDocumentLineDetailDrawer({
   deliveryDiffAccepted = false,
   onClose,
 }: Props) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
   if (!open || line == null) return null;
 
   const title = mode === "detail" ? "Szczegóły pozycji" : "Historia blokad";
@@ -48,10 +62,9 @@ export function WarehouseDocumentLineDetailDrawer({
   const showShortage = hasDeliveryQuantityDiff(ordered, received);
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex justify-end bg-black/30"
-      role="presentation"
-      onClick={onClose}
+    <WarehouseDocumentOverlayPortal
+      className="fixed inset-0 flex justify-end bg-black/30"
+      onBackdropClick={onClose}
     >
       <aside
         className="flex h-full w-full max-w-md flex-col border-l border-slate-200 bg-white shadow-xl"
@@ -140,7 +153,7 @@ export function WarehouseDocumentLineDetailDrawer({
           )}
         </div>
       </aside>
-    </div>
+    </WarehouseDocumentOverlayPortal>
   );
 }
 

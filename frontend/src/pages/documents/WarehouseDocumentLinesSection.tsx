@@ -26,6 +26,7 @@ import {
   WarehouseLineStatusBadge,
   wzLineStatusLabel,
 } from "./warehouseDocumentLineUi";
+import { WarehouseDocumentOverlayPortal } from "./WarehouseDocumentOverlayPortal";
 
 export type WarehouseLineSummary = {
   lineCount: number;
@@ -169,6 +170,7 @@ export function WarehouseDocumentLinesSection({
       ) : (
         <>
           <div className={warehouseDocDetailScrollClass}>
+            <div className="min-w-0 overflow-x-auto">
             <table className="w-full min-w-[1180px] text-[13px]">
               <thead className="sticky top-0 z-[1] bg-white shadow-[0_1px_0_0_rgb(241_245_249)]">
                 <tr className="border-b border-slate-100">
@@ -218,6 +220,7 @@ export function WarehouseDocumentLinesSection({
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
 
           <PurchaseSalesBlockDrawer
@@ -504,15 +507,26 @@ function DeliveryDiffConfirmDialog({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        onCancel();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onCancel]);
+
   if (!open) return null;
 
   const shortage = deliveryShortageQty(ordered, received);
 
   return (
-    <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4"
-      role="presentation"
-      onClick={onCancel}
+    <WarehouseDocumentOverlayPortal
+      className="fixed inset-0 flex items-center justify-center bg-black/40 p-4"
+      onBackdropClick={onCancel}
     >
       <div
         role="dialog"
@@ -557,7 +571,7 @@ function DeliveryDiffConfirmDialog({
           </button>
         </div>
       </div>
-    </div>
+    </WarehouseDocumentOverlayPortal>
   );
 }
 

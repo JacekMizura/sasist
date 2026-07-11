@@ -11,7 +11,7 @@ export const warehouseDocInfoCardClass =
 export const warehouseDocPrimaryBtnClass =
   "inline-flex h-9 items-center justify-center rounded-lg bg-slate-900 px-3.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/50 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50";
 
-export const warehouseDocDetailScrollClass = "min-h-0 min-w-0 flex-1 overflow-auto pb-[72px]";
+export const warehouseDocDetailScrollClass = "min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden";
 
 export const warehouseDocSecondaryBtnClass = listSellasistToolbarToggleBtn;
 

@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { Copy, Pencil, Printer, Trash2 } from "lucide-react";
 import {
   warehouseDocIconBtnClass,
@@ -5,6 +6,7 @@ import {
   warehouseDocPrimaryBtnClass,
   warehouseDocSecondaryBtnClass,
 } from "./warehouseDocumentDetailUi";
+import { WarehouseDocumentFloatingMenu } from "./WarehouseDocumentFloatingMenu";
 
 type Props = {
   detailBusy: boolean;
@@ -53,6 +55,7 @@ export function WarehouseDocumentDetailFooter({
   onSaveDraft,
   onAccept,
 }: Props) {
+  const printBtnRef = useRef<HTMLButtonElement>(null);
   const showPzActions = (isDraft || isWmsCompleteDraft) && isPzDetail;
   const acceptLabel = detailBusy
     ? "Przetwarzanie…"
@@ -61,7 +64,7 @@ export function WarehouseDocumentDetailFooter({
       : "Zatwierdź przyjęcie";
 
   return (
-    <footer className="sticky bottom-0 z-10 flex h-14 shrink-0 items-center gap-2 border-t border-slate-200 bg-white px-3 shadow-[0_-1px_0_0_rgb(226_232_240)]">
+    <footer className="flex h-14 shrink-0 items-center gap-2 border-t border-slate-200 bg-white px-3 shadow-[0_-1px_0_0_rgb(226_232_240)]">
       <div className="flex min-w-0 flex-wrap items-center gap-1.5">
         <button type="button" onClick={onClose} disabled={detailBusy} className={warehouseDocSecondaryBtnClass}>
           Zamknij
@@ -69,47 +72,53 @@ export function WarehouseDocumentDetailFooter({
 
         {detailId != null && detail ? (
           <>
-            <div className="flex items-center gap-1" data-print-menu-root>
-              <button
-                type="button"
-                aria-label="Edytuj pozycje"
-                title="Edytuj pozycje"
-                disabled={detailBusy}
-                onClick={onScrollToLines}
-                className={`${warehouseDocIconBtnClass} !h-9 !w-9`}
-              >
-                <Pencil className="h-4 w-4" strokeWidth={2} aria-hidden />
-              </button>
-              <div className="relative inline-flex">
+              <div className="flex items-center gap-1" data-print-menu-root>
                 <button
+                  type="button"
+                  aria-label="Edytuj pozycje"
+                  title="Edytuj pozycje"
+                  disabled={detailBusy}
+                  onClick={onScrollToLines}
+                  className={`${warehouseDocIconBtnClass} !h-9 !w-9`}
+                >
+                  <Pencil className="h-4 w-4" strokeWidth={2} aria-hidden />
+                </button>
+                <button
+                  ref={printBtnRef}
                   type="button"
                   aria-label="Drukuj"
                   title="Drukuj / PDF"
+                  aria-expanded={detailPrintMenuOpen}
                   disabled={detailBusy}
                   onClick={onTogglePrintMenu}
                   className={`${warehouseDocIconBtnClass} !h-9 !w-9`}
                 >
                   <Printer className="h-4 w-4" strokeWidth={2} aria-hidden />
                 </button>
-                {detailPrintMenuOpen ? (
-                  <div className="absolute bottom-full right-0 z-[320] mb-1 w-44 rounded-lg border border-slate-200 bg-white py-1 text-left shadow-lg ring-1 ring-slate-900/5">
-                    <button
-                      type="button"
-                      className="block w-full px-3 py-2 text-left text-sm text-slate-800 hover:bg-slate-50"
-                      onClick={onPrint}
-                    >
-                      Drukuj
-                    </button>
-                    <button
-                      type="button"
-                      className="block w-full px-3 py-2 text-left text-sm text-slate-800 hover:bg-slate-50"
-                      onClick={onDownloadPdf}
-                    >
-                      Pobierz PDF
-                    </button>
-                  </div>
-                ) : null}
-              </div>
+                <WarehouseDocumentFloatingMenu
+                  open={detailPrintMenuOpen}
+                  anchorRef={printBtnRef}
+                  onClose={() => {
+                    if (detailPrintMenuOpen) onTogglePrintMenu();
+                  }}
+                  placement="top-end"
+                  className="w-44 rounded-lg border border-slate-200 bg-white py-1 text-left shadow-lg ring-1 ring-slate-900/5"
+                >
+                  <button
+                    type="button"
+                    className="block w-full px-3 py-2 text-left text-sm text-slate-800 hover:bg-slate-50"
+                    onClick={onPrint}
+                  >
+                    Drukuj
+                  </button>
+                  <button
+                    type="button"
+                    className="block w-full px-3 py-2 text-left text-sm text-slate-800 hover:bg-slate-50"
+                    onClick={onDownloadPdf}
+                  >
+                    Pobierz PDF
+                  </button>
+                </WarehouseDocumentFloatingMenu>
               <button
                 type="button"
                 aria-label="Usuń dokument"

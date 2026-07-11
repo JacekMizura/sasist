@@ -1,6 +1,8 @@
+import { useEffect } from "react";
 import type { StockDocumentItemRead } from "../../api/stockDocumentsApi";
 import { PurchaseSalesBlockLinePanel } from "./PurchaseSalesBlockLinePanel";
 import { receiptLineDisplayName } from "../../pages/documents/warehouseDocumentLineUi";
+import { WarehouseDocumentOverlayPortal } from "../../pages/documents/WarehouseDocumentOverlayPortal";
 
 type Props = {
   open: boolean;
@@ -21,13 +23,24 @@ export function PurchaseSalesBlockDrawer({
   onClose,
   onUpdated,
 }: Props) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
   if (!open || line == null) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex justify-end bg-black/30"
-      role="presentation"
-      onClick={onClose}
+    <WarehouseDocumentOverlayPortal
+      className="fixed inset-0 flex justify-end bg-black/30"
+      onBackdropClick={onClose}
     >
       <aside
         className="flex h-full w-full max-w-md flex-col border-l border-slate-200 bg-white shadow-xl"
@@ -65,6 +78,6 @@ export function PurchaseSalesBlockDrawer({
           />
         </div>
       </aside>
-    </div>
+    </WarehouseDocumentOverlayPortal>
   );
 }

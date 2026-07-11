@@ -131,6 +131,7 @@ export function WarehouseZPzDocumentDetail({
           <div className="flex flex-1 items-center justify-center py-12 text-sm text-slate-500">Wczytywanie…</div>
         ) : (
           <div className={warehouseDocDetailScrollClass}>
+            <div className="min-w-0 overflow-x-auto">
             <table className="min-w-full text-[13px]">
               <thead className="sticky top-0 z-[1] bg-white shadow-[0_1px_0_0_rgb(241_245_249)]">
                 <tr className="border-b border-slate-100">
@@ -203,6 +204,7 @@ export function WarehouseZPzDocumentDetail({
                 )}
               </tbody>
             </table>
+            </div>
           </div>
         )}
       </div>
