@@ -34,7 +34,6 @@ export interface InventoryDocumentFiltersConfig {
   location_ids?: number[];
   product_ids?: number[];
   category_ids?: number[];
-  abc_class?: string;
   carrier_ids?: number[];
   dynamic?: InventoryDynamicFilters;
   include_zero_stock?: boolean;

@@ -22,7 +22,6 @@ from ..models.supplier import Supplier
 from ..models.supplier_product import SupplierProduct
 from . import purchasing_replenish_core as core
 from .purchasing_forecast_service import sales_qty_by_days
-from .purchasing_segments_service import build_purchasing_segments
 
 # Statusy PO uznawane za „realne” zakupy do historii cen (bez szkiców i anulowanych).
 _PO_STATUSES_HISTORICAL = ("Sent", "Confirmed", "PartiallyReceived", "Closed")
@@ -387,18 +386,6 @@ def build_price_opportunities(
             return True
         return False
 
-    seg_payload = build_purchasing_segments(
-        db,
-        tenant_id=tenant_id,
-        warehouse_id=warehouse_id,
-        range_days=range_days,
-        segment_filter=None,
-        supplier_id=supplier_id,
-        dead_stock_only=False,
-        high_priority_only=False,
-    )
-    seg_by_pid = {int(r["product_id"]): r for r in seg_payload.get("rows", [])}
-
     rows_out: List[Dict[str, Any]] = []
     seen_keys: Set[str] = set()
 
@@ -611,14 +598,11 @@ def build_price_opportunities(
                     }
                 )
 
-    # --- 5) Niska rotacja (Z) + relatywnie wysoka cena vs najtańsza oferta ---
+    # --- 5) Niska rotacja + relatywnie wysoka cena vs najtańsza oferta ---
     if tf is None or tf == "low_rotation_high_cost":
-        for r in seg_payload.get("rows", []):
-            if str(r.get("xyz_class") or "") != "Z":
-                continue
-            pid = int(r["product_id"])
-            p = product_by_id.get(pid)
-            if p is None:
+        low_rotation_threshold = max(0.05, float(range_days) / 30.0 * 0.15)
+        for pid, p in product_by_id.items():
+            if monthly_sales.get(pid, 0.0) > low_rotation_threshold:
                 continue
             if not sku_jest_aktywne(pid):
                 continue
@@ -658,7 +642,7 @@ def build_price_opportunities(
                     "price_diff_percent": round(pct, 2),
                     "estimated_saving": round(max(0.0, saving), 2),
                     "monthly_volume": round(vol, 3),
-                    "recommendation": f"Segment {r.get('segment', '?')} (niska rotacja) — płacisz powyżej najniższej ceny katalogowej o ok. {round(pct, 1)}%.",
+                    "recommendation": f"Niska rotacja — płacisz powyżej najniższej ceny katalogowej o ok. {round(pct, 1)}%.",
                     "action_label": "Porównaj dostawców",
                 }
             )

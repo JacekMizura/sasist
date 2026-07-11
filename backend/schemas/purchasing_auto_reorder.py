@@ -23,7 +23,7 @@ class PurchaseAutoRuleCreateBody(BaseModel):
     is_enabled: bool = True
     run_time: str = Field(default="07:00", max_length=8)
     weekdays_json: str = Field(default="[1,2,3,4,5]", description="JSON: numery dni 1=pon … 7=nd")
-    config_json: str = Field(default="{}", description="Filtry silnika (segmenty, budżet, MOV, …)")
+    config_json: str = Field(default="{}", description="Filtry silnika (budżet, MOV, …)")
 
 
 class PurchaseAutoRulePatchBody(BaseModel):
@@ -69,7 +69,6 @@ class PurchaseAutoReorderPreviewRowOut(BaseModel):
     product_id: int
     name: Optional[str] = None
     sku: Optional[str] = None
-    segment: Optional[str] = None
     supplier_name: Optional[str] = None
     suggested_qty: float
     estimated_order_value: Optional[float] = None

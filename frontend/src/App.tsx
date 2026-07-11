@@ -798,7 +798,6 @@ export const router = createBrowserRouter(
                   />
                   <Route path="replenishment" element={<PurchasingRedirectTo to="/purchasing/plan" />} />
                   <Route path="forecast" element={<PurchasingRedirectTo to="/purchasing/plan" />} />
-                  <Route path="segments" element={<PurchasingRedirectTo to="/purchasing/plan" />} />
                   <Route path="alerts" element={<PurchasingRedirectTo to="/purchasing/plan" />} />
                   <Route path="auto-reorder" element={<PurchasingRedirectTo to="/purchasing/plan" />} />
                   <Route path="suppliers" element={<PurchasingSuppliersTabLayout />}>

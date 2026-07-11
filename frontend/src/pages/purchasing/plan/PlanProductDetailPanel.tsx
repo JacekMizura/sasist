@@ -4,14 +4,12 @@ import { X } from "lucide-react";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { PurchasingAlertEvent } from "../../../api/purchasingAlertsApi";
 import { fetchPurchasingForecast, type PurchasingForecastPayload } from "../../../api/purchasingForecastApi";
-import type { PurchasingSegmentRow } from "../../../api/purchasingSegmentsApi";
 import type { ReplenishmentRow } from "../../../api/purchasingReplenishmentApi";
 import { PurchasingProductThumbnail } from "../../../modules/purchasing/ui";
 import { fmtShortDate, numFmt } from "./planFormatters";
 
 type Props = {
   row: ReplenishmentRow;
-  segment: PurchasingSegmentRow | null;
   alerts: PurchasingAlertEvent[];
   tenantId: number;
   warehouseId: number | null;
@@ -30,7 +28,7 @@ function severityClass(sev: string): string {
   }
 }
 
-function PlanProductDetailPanelInner({ row, segment, alerts, tenantId, warehouseId, onClose, formatQty }: Props) {
+function PlanProductDetailPanelInner({ row, alerts, tenantId, warehouseId, onClose, formatQty }: Props) {
   const [forecast, setForecast] = useState<PurchasingForecastPayload | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -112,22 +110,7 @@ function PlanProductDetailPanelInner({ row, segment, alerts, tenantId, warehouse
             Wartość szac.: {numFmt(row.estimated_order_value, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} zł
             {row.stock_cover_days != null ? ` · Zapas ~${numFmt(row.stock_cover_days, { maximumFractionDigits: 1 })} d` : ""}
           </p>
-          {segment?.suggested_strategy ? (
-            <p className="mt-2 text-xs text-emerald-950">{segment.suggested_strategy}</p>
-          ) : null}
         </section>
-
-        {segment ? (
-          <section>
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Segment ABC/XYZ</h3>
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <span className="rounded-full bg-slate-900 px-2 py-0.5 font-mono text-xs font-bold text-white">{segment.segment}</span>
-              <span className="text-xs text-slate-600">
-                {segment.abc_class}/{segment.xyz_class} · priorytet {segment.reorder_priority}
-              </span>
-            </div>
-          </section>
-        ) : null}
 
         {alerts.length > 0 ? (
           <section>

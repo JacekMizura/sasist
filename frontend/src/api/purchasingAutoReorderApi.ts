@@ -42,7 +42,6 @@ export type PurchaseAutoReorderPreviewPayload = {
     product_id: number;
     name?: string | null;
     sku?: string | null;
-    segment?: string | null;
     supplier_name?: string | null;
     suggested_qty: number;
     estimated_order_value?: number | null;

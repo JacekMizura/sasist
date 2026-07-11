@@ -22,17 +22,6 @@ export const INVENTORY_SCOPE_PRESETS: InventoryScopePreset[] = [
     }),
   },
   {
-    id: "abc_a",
-    label: "Towar ABC — klasa A",
-    hint: "Rotacja A — priorytetowa weryfikacja",
-    scopeMode: "dynamic",
-    apply: () => ({
-      scope_mode: "dynamic",
-      abc_class: "A",
-      dynamic: { stock_gt_zero: true },
-    }),
-  },
-  {
     id: "stock_gt_zero",
     label: "Stany > 0",
     hint: "Pomija puste lokalizacje",

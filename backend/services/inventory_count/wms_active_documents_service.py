@@ -38,8 +38,6 @@ def _scope_summary(filters: dict[str, Any]) -> str:
         dyn = filters.get("dynamic") if isinstance(filters.get("dynamic"), dict) else {}
         if dyn.get("missing_ean"):
             parts.append("bez EAN")
-        if filters.get("abc_class"):
-            parts.append(f"ABC {filters['abc_class']}")
         if dyn.get("stock_gt_zero"):
             parts.append("stan > 0")
         return " · ".join(parts)

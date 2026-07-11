@@ -410,15 +410,6 @@ export function InventoryWizardScopeStep({
             <span>Produkty bez EAN</span>
           </label>
           <label className="block">
-            <span className="text-slate-600">Klasa ABC</span>
-            <input
-              className={fieldClass}
-              placeholder="A, B lub C"
-              defaultValue={filters.abc_class ?? ""}
-              onBlur={(e) => patch({ abc_class: e.target.value.trim().toUpperCase() || undefined })}
-            />
-          </label>
-          <label className="block">
             <span className="text-slate-600">ID producentów (po przecinku)</span>
             <input
               className={fieldClass}

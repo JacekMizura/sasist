@@ -1,5 +1,5 @@
 """
-Silnik auto-reorder: filtruje produkty z generatora, stosuje segmenty i score dostawcy,
+Silnik auto-reorder: filtruje produkty z generatora, stosuje score dostawcy,
 pilnuje budżetu, tworzy wyłącznie szkice PO (Draft) — bez wysyłki do dostawcy.
 """
 
@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
@@ -19,12 +19,10 @@ from . import purchasing_order_service as po_svc
 from .purchasing_order_service import ERR_PO_WAREHOUSE_REQUIRED
 from .purchasing_forecast_service import sales_qty_by_days
 from .purchasing_replenishment_service import replenishment_rows_for_export
-from .purchasing_segments_service import build_purchasing_segments
 from .purchasing_supplier_analytics_service import build_supplier_analytics
 
 # Domyślna konfiguracja reguły (uzupełniana przez config_json z bazy)
 _DEFAULT_RULE_CONFIG: Dict[str, Any] = {
-    "only_segments": [],
     "max_budget": None,
     "only_critical_products": False,
     "exclude_dead_stock": True,
@@ -33,8 +31,6 @@ _DEFAULT_RULE_CONFIG: Dict[str, Any] = {
     "auto_group_by_supplier": True,
     "minimum_order_value_required": False,
     "warehouse_id": None,
-    "segment_range_days": 90,
-    # Opcjonalnie: ogranicz automatyzację do jednego dostawcy (ustawiane z UI kreatora).
     "only_supplier_id": None,
 }
 
@@ -53,17 +49,6 @@ def _parse_config(raw: Optional[str]) -> Dict[str, Any]:
     return cfg
 
 
-def _normalize_segments(val: Any) -> Set[str]:
-    """Akceptuje listę JSON lub napis „AX,BX”."""
-    if val is None:
-        return set()
-    if isinstance(val, list):
-        return {str(x).strip().upper() for x in val if str(x).strip()}
-    if isinstance(val, str):
-        return {p.strip().upper() for p in val.split(",") if p.strip()}
-    return set()
-
-
 def _supplier_score_map(db: Session, tenant_id: int, range_days: int) -> Dict[int, Optional[float]]:
     """supplier_id -> score (None jeśli brak danych scorecard)."""
     payload = build_supplier_analytics(db, tenant_id=tenant_id, supplier_id=None, range_days=range_days)
@@ -73,23 +58,6 @@ def _supplier_score_map(db: Session, tenant_id: int, range_days: int) -> Dict[in
         sc = r.get("score")
         out[sid] = float(sc) if sc is not None else None
     return out
-
-
-def _segment_map(db: Session, tenant_id: int, warehouse_id: Optional[int], range_days: int) -> Dict[int, str]:
-    """product_id -> segment (np. AX)."""
-    if range_days not in (30, 90, 365):
-        range_days = 90
-    payload = build_purchasing_segments(
-        db,
-        tenant_id=tenant_id,
-        warehouse_id=warehouse_id,
-        range_days=range_days,
-        segment_filter=None,
-        supplier_id=None,
-        dead_stock_only=False,
-        high_priority_only=False,
-    )
-    return {int(r["product_id"]): str(r["segment"]) for r in payload.get("rows", [])}
 
 
 def _dead_stock_sales_map(
@@ -130,17 +98,10 @@ def resolve_auto_reorder_products(
     wh_raw = cfg.get("warehouse_id")
     warehouse_id: Optional[int] = int(wh_raw) if wh_raw is not None else None
 
-    seg_days = int(cfg.get("segment_range_days") or 90)
-    if seg_days not in (30, 90, 365):
-        seg_days = 90
-
     score_days = 90
     scores = _supplier_score_map(db, tenant_id, score_days)
-    seg_by_pid = _segment_map(db, tenant_id, warehouse_id, seg_days)
-    sales_window = max(seg_days, 30)
-    sales_map = _dead_stock_sales_map(db, tenant_id, warehouse_id, sales_window)
+    sales_map = _dead_stock_sales_map(db, tenant_id, warehouse_id, 90)
 
-    only_seg = _normalize_segments(cfg.get("only_segments"))
     max_budget = cfg.get("max_budget")
     max_budget_f = float(max_budget) if max_budget is not None else None
     min_score = cfg.get("min_supplier_score")
@@ -175,9 +136,7 @@ def resolve_auto_reorder_products(
 
     stats = {
         "input_rows": len(rows),
-        "after_segment": 0,
-        "after_supplier_score": 0,
-        "after_dead_stock": 0,
+        "after_filters": 0,
         "after_mov": 0,
         "after_budget": 0,
     }
@@ -191,9 +150,6 @@ def resolve_auto_reorder_products(
             sid_row = r.get("supplier_id")
             if sid_row is None or int(sid_row) != only_supplier_id:
                 continue
-        seg = seg_by_pid.get(pid, "CZ")
-        if only_seg and seg not in only_seg:
-            continue
         sid = r.get("supplier_id")
         if sid is not None and min_score_f is not None:
             sc = scores.get(int(sid))
@@ -206,7 +162,7 @@ def resolve_auto_reorder_products(
                 continue
         filtered.append(r)
 
-    stats["after_segment"] = len(filtered)
+    stats["after_filters"] = len(filtered)
 
     # Minimalna wartość zamówienia u dostawcy — odrzuć całą grupę dostawcy poniżej progu
     if mov_required and filtered:
@@ -231,15 +187,7 @@ def resolve_auto_reorder_products(
 
     stats["after_mov"] = len(filtered)
 
-    # Priorytet wg segmentu (AX najpierw) i wartości sugerowanej
-    seg_rank = {"AX": 0, "AY": 1, "AZ": 2, "BX": 3, "BY": 4, "BZ": 5, "CX": 6, "CY": 7, "CZ": 8}
-
-    def sort_key(rr: Dict[str, Any]) -> Tuple[int, float, float]:
-        pid = int(rr["product_id"])
-        sg = seg_by_pid.get(pid, "CZ")
-        return (seg_rank.get(sg, 9), -float(rr.get("estimated_order_value") or 0), pid)
-
-    filtered.sort(key=sort_key)
+    filtered.sort(key=lambda rr: (-float(rr.get("estimated_order_value") or 0), int(rr["product_id"])))
 
     if max_budget_f is not None and max_budget_f > 0:
         cum = 0.0
@@ -253,18 +201,8 @@ def resolve_auto_reorder_products(
         filtered = budgeted
 
     stats["after_budget"] = len(filtered)
-    stats["after_supplier_score"] = stats["after_segment"]
-    stats["after_dead_stock"] = stats["after_segment"]
 
-    # Dołącz segment do podglądu wiersza
-    out_rows: List[Dict[str, Any]] = []
-    for r in filtered:
-        pid = int(r["product_id"])
-        rr = dict(r)
-        rr["_segment"] = seg_by_pid.get(pid, "CZ")
-        out_rows.append(rr)
-
-    return out_rows, {"stats": stats, "target_cover_days": target_cover, "segment_by_product": seg_by_pid}
+    return filtered, {"stats": stats, "target_cover_days": target_cover}
 
 
 def _execute_rule_engine(
@@ -319,7 +257,6 @@ def _execute_rule_engine(
                 "preview_rows": [
                     {
                         "product_id": int(r["product_id"]),
-                        "segment": r.get("_segment"),
                         "product_name": r.get("product_name"),
                         "suggested_qty": float(r.get("suggested_qty") or 0),
                     }
@@ -353,7 +290,6 @@ def _execute_rule_engine(
                 "preview_rows": [
                     {
                         "product_id": int(r["product_id"]),
-                        "segment": r.get("_segment"),
                         "suggested_qty": override_qty.get(int(r["product_id"]), float(r.get("suggested_qty") or 0)),
                         "supplier_name": r.get("supplier_name"),
                         "estimated_order_value": r.get("estimated_order_value"),
@@ -622,7 +558,6 @@ def preview_rule(db: Session, *, tenant_id: int, rule_id: int) -> Dict[str, Any]
                 "product_id": pid,
                 "name": r.get("product_name"),
                 "sku": r.get("sku"),
-                "segment": r.get("_segment"),
                 "supplier_name": r.get("supplier_name"),
                 "suggested_qty": override_qty.get(pid, float(r.get("suggested_qty") or 0)),
                 "estimated_order_value": r.get("estimated_order_value"),

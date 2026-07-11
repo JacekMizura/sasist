@@ -62,7 +62,6 @@ export function isNavPathActive(pathname: string, path: string): boolean {
       pathname === "/purchasing/plan" ||
       pathname === "/purchasing/replenishment" ||
       pathname === "/purchasing/forecast" ||
-      pathname === "/purchasing/segments" ||
       pathname === "/purchasing/alerts" ||
       pathname.startsWith("/purchasing/alerts/") ||
       pathname === "/purchasing/auto-reorder" ||

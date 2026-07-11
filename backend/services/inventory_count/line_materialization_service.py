@@ -93,12 +93,6 @@ def _line_matches_filters(
                 if prod_cat is None or int(prod_cat) not in cats:
                     return False
 
-        abc = filters.get("abc_class")
-        if mode == "dynamic" and abc and product is not None:
-            prod_abc = getattr(product, "abc_class", None) or getattr(product, "inventory_class", None)
-            if prod_abc and str(prod_abc).upper() != str(abc).upper():
-                return False
-
         # Cross-cutting filters (also apply when mode is not full)
         if loc_ids and int(location_id) not in {int(x) for x in loc_ids}:
             return False

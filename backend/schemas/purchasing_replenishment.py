@@ -10,6 +10,7 @@ class ReplenishmentSummaryOut(BaseModel):
     total_suggested_value: float = Field(..., description="Sum of estimated_order_value where suggested_qty >= 1.")
     critical_count: int
     suggested_count: int = Field(..., description="Rows with suggested_qty >= 1.")
+    low_stock_count: int = Field(0, description="Rows flagged as low stock (non-critical short cover).")
 
 
 class ReplenishmentRowOut(BaseModel):

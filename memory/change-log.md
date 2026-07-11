@@ -1,5 +1,13 @@
 # Change log
 
+## 2026-06-08 — Usunięcie segmentacji ABC/XYZ (Zakupy i planowanie)
+
+- Usunięto endpoint `GET /purchasing/segments`, serwis `purchasing_segments_service`, strony/komponenty heatmapy i priorytetów.
+- Plan zakupów: `PlanCategoryStrip` (Hity sprzedaży, Niski zapas, Martwy stock, Ryzyko braku, Wysoka wartość magazynu) zamiast AX–CZ.
+- Auto-reorder i replenishment bez filtrów `segment_abc` / `only_segments`.
+- Opcjonalna migracja SQL: `backend/db/migrations/optional/2026-06-08_drop_abc_xyz_purchasing.sql`.
+- Raport: `docs/abc-xyz-removal-report.md`.
+
 ## 2026-06-08 — Sidebar ERP + dashboardy: gęstość informacji (design tokens)
 
 - `erpDensityTokens.ts` — globalne tokeny: `sidebarItemHeight`, `sidebarItemGap`, `dashboardCardPadding`, `dashboardSectionGap`, `kpiCardHeight` + klasy Tailwind.

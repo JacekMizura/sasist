@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 from sqlalchemy import or_
@@ -14,7 +13,6 @@ from ..models.supplier_product import SupplierProduct
 from . import purchasing_replenish_core as core
 from .product_inventory_snapshot_service import inventory_snapshots_for_products
 from .product_cost_service import get_products_current_costs
-from .purchasing_segments_service import _abc_from_sorted_values, _sales_qty_value_in_range
 
 
 def _allowed_supplier_products(db: Session, tenant_id: int, supplier_id: int) -> Set[int]:
@@ -178,7 +176,6 @@ def _build_sorted_rows(
     show_loss_products: bool = False,
     low_margin_lt: Optional[float] = None,
     top_sales_limit: Optional[int] = None,
-    segment_abc: Optional[str] = None,
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     ids = replenishment_candidate_ids(
         db,
@@ -194,6 +191,7 @@ def _build_sorted_rows(
             "total_suggested_value": 0.0,
             "critical_count": 0,
             "suggested_count": 0,
+            "low_stock_count": 0,
         }
 
     products = (
@@ -286,16 +284,6 @@ def _build_sorted_rows(
         rows = [r for r in rows if float(r.get("margin_percent") or 0) < 0.0]
     if low_margin_lt is not None:
         rows = [r for r in rows if float(r.get("margin_percent") or 0) < float(low_margin_lt)]
-    seg = (segment_abc or "").strip().upper()
-    if seg in ("A", "B", "C"):
-        pids_set = {int(r["product_id"]) for r in rows}
-        since = datetime.utcnow() - timedelta(days=90)
-        until = datetime.utcnow()
-        rev_map = _sales_qty_value_in_range(db, tenant_id, warehouse_id, since, until, product_ids=pids_set)
-        pairs = [(pid, float(rev_map.get(pid, (0.0, 0.0))[1])) for pid in pids_set]
-        pairs.sort(key=lambda x: -x[1])
-        abc = _abc_from_sorted_values(pairs)
-        rows = [r for r in rows if abc.get(int(r["product_id"]), "C") == seg]
     if top_sales_limit is not None and int(top_sales_limit) > 0:
         rows = sorted(rows, key=lambda r: -float(r["sales_30d"]))[: int(top_sales_limit)]
 
@@ -314,6 +302,7 @@ def _build_sorted_rows(
     total_rows = len(rows)
     critical_count = sum(1 for r in rows if r["critical_flag"])
     suggested_count = sum(1 for r in rows if float(r["suggested_qty"]) >= 1.0)
+    low_stock_count = sum(1 for r in rows if r.get("low_stock_flag"))
     total_suggested_value = sum(float(r["estimated_order_value"]) for r in rows if float(r["suggested_qty"]) >= 1.0)
 
     summary = {
@@ -321,6 +310,7 @@ def _build_sorted_rows(
         "total_suggested_value": round(float(total_suggested_value), 2),
         "critical_count": int(critical_count),
         "suggested_count": int(suggested_count),
+        "low_stock_count": int(low_stock_count),
     }
     return rows, summary
 
@@ -347,7 +337,6 @@ def build_replenishment_payload(
     show_loss_products: bool = False,
     low_margin_lt: Optional[float] = None,
     top_sales_limit: Optional[int] = None,
-    segment_abc: Optional[str] = None,
 ) -> Dict[str, Any]:
     page = max(1, int(page))
     page_size = min(max(1, int(page_size)), 200)
@@ -370,7 +359,6 @@ def build_replenishment_payload(
         show_loss_products=show_loss_products,
         low_margin_lt=low_margin_lt,
         top_sales_limit=top_sales_limit,
-        segment_abc=segment_abc,
     )
     start = (page - 1) * page_size
     page_rows = rows[start : start + page_size]
@@ -404,7 +392,6 @@ def replenishment_rows_for_export(
     show_loss_products: bool = False,
     low_margin_lt: Optional[float] = None,
     top_sales_limit: Optional[int] = None,
-    segment_abc: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """Full sorted row list for CSV (optional intersection with product_ids)."""
     rows, _ = _build_sorted_rows(
@@ -426,7 +413,6 @@ def replenishment_rows_for_export(
         show_loss_products=show_loss_products,
         low_margin_lt=low_margin_lt,
         top_sales_limit=top_sales_limit,
-        segment_abc=segment_abc,
     )
     if product_ids is not None:
         wanted = {int(x) for x in product_ids}

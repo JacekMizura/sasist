@@ -160,7 +160,6 @@ function buildEngineConfig(params: {
   onlySupplierId: number | null;
 }): string {
   const o = {
-    only_segments: [] as string[],
     max_budget: null as number | null,
     only_critical_products: false,
     exclude_dead_stock: true,
@@ -169,7 +168,6 @@ function buildEngineConfig(params: {
     auto_group_by_supplier: true,
     minimum_order_value_required: false,
     warehouse_id: params.warehouseId,
-    segment_range_days: 90,
     only_supplier_id: params.onlySupplierId,
   };
   return JSON.stringify(o, null, 0);
@@ -688,7 +686,7 @@ export default function PurchasingAutoReorderPage() {
                   <thead className="sticky top-0 bg-slate-50">
                     <tr>
                       <th className="px-2 py-2">Produkt</th>
-                      <th className="px-2 py-2">Priorytet (ABC/XYZ)</th>
+                      <th className="px-2 py-2">Dostawca</th>
                       <th className="px-2 py-2">Sztuki</th>
                       <th className="px-2 py-2">Szac. wartość</th>
                     </tr>
@@ -702,7 +700,7 @@ export default function PurchasingAutoReorderPage() {
                             sku={row.sku}
                           />
                         </td>
-                        <td className="px-2 py-1">{row.segment ?? "—"}</td>
+                        <td className="px-2 py-1">{row.supplier_name ?? "—"}</td>
                         <td className="px-2 py-1 tabular-nums">{row.suggested_qty}</td>
                         <td className="px-2 py-1 tabular-nums">{row.estimated_order_value ?? "—"}</td>
                       </tr>

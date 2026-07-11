@@ -28,7 +28,6 @@ export const UI_STRINGS = {
     purchasingSupplierAnalytics: "Ocena dostawców",
     purchasingForecast: "Prognoza zakupów",
     /** ABC/XYZ product segmentation under purchasing module. */
-    purchasingSegments: "Priorytety asortymentu",
     purchasingAutoReorder: "Auto-uzupełnianie",
     purchasingPriceOpportunities: "Oszczędności zakupowe",
     addProduct: "Dodaj produkt",

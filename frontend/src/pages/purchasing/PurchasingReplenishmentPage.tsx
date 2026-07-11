@@ -17,11 +17,6 @@ import {
   type PurchasingAlertEvent,
   type PurchasingAlertSummary,
 } from "../../api/purchasingAlertsApi";
-import {
-  fetchPurchasingSegments,
-  type PurchasingSegmentRow,
-  type PurchasingSegmentsPayload,
-} from "../../api/purchasingSegmentsApi";
 import { useActiveWarehouseContext, ACTIVE_WAREHOUSE_REQUIRED_MESSAGE } from "../../hooks/useActiveWarehouseContext";
 import { ActiveWarehouseRequiredBanner } from "../../components/layout/ActiveWarehouseRequiredBanner";
 import { createPurchaseOrdersFromGenerator } from "../../api/purchasingOrdersApi";
@@ -29,8 +24,8 @@ import { pageContainerWidthAlignClass } from "../../components/layout/PageContai
 import { DataTablePageSizeSelect } from "../../components/table/DataTablePageSizeSelect";
 import { usePurchasingTenant } from "../../modules/purchasing/hooks/usePurchasingTenant";
 import { PlanAlertStrip, type PlanAlertQuickFilter } from "./plan/PlanAlertStrip";
+import { PlanCategoryStrip, type PlanCategoryQuickFilter } from "./plan/PlanCategoryStrip";
 import { PlanProductDetailPanel } from "./plan/PlanProductDetailPanel";
-import { PlanSegmentHeatmap } from "./plan/PlanSegmentHeatmap";
 import {
   PurchasingContentArea,
   PurchasingFilterBar,
@@ -166,7 +161,6 @@ export default function PurchasingReplenishmentPage({ variant = "standalone" }: 
   const [showLossProducts, setShowLossProducts] = useState(false);
   const [lowMarginLtStr, setLowMarginLtStr] = useState("");
   const [topSalesLimitStr, setTopSalesLimitStr] = useState("");
-  const [segmentAbc, setSegmentAbc] = useState<"" | "A" | "B" | "C">("");
   const [sortBy, setSortBy] = useState("suggested_qty");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(1);
@@ -187,8 +181,7 @@ export default function PurchasingReplenishmentPage({ variant = "standalone" }: 
   const [inspectorData, setInspectorData] = useState<PurchasingForecastPayload | null>(null);
   const [inspectorLoading, setInspectorLoading] = useState(false);
 
-  const [segmentFilter, setSegmentFilter] = useState("");
-  const [segmentsMeta, setSegmentsMeta] = useState<PurchasingSegmentsPayload | null>(null);
+  const [categoryQuickFilter, setCategoryQuickFilter] = useState<PlanCategoryQuickFilter>("");
   const [alertSummary, setAlertSummary] = useState<PurchasingAlertSummary | null>(null);
   const [alertQuickFilter, setAlertQuickFilter] = useState<PlanAlertQuickFilter>("");
   const [alertsByProduct, setAlertsByProduct] = useState<Map<number, PurchasingAlertEvent[]>>(() => new Map());
@@ -215,12 +208,10 @@ export default function PurchasingReplenishmentPage({ variant = "standalone" }: 
   const loadPlanMeta = useCallback(async () => {
     if (!isPlan || !tenantId) return;
     try {
-      const [seg, sum, alerts] = await Promise.all([
-        fetchPurchasingSegments({ tenantId, warehouseId: warehouseId ?? null, rangeDays: 90 }),
+      const [sum, alerts] = await Promise.all([
         fetchPurchasingAlertsSummary(tenantId),
         fetchPurchasingAlerts({ tenantId, status: "open", limit: 500 }),
       ]);
-      setSegmentsMeta(seg);
       setAlertSummary(sum);
       const m = new Map<number, PurchasingAlertEvent[]>();
       for (const a of alerts) {
@@ -231,15 +222,21 @@ export default function PurchasingReplenishmentPage({ variant = "standalone" }: 
       }
       setAlertsByProduct(m);
     } catch {
-      setSegmentsMeta(null);
       setAlertSummary(null);
       setAlertsByProduct(new Map());
     }
-  }, [isPlan, tenantId, warehouseId]);
+  }, [isPlan, tenantId]);
 
   useEffect(() => {
     void loadPlanMeta();
   }, [loadPlanMeta, refreshSignal]);
+
+  const handleCategoryQuickFilter = (f: PlanCategoryQuickFilter) => {
+    if (categoryQuickFilter === "low_stock" && f !== "low_stock") setLowStockOnly(false);
+    if (f === "low_stock") setLowStockOnly(true);
+    setCategoryQuickFilter(f);
+    setPage(1);
+  };
 
   const handleAlertQuickFilter = (f: PlanAlertQuickFilter) => {
     setAlertQuickFilter(f);
@@ -281,7 +278,6 @@ export default function PurchasingReplenishmentPage({ variant = "standalone" }: 
       show_loss_products: showLossProducts,
       low_margin_lt: lowMarginLtParsed,
       top_sales_limit: topSalesParsed,
-      segment_abc: segmentAbc || null,
       sort_by: sortBy,
       sort_dir: sortDir,
     }),
@@ -300,7 +296,6 @@ export default function PurchasingReplenishmentPage({ variant = "standalone" }: 
       showLossProducts,
       lowMarginLtParsed,
       topSalesParsed,
-      segmentAbc,
       sortBy,
       sortDir,
     ],
@@ -358,7 +353,7 @@ export default function PurchasingReplenishmentPage({ variant = "standalone" }: 
     showLossProducts,
     lowMarginLtStr,
     topSalesLimitStr,
-    segmentAbc,
+    categoryQuickFilter,
     tenantId,
   ]);
 
@@ -389,23 +384,38 @@ export default function PurchasingReplenishmentPage({ variant = "standalone" }: 
     };
   }, [inspectorProductId, tenantId, warehouseId, isPlan]);
 
-  const segmentByProduct = useMemo(() => {
-    const m = new Map<number, PurchasingSegmentRow>();
-    for (const r of segmentsMeta?.rows ?? []) m.set(r.product_id, r);
-    return m;
-  }, [segmentsMeta]);
+  const categoryCounts = useMemo(() => {
+    const counts = {
+      rising_demand: 0,
+      low_stock: data?.summary?.low_stock_count ?? 0,
+      dead_stock: 0,
+      low_cover_days: 0,
+      high_capital_locked: 0,
+    };
+    for (const list of alertsByProduct.values()) {
+      for (const a of list) {
+        if (a.rule_type === "rising_demand") counts.rising_demand += 1;
+        else if (a.rule_type === "dead_stock") counts.dead_stock += 1;
+        else if (a.rule_type === "low_cover_days") counts.low_cover_days += 1;
+        else if (a.rule_type === "high_capital_locked") counts.high_capital_locked += 1;
+      }
+    }
+    return counts;
+  }, [alertsByProduct, data?.summary?.low_stock_count]);
 
   const rows = data?.rows ?? [];
   const displayRows = useMemo(() => {
     let out = rows;
-    if (segmentFilter) {
-      out = out.filter((r) => segmentByProduct.get(r.product_id)?.segment === segmentFilter);
+    if (categoryQuickFilter && categoryQuickFilter !== "low_stock") {
+      out = out.filter((r) =>
+        (alertsByProduct.get(r.product_id) ?? []).some((a) => a.rule_type === categoryQuickFilter),
+      );
     }
     if (alertQuickFilter === "with_alerts") {
       out = out.filter((r) => alertsByProduct.has(r.product_id));
     }
     return out;
-  }, [rows, segmentFilter, segmentByProduct, alertQuickFilter, alertsByProduct]);
+  }, [rows, categoryQuickFilter, alertQuickFilter, alertsByProduct]);
 
   const selectedRow = useMemo(
     () => (selectedProductId != null ? displayRows.find((r) => r.product_id === selectedProductId) ?? rows.find((r) => r.product_id === selectedProductId) ?? null : null),
@@ -534,14 +544,11 @@ export default function PurchasingReplenishmentPage({ variant = "standalone" }: 
                   icon={<Banknote aria-hidden />}
                 />
               </PurchasingKpiGrid>
-              {isPlan && segmentsMeta ? (
-                <PlanSegmentHeatmap
-                  counts={segmentsMeta.summary.segment_counts}
-                  activeSegment={segmentFilter}
-                  onSelect={(seg) => {
-                    setSegmentFilter(seg);
-                    setPage(1);
-                  }}
+              {isPlan ? (
+                <PlanCategoryStrip
+                  counts={categoryCounts}
+                  active={categoryQuickFilter}
+                  onSelect={handleCategoryQuickFilter}
                 />
               ) : null}
             </div>
@@ -714,21 +721,6 @@ export default function PurchasingReplenishmentPage({ variant = "standalone" }: 
                 }}
               />
             </PurchasingFilterField>
-            <PurchasingFilterField label="Klasa ABC" className="min-w-[100px]">
-              <select
-                className={purchasingSelectClass}
-                value={segmentAbc}
-                onChange={(e) => {
-                  setSegmentAbc(e.target.value as "" | "A" | "B" | "C");
-                  setPage(1);
-                }}
-              >
-                <option value="">Wszystkie</option>
-                <option value="A">A</option>
-                <option value="B">B</option>
-                <option value="C">C</option>
-              </select>
-            </PurchasingFilterField>
             <PurchasingFilterField label="Sortowanie">
               <select
                 className={purchasingSelectClass}
@@ -782,7 +774,7 @@ export default function PurchasingReplenishmentPage({ variant = "standalone" }: 
               indicatorClass="bg-blue-500"
               toolbar={
                 <div className="flex flex-wrap items-center justify-end gap-2">
-                  {isPlan && (segmentFilter || alertQuickFilter === "with_alerts") ? (
+                  {isPlan && (categoryQuickFilter || alertQuickFilter === "with_alerts") ? (
                     <span className="text-xs text-slate-500">
                       Widoczne po filtrach: <strong>{displayRows.length}</strong>
                     </span>
@@ -801,7 +793,7 @@ export default function PurchasingReplenishmentPage({ variant = "standalone" }: 
                 <AppEmptyState
                   icon={PackageSearch}
                   title="Brak wierszy na tej stronie"
-                  description="Aktywne filtry segmentu lub alertów nie pasują do produktów na bieżącej stronie."
+                  description="Aktywne filtry kategorii lub alertów nie pasują do produktów na bieżącej stronie."
                   density="inline"
                 />
               ) : (
@@ -816,9 +808,6 @@ export default function PurchasingReplenishmentPage({ variant = "standalone" }: 
                         onChange={togglePage}
                       />
                     </th>
-                    {isPlan ? (
-                      <th className={`${td} text-left font-semibold uppercase tracking-wide text-slate-500`}>Seg.</th>
-                    ) : null}
                     <th className={`${td} text-left font-semibold uppercase tracking-wide text-slate-500`}>Produkt</th>
                     <th className={`${td} text-right font-semibold uppercase tracking-wide text-slate-500`}>Stan</th>
                     <th className={`${td} text-right font-semibold uppercase tracking-wide text-slate-500`}>W drodze</th>
@@ -850,11 +839,6 @@ export default function PurchasingReplenishmentPage({ variant = "standalone" }: 
                       onClick={(e) => e.stopPropagation()}
                     />
                   </td>
-                  {isPlan ? (
-                    <td className="px-2 py-2 align-middle font-mono text-xs text-slate-700">
-                      {segmentByProduct.get(r.product_id)?.segment ?? "—"}
-                    </td>
-                  ) : null}
                   <td className="px-2 py-2 align-middle">
                     <PurchasingProductCell
                       name={r.product_name}
@@ -922,7 +906,6 @@ export default function PurchasingReplenishmentPage({ variant = "standalone" }: 
               {isPlan && selectedRow ? (
                 <PlanProductDetailPanel
                   row={selectedRow}
-                  segment={segmentByProduct.get(selectedRow.product_id) ?? null}
                   alerts={alertsByProduct.get(selectedRow.product_id) ?? []}
                   tenantId={tenantId}
                   warehouseId={warehouseId}

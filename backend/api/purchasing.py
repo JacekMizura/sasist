@@ -59,7 +59,6 @@ from ..schemas.purchasing_auto_reorder import (
     PurchaseAutoRunOut,
 )
 from ..schemas.purchasing_price_opportunities import PurchasingPriceOpportunitiesOut
-from ..schemas.purchasing_segments import PurchasingSegmentsOut
 from ..schemas.purchasing_supplier_analytics import PurchasingSupplierAnalyticsOut
 from ..schemas.purchasing_cooperation_history import PurchasingCooperationHistoryOut
 from ..schemas.purchasing_fx import FxManualRateBody, FxRateListOut, FxRateRowOut
@@ -70,7 +69,6 @@ from ..services import currency_rate_service as fx_rates
 from ..services.purchasing_dashboard_service import build_purchasing_dashboard
 from ..services.purchasing_forecast_service import build_purchasing_forecast
 from ..services import purchasing_auto_reorder_service as auto_reorder_svc
-from ..services.purchasing_segments_service import build_purchasing_segments
 from ..services import purchasing_price_opportunities_service as price_opp_svc
 from ..services.purchasing_supplier_analytics_service import build_supplier_analytics
 from ..services.purchasing_cooperation_history_service import build_cooperation_history
@@ -176,39 +174,6 @@ def get_purchasing_cooperation_history(
 ) -> PurchasingCooperationHistoryOut:
     raw = build_cooperation_history(db, tenant_id=tenant_id, supplier_id=supplier_id, limit_docs=limit_docs)
     return PurchasingCooperationHistoryOut.model_validate(raw)
-
-
-@router.get("/segments", response_model=PurchasingSegmentsOut)
-def get_purchasing_segments(
-    tenant_id: int = Query(..., ge=1),
-    warehouse_id: Optional[int] = Query(None, ge=1),
-    range_days: int = Query(90, description="Okno sprzedaży: 30, 90 lub 365 dni."),
-    segment_filter: Optional[str] = Query(None, max_length=2, description="Np. AX, BY — filtr dokładnego segmentu."),
-    supplier_id: Optional[int] = Query(None, ge=1),
-    dead_stock_only: bool = Query(False),
-    high_priority_only: bool = Query(False, description="Priorytet uzupełnienia >= 70."),
-    db: Session = Depends(get_db),
-) -> PurchasingSegmentsOut:
-    """Segmentacja ABC/XYZ z historii zamówień i stanów magazynowych (spójnie z forecast)."""
-    with purchasing_api_span(
-        "GET /purchasing/segments",
-        tenant_id=tenant_id,
-        warehouse_id=warehouse_id,
-        range_days=range_days,
-    ):
-        if range_days not in (30, 90, 365):
-            range_days = 90
-        raw = build_purchasing_segments(
-            db,
-            tenant_id=tenant_id,
-            warehouse_id=warehouse_id,
-            range_days=range_days,
-            segment_filter=segment_filter,
-            supplier_id=supplier_id,
-            dead_stock_only=dead_stock_only,
-            high_priority_only=high_priority_only,
-        )
-        return PurchasingSegmentsOut.model_validate(raw)
 
 
 # --- Auto-reorder: reguły, uruchomienia, wyłącznie szkice PO ---
@@ -606,7 +571,6 @@ def get_purchasing_replenishment(
     show_loss_products: bool = Query(False, description="Pokaż tylko produkty ze stratą (marża < 0%)."),
     low_margin_lt: Optional[float] = Query(None, ge=0, le=100, description="Pokaż produkty z marżą poniżej X%."),
     top_sales_limit: Optional[int] = Query(None, ge=1, le=5000, description="Top N po sprzedaży 30d (rotacja)."),
-    segment_abc: Optional[str] = Query(None, max_length=1, description="Filtr klasy ABC: A, B lub C."),
     sort_by: str = Query("suggested_qty", max_length=64),
     sort_dir: str = Query("desc", max_length=4),
     db: Session = Depends(get_db),
@@ -634,7 +598,6 @@ def get_purchasing_replenishment(
             show_loss_products=show_loss_products,
             low_margin_lt=low_margin_lt,
             top_sales_limit=top_sales_limit,
-            segment_abc=segment_abc,
         )
         return ReplenishmentListOut.model_validate(raw)
 
@@ -656,7 +619,6 @@ def export_purchasing_replenishment_csv(
     show_loss_products: bool = Query(False),
     low_margin_lt: Optional[float] = Query(None, ge=0, le=100),
     top_sales_limit: Optional[int] = Query(None, ge=1, le=5000),
-    segment_abc: Optional[str] = Query(None, max_length=1),
     sort_by: str = Query("suggested_qty", max_length=64),
     sort_dir: str = Query("desc", max_length=4),
     product_ids: Optional[str] = Query(
@@ -697,7 +659,6 @@ def export_purchasing_replenishment_csv(
         show_loss_products=show_loss_products,
         low_margin_lt=low_margin_lt,
         top_sales_limit=top_sales_limit,
-        segment_abc=segment_abc,
     )
     buf = _replenishment_rows_to_csv_stream(rows)
     headers = {"Content-Disposition": 'attachment; filename="replenishment_export.csv"'}

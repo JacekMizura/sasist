@@ -28,7 +28,6 @@ class InventoryDocumentFilters(BaseModel):
     category_id: int | None = None
     category_ids: list[int] = Field(default_factory=list)
     brand_id: int | None = None
-    abc_class: str | None = None
     carrier_ids: list[int] = Field(default_factory=list)
     dynamic: InventoryDocumentDynamicFilters | None = None
     include_zero_stock: bool = False

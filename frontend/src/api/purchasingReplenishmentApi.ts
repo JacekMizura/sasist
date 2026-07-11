@@ -5,6 +5,7 @@ export type ReplenishmentSummary = {
   total_suggested_value: number;
   critical_count: number;
   suggested_count: number;
+  low_stock_count: number;
 };
 
 export type ReplenishmentRow = {
@@ -61,8 +62,6 @@ export type ReplenishmentQuery = {
   show_loss_products?: boolean;
   low_margin_lt?: number | null;
   top_sales_limit?: number | null;
-  /** Klasa ABC wg sprzedaży 30 dni w podmiocie: A, B lub C. */
-  segment_abc?: "A" | "B" | "C" | null;
   sort_by?: string;
   sort_dir?: string;
 };
@@ -91,7 +90,6 @@ function toParams(q: ReplenishmentQuery): Record<string, string | number | boole
       q.top_sales_limit != null && Number.isFinite(Number(q.top_sales_limit))
         ? Number(q.top_sales_limit)
         : undefined,
-    segment_abc: q.segment_abc ? String(q.segment_abc).trim().toUpperCase() : undefined,
     sort_by: q.sort_by,
     sort_dir: q.sort_dir,
   };
