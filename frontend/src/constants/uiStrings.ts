@@ -5,9 +5,8 @@
 
 export const UI_STRINGS = {
   app: {
-    /** Marka w pasku ERP (nie mylić z tytułem modułu WMS terminal). */
-    brandMark: "SELLASIST",
-    erpSubtitle: "ERP",
+    /** Marka aplikacji (sidebar, tytuły). */
+    brandMark: "Sasist",
     title: "WMS",
     titleSaaS: "WMS SaaS",
   },

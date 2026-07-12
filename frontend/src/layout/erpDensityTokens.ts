@@ -16,7 +16,7 @@ export const erpDensityTokens = {
 } as const;
 
 export const erpDensityClasses = {
-  sidebarBrand: "flex h-10 shrink-0 items-center px-2.5",
+  sidebarBrand: "flex h-14 shrink-0 items-center px-2.5",
   sidebarNav: "min-h-0 flex-1 overflow-y-auto px-2 py-1",
   sidebarSectionList: "flex flex-col gap-0.5",
   sidebarItemBase:
