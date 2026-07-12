@@ -62,12 +62,12 @@ function Invoke-AgentUiSmokeTest {
         throw "Agent EXE not found for UI smoke test: $AgentExePath"
     }
 
-    Write-Host "[build] UI smoke test: $AgentExePath --ui-smoke-test" -ForegroundColor Cyan
+    Write-Host ("[build] UI smoke test: {0} --ui-smoke-test" -f $AgentExePath) -ForegroundColor Cyan
     & $AgentExePath --ui-smoke-test
     if ($LASTEXITCODE -ne 0) {
         throw "UI smoke test failed with exit code $LASTEXITCODE"
     }
-    Write-Host "[build] UI smoke test PASS" -ForegroundColor Green
+    Write-Host ("[build] UI smoke test PASS") -ForegroundColor Green
 }
 
 function Get-SourceIconSha256 {
@@ -137,13 +137,13 @@ function Invoke-LocalDistArtifactValidation {
         if ($length -le 0) {
             throw "Build artifact is empty: $($item.Label) ($($item.Path))"
         }
-        Write-Host "[build] Verified local $($item.Label) ($length bytes)" -ForegroundColor Green
+        Write-Host ("[build] Verified local {0} ({1} bytes)" -f $item.Label, $length) -ForegroundColor Green
     }
 
-    Write-Host "[build] Validating SasistPrinterAgent.exe (UI modules + VERSION)..." -ForegroundColor Cyan
+    Write-Host ("[build] Validating SasistPrinterAgent.exe (UI modules + VERSION)...") -ForegroundColor Cyan
     Invoke-AgentExeValidation -AgentExePath $AgentExePath -ExpectedVersion $ExpectedVersion -RepoRoot $RepoRoot
 
-    Write-Host "[build] UI smoke test (Status / Logi / Ustawienia)..." -ForegroundColor Cyan
+    Write-Host ("[build] UI smoke test (Status / Logi / Ustawienia)...") -ForegroundColor Cyan
     Invoke-AgentUiSmokeTest -AgentExePath $AgentExePath
 }
 
@@ -160,8 +160,8 @@ function Invoke-OptionalSetupValidation {
 
     $sevenZip = Find-SevenZip
     if (-not $sevenZip) {
-        Write-Host "[build] Warning: 7-Zip not found — skipping optional installer setup validation." -ForegroundColor Yellow
-        Write-Host "[build]          Install 7-Zip to validate SasistPrinterAgent.exe inside the setup EXE." -ForegroundColor Yellow
+        Write-Host ("[build] Warning: 7-Zip not found - skipping optional installer setup validation.") -ForegroundColor Yellow
+        Write-Host ("[build]          Install 7-Zip to validate SasistPrinterAgent.exe inside the setup EXE.") -ForegroundColor Yellow
         return $false
     }
 
@@ -169,15 +169,15 @@ function Invoke-OptionalSetupValidation {
         $ExtractDirectory = Join-Path (Split-Path -Parent $InstallerPath) "_build_verify_extracted"
     }
 
-    Write-Host "[build] Optional setup validation (7-Zip): $($sevenZip)" -ForegroundColor Cyan
+    Write-Host ("[build] Optional setup validation (7Zip): {0}" -f $sevenZip) -ForegroundColor Cyan
     $installerAgentExe = Extract-AgentExeFromInstaller -InstallerPath $InstallerPath -OutputDirectory $ExtractDirectory
     if (-not $installerAgentExe) {
-        Write-Host "[build] Warning: could not extract SasistPrinterAgent.exe from installer — setup validation skipped." -ForegroundColor Yellow
+        Write-Host ("[build] Warning: could not extract SasistPrinterAgent.exe from installer - setup validation skipped.") -ForegroundColor Yellow
         return $false
     }
 
     Invoke-AgentExeValidation -AgentExePath $installerAgentExe -ExpectedVersion $ExpectedVersion -RepoRoot $RepoRoot
-    Write-Host "[build] Optional setup validation PASS" -ForegroundColor Green
+    Write-Host ("[build] Optional setup validation PASS") -ForegroundColor Green
     return $true
 }
 
