@@ -8,11 +8,8 @@ from ...auth.deps import get_current_user
 from ...models.app_user import AppUser
 from ...schemas.printing.release import AgentDownloadInfoResponse, AgentVersionResponse
 from ...services.printing.agent_auth_service import get_current_agent
-from ...services.printing.release_service import (
-    AGENT_DOWNLOAD_URL,
-    AGENT_RELEASE_VERSION,
-    AGENT_UPDATE_MANDATORY,
-)
+from ...services.printing.github_release_service import get_latest_printer_agent_release
+from ...services.printing.release_service import AGENT_UPDATE_MANDATORY
 
 router = APIRouter()
 
@@ -23,9 +20,10 @@ def get_agent_download_info(
     _: AppUser = Depends(get_current_user),
 ):
     """Public installer metadata for the settings onboarding modal."""
+    release = get_latest_printer_agent_release()
     return AgentDownloadInfoResponse(
-        download_url=AGENT_DOWNLOAD_URL,
-        latest_version=AGENT_RELEASE_VERSION,
+        download_url=release.download_url,
+        latest_version=release.version,
     )
 
 
@@ -34,8 +32,9 @@ def get_agent_version(
     tenant_id: int | None = Query(default=None, ge=1),
     _=Depends(get_current_agent),
 ):
+    release = get_latest_printer_agent_release()
     return AgentVersionResponse(
-        version=AGENT_RELEASE_VERSION,
-        download_url=AGENT_DOWNLOAD_URL,
+        version=release.version,
+        download_url=release.download_url,
         mandatory=AGENT_UPDATE_MANDATORY,
     )
