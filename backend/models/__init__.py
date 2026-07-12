@@ -219,3 +219,9 @@ from .inventory_count import (  # noqa: F401 — stock count module
     InventoryTask,
 )
 from .user_list_view import UserListView  # noqa: F401
+from .printing import (  # noqa: F401 — Sasist Printer Agent MVP
+    AgentPrinter,
+    PrintJob,
+    PrinterAgent,
+    PrintingDefault,
+)

@@ -1,0 +1,76 @@
+# -*- mode: python ; coding: utf-8 -*-
+# Tray application — one-file EXE (avoids _internal merge conflicts in installer).
+
+from pathlib import Path
+
+project_root = Path(SPECPATH)
+
+a = Analysis(
+    [str(project_root / "agent" / "__main__.py")],
+    pathex=[str(project_root)],
+    binaries=[],
+    datas=[
+        (str(project_root / "assets" / "icon.ico"), "assets"),
+        (str(project_root / "config" / "config.example.json"), "config"),
+    ],
+    hiddenimports=[
+        "win32print",
+        "win32api",
+        "win32event",
+        "pystray",
+        "PIL",
+        "PIL._imagingtk",
+        "PIL._tkinter_finder",
+        "requests",
+        "urllib3",
+        "certifi",
+        "charset_normalizer",
+        "idna",
+        "agent",
+        "agent.app",
+        "agent.runtime",
+        "agent.runtime.core",
+        "agent.api",
+        "agent.auth",
+        "agent.config",
+        "agent.heartbeat",
+        "agent.jobs",
+        "agent.printing",
+        "agent.printers",
+        "agent.tray",
+        "agent.update_checker",
+        "agent.updater_launcher",
+        "agent.logging_setup",
+    ],
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=[],
+    noarchive=False,
+    optimize=0,
+)
+
+pyz = PYZ(a.pure)
+
+exe = EXE(
+    pyz,
+    a.scripts,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    [],
+    name="SasistPrinterAgent",
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    runtime_tmpdir=None,
+    console=False,
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+    icon=str(project_root / "assets" / "icon.ico"),
+)

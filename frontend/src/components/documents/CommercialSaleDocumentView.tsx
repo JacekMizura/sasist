@@ -3,10 +3,11 @@ import { Download, FileText, Package, Printer, ScrollText } from "lucide-react";
 
 import { DAMAGE_TENANT_ID } from "../../constants/panelTenant";
 import { printButtonLabelPl } from "../../components/directSales/directSalesTerminology";
-import { useDocumentTemplatePrint } from "../../hooks/useDocumentTemplatePrint";
+import { useWarehouse } from "../../context/WarehouseContext";
+import { useQueuePrint } from "../../hooks/useQueuePrint";
+import DocumentPrintHistory from "../printing/DocumentPrintHistory";
 import type { SaleDocumentDetail } from "../../types/saleDocument";
 import { formatMoneyPl } from "../../utils/formatOrderMoney";
-import { saleKindFromSubtype } from "../../utils/documentTemplatePrint";
 import { DocumentTypeBadge, ExternalStatusBadge, PaymentStatusBadge } from "../../pages/documents/documentsBadges";
 
 const btnSecondary =
@@ -46,7 +47,12 @@ type Props = {
 };
 
 export default function CommercialSaleDocumentView({ doc, onPrint, onExport }: Props) {
-  const { requestPrint, pickerModal, printBusy } = useDocumentTemplatePrint({ tenantId: DAMAGE_TENANT_ID });
+  const { warehouse: activeWarehouse } = useWarehouse();
+  const warehouseId = activeWarehouse?.id ?? null;
+  const { queueSaleDocument, queueStockDocument, busy: printBusy } = useQueuePrint({
+    tenantId: DAMAGE_TENANT_ID,
+    warehouseId,
+  });
   const title = doc.doc_type === "PA" ? "Paragon" : "Faktura VAT";
   const legacy = doc.numbering_legacy;
   const printLabel = printButtonLabelPl(doc.document_subtype || doc.doc_type);
@@ -54,15 +60,11 @@ export default function CommercialSaleDocumentView({ doc, onPrint, onExport }: P
   const handlePrint =
     onPrint ??
     (() => {
-      void requestPrint({
-        kind: "sale_document",
-        documentId: doc.id,
-        kindCode: saleKindFromSubtype(doc.document_subtype || doc.doc_type),
-      });
+      void queueSaleDocument(doc.id, warehouseId);
     });
 
   const handlePrintWz = (wzId: number) => {
-    void requestPrint({ kind: "stock_document", documentId: wzId, kindCode: "wz" });
+    void queueStockDocument(wzId, warehouseId);
   };
 
   return (
@@ -297,6 +299,13 @@ export default function CommercialSaleDocumentView({ doc, onPrint, onExport }: P
         </section>
       ) : null}
 
+      <DocumentPrintHistory
+        tenantId={DAMAGE_TENANT_ID}
+        documentType="sale_document"
+        documentId={Number(doc.id)}
+        warehouseId={warehouseId}
+      />
+
       <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <h2 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-slate-500">
           <ScrollText className="h-4 w-4" aria-hidden />
@@ -315,7 +324,6 @@ export default function CommercialSaleDocumentView({ doc, onPrint, onExport }: P
           ))}
         </ol>
       </section>
-      {pickerModal}
     </div>
   );
 }

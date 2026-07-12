@@ -15,6 +15,7 @@ import {
   type WarehouseStockDocumentDetailViewProps,
 } from "../../../components/documents/warehouse/WarehouseStockDocumentDetailView";
 import { useDocumentTemplatePrint } from "../../../hooks/useDocumentTemplatePrint";
+import { useQueuePrint } from "../../../hooks/useQueuePrint";
 import { stockKindFromType } from "../../../utils/documentTemplatePrint";
 import { listValueNet } from "../warehouseDocumentHelpers";
 import {
@@ -90,7 +91,9 @@ export function useWarehouseStockDocumentDetail({
   const navigate = useNavigate();
   const { requestPrint: requestStockDocumentPrint, pickerModal: stockDocumentPickerModal } = useDocumentTemplatePrint({
     tenantId,
+    autoPrint: false,
   });
+  const { queueStockDocument, busy: queuePrintBusy } = useQueuePrint({ tenantId, warehouseId });
 
   const [detail, setDetail] = useState<StockDocumentRead | null>(null);
   const [loading, setLoading] = useState(true);
@@ -308,9 +311,8 @@ export function useWarehouseStockDocumentDetail({
   }, [detail?.document_type, docTypeFallback, documentId, requestStockDocumentPrint]);
 
   const printDocumentPdf = useCallback(() => {
-    const kindCode = stockKindFromType(detail?.document_type ?? docTypeFallback);
-    void requestStockDocumentPrint({ kind: "stock_document", documentId, kindCode });
-  }, [detail?.document_type, docTypeFallback, documentId, requestStockDocumentPrint]);
+    void queueStockDocument(documentId, warehouseId);
+  }, [documentId, queueStockDocument, warehouseId]);
 
   const actions: WarehouseStockDocumentDetailActions = useMemo(
     () => ({
@@ -376,7 +378,7 @@ export function useWarehouseStockDocumentDetail({
     canPostAccept: derived.canPostAccept,
     canEditMetadata: derived.canEditMetadata,
     isWmsCompleteDraft: derived.isWmsCompleteDraft,
-    detailBusy,
+    detailBusy: detailBusy || queuePrintBusy,
     metaCurrency,
     metaNet,
     metaGross,

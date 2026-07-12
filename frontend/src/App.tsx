@@ -75,7 +75,7 @@ import EmployeeCostsOverviewPage from "./pages/Settings/EmployeeCostsOverviewPag
 import WorkforceLayout from "./pages/Settings/WorkforceLayout"
 import WorkforceDashboardPage from "./pages/Settings/WorkforceDashboardPage"
 import WorkforceActivityPage from "./pages/Settings/WorkforceActivityPage"
-import PrintersPage from "./pages/Settings/PrintersPage"
+import PrintingSettingsModule from "./pages/Settings/printing"
 import WmsSettingsPage from "./pages/Settings/WmsSettingsPage"
 import ReturnsModuleLayout from "./pages/Orders/ReturnsModuleLayout"
 import ReturnsModuleSettingsTabPage from "./pages/Orders/ReturnsModuleSettingsTabPage"
@@ -561,8 +561,8 @@ export const router = createBrowserRouter(
                   <Route path=":id/edytuj" element={<AdministratorCreatePage />} />
                   <Route path=":id" element={<AdministratorCreatePage />} />
                 </Route>
-                <Route path="setup/printers" element={<Navigate to="/settings/printers" replace />} />
-                <Route path="settings/printers" element={<PrintersPage />} />
+                <Route path="setup/printers/*" element={<Navigate to="/settings/printers/agents" replace />} />
+                <Route path="settings/printers/*" element={<PrintingSettingsModule />} />
                 <Route path="settings/wms/returns/*" element={<LegacySettingsWmsReturnsRedirect />} />
                 <Route path="settings/wms" element={<WmsSettingsPage />} />
                 <Route path="settings/returns/*" element={<LegacySettingsReturnsRedirect />} />

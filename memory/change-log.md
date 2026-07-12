@@ -1,5 +1,36 @@
 # Change log
 
+## 2026-07-11 — Integracja drukowania Sasist (frontend + orchestracja backend)
+
+- Backend: `POST /api/printing/jobs/queue` — generuje PDF server-side, zapisuje plik, tworzy PrintJob z `pdf_url` → `/jobs/{id}/file`.
+- Backend: `GET /api/printing/jobs/{id}/file` — pobranie PDF przez agenta (Bearer).
+- Frontend: `printingApi.ts`, `useQueuePrint`, moduł Ustawienia → Drukarki (agenci / drukarki / domyślne / legacy QZ).
+- Integracja „Drukuj”: dokumenty magazynowe, sprzedażowe, kolejka etykiet → kolejka drukowania + toast sukcesu.
+
+## 2026-07-11 — Sasist Printer Agent Windows MVP (Faza 2A–2F)
+
+- Nowy projekt: `sasist-printer-agent/` — Python 3.12, requests, pywin32, pystray, PyInstaller.
+- Moduły: config, api, auth, printers, heartbeat, jobs, printing, tray, app.
+- Config/logs: `%ProgramData%\Sasist\PrinterAgent\`.
+- Testy: `sasist-printer-agent/tests/` (6 passed).
+
+## 2026-07-11 — Printing MVP Faza 1B–1D (API + serwisy + testy)
+
+- Serwisy: `backend/services/printing/` — auth token `spt_*`, rejestracja/heartbeat agentów, sync drukarek, job lifecycle (atomowy claim), defaults.
+- API: `/api/printing/*` — agents, printers, jobs, defaults (`backend/api/printing/`).
+- Auth agenta: `get_current_agent()` — Bearer `spt_*`, bez JWT.
+- Testy: `backend/tests/printing/test_printing_api.py` — 16 testów, wszystkie przechodzą.
+- **Następny krok:** Faza 2 — agent Windows.
+
+## 2026-07-11 — Printing MVP Faza 1A (modele + migracje + schemas)
+
+- Nowe tabele ORM: `printer_agents`, `agent_printers`, `print_jobs`, `printing_defaults` (`backend/models/printing/`).
+- Pydantic schemas: `backend/schemas/printing/` (agent, printer, job, defaults).
+- Tier 1 ensure: `backend/db/printing_schema.py` + wpis w `schema_tiers.py`.
+- SQL referencyjny: `backend/migrations/018_printing_mvp.sql`.
+- Legacy `printers` (QZ) bez zmian; nowy model `AgentPrinter` → tabela `agent_printers`.
+- **Następny krok:** Faza 1B–1D (serwisy + API `/api/printing/*`).
+
 ## 2026-06-08 — Usunięcie segmentacji ABC/XYZ (Zakupy i planowanie)
 
 - Usunięto endpoint `GET /purchasing/segments`, serwis `purchasing_segments_service`, strony/komponenty heatmapy i priorytetów.

@@ -293,6 +293,7 @@ from .api.label_pack import router as label_pack_router
 from .api.label_preview import router as label_preview_router
 from .api.printer_profiles import router as printer_profiles_router
 from .api.printers import router as printers_router
+from .api.printing import router as printing_router
 from .api.qz import router as qz_router
 from .api.wave import router as wave_router
 from .api.scan import router as scan_router
@@ -1912,6 +1913,7 @@ _API_ROUTERS = (
     label_preview_router,
     printer_profiles_router,
     printers_router,
+    printing_router,
     qz_router,
     wave_router,
     scan_router,

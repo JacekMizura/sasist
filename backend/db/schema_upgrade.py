@@ -4523,6 +4523,13 @@ def ensure_inventory_count_schema(engine: Engine) -> None:
     _impl(engine)
 
 
+def ensure_printing_schema(engine: Engine) -> None:
+    """Sasist Printer Agent MVP — Tier 1 operational tables."""
+    from .printing_schema import ensure_printing_schema as _impl
+
+    _impl(engine)
+
+
 def ensure_slotting_schema(engine: Engine) -> None:
     """Warehouse capacity / slotting engine — location occupancy columns."""
     from .slotting_schema import ensure_slotting_schema as _impl

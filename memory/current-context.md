@@ -1,5 +1,15 @@
 # Current context
 
+## Printing MVP — Faza 1B–1D done (2026-07-11)
+- Pełne API `/api/printing/*` (agents, jobs, printers, defaults).
+- Serwisy + testy (16/16 pass). Agent Windows i frontend — nie ruszane.
+
+## Printing MVP — Faza 1A done (2026-07-11)
+- Modele: `PrinterAgent`, `AgentPrinter`, `PrintJob`, `PrintingDefault` w `backend/models/printing/`.
+- Schemas Pydantic: `backend/schemas/printing/`.
+- Migracja Tier 1: `ensure_printing_schema()` + `018_printing_mvp.sql`.
+- **Nie zrobione:** serwisy, API, agent Windows, panel ustawień, integracja dokumentów.
+
 ## Workflow (2026-07-05)
 - Agent: **tylko implementacja i naprawa kodu** — bez E2E, Playwright, logowania do Vercel/Railway, lokalnych serwerów.
 - Weryfikacja techniczna przed commitem: `frontend` → `npm run build`; backend → import `backend.main`, brak błędów składni/importów.

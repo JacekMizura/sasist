@@ -1,0 +1,33 @@
+[project]
+name = "sasist-printer-agent"
+version = "1.0.0"
+description = "Sasist Printer Agent for Windows — PDF printing via Sasist backend"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "requests>=2.31.0",
+  "pywin32>=306",
+  "pystray>=0.19.5",
+  "Pillow>=10.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0.0",
+  "pyinstaller>=6.0.0",
+]
+
+[project.scripts]
+sasist-printer-agent = "agent.app:main"
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["agent*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

@@ -1,0 +1,11 @@
+{
+  "server_url": "https://your-sasist-server.example.com",
+  "tenant_id": 1,
+  "warehouse_id": 1,
+  "token": "",
+  "machine_id": "",
+  "computer_name": "",
+  "version": "1.0.0",
+  "heartbeat_interval_sec": 30,
+  "poll_interval_sec": 5
+}

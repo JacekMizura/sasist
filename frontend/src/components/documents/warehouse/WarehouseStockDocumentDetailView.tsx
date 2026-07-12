@@ -2,6 +2,7 @@ import type { RefObject } from "react";
 
 import type { StockDocumentListRow, StockDocumentRead } from "../../../api/stockDocumentsApi";
 import type { WarehouseCarrierRead } from "../../../api/wmsCarrierApi";
+import DocumentPrintHistory from "../../printing/DocumentPrintHistory";
 import { CarrierAssignProductsModal } from "../../warehouse/carriers/CarrierAssignProductsModal";
 import { CarrierCreateModal } from "../../warehouse/carriers/CarrierCreateModal";
 import { WarehouseDocumentDetailFooter } from "../../../pages/documents/WarehouseDocumentDetailFooter";
@@ -208,6 +209,17 @@ export function WarehouseStockDocumentDetailView({
             </div>
           ) : null}
         </div>
+
+        {detail && detailId != null ? (
+          <div className="shrink-0 border-t border-slate-200 p-4">
+            <DocumentPrintHistory
+              tenantId={tenantId}
+              documentType="stock_document"
+              documentId={detailId}
+              warehouseId={detail.warehouse_id ?? undefined}
+            />
+          </div>
+        ) : null}
 
         <WarehouseDocumentDetailFooter
           detailBusy={detailBusy}
