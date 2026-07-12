@@ -374,6 +374,30 @@ $manifest = [ordered]@{
 Write-Step "Wrote $ManifestPath"
 
 Assert-PublicationReady -ManifestPath $ManifestPath -SetupSha $setupSha -CurrentVersion $version
+
+Write-Step "Running agent unit tests..."
+Push-Location $AgentRoot
+try {
+    python -m pytest tests -q --tb=short
+    if ($LASTEXITCODE -ne 0) {
+        throw "Agent tests failed (exit $LASTEXITCODE)"
+    }
+} finally {
+    Pop-Location
+}
+
+Write-Step "Running verify_agent_exe.py on dist artifact..."
+python (Join-SafePath $RepoRoot "scripts\verify_agent_exe.py") $agentExe --expected-version $version
+if ($LASTEXITCODE -ne 0) {
+    throw "verify_agent_exe.py failed (exit $LASTEXITCODE)"
+}
+
+Write-Step "Running verify-release.ps1 (local, -SkipGithub)..."
+powershell -ExecutionPolicy Bypass -File (Join-SafePath $RepoRoot "scripts\verify-release.ps1") -Version $version -SkipGithub
+if ($LASTEXITCODE -ne 0) {
+    throw "verify-release.ps1 failed (exit $LASTEXITCODE)"
+}
+
 Write-Step "Running upgrade verification script..."
 powershell -ExecutionPolicy Bypass -File (Join-SafePath $RepoRoot "scripts\verify_agent_upgrade.ps1")
-Write-Step "Build complete. Upload Output\SasistPrinterAgent-Setup-${version}.exe to GitHub Release v$version, then run scripts\\verify-release.ps1."
+Write-Step "Build complete. Release: powershell -ExecutionPolicy Bypass -File release.ps1 -Version $version"

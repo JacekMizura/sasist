@@ -91,6 +91,46 @@ Use **Apps & features** → Sasist Printer Agent, or rerun uninstaller from `Out
 
 Logs: `%ProgramData%\Sasist\PrinterAgent\logs\agent.log`
 
+## Automated release
+
+### One-time setup
+
+Install [GitHub CLI](https://cli.github.com/) and authenticate:
+
+```powershell
+gh auth login
+```
+
+### Release from your machine
+
+1. Edit `RELEASE_NOTES.md` in the repository root (release notes for GitHub).
+2. Run from the **repository root**:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File release.ps1 -Version 1.0.6
+```
+
+The script will:
+
+1. Bump `sasist-printer-agent/VERSION` via `scripts\bump-version.ps1`
+2. Commit, push (`Printer Agent vX.Y.Z`)
+3. Build the installer (`installer\build.ps1`)
+4. Create or update GitHub Release `vX.Y.Z` with `Output\SasistPrinterAgent-Setup-X.Y.Z.exe`
+5. Run `scripts\verify-release.ps1`
+
+Any failed step stops the process with a non-zero exit code.
+
+### Release via GitHub Actions (tag push)
+
+After `VERSION` is bumped and committed on the default branch:
+
+```powershell
+git tag v1.0.6
+git push origin v1.0.6
+```
+
+Workflow `.github/workflows/printer-agent-release.yml` will build the installer, publish the GitHub Release, upload the Setup.exe asset, and verify the release.
+
 ## Tests
 
 ```powershell

@@ -112,7 +112,7 @@ class LogsPanel(ctk.CTkFrame):
         left = ctk.CTkFrame(footer, fg_color="transparent")
         left.pack(side="left")
         secondary_button(left, "Kopiuj błąd", self._copy_error).pack(side="left", padx=(0, 8))
-        secondary_button(left, "Wyczyść filtr", self._clear_filters).pack(side="left", padx=(0, 8))
+        secondary_button(left, "Reset filtrów", self._clear_filters).pack(side="left", padx=(0, 8))
         secondary_button(left, "Kopiuj", self._copy_to_clipboard).pack(side="left", padx=(0, 8))
         secondary_button(left, "Otwórz w Notepad", self._open_in_notepad).pack(side="left")
         primary_button(footer, "Odśwież", lambda: self.refresh_file_list(keep_selection=True)).pack(side="right")

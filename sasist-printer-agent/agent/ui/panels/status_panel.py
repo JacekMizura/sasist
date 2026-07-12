@@ -49,7 +49,7 @@ class StatusPanel(ctk.CTkFrame):
         self._hero_row = ctk.CTkFrame(hero_inner, fg_color="transparent")
         self._hero_row.pack(side="right")
 
-        overview = card(self._scroll, "Przegląd")
+        overview = card(self._scroll, "Status")
         self._overview_body = ctk.CTkFrame(overview, fg_color="transparent")
         self._overview_body.pack(fill="x")
         self._overview_body.grid_columnconfigure(0, weight=1)
@@ -117,12 +117,12 @@ class StatusPanel(ctk.CTkFrame):
                 ("\U0001f5a8", "Drukarki", str(self._runtime.state.printer_count)),
                 (
                     "\U0001f493",
-                    "Ostatni heartbeat",
+                    "Heartbeat",
                     hb.last_success_at.strftime("%Y-%m-%d %H:%M:%S") if hb.last_success_at else "—",
                 ),
                 (
                     "\U0001f501",
-                    "Ostatni polling",
+                    "Polling",
                     jobs.last_poll_at.strftime("%Y-%m-%d %H:%M:%S") if jobs.last_poll_at else "—",
                 ),
                 ("\U0001f4e6", "Wersja", __version__),
@@ -144,12 +144,15 @@ class StatusPanel(ctk.CTkFrame):
                 justify="left",
             ).pack(fill="x", padx=10, pady=8)
 
+        update_available = bool(
+            self._remote_version and is_newer_version(__version__, self._remote_version)
+        )
         self._fill_rows(
             self._update_rows,
             [
                 ("\U0001f4e6", "Aktualna wersja", __version__),
                 ("\U0001f680", "Najnowsza wersja", self._remote_version or "—"),
-                ("\U0001f4ca", "Status", update_label),
+                ("\U0001f4ca", "Update available", "Tak" if update_available else "Nie"),
             ],
         )
 

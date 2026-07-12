@@ -3,7 +3,7 @@ name: Printer Agent Release
 on:
   push:
     tags:
-      - "v*.*.*"
+      - "v*"
 
 jobs:
   build-and-release:
@@ -14,14 +14,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Verify tag matches VERSION
+      - name: Resolve release version from tag
+        id: version
         shell: pwsh
         run: |
-          $tag = "$env:GITHUB_REF_NAME".TrimStart('v')
-          $version = (Get-Content -LiteralPath "sasist-printer-agent/VERSION" -Raw).Trim()
-          if ($tag -ne $version) {
-            throw "Git tag v$tag does not match sasist-printer-agent/VERSION ($version)"
+          $tag = "$env:GITHUB_REF_NAME".Trim()
+          $version = $tag.TrimStart('v')
+          if ($version -notmatch '^\d+\.\d+\.\d+$') {
+            throw "Tag must be vX.Y.Z semver, got: $tag"
           }
+          $fileVersion = (Get-Content -LiteralPath "sasist-printer-agent/VERSION" -Raw).Trim()
+          if ($fileVersion -ne $version) {
+            throw "Git tag v$version does not match sasist-printer-agent/VERSION ($fileVersion). Bump VERSION before tagging."
+          }
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           Write-Host "Release version OK: $version"
 
       - name: Setup Python
@@ -43,12 +49,16 @@ jobs:
       - name: Verify local release build
         shell: pwsh
         run: |
-          powershell -ExecutionPolicy Bypass -File scripts/verify-release.ps1 -SkipGithub
+          powershell -ExecutionPolicy Bypass -File scripts/verify-release.ps1 -Version ${{ steps.version.outputs.version }} -SkipGithub
 
-      - name: Upload GitHub Release asset
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            Output/SasistPrinterAgent-Setup-*.exe
-            installer/build-manifest.json
-          generate_release_notes: true
+      - name: Publish GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          powershell -ExecutionPolicy Bypass -File scripts/lib/publish-agent-github-release.ps1 -Version ${{ steps.version.outputs.version }}
+
+      - name: Verify published release
+        shell: pwsh
+        run: |
+          powershell -ExecutionPolicy Bypass -File scripts/verify-release.ps1 -Version ${{ steps.version.outputs.version }}
