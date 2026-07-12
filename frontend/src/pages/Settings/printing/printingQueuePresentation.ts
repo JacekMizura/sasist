@@ -35,28 +35,28 @@ export function printJobStatusLabel(status: string): string {
 export function printJobStatusClass(status: string): string {
   switch (status) {
     case "pending":
-      return "bg-blue-50 text-blue-700";
+      return "bg-amber-50 text-amber-700 ring-1 ring-amber-200/80";
     case "processing":
-      return "bg-orange-50 text-orange-700";
+      return "bg-orange-50 text-orange-700 ring-1 ring-orange-200/80";
     case "printed":
-      return "bg-emerald-50 text-emerald-700";
+      return "bg-green-50 text-green-700 ring-1 ring-green-200/80";
     case "failed":
-      return "bg-red-50 text-red-700";
+      return "bg-red-50 text-red-700 ring-1 ring-red-200/80";
     case "cancelled":
-      return "bg-slate-100 text-slate-600";
+      return "bg-slate-100 text-slate-600 ring-1 ring-slate-200/80";
     default:
-      return "bg-slate-100 text-slate-600";
+      return "bg-slate-100 text-slate-600 ring-1 ring-slate-200/80";
   }
 }
 
 export function agentHealthClass(health: string): string {
   switch (health) {
     case "online":
-      return "bg-emerald-50 text-emerald-700";
+      return "bg-green-50 text-green-700 ring-1 ring-green-200/80";
     case "stale":
-      return "bg-amber-50 text-amber-700";
+      return "bg-orange-50 text-orange-700 ring-1 ring-orange-200/80";
     default:
-      return "bg-red-50 text-red-700";
+      return "bg-red-50 text-red-700 ring-1 ring-red-200/80";
   }
 }
 

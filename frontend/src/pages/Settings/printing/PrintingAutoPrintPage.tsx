@@ -4,10 +4,20 @@ import { fetchPrintingAutoPrint, updatePrintingAutoPrint } from "../../../api/pr
 import { extractApiErrorMessage } from "../../../api/apiErrorMessage";
 import type { PrintingAutoPrintRead } from "../../../types/printing";
 import { DAMAGE_TENANT_ID } from "../../damage/damageShared";
+import {
+  PrintingAlert,
+  PrintingLoadingState,
+  PrintingPageBody,
+  PrintingPrimaryButton,
+} from "./components/printingUi";
 
 const FIELDS: { key: keyof PrintingAutoPrintRead; label: string; hint: string }[] = [
   { key: "labels", label: "Etykiety", hint: "Automatyczny wydruk etykiet po wygenerowaniu (wkrótce)." },
-  { key: "stock_documents", label: "Dokumenty magazynowe", hint: "PZ, PW, RW, MM, WZ, ZD — bez automatycznego wykonania w tej fazie." },
+  {
+    key: "stock_documents",
+    label: "Dokumenty magazynowe",
+    hint: "PZ, PW, RW, MM, WZ, ZD — bez automatycznego wykonania w tej fazie.",
+  },
   { key: "sale_documents", label: "Dokumenty sprzedażowe", hint: "FV, PAR, KOR — tylko konfiguracja." },
   { key: "shipping_labels", label: "Etykiety wysyłkowe", hint: "Etykiety kurierskie — tylko konfiguracja." },
 ];
@@ -58,22 +68,30 @@ export default function PrintingAutoPrintPage() {
   };
 
   if (loading || !values) {
-    return <p className="mt-4 text-sm text-slate-500">Ładowanie…</p>;
+    return (
+      <PrintingPageBody>
+        <PrintingLoadingState />
+      </PrintingPageBody>
+    );
   }
 
   return (
-    <div className="mt-4 max-w-xl space-y-4">
+    <PrintingPageBody className="max-w-xl">
       <p className="text-sm text-slate-600">
-        Konfiguracja automatycznego drukowania na poziomie tenantu. W tej fazie zapisywane są tylko preferencje — wydruki nie są uruchamiane automatycznie.
+        Konfiguracja automatycznego drukowania na poziomie tenantu. W tej fazie zapisywane są tylko preferencje — wydruki
+        nie są uruchamiane automatycznie.
       </p>
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
-      {saved ? <p className="text-sm text-emerald-700">Zapisano ustawienia auto-druk.</p> : null}
+      {error ? <PrintingAlert tone="error">{error}</PrintingAlert> : null}
+      {saved ? <PrintingAlert tone="success">Zapisano ustawienia auto-druk.</PrintingAlert> : null}
 
       {FIELDS.map((field) => (
-        <label key={field.key} className="flex items-start gap-3 rounded-lg border border-slate-200 p-3">
+        <label
+          key={field.key}
+          className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-colors hover:border-orange-200"
+        >
           <input
             type="checkbox"
-            className="mt-1"
+            className="mt-1 h-4 w-4 rounded border-slate-300 text-orange-500 focus:ring-orange-500/30"
             checked={Boolean(values[field.key])}
             onChange={(e) => {
               setValues((prev) => (prev ? { ...prev, [field.key]: e.target.checked } : prev));
@@ -87,14 +105,9 @@ export default function PrintingAutoPrintPage() {
         </label>
       ))}
 
-      <button
-        type="button"
-        className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-        disabled={saving}
-        onClick={() => void save()}
-      >
+      <PrintingPrimaryButton disabled={saving} onClick={() => void save()}>
         {saving ? "Zapisywanie…" : "Zapisz"}
-      </button>
-    </div>
+      </PrintingPrimaryButton>
+    </PrintingPageBody>
   );
 }

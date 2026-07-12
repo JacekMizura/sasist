@@ -6,17 +6,22 @@ import logging
 import os
 import subprocess
 import sys
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
 from PIL import Image, ImageDraw
 
-from .config import save_config
 from .build_info import format_about_text
+from .config import save_config
 from .runtime import AgentRuntime
+from .ui.config_dialog import ConfigDialog
+from .ui.status_window import StatusWindow
 
 logger = logging.getLogger(__name__)
+
+PRIMARY_RGBA = (249, 115, 22, 255)
 
 
 @dataclass
@@ -30,50 +35,39 @@ def _project_root() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
+def _draw_fallback_icon(size: int) -> Image.Image:
+    image = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(image)
+    draw.rounded_rectangle((0, 0, size - 1, size - 1), radius=size // 5, fill=(15, 23, 42, 255))
+    margin = size // 6
+    cx, cy = size // 2, size // 2
+    s = size // 4
+    top = [(cx, cy - s), (cx + s, cy - s // 2), (cx, cy), (cx - s, cy - s // 2)]
+    draw.polygon(top, outline=PRIMARY_RGBA)
+    draw.ellipse((margin, size - margin - 4, margin + 4, size - margin), fill=PRIMARY_RGBA)
+    return image
+
+
 def load_tray_icon() -> Image.Image:
     icon_path = _project_root() / "assets" / "icon.ico"
     if icon_path.exists():
         return Image.open(icon_path).convert("RGBA")
-
-    image = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(image)
-    draw.ellipse((8, 8, 56, 56), fill=(37, 99, 235, 255))
-    draw.rectangle((22, 18, 42, 34), fill=(255, 255, 255, 255))
-    draw.polygon([(20, 40), (44, 40), (32, 52)], fill=(255, 255, 255, 255))
-    return image
-
-
-def _format_status(ctx: TrayContext) -> str:
-    cfg = ctx.runtime.config
-    hb = ctx.runtime.state.heartbeat
-    jobs = ctx.runtime.state.jobs
-    online = "online" if hb.online else "offline"
-    last_hb = hb.last_success_at.strftime("%Y-%m-%d %H:%M:%S") if hb.last_success_at else "—"
-    last_poll = jobs.last_poll_at.strftime("%Y-%m-%d %H:%M:%S") if jobs.last_poll_at else "—"
-    lines = [
-        f"Status: {online}",
-        f"Wersja: {cfg.version if cfg else '—'}",
-        f"Agent ID: {cfg.agent_id if cfg and cfg.agent_id else '—'}",
-        f"Machine ID: {cfg.machine_id if cfg else '—'}",
-        f"Komputer: {cfg.computer_name if cfg else '—'}",
-        f"Magazyn: {cfg.warehouse_id if cfg and cfg.warehouse_id else '—'}",
-        f"Drukarki: {ctx.runtime.state.printer_count}",
-        f"Ostatni heartbeat: {last_hb}",
-        f"Ostatni poll: {last_poll}",
-        f"Oczekujące zadania: {jobs.pending_count}",
-    ]
-    err = hb.last_error or jobs.last_poll_error or jobs.last_processing_error
-    if err:
-        lines.append(f"Ostatni błąd: {err}")
-    if jobs.processing:
-        lines.append("Drukowanie w toku…")
-    return "\n".join(lines)
+    return _draw_fallback_icon(64)
 
 
 class TrayApp:
     def __init__(self, ctx: TrayContext) -> None:
         self._ctx = ctx
         self._icon = None
+        self._ui_lock = threading.Lock()
+
+    def _run_ui(self, builder: Callable[[], None]) -> None:
+        if not self._ui_lock.acquire(blocking=False):
+            return
+        try:
+            builder()
+        finally:
+            self._ui_lock.release()
 
     def _show_about(self, _icon, _item) -> None:
         import tkinter as tk
@@ -87,23 +81,33 @@ class TrayApp:
         root.destroy()
 
     def _show_status(self, _icon, _item) -> None:
-        import tkinter as tk
-        from tkinter import messagebox
+        def _open() -> None:
+            StatusWindow(
+                self._ctx.runtime,
+                on_open_config=lambda: self._open_config(None, None),
+                on_open_logs=lambda: self._open_logs(None, None),
+                on_sync=lambda: self._sync_printers(None, None),
+                on_test_page=lambda: self._test_page(None, None),
+            ).show()
 
-        root = tk.Tk()
-        root.withdraw()
-        messagebox.showinfo("Sasist Printer Agent", _format_status(self._ctx))
-        root.destroy()
+        threading.Thread(target=lambda: self._run_ui(_open), daemon=True).start()
 
     def _open_config(self, _icon, _item) -> None:
         cfg = self._ctx.runtime.config
         if not cfg:
             return
-        path = cfg.config_path
-        path.parent.mkdir(parents=True, exist_ok=True)
-        if not path.exists():
-            save_config(cfg)
-        os.startfile(str(path))
+
+        def _open() -> None:
+            cfg.config_path.parent.mkdir(parents=True, exist_ok=True)
+            if not cfg.config_path.exists():
+                save_config(cfg)
+
+            def _on_saved(updated) -> None:
+                self._ctx.runtime.config = updated
+
+            ConfigDialog(cfg, on_saved=_on_saved).show()
+
+        threading.Thread(target=lambda: self._run_ui(_open), daemon=True).start()
 
     def _open_logs(self, _icon, _item) -> None:
         cfg = self._ctx.runtime.config
@@ -143,20 +147,20 @@ class TrayApp:
         import pystray
 
         menu = pystray.Menu(
-            pystray.MenuItem("Status", self._show_status),
-            pystray.MenuItem(
-                "Pomoc",
-                pystray.Menu(
-                    pystray.MenuItem("O programie", self._show_about),
-                ),
-            ),
+            pystray.MenuItem("Status", self._show_status, default=True),
+            pystray.Menu.SEPARATOR,
             pystray.MenuItem("Otwórz konfigurację", self._open_config),
             pystray.MenuItem("Otwórz logi", self._open_logs),
             pystray.MenuItem("Synchronizuj drukarki", self._sync_printers),
             pystray.MenuItem("Wydrukuj stronę testową", self._test_page),
+            pystray.Menu.SEPARATOR,
             pystray.MenuItem("Restart usługi", self._restart_service),
             pystray.MenuItem("Restart aplikacji", self._restart),
-            pystray.MenuItem("Wyjście", self._exit),
+            pystray.Menu.SEPARATOR,
+            pystray.MenuItem("Ustawienia", self._open_config),
+            pystray.MenuItem("O programie", self._show_about),
+            pystray.Menu.SEPARATOR,
+            pystray.MenuItem("Zamknij", self._exit),
         )
         self._icon = pystray.Icon(
             "sasist_printer_agent",

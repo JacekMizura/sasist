@@ -1,0 +1,14 @@
+"""Sasist Printer Agent — shared UI theme tokens."""
+
+PRIMARY = "#F97316"
+PRIMARY_HOVER = "#EA580C"
+PRIMARY_LIGHT = "#FFEDD5"
+SUCCESS = "#16A34A"
+DANGER = "#DC2626"
+WARNING = "#F59E0B"
+NEUTRAL_BG = "#F8FAFC"
+NEUTRAL_TEXT = "#0F172A"
+MUTED_TEXT = "#64748B"
+FONT_FAMILY = ("Segoe UI", 10)
+FONT_FAMILY_BOLD = ("Segoe UI", 10, "bold")
+FONT_TITLE = ("Segoe UI", 14, "bold")

@@ -1,12 +1,28 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { fetchPrintingAgents, sendAgentTestPage } from "../../../api/printingApi";
+import { fetchPrintingAgents, fetchPrintJobs, sendAgentTestPage } from "../../../api/printingApi";
 import { extractApiErrorMessage } from "../../../api/apiErrorMessage";
 import { useWarehouse } from "../../../context/WarehouseContext";
 import type { PrinterAgentRead } from "../../../types/printing";
 import { DAMAGE_TENANT_ID } from "../../damage/damageShared";
 import { agentHealthClass, agentHealthLabel } from "./printingQueuePresentation";
 import AddComputerModal from "./AddComputerModal";
+import {
+  PrintingAlert,
+  PrintingDataTable,
+  PrintingEmptyState,
+  PrintingKpiGrid,
+  PrintingLinkButton,
+  PrintingLoadingState,
+  PrintingPageBody,
+  PrintingPrimaryButton,
+  PrintingStatusBadge,
+  PrintingTableBody,
+  PrintingTableCell,
+  PrintingTableHead,
+  PrintingTableHeadCell,
+  PrintingTableRow,
+} from "./components/printingUi";
 
 function formatDate(value: string | null | undefined): string {
   if (!value) return "—";
@@ -22,14 +38,18 @@ export default function PrintingAgentsPage() {
   const [error, setError] = useState<string | null>(null);
   const [actionId, setActionId] = useState<number | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [addComputerOpen, setAddComputerOpen] = useState(false);
+  const [pendingJobs, setPendingJobs] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchPrintingAgents(DAMAGE_TENANT_ID, warehouseId);
+      const [data, pending] = await Promise.all([
+        fetchPrintingAgents(DAMAGE_TENANT_ID, warehouseId),
+        fetchPrintJobs(DAMAGE_TENANT_ID, { warehouseId, status: "pending", limit: 500 }),
+      ]);
       setRows(data);
+      setPendingJobs(pending.length);
     } catch (err) {
       setError(extractApiErrorMessage(err, "Nie udało się pobrać agentów."));
       setRows([]);
@@ -41,6 +61,19 @@ export default function PrintingAgentsPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const kpis = useMemo(() => {
+    let online = 0;
+    let offline = 0;
+    let printers = 0;
+    for (const row of rows) {
+      const health = row.health_status ?? (row.is_online ? "online" : "offline");
+      if (health === "online") online += 1;
+      else offline += 1;
+      printers += row.printer_count ?? 0;
+    }
+    return { online, offline, printers, pending: pendingJobs };
+  }, [rows, pendingJobs]);
 
   const runTestPage = async (agentId: number) => {
     setActionId(agentId);
@@ -57,75 +90,74 @@ export default function PrintingAgentsPage() {
   };
 
   return (
-    <div className="mt-4 min-w-0">
-      <div className="mb-3 flex justify-end">
-        <button
-          type="button"
-          className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
-          onClick={() => setAddComputerOpen(true)}
-        >
-          Dodaj komputer
-        </button>
+    <PrintingPageBody>
+      <div className="flex justify-end">
+        <PrintingPrimaryButton onClick={() => setAddComputerOpen(true)}>Dodaj komputer</PrintingPrimaryButton>
       </div>
-      {error ? <p className="mb-3 text-sm text-red-600">{error}</p> : null}
-      {success ? <p className="mb-3 text-sm text-emerald-700">{success}</p> : null}
+
+      <PrintingKpiGrid
+        items={[
+          { label: "Online", value: kpis.online, tone: "success" },
+          { label: "Offline", value: kpis.offline, tone: "danger" },
+          { label: "Drukarki", value: kpis.printers, tone: "primary" },
+          { label: "Oczekujące zadania", value: kpis.pending, tone: "warning" },
+        ]}
+      />
+
+      {error ? <PrintingAlert tone="error">{error}</PrintingAlert> : null}
+      {success ? <PrintingAlert tone="success">{success}</PrintingAlert> : null}
+
       {loading ? (
-        <p className="text-sm text-slate-500">Ładowanie…</p>
+        <PrintingLoadingState />
       ) : rows.length === 0 ? (
-        <p className="text-sm text-slate-500">Brak zarejestrowanych agentów drukowania.</p>
+        <PrintingEmptyState>Brak zarejestrowanych agentów drukowania.</PrintingEmptyState>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-          <table className="min-w-full text-sm">
-            <thead className="bg-slate-50 text-left text-slate-600">
-              <tr>
-                <th className="px-3 py-2 font-medium">Komputer</th>
-                <th className="px-3 py-2 font-medium">Machine ID</th>
-                <th className="px-3 py-2 font-medium">Wersja</th>
-                <th className="px-3 py-2 font-medium">Magazyn</th>
-                <th className="px-3 py-2 font-medium">Drukarki</th>
-                <th className="px-3 py-2 font-medium">Status</th>
-                <th className="px-3 py-2 font-medium">Ostatni heartbeat</th>
-                <th className="px-3 py-2 font-medium">Ostatni polling</th>
-                <th className="px-3 py-2 font-medium">Ostatni błąd</th>
-                <th className="px-3 py-2 font-medium">Diagnostyka</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.id} className="border-t border-slate-100 align-top">
-                  <td className="px-3 py-2">{row.name}</td>
-                  <td className="px-3 py-2 font-mono text-xs text-slate-600">{row.machine_id}</td>
-                  <td className="px-3 py-2">{row.version ?? "—"}</td>
-                  <td className="px-3 py-2">{row.warehouse_id ?? "—"}</td>
-                  <td className="px-3 py-2">{row.printer_count ?? 0}</td>
-                  <td className="px-3 py-2">
-                    <span
-                      className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${agentHealthClass(row.health_status ?? (row.is_online ? "online" : "offline"))}`}
-                    >
-                      {agentHealthLabel(row.health_status ?? (row.is_online ? "online" : "offline"))}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2 whitespace-nowrap">{formatDate(row.last_seen_at)}</td>
-                  <td className="px-3 py-2 whitespace-nowrap">{formatDate(row.last_poll_at)}</td>
-                  <td className="max-w-[14rem] truncate px-3 py-2 text-red-600" title={row.last_error ?? undefined}>
-                    {row.last_error ?? "—"}
-                  </td>
-                  <td className="px-3 py-2">
-                    <button
-                      type="button"
-                      className="text-xs text-blue-700 underline disabled:opacity-50"
-                      disabled={actionId === row.id}
-                      onClick={() => void runTestPage(row.id)}
-                    >
-                      Strona testowa
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <PrintingDataTable>
+          <PrintingTableHead>
+            <tr>
+              <PrintingTableHeadCell>Komputer</PrintingTableHeadCell>
+              <PrintingTableHeadCell>Machine ID</PrintingTableHeadCell>
+              <PrintingTableHeadCell>Wersja</PrintingTableHeadCell>
+              <PrintingTableHeadCell>Magazyn</PrintingTableHeadCell>
+              <PrintingTableHeadCell>Drukarki</PrintingTableHeadCell>
+              <PrintingTableHeadCell>Status</PrintingTableHeadCell>
+              <PrintingTableHeadCell>Ostatni heartbeat</PrintingTableHeadCell>
+              <PrintingTableHeadCell>Ostatni polling</PrintingTableHeadCell>
+              <PrintingTableHeadCell>Ostatni błąd</PrintingTableHeadCell>
+              <PrintingTableHeadCell>Diagnostyka</PrintingTableHeadCell>
+            </tr>
+          </PrintingTableHead>
+          <PrintingTableBody>
+            {rows.map((row) => (
+              <PrintingTableRow key={row.id}>
+                <PrintingTableCell>{row.name}</PrintingTableCell>
+                <PrintingTableCell className="font-mono text-xs text-slate-600">{row.machine_id}</PrintingTableCell>
+                <PrintingTableCell>{row.version ?? "—"}</PrintingTableCell>
+                <PrintingTableCell>{row.warehouse_id ?? "—"}</PrintingTableCell>
+                <PrintingTableCell>{row.printer_count ?? 0}</PrintingTableCell>
+                <PrintingTableCell>
+                  <PrintingStatusBadge
+                    className={agentHealthClass(row.health_status ?? (row.is_online ? "online" : "offline"))}
+                  >
+                    {agentHealthLabel(row.health_status ?? (row.is_online ? "online" : "offline"))}
+                  </PrintingStatusBadge>
+                </PrintingTableCell>
+                <PrintingTableCell className="whitespace-nowrap">{formatDate(row.last_seen_at)}</PrintingTableCell>
+                <PrintingTableCell className="whitespace-nowrap">{formatDate(row.last_poll_at)}</PrintingTableCell>
+                <PrintingTableCell className="max-w-[14rem] truncate text-red-600" title={row.last_error ?? undefined}>
+                  {row.last_error ?? "—"}
+                </PrintingTableCell>
+                <PrintingTableCell>
+                  <PrintingLinkButton disabled={actionId === row.id} onClick={() => void runTestPage(row.id)}>
+                    Strona testowa
+                  </PrintingLinkButton>
+                </PrintingTableCell>
+              </PrintingTableRow>
+            ))}
+          </PrintingTableBody>
+        </PrintingDataTable>
       )}
+
       <AddComputerModal
         open={addComputerOpen}
         onClose={() => {
@@ -133,6 +165,6 @@ export default function PrintingAgentsPage() {
           void load();
         }}
       />
-    </div>
+    </PrintingPageBody>
   );
 }

@@ -14,7 +14,7 @@ describe("printingQueuePresentation", () => {
   it("maps job status labels and colors", () => {
     expect(printJobStatusLabel("pending")).toBe("Oczekuje");
     expect(printJobStatusClass("failed")).toContain("red");
-    expect(printJobStatusClass("printed")).toContain("emerald");
+    expect(printJobStatusClass("printed")).toContain("green");
   });
 
   it("gates retry and cancel actions", () => {
@@ -32,7 +32,7 @@ describe("printingQueuePresentation", () => {
 
   it("maps agent health", () => {
     expect(agentHealthLabel("stale")).toBe("Opóźniony");
-    expect(agentHealthClass("online")).toContain("emerald");
+    expect(agentHealthClass("online")).toContain("green");
     expect(agentHealthClass("offline")).toContain("red");
   });
 });

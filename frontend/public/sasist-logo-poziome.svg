@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 64" fill="none" role="img" aria-label="Sasist">
+  <g fill="#F97316">
+    <path d="M28 12 44 22v20L28 52 12 42V22L28 12Z" stroke="#F97316" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M12 28c-6 4-6 12 0 16" stroke="#F97316" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="8" cy="48" r="3" fill="#F97316"/>
+    <path d="M44 22c10-2 18 4 20 14" stroke="#F97316" stroke-width="3" stroke-linecap="round"/>
+  </g>
+  <text x="72" y="42" font-family="Segoe UI, system-ui, sans-serif" font-size="32" font-weight="700" fill="#0F172A">Sasist</text>
+</svg>

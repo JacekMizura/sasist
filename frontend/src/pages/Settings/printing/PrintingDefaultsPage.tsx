@@ -9,6 +9,12 @@ import { extractApiErrorMessage } from "../../../api/apiErrorMessage";
 import { useWarehouse } from "../../../context/WarehouseContext";
 import type { AgentPrinterRead } from "../../../types/printing";
 import { DAMAGE_TENANT_ID } from "../../damage/damageShared";
+import {
+  PrintingAlert,
+  PrintingLoadingState,
+  PrintingPageBody,
+  PrintingPrimaryButton,
+} from "./components/printingUi";
 
 type DefaultField = "a4_printer_id" | "label_printer_id" | "receipt_printer_id";
 
@@ -70,11 +76,7 @@ export default function PrintingDefaultsPage() {
     setError(null);
     setSaved(false);
     try {
-      await updatePrintingDefaults(
-        DAMAGE_TENANT_ID,
-        { warehouse_id: warehouseId, ...values },
-        warehouseId,
-      );
+      await updatePrintingDefaults(DAMAGE_TENANT_ID, { warehouse_id: warehouseId, ...values }, warehouseId);
       setSaved(true);
     } catch (err) {
       setError(extractApiErrorMessage(err, "Nie udało się zapisać ustawień."));
@@ -84,19 +86,23 @@ export default function PrintingDefaultsPage() {
   };
 
   if (loading) {
-    return <p className="mt-4 text-sm text-slate-500">Ładowanie…</p>;
+    return (
+      <PrintingPageBody>
+        <PrintingLoadingState />
+      </PrintingPageBody>
+    );
   }
 
   return (
-    <div className="mt-4 max-w-xl space-y-4">
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
-      {saved ? <p className="text-sm text-emerald-700">Zapisano domyślne drukarki.</p> : null}
+    <PrintingPageBody className="max-w-xl">
+      {error ? <PrintingAlert tone="error">{error}</PrintingAlert> : null}
+      {saved ? <PrintingAlert tone="success">Zapisano domyślne drukarki.</PrintingAlert> : null}
 
       {FIELDS.map((field) => (
-        <label key={field.key} className="block space-y-1">
+        <label key={field.key} className="block space-y-1.5">
           <span className="text-sm font-medium text-slate-700">{field.label}</span>
           <select
-            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
             value={values[field.key] ?? ""}
             onChange={(e) => {
               const v = e.target.value;
@@ -117,14 +123,9 @@ export default function PrintingDefaultsPage() {
         </label>
       ))}
 
-      <button
-        type="button"
-        className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-        disabled={saving}
-        onClick={() => void save()}
-      >
+      <PrintingPrimaryButton disabled={saving} onClick={() => void save()}>
         {saving ? "Zapisywanie…" : "Zapisz"}
-      </button>
-    </div>
+      </PrintingPrimaryButton>
+    </PrintingPageBody>
   );
 }

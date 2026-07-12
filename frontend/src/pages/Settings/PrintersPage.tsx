@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from "react";
-import { Link } from "react-router-dom";
 import api from "../../api/axios";
 import { useWarehouse } from "../../context/WarehouseContext";
 import type { Printer } from "../../types/printer";
@@ -128,73 +127,62 @@ export default function PrintersPage() {
   };
 
   if (loading) {
-    return (
-      <div className="w-full p-4">
-        <p className="text-gray-500">Ładowanie…</p>
-      </div>
-    );
+    return <p className="text-sm text-slate-500">Ładowanie…</p>;
   }
 
   return (
-    <div className="w-full space-y-6 p-4">
-      <div className="flex items-center gap-4">
-        <Link to="/settings/company" className="text-slate-600 hover:text-slate-800 text-sm">
-          ← Firma
-        </Link>
-        <h1 className="text-2xl font-semibold text-gray-800">Drukarki</h1>
+    <div className="min-w-0 space-y-4">
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={openCreate}
+          className="rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-600"
+        >
+          Dodaj drukarkę
+        </button>
       </div>
 
-      <section className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="p-4 border-b border-gray-100 flex justify-between items-center">
-          <h2 className="text-lg font-medium text-gray-700">Lista drukarek</h2>
-          <button
-            type="button"
-            onClick={openCreate}
-            className="px-4 py-2 bg-cyan-600 text-white text-sm font-medium rounded-lg hover:bg-cyan-700 transition-colors"
-          >
-            Dodaj drukarkę
-          </button>
-        </div>
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-slate-50 text-left text-slate-600 font-medium">
-                <th className="p-3">Nazwa</th>
-                <th className="p-3">Profil</th>
-                <th className="p-3">Magazyn</th>
-                <th className="p-3">Typ połączenia</th>
-                <th className="p-3">System printer</th>
-                <th className="p-3 w-28">Akcje</th>
+          <table className="min-w-full text-sm">
+            <thead className="sticky top-0 border-b border-slate-200 bg-slate-50/95 text-left text-slate-600">
+              <tr>
+                <th className="px-4 py-2.5 text-xs font-semibold uppercase tracking-wide">Nazwa</th>
+                <th className="px-4 py-2.5 text-xs font-semibold uppercase tracking-wide">Profil</th>
+                <th className="px-4 py-2.5 text-xs font-semibold uppercase tracking-wide">Magazyn</th>
+                <th className="px-4 py-2.5 text-xs font-semibold uppercase tracking-wide">Typ połączenia</th>
+                <th className="px-4 py-2.5 text-xs font-semibold uppercase tracking-wide">System printer</th>
+                <th className="px-4 py-2.5 text-xs font-semibold uppercase tracking-wide w-28">Akcje</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-slate-100">
               {printers.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="p-4 text-gray-500 text-center">
-                    Brak drukarek. Kliknij „Dodaj drukarkę”.
+                  <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
+                    Brak drukarek QZ. Kliknij „Dodaj drukarkę”.
                   </td>
                 </tr>
               )}
               {printers.map((p) => (
-                <tr key={p.id} className="border-t border-gray-100 hover:bg-slate-50/50">
-                  <td className="p-3 font-medium text-gray-800">{p.name}</td>
-                  <td className="p-3 text-gray-600">{profileName(p.profile_id)}</td>
-                  <td className="p-3 text-gray-600">{warehouseName(p.warehouse_id)}</td>
-                  <td className="p-3 text-gray-600">{p.connection_type ?? "—"}</td>
-                  <td className="p-3 text-gray-600">{p.system_printer_name ?? "—"}</td>
-                  <td className="p-3">
+                <tr key={p.id} className="transition-colors even:bg-slate-50/40 hover:bg-orange-50/40">
+                  <td className="px-4 py-2.5 font-medium text-slate-900">{p.name}</td>
+                  <td className="px-4 py-2.5 text-slate-600">{profileName(p.profile_id)}</td>
+                  <td className="px-4 py-2.5 text-slate-600">{warehouseName(p.warehouse_id)}</td>
+                  <td className="px-4 py-2.5 text-slate-600">{p.connection_type ?? "—"}</td>
+                  <td className="px-4 py-2.5 text-slate-600">{p.system_printer_name ?? "—"}</td>
+                  <td className="px-4 py-2.5">
                     <div className="flex gap-2">
                       <button
                         type="button"
                         onClick={() => openEdit(p)}
-                        className="text-cyan-600 hover:text-cyan-800 text-xs font-medium"
+                        className="text-xs font-medium text-orange-600 hover:underline"
                       >
                         Edytuj
                       </button>
                       <button
                         type="button"
                         onClick={() => deletePrinter(p.id)}
-                        className="text-red-600 hover:text-red-800 text-xs font-medium"
+                        className="text-xs font-medium text-red-600 hover:underline"
                       >
                         Usuń
                       </button>
@@ -205,12 +193,12 @@ export default function PrintersPage() {
             </tbody>
           </table>
         </div>
-      </section>
+      </div>
 
       {formOpen && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4" onClick={closeForm}>
           <div
-            className="bg-white rounded-xl shadow-lg border border-gray-200 p-6 w-full max-w-md space-y-4"
+            className="rounded-xl border border-slate-200 bg-white p-6 shadow-xl w-full max-w-md space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-lg font-medium text-gray-800">
@@ -299,7 +287,7 @@ export default function PrintersPage() {
                 type="button"
                 onClick={saveForm}
                 disabled={!form.name.trim()}
-                className="px-4 py-2 bg-cyan-600 text-white text-sm font-medium rounded-lg hover:bg-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Zapisz
               </button>

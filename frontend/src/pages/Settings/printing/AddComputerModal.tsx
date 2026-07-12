@@ -50,7 +50,7 @@ function StepCard({ step, title, children }: { step: number; title: string; chil
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="mb-3 flex items-center gap-2 border-b border-slate-100 pb-3">
-        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-semibold text-white">
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-orange-500 text-sm font-semibold text-white">
           {step}
         </span>
         <h3 className="text-base font-semibold text-slate-900">{title}</h3>
@@ -74,7 +74,7 @@ function CopyField({
   mono?: boolean;
 }) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+    <div className="rounded-lg border border-slate-200 bg-white p-3">
       <div className="mb-1 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-slate-500">
         <Icon className="h-3.5 w-3.5" aria-hidden />
         {label}
@@ -249,26 +249,29 @@ export default function AddComputerModal({ open, onClose }: Props) {
         }}
       >
         <div
-          className="max-h-[92vh] w-full max-w-[760px] overflow-y-auto rounded-2xl bg-slate-50 p-5 shadow-2xl sm:p-6"
+          className="max-h-[92vh] w-full max-w-[760px] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl sm:p-6"
           role="dialog"
           aria-modal="true"
           aria-labelledby="add-computer-title"
           onClick={(e) => e.stopPropagation()}
         >
-          <header className="mb-5">
-            <h2 id="add-computer-title" className="text-xl font-semibold text-slate-900">
-              Dodaj komputer
-            </h2>
-            <p className="mt-1 text-sm text-slate-600">
-              Skonfiguruj nowy komputer do drukowania dokumentów i etykiet.
-            </p>
+          <header className="mb-5 flex items-start gap-4 border-b border-slate-100 pb-4">
+            <img src="/sasist-logo-poziome.svg" alt="Sasist" className="h-8 w-auto shrink-0" />
+            <div>
+              <h2 id="add-computer-title" className="text-xl font-semibold text-slate-900">
+                Dodaj komputer
+              </h2>
+              <p className="mt-1 text-sm text-slate-600">
+                Skonfiguruj nowy komputer do drukowania dokumentów i etykiet.
+              </p>
+            </div>
           </header>
 
           <div className="space-y-4">
             <StepCard step={1} title="Pobierz instalator">
               <button
                 type="button"
-                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3.5 text-base font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-orange-500 px-5 py-3.5 text-base font-semibold text-white shadow-sm hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
                 disabled={!resolvedDownload.downloadUrl}
                 onClick={handleDownloadInstaller}
               >
@@ -315,7 +318,7 @@ export default function AddComputerModal({ open, onClose }: Props) {
                   <p className="text-sm text-red-600">{error ?? "Nie udało się przygotować klucza."}</p>
                   <button
                     type="button"
-                    className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                    className="rounded-lg bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600 disabled:opacity-50"
                     disabled={busy}
                     onClick={() => void issueKey()}
                   >
@@ -325,15 +328,15 @@ export default function AddComputerModal({ open, onClose }: Props) {
               )}
             </StepCard>
 
-            <StepCard step={3} title="Uruchom instalator">
+            <StepCard step={3} title="Uruchom instalator i połącz">
               <ol className="list-decimal space-y-2 pl-5 text-sm text-slate-700">
-                <li>Uruchom instalator.</li>
+                <li>Uruchom instalator Sasist Printer Agent.</li>
                 <li>Wklej adres serwera i klucz API.</li>
                 <li>Kliknij „Połącz”.</li>
               </ol>
-              <div className="mt-4 rounded-lg border border-emerald-100 bg-emerald-50/80 p-4">
-                <p className="text-sm font-medium text-emerald-900">Po połączeniu komputer automatycznie:</p>
-                <ul className="mt-2 space-y-1.5 text-sm text-emerald-800">
+              <div className="mt-4 rounded-xl border border-green-200 bg-green-50 p-4">
+                <p className="text-sm font-semibold text-green-900">Po podłączeniu komputer automatycznie:</p>
+                <ul className="mt-2 space-y-1.5 text-sm text-green-800">
                   <li className="flex items-start gap-2">
                     <CheckCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
                     pojawi się na liście agentów
