@@ -127,11 +127,11 @@ function Get-PreviousReleaseVersion {
 function Assert-ReleaseVersionBump([string]$CurrentVersion) {
     $previous = Get-PreviousReleaseVersion
     if (-not $previous) {
-        Write-Step "No previous release manifest/tag found — version $CurrentVersion accepted."
+        Write-Step "No previous release manifest/tag found - version $CurrentVersion accepted."
         return
     }
     if (-not (Test-VersionGreater $CurrentVersion $previous)) {
-        throw "Release version must be greater than previous release ($previous). Current: $CurrentVersion. Run: powershell -File scripts\bump-version.ps1 x.y.z"
+        throw "Release version must be greater than previous release ($previous). Current: $CurrentVersion. Run: powershell -File scripts\\bump-version.ps1 x.y.z"
     }
     Write-Step "Version bump OK: $CurrentVersion > $previous"
 }
@@ -340,4 +340,4 @@ $manifest = [ordered]@{
 Write-Step "Wrote $ManifestPath"
 
 Assert-PublicationReady -ManifestPath $ManifestPath -SetupSha $setupSha -CurrentVersion $version
-Write-Step "Build complete. Upload Output\SasistPrinterAgent-Setup-$version.exe to GitHub Release v$version, then run scripts\verify-release.ps1."
+Write-Step "Build complete. Upload Output\SasistPrinterAgent-Setup-${version}.exe to GitHub Release v$version, then run scripts\\verify-release.ps1."
