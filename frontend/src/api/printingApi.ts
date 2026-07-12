@@ -3,6 +3,7 @@ import type {
   AgentPrinterRead,
   PrintJobDetailRead,
   PrintJobRead,
+  PrinterAgentDiagnosticsRead,
   PrinterAgentDownloadInfo,
   PrinterAgentRead,
   PrintingAutoPrintRead,
@@ -168,6 +169,28 @@ export async function sendAgentTestPage(tenantId: number, agentId: number): Prom
     params: { tenant_id: tenantId },
   });
   return data;
+}
+
+export async function fetchAgentDiagnostics(
+  tenantId: number,
+  agentId: number,
+): Promise<PrinterAgentDiagnosticsRead> {
+  const { data } = await api.get<PrinterAgentDiagnosticsRead>(`/printing/agents/${agentId}/diagnostics`, {
+    params: { tenant_id: tenantId },
+  });
+  return data;
+}
+
+export async function requestAgentPrinterSync(tenantId: number, agentId: number): Promise<void> {
+  await api.post(`/printing/agents/${agentId}/sync-printers`, null, {
+    params: { tenant_id: tenantId },
+  });
+}
+
+export async function requestAgentRestart(tenantId: number, agentId: number): Promise<void> {
+  await api.post(`/printing/agents/${agentId}/restart`, null, {
+    params: { tenant_id: tenantId },
+  });
 }
 
 export async function fetchPrintJobsByDocument(

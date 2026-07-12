@@ -39,6 +39,22 @@ def card(parent: ctk.CTkBaseClass, title: str) -> ctk.CTkFrame:
     return body
 
 
+def dense_info_row(parent: ctk.CTkBaseClass, icon: str, label: str, value: str) -> None:
+    row = ctk.CTkFrame(parent, fg_color="transparent")
+    row.pack(fill="x", pady=3)
+    ctk.CTkLabel(row, text=icon, font=T.FONT, width=22, anchor="w").pack(side="left", padx=(0, 4))
+    ctk.CTkLabel(row, text=label, font=T.FONT, text_color=T.MUTED, width=130, anchor="w").pack(side="left")
+    ctk.CTkLabel(
+        row,
+        text=value,
+        font=T.FONT_BOLD,
+        text_color=T.TEXT,
+        anchor="w",
+        justify="left",
+        wraplength=240,
+    ).pack(side="left", fill="x", expand=True)
+
+
 def info_row(parent: ctk.CTkBaseClass, label: str, value: str) -> None:
     row = ctk.CTkFrame(parent, fg_color="transparent")
     row.pack(fill="x", pady=4)

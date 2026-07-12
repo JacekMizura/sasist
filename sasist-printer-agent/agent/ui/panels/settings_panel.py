@@ -45,14 +45,45 @@ class SettingsPanel(ctk.CTkFrame):
         self._last_test_status: str | None = None
         self._last_test_at: datetime | None = None
         self._last_reported_version: str | None = None
+        self._test_passed = False
+        self._saved_server_url = config.server_url
+        self._saved_api_key = config.api_key
+        self._pending_navigation: Callable[[], None] | None = None
         self._build()
 
     def update_config(self, config: AgentConfig) -> None:
         self._config = config
         self._server_var.set(config.server_url)
         self._api_key_var.set(config.api_key)
+        self._saved_server_url = config.server_url
+        self._saved_api_key = config.api_key
+        self._test_passed = False
         self._set_message("")
+        self._hide_unsaved_dialog()
+        self._refresh_test_success_badge()
         self.refresh()
+
+    def is_dirty(self) -> bool:
+        server = self._server_var.get().strip().rstrip("/")
+        api_key = self._api_key_var.get().strip()
+        saved_server = (self._saved_server_url or "").strip().rstrip("/")
+        saved_key = (self._saved_api_key or "").strip()
+        return server != saved_server or api_key != saved_key
+
+    def confirm_navigation(self, on_proceed: Callable[[], None]) -> bool:
+        if not self.is_dirty():
+            on_proceed()
+            return True
+        self._pending_navigation = on_proceed
+        self._show_unsaved_dialog()
+        return False
+
+    def _show_unsaved_dialog(self) -> None:
+        self._unsaved_dialog.pack(fill="x", pady=(T.PAD, 0), before=self._message_label)
+
+    def _hide_unsaved_dialog(self) -> None:
+        self._unsaved_dialog.pack_forget()
+        self._pending_navigation = None
 
     def refresh(self) -> None:
         cfg = self._runtime.config if self._runtime and self._runtime.config else self._config
@@ -95,6 +126,9 @@ class SettingsPanel(ctk.CTkFrame):
         self._labeled_entry(connection, "URL serwera", self._server_var)
         self._build_api_key_field(connection)
 
+        self._test_success_row = ctk.CTkFrame(connection, fg_color="transparent")
+        self._test_success_row.pack(fill="x", pady=(0, 8))
+
         diagnostics = card(scroll, "Diagnostyka")
         ctk.CTkLabel(
             diagnostics,
@@ -107,6 +141,26 @@ class SettingsPanel(ctk.CTkFrame):
         self._status_badge_row.pack(fill="x", pady=(0, 10))
         self._diagnostics_body = ctk.CTkFrame(diagnostics, fg_color="transparent")
         self._diagnostics_body.pack(fill="x")
+
+        self._unsaved_dialog = ctk.CTkFrame(
+            scroll,
+            fg_color=T.PREVIEW_BG,
+            corner_radius=T.CORNER_RADIUS_SM,
+            border_width=1,
+            border_color=T.BORDER,
+        )
+        ctk.CTkLabel(
+            self._unsaved_dialog,
+            text="Masz niezapisane zmiany",
+            font=T.FONT_BOLD,
+            text_color=T.TEXT,
+            anchor="w",
+        ).pack(fill="x", padx=T.PAD, pady=(T.PAD, 8))
+        dialog_actions = ctk.CTkFrame(self._unsaved_dialog, fg_color="transparent")
+        dialog_actions.pack(fill="x", padx=T.PAD, pady=(0, T.PAD))
+        primary_button(dialog_actions, "Zapisz", self._on_unsaved_save).pack(side="left", padx=(0, 8))
+        secondary_button(dialog_actions, "Odrzuć", self._on_unsaved_discard).pack(side="left", padx=(0, 8))
+        secondary_button(dialog_actions, "Anuluj", self._hide_unsaved_dialog).pack(side="left")
 
         self._message_var = ctk.StringVar(value="")
         self._message_label = ctk.CTkLabel(
@@ -129,6 +183,35 @@ class SettingsPanel(ctk.CTkFrame):
         primary_button(footer, "Zapisz", self._on_save).pack(side="right")
 
         self.refresh()
+
+    def _refresh_test_success_badge(self) -> None:
+        for child in self._test_success_row.winfo_children():
+            child.destroy()
+        if self._test_passed:
+            badge(
+                self._test_success_row,
+                "Połączenie poprawne — możesz zapisać konfigurację",
+                tone="success",
+            ).pack(anchor="w")
+
+    def _on_unsaved_save(self) -> None:
+        self._on_save()
+        if not self.is_dirty():
+            proceed = self._pending_navigation
+            self._hide_unsaved_dialog()
+            if proceed:
+                proceed()
+
+    def _on_unsaved_discard(self) -> None:
+        self._server_var.set(self._saved_server_url)
+        self._api_key_var.set(self._saved_api_key)
+        self._test_passed = False
+        self._refresh_test_success_badge()
+        self._set_message("")
+        proceed = self._pending_navigation
+        self._hide_unsaved_dialog()
+        if proceed:
+            proceed()
 
     def _build_api_key_field(self, parent: ctk.CTkBaseClass) -> None:
         ctk.CTkLabel(parent, text="Klucz API", font=T.FONT_BOLD, text_color=T.TEXT, anchor="w").pack(
@@ -245,6 +328,10 @@ class SettingsPanel(ctk.CTkFrame):
             return
         save_config(draft)
         self._config = draft
+        self._saved_server_url = draft.server_url
+        self._saved_api_key = draft.api_key
+        self._test_passed = False
+        self._refresh_test_success_badge()
         if self._runtime:
             self._runtime.config = draft
         self._set_message("Zapisano ustawienia.", success=True)
@@ -269,6 +356,8 @@ class SettingsPanel(ctk.CTkFrame):
             logger.exception("Connection test failed")
             self._last_test_status = self._status_from_error(exc)
             self._last_test_at = datetime.now()
+            self._test_passed = False
+            self._refresh_test_success_badge()
             self._set_message(str(exc), error=True)
             self.refresh()
             return
@@ -276,6 +365,8 @@ class SettingsPanel(ctk.CTkFrame):
         self._last_test_status = STATUS_CONNECTED
         self._last_test_at = datetime.now()
         self._last_reported_version = __version__
+        self._test_passed = True
+        self._refresh_test_success_badge()
         self._set_message(
             "Połączenie działa poprawnie. Kliknij Zapisz, aby zachować ustawienia w config.json.",
             success=True,

@@ -14,6 +14,7 @@ from ...database import get_db
 from ...models.app_user import AppUser
 from ...models.printing.printer_agent import PrinterAgent
 from ...schemas.printing.agent import (
+    AgentDiagnosticsRead,
     AgentHeartbeatRequest,
     AgentHeartbeatResponse,
     AgentRegisterRequest,
@@ -24,6 +25,7 @@ from ...services.api_keys.api_key_service import extract_raw_api_key, validate_k
 from ...services.api_keys.errors import ApiKeyError, ApiKeyRateLimitError, ApiKeyValidationError
 from ...services.printing.agent_auth_service import get_current_agent
 from ...services.printing.agent_service import (
+    get_agent_diagnostics,
     is_agent_online,
     list_agents,
     record_agent_heartbeat,
@@ -98,6 +100,9 @@ def agent_heartbeat(
     updated = record_agent_heartbeat(
         db,
         agent,
+        version=body.version,
+        name=body.name,
+        printer_count=body.printer_count,
         last_poll_at=body.last_poll_at,
         last_error=body.last_error,
     )
@@ -167,3 +172,42 @@ def get_printing_agents(
         printer_count,
     )
     return rows
+
+
+@router.get("/agents/{agent_id}/diagnostics", response_model=AgentDiagnosticsRead)
+def get_printing_agent_diagnostics(
+    agent_id: int,
+    tenant_id: int = Query(..., ge=1),
+    _: AppUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    try:
+        return get_agent_diagnostics(db, tenant_id=tenant_id, agent_id=agent_id)
+    except PrintingError as exc:
+        raise_printing_error(exc)
+
+
+@router.post("/agents/{agent_id}/sync-printers")
+def request_agent_printer_sync(
+    agent_id: int,
+    tenant_id: int = Query(..., ge=1),
+    _: AppUser = Depends(get_current_user),
+):
+    """Placeholder for future remote printer sync — agent-side sync remains authoritative."""
+    raise HTTPException(
+        status_code=501,
+        detail="Zdalna synchronizacja drukarek będzie dostępna w kolejnej wersji. Użyj Synchronizuj drukarki w agencie.",
+    )
+
+
+@router.post("/agents/{agent_id}/restart")
+def request_agent_restart(
+    agent_id: int,
+    tenant_id: int = Query(..., ge=1),
+    _: AppUser = Depends(get_current_user),
+):
+    """Placeholder for future remote agent restart."""
+    raise HTTPException(
+        status_code=501,
+        detail="Zdalny restart agenta będzie dostępny w kolejnej wersji.",
+    )

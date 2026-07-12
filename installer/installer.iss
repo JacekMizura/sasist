@@ -56,9 +56,11 @@ Source: "..\scripts\lib\ps-encoding.ps1"; DestDir: "{app}\installer\lib"; Flags:
 [InstallDelete]
 Type: files; Name: "{commondesktop}\Sasist Printer Logs.lnk"
 Type: files; Name: "{commondesktop}\Sasist Printer Config.lnk"
+Type: files; Name: "{commondesktop}\Sasist Printer Agent.lnk"
 Type: files; Name: "{group}\Logi drukowania.lnk"
 Type: files; Name: "{group}\Konfiguracja.lnk"
 Type: files; Name: "{group}\Sasist Printer Agent (Tray).lnk"
+Type: files; Name: "{group}\Sasist Printer Agent.lnk"
 
 [Icons]
 Name: "{group}\Sasist Printer Agent"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\assets\icon.ico"
@@ -107,7 +109,18 @@ begin
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
+var
+  ResultCode: Integer;
 begin
   if CurStep = ssInstall then
     StopPrintingService();
+  if CurStep = ssPostInstall then
+  begin
+    { Odśwież cache ikon Windows po upgrade — nowa ikona w skrótach i ARP }
+    if FileExists(ExpandConstant('{win}\System32\ie4uinit.exe')) then
+    begin
+      Exec(ExpandConstant('{win}\System32\ie4uinit.exe'), '-show', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+      Log('Icon cache refresh requested (ie4uinit -show, code ' + IntToStr(ResultCode) + ')');
+    end;
+  end;
 end;

@@ -69,6 +69,8 @@ class AgentRuntime:
             interval_sec=self.config.heartbeat_interval_sec,
             on_state_change=self._on_heartbeat_change,
             jobs_state=self.state.jobs,
+            config=self.config,
+            get_printer_count=lambda: self.state.printer_count,
         )
         self.jobs_worker = JobsWorker(
             self.client,

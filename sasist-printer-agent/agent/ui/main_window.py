@@ -59,12 +59,27 @@ class MainWindow:
         self._app.focus_force()
 
     def hide(self) -> None:
+        settings = self._panels.get("settings")
+        if isinstance(settings, SettingsPanel) and settings.is_dirty():
+            settings.confirm_navigation(self._do_hide)
+            return
+        self._do_hide()
+
+    def _do_hide(self) -> None:
         logs = self._panels.get("logs")
         if isinstance(logs, LogsPanel):
             logs.stop_refresh()
         self._app.withdraw()
 
     def select_tab(self, tab: TabKey) -> None:
+        if tab != self._active_tab and self._active_tab == "settings":
+            settings = self._panels.get("settings")
+            if isinstance(settings, SettingsPanel) and settings.is_dirty():
+                settings.confirm_navigation(lambda: self._select_tab_impl(tab))
+                return
+        self._select_tab_impl(tab)
+
+    def _select_tab_impl(self, tab: TabKey) -> None:
         self._ensure_built()
         self._active_tab = tab
         for key, panel in self._panels.items():

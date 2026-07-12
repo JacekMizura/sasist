@@ -164,3 +164,43 @@ foreach ($link in $legacyDesktopLinks) {
         Remove-Item -LiteralPath $link -Force
     }
 }
+
+function Refresh-WindowsIconCache {
+    $ie4uinit = Join-Path $env:SystemRoot "System32\ie4uinit.exe"
+    if (Test-Path -LiteralPath $ie4uinit) {
+        Write-Step "Odświeżanie cache ikon Windows (ie4uinit)"
+        & $ie4uinit.exe -show | Out-Null
+    }
+}
+
+function New-AgentShortcut {
+    param(
+        [string]$ShortcutPath,
+        [string]$TargetPath,
+        [string]$IconPath,
+        [string]$Description
+    )
+    if (-not (Test-Path -LiteralPath $TargetPath)) {
+        return
+    }
+    $shell = New-Object -ComObject WScript.Shell
+    $shortcut = $shell.CreateShortcut($ShortcutPath)
+    $shortcut.TargetPath = $TargetPath
+    if (Test-Path -LiteralPath $IconPath) {
+        $shortcut.IconLocation = "$IconPath,0"
+    }
+    $shortcut.Description = $Description
+    $shortcut.WorkingDirectory = Split-Path -Parent $TargetPath
+    $shortcut.Save()
+}
+
+$iconPath = Join-Path $InstallDir "assets\icon.ico"
+$desktopLink = Join-Path $env:PUBLIC "Desktop\Sasist Printer Agent.lnk"
+$startMenuDir = Join-Path $env:ProgramData "Microsoft\Windows\Start Menu\Programs\Sasist Printer Agent"
+New-Item -ItemType Directory -Force -Path $startMenuDir | Out-Null
+$startMenuLink = Join-Path $startMenuDir "Sasist Printer Agent.lnk"
+
+Write-Step "Odtwarzanie skrótów z aktualną ikoną"
+New-AgentShortcut -ShortcutPath $desktopLink -TargetPath $agentExe -IconPath $iconPath -Description "Sasist Printer Agent"
+New-AgentShortcut -ShortcutPath $startMenuLink -TargetPath $agentExe -IconPath $iconPath -Description "Sasist Printer Agent"
+Refresh-WindowsIconCache

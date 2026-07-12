@@ -154,10 +154,19 @@ class SasistApiClient:
     def heartbeat(
         self,
         *,
+        version: str | None = None,
+        name: str | None = None,
+        printer_count: int | None = None,
         last_poll_at: str | None = None,
         last_error: str | None = None,
     ) -> dict[str, Any]:
         body: dict[str, Any] = {}
+        if version:
+            body["version"] = version
+        if name:
+            body["name"] = name
+        if printer_count is not None:
+            body["printer_count"] = printer_count
         if last_poll_at:
             body["last_poll_at"] = last_poll_at
         if last_error:

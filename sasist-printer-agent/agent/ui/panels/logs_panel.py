@@ -1,4 +1,4 @@
-"""Logs panel — file list and preview."""
+"""Logs panel — file list, search, and preview."""
 
 from __future__ import annotations
 
@@ -21,6 +21,8 @@ class LogsPanel(ctk.CTkFrame):
         self._files: list[Path] = []
         self._refresh_job: str | None = None
         self._filter_var = ctk.StringVar(value="ALL")
+        self._search_var = ctk.StringVar(value="")
+        self._autoscroll_var = ctk.BooleanVar(value=True)
         self._build()
 
     def _build(self) -> None:
@@ -30,11 +32,14 @@ class LogsPanel(ctk.CTkFrame):
 
         toolbar = ctk.CTkFrame(self, fg_color="transparent")
         toolbar.pack(fill="x", pady=(0, 8))
-        ctk.CTkLabel(toolbar, text="Filtr:", font=T.FONT_BOLD, text_color=T.MUTED).pack(side="left", padx=(0, 8))
+
+        filter_row = ctk.CTkFrame(toolbar, fg_color="transparent")
+        filter_row.pack(fill="x", pady=(0, 6))
+        ctk.CTkLabel(filter_row, text="Filtr:", font=T.FONT_BOLD, text_color=T.MUTED).pack(side="left", padx=(0, 8))
         self._filter_buttons: dict[str, ctk.CTkButton] = {}
         for option in self.FILTER_OPTIONS:
             btn = ctk.CTkButton(
-                toolbar,
+                filter_row,
                 text=option,
                 width=72,
                 height=28,
@@ -47,6 +52,30 @@ class LogsPanel(ctk.CTkFrame):
             )
             btn.pack(side="left", padx=(0, 6))
             self._filter_buttons[option] = btn
+
+        search_row = ctk.CTkFrame(toolbar, fg_color="transparent")
+        search_row.pack(fill="x")
+        ctk.CTkLabel(search_row, text="Szukaj:", font=T.FONT_BOLD, text_color=T.MUTED).pack(side="left", padx=(0, 8))
+        search_entry = ctk.CTkEntry(
+            search_row,
+            textvariable=self._search_var,
+            placeholder_text="Tekst w logu…",
+            fg_color=T.PREVIEW_BG,
+            border_color=T.BORDER,
+            text_color=T.TEXT,
+            corner_radius=T.CORNER_RADIUS_SM,
+        )
+        search_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
+        search_entry.bind("<KeyRelease>", lambda _event: self._load_preview())
+        ctk.CTkCheckBox(
+            search_row,
+            text="Autoscroll",
+            variable=self._autoscroll_var,
+            font=T.FONT_SMALL,
+            text_color=T.TEXT,
+            fg_color=T.PRIMARY,
+            hover_color=T.PRIMARY_HOVER,
+        ).pack(side="left")
 
         content = ctk.CTkFrame(self, fg_color="transparent")
         content.pack(fill="both", expand=True)
@@ -82,6 +111,8 @@ class LogsPanel(ctk.CTkFrame):
         footer.pack(fill="x", pady=(T.PAD, 0))
         left = ctk.CTkFrame(footer, fg_color="transparent")
         left.pack(side="left")
+        secondary_button(left, "Kopiuj błąd", self._copy_error).pack(side="left", padx=(0, 8))
+        secondary_button(left, "Wyczyść filtr", self._clear_filters).pack(side="left", padx=(0, 8))
         secondary_button(left, "Kopiuj", self._copy_to_clipboard).pack(side="left", padx=(0, 8))
         secondary_button(left, "Otwórz w Notepad", self._open_in_notepad).pack(side="left")
         primary_button(footer, "Odśwież", lambda: self.refresh_file_list(keep_selection=True)).pack(side="right")
@@ -100,6 +131,10 @@ class LogsPanel(ctk.CTkFrame):
             )
         self._load_preview()
 
+    def _clear_filters(self) -> None:
+        self._search_var.set("")
+        self._select_filter("ALL")
+
     def _selected_path(self) -> Path | None:
         if not self._files:
             return None
@@ -107,20 +142,36 @@ class LogsPanel(ctk.CTkFrame):
             return None
         return self._files[self._selected_index]
 
+    def _read_selected_raw(self) -> str:
+        path = self._selected_path()
+        if path is None or not path.exists():
+            return ""
+        try:
+            return path.read_text(encoding="utf-8", errors="replace")
+        except OSError as exc:
+            return f"Nie udało się odczytać pliku:\n{exc}"
+
     def _apply_filter(self, raw: str) -> str:
         level = self._filter_var.get().strip().upper()
-        if level == "ALL":
-            return raw
-        lines = []
+        query = self._search_var.get().strip().lower()
+        lines: list[str] = []
         for line in raw.splitlines():
             upper = line.upper()
-            if level == "ERROR" and "ERROR" in upper:
-                lines.append(line)
-            elif level == "WARNING" and "WARNING" in upper:
-                lines.append(line)
-            elif level == "INFO" and "INFO" in upper:
-                lines.append(line)
-        return "\n".join(lines) if lines else f"(Brak wpisów {level})"
+            if level == "ERROR" and "ERROR" not in upper:
+                continue
+            if level == "WARNING" and "WARNING" not in upper:
+                continue
+            if level == "INFO" and "INFO" not in upper:
+                continue
+            if query and query not in line.lower():
+                continue
+            lines.append(line)
+        if not lines:
+            if query:
+                return f'(Brak wyników dla "{self._search_var.get().strip()}")'
+            if level != "ALL":
+                return f"(Brak wpisów {level})"
+        return "\n".join(lines)
 
     def _load_preview(self) -> None:
         self._preview.configure(state="normal")
@@ -134,12 +185,10 @@ class LogsPanel(ctk.CTkFrame):
             elif not path.exists():
                 self._preview.insert("1.0", f"Plik nie istnieje:\n{path}")
             else:
-                try:
-                    raw = path.read_text(encoding="utf-8", errors="replace")
-                except OSError as exc:
-                    raw = f"Nie udało się odczytać pliku:\n{exc}"
-                self._preview.insert("1.0", self._apply_filter(raw))
+                self._preview.insert("1.0", self._apply_filter(self._read_selected_raw()))
         self._preview.configure(state="disabled")
+        if self._autoscroll_var.get():
+            self._preview.see("end")
 
     def _select_file(self, index: int) -> None:
         self._selected_index = index
@@ -217,15 +266,23 @@ class LogsPanel(ctk.CTkFrame):
         self._refresh_job = self.after(self.REFRESH_MS, self._schedule_refresh)
 
     def _copy_to_clipboard(self) -> None:
-        path = self._selected_path()
-        if path is None or not path.exists():
-            return
-        try:
-            raw = path.read_text(encoding="utf-8", errors="replace")
-        except OSError:
+        raw = self._read_selected_raw()
+        if not raw:
             return
         self.clipboard_clear()
         self.clipboard_append(self._apply_filter(raw))
+
+    def _copy_error(self) -> None:
+        raw = self._read_selected_raw()
+        if not raw:
+            return
+        errors = [line for line in raw.splitlines() if "ERROR" in line.upper()]
+        if not errors:
+            errors = [line for line in raw.splitlines() if "WARNING" in line.upper()]
+        if not errors:
+            return
+        self.clipboard_clear()
+        self.clipboard_append("\n".join(errors))
 
     def _open_in_notepad(self) -> None:
         path = self._selected_path()

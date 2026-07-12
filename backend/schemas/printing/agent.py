@@ -43,6 +43,9 @@ class AgentRegisterResponse(BaseModel):
 
 
 class AgentHeartbeatRequest(BaseModel):
+    version: str | None = Field(default=None, max_length=32)
+    name: str | None = Field(default=None, max_length=120)
+    printer_count: int | None = Field(default=None, ge=0)
     last_poll_at: datetime | None = None
     last_error: str | None = Field(default=None, max_length=2000)
 
@@ -51,6 +54,18 @@ class AgentHeartbeatResponse(BaseModel):
     agent_id: int
     is_online: bool
     last_seen_at: datetime | None = None
+
+
+class AgentDiagnosticsRead(BaseModel):
+    version: str | None = None
+    latest_version: str | None = None
+    last_heartbeat: datetime | None = None
+    last_poll: datetime | None = None
+    printer_count: int = 0
+    config_version: str | None = None
+    machine_id: str
+    warehouse_id: int | None = None
+    update_available: bool = False
 
 
 class PrinterAgentRead(BaseModel):

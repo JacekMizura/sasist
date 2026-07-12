@@ -9,7 +9,9 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Callable, TYPE_CHECKING
 
+from . import __version__
 from .api import ApiError, SasistApiClient
+from .config import AgentConfig
 
 if TYPE_CHECKING:
     from .jobs import JobsState
@@ -32,11 +34,15 @@ class HeartbeatWorker:
         interval_sec: int = 30,
         on_state_change: Callable[[HeartbeatState], None] | None = None,
         jobs_state: JobsState | None = None,
+        config: AgentConfig | None = None,
+        get_printer_count: Callable[[], int] | None = None,
     ) -> None:
         self._client = client
         self._interval_sec = max(5, interval_sec)
         self._on_state_change = on_state_change
         self._jobs_state = jobs_state
+        self._config = config
+        self._get_printer_count = get_printer_count or (lambda: 0)
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self.state = HeartbeatState()
@@ -66,7 +72,14 @@ class HeartbeatWorker:
             last_error = poll_err or proc_err
 
         try:
-            result = self._client.heartbeat(last_poll_at=last_poll_at, last_error=last_error)
+            computer_name = (self._config.computer_name if self._config else "") or None
+            result = self._client.heartbeat(
+                version=__version__,
+                name=computer_name,
+                printer_count=self._get_printer_count(),
+                last_poll_at=last_poll_at,
+                last_error=last_error,
+            )
             self.state.online = bool(result.get("is_online", True))
             self.state.last_success_at = datetime.now()
             self.state.last_error = None

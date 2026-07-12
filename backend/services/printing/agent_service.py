@@ -125,6 +125,9 @@ def record_agent_heartbeat(
     db: Session,
     agent: PrinterAgent,
     *,
+    version: str | None = None,
+    name: str | None = None,
+    printer_count: int | None = None,
     last_poll_at: datetime | None = None,
     last_error: str | None = None,
 ) -> PrinterAgent:
@@ -132,6 +135,16 @@ def record_agent_heartbeat(
     agent.last_seen_at = now
     agent.is_online = True
     agent.updated_at = now
+    if version is not None:
+        normalized = version.strip()
+        if normalized:
+            agent.version = normalized[:32]
+    if name is not None:
+        normalized_name = name.strip()
+        if normalized_name:
+            agent.name = normalized_name[:120]
+    if printer_count is not None:
+        agent.printer_count = max(0, int(printer_count))
     if last_poll_at is not None:
         agent.last_poll_at = last_poll_at
     if last_error is not None:
@@ -139,6 +152,68 @@ def record_agent_heartbeat(
     db.commit()
     db.refresh(agent)
     return agent
+
+
+def _resolve_printer_count(db: Session, agent: PrinterAgent) -> int:
+    if agent.printer_count is not None:
+        return int(agent.printer_count)
+    from sqlalchemy import func
+
+    count = (
+        db.query(func.count(AgentPrinter.id))
+        .filter(AgentPrinter.agent_id == agent.id, AgentPrinter.is_active.is_(True))
+        .scalar()
+    )
+    return int(count or 0)
+
+
+def _agent_update_available(reported: str | None, latest: str | None) -> bool:
+    if not reported or not latest:
+        return False
+    left = [int(part or 0) for part in reported.strip().lstrip("vV").split(".")]
+    right = [int(part or 0) for part in latest.strip().lstrip("vV").split(".")]
+    length = max(len(left), len(right))
+    for index in range(length):
+        a = left[index] if index < len(left) else 0
+        b = right[index] if index < len(right) else 0
+        if a < b:
+            return True
+        if a > b:
+            return False
+    return False
+
+
+def get_agent_diagnostics(
+    db: Session,
+    *,
+    tenant_id: int,
+    agent_id: int,
+) -> dict:
+    from .errors import PrintingError
+    from .github_release_service import get_latest_printer_agent_release
+
+    agent = (
+        db.query(PrinterAgent)
+        .filter(PrinterAgent.tenant_id == tenant_id, PrinterAgent.id == agent_id)
+        .first()
+    )
+    if agent is None:
+        raise PrintingError("Agent not found", status_code=404)
+
+    release = get_latest_printer_agent_release()
+    latest_version = release.version
+    reported_version = agent.version
+    return {
+        "version": reported_version,
+        "latest_version": latest_version,
+        "last_heartbeat": agent.last_seen_at,
+        "last_poll": agent.last_poll_at,
+        "printer_count": _resolve_printer_count(db, agent),
+        "config_version": reported_version,
+        "machine_id": agent.machine_id,
+        "warehouse_id": agent.warehouse_id,
+        "update_available": _agent_update_available(reported_version, latest_version),
+    }
 
 
 def list_agents(
@@ -153,19 +228,6 @@ def list_agents(
     rows = query.order_by(PrinterAgent.name.asc()).all()
     now = datetime.utcnow()
 
-    printer_counts: dict[int, int] = {}
-    if rows:
-        from sqlalchemy import func
-
-        agent_ids = [row.id for row in rows]
-        for agent_id, count in (
-            db.query(AgentPrinter.agent_id, func.count(AgentPrinter.id))
-            .filter(AgentPrinter.agent_id.in_(agent_ids), AgentPrinter.is_active.is_(True))
-            .group_by(AgentPrinter.agent_id)
-            .all()
-        ):
-            printer_counts[int(agent_id)] = int(count)
-
     return [
         {
             "id": row.id,
@@ -179,7 +241,7 @@ def list_agents(
             "last_error": row.last_error,
             "is_online": is_agent_online(row, now=now),
             "health_status": agent_health_status(row, now=now),
-            "printer_count": printer_counts.get(row.id, 0),
+            "printer_count": _resolve_printer_count(db, row),
             "created_at": row.created_at,
             "updated_at": row.updated_at,
         }

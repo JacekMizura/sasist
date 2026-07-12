@@ -152,11 +152,41 @@ class TestAgentHeartbeat(PrintingTestCase):
         response = self.client.post(
             "/api/printing/agents/heartbeat",
             headers=auth_headers(reg["token"]),
+            json={
+                "version": "1.0.5",
+                "name": "WORKSTATION-01",
+                "printer_count": 3,
+            },
         )
         self.assertEqual(response.status_code, 200)
         body = response.json()
         self.assertTrue(body["is_online"])
         self.assertIsNotNone(body["last_seen_at"])
+
+        agents = self.client.get("/api/printing/agents", params={"tenant_id": 1}).json()
+        agent = next(row for row in agents if row["id"] == reg["agent_id"])
+        self.assertEqual(agent["version"], "1.0.5")
+        self.assertEqual(agent["name"], "WORKSTATION-01")
+        self.assertEqual(agent["printer_count"], 3)
+
+    def test_agent_diagnostics_endpoint(self):
+        reg = register_agent_via_api(self.client)
+        token = reg["token"]
+        self.client.post(
+            "/api/printing/agents/heartbeat",
+            headers=auth_headers(token),
+            json={"version": "1.0.5", "printer_count": 2},
+        )
+        response = self.client.get(
+            f"/api/printing/agents/{reg['agent_id']}/diagnostics",
+            params={"tenant_id": 1},
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["version"], "1.0.5")
+        self.assertEqual(body["machine_id"], reg["machine_id"])
+        self.assertEqual(body["printer_count"], 2)
+        self.assertIn("update_available", body)
 
 
 class TestAgentListing(PrintingTestCase):

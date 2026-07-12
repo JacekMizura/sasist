@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import toast from "react-hot-toast";
 
-import { fetchPrinterAgentDownloadInfo, fetchPrintingAgents, fetchPrintJobs, sendAgentTestPage } from "../../../api/printingApi";
+import {
+  fetchPrinterAgentDownloadInfo,
+  fetchPrintingAgents,
+  fetchPrintJobs,
+  requestAgentPrinterSync,
+  requestAgentRestart,
+  sendAgentTestPage,
+} from "../../../api/printingApi";
 import { extractApiErrorMessage } from "../../../api/apiErrorMessage";
 import {
   openPrinterAgentDownload,
@@ -16,6 +24,7 @@ import {
   compareAgentVersions,
 } from "./agentVersionPresentation";
 import AddComputerModal from "./AddComputerModal";
+import AgentDiagnosticsModal, { AgentActionsCell } from "./AgentDiagnosticsModal";
 import {
   PrintingAlert,
   PrintingDataTable,
@@ -50,6 +59,7 @@ export default function PrintingAgentsPage() {
   const [addComputerOpen, setAddComputerOpen] = useState(false);
   const [pendingJobs, setPendingJobs] = useState(0);
   const [downloadInfo, setDownloadInfo] = useState<PrinterAgentDownloadInfo | null>(null);
+  const [diagnosticsAgent, setDiagnosticsAgent] = useState<PrinterAgentRead | null>(null);
 
   const latestReleaseVersion = downloadInfo?.latest_version ?? null;
   const resolvedDownload = useMemo(() => resolvePrinterAgentDownload(downloadInfo), [downloadInfo]);
@@ -114,6 +124,42 @@ export default function PrintingAgentsPage() {
     openPrinterAgentDownload(url);
   };
 
+  const copyMachineId = async (machineId: string) => {
+    try {
+      await navigator.clipboard.writeText(machineId);
+      toast.success("Skopiowano Machine ID");
+    } catch {
+      toast.error("Kopiowanie nie powiodło się");
+    }
+  };
+
+  const runAgentSync = async (agentId: number) => {
+    setActionId(agentId);
+    setError(null);
+    try {
+      await requestAgentPrinterSync(DAMAGE_TENANT_ID, agentId);
+      toast.success("Zsynchronizowano drukarki agenta.");
+      void load();
+    } catch (err) {
+      const message = extractApiErrorMessage(err, "Synchronizacja nie powiodła się.");
+      toast.error(message);
+    } finally {
+      setActionId(null);
+    }
+  };
+
+  const runAgentRestart = async (agentId: number) => {
+    setActionId(agentId);
+    try {
+      await requestAgentRestart(DAMAGE_TENANT_ID, agentId);
+      toast.success("Zrestartowano agenta.");
+    } catch (err) {
+      toast.error(extractApiErrorMessage(err, "Restart agenta nie jest jeszcze dostępny."));
+    } finally {
+      setActionId(null);
+    }
+  };
+
   return (
     <PrintingPageBody>
       <div className="flex justify-end">
@@ -155,7 +201,7 @@ export default function PrintingAgentsPage() {
               <PrintingTableHeadCell>Drukarki</PrintingTableHeadCell>
               <PrintingTableHeadCell>Status</PrintingTableHeadCell>
               <PrintingTableHeadCell>Ostatni heartbeat</PrintingTableHeadCell>
-              <PrintingTableHeadCell>Diagnostyka</PrintingTableHeadCell>
+              <PrintingTableHeadCell>Akcje</PrintingTableHeadCell>
             </tr>
           </PrintingTableHead>
           <PrintingTableBody>
@@ -194,9 +240,14 @@ export default function PrintingAgentsPage() {
                   </PrintingTableCell>
                   <PrintingTableCell className="whitespace-nowrap">{formatDate(row.last_seen_at)}</PrintingTableCell>
                   <PrintingTableCell>
-                    <PrintingLinkButton disabled={actionId === row.id} onClick={() => void runTestPage(row.id)}>
-                      Strona testowa
-                    </PrintingLinkButton>
+                    <AgentActionsCell
+                      busy={actionId === row.id}
+                      onCopyMachineId={() => void copyMachineId(row.machine_id)}
+                      onDiagnostics={() => setDiagnosticsAgent(row)}
+                      onSync={() => void runAgentSync(row.id)}
+                      onRestart={() => void runAgentRestart(row.id)}
+                      onTestPage={() => void runTestPage(row.id)}
+                    />
                   </PrintingTableCell>
                 </PrintingTableRow>
               );
@@ -211,6 +262,13 @@ export default function PrintingAgentsPage() {
           setAddComputerOpen(false);
           void load();
         }}
+      />
+
+      <AgentDiagnosticsModal
+        open={diagnosticsAgent != null}
+        agent={diagnosticsAgent}
+        tenantId={DAMAGE_TENANT_ID}
+        onClose={() => setDiagnosticsAgent(null)}
       />
     </PrintingPageBody>
   );

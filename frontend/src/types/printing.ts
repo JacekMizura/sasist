@@ -17,6 +17,18 @@ export type PrinterAgentRead = {
   updated_at?: string | null;
 };
 
+export type PrinterAgentDiagnosticsRead = {
+  version: string | null;
+  latest_version: string | null;
+  last_heartbeat: string | null;
+  last_poll: string | null;
+  printer_count: number;
+  config_version: string | null;
+  machine_id: string;
+  warehouse_id: number | null;
+  update_available: boolean;
+};
+
 export type AgentPrinterRead = {
   id: number;
   agent_id: number;
