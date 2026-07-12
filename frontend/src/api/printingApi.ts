@@ -21,7 +21,7 @@ export async function fetchPrintingAgents(
   return Array.isArray(data) ? data : [];
 }
 
-/** Best-effort — returns null when endpoint is unavailable (UI uses static fallback). */
+/** Best-effort — returns null when endpoint is unavailable or URL is invalid. */
 export async function fetchPrinterAgentDownloadInfo(
   tenantId: number,
 ): Promise<PrinterAgentDownloadInfo | null> {

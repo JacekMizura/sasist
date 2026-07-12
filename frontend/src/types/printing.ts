@@ -114,4 +114,5 @@ export type PrintJobDetailRead = PrintJobRead & {
 export type PrinterAgentDownloadInfo = {
   download_url: string;
   latest_version: string;
+  source?: "github" | "env" | "fallback";
 };

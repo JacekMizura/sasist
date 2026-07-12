@@ -9,7 +9,11 @@ import { PanelBulkStatusConfirmModal } from "../../../components/orders/panelLis
 import {
   buildPrinterAgentConfigClipboardText,
   getPrinterAgentServerUrl,
-  resolvePrinterAgentDownloadUrl,
+  isValidPrinterAgentDownloadUrl,
+  logPrinterAgentDownloadDiagnostics,
+  openPrinterAgentDownload,
+  resolvePrinterAgentDownload,
+  type ResolvedPrinterAgentDownload,
 } from "../../../config/printerAgent";
 import { useWarehouse } from "../../../context/WarehouseContext";
 import type { PrinterAgentDownloadInfo } from "../../../types/printing";
@@ -103,7 +107,15 @@ export default function AddComputerModal({ open, onClose }: Props) {
   const initRef = useRef(false);
 
   const serverUrl = useMemo(() => getPrinterAgentServerUrl(), []);
-  const downloadUrl = useMemo(() => resolvePrinterAgentDownloadUrl(downloadInfo), [downloadInfo]);
+  const resolvedDownload = useMemo(
+    (): ResolvedPrinterAgentDownload => resolvePrinterAgentDownload(downloadInfo),
+    [downloadInfo],
+  );
+
+  useEffect(() => {
+    if (!open || !downloadInfo) return;
+    logPrinterAgentDownloadDiagnostics(resolvedDownload);
+  }, [open, downloadInfo, resolvedDownload]);
 
   const reset = useCallback(() => {
     setKeyId(null);
@@ -208,6 +220,18 @@ export default function AddComputerModal({ open, onClose }: Props) {
     }
   };
 
+  const handleDownloadInstaller = () => {
+    const { downloadUrl, source } = resolvedDownload;
+    logPrinterAgentDownloadDiagnostics({ downloadUrl, source });
+
+    if (!downloadUrl || !isValidPrinterAgentDownloadUrl(downloadUrl)) {
+      toast.error("Nieprawidłowy adres instalatora.");
+      return;
+    }
+
+    openPrinterAgentDownload(downloadUrl);
+  };
+
   const handleClose = () => {
     reset();
     onClose();
@@ -242,16 +266,22 @@ export default function AddComputerModal({ open, onClose }: Props) {
 
           <div className="space-y-4">
             <StepCard step={1} title="Pobierz instalator">
-              <a
-                href={downloadUrl}
-                download
-                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3.5 text-base font-semibold text-white shadow-sm hover:bg-blue-700 sm:w-auto"
+              <button
+                type="button"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3.5 text-base font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                disabled={!resolvedDownload.downloadUrl}
+                onClick={handleDownloadInstaller}
               >
                 <Download className="h-5 w-5" aria-hidden />
                 Pobierz Sasist Printer Agent
-              </a>
+              </button>
               {downloadInfo?.latest_version ? (
                 <p className="mt-2 text-xs text-slate-500">Wersja {downloadInfo.latest_version}</p>
+              ) : null}
+              {!resolvedDownload.downloadUrl ? (
+                <p className="mt-2 text-xs text-amber-700">
+                  Instalator jest chwilowo niedostępny. Skontaktuj się z administratorem lub sprawdź GitHub Releases.
+                </p>
               ) : null}
               <p className="mt-3 text-sm text-slate-600">
                 Zainstaluj program na komputerze, który ma obsługiwać drukarki.

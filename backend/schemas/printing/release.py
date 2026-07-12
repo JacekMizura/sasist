@@ -14,6 +14,16 @@ class AgentVersionResponse(BaseModel):
 class AgentDownloadInfoResponse(BaseModel):
     download_url: str
     latest_version: str
+    source: str = "github"
+
+
+class AgentDownloadDebugResponse(BaseModel):
+    source: str
+    url: str
+    env_url: str
+    github_repository: str
+    cache_hit: bool
+    latest_version: str
 
 
 class PrintingAutoPrintRead(BaseModel):
