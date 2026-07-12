@@ -223,47 +223,47 @@ def ensure_postgres_sequences_synced(
         metadata = Base.metadata
 
     names = sorted(table_names if table_names is not None else metadata.tables.keys())
-    with engine.begin() as conn:
-        for name in names:
-            table = metadata.tables.get(name)
-            if table is None:
-                continue
-            try:
+    for name in names:
+        table = metadata.tables.get(name)
+        if table is None:
+            continue
+        try:
+            with engine.begin() as conn:
                 result = _sync_table_sequence(conn, table)
-            except Exception as exc:
-                logger.exception(
-                    "[postgres_sequence_sync] error table=%s exc_type=%s",
-                    name,
-                    type(exc).__name__,
+        except Exception as exc:
+            logger.error(
+                "[postgres_sequence_sync] table=%s error=%s",
+                name,
+                exc,
+            )
+            report.errors += 1
+            report.results.append(
+                SequenceSyncResult(
+                    table=name,
+                    column="",
+                    sequence="",
+                    max_id=None,
+                    last_value=None,
+                    is_called=None,
+                    next_value=None,
+                    action="error",
                 )
-                report.errors += 1
-                report.results.append(
-                    SequenceSyncResult(
-                        table=name,
-                        column="",
-                        sequence="",
-                        max_id=None,
-                        last_value=None,
-                        is_called=None,
-                        next_value=None,
-                        action="error",
-                    )
-                )
-                continue
+            )
+            continue
 
-            report.results.append(result)
-            if result.action in ("skipped_no_sequence", "skipped_composite_pk", "skipped_non_integer_pk"):
-                report.skipped += 1
-                continue
-            if result.action == "error":
-                report.errors += 1
-                continue
+        report.results.append(result)
+        if result.action in ("skipped_no_sequence", "skipped_composite_pk", "skipped_non_integer_pk"):
+            report.skipped += 1
+            continue
+        if result.action == "error":
+            report.errors += 1
+            continue
 
-            report.checked += 1
-            if result.action == "fixed":
-                report.fixed += 1
-            else:
-                report.ok += 1
+        report.checked += 1
+        if result.action == "fixed":
+            report.fixed += 1
+        else:
+            report.ok += 1
 
     if report.fixed:
         logger.info(
