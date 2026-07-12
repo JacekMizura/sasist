@@ -17,6 +17,12 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+$encodingLib = Join-Path $PSScriptRoot "lib\ps-encoding.ps1"
+if (-not (Test-Path -LiteralPath $encodingLib)) {
+    $encodingLib = Join-Path (Split-Path -Parent $PSScriptRoot) "scripts\lib\ps-encoding.ps1"
+}
+. $encodingLib
+
 $ServiceName = "SasistPrinterService"
 $ServiceDisplayName = "Sasist Printer Service"
 $ProgramDataDir = Join-Path $env:ProgramData "Sasist\PrinterAgent"
@@ -99,7 +105,7 @@ if (-not (Test-Path $ConfigPath)) {
   "heartbeat_interval_sec": 30,
   "poll_interval_sec": 5
 }
-"@ | Set-Content -Path $ConfigPath -Encoding UTF8
+"@ | Set-Content -Path $ConfigPath -Encoding (Get-Utf8Encoding)
     }
 } else {
     Write-Step "Zachowano istniejący config.json"

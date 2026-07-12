@@ -1,5 +1,7 @@
 # Shared Printer Agent version helpers (SSOT: sasist-printer-agent/VERSION).
 
+. (Join-Path $PSScriptRoot "ps-encoding.ps1")
+
 function Get-AgentVersionFilePath {
     param(
         [string]$RepoRoot = $(Split-Path -Parent (Split-Path -Parent $PSScriptRoot))
@@ -44,13 +46,13 @@ function Set-AgentVersion {
     }
 
     $versionPath = Get-AgentVersionFilePath -RepoRoot $RepoRoot
-    ($normalized + [Environment]::NewLine) | Set-Content -LiteralPath $versionPath -Encoding utf8NoBOM
+    ($normalized + [Environment]::NewLine) | Set-Content -LiteralPath $versionPath -Encoding (Get-Utf8Encoding)
 
     $exampleConfig = Join-Path $RepoRoot "sasist-printer-agent\config\config.example.json"
     if (Test-Path -LiteralPath $exampleConfig) {
         $content = Get-Content -LiteralPath $exampleConfig -Raw
         $updated = [regex]::Replace($content, '"version"\s*:\s*"[^"]*"', """version"": ""$normalized""")
-        Set-Content -LiteralPath $exampleConfig -Value $updated -Encoding UTF8 -NoNewline
+        Set-Content -LiteralPath $exampleConfig -Value $updated -Encoding (Get-Utf8Encoding) -NoNewline
     }
 
     return $normalized

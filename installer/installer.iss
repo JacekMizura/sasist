@@ -51,6 +51,7 @@ Source: "{#DistRoot}\build_info.json"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#AgentRoot}\config\config.example.json"; DestDir: "{app}\config"; Flags: ignoreversion
 Source: "{#AgentRoot}\assets\icon.ico"; DestDir: "{app}\assets"; Flags: ignoreversion
 Source: "install.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion
+Source: "..\scripts\lib\ps-encoding.ps1"; DestDir: "{app}\installer\lib"; Flags: ignoreversion
 
 [InstallDelete]
 Type: files; Name: "{commondesktop}\Sasist Printer Logs.lnk"

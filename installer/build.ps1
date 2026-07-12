@@ -34,8 +34,10 @@ $installerScript = Join-SafePath $InstallerDir "installer.iss"
 $ManifestPath = Join-SafePath $InstallerDir "build-manifest.json"
 $VersionLib = Join-SafePath $RepoRoot "scripts\lib\agent-version.ps1"
 $VerifyLib = Join-SafePath $RepoRoot "scripts\lib\agent-build-verify.ps1"
+$EncodingLib = Join-SafePath $RepoRoot "scripts\lib\ps-encoding.ps1"
 $GithubRepo = if ($env:GITHUB_REPOSITORY) { $env:GITHUB_REPOSITORY.Trim() } else { "JacekMizura/sasist" }
 
+. $EncodingLib
 . $VersionLib
 . $VerifyLib
 
@@ -155,7 +157,7 @@ function Write-BuildInfoJson(
         service_sha256 = $ServiceSha
         updater_sha256 = $UpdaterSha
     }
-    ($payload | ConvertTo-Json -Depth 4) + "`n" | Set-Content -LiteralPath $TargetPath -Encoding UTF8
+    ($payload | ConvertTo-Json -Depth 4) + "`n" | Set-Content -LiteralPath $TargetPath -Encoding (Get-Utf8Encoding)
 }
 
 function Assert-PublicationReady(
@@ -347,7 +349,7 @@ $manifest = [ordered]@{
     setup_sha256 = $setupSha
     icon_sha256 = $iconSha256
 }
-($manifest | ConvertTo-Json -Depth 4) + "`n" | Set-Content -LiteralPath $ManifestPath -Encoding UTF8
+($manifest | ConvertTo-Json -Depth 4) + "`n" | Set-Content -LiteralPath $ManifestPath -Encoding (Get-Utf8Encoding)
 Write-Step "Wrote $ManifestPath"
 
 Assert-PublicationReady -ManifestPath $ManifestPath -SetupSha $setupSha -CurrentVersion $version
