@@ -77,6 +77,8 @@ class MainWindow:
                     if cfg:
                         panel.set_log_dir(cfg.log_path.parent)
                     panel.start_refresh()
+                elif key == "settings" and isinstance(panel, SettingsPanel):
+                    panel.refresh()
             else:
                 panel.pack_forget()
                 if key == "logs" and isinstance(panel, LogsPanel):
@@ -129,7 +131,9 @@ class MainWindow:
         self._panels["settings"] = SettingsPanel(
             self._content,
             cfg if cfg else AgentConfig(server_url="", api_key=""),
+            runtime=self._runtime,
             on_saved=self._on_saved,
+            on_sync=self._runtime.sync_printers,
         )
 
         self._update_nav()

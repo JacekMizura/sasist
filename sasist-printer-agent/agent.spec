@@ -55,6 +55,7 @@ a = Analysis(
         "agent.ui",
         "agent.ui.theme",
         "agent.ui.ct_widgets",
+        "agent.ui.connection_test",
         "agent.ui.main_window",
         "agent.ui.panels",
         "agent.ui.panels.status_panel",

@@ -1,226 +1,244 @@
-"""First-run setup wizard — server URL and API key."""
+"""First-run setup wizard — CustomTkinter, aligned with MainWindow design."""
 
 from __future__ import annotations
 
 import logging
-import tkinter as tk
+import threading
 
+import customtkinter as ctk
+
+from . import __version__
 from .auth import sync_agent_registration
 from .config import AgentConfig, load_config, save_config
 from .ui import theme as T
-from .ui.dialogs import show_success
-from .ui.widgets import (
-    app_header,
-    apply_window_icon,
-    card,
-    configure_styles,
-    labeled_entry,
-    primary_button,
-    secondary_button,
-    window_shell,
-)
+from .ui.connection_test import probe_agent_connection
+from .ui.ct_widgets import apply_window_icon, card, info_row, primary_button, secondary_button
 
 logger = logging.getLogger(__name__)
+
+MASK_CHAR = "\u2022"
+API_KEY_HINT = "Klucz API wygenerujesz w:\nSasist → Ustawienia → Integracje → Klucze API"
 
 
 def run_first_run_setup(config: AgentConfig) -> AgentConfig:
     connected = False
+    result_holder: dict[str, AgentConfig] = {}
 
-    root = tk.Tk()
-    root.title("Sasist Printer Agent — konfiguracja")
-    root.geometry("560x460")
-    root.minsize(520, 420)
-    root.resizable(False, False)
-    apply_window_icon(root)
-    configure_styles()
+    ctk.set_appearance_mode("light")
+    app = ctk.CTk()
+    app.title("Sasist Printer Agent — konfiguracja")
+    app.geometry("640x560")
+    app.minsize(580, 520)
+    app.configure(fg_color=T.BG)
+    apply_window_icon(app)
 
-    shell = window_shell(root)
-    app_header(shell, "Konfiguracja początkowa")
+    state = {
+        "step": 1,
+        "api_visible": False,
+        "testing": False,
+        "test_ok": False,
+        "register_result": None,
+    }
+    server_var = ctk.StringVar(value=config.server_url or "https://sasist.pl")
+    api_key_var = ctk.StringVar(value=config.api_key)
+    status_var = ctk.StringVar(value="")
 
-    body = tk.Frame(shell, bg=T.BG, padx=T.PADDING, pady=T.PADDING)
-    body.pack(fill="both", expand=True)
+    root = ctk.CTkFrame(app, fg_color=T.BG)
+    root.pack(fill="both", expand=True, padx=T.PAD, pady=T.PAD)
 
-    step_var = tk.IntVar(value=1)
-    step_label = tk.Label(body, text="Krok 1 z 4", font=T.FONT_FAMILY_BOLD, fg=T.PRIMARY, bg=T.BG, anchor="w")
-    step_label.pack(fill="x", pady=(0, 8))
+    header = ctk.CTkFrame(root, fg_color=T.CARD, corner_radius=T.CORNER_RADIUS, border_width=1, border_color=T.BORDER)
+    header.pack(fill="x", pady=(0, T.PAD))
+    header_inner = ctk.CTkFrame(header, fg_color="transparent")
+    header_inner.pack(fill="x", padx=T.PAD, pady=T.PAD)
+    ctk.CTkLabel(header_inner, text="Konfiguracja początkowa", font=T.FONT_TITLE, text_color=T.TEXT, anchor="w").pack(fill="x")
+    step_label = ctk.CTkLabel(header_inner, text="Krok 1 z 4", font=T.FONT_BOLD, text_color=T.PRIMARY, anchor="w")
+    step_label.pack(fill="x", pady=(4, 0))
 
-    content = tk.Frame(body, bg=T.BG)
+    content = ctk.CTkScrollableFrame(root, fg_color="transparent", height=320)
     content.pack(fill="both", expand=True)
 
-    server_var = tk.StringVar(value=config.server_url or "https://sasist.pl")
-    api_key_var = tk.StringVar(value=config.api_key)
-    status_var = tk.StringVar(value="")
-    tk.Label(body, textvariable=status_var, font=T.FONT_FAMILY, fg=T.WARNING, bg=T.BG, anchor="w").pack(fill="x", pady=(8, 0))
-
-    footer = tk.Frame(shell, bg=T.CARD, padx=T.PADDING, pady=T.PADDING)
-    footer.pack(fill="x", side="bottom")
-    back_btn = secondary_button(footer, "Wstecz", lambda: None)
+    footer = ctk.CTkFrame(root, fg_color="transparent")
+    footer.pack(fill="x", pady=(T.PAD, 0))
+    ctk.CTkLabel(footer, textvariable=status_var, font=T.FONT, text_color=T.DANGER, anchor="w", wraplength=580).pack(fill="x", pady=(0, 8))
+    btn_row = ctk.CTkFrame(footer, fg_color="transparent")
+    btn_row.pack(fill="x")
+    back_btn = secondary_button(btn_row, "Wstecz", lambda: None)
     back_btn.pack(side="left")
-    next_btn = primary_button(footer, "Dalej", lambda: None)
-    next_btn.pack(side="right", padx=(0, 8))
-    connect_btn = primary_button(footer, "Połącz", lambda: None)
+    next_btn = primary_button(btn_row, "Dalej", lambda: None)
+    next_btn.pack(side="right", padx=(8, 0))
+    finish_btn = primary_button(btn_row, "Zakończ konfigurację", lambda: None)
 
-    def _draft_config() -> AgentConfig:
-        return AgentConfig.from_dict(
+    def draft() -> AgentConfig:
+        draft_cfg = AgentConfig.from_dict(
             {
                 **config.to_dict(),
                 "server_url": server_var.get().strip().rstrip("/"),
                 "api_key": api_key_var.get().strip(),
             }
         )
+        draft_cfg.version = __version__
+        return draft_cfg
 
-    def _render_step() -> None:
+    def set_status(text: str, *, error: bool = True) -> None:
+        status_var.set(text)
+        # CTkLabel text color via status only — error tone default
+
+    def render() -> None:
         for child in content.winfo_children():
             child.destroy()
-
-        step = step_var.get()
+        step = state["step"]
         step_label.configure(text=f"Krok {step} z 4")
         status_var.set("")
+        back_btn.configure(state="normal" if step > 1 else "disabled")
+        next_btn.pack_forget()
+        finish_btn.pack_forget()
+        if step < 4:
+            next_btn.pack(side="right", padx=(8, 0))
+        else:
+            finish_btn.pack(side="right")
 
         if step == 1:
-            frame = card(content, "Adres serwera")
-            tk.Label(
-                frame,
+            body = card(content, "URL serwera")
+            ctk.CTkLabel(
+                body,
                 text="Podaj adres serwera Sasist, z którym agent będzie się łączył.",
-                font=T.FONT_FAMILY,
-                fg=T.MUTED_TEXT,
-                bg=T.CARD,
+                font=T.FONT,
+                text_color=T.MUTED,
                 anchor="w",
-                wraplength=460,
+                wraplength=520,
                 justify="left",
             ).pack(fill="x", pady=(0, 8))
-            labeled_entry(frame, "URL serwera", server_var)
+            ctk.CTkEntry(body, textvariable=server_var, fg_color=T.PREVIEW_BG, border_color=T.BORDER).pack(fill="x")
         elif step == 2:
-            frame = card(content, "Klucz API")
-            tk.Label(
-                frame,
-                text="Wklej klucz API typu Printer Agent wygenerowany w panelu Sasist.",
-                font=T.FONT_FAMILY,
-                fg=T.MUTED_TEXT,
-                bg=T.CARD,
-                anchor="w",
-                wraplength=460,
-                justify="left",
-            ).pack(fill="x", pady=(0, 8))
-            labeled_entry(frame, "Klucz API", api_key_var, secret=True)
-        elif step == 3:
-            frame = card(content, "Test połączenia")
-            tk.Label(
-                frame,
-                text="Sprawdź połączenie z serwerem przed zapisaniem konfiguracji.",
-                font=T.FONT_FAMILY,
-                fg=T.MUTED_TEXT,
-                bg=T.CARD,
-                anchor="w",
-                wraplength=460,
-                justify="left",
-            ).pack(fill="x", pady=(0, 8))
-            tk.Label(frame, text=f"Serwer: {server_var.get().strip() or '—'}", font=T.FONT_FAMILY, bg=T.CARD, anchor="w").pack(
-                fill="x", pady=2
+            body = card(content, "Klucz API")
+            ctk.CTkLabel(body, text=API_KEY_HINT, font=T.FONT_SMALL, text_color=T.MUTED, anchor="w", justify="left").pack(
+                fill="x", pady=(0, 8)
             )
-            tk.Label(frame, text="Klucz API: ********", font=T.FONT_FAMILY, bg=T.CARD, anchor="w").pack(fill="x", pady=2)
+            row = ctk.CTkFrame(body, fg_color="transparent")
+            row.pack(fill="x")
+            entry = ctk.CTkEntry(row, textvariable=api_key_var, show=MASK_CHAR if not state["api_visible"] else "", fg_color=T.PREVIEW_BG, border_color=T.BORDER)
+            entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
+
+            def toggle() -> None:
+                state["api_visible"] = not state["api_visible"]
+                entry.configure(show="" if state["api_visible"] else MASK_CHAR)
+                toggle_btn.configure(text="\U0001f441 Ukryj" if state["api_visible"] else "\U0001f441 Pokaż")
+
+            toggle_btn = secondary_button(row, "\U0001f441 Pokaż", toggle)
+            toggle_btn.pack(side="left", padx=(0, 8))
+
+            def paste() -> None:
+                try:
+                    api_key_var.set(app.clipboard_get().strip())
+                    set_status("Wklejono klucz ze schowka.", error=False)
+                except Exception:
+                    set_status("Nie udało się odczytać schowka.")
+
+            secondary_button(row, "Wklej ze schowka", paste).pack(side="left")
+        elif step == 3:
+            body = card(content, "Test połączenia")
+            ctk.CTkLabel(
+                body,
+                text=f"Serwer: {server_var.get().strip() or '—'}",
+                font=T.FONT,
+                text_color=T.TEXT,
+                anchor="w",
+            ).pack(fill="x", pady=2)
+            ctk.CTkLabel(body, text="Klucz API: ********", font=T.FONT, text_color=T.TEXT, anchor="w").pack(fill="x", pady=2)
+            spinner = ctk.CTkLabel(body, text="", font=T.FONT, text_color=T.MUTED, anchor="w")
+            spinner.pack(fill="x", pady=(8, 0))
+            result = ctk.CTkLabel(body, text="", font=T.FONT, text_color=T.TEXT, anchor="w", wraplength=520, justify="left")
+            result.pack(fill="x", pady=(4, 0))
 
             def run_test() -> None:
-                draft = _draft_config()
-                if not draft.server_url:
-                    status_var.set("Podaj URL serwera.")
+                if state["testing"]:
                     return
-                if not draft.api_key:
-                    status_var.set("Podaj klucz API.")
+                d = draft()
+                if not d.server_url:
+                    set_status("Podaj URL serwera.")
                     return
-                save_config(draft)
-                status_var.set("Test połączenia…")
-                root.update_idletasks()
-                try:
-                    sync_agent_registration(draft)
-                except Exception as exc:
-                    logger.exception("First-run connection test failed")
-                    status_var.set(str(exc))
+                if not d.api_key:
+                    set_status("Podaj klucz API.")
                     return
-                status_var.set("Połączenie OK.")
+                state["testing"] = True
+                state["test_ok"] = False
+                spinner.configure(text="Test połączenia…")
+                result.configure(text="")
 
-            primary_button(frame, "Test połączenia", run_test).pack(anchor="w", pady=(8, 0))
-        else:
-            frame = card(content, "Połącz")
-            tk.Label(
-                frame,
-                text="Zapisz konfigurację i połącz ten komputer z magazynem Sasist.",
-                font=T.FONT_FAMILY,
-                fg=T.MUTED_TEXT,
-                bg=T.CARD,
-                anchor="w",
-                wraplength=460,
-                justify="left",
-            ).pack(fill="x", pady=(0, 8))
-            tk.Label(frame, text=f"Serwer: {server_var.get().strip() or '—'}", font=T.FONT_FAMILY, bg=T.CARD, anchor="w").pack(
-                fill="x", pady=2
-            )
+                def worker() -> None:
+                    try:
+                        probe_agent_connection(d)
+                        msg = "\U0001f7e2 Połączenie działa poprawnie."
+                        ok = True
+                    except Exception as exc:
+                        msg = str(exc)
+                        ok = False
 
-        back_btn.configure(state="normal" if step > 1 else "disabled")
-        if step < 4:
-            connect_btn.pack_forget()
-            if not next_btn.winfo_ismapped():
-                next_btn.pack(side="right", padx=(0, 8))
+                    def done() -> None:
+                        state["testing"] = False
+                        state["test_ok"] = ok
+                        spinner.configure(text="")
+                        result.configure(text=msg, text_color=T.SUCCESS if ok else T.DANGER)
+
+                    app.after(0, done)
+
+                threading.Thread(target=worker, daemon=True).start()
+
+            primary_button(body, "Test połączenia", run_test).pack(anchor="w", pady=(8, 0))
+            if state["test_ok"]:
+                result.configure(text="\U0001f7e2 Połączenie działa poprawnie.", text_color=T.SUCCESS)
         else:
-            next_btn.pack_forget()
-            if not connect_btn.winfo_ismapped():
-                connect_btn.pack(side="right", padx=(0, 8))
+            body = card(content, "Połącz komputer")
+            d = draft()
+            info_row(body, "Nazwa komputera:", d.computer_name or "—")
+            info_row(body, "Machine ID:", d.machine_id or "(zostanie przypisany)")
+            info_row(body, "Magazyn:", str(d.warehouse_id) if d.warehouse_id else "(z rejestracji)")
+            info_row(body, "Wersja agenta:", __version__)
 
     def on_next() -> None:
-        step = step_var.get()
+        step = state["step"]
         if step == 1 and not server_var.get().strip():
-            status_var.set("Podaj URL serwera.")
+            set_status("Podaj URL serwera.")
             return
         if step == 2 and not api_key_var.get().strip():
-            status_var.set("Podaj klucz API.")
+            set_status("Podaj klucz API.")
             return
         if step < 4:
-            step_var.set(step + 1)
-            _render_step()
+            state["step"] = step + 1
+            render()
 
     def on_back() -> None:
-        step = step_var.get()
-        if step > 1:
-            step_var.set(step - 1)
-            _render_step()
+        if state["step"] > 1:
+            state["step"] -= 1
+            render()
 
-    def on_connect() -> None:
+    def on_finish() -> None:
         nonlocal connected
-        draft = _draft_config()
-        if not draft.server_url:
-            status_var.set("Podaj URL serwera.")
+        d = draft()
+        if not d.server_url or not d.api_key:
+            set_status("Uzupełnij URL serwera i klucz API.")
             return
-        if not draft.api_key:
-            status_var.set("Podaj klucz API.")
-            return
-
-        save_config(draft)
-        status_var.set("Łączenie…")
-        root.update_idletasks()
+        set_status("Łączenie…", error=False)
+        status_var.configure(text_color=T.MUTED)
+        app.update_idletasks()
         try:
-            sync_agent_registration(draft)
+            save_config(d)
+            updated, _client = sync_agent_registration(d)
+            result_holder["config"] = updated
+            connected = True
+            app.destroy()
         except Exception as exc:
             logger.exception("First-run setup failed")
-            status_var.set(str(exc))
-            return
-
-        connected = True
-        show_success(root, "Połączenie", "Komputer został połączony z magazynem.")
-        root.destroy()
-
-    def on_cancel() -> None:
-        save_config(_draft_config())
-        root.destroy()
+            set_status(str(exc))
 
     back_btn.configure(command=on_back)
     next_btn.configure(command=on_next)
-    connect_btn.configure(command=on_connect)
-    cancel_btn = secondary_button(footer, "Zapisz i zamknij", on_cancel)
-    cancel_btn.pack(side="right")
+    finish_btn.configure(command=on_finish)
+    render()
+    app.mainloop()
 
-    _render_step()
-    root.mainloop()
     loaded = load_config()
     if connected:
         logger.info("First-run setup completed")
+        return result_holder.get("config", loaded)
     return loaded

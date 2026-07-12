@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import toast from "react-hot-toast";
-import { CheckCircle, Copy, Download, Key, Server, ShieldAlert } from "lucide-react";
+import { Copy, Download, Key, RefreshCw, Server, ShieldAlert } from "lucide-react";
 
 import { createApiKey, rotateApiKey } from "../../../api/apiKeysApi";
 import { extractApiErrorMessage } from "../../../api/apiErrorMessage";
 import { fetchPrinterAgentDownloadInfo } from "../../../api/printingApi";
 import { PanelBulkStatusConfirmModal } from "../../../components/orders/panelList/PanelBulkStatusConfirmModal";
 import {
-  buildPrinterAgentConfigClipboardText,
   getPrinterAgentServerUrl,
   isValidPrinterAgentDownloadUrl,
   logPrinterAgentDownloadDiagnostics,
@@ -48,8 +47,8 @@ async function copyText(text: string): Promise<boolean> {
 
 function StepCard({ step, title, children }: { step: number; title: string; children: ReactNode }) {
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="mb-3 flex items-center gap-2 border-b border-slate-100 pb-3">
+    <section className="rounded-xl border border-orange-100 bg-[#FFF7ED] p-4 shadow-sm">
+      <div className="mb-3 flex items-center gap-2 border-b border-orange-100 pb-3">
         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-orange-500 text-sm font-semibold text-white">
           {step}
         </span>
@@ -57,40 +56,6 @@ function StepCard({ step, title, children }: { step: number; title: string; chil
       </div>
       {children}
     </section>
-  );
-}
-
-function CopyField({
-  label,
-  icon: Icon,
-  value,
-  onCopy,
-  mono = false,
-}: {
-  label: string;
-  icon: typeof Server;
-  value: string;
-  onCopy: () => void;
-  mono?: boolean;
-}) {
-  return (
-    <div className="rounded-lg border border-slate-200 bg-white p-3">
-      <div className="mb-1 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-slate-500">
-        <Icon className="h-3.5 w-3.5" aria-hidden />
-        {label}
-      </div>
-      <div className="flex items-center gap-2">
-        <p className={`min-w-0 flex-1 break-all text-sm text-slate-900 ${mono ? "font-mono" : ""}`}>{value}</p>
-        <button
-          type="button"
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-          onClick={onCopy}
-        >
-          <Copy className="h-4 w-4" aria-hidden />
-          Kopiuj
-        </button>
-      </div>
-    </div>
   );
 }
 
@@ -103,7 +68,6 @@ export default function AddComputerModal({ open, onClose }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [downloadInfo, setDownloadInfo] = useState<PrinterAgentDownloadInfo | null>(null);
   const [confirmRotateOpen, setConfirmRotateOpen] = useState(false);
-  const autoCopiedRef = useRef(false);
   const initRef = useRef(false);
 
   const serverUrl = useMemo(() => getPrinterAgentServerUrl(), []);
@@ -111,6 +75,7 @@ export default function AddComputerModal({ open, onClose }: Props) {
     (): ResolvedPrinterAgentDownload => resolvePrinterAgentDownload(downloadInfo),
     [downloadInfo],
   );
+  const maskedKey = plainKey ? "•".repeat(Math.max(plainKey.length, 24)) : "";
 
   useEffect(() => {
     if (!open || !downloadInfo) return;
@@ -123,7 +88,6 @@ export default function AddComputerModal({ open, onClose }: Props) {
     setError(null);
     setDownloadInfo(null);
     setConfirmRotateOpen(false);
-    autoCopiedRef.current = false;
     initRef.current = false;
   }, []);
 
@@ -155,45 +119,20 @@ export default function AddComputerModal({ open, onClose }: Props) {
     if (!open) return;
     if (initRef.current) return;
     initRef.current = true;
-
-    void issueKey();
     void fetchPrinterAgentDownloadInfo(DAMAGE_TENANT_ID)
       .then((info) => {
         if (info) setDownloadInfo(info);
       })
       .catch(() => {
-        /* UI falls back to static download path */
+        /* fallback download path */
       });
-  }, [open, issueKey]);
-
-  useEffect(() => {
-    if (!open || !plainKey || autoCopiedRef.current) return;
-    autoCopiedRef.current = true;
-    void copyText(plainKey).then((ok) => {
-      if (ok) {
-        toast.success("Klucz API został skopiowany do schowka.");
-      }
-    });
-  }, [open, plainKey]);
-
-  const handleCopyServer = async () => {
-    const ok = await copyText(serverUrl);
-    if (ok) toast.success("Adres został skopiowany");
-    else toast.error("Nie udało się skopiować adresu.");
-  };
+  }, [open]);
 
   const handleCopyKey = async () => {
     if (!plainKey) return;
     const ok = await copyText(plainKey);
-    if (ok) toast.success("Klucz API został skopiowany");
+    if (ok) toast.success("Klucz API skopiowany do schowka");
     else toast.error("Nie udało się skopiować klucza.");
-  };
-
-  const handleCopyAll = async () => {
-    if (!plainKey) return;
-    const ok = await copyText(buildPrinterAgentConfigClipboardText(serverUrl, plainKey));
-    if (ok) toast.success("Dane konfiguracji skopiowane do schowka");
-    else toast.error("Nie udało się skopiować danych.");
   };
 
   const handleRotateKey = async () => {
@@ -204,15 +143,8 @@ export default function AddComputerModal({ open, onClose }: Props) {
       const result = await rotateApiKey(DAMAGE_TENANT_ID, keyId);
       setKeyId(result.key.id);
       setPlainKey(result.plain_key);
-      autoCopiedRef.current = false;
       setConfirmRotateOpen(false);
-      const copied = await copyText(result.plain_key);
-      if (copied) {
-        toast.success("Nowy klucz API został skopiowany do schowka.");
-        autoCopiedRef.current = true;
-      } else {
-        toast.success("Wygenerowano nowy klucz API.");
-      }
+      toast.success("Wygenerowano nowy klucz API.");
     } catch (e) {
       setError(extractApiErrorMessage(e, "Nie udało się wygenerować nowego klucza."));
     } finally {
@@ -223,12 +155,10 @@ export default function AddComputerModal({ open, onClose }: Props) {
   const handleDownloadInstaller = () => {
     const { downloadUrl, source } = resolvedDownload;
     logPrinterAgentDownloadDiagnostics({ downloadUrl, source });
-
     if (!downloadUrl || !isValidPrinterAgentDownloadUrl(downloadUrl)) {
       toast.error("Nieprawidłowy adres instalatora.");
       return;
     }
-
     openPrinterAgentDownload(downloadUrl);
   };
 
@@ -249,7 +179,7 @@ export default function AddComputerModal({ open, onClose }: Props) {
         }}
       >
         <div
-          className="max-h-[92vh] w-full max-w-[760px] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl sm:p-6"
+          className="max-h-[92vh] w-full max-w-[820px] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl sm:p-6"
           role="dialog"
           aria-modal="true"
           aria-labelledby="add-computer-title"
@@ -262,7 +192,7 @@ export default function AddComputerModal({ open, onClose }: Props) {
                 Dodaj komputer
               </h2>
               <p className="mt-1 text-sm text-slate-600">
-                Skonfiguruj nowy komputer do drukowania dokumentów i etykiet.
+                Pobierz agenta, wygeneruj klucz API i połącz komputer krok po kroku.
               </p>
             </div>
           </header>
@@ -281,101 +211,100 @@ export default function AddComputerModal({ open, onClose }: Props) {
               {downloadInfo?.latest_version ? (
                 <p className="mt-2 text-xs text-slate-500">Wersja {downloadInfo.latest_version}</p>
               ) : null}
-              {!resolvedDownload.downloadUrl ? (
-                <p className="mt-2 text-xs text-amber-700">
-                  Instalator jest chwilowo niedostępny. Skontaktuj się z administratorem lub sprawdź GitHub Releases.
-                </p>
-              ) : null}
-              <p className="mt-3 text-sm text-slate-600">
-                Zainstaluj program na komputerze, który ma obsługiwać drukarki.
-              </p>
+              <p className="mt-3 text-sm text-slate-600">Zainstaluj program na komputerze z drukarkami.</p>
             </StepCard>
 
-            <StepCard step={2} title="Skopiuj dane konfiguracji">
-              {busy && !plainKey ? (
-                <p className="text-sm text-slate-500">Generowanie klucza API…</p>
-              ) : plainKey ? (
+            <StepCard step={2} title="Wygeneruj klucz API">
+              <p className="text-sm text-slate-600">
+                Klucz jest przypisany do magazynu{" "}
+                <span className="font-medium text-slate-900">{activeWarehouse?.name ?? "—"}</span>.
+              </p>
+              <button
+                type="button"
+                className="mt-3 inline-flex items-center gap-2 rounded-xl bg-orange-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-50"
+                disabled={busy || !!plainKey}
+                onClick={() => void issueKey()}
+              >
+                <Key className="h-4 w-4" aria-hidden />
+                {busy ? "Generowanie…" : plainKey ? "Klucz wygenerowany" : "Wygeneruj klucz API"}
+              </button>
+              {error && !plainKey ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
+            </StepCard>
+
+            <StepCard step={3} title="Skopiuj klucz — wyświetlimy go tylko raz">
+              {plainKey ? (
                 <div className="space-y-3">
-                  <CopyField label="Adres serwera" icon={Server} value={serverUrl} onCopy={() => void handleCopyServer()} />
-                  <CopyField
-                    label="Klucz API"
-                    icon={Key}
-                    value={plainKey}
-                    mono
-                    onCopy={() => void handleCopyKey()}
-                  />
-                  <button
-                    type="button"
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-800 hover:bg-slate-50 sm:w-auto"
-                    onClick={() => void handleCopyAll()}
-                  >
-                    <Copy className="h-4 w-4" aria-hidden />
-                    Kopiuj wszystko
-                  </button>
+                  <div className="rounded-xl border-2 border-orange-200 bg-white p-4">
+                    <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Klucz API</div>
+                    <p className="break-all font-mono text-lg tracking-widest text-slate-900">{maskedKey}</p>
+                    <p className="mt-2 text-xs text-slate-500">
+                      Pełny klucz jest ukryty. Użyj „Kopiuj”, aby wkleić go w agencie.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-2 rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600"
+                      onClick={() => void handleCopyKey()}
+                    >
+                      <Copy className="h-4 w-4" aria-hidden />
+                      Kopiuj
+                    </button>
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50 disabled:opacity-50"
+                      disabled={!keyId || rotateBusy}
+                      onClick={() => setConfirmRotateOpen(true)}
+                    >
+                      <RefreshCw className="h-4 w-4" aria-hidden />
+                      Regeneruj
+                    </button>
+                  </div>
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+                    <div className="mb-1 flex items-center gap-1.5 font-medium text-slate-700">
+                      <Server className="h-4 w-4" aria-hidden />
+                      Adres serwera
+                    </div>
+                    <p className="font-mono text-slate-900">{serverUrl}</p>
+                  </div>
                 </div>
               ) : (
-                <div className="space-y-2">
-                  <p className="text-sm text-red-600">{error ?? "Nie udało się przygotować klucza."}</p>
-                  <button
-                    type="button"
-                    className="rounded-lg bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600 disabled:opacity-50"
-                    disabled={busy}
-                    onClick={() => void issueKey()}
-                  >
-                    Spróbuj ponownie
-                  </button>
-                </div>
+                <p className="text-sm text-slate-500">Najpierw wygeneruj klucz API w kroku 2.</p>
               )}
             </StepCard>
 
-            <StepCard step={3} title="Uruchom instalator i połącz">
+            <StepCard step={4} title="Połącz komputer w agencie">
               <ol className="list-decimal space-y-2 pl-5 text-sm text-slate-700">
-                <li>Uruchom instalator Sasist Printer Agent.</li>
-                <li>Wklej adres serwera i klucz API.</li>
-                <li>Kliknij „Połącz”.</li>
+                <li>Uruchom Sasist Printer Agent.</li>
+                <li>Wejdź w <span className="font-medium">Ustawienia</span>.</li>
+                <li>Wklej klucz API (przycisk „Wklej ze schowka”).</li>
+                <li>Kliknij <span className="font-medium">Test połączenia</span>.</li>
+                <li>Kliknij <span className="font-medium">Zapisz</span>.</li>
               </ol>
-              <div className="mt-4 rounded-xl border border-green-200 bg-green-50 p-4">
-                <p className="text-sm font-semibold text-green-900">Po podłączeniu komputer automatycznie:</p>
-                <ul className="mt-2 space-y-1.5 text-sm text-green-800">
-                  <li className="flex items-start gap-2">
-                    <CheckCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-                    pojawi się na liście agentów
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <CheckCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-                    pobierze dostępne drukarki
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <CheckCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-                    będzie gotowy do drukowania dokumentów
-                  </li>
-                </ul>
+              <div
+                className="mt-4 flex min-h-[140px] flex-col items-center justify-center rounded-xl border-2 border-dashed border-orange-200 bg-[#FFF7ED] p-4 text-center"
+                aria-hidden
+              >
+                <p className="text-sm font-semibold text-slate-800">Podgląd — pole Klucz API w agencie</p>
+                <p className="mt-1 text-xs text-slate-500">Ustawienia → Połączenie → Klucz API</p>
+                <div className="mt-3 w-full max-w-md rounded-lg border border-orange-100 bg-white p-3 text-left shadow-sm">
+                  <div className="text-xs font-medium text-slate-500">Klucz API</div>
+                  <div className="mt-1 h-9 rounded-md border border-slate-200 bg-slate-50 px-2 font-mono text-sm leading-9 text-slate-400">
+                    ••••••••••••••••
+                  </div>
+                </div>
               </div>
             </StepCard>
 
             <section className="rounded-xl border border-amber-200 bg-amber-50 p-4">
               <div className="flex gap-3">
                 <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" aria-hidden />
-                <div className="min-w-0 flex-1">
-                  <h3 className="text-sm font-semibold text-amber-950">Bezpieczeństwo</h3>
-                  <p className="mt-1 text-sm text-amber-900">
-                    Ten klucz można wyświetlić tylko raz. Jeżeli go zgubisz, wygeneruj nowy.
-                  </p>
-                  <button
-                    type="button"
-                    className="mt-3 inline-flex items-center gap-2 rounded-lg border border-amber-300 bg-white px-4 py-2 text-sm font-medium text-amber-950 hover:bg-amber-100/60 disabled:opacity-50"
-                    disabled={!keyId || rotateBusy || busy}
-                    onClick={() => setConfirmRotateOpen(true)}
-                  >
-                    <Key className="h-4 w-4" aria-hidden />
-                    Wygeneruj nowy klucz
-                  </button>
-                </div>
+                <p className="text-sm text-amber-900">
+                  Klucz API można skopiować tylko teraz. Po zamknięciu okna nie będzie możliwości ponownego podglądu.
+                </p>
               </div>
             </section>
           </div>
-
-          {error && plainKey ? <p className="mt-4 text-sm text-red-600">{error}</p> : null}
 
           <div className="mt-6 flex justify-end">
             <button
@@ -392,9 +321,9 @@ export default function AddComputerModal({ open, onClose }: Props) {
 
       <PanelBulkStatusConfirmModal
         open={confirmRotateOpen}
-        title="Wygenerować nowy klucz?"
-        message="Stary klucz zostanie natychmiast unieważniony. Komputer z poprzednim kluczem nie będzie mógł się połączyć, dopóki nie wkleisz nowego."
-        confirmLabel="Wygeneruj nowy klucz"
+        title="Regenerować klucz API?"
+        message="Stary klucz zostanie unieważniony. Komputer z poprzednim kluczem nie połączy się, dopóki nie wkleisz nowego."
+        confirmLabel="Regeneruj"
         cancelLabel="Anuluj"
         busy={rotateBusy}
         variant="danger"

@@ -44,6 +44,7 @@ class AgentRuntime:
             return
 
         self.config = load_config()
+        persisted_version = self.config.version
         self.config.version = __version__
         self.config.ensure_directories()
         setup_logging(self.config.log_path)
@@ -53,6 +54,14 @@ class AgentRuntime:
 
         self.config, self.client = register_if_needed(self.config)
         assert self.client is not None
+
+        if self.config.has_token and persisted_version.strip() and persisted_version.strip() != __version__:
+            logger.info(
+                "Agent version changed (%s -> %s); re-registering to sync backend",
+                persisted_version,
+                __version__,
+            )
+            self.config, self.client = sync_agent_registration(self.config, self.client)
         self.state.printer_count = len(list_windows_printers())
 
         self.heartbeat_worker = HeartbeatWorker(

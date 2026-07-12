@@ -14,6 +14,7 @@ from pathlib import Path
 REQUIRED_UI_MODULES = (
     "agent.ui.theme",
     "agent.ui.ct_widgets",
+    "agent.ui.connection_test",
     "agent.ui.main_window",
     "agent.ui.panels.status_panel",
     "agent.ui.panels.logs_panel",
