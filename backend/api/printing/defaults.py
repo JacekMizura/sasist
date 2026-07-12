@@ -8,7 +8,12 @@ from sqlalchemy.orm import Session
 from ...auth.deps import get_current_user
 from ...database import get_db
 from ...models.app_user import AppUser
-from ...schemas.printing.defaults import PrintingDefaultsRead, PrintingDefaultsUpdate
+from ...schemas.printing.defaults import (
+    PrinterAssignmentRepairRead,
+    PrintingDefaultsRead,
+    PrintingDefaultsUpdate,
+)
+from ...services.printing.assignment_service import repair_warehouse_printer_assignments
 from ...services.printing.errors import PrintingError
 from ...services.printing.printer_service import get_printing_defaults, upsert_printing_defaults
 from ._helpers import raise_printing_error
@@ -39,5 +44,22 @@ def update_printing_defaults(
     merged = payload.model_copy(update={"warehouse_id": warehouse_id})
     try:
         return upsert_printing_defaults(db, tenant_id=tenant_id, payload=merged)
+    except PrintingError as exc:
+        raise_printing_error(exc)
+
+
+@router.post("/defaults/repair", response_model=PrinterAssignmentRepairRead)
+def repair_printing_defaults(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int | None = Query(default=None, ge=1),
+    _: AppUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    try:
+        return repair_warehouse_printer_assignments(
+            db,
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+        )
     except PrintingError as exc:
         raise_printing_error(exc)

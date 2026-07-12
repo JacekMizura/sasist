@@ -8,6 +8,7 @@ from typing import Callable, Literal
 import customtkinter as ctk
 
 from ..config import AgentConfig
+from ..i18n import pl as PL
 from ..runtime import AgentRuntime
 from . import theme as T
 from .ct_widgets import apply_window_icon, build_sidebar_header, sidebar_button
@@ -16,9 +17,9 @@ from .panels import LogsPanel, SettingsPanel, StatusPanel
 TabKey = Literal["status", "logs", "settings"]
 
 SIDEBAR_ITEMS: tuple[tuple[TabKey, str], ...] = (
-    ("status", "Status"),
-    ("logs", "Logi"),
-    ("settings", "Ustawienia"),
+    ("status", PL.NAV_STATUS),
+    ("logs", PL.NAV_LOGS),
+    ("settings", PL.NAV_SETTINGS),
 )
 
 
@@ -112,7 +113,7 @@ class MainWindow:
         self._built = True
 
     def _build(self) -> None:
-        self._app.title("Sasist Printer Agent")
+        self._app.title(PL.APP_TITLE)
         self._app.geometry("960x640")
         self._app.minsize(880, 580)
         self._app.configure(fg_color=T.BG)

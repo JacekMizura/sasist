@@ -87,6 +87,11 @@ def sync_agent_printers(
 
     for system_name, row in existing_by_system.items():
         if system_name not in incoming_names:
+            from .assignment_service import find_active_replacement_printer, migrate_pending_jobs
+
+            replacement = find_active_replacement_printer(db, inactive_row=row, agent=agent)
+            if replacement is not None:
+                migrate_pending_jobs(db, old_printer_id=row.id, new_printer_id=replacement.id)
             row.is_active = False
 
     for printer_type in PRINTER_TYPES:

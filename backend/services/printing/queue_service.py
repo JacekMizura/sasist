@@ -17,6 +17,7 @@ from ...models.printing.constants import (
 )
 from ...schemas.printing.job import PrintJobCreateRequest, PrintJobPayload
 from ...schemas.printing.queue import QueuePrintRequest
+from .assignment_service import ensure_queue_target_agent_online, log_print_queue
 from .errors import PrintingError
 from .file_service import save_job_pdf
 from .job_service import create_print_job
@@ -211,6 +212,11 @@ def queue_print_job(
         warehouse_id=warehouse_id,
         document_type=document_type,
     )
+    target_printer, target_agent = ensure_queue_target_agent_online(
+        db,
+        tenant_id=tenant_id,
+        printer_id=printer_id,
+    )
 
     pdf_bytes = generate_pdf_bytes(db, tenant_id=tenant_id, payload=payload)
     copies = max(1, int(payload.copies or 1))
@@ -245,10 +251,11 @@ def queue_print_job(
     db.commit()
     db.refresh(job)
 
-    logger.info(
-        "Queued print job id=%s type=%s printer_id=%s",
-        job.id,
-        document_type,
-        printer_id,
+    log_print_queue(
+        job_id=job.id,
+        printer_id=target_printer.id,
+        agent_id=target_agent.id,
+        machine_id=target_agent.machine_id,
+        warehouse_id=job.warehouse_id,
     )
     return job

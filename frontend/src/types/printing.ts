@@ -39,6 +39,8 @@ export type AgentPrinterRead = {
   is_active: boolean;
   agent_name?: string | null;
   machine_id?: string | null;
+  agent_is_online?: boolean;
+  agent_health_status?: AgentHealthStatus;
   created_at?: string | null;
   updated_at?: string | null;
 };
@@ -49,6 +51,13 @@ export type PrintingDefaultsRead = {
   a4_printer_id: number | null;
   label_printer_id: number | null;
   receipt_printer_id: number | null;
+};
+
+export type PrinterAssignmentRepairRead = {
+  defaults_remapped: number;
+  jobs_migrated: number;
+  primary_agent_id: number;
+  primary_machine_id: string;
 };
 
 export type QueuePrintRequest = {

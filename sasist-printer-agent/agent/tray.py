@@ -12,6 +12,7 @@ from typing import Callable
 from PIL import Image, ImageDraw
 
 from .config import save_config
+from .i18n import pl as PL
 from .runtime import AgentRuntime
 from .ui.host import get_ui_host
 from .ui.main_window import MainWindow
@@ -102,17 +103,17 @@ class TrayApp:
         import pystray
 
         menu = pystray.Menu(
-            pystray.MenuItem("Otwórz Sasist Printer Agent", self._open_main, default=True),
-            pystray.MenuItem("Synchronizuj drukarki", self._sync_printers),
-            pystray.MenuItem("Wydruk testowy", self._test_page),
+            pystray.MenuItem(PL.TRAY_OPEN, self._open_main, default=True),
+            pystray.MenuItem(PL.TRAY_SYNC, self._sync_printers),
+            pystray.MenuItem(PL.TRAY_TEST_PAGE, self._test_page),
             pystray.Menu.SEPARATOR,
-            pystray.MenuItem("Restart aplikacji", self._restart),
-            pystray.MenuItem("Wyjście", self._exit),
+            pystray.MenuItem(PL.TRAY_RESTART, self._restart),
+            pystray.MenuItem(PL.TRAY_EXIT, self._exit),
         )
         self._icon = pystray.Icon(
             "sasist_printer_agent",
             load_tray_icon(),
-            "Sasist Printer Agent",
+            PL.APP_TITLE,
             menu,
         )
         logger.info("Starting tray icon")

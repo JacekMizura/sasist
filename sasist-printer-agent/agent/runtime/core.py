@@ -11,6 +11,7 @@ from ..api import SasistApiClient
 from ..auth import register_if_needed, sync_agent_registration
 from ..config import AgentConfig, load_config
 from ..heartbeat import HeartbeatState, HeartbeatWorker
+from ..i18n import pl as PL
 from ..jobs import JobsState, JobsWorker
 from ..logging_setup import setup_logging
 from ..printers import list_windows_printers
@@ -57,7 +58,7 @@ class AgentRuntime:
 
         if self.config.has_token and persisted_version.strip() and persisted_version.strip() != __version__:
             logger.info(
-                "Agent version changed (%s -> %s); re-registering to sync backend",
+                PL.LOG_VERSION_CHANGED,
                 persisted_version,
                 __version__,
             )
@@ -110,7 +111,7 @@ class AgentRuntime:
     def sync_printers(self) -> None:
         if not self.config or not self.client:
             return
-        logger.info("Manual printer sync requested")
+        logger.info(PL.LOG_PRINTER_SYNC)
         self.config, self.client = sync_agent_registration(self.config, self.client)
         self.state.printer_count = len(list_windows_printers())
         if self.heartbeat_worker:

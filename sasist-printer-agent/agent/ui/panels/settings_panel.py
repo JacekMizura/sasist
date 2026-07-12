@@ -12,19 +12,16 @@ import requests
 from ... import __version__
 from ...api import ApiError
 from ...config import AgentConfig, save_config
+from ...i18n import pl as PL
 from ...runtime import AgentRuntime
 from .. import theme as T
+from ..clipboard import copy_button_feedback
 from ..connection_test import probe_agent_connection
 from ..ct_widgets import badge, card, info_row, primary_button, secondary_button
 
 logger = logging.getLogger(__name__)
 
-API_KEY_HINT = "Klucz API wygenerujesz w:\nSasist → Ustawienia → Integracje → Klucze API"
 MASK_CHAR = "\u2022"
-STATUS_CONNECTED = "\U0001f7e2 Po\u0142\u0105czono"
-STATUS_NO_CONNECTION = "\U0001f7e0 Brak po\u0142\u0105czenia"
-STATUS_INVALID_KEY = "\U0001f534 Nieprawid\u0142owy klucz API"
-STATUS_NOT_CONFIGURED = "\U0001f7e0 Nie skonfigurowano"
 
 
 class SettingsPanel(ctk.CTkFrame):
@@ -50,6 +47,8 @@ class SettingsPanel(ctk.CTkFrame):
         self._saved_server_url = config.server_url
         self._saved_api_key = config.api_key
         self._pending_navigation: Callable[[], None] | None = None
+        self._copy_key_btn: ctk.CTkButton | None = None
+        self._toggle_key_btn: ctk.CTkButton | None = None
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
         self._build()
@@ -94,7 +93,13 @@ class SettingsPanel(ctk.CTkFrame):
             self._config = cfg
 
         status = self._resolve_connection_status(cfg)
-        tone = "success" if "Po\u0142\u0105czono" in status else "danger" if "Nieprawid" in status else "warning"
+        tone = (
+            "success"
+            if status == PL.STATUS_CONNECTED
+            else "danger"
+            if status == PL.STATUS_INVALID_KEY
+            else "warning"
+        )
 
         for child in self._status_badge_row.winfo_children():
             child.destroy()
@@ -107,12 +112,12 @@ class SettingsPanel(ctk.CTkFrame):
         reported = self._last_reported_version or (cfg.version if cfg and cfg.has_token else "—")
 
         rows = [
-            ("Ostatni test połączenia:", last_test),
-            ("Machine ID:", machine_id),
-            ("Agent ID:", agent_id),
-            ("Magazyn (warehouse_id):", warehouse_id),
-            ("Wersja agenta:", __version__),
-            ("Wersja zgłoszona do backendu:", reported),
+            (PL.DIAG_LAST_TEST, last_test),
+            (PL.DIAG_MACHINE_ID, machine_id),
+            (PL.DIAG_AGENT_ID, agent_id),
+            (PL.DIAG_WAREHOUSE, warehouse_id),
+            (PL.DIAG_AGENT_VERSION, __version__),
+            (PL.DIAG_REPORTED_VERSION, reported),
         ]
         for child in self._diagnostics_body.winfo_children():
             child.destroy()
@@ -120,16 +125,14 @@ class SettingsPanel(ctk.CTkFrame):
             info_row(self._diagnostics_body, label, value)
 
     def _build(self) -> None:
-        logger.debug("settings widgets created")
-
         scroll = ctk.CTkScrollableFrame(self, fg_color="transparent")
         scroll.grid(row=0, column=0, sticky="nsew", padx=0, pady=0)
 
-        connection = card(scroll, "Po\u0142\u0105czenie")
+        connection = card(scroll, PL.SETTINGS_CONNECTION)
         self._server_var = ctk.StringVar(value=self._config.server_url)
         self._api_key_var = ctk.StringVar(value=self._config.api_key)
 
-        ctk.CTkLabel(connection, text="Adres serwera", font=T.FONT_BOLD, text_color=T.TEXT, anchor="w").pack(
+        ctk.CTkLabel(connection, text=PL.SETTINGS_SERVER_URL, font=T.FONT_BOLD, text_color=T.TEXT, anchor="w").pack(
             fill="x", pady=(0, 4)
         )
         self._server_entry = ctk.CTkEntry(
@@ -148,13 +151,13 @@ class SettingsPanel(ctk.CTkFrame):
         self._test_success_row = ctk.CTkFrame(connection, fg_color="transparent")
         self._test_success_row.pack(fill="x", pady=(0, 8))
 
-        ctk.CTkLabel(connection, text="Status po\u0142\u0105czenia:", font=T.FONT, text_color=T.MUTED, anchor="w").pack(
+        ctk.CTkLabel(connection, text=PL.SETTINGS_CONNECTION_STATUS, font=T.FONT, text_color=T.MUTED, anchor="w").pack(
             fill="x", pady=(4, 6)
         )
         self._status_badge_row = ctk.CTkFrame(connection, fg_color="transparent")
         self._status_badge_row.pack(fill="x", pady=(0, 4))
 
-        diagnostics = card(scroll, "Diagnostyka")
+        diagnostics = card(scroll, PL.SETTINGS_DIAGNOSTICS)
         self._diagnostics_body = ctk.CTkFrame(diagnostics, fg_color="transparent")
         self._diagnostics_body.pack(fill="x")
 
@@ -167,16 +170,16 @@ class SettingsPanel(ctk.CTkFrame):
         )
         ctk.CTkLabel(
             self._unsaved_dialog,
-            text="Masz niezapisane zmiany",
+            text=PL.SETTINGS_UNSAVED_CHANGES,
             font=T.FONT_BOLD,
             text_color=T.TEXT,
             anchor="w",
         ).pack(fill="x", padx=T.PAD, pady=(T.PAD, 8))
         dialog_actions = ctk.CTkFrame(self._unsaved_dialog, fg_color="transparent")
         dialog_actions.pack(fill="x", padx=T.PAD, pady=(0, T.PAD))
-        primary_button(dialog_actions, "Zapisz", self._on_unsaved_save).pack(side="left", padx=(0, 8))
-        secondary_button(dialog_actions, "Odrzuć", self._on_unsaved_discard).pack(side="left", padx=(0, 8))
-        secondary_button(dialog_actions, "Anuluj", self._hide_unsaved_dialog).pack(side="left")
+        primary_button(dialog_actions, PL.SAVE, self._on_unsaved_save).pack(side="left", padx=(0, 8))
+        secondary_button(dialog_actions, PL.DISCARD, self._on_unsaved_discard).pack(side="left", padx=(0, 8))
+        secondary_button(dialog_actions, PL.CANCEL, self._hide_unsaved_dialog).pack(side="left")
 
         self._message_var = ctk.StringVar(value="")
         self._message_label = ctk.CTkLabel(
@@ -194,12 +197,11 @@ class SettingsPanel(ctk.CTkFrame):
         footer.grid(row=1, column=0, sticky="ew", pady=(T.PAD, 0))
         footer.grid_columnconfigure(0, weight=1)
 
-        primary_button(footer, "Test po\u0142\u0105czenia", self._on_test_connection).grid(row=0, column=0, sticky="ew", pady=(0, 8))
-        primary_button(footer, "Zapisz", self._on_save).grid(row=1, column=0, sticky="ew", pady=(0, 8))
-        secondary_button(footer, "Synchronizuj drukarki", self._on_sync_printers).grid(row=2, column=0, sticky="ew")
-
-        for widget in (self._server_entry, self._api_key_entry, scroll, footer):
-            logger.debug("settings widget %s manager=%s", widget, widget.winfo_manager())
+        primary_button(footer, PL.SETTINGS_TEST_CONNECTION, self._on_test_connection).grid(
+            row=0, column=0, sticky="ew", pady=(0, 8)
+        )
+        primary_button(footer, PL.SAVE, self._on_save).grid(row=1, column=0, sticky="ew", pady=(0, 8))
+        secondary_button(footer, PL.SETTINGS_SYNC_PRINTERS, self._on_sync_printers).grid(row=2, column=0, sticky="ew")
 
         self.refresh()
 
@@ -207,11 +209,7 @@ class SettingsPanel(ctk.CTkFrame):
         for child in self._test_success_row.winfo_children():
             child.destroy()
         if self._test_passed:
-            badge(
-                self._test_success_row,
-                "Po\u0142\u0105czenie poprawne \u2014 mo\u017cesz zapisa\u0107 konfiguracj\u0119",
-                tone="success",
-            ).pack(anchor="w")
+            badge(self._test_success_row, PL.SETTINGS_TEST_SUCCESS, tone="success").pack(anchor="w")
 
     def _on_unsaved_save(self) -> None:
         self._on_save()
@@ -233,13 +231,11 @@ class SettingsPanel(ctk.CTkFrame):
             proceed()
 
     def _build_api_key_field(self, parent: ctk.CTkBaseClass) -> None:
-        ctk.CTkLabel(parent, text="Klucz API", font=T.FONT_BOLD, text_color=T.TEXT, anchor="w").pack(
+        ctk.CTkLabel(parent, text=PL.SETTINGS_API_KEY, font=T.FONT_BOLD, text_color=T.TEXT, anchor="w").pack(
             fill="x", pady=(0, 4)
         )
-        row = ctk.CTkFrame(parent, fg_color="transparent")
-        row.pack(fill="x", pady=(0, 8))
         self._api_key_entry = ctk.CTkEntry(
-            row,
+            parent,
             textvariable=self._api_key_var,
             show=MASK_CHAR,
             fg_color=T.PREVIEW_BG,
@@ -248,14 +244,19 @@ class SettingsPanel(ctk.CTkFrame):
             corner_radius=T.CORNER_RADIUS_SM,
             height=36,
         )
-        self._api_key_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
-        self._toggle_key_btn = secondary_button(row, "Poka\u017c", self._toggle_api_key_visibility)
+        self._api_key_entry.pack(fill="x", pady=(0, 8))
+
+        actions = ctk.CTkFrame(parent, fg_color="transparent")
+        actions.pack(fill="x", pady=(0, 8))
+        secondary_button(actions, PL.PASTE, self._paste_api_key).pack(side="left", padx=(0, 8))
+        self._copy_key_btn = secondary_button(actions, PL.COPY, self._copy_api_key)
+        self._copy_key_btn.pack(side="left", padx=(0, 8))
+        self._toggle_key_btn = secondary_button(actions, PL.SHOW, self._toggle_api_key_visibility)
         self._toggle_key_btn.pack(side="left")
 
-        secondary_button(parent, "Wklej ze schowka", self._paste_api_key).pack(anchor="w", pady=(0, 8))
         ctk.CTkLabel(
             parent,
-            text=API_KEY_HINT,
+            text=PL.SETTINGS_API_KEY_HINT,
             font=T.FONT_SMALL,
             text_color=T.MUTED,
             anchor="w",
@@ -266,19 +267,26 @@ class SettingsPanel(ctk.CTkFrame):
     def _toggle_api_key_visibility(self) -> None:
         self._api_key_visible = not self._api_key_visible
         self._api_key_entry.configure(show="" if self._api_key_visible else MASK_CHAR)
-        self._toggle_key_btn.configure(text="Ukryj" if self._api_key_visible else "Poka\u017c")
+        if self._toggle_key_btn:
+            self._toggle_key_btn.configure(text=PL.HIDE if self._api_key_visible else PL.SHOW)
 
     def _paste_api_key(self) -> None:
         try:
             value = self.clipboard_get().strip()
         except Exception:
-            self._set_message("Schowek jest pusty lub niedost\u0119pny.", error=True)
+            self._set_message(PL.CLIPBOARD_UNAVAILABLE, error=True)
             return
         if not value:
-            self._set_message("Schowek jest pusty.", error=True)
+            self._set_message(PL.CLIPBOARD_EMPTY, error=True)
             return
         self._api_key_var.set(value)
-        self._set_message("Wklejono klucz API ze schowka.")
+        self._set_message(PL.SETTINGS_PASTED_KEY)
+
+    def _copy_api_key(self) -> None:
+        value = self._api_key_var.get().strip()
+        if not value or not self._copy_key_btn:
+            return
+        copy_button_feedback(self._copy_key_btn, value, original_text=PL.COPY)
 
     def _draft(self) -> AgentConfig:
         draft = AgentConfig.from_dict(
@@ -295,30 +303,28 @@ class SettingsPanel(ctk.CTkFrame):
         if self._last_test_status:
             return self._last_test_status
         if cfg and cfg.has_token:
-            if self._runtime and self._runtime.state.heartbeat.online:
-                return STATUS_CONNECTED
-            return STATUS_CONNECTED
+            return PL.STATUS_CONNECTED
         if not (cfg and cfg.server_url and cfg.api_key):
-            return STATUS_NOT_CONFIGURED
-        return STATUS_NO_CONNECTION
+            return PL.STATUS_NOT_CONFIGURED
+        return PL.STATUS_NO_CONNECTION
 
     @staticmethod
     def _status_from_error(exc: Exception) -> str:
         if isinstance(exc, ApiError):
             if exc.status_code in (401, 403):
-                return STATUS_INVALID_KEY
+                return PL.STATUS_INVALID_KEY
             if exc.status_code is None:
-                return STATUS_NO_CONNECTION
+                return PL.STATUS_NO_CONNECTION
         message = str(exc).lower()
         if any(token in message for token in ("401", "403", "unauthorized", "forbidden", "invalid api key", "api key")):
-            return STATUS_INVALID_KEY
+            return PL.STATUS_INVALID_KEY
         if any(token in message for token in ("connection", "timeout", "failed after", "network", "refused")):
-            return STATUS_NO_CONNECTION
+            return PL.STATUS_NO_CONNECTION
         if isinstance(exc, (requests.ConnectionError, requests.Timeout)):
-            return STATUS_NO_CONNECTION
+            return PL.STATUS_NO_CONNECTION
         if isinstance(exc, ApiError) and exc.status_code and exc.status_code >= 400:
-            return STATUS_INVALID_KEY
-        return STATUS_NO_CONNECTION
+            return PL.STATUS_INVALID_KEY
+        return PL.STATUS_NO_CONNECTION
 
     def _set_message(self, text: str, *, error: bool = False, success: bool = False) -> None:
         self._message_var.set(text)
@@ -333,10 +339,10 @@ class SettingsPanel(ctk.CTkFrame):
     def _on_save(self) -> None:
         draft = self._draft()
         if not draft.server_url:
-            self._set_message("Podaj URL serwera.", error=True)
+            self._set_message(PL.SETTINGS_NEED_URL, error=True)
             return
         if not draft.api_key:
-            self._set_message("Podaj klucz API.", error=True)
+            self._set_message(PL.SETTINGS_NEED_KEY, error=True)
             return
         save_config(draft)
         self._config = draft
@@ -346,7 +352,7 @@ class SettingsPanel(ctk.CTkFrame):
         self._refresh_test_success_badge()
         if self._runtime:
             self._runtime.config = draft
-        self._set_message("Zapisano ustawienia.", success=True)
+        self._set_message(PL.SETTINGS_SAVED, success=True)
         if self._on_saved:
             self._on_saved(draft)
         self.refresh()
@@ -354,13 +360,13 @@ class SettingsPanel(ctk.CTkFrame):
     def _on_test_connection(self) -> None:
         draft = self._draft()
         if not draft.server_url:
-            self._set_message("Podaj URL serwera.", error=True)
+            self._set_message(PL.SETTINGS_NEED_URL, error=True)
             return
         if not draft.api_key:
-            self._set_message("Podaj klucz API.", error=True)
+            self._set_message(PL.SETTINGS_NEED_KEY, error=True)
             return
 
-        self._set_message("Test po\u0142\u0105czenia\u2026")
+        self._set_message(PL.SETTINGS_TEST_RUNNING)
         self.update_idletasks()
         try:
             probe_agent_connection(draft)
@@ -374,23 +380,20 @@ class SettingsPanel(ctk.CTkFrame):
             self.refresh()
             return
 
-        self._last_test_status = STATUS_CONNECTED
+        self._last_test_status = PL.STATUS_CONNECTED
         self._last_test_at = datetime.now()
         self._last_reported_version = __version__
         self._test_passed = True
         self._refresh_test_success_badge()
-        self._set_message(
-            "Po\u0142\u0105czenie dzia\u0142a poprawnie. Kliknij Zapisz, aby zachowa\u0107 ustawienia w config.json.",
-            success=True,
-        )
+        self._set_message(PL.SETTINGS_TEST_OK_HINT, success=True)
         self.refresh()
 
     def _on_sync_printers(self) -> None:
         if not self._on_sync:
-            self._set_message("Synchronizacja drukarek jest niedost\u0119pna.", error=True)
+            self._set_message(PL.SETTINGS_SYNC_UNAVAILABLE, error=True)
             return
         if self._runtime and not self._runtime.client:
-            self._set_message("Agent nie jest po\u0142\u0105czony. Zapisz ustawienia i uruchom ponownie agenta.", error=True)
+            self._set_message(PL.SETTINGS_NOT_CONNECTED, error=True)
             return
         try:
             self._on_sync()
@@ -399,5 +402,5 @@ class SettingsPanel(ctk.CTkFrame):
             self._set_message(str(exc), error=True)
             return
         self._last_reported_version = __version__
-        self._set_message("Zsynchronizowano drukarki.", success=True)
+        self._set_message(PL.SETTINGS_SYNC_OK, success=True)
         self.refresh()

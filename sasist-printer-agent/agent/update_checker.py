@@ -14,6 +14,7 @@ from typing import Callable
 import requests
 
 from .config import program_data_dir
+from .i18n import pl as PL
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +96,15 @@ class UpdateChecker:
                     if chunk:
                         fh.write(chunk)
         except Exception as exc:
-            logger.error("Download failed: %s", exc)
+            logger.error(PL.LOG_UPDATE_DOWNLOAD_FAILED, exc)
+            return None
+
+        if not zipfile.is_zipfile(zip_path):
+            logger.error(PL.LOG_UPDATE_INVALID_FILE, zip_path.name)
+            try:
+                zip_path.unlink(missing_ok=True)
+            except OSError:
+                pass
             return None
 
         extract_dir = updates_dir / f"extract-{version}-{stamp}"
@@ -104,7 +113,7 @@ class UpdateChecker:
             with zipfile.ZipFile(zip_path, "r") as zf:
                 zf.extractall(extract_dir)
         except Exception as exc:
-            logger.error("Extract failed: %s", exc)
+            logger.error(PL.LOG_UPDATE_INVALID_FILE, exc)
             shutil.rmtree(extract_dir, ignore_errors=True)
             return None
 

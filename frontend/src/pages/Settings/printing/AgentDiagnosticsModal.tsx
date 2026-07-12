@@ -42,6 +42,7 @@ export default function AgentDiagnosticsModal({ open, agent, tenantId, onClose }
   const [data, setData] = useState<PrinterAgentDiagnosticsRead | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [copiedMachineId, setCopiedMachineId] = useState(false);
 
   const load = useCallback(async () => {
     if (!agent) return;
@@ -64,6 +65,7 @@ export default function AgentDiagnosticsModal({ open, agent, tenantId, onClose }
     } else {
       setData(null);
       setError(null);
+      setCopiedMachineId(false);
     }
   }, [open, agent, load]);
 
@@ -96,13 +98,19 @@ export default function AgentDiagnosticsModal({ open, agent, tenantId, onClose }
             type="button"
             className="inline-flex items-center gap-1.5 rounded-lg border border-orange-200 bg-[#FFF7ED] px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-orange-100"
             onClick={() =>
-              void copyText(agent.machine_id).then((ok) =>
-                ok ? toast.success("Skopiowano Machine ID") : toast.error("Kopiowanie nie powiodło się"),
-              )
+              void copyText(agent.machine_id).then((ok) => {
+                if (ok) {
+                  toast.success("Skopiowano identyfikator maszyny");
+                  setCopiedMachineId(true);
+                  window.setTimeout(() => setCopiedMachineId(false), 2000);
+                } else {
+                  toast.error("Kopiowanie nie powiodło się");
+                }
+              })
             }
           >
             <Copy className="h-3.5 w-3.5" />
-            Kopiuj Machine ID
+            {copiedMachineId ? "Skopiowano" : "Kopiuj identyfikator"}
           </button>
           <button
             type="button"
@@ -124,16 +132,16 @@ export default function AgentDiagnosticsModal({ open, agent, tenantId, onClose }
         ) : data ? (
           <div className="rounded-xl border border-orange-100 bg-[#FFF7ED] p-4">
             <Row label="Wersja agenta" value={data.version ?? "—"} />
-            <Row label="Wersja release" value={data.latest_version ?? "—"} />
-            <Row label="Wersja config" value={data.config_version ?? "—"} />
-            <Row label="Machine ID" value={data.machine_id} />
+            <Row label="Dostępna wersja" value={data.latest_version ?? "—"} />
+            <Row label="Wersja w konfiguracji" value={data.config_version ?? "—"} />
+            <Row label="Identyfikator maszyny" value={data.machine_id} />
             <Row label="Magazyn" value={data.warehouse_id != null ? String(data.warehouse_id) : "—"} />
             <Row label="Drukarki" value={String(data.printer_count)} />
-            <Row label="Ostatni heartbeat" value={formatDate(data.last_heartbeat)} />
-            <Row label="Ostatni polling" value={formatDate(data.last_poll)} />
+            <Row label="Ostatnia sygnatura życia" value={formatDate(data.last_heartbeat)} />
+            <Row label="Ostatnie odpytywanie" value={formatDate(data.last_poll)} />
             <Row
               label="Aktualizacja"
-              value={data.update_available ? "🟠 Dostępna aktualizacja" : "🟢 Aktualny"}
+              value={data.update_available ? "Dostępna aktualizacja" : "Brak aktualizacji"}
             />
           </div>
         ) : null}
@@ -164,7 +172,7 @@ export function AgentActionsCell({
   return (
     <div className="flex min-w-[200px] flex-col gap-1">
       <PrintingLinkButton disabled={busy} onClick={onCopyMachineId}>
-        Kopiuj Machine ID
+        Kopiuj identyfikator maszyny
       </PrintingLinkButton>
       <PrintingLinkButton disabled={busy} onClick={onDiagnostics}>
         Otwórz diagnostykę

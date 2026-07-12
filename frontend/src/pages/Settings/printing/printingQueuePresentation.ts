@@ -63,11 +63,11 @@ export function agentHealthClass(health: string): string {
 export function agentHealthLabel(health: string): string {
   switch (health) {
     case "online":
-      return "Online";
+      return "Połączony";
     case "stale":
       return "Opóźniony";
     default:
-      return "Offline";
+      return "Rozłączony";
   }
 }
 

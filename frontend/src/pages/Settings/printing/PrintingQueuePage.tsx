@@ -242,10 +242,10 @@ export default function PrintingQueuePage() {
     <PrintingPageBody>
       <PrintingKpiGrid
         items={[
-          { label: "Pending", value: kpis.pending, tone: "warning" },
-          { label: "Processing", value: kpis.processing, tone: "primary" },
-          { label: "Failed", value: kpis.failed, tone: "danger" },
-          { label: "Printed", value: kpis.printed, tone: "success" },
+          { label: "Oczekujące", value: kpis.pending, tone: "warning" },
+          { label: "W trakcie", value: kpis.processing, tone: "primary" },
+          { label: "Nieudane", value: kpis.failed, tone: "danger" },
+          { label: "Wydrukowane", value: kpis.printed, tone: "success" },
         ]}
       />
 

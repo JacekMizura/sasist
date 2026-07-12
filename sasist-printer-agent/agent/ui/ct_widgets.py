@@ -7,6 +7,7 @@ from pathlib import Path
 
 import customtkinter as ctk
 
+from ..i18n import pl as PL
 from ..version import __version__
 from . import theme as T
 
@@ -130,7 +131,7 @@ def sidebar_button(parent: ctk.CTkBaseClass, text: str, command, *, active: bool
 
 
 def build_sidebar_header(parent: ctk.CTkBaseClass) -> None:
-    ctk.CTkLabel(parent, text="Sasist Printer Agent", font=T.FONT_SECTION, text_color=T.TEXT, anchor="w").pack(
+    ctk.CTkLabel(parent, text=PL.APP_TITLE, font=T.FONT_SECTION, text_color=T.TEXT, anchor="w").pack(
         fill="x", padx=T.PAD, pady=(T.PAD, 2)
     )
     ctk.CTkLabel(parent, text=f"v{__version__}", font=T.FONT_SMALL, text_color=T.MUTED, anchor="w").pack(

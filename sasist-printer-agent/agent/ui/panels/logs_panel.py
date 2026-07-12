@@ -7,13 +7,15 @@ from pathlib import Path
 
 import customtkinter as ctk
 
+from ...i18n import pl as PL
 from .. import theme as T
+from ..clipboard import copy_button_feedback
 from ..ct_widgets import primary_button, secondary_button
 
 
 class LogsPanel(ctk.CTkFrame):
     REFRESH_MS = 2500
-    FILTER_OPTIONS = ("ALL", "INFO", "WARNING", "ERROR")
+    FILTER_OPTIONS = tuple(key for key, _label in PL.LOG_FILTER_OPTIONS)
 
     def __init__(self, parent: ctk.CTkBaseClass, log_dir: Path) -> None:
         super().__init__(parent, fg_color="transparent")
@@ -23,6 +25,8 @@ class LogsPanel(ctk.CTkFrame):
         self._filter_var = ctk.StringVar(value="ALL")
         self._search_var = ctk.StringVar(value="")
         self._autoscroll_var = ctk.BooleanVar(value=True)
+        self._copy_btn: ctk.CTkButton | None = None
+        self._copy_error_btn: ctk.CTkButton | None = None
         self._build()
 
     def _build(self) -> None:
@@ -35,15 +39,17 @@ class LogsPanel(ctk.CTkFrame):
 
         filter_row = ctk.CTkFrame(toolbar, fg_color="transparent")
         filter_row.pack(fill="x", pady=(0, 6))
-        ctk.CTkLabel(filter_row, text="Filtr:", font=T.FONT_BOLD, text_color=T.MUTED).pack(side="left", padx=(0, 8))
+        ctk.CTkLabel(filter_row, text=PL.LOG_FILTER_LABEL, font=T.FONT_BOLD, text_color=T.MUTED).pack(
+            side="left", padx=(0, 8)
+        )
         self._filter_buttons: dict[str, ctk.CTkButton] = {}
-        for option in self.FILTER_OPTIONS:
+        for key, label in PL.LOG_FILTER_OPTIONS:
             btn = ctk.CTkButton(
                 filter_row,
-                text=option,
-                width=72,
+                text=label,
+                width=max(88, len(label) * 10),
                 height=28,
-                command=lambda value=option: self._select_filter(value),
+                command=lambda value=key: self._select_filter(value),
                 fg_color=T.CARD,
                 hover_color=T.BORDER,
                 text_color=T.TEXT,
@@ -51,15 +57,17 @@ class LogsPanel(ctk.CTkFrame):
                 font=T.FONT_SMALL,
             )
             btn.pack(side="left", padx=(0, 6))
-            self._filter_buttons[option] = btn
+            self._filter_buttons[key] = btn
 
         search_row = ctk.CTkFrame(toolbar, fg_color="transparent")
         search_row.pack(fill="x")
-        ctk.CTkLabel(search_row, text="Szukaj:", font=T.FONT_BOLD, text_color=T.MUTED).pack(side="left", padx=(0, 8))
+        ctk.CTkLabel(search_row, text=PL.LOG_SEARCH_LABEL, font=T.FONT_BOLD, text_color=T.MUTED).pack(
+            side="left", padx=(0, 8)
+        )
         search_entry = ctk.CTkEntry(
             search_row,
             textvariable=self._search_var,
-            placeholder_text="Tekst w logu…",
+            placeholder_text=PL.LOG_SEARCH_PLACEHOLDER,
             fg_color=T.PREVIEW_BG,
             border_color=T.BORDER,
             text_color=T.TEXT,
@@ -69,7 +77,7 @@ class LogsPanel(ctk.CTkFrame):
         search_entry.bind("<KeyRelease>", lambda _event: self._load_preview())
         ctk.CTkCheckBox(
             search_row,
-            text="Autoscroll",
+            text=PL.LOG_AUTOSCROLL,
             variable=self._autoscroll_var,
             font=T.FONT_SMALL,
             text_color=T.TEXT,
@@ -82,18 +90,22 @@ class LogsPanel(ctk.CTkFrame):
         content.grid_columnconfigure(1, weight=1)
         content.grid_rowconfigure(0, weight=1)
 
-        list_card = ctk.CTkFrame(content, fg_color=T.CARD, corner_radius=T.CORNER_RADIUS, border_width=1, border_color=T.BORDER)
+        list_card = ctk.CTkFrame(
+            content, fg_color=T.CARD, corner_radius=T.CORNER_RADIUS, border_width=1, border_color=T.BORDER
+        )
         list_card.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
-        ctk.CTkLabel(list_card, text="Pliki", font=T.FONT_BOLD, text_color=T.TEXT, anchor="w").pack(
+        ctk.CTkLabel(list_card, text=PL.LOG_FILES, font=T.FONT_BOLD, text_color=T.TEXT, anchor="w").pack(
             fill="x", padx=T.PAD, pady=(T.PAD, 6)
         )
         self._file_list = ctk.CTkScrollableFrame(list_card, fg_color=T.PREVIEW_BG, width=220, height=360)
         self._file_list.pack(fill="both", expand=True, padx=T.PAD, pady=(0, T.PAD))
         self._file_buttons: list[ctk.CTkButton] = []
 
-        preview_card = ctk.CTkFrame(content, fg_color=T.CARD, corner_radius=T.CORNER_RADIUS, border_width=1, border_color=T.BORDER)
+        preview_card = ctk.CTkFrame(
+            content, fg_color=T.CARD, corner_radius=T.CORNER_RADIUS, border_width=1, border_color=T.BORDER
+        )
         preview_card.grid(row=0, column=1, sticky="nsew")
-        ctk.CTkLabel(preview_card, text="Podgląd", font=T.FONT_BOLD, text_color=T.TEXT, anchor="w").pack(
+        ctk.CTkLabel(preview_card, text=PL.LOG_PREVIEW, font=T.FONT_BOLD, text_color=T.TEXT, anchor="w").pack(
             fill="x", padx=T.PAD, pady=(T.PAD, 6)
         )
         self._preview = ctk.CTkTextbox(
@@ -111,11 +123,13 @@ class LogsPanel(ctk.CTkFrame):
         footer.pack(fill="x", pady=(T.PAD, 0))
         left = ctk.CTkFrame(footer, fg_color="transparent")
         left.pack(side="left")
-        secondary_button(left, "Kopiuj błąd", self._copy_error).pack(side="left", padx=(0, 8))
-        secondary_button(left, "Reset filtrów", self._clear_filters).pack(side="left", padx=(0, 8))
-        secondary_button(left, "Kopiuj", self._copy_to_clipboard).pack(side="left", padx=(0, 8))
-        secondary_button(left, "Otwórz w Notepad", self._open_in_notepad).pack(side="left")
-        primary_button(footer, "Odśwież", lambda: self.refresh_file_list(keep_selection=True)).pack(side="right")
+        self._copy_error_btn = secondary_button(left, PL.LOG_COPY_ERROR, self._copy_error)
+        self._copy_error_btn.pack(side="left", padx=(0, 8))
+        secondary_button(left, PL.LOG_RESET_FILTERS, self._clear_filters).pack(side="left", padx=(0, 8))
+        self._copy_btn = secondary_button(left, PL.COPY, self._copy_to_clipboard)
+        self._copy_btn.pack(side="left", padx=(0, 8))
+        secondary_button(left, PL.LOG_OPEN_NOTEPAD, self._open_in_notepad).pack(side="left")
+        primary_button(footer, PL.REFRESH, lambda: self.refresh_file_list(keep_selection=True)).pack(side="right")
 
         self._selected_index = 0
         self._select_filter("ALL")
@@ -149,7 +163,7 @@ class LogsPanel(ctk.CTkFrame):
         try:
             return path.read_text(encoding="utf-8", errors="replace")
         except OSError as exc:
-            return f"Nie udało się odczytać pliku:\n{exc}"
+            return PL.LOG_READ_FAILED.format(error=exc)
 
     def _apply_filter(self, raw: str) -> str:
         level = self._filter_var.get().strip().upper()
@@ -168,22 +182,22 @@ class LogsPanel(ctk.CTkFrame):
             lines.append(line)
         if not lines:
             if query:
-                return f'(Brak wyników dla "{self._search_var.get().strip()}")'
+                return PL.LOG_NO_RESULTS.format(query=self._search_var.get().strip())
             if level != "ALL":
-                return f"(Brak wpisów {level})"
+                return PL.LOG_NO_LEVEL_ENTRIES.format(level=PL.log_filter_display(level))
         return "\n".join(lines)
 
     def _load_preview(self) -> None:
         self._preview.configure(state="normal")
         self._preview.delete("1.0", "end")
         if not self._files:
-            self._preview.insert("1.0", "Brak plików logów.")
+            self._preview.insert("1.0", PL.LOG_NO_FILES)
         else:
             path = self._selected_path()
             if path is None:
-                self._preview.insert("1.0", "Wybierz plik logu po lewej.")
+                self._preview.insert("1.0", PL.LOG_SELECT_FILE)
             elif not path.exists():
-                self._preview.insert("1.0", f"Plik nie istnieje:\n{path}")
+                self._preview.insert("1.0", PL.LOG_FILE_MISSING.format(path=path))
             else:
                 self._preview.insert("1.0", self._apply_filter(self._read_selected_raw()))
         self._preview.configure(state="disabled")
@@ -217,7 +231,7 @@ class LogsPanel(ctk.CTkFrame):
         self._file_buttons.clear()
 
         if not self._files:
-            ctk.CTkLabel(self._file_list, text="Brak plików logów.", font=T.FONT, text_color=T.MUTED).pack(anchor="w")
+            ctk.CTkLabel(self._file_list, text=PL.LOG_NO_FILES, font=T.FONT, text_color=T.MUTED).pack(anchor="w")
             self._selected_index = 0
         else:
             index = 0
@@ -266,23 +280,21 @@ class LogsPanel(ctk.CTkFrame):
         self._refresh_job = self.after(self.REFRESH_MS, self._schedule_refresh)
 
     def _copy_to_clipboard(self) -> None:
-        raw = self._read_selected_raw()
-        if not raw:
+        raw = self._apply_filter(self._read_selected_raw())
+        if not raw or not self._copy_btn:
             return
-        self.clipboard_clear()
-        self.clipboard_append(self._apply_filter(raw))
+        copy_button_feedback(self._copy_btn, raw, original_text=PL.COPY)
 
     def _copy_error(self) -> None:
         raw = self._read_selected_raw()
-        if not raw:
+        if not raw or not self._copy_error_btn:
             return
         errors = [line for line in raw.splitlines() if "ERROR" in line.upper()]
         if not errors:
             errors = [line for line in raw.splitlines() if "WARNING" in line.upper()]
         if not errors:
             return
-        self.clipboard_clear()
-        self.clipboard_append("\n".join(errors))
+        copy_button_feedback(self._copy_error_btn, "\n".join(errors), original_text=PL.LOG_COPY_ERROR)
 
     def _open_in_notepad(self) -> None:
         path = self._selected_path()

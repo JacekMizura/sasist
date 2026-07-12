@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
@@ -30,6 +32,7 @@ from ...services.printing.job_admin_service import (
     retry_print_job,
     soft_delete_print_job,
 )
+from ...services.printing.assignment_service import log_print_poll
 from ...services.printing.job_service import (
     claim_print_job,
     complete_print_job,
@@ -42,6 +45,7 @@ from ...services.printing.queue_service import queue_print_job
 from ._helpers import raise_printing_error
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.post("/jobs", response_model=PrintJobRead)
@@ -101,7 +105,14 @@ def get_pending_jobs(
     agent: PrinterAgent = Depends(get_current_agent),
     db: Session = Depends(get_db),
 ):
-    jobs = list_pending_jobs_for_agent(db, agent)
+    jobs, active_printer_ids = list_pending_jobs_for_agent(db, agent)
+    log_print_poll(
+        agent_id=agent.id,
+        machine_id=agent.machine_id,
+        active_printers=active_printer_ids,
+        jobs_count=len(jobs),
+        job_ids=[int(job["id"]) for job in jobs if job.get("id") is not None],
+    )
     return PrintJobPendingResponse(jobs=jobs)
 
 

@@ -31,6 +31,8 @@ describe("printingQueuePresentation", () => {
   });
 
   it("maps agent health", () => {
+    expect(agentHealthLabel("online")).toBe("Połączony");
+    expect(agentHealthLabel("offline")).toBe("Rozłączony");
     expect(agentHealthLabel("stale")).toBe("Opóźniony");
     expect(agentHealthClass("online")).toContain("green");
     expect(agentHealthClass("offline")).toContain("red");

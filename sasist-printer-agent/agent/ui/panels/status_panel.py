@@ -8,6 +8,7 @@ import threading
 import customtkinter as ctk
 
 from ... import __version__
+from ...i18n import pl as PL
 from ...runtime import AgentRuntime
 from ...update_checker import is_newer_version
 from .. import theme as T
@@ -41,7 +42,7 @@ class StatusPanel(ctk.CTkFrame):
         hero_inner.pack(fill="x", padx=T.PAD, pady=T.PAD)
         ctk.CTkLabel(
             hero_inner,
-            text="Stan agenta",
+            text=PL.STATUS_AGENT_STATE,
             font=T.FONT_SECTION,
             text_color=T.TEXT,
             anchor="w",
@@ -49,16 +50,16 @@ class StatusPanel(ctk.CTkFrame):
         self._hero_row = ctk.CTkFrame(hero_inner, fg_color="transparent")
         self._hero_row.pack(side="right")
 
-        overview = card(self._scroll, "Status")
+        overview = card(self._scroll, PL.STATUS_LABEL)
         self._overview_body = ctk.CTkFrame(overview, fg_color="transparent")
         self._overview_body.pack(fill="x")
         self._overview_body.grid_columnconfigure(0, weight=1)
         self._overview_body.grid_columnconfigure(1, weight=1)
 
-        update_card = card(self._scroll, "Aktualizacja")
+        update_card = card(self._scroll, PL.UPDATE_SECTION)
         update_toolbar = ctk.CTkFrame(update_card, fg_color="transparent")
         update_toolbar.pack(fill="x", pady=(0, 6))
-        primary_button(update_toolbar, "Sprawdź aktualizacje", self._on_check_updates).pack(side="left")
+        primary_button(update_toolbar, PL.UPDATE_CHECK, self._on_check_updates).pack(side="left")
         self._update_rows = ctk.CTkFrame(update_card, fg_color="transparent")
         self._update_rows.pack(fill="x")
         ctk.CTkLabel(
@@ -100,33 +101,33 @@ class StatusPanel(ctk.CTkFrame):
                 child.destroy()
             badge(
                 self._hero_row,
-                "\U0001f7e2 ONLINE" if online else "\U0001f534 OFFLINE",
+                PL.STATUS_ONLINE if online else PL.STATUS_OFFLINE,
                 tone="success" if online else "danger",
             ).pack(side="left", padx=(0, 6))
             if jobs.processing:
-                badge(self._hero_row, "\U0001f7e0 DRUKUJE", tone="warning").pack(side="left")
+                badge(self._hero_row, PL.STATUS_PRINTING, tone="warning").pack(side="left")
 
         update_label = self._update_status_label()
         self._fill_overview(
             [
-                ("\U0001f310", "Status", "Połączono" if online else "Brak połączenia"),
-                ("\U0001f194", "Agent ID", str(cfg.agent_id) if cfg and cfg.agent_id else "—"),
-                ("\U0001f4bb", "Komputer", cfg.computer_name if cfg else "—"),
-                ("\U0001f5a5", "Machine ID", cfg.machine_id if cfg else "—"),
-                ("\U0001f3ed", "Magazyn", str(cfg.warehouse_id) if cfg and cfg.warehouse_id else "—"),
-                ("\U0001f5a8", "Drukarki", str(self._runtime.state.printer_count)),
+                ("\U0001f310", PL.STATUS_LABEL, PL.STATUS_CONNECTED_LABEL if online else PL.STATUS_DISCONNECTED_LABEL),
+                ("\U0001f194", PL.DIAG_AGENT_ID, str(cfg.agent_id) if cfg and cfg.agent_id else "—"),
+                ("\U0001f4bb", PL.STATUS_COMPUTER, cfg.computer_name if cfg else "—"),
+                ("\U0001f5a5", PL.STATUS_MACHINE_ID, cfg.machine_id if cfg else "—"),
+                ("\U0001f3ed", PL.STATUS_WAREHOUSE, str(cfg.warehouse_id) if cfg and cfg.warehouse_id else "—"),
+                ("\U0001f5a8", PL.STATUS_PRINTERS, str(self._runtime.state.printer_count)),
                 (
                     "\U0001f493",
-                    "Heartbeat",
+                    PL.STATUS_HEARTBEAT,
                     hb.last_success_at.strftime("%Y-%m-%d %H:%M:%S") if hb.last_success_at else "—",
                 ),
                 (
                     "\U0001f501",
-                    "Polling",
+                    PL.STATUS_POLLING,
                     jobs.last_poll_at.strftime("%Y-%m-%d %H:%M:%S") if jobs.last_poll_at else "—",
                 ),
-                ("\U0001f4e6", "Wersja", __version__),
-                ("\u2b06", "Aktualizacja", update_label),
+                ("\U0001f4e6", PL.STATUS_VERSION, __version__),
+                ("\u2b06", PL.STATUS_UPDATE, update_label),
             ]
         )
 
@@ -136,7 +137,7 @@ class StatusPanel(ctk.CTkFrame):
             err_frame.grid(row=6, column=0, columnspan=2, sticky="ew", pady=(8, 0))
             ctk.CTkLabel(
                 err_frame,
-                text=f"\u26a0 Ostatni błąd: {err}",
+                text=PL.STATUS_LAST_ERROR.format(error=err),
                 font=T.FONT_SMALL,
                 text_color=T.DANGER,
                 anchor="w",
@@ -150,27 +151,31 @@ class StatusPanel(ctk.CTkFrame):
         self._fill_rows(
             self._update_rows,
             [
-                ("\U0001f4e6", "Aktualna wersja", __version__),
-                ("\U0001f680", "Najnowsza wersja", self._remote_version or "—"),
-                ("\U0001f4ca", "Update available", "Tak" if update_available else "Nie"),
+                ("\U0001f4e6", PL.UPDATE_CURRENT_VERSION, __version__),
+                ("\U0001f680", PL.UPDATE_AVAILABLE_VERSION, self._remote_version or "—"),
+                (
+                    "\U0001f4ca",
+                    PL.STATUS_UPDATE,
+                    PL.UPDATE_AVAILABLE_YES if update_available else PL.UPDATE_AVAILABLE_NO,
+                ),
             ],
         )
 
     def _update_status_label(self) -> str:
         remote = self._remote_version
         if not remote:
-            return "Nie sprawdzono"
+            return PL.UPDATE_NOT_CHECKED
         if is_newer_version(__version__, remote):
-            return "\U0001f7e0 Dost\u0119pna aktualizacja"
+            return PL.UPDATE_AVAILABLE_BADGE
         if remote == __version__:
-            return "\U0001f7e2 Aktualny"
-        return "\U0001f534 Nieznana wersja"
+            return PL.UPDATE_UP_TO_DATE
+        return PL.UPDATE_UNKNOWN
 
     def _on_check_updates(self) -> None:
         if not self._runtime.client:
-            self._update_message.set("Agent nie jest połączony z serwerem.")
+            self._update_message.set(PL.UPDATE_NOT_CONNECTED)
             return
-        self._update_message.set("Sprawdzanie aktualizacji…")
+        self._update_message.set(PL.UPDATE_CHECKING)
 
         def worker() -> None:
             try:
@@ -184,15 +189,13 @@ class StatusPanel(ctk.CTkFrame):
             def apply() -> None:
                 self._remote_version = remote
                 if remote and is_newer_version(__version__, remote):
-                    self._update_message.set(
-                        f"Dost\u0119pna wersja {remote}. Pobieranie mo\u017ce rozpocz\u0105\u0107 si\u0119 automatycznie w tle."
-                    )
+                    self._update_message.set(PL.UPDATE_FOUND.format(version=remote))
                     if self._runtime.update_checker:
                         threading.Thread(target=self._runtime.update_checker.check_once, daemon=True).start()
                 elif remote == __version__:
-                    self._update_message.set("Agent jest aktualny.")
+                    self._update_message.set(PL.UPDATE_CURRENT)
                 else:
-                    self._update_message.set("Sprawdzono wersj\u0119 na serwerze.")
+                    self._update_message.set(PL.UPDATE_CHECKED)
                 self.refresh()
 
             self.after(0, apply)

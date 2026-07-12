@@ -77,9 +77,24 @@ class JobsWorker:
             self._notify()
         except ApiError as exc:
             self.state.last_poll_error = str(exc)
-            logger.warning("Pending jobs poll failed: %s", exc)
+            logger.warning(
+                "[print-poll] poll failed agent_id=%s machine_id=%s error=%s",
+                self._config.agent_id,
+                self._config.machine_id,
+                exc,
+            )
             self._notify()
             return
+
+        job_ids = [int(job["id"]) for job in jobs if job.get("id") is not None]
+        logger.info(
+            "[print-poll] agent_id=%s machine_id=%s active_printers=%s jobs_count=%s job_ids=%s",
+            self._config.agent_id,
+            self._config.machine_id,
+            "n/a",
+            len(jobs),
+            job_ids,
+        )
 
         for job in jobs:
             if self._stop.is_set():

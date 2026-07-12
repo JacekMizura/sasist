@@ -20,3 +20,10 @@ class PrintingDefaultsUpdate(BaseModel):
     a4_printer_id: int | None = Field(default=None, ge=1)
     label_printer_id: int | None = Field(default=None, ge=1)
     receipt_printer_id: int | None = Field(default=None, ge=1)
+
+
+class PrinterAssignmentRepairRead(BaseModel):
+    defaults_remapped: int
+    jobs_migrated: int
+    primary_agent_id: int
+    primary_machine_id: str

@@ -12,6 +12,7 @@ from typing import Callable, TYPE_CHECKING
 from . import __version__
 from .api import ApiError, SasistApiClient
 from .config import AgentConfig
+from .i18n import pl as PL
 
 if TYPE_CHECKING:
     from .jobs import JobsState
@@ -86,8 +87,12 @@ class HeartbeatWorker:
             logger.debug("Heartbeat OK")
         except ApiError as exc:
             self.state.online = False
-            self.state.last_error = str(exc)
-            logger.warning("Heartbeat failed: %s", exc)
+            if exc.status_code == 404:
+                self.state.last_error = PL.LOG_AGENT_NOT_FOUND
+                logger.warning("%s", PL.LOG_AGENT_NOT_FOUND)
+            else:
+                self.state.last_error = str(exc)
+                logger.warning("Heartbeat failed: %s", exc)
         if self._on_state_change:
             self._on_state_change(self.state)
         return self.state

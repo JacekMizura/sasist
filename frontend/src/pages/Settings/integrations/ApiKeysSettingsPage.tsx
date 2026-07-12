@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Key, Plus } from "lucide-react";
+import toast from "react-hot-toast";
 
 import PageLayout from "../../../components/layout/PageLayout";
 import { PageHeader } from "../../../components/layout/PageHeader";
@@ -60,6 +61,7 @@ export default function ApiKeysSettingsPage() {
   const [expiresAt, setExpiresAt] = useState("");
 
   const [createdKey, setCreatedKey] = useState<string | null>(null);
+  const [copiedKey, setCopiedKey] = useState(false);
 
   const selectedScopes = useMemo(() => DEFAULT_SCOPES_BY_TYPE[keyType], [keyType]);
 
@@ -88,6 +90,7 @@ export default function ApiKeysSettingsPage() {
     setAllowedIpsInput("");
     setExpiresAt("");
     setCreatedKey(null);
+    setCopiedKey(false);
     setModalOpen(true);
   };
 
@@ -131,6 +134,18 @@ export default function ApiKeysSettingsPage() {
   const copyText = async (value: string) => {
     try {
       await navigator.clipboard.writeText(value);
+    } catch {
+      setError("Nie udało się skopiować do schowka.");
+    }
+  };
+
+  const copyCreatedKey = async () => {
+    if (!createdKey) return;
+    try {
+      await navigator.clipboard.writeText(createdKey);
+      toast.success("Skopiowano klucz API");
+      setCopiedKey(true);
+      window.setTimeout(() => setCopiedKey(false), 2000);
     } catch {
       setError("Nie udało się skopiować do schowka.");
     }
@@ -317,17 +332,26 @@ export default function ApiKeysSettingsPage() {
                 <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
                   Zapisz ten klucz. Nie będzie można go ponownie wyświetlić.
                 </p>
-                <pre className="mt-3 overflow-x-auto rounded-lg bg-slate-900 p-3 text-xs text-emerald-200">{createdKey}</pre>
-                <div className="mt-4 flex justify-end gap-2">
-                  <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={() => void copyText(createdKey)}>
-                    Kopiuj
+                <div className="mt-3 flex items-center gap-2">
+                  <pre className="min-w-0 flex-1 overflow-x-auto rounded-lg bg-slate-900 px-3 py-2.5 text-xs leading-relaxed text-emerald-200">
+                    {createdKey}
+                  </pre>
+                  <button
+                    type="button"
+                    className="shrink-0 self-center rounded-lg bg-orange-500 px-3 py-2 text-sm font-semibold text-white hover:bg-orange-600"
+                    onClick={() => void copyCreatedKey()}
+                  >
+                    {copiedKey ? "Skopiowano" : "Kopiuj"}
                   </button>
+                </div>
+                <div className="mt-4 flex justify-end">
                   <button
                     type="button"
                     className="rounded-lg bg-blue-600 px-3 py-2 text-sm text-white"
                     onClick={() => {
                       setModalOpen(false);
                       setCreatedKey(null);
+                      setCopiedKey(false);
                     }}
                   >
                     Zamknij

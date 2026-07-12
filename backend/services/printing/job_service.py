@@ -91,7 +91,7 @@ def _job_belongs_to_agent(job: PrintJob, agent: PrinterAgent) -> bool:
     return job.printer is not None and job.printer.agent_id == agent.id
 
 
-def list_pending_jobs_for_agent(db: Session, agent: PrinterAgent) -> list[dict[str, Any]]:
+def list_pending_jobs_for_agent(db: Session, agent: PrinterAgent) -> tuple[list[dict[str, Any]], list[int]]:
     printer_ids = [
         row.id
         for row in db.query(AgentPrinter.id)
@@ -102,7 +102,7 @@ def list_pending_jobs_for_agent(db: Session, agent: PrinterAgent) -> list[dict[s
         .all()
     ]
     if not printer_ids:
-        return []
+        return [], []
 
     jobs = (
         db.query(PrintJob)
@@ -115,7 +115,7 @@ def list_pending_jobs_for_agent(db: Session, agent: PrinterAgent) -> list[dict[s
         .order_by(PrintJob.created_at.asc())
         .all()
     )
-    return [
+    payload = [
         {
             "id": job.id,
             "printer_id": job.printer_id,
@@ -126,6 +126,7 @@ def list_pending_jobs_for_agent(db: Session, agent: PrinterAgent) -> list[dict[s
         }
         for job in jobs
     ]
+    return payload, printer_ids
 
 
 def _load_job_for_agent(db: Session, *, job_id: int, agent: PrinterAgent) -> PrintJob:

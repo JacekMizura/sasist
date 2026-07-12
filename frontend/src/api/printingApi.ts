@@ -6,6 +6,7 @@ import type {
   PrinterAgentDiagnosticsRead,
   PrinterAgentDownloadInfo,
   PrinterAgentRead,
+  PrinterAssignmentRepairRead,
   PrintingAutoPrintRead,
   PrintingDefaultsRead,
   QueuePrintRequest,
@@ -97,6 +98,16 @@ export async function updatePrintingDefaults(
   warehouseId?: number | null,
 ): Promise<PrintingDefaultsRead> {
   const { data } = await api.put<PrintingDefaultsRead>("/printing/defaults", body, {
+    params: { tenant_id: tenantId, warehouse_id: warehouseId ?? undefined },
+  });
+  return data;
+}
+
+export async function repairPrinterAssignments(
+  tenantId: number,
+  warehouseId?: number | null,
+): Promise<PrinterAssignmentRepairRead> {
+  const { data } = await api.post<PrinterAssignmentRepairRead>("/printing/defaults/repair", null, {
     params: { tenant_id: tenantId, warehouse_id: warehouseId ?? undefined },
   });
   return data;

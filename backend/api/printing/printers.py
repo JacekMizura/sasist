@@ -12,6 +12,7 @@ from ...auth.deps import get_current_user
 from ...database import get_db
 from ...models.app_user import AppUser
 from ...schemas.printing.printer import AgentPrinterPatch, AgentPrinterRead
+from ...services.printing.assignment_service import agent_printer_status_fields
 from ...services.printing.errors import PrintingError
 from ...services.printing.printer_service import (
     list_agent_printers,
@@ -26,6 +27,7 @@ logger = logging.getLogger(__name__)
 
 def _serialize_printer(row: Any) -> dict[str, Any]:
     agent = row.agent
+    status = agent_printer_status_fields(agent)
     return {
         "id": row.id,
         "agent_id": row.agent_id,
@@ -39,6 +41,7 @@ def _serialize_printer(row: Any) -> dict[str, Any]:
         "updated_at": row.updated_at,
         "agent_name": agent.name if agent else None,
         "machine_id": agent.machine_id if agent else None,
+        **status,
     }
 
 

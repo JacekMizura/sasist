@@ -23,6 +23,8 @@ class AgentPrinterRead(BaseModel):
     updated_at: datetime | None = None
     agent_name: str | None = None
     machine_id: str | None = None
+    agent_is_online: bool = False
+    agent_health_status: str = "offline"
 
     model_config = ConfigDict(from_attributes=True)
 

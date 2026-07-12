@@ -68,9 +68,8 @@ export default function AddComputerModal({ open, onClose }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [downloadInfo, setDownloadInfo] = useState<PrinterAgentDownloadInfo | null>(null);
   const [confirmRotateOpen, setConfirmRotateOpen] = useState(false);
+  const [copiedKey, setCopiedKey] = useState(false);
   const initRef = useRef(false);
-
-  const serverUrl = useMemo(() => getPrinterAgentServerUrl(), []);
   const resolvedDownload = useMemo(
     (): ResolvedPrinterAgentDownload => resolvePrinterAgentDownload(downloadInfo),
     [downloadInfo],
@@ -88,6 +87,7 @@ export default function AddComputerModal({ open, onClose }: Props) {
     setError(null);
     setDownloadInfo(null);
     setConfirmRotateOpen(false);
+    setCopiedKey(false);
     initRef.current = false;
   }, []);
 
@@ -131,8 +131,13 @@ export default function AddComputerModal({ open, onClose }: Props) {
   const handleCopyKey = async () => {
     if (!plainKey) return;
     const ok = await copyText(plainKey);
-    if (ok) toast.success("Klucz API skopiowany do schowka");
-    else toast.error("Nie udało się skopiować klucza.");
+    if (ok) {
+      toast.success("Skopiowano klucz API");
+      setCopiedKey(true);
+      window.setTimeout(() => setCopiedKey(false), 2000);
+    } else {
+      toast.error("Nie udało się skopiować klucza.");
+    }
   };
 
   const handleRotateKey = async () => {
@@ -248,7 +253,7 @@ export default function AddComputerModal({ open, onClose }: Props) {
                       onClick={() => void handleCopyKey()}
                     >
                       <Copy className="h-4 w-4" aria-hidden />
-                      Kopiuj
+                      {copiedKey ? "Skopiowano" : "Kopiuj"}
                     </button>
                     <button
                       type="button"
@@ -277,7 +282,7 @@ export default function AddComputerModal({ open, onClose }: Props) {
               <ol className="list-decimal space-y-2 pl-5 text-sm text-slate-700">
                 <li>Uruchom Sasist Printer Agent.</li>
                 <li>Wejdź w <span className="font-medium">Ustawienia</span>.</li>
-                <li>Wklej klucz API (przycisk „Wklej ze schowka”).</li>
+                <li>Wklej klucz API (przycisk „Wklej”).</li>
                 <li>Kliknij <span className="font-medium">Test połączenia</span>.</li>
                 <li>Kliknij <span className="font-medium">Zapisz</span>.</li>
               </ol>

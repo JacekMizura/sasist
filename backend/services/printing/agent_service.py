@@ -12,6 +12,7 @@ from ...models.printing.printer_agent import PrinterAgent
 from ...models.integration_api_key import IntegrationApiKey
 from ...schemas.printing.agent import AgentRegisterRequest
 from .agent_auth_service import generate_agent_token, hash_agent_token
+from .assignment_service import remap_printing_defaults_for_agent
 from .printer_service import sync_agent_printers
 
 
@@ -57,6 +58,7 @@ def _upsert_registered_agent(
         agent.updated_at = now
 
     sync_agent_printers(db, agent, payload.printers)
+    remap_printing_defaults_for_agent(db, agent)
     db.commit()
     db.refresh(agent)
     return agent, plain_token

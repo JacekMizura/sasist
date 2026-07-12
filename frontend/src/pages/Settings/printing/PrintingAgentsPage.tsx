@@ -127,7 +127,7 @@ export default function PrintingAgentsPage() {
   const copyMachineId = async (machineId: string) => {
     try {
       await navigator.clipboard.writeText(machineId);
-      toast.success("Skopiowano Machine ID");
+      toast.success("Skopiowano identyfikator maszyny");
     } catch {
       toast.error("Kopiowanie nie powiodło się");
     }
@@ -168,8 +168,8 @@ export default function PrintingAgentsPage() {
 
       <PrintingKpiGrid
         items={[
-          { label: "Online", value: kpis.online, tone: "success" },
-          { label: "Offline", value: kpis.offline, tone: "danger" },
+          { label: "Połączeni", value: kpis.online, tone: "success" },
+          { label: "Rozłączeni", value: kpis.offline, tone: "danger" },
           { label: "Drukarki", value: kpis.printers, tone: "primary" },
           { label: "Oczekujące zadania", value: kpis.pending, tone: "warning" },
         ]}
@@ -193,14 +193,14 @@ export default function PrintingAgentsPage() {
           <PrintingTableHead>
             <tr>
               <PrintingTableHeadCell>Komputer</PrintingTableHeadCell>
-              <PrintingTableHeadCell>Machine ID</PrintingTableHeadCell>
+              <PrintingTableHeadCell>Identyfikator maszyny</PrintingTableHeadCell>
               <PrintingTableHeadCell>Wersja agenta</PrintingTableHeadCell>
-              <PrintingTableHeadCell>Release</PrintingTableHeadCell>
+              <PrintingTableHeadCell>Wersja wydania</PrintingTableHeadCell>
               <PrintingTableHeadCell>Status wersji</PrintingTableHeadCell>
               <PrintingTableHeadCell>Magazyn</PrintingTableHeadCell>
               <PrintingTableHeadCell>Drukarki</PrintingTableHeadCell>
               <PrintingTableHeadCell>Status</PrintingTableHeadCell>
-              <PrintingTableHeadCell>Ostatni heartbeat</PrintingTableHeadCell>
+              <PrintingTableHeadCell>Ostatnia sygnatura życia</PrintingTableHeadCell>
               <PrintingTableHeadCell>Akcje</PrintingTableHeadCell>
             </tr>
           </PrintingTableHead>
