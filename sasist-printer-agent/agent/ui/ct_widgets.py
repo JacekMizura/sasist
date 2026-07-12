@@ -31,11 +31,12 @@ def apply_window_icon(window: ctk.CTk | ctk.CTkToplevel) -> None:
 
 def card(parent: ctk.CTkBaseClass, title: str) -> ctk.CTkFrame:
     outer = ctk.CTkFrame(parent, fg_color=T.CARD, corner_radius=T.CORNER_RADIUS, border_width=1, border_color=T.BORDER)
+    outer.pack(fill="x", pady=(0, T.PAD))
     ctk.CTkLabel(outer, text=title, font=T.FONT_SECTION, text_color=T.TEXT, anchor="w").pack(
         fill="x", padx=T.PAD, pady=(T.PAD, 8)
     )
     body = ctk.CTkFrame(outer, fg_color="transparent")
-    body.pack(fill="both", expand=True, padx=T.PAD, pady=(0, T.PAD))
+    body.pack(fill="x", padx=T.PAD, pady=(0, T.PAD))
     return body
 
 
