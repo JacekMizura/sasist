@@ -38,6 +38,7 @@ export default function PrintingAgentsPage() {
   const [error, setError] = useState<string | null>(null);
   const [actionId, setActionId] = useState<number | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [addComputerOpen, setAddComputerOpen] = useState(false);
   const [pendingJobs, setPendingJobs] = useState(0);
 
   const load = useCallback(async () => {
