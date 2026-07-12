@@ -11,6 +11,11 @@ class AgentVersionResponse(BaseModel):
     mandatory: bool = False
 
 
+class AgentDownloadInfoResponse(BaseModel):
+    download_url: str
+    latest_version: str
+
+
 class PrintingAutoPrintRead(BaseModel):
     tenant_id: int
     labels: bool = False

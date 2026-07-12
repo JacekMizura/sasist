@@ -110,3 +110,8 @@ export type PrintJobParentSummary = {
 export type PrintJobDetailRead = PrintJobRead & {
   parent_job?: PrintJobParentSummary | null;
 };
+
+export type PrinterAgentDownloadInfo = {
+  download_url: string;
+  latest_version: string;
+};

@@ -126,7 +126,13 @@ export default function PrintingAgentsPage() {
           </table>
         </div>
       )}
-      <AddComputerModal open={addComputerOpen} onClose={() => setAddComputerOpen(false)} />
+      <AddComputerModal
+        open={addComputerOpen}
+        onClose={() => {
+          setAddComputerOpen(false);
+          void load();
+        }}
+      />
     </div>
   );
 }

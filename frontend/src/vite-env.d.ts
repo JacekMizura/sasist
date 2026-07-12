@@ -11,4 +11,12 @@ interface ImportMetaEnv {
   readonly VITE_API_PROXY_TARGET?: string;
   /** WMS receiving: show dev EAN scanner panel when `"true"` (also shown in `import.meta.env.DEV` without this). */
   readonly VITE_ENABLE_DEV_SCANNER?: string;
+  /** Printer Agent onboarding: server URL shown to operators (e.g. https://sasist.pl). */
+  readonly VITE_PRINTER_AGENT_SERVER_URL?: string;
+  /** Printer Agent onboarding: installer download URL override. */
+  readonly VITE_PRINTER_AGENT_DOWNLOAD_URL?: string;
+}
+
+interface ImportMeta {
+  readonly env: ImportMetaEnv;
 }

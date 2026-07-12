@@ -3,6 +3,7 @@ import type {
   AgentPrinterRead,
   PrintJobDetailRead,
   PrintJobRead,
+  PrinterAgentDownloadInfo,
   PrinterAgentRead,
   PrintingAutoPrintRead,
   PrintingDefaultsRead,
@@ -18,6 +19,21 @@ export async function fetchPrintingAgents(
     params: { tenant_id: tenantId, warehouse_id: warehouseId ?? undefined },
   });
   return Array.isArray(data) ? data : [];
+}
+
+/** Best-effort — returns null when endpoint is unavailable (UI uses static fallback). */
+export async function fetchPrinterAgentDownloadInfo(
+  tenantId: number,
+): Promise<PrinterAgentDownloadInfo | null> {
+  try {
+    const { data } = await api.get<PrinterAgentDownloadInfo>("/printing/agent/download-info", {
+      params: { tenant_id: tenantId },
+    });
+    if (!data?.download_url) return null;
+    return data;
+  } catch {
+    return null;
+  }
 }
 
 export async function fetchAgentPrinters(
