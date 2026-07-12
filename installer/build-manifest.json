@@ -1,0 +1,10 @@
+﻿{
+    "version":  "1.0.1",
+    "built_at":  "2026-07-12T09:56:18Z",
+    "git_commit":  "c706dd26ec7a432fb635d4707ee9ff997edc7016",
+    "agent_sha256":  "b5fa6008ccd782cfa01bbd452ad04d5aef3e6ad52813fff9ad4afea2185cf2cc",
+    "service_sha256":  "c0643b89de8c4757c27761be7705b2b84c836e978d1eee90a870582d2f3d8107",
+    "updater_sha256":  "9df3fdc893bc6d4492da044470cfddcda52f6429ba7c39c2835e9063b8f06046",
+    "setup_sha256":  "80c402e755f305aa0e0b49b306d096bb941f4613741f2f78d1474d938e91e420"
+}
+
