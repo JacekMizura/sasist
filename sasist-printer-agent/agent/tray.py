@@ -13,10 +13,8 @@ from PIL import Image, ImageDraw
 
 from .config import save_config
 from .runtime import AgentRuntime
-from .ui.config_dialog import ConfigDialog
 from .ui.host import get_ui_host
-from .ui.log_viewer_window import LogViewerWindow
-from .ui.status_window import StatusWindow
+from .ui.main_window import MainWindow
 
 logger = logging.getLogger(__name__)
 
@@ -58,44 +56,27 @@ class TrayApp:
     def __init__(self, ctx: TrayContext) -> None:
         self._ctx = ctx
         self._icon = None
-        get_ui_host().ensure_started()
-        self._status_window = StatusWindow(
-            self._ctx.runtime,
-            on_open_config=lambda: self._open_config(None, None),
-            on_open_logs=lambda: self._open_logs(None, None),
-            on_sync=lambda: self._sync_printers(None, None),
-            on_test_page=lambda: self._test_page(None, None),
-        )
-        self._config_dialog: ConfigDialog | None = None
-        self._log_viewer: LogViewerWindow | None = None
+        self._host = get_ui_host()
+        self._host.ensure_started()
+        self._host.set_main_window_factory(self._create_main_window)
 
-    def _show_status(self, _icon, _item) -> None:
-        self._status_window.show()
-
-    def _open_config(self, _icon, _item) -> None:
-        cfg = self._ctx.runtime.config
-        if not cfg:
-            return
-        cfg.config_path.parent.mkdir(parents=True, exist_ok=True)
-        if not cfg.config_path.exists():
-            save_config(cfg)
-
+    def _create_main_window(self, app) -> MainWindow:
         def _on_saved(updated) -> None:
             self._ctx.runtime.config = updated
 
-        if self._config_dialog is None:
-            self._config_dialog = ConfigDialog(cfg, on_saved=_on_saved)
-        else:
-            self._config_dialog.update_config(cfg)
-        self._config_dialog.show()
+        return MainWindow(app, self._ctx.runtime, on_saved=_on_saved)
 
-    def _open_logs(self, _icon, _item) -> None:
+    def _open_main(self, _icon, _item) -> None:
         cfg = self._ctx.runtime.config
-        if not cfg:
-            return
-        if self._log_viewer is None:
-            self._log_viewer = LogViewerWindow(cfg.log_path.parent)
-        self._log_viewer.show()
+        if cfg:
+            cfg.config_path.parent.mkdir(parents=True, exist_ok=True)
+            if not cfg.config_path.exists():
+                save_config(cfg)
+            host = get_ui_host()
+            window = host.main_window
+            if window is not None:
+                window.update_config(cfg)
+        get_ui_host().show_main_window("status")
 
     def _sync_printers(self, _icon, _item) -> None:
         try:
@@ -121,12 +102,9 @@ class TrayApp:
         import pystray
 
         menu = pystray.Menu(
-            pystray.MenuItem("Status", self._show_status, default=True),
+            pystray.MenuItem("Otwórz Sasist Printer Agent", self._open_main, default=True),
             pystray.MenuItem("Synchronizuj drukarki", self._sync_printers),
             pystray.MenuItem("Wydruk testowy", self._test_page),
-            pystray.Menu.SEPARATOR,
-            pystray.MenuItem("Logi", self._open_logs),
-            pystray.MenuItem("Ustawienia", self._open_config),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("Restart aplikacji", self._restart),
             pystray.MenuItem("Wyjście", self._exit),

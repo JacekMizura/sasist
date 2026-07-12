@@ -3,6 +3,8 @@
 
 from pathlib import Path
 
+from PyInstaller.utils.hooks import collect_data_files
+
 project_root = Path(SPECPATH)
 
 a = Analysis(
@@ -15,6 +17,7 @@ a = Analysis(
         (str(project_root / "assets" / "icon-32.png"), "assets"),
         (str(project_root / "assets" / "sasist-logo.png"), "assets"),
         (str(project_root / "config" / "config.example.json"), "config"),
+        *collect_data_files("customtkinter"),
     ],
     hiddenimports=[
         "win32print",
@@ -24,6 +27,7 @@ a = Analysis(
         "PIL",
         "PIL._imagingtk",
         "PIL._tkinter_finder",
+        "customtkinter",
         "requests",
         "urllib3",
         "certifi",
@@ -49,14 +53,16 @@ a = Analysis(
         "agent.build_info",
         "agent.ui",
         "agent.ui.theme",
+        "agent.ui.ct_widgets",
+        "agent.ui.main_window",
+        "agent.ui.panels",
+        "agent.ui.panels.status_panel",
+        "agent.ui.panels.logs_panel",
+        "agent.ui.panels.settings_panel",
         "agent.ui.widgets",
         "agent.ui.host",
         "agent.ui.dialogs",
-        "agent.ui.window_registry",
         "agent.ui_smoke_test",
-        "agent.ui.status_window",
-        "agent.ui.config_dialog",
-        "agent.ui.log_viewer_window",
         "agent.print_errors",
     ],
     hookspath=[],

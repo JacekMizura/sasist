@@ -12,13 +12,15 @@ import tempfile
 from pathlib import Path
 
 REQUIRED_UI_MODULES = (
-    "agent.ui.widgets",
-    "agent.ui.log_viewer_window",
-    "agent.ui.status_window",
-    "agent.ui.config_dialog",
+    "agent.ui.theme",
+    "agent.ui.ct_widgets",
+    "agent.ui.main_window",
+    "agent.ui.panels.status_panel",
+    "agent.ui.panels.logs_panel",
+    "agent.ui.panels.settings_panel",
     "agent.ui.host",
+    "agent.ui.widgets",
     "agent.ui.dialogs",
-    "agent.ui.window_registry",
 )
 
 UI_MISSING_MESSAGE = "Installer was built without the new UI modules."

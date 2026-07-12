@@ -5,16 +5,14 @@ from __future__ import annotations
 import os
 import sys
 import tempfile
-import tkinter as tk
 from pathlib import Path
+
+import customtkinter as ctk
 
 from .config import AgentConfig, load_config, save_config
 from .runtime.core import AgentRuntime, RuntimeState
-from .ui.config_dialog import ConfigDialog
 from .ui.host import get_ui_host
-from .ui.log_viewer_window import LogViewerWindow
-from .ui.status_window import StatusWindow
-from .ui.window_registry import WindowRegistry
+from .ui.main_window import MainWindow
 
 
 def _mock_runtime(program_data: Path) -> AgentRuntime:
@@ -40,7 +38,7 @@ def _mock_runtime(program_data: Path) -> AgentRuntime:
 
 
 def run_ui_smoke_test() -> int:
-    """Open Status/Config/Logs twice, verify singleton windows, close cleanly."""
+    """Open main window tabs twice, verify singleton window, hide cleanly."""
     errors: list[str] = []
 
     with tempfile.TemporaryDirectory(prefix="sasist-ui-smoke-") as tmp:
@@ -52,43 +50,31 @@ def run_ui_smoke_test() -> int:
 
         def smoke() -> None:
             try:
-                root = host.root
-                if not isinstance(root, tk.Tk):
-                    errors.append("UI host root is not tk.Tk")
+                app = host.app
+                if not isinstance(app, ctk.CTk):
+                    errors.append("UI host root is not customtkinter.CTk")
                     return
 
-                status = StatusWindow(
-                    runtime,
-                    on_open_config=lambda: None,
-                    on_open_logs=lambda: None,
-                    on_sync=lambda: None,
-                    on_test_page=lambda: None,
-                )
-                config = ConfigDialog(runtime.config)
-                logs = LogViewerWindow(runtime.config.log_path.parent)
+                window = MainWindow(app, runtime)
+                window.show("status")
+                window.show("status")
+                if not host.is_main_window_visible():
+                    errors.append("Main window should be visible after show()")
 
-                status._open()
-                status._open()
-                if host.count_toplevel_windows() != 1:
-                    errors.append(f"Status: expected 1 Toplevel, got {host.count_toplevel_windows()}")
+                window.select_tab("settings")
+                window.select_tab("settings")
+                window.select_tab("logs")
+                window.select_tab("logs")
 
-                config._open()
-                config._open()
-                if host.count_toplevel_windows() != 2:
-                    errors.append(f"Config: expected 2 Toplevels, got {host.count_toplevel_windows()}")
+                if MainWindow.instance() is not window:
+                    errors.append("MainWindow singleton mismatch")
 
-                logs._open()
-                logs._open()
-                if host.count_toplevel_windows() != 3:
-                    errors.append(f"Logs: expected 3 Toplevels, got {host.count_toplevel_windows()}")
+                window.hide()
+                if host.is_main_window_visible():
+                    errors.append("Main window should be hidden after hide()")
 
-                if WindowRegistry.count() != 3:
-                    errors.append(f"WindowRegistry count expected 3, got {WindowRegistry.count()}")
-
-                WindowRegistry.close_all()
-                root.update_idletasks()
-                if host.count_toplevel_windows() != 0:
-                    errors.append(f"After close: expected 0 Toplevels, got {host.count_toplevel_windows()}")
+                window.show("settings")
+                window.hide()
             except Exception as exc:
                 errors.append(str(exc))
 
@@ -102,7 +88,7 @@ def run_ui_smoke_test() -> int:
             print(f"[ui-smoke] FAIL: {line}", file=sys.stderr)
         return 1
 
-    print("[ui-smoke] PASS: Status, Config, Logs opened; singleton enforced; clean close")
+    print("[ui-smoke] PASS: MainWindow tabs opened; singleton enforced; clean hide")
     sys.stdout.flush()
     return 0
 

@@ -243,22 +243,14 @@ python -m PyInstaller updater.spec
 $agentExe = Join-SafePath $DistRoot "SasistPrinterAgent.exe"
 $serviceExe = Join-SafePath $DistRoot "SasistPrinterService.exe"
 $updaterExe = Join-SafePath $DistRoot "SasistPrinterUpdater.exe"
-$required = @(
-    @{ Name = "SasistPrinterAgent.exe"; Path = $agentExe },
-    @{ Name = "SasistPrinterService.exe"; Path = $serviceExe },
-    @{ Name = "SasistPrinterUpdater.exe"; Path = $updaterExe }
-)
-foreach ($item in $required) {
-    if (-not (Test-Path -LiteralPath $item.Path)) {
-        throw "Missing build artifact: $($item.Path)"
-    }
-}
 
-Write-Step "Validating SasistPrinterAgent.exe (UI modules + VERSION)..."
-Invoke-AgentExeValidation -AgentExePath $agentExe -ExpectedVersion $version -RepoRoot $RepoRoot
-
-Write-Step "UI smoke test (Status / Logi / Ustawienia)..."
-Invoke-AgentUiSmokeTest -AgentExePath $agentExe
+Write-Step "Validating local dist artifacts (Agent / Service / Updater)..."
+Invoke-LocalDistArtifactValidation `
+    -AgentExePath $agentExe `
+    -ServiceExePath $serviceExe `
+    -UpdaterExePath $updaterExe `
+    -ExpectedVersion $version `
+    -RepoRoot $RepoRoot
 
 Write-Step "Computing SHA256 for PyInstaller artifacts..."
 $agentSha = Write-FileSha256 "SasistPrinterAgent.exe" $agentExe
@@ -307,13 +299,11 @@ Write-Step "Installer created: $($setup.FullName)"
 $setupPath = $setup.FullName
 Assert-InstallerNameMatchesVersion -InstallerPath $setupPath -ExpectedVersion $version
 
-Write-Step "Validating SasistPrinterAgent.exe inside installer (UI modules + VERSION)..."
-$installerExtractDir = Join-SafePath $OutputRoot "_build_verify_extracted"
-$installerAgentExe = Extract-AgentExeFromInstaller -InstallerPath $setupPath -OutputDirectory $installerExtractDir
-if (-not $installerAgentExe) {
-    throw "Could not extract SasistPrinterAgent.exe from installer for validation. Install 7-Zip."
-}
-Invoke-AgentExeValidation -AgentExePath $installerAgentExe -ExpectedVersion $version -RepoRoot $RepoRoot
+Invoke-OptionalSetupValidation `
+    -InstallerPath $setupPath `
+    -ExpectedVersion $version `
+    -RepoRoot $RepoRoot `
+    -ExtractDirectory (Join-SafePath $OutputRoot "_build_verify_extracted") | Out-Null
 
 $localSetupHash = (Get-FileHash -LiteralPath $setupPath -Algorithm SHA256).Hash.ToLowerInvariant()
 Write-Host "[build] Local setup hash: $localSetupHash"

@@ -1,28 +1,37 @@
-"""Sasist Printer Agent — shared UI theme tokens."""
+"""Sasist Printer Agent — CustomTkinter theme tokens."""
 
 PRIMARY = "#F97316"
 PRIMARY_HOVER = "#EA580C"
-PRIMARY_LIGHT = "#FFEDD5"
 BG = "#FFF7ED"
 CARD = "#FFFFFF"
 BORDER = "#FED7AA"
 SUCCESS = "#22C55E"
-SUCCESS_LIGHT = "#DCFCE7"
 DANGER = "#DC2626"
-DANGER_LIGHT = "#FEE2E2"
 WARNING = "#F59E0B"
-NEUTRAL_BG = "#F8FAFC"
-NEUTRAL_TEXT = "#1E293B"
-MUTED_TEXT = "#64748B"
+TEXT = "#1E293B"
+MUTED = "#64748B"
+SIDEBAR = "#FFEDD5"
 PREVIEW_BG = "#FFFBF5"
 
-FONT_FAMILY = ("Segoe UI", 10)
-FONT_FAMILY_BOLD = ("Segoe UI", 10, "bold")
-FONT_TITLE = ("Segoe UI", 16, "bold")
-FONT_SECTION = ("Segoe UI", 11, "bold")
-FONT_SMALL = ("Segoe UI", 9)
-FONT_MONO = ("Consolas", 10)
+CORNER_RADIUS = 12
+CORNER_RADIUS_SM = 8
+PAD = 16
 
-PADDING = 18
-CARD_PADX = 16
-CARD_PADY = 14
+FONT = ("Segoe UI", 13)
+FONT_BOLD = ("Segoe UI", 13, "bold")
+FONT_TITLE = ("Segoe UI", 18, "bold")
+FONT_SECTION = ("Segoe UI", 14, "bold")
+FONT_SMALL = ("Segoe UI", 11)
+FONT_MONO = ("Consolas", 11)
+
+# Legacy Tk setup wizard aliases
+PADDING = PAD
+CARD_PADX = PAD
+CARD_PADY = PAD
+FONT_FAMILY = FONT
+FONT_FAMILY_BOLD = FONT_BOLD
+MUTED_TEXT = MUTED
+NEUTRAL_TEXT = TEXT
+PRIMARY_LIGHT = BORDER
+SUCCESS_LIGHT = "#DCFCE7"
+DANGER_LIGHT = "#FEE2E2"
