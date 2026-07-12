@@ -70,6 +70,7 @@ class TrayApp:
 
     def _show_status(self, _icon, _item) -> None:
         def _open() -> None:
+            print("[UI] Opening StatusWindow:", StatusWindow)
             StatusWindow(
                 self._ctx.runtime,
                 on_open_config=lambda: self._open_config(None, None),
@@ -86,6 +87,7 @@ class TrayApp:
             return
 
         def _open() -> None:
+            print("[UI] Opening ConfigDialog:", ConfigDialog)
             cfg.config_path.parent.mkdir(parents=True, exist_ok=True)
             if not cfg.config_path.exists():
                 save_config(cfg)
@@ -104,6 +106,7 @@ class TrayApp:
 
         def _open() -> None:
             log_dir = cfg.log_path.parent
+            print("[UI] Opening LogViewerWindow:", LogViewerWindow, "log_dir=", log_dir)
             LogViewerWindow(log_dir).show()
 
         threading.Thread(target=lambda: self._run_ui(_open), daemon=True).start()

@@ -67,6 +67,9 @@ import {
   PrintQueueWorkflowStep,
   humanizeCsvSanitizeWarning,
 } from "./printQueue/printQueueUi";
+import { useLabelPrintingPrinters } from "./hooks/useLabelPrintingPrinters";
+import { LabelPrintingProfileField } from "./printQueue/LabelPrintingProfileField";
+import { formatProfileSummaryLabel } from "./printQueue/labelProfileDisplay";
 
 const TENANT_ID = 1;
 
@@ -154,12 +157,15 @@ export function LabelPrintQueue({ template }: Props) {
   const [locationPreviewLoading, setLocationPreviewLoading] = useState(false);
   const [rackPreviewTemplate, setRackPreviewTemplate] = useState<LabelTemplate | null>(null);
   const [rackPreviewLoading, setRackPreviewLoading] = useState(false);
-  const [printers, setPrinters] = useState<Printer[]>([]);
+  const { printers, profiles, legacyPrinters, agentPrinters, systemPrinters, setSystemPrinters, reloadPrinters } =
+    useLabelPrintingPrinters({
+      tenantId: TENANT_ID,
+      warehouseId: selectedWarehouseId,
+    });
   const [selectedPrinterId, setSelectedPrinterId] = useState<number | null>(null);
   const [backendPdfFallbackWarning, setBackendPdfFallbackWarning] = useState(false);
   const [qzReady, setQzReady] = useState(false);
   const [qzChecking, setQzChecking] = useState(true);
-  const [systemPrinters, setSystemPrinters] = useState<string[] | null>(null);
   const [printing, setPrinting] = useState(false);
   /** Repeater strip: locations per physical label (auto = derive from template geometry). */
   const [labelDatasetItemsPerLabel, setLabelDatasetItemsPerLabel] = useState<"auto" | 3 | 5 | 10>("auto");
@@ -198,18 +204,6 @@ export function LabelPrintQueue({ template }: Props) {
       }
     })();
   }, [printMode, selectedCartId]);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await api.get<Printer[]>("/printers", { params: { tenant_id: TENANT_ID } });
-        const list = Array.isArray(res.data) ? res.data : [];
-        setPrinters(list);
-      } catch {
-        setPrinters([]);
-      }
-    })();
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -739,13 +733,21 @@ export function LabelPrintQueue({ template }: Props) {
 
   const handleDetectSystemPrinters = useCallback(async () => {
     try {
-      const list = await listSystemPrinters();
-      setSystemPrinters(list);
+      const qzList = qzReady ? await listSystemPrinters() : [];
+      const agentNames = agentPrinters
+        .filter((row) => row.is_active)
+        .map((row) => row.system_name)
+        .filter(Boolean);
+      const merged = [...new Set([...systemPrinters, ...agentNames, ...qzList].map((s) => s.trim()).filter(Boolean))];
+      merged.sort((a, b) => a.localeCompare(b, "pl"));
+      setSystemPrinters(merged);
     } catch (e) {
       console.error("List system printers failed:", e);
-      setSystemPrinters([]);
+      setSystemPrinters(
+        agentPrinters.filter((row) => row.is_active).map((row) => row.system_name).filter(Boolean),
+      );
     }
-  }, []);
+  }, [agentPrinters, qzReady, setSystemPrinters, systemPrinters]);
 
   const handleGenerateRackLabels = useCallback(async () => {
     setRackGenerating(true);
@@ -1154,9 +1156,9 @@ export function LabelPrintQueue({ template }: Props) {
   }, [printMode, csvTemplateParsed, locationPreviewTemplate, rackPreviewTemplate, template]);
 
   const summaryPrinterLabel = useMemo(() => {
-    const p = printers.find((x) => x.id === selectedPrinterId);
-    return p?.name?.trim() || "—";
-  }, [printers, selectedPrinterId]);
+    const printer = printers.find((row) => row.id === selectedPrinterId);
+    return formatProfileSummaryLabel(printer, legacyPrinters);
+  }, [printers, legacyPrinters, selectedPrinterId]);
 
   const labelsToPrintCount =
     printMode === "location" ? locationPageRecords.length
@@ -1180,9 +1182,9 @@ export function LabelPrintQueue({ template }: Props) {
           <div className="min-w-0 space-y-4 lg:col-span-8">
             <PrintQueueWorkflowStep
               step={2}
-              title="Wybierz szablon i drukarkę"
+              title="Wybierz szablon i profil drukowania"
             />
-            <PrintQueueSurfaceCard title="Szablon i drukarka">
+            <PrintQueueSurfaceCard title="Szablon i profil drukowania">
               <div className="grid gap-4 md:grid-cols-2">
                 {printMode === "csv_import" && (
                   <div className="space-y-2 md:col-span-2">
@@ -1236,21 +1238,17 @@ export function LabelPrintQueue({ template }: Props) {
                     </select>
                   </div>
                 )}
-                <div className="md:col-span-2">
-                  <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">Drukarka</label>
-                  <select
-                    value={selectedPrinterId ?? ""}
-                    onChange={(e) => setSelectedPrinterId(e.target.value ? Number(e.target.value) : null)}
-                    className="mt-1.5 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-2.5 py-2 text-sm text-slate-900 outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-300/40"
-                  >
-                    <option value="">— Bez profilu drukarki —</option>
-                    {printers.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <LabelPrintingProfileField
+                  tenantId={TENANT_ID}
+                  warehouseId={selectedWarehouseId}
+                  profiles={profiles}
+                  printers={printers}
+                  legacyPrinters={legacyPrinters}
+                  systemPrinters={systemPrinters}
+                  selectedPrinterId={selectedPrinterId}
+                  onSelectPrinterId={setSelectedPrinterId}
+                  onProfilesChanged={reloadPrinters}
+                />
               </div>
             </PrintQueueSurfaceCard>
 
@@ -2220,7 +2218,7 @@ export function LabelPrintQueue({ template }: Props) {
                   </dd>
                 </div>
                 <div className="flex justify-between gap-3">
-                  <dt className="text-slate-500">Drukarka (profil)</dt>
+                  <dt className="text-slate-500">Profil drukowania</dt>
                   <dd className="text-right font-medium text-slate-900">{summaryPrinterLabel}</dd>
                 </div>
               </dl>
@@ -2263,22 +2261,19 @@ export function LabelPrintQueue({ template }: Props) {
                     <button
                       type="button"
                       onClick={handleDetectSystemPrinters}
-                      disabled={!qzReady}
-                      className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-800 hover:bg-slate-50 disabled:opacity-50"
+                      className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-800 hover:bg-slate-50"
                     >
                       Odśwież listę drukarek
                     </button>
-                    {systemPrinters && (
-                      <ul className="list-disc list-inside text-xs text-slate-600 max-h-32 overflow-y-auto">
-                        {systemPrinters.length === 0 ? (
-                          <li>Nie wykryto drukarek — sprawdź sterowniki i udostępnienie drukarki w systemie.</li>
-                        ) : (
-                          systemPrinters.map((name, i) => (
-                            <li key={i}>{name}</li>
-                          ))
-                        )}
-                      </ul>
-                    )}
+                    <ul className="list-disc list-inside text-xs text-slate-600 max-h-32 overflow-y-auto">
+                      {systemPrinters.length === 0 ? (
+                        <li>Nie wykryto drukarek — sprawdź agenta Sasist Printer lub QZ Tray.</li>
+                      ) : (
+                        systemPrinters.map((name, i) => (
+                          <li key={i}>{name}</li>
+                        ))
+                      )}
+                    </ul>
                   </div>
                 </details>
               </div>

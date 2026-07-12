@@ -10,6 +10,7 @@ from typing import Callable
 
 from .api import ApiError, SasistApiClient
 from .config import AgentConfig
+from .print_errors import build_job_error_message, parse_job_error_message
 from .printing import cleanup_pdf, download_pdf, print_pdf
 
 logger = logging.getLogger(__name__)
@@ -60,6 +61,13 @@ class JobsWorker:
         if self._on_state_change:
             self._on_state_change(self.state)
 
+    @staticmethod
+    def _friendly_error_summary(error_message: str) -> str:
+        parsed = parse_job_error_message(error_message)
+        if parsed:
+            return str(parsed.get("friendly") or error_message)
+        return error_message
+
     def poll_once(self) -> None:
         self.state.last_poll_at = datetime.now()
         try:
@@ -106,17 +114,20 @@ class JobsWorker:
             self.state.last_processing_error = None
             logger.info("Job %s completed", job_id)
         except ApiError as exc:
-            logger.error("Job %s failed: %s", job_id, exc)
-            self.state.last_processing_error = str(exc)
+            error_msg = str(exc)
+            logger.error("Job %s failed: %s", job_id, error_msg)
+            self.state.last_processing_error = self._friendly_error_summary(error_msg)
             try:
-                self._client.mark_failed(int(job_id), str(exc))
+                self._client.mark_failed(int(job_id), error_msg)
             except ApiError as mark_exc:
                 logger.error("Could not mark job %s failed: %s", job_id, mark_exc)
         except Exception as exc:
             logger.exception("Unexpected error processing job %s", job_id)
-            self.state.last_processing_error = str(exc)
+            printer_name = str(job.get("system_name") or "").strip() or None
+            error_msg = build_job_error_message(exc, printer_name)
+            self.state.last_processing_error = self._friendly_error_summary(error_msg)
             try:
-                self._client.mark_failed(int(job_id), str(exc))
+                self._client.mark_failed(int(job_id), error_msg)
             except ApiError as mark_exc:
                 logger.error("Could not mark job %s failed: %s", job_id, mark_exc)
         finally:

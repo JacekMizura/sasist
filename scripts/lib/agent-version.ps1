@@ -44,7 +44,7 @@ function Set-AgentVersion {
     }
 
     $versionPath = Get-AgentVersionFilePath -RepoRoot $RepoRoot
-    ($normalized + [Environment]::NewLine) | Set-Content -LiteralPath $versionPath -Encoding UTF8
+    ($normalized + [Environment]::NewLine) | Set-Content -LiteralPath $versionPath -Encoding utf8NoBOM
 
     $exampleConfig = Join-Path $RepoRoot "sasist-printer-agent\config\config.example.json"
     if (Test-Path -LiteralPath $exampleConfig) {

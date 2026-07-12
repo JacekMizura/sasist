@@ -1,10 +1,10 @@
 ﻿{
-    "version":  "1.0.2",
-    "built_at":  "2026-07-12T10:33:30Z",
-    "git_commit":  "24623353a2d426bbef815ae2a962527bbd0601b4",
-    "agent_sha256":  "7eb9c42867e58d923c404d29486264db3dc4bf221d08d7c2f63fc7b4333f7d16",
-    "service_sha256":  "71abd7cf05e8d4216934c0af0d43a726bfa830ad0b71d3f558b5c0527df6a045",
-    "updater_sha256":  "5f265639ff02822df876f12b22f4b3828cd1485b687d373f928657e1d9734c4a",
-    "setup_sha256":  "8b740b13acf93540aef0aedf742f74471ebd5de8792479df2d1c418a78b1e878"
+    "version":  "1.0.3",
+    "built_at":  "2026-07-12T10:55:03Z",
+    "git_commit":  "51e55dbdc1a736c6e3668b0f0394ab9bb904e7e8",
+    "agent_sha256":  "5779959aca74d4807b9f75c21a04d788f2b141cdcbb2b3a66a354b0ed2d7c6bb",
+    "service_sha256":  "6e5771863e28b9df9a8c7779eb36babd3baaec5a24620fe41b1176a850282f56",
+    "updater_sha256":  "dff763196f70360fb6f4bfcfb134471568938d3c7961c302617d64a389827aad",
+    "setup_sha256":  "294b10a32c94bbadc068f7edcec26936cb60ec39b1a606530454b73faa72685f"
 }
 

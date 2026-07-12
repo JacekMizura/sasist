@@ -146,6 +146,37 @@ def list_agent_printers(
     return query.order_by(AgentPrinter.name.asc()).all()
 
 
+def list_system_printer_names(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int | None = None,
+    online_only: bool = False,
+) -> list[str]:
+    """Distinct OS printer names reported by active agent printers."""
+    from .agent_service import is_agent_online
+
+    rows = list_agent_printers(
+        db,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+    )
+    names: list[str] = []
+    seen: set[str] = set()
+    for row in rows:
+        if not row.is_active:
+            continue
+        agent = row.agent
+        if online_only and agent is not None and not is_agent_online(agent):
+            continue
+        system_name = (row.system_name or "").strip()
+        if not system_name or system_name in seen:
+            continue
+        seen.add(system_name)
+        names.append(system_name)
+    return sorted(names, key=str.casefold)
+
+
 def patch_agent_printer(
     db: Session,
     *,

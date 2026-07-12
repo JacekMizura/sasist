@@ -20,6 +20,7 @@ import {
   printJobStatusLabel,
   type PrintJobStatusFilter,
 } from "./printingQueuePresentation";
+import { parsePrintJobError, printJobErrorSummary } from "./printingErrorPresentation";
 import {
   PrintingAlert,
   PrintingDataTable,
@@ -133,10 +134,28 @@ function JobDetailModal({ job, onClose }: DetailModalProps) {
             </div>
           ) : null}
           {job.error_message ? (
-            <div className="sm:col-span-2">
-              <dt className="text-slate-500">Błąd</dt>
-              <dd className="text-red-600">{job.error_message}</dd>
-            </div>
+            (() => {
+              const err = parsePrintJobError(job.error_message);
+              if (!err) return null;
+              return (
+                <div className="sm:col-span-2 space-y-3 rounded-xl border border-red-200 bg-red-50/60 p-4">
+                  <div>
+                    <dt className="text-xs font-semibold uppercase tracking-wide text-red-800">Przyjazny opis</dt>
+                    <dd className="mt-1 text-sm font-medium text-red-900">{err.friendly}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-semibold uppercase tracking-wide text-slate-600">Błąd techniczny</dt>
+                    <dd className="mt-1 break-all font-mono text-xs text-slate-700">{err.technical}</dd>
+                  </div>
+                  {err.suggestion ? (
+                    <div>
+                      <dt className="text-xs font-semibold uppercase tracking-wide text-orange-700">Sugestia naprawy</dt>
+                      <dd className="mt-1 text-sm text-orange-900">{err.suggestion}</dd>
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })()
           ) : null}
         </dl>
 
@@ -300,7 +319,7 @@ export default function PrintingQueuePage() {
                 <PrintingTableCell>{formatDurationSeconds(row.duration_seconds)}</PrintingTableCell>
                 <PrintingTableCell>{row.copies ?? 1}</PrintingTableCell>
                 <PrintingTableCell className="max-w-[12rem] truncate text-red-600" title={row.error_message ?? undefined}>
-                  {row.error_message ?? "—"}
+                  {printJobErrorSummary(row.error_message)}
                 </PrintingTableCell>
                 <PrintingTableCell>
                   <div className="flex flex-wrap gap-2">

@@ -1,11 +1,15 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+import logging
+
 from ..database import get_db
 from ..models.printer_profile import PrinterProfile
 from ..schemas.printer_profile import PrinterProfilePayload, PrinterProfileResponse
 
 router = APIRouter(prefix="/printer-profiles", tags=["Printer Profiles"])
+
+logger = logging.getLogger(__name__)
 
 TENANT_ID = 1
 
@@ -22,6 +26,7 @@ def list_profiles(
         .order_by(PrinterProfile.name.asc())
         .all()
     )
+    logger.info("GET /printer-profiles tenant_id=%s -> %s profiles", tenant_id, len(rows))
     return [
         {
             "id": r.id,

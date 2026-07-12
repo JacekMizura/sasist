@@ -1,12 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
 
+import logging
+
 from ..database import get_db
 from ..models.printer import Printer
 from ..models.printer_profile import PrinterProfile
 from ..schemas.printer import PrinterPayload, PrinterResponse
 
 router = APIRouter(prefix="/printers", tags=["Printers"])
+
+logger = logging.getLogger(__name__)
 
 TENANT_ID = 1
 
@@ -55,6 +59,7 @@ def list_printers(
         .order_by(Printer.name.asc())
         .all()
     )
+    logger.info("GET /printers tenant_id=%s -> %s legacy printers", tenant_id, len(rows))
     return [_printer_to_response(r) for r in rows]
 
 

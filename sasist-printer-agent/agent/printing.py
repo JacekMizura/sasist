@@ -10,6 +10,7 @@ from typing import Any
 from urllib.parse import urljoin
 
 from .api import ApiError, SasistApiClient
+from .print_errors import build_job_error_message
 
 logger = logging.getLogger(__name__)
 
@@ -42,10 +43,12 @@ def print_pdf(file_path: Path, printer_name: str, *, copies: int = 1) -> None:
     try:
         import win32api
     except ImportError as exc:
-        raise ApiError(f"pywin32 required for printing: {exc}") from exc
+        raise ApiError(build_job_error_message(exc, printer_name)) from exc
 
     if not file_path.exists():
-        raise ApiError(f"PDF file not found: {file_path}")
+        raise ApiError(
+            build_job_error_message(ApiError(f"PDF file not found: {file_path}"), printer_name)
+        ) from None
 
     count = max(1, int(copies or 1))
     params = f'/d:"{printer_name}"'
@@ -57,9 +60,15 @@ def print_pdf(file_path: Path, printer_name: str, *, copies: int = 1) -> None:
             copy_idx + 1,
             count,
         )
-        result = win32api.ShellExecute(0, "print", str(file_path), params, ".", 0)
-        if isinstance(result, int) and result <= 32:
-            raise ApiError(f"ShellExecute failed with code {result} for printer {printer_name}")
+        try:
+            result = win32api.ShellExecute(0, "print", str(file_path), params, ".", 0)
+            if isinstance(result, int) and result <= 32:
+                shell_exc = RuntimeError(f"ShellExecute failed with code {result} for printer {printer_name}")
+                setattr(shell_exc, "winerror", result)
+                raise shell_exc
+        except Exception as exc:
+            info = map_print_error(exc, printer_name=printer_name)
+            raise ApiError(build_job_error_message(exc, printer_name)) from exc
 
 
 def cleanup_pdf(file_path: Path) -> None:

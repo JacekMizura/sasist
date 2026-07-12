@@ -21,6 +21,9 @@ from .widgets import (
 )
 
 
+print("[UI] New StatusWindow loaded")
+
+
 class StatusWindow:
     def __init__(
         self,

@@ -10,6 +10,8 @@ from tkinter import messagebox, ttk
 from . import theme as T
 from .widgets import apply_window_icon, configure_styles, primary_button, secondary_button
 
+print("[UI] New LogViewerWindow loaded")
+
 
 class LogViewerWindow:
     REFRESH_MS = 2500
@@ -21,6 +23,7 @@ class LogViewerWindow:
         self._refresh_job: str | None = None
 
     def show(self) -> None:
+        print("[UI] New LogViewerWindow loaded")
         self._log_dir.mkdir(parents=True, exist_ok=True)
 
         root = tk.Tk()

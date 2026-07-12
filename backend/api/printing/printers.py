@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query
@@ -12,10 +13,15 @@ from ...database import get_db
 from ...models.app_user import AppUser
 from ...schemas.printing.printer import AgentPrinterPatch, AgentPrinterRead
 from ...services.printing.errors import PrintingError
-from ...services.printing.printer_service import list_agent_printers, patch_agent_printer
+from ...services.printing.printer_service import (
+    list_agent_printers,
+    list_system_printer_names,
+    patch_agent_printer,
+)
 from ._helpers import raise_printing_error
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 def _serialize_printer(row: Any) -> dict[str, Any]:
@@ -36,6 +42,30 @@ def _serialize_printer(row: Any) -> dict[str, Any]:
     }
 
 
+@router.get("/printers/system", response_model=list[str])
+def get_system_printer_names(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int | None = Query(default=None, ge=1),
+    online_only: bool = Query(default=False),
+    _: AppUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    names = list_system_printer_names(
+        db,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        online_only=online_only,
+    )
+    logger.info(
+        "GET /printing/printers/system tenant_id=%s warehouse_id=%s online_only=%s -> %s names",
+        tenant_id,
+        warehouse_id,
+        online_only,
+        len(names),
+    )
+    return names
+
+
 @router.get("/printers", response_model=list[AgentPrinterRead])
 def get_agent_printers(
     tenant_id: int = Query(..., ge=1),
@@ -49,6 +79,15 @@ def get_agent_printers(
         tenant_id=tenant_id,
         warehouse_id=warehouse_id,
         agent_id=agent_id,
+    )
+    active_count = sum(1 for row in rows if row.is_active)
+    logger.info(
+        "GET /printing/printers tenant_id=%s warehouse_id=%s agent_id=%s -> %s printers (%s active)",
+        tenant_id,
+        warehouse_id,
+        agent_id,
+        len(rows),
+        active_count,
     )
     return [_serialize_printer(row) for row in rows]
 

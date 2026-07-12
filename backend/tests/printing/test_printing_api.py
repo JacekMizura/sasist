@@ -429,6 +429,16 @@ class TestPrintersAndDefaults(PrintingTestCase):
         self.assertEqual(cleared.status_code, 200)
         self.assertIsNone(cleared.json()["a4_printer_id"])
 
+    def test_system_printer_names_from_agent(self):
+        register_agent_via_api(self.client)
+        res = self.client.get("/api/printing/printers/system", params={"tenant_id": 1})
+        self.assertEqual(res.status_code, 200)
+        names = res.json()
+        self.assertIsInstance(names, list)
+        self.assertIn("ZDesigner", names)
+        self.assertIn("HP LaserJet", names)
+        self.assertEqual(len(names), len(set(names)))
+
 
 if __name__ == "__main__":
     unittest.main()

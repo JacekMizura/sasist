@@ -36,6 +36,20 @@ export async function fetchPrinterAgentDownloadInfo(
   }
 }
 
+export async function fetchSystemPrinters(
+  tenantId: number,
+  opts?: { warehouseId?: number | null; onlineOnly?: boolean },
+): Promise<string[]> {
+  const { data } = await api.get<string[]>("/printing/printers/system", {
+    params: {
+      tenant_id: tenantId,
+      warehouse_id: opts?.warehouseId ?? undefined,
+      online_only: opts?.onlineOnly ?? undefined,
+    },
+  });
+  return Array.isArray(data) ? data.filter((name) => typeof name === "string" && name.trim()) : [];
+}
+
 export async function fetchAgentPrinters(
   tenantId: number,
   opts?: { warehouseId?: number | null; agentId?: number | null },

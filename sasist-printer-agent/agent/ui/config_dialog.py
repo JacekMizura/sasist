@@ -21,6 +21,8 @@ from .widgets import (
 
 logger = logging.getLogger(__name__)
 
+print("[UI] New ConfigDialog loaded")
+
 
 class ConfigDialog:
     def __init__(self, config: AgentConfig, *, on_saved: Callable[[AgentConfig], None] | None = None) -> None:
@@ -28,6 +30,7 @@ class ConfigDialog:
         self._on_saved = on_saved
 
     def show(self) -> None:
+        print("[UI] New ConfigDialog loaded")
         root = tk.Tk()
         root.title("Sasist Printer Agent — Ustawienia")
         root.geometry("560x520")

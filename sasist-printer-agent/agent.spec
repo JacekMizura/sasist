@@ -53,6 +53,7 @@ a = Analysis(
         "agent.ui.status_window",
         "agent.ui.config_dialog",
         "agent.ui.log_viewer_window",
+        "agent.print_errors",
     ],
     hookspath=[],
     hooksconfig={},

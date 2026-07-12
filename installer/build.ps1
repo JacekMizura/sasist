@@ -33,9 +33,11 @@ $InstallerDir = Join-SafePath $RepoRoot "installer"
 $installerScript = Join-SafePath $InstallerDir "installer.iss"
 $ManifestPath = Join-SafePath $InstallerDir "build-manifest.json"
 $VersionLib = Join-SafePath $RepoRoot "scripts\lib\agent-version.ps1"
+$VerifyLib = Join-SafePath $RepoRoot "scripts\lib\agent-build-verify.ps1"
 $GithubRepo = if ($env:GITHUB_REPOSITORY) { $env:GITHUB_REPOSITORY.Trim() } else { "JacekMizura/sasist" }
 
 . $VersionLib
+. $VerifyLib
 
 function Write-Step([string]$Message) {
     Write-Host "[build] $Message" -ForegroundColor Cyan
@@ -252,6 +254,9 @@ foreach ($item in $required) {
     }
 }
 
+Write-Step "Validating SasistPrinterAgent.exe (UI modules + VERSION)..."
+Invoke-AgentExeValidation -AgentExePath $agentExe -ExpectedVersion $version -RepoRoot $RepoRoot
+
 Write-Step "Computing SHA256 for PyInstaller artifacts..."
 $agentSha = Write-FileSha256 "SasistPrinterAgent.exe" $agentExe
 $serviceSha = Write-FileSha256 "SasistPrinterService.exe" $serviceExe
@@ -297,6 +302,16 @@ if (-not $setup) {
 
 Write-Step "Installer created: $($setup.FullName)"
 $setupPath = $setup.FullName
+Assert-InstallerNameMatchesVersion -InstallerPath $setupPath -ExpectedVersion $version
+
+Write-Step "Validating SasistPrinterAgent.exe inside installer (UI modules + VERSION)..."
+$installerExtractDir = Join-SafePath $OutputRoot "_build_verify_extracted"
+$installerAgentExe = Extract-AgentExeFromInstaller -InstallerPath $setupPath -OutputDirectory $installerExtractDir
+if (-not $installerAgentExe) {
+    throw "Could not extract SasistPrinterAgent.exe from installer for validation. Install 7-Zip."
+}
+Invoke-AgentExeValidation -AgentExePath $installerAgentExe -ExpectedVersion $version -RepoRoot $RepoRoot
+
 $localSetupHash = (Get-FileHash -LiteralPath $setupPath -Algorithm SHA256).Hash.ToLowerInvariant()
 Write-Host "[build] Local setup hash: $localSetupHash"
 

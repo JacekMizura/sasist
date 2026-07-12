@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
@@ -36,6 +38,7 @@ from ._helpers import raise_printing_error
 
 router = APIRouter()
 _http_bearer = HTTPBearer(auto_error=False)
+logger = logging.getLogger(__name__)
 
 
 @router.post("/agents/register", response_model=AgentRegisterResponse)
@@ -152,4 +155,15 @@ def get_printing_agents(
     _: AppUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    return list_agents(db, tenant_id=tenant_id, warehouse_id=warehouse_id)
+    rows = list_agents(db, tenant_id=tenant_id, warehouse_id=warehouse_id)
+    online_count = sum(1 for row in rows if row.get("is_online"))
+    printer_count = sum(int(row.get("printer_count") or 0) for row in rows)
+    logger.info(
+        "GET /printing/agents tenant_id=%s warehouse_id=%s -> %s agents (%s online, %s printers)",
+        tenant_id,
+        warehouse_id,
+        len(rows),
+        online_count,
+        printer_count,
+    )
+    return rows

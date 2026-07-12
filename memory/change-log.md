@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-07-12 — Sasist Printer Agent release validation
+
+- `installer/build.ps1`: po PyInstaller walidacja PYZ (UI modules + VERSION); po Inno Setup walidacja nazwy instalatora i EXE wyciągniętego z setupu; exit 1 przy braku modułów UI.
+- `scripts/verify_agent_exe.py`: weryfikacja modułów `agent.ui.*` i spójności VERSION (utf-8-sig).
+- `scripts/verify-release.ps1`: SHA256 manifest vs lokalny build vs GitHub asset, UI modules, wynik PASS/FAIL.
+- CI: `verify-release.ps1 -SkipGithub` przed uploadem; pełna weryfikacja GitHub po publikacji tagu.
+
 ## 2026-07-11 — Integracja drukowania Sasist (frontend + orchestracja backend)
 
 - Backend: `POST /api/printing/jobs/queue` — generuje PDF server-side, zapisuje plik, tworzy PrintJob z `pdf_url` → `/jobs/{id}/file`.

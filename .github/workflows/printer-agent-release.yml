@@ -40,10 +40,10 @@ jobs:
         run: |
           powershell -ExecutionPolicy Bypass -File installer/build.ps1
 
-      - name: Verify release hash manifest
+      - name: Verify local release build
         shell: pwsh
         run: |
-          powershell -ExecutionPolicy Bypass -File scripts/verify-release.ps1
+          powershell -ExecutionPolicy Bypass -File scripts/verify-release.ps1 -SkipGithub
 
       - name: Upload GitHub Release asset
         uses: softprops/action-gh-release@v2
