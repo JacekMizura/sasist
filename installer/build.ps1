@@ -28,6 +28,7 @@ $RepoRoot = Split-Path -Parent $PSScriptRoot
 $AgentRoot = Join-SafePath $RepoRoot "sasist-printer-agent"
 $DistRoot = Join-SafePath $AgentRoot "dist"
 $BuildRoot = Join-SafePath $AgentRoot "build"
+$BuildUiAuditLog = Join-SafePath $AgentRoot "build-ui-audit.log"
 $OutputRoot = Join-SafePath $RepoRoot "Output"
 $InstallerDir = Join-SafePath $RepoRoot "installer"
 $installerScript = Join-SafePath $InstallerDir "installer.iss"
@@ -230,10 +231,30 @@ $builtAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss'Z'")
 Set-Location $AgentRoot
 
 Write-Step "Cleaning stale PyInstaller artifacts..."
-Remove-Item $BuildRoot -Recurse -Force -ErrorAction SilentlyContinue
-Remove-Item $DistRoot -Recurse -Force -ErrorAction SilentlyContinue
+if (Test-Path -LiteralPath $DistRoot) {
+    Remove-Item -LiteralPath $DistRoot -Recurse -Force -ErrorAction Stop
+}
+if (Test-Path -LiteralPath $BuildRoot) {
+    Remove-Item -LiteralPath $BuildRoot -Recurse -Force -ErrorAction Stop
+}
+if (Test-Path -LiteralPath $DistRoot) {
+    throw "dist directory could not be removed. Some process is locking files."
+}
+if (Test-Path -LiteralPath $BuildRoot) {
+    throw "build directory could not be removed. Some process is locking files."
+}
 Get-ChildItem -Path $AgentRoot -Filter "*.spec.cache" -File -ErrorAction SilentlyContinue |
     Remove-Item -Force -ErrorAction SilentlyContinue
+
+Write-Host ("[build] Building from:")
+Write-Host (Resolve-Path .)
+Write-Host ("[build] main_window exists: {0}" -f (Test-Path -LiteralPath (Join-Path $AgentRoot "agent\ui\main_window.py")))
+Write-Host ("[build] status_window exists: {0}" -f (Test-Path -LiteralPath (Join-Path $AgentRoot "agent\ui\status_window.py")))
+$uiInventory = Get-ChildItem (Join-Path $AgentRoot "agent\ui") -Recurse -File -ErrorAction SilentlyContinue |
+    Select-Object FullName, Length, LastWriteTime
+$uiInventory | Format-Table -AutoSize | Out-String | Set-Content -LiteralPath $BuildUiAuditLog -Encoding (Get-Utf8Encoding)
+Write-Host ("[build] UI inventory log: {0}" -f $BuildUiAuditLog)
+Write-Host ($uiInventory | Format-Table -AutoSize | Out-String)
 
 Write-Step "PyInstaller: agent.spec"
 python -m PyInstaller agent.spec

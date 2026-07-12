@@ -6,6 +6,7 @@ from pathlib import Path
 from PyInstaller.utils.hooks import collect_data_files
 
 project_root = Path(SPECPATH)
+print("SPEC ROOT:", project_root)
 
 a = Analysis(
     [str(project_root / "agent" / "__main__.py")],
