@@ -17,7 +17,7 @@ router = APIRouter()
 
 @router.get("/agent/version", response_model=AgentVersionResponse)
 def get_agent_version(
-    tenant_id: int = Query(..., ge=1),
+    tenant_id: int | None = Query(default=None, ge=1),
     _=Depends(get_current_agent),
 ):
     return AgentVersionResponse(

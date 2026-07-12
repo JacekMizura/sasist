@@ -1,6 +1,6 @@
 """python -m agent"""
 
-from .app import main
+from agent.app import main
 
 if __name__ == "__main__":
     raise SystemExit(main())

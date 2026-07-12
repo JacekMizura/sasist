@@ -119,6 +119,9 @@ export function isNavPathActive(pathname: string, path: string): boolean {
   if (path === "/settings/printers") {
     return pathname === "/settings/printers" || pathname.startsWith("/settings/printers/");
   }
+  if (path === "/settings/integrations/api-keys") {
+    return pathname === path || pathname.startsWith("/settings/integrations/");
+  }
   if (path === "/settings/exports") {
     return pathname === "/settings/exports" || pathname.startsWith("/settings/exports/");
   }

@@ -30,6 +30,7 @@ import {
   UserCog,
   MessageSquare,
   FileText,
+  Key,
   Building2,
   Library,
 } from "lucide-react";
@@ -323,6 +324,17 @@ export const NAV_FLYOUT_CATEGORIES: NavCategoryConfig[] = [
             label: "Pule stanów",
             Icon: Layers,
             permissionsAny: ["settings.users", "settings.company"],
+          },
+        ],
+      },
+      {
+        title: "Integracje",
+        items: [
+          {
+            path: "/settings/integrations/api-keys",
+            label: "Klucze API",
+            Icon: Key,
+            permissionsAny: ["settings.users"],
           },
         ],
       },

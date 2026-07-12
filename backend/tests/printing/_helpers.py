@@ -7,6 +7,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from backend.db.printing_schema import ensure_printing_schema
+from backend.db.integration_api_keys_schema import ensure_integration_api_keys_schema
 
 
 def create_printing_test_engine():
@@ -16,11 +17,19 @@ def create_printing_test_engine():
         poolclass=StaticPool,
     )
     ensure_printing_schema(engine)
+    ensure_integration_api_keys_schema(engine)
+    from backend.models.app_user import AuditLog
+    from sqlalchemy.schema import CreateTable
+
+    with engine.begin() as conn:
+        conn.execute(text(str(CreateTable(AuditLog.__table__).compile(dialect=engine.dialect))))
     with engine.begin() as conn:
         conn.execute(text("CREATE TABLE IF NOT EXISTS tenants (id INTEGER PRIMARY KEY)"))
         conn.execute(text("INSERT INTO tenants (id) VALUES (1), (2)"))
-        conn.execute(text("CREATE TABLE IF NOT EXISTS warehouses (id INTEGER PRIMARY KEY)"))
-        conn.execute(text("INSERT INTO warehouses (id) VALUES (1), (2)"))
+        conn.execute(text("CREATE TABLE IF NOT EXISTS warehouses (id INTEGER PRIMARY KEY, name TEXT)"))
+        conn.execute(text("INSERT INTO warehouses (id, name) VALUES (1, 'Main'), (2, 'Secondary')"))
+        conn.execute(text("CREATE TABLE IF NOT EXISTS app_users (id INTEGER PRIMARY KEY)"))
+        conn.execute(text("INSERT INTO app_users (id) VALUES (1)"))
     return engine
 
 

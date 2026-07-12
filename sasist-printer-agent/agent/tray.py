@@ -55,7 +55,7 @@ def _format_status(ctx: TrayContext) -> str:
         f"Agent ID: {cfg.agent_id if cfg and cfg.agent_id else '—'}",
         f"Machine ID: {cfg.machine_id if cfg else '—'}",
         f"Komputer: {cfg.computer_name if cfg else '—'}",
-        f"Magazyn: {cfg.warehouse_id if cfg else '—'}",
+        f"Magazyn: {cfg.warehouse_id if cfg and cfg.warehouse_id else '—'}",
         f"Drukarki: {ctx.runtime.state.printer_count}",
         f"Ostatni heartbeat: {last_hb}",
         f"Ostatni poll: {last_poll}",

@@ -38,6 +38,8 @@ class AgentRegisterResponse(BaseModel):
     agent_id: int
     token: str
     machine_id: str
+    tenant_id: int | None = None
+    warehouse_id: int | None = None
 
 
 class AgentHeartbeatRequest(BaseModel):

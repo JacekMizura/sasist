@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
+from ...auth.api_key_deps import client_ip_from_request, user_agent_from_request
 from ...auth.deps import get_current_user
 from ...database import get_db
 from ...models.app_user import AppUser
@@ -16,12 +18,15 @@ from ...schemas.printing.agent import (
     AgentRegisterResponse,
     PrinterAgentRead,
 )
+from ...services.api_keys.api_key_service import extract_raw_api_key, validate_key
+from ...services.api_keys.errors import ApiKeyError, ApiKeyRateLimitError, ApiKeyValidationError
 from ...services.printing.agent_auth_service import get_current_agent
 from ...services.printing.agent_service import (
     is_agent_online,
     list_agents,
     record_agent_heartbeat,
     register_agent,
+    register_agent_with_api_key,
 )
 from ...services.printing.errors import PrintingError
 from ...services.printing.test_page_service import create_agent_test_page_job
@@ -30,19 +35,54 @@ from ...schemas.printing.job import PrintJobRead
 from ._helpers import raise_printing_error
 
 router = APIRouter()
+_http_bearer = HTTPBearer(auto_error=False)
 
 
 @router.post("/agents/register", response_model=AgentRegisterResponse)
 def register_printing_agent(
     payload: AgentRegisterRequest,
-    tenant_id: int = Query(..., ge=1),
+    request: Request,
+    tenant_id: int | None = Query(default=None, ge=1),
+    cred: HTTPAuthorizationCredentials | None = Depends(_http_bearer),
     db: Session = Depends(get_db),
 ):
+    api_key_raw = extract_raw_api_key(cred)
+
     try:
-        agent, token = register_agent(db, tenant_id=tenant_id, payload=payload)
+        if api_key_raw:
+            api_key = validate_key(
+                db,
+                api_key_raw,
+                expected_type="printer_agent",
+                required_scope="printing.agent",
+                client_ip=client_ip_from_request(request),
+                user_agent=user_agent_from_request(request),
+            )
+            agent, token = register_agent_with_api_key(db, api_key=api_key, payload=payload)
+            db.commit()
+        elif tenant_id is not None:
+            agent, token = register_agent(db, tenant_id=tenant_id, payload=payload)
+        else:
+            raise HTTPException(
+                status_code=401,
+                detail="Authorization Bearer API key required (legacy: tenant_id query param)",
+            )
+    except ApiKeyRateLimitError as exc:
+        raise HTTPException(status_code=429, detail=str(exc)) from exc
+    except ApiKeyValidationError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    except ApiKeyError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except PrintingError as exc:
         raise_printing_error(exc)
-    return AgentRegisterResponse(agent_id=agent.id, token=token, machine_id=agent.machine_id)
+
+    return AgentRegisterResponse(
+        agent_id=agent.id,
+        token=token,
+        machine_id=agent.machine_id,
+        tenant_id=agent.tenant_id,
+        warehouse_id=agent.warehouse_id,
+    )
 
 
 @router.post("/agents/heartbeat", response_model=AgentHeartbeatResponse)

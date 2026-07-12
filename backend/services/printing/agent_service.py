@@ -9,9 +9,57 @@ from sqlalchemy.orm import Session
 from ...models.printing.agent_printer import AgentPrinter
 from ...models.printing.constants import OFFLINE_THRESHOLD_MINUTES, STALE_HEARTBEAT_SECONDS
 from ...models.printing.printer_agent import PrinterAgent
+from ...models.integration_api_key import IntegrationApiKey
 from ...schemas.printing.agent import AgentRegisterRequest
 from .agent_auth_service import generate_agent_token, hash_agent_token
 from .printer_service import sync_agent_printers
+
+
+def _upsert_registered_agent(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int | None,
+    payload: AgentRegisterRequest,
+) -> tuple[PrinterAgent, str]:
+    now = datetime.utcnow()
+    agent = (
+        db.query(PrinterAgent)
+        .filter(
+            PrinterAgent.tenant_id == tenant_id,
+            PrinterAgent.machine_id == payload.machine_id.strip(),
+        )
+        .first()
+    )
+    plain_token = generate_agent_token()
+    token_hash = hash_agent_token(plain_token)
+
+    if agent is None:
+        agent = PrinterAgent(
+            tenant_id=tenant_id,
+            machine_id=payload.machine_id.strip(),
+            name=payload.name.strip(),
+            token_hash=token_hash,
+            version=payload.version,
+            warehouse_id=warehouse_id,
+            last_seen_at=now,
+            is_online=True,
+        )
+        db.add(agent)
+        db.flush()
+    else:
+        agent.name = payload.name.strip()
+        agent.version = payload.version
+        agent.warehouse_id = warehouse_id
+        agent.token_hash = token_hash
+        agent.last_seen_at = now
+        agent.is_online = True
+        agent.updated_at = now
+
+    sync_agent_printers(db, agent, payload.printers)
+    db.commit()
+    db.refresh(agent)
+    return agent, plain_token
 
 
 def is_agent_online(agent: PrinterAgent, *, now: datetime | None = None) -> bool:
@@ -39,44 +87,38 @@ def register_agent(
     tenant_id: int,
     payload: AgentRegisterRequest,
 ) -> tuple[PrinterAgent, str]:
-    now = datetime.utcnow()
-    agent = (
-        db.query(PrinterAgent)
-        .filter(
-            PrinterAgent.tenant_id == tenant_id,
-            PrinterAgent.machine_id == payload.machine_id.strip(),
-        )
-        .first()
+    """Legacy registration — tenant_id and warehouse_id from request (deprecated)."""
+    warehouse_id = payload.warehouse_id
+    return _upsert_registered_agent(
+        db,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        payload=payload,
     )
-    plain_token = generate_agent_token()
-    token_hash = hash_agent_token(plain_token)
 
-    if agent is None:
-        agent = PrinterAgent(
-            tenant_id=tenant_id,
-            machine_id=payload.machine_id.strip(),
-            name=payload.name.strip(),
-            token_hash=token_hash,
-            version=payload.version,
-            warehouse_id=payload.warehouse_id,
-            last_seen_at=now,
-            is_online=True,
-        )
-        db.add(agent)
-        db.flush()
-    else:
-        agent.name = payload.name.strip()
-        agent.version = payload.version
-        agent.warehouse_id = payload.warehouse_id
-        agent.token_hash = token_hash
-        agent.last_seen_at = now
-        agent.is_online = True
-        agent.updated_at = now
 
-    sync_agent_printers(db, agent, payload.printers)
-    db.commit()
-    db.refresh(agent)
-    return agent, plain_token
+def register_agent_with_api_key(
+    db: Session,
+    *,
+    api_key: IntegrationApiKey,
+    payload: AgentRegisterRequest,
+) -> tuple[PrinterAgent, str]:
+    """Register agent scoped by integration API key (tenant + warehouse from key)."""
+    if api_key.type != "printer_agent":
+        from .errors import PrintingError
+
+        raise PrintingError("API key type must be printer_agent", status_code=403)
+    if api_key.warehouse_id is None:
+        from .errors import PrintingError
+
+        raise PrintingError("Printer agent API key is missing warehouse scope", status_code=403)
+
+    return _upsert_registered_agent(
+        db,
+        tenant_id=int(api_key.tenant_id),
+        warehouse_id=int(api_key.warehouse_id),
+        payload=payload,
+    )
 
 
 def record_agent_heartbeat(

@@ -12,7 +12,7 @@ SERVICE_DESCRIPTION = "Sasist local printing service."
 def main() -> int:
     if len(sys.argv) == 1:
         # Started by Service Control Manager
-        from .service import SasistPrinterService
+        from agent.service import SasistPrinterService
 
         import servicemanager
 
@@ -21,7 +21,7 @@ def main() -> int:
         servicemanager.StartServiceCtrlDispatcher()
         return 0
 
-    from .service import SasistPrinterService
+    from agent.service import SasistPrinterService
 
     import win32serviceutil
 

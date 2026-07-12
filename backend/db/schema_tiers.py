@@ -325,6 +325,7 @@ def _tier1_ensure_steps() -> list[tuple[str, Callable[[Engine], Any]]]:
         ("operational_feature_scopes", su.ensure_operational_feature_scopes_schema),
         ("inventory_count", su.ensure_inventory_count_schema),
         ("printing", su.ensure_printing_schema),
+        ("integration_api_keys", su.ensure_integration_api_keys_schema),
         ("slotting", su.ensure_slotting_schema),
     ]
 

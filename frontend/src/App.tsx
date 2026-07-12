@@ -84,6 +84,7 @@ import OrderPanelUiStatusesSettingsPage from "./pages/Settings/OrderPanelUiStatu
 import ComplaintPanelUiStatusesSettingsPage from "./pages/Settings/ComplaintPanelUiStatusesSettingsPage"
 import ShippingMethodsSettingsPage from "./pages/Settings/ShippingMethodsSettingsPage"
 import OfferStockPoolsSettingsPage from "./pages/Settings/OfferStockPoolsSettingsPage"
+import ApiKeysSettingsPage from "./pages/Settings/integrations/ApiKeysSettingsPage"
 import ExportsPage from "./pages/Settings/ExportsPage"
 import ExportEditorPage from "./pages/Settings/ExportEditorPage"
 import DocumentSeriesListPage from "./pages/documents/DocumentSeriesListPage"
@@ -571,6 +572,7 @@ export const router = createBrowserRouter(
                 <Route path="settings/complaints/ui-statuses" element={<ComplaintPanelUiStatusesSettingsPage />} />
                 <Route path="settings/shipping-methods" element={<ShippingMethodsSettingsPage />} />
                 <Route path="settings/sales/stock-pools" element={<OfferStockPoolsSettingsPage />} />
+                <Route path="settings/integrations/api-keys" element={<ApiKeysSettingsPage />} />
                 <Route path="settings/exports" element={<ExportsPage />} />
                 <Route path="settings/exports/new" element={<ExportEditorPage />} />
                 <Route path="settings/exports/:id" element={<ExportEditorPage />} />

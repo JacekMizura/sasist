@@ -5,7 +5,9 @@ from __future__ import annotations
 import logging
 import sys
 
+from .config import load_config
 from .runtime import AgentRuntime
+from .setup_wizard import run_first_run_setup
 from .tray import TrayApp, TrayContext, restart_process
 
 logger = logging.getLogger(__name__)
@@ -18,6 +20,9 @@ class AgentApplication:
 
     def run(self) -> int:
         try:
+            config = load_config()
+            if config.needs_first_run_setup():
+                config = run_first_run_setup(config)
             self.runtime.start()
             assert self.runtime.config is not None
             tray_ctx = TrayContext(

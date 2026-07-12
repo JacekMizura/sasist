@@ -29,13 +29,15 @@ class SasistApiClient:
         self,
         *,
         server_url: str,
-        tenant_id: int,
         token: str = "",
+        api_key: str = "",
+        tenant_id: int | None = None,
         timeout: int = DEFAULT_TIMEOUT,
     ) -> None:
         self.server_url = server_url.rstrip("/")
-        self.tenant_id = tenant_id
         self.token = token.strip()
+        self.api_key = api_key.strip()
+        self.tenant_id = tenant_id
         self.timeout = timeout
         self._session = Session()
 
@@ -45,9 +47,13 @@ class SasistApiClient:
     def _api_base(self) -> str:
         return f"{self.server_url}/api/printing"
 
-    def _headers(self, *, auth: bool = True) -> dict[str, str]:
+    def _headers(self, *, auth: bool = True, use_api_key: bool = False) -> dict[str, str]:
         headers = {"Accept": "application/json", "Content-Type": "application/json"}
-        if auth and self.token:
+        if not auth:
+            return headers
+        if use_api_key and self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        elif self.token:
             headers["Authorization"] = f"Bearer {self.token}"
         return headers
 
@@ -57,6 +63,7 @@ class SasistApiClient:
         path: str,
         *,
         auth: bool = True,
+        use_api_key: bool = False,
         params: dict[str, Any] | None = None,
         json_body: dict[str, Any] | None = None,
     ) -> Any:
@@ -68,7 +75,7 @@ class SasistApiClient:
                 response = self._session.request(
                     method,
                     url,
-                    headers=self._headers(auth=auth),
+                    headers=self._headers(auth=auth, use_api_key=use_api_key),
                     params=params,
                     json=json_body,
                     timeout=self.timeout,
@@ -118,13 +125,28 @@ class SasistApiClient:
         return body
 
     def register_agent(self, payload: dict[str, Any]) -> dict[str, Any]:
-        result = self._request(
-            "POST",
-            "/agents/register",
-            auth=False,
-            params={"tenant_id": self.tenant_id},
-            json_body=payload,
-        )
+        register_payload = dict(payload)
+        register_payload.pop("warehouse_id", None)
+
+        if self.api_key:
+            result = self._request(
+                "POST",
+                "/agents/register",
+                auth=True,
+                use_api_key=True,
+                json_body=register_payload,
+            )
+        elif self.tenant_id is not None:
+            result = self._request(
+                "POST",
+                "/agents/register",
+                auth=False,
+                params={"tenant_id": self.tenant_id},
+                json_body=payload,
+            )
+        else:
+            raise ApiError("api_key or legacy tenant_id is required for registration")
+
         if not isinstance(result, dict):
             raise ApiError("Invalid register response")
         return result
@@ -197,11 +219,14 @@ class SasistApiClient:
         raise ApiError(f"PDF download failed: {last_error}")
 
     def get_agent_version(self) -> dict[str, Any]:
+        params: dict[str, Any] = {}
+        if self.tenant_id is not None:
+            params["tenant_id"] = self.tenant_id
         result = self._request(
             "GET",
             "/agent/version",
             auth=True,
-            params={"tenant_id": self.tenant_id},
+            params=params or None,
         )
         if not isinstance(result, dict):
             raise ApiError("Invalid version response")

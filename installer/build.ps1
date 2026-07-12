@@ -12,20 +12,35 @@ $RepoRoot = Split-Path -Parent $PSScriptRoot
 $AgentRoot = Join-Path $RepoRoot "sasist-printer-agent"
 $DistRoot = Join-Path $AgentRoot "dist"
 $OutputRoot = Join-Path $RepoRoot "Output"
-$IssFile = Join-Path $RepoRoot "installer\installer.iss"
+$installerScript = Join-Path $RepoRoot "installer\installer.iss"
 
 function Write-Step([string]$Message) {
     Write-Host "[build] $Message" -ForegroundColor Cyan
 }
 
-function Find-InnoSetup {
-    $candidates = @(
-        "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
-        "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
-    )
-    foreach ($path in $candidates) {
-        if (Test-Path $path) { return $path }
+function Search-IsccOnDrives {
+    foreach ($drive in Get-PSDrive -PSProvider FileSystem) {
+        $roots = @(
+            Join-Path $drive.Root "Program Files (x86)",
+            Join-Path $drive.Root "Program Files"
+        )
+        foreach ($root in $roots) {
+            $candidate = Join-Path $root "Inno Setup 6\ISCC.exe"
+            if (Test-Path -LiteralPath $candidate) {
+                return $candidate
+            }
+        }
     }
+
+    foreach ($drive in Get-PSDrive -PSProvider FileSystem) {
+        $found = Get-ChildItem -Path $drive.Root -Filter "ISCC.exe" -Recurse -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -like "*\Inno Setup 6\ISCC.exe" } |
+            Select-Object -First 1
+        if ($found) {
+            return $found.FullName
+        }
+    }
+
     return $null
 }
 
@@ -51,18 +66,33 @@ foreach ($name in $required) {
     }
 }
 
-$iscc = Find-InnoSetup
+try {
+    $iscc = (Get-Command ISCC.exe -ErrorAction Stop).Source
+} catch {
+    $iscc = $null
+}
+
+if (-not $iscc -or -not (Test-Path -LiteralPath $iscc)) {
+    $iscc = Search-IsccOnDrives
+}
+
 if (-not $iscc) {
-    throw "Inno Setup 6 (ISCC.exe) not found. Install from https://jrsoftware.org/isinfo.php"
+    throw "Inno Setup 6 (ISCC.exe) not found. Install from https://jrsoftware.org/isinfo.php or add ISCC.exe to PATH."
 }
 
-Write-Step "Inno Setup: installer.iss"
+Write-Step "Using ISCC: $iscc"
+Write-Step "Compiling installer..."
 Set-Location $RepoRoot
-& $iscc $IssFile
-
-$setup = Get-ChildItem -Path $OutputRoot -Filter "SasistPrinterAgent-Setup-*.exe" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
-if (-not $setup) {
-    throw "Installer EXE not found in $OutputRoot"
+& $iscc $installerScript
+if ($LASTEXITCODE -ne 0) {
+    throw "ISCC failed with exit code $LASTEXITCODE"
 }
 
-Write-Step "Done: $($setup.FullName)"
+$setup = Get-ChildItem -Path $OutputRoot -Filter "SasistPrinterAgent-Setup-*.exe" -ErrorAction SilentlyContinue |
+    Sort-Object LastWriteTime -Descending |
+    Select-Object -First 1
+if (-not $setup) {
+    throw "Installer EXE not created. Expected: $OutputRoot\SasistPrinterAgent-Setup-*.exe"
+}
+
+Write-Step "Installer created: $($setup.FullName)"

@@ -78,8 +78,7 @@ if (-not (Test-Path $ConfigPath)) {
         @"
 {
   "server_url": "",
-  "tenant_id": 1,
-  "warehouse_id": 1,
+  "api_key": "",
   "token": "",
   "machine_id": "",
   "agent_id": 0,

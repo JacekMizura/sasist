@@ -6,6 +6,7 @@ import { useWarehouse } from "../../../context/WarehouseContext";
 import type { PrinterAgentRead } from "../../../types/printing";
 import { DAMAGE_TENANT_ID } from "../../damage/damageShared";
 import { agentHealthClass, agentHealthLabel } from "./printingQueuePresentation";
+import AddComputerModal from "./AddComputerModal";
 
 function formatDate(value: string | null | undefined): string {
   if (!value) return "—";
@@ -21,6 +22,7 @@ export default function PrintingAgentsPage() {
   const [error, setError] = useState<string | null>(null);
   const [actionId, setActionId] = useState<number | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [addComputerOpen, setAddComputerOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -56,6 +58,15 @@ export default function PrintingAgentsPage() {
 
   return (
     <div className="mt-4 min-w-0">
+      <div className="mb-3 flex justify-end">
+        <button
+          type="button"
+          className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          onClick={() => setAddComputerOpen(true)}
+        >
+          Dodaj komputer
+        </button>
+      </div>
       {error ? <p className="mb-3 text-sm text-red-600">{error}</p> : null}
       {success ? <p className="mb-3 text-sm text-emerald-700">{success}</p> : null}
       {loading ? (
@@ -115,6 +126,7 @@ export default function PrintingAgentsPage() {
           </table>
         </div>
       )}
+      <AddComputerModal open={addComputerOpen} onClose={() => setAddComputerOpen(false)} />
     </div>
   );
 }

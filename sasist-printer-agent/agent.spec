@@ -41,6 +41,7 @@ a = Analysis(
         "agent.update_checker",
         "agent.updater_launcher",
         "agent.logging_setup",
+        "agent.setup_wizard",
     ],
     hookspath=[],
     hooksconfig={},

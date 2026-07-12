@@ -256,6 +256,7 @@ from .api.packaging_materials import router as packaging_materials_router
 from .api.product import router as product_router
 from .api.product_sales_offers import router as product_sales_offers_router
 from .api.offer_stock_pool import router as offer_stock_pool_router
+from .api.api_keys import router as api_keys_router
 from .api.product_warehouse_slotting import router as product_warehouse_slotting_router
 from .api.bundle import router as bundle_router
 from .api.bundle_traceability import router as bundle_traceability_router
@@ -1860,6 +1861,7 @@ _API_ROUTERS = (
     consolidation_plans_router,
     wms_consolidation_router,
     admin_users_router,
+    api_keys_router,
     uploads_router,
     tenant_router,
     warehouse_router,

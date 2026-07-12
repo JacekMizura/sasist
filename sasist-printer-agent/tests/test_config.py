@@ -13,7 +13,7 @@ def test_default_config_roundtrip(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr("agent.config.program_data_dir", lambda: cfg_dir)
 
     config = load_config()
-    assert config.tenant_id == 1
+    assert config.api_key == ""
     assert config.heartbeat_interval_sec == 30
     assert config.config_path.exists()
 
@@ -24,6 +24,28 @@ def test_default_config_roundtrip(tmp_path: Path, monkeypatch) -> None:
     reloaded = load_config()
     assert reloaded.server_url == "https://example.com"
     assert reloaded.token == "spt_test"
+
+
+def test_legacy_config_roundtrip(tmp_path: Path, monkeypatch) -> None:
+    cfg_dir = tmp_path / "Sasist" / "PrinterAgent"
+    monkeypatch.setattr("agent.config.program_data_dir", lambda: cfg_dir)
+    legacy_path = cfg_dir / "config.json"
+    cfg_dir.mkdir(parents=True)
+    legacy_path.write_text(
+        json.dumps(
+            {
+                "server_url": "https://legacy.test",
+                "tenant_id": 2,
+                "warehouse_id": 3,
+                "token": "",
+            }
+        ),
+        encoding="utf-8",
+    )
+    cfg = load_config()
+    assert cfg.uses_legacy_auth()
+    assert cfg.tenant_id == 2
+    assert cfg.warehouse_id == 3
 
 
 def test_from_dict_merges_unknown_keys(tmp_path: Path) -> None:
