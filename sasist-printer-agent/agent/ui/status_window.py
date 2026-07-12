@@ -7,21 +7,21 @@ from typing import Callable
 
 from ..runtime import AgentRuntime
 from . import theme as T
+from .host import get_ui_host
+from .window_registry import WindowRegistry
+
+WINDOW_KEY = "status"
 from .widgets import (
     ScrollableBody,
+    app_header,
     apply_window_icon,
     badge,
     card,
-    configure_styles,
-    divider,
-    header_bar,
     info_row,
     primary_button,
     secondary_button,
+    window_shell,
 )
-
-
-print("[UI] New StatusWindow loaded")
 
 
 class StatusWindow:
@@ -39,34 +39,30 @@ class StatusWindow:
         self._on_open_logs = on_open_logs
         self._on_sync = on_sync
         self._on_test_page = on_test_page
-        self._root: tk.Tk | None = None
 
     def show(self) -> None:
-        if self._root is not None:
-            try:
-                self._root.lift()
-                self._root.focus_force()
-                return
-            except tk.TclError:
-                self._root = None
+        get_ui_host().call(self._open)
+
+    def _open(self) -> None:
+        if WindowRegistry.focus_if_open(WINDOW_KEY):
+            return
 
         cfg = self._runtime.config
         hb = self._runtime.state.heartbeat
         jobs = self._runtime.state.jobs
         online = hb.online
 
-        root = tk.Tk()
-        root.title("Sasist Printer Agent")
-        root.geometry("520x680")
-        root.minsize(480, 620)
-        root.configure(bg=T.BG)
-        apply_window_icon(root)
-        configure_styles()
-        self._root = root
+        root = get_ui_host().root
+        win = tk.Toplevel(root)
+        win.title("Sasist Printer Agent — Status")
+        win.geometry("540x720")
+        win.minsize(500, 640)
+        apply_window_icon(win)
+        WindowRegistry.register(WINDOW_KEY, win)
+        shell = window_shell(win)
+        app_header(shell, "Status")
 
-        header_bar(root, "Sasist Printer Agent")
-
-        hero = tk.Frame(root, bg=T.CARD, padx=T.PADDING, pady=(0, T.PADDING))
+        hero = tk.Frame(shell, bg=T.CARD, padx=T.PADDING, pady=T.PADDING)
         hero.pack(fill="x")
         hero_row = tk.Frame(hero, bg=T.CARD)
         hero_row.pack(fill="x")
@@ -75,25 +71,17 @@ class StatusWindow:
         )
         if jobs.processing:
             badge(hero_row, "DRUKUJE", tone="warning").pack(side="left", padx=(8, 0))
-        tk.Label(
-            hero_row,
-            text=f"Agent ID: {cfg.agent_id if cfg and cfg.agent_id else '—'}",
-            font=T.FONT_FAMILY,
-            fg=T.MUTED_TEXT,
-            bg=T.CARD,
-        ).pack(side="left", padx=(14, 0))
 
-        scroll_host = tk.Frame(root, bg=T.BG, padx=T.PADDING, pady=(T.PADDING, 0))
-        scroll_host.pack(fill="both", expand=True)
+        scroll_host = tk.Frame(shell, bg=T.BG, padx=T.PADDING)
+        scroll_host.pack(fill="both", expand=True, pady=(T.PADDING, 0))
         scroll = ScrollableBody(scroll_host)
         scroll.pack(fill="both", expand=True)
         body = scroll.inner
 
-        divider(body)
-
-        computer = card(body, "Komputer")
-        info_row(computer, "Nazwa:", cfg.computer_name if cfg else "—")
-        info_row(computer, "Machine ID:", cfg.machine_id if cfg else "—")
+        agent_card = card(body, "Agent")
+        info_row(agent_card, "Agent ID:", cfg.agent_id if cfg and cfg.agent_id else "—")
+        info_row(agent_card, "Komputer:", cfg.computer_name if cfg else "—")
+        info_row(agent_card, "Machine ID:", cfg.machine_id if cfg else "—")
 
         warehouse = card(body, "Magazyn")
         warehouse_label = str(cfg.warehouse_id) if cfg and cfg.warehouse_id else "—"
@@ -105,14 +93,14 @@ class StatusWindow:
         sync = card(body, "Synchronizacja")
         last_hb = hb.last_success_at.strftime("%Y-%m-%d %H:%M:%S") if hb.last_success_at else "—"
         last_poll = jobs.last_poll_at.strftime("%Y-%m-%d %H:%M:%S") if jobs.last_poll_at else "—"
-        info_row(sync, "Heartbeat:", last_hb)
-        info_row(sync, "Polling:", last_poll)
+        info_row(sync, "Ostatni heartbeat:", last_hb)
+        info_row(sync, "Ostatni polling:", last_poll)
         info_row(sync, "Oczekujące zadania:", str(jobs.pending_count))
         err = hb.last_error or jobs.last_poll_error or jobs.last_processing_error
         if err:
             info_row(sync, "Ostatni błąd:", err)
 
-        footer = tk.Frame(root, bg=T.CARD, padx=T.PADDING, pady=T.PADDING)
+        footer = tk.Frame(shell, bg=T.CARD, padx=T.PADDING, pady=T.PADDING)
         footer.pack(fill="x", side="bottom")
 
         row1 = tk.Frame(footer, bg=T.CARD)
@@ -122,10 +110,8 @@ class StatusWindow:
 
         row2 = tk.Frame(footer, bg=T.CARD)
         row2.pack(fill="x")
-        secondary_button(row2, "Otwórz logi", self._on_open_logs).pack(side="left", padx=(0, 8))
+        secondary_button(row2, "Logi", self._on_open_logs).pack(side="left", padx=(0, 8))
         secondary_button(row2, "Ustawienia", self._on_open_config).pack(side="left", padx=(0, 8))
-        secondary_button(row2, "Zamknij", root.destroy).pack(side="right")
+        secondary_button(row2, "Zamknij", win.destroy).pack(side="right")
 
-        root.protocol("WM_DELETE_WINDOW", root.destroy)
-        root.mainloop()
-        self._root = None
+        win.protocol("WM_DELETE_WINDOW", win.destroy)

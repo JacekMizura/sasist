@@ -147,3 +147,14 @@ if (-not $SkipService) {
 }
 
 Write-Step "Instalacja zakończona pomyślnie."
+
+$legacyDesktopLinks = @(
+    (Join-Path $env:PUBLIC "Desktop\Sasist Printer Logs.lnk"),
+    (Join-Path $env:PUBLIC "Desktop\Sasist Printer Config.lnk")
+)
+foreach ($link in $legacyDesktopLinks) {
+    if (Test-Path -LiteralPath $link) {
+        Write-Step "Usuwanie przestarzałego skrótu: $link"
+        Remove-Item -LiteralPath $link -Force
+    }
+}

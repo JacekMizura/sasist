@@ -8,6 +8,7 @@ from pathlib import Path
 from tkinter import ttk
 from typing import Callable
 
+from ..version import __version__
 from . import theme as T
 
 
@@ -50,6 +51,28 @@ def configure_styles() -> ttk.Style:
         padding=8,
     )
     style.configure(
+        "Sasist.TCombobox",
+        fieldbackground=T.CARD,
+        background=T.CARD,
+        bordercolor=T.BORDER,
+        arrowcolor=T.PRIMARY,
+        padding=6,
+    )
+    style.configure(
+        "Sasist.Vertical.TScrollbar",
+        background=T.CARD,
+        troughcolor=T.BG,
+        bordercolor=T.BORDER,
+        arrowcolor=T.PRIMARY,
+    )
+    style.configure(
+        "Sasist.Horizontal.TScrollbar",
+        background=T.CARD,
+        troughcolor=T.BG,
+        bordercolor=T.BORDER,
+        arrowcolor=T.PRIMARY,
+    )
+    style.configure(
         "Sasist.TButton",
         background=T.CARD,
         foreground=T.NEUTRAL_TEXT,
@@ -77,7 +100,7 @@ def configure_styles() -> ttk.Style:
     return style
 
 
-def load_logo_photo(max_height: int = 28) -> tk.PhotoImage | None:
+def load_logo_photo(max_height: int = 36) -> tk.PhotoImage | None:
     for name in ("sasist-logo.png", "icon-32.png", "icon-64.png"):
         path = _assets_dir / name
         if not path.exists():
@@ -93,11 +116,57 @@ def load_logo_photo(max_height: int = 28) -> tk.PhotoImage | None:
     return None
 
 
+def app_header(parent: tk.Widget, window_title: str) -> tk.Frame:
+    """Unified header: logo + Sasist Printer Agent / window title / version."""
+    bar = tk.Frame(parent, bg=T.CARD, padx=T.PADDING, pady=T.PADDING)
+    bar.pack(fill="x")
+    row = tk.Frame(bar, bg=T.CARD)
+    row.pack(fill="x")
+
+    logo = load_logo_photo()
+    if logo is not None:
+        logo_label = tk.Label(row, image=logo, bg=T.CARD)
+        logo_label.image = logo
+        logo_label.pack(side="left", padx=(0, 12))
+
+    text_col = tk.Frame(row, bg=T.CARD)
+    text_col.pack(side="left", fill="x", expand=True)
+    tk.Label(
+        text_col,
+        text="Sasist Printer Agent",
+        font=T.FONT_SECTION,
+        fg=T.MUTED_TEXT,
+        bg=T.CARD,
+        anchor="w",
+    ).pack(fill="x")
+    tk.Label(
+        text_col,
+        text=window_title,
+        font=T.FONT_TITLE,
+        fg=T.NEUTRAL_TEXT,
+        bg=T.CARD,
+        anchor="w",
+    ).pack(fill="x", pady=(2, 0))
+    tk.Label(
+        text_col,
+        text=f"v{__version__}",
+        font=T.FONT_SMALL,
+        fg=T.MUTED_TEXT,
+        bg=T.CARD,
+        anchor="w",
+    ).pack(fill="x", pady=(2, 0))
+    return bar
+
+
+def header_bar(parent: tk.Widget, title: str) -> tk.Frame:
+    return app_header(parent, title)
+
+
 class ScrollableBody(tk.Frame):
     def __init__(self, parent: tk.Widget, **kwargs) -> None:
         super().__init__(parent, bg=T.BG, **kwargs)
         canvas = tk.Canvas(self, bg=T.BG, highlightthickness=0, borderwidth=0)
-        scrollbar = ttk.Scrollbar(self, orient="vertical", command=canvas.yview)
+        scrollbar = ttk.Scrollbar(self, orient="vertical", style="Sasist.Vertical.TScrollbar", command=canvas.yview)
         self.inner = tk.Frame(canvas, bg=T.BG)
         self.inner.bind(
             "<Configure>",
@@ -116,7 +185,14 @@ class ScrollableBody(tk.Frame):
         def _on_mousewheel(event: tk.Event) -> None:
             canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
 
-        canvas.bind_all("<MouseWheel>", _on_mousewheel, add="+")
+        def _bind_wheel(_event: tk.Event) -> None:
+            canvas.bind_all("<MouseWheel>", _on_mousewheel)
+
+        def _unbind_wheel(_event: tk.Event) -> None:
+            canvas.unbind_all("<MouseWheel>")
+
+        canvas.bind("<Enter>", _bind_wheel)
+        canvas.bind("<Leave>", _unbind_wheel)
         self._canvas = canvas
 
 
@@ -163,7 +239,7 @@ def card(parent: tk.Widget, title: str) -> tk.Frame:
 def info_row(parent: tk.Widget, label: str, value: str) -> None:
     row = tk.Frame(parent, bg=T.CARD)
     row.pack(fill="x", pady=3)
-    tk.Label(row, text=label, font=T.FONT_FAMILY, fg=T.MUTED_TEXT, bg=T.CARD, width=16, anchor="w").pack(
+    tk.Label(row, text=label, font=T.FONT_FAMILY, fg=T.MUTED_TEXT, bg=T.CARD, width=18, anchor="w").pack(
         side="left"
     )
     tk.Label(
@@ -176,24 +252,6 @@ def info_row(parent: tk.Widget, label: str, value: str) -> None:
         wraplength=360,
         justify="left",
     ).pack(side="left", fill="x", expand=True)
-
-
-def header_bar(parent: tk.Widget, title: str) -> tk.Frame:
-    bar = tk.Frame(parent, bg=T.CARD, padx=T.PADDING, pady=T.PADDING)
-    bar.pack(fill="x")
-    row = tk.Frame(bar, bg=T.CARD)
-    row.pack(fill="x")
-
-    logo = load_logo_photo()
-    if logo is not None:
-        logo_label = tk.Label(row, image=logo, bg=T.CARD)
-        logo_label.image = logo  # keep reference
-        logo_label.pack(side="left", padx=(0, 10))
-
-    tk.Label(row, text=title, font=T.FONT_TITLE, fg=T.NEUTRAL_TEXT, bg=T.CARD, anchor="w").pack(
-        side="left", fill="x", expand=True
-    )
-    return bar
 
 
 def primary_button(parent: tk.Widget, text: str, command: Callable[[], None]) -> ttk.Button:
@@ -211,3 +269,79 @@ def labeled_entry(parent: tk.Widget, label: str, textvariable: tk.StringVar, *, 
     entry = ttk.Entry(parent, textvariable=textvariable, style="Sasist.TEntry", show="*" if secret else "")
     entry.pack(fill="x", pady=(0, 14))
     return entry
+
+
+def filter_chip_row(
+    parent: tk.Widget,
+    options: list[str],
+    selected: tk.StringVar,
+    on_change: Callable[[], None],
+) -> tk.Frame:
+    row = tk.Frame(parent, bg=T.BG)
+    row.pack(fill="x")
+    buttons: dict[str, tk.Label] = {}
+
+    def _select(value: str) -> None:
+        selected.set(value)
+        for key, widget in buttons.items():
+            active = key == value
+            widget.configure(
+                bg=T.PRIMARY if active else T.CARD,
+                fg="white" if active else T.NEUTRAL_TEXT,
+            )
+        on_change()
+
+    for option in options:
+        btn = tk.Label(
+            row,
+            text=option,
+            font=T.FONT_FAMILY_BOLD,
+            bg=T.CARD,
+            fg=T.NEUTRAL_TEXT,
+            padx=12,
+            pady=6,
+            cursor="hand2",
+        )
+        btn.pack(side="left", padx=(0, 6))
+        btn.bind("<Button-1>", lambda _e, value=option: _select(value))
+        buttons[option] = btn
+
+    _select(selected.get())
+    return row
+
+
+def styled_listbox(parent: tk.Widget, **kwargs) -> tk.Listbox:
+    defaults = {
+        "font": T.FONT_FAMILY,
+        "bg": T.CARD,
+        "fg": T.NEUTRAL_TEXT,
+        "selectbackground": T.PRIMARY_LIGHT,
+        "selectforeground": T.NEUTRAL_TEXT,
+        "borderwidth": 0,
+        "highlightthickness": 0,
+        "activestyle": "none",
+    }
+    defaults.update(kwargs)
+    return tk.Listbox(parent, **defaults)
+
+
+def styled_text(parent: tk.Widget, **kwargs) -> tk.Text:
+    defaults = {
+        "wrap": "none",
+        "font": T.FONT_MONO,
+        "bg": T.PREVIEW_BG,
+        "fg": T.NEUTRAL_TEXT,
+        "borderwidth": 0,
+        "highlightthickness": 0,
+        "padx": 10,
+        "pady": 10,
+    }
+    defaults.update(kwargs)
+    return tk.Text(parent, **defaults)
+
+
+def window_shell(parent: tk.Toplevel) -> tk.Frame:
+    parent.configure(bg=T.BG)
+    shell = tk.Frame(parent, bg=T.BG)
+    shell.pack(fill="both", expand=True)
+    return shell

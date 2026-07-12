@@ -71,6 +71,8 @@ if (-not (Test-Path -LiteralPath $ManifestPath)) {
 $manifest = Get-Content -LiteralPath $ManifestPath -Raw | ConvertFrom-Json
 $manifestVersion = Normalize-VersionTag ([string]$manifest.version)
 $expectedSetupSha = [string]$manifest.setup_sha256
+$expectedBuiltAt = [string]$manifest.built_at
+$expectedIconSha = [string]$manifest.icon_sha256
 
 if (-not $expectedSetupSha) {
     throw "Manifest does not contain setup_sha256."
@@ -88,6 +90,19 @@ $allPassed = (Add-CheckResult -Results $results -Name "Agent VERSION file" -Pass
 
 Write-Step "Manifest version: $manifestVersion"
 Write-Step "Expected setup SHA256: $expectedSetupSha"
+if ($expectedBuiltAt) {
+    Write-Step "Manifest built_at: $expectedBuiltAt"
+}
+if ($expectedIconSha) {
+    Write-Step "Expected icon SHA256: $expectedIconSha"
+}
+
+$sourceIconSha = Get-SourceIconSha256 -RepoRoot $RepoRoot
+if ($expectedIconSha -and $sourceIconSha) {
+    $iconSourceMatch = ($expectedIconSha -eq $sourceIconSha)
+    $allPassed = (Add-CheckResult -Results $results -Name "Manifest icon SHA256 vs source assets/icon.ico" -Passed $iconSourceMatch `
+        -Detail "manifest=$expectedIconSha source=$sourceIconSha") -and $allPassed
+}
 
 $localInstallerPath = Join-Path $RepoRoot "Output\SasistPrinterAgent-Setup-$targetVersion.exe"
 $localInstallerExists = Test-Path -LiteralPath $localInstallerPath
@@ -123,12 +138,55 @@ if ($localInstallerExists) {
             Write-Host "Installer was built without the new UI modules." -ForegroundColor Red
         }
         $allPassed = (Add-CheckResult -Results $results -Name "Local agent UI modules + VERSION" -Passed $uiPassed) -and $allPassed
+
+        if ($expectedIconSha) {
+            $verifyScript = Join-Path $RepoRoot "scripts\verify_agent_exe.py"
+            & python $verifyScript $localAgentExe --expected-version $targetVersion --expected-icon-sha256 $expectedIconSha 2>&1 | Out-Null
+            $iconPassed = ($LASTEXITCODE -eq 0)
+            $allPassed = (Add-CheckResult -Results $results -Name "Local agent bundled icon.ico SHA256" -Passed $iconPassed) -and $allPassed
+        }
+
+        $buildInfoPath = Extract-BuildInfoFromInstaller -InstallerPath $localInstallerPath `
+            -OutputDirectory (Join-Path $DownloadDir "_local_build_info")
+        if ($buildInfoPath -and $expectedBuiltAt) {
+            $buildInfo = Get-Content -LiteralPath $buildInfoPath -Raw | ConvertFrom-Json
+            $buildInfoVersion = Normalize-VersionTag ([string]$buildInfo.version)
+            $versionOk = ($buildInfoVersion -eq $targetVersion)
+            $allPassed = (Add-CheckResult -Results $results -Name "Installer build_info.json version" -Passed $versionOk `
+                -Detail "build_info=$buildInfoVersion expected=$targetVersion") -and $allPassed
+        } elseif ($expectedBuiltAt) {
+            Add-CheckResult -Results $results -Name "Installer build_info.json present" -Passed $false `
+                -Detail "Could not extract build_info.json (install 7-Zip)" | Out-Null
+            $allPassed = $false
+        }
     }
 } else {
     Write-Step "Local installer not found: $localInstallerPath (skipping local checks)"
     Add-CheckResult -Results $results -Name "Local installer present" -Passed $false `
         -Detail "Missing $localInstallerPath" | Out-Null
     $allPassed = $false
+}
+
+if ($expectedBuiltAt) {
+    try {
+        $builtAtParsed = [DateTime]::Parse($expectedBuiltAt)
+        $age = (Get-Date).ToUniversalTime() - $builtAtParsed.ToUniversalTime()
+        $recentBuild = ($age.TotalDays -le 30)
+        $allPassed = (Add-CheckResult -Results $results -Name "Manifest built_at is valid ISO timestamp" -Passed $true `
+            -Detail $expectedBuiltAt) -and $allPassed
+        if (-not $recentBuild) {
+            Add-CheckResult -Results $results -Name "Manifest built_at recency (<30 days)" -Passed $false `
+                -Detail "built_at=$expectedBuiltAt" | Out-Null
+            $allPassed = $false
+        } else {
+            Add-CheckResult -Results $results -Name "Manifest built_at recency (<30 days)" -Passed $true `
+                -Detail "age=$([math]::Round($age.TotalHours, 1))h" | Out-Null
+        }
+    } catch {
+        Add-CheckResult -Results $results -Name "Manifest built_at is valid ISO timestamp" -Passed $false `
+            -Detail $expectedBuiltAt | Out-Null
+        $allPassed = $false
+    }
 }
 
 $githubSetupSha = $null

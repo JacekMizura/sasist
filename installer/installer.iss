@@ -52,13 +52,16 @@ Source: "{#AgentRoot}\config\config.example.json"; DestDir: "{app}\config"; Flag
 Source: "{#AgentRoot}\assets\icon.ico"; DestDir: "{app}\assets"; Flags: ignoreversion
 Source: "install.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion
 
+[InstallDelete]
+Type: files; Name: "{commondesktop}\Sasist Printer Logs.lnk"
+Type: files; Name: "{commondesktop}\Sasist Printer Config.lnk"
+Type: files; Name: "{group}\Logi drukowania.lnk"
+Type: files; Name: "{group}\Konfiguracja.lnk"
+Type: files; Name: "{group}\Sasist Printer Agent (Tray).lnk"
+
 [Icons]
-Name: "{group}\Sasist Printer Agent (Tray)"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\assets\icon.ico"
-Name: "{group}\Logi drukowania"; Filename: "{commonappdata}\Sasist\PrinterAgent\logs"
-Name: "{group}\Konfiguracja"; Filename: "{commonappdata}\Sasist\PrinterAgent\config.json"
+Name: "{group}\Sasist Printer Agent"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\assets\icon.ico"
 Name: "{commondesktop}\Sasist Printer Agent"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\assets\icon.ico"
-Name: "{commondesktop}\Sasist Printer Logs"; Filename: "{commonappdata}\Sasist\PrinterAgent\logs"
-Name: "{commondesktop}\Sasist Printer Config"; Filename: "{commonappdata}\Sasist\PrinterAgent\config.json"
 
 [Run]
 Filename: "powershell.exe"; \

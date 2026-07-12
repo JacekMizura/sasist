@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import subprocess
 import sys
-import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -15,6 +14,7 @@ from PIL import Image, ImageDraw
 from .config import save_config
 from .runtime import AgentRuntime
 from .ui.config_dialog import ConfigDialog
+from .ui.host import get_ui_host
 from .ui.log_viewer_window import LogViewerWindow
 from .ui.status_window import StatusWindow
 
@@ -58,58 +58,44 @@ class TrayApp:
     def __init__(self, ctx: TrayContext) -> None:
         self._ctx = ctx
         self._icon = None
-        self._ui_lock = threading.Lock()
-
-    def _run_ui(self, builder: Callable[[], None]) -> None:
-        if not self._ui_lock.acquire(blocking=False):
-            return
-        try:
-            builder()
-        finally:
-            self._ui_lock.release()
+        get_ui_host().ensure_started()
+        self._status_window = StatusWindow(
+            self._ctx.runtime,
+            on_open_config=lambda: self._open_config(None, None),
+            on_open_logs=lambda: self._open_logs(None, None),
+            on_sync=lambda: self._sync_printers(None, None),
+            on_test_page=lambda: self._test_page(None, None),
+        )
+        self._config_dialog: ConfigDialog | None = None
+        self._log_viewer: LogViewerWindow | None = None
 
     def _show_status(self, _icon, _item) -> None:
-        def _open() -> None:
-            print("[UI] Opening StatusWindow:", StatusWindow)
-            StatusWindow(
-                self._ctx.runtime,
-                on_open_config=lambda: self._open_config(None, None),
-                on_open_logs=lambda: self._open_logs(None, None),
-                on_sync=lambda: self._sync_printers(None, None),
-                on_test_page=lambda: self._test_page(None, None),
-            ).show()
-
-        threading.Thread(target=lambda: self._run_ui(_open), daemon=True).start()
+        self._status_window.show()
 
     def _open_config(self, _icon, _item) -> None:
         cfg = self._ctx.runtime.config
         if not cfg:
             return
+        cfg.config_path.parent.mkdir(parents=True, exist_ok=True)
+        if not cfg.config_path.exists():
+            save_config(cfg)
 
-        def _open() -> None:
-            print("[UI] Opening ConfigDialog:", ConfigDialog)
-            cfg.config_path.parent.mkdir(parents=True, exist_ok=True)
-            if not cfg.config_path.exists():
-                save_config(cfg)
+        def _on_saved(updated) -> None:
+            self._ctx.runtime.config = updated
 
-            def _on_saved(updated) -> None:
-                self._ctx.runtime.config = updated
-
-            ConfigDialog(cfg, on_saved=_on_saved).show()
-
-        threading.Thread(target=lambda: self._run_ui(_open), daemon=True).start()
+        if self._config_dialog is None:
+            self._config_dialog = ConfigDialog(cfg, on_saved=_on_saved)
+        else:
+            self._config_dialog.update_config(cfg)
+        self._config_dialog.show()
 
     def _open_logs(self, _icon, _item) -> None:
         cfg = self._ctx.runtime.config
         if not cfg:
             return
-
-        def _open() -> None:
-            log_dir = cfg.log_path.parent
-            print("[UI] Opening LogViewerWindow:", LogViewerWindow, "log_dir=", log_dir)
-            LogViewerWindow(log_dir).show()
-
-        threading.Thread(target=lambda: self._run_ui(_open), daemon=True).start()
+        if self._log_viewer is None:
+            self._log_viewer = LogViewerWindow(cfg.log_path.parent)
+        self._log_viewer.show()
 
     def _sync_printers(self, _icon, _item) -> None:
         try:

@@ -4,24 +4,27 @@ from __future__ import annotations
 
 import logging
 import tkinter as tk
-from tkinter import messagebox
 from typing import Callable
 
 from ..auth import sync_agent_registration
 from ..config import AgentConfig, save_config
 from . import theme as T
+from .dialogs import show_success
+from .host import get_ui_host
+from .window_registry import WindowRegistry
+
+WINDOW_KEY = "config"
 from .widgets import (
+    app_header,
     apply_window_icon,
-    configure_styles,
-    header_bar,
+    card,
     labeled_entry,
     primary_button,
     secondary_button,
+    window_shell,
 )
 
 logger = logging.getLogger(__name__)
-
-print("[UI] New ConfigDialog loaded")
 
 
 class ConfigDialog:
@@ -29,55 +32,51 @@ class ConfigDialog:
         self._config = config
         self._on_saved = on_saved
 
+    def update_config(self, config: AgentConfig) -> None:
+        self._config = config
+
     def show(self) -> None:
-        print("[UI] New ConfigDialog loaded")
-        root = tk.Tk()
-        root.title("Sasist Printer Agent — Ustawienia")
-        root.geometry("560x520")
-        root.resizable(False, False)
-        root.configure(bg=T.BG)
-        apply_window_icon(root)
-        configure_styles()
+        get_ui_host().call(self._open)
 
-        header_bar(root, "Ustawienia")
+    def _open(self) -> None:
+        if WindowRegistry.focus_if_open(WINDOW_KEY):
+            return
 
-        body_shell = tk.Frame(root, bg=T.BG, padx=T.PADDING, pady=T.PADDING)
-        body_shell.pack(fill="both", expand=True)
-        card_shell = tk.Frame(body_shell, bg=T.BORDER, padx=1, pady=1)
-        card_shell.pack(fill="both", expand=True)
-        frame = tk.Frame(card_shell, bg=T.CARD, padx=T.CARD_PADX, pady=T.CARD_PADY)
-        frame.pack(fill="both", expand=True)
+        root = get_ui_host().root
+        win = tk.Toplevel(root)
+        win.title("Sasist Printer Agent — Ustawienia")
+        win.geometry("580x560")
+        win.minsize(520, 520)
+        win.resizable(True, False)
+        apply_window_icon(win)
+        WindowRegistry.register(WINDOW_KEY, win)
+        shell = window_shell(win)
+        app_header(shell, "Ustawienia")
 
-        tk.Label(
-            frame,
-            text="Połączenie z serwerem Sasist",
-            font=T.FONT_SECTION,
-            fg=T.NEUTRAL_TEXT,
-            bg=T.CARD,
-            anchor="w",
-        ).pack(fill="x", pady=(0, 4))
-        tk.Label(
-            frame,
-            text="Zmiany zapisywane są do config.json w ProgramData.",
-            font=T.FONT_SMALL,
-            fg=T.MUTED_TEXT,
-            bg=T.CARD,
-            anchor="w",
-        ).pack(fill="x", pady=(0, 16))
+        body = tk.Frame(shell, bg=T.BG, padx=T.PADDING, pady=T.PADDING)
+        body.pack(fill="both", expand=True)
 
+        connection = card(body, "Połączenie")
         server_var = tk.StringVar(value=self._config.server_url)
         api_key_var = tk.StringVar(value=self._config.api_key)
+        labeled_entry(connection, "URL", server_var)
+        labeled_entry(connection, "Klucz API", api_key_var, secret=True)
+
+        sync = card(body, "Synchronizacja")
         heartbeat_var = tk.StringVar(value=str(self._config.heartbeat_interval_sec))
         poll_var = tk.StringVar(value=str(self._config.poll_interval_sec))
+        labeled_entry(sync, "Heartbeat (s)", heartbeat_var)
+        labeled_entry(sync, "Polling (s)", poll_var)
+
         status_var = tk.StringVar(value="")
-
-        labeled_entry(frame, "URL serwera", server_var)
-        labeled_entry(frame, "Klucz API", api_key_var, secret=True)
-        labeled_entry(frame, "Heartbeat (s)", heartbeat_var)
-        labeled_entry(frame, "Polling (s)", poll_var)
-
-        status_label = tk.Label(frame, textvariable=status_var, font=T.FONT_FAMILY, fg=T.WARNING, bg=T.CARD, anchor="w")
-        status_label.pack(fill="x")
+        tk.Label(
+            body,
+            textvariable=status_var,
+            font=T.FONT_FAMILY,
+            fg=T.WARNING,
+            bg=T.BG,
+            anchor="w",
+        ).pack(fill="x", pady=(4, 0))
 
         def _draft() -> AgentConfig:
             return AgentConfig.from_dict(
@@ -116,7 +115,7 @@ class ConfigDialog:
                 return
             save_config(draft)
             status_var.set("Test połączenia…")
-            root.update_idletasks()
+            win.update_idletasks()
             try:
                 sync_agent_registration(draft)
             except Exception as exc:
@@ -125,15 +124,15 @@ class ConfigDialog:
                 return
             self._config = draft
             status_var.set("Połączenie OK.")
-            messagebox.showinfo("Sasist Printer Agent", "Połączenie z serwerem działa.", parent=root)
+            show_success(win, "Połączenie", "Połączenie z serwerem działa.")
             if self._on_saved:
                 self._on_saved(draft)
 
-        footer = tk.Frame(root, bg=T.CARD, padx=T.PADDING, pady=T.PADDING)
+        footer = tk.Frame(shell, bg=T.CARD, padx=T.PADDING, pady=T.PADDING)
         footer.pack(fill="x", side="bottom")
 
-        secondary_button(footer, "Zamknij", root.destroy).pack(side="right")
+        secondary_button(footer, "Zamknij", win.destroy).pack(side="right")
         primary_button(footer, "Zapisz", on_save).pack(side="right", padx=(0, 8))
         primary_button(footer, "Test połączenia", on_test_connection).pack(side="left")
 
-        root.mainloop()
+        win.protocol("WM_DELETE_WINDOW", win.destroy)

@@ -19,7 +19,8 @@ function Invoke-AgentExeValidation {
         [Parameter(Mandatory = $true)]
         [string]$ExpectedVersion,
         [Parameter(Mandatory = $true)]
-        [string]$RepoRoot
+        [string]$RepoRoot,
+        [string]$ExpectedIconSha256 = ""
     )
 
     if (-not (Test-Path -LiteralPath $AgentExePath)) {
@@ -32,13 +33,80 @@ function Invoke-AgentExeValidation {
         throw "Missing validation script: $verifyScript"
     }
 
-    & python $verifyScript $AgentExePath --expected-version $ExpectedVersion
+    $iconPath = Join-Path $RepoRoot "sasist-printer-agent\assets\icon.ico"
+    if (-not $ExpectedIconSha256 -and (Test-Path -LiteralPath $iconPath)) {
+        $ExpectedIconSha256 = (Get-FileHash -LiteralPath $iconPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    }
+
+    $args = @($verifyScript, $AgentExePath, "--expected-version", $ExpectedVersion)
+    if ($ExpectedIconSha256) {
+        $args += @("--expected-icon-sha256", $ExpectedIconSha256)
+    }
+
+    & python @args
     if ($LASTEXITCODE -ne 0) {
         if ($LASTEXITCODE -eq 1) {
             Write-Host "Installer was built without the new UI modules." -ForegroundColor Red
         }
         exit 1
     }
+}
+
+function Invoke-AgentUiSmokeTest {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$AgentExePath
+    )
+
+    if (-not (Test-Path -LiteralPath $AgentExePath)) {
+        throw "Agent EXE not found for UI smoke test: $AgentExePath"
+    }
+
+    Write-Host "[build] UI smoke test: $AgentExePath --ui-smoke-test" -ForegroundColor Cyan
+    & $AgentExePath --ui-smoke-test
+    if ($LASTEXITCODE -ne 0) {
+        throw "UI smoke test failed with exit code $LASTEXITCODE"
+    }
+    Write-Host "[build] UI smoke test PASS" -ForegroundColor Green
+}
+
+function Get-SourceIconSha256 {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RepoRoot
+    )
+
+    $iconPath = Join-Path $RepoRoot "sasist-printer-agent\assets\icon.ico"
+    if (-not (Test-Path -LiteralPath $iconPath)) {
+        return $null
+    }
+    return (Get-FileHash -LiteralPath $iconPath -Algorithm SHA256).Hash.ToLowerInvariant()
+}
+
+function Extract-BuildInfoFromInstaller {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$InstallerPath,
+        [Parameter(Mandatory = $true)]
+        [string]$OutputDirectory
+    )
+
+    $sevenZip = Find-SevenZip
+    if (-not $sevenZip) {
+        return $null
+    }
+
+    New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
+    & $sevenZip e -y "-o$OutputDirectory" $InstallerPath "build_info.json" | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        return $null
+    }
+
+    $buildInfoPath = Join-Path $OutputDirectory "build_info.json"
+    if (Test-Path -LiteralPath $buildInfoPath) {
+        return $buildInfoPath
+    }
+    return $null
 }
 
 function Assert-InstallerNameMatchesVersion {

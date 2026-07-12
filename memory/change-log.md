@@ -1,5 +1,23 @@
 # Change log
 
+## 2026-07-12 — Sasist Printer Agent v1.0.4 pre-release audit
+
+- `WindowRegistry` — singleton okien Status/Config/Logs; `TrayApp` reużywa instancji.
+- `agent/ui/host.py` — jeden hidden root, non-daemon UI thread, Toplevel only (tray).
+- `agent/ui_smoke_test.py` + `--ui-smoke-test` + `scripts/verify_agent_ui_smoke.ps1`.
+- `verify_agent_exe.py` — icon SHA256 + moduły `host/dialogs/window_registry`.
+- `verify-release.ps1` — icon, built_at, build_info.json; manifest `icon_sha256`.
+- `installer.iss` — `[InstallDelete]` legacy skrótów; jeden skrót pulpitu.
+- `install.ps1` — usuwa legacy skróty przy upgrade; `verify_agent_upgrade.ps1`.
+- VERSION → 1.0.4.
+
+## 2026-07-12 — Sasist Printer Agent desktop UI audit
+
+- Wspólny wątek UI (`agent/ui/host.py`), Toplevel zamiast wielu `tk.Tk()` na wątkach daemon.
+- Ujednolicony nagłówek (`app_header`), theme, karty, badge, filtry chip w Log Viewer.
+- Setup Wizard 4-krokowy; Config/Status/Logi bez `messagebox` / `LabelFrame`.
+- Instalator: jeden skrót pulpitu z `{app}\assets\icon.ico`; usunięte skróty Logs/Config.
+
 ## 2026-07-12 — Sasist Printer Agent release validation
 
 - `installer/build.ps1`: po PyInstaller walidacja PYZ (UI modules + VERSION); po Inno Setup walidacja nazwy instalatora i EXE wyciągniętego z setupu; exit 1 przy braku modułów UI.

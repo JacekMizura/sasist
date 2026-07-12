@@ -257,6 +257,9 @@ foreach ($item in $required) {
 Write-Step "Validating SasistPrinterAgent.exe (UI modules + VERSION)..."
 Invoke-AgentExeValidation -AgentExePath $agentExe -ExpectedVersion $version -RepoRoot $RepoRoot
 
+Write-Step "UI smoke test (Status / Logi / Ustawienia)..."
+Invoke-AgentUiSmokeTest -AgentExePath $agentExe
+
 Write-Step "Computing SHA256 for PyInstaller artifacts..."
 $agentSha = Write-FileSha256 "SasistPrinterAgent.exe" $agentExe
 $serviceSha = Write-FileSha256 "SasistPrinterService.exe" $serviceExe
@@ -342,6 +345,8 @@ try {
 
 $setupSha = $localSetupHash
 
+$iconSha256 = Get-SourceIconSha256 -RepoRoot $RepoRoot
+
 $manifest = [ordered]@{
     version = $version
     built_at = $builtAt
@@ -350,9 +355,12 @@ $manifest = [ordered]@{
     service_sha256 = $serviceSha
     updater_sha256 = $updaterSha
     setup_sha256 = $setupSha
+    icon_sha256 = $iconSha256
 }
 ($manifest | ConvertTo-Json -Depth 4) + "`n" | Set-Content -LiteralPath $ManifestPath -Encoding UTF8
 Write-Step "Wrote $ManifestPath"
 
 Assert-PublicationReady -ManifestPath $ManifestPath -SetupSha $setupSha -CurrentVersion $version
+Write-Step "Running upgrade verification script..."
+powershell -ExecutionPolicy Bypass -File (Join-SafePath $RepoRoot "scripts\verify_agent_upgrade.ps1")
 Write-Step "Build complete. Upload Output\SasistPrinterAgent-Setup-${version}.exe to GitHub Release v$version, then run scripts\\verify-release.ps1."

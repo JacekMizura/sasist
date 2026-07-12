@@ -53,6 +53,15 @@ class AgentApplication:
 
 
 def main() -> int:
+    if "--ui-smoke-test" in sys.argv:
+        from .ui_smoke_test import run_ui_smoke_test
+
+        code = run_ui_smoke_test()
+        # UI host runs on a non-daemon thread with tk mainloop — terminate cleanly.
+        import os
+
+        os._exit(code)
+
     app = AgentApplication()
     return app.run()
 
