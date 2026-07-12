@@ -1,6 +1,6 @@
 [project]
 name = "sasist-printer-agent"
-version = "1.0.0"
+dynamic = ["version"]
 description = "Sasist Printer Agent for Windows — PDF printing via Sasist backend"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -27,6 +27,9 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["agent*"]
+
+[tool.setuptools.dynamic]
+version = { file = "VERSION" }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

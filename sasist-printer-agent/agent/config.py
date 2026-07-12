@@ -10,7 +10,8 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-DEFAULT_VERSION = "1.0.0"
+from .version import __version__ as DEFAULT_VERSION
+
 DEFAULT_HEARTBEAT_SEC = 30
 DEFAULT_POLL_SEC = 5
 DEFAULT_UPDATE_CHECK_SEC = 6 * 60 * 60

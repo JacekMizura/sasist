@@ -10,6 +10,7 @@ a = Analysis(
     pathex=[str(project_root)],
     binaries=[],
     datas=[
+        (str(project_root / "VERSION"), "."),
         (str(project_root / "assets" / "icon.ico"), "assets"),
         (str(project_root / "config" / "config.example.json"), "config"),
     ],
@@ -42,6 +43,8 @@ a = Analysis(
         "agent.updater_launcher",
         "agent.logging_setup",
         "agent.setup_wizard",
+        "agent.version",
+        "agent.build_info",
     ],
     hookspath=[],
     hooksconfig={},

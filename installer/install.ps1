@@ -75,6 +75,18 @@ if (-not (Test-Path $ConfigPath)) {
         Copy-Item -Path $example -Destination $ConfigPath -Force
     } else {
         Write-Step "Brak config.example.json — tworzę minimalny config.json"
+        $defaultVersion = "1.0.1"
+        $buildInfoPath = Join-Path $InstallDir "build_info.json"
+        if (Test-Path -LiteralPath $buildInfoPath) {
+            try {
+                $buildInfo = Get-Content -LiteralPath $buildInfoPath -Raw | ConvertFrom-Json
+                if ($buildInfo.version) {
+                    $defaultVersion = [string]$buildInfo.version
+                }
+            } catch {
+                Write-Step "Nie udało się odczytać wersji z build_info.json — używam domyślnej"
+            }
+        }
         @"
 {
   "server_url": "",
@@ -83,7 +95,7 @@ if (-not (Test-Path $ConfigPath)) {
   "machine_id": "",
   "agent_id": 0,
   "computer_name": "$($env:COMPUTERNAME)",
-  "version": "1.0.0",
+  "version": "$defaultVersion",
   "heartbeat_interval_sec": 30,
   "poll_interval_sec": 5
 }

@@ -13,6 +13,7 @@ from typing import Callable
 from PIL import Image, ImageDraw
 
 from .config import save_config
+from .build_info import format_about_text
 from .runtime import AgentRuntime
 
 logger = logging.getLogger(__name__)
@@ -74,6 +75,17 @@ class TrayApp:
         self._ctx = ctx
         self._icon = None
 
+    def _show_about(self, _icon, _item) -> None:
+        import tkinter as tk
+        from tkinter import messagebox
+
+        cfg = self._ctx.runtime.config
+        config_version = cfg.version if cfg else None
+        root = tk.Tk()
+        root.withdraw()
+        messagebox.showinfo("O programie", format_about_text(config_version=config_version))
+        root.destroy()
+
     def _show_status(self, _icon, _item) -> None:
         import tkinter as tk
         from tkinter import messagebox
@@ -132,6 +144,12 @@ class TrayApp:
 
         menu = pystray.Menu(
             pystray.MenuItem("Status", self._show_status),
+            pystray.MenuItem(
+                "Pomoc",
+                pystray.Menu(
+                    pystray.MenuItem("O programie", self._show_about),
+                ),
+            ),
             pystray.MenuItem("Otwórz konfigurację", self._open_config),
             pystray.MenuItem("Otwórz logi", self._open_logs),
             pystray.MenuItem("Synchronizuj drukarki", self._sync_printers),

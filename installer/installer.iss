@@ -7,8 +7,11 @@
 ;   cd ..
 ;   iscc installer\installer.iss
 
+#ifndef MyAppVersion
+  #error "MyAppVersion must be passed by build.ps1 via ISCC /DMyAppVersion=x.y.z"
+#endif
+
 #define MyAppName "Sasist Printer Agent"
-#define MyAppVersion "1.0.0"
 #define MyAppPublisher "Sasist"
 #define MyAppExeName "SasistPrinterAgent.exe"
 #define ServiceExeName "SasistPrinterService.exe"
@@ -44,6 +47,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Source: "{#DistRoot}\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#DistRoot}\{#ServiceExeName}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#DistRoot}\{#UpdaterExeName}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#DistRoot}\build_info.json"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#AgentRoot}\config\config.example.json"; DestDir: "{app}\config"; Flags: ignoreversion
 Source: "{#AgentRoot}\assets\icon.ico"; DestDir: "{app}\assets"; Flags: ignoreversion
 Source: "install.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion
