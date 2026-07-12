@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import os
 import subprocess
 import sys
 import threading
@@ -13,10 +12,10 @@ from typing import Callable
 
 from PIL import Image, ImageDraw
 
-from .build_info import format_about_text
 from .config import save_config
 from .runtime import AgentRuntime
 from .ui.config_dialog import ConfigDialog
+from .ui.log_viewer_window import LogViewerWindow
 from .ui.status_window import StatusWindow
 
 logger = logging.getLogger(__name__)
@@ -69,17 +68,6 @@ class TrayApp:
         finally:
             self._ui_lock.release()
 
-    def _show_about(self, _icon, _item) -> None:
-        import tkinter as tk
-        from tkinter import messagebox
-
-        cfg = self._ctx.runtime.config
-        config_version = cfg.version if cfg else None
-        root = tk.Tk()
-        root.withdraw()
-        messagebox.showinfo("O programie", format_about_text(config_version=config_version))
-        root.destroy()
-
     def _show_status(self, _icon, _item) -> None:
         def _open() -> None:
             StatusWindow(
@@ -113,9 +101,12 @@ class TrayApp:
         cfg = self._ctx.runtime.config
         if not cfg:
             return
-        log_dir = cfg.log_path.parent
-        log_dir.mkdir(parents=True, exist_ok=True)
-        os.startfile(str(log_dir))
+
+        def _open() -> None:
+            log_dir = cfg.log_path.parent
+            LogViewerWindow(log_dir).show()
+
+        threading.Thread(target=lambda: self._run_ui(_open), daemon=True).start()
 
     def _sync_printers(self, _icon, _item) -> None:
         try:
@@ -128,12 +119,6 @@ class TrayApp:
             self._ctx.runtime.request_test_page()
         except Exception as exc:
             logger.exception("Test page failed: %s", exc)
-
-    def _restart_service(self, _icon, _item) -> None:
-        try:
-            self._ctx.runtime.restart_service()
-        except Exception as exc:
-            logger.exception("Service restart failed: %s", exc)
 
     def _restart(self, _icon, _item) -> None:
         self._ctx.on_restart()
@@ -148,19 +133,14 @@ class TrayApp:
 
         menu = pystray.Menu(
             pystray.MenuItem("Status", self._show_status, default=True),
-            pystray.Menu.SEPARATOR,
-            pystray.MenuItem("Otwórz konfigurację", self._open_config),
-            pystray.MenuItem("Otwórz logi", self._open_logs),
             pystray.MenuItem("Synchronizuj drukarki", self._sync_printers),
-            pystray.MenuItem("Wydrukuj stronę testową", self._test_page),
+            pystray.MenuItem("Wydruk testowy", self._test_page),
             pystray.Menu.SEPARATOR,
-            pystray.MenuItem("Restart usługi", self._restart_service),
-            pystray.MenuItem("Restart aplikacji", self._restart),
-            pystray.Menu.SEPARATOR,
+            pystray.MenuItem("Logi", self._open_logs),
             pystray.MenuItem("Ustawienia", self._open_config),
-            pystray.MenuItem("O programie", self._show_about),
             pystray.Menu.SEPARATOR,
-            pystray.MenuItem("Zamknij", self._exit),
+            pystray.MenuItem("Restart aplikacji", self._restart),
+            pystray.MenuItem("Wyjście", self._exit),
         )
         self._icon = pystray.Icon(
             "sasist_printer_agent",

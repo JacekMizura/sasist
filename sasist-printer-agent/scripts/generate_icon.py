@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 
 PRIMARY = (249, 115, 22, 255)
 DARK = (15, 23, 42, 255)
@@ -50,6 +50,17 @@ def main() -> None:
     ico_path = assets / "icon.ico"
     base = images[128].copy()
     base.save(ico_path, format="ICO", sizes=[(size, size) for size in sizes])
+
+    logo = Image.new("RGBA", (220, 40), (255, 255, 255, 0))
+    mark = images[32].resize((32, 32), Image.Resampling.LANCZOS)
+    logo.paste(mark, (0, 4), mark)
+    draw = ImageDraw.Draw(logo)
+    try:
+        font = ImageFont.truetype("segoeui.ttf", 22)
+    except OSError:
+        font = ImageFont.load_default()
+    draw.text((40, 8), "Sasist", fill=DARK, font=font)
+    logo.save(assets / "sasist-logo.png")
     print(f"Wrote {ico_path} ({ico_path.stat().st_size} bytes) and PNG sizes to {assets}")
 
 

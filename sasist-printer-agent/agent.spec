@@ -12,6 +12,8 @@ a = Analysis(
     datas=[
         (str(project_root / "VERSION"), "."),
         (str(project_root / "assets" / "icon.ico"), "assets"),
+        (str(project_root / "assets" / "icon-32.png"), "assets"),
+        (str(project_root / "assets" / "sasist-logo.png"), "assets"),
         (str(project_root / "config" / "config.example.json"), "config"),
     ],
     hiddenimports=[
@@ -45,6 +47,12 @@ a = Analysis(
         "agent.setup_wizard",
         "agent.version",
         "agent.build_info",
+        "agent.ui",
+        "agent.ui.theme",
+        "agent.ui.widgets",
+        "agent.ui.status_window",
+        "agent.ui.config_dialog",
+        "agent.ui.log_viewer_window",
     ],
     hookspath=[],
     hooksconfig={},

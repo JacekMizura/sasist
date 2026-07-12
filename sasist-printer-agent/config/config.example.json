@@ -5,7 +5,7 @@
   "machine_id": "",
   "agent_id": 0,
   "computer_name": "",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "heartbeat_interval_sec": 30,
   "poll_interval_sec": 5
 }
