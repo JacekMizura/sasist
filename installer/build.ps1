@@ -221,6 +221,137 @@ function Search-IsccOnDrives {
     return $null
 }
 
+$SasistProcessNames = @(
+    "SasistPrinterAgent"
+    "SasistPrinterService"
+    "SasistPrinterUpdater"
+)
+
+$SasistProcessLockMessage = @"
+Sasist Printer Agent is still running or locked.
+Close the application and try again.
+"@
+
+function Get-SasistRunningProcesses {
+    $result = @()
+    $seen = @{}
+
+    foreach ($proc in @(Get-Process -Name "*Sasist*" -ErrorAction SilentlyContinue)) {
+        if ($seen.ContainsKey($proc.Id)) { continue }
+        $seen[$proc.Id] = $true
+        $result += $proc
+    }
+
+    foreach ($name in $SasistProcessNames) {
+        foreach ($proc in @(Get-Process -Name $name -ErrorAction SilentlyContinue)) {
+            if ($seen.ContainsKey($proc.Id)) { continue }
+            $seen[$proc.Id] = $true
+            $result += $proc
+        }
+    }
+
+    return $result
+}
+
+function Stop-SasistRunningProcesses {
+    Write-Host "[build] Stopping running Sasist processes..." -ForegroundColor Cyan
+
+    try {
+        $service = Get-Service -Name "SasistPrinterService" -ErrorAction SilentlyContinue
+        if ($service -and $service.Status -ne "Stopped") {
+            & sc.exe stop SasistPrinterService 2>$null | Out-Null
+        }
+    } catch {
+        # Service may not be installed on dev machines.
+    }
+
+    foreach ($name in $SasistProcessNames) {
+        & taskkill.exe /F /IM "$name.exe" 2>$null | Out-Null
+    }
+
+    foreach ($proc in @(Get-SasistRunningProcesses)) {
+        try {
+            Stop-Process -Id $proc.Id -Force -ErrorAction Stop
+        } catch {
+            & taskkill.exe /F /PID $proc.Id 2>$null | Out-Null
+        }
+    }
+}
+
+function Wait-SasistProcessesExit {
+    param(
+        [int]$TimeoutSeconds = 10
+    )
+
+    Write-Host "[build] Waiting for processes to exit..." -ForegroundColor Cyan
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    while ((Get-Date) -lt $deadline) {
+        if (-not (Get-SasistRunningProcesses)) {
+            return $true
+        }
+        Start-Sleep -Milliseconds 250
+    }
+    return -not (Get-SasistRunningProcesses)
+}
+
+function Remove-AgentBuildDirectory {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path,
+        [Parameter(Mandatory = $true)]
+        [string]$Label
+    )
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return
+    }
+
+    try {
+        Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction Stop
+    } catch {
+        if (Get-SasistRunningProcesses) {
+            throw $SasistProcessLockMessage
+        }
+        throw "$Label directory could not be removed. Some process is locking files."
+    }
+
+    if (Test-Path -LiteralPath $Path) {
+        if (Get-SasistRunningProcesses) {
+            throw $SasistProcessLockMessage
+        }
+        throw "$Label directory could not be removed. Some process is locking files."
+    }
+}
+
+function Clear-AgentPyInstallerArtifacts {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$DistRoot,
+        [Parameter(Mandatory = $true)]
+        [string]$BuildRoot,
+        [Parameter(Mandatory = $true)]
+        [string]$AgentRoot
+    )
+
+    Write-Step "Cleaning stale PyInstaller artifacts..."
+
+    Stop-SasistRunningProcesses
+    if (-not (Wait-SasistProcessesExit -TimeoutSeconds 10)) {
+        throw $SasistProcessLockMessage
+    }
+    if (Get-SasistRunningProcesses) {
+        throw $SasistProcessLockMessage
+    }
+
+    Remove-AgentBuildDirectory -Path $DistRoot -Label "dist"
+    Remove-AgentBuildDirectory -Path $BuildRoot -Label "build"
+
+    Write-Host "[build] Dist cleanup successful." -ForegroundColor Green
+
+    Get-ChildItem -Path $AgentRoot -Filter "*.spec.cache" -File -ErrorAction SilentlyContinue |
+        Remove-Item -Force -ErrorAction SilentlyContinue
+}
+
 Write-Step "Repository: $RepoRoot"
 $version = Read-AgentVersionFromRepo
 Write-Step "Agent version (VERSION): $version"
@@ -230,21 +361,7 @@ $builtAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss'Z'")
 
 Set-Location $AgentRoot
 
-Write-Step "Cleaning stale PyInstaller artifacts..."
-if (Test-Path -LiteralPath $DistRoot) {
-    Remove-Item -LiteralPath $DistRoot -Recurse -Force -ErrorAction Stop
-}
-if (Test-Path -LiteralPath $BuildRoot) {
-    Remove-Item -LiteralPath $BuildRoot -Recurse -Force -ErrorAction Stop
-}
-if (Test-Path -LiteralPath $DistRoot) {
-    throw "dist directory could not be removed. Some process is locking files."
-}
-if (Test-Path -LiteralPath $BuildRoot) {
-    throw "build directory could not be removed. Some process is locking files."
-}
-Get-ChildItem -Path $AgentRoot -Filter "*.spec.cache" -File -ErrorAction SilentlyContinue |
-    Remove-Item -Force -ErrorAction SilentlyContinue
+Clear-AgentPyInstallerArtifacts -DistRoot $DistRoot -BuildRoot $BuildRoot -AgentRoot $AgentRoot
 
 Write-Host ("[build] Building from:")
 Write-Host (Resolve-Path .)
