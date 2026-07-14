@@ -58,7 +58,11 @@ class SupplierListQueryError(RuntimeError):
 
 
 def _is_missing_column_error(exc: BaseException) -> bool:
-    msg = str(exc).lower()
+    parts = [str(exc)]
+    orig = getattr(exc, "orig", None)
+    if orig is not None:
+        parts.append(str(orig))
+    msg = " ".join(parts).lower()
     if "no such column" in msg:
         return True
     if "undefined column" in msg:

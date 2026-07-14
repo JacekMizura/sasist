@@ -7,6 +7,7 @@ import {
   updateSupplier,
   type SupplierRead,
 } from "../../api/inboundSuppliersApi";
+import { extractApiErrorMessage } from "../../api/apiErrorMessage";
 import { fetchPurchasingCooperationHistory } from "../../api/purchasingCooperationHistoryApi";
 import {
   createSupplierProductLink,
@@ -365,11 +366,7 @@ export default function SupplierEditPage() {
         setLoadedSupplier(updated);
       }
     } catch (err: unknown) {
-      const msg =
-        err && typeof err === "object" && "response" in err
-          ? String((err as { response?: { data?: { detail?: unknown } } }).response?.data?.detail ?? "")
-          : "";
-      setSaveErr(msg || "Zapis nie powiódł się.");
+      setSaveErr(extractApiErrorMessage(err, "Zapis nie powiódł się."));
     } finally {
       setSaving(false);
     }

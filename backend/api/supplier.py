@@ -16,6 +16,11 @@ from ..models.app_user import AppUser
 from ..models.inbound_delivery import InboundDelivery
 from ..models.supplier import Supplier
 from ..schemas.supplier import SupplierCreateBody, SupplierRead, SupplierUpdateBody
+from ..services.suppliers.errors import SupplierCreateError
+from ..services.suppliers.supplier_create_service import (
+    create_supplier_for_tenant,
+    supplier_create_payload_for_log,
+)
 from ..services.suppliers.supplier_list_service import SupplierListQueryError, list_suppliers_for_tenant
 from ..services.suppliers.supplier_projection import (
     delivery_counts,
@@ -122,34 +127,40 @@ def get_supplier(supplier_id: int, tenant_id: int = Query(..., ge=1), db: Sessio
 
 
 @router.post("/", response_model=SupplierRead, status_code=201)
-def create_supplier(body: SupplierCreateBody, db: Session = Depends(get_db)):
-    s = Supplier(
-        tenant_id=body.tenant_id,
-        name=body.name.strip(),
-        company_name=strip_optional_text(body.company_name),
-        tax_id=strip_optional_text(body.tax_id),
-        email=strip_optional_text(body.email),
-        phone=strip_optional_text(body.phone),
-        website=strip_optional_text(body.website),
-        country=strip_optional_text(body.country),
-        city=strip_optional_text(body.city),
-        postal_code=strip_optional_text(body.postal_code),
-        street=strip_optional_text(body.street),
-        address=strip_optional_text(body.address),
-        active=bool(body.active),
-        default_lead_time_days=body.default_lead_time_days,
-        default_currency=body.default_currency,
-        minimum_order_value=(body.minimum_order_value if body.requires_moq else None),
-        minimum_order_qty=(body.minimum_order_qty if body.requires_moq else None),
-        free_shipping_threshold=(body.free_shipping_threshold if body.offers_free_shipping else None),
-        offers_free_shipping=bool(body.offers_free_shipping),
-        requires_moq=bool(body.requires_moq),
-        notes=strip_optional_text(body.notes),
-    )
-    db.add(s)
-    db.commit()
-    db.refresh(s)
-    return supplier_to_read(s, delivery_count=0, product_count=0)
+def create_supplier(
+    body: SupplierCreateBody,
+    db: Session = Depends(get_db),
+    user: Optional[AppUser] = Depends(get_optional_current_user),
+):
+    user_id = user.id if user is not None else None
+    payload_log = supplier_create_payload_for_log(body)
+    try:
+        row = create_supplier_for_tenant(db, body)
+        return supplier_to_read(row, delivery_count=0, product_count=0)
+    except SupplierCreateError as exc:
+        logger.exception(
+            "[suppliers-create] tenant_id=%s user_id=%s payload=%s error=%s",
+            body.tenant_id,
+            user_id,
+            payload_log,
+            exc,
+        )
+        raise HTTPException(status_code=exc.http_status, detail=exc.as_detail()) from exc
+    except Exception as exc:
+        mapped = SupplierCreateError(
+            "Nie udało się utworzyć dostawcy. Spróbuj ponownie za chwilę.",
+            code="SUPPLIER_CREATE_FAILED",
+            details=str(exc),
+            http_status=503,
+        )
+        logger.exception(
+            "[suppliers-create] tenant_id=%s user_id=%s payload=%s error=%s",
+            body.tenant_id,
+            user_id,
+            payload_log,
+            exc,
+        )
+        raise HTTPException(status_code=mapped.http_status, detail=mapped.as_detail()) from exc
 
 
 @router.put("/{supplier_id}", response_model=SupplierRead)
