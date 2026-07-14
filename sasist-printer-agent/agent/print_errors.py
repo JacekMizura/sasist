@@ -196,9 +196,13 @@ def build_job_error_message(exc: BaseException, printer_name: str | None = None)
         except json.JSONDecodeError:
             pass
 
-    log_print_failure_context(printer_name, exc)
-    info = map_print_error(exc, printer_name=printer_name)
-    return info.to_api_message()
+    try:
+        log_print_failure_context(printer_name, exc)
+        info = map_print_error(exc, printer_name=printer_name)
+        return info.to_api_message()
+    except Exception:
+        logger.exception("Failed to map print error")
+        return str(exc)
 
 
 def parse_job_error_message(raw: str | None) -> dict[str, Any] | None:

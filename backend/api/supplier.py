@@ -1,19 +1,31 @@
 """CRUD for suppliers (dostawcy), tenant-scoped."""
 
-from typing import Dict, List, Optional
+from __future__ import annotations
+
+import logging
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, or_
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from ..catalog.supplier_taxonomy import country_is_eu, list_country_choices, list_currency_choices
+from ..auth.deps import get_optional_current_user
+from ..catalog.supplier_taxonomy import list_country_choices, list_currency_choices
 from ..database import get_db
+from ..models.app_user import AppUser
 from ..models.inbound_delivery import InboundDelivery
 from ..models.supplier import Supplier
-from ..models.supplier_product import SupplierProduct
 from ..schemas.supplier import SupplierCreateBody, SupplierRead, SupplierUpdateBody
+from ..services.suppliers.supplier_list_service import SupplierListQueryError, list_suppliers_for_tenant
+from ..services.suppliers.supplier_projection import (
+    delivery_counts,
+    product_counts,
+    strip_optional_text,
+    supplier_to_read,
+)
 
 router = APIRouter(prefix="/suppliers", tags=["Suppliers"])
+logger = logging.getLogger(__name__)
 
 
 @router.get("/taxonomy")
@@ -23,75 +35,6 @@ def get_supplier_taxonomy():
         "countries": list_country_choices(),
         "currencies": [{"code": c} for c in list_currency_choices()],
     }
-
-
-def _strip_opt(s: Optional[str]) -> Optional[str]:
-    if s is None:
-        return None
-    t = str(s).strip()
-    return t or None
-
-
-def _delivery_counts(db: Session, tenant_id: int, ids: List[int]) -> Dict[int, int]:
-    if not ids:
-        return {}
-    rows = (
-        db.query(InboundDelivery.supplier_id, func.count(InboundDelivery.id))
-        .filter(InboundDelivery.tenant_id == tenant_id, InboundDelivery.supplier_id.in_(ids))
-        .group_by(InboundDelivery.supplier_id)
-        .all()
-    )
-    return {int(sid): int(c or 0) for sid, c in rows if sid is not None}
-
-
-def _product_counts(db: Session, tenant_id: int, ids: List[int]) -> Dict[int, int]:
-    if not ids:
-        return {}
-    rows = (
-        db.query(SupplierProduct.supplier_id, func.count(SupplierProduct.id))
-        .filter(SupplierProduct.tenant_id == tenant_id, SupplierProduct.supplier_id.in_(ids))
-        .group_by(SupplierProduct.supplier_id)
-        .all()
-    )
-    return {int(sid): int(c or 0) for sid, c in rows if sid is not None}
-
-
-def _serialize(s: Supplier, delivery_count: int, product_count: int = 0) -> SupplierRead:
-    mov = getattr(s, "minimum_order_value", None)
-    mov_f = float(mov) if mov is not None else None
-    ctry = _strip_opt(getattr(s, "country", None))
-    return SupplierRead(
-        id=s.id,
-        tenant_id=s.tenant_id,
-        name=s.name,
-        company_name=_strip_opt(getattr(s, "company_name", None)),
-        tax_id=_strip_opt(getattr(s, "tax_id", None)),
-        email=_strip_opt(getattr(s, "email", None)),
-        phone=_strip_opt(getattr(s, "phone", None)),
-        website=_strip_opt(getattr(s, "website", None)),
-        country=ctry,
-        city=_strip_opt(getattr(s, "city", None)),
-        postal_code=_strip_opt(getattr(s, "postal_code", None)),
-        street=_strip_opt(getattr(s, "street", None)),
-        address=_strip_opt(getattr(s, "address", None)),
-        active=bool(s.active),
-        default_lead_time_days=getattr(s, "default_lead_time_days", None),
-        default_currency=_strip_opt(getattr(s, "default_currency", None)),
-        minimum_order_value=round(mov_f, 2) if mov_f is not None else None,
-        minimum_order_qty=getattr(s, "minimum_order_qty", None),
-        free_shipping_threshold=(
-            round(float(getattr(s, "free_shipping_threshold")), 2)
-            if getattr(s, "free_shipping_threshold", None) is not None
-            else None
-        ),
-        offers_free_shipping=bool(getattr(s, "offers_free_shipping", True)),
-        requires_moq=bool(getattr(s, "requires_moq", True)),
-        notes=_strip_opt(getattr(s, "notes", None)),
-        delivery_count=int(delivery_count),
-        product_count=int(product_count),
-        is_incomplete=bool(getattr(s, "is_incomplete", False)),
-        country_is_eu=country_is_eu(ctry),
-    )
 
 
 @router.get("/", response_model=List[SupplierRead])
@@ -111,55 +54,54 @@ def list_suppliers(
     sort_by: str = Query("name", description="name only"),
     sort_dir: str = Query("asc", description="asc | desc"),
     db: Session = Depends(get_db),
+    user: Optional[AppUser] = Depends(get_optional_current_user),
 ):
-    q = db.query(Supplier).filter(Supplier.tenant_id == tenant_id)
-    st = (status or "all").strip().lower()
-    if st == "active":
-        q = q.filter(Supplier.active.is_(True))
-    elif st == "inactive":
-        q = q.filter(Supplier.active.is_(False))
-    if name and name.strip():
-        term = f"%{name.strip()}%"
-        q = q.filter(
-            or_(
-                Supplier.name.ilike(term),
-                Supplier.company_name.ilike(term),
-                Supplier.tax_id.ilike(term),
-            )
+    user_id = user.id if user is not None else None
+    try:
+        return list_suppliers_for_tenant(
+            db,
+            tenant_id=int(tenant_id),
+            name=name,
+            country=country,
+            city=city,
+            email=email,
+            phone=phone,
+            currency=currency,
+            requires_moq=requires_moq,
+            offers_free_shipping=offers_free_shipping,
+            min_product_count=min_product_count,
+            min_delivery_count=min_delivery_count,
+            status=status,
+            sort_dir=sort_dir,
         )
-    if country and country.strip():
-        q = q.filter(Supplier.country.ilike(f"%{country.strip()}%"))
-    if city and city.strip():
-        q = q.filter(Supplier.city.ilike(f"%{city.strip()}%"))
-    if email and email.strip():
-        q = q.filter(Supplier.email.ilike(f"%{email.strip()}%"))
-    if phone and phone.strip():
-        q = q.filter(Supplier.phone.ilike(f"%{phone.strip()}%"))
-    if currency and currency.strip():
-        q = q.filter(Supplier.default_currency.ilike(f"%{currency.strip()}%"))
-    if requires_moq is not None:
-        q = q.filter(Supplier.requires_moq.is_(bool(requires_moq)))
-    if offers_free_shipping is not None:
-        q = q.filter(Supplier.offers_free_shipping.is_(bool(offers_free_shipping)))
-    rows = q.all()
-    ids = [s.id for s in rows]
-    delivery_counts = _delivery_counts(db, tenant_id, ids)
-    product_counts = _product_counts(db, tenant_id, ids)
-    out = [
-        _serialize(
-            s,
-            delivery_counts.get(s.id, 0),
-            product_counts.get(s.id, 0),
+    except SupplierListQueryError as exc:
+        logger.exception(
+            "[suppliers] tenant_id=%s user_id=%s error=%s",
+            tenant_id,
+            user_id,
+            exc,
         )
-        for s in rows
-    ]
-    if min_product_count is not None:
-        out = [r for r in out if r.product_count >= int(min_product_count)]
-    if min_delivery_count is not None:
-        out = [r for r in out if r.delivery_count >= int(min_delivery_count)]
-    rev = (sort_dir or "asc").strip().lower() == "desc"
-    out.sort(key=lambda r: (r.name or "").lower(), reverse=rev)
-    return out
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "message": exc.message,
+                "code": exc.code,
+            },
+        ) from exc
+    except Exception as exc:
+        logger.exception(
+            "[suppliers] tenant_id=%s user_id=%s error=%s",
+            tenant_id,
+            user_id,
+            exc,
+        )
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "message": "Nie udało się wczytać listy dostawców. Spróbuj ponownie za chwilę.",
+                "code": "SUPPLIERS_LIST_FAILED",
+            },
+        ) from exc
 
 
 @router.get("/{supplier_id}", response_model=SupplierRead)
@@ -172,7 +114,11 @@ def get_supplier(supplier_id: int, tenant_id: int = Query(..., ge=1), db: Sessio
         .filter(InboundDelivery.supplier_id == s.id, InboundDelivery.tenant_id == tenant_id)
         .scalar()
     )
-    return _serialize(s, int(cnt or 0), _product_counts(db, tenant_id, [s.id]).get(s.id, 0))
+    return supplier_to_read(
+        s,
+        delivery_count=int(cnt or 0),
+        product_count=product_counts(db, tenant_id, [s.id]).get(s.id, 0),
+    )
 
 
 @router.post("/", response_model=SupplierRead, status_code=201)
@@ -180,16 +126,16 @@ def create_supplier(body: SupplierCreateBody, db: Session = Depends(get_db)):
     s = Supplier(
         tenant_id=body.tenant_id,
         name=body.name.strip(),
-        company_name=_strip_opt(body.company_name),
-        tax_id=_strip_opt(body.tax_id),
-        email=_strip_opt(body.email),
-        phone=_strip_opt(body.phone),
-        website=_strip_opt(body.website),
-        country=_strip_opt(body.country),
-        city=_strip_opt(body.city),
-        postal_code=_strip_opt(body.postal_code),
-        street=_strip_opt(body.street),
-        address=_strip_opt(body.address),
+        company_name=strip_optional_text(body.company_name),
+        tax_id=strip_optional_text(body.tax_id),
+        email=strip_optional_text(body.email),
+        phone=strip_optional_text(body.phone),
+        website=strip_optional_text(body.website),
+        country=strip_optional_text(body.country),
+        city=strip_optional_text(body.city),
+        postal_code=strip_optional_text(body.postal_code),
+        street=strip_optional_text(body.street),
+        address=strip_optional_text(body.address),
         active=bool(body.active),
         default_lead_time_days=body.default_lead_time_days,
         default_currency=body.default_currency,
@@ -198,12 +144,12 @@ def create_supplier(body: SupplierCreateBody, db: Session = Depends(get_db)):
         free_shipping_threshold=(body.free_shipping_threshold if body.offers_free_shipping else None),
         offers_free_shipping=bool(body.offers_free_shipping),
         requires_moq=bool(body.requires_moq),
-        notes=_strip_opt(body.notes),
+        notes=strip_optional_text(body.notes),
     )
     db.add(s)
     db.commit()
     db.refresh(s)
-    return _serialize(s, 0, 0)
+    return supplier_to_read(s, delivery_count=0, product_count=0)
 
 
 @router.put("/{supplier_id}", response_model=SupplierRead)
@@ -217,16 +163,16 @@ def update_supplier(
     if not s:
         raise HTTPException(status_code=404, detail="Supplier not found")
     s.name = body.name.strip()
-    s.company_name = _strip_opt(body.company_name)
-    s.tax_id = _strip_opt(body.tax_id)
-    s.email = _strip_opt(body.email)
-    s.phone = _strip_opt(body.phone)
-    s.website = _strip_opt(body.website)
-    s.country = _strip_opt(body.country)
-    s.city = _strip_opt(body.city)
-    s.postal_code = _strip_opt(body.postal_code)
-    s.street = _strip_opt(body.street)
-    s.address = _strip_opt(body.address)
+    s.company_name = strip_optional_text(body.company_name)
+    s.tax_id = strip_optional_text(body.tax_id)
+    s.email = strip_optional_text(body.email)
+    s.phone = strip_optional_text(body.phone)
+    s.website = strip_optional_text(body.website)
+    s.country = strip_optional_text(body.country)
+    s.city = strip_optional_text(body.city)
+    s.postal_code = strip_optional_text(body.postal_code)
+    s.street = strip_optional_text(body.street)
+    s.address = strip_optional_text(body.address)
     s.active = bool(body.active)
     s.default_lead_time_days = body.default_lead_time_days
     s.default_currency = body.default_currency
@@ -235,7 +181,7 @@ def update_supplier(
     s.minimum_order_value = body.minimum_order_value if body.requires_moq else None
     s.minimum_order_qty = body.minimum_order_qty if body.requires_moq else None
     s.free_shipping_threshold = body.free_shipping_threshold if body.offers_free_shipping else None
-    s.notes = _strip_opt(body.notes)
+    s.notes = strip_optional_text(body.notes)
     db.commit()
     db.refresh(s)
     cnt = (
@@ -243,7 +189,11 @@ def update_supplier(
         .filter(InboundDelivery.supplier_id == s.id, InboundDelivery.tenant_id == tenant_id)
         .scalar()
     )
-    return _serialize(s, int(cnt or 0), _product_counts(db, tenant_id, [s.id]).get(s.id, 0))
+    return supplier_to_read(
+        s,
+        delivery_count=int(cnt or 0),
+        product_count=product_counts(db, tenant_id, [s.id]).get(s.id, 0),
+    )
 
 
 @router.delete("/{supplier_id}")

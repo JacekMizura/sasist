@@ -63,3 +63,41 @@ def test_build_job_error_message_json_roundtrip() -> None:
     assert parsed["technical"]
     assert parsed["suggestion"]
     assert json.loads(raw)["friendly"] == parsed["friendly"]
+
+
+def test_build_job_error_message_when_mapper_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    exc = WinErrorStub(ERROR_GEN_FAILURE, "original device failure")
+
+    def _missing(*_args, **_kwargs):
+        raise NameError("map_print_error is not defined")
+
+    monkeypatch.setattr("agent.print_errors.map_print_error", _missing)
+    raw = build_job_error_message(exc, printer_name="TestPrinter")
+    assert raw == str(exc)
+    assert "original device failure" in raw
+
+
+def test_build_job_error_message_when_mapper_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    exc = Exception("ShellExecute failed with code 31")
+
+    def _broken(*_args, **_kwargs):
+        raise RuntimeError("mapper crashed")
+
+    monkeypatch.setattr("agent.print_errors.map_print_error", _broken)
+    raw = build_job_error_message(exc, printer_name="HP")
+    assert raw == str(exc)
+    assert "ShellExecute failed with code 31" in raw
+
+
+def test_build_job_error_message_preserves_original_for_ui(monkeypatch: pytest.MonkeyPatch) -> None:
+    exc = WinErrorStub(ERROR_GEN_FAILURE, "Urządzenie dołączone do komputera nie działa.")
+
+    monkeypatch.setattr(
+        "agent.print_errors.map_print_error",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("formatter down")),
+    )
+    raw = build_job_error_message(exc, printer_name="Etykiety")
+    assert raw == str(exc)
+    parsed = parse_job_error_message(raw)
+    assert parsed is None
+    assert "Urządzenie dołączone do komputera nie działa." in raw

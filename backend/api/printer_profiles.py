@@ -14,6 +14,21 @@ logger = logging.getLogger(__name__)
 TENANT_ID = 1
 
 
+def _profile_to_response(row: PrinterProfile) -> dict:
+    return {
+        "id": row.id,
+        "tenant_id": row.tenant_id,
+        "name": row.name,
+        "dpi": row.dpi,
+        "offset_x_mm": float(row.offset_x_mm or 0),
+        "offset_y_mm": float(row.offset_y_mm or 0),
+        "scale": float(row.scale if row.scale is not None else 1.0),
+        "agent_printer_id": row.agent_printer_id,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+    }
+
+
 @router.get("", response_model=list[PrinterProfileResponse])
 def list_profiles(
     tenant_id: int = TENANT_ID,
@@ -27,20 +42,7 @@ def list_profiles(
         .all()
     )
     logger.info("GET /printer-profiles tenant_id=%s -> %s profiles", tenant_id, len(rows))
-    return [
-        {
-            "id": r.id,
-            "tenant_id": r.tenant_id,
-            "name": r.name,
-            "dpi": r.dpi,
-            "offset_x_mm": float(r.offset_x_mm or 0),
-            "offset_y_mm": float(r.offset_y_mm or 0),
-            "scale": float(r.scale if r.scale is not None else 1.0),
-            "created_at": r.created_at.isoformat() if r.created_at else None,
-            "updated_at": r.updated_at.isoformat() if r.updated_at else None,
-        }
-        for r in rows
-    ]
+    return [_profile_to_response(r) for r in rows]
 
 
 @router.post("", response_model=PrinterProfileResponse)
@@ -57,21 +59,12 @@ def create_profile(
         offset_x_mm=payload.offset_x_mm,
         offset_y_mm=payload.offset_y_mm,
         scale=payload.scale,
+        agent_printer_id=payload.agent_printer_id,
     )
     db.add(row)
     db.commit()
     db.refresh(row)
-    return {
-        "id": row.id,
-        "tenant_id": row.tenant_id,
-        "name": row.name,
-        "dpi": row.dpi,
-        "offset_x_mm": float(row.offset_x_mm or 0),
-        "offset_y_mm": float(row.offset_y_mm or 0),
-        "scale": float(row.scale if row.scale is not None else 1.0),
-        "created_at": row.created_at.isoformat() if row.created_at else None,
-        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
-    }
+    return _profile_to_response(row)
 
 
 @router.get("/{profile_id}", response_model=PrinterProfileResponse)
@@ -87,17 +80,7 @@ def get_profile(
     ).first()
     if not row:
         raise HTTPException(status_code=404, detail="Printer profile not found")
-    return {
-        "id": row.id,
-        "tenant_id": row.tenant_id,
-        "name": row.name,
-        "dpi": row.dpi,
-        "offset_x_mm": float(row.offset_x_mm or 0),
-        "offset_y_mm": float(row.offset_y_mm or 0),
-        "scale": float(row.scale if row.scale is not None else 1.0),
-        "created_at": row.created_at.isoformat() if row.created_at else None,
-        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
-    }
+    return _profile_to_response(row)
 
 
 @router.put("/{profile_id}", response_model=PrinterProfileResponse)
@@ -119,19 +102,10 @@ def update_profile(
     row.offset_x_mm = payload.offset_x_mm
     row.offset_y_mm = payload.offset_y_mm
     row.scale = payload.scale
+    row.agent_printer_id = payload.agent_printer_id
     db.commit()
     db.refresh(row)
-    return {
-        "id": row.id,
-        "tenant_id": row.tenant_id,
-        "name": row.name,
-        "dpi": row.dpi,
-        "offset_x_mm": float(row.offset_x_mm or 0),
-        "offset_y_mm": float(row.offset_y_mm or 0),
-        "scale": float(row.scale if row.scale is not None else 1.0),
-        "created_at": row.created_at.isoformat() if row.created_at else None,
-        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
-    }
+    return _profile_to_response(row)
 
 
 @router.delete("/{profile_id}")

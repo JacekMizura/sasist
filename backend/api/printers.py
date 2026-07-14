@@ -7,6 +7,7 @@ from ..database import get_db
 from ..models.printer import Printer
 from ..models.printer_profile import PrinterProfile
 from ..schemas.printer import PrinterPayload, PrinterResponse
+from ..services.printing.printer_service import sync_profile_agent_printer_link
 
 router = APIRouter(prefix="/printers", tags=["Printers"])
 
@@ -81,6 +82,14 @@ def create_printer(
         system_printer_name=payload.system_printer_name.strip() if (payload.system_printer_name and payload.system_printer_name.strip()) else None,
     )
     db.add(row)
+    db.flush()
+    sync_profile_agent_printer_link(
+        db,
+        tenant_id=tenant_id,
+        profile_id=row.profile_id,
+        system_printer_name=row.system_printer_name,
+        warehouse_id=row.warehouse_id,
+    )
     db.commit()
     db.refresh(row)
     return _printer_to_response(row)
@@ -125,6 +134,13 @@ def update_printer(
     row.description = payload.description.strip() if payload.description else None
     row.provider = payload.provider.strip() if (payload.provider and payload.provider.strip()) else None
     row.system_printer_name = payload.system_printer_name.strip() if (payload.system_printer_name and payload.system_printer_name.strip()) else None
+    sync_profile_agent_printer_link(
+        db,
+        tenant_id=tenant_id,
+        profile_id=row.profile_id,
+        system_printer_name=row.system_printer_name,
+        warehouse_id=row.warehouse_id,
+    )
     db.commit()
     db.refresh(row)
     return _printer_to_response(row)

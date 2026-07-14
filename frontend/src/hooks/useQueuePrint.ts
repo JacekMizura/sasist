@@ -62,12 +62,16 @@ export function useQueuePrint({ tenantId, warehouseId }: Options) {
     (
       label: NonNullable<QueuePrintRequest["label"]>,
       warehouseIdOverride?: number | null,
+      printerSelection?: Pick<QueuePrintRequest, "printer_id" | "printer_profile_id">,
     ) =>
       queuePrint({
         document_type: "label",
         label,
         warehouse_id: warehouseIdOverride ?? warehouseId ?? null,
         copies: 1,
+        printer_id: printerSelection?.printer_id ?? null,
+        printer_profile_id:
+          printerSelection?.printer_profile_id ?? label.printer_profile_id ?? null,
       }),
     [queuePrint, warehouseId],
   );

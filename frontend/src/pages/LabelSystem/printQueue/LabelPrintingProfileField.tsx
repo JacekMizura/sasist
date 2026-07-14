@@ -3,8 +3,14 @@ import { Link } from "react-router-dom";
 
 import type { Printer } from "../../../types/printer";
 import type { PrinterProfile } from "../../../types/printerProfiles";
+import type { AgentPrinterRead } from "../../../types/printing";
 import { LabelProfileWizardModal } from "./LabelProfileWizardModal";
 import { formatProfileOptionDisplay } from "./labelProfileDisplay";
+import {
+  formatProfileAgentLinkMessage,
+  isProfileAgentLinkBroken,
+  resolveProfileAgentLinkStatus,
+} from "./labelProfileAgentLink";
 import { PrintQueueGhostButton, PrintQueuePrimaryButton } from "./printQueueUi";
 
 type Props = {
@@ -13,6 +19,7 @@ type Props = {
   profiles: PrinterProfile[];
   printers: Printer[];
   legacyPrinters: Printer[];
+  agentPrinters: AgentPrinterRead[];
   systemPrinters: string[];
   selectedPrinterId: number | null;
   onSelectPrinterId: (id: number | null) => void;
@@ -25,6 +32,7 @@ export function LabelPrintingProfileField({
   profiles,
   printers,
   legacyPrinters,
+  agentPrinters,
   systemPrinters,
   selectedPrinterId,
   onSelectPrinterId,
@@ -39,6 +47,14 @@ export function LabelPrintingProfileField({
   const selectedDisplay = selectedPrinter
     ? formatProfileOptionDisplay(selectedPrinter, legacyPrinters)
     : null;
+  const selectedAgentLink = resolveProfileAgentLinkStatus(
+    selectedPrinter,
+    legacyPrinters,
+    agentPrinters,
+    profiles,
+  );
+  const selectedAgentLinkMessage = formatProfileAgentLinkMessage(selectedAgentLink);
+  const selectedAgentLinkBroken = isProfileAgentLinkBroken(selectedAgentLink);
 
   useEffect(() => {
     if (printers.length !== 1 || selectedPrinterId != null) return;
@@ -156,6 +172,23 @@ export function LabelPrintingProfileField({
                 </li>
               ))}
             </ul>
+          ) : null}
+
+          {selectedAgentLinkMessage ? (
+            <p
+              className={`mt-2 text-xs leading-relaxed ${
+                selectedAgentLinkBroken ? "text-amber-800" : "text-slate-600"
+              }`}
+            >
+              {selectedAgentLinkMessage}
+            </p>
+          ) : null}
+
+          {selectedAgentLinkBroken ? (
+            <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50/90 px-3 py-2 text-xs text-amber-950">
+              Wydruk może trafić na domyślną drukarkę magazynu, dopóki profil nie wskazuje aktywnej drukarki agenta.
+              Zaktualizuj powiązanie w ustawieniach drukarek lub wybierz inną drukarkę systemową.
+            </div>
           ) : null}
 
           <div className="mt-2 flex flex-wrap gap-2">

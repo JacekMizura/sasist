@@ -67,7 +67,6 @@ def print_pdf(file_path: Path, printer_name: str, *, copies: int = 1) -> None:
                 setattr(shell_exc, "winerror", result)
                 raise shell_exc
         except Exception as exc:
-            info = map_print_error(exc, printer_name=printer_name)
             raise ApiError(build_job_error_message(exc, printer_name)) from exc
 
 

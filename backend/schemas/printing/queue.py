@@ -26,4 +26,6 @@ class QueuePrintRequest(BaseModel):
     warehouse_id: int | None = None
     template_version_id: int | None = None
     copies: int = Field(default=1, ge=1, le=99)
+    printer_id: int | None = None
+    printer_profile_id: int | None = None
     label: LabelQueuePayload | None = None

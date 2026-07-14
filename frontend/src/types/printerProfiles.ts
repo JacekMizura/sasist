@@ -5,4 +5,5 @@ export interface PrinterProfile {
   offset_x_mm: number;
   offset_y_mm: number;
   scale: number;
+  agent_printer_id?: number | null;
 }

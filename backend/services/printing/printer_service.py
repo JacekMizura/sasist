@@ -280,3 +280,170 @@ def upsert_printing_defaults(
 
     db.commit()
     return get_printing_defaults(db, tenant_id=tenant_id, warehouse_id=warehouse_id)
+
+
+def find_agent_printer_id_by_system_name(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int | None,
+    system_name: str,
+) -> int | None:
+    normalized = system_name.strip()
+    if not normalized:
+        return None
+    query = (
+        db.query(AgentPrinter)
+        .join(PrinterAgent, AgentPrinter.agent_id == PrinterAgent.id)
+        .filter(
+            PrinterAgent.tenant_id == tenant_id,
+            AgentPrinter.system_name == normalized,
+            AgentPrinter.is_active.is_(True),
+        )
+    )
+    if warehouse_id is not None:
+        query = query.filter(PrinterAgent.warehouse_id == warehouse_id)
+    row = query.order_by(AgentPrinter.id.asc()).first()
+    return int(row.id) if row else None
+
+
+def _active_agent_printer_id(db: Session, *, tenant_id: int, printer_id: int) -> int | None:
+    row = (
+        db.query(AgentPrinter)
+        .join(PrinterAgent, AgentPrinter.agent_id == PrinterAgent.id)
+        .filter(
+            AgentPrinter.id == printer_id,
+            AgentPrinter.is_active.is_(True),
+            PrinterAgent.tenant_id == tenant_id,
+        )
+        .first()
+    )
+    return int(row.id) if row else None
+
+
+def resolve_profile_agent_printer_id(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int | None,
+    profile_id: int,
+) -> int | None:
+    from ...models.printer import Printer
+    from ...models.printer_profile import PrinterProfile
+
+    profile = (
+        db.query(PrinterProfile)
+        .filter(PrinterProfile.id == profile_id, PrinterProfile.tenant_id == tenant_id)
+        .first()
+    )
+    if profile is None:
+        return None
+
+    if profile.agent_printer_id:
+        active_id = _active_agent_printer_id(
+            db,
+            tenant_id=tenant_id,
+            printer_id=int(profile.agent_printer_id),
+        )
+        if active_id is not None:
+            return active_id
+        profile.agent_printer_id = None
+        db.flush()
+
+    legacy = (
+        db.query(Printer)
+        .filter(Printer.profile_id == profile_id, Printer.tenant_id == tenant_id)
+        .order_by(Printer.id.asc())
+        .first()
+    )
+    if legacy is None or not legacy.system_printer_name:
+        return None
+
+    resolved = find_agent_printer_id_by_system_name(
+        db,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id if warehouse_id is not None else legacy.warehouse_id,
+        system_name=str(legacy.system_printer_name),
+    )
+    if resolved is not None:
+        profile.agent_printer_id = resolved
+        db.flush()
+    return resolved
+
+
+def sync_profile_agent_printer_link(
+    db: Session,
+    *,
+    tenant_id: int,
+    profile_id: int | None,
+    system_printer_name: str | None,
+    warehouse_id: int | None,
+) -> None:
+    if profile_id is None:
+        return
+    from ...models.printer_profile import PrinterProfile
+
+    profile = (
+        db.query(PrinterProfile)
+        .filter(PrinterProfile.id == profile_id, PrinterProfile.tenant_id == tenant_id)
+        .first()
+    )
+    if profile is None:
+        return
+
+    resolved = find_agent_printer_id_by_system_name(
+        db,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        system_name=str(system_printer_name or ""),
+    )
+    profile.agent_printer_id = resolved
+    db.flush()
+
+
+def backfill_profile_agent_printer_links(db: Session) -> dict[str, int]:
+    """Idempotent repair: populate profile.agent_printer_id from legacy printers.system_printer_name."""
+    from ...models.printer import Printer
+    from ...models.printer_profile import PrinterProfile
+
+    updated = 0
+    cleared = 0
+    skipped = 0
+    profiles = db.query(PrinterProfile).order_by(PrinterProfile.id.asc()).all()
+    for profile in profiles:
+        if profile.agent_printer_id:
+            active_id = _active_agent_printer_id(
+                db,
+                tenant_id=int(profile.tenant_id),
+                printer_id=int(profile.agent_printer_id),
+            )
+            if active_id is not None:
+                continue
+            profile.agent_printer_id = None
+            cleared += 1
+
+        legacy = (
+            db.query(Printer)
+            .filter(Printer.profile_id == profile.id, Printer.tenant_id == profile.tenant_id)
+            .order_by(Printer.id.asc())
+            .first()
+        )
+        if legacy is None or not legacy.system_printer_name:
+            skipped += 1
+            continue
+
+        resolved = find_agent_printer_id_by_system_name(
+            db,
+            tenant_id=int(profile.tenant_id),
+            warehouse_id=legacy.warehouse_id,
+            system_name=str(legacy.system_printer_name),
+        )
+        if resolved is None:
+            skipped += 1
+            continue
+        profile.agent_printer_id = resolved
+        updated += 1
+
+    if updated or cleared:
+        db.commit()
+    return {"updated": updated, "cleared": cleared, "skipped": skipped}

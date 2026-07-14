@@ -187,11 +187,18 @@ def log_print_queue(
     agent_id: int,
     machine_id: str,
     warehouse_id: int | None,
+    requested_profile_id: int | None = None,
+    requested_printer_id: int | None = None,
+    resolution_source: str | None = None,
 ) -> None:
     logger.info(
-        "[print-queue] job_id=%s printer_id=%s agent_id=%s machine_id=%s warehouse_id=%s",
+        "[print-queue] job_id=%s requested_profile_id=%s requested_printer_id=%s "
+        "resolved_printer_id=%s resolution_source=%s agent_id=%s machine_id=%s warehouse_id=%s",
         job_id,
+        requested_profile_id,
+        requested_printer_id,
         printer_id,
+        resolution_source,
         agent_id,
         machine_id,
         warehouse_id,

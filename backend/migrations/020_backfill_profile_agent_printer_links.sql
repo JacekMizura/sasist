@@ -1,0 +1,19 @@
+-- Repair migration: link printer_profiles.agent_printer_id from legacy printers.system_printer_name.
+-- Portable runtime backfill: backfill_profile_agent_printer_links() on startup (printing_schema).
+--
+-- PostgreSQL one-shot (optional manual run after 019):
+--
+-- UPDATE printer_profiles AS pp
+-- SET agent_printer_id = ap.id
+-- FROM printers AS lp
+-- JOIN agent_printers AS ap
+--   ON ap.system_name = lp.system_printer_name
+--  AND ap.is_active = TRUE
+-- JOIN printer_agents AS pa
+--   ON pa.id = ap.agent_id
+--  AND pa.tenant_id = pp.tenant_id
+-- WHERE lp.profile_id = pp.id
+--   AND lp.tenant_id = pp.tenant_id
+--   AND pp.agent_printer_id IS NULL
+--   AND lp.system_printer_name IS NOT NULL
+--   AND TRIM(lp.system_printer_name) <> '';

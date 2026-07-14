@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+from dataclasses import dataclass
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -21,7 +22,7 @@ from .assignment_service import ensure_queue_target_agent_online, log_print_queu
 from .errors import PrintingError
 from .file_service import save_job_pdf
 from .job_service import create_print_job
-from .printer_service import get_printing_defaults
+from .printer_service import get_printing_defaults, resolve_profile_agent_printer_id
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +59,78 @@ def resolve_default_printer_id(
             status_code=400,
         )
     return int(printer_id)
+
+
+@dataclass(frozen=True)
+class QueuePrinterResolution:
+    printer_id: int
+    source: str
+    requested_profile_id: int | None
+    requested_printer_id: int | None
+
+
+def _extract_requested_profile_id(payload: QueuePrintRequest) -> int | None:
+    if payload.printer_profile_id is not None:
+        return int(payload.printer_profile_id)
+    if payload.label is not None and payload.label.printer_profile_id is not None:
+        return int(payload.label.printer_profile_id)
+    return None
+
+
+def resolve_queue_printer_id(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int | None,
+    document_type: str,
+    requested_printer_id: int | None,
+    requested_profile_id: int | None,
+) -> QueuePrinterResolution:
+    if requested_profile_id is not None:
+        profile_printer_id = resolve_profile_agent_printer_id(
+            db,
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+            profile_id=requested_profile_id,
+        )
+        if profile_printer_id is not None:
+            return QueuePrinterResolution(
+                printer_id=profile_printer_id,
+                source="profile",
+                requested_profile_id=requested_profile_id,
+                requested_printer_id=requested_printer_id,
+            )
+
+    if requested_printer_id is not None:
+        return QueuePrinterResolution(
+            printer_id=int(requested_printer_id),
+            source="request",
+            requested_profile_id=requested_profile_id,
+            requested_printer_id=requested_printer_id,
+        )
+
+    default_printer_id = resolve_default_printer_id(
+        db,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        document_type=document_type,
+    )
+    return QueuePrinterResolution(
+        printer_id=default_printer_id,
+        source="default",
+        requested_profile_id=requested_profile_id,
+        requested_printer_id=requested_printer_id,
+    )
+
+
+def log_queue_printer_resolution(resolution: QueuePrinterResolution) -> None:
+    logger.info(
+        "[print-queue] requested_profile_id=%s requested_printer_id=%s resolved_printer_id=%s resolution_source=%s",
+        resolution.requested_profile_id,
+        resolution.requested_printer_id,
+        resolution.printer_id,
+        resolution.source,
+    )
 
 
 def _generate_stock_document_pdf(
@@ -206,12 +279,17 @@ def queue_print_job(
         raise PrintingError(f"Unsupported document_type: {document_type}", status_code=400)
 
     warehouse_id = payload.warehouse_id
-    printer_id = resolve_default_printer_id(
+    requested_profile_id = _extract_requested_profile_id(payload)
+    resolution = resolve_queue_printer_id(
         db,
         tenant_id=tenant_id,
         warehouse_id=warehouse_id,
         document_type=document_type,
+        requested_printer_id=payload.printer_id,
+        requested_profile_id=requested_profile_id,
     )
+    log_queue_printer_resolution(resolution)
+    printer_id = resolution.printer_id
     target_printer, target_agent = ensure_queue_target_agent_online(
         db,
         tenant_id=tenant_id,
@@ -257,5 +335,8 @@ def queue_print_job(
         agent_id=target_agent.id,
         machine_id=target_agent.machine_id,
         warehouse_id=job.warehouse_id,
+        requested_profile_id=resolution.requested_profile_id,
+        requested_printer_id=resolution.requested_printer_id,
+        resolution_source=resolution.source,
     )
     return job

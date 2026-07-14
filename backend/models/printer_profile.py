@@ -5,7 +5,8 @@ Stores printer calibration (offset and scale) per tenant for label export/printi
 Calibration is applied only during export/printing, not in preview or editing.
 """
 
-from sqlalchemy import Column, Integer, Float, String
+from sqlalchemy import Column, Float, Integer, String, ForeignKey
+from sqlalchemy.orm import relationship
 
 from ..database import Base
 from .base import BaseModelMixin
@@ -20,3 +21,11 @@ class PrinterProfile(Base, BaseModelMixin):
     offset_x_mm = Column(Float, default=0.0)
     offset_y_mm = Column(Float, default=0.0)
     scale = Column(Float, default=1.0)
+    agent_printer_id = Column(
+        Integer,
+        ForeignKey("agent_printers.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
+    agent_printer = relationship("AgentPrinter", foreign_keys=[agent_printer_id])

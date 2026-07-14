@@ -17,7 +17,7 @@ from .schema_introspection import ensure_model_schema_sync, has_table
 
 logger = logging.getLogger(__name__)
 
-PRINTING_SCHEMA_VERSION = "2026.07.12.1"
+PRINTING_SCHEMA_VERSION = "2026.07.12.2"
 
 
 @dataclass(frozen=True)
@@ -81,6 +81,33 @@ def ensure_printing_schema(engine: Engine) -> int:
                 "[printing.schema] sync_failed table=%s",
                 spec.table_name,
             )
+
+    try:
+        from ..models.printer_profile import PrinterProfile
+
+        if has_table(engine, "printer_profiles"):
+            added += ensure_model_schema_sync(
+                engine,
+                PrinterProfile,
+                log_prefix="printing.schema.sync",
+                sync_indexes=True,
+            )
+    except Exception:
+        logger.exception("[printing.schema] sync_failed table=printer_profiles")
+
+    try:
+        from sqlalchemy.orm import sessionmaker
+
+        from ..services.printing.printer_service import backfill_profile_agent_printer_links
+
+        session_factory = sessionmaker(bind=engine)
+        with session_factory() as db:
+            stats = backfill_profile_agent_printer_links(db)
+            if stats.get("updated") or stats.get("cleared"):
+                logger.info("[printing.schema] profile_agent_printer_backfill %s", stats)
+    except Exception:
+        logger.exception("[printing.schema] profile_agent_printer_backfill_failed")
+
     logger.info(
         "[printing.schema] ensure_complete version=%s columns_added=%s",
         PRINTING_SCHEMA_VERSION,

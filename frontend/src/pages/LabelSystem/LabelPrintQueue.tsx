@@ -70,6 +70,7 @@ import {
 import { useLabelPrintingPrinters } from "./hooks/useLabelPrintingPrinters";
 import { LabelPrintingProfileField } from "./printQueue/LabelPrintingProfileField";
 import { formatProfileSummaryLabel } from "./printQueue/labelProfileDisplay";
+import { resolveLabelQueuePrinterSelection } from "./printQueue/labelQueuePrinterSelection";
 
 const TENANT_ID = 1;
 
@@ -696,17 +697,24 @@ export function LabelPrintQueue({ template }: Props) {
         labelDatasetPrepare,
       );
       const selectedPrinter = printers.find((p) => p.id === selectedPrinterId) ?? null;
+      const printerSelection = resolveLabelQueuePrinterSelection(
+        selectedPrinter,
+        agentPrinters,
+        profiles,
+        legacyPrinters,
+      );
 
       await queueLabelPrint(
         {
           template_id: templateId,
           records: recordsToSend,
           exclude_floors: excludeFloors,
-          printer_profile_id: selectedPrinter?.profile_id ?? null,
+          printer_profile_id: printerSelection.printer_profile_id,
           print_mode: pdfPrintReady,
           ...(printMode === "csv_import" ? labelRenderPdfCsvGroupBody(csvPdfRequestUsesGrouping) : {}),
         },
         selectedWarehouseId,
+        printerSelection,
       );
     } catch (e) {
       console.error("Label queue print failed:", e);
@@ -724,6 +732,9 @@ export function LabelPrintQueue({ template }: Props) {
     labelDatasetPrepare,
     printers,
     selectedPrinterId,
+    profiles,
+    legacyPrinters,
+    agentPrinters,
     excludeFloors,
     pdfPrintReady,
     csvPdfRequestUsesGrouping,
@@ -1244,6 +1255,7 @@ export function LabelPrintQueue({ template }: Props) {
                   profiles={profiles}
                   printers={printers}
                   legacyPrinters={legacyPrinters}
+                  agentPrinters={agentPrinters}
                   systemPrinters={systemPrinters}
                   selectedPrinterId={selectedPrinterId}
                   onSelectPrinterId={setSelectedPrinterId}

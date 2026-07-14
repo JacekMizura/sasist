@@ -67,6 +67,8 @@ export type QueuePrintRequest = {
   warehouse_id?: number | null;
   template_version_id?: number | null;
   copies?: number;
+  printer_id?: number | null;
+  printer_profile_id?: number | null;
   label?: {
     template_id: number;
     records: Record<string, unknown>[];

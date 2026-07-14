@@ -7,6 +7,7 @@ class PrinterProfilePayload(BaseModel):
     offset_x_mm: float = 0.0
     offset_y_mm: float = 0.0
     scale: float = 1.0
+    agent_printer_id: int | None = None
 
 
 class PrinterProfileResponse(BaseModel):
@@ -17,6 +18,7 @@ class PrinterProfileResponse(BaseModel):
     offset_x_mm: float
     offset_y_mm: float
     scale: float
+    agent_printer_id: int | None = None
     created_at: str | None = None
     updated_at: str | None = None
 
