@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-07-15 — Label CSV print queue 3-column wizard
+
+- Import CSV: wizard steps + left accordions (320px) + paginated preview + sticky summary (320px).
+- New `printQueue/CsvImportQueueShell`, `PrintQueueStepWizard`, `PrintQueueAccordion`, `PrintQueueThreeColumnLayout`, `PrintQueueLabelPreviewPane`, `PrintQueueSummaryPanel`.
+- No API/print logic changes — UI shell only for `printMode === "csv_import"`.
+
 ## 2026-07-15 — Label CSV mapping UX
 
 - Dropdown no longer lists full `LABEL_VARIABLE_CATEGORIES`; scoped to `available_variables` / bindings / type fallback.

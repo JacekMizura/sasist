@@ -31,8 +31,10 @@ import {
   dedupeLabelRecordsByRackFloorRow,
   sanitizeRecordsForRenderPdf,
   extractTemplateDataBindingKeys,
+  mappedTargetFields,
   mergeParsedCsvSources,
   parseCsv,
+  polishLabelCsvFieldForUi,
   saveCsvLabelMapping,
   sanitizeTemplateJsonDimensionsForCsvExport,
   type CsvFileRowStats,
@@ -41,6 +43,9 @@ import {
   csvGroupingPdfBlockedByTemplate,
 } from "./labelCsvImport";
 import CsvColumnMappingSection from "./csvMapping/CsvColumnMappingSection";
+import { resolveTemplateUsedVariables } from "./csvMapping/labelCsvMappingFields";
+import CsvImportQueueShell from "./printQueue/CsvImportQueueShell";
+import type { PrintQueueWizardStepId } from "./printQueue/PrintQueueStepWizard";
 import {
   CSV_GROUPING_PREVIEW_LIMIT,
   getCsvGroupingPreview,
@@ -1191,8 +1196,416 @@ export function LabelPrintQueue({ template }: Props) {
     : printMode === "csv_import" ? csvRecordsFiltered.length
     : null;
 
+  const csvWizardStep: PrintQueueWizardStepId = useMemo(() => {
+    if (!selectedCsvTemplateId) return 1;
+    if (csvHeaders.length === 0) return 2;
+    if (csvRecordsFiltered.length === 0) return 3;
+    return 4;
+  }, [selectedCsvTemplateId, csvHeaders.length, csvRecordsFiltered.length]);
+
+  const csvMappingSummary = useMemo(() => {
+    if (csvHeaders.length === 0) return { kind: "na" as const };
+    const used = resolveTemplateUsedVariables({
+      template: csvTemplateParsed,
+      apiAvailableVariables:
+        selectedCsvTemplateRow?.available_variables ?? selectedCsvTemplateRow?.variables ?? null,
+      bindingKeys: csvTemplateBindingInfo.keys,
+    });
+    if (used.length === 0) return { kind: "ok" as const };
+    const covered = mappedTargetFields(csvColumnToField);
+    const missing = used
+      .filter((f) => !covered.has(f))
+      .map((f) => polishLabelCsvFieldForUi(f));
+    return missing.length === 0
+      ? { kind: "ok" as const }
+      : { kind: "missing" as const, fields: missing };
+  }, [
+    csvHeaders.length,
+    csvTemplateParsed,
+    selectedCsvTemplateRow,
+    csvTemplateBindingInfo.keys,
+    csvColumnToField,
+  ]);
+
+  if (printMode === "csv_import") {
+    const labelW = Math.round(Number(summaryDimsTemplate?.widthMm) || 0);
+    const labelH = Math.round(Number(summaryDimsTemplate?.heightMm) || 0);
+    const dpi = summaryDimsTemplate?.dpi ?? 300;
+    const samplePreviewRecord =
+      csvRecordsFiltered[0] ??
+      ({ loc_name: "A1-C-1", barcode_data: "SAMPLE", rack_name: "A1" } as Record<string, unknown>);
+
+    return (
+      <CsvImportQueueShell
+        printMode={printMode}
+        onPrintModeChange={setPrintMode}
+        currentStep={csvWizardStep}
+        templateSummary={summaryTemplateName}
+        profileSummary={summaryPrinterLabel}
+        dataSummary={
+          csvHeaders.length > 0
+            ? `${csvRows.length} wierszy · ${csvHeaders.length} kolumn`
+            : "Brak pliku CSV"
+        }
+        filtersSummary={
+          excludeFloors.length > 0 ? `Wykluczone piętra: ${excludeFloors.length}` : "Bez filtra pięter"
+        }
+        templateSection={
+          <div className="space-y-3">
+            <div>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Typ szablonu
+              </label>
+              <p className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-slate-800">
+                {csvSelectedTemplateType?.trim() || "—"}
+              </p>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Szablon etykiety
+              </label>
+              <select
+                value={selectedCsvTemplateId ?? ""}
+                onChange={(e) => setSelectedCsvTemplateId(e.target.value ? Number(e.target.value) : null)}
+                className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-sm text-slate-900 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-300/40"
+              >
+                <option value="">— Wybierz szablon —</option>
+                {allLabelTemplatesForCsv.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                    {t.template_type ? ` (${t.template_type})` : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {csvTemplateParsed ? (
+              <div className="flex flex-col items-center rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
+                <p className="mb-2 self-start text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Miniatura
+                </p>
+                <LabelPreviewCard template={csvTemplateParsed} record={samplePreviewRecord} />
+              </div>
+            ) : null}
+            {csvTemplateDimensionHints.warnings.length > 0 ? (
+              <div className="space-y-1 rounded-xl border border-amber-200 bg-amber-50/90 px-3 py-2 text-xs leading-relaxed text-amber-950">
+                {csvTemplateDimensionHints.warnings.map((w, i) => (
+                  <p key={i}>{humanizeCsvSanitizeWarning(w)}</p>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        }
+        profileSection={
+          <div className="space-y-3">
+            <LabelPrintingProfileField
+              tenantId={TENANT_ID}
+              warehouseId={selectedWarehouseId}
+              profiles={profiles}
+              printers={printers}
+              legacyPrinters={legacyPrinters}
+              agentPrinters={agentPrinters}
+              systemPrinters={systemPrinters}
+              selectedPrinterId={selectedPrinterId}
+              onSelectPrinterId={setSelectedPrinterId}
+              onProfilesChanged={reloadPrinters}
+            />
+            <dl className="grid grid-cols-2 gap-2 text-xs">
+              <div className="rounded-lg border border-gray-200 bg-white p-2.5 shadow-sm">
+                <dt className="font-semibold uppercase tracking-wide text-slate-500">DPI</dt>
+                <dd className="mt-1 text-sm font-semibold text-slate-900">{dpi}</dd>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-white p-2.5 shadow-sm">
+                <dt className="font-semibold uppercase tracking-wide text-slate-500">Rozmiar</dt>
+                <dd className="mt-1 text-sm font-semibold text-slate-900 tabular-nums">
+                  {labelW} × {labelH} mm
+                </dd>
+              </div>
+            </dl>
+          </div>
+        }
+        dataSection={
+          <div className="space-y-3">
+            <p className="text-xs leading-relaxed text-slate-600">
+              Jedna linia CSV = jedna etykieta. Przy wielu plikach obowiązuje jedno mapowanie kolumn.
+            </p>
+            <div>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Źródło danych
+              </label>
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                multiple
+                onChange={handleCsvFileChange}
+                disabled={csvImportLoading}
+                className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-sm file:mr-2 file:rounded file:border-0 file:bg-blue-50 file:px-3 file:py-1 file:text-sm file:font-medium file:text-blue-700"
+              />
+            </div>
+            {csvImportLoading ? <p className="text-sm text-slate-500">Wczytywanie…</p> : null}
+            {csvImportError ? <p className="text-sm text-red-600">{csvImportError}</p> : null}
+            {csvHeaders.length > 0 ? (
+              <>
+                <p className="text-sm text-slate-700">
+                  Rekordów: <strong>{csvRows.length}</strong>
+                  {csvPerFileStats.length > 1 ? (
+                    <span className="text-slate-500"> ({csvPerFileStats.length} plików)</span>
+                  ) : null}{" "}
+                  · etykiet po filtrach: <strong>{csvRecordsFiltered.length}</strong>
+                </p>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setCsvColumnToField(buildColumnMappingWithPersistence(csvHeaders, { forceAuto: true }))
+                  }
+                  className="text-xs font-semibold text-blue-700 hover:underline"
+                >
+                  Automatyczne mapowanie
+                </button>
+                {csvPerFileStats.length > 0 ? (
+                  <ul className="list-disc space-y-0.5 pl-5 text-xs text-slate-600">
+                    {csvPerFileStats.map((s) => (
+                      <li key={s.filename}>
+                        <span className="font-mono text-slate-800">{s.filename}</span> — {s.rowCount} wierszy
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                {csvMergeWarnings.length > 0 ? (
+                  <div className="space-y-1 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+                    <p className="font-semibold">Scalanie plików</p>
+                    <ul className="list-disc space-y-0.5 pl-4">
+                      {csvMergeWarnings.map((w, i) => (
+                        <li key={`${i}-${w.slice(0, 40)}`}>{w}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                <label className="flex cursor-pointer items-start gap-2 text-sm text-slate-700 select-none">
+                  <input
+                    type="checkbox"
+                    checked={csvDedupeRackFloorRow}
+                    onChange={(e) => setCsvDedupeRackFloorRow(e.target.checked)}
+                    className="mt-1 rounded border-gray-200"
+                  />
+                  <span>
+                    Usuń duplikaty po <strong>Regał</strong> + <strong>Piętro</strong> + <strong>Rząd</strong>
+                  </span>
+                </label>
+                {csvValidationWarnings.length > 0 ? (
+                  <div className="space-y-1 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+                    <p className="font-semibold">Uwagi (druk nadal możliwy):</p>
+                    <ul className="list-disc space-y-0.5 pl-4">
+                      {csvValidationWarnings.map((w, i) => (
+                        <li key={`${i}-${w.slice(0, 48)}`}>{w}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                <CsvColumnMappingSection
+                  csvHeaders={csvHeaders}
+                  csvColumnToField={csvColumnToField}
+                  template={csvTemplateParsed}
+                  templateType={csvSelectedTemplateType}
+                  apiAvailableVariables={
+                    selectedCsvTemplateRow?.available_variables ?? selectedCsvTemplateRow?.variables ?? null
+                  }
+                  bindingKeys={csvTemplateBindingInfo.keys}
+                  onMappingChange={(header, field) => {
+                    setCsvColumnToField((prev) => {
+                      const next = filterDerivedGroupSlotsFromCsvMapping({
+                        ...prev,
+                        [header]: field,
+                      });
+                      saveCsvLabelMapping(csvHeaders, next);
+                      return next;
+                    });
+                  }}
+                />
+              </>
+            ) : null}
+          </div>
+        }
+        filtersSection={
+          <div className="space-y-3">
+            <FloorExclusionPanel
+              value={floorFilterUi}
+              onChange={setFloorFilterUi}
+              summaryFooter={csvFloorSummaryFooter}
+            />
+          </div>
+        }
+        advancedSection={
+          <div className="space-y-3.5">
+            <label className="flex cursor-pointer items-start gap-3 text-sm text-slate-800">
+              <input
+                type="checkbox"
+                className="mt-1 rounded border-gray-300"
+                checked={pdfPrintReady}
+                onChange={(e) => setPdfPrintReady(e.target.checked)}
+              />
+              <span>
+                <span className="font-medium">PDF pod druk profesjonalny</span>
+                <span className="mt-0.5 block text-xs font-normal text-slate-600">
+                  Spady i znaczniki cięcia dla drukarni zewnętrznej.
+                </span>
+              </span>
+            </label>
+            <label className="flex cursor-pointer items-start gap-3 text-sm text-slate-800">
+              <input
+                type="checkbox"
+                className="mt-1 rounded border-gray-300"
+                checked={thermalMode}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  setThermalMode(checked);
+                  try {
+                    localStorage.setItem("label_print_thermal_mode", String(checked));
+                  } catch {
+                    /* ignore */
+                  }
+                }}
+              />
+              <span>
+                <span className="font-medium">Tryb drukarki termicznej</span>
+                <span className="mt-0.5 block text-xs font-normal text-slate-600">
+                  Monochrom i wyższy kontrast (Zebra i podobne).
+                </span>
+              </span>
+            </label>
+            <div className="space-y-3 rounded-xl border border-gray-200 bg-white p-3">
+              <p className="text-xs font-semibold text-slate-800">Grupowanie wierszy CSV w PDF</p>
+              <label className="flex cursor-pointer items-start gap-2 text-sm text-slate-800 select-none">
+                <input
+                  type="checkbox"
+                  checked={csvGroupMode}
+                  onChange={(e) => {
+                    const on = e.target.checked;
+                    setCsvGroupMode(on);
+                    if (!on) {
+                      setCsvGroupByRack(false);
+                      setCsvFloorSets([]);
+                      setCsvFloorDraftInput("");
+                      setCsvFloorDraftTokens([]);
+                    }
+                  }}
+                  className="mt-1 rounded border-gray-300"
+                />
+                <span>Włącz grupowanie wielu wierszy w jedną etykietę</span>
+              </label>
+              <label
+                className={`flex items-start gap-2 text-sm text-slate-800 select-none ${
+                  csvGroupMode ? "cursor-pointer" : "cursor-not-allowed opacity-50"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={csvGroupByRack}
+                  disabled={!csvGroupMode}
+                  onChange={(e) => setCsvGroupByRack(e.target.checked)}
+                  className="mt-1 rounded border-gray-300"
+                />
+                <span>Uwzględnij regał przy grupowaniu (regał + rząd)</span>
+              </label>
+              {csvGroupMode && csvGroupingPdfBlocked ? (
+                <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+                  <span>Szablon nie obsługuje grupowania — etykiety zostaną wygenerowane pojedynczo</span>
+                  {selectedCsvTemplateId != null ? (
+                    <button
+                      type="button"
+                      onClick={() => navigate(`${labelBase}/${selectedCsvTemplateId}/edit`)}
+                      className="shrink-0 rounded border border-amber-300 bg-white px-2 py-0.5 text-[11px] font-medium text-amber-900 hover:bg-amber-100"
+                    >
+                      Dostosuj szablon
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
+              {csvGroupingPreviewState != null ? (
+                <div className="rounded border border-gray-200 bg-white px-2.5 py-2">
+                  <p className="mb-1 text-[10px] font-semibold text-slate-600">Podgląd grupowania</p>
+                  {csvGroupingPreviewState.kind === "ready" &&
+                  csvGroupingPreviewState.preview.kind === "ok" ? (
+                    <ul className="list-none space-y-0.5 font-mono text-[10px] leading-snug text-slate-800">
+                      {csvGroupingPreviewState.preview.lines.map((line, idx) => (
+                        <li key={`${idx}-${line}`}>{line}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-[10px] text-slate-500">Podgląd grupowania niedostępny / pusty.</p>
+                  )}
+                </div>
+              ) : null}
+            </div>
+          </div>
+        }
+        previewTemplate={csvTemplateParsed}
+        previewRecords={csvRecordsFiltered as Array<Record<string, unknown>>}
+        summaryTiles={[
+          { label: "Liczba etykiet", value: csvRecordsFiltered.length },
+          { label: "Rozmiar etykiety", value: `${labelW} × ${labelH} mm` },
+          { label: "Profil drukowania", value: summaryPrinterLabel },
+          {
+            label: "Źródło danych",
+            value: csvHeaders.length > 0 ? `CSV · ${csvRows.length} wierszy` : "Brak CSV",
+          },
+          {
+            label: "Stan mapowania pól",
+            value:
+              csvMappingSummary.kind === "ok"
+                ? "Kompletne"
+                : csvMappingSummary.kind === "missing"
+                  ? `Brakuje ${csvMappingSummary.fields.length}`
+                  : "—",
+          },
+        ]}
+        mapping={csvMappingSummary}
+        generateLabel={csvPdfLoading ? "Generowanie PDF…" : "Generuj PDF"}
+        generateDisabled={
+          csvPdfLoading ||
+          csvRows.length === 0 ||
+          csvRecordsFiltered.length === 0 ||
+          selectedCsvTemplateId == null ||
+          allLabelTemplatesForCsv.length === 0 ||
+          csvTemplateParsed == null
+        }
+        onGenerate={() => void handleCsvGeneratePdf()}
+        printersSlot={
+          <details className="group">
+            <summary className="cursor-pointer list-none text-sm font-semibold text-slate-900 marker:content-none [&::-webkit-details-marker]:hidden">
+              <span className="flex items-center justify-between gap-2">
+                Lista drukarek systemowych
+                <span className="text-slate-400 group-open:rotate-180">▼</span>
+              </span>
+            </summary>
+            <div className="mt-3 space-y-2">
+              <button
+                type="button"
+                onClick={handleDetectSystemPrinters}
+                className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-800 shadow-sm hover:shadow-md"
+              >
+                Odśwież listę drukarek
+              </button>
+              <ul className="max-h-32 list-inside list-disc overflow-y-auto text-xs text-slate-600">
+                {systemPrinters.length === 0 ? (
+                  <li>Nie wykryto drukarek — sprawdź agenta Sasist Printer lub QZ Tray.</li>
+                ) : (
+                  systemPrinters.map((name, i) => <li key={i}>{name}</li>)
+                )}
+              </ul>
+            </div>
+          </details>
+        }
+        footerNote={
+          <>
+            DPI w profilu: {dpi}. Generowanie używa tego samego endpointu co wcześniej — bez zmian w backendzie.
+          </>
+        }
+      />
+    );
+  }
+
   return (
-    <div className="h-full min-h-0 overflow-y-auto bg-gradient-to-b from-slate-50 via-white to-slate-50/90">
+    <div className="h-full min-h-0 overflow-y-auto bg-white">
       <div className="mx-auto w-full max-w-[1500px] px-3 py-5 pb-12 md:px-5">
         <PrintQueueWorkflowStep
           step={1}
