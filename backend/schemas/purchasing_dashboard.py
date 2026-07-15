@@ -22,6 +22,7 @@ class CriticalProductRowOut(BaseModel):
     product_id: int
     product_name: str
     sku: Optional[str] = None
+    image_url: Optional[str] = None
     stock: float
     avg_daily_sales: float
     days_cover: Optional[float] = None
@@ -31,6 +32,7 @@ class CriticalProductRowOut(BaseModel):
 class SuggestedOrderRowOut(BaseModel):
     product_id: int
     product_name: str
+    image_url: Optional[str] = None
     suggested_qty: float
     supplier_name: Optional[str] = None
     buy_price: Optional[float] = None

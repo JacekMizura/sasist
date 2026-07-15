@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-07-15 — Purchasing product images
+
+- Root cause: API returns relative `/uploads/...`; purchasing thumbs used raw URL → 404 on SPA origin.
+- Added `getProductImage` / `toAbsoluteProductImageUrl` (candidate fields + semicolon first + backend origin).
+- Wired into `PurchasingProductThumbnail` and `purchasingProductDisplayMeta`.
+- Dashboard critical/suggested rows now include `image_url`.
+
 ## 2026-07-12 — Sasist Printer Agent v1.0.4 pre-release audit
 
 - `WindowRegistry` — singleton okien Status/Config/Logs; `TrayApp` reużywa instancji.

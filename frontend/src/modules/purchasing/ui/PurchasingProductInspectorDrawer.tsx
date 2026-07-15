@@ -4,11 +4,13 @@ import { X } from "lucide-react";
 
 import type { ProductForecastDetail } from "../../../api/purchasingForecastApi";
 import { PurchasingProductThumbnail } from "./PurchasingProductThumbnail";
+import { PurchasingProductMetaCard } from "./PurchasingProductMetaCard";
 import { PurchasingRightDrawer } from "./PurchasingRightDrawer";
 import {
   fetchProductDisplayMeta,
   type ProductDisplayMeta,
 } from "./purchasingProductDisplayMeta";
+import { getProductImage } from "./getProductImage";
 
 type Props = {
   open: boolean;
@@ -64,7 +66,7 @@ function PurchasingProductInspectorDrawerInner({
   const pr = detail?.product;
   const u = detail?.unit ?? null;
   const displayName = productMeta?.name ?? pr?.name ?? "Produkt";
-  const imageUrl = productMeta?.imageUrl ?? pr?.image_url ?? null;
+  const imageUrl = productMeta?.imageUrl ?? getProductImage(pr) ?? getProductImage(detail);
   const ean = productMeta?.ean ?? pr?.ean ?? null;
   const sku = productMeta?.sku ?? pr?.sku ?? null;
 
@@ -92,7 +94,7 @@ function PurchasingProductInspectorDrawerInner({
           <p className="text-slate-500">Wczytywanie…</p>
         ) : detail && pr ? (
           <div className="space-y-4">
-            <div className="flex gap-3">
+            <PurchasingProductMetaCard>
               <PurchasingProductThumbnail
                 size="lg"
                 imageUrl={imageUrl}
@@ -118,8 +120,8 @@ function PurchasingProductInspectorDrawerInner({
                   Karta produktu →
                 </Link>
               </div>
-            </div>
-            <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+            </PurchasingProductMetaCard>
+            <dl className="grid grid-cols-2 gap-x-3 gap-y-2 rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs">
               <dt className="text-slate-500">Dostawca</dt>
               <dd className="truncate text-right">{detail.supplier_name ?? "—"}</dd>
               <dt className="text-slate-500">Stan magazynowy</dt>

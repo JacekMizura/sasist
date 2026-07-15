@@ -34,6 +34,7 @@ export {
   PurchasingProductThumbnail,
   PurchasingProductCell,
 } from "./PurchasingProductThumbnail";
+export { PurchasingProductMetaCard } from "./PurchasingProductMetaCard";
 export type { PurchasingProductThumbnailProps } from "./PurchasingProductThumbnail";
 export { PurchasingRightDrawer } from "./PurchasingRightDrawer";
 export type { PurchasingRightDrawerProps } from "./PurchasingRightDrawer";
@@ -43,6 +44,7 @@ export {
   fetchProductDisplayMeta,
   type ProductDisplayMeta,
 } from "./purchasingProductDisplayMeta";
+export { getProductImage, toAbsoluteProductImageUrl } from "./getProductImage";
 export {
   PURCHASING_THUMB_TABLE_PX,
   PURCHASING_THUMB_MD_PX,

@@ -13,6 +13,7 @@ export type CriticalProductRow = {
   product_id: number;
   product_name: string;
   sku?: string | null;
+  image_url?: string | null;
   stock: number;
   avg_daily_sales: number;
   days_cover?: number | null;
@@ -22,6 +23,7 @@ export type CriticalProductRow = {
 export type SuggestedOrderRow = {
   product_id: number;
   product_name: string;
+  image_url?: string | null;
   suggested_qty: number;
   supplier_name?: string | null;
   buy_price?: number | null;

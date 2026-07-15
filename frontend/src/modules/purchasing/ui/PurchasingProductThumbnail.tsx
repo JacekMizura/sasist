@@ -10,6 +10,7 @@ import {
   purchasingThumbBoxClass,
   purchasingThumbImgClass,
 } from "./purchasingProductThumbnailTokens";
+import { getProductImage } from "./getProductImage";
 
 const HOVER_DELAY_MS = 150;
 
@@ -43,7 +44,7 @@ function PurchasingProductThumbnailInner({
   hoverPreview,
   className = "",
 }: PurchasingProductThumbnailProps) {
-  const src = (imageUrl ?? "").trim();
+  const src = getProductImage({ image_url: imageUrl }) ?? "";
   const showHover = hoverPreview ?? size === "table";
   const boxSize = PURCHASING_THUMB_SIZE_CLASS[size];
 
@@ -123,7 +124,7 @@ function PurchasingProductThumbnailInner({
     src && imgState === "ok" ? (
       <img src={src} alt="" className={purchasingThumbImgClass} loading="lazy" />
     ) : src && imgState === "idle" ? (
-      <span className="h-full w-full animate-pulse bg-slate-100" aria-hidden />
+      <span className="h-full w-full animate-pulse bg-white" aria-hidden />
     ) : (
       <ImageIcon className={size === "table" ? "h-5 w-5" : "h-6 w-6"} strokeWidth={1.5} aria-hidden />
     );

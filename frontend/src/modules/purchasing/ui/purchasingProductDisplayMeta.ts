@@ -1,4 +1,5 @@
 import api from "../../../api/axios";
+import { getProductImage } from "./getProductImage";
 
 export type ProductDisplayMeta = {
   name?: string | null;
@@ -9,13 +10,9 @@ export type ProductDisplayMeta = {
   brand?: string | null;
 };
 
+/** @deprecated Prefer {@link getProductImage}. Kept for callers that already import this name. */
 export function resolveProductImageUrl(raw: Record<string, unknown> | null | undefined): string | null {
-  if (!raw) return null;
-  for (const key of ["image_url", "photo_url", "image"]) {
-    const v = raw[key];
-    if (typeof v === "string" && v.trim()) return v.trim();
-  }
-  return null;
+  return getProductImage(raw);
 }
 
 function categoryFromMeta(meta: unknown): string | null {
@@ -45,7 +42,7 @@ export function productDisplayMetaFromPayload(raw: Record<string, unknown>): Pro
   const symbol = raw.symbol ?? raw.sku;
   return {
     name: typeof raw.name === "string" ? raw.name : null,
-    imageUrl: resolveProductImageUrl(raw),
+    imageUrl: getProductImage(raw),
     ean: typeof raw.ean === "string" ? raw.ean : null,
     sku: typeof symbol === "string" ? symbol : null,
     category: categoryFromMeta(raw.metadata_json),

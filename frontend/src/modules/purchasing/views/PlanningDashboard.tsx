@@ -182,6 +182,7 @@ function PlanningDashboardInner() {
                             <PurchasingProductCell
                               name={r.product_name}
                               sku={r.sku}
+                              imageUrl={r.image_url}
                               stock={r.stock}
                             />
                           </td>
@@ -241,7 +242,7 @@ function PlanningDashboardInner() {
                       {data.suggested_orders.map((r) => (
                         <tr key={r.product_id} className="group transition-colors hover:bg-blue-50/30">
                           <td className={td}>
-                            <PurchasingProductCell name={r.product_name} />
+                            <PurchasingProductCell name={r.product_name} imageUrl={r.image_url} />
                           </td>
                           <td className={`${td} text-right font-semibold tabular-nums text-blue-600`}>
                             {r.suggested_qty}

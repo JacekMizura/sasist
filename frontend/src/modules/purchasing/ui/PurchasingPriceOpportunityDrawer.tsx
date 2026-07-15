@@ -4,11 +4,13 @@ import { X } from "lucide-react";
 
 import type { PriceOpportunityDrawer, PriceOpportunityRow, PriceOpportunityType } from "../../../api/purchasingPriceOpportunitiesApi";
 import { PurchasingProductThumbnail } from "./PurchasingProductThumbnail";
+import { PurchasingProductMetaCard } from "./PurchasingProductMetaCard";
 import { PurchasingRightDrawer } from "./PurchasingRightDrawer";
 import {
   fetchProductDisplayMeta,
   type ProductDisplayMeta,
 } from "./purchasingProductDisplayMeta";
+import { getProductImage } from "./getProductImage";
 
 type Props = {
   open: boolean;
@@ -75,7 +77,7 @@ function PurchasingPriceOpportunityDrawerInner({
   }, [open, row.product_id, tenantId, onMetaLoaded]);
 
   const displayName = productMeta?.name ?? row.product_name;
-  const imageUrl = productMeta?.imageUrl ?? null;
+  const imageUrl = productMeta?.imageUrl ?? getProductImage(productMeta) ?? null;
   const ean = productMeta?.ean ?? null;
   const sku = productMeta?.sku ?? null;
   const category = productMeta?.category ?? null;
@@ -134,7 +136,7 @@ function PurchasingPriceOpportunityDrawerInner({
       }
     >
       <div className="px-4 py-4 pb-safe text-sm text-slate-700">
-        <div className="flex gap-4 rounded-xl border border-slate-200 bg-slate-50/80 p-3">
+        <PurchasingProductMetaCard>
           <PurchasingProductThumbnail
             size="lg"
             imageUrl={imageUrl}
@@ -155,7 +157,7 @@ function PurchasingPriceOpportunityDrawerInner({
               </>
             )}
           </div>
-        </div>
+        </PurchasingProductMetaCard>
 
         <div className="mt-4 space-y-4">
           {row.product_id == null ? (

@@ -4,7 +4,7 @@ export const PURCHASING_THUMB_MD_PX = 56;
 export const PURCHASING_THUMB_LG_PX = 80;
 
 export const purchasingThumbBoxClass =
-  "flex shrink-0 items-center justify-center overflow-hidden bg-white";
+  "flex shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-white";
 
 export const purchasingThumbImgClass = "h-full w-full object-contain object-center";
 

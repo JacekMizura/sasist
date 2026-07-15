@@ -98,6 +98,7 @@ def build_purchasing_dashboard(db: Session, tenant_id: int, warehouse_id: Option
                 "product_id": m.product_id,
                 "product_name": m.name,
                 "sku": m.sku,
+                "image_url": m.image_url,
                 "stock": round(m.stock, 3),
                 "avg_daily_sales": round(m.avg_daily, 4),
                 "days_cover": core.days_cover(m.stock, m.avg_daily),
@@ -110,6 +111,7 @@ def build_purchasing_dashboard(db: Session, tenant_id: int, warehouse_id: Option
         {
             "product_id": m.product_id,
             "product_name": m.name,
+            "image_url": m.image_url,
             "suggested_qty": float(sq),
             "supplier_name": supplier_names.get(int(m.resolved_supplier_id), None) if m.resolved_supplier_id else None,
             "buy_price": float(bp) if bp is not None else None,
