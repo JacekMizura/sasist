@@ -1,5 +1,10 @@
 # Change log
 
+## 2026-07-15 — Ready templates library UI
+
+- `LabelReadyTemplatesPage`: Figma/Canva-style library — orange filter tabs, grouped sections, preview-first cards (`LabelGalleryThumbnail`), outline Edytuj/Użyj + ⋮ menu.
+- New `readyTemplates/*`; presets stay client-side; „Własne” from existing `GET /label-templates/`.
+
 ## 2026-07-15 — Label CSV print queue 3-column wizard
 
 - Import CSV: wizard steps + left accordions (320px) + paginated preview + sticky summary (320px).

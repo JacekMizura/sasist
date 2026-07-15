@@ -45,17 +45,21 @@ export function LabelGalleryThumbnail({ template, cacheKey, className = "h-[140p
 
   return (
     <div
-      className={`relative w-full shrink-0 overflow-hidden border-b border-slate-200 bg-slate-50 ${className}`}
+      className={`relative w-full shrink-0 overflow-hidden border-b border-gray-200 bg-white ${className}`}
       aria-hidden
     >
       <div className="flex h-full w-full items-center justify-center p-3">
         {svg ? (
           <div
-            className="flex max-h-full max-w-full items-center justify-center rounded border border-slate-200/90 bg-white p-1.5 shadow-sm [&>svg]:h-auto [&>svg]:max-h-full [&>svg]:w-auto [&>svg]:max-w-full"
+            className="flex max-h-full max-w-full items-center justify-center rounded-lg border border-gray-200 bg-white p-1.5 shadow-sm [&>svg]:h-auto [&>svg]:max-h-full [&>svg]:w-auto [&>svg]:max-w-full"
             dangerouslySetInnerHTML={{ __html: svg }}
           />
         ) : (
-          <div className="h-[72%] w-[78%] animate-pulse rounded border border-slate-200/70 bg-slate-100/90" />
+          <div className="flex h-[72%] w-[78%] flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-gray-200 bg-white">
+            <div className="h-2 w-1/2 animate-pulse rounded bg-gray-200" />
+            <div className="h-8 w-2/3 animate-pulse rounded border border-gray-200 bg-white" />
+            <div className="h-2 w-1/3 animate-pulse rounded bg-gray-200" />
+          </div>
         )}
       </div>
     </div>
