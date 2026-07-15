@@ -1,10 +1,8 @@
-import {
-  Filter,
-  Layers,
-  Settings2,
-  Tag,
-  Upload,
-} from "lucide-react";
+/**
+ * Shared print-queue workspace: mode cards + optional wizard + 3-column layout.
+ * Presentational only — handlers and data stay in LabelPrintQueue.
+ */
+import { Database, Filter, Settings2, SlidersHorizontal } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
 import type { LabelRecord } from "../../../types/labelSystem";
@@ -16,31 +14,38 @@ import PrintQueueStepWizard, { type PrintQueueWizardStepId } from "./PrintQueueS
 import PrintQueueSummaryPanel, { type MappingSummaryState } from "./PrintQueueSummaryPanel";
 import PrintQueueThreeColumnLayout from "./PrintQueueThreeColumnLayout";
 
-export type CsvImportAccordionId = "template" | "profile" | "data" | "filters" | "advanced";
+export type PrintQueueAccordionsOpen = {
+  data: boolean;
+  config: boolean;
+  filters: boolean;
+  options: boolean;
+};
 
 type Props = {
   printMode: PrintQueueMode;
   onPrintModeChange: (m: PrintQueueMode) => void;
-  currentStep: PrintQueueWizardStepId;
+  currentStep?: PrintQueueWizardStepId;
   onStepClick?: (step: PrintQueueWizardStepId) => void;
+  showWizard?: boolean;
 
-  templateSummary?: string;
-  profileSummary?: string;
   dataSummary?: string;
+  configSummary?: string;
   filtersSummary?: string;
+  optionsSummary?: string;
 
-  templateSection: ReactNode;
-  profileSection: ReactNode;
   dataSection: ReactNode;
+  configSection: ReactNode;
   filtersSection: ReactNode;
-  advancedSection: ReactNode;
+  optionsSection: ReactNode;
 
   previewTemplate: LabelPreviewCardTemplate | null;
   previewRecords: Array<LabelRecord | Record<string, unknown>>;
   previewLoading?: boolean;
+  previewEmptyMessage?: string;
 
   summaryTiles: Array<{ label: string; value: ReactNode }>;
-  mapping: MappingSummaryState;
+  mapping?: MappingSummaryState;
+  warnings?: ReactNode;
   generateLabel: string;
   generateDisabled: boolean;
   onGenerate: () => void;
@@ -51,37 +56,34 @@ type Props = {
   footerNote?: ReactNode;
 };
 
-const DEFAULT_OPEN: Record<CsvImportAccordionId, boolean> = {
-  template: true,
-  profile: true,
+const DEFAULT_OPEN: PrintQueueAccordionsOpen = {
   data: true,
-  filters: false,
-  advanced: false,
+  config: true,
+  filters: true,
+  options: false,
 };
 
-/**
- * CSV import print-queue: wizard + 3-column shell (config | preview | summary).
- * Presentational — all print logic stays in LabelPrintQueue.
- */
-export default function CsvImportQueueShell({
+export default function PrintQueueWorkspaceShell({
   printMode,
   onPrintModeChange,
-  currentStep,
+  currentStep = 4,
   onStepClick,
-  templateSummary,
-  profileSummary,
+  showWizard = true,
   dataSummary,
+  configSummary,
   filtersSummary,
-  templateSection,
-  profileSection,
+  optionsSummary,
   dataSection,
+  configSection,
   filtersSection,
-  advancedSection,
+  optionsSection,
   previewTemplate,
   previewRecords,
   previewLoading,
+  previewEmptyMessage,
   summaryTiles,
-  mapping,
+  mapping = { kind: "na" },
+  warnings,
   generateLabel,
   generateDisabled,
   onGenerate,
@@ -95,15 +97,18 @@ export default function CsvImportQueueShell({
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightDrawerOpen, setRightDrawerOpen] = useState(false);
 
-  const toggle = (id: CsvImportAccordionId) => {
+  const toggle = (id: keyof PrintQueueAccordionsOpen) => {
     setOpenMap((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
   const handleStepClick = (step: PrintQueueWizardStepId) => {
     onStepClick?.(step);
-    const focus = ({ 1: "template", 2: "data", 3: "filters" } as const)[step as 1 | 2 | 3];
-    if (focus) {
-      setOpenMap((prev) => ({ ...prev, [focus]: true }));
+    if (step === 2) {
+      setOpenMap((p) => ({ ...p, data: true }));
+      setLeftOpen(true);
+    }
+    if (step === 3) {
+      setOpenMap((p) => ({ ...p, filters: true }));
       setLeftOpen(true);
     }
     if (step === 5) setRightDrawerOpen(true);
@@ -112,34 +117,24 @@ export default function CsvImportQueueShell({
   const left = (
     <div className="space-y-3">
       <PrintQueueAccordion
-        id="pq-template"
-        title="Szablon"
-        icon={Tag}
-        open={openMap.template}
-        onToggle={() => toggle("template")}
-        summary={templateSummary}
-      >
-        {templateSection}
-      </PrintQueueAccordion>
-      <PrintQueueAccordion
-        id="pq-profile"
-        title="Profil drukowania"
-        icon={Layers}
-        open={openMap.profile}
-        onToggle={() => toggle("profile")}
-        summary={profileSummary}
-      >
-        {profileSection}
-      </PrintQueueAccordion>
-      <PrintQueueAccordion
         id="pq-data"
-        title="Dane"
-        icon={Upload}
+        title="Dane źródłowe"
+        icon={Database}
         open={openMap.data}
         onToggle={() => toggle("data")}
         summary={dataSummary}
       >
         {dataSection}
+      </PrintQueueAccordion>
+      <PrintQueueAccordion
+        id="pq-config"
+        title="Konfiguracja"
+        icon={SlidersHorizontal}
+        open={openMap.config}
+        onToggle={() => toggle("config")}
+        summary={configSummary}
+      >
+        {configSection}
       </PrintQueueAccordion>
       <PrintQueueAccordion
         id="pq-filters"
@@ -152,14 +147,14 @@ export default function CsvImportQueueShell({
         {filtersSection}
       </PrintQueueAccordion>
       <PrintQueueAccordion
-        id="pq-advanced"
-        title="Ustawienia zaawansowane"
+        id="pq-options"
+        title="Opcje"
         icon={Settings2}
-        open={openMap.advanced}
-        onToggle={() => toggle("advanced")}
-        summary="Grupowanie CSV, PDF drukarni, termika"
+        open={openMap.options}
+        onToggle={() => toggle("options")}
+        summary={optionsSummary ?? "PDF drukarni, termika, grupowanie"}
       >
-        {advancedSection}
+        {optionsSection}
       </PrintQueueAccordion>
     </div>
   );
@@ -169,22 +164,26 @@ export default function CsvImportQueueShell({
       template={previewTemplate}
       records={previewRecords}
       loading={previewLoading}
+      emptyMessage={previewEmptyMessage}
     />
   );
 
   const right = (
-    <PrintQueueSummaryPanel
-      tiles={summaryTiles}
-      mapping={mapping}
-      generateLabel={generateLabel}
-      generateDisabled={generateDisabled}
-      onGenerate={onGenerate}
-      printLabel={printLabel}
-      printDisabled={printDisabled}
-      onPrint={onPrint}
-      printersSlot={printersSlot}
-      footerNote={footerNote}
-    />
+    <div className="space-y-3">
+      {warnings ? <div className="space-y-2">{warnings}</div> : null}
+      <PrintQueueSummaryPanel
+        tiles={summaryTiles}
+        mapping={mapping}
+        generateLabel={generateLabel}
+        generateDisabled={generateDisabled}
+        onGenerate={onGenerate}
+        printLabel={printLabel}
+        printDisabled={printDisabled}
+        onPrint={onPrint}
+        printersSlot={printersSlot}
+        footerNote={footerNote}
+      />
+    </div>
   );
 
   return (
@@ -195,9 +194,11 @@ export default function CsvImportQueueShell({
           <PrintModeCards value={printMode} onChange={onPrintModeChange} />
         </div>
 
-        <div className="rounded-2xl border border-gray-200 bg-white px-5 py-4 shadow-sm md:px-6">
-          <PrintQueueStepWizard currentStep={currentStep} onStepClick={handleStepClick} />
-        </div>
+        {showWizard ? (
+          <div className="rounded-2xl border border-gray-200 bg-white px-5 py-4 shadow-sm md:px-6">
+            <PrintQueueStepWizard currentStep={currentStep} onStepClick={handleStepClick} />
+          </div>
+        ) : null}
 
         <PrintQueueThreeColumnLayout
           left={left}

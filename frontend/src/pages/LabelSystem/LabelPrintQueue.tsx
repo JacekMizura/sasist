@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from "react";
+﻿import { useState, useCallback, useEffect, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { warn } from "../../utils/logger";
 import { jsPDF } from "jspdf";
@@ -50,16 +50,14 @@ import {
 import CsvMappingModal from "./csvMapping/CsvMappingModal";
 import CsvTemplatePicker from "./csvMapping/CsvTemplatePicker";
 import { resolveTemplateUsedVariables } from "./csvMapping/labelCsvMappingFields";
-import CsvImportQueueShell from "./printQueue/CsvImportQueueShell";
+import PrintQueueWorkspaceShell from "./printQueue/PrintQueueWorkspaceShell";
 import type { PrintQueueWizardStepId } from "./printQueue/PrintQueueStepWizard";
 import {
-  CSV_GROUPING_PREVIEW_LIMIT,
   getCsvGroupingPreview,
   sanitizeFloorSetsMatrix,
 } from "../../utils/labels/csvGroupingPreview";
 import { FloorExclusionPanel, excludeFloorsFromUiState, type FloorFilterUiState } from "./FloorExclusionPanel";
 import { labelModuleBasePath } from "./labelModuleBasePath";
-import { LabelPreviewCard } from "./LabelPreviewCard";
 import { renderLabel } from "../../labelRenderer";
 import {
   connectQZ,
@@ -69,12 +67,7 @@ import {
   setQzSecurity,
 } from "../../printing/qzService";
 import {
-  PrintModeCards,
-  PrintQueueGhostButton,
-  PrintQueuePrimaryButton,
   PrintQueueSecondaryButton,
-  PrintQueueSurfaceCard,
-  PrintQueueWorkflowStep,
   humanizeCsvSanitizeWarning,
 } from "./printQueue/printQueueUi";
 import { useLabelPrintingPrinters } from "./hooks/useLabelPrintingPrinters";
@@ -202,7 +195,6 @@ export function LabelPrintQueue({ template }: Props) {
   const [csvFloorSets, setCsvFloorSets] = useState<string[][]>([]);
   const [csvFloorDraftInput, setCsvFloorDraftInput] = useState("");
   const [csvFloorDraftTokens, setCsvFloorDraftTokens] = useState<string[]>([]);
-  const [advancedSettingsOpen, setAdvancedSettingsOpen] = useState(false);
 
   const csvFloorSetsNormalized = useMemo(() => sanitizeFloorSetsMatrix(csvFloorSets), [csvFloorSets]);
 
@@ -1249,334 +1241,755 @@ export function LabelPrintQueue({ template }: Props) {
     csvColumnToField,
   ]);
 
-  if (printMode === "csv_import") {
-    const labelW = Math.round(Number(summaryDimsTemplate?.widthMm) || 0);
-    const labelH = Math.round(Number(summaryDimsTemplate?.heightMm) || 0);
-    const dpi = summaryDimsTemplate?.dpi ?? 300;
 
-    return (
-      <>
-      <CsvImportQueueShell
-        printMode={printMode}
-        onPrintModeChange={setPrintMode}
-        currentStep={csvWizardStep}
-        templateSummary={summaryTemplateName}
-        profileSummary={summaryPrinterLabel}
-        dataSummary={
-          csvHeaders.length > 0
-            ? `${csvRows.length} wierszy · ${csvHeaders.length} kolumn`
-            : "Brak pliku CSV"
-        }
-        filtersSummary={
-          excludeFloors.length > 0 ? `Wykluczone piętra: ${excludeFloors.length}` : "Bez filtra pięter"
-        }
-        templateSection={
-          <div className="space-y-3">
-            <div>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Typ wydruku
-              </p>
-              <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Typ wydruku dla importu CSV">
-                {CSV_IMPORT_PRINT_KINDS.map((kind) => {
-                  const active = csvImportPrintKind === kind.id;
-                  return (
-                    <button
-                      key={kind.id}
-                      type="button"
-                      role="radio"
-                      aria-checked={active}
-                      onClick={() => setCsvImportPrintKind(kind.id)}
-                      className={[
-                        "inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition",
-                        active
-                          ? "border-orange-400 bg-orange-50 text-orange-900 ring-1 ring-orange-400"
-                          : "border-gray-200 bg-white text-slate-700 hover:border-orange-300",
-                      ].join(" ")}
-                    >
-                      <span aria-hidden>{kind.emoji}</span>
-                      {kind.label}
-                    </button>
-                  );
-                })}
-              </div>
-              <p className="mt-2 text-[11px] leading-snug text-slate-500">
-                Lista poniżej pokazuje wyłącznie szablony pasujące do wybranego typu.
-              </p>
+  const labelW = Math.round(Number(summaryDimsTemplate?.widthMm) || 0);
+  const labelH = Math.round(Number(summaryDimsTemplate?.heightMm) || 0);
+  const dpi = summaryDimsTemplate?.dpi ?? 300;
+
+  const workspaceWizardStep: PrintQueueWizardStepId =
+    printMode === "csv_import" ? csvWizardStep : labelsToPrintCount && labelsToPrintCount > 0 ? 4 : 2;
+
+  const previewBundle = useMemo(() => {
+    if (printMode === "csv_import") {
+      return {
+        template: csvTemplateParsed,
+        records: csvRecordsFiltered as Array<Record<string, unknown>>,
+        loading: false,
+        empty: "Wgraj CSV i zmapuj kolumny, aby zobaczyć podgląd.",
+      };
+    }
+    if (printMode === "location") {
+      return {
+        template: locationPreviewTemplate,
+        records: locationPageRecords as Array<Record<string, unknown>>,
+        loading: locationPreviewLoading,
+        empty: "Wybierz lokalizacje i szablon, aby zobaczyć podgląd.",
+      };
+    }
+    if (printMode === "rack") {
+      return {
+        template: rackPreviewTemplate,
+        records: rackPageRecords as Array<Record<string, unknown>>,
+        loading: rackPreviewLoading,
+        empty: "Wygeneruj siatkę regału, aby zobaczyć podgląd.",
+      };
+    }
+    if (printMode === "rack_strip") {
+      return {
+        template: locationPreviewTemplate ?? rackPreviewTemplate,
+        records: stripRecords as Array<Record<string, unknown>>,
+        loading: false,
+        empty: "Utwórz segmenty listwy, aby zobaczyć podgląd.",
+      };
+    }
+    if (printMode === "pdf_import") {
+      return {
+        template: locationPreviewTemplate,
+        records: pdfImportBarcodes.map((code) => ({
+          barcode_data: code,
+          loc_name: code,
+          loc_barcode: code,
+        })),
+        loading: pdfImportLoading || locationPreviewLoading,
+        empty: "Wgraj PDF z kodami, aby zobaczyć podgląd.",
+      };
+    }
+    return {
+      template: template as typeof locationPreviewTemplate,
+      records: [] as Array<Record<string, unknown>>,
+      loading: false,
+      empty: "Wybierz wózek i wygeneruj etykiety koszyków.",
+    };
+  }, [
+    printMode,
+    csvTemplateParsed,
+    csvRecordsFiltered,
+    locationPreviewTemplate,
+    locationPageRecords,
+    locationPreviewLoading,
+    rackPreviewTemplate,
+    rackPageRecords,
+    rackPreviewLoading,
+    stripRecords,
+    pdfImportBarcodes,
+    pdfImportLoading,
+    template,
+  ]);
+
+  const configSection = (
+    <div className="space-y-3">
+      {printMode === "csv_import" ? (
+        <>
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Typ wydruku (CSV)</p>
+            <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Typ wydruku dla importu CSV">
+              {CSV_IMPORT_PRINT_KINDS.map((kind) => {
+                const active = csvImportPrintKind === kind.id;
+                return (
+                  <button
+                    key={kind.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    onClick={() => setCsvImportPrintKind(kind.id)}
+                    className={[
+                      "inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition",
+                      active
+                        ? "border-orange-400 bg-orange-50 text-orange-900 ring-1 ring-orange-400"
+                        : "border-gray-200 bg-white text-slate-700 hover:border-orange-300",
+                    ].join(" ")}
+                  >
+                    <span aria-hidden>{kind.emoji}</span>
+                    {kind.label}
+                  </button>
+                );
+              })}
             </div>
-            <div>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Szablon etykiety
-              </p>
-              <CsvTemplatePicker
-                templates={csvTemplatesForPrintKind}
-                selectedId={selectedCsvTemplateId}
-                onSelect={setSelectedCsvTemplateId}
-              />
-            </div>
-            {csvTemplateDimensionHints.warnings.length > 0 ? (
-              <div className="space-y-1 rounded-xl border border-amber-200 bg-amber-50/90 px-3 py-2 text-xs leading-relaxed text-amber-950">
-                {csvTemplateDimensionHints.warnings.map((w, i) => (
-                  <p key={i}>{humanizeCsvSanitizeWarning(w)}</p>
-                ))}
-              </div>
-            ) : null}
           </div>
-        }
-        profileSection={
-          <div className="space-y-3">
-            <LabelPrintingProfileField
-              tenantId={TENANT_ID}
-              warehouseId={selectedWarehouseId}
-              profiles={profiles}
-              printers={printers}
-              legacyPrinters={legacyPrinters}
-              agentPrinters={agentPrinters}
-              systemPrinters={systemPrinters}
-              selectedPrinterId={selectedPrinterId}
-              onSelectPrinterId={setSelectedPrinterId}
-              onProfilesChanged={reloadPrinters}
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Szablon etykiety</p>
+            <CsvTemplatePicker
+              templates={csvTemplatesForPrintKind}
+              selectedId={selectedCsvTemplateId}
+              onSelect={setSelectedCsvTemplateId}
             />
-            <dl className="grid grid-cols-2 gap-2 text-xs">
-              <div className="rounded-lg border border-gray-200 bg-white p-2.5 shadow-sm">
-                <dt className="font-semibold uppercase tracking-wide text-slate-500">DPI</dt>
-                <dd className="mt-1 text-sm font-semibold text-slate-900">{dpi}</dd>
-              </div>
-              <div className="rounded-lg border border-gray-200 bg-white p-2.5 shadow-sm">
-                <dt className="font-semibold uppercase tracking-wide text-slate-500">Rozmiar</dt>
-                <dd className="mt-1 text-sm font-semibold text-slate-900 tabular-nums">
-                  {labelW} × {labelH} mm
-                </dd>
-              </div>
-            </dl>
           </div>
-        }
-        dataSection={
-          <div className="space-y-3">
-            <p className="text-xs leading-relaxed text-slate-600">
-              Jedna linia CSV = jedna etykieta. Przy wielu plikach obowiązuje jedno mapowanie kolumn.
-            </p>
-            <div>
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Źródło danych
-              </label>
-              <input
-                type="file"
-                accept=".csv,text/csv"
-                multiple
-                onChange={handleCsvFileChange}
-                disabled={csvImportLoading}
-                className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-sm file:mr-2 file:rounded file:border-0 file:bg-blue-50 file:px-3 file:py-1 file:text-sm file:font-medium file:text-blue-700"
-              />
+          {csvTemplateDimensionHints.warnings.length > 0 ? (
+            <div className="space-y-1 rounded-xl border border-amber-200 bg-amber-50/90 px-3 py-2 text-xs leading-relaxed text-amber-950">
+              {csvTemplateDimensionHints.warnings.map((w, i) => (
+                <p key={i}>{humanizeCsvSanitizeWarning(w)}</p>
+              ))}
             </div>
-            {csvImportLoading ? <p className="text-sm text-slate-500">Wczytywanie…</p> : null}
-            {csvImportError ? <p className="text-sm text-red-600">{csvImportError}</p> : null}
-            {csvHeaders.length > 0 ? (
-              <>
-                <p className="text-sm text-slate-700">
-                  Rekordów: <strong>{csvRows.length}</strong>
-                  {csvPerFileStats.length > 1 ? (
-                    <span className="text-slate-500"> ({csvPerFileStats.length} plików)</span>
-                  ) : null}{" "}
-                  · etykiet po filtrach: <strong>{csvRecordsFiltered.length}</strong>
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setCsvMappingModalOpen(true)}
-                  className="w-full rounded-xl border border-orange-300 bg-orange-50 px-3 py-2.5 text-sm font-semibold text-orange-900 shadow-sm transition hover:bg-orange-100"
-                >
-                  Otwórz mapowanie kolumn
-                </button>
-                {csvPerFileStats.length > 0 ? (
-                  <ul className="list-disc space-y-0.5 pl-5 text-xs text-slate-600">
-                    {csvPerFileStats.map((s) => (
-                      <li key={s.filename}>
-                        <span className="font-mono text-slate-800">{s.filename}</span> — {s.rowCount} wierszy
-                      </li>
+          ) : null}
+        </>
+      ) : (
+        <div>
+          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Szablon etykiety
+          </label>
+          <select
+            value={selectedLocationTemplateId ?? ""}
+            onChange={(e) => setSelectedLocationTemplateId(e.target.value ? Number(e.target.value) : null)}
+            className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-sm text-slate-900 outline-none focus:border-orange-400 focus:ring-1 focus:ring-orange-300/40"
+          >
+            <option value="">
+              {printMode === "location" ? "— Domyślny z listy —" : "— Wybierz szablon —"}
+            </option>
+            {locationTemplates.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+                {t.is_default ? " (domyślny)" : ""}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+      <LabelPrintingProfileField
+        tenantId={TENANT_ID}
+        warehouseId={selectedWarehouseId}
+        profiles={profiles}
+        printers={printers}
+        legacyPrinters={legacyPrinters}
+        agentPrinters={agentPrinters}
+        systemPrinters={systemPrinters}
+        selectedPrinterId={selectedPrinterId}
+        onSelectPrinterId={setSelectedPrinterId}
+        onProfilesChanged={reloadPrinters}
+      />
+      <dl className="grid grid-cols-2 gap-2 text-xs">
+        <div className="rounded-lg border border-gray-200 bg-white p-2.5 shadow-sm">
+          <dt className="font-semibold uppercase tracking-wide text-slate-500">DPI</dt>
+          <dd className="mt-1 text-sm font-semibold text-slate-900">{dpi}</dd>
+        </div>
+        <div className="rounded-lg border border-gray-200 bg-white p-2.5 shadow-sm">
+          <dt className="font-semibold uppercase tracking-wide text-slate-500">Rozmiar</dt>
+          <dd className="mt-1 text-sm font-semibold tabular-nums text-slate-900">
+            {labelW} × {labelH} mm
+          </dd>
+        </div>
+      </dl>
+    </div>
+  );
+
+  const dataSection = (
+    <div className="space-y-3">
+      {printMode === "csv_import" ? (
+        <>
+          <p className="text-xs leading-relaxed text-slate-600">
+            Jedna linia CSV = jedna etykieta. Mapowanie otwiera się w pełnym oknie po wczytaniu pliku.
+          </p>
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Źródło danych
+            </label>
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              multiple
+              onChange={handleCsvFileChange}
+              disabled={csvImportLoading}
+              className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-sm file:mr-2 file:rounded file:border-0 file:bg-orange-50 file:px-3 file:py-1 file:text-sm file:font-medium file:text-orange-800"
+            />
+          </div>
+          {csvImportLoading ? <p className="text-sm text-slate-500">Wczytywanie…</p> : null}
+          {csvImportError ? <p className="text-sm text-red-600">{csvImportError}</p> : null}
+          {csvHeaders.length > 0 ? (
+            <>
+              <p className="text-sm text-slate-700">
+                Rekordów: <strong>{csvRows.length}</strong>
+                {csvPerFileStats.length > 1 ? (
+                  <span className="text-slate-500"> ({csvPerFileStats.length} plików)</span>
+                ) : null}{" "}
+                · etykiet po filtrach: <strong>{csvRecordsFiltered.length}</strong>
+              </p>
+              <button
+                type="button"
+                onClick={() => setCsvMappingModalOpen(true)}
+                className="w-full rounded-xl border border-orange-300 bg-orange-50 px-3 py-2.5 text-sm font-semibold text-orange-900 shadow-sm hover:bg-orange-100"
+              >
+                Otwórz mapowanie kolumn
+              </button>
+              {csvPerFileStats.length > 0 ? (
+                <ul className="list-disc space-y-0.5 pl-5 text-xs text-slate-600">
+                  {csvPerFileStats.map((s) => (
+                    <li key={s.filename}>
+                      <span className="font-mono text-slate-800">{s.filename}</span> — {s.rowCount}{" "}
+                      wierszy
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              {csvMergeWarnings.length > 0 ? (
+                <div className="space-y-1 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+                  <p className="font-semibold">Scalanie plików</p>
+                  <ul className="list-disc space-y-0.5 pl-4">
+                    {csvMergeWarnings.map((w, i) => (
+                      <li key={`${i}-${w.slice(0, 40)}`}>{w}</li>
                     ))}
                   </ul>
-                ) : null}
-                {csvMergeWarnings.length > 0 ? (
-                  <div className="space-y-1 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
-                    <p className="font-semibold">Scalanie plików</p>
-                    <ul className="list-disc space-y-0.5 pl-4">
-                      {csvMergeWarnings.map((w, i) => (
-                        <li key={`${i}-${w.slice(0, 40)}`}>{w}</li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
-                <label className="flex cursor-pointer items-start gap-2 text-sm text-slate-700 select-none">
+                </div>
+              ) : null}
+              <label className="flex cursor-pointer items-start gap-2 text-sm text-slate-700 select-none">
+                <input
+                  type="checkbox"
+                  checked={csvDedupeRackFloorRow}
+                  onChange={(e) => setCsvDedupeRackFloorRow(e.target.checked)}
+                  className="mt-1 rounded border-gray-200"
+                />
+                <span>
+                  Usuń duplikaty po <strong>Regał</strong> + <strong>Piętro</strong> + <strong>Rząd</strong>
+                </span>
+              </label>
+            </>
+          ) : null}
+        </>
+      ) : null}
+
+      {printMode === "location" && layout ? (
+        <>
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Zakres lokalizacji
+            </label>
+            <select
+              value={selectionMode}
+              onChange={(e) => setSelectionMode(e.target.value as SelectionMode)}
+              className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-sm"
+            >
+              <option value="all">Wszystkie lokalizacje</option>
+              <option value="by_rack">Wybrane regały</option>
+              <option value="reserve_only">Tylko rezerwa</option>
+              <option value="manual">Ręczny wybór</option>
+            </select>
+          </div>
+          {selectionMode === "by_rack" ? (
+            <div className="max-h-40 space-y-1 overflow-y-auto rounded-lg border border-gray-200 p-2 text-sm">
+              {rackOptions.map((r) => (
+                <label key={r.id} className="flex items-center gap-2">
                   <input
                     type="checkbox"
-                    checked={csvDedupeRackFloorRow}
-                    onChange={(e) => setCsvDedupeRackFloorRow(e.target.checked)}
-                    className="mt-1 rounded border-gray-200"
+                    checked={selectedRackIds.includes(r.id)}
+                    onChange={(e) => {
+                      setSelectedRackIds((prev) =>
+                        e.target.checked ? [...prev, r.id] : prev.filter((x) => x !== r.id),
+                      );
+                    }}
                   />
-                  <span>
-                    Usuń duplikaty po <strong>Regał</strong> + <strong>Piętro</strong> + <strong>Rząd</strong>
-                  </span>
+                  {r.label}
                 </label>
-                {csvValidationWarnings.length > 0 ? (
-                  <div className="space-y-1 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
-                    <p className="font-semibold">Uwagi (druk nadal możliwy):</p>
-                    <ul className="list-disc space-y-0.5 pl-4">
-                      {csvValidationWarnings.map((w, i) => (
-                        <li key={`${i}-${w.slice(0, 48)}`}>{w}</li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
-              </>
-            ) : null}
-          </div>
-        }
-        filtersSection={
-          <div className="space-y-3">
-            <FloorExclusionPanel
-              value={floorFilterUi}
-              onChange={setFloorFilterUi}
-              summaryFooter={csvFloorSummaryFooter}
+              ))}
+            </div>
+          ) : null}
+          {selectionMode === "manual" ? (
+            <div className="space-y-2">
+              <input
+                type="search"
+                value={manualLocationSearch}
+                onChange={(e) => setManualLocationSearch(e.target.value)}
+                placeholder="Szukaj lokalizacji…"
+                className="w-full rounded-lg border border-gray-200 px-2.5 py-2 text-sm"
+              />
+              <div className="max-h-48 space-y-1 overflow-y-auto rounded-lg border border-gray-200 p-2 text-sm">
+                {(layout?.racks ?? [])
+                  .flatMap((rack, ri) =>
+                    (rack.bins ?? []).map((bin, bi) => {
+                      const id =
+                        bin.location_id ||
+                        bin.barcode_data ||
+                        bin.label ||
+                        `${rack.aisle_letter ?? "R"}${ri}-${bi}`;
+                      const label = bin.label || bin.barcode_data || id;
+                      return { id: String(id), label: String(label) };
+                    }),
+                  )
+                  .filter((loc) => {
+                    const q = manualLocationSearch.trim().toLowerCase();
+                    if (!q) return true;
+                    return loc.label.toLowerCase().includes(q) || loc.id.toLowerCase().includes(q);
+                  })
+                  .slice(0, 200)
+                  .map((loc) => (
+                    <label key={loc.id} className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={manualLocationIds.includes(loc.id)}
+                        onChange={(e) => {
+                          setManualLocationIds((prev) =>
+                            e.target.checked ? [...prev, loc.id] : prev.filter((x) => x !== loc.id),
+                          );
+                        }}
+                      />
+                      <span className="truncate">{loc.label}</span>
+                    </label>
+                  ))}
+              </div>
+              <p className="text-xs text-slate-500">Wybrano: {manualLocationIds.length}</p>
+            </div>
+          ) : null}
+        </>
+      ) : null}
+
+      {printMode === "rack" ? (
+        <div className="grid grid-cols-2 gap-2">
+          <div className="col-span-2">
+            <label className="mb-1 block text-xs font-medium text-slate-600">Regał</label>
+            <input
+              type="text"
+              value={rackRack}
+              onChange={(e) => setRackRack(e.target.value)}
+              className="w-full rounded-lg border border-gray-200 px-2.5 py-2 text-sm"
             />
           </div>
-        }
-        advancedSection={
-          <div className="space-y-3.5">
-            <label className="flex cursor-pointer items-start gap-3 text-sm text-slate-800">
-              <input
-                type="checkbox"
-                className="mt-1 rounded border-gray-300"
-                checked={pdfPrintReady}
-                onChange={(e) => setPdfPrintReady(e.target.checked)}
-              />
-              <span>
-                <span className="font-medium">PDF pod druk profesjonalny</span>
-                <span className="mt-0.5 block text-xs font-normal text-slate-600">
-                  Spady i znaczniki cięcia dla drukarni zewnętrznej.
-                </span>
-              </span>
-            </label>
-            <label className="flex cursor-pointer items-start gap-3 text-sm text-slate-800">
-              <input
-                type="checkbox"
-                className="mt-1 rounded border-gray-300"
-                checked={thermalMode}
-                onChange={(e) => {
-                  const checked = e.target.checked;
-                  setThermalMode(checked);
-                  try {
-                    localStorage.setItem("label_print_thermal_mode", String(checked));
-                  } catch {
-                    /* ignore */
-                  }
-                }}
-              />
-              <span>
-                <span className="font-medium">Tryb drukarki termicznej</span>
-                <span className="mt-0.5 block text-xs font-normal text-slate-600">
-                  Monochrom i wyższy kontrast (Zebra i podobne).
-                </span>
-              </span>
-            </label>
-            <div className="space-y-3 rounded-xl border border-gray-200 bg-white p-3">
-              <p className="text-xs font-semibold text-slate-800">Grupowanie wierszy CSV w PDF</p>
-              <label className="flex cursor-pointer items-start gap-2 text-sm text-slate-800 select-none">
-                <input
-                  type="checkbox"
-                  checked={csvGroupMode}
-                  onChange={(e) => {
-                    const on = e.target.checked;
-                    setCsvGroupMode(on);
-                    if (!on) {
-                      setCsvGroupByRack(false);
-                      setCsvFloorSets([]);
-                      setCsvFloorDraftInput("");
-                      setCsvFloorDraftTokens([]);
-                    }
-                  }}
-                  className="mt-1 rounded border-gray-300"
-                />
-                <span>Włącz grupowanie wielu wierszy w jedną etykietę</span>
-              </label>
-              <label
-                className={`flex items-start gap-2 text-sm text-slate-800 select-none ${
-                  csvGroupMode ? "cursor-pointer" : "cursor-not-allowed opacity-50"
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  checked={csvGroupByRack}
-                  disabled={!csvGroupMode}
-                  onChange={(e) => setCsvGroupByRack(e.target.checked)}
-                  className="mt-1 rounded border-gray-300"
-                />
-                <span>Uwzględnij regał przy grupowaniu (regał + rząd)</span>
-              </label>
-              {csvGroupMode && csvGroupingPdfBlocked ? (
-                <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
-                  <span>Szablon nie obsługuje grupowania — etykiety zostaną wygenerowane pojedynczo</span>
-                  {selectedCsvTemplateId != null ? (
-                    <button
-                      type="button"
-                      onClick={() => navigate(`${labelBase}/${selectedCsvTemplateId}/edit`)}
-                      className="shrink-0 rounded border border-amber-300 bg-white px-2 py-0.5 text-[11px] font-medium text-amber-900 hover:bg-amber-100"
-                    >
-                      Dostosuj szablon
-                    </button>
-                  ) : null}
-                </div>
-              ) : null}
-              {csvGroupingPreviewState != null ? (
-                <div className="rounded border border-gray-200 bg-white px-2.5 py-2">
-                  <p className="mb-1 text-[10px] font-semibold text-slate-600">Podgląd grupowania</p>
-                  {csvGroupingPreviewState.kind === "ready" &&
-                  csvGroupingPreviewState.preview.kind === "ok" ? (
-                    <ul className="list-none space-y-0.5 font-mono text-[10px] leading-snug text-slate-800">
-                      {csvGroupingPreviewState.preview.lines.map((line, idx) => (
-                        <li key={`${idx}-${line}`}>{line}</li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="text-[10px] text-slate-500">Podgląd grupowania niedostępny / pusty.</p>
-                  )}
-                </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Poziomy</label>
+            <input
+              type="number"
+              min={1}
+              value={rackLevels}
+              onChange={(e) => setRackLevels(Math.max(1, Number(e.target.value) || 1))}
+              className="w-full rounded-lg border border-gray-200 px-2.5 py-2 text-sm"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Pozycje</label>
+            <input
+              type="number"
+              min={1}
+              value={rackPositions}
+              onChange={(e) => setRackPositions(Math.max(1, Number(e.target.value) || 1))}
+              className="w-full rounded-lg border border-gray-200 px-2.5 py-2 text-sm"
+            />
+          </div>
+          <div className="col-span-2">
+            <label className="mb-1 block text-xs font-medium text-slate-600">Strefa (opcjonalnie)</label>
+            <input
+              type="text"
+              value={rackZone}
+              onChange={(e) => setRackZone(e.target.value)}
+              className="w-full rounded-lg border border-gray-200 px-2.5 py-2 text-sm"
+            />
+          </div>
+          <div className="col-span-2">
+            <PrintQueueSecondaryButton onClick={handleGenerateRackLabels} disabled={rackGenerating}>
+              {rackGenerating ? "Generowanie…" : "Utwórz siatkę regału"}
+            </PrintQueueSecondaryButton>
+          </div>
+        </div>
+      ) : null}
+
+      {printMode === "rack_strip" ? (
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Regał</label>
+            <input
+              type="text"
+              value={stripRack}
+              onChange={(e) => setStripRack(e.target.value)}
+              className="w-full rounded-lg border border-gray-200 px-2.5 py-2 text-sm"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Poziom</label>
+            <input
+              type="number"
+              min={1}
+              value={stripLevel}
+              onChange={(e) => setStripLevel(Math.max(1, Number(e.target.value) || 1))}
+              className="w-full rounded-lg border border-gray-200 px-2.5 py-2 text-sm"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Start</label>
+            <input
+              type="number"
+              min={1}
+              value={stripStart}
+              onChange={(e) => setStripStart(Math.max(1, Number(e.target.value) || 1))}
+              className="w-full rounded-lg border border-gray-200 px-2.5 py-2 text-sm"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Koniec</label>
+            <input
+              type="number"
+              min={1}
+              value={stripEnd}
+              onChange={(e) => setStripEnd(Math.max(stripStart, Number(e.target.value) || 1))}
+              className="w-full rounded-lg border border-gray-200 px-2.5 py-2 text-sm"
+            />
+          </div>
+          <div className="col-span-2">
+            <PrintQueueSecondaryButton
+              onClick={handleGenerateRackStrip}
+              disabled={stripGenerating || stripEnd < stripStart}
+            >
+              {stripGenerating ? "Tworzenie listwy…" : "Utwórz segmenty listwy"}
+            </PrintQueueSecondaryButton>
+          </div>
+        </div>
+      ) : null}
+
+      {printMode === "pdf_import" ? (
+        <>
+          <input
+            type="file"
+            accept=".pdf,application/pdf"
+            onChange={handlePdfImportUpload}
+            disabled={pdfImportLoading}
+            className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-sm file:mr-2 file:rounded file:border-0 file:bg-orange-50 file:px-3 file:py-1 file:text-sm file:font-medium file:text-orange-800"
+          />
+          {pdfImportError ? <p className="text-sm text-red-600">{pdfImportError}</p> : null}
+          {pdfImportLoading ? <p className="text-sm text-slate-500">Odczytywanie kodów…</p> : null}
+          {pdfImportBarcodes.length > 0 ? (
+            <p className="text-sm text-slate-700">
+              Wykryto kodów: <strong>{pdfImportBarcodes.length}</strong>
+            </p>
+          ) : null}
+        </>
+      ) : null}
+
+      {printMode === "cart_basket" ? (
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-600">Wózek</label>
+          <select
+            value={selectedCartId ?? ""}
+            onChange={(e) => setSelectedCartId(e.target.value ? Number(e.target.value) : null)}
+            className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-sm"
+          >
+            <option value="">— Wybierz wózek —</option>
+            {cartList.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : null}
+
+      {!layout && printMode === "location" ? (
+        <p className="text-sm text-slate-500">{loading ? "Ładowanie układu…" : "Brak układu magazynu."}</p>
+      ) : null}
+    </div>
+  );
+
+  const filtersSection = (
+    <div className="space-y-3">
+      {printMode === "csv_import" || printMode === "location" ? (
+        <FloorExclusionPanel
+          value={floorFilterUi}
+          onChange={setFloorFilterUi}
+          summaryFooter={printMode === "csv_import" ? csvFloorSummaryFooter : locationFloorSummaryFooter}
+        />
+      ) : (
+        <p className="text-xs text-slate-500">Brak dodatkowych filtrów dla tego typu wydruku.</p>
+      )}
+    </div>
+  );
+
+  const optionsSection = (
+    <div className="space-y-3.5">
+      <label className="flex cursor-pointer items-start gap-3 text-sm text-slate-800">
+        <input
+          type="checkbox"
+          className="mt-1 rounded border-gray-300"
+          checked={pdfPrintReady}
+          onChange={(e) => setPdfPrintReady(e.target.checked)}
+        />
+        <span>
+          <span className="font-medium">PDF pod druk profesjonalny</span>
+          <span className="mt-0.5 block text-xs font-normal text-slate-600">
+            Spady i znaczniki cięcia dla drukarni zewnętrznej.
+          </span>
+        </span>
+      </label>
+      <label className="flex cursor-pointer items-start gap-3 text-sm text-slate-800">
+        <input
+          type="checkbox"
+          className="mt-1 rounded border-gray-300"
+          checked={thermalMode}
+          onChange={(e) => {
+            const checked = e.target.checked;
+            setThermalMode(checked);
+            try {
+              localStorage.setItem("label_print_thermal_mode", String(checked));
+            } catch {
+              /* ignore */
+            }
+          }}
+        />
+        <span>
+          <span className="font-medium">Tryb drukarki termicznej</span>
+          <span className="mt-0.5 block text-xs font-normal text-slate-600">
+            Monochrom i wyższy kontrast (Zebra i podobne).
+          </span>
+        </span>
+      </label>
+      {(printMode === "location" || printMode === "rack") && (
+        <div className="space-y-2 rounded-xl border border-gray-200 bg-white p-3">
+          <p className="text-xs font-semibold text-slate-800">Powtarzacz — lokacji na etykietę</p>
+          <select
+            value={labelDatasetItemsPerLabel}
+            onChange={(e) => {
+              const v = e.target.value;
+              setLabelDatasetItemsPerLabel(v === "auto" ? "auto" : (Number(v) as 3 | 5 | 10));
+            }}
+            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm"
+          >
+            <option value="auto">Automatycznie</option>
+            <option value="3">3</option>
+            <option value="5">5</option>
+            <option value="10">10</option>
+          </select>
+          <select
+            value={labelDatasetTransformMode}
+            onChange={(e) => setLabelDatasetTransformMode(e.target.value as RackDatasetTransformMode)}
+            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm"
+          >
+            <option value="sequential">Jak na liście</option>
+            <option value="row">Wierszami</option>
+            <option value="column">Kolumnami</option>
+          </select>
+        </div>
+      )}
+      {printMode === "csv_import" ? (
+        <div className="space-y-3 rounded-xl border border-gray-200 bg-white p-3">
+          <p className="text-xs font-semibold text-slate-800">Grupowanie wierszy CSV w PDF</p>
+          <label className="flex cursor-pointer items-start gap-2 text-sm text-slate-800 select-none">
+            <input
+              type="checkbox"
+              checked={csvGroupMode}
+              onChange={(e) => {
+                const on = e.target.checked;
+                setCsvGroupMode(on);
+                if (!on) {
+                  setCsvGroupByRack(false);
+                  setCsvFloorSets([]);
+                  setCsvFloorDraftInput("");
+                  setCsvFloorDraftTokens([]);
+                }
+              }}
+              className="mt-1 rounded border-gray-300"
+            />
+            <span>Włącz grupowanie wielu wierszy w jedną etykietę</span>
+          </label>
+          <label
+            className={`flex items-start gap-2 text-sm text-slate-800 select-none ${
+              csvGroupMode ? "cursor-pointer" : "cursor-not-allowed opacity-50"
+            }`}
+          >
+            <input
+              type="checkbox"
+              checked={csvGroupByRack}
+              disabled={!csvGroupMode}
+              onChange={(e) => setCsvGroupByRack(e.target.checked)}
+              className="mt-1 rounded border-gray-300"
+            />
+            <span>Uwzględnij regał przy grupowaniu (regał + rząd)</span>
+          </label>
+          {csvGroupMode && csvGroupingPdfBlocked ? (
+            <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+              <span>Szablon nie obsługuje grupowania — etykiety zostaną wygenerowane pojedynczo</span>
+              {selectedCsvTemplateId != null ? (
+                <button
+                  type="button"
+                  onClick={() => navigate(`${labelBase}/${selectedCsvTemplateId}/edit`)}
+                  className="shrink-0 rounded border border-amber-300 bg-white px-2 py-0.5 text-[11px] font-medium text-amber-900 hover:bg-amber-100"
+                >
+                  Dostosuj szablon
+                </button>
               ) : null}
             </div>
-          </div>
+          ) : null}
+          {csvGroupingPreviewState != null ? (
+            <div className="rounded border border-gray-200 bg-white px-2.5 py-2">
+              <p className="mb-1 text-[10px] font-semibold text-slate-600">Podgląd grupowania</p>
+              {csvGroupingPreviewState.kind === "ready" &&
+              csvGroupingPreviewState.preview.kind === "ok" ? (
+                <ul className="list-none space-y-0.5 font-mono text-[10px] leading-snug text-slate-800">
+                  {csvGroupingPreviewState.preview.lines.map((line, idx) => (
+                    <li key={`${idx}-${line}`}>{line}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-[10px] text-slate-500">Podgląd grupowania niedostępny / pusty.</p>
+              )}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+
+  const generateDisabled =
+    printMode === "csv_import"
+      ? csvPdfLoading ||
+        csvRows.length === 0 ||
+        csvRecordsFiltered.length === 0 ||
+        selectedCsvTemplateId == null ||
+        csvTemplatesForPrintKind.length === 0 ||
+        csvTemplateParsed == null
+      : printMode === "location"
+        ? locationRecordsFiltered.length === 0
+        : printMode === "rack"
+          ? rackRecords.length === 0 || rackPdfLoading || locationTemplates.length === 0
+          : printMode === "rack_strip"
+            ? stripRecords.length === 0 || stripPdfLoading || locationTemplates.length === 0
+            : printMode === "pdf_import"
+              ? pdfImportBarcodes.length === 0 || pdfImportPdfLoading || locationTemplates.length === 0
+              : selectedCartId == null || generatingBasketLabels;
+
+  const onGenerate = () => {
+    if (printMode === "csv_import") void handleCsvGeneratePdf();
+    else if (printMode === "location") void handleGeneratePdf();
+    else if (printMode === "rack") void handleDownloadRackPdf();
+    else if (printMode === "rack_strip") void handleDownloadRackStripPdf();
+    else if (printMode === "pdf_import") void handlePdfImportGenerateLabels();
+    else void handleGenerateBasketLabelsForCart();
+  };
+
+  const generateLabel =
+    printMode === "csv_import"
+      ? csvPdfLoading
+        ? "Generowanie PDF…"
+        : "Generuj PDF"
+      : printMode === "location"
+        ? "Generuj PDF"
+        : printMode === "rack"
+          ? rackPdfLoading
+            ? "Tworzenie pliku PDF…"
+            : "Pobierz PDF regału"
+          : printMode === "rack_strip"
+            ? stripPdfLoading
+              ? "Tworzenie pliku PDF…"
+              : "Pobierz PDF listwy"
+            : printMode === "pdf_import"
+              ? pdfImportPdfLoading
+                ? "Tworzenie pliku PDF…"
+                : "Generuj PDF z kodów"
+              : generatingBasketLabels
+                ? "Tworzenie pliku PDF…"
+                : "Generuj PDF etykiet koszyków";
+
+  return (
+    <>
+      <PrintQueueWorkspaceShell
+        printMode={printMode}
+        onPrintModeChange={setPrintMode}
+        currentStep={workspaceWizardStep}
+        dataSummary={
+          printMode === "csv_import"
+            ? csvHeaders.length > 0
+              ? `${csvRows.length} wierszy`
+              : "Brak CSV"
+            : labelsToPrintCount != null
+              ? `${labelsToPrintCount} etykiet`
+              : undefined
         }
-        previewTemplate={csvTemplateParsed}
-        previewRecords={csvRecordsFiltered as Array<Record<string, unknown>>}
+        configSummary={summaryTemplateName}
+        filtersSummary={
+          printMode === "csv_import" || printMode === "location"
+            ? excludeFloors.length > 0
+              ? `Wykluczone piętra: ${excludeFloors.length}`
+              : "Bez filtra pięter"
+            : "—"
+        }
+        dataSection={dataSection}
+        configSection={configSection}
+        filtersSection={filtersSection}
+        optionsSection={optionsSection}
+        previewTemplate={previewBundle.template}
+        previewRecords={previewBundle.records}
+        previewLoading={previewBundle.loading}
+        previewEmptyMessage={previewBundle.empty}
         summaryTiles={[
-          { label: "Liczba etykiet", value: csvRecordsFiltered.length },
+          { label: "Liczba etykiet", value: labelsToPrintCount != null ? labelsToPrintCount : "—" },
           { label: "Rozmiar etykiety", value: `${labelW} × ${labelH} mm` },
-          { label: "Profil drukowania", value: summaryPrinterLabel },
+          { label: "Profil / drukarka", value: summaryPrinterLabel },
+          { label: "Szablon", value: summaryTemplateName },
           {
             label: "Źródło danych",
-            value: csvHeaders.length > 0 ? `CSV · ${csvRows.length} wierszy` : "Brak CSV",
-          },
-          {
-            label: "Stan mapowania pól",
             value:
-              csvMappingSummary.kind === "ok"
-                ? "Kompletne"
-                : csvMappingSummary.kind === "missing"
-                  ? `Brakuje ${csvMappingSummary.fields.length}`
-                  : "—",
+              printMode === "csv_import"
+                ? csvHeaders.length > 0
+                  ? `CSV · ${csvRows.length} wierszy`
+                  : "Brak CSV"
+                : printMode,
           },
         ]}
-        mapping={csvMappingSummary}
-        generateLabel={csvPdfLoading ? "Generowanie PDF…" : "Generuj PDF"}
-        generateDisabled={
-          csvPdfLoading ||
-          csvRows.length === 0 ||
-          csvRecordsFiltered.length === 0 ||
-          selectedCsvTemplateId == null ||
-                  csvTemplatesForPrintKind.length === 0 ||
-                  csvTemplateParsed == null
-                }
-                onGenerate={() => void handleCsvGeneratePdf()}
+        mapping={printMode === "csv_import" ? csvMappingSummary : { kind: "na" }}
+        warnings={
+          <>
+            {backendPdfFallbackWarning && printMode === "location" ? (
+              <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                Nie udało się przygotować PDF na serwerze — używamy silnika w przeglądarce.
+              </p>
+            ) : null}
+            {printMode === "csv_import" && csvValidationWarnings.length > 0 ? (
+              <div className="space-y-1 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+                <p className="font-semibold">Uwagi mapowania:</p>
+                <ul className="list-disc space-y-0.5 pl-4">
+                  {csvValidationWarnings.slice(0, 5).map((w, i) => (
+                    <li key={`${i}-${w.slice(0, 40)}`}>{w}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            {printMode === "location" && !qzChecking && !qzReady ? (
+              <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                Zainstaluj i uruchom QZ Tray, aby drukować bezpośrednio.
+              </p>
+            ) : null}
+          </>
+        }
+        generateLabel={generateLabel}
+        generateDisabled={generateDisabled}
+        onGenerate={onGenerate}
+        printLabel={printMode === "location" ? (printing ? "Wysyłanie…" : "Drukuj etykiety") : undefined}
+        printDisabled={printMode === "location" ? locationRecordsFiltered.length === 0 || printing : undefined}
+        onPrint={printMode === "location" ? handlePrint : undefined}
         printersSlot={
           <details className="group">
-            <summary className="cursor-pointer list-none text-sm font-semibold text-slate-900 marker:content-none [&::-webkit-details-marker]:hidden">
+            <summary className="cursor-pointer list-none text-sm font-semibold text-slate-900 [&::-webkit-details-marker]:hidden">
               <span className="flex items-center justify-between gap-2">
                 Lista drukarek systemowych
                 <span className="text-slate-400 group-open:rotate-180">▼</span>
@@ -1600,1166 +2013,32 @@ export function LabelPrintQueue({ template }: Props) {
             </div>
           </details>
         }
-        footerNote={
-          <>
-            DPI w profilu: {dpi}. Generowanie używa tego samego endpointu co wcześniej — bez zmian w backendzie.
-          </>
-        }
+        footerNote={<>DPI w profilu: {dpi}.</>}
       />
-      <CsvMappingModal
-        open={csvMappingModalOpen}
-        onClose={() => setCsvMappingModalOpen(false)}
-        onSave={(mapping) => {
-          const next = filterDerivedGroupSlotsFromCsvMapping(mapping);
-          setCsvColumnToField(next);
-          saveCsvLabelMapping(csvHeaders, next);
-          setCsvMappingModalOpen(false);
-        }}
-        csvHeaders={csvHeaders}
-        initialMapping={csvColumnToField}
-        csvRowCount={csvRows.length}
-        labelCount={csvRecordsFiltered.length}
-        perFileStats={csvPerFileStats}
-        template={csvTemplateParsed}
-        templateType={csvSelectedTemplateType}
-        apiAvailableVariables={
-          selectedCsvTemplateRow?.available_variables ?? selectedCsvTemplateRow?.variables ?? null
-        }
-        bindingKeys={csvTemplateBindingInfo.keys}
-      />
-      </>
-    );
-  }
-
-  return (
-    <div className="h-full min-h-0 overflow-y-auto bg-white">
-      <div className="mx-auto w-full max-w-[1500px] px-3 py-5 pb-12 md:px-5">
-        <PrintQueueWorkflowStep
-          step={1}
-          title="Wybierz typ wydruku"
-          subtitle="Od tego zależy, skąd pobieramy dane i jakie kroki są dostępne poniżej."
+      {printMode === "csv_import" ? (
+        <CsvMappingModal
+          open={csvMappingModalOpen}
+          onClose={() => setCsvMappingModalOpen(false)}
+          onSave={(mapping) => {
+            const next = filterDerivedGroupSlotsFromCsvMapping(mapping);
+            setCsvColumnToField(next);
+            saveCsvLabelMapping(csvHeaders, next);
+            setCsvMappingModalOpen(false);
+          }}
+          csvHeaders={csvHeaders}
+          initialMapping={csvColumnToField}
+          csvRowCount={csvRows.length}
+          labelCount={csvRecordsFiltered.length}
+          perFileStats={csvPerFileStats}
+          template={csvTemplateParsed}
+          templateType={csvSelectedTemplateType}
+          apiAvailableVariables={
+            selectedCsvTemplateRow?.available_variables ?? selectedCsvTemplateRow?.variables ?? null
+          }
+          bindingKeys={csvTemplateBindingInfo.keys}
         />
-        <PrintModeCards value={printMode} onChange={setPrintMode} />
-
-        <div className="mt-6 grid gap-6 lg:grid-cols-12 lg:items-start">
-          <div className="min-w-0 space-y-4 lg:col-span-8">
-            <PrintQueueWorkflowStep
-              step={2}
-              title="Wybierz szablon i profil drukowania"
-            />
-            <PrintQueueSurfaceCard title="Szablon i profil drukowania">
-              <div className="grid gap-4 md:grid-cols-2">
-                {printMode === "csv_import" && (
-                  <div className="space-y-2 md:col-span-2">
-                    <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      Szablon z biblioteki
-                    </label>
-                    <select
-                      value={selectedCsvTemplateId ?? ""}
-                      onChange={(e) => setSelectedCsvTemplateId(e.target.value ? Number(e.target.value) : null)}
-                      className="w-full rounded-lg border border-slate-200 bg-slate-50/50 px-2.5 py-2 text-sm text-slate-900 outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-300/40"
-                    >
-                      <option value="">— Wybierz szablon —</option>
-                      {allLabelTemplatesForCsv.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.name}
-                          {t.template_type ? ` (${t.template_type})` : ""}
-                        </option>
-                      ))}
-                    </select>
-                    {csvTemplateDimensionHints.warnings.length > 0 && (
-                      <div className="rounded-xl border border-amber-200 bg-amber-50/90 px-3 py-2 text-xs leading-relaxed text-amber-950 space-y-1">
-                        {csvTemplateDimensionHints.warnings.map((w, i) => (
-                          <p key={i}>{humanizeCsvSanitizeWarning(w)}</p>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-                {(printMode === "location" ||
-                  printMode === "rack" ||
-                  printMode === "rack_strip" ||
-                  printMode === "pdf_import") && (
-                  <div className={printMode === "csv_import" ? "md:col-span-2" : "md:col-span-2"}>
-                    <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      Szablon etykiety (lokalizacja)
-                    </label>
-                    <select
-                      value={selectedLocationTemplateId ?? ""}
-                      onChange={(e) => setSelectedLocationTemplateId(e.target.value ? Number(e.target.value) : null)}
-                      className="mt-1.5 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-2.5 py-2 text-sm text-slate-900 outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-300/40"
-                    >
-                      <option value="">
-                        {printMode === "location" ? "— Domyślny z listy —" : "— Wybierz szablon —"}
-                      </option>
-                      {locationTemplates.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.name}
-                          {t.is_default ? " (domyślny)" : ""}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-                <LabelPrintingProfileField
-                  tenantId={TENANT_ID}
-                  warehouseId={selectedWarehouseId}
-                  profiles={profiles}
-                  printers={printers}
-                  legacyPrinters={legacyPrinters}
-                  agentPrinters={agentPrinters}
-                  systemPrinters={systemPrinters}
-                  selectedPrinterId={selectedPrinterId}
-                  onSelectPrinterId={setSelectedPrinterId}
-                  onProfilesChanged={reloadPrinters}
-                />
-              </div>
-            </PrintQueueSurfaceCard>
-
-            <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
-              <button
-                type="button"
-                onClick={() => setAdvancedSettingsOpen((o) => !o)}
-                className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left transition hover:bg-slate-50/80"
-              >
-                <div>
-                  <span className="text-[14px] font-semibold text-slate-900">Ustawienia zaawansowane</span>
-                  <p className="text-xs text-slate-500 mt-0.5">Grupowanie CSV, powtarzacz, PDF dla drukarni, termika, podpowiedzi PDF.</p>
-                </div>
-                <span className="text-slate-400 text-sm shrink-0">{advancedSettingsOpen ? "▲" : "▼"}</span>
-              </button>
-              {advancedSettingsOpen && (
-                <div className="space-y-3.5 border-t border-slate-100 px-3 py-3">
-                  <label className="flex cursor-pointer items-start gap-3 text-sm text-slate-800">
-                    <input
-                      type="checkbox"
-                      className="mt-1 rounded border-slate-300"
-                      checked={pdfPrintReady}
-                      onChange={(e) => setPdfPrintReady(e.target.checked)}
-                    />
-                    <span>
-                      <span className="font-medium">PDF pod druk profesjonalny</span>
-                      <span className="mt-0.5 block text-xs font-normal text-slate-600">
-                        Dodaje spady i znaczniki cięcia — włącz tylko, gdy przygotowujesz plik dla drukarni zewnętrznej.
-                      </span>
-                    </span>
-                  </label>
-                  <label className="flex cursor-pointer items-start gap-3 text-sm text-slate-800">
-                    <input
-                      type="checkbox"
-                      className="mt-1 rounded border-slate-300"
-                      checked={thermalMode}
-                      onChange={(e) => {
-                        const checked = e.target.checked;
-                        setThermalMode(checked);
-                        try {
-                          localStorage.setItem("label_print_thermal_mode", String(checked));
-                        } catch {
-                          /* ignore */
-                        }
-                      }}
-                    />
-                    <span>
-                      <span className="font-medium">Tryb drukarki termicznej</span>
-                      <span className="mt-0.5 block text-xs font-normal text-slate-600">
-                        Monochrom i wyższy kontrast — zwykle włączony dla Zebra i podobnych.
-                      </span>
-                    </span>
-                  </label>
-                  {(printMode === "location" || printMode === "rack") && (
-                    <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-3 space-y-3">
-                      <p className="text-xs font-semibold text-slate-800">Powtarzacz w szablonie — segmenty na jednej etykiecie</p>
-                      <p className="text-[11px] text-slate-600 leading-snug">
-                        Używane, gdy szablon łączy wiele lokacji w jednym polu powtarzalnym.
-                      </p>
-                      <div>
-                        <label className="block text-xs font-medium text-slate-600 mb-1">Lokacji na etykietę</label>
-                        <select
-                          value={labelDatasetItemsPerLabel}
-                          onChange={(e) => {
-                            const v = e.target.value;
-                            setLabelDatasetItemsPerLabel(v === "auto" ? "auto" : (Number(v) as 3 | 5 | 10));
-                          }}
-                          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
-                        >
-                          <option value="auto">Automatycznie (z szerokości szablonu)</option>
-                          <option value="3">3</option>
-                          <option value="5">5</option>
-                          <option value="10">10</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-slate-600 mb-1">Kolejność na etykiecie</label>
-                        <select
-                          value={labelDatasetTransformMode}
-                          onChange={(e) => setLabelDatasetTransformMode(e.target.value as RackDatasetTransformMode)}
-                          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
-                        >
-                          <option value="sequential">Jak na liście</option>
-                          <option value="row">Wierszami (piętro, potem pozycja)</option>
-                          <option value="column">Kolumnami (pozycja, potem piętro)</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-slate-600 mb-1">
-                          Opcjonalnie: kolumny siatki (stabilniejsze sortowanie)
-                        </label>
-                        <input
-                          type="number"
-                          min={1}
-                          max={99}
-                          placeholder="np. 4"
-                          value={labelDatasetColumnsHint}
-                          onChange={(e) => setLabelDatasetColumnsHint(e.target.value)}
-                          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
-                        />
-                      </div>
-                    </div>
-                  )}
-                  {printMode === "csv_import" && (
-                    <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-3 space-y-3">
-                      <p className="text-xs font-semibold text-slate-800">Grupowanie wierszy CSV w PDF</p>
-                      <p className="text-[11px] text-slate-600 leading-snug">
-                        Łączy do trzech lokacji w jednej etykiecie, gdy szablon ma pola grupowe (np. piętra 1–3).
-                      </p>
-                      <label className="flex items-start gap-2 text-sm text-slate-800 cursor-pointer select-none">
-                        <input
-                          type="checkbox"
-                          checked={csvGroupMode}
-                          onChange={(e) => {
-                            const on = e.target.checked;
-                            setCsvGroupMode(on);
-                            if (!on) {
-                              setCsvGroupByRack(false);
-                              setCsvFloorSets([]);
-                              setCsvFloorDraftInput("");
-                              setCsvFloorDraftTokens([]);
-                            }
-                          }}
-                          className="mt-1 rounded border-slate-300"
-                        />
-                        <span>Włącz grupowanie wielu wierszy w jedną etykietę</span>
-                      </label>
-                      <label
-                        className={`flex items-start gap-2 text-sm text-slate-800 select-none ${
-                          csvGroupMode ? "cursor-pointer" : "cursor-not-allowed opacity-50"
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={csvGroupByRack}
-                          disabled={!csvGroupMode}
-                          onChange={(e) => setCsvGroupByRack(e.target.checked)}
-                          className="mt-1 rounded border-slate-300"
-                        />
-                        <span>Uwzględnij regał przy grupowaniu (regał + rząd)</span>
-                      </label>
-                      <div className={csvGroupMode ? "" : "opacity-50 pointer-events-none"}>
-                        <label className="block text-xs font-medium text-slate-600 mb-1">Zestawy pięter</label>
-                        {csvFloorSets.length > 0 && (
-                          <div className="flex flex-wrap items-center gap-2 mb-2">
-                            {csvFloorSets.map((set, si) =>
-                              set.length === 0 ? null : (
-                                <div
-                                  key={`set-${si}`}
-                                  className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-1.5 py-1"
-                                >
-                                  <span className="text-slate-400 text-[11px]">[</span>
-                                  {set.map((tok, ti) => (
-                                    <span
-                                      key={`${si}-${ti}-${tok}`}
-                                      className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] font-medium text-slate-800"
-                                    >
-                                      {tok}
-                                    </span>
-                                  ))}
-                                  <span className="text-slate-400 text-[11px]">]</span>
-                                  <button
-                                    type="button"
-                                    disabled={!csvGroupMode}
-                                    onClick={() => setCsvFloorSets((prev) => prev.filter((_, i) => i !== si))}
-                                    className="ml-0.5 rounded px-1 text-slate-500 hover:bg-red-50 hover:text-red-700 text-sm leading-none"
-                                    aria-label="Usuń zestaw"
-                                    title="Usuń zestaw"
-                                  >
-                                    ×
-                                  </button>
-                                </div>
-                              ),
-                            )}
-                          </div>
-                        )}
-                        <div className="flex flex-wrap items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 py-1.5 min-h-[2.25rem]">
-                          <span className="text-slate-400 text-[11px] shrink-0">[</span>
-                          {csvFloorDraftTokens.map((tok, i) => (
-                            <span
-                              key={`draft-${i}-${tok}`}
-                              className="inline-flex items-center gap-0.5 rounded bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 font-mono text-[11px] font-medium text-emerald-900"
-                            >
-                              {tok}
-                              <button
-                                type="button"
-                                disabled={!csvGroupMode}
-                                onClick={() => setCsvFloorDraftTokens((t) => t.filter((_, j) => j !== i))}
-                                className="rounded px-0.5 text-emerald-700 hover:bg-emerald-100 leading-none"
-                                aria-label={`Usuń ${tok}`}
-                              >
-                                ×
-                              </button>
-                            </span>
-                          ))}
-                          <input
-                            type="text"
-                            disabled={!csvGroupMode}
-                            value={csvFloorDraftInput}
-                            onChange={(e) => setCsvFloorDraftInput(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key !== "Enter") return;
-                              e.preventDefault();
-                              const rawFromInput = e.currentTarget.value.trim();
-                              if (rawFromInput) {
-                                const parts = rawFromInput
-                                  .split(/[\s,;]+/)
-                                  .map((p) => p.trim().toUpperCase())
-                                  .filter(Boolean);
-                                if (parts.length > 0) {
-                                  setCsvFloorDraftTokens((t) => [...t, ...parts]);
-                                  setCsvFloorDraftInput("");
-                                }
-                                return;
-                              }
-                              setCsvFloorDraftTokens((curr) => {
-                                if (curr.length === 0) return curr;
-                                setCsvFloorSets((sets) => [...sets, [...curr]]);
-                                return [];
-                              });
-                            }}
-                            placeholder="Piętro… Enter = dodaj; pusty Enter = nowy zestaw"
-                            className="min-w-[8rem] flex-1 border-0 bg-transparent text-[12px] text-slate-900 outline-none focus:ring-0 placeholder:text-slate-400"
-                          />
-                          <span className="text-slate-400 text-[11px] shrink-0">]</span>
-                          <button
-                            type="button"
-                            disabled={!csvGroupMode}
-                            title="Dodaj zestaw (zapisz bieżące piętra w nawiasie)"
-                            onClick={() => {
-                              const raw = csvFloorDraftInput.trim();
-                              let merged = [...csvFloorDraftTokens];
-                              if (raw) {
-                                merged = [
-                                  ...merged,
-                                  ...raw
-                                    .split(/[\s,;]+/)
-                                    .map((p) => p.trim().toUpperCase())
-                                    .filter(Boolean),
-                                ];
-                              }
-                              if (merged.length === 0) return;
-                              setCsvFloorSets((sets) => [...sets, merged]);
-                              setCsvFloorDraftTokens([]);
-                              setCsvFloorDraftInput("");
-                            }}
-                            className="shrink-0 rounded border border-slate-300 bg-slate-50 px-2 py-0.5 text-sm font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-40"
-                          >
-                            +
-                          </button>
-                        </div>
-                        {csvGroupingPreviewState != null && (
-                          <div className="mt-2 rounded border border-slate-200 bg-white px-2.5 py-2">
-                            <p className="text-[10px] font-semibold text-slate-600 mb-1">Podgląd grupowania</p>
-                            {csvGroupingPreviewState.kind === "no_rows" && (
-                              <p className="text-[10px] text-slate-500">Brak wierszy po filtrach piętra — podgląd niedostępny.</p>
-                            )}
-                            {csvGroupingPreviewState.kind === "ready" && (
-                              <>
-                                {csvGroupingPreviewState.preview.kind === "empty" && (
-                                  <p className="text-[10px] text-slate-500">{csvGroupingPreviewState.preview.message}</p>
-                                )}
-                                {csvGroupingPreviewState.preview.kind === "skipped_repeater" && (
-                                  <p className="text-[10px] text-slate-500">{csvGroupingPreviewState.preview.message}</p>
-                                )}
-                                {csvGroupingPreviewState.preview.kind === "ok" && (
-                                  <>
-                                    <ul className="list-none space-y-0.5 font-mono text-[10px] text-slate-800 leading-snug">
-                                      {csvGroupingPreviewState.preview.lines.map((line, idx) => (
-                                        <li key={`${idx}-${line}`}>{line}</li>
-                                      ))}
-                                    </ul>
-                                    {csvGroupingPreviewState.preview.truncated && (
-                                      <p className="text-[10px] text-slate-500 mt-1.5">
-                                        Pokazano pierwsze {CSV_GROUPING_PREVIEW_LIMIT} z {csvGroupingPreviewState.preview.totalLabels}{" "}
-                                        etykiet.
-                                      </p>
-                                    )}
-                                  </>
-                                )}
-                              </>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                  {labelsToPrintCount !== null && (
-                    <p className="text-sm text-slate-700">
-                      Szacowana liczba etykiet (stron): <strong className="text-slate-900">{labelsToPrintCount}</strong>
-                    </p>
-                  )}
-                  <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/80 p-3 text-xs leading-relaxed text-slate-600">
-                    <p className="font-medium text-slate-800">Druk z podglądu PDF w przeglądarce</p>
-                    <p className="mt-1">
-                      Ustaw skalę <strong>100&nbsp;%</strong> (rzeczywisty rozmiar), wyłącz „Dopasuj do strony” i wybierz brak marginesów, jeśli
-                      przeglądarka to umożliwia — wtedy unikniesz niechcianego powiększenia etykiety.
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <PrintQueueWorkflowStep
-              step={3}
-              title="Wybierz dane"
-            />
-
-        {printMode === "rack_strip" && (
-          <div className="rounded-lg border border-[#E2E8F0] bg-slate-50/80 p-3 space-y-2.5">
-            <h3 className="text-sm font-semibold text-slate-700">Listwa regałowa</h3>
-            <p className="text-xs text-slate-500">
-              Zbiorcza etykieta z wieloma segmentami (np. A-1-1 … A-1-10). Wymaga szablonu z powtarzaczem i zbiorem danych „locations”.
-            </p>
-            <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2">
-              <div>
-                <label className="block text-sm font-medium text-slate-600 mb-1">Regał</label>
-                <input
-                  type="text"
-                  value={stripRack}
-                  onChange={(e) => setStripRack(e.target.value)}
-                  placeholder="A"
-                  className="w-full rounded border border-[#E2E8F0] bg-white text-[#1E293B] px-2.5 py-1.5"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-600 mb-1">Poziom</label>
-                <input
-                  type="number"
-                  min={1}
-                  max={99}
-                  value={stripLevel}
-                  onChange={(e) => setStripLevel(Math.max(1, Math.min(99, Number(e.target.value) || 1)))}
-                  className="w-full rounded border border-[#E2E8F0] bg-white text-[#1E293B] px-2.5 py-1.5"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-600 mb-1">Pozycja startowa</label>
-                <input
-                  type="number"
-                  min={1}
-                  value={stripStart}
-                  onChange={(e) => setStripStart(Math.max(1, Number(e.target.value) || 1))}
-                  className="w-full rounded border border-[#E2E8F0] bg-white text-[#1E293B] px-2.5 py-1.5"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-600 mb-1">Pozycja końcowa</label>
-                <input
-                  type="number"
-                  min={1}
-                  value={stripEnd}
-                  onChange={(e) => setStripEnd(Math.max(stripStart, Number(e.target.value) || 1))}
-                  className="w-full rounded border border-[#E2E8F0] bg-white text-[#1E293B] px-2.5 py-1.5"
-                />
-              </div>
-            </div>
-            <PrintQueueSecondaryButton
-              onClick={handleGenerateRackStrip}
-              disabled={stripGenerating || stripEnd < stripStart}
-            >
-              {stripGenerating ? "Tworzenie listwy…" : "Utwórz segmenty listwy"}
-            </PrintQueueSecondaryButton>
-            {stripRecords.length > 0 && (
-              <div>
-                <label className="block text-sm font-medium text-slate-600 mb-1">
-                  Szablon (powtarzacz, zbiór „locations”)
-                </label>
-                <select
-                  value={selectedLocationTemplateId ?? ""}
-                  onChange={(e) => setSelectedLocationTemplateId(e.target.value ? Number(e.target.value) : null)}
-                  className="w-full rounded border border-[#E2E8F0] bg-white text-[#1E293B] px-2.5 py-1.5"
-                >
-                  <option value="">— Wybierz szablon —</option>
-                  {locationTemplates.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                      {t.is_default ? " (domyślny)" : ""}
-                    </option>
-                  ))}
-                </select>
-                <p className="mt-2 text-xs text-slate-500">
-                  Plik PDF pobierzesz w kroku 5 po prawej stronie, gdy segmenty są gotowe.
-                </p>
-              </div>
-            )}
-          </div>
-        )}
-
-        {printMode === "csv_import" && (
-          <div className="rounded-lg border border-[#E2E8F0] bg-slate-50/80 p-3 space-y-2.5">
-            <h3 className="text-sm font-semibold text-slate-700">Import CSV</h3>
-            <ol className="mb-3 list-decimal space-y-1 pl-5 text-xs text-slate-600">
-              <li>Wgraj jeden lub wiele plików CSV (wiersze zostaną połączone w przeglądarce).</li>
-              <li>Sprawdź wykryte nagłówki i liczbę wierszy po scaleniu.</li>
-              <li>Powiąż kolumny z polami etykiety — potem wygeneruj PDF w kroku 5.</li>
-            </ol>
-            <p className="text-xs text-slate-500">
-              Jedna linia CSV odpowiada jednej etykiecie. Przy wielu plikach obowiązuje jedno mapowanie kolumn (unia nagłówków; brakująca kolumna w pliku = puste pole).
-              Filtr pięter z lewej kolumny działa na scalonym zbiorze. Szablony z powtarzaczem CSV nie obsługujemy w tym imporcie.
-            </p>
-            <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">Plik(i) CSV</label>
-              <input
-                type="file"
-                accept=".csv,text/csv"
-                multiple
-                onChange={handleCsvFileChange}
-                disabled={csvImportLoading}
-                className="w-full rounded border border-[#E2E8F0] bg-white text-[#1E293B] px-2.5 py-1.5 file:mr-2 file:rounded file:border-0 file:bg-cyan-100 file:px-3 file:py-1 file:text-sm file:font-medium file:text-cyan-700"
-              />
-            </div>
-            {csvImportLoading && <p className="text-sm text-slate-500">Wczytywanie…</p>}
-            {csvImportError && <p className="text-sm text-red-600">{csvImportError}</p>}
-            {csvHeaders.length > 0 && (
-              <>
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-sm text-slate-600">
-                    Łącznie wierszy: <strong>{csvRows.length}</strong>
-                    {csvPerFileStats.length > 1 ? (
-                      <span className="text-slate-500"> ({csvPerFileStats.length} plików)</span>
-                    ) : null}{" "}
-                    · nagłówków: {csvHeaders.length}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setCsvColumnToField(buildColumnMappingWithPersistence(csvHeaders, { forceAuto: true }))
-                    }
-                    className="text-xs font-medium text-cyan-700 hover:underline"
-                  >
-                    Automatyczne mapowanie
-                  </button>
-                </div>
-                {csvPerFileStats.length > 0 && (
-                  <ul className="text-xs text-slate-600 list-disc pl-5 space-y-0.5">
-                    {csvPerFileStats.map((s) => (
-                      <li key={s.filename}>
-                        <span className="font-mono text-slate-800">{s.filename}</span> — {s.rowCount} wierszy
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                {csvMergeWarnings.length > 0 && (
-                  <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950 space-y-1">
-                    <p className="font-semibold">Scalanie plików</p>
-                    <ul className="list-disc pl-4 space-y-0.5">
-                      {csvMergeWarnings.map((w, i) => (
-                        <li key={`${i}-${w.slice(0, 40)}`}>{w}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                <label className="flex items-start gap-2 text-sm text-slate-700 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={csvDedupeRackFloorRow}
-                    onChange={(e) => setCsvDedupeRackFloorRow(e.target.checked)}
-                    className="mt-1 rounded border-[#E2E8F0]"
-                  />
-                  <span>
-                    Usuń duplikaty po <strong>Regał</strong> + <strong>Piętro</strong> + <strong>Rząd</strong> (po zmapowaniu
-                    kolumn; wiersze bez tych pól nie są łączone)
-                  </span>
-                </label>
-                <FloorExclusionPanel
-                  value={floorFilterUi}
-                  onChange={setFloorFilterUi}
-                  summaryFooter={csvFloorSummaryFooter}
-                />
-                {csvValidationWarnings.length > 0 && (
-                  <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950 space-y-1">
-                    <p className="font-semibold">Uwagi (druk nadal możliwy):</p>
-                    <ul className="list-disc pl-4 space-y-0.5">
-                      {csvValidationWarnings.map((w, i) => (
-                        <li key={`${i}-${w.slice(0, 48)}`}>{w}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                <p className="text-xs text-slate-500">
-                  Mapowanie kolumn otwiera się w osobnym oknie po wczytaniu CSV (tryb Import CSV).
-                </p>
-                {csvGroupMode && csvGroupingPdfBlocked && (
-                  <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
-                    <span>
-                      Szablon nie obsługuje grupowania — etykiety zostaną wygenerowane pojedynczo
-                    </span>
-                    {selectedCsvTemplateId != null && (
-                      <button
-                        type="button"
-                        onClick={() => navigate(`${labelBase}/${selectedCsvTemplateId}/edit`)}
-                        className="shrink-0 rounded border border-amber-300 bg-white px-2 py-0.5 text-[11px] font-medium text-amber-900 hover:bg-amber-100"
-                      >
-                        Dostosuj szablon
-                      </button>
-                    )}
-                  </div>
-                )}
-                <p className="text-xs text-slate-500">
-                  Po zmapowaniu kolumn użyj przycisku „Generuj PDF” w panelu po prawej (krok 5).
-                </p>
-              </>
-            )}
-          </div>
-        )}
-
-        {printMode === "pdf_import" && (
-          <div className="rounded-lg border border-[#E2E8F0] bg-slate-50/80 p-3 space-y-2.5">
-            <h3 className="text-sm font-semibold text-slate-700">Import PDF</h3>
-            <p className="text-xs text-slate-500">Wgraj plik PDF z kodami kreskowymi, aby wyodrębnić dane i wygenerować nowe etykiety.</p>
-            <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">Plik PDF</label>
-              <input
-                type="file"
-                accept=".pdf,application/pdf"
-                onChange={handlePdfImportUpload}
-                disabled={pdfImportLoading}
-                className="w-full rounded border border-[#E2E8F0] bg-white text-[#1E293B] px-2.5 py-1.5 file:mr-2 file:rounded file:border-0 file:bg-cyan-100 file:px-3 file:py-1 file:text-sm file:font-medium file:text-cyan-700"
-              />
-            </div>
-            {pdfImportError && <p className="text-sm text-red-600">{pdfImportError}</p>}
-            {pdfImportLoading && <p className="text-sm text-slate-500">Odczytywanie kodów z pliku…</p>}
-            {pdfImportBarcodes.length > 0 && (
-              <>
-                <div>
-                  <label className="block text-sm font-medium text-slate-600 mb-1">Szablon</label>
-                  <select
-                    value={selectedLocationTemplateId ?? ""}
-                    onChange={(e) => setSelectedLocationTemplateId(e.target.value ? Number(e.target.value) : null)}
-                    className="w-full rounded border border-[#E2E8F0] bg-white text-[#1E293B] px-2.5 py-1.5"
-                  >
-                    <option value="">— Wybierz szablon —</option>
-                    {locationTemplates.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name}
-                        {t.is_default ? " (domyślny)" : ""}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <p className="text-xs text-slate-500">
-                  Gdy kody zostaną odczytane, wygeneruj PDF w panelu po prawej (krok 5).
-                </p>
-              </>
-            )}
-          </div>
-        )}
-
-        {printMode === "rack" && (
-          <div className="rounded-lg border border-[#E2E8F0] bg-slate-50/80 p-3 space-y-2.5">
-            <h3 className="text-sm font-semibold text-slate-700">Twórz etykiety lokalizacji</h3>
-            <p className="text-xs text-slate-500">
-              Twórz siatkę lokalizacji dla jednego regału (np. A-1-1, A-1-2 …), a następnie pobierz PDF w kroku 5.
-            </p>
-            <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2">
-              <div>
-                <label className="block text-sm font-medium text-slate-600 mb-1">Regał</label>
-                <input
-                  type="text"
-                  value={rackRack}
-                  onChange={(e) => setRackRack(e.target.value)}
-                  placeholder="A"
-                  className="w-full rounded border border-[#E2E8F0] bg-white text-[#1E293B] px-2.5 py-1.5"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-600 mb-1">Poziomy</label>
-                <input
-                  type="number"
-                  min={1}
-                  max={99}
-                  value={rackLevels}
-                  onChange={(e) => setRackLevels(Math.max(1, Math.min(99, Number(e.target.value) || 1)))}
-                  className="w-full rounded border border-[#E2E8F0] bg-white text-[#1E293B] px-2.5 py-1.5"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-600 mb-1">Kolumna</label>
-                <input
-                  type="number"
-                  min={1}
-                  max={99}
-                  value={rackPositions}
-                  onChange={(e) => setRackPositions(Math.max(1, Math.min(99, Number(e.target.value) || 1)))}
-                  className="w-full rounded border border-[#E2E8F0] bg-white text-[#1E293B] px-2.5 py-1.5"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-600 mb-1">Strefa (opcjonalnie)</label>
-                <input
-                  type="text"
-                  value={rackZone}
-                  onChange={(e) => setRackZone(e.target.value)}
-                  placeholder=""
-                  className="w-full rounded border border-[#E2E8F0] bg-white text-[#1E293B] px-2.5 py-1.5"
-                />
-              </div>
-            </div>
-            <PrintQueueSecondaryButton onClick={handleGenerateRackLabels} disabled={rackGenerating}>
-              {rackGenerating ? "Obliczanie siatki…" : "Przygotuj siatkę lokalizacji"}
-            </PrintQueueSecondaryButton>
-            {rackRecords.length > 0 && (
-              <div>
-                <label className="block text-sm font-medium text-slate-600 mb-1">Szablon</label>
-                <select
-                  value={selectedLocationTemplateId ?? ""}
-                  onChange={(e) => setSelectedLocationTemplateId(e.target.value ? Number(e.target.value) : null)}
-                  className="w-full rounded border border-[#E2E8F0] bg-white text-[#1E293B] px-2.5 py-1.5"
-                >
-                  <option value="">— Wybierz szablon —</option>
-                  {locationTemplates.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                      {t.is_default ? " (domyślny)" : ""}
-                    </option>
-                  ))}
-                </select>
-                <p className="mt-2 text-xs text-slate-500">
-                  Po wygenerowaniu siatki pobierz PDF w kroku 5 po prawej stronie.
-                </p>
-              </div>
-            )}
-          </div>
-        )}
-
-        {printMode === "cart_basket" && (
-          <div className="rounded-lg border border-[#E2E8F0] bg-slate-50/80 p-3 space-y-2.5">
-            <h3 className="text-sm font-semibold text-slate-700">Etykiety koszyków na wózku</h3>
-            <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">Wózek</label>
-              <select
-                value={selectedCartId ?? ""}
-                onChange={(e) => setSelectedCartId(e.target.value ? Number(e.target.value) : null)}
-                className="w-full rounded border border-[#E2E8F0] bg-white text-[#1E293B] px-2.5 py-1.5"
-              >
-                <option value="">Wybierz wózek</option>
-                {cartList.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} (identyfikator {c.id})
-                  </option>
-                ))}
-              </select>
-            </div>
-            <p className="text-xs text-slate-500">
-              Po wyborze wózka wygeneruj PDF w panelu po prawej (krok 5).
-            </p>
-          </div>
-        )}
-
-        {printMode === "location" && (
-          <>
-        <PrintQueueSecondaryButton
-          onClick={loadLayout}
-          disabled={selectedWarehouseId == null || loading}
-          className="w-full sm:w-auto"
-        >
-          {loading ? "Ładowanie układu…" : "Załaduj układ magazynu"}
-        </PrintQueueSecondaryButton>
-
-        {layout && (
-          <>
-            <div>
-              <label className="block text-sm font-medium text-slate-600 mb-2">Które etykiety drukować</label>
-              <div className="flex flex-wrap gap-2">
-                {[
-                  { value: "all" as const, label: "Wszystkie lokalizacje" },
-                  { value: "by_rack" as const, label: "Po regale" },
-                  { value: "reserve_only" as const, label: "Tylko rezerwa" },
-                  { value: "manual" as const, label: "Ręczny wybór (lista)" },
-                ].map((opt) => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => setSelectionMode(opt.value)}
-                    className={`px-3 py-1.5 rounded text-sm font-medium ${
-                      selectionMode === opt.value ? "bg-cyan-600 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200 border border-[#E2E8F0]"
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {selectionMode === "by_rack" && (
-              <div>
-                <label className="block text-sm font-medium text-slate-600 mb-1">Wybierz regały</label>
-                <div className="flex flex-wrap gap-2">
-                  {rackOptions.map((opt) => (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      onClick={() =>
-                        setSelectedRackIds((prev) =>
-                          prev.includes(opt.id) ? prev.filter((id) => id !== opt.id) : [...prev, opt.id]
-                        )
-                      }
-                      className={`px-2 py-1 rounded text-xs border ${
-                        selectedRackIds.includes(opt.id) ? "bg-cyan-600 text-white border-cyan-600" : "bg-slate-100 text-slate-700 border-[#E2E8F0] hover:bg-slate-200"
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {selectionMode === "manual" && (() => {
-              const allForManual = layout ? getRecordsFromLayout(layout, "all", [], []) : [];
-              const searchLower = manualLocationSearch.trim().toLowerCase();
-              const filtered = searchLower
-                ? allForManual.filter(
-                    (r) =>
-                      (r.location_code ?? "").toLowerCase().includes(searchLower) ||
-                      (r.location_barcode ?? "").toLowerCase().includes(searchLower) ||
-                      (r.rack ?? "").toLowerCase().includes(searchLower)
-                  )
-                : allForManual;
-              const isSelected = (r: LabelRecord) =>
-                manualLocationIds.includes(r.location_barcode ?? "") || manualLocationIds.includes(r.location_code ?? "");
-              const toggle = (r: LabelRecord) => {
-                const add = [r.location_barcode, r.location_code].filter(Boolean) as string[];
-                setManualLocationIds((prev) => {
-                  const next = new Set(prev);
-                  if (isSelected(r)) add.forEach((id) => next.delete(id));
-                  else add.forEach((id) => next.add(id));
-                  return [...next];
-                });
-              };
-              return (
-                <div>
-                  <label className="block text-sm font-medium text-slate-600 mb-1">Ręczny wybór lokalizacji</label>
-                  <input
-                    type="text"
-                    placeholder="Szukaj (kod, regał…)"
-                    value={manualLocationSearch}
-                    onChange={(e) => setManualLocationSearch(e.target.value)}
-                    className="w-full max-w-sm rounded border border-[#E2E8F0] bg-white text-[#1E293B] px-3 py-2 text-sm mb-2"
-                  />
-                  <div className="max-h-48 overflow-y-auto rounded border border-[#E2E8F0] bg-white">
-                    <table className="w-full text-left text-sm">
-                      <thead className="sticky top-0 bg-slate-50 border-b border-[#E2E8F0]">
-                        <tr>
-                          <th className="px-2 py-1.5 w-8" />
-                          <th className="px-2 py-1.5 font-medium text-slate-600">Kod lokalizacji</th>
-                          <th className="px-2 py-1.5 font-medium text-slate-600">Regał</th>
-                          <th className="px-2 py-1.5 font-medium text-slate-600">Poziom</th>
-                          <th className="px-2 py-1.5 font-medium text-slate-600">Pozycja</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filtered.map((r, i) => (
-                          <tr
-                            key={i}
-                            className="border-b border-slate-100 hover:bg-slate-50"
-                            onClick={() => toggle(r)}
-                          >
-                            <td className="px-2 py-1">
-                              <input
-                                type="checkbox"
-                                checked={isSelected(r)}
-                                onChange={() => toggle(r)}
-                                onClick={(e) => e.stopPropagation()}
-                                className="rounded border-[#E2E8F0]"
-                              />
-                            </td>
-                            <td className="px-2 py-1 font-mono text-xs">{r.location_code ?? "—"}</td>
-                            <td className="px-2 py-1">{r.rack ?? "—"}</td>
-                            <td className="px-2 py-1">{r.level ?? "—"}</td>
-                            <td className="px-2 py-1">{r.position ?? "—"}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <p className="text-xs text-slate-500 mt-1">Wybrano: {manualLocationIds.length} lokalizacji</p>
-                </div>
-              );
-            })()}
-
-            <PrintQueueWorkflowStep
-              step={4}
-              title="Ustaw filtry"
-            />
-            <FloorExclusionPanel
-              value={floorFilterUi}
-              onChange={setFloorFilterUi}
-              summaryFooter={locationFloorSummaryFooter}
-            />
-          </>
-        )}
-        </>
-        )}
-
-      {/* Section 4 — Preview area (location mode) */}
-      {printMode === "location" && layout && locationRecordsFiltered.length > 0 && (
-        <div className="border border-[#E2E8F0] rounded-xl overflow-hidden bg-slate-50/60">
-          <h3 className="text-sm font-semibold text-slate-700 bg-slate-50 px-4 py-3 border-b border-[#E2E8F0]">
-            Podgląd (pierwsze 20 etykiet)
-          </h3>
-          <div className="p-4">
-            {locationPreviewLoading ? (
-              <p className="text-sm text-slate-500">Ładowanie podglądu…</p>
-            ) : templateIdForPreview == null ? (
-              <p className="text-sm text-slate-500">Wybierz szablon, aby zobaczyć podgląd etykiet.</p>
-            ) : (
-              <div className="grid grid-cols-6 gap-3">
-                {locationPreviewTemplate &&
-                  locationPageRecords.slice(0, 20).map((record, i) => (
-                    <div
-                      key={i}
-                      className="flex flex-col items-center rounded border border-slate-200 bg-white shadow-sm overflow-hidden"
-                    >
-                      <LabelPreviewCard
-                        template={locationPreviewTemplate}
-                        record={record}
-                        cardWidthPx={120}
-                      />
-                      <span className="text-[10px] text-slate-500 py-1 font-mono">
-                        {String(record?.loc_name ?? record?.location_name ?? record?.location_code ?? record?.barcode_data ?? "")}
-                      </span>
-                    </div>
-                  ))}
-                {locationPageRecords.length > 20 && (
-                  <span className="text-xs text-slate-500 self-center">+{locationPageRecords.length - 20} kolejnych</span>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {printMode === "rack_strip" && stripRecords.length > 0 && (
-        <div className="mt-6 border border-[#E2E8F0] rounded-lg overflow-hidden bg-slate-50/60">
-          <h3 className="text-xs font-bold text-slate-600 bg-slate-50 px-3 py-2 border-b border-[#E2E8F0]">
-            Podgląd — pasek regału ({stripRecords.length} segmentów)
-          </h3>
-          <div className="p-3">
-            <div className="flex flex-wrap gap-2 items-center text-xs font-mono text-slate-700">
-              {stripRecords.map((r, i) => (
-                <span key={i} className="px-2 py-1 rounded bg-slate-100 border border-slate-200">
-                  {String((r as LabelRecord).loc_name ?? (r as LabelRecord).barcode_data ?? "")}
-                </span>
-              ))}
-            </div>
-            <p className="text-slate-500 text-[10px] mt-2">Pojedyncza etykieta z powielaniem; kod kreskowy pod każdym segmentem</p>
-          </div>
-        </div>
-      )}
-
-      {printMode === "rack" && rackRecords.length > 0 && (
-        <div className="border border-[#E2E8F0] rounded-xl overflow-hidden bg-slate-50/60">
-          <h3 className="text-sm font-semibold text-slate-700 bg-slate-50 px-4 py-3 border-b border-[#E2E8F0]">
-            Podgląd (pierwsze 20 etykiet)
-          </h3>
-          <div className="p-4">
-            {rackPreviewLoading ? (
-              <p className="text-sm text-slate-500">Ładowanie podglądu…</p>
-            ) : templateIdForPreview == null ? (
-              <p className="text-sm text-slate-500">Wybierz szablon, aby zobaczyć podgląd etykiet.</p>
-            ) : (
-              <div className="grid grid-cols-6 gap-3">
-                {rackPreviewTemplate &&
-                  rackPageRecords.slice(0, 20).map((record, i) => (
-                    <div
-                      key={i}
-                      className="flex flex-col items-center rounded border border-slate-200 bg-white shadow-sm overflow-hidden"
-                    >
-                      <LabelPreviewCard
-                        template={rackPreviewTemplate}
-                        record={record}
-                        cardWidthPx={120}
-                      />
-                      <span className="text-[10px] text-slate-500 py-1 font-mono">
-                        {String(record?.loc_name ?? record?.location_name ?? record?.barcode_data ?? "")}
-                      </span>
-                    </div>
-                  ))}
-                {rackPageRecords.length > 20 && (
-                  <span className="text-xs text-slate-500 self-center">+{rackPageRecords.length - 20} kolejnych</span>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {printMode === "pdf_import" && pdfImportBarcodes.length > 0 && (
-        <div className="mt-6 border border-[#E2E8F0] rounded-lg overflow-hidden bg-slate-50/60">
-          <h3 className="text-xs font-bold text-slate-600 bg-slate-50 px-3 py-2 border-b border-[#E2E8F0]">
-            Wykryte kody ({pdfImportBarcodes.length})
-          </h3>
-          <ul className="max-h-64 overflow-y-auto p-2 space-y-1 text-xs text-slate-700 font-mono">
-            {pdfImportBarcodes.slice(0, 100).map((code, i) => (
-              <li key={i}>{code}</li>
-            ))}
-            {pdfImportBarcodes.length > 100 && (
-              <li className="text-slate-500">… jeszcze {pdfImportBarcodes.length - 100}</li>
-            )}
-          </ul>
-        </div>
-      )}
-          </div>
-          <aside className="min-w-0 space-y-3 lg:col-span-4 lg:sticky lg:top-4 self-start">
-            <PrintQueueWorkflowStep
-              step={5}
-              title="Podgląd i generowanie"
-            />
-            <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm ring-1 ring-slate-900/5">
-              <h3 className="text-sm font-semibold text-slate-900">Podsumowanie wydruku</h3>
-              <dl className="mt-2 space-y-1.5 text-[13px]">
-                <div className="flex justify-between gap-3 border-b border-slate-100 pb-2">
-                  <dt className="text-slate-500">Szablon</dt>
-                  <dd className="text-right font-medium text-slate-900">{summaryTemplateName}</dd>
-                </div>
-                <div className="flex justify-between gap-3 border-b border-slate-100 pb-2">
-                  <dt className="text-slate-500">Etykiety (stron)</dt>
-                  <dd className="text-right font-medium text-slate-900">
-                    {labelsToPrintCount != null ? labelsToPrintCount : "—"}
-                  </dd>
-                </div>
-                <div className="flex justify-between gap-3 border-b border-slate-100 pb-2">
-                  <dt className="text-slate-500">Rozmiar etykiety (mm)</dt>
-                  <dd className="text-right font-medium text-slate-900 tabular-nums">
-                    {Math.round(Number(summaryDimsTemplate?.widthMm) || 0)} ×{" "}
-                    {Math.round(Number(summaryDimsTemplate?.heightMm) || 0)}
-                  </dd>
-                </div>
-                <div className="flex justify-between gap-3">
-                  <dt className="text-slate-500">Profil drukowania</dt>
-                  <dd className="text-right font-medium text-slate-900">{summaryPrinterLabel}</dd>
-                </div>
-              </dl>
-              <p className="mt-3 text-xs text-slate-500">
-                DPI w profilu: {summaryDimsTemplate?.dpi ?? 300}. Rozmiar strony PDF odpowiada polom szerokości i wysokości szablonu.
-              </p>
-            </div>
-
-            {printMode === "location" && (
-              <div className="space-y-2.5 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-                {backendPdfFallbackWarning && (
-                  <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
-                    Nie udało się przygotować PDF na serwerze — używamy silnika w przeglądarce (wynik może nieznacznie różnić się od wersji serwerowej).
-                  </p>
-                )}
-                <PrintQueuePrimaryButton onClick={handleGeneratePdf} disabled={locationRecordsFiltered.length === 0}>
-                  Generuj PDF
-                </PrintQueuePrimaryButton>
-                <PrintQueueSecondaryButton
-                  onClick={handlePrint}
-                  disabled={locationRecordsFiltered.length === 0 || printing}
-                >
-                  {printing ? "Wysyłanie…" : "Drukuj"}
-                </PrintQueueSecondaryButton>
-                {!qzChecking && !qzReady && (
-                  <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
-                    Zainstaluj i uruchom QZ Tray, aby drukować bezpośrednio na drukarce USB lub sieciowej.
-                  </p>
-                )}
-                {qzReady &&
-                  selectedPrinterId != null &&
-                  !printers.find((p) => p.id === selectedPrinterId)?.system_printer_name && (
-                    <p className="text-sm text-slate-600">
-                      Wybrana drukarka nie ma powiązania z drukarką systemową — ustaw je w konfiguracji magazynu.
-                    </p>
-                  )}
-                <details className="rounded-xl border border-slate-100 bg-slate-50/80 px-3 py-2 text-sm text-slate-700">
-                  <summary className="cursor-pointer font-medium">Lista drukarek systemowych</summary>
-                  <div className="mt-2 space-y-2">
-                    <button
-                      type="button"
-                      onClick={handleDetectSystemPrinters}
-                      className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-800 hover:bg-slate-50"
-                    >
-                      Odśwież listę drukarek
-                    </button>
-                    <ul className="list-disc list-inside text-xs text-slate-600 max-h-32 overflow-y-auto">
-                      {systemPrinters.length === 0 ? (
-                        <li>Nie wykryto drukarek — sprawdź agenta Sasist Printer lub QZ Tray.</li>
-                      ) : (
-                        systemPrinters.map((name, i) => (
-                          <li key={i}>{name}</li>
-                        ))
-                      )}
-                    </ul>
-                  </div>
-                </details>
-              </div>
-            )}
-
-            {printMode === "csv_import" && csvHeaders.length > 0 && (
-              <PrintQueuePrimaryButton
-                onClick={() => void handleCsvGeneratePdf()}
-                disabled={
-                  csvPdfLoading ||
-                  csvRows.length === 0 ||
-                  csvRecordsFiltered.length === 0 ||
-                  selectedCsvTemplateId == null ||
-                  allLabelTemplatesForCsv.length === 0 ||
-                  csvTemplateParsed == null
-                }
-              >
-                {csvPdfLoading ? "Generowanie PDF…" : "Generuj PDF"}
-              </PrintQueuePrimaryButton>
-            )}
-
-            {printMode === "rack_strip" && stripRecords.length > 0 && (
-              <PrintQueuePrimaryButton
-                onClick={handleDownloadRackStripPdf}
-                disabled={stripPdfLoading || locationTemplates.length === 0}
-              >
-                {stripPdfLoading ? "Tworzenie pliku PDF…" : "Pobierz PDF listwy"}
-              </PrintQueuePrimaryButton>
-            )}
-
-            {printMode === "rack" && rackRecords.length > 0 && (
-              <PrintQueuePrimaryButton
-                onClick={handleDownloadRackPdf}
-                disabled={rackRecords.length === 0 || rackPdfLoading || locationTemplates.length === 0}
-              >
-                {rackPdfLoading ? "Tworzenie pliku PDF…" : "Pobierz PDF regału"}
-              </PrintQueuePrimaryButton>
-            )}
-
-            {printMode === "pdf_import" && pdfImportBarcodes.length > 0 && (
-              <PrintQueuePrimaryButton
-                onClick={handlePdfImportGenerateLabels}
-                disabled={pdfImportPdfLoading || locationTemplates.length === 0}
-              >
-                {pdfImportPdfLoading ? "Tworzenie pliku PDF…" : "Generuj PDF z kodów"}
-              </PrintQueuePrimaryButton>
-            )}
-
-            {printMode === "cart_basket" && (
-              <PrintQueuePrimaryButton
-                onClick={handleGenerateBasketLabelsForCart}
-                disabled={selectedCartId == null || generatingBasketLabels}
-              >
-                {generatingBasketLabels ? "Tworzenie pliku PDF…" : "Generuj PDF etykiet koszyków"}
-              </PrintQueuePrimaryButton>
-            )}
-          </aside>
-        </div>
-      </div>
-    </div>
+      ) : null}
+    </>
   );
 }
 
@@ -2967,3 +2246,4 @@ async function generatePdfBlob(
 
   return pdf.output("blob");
 }
+

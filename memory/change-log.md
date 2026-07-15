@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-07-15 — Print queue unified 3-column layout
+
+- All print modes (Lokalizacje, Regały, Pasek, Wózki, Import PDF, Import CSV) share `PrintQueueWorkspaceShell`: `380px | minmax(700px,1fr) | 320px`.
+- Removed vertical stack + `max-w-[1500px]`; CSV keeps fullscreen `CsvMappingModal`; deleted `CsvImportQueueShell`.
+- Handlers/API unchanged — UI shell only.
+
 ## 2026-07-15 — CSV mapping fullscreen modal
 
 - Import CSV: mapping moved from left column into `CsvMappingModal` (backdrop blur, badges, table, auto/clear/save).

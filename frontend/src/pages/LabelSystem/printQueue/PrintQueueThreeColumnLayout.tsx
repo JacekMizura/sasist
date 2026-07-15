@@ -13,8 +13,8 @@ type Props = {
 };
 
 /**
- * Responsive 3-column print-queue shell.
- * ≥1600: 320 | auto | 320 · 1200–1600: 300 | auto | 300 · &lt;1200: collapsible left + right drawer.
+ * Print-queue 3-column shell.
+ * Desktop: 380px | minmax(700px, 1fr) | 320px — full width, no artificial max-width.
  */
 export default function PrintQueueThreeColumnLayout({
   left,
@@ -40,7 +40,7 @@ export default function PrintQueueThreeColumnLayout({
         <button
           type="button"
           onClick={onOpenRightDrawer}
-          className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:shadow-md xl:hidden"
+          className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:shadow-md"
         >
           Podsumowanie
         </button>
@@ -48,24 +48,13 @@ export default function PrintQueueThreeColumnLayout({
 
       <div
         className={[
-          "grid gap-5 items-start",
+          "grid items-start gap-5",
           "grid-cols-1",
-          "xl:grid-cols-[minmax(0,300px)_minmax(0,1fr)_minmax(0,300px)]",
-          "min-[1600px]:grid-cols-[320px_minmax(0,1fr)_320px]",
+          "xl:grid-cols-[380px_minmax(700px,1fr)_320px]",
         ].join(" ")}
       >
-        <div
-          className={[
-            "min-w-0 space-y-3",
-            leftOpen ? "block" : "hidden",
-            "xl:block",
-          ].join(" ")}
-        >
-          {left}
-        </div>
-
+        <div className={["min-w-0 space-y-3", leftOpen ? "block" : "hidden", "xl:block"].join(" ")}>{left}</div>
         <div className="min-w-0">{center}</div>
-
         <div className="hidden min-w-0 xl:block">
           <div className="sticky top-6 space-y-3">{right}</div>
         </div>
