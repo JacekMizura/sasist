@@ -1,4 +1,6 @@
-import { Layers, TrendingUp } from "lucide-react";
+import { TrendingUp } from "lucide-react";
+
+import markUrl from "../../../assets/logo/sasist-mark.svg";
 
 /** Dark SaaS branding panel — desktop only. */
 export default function LoginBrandingPanel() {
@@ -8,9 +10,9 @@ export default function LoginBrandingPanel() {
       <div className="pointer-events-none absolute -right-[10%] bottom-[-10%] h-[500px] w-[500px] rounded-full bg-emerald-500/10 blur-[100px]" />
 
       <div className="relative z-10">
-        <div className="mb-16 flex items-center gap-2.5 text-2xl font-bold tracking-tight">
-          <Layers className="h-8 w-8 text-indigo-500" strokeWidth={2} />
-          <span>Sasist</span>
+        <div className="mb-16 flex items-center gap-2.5">
+          <img src={markUrl} alt="" className="h-9 w-9" draggable={false} />
+          <span className="text-2xl font-extrabold tracking-[0.12em] text-white">SASIST</span>
         </div>
 
         <h1 className="mb-6 max-w-lg text-5xl font-extrabold leading-[1.12] tracking-tight text-transparent bg-clip-text bg-gradient-to-br from-white to-slate-400">

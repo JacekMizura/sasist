@@ -1,12 +1,13 @@
 import { useEffect, useMemo, type LucideIcon } from "react";
 import { ChevronRight, Menu } from "lucide-react";
-import { useLocation } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 
 import HeaderLogo from "../components/layout/topbar/HeaderLogo";
 import UserAccountMenu from "../components/layout/UserAccountMenu";
 import {
   NAV_FLYOUT_CATEGORIES,
   NAV_SIDEBAR_SECTIONS,
+  WMS_SIDEBAR_DIRECT,
   isCategoryActive,
   type NavCategoryConfig,
   type NavSidebarSectionConfig,
@@ -130,8 +131,7 @@ function SectionBlock({
         {items.map((cat) => {
           const flyoutOpen = openCategoryId === cat.id;
           const active = isCategoryActive(cat, pathname);
-          const hasFlyout = cat.flyoutSections.some((s) => s.items.length > 0);
-          const isWarehouse = cat.id === "warehouse";
+          const showChevron = Boolean(cat.opensSideFlyout) && !collapsed;
           return (
             <SidebarNavButton
               key={cat.id}
@@ -139,7 +139,7 @@ function SectionBlock({
               collapsed={collapsed}
               icon={cat.Icon}
               label={cat.label}
-              showChevron={isWarehouse && hasFlyout && !collapsed}
+              showChevron={showChevron}
               flyoutOpen={flyoutOpen}
               onMouseEnter={(e) => onTriggerEnter(cat.id, e.currentTarget)}
               onMouseLeave={onTriggerLeave}
@@ -152,8 +152,33 @@ function SectionBlock({
   );
 }
 
+function WmsCtaButton({ collapsed }: { collapsed: boolean }) {
+  const WmsIcon = WMS_SIDEBAR_DIRECT.Icon;
+  if (collapsed) {
+    return (
+      <Link
+        to={WMS_SIDEBAR_DIRECT.path}
+        title={WMS_SIDEBAR_DIRECT.label}
+        aria-label={WMS_SIDEBAR_DIRECT.label}
+        className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-[#E2E8F0] bg-white text-slate-700 transition-colors duration-150 ease-out hover:bg-[#F8FAFC] hover:text-slate-900"
+      >
+        <WmsIcon className="h-6 w-6" strokeWidth={1.75} aria-hidden />
+      </Link>
+    );
+  }
+  return (
+    <Link
+      to={WMS_SIDEBAR_DIRECT.path}
+      className="flex h-[56px] w-full items-center justify-center gap-2 rounded-2xl border border-[#E2E8F0] bg-white px-4 text-[15px] font-semibold text-slate-800 transition-colors duration-150 ease-out hover:bg-[#F8FAFC] hover:text-slate-900"
+    >
+      <WmsIcon className="h-5 w-5 shrink-0 text-slate-600" strokeWidth={1.75} aria-hidden />
+      {WMS_SIDEBAR_DIRECT.label}
+    </Link>
+  );
+}
+
 /**
- * Left ERP navigation — 260px white rail, blue active, Magazyn side-flyout.
+ * Left ERP navigation — SPRZEDAŻ / OPERACJE, Magazyn+Ustawienia flyouts, WMS CTA.
  */
 export default function ErpSidebar() {
   const { pathname } = useLocation();
@@ -175,9 +200,6 @@ export default function ErpSidebar() {
 
   const desktopWidthPx = collapsed ? ERP_SIDEBAR_COLLAPSED_WIDTH_PX : ERP_SIDEBAR_WIDTH_PX;
 
-  const mainSections = NAV_SIDEBAR_SECTIONS.filter((s) => !s.pinToBottom);
-  const bottomSections = NAV_SIDEBAR_SECTIONS.filter((s) => s.pinToBottom);
-
   const openCategory = useMemo(
     () => (hoveredCategoryId ? NAV_FLYOUT_CATEGORIES.find((c) => c.id === hoveredCategoryId) ?? null : null),
     [hoveredCategoryId],
@@ -194,8 +216,8 @@ export default function ErpSidebar() {
         <div className={`flex h-full min-h-0 flex-col ${ERP_SIDEBAR_SURFACE}`}>
           <div
             className={[
-              "flex h-[70px] shrink-0 items-center gap-1 border-b border-slate-200",
-              collapsed ? "justify-center px-2" : "px-3",
+              "flex h-[70px] shrink-0 items-center border-b border-slate-200",
+              collapsed ? "justify-center px-2" : "gap-1 px-3",
             ].join(" ")}
           >
             <button
@@ -215,45 +237,29 @@ export default function ErpSidebar() {
           </div>
 
           <nav className={`min-h-0 flex-1 ${ERP_SIDEBAR_NAV_SCROLL}`} aria-label="Menu główne">
-            <div className="flex min-h-full flex-col pb-2">
-              <div className="flex flex-col">
-                {mainSections.map((section) => (
-                  <SectionBlock
-                    key={section.id}
-                    section={section}
-                    collapsed={collapsed}
-                    pathname={pathname}
-                    openCategoryId={hoveredCategoryId}
-                    onTriggerEnter={(id, el) => onTriggerEnter(id, el)}
-                    onTriggerLeave={onTriggerLeave}
-                    onTriggerClick={(id, el) => onTriggerClick(id, el)}
-                  />
-                ))}
-              </div>
-
-              <div className="mt-auto border-t border-slate-200 pt-5">
-                {bottomSections.map((section) => (
-                  <SectionBlock
-                    key={section.id}
-                    section={section}
-                    collapsed={collapsed}
-                    pathname={pathname}
-                    openCategoryId={hoveredCategoryId}
-                    onTriggerEnter={(id, el) => onTriggerEnter(id, el)}
-                    onTriggerLeave={onTriggerLeave}
-                    onTriggerClick={(id, el) => onTriggerClick(id, el)}
-                  />
-                ))}
-              </div>
+            <div className="flex flex-col pb-2">
+              {NAV_SIDEBAR_SECTIONS.map((section) => (
+                <SectionBlock
+                  key={section.id}
+                  section={section}
+                  collapsed={collapsed}
+                  pathname={pathname}
+                  openCategoryId={hoveredCategoryId}
+                  onTriggerEnter={(id, el) => onTriggerEnter(id, el)}
+                  onTriggerLeave={onTriggerLeave}
+                  onTriggerClick={(id, el) => onTriggerClick(id, el)}
+                />
+              ))}
             </div>
           </nav>
 
           <div
             className={[
-              "shrink-0 border-t border-slate-200 bg-white pt-3",
-              collapsed ? "flex justify-center px-2 pb-4" : "px-3 pb-4",
+              "mt-auto shrink-0 space-y-3 border-t border-slate-200 bg-white pt-4",
+              collapsed ? "px-2 pb-4" : "px-3 pb-4",
             ].join(" ")}
           >
+            <WmsCtaButton collapsed={collapsed} />
             <UserAccountMenu variant="sidebar" collapsed={collapsed} />
           </div>
         </div>

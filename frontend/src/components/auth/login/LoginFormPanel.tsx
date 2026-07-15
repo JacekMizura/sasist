@@ -4,12 +4,12 @@ import {
   ArrowRight,
   Eye,
   EyeOff,
-  Layers,
   Loader2,
   Lock,
   Mail,
 } from "lucide-react";
 
+import markUrl from "@/assets/logo/sasist-mark.svg";
 import { extractApiErrorMessage } from "@/api/authApi";
 import {
   consumeLoginNotice,
@@ -100,9 +100,9 @@ export default function LoginFormPanel({ onSuccess }: Props) {
   return (
     <div className="flex w-full flex-col justify-center bg-white p-8 lg:w-[45%] lg:p-16">
       <div className="mx-auto w-full max-w-[420px] animate-in fade-in slide-in-from-bottom-3 duration-500">
-        <div className="mb-10 flex items-center justify-center gap-2 lg:hidden">
-          <Layers className="h-8 w-8 text-indigo-600" strokeWidth={2} />
-          <span className="text-2xl font-bold tracking-tight text-slate-900">Sasist</span>
+        <div className="mb-10 flex items-center justify-center gap-2.5 lg:hidden">
+          <img src={markUrl} alt="" className="h-9 w-9" draggable={false} />
+          <span className="text-2xl font-extrabold tracking-[0.12em] text-slate-900">SASIST</span>
         </div>
 
         <div className="mb-8 text-center lg:text-left">

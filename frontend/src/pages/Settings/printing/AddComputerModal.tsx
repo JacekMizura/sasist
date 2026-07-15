@@ -191,7 +191,7 @@ export default function AddComputerModal({ open, onClose }: Props) {
           onClick={(e) => e.stopPropagation()}
         >
           <header className="mb-5 flex items-start gap-4 border-b border-slate-100 pb-4">
-            <img src="/sasist-logo-poziome.svg" alt="Sasist" className="h-8 w-auto shrink-0" />
+            <img src="/sasist-logo.svg" alt="Sasist" className="h-8 w-auto shrink-0" />
             <div>
               <h2 id="add-computer-title" className="text-xl font-semibold text-slate-900">
                 Dodaj komputer

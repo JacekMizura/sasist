@@ -1,7 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import {
   ClipboardList,
-  Inbox,
   Package,
   Warehouse,
   Activity,
@@ -15,9 +14,7 @@ import {
   MessageSquareWarning,
   ShoppingCart,
   Route,
-  Printer,
   Recycle,
-  Sliders,
   SlidersHorizontal,
   FolderOpen,
   Boxes,
@@ -26,13 +23,9 @@ import {
   ShoppingBag,
   Layers,
   Users,
-  Upload,
   UserCog,
-  MessageSquare,
-  FileText,
   Key,
   Building2,
-  Library,
 } from "lucide-react";
 
 import { UI_STRINGS } from "../constants/uiStrings";
@@ -73,30 +66,30 @@ export type NavCategoryConfig = {
    * (module uses in-page tabs instead of a long fly-out).
    */
   activePathPrefix?: string;
+  /** Show › chevron — category opens a right fly-out panel (Magazyn / Ustawienia). */
+  opensSideFlyout?: boolean;
 };
 
-/** Direct WMS entry — sticky MAGAZYN section (path unchanged). */
+/** WMS entry CTA at bottom of sidebar (not a menu row). */
 export const WMS_SIDEBAR_DIRECT = {
   id: "wms" as const,
   path: "/wms/menu",
-  label: UI_STRINGS.navigation.wmsTerminal,
+  label: "Przejdź do WMS",
   Icon: Tablet,
 };
 
-export type NavSidebarSectionId = "sales" | "operations" | "warehouse";
+export type NavSidebarSectionId = "sales" | "operations";
 
 export type NavSidebarSectionConfig = {
   id: NavSidebarSectionId;
   label: string;
   /** Categories in this section (order = sidebar order). */
   categoryIds: string[];
-  /** Sticky footer block (MAGAZYN + WMS). */
-  pinToBottom?: boolean;
 };
 
 /**
- * ERP sidebar grouping — SPRZEDAŻ / OPERACJE / MAGAZYN.
- * Magazyn (projektant/wozki) stays under MAGAZYN above WMS so no module is dropped.
+ * ERP sidebar grouping — SPRZEDAŻ / OPERACJE.
+ * Magazyn & Ustawienia open side fly-outs; WMS is a footer CTA.
  */
 export const NAV_SIDEBAR_SECTIONS: NavSidebarSectionConfig[] = [
   {
@@ -107,13 +100,7 @@ export const NAV_SIDEBAR_SECTIONS: NavSidebarSectionConfig[] = [
   {
     id: "operations",
     label: "Operacje",
-    categoryIds: ["purchasing", "analytics", "labels", "settings", "system"],
-  },
-  {
-    id: "warehouse",
-    label: "Magazyn",
-    categoryIds: ["warehouse", "wms"],
-    pinToBottom: true,
+    categoryIds: ["purchasing", "analytics", "labels", "warehouse", "settings"],
   },
 ];
 
@@ -247,12 +234,13 @@ export const NAV_FLYOUT_CATEGORIES: NavCategoryConfig[] = [
     id: "warehouse",
     label: UI_STRINGS.navigation.groups.warehouse,
     Icon: Warehouse,
+    opensSideFlyout: true,
     flyoutSections: [
       {
         items: [
           { path: "/designer", label: UI_STRINGS.navigation.warehouseDesigner, Icon: Warehouse },
-          { path: "/carts/bulk", label: UI_STRINGS.navigation.carts, Icon: ShoppingCart },
           { path: "/carts/racks", label: "Regały", Icon: Boxes },
+          { path: "/carts/bulk", label: UI_STRINGS.navigation.carts, Icon: ShoppingCart },
           { path: "/carts/zones", label: "Strefy", Icon: Layers },
           { path: "/carts/carriers", label: UI_STRINGS.navigation.warehouseCarriers, Icon: Package },
           { path: "/inventory-count/dashboard", label: "Inwentaryzacja", Icon: ClipboardList },
@@ -304,23 +292,6 @@ export const NAV_FLYOUT_CATEGORIES: NavCategoryConfig[] = [
     flyoutSections: [{ items: [{ path: "/labels", label: UI_STRINGS.navigation.labelSystem, Icon: Tag }] }],
   },
   {
-    id: "wms",
-    label: WMS_SIDEBAR_DIRECT.label,
-    Icon: WMS_SIDEBAR_DIRECT.Icon,
-    activePathPrefix: "/wms",
-    flyoutSections: [
-      {
-        items: [
-          {
-            path: WMS_SIDEBAR_DIRECT.path,
-            label: "Menu główne WMS",
-            Icon: WMS_SIDEBAR_DIRECT.Icon,
-          },
-        ],
-      },
-    ],
-  },
-  {
     id: "documents",
     label: UI_STRINGS.navigation.documentsCategory,
     Icon: FolderOpen,
@@ -333,81 +304,42 @@ export const NAV_FLYOUT_CATEGORIES: NavCategoryConfig[] = [
     id: "settings",
     label: UI_STRINGS.navigation.settingsCategory,
     Icon: Settings,
+    opensSideFlyout: true,
     flyoutSections: [
       {
         items: [
           {
             path: "/settings/company",
-            label: "Firma",
+            label: "Ogólne",
             Icon: Building2,
             permissionsAny: ["settings.users", "settings.company"],
           },
           {
             path: "/settings/administrators",
-            label: UI_STRINGS.navigation.administratorsNav,
+            label: "Użytkownicy",
+            Icon: Users,
+            permissionsAny: ["settings.users"],
+          },
+          {
+            path: "/settings/administrators/groups",
+            label: "Uprawnienia",
             Icon: UserCog,
             permissionsAny: ["settings.users"],
           },
-        ],
-      },
-      {
-        title: "Sprzedaż",
-        items: [
-          {
-            path: "/settings/sales/stock-pools",
-            label: "Pule stanów",
-            Icon: Layers,
-            permissionsAny: ["settings.users", "settings.company"],
-          },
-        ],
-      },
-      {
-        title: "Integracje",
-        items: [
           {
             path: "/settings/integrations/api-keys",
-            label: "Klucze API",
+            label: "Integracje",
             Icon: Key,
             permissionsAny: ["settings.users"],
           },
-        ],
-      },
-      {
-        items: [
-          { path: "/settings/printers", label: UI_STRINGS.navigation.printersNav, Icon: Printer }],
-      },
-      {
-        items: [
-          { path: "/settings/import", label: "Import", Icon: Upload },
-          { path: "/settings/exports", label: "Eksport", Icon: FolderOpen },
-          { path: "/admin/message-templates", label: "Szablony wiadomości", Icon: MessageSquare },
-          { path: "/admin/print-templates", label: "Szablony wydruków (etykiety)", Icon: FileText },
-          { path: "/settings/document-templates", label: "Szablony wydruków", Icon: FileText },
-        ],
-      },
-      {
-        items: [
-          { path: "/settings/wms", label: UI_STRINGS.navigation.wmsSettings, Icon: Sliders },
           {
-            path: "/settings/shipping-methods",
-            label: UI_STRINGS.navigation.shippingMethods,
-            Icon: Truck,
-          },
-          {
-            path: "/documents/series",
-            label: "Serie dokumentów",
-            Icon: Library,
-            permissionsAny: ["settings.users", "settings.company"],
+            path: "/system",
+            label: UI_STRINGS.navigation.system,
+            Icon: Cpu,
           },
         ],
       },
     ],
-  },
-  {
-    id: "system",
-    label: UI_STRINGS.navigation.system,
-    Icon: Cpu,
-    flyoutSections: [{ items: [{ path: "/system", label: UI_STRINGS.navigation.system, Icon: Cpu }] }],
   },
 ];
 
@@ -438,9 +370,9 @@ export function isCategoryActive(category: NavCategoryConfig, pathname: string):
   }
   if (category.id === "settings") {
     if (pathname.startsWith("/settings")) return true;
+    if (pathname === "/system" || pathname.startsWith("/system/")) return true;
     if (pathname.startsWith("/admin/message-templates")) return true;
     if (pathname.startsWith("/admin/print-templates")) return true;
-    if (pathname.startsWith("/settings/document-templates")) return true;
   }
   if (category.id === "documents") {
     if (pathname.startsWith("/documents")) return true;

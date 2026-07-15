@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-07-15 — Sidebar IA + new Sasist logo
+
+- Removed MAGAZYN section and System/WMS menu rows; Magazyn + Ustawienia open right flyouts under OPERACJE.
+- Footer CTA „Przejdź do WMS” (56px, rounded-16, white border).
+- New assets: `frontend/src/assets/logo/sasist-{mark,logo}.svg` (+ public/favicon sync); HeaderLogo / login / printer modal.
+
 ## 2026-07-15 — ERP shell polish (blue active + Magazyn flyout)
 
 - Sidebar 260px: hamburger + logo in rail; active `bg-blue-50` + `w-1 bg-blue-600`; larger icons/gaps.
