@@ -189,7 +189,7 @@ export default function CsvImportQueueShell({
 
   return (
     <div className="h-full min-h-0 overflow-y-auto bg-white">
-      <div className="mx-auto w-full max-w-[1800px] space-y-5 px-4 py-5 pb-12 md:px-6">
+      <div className="mx-auto w-full space-y-5 px-4 py-5 pb-12 md:px-6 min-[1600px]:px-8">
         <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm md:p-6">
           <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Typ wydruku</p>
           <PrintModeCards value={printMode} onChange={onPrintModeChange} />

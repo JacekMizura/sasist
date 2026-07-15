@@ -1,5 +1,10 @@
 # Change log
 
+## 2026-07-15 — CSV mapping fullscreen modal
+
+- Import CSV: mapping moved from left column into `CsvMappingModal` (backdrop blur, badges, table, auto/clear/save).
+- Removed artificial `max-w-[1800px]` from CSV shell.
+
 ## 2026-07-15 — CSV import template picker UX
 
 - Import CSV only: friendly print-kind chips filter templates; `CsvTemplatePicker` (search + thumbnails); no raw `(location)` labels.

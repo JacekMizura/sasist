@@ -42,12 +42,12 @@ import {
   validateGroupedVariablesRequireGrouping,
   csvGroupingPdfBlockedByTemplate,
 } from "./labelCsvImport";
-import CsvColumnMappingSection from "./csvMapping/CsvColumnMappingSection";
 import {
   CSV_IMPORT_PRINT_KINDS,
   type CsvImportPrintKind,
   templateMatchesCsvPrintKind,
 } from "./csvMapping/csvImportPrintKinds";
+import CsvMappingModal from "./csvMapping/CsvMappingModal";
 import CsvTemplatePicker from "./csvMapping/CsvTemplatePicker";
 import { resolveTemplateUsedVariables } from "./csvMapping/labelCsvMappingFields";
 import CsvImportQueueShell from "./printQueue/CsvImportQueueShell";
@@ -133,6 +133,7 @@ export function LabelPrintQueue({ template }: Props) {
   const [selectedCsvTemplateId, setSelectedCsvTemplateId] = useState<number | null>(null);
   /** Friendly print kind for Import CSV — filters template list (never shown as raw type ids). */
   const [csvImportPrintKind, setCsvImportPrintKind] = useState<CsvImportPrintKind>("locations");
+  const [csvMappingModalOpen, setCsvMappingModalOpen] = useState(false);
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   const [csvRows, setCsvRows] = useState<Record<string, string>[]>([]);
   const [csvColumnToField, setCsvColumnToField] = useState<Record<string, string>>({});
@@ -956,6 +957,7 @@ export function LabelPrintQueue({ template }: Props) {
       setCsvHeaders(headers);
       setCsvRows(rows);
       setCsvColumnToField(buildColumnMappingWithPersistence(headers));
+      setCsvMappingModalOpen(true);
     } catch {
       setCsvImportError("Nie udało się odczytać pliku CSV.");
       setCsvHeaders([]);
@@ -963,6 +965,7 @@ export function LabelPrintQueue({ template }: Props) {
       setCsvColumnToField({});
       setCsvPerFileStats([]);
       setCsvMergeWarnings([]);
+      setCsvMappingModalOpen(false);
     } finally {
       setCsvImportLoading(false);
     }
@@ -1252,6 +1255,7 @@ export function LabelPrintQueue({ template }: Props) {
     const dpi = summaryDimsTemplate?.dpi ?? 300;
 
     return (
+      <>
       <CsvImportQueueShell
         printMode={printMode}
         onPrintModeChange={setPrintMode}
@@ -1377,12 +1381,10 @@ export function LabelPrintQueue({ template }: Props) {
                 </p>
                 <button
                   type="button"
-                  onClick={() =>
-                    setCsvColumnToField(buildColumnMappingWithPersistence(csvHeaders, { forceAuto: true }))
-                  }
-                  className="text-xs font-semibold text-blue-700 hover:underline"
+                  onClick={() => setCsvMappingModalOpen(true)}
+                  className="w-full rounded-xl border border-orange-300 bg-orange-50 px-3 py-2.5 text-sm font-semibold text-orange-900 shadow-sm transition hover:bg-orange-100"
                 >
-                  Automatyczne mapowanie
+                  Otwórz mapowanie kolumn
                 </button>
                 {csvPerFileStats.length > 0 ? (
                   <ul className="list-disc space-y-0.5 pl-5 text-xs text-slate-600">
@@ -1424,26 +1426,6 @@ export function LabelPrintQueue({ template }: Props) {
                     </ul>
                   </div>
                 ) : null}
-                <CsvColumnMappingSection
-                  csvHeaders={csvHeaders}
-                  csvColumnToField={csvColumnToField}
-                  template={csvTemplateParsed}
-                  templateType={csvSelectedTemplateType}
-                  apiAvailableVariables={
-                    selectedCsvTemplateRow?.available_variables ?? selectedCsvTemplateRow?.variables ?? null
-                  }
-                  bindingKeys={csvTemplateBindingInfo.keys}
-                  onMappingChange={(header, field) => {
-                    setCsvColumnToField((prev) => {
-                      const next = filterDerivedGroupSlotsFromCsvMapping({
-                        ...prev,
-                        [header]: field,
-                      });
-                      saveCsvLabelMapping(csvHeaders, next);
-                      return next;
-                    });
-                  }}
-                />
               </>
             ) : null}
           </div>
@@ -1624,6 +1606,28 @@ export function LabelPrintQueue({ template }: Props) {
           </>
         }
       />
+      <CsvMappingModal
+        open={csvMappingModalOpen}
+        onClose={() => setCsvMappingModalOpen(false)}
+        onSave={(mapping) => {
+          const next = filterDerivedGroupSlotsFromCsvMapping(mapping);
+          setCsvColumnToField(next);
+          saveCsvLabelMapping(csvHeaders, next);
+          setCsvMappingModalOpen(false);
+        }}
+        csvHeaders={csvHeaders}
+        initialMapping={csvColumnToField}
+        csvRowCount={csvRows.length}
+        labelCount={csvRecordsFiltered.length}
+        perFileStats={csvPerFileStats}
+        template={csvTemplateParsed}
+        templateType={csvSelectedTemplateType}
+        apiAvailableVariables={
+          selectedCsvTemplateRow?.available_variables ?? selectedCsvTemplateRow?.variables ?? null
+        }
+        bindingKeys={csvTemplateBindingInfo.keys}
+      />
+      </>
     );
   }
 
@@ -2189,26 +2193,9 @@ export function LabelPrintQueue({ template }: Props) {
                     </ul>
                   </div>
                 )}
-                <CsvColumnMappingSection
-                  csvHeaders={csvHeaders}
-                  csvColumnToField={csvColumnToField}
-                  template={csvTemplateParsed}
-                  templateType={csvSelectedTemplateType}
-                  apiAvailableVariables={
-                    selectedCsvTemplateRow?.available_variables ?? selectedCsvTemplateRow?.variables ?? null
-                  }
-                  bindingKeys={csvTemplateBindingInfo.keys}
-                  onMappingChange={(header, field) => {
-                    setCsvColumnToField((prev) => {
-                      const next = filterDerivedGroupSlotsFromCsvMapping({
-                        ...prev,
-                        [header]: field,
-                      });
-                      saveCsvLabelMapping(csvHeaders, next);
-                      return next;
-                    });
-                  }}
-                />
+                <p className="text-xs text-slate-500">
+                  Mapowanie kolumn otwiera się w osobnym oknie po wczytaniu CSV (tryb Import CSV).
+                </p>
                 {csvGroupMode && csvGroupingPdfBlocked && (
                   <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
                     <span>
