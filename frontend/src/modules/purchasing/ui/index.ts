@@ -36,6 +36,11 @@ export {
 } from "./PurchasingProductThumbnail";
 export type { PurchasingProductThumbnailProps } from "./PurchasingProductThumbnail";
 export { PurchasingProductInspectorDrawer } from "./PurchasingProductInspectorDrawer";
+export { PurchasingPriceOpportunityDrawer } from "./PurchasingPriceOpportunityDrawer";
+export {
+  fetchProductDisplayMeta,
+  type ProductDisplayMeta,
+} from "./purchasingProductDisplayMeta";
 export {
   PURCHASING_THUMB_TABLE_PX,
   PURCHASING_THUMB_MD_PX,

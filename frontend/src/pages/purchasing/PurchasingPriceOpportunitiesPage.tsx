@@ -1,7 +1,7 @@
 /**
  * Oszczędności zakupowe — okazje cenowe wyłącznie z danych systemu (bez sztucznych kwot).
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PiggyBank, Tags, TrendingDown, TrendingUp } from "lucide-react";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { fetchTenantsList } from "../../api/tenantsApi";
@@ -23,11 +23,13 @@ import {
   PurchasingKpiGrid,
   PurchasingPageHeader,
   PurchasingPageShell,
+  PurchasingPriceOpportunityDrawer,
   PurchasingProductCell,
-  PurchasingProductThumbnail,
   PurchasingQuickActions,
   PurchasingTableHeader,
   PurchasingTableSection,
+  fetchProductDisplayMeta,
+  type ProductDisplayMeta,
   purchasingBtnSecondary,
   purchasingLinkClass,
   purchasingSelectClass,
@@ -126,6 +128,8 @@ export default function PurchasingPriceOpportunitiesPage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [zignorowane, setZignorowane] = useState<Set<string>>(() => new Set());
+  const [productMetaById, setProductMetaById] = useState<Map<number, ProductDisplayMeta>>(() => new Map());
+  const metaPrefetchRef = useRef<Set<number>>(new Set());
 
   useEffect(() => {
     void fetchTenantsList()
@@ -217,6 +221,46 @@ export default function PurchasingPriceOpportunitiesPage() {
       return true;
     });
   }, [data, zignorowane, tylkoWysokie]);
+
+  useEffect(() => {
+    metaPrefetchRef.current.clear();
+    setProductMetaById(new Map());
+  }, [tenantId]);
+
+  useEffect(() => {
+    const ids = [
+      ...new Set(
+        wierszeWidoczne
+          .map((r) => r.product_id)
+          .filter((id): id is number => id != null && id >= 1),
+      ),
+    ].slice(0, 48);
+    for (const productId of ids) {
+      if (metaPrefetchRef.current.has(productId)) continue;
+      metaPrefetchRef.current.add(productId);
+      void fetchProductDisplayMeta(tenantId, productId)
+        .then((meta) => {
+          setProductMetaById((prev) => {
+            if (prev.has(productId)) return prev;
+            const next = new Map(prev);
+            next.set(productId, meta);
+            return next;
+          });
+        })
+        .catch(() => {
+          metaPrefetchRef.current.delete(productId);
+        });
+    }
+  }, [wierszeWidoczne, tenantId]);
+
+  const onDrawerMetaLoaded = useCallback((productId: number, meta: ProductDisplayMeta) => {
+    setProductMetaById((prev) => {
+      if (prev.has(productId)) return prev;
+      const next = new Map(prev);
+      next.set(productId, meta);
+      return next;
+    });
+  }, []);
 
   const kpiZListy = useMemo(() => {
     const oszcz = wierszeWidoczne.reduce((a, r) => a + (Number.isFinite(r.estimated_saving) ? r.estimated_saving : 0), 0);
@@ -402,7 +446,14 @@ export default function PurchasingPriceOpportunitiesPage() {
                     </span>
                   </td>
                   <td className="px-3 py-2">
-                    <PurchasingProductCell name={r.product_name} />
+                    <PurchasingProductCell
+                      name={r.product_name}
+                      imageUrl={
+                        r.product_id != null ? productMetaById.get(r.product_id)?.imageUrl ?? undefined : undefined
+                      }
+                      sku={r.product_id != null ? productMetaById.get(r.product_id)?.sku ?? undefined : undefined}
+                      ean={r.product_id != null ? productMetaById.get(r.product_id)?.ean ?? undefined : undefined}
+                    />
                   </td>
                   <td className="max-w-[180px] truncate px-3 py-2 text-slate-700" title={r.supplier_name}>
                     {r.supplier_name}
@@ -464,107 +515,22 @@ export default function PurchasingPriceOpportunitiesPage() {
       />
 
       {drawerRow ? (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/30" role="presentation" onClick={() => setDrawerRow(null)}>
-          <div
-            className="h-full w-full max-w-lg overflow-y-auto bg-white shadow-2xl"
-            role="dialog"
-            aria-label="Szczegóły okazji"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="sticky top-0 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
-              <div className="flex min-w-0 items-start gap-3">
-                <PurchasingProductThumbnail size="md" name={drawerRow.product_name} hoverPreview={false} />
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold uppercase text-slate-500">Szczegóły</p>
-                  <p className="truncate text-lg font-semibold text-slate-900">{drawerRow.product_name}</p>
-                  <p className="text-sm text-slate-600">{TYP_ETYK[drawerRow.type]}</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                className="rounded-lg border border-slate-200 px-2 py-1 text-sm text-slate-700 hover:bg-slate-50"
-                onClick={() => setDrawerRow(null)}
-              >
-                Zamknij
-              </button>
-            </div>
-            <div className="space-y-4 p-4 text-sm">
-              {drawerRow.product_id == null ? (
-                <p className="text-slate-600">Brak powiązania z pojedynczym SKU — wybierz wiersz z produktem po pełnej liście.</p>
-              ) : drawerLoading ? (
-                <p className="text-slate-500">Wczytywanie historii…</p>
-              ) : drawer ? (
-                <>
-                  <div>
-                    <p className="text-xs font-semibold uppercase text-slate-500">Wolumen (szac.)</p>
-                    <p className="mt-1 text-slate-800">
-                      Zakupy / mies.: <span className="font-mono">{num(drawer.monthly_purchase_units, { maximumFractionDigits: 2 })}</span> szt.
-                      <br />
-                      Sprzedaż / mies.: <span className="font-mono">{num(drawer.monthly_sales_units, { maximumFractionDigits: 2 })}</span> szt.
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold uppercase text-slate-500">Historia cen (PO i dostawy)</p>
-                    {drawer.price_history.length === 0 ? (
-                      <p className="mt-1 text-slate-600">Brak wystarczających danych.</p>
-                    ) : (
-                      <ul className="mt-1 max-h-48 overflow-auto rounded border border-slate-100">
-                        {drawer.price_history.map((h, i) => (
-                          <li key={i} className="flex justify-between border-b border-slate-50 px-2 py-1 text-xs">
-                            <span className="text-slate-600">{h.date.slice(0, 16)}</span>
-                            <span className="font-mono text-slate-900">{num(h.unit_price, { maximumFractionDigits: 4 })}</span>
-                            <span className="text-slate-500">{h.source === "delivery" ? "Dostawa" : "PO"}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold uppercase text-slate-500">Porównanie dostawców (katalog)</p>
-                    {drawer.supplier_offers.length === 0 ? (
-                      <p className="mt-1 text-slate-600">Brak wystarczających danych.</p>
-                    ) : (
-                      <ul className="mt-1 space-y-1">
-                        {drawer.supplier_offers.map((o) => (
-                          <li key={o.supplier_id} className="flex justify-between rounded border border-slate-100 px-2 py-1">
-                            <span>{o.supplier_name}</span>
-                            <span className="font-mono">{num(o.purchase_price, { maximumFractionDigits: 4 })} PLN</span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                </>
-              ) : (
-                <p className="text-slate-600">Brak danych do szczegółów.</p>
-              )}
-
-              <div className="flex flex-col gap-2 border-t border-slate-100 pt-3">
-                <Link
-                  className="rounded-lg bg-slate-900 px-3 py-2 text-center text-sm font-medium text-white hover:bg-slate-800"
-                  to={`/purchasing/plan?tenant_id=${tenantId}&supplier_id=${drawerRow.supplier_id}${
-                    drawerRow.product_id != null ? `&search=${encodeURIComponent(drawerRow.product_name)}` : ""
-                  }`}
-                >
-                  Dodaj do zamówienia (generator)
-                </Link>
-                <Link
-                  className="rounded-lg border border-slate-300 px-3 py-2 text-center text-sm font-medium text-slate-800 hover:bg-slate-50"
-                  to={`/suppliers?tenant_id=${tenantId}&edit=${drawerRow.supplier_id}`}
-                >
-                  Karta dostawcy
-                </Link>
-                <button
-                  type="button"
-                  className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50"
-                  onClick={() => zignoruj(drawerRow)}
-                >
-                  Oznacz jako zignorowane
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <PurchasingPriceOpportunityDrawer
+          open
+          row={drawerRow}
+          drawer={drawer}
+          drawerLoading={drawerLoading}
+          tenantId={tenantId}
+          typeLabel={TYP_ETYK[drawerRow.type]}
+          typeBadgeClass={kolorOdznaki(drawerRow.type, drawerRow.severity)}
+          onClose={() => {
+            setDrawerRow(null);
+            setDrawer(null);
+          }}
+          onDismiss={zignoruj}
+          onMetaLoaded={onDrawerMetaLoaded}
+          formatNum={num}
+        />
       ) : null}
     </PurchasingContentArea>
   );
