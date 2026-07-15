@@ -169,9 +169,8 @@ export function resolveTemplateUsedVariables(args: {
 }
 
 /**
- * Dropdown options for CSV mapping.
- * Prefer template used vars; if empty, fall back to type catalog
- * (location / product / document → that domain only).
+ * Dropdown options for CSV mapping — only fields used by the selected template.
+ * No type-catalog fallback (avoids cluttering location CSV with invoice/cart fields).
  */
 export function resolveTemplateAvailableVariables(args: {
   template: LabelTemplate | null;
@@ -179,11 +178,7 @@ export function resolveTemplateAvailableVariables(args: {
   bindingKeys: Iterable<string>;
   templateType?: string | null;
 }): string[] {
-  const used = resolveTemplateUsedVariables(args);
-  if (used.length > 0) return used;
-
-  const kind = resolveCsvTemplateKind(args.templateType ?? args.template?.template_type);
-  return filterFieldsToStrictKind(fallbackFieldsForTemplateKind(kind), kind);
+  return resolveTemplateUsedVariables(args);
 }
 
 function normalizeVarList(raw: string[] | null | undefined): string[] {

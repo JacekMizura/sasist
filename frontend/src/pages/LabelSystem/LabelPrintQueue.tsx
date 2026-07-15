@@ -43,6 +43,12 @@ import {
   csvGroupingPdfBlockedByTemplate,
 } from "./labelCsvImport";
 import CsvColumnMappingSection from "./csvMapping/CsvColumnMappingSection";
+import {
+  CSV_IMPORT_PRINT_KINDS,
+  type CsvImportPrintKind,
+  templateMatchesCsvPrintKind,
+} from "./csvMapping/csvImportPrintKinds";
+import CsvTemplatePicker from "./csvMapping/CsvTemplatePicker";
 import { resolveTemplateUsedVariables } from "./csvMapping/labelCsvMappingFields";
 import CsvImportQueueShell from "./printQueue/CsvImportQueueShell";
 import type { PrintQueueWizardStepId } from "./printQueue/PrintQueueStepWizard";
@@ -125,6 +131,8 @@ export function LabelPrintQueue({ template }: Props) {
   const [pdfImportPdfLoading, setPdfImportPdfLoading] = useState(false);
   const [allLabelTemplatesForCsv, setAllLabelTemplatesForCsv] = useState<ApiLabelTemplateRow[]>([]);
   const [selectedCsvTemplateId, setSelectedCsvTemplateId] = useState<number | null>(null);
+  /** Friendly print kind for Import CSV — filters template list (never shown as raw type ids). */
+  const [csvImportPrintKind, setCsvImportPrintKind] = useState<CsvImportPrintKind>("locations");
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   const [csvRows, setCsvRows] = useState<Record<string, string>[]>([]);
   const [csvColumnToField, setCsvColumnToField] = useState<Record<string, string>>({});
@@ -273,11 +281,6 @@ export function LabelPrintQueue({ template }: Props) {
         if (cancelled) return;
         const list = Array.isArray(res.data) ? res.data : [];
         setAllLabelTemplatesForCsv(list);
-        if (list.length > 0) {
-          setSelectedCsvTemplateId((prev) => (prev != null && list.some((t) => t.id === prev) ? prev : list[0].id));
-        } else {
-          setSelectedCsvTemplateId(null);
-        }
       })
       .catch(() => {
         if (!cancelled) {
@@ -290,9 +293,25 @@ export function LabelPrintQueue({ template }: Props) {
     };
   }, [printMode]);
 
+  const csvTemplatesForPrintKind = useMemo(
+    () =>
+      allLabelTemplatesForCsv.filter((t) =>
+        templateMatchesCsvPrintKind(t.template_type, csvImportPrintKind),
+      ),
+    [allLabelTemplatesForCsv, csvImportPrintKind],
+  );
+
+  useEffect(() => {
+    if (printMode !== "csv_import") return;
+    setSelectedCsvTemplateId((prev) => {
+      if (prev != null && csvTemplatesForPrintKind.some((t) => t.id === prev)) return prev;
+      return csvTemplatesForPrintKind[0]?.id ?? null;
+    });
+  }, [printMode, csvTemplatesForPrintKind]);
+
   const selectedCsvTemplateRow = useMemo(
-    () => allLabelTemplatesForCsv.find((t) => t.id === selectedCsvTemplateId) ?? null,
-    [allLabelTemplatesForCsv, selectedCsvTemplateId],
+    () => csvTemplatesForPrintKind.find((t) => t.id === selectedCsvTemplateId) ?? null,
+    [csvTemplatesForPrintKind, selectedCsvTemplateId],
   );
 
   const csvTemplateParsed = useMemo((): LabelTemplate | null => {
@@ -1231,9 +1250,6 @@ export function LabelPrintQueue({ template }: Props) {
     const labelW = Math.round(Number(summaryDimsTemplate?.widthMm) || 0);
     const labelH = Math.round(Number(summaryDimsTemplate?.heightMm) || 0);
     const dpi = summaryDimsTemplate?.dpi ?? 300;
-    const samplePreviewRecord =
-      csvRecordsFiltered[0] ??
-      ({ loc_name: "A1-C-1", barcode_data: "SAMPLE", rack_name: "A1" } as Record<string, unknown>);
 
     return (
       <CsvImportQueueShell
@@ -1253,39 +1269,46 @@ export function LabelPrintQueue({ template }: Props) {
         templateSection={
           <div className="space-y-3">
             <div>
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Typ szablonu
-              </label>
-              <p className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-slate-800">
-                {csvSelectedTemplateType?.trim() || "—"}
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Typ wydruku
+              </p>
+              <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Typ wydruku dla importu CSV">
+                {CSV_IMPORT_PRINT_KINDS.map((kind) => {
+                  const active = csvImportPrintKind === kind.id;
+                  return (
+                    <button
+                      key={kind.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={active}
+                      onClick={() => setCsvImportPrintKind(kind.id)}
+                      className={[
+                        "inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition",
+                        active
+                          ? "border-orange-400 bg-orange-50 text-orange-900 ring-1 ring-orange-400"
+                          : "border-gray-200 bg-white text-slate-700 hover:border-orange-300",
+                      ].join(" ")}
+                    >
+                      <span aria-hidden>{kind.emoji}</span>
+                      {kind.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-2 text-[11px] leading-snug text-slate-500">
+                Lista poniżej pokazuje wyłącznie szablony pasujące do wybranego typu.
               </p>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Szablon etykiety
-              </label>
-              <select
-                value={selectedCsvTemplateId ?? ""}
-                onChange={(e) => setSelectedCsvTemplateId(e.target.value ? Number(e.target.value) : null)}
-                className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-sm text-slate-900 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-300/40"
-              >
-                <option value="">— Wybierz szablon —</option>
-                {allLabelTemplatesForCsv.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                    {t.template_type ? ` (${t.template_type})` : ""}
-                  </option>
-                ))}
-              </select>
+              </p>
+              <CsvTemplatePicker
+                templates={csvTemplatesForPrintKind}
+                selectedId={selectedCsvTemplateId}
+                onSelect={setSelectedCsvTemplateId}
+              />
             </div>
-            {csvTemplateParsed ? (
-              <div className="flex flex-col items-center rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
-                <p className="mb-2 self-start text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Miniatura
-                </p>
-                <LabelPreviewCard template={csvTemplateParsed} record={samplePreviewRecord} />
-              </div>
-            ) : null}
             {csvTemplateDimensionHints.warnings.length > 0 ? (
               <div className="space-y-1 rounded-xl border border-amber-200 bg-amber-50/90 px-3 py-2 text-xs leading-relaxed text-amber-950">
                 {csvTemplateDimensionHints.warnings.map((w, i) => (
@@ -1565,10 +1588,10 @@ export function LabelPrintQueue({ template }: Props) {
           csvRows.length === 0 ||
           csvRecordsFiltered.length === 0 ||
           selectedCsvTemplateId == null ||
-          allLabelTemplatesForCsv.length === 0 ||
-          csvTemplateParsed == null
-        }
-        onGenerate={() => void handleCsvGeneratePdf()}
+                  csvTemplatesForPrintKind.length === 0 ||
+                  csvTemplateParsed == null
+                }
+                onGenerate={() => void handleCsvGeneratePdf()}
         printersSlot={
           <details className="group">
             <summary className="cursor-pointer list-none text-sm font-semibold text-slate-900 marker:content-none [&::-webkit-details-marker]:hidden">

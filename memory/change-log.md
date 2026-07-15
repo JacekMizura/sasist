@@ -1,5 +1,10 @@
 # Change log
 
+## 2026-07-15 — CSV import template picker UX
+
+- Import CSV only: friendly print-kind chips filter templates; `CsvTemplatePicker` (search + thumbnails); no raw `(location)` labels.
+- Mapping dropdown = template used variables only (no type-catalog dump).
+
 ## 2026-07-15 — Ready templates library UI
 
 - `LabelReadyTemplatesPage`: Figma/Canva-style library — orange filter tabs, grouped sections, preview-first cards (`LabelGalleryThumbnail`), outline Edytuj/Użyj + ⋮ menu.

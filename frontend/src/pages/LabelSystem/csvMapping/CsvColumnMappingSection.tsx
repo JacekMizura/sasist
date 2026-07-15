@@ -87,7 +87,9 @@ export default function CsvColumnMappingSection({
       <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
         <p className="mb-2 text-xs font-semibold text-slate-700">Ten szablon używa pól:</p>
         {checklistFields.length === 0 ? (
-          <p className="text-xs text-slate-500">Brak wykrytych pól w szablonie — wybierz typ lokalizacji / produktu / dokumentu.</p>
+          <p className="text-xs text-slate-500">
+            Ten szablon nie ma rozpoznanych zmiennych do mapowania — sprawdź pola w projektancie.
+          </p>
         ) : (
           <ul className="flex flex-col gap-1">
             {checklistFields.map((field) => {
