@@ -26,7 +26,8 @@ export const erpDensityClasses = {
   sidebarLabel: "min-w-0 flex-1 truncate text-[13px] leading-tight",
   sidebarActiveBar: "absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full",
   sidebarIcon: "shrink-0 transition-colors",
-  sidebarIconSize: 17,
+  /** Prefer ERP sidebar `h-6 w-6` tokens; kept for legacy callers. */
+  sidebarIconSize: 24,
 
   surfaceCard: "rounded-xl border border-slate-200/80 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]",
   surfaceCardHover:

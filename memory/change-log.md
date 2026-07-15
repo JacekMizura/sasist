@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-07-15 — ERP left sidebar UX rebuild
+
+- New `ErpSidebar`: sections SPRZEDAŻ / OPERACJE / MAGAZYN, WMS sticky bottom, profile footer, collapse 76px, mobile drawer.
+- Orange active item (`bg-orange-50`, `border-l-[3px] border-orange-500`), white surface, 24px icons.
+- Grouping via `NAV_SIDEBAR_SECTIONS` in `mainNavConfig.tsx`.
+
 ## 2026-07-15 — Purchasing product images
 
 - Root cause: API returns relative `/uploads/...`; purchasing thumbs used raw URL → 404 on SPA origin.

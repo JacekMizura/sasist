@@ -1,3 +1,41 @@
+/**
+ * ERP left sidebar tokens — Linear / Notion style (white surface, orange active).
+ * Shared with {@link NavFlyoutPanel} for left offset.
+ */
+
+export const ERP_SIDEBAR_WIDTH_PX = 268;
+export const ERP_SIDEBAR_COLLAPSED_WIDTH_PX = 76;
+export const ERP_SIDEBAR_MOBILE_WIDTH_PX = 280;
+
+export const ERP_SIDEBAR_WIDTH_CLASS = "w-[268px]";
+export const ERP_SIDEBAR_COLLAPSED_WIDTH_CLASS = "w-[76px]";
+export const ERP_SIDEBAR_MOBILE_WIDTH_CLASS = "w-[280px]";
+
+export const ERP_SIDEBAR_SURFACE =
+  "bg-white border-r border-[#E2E8F0]";
+
+export const ERP_SIDEBAR_NAV_SCROLL =
+  "[scrollbar-width:thin] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-transparent hover:[&::-webkit-scrollbar-thumb]:bg-slate-300";
+
+export const ERP_SIDEBAR_SECTION_LABEL =
+  "px-5 pb-1 pt-5 text-xs font-bold uppercase tracking-wider text-slate-400 first:pt-2";
+
+export const ERP_SIDEBAR_ITEM_BASE =
+  "group relative flex w-full items-center gap-4 rounded-xl px-5 py-3 text-left font-medium text-slate-600 transition-colors duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500";
+
+export const ERP_SIDEBAR_ITEM_HOVER = "hover:bg-orange-50 hover:text-orange-600";
+
+export const ERP_SIDEBAR_ITEM_ACTIVE =
+  "border-l-[3px] border-orange-500 bg-orange-50 font-semibold text-orange-600";
+
+export const ERP_SIDEBAR_ITEM_INACTIVE = "border-l-[3px] border-transparent";
+
+export const ERP_SIDEBAR_ICON_CLASS = "h-6 w-6 shrink-0";
+export const ERP_SIDEBAR_ICON_COLLAPSED_CLASS = "h-7 w-7 shrink-0";
+
+export const ERP_SIDEBAR_COLLAPSE_STORAGE_KEY = "erp-sidebar-collapsed";
+
+/** @deprecated Accent map removed — sidebar uses a single orange active state. */
 export type NavCategoryAccent = {
   barClass: string;
   activeBgClass: string;
@@ -6,115 +44,20 @@ export type NavCategoryAccent = {
   hoverBgClass: string;
 };
 
-const DEFAULT_ACCENT: NavCategoryAccent = {
-  barClass: "bg-slate-400",
-  activeBgClass: "bg-slate-100",
-  activeTextClass: "text-slate-900",
-  activeIconClass: "text-slate-600",
-  hoverBgClass: "hover:bg-slate-50",
-};
-
-/** Per-module accent for ERP sidebar active / hover states (light bg + left bar). */
-export const ERP_NAV_CATEGORY_ACCENT: Record<string, NavCategoryAccent> = {
-  orders: {
-    barClass: "bg-blue-500",
-    activeBgClass: "bg-blue-50",
-    activeTextClass: "text-blue-900",
-    activeIconClass: "text-blue-600",
-    hoverBgClass: "hover:bg-blue-50/80",
-  },
-  customers: {
-    barClass: "bg-indigo-500",
-    activeBgClass: "bg-indigo-50",
-    activeTextClass: "text-indigo-900",
-    activeIconClass: "text-indigo-600",
-    hoverBgClass: "hover:bg-indigo-50/80",
-  },
-  assortment: {
-    barClass: "bg-emerald-500",
-    activeBgClass: "bg-emerald-50",
-    activeTextClass: "text-emerald-900",
-    activeIconClass: "text-emerald-600",
-    hoverBgClass: "hover:bg-emerald-50/80",
-  },
-  warehouse: {
-    barClass: "bg-sky-500",
-    activeBgClass: "bg-sky-50",
-    activeTextClass: "text-sky-900",
-    activeIconClass: "text-sky-600",
-    hoverBgClass: "hover:bg-sky-50/80",
-  },
-  purchasing: {
-    barClass: "bg-violet-500",
-    activeBgClass: "bg-violet-50",
-    activeTextClass: "text-violet-900",
-    activeIconClass: "text-violet-600",
-    hoverBgClass: "hover:bg-violet-50/80",
-  },
-  analytics: {
-    barClass: "bg-rose-500",
-    activeBgClass: "bg-rose-50",
-    activeTextClass: "text-rose-900",
-    activeIconClass: "text-rose-600",
-    hoverBgClass: "hover:bg-rose-50/80",
-  },
-  labels: {
-    barClass: "bg-fuchsia-500",
-    activeBgClass: "bg-fuchsia-50",
-    activeTextClass: "text-fuchsia-900",
-    activeIconClass: "text-fuchsia-600",
-    hoverBgClass: "hover:bg-fuchsia-50/80",
-  },
-  documents: {
-    barClass: "bg-teal-500",
-    activeBgClass: "bg-teal-50",
-    activeTextClass: "text-teal-900",
-    activeIconClass: "text-teal-600",
-    hoverBgClass: "hover:bg-teal-50/80",
-  },
-  settings: {
-    barClass: "bg-slate-500",
-    activeBgClass: "bg-slate-100",
-    activeTextClass: "text-slate-900",
-    activeIconClass: "text-slate-600",
-    hoverBgClass: "hover:bg-slate-50",
-  },
-  system: {
-    barClass: "bg-slate-600",
-    activeBgClass: "bg-slate-100",
-    activeTextClass: "text-slate-900",
-    activeIconClass: "text-slate-700",
-    hoverBgClass: "hover:bg-slate-50",
-  },
-  wms: {
-    barClass: "bg-orange-500",
-    activeBgClass: "bg-orange-50",
-    activeTextClass: "text-orange-900",
-    activeIconClass: "text-orange-600",
-    hoverBgClass: "hover:bg-orange-50/80",
-  },
-};
-
-export function getNavCategoryAccent(categoryId: string): NavCategoryAccent {
-  return ERP_NAV_CATEGORY_ACCENT[categoryId] ?? DEFAULT_ACCENT;
-}
-
-export const WMS_NAV_ACCENT: NavCategoryAccent = {
+const ORANGE_ACCENT: NavCategoryAccent = {
   barClass: "bg-orange-500",
   activeBgClass: "bg-orange-50",
-  activeTextClass: "text-orange-900",
+  activeTextClass: "text-orange-600",
   activeIconClass: "text-orange-600",
-  hoverBgClass: "hover:bg-orange-50/80",
+  hoverBgClass: "hover:bg-orange-50",
 };
 
-/** Sidebar width in px — shared with fly-out positioning ({@link NavFlyoutPanel}). */
-export const ERP_SIDEBAR_WIDTH_PX = 224;
+/** Kept for callers that still import accents — always orange. */
+export function getNavCategoryAccent(_categoryId?: string): NavCategoryAccent {
+  return ORANGE_ACCENT;
+}
 
-export const ERP_SIDEBAR_WIDTH_CLASS = "w-56";
+export const WMS_NAV_ACCENT = ORANGE_ACCENT;
 
-export const ERP_SIDEBAR_NAV_SCROLL =
-  "[scrollbar-width:thin] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-transparent hover:[&::-webkit-scrollbar-thumb]:bg-slate-300";
-
-import { erpDensityClasses } from "./erpDensityTokens";
-
-export const ERP_SIDEBAR_ACTIVE_BAR = erpDensityClasses.sidebarActiveBar;
+/** @deprecated Use active border-l on the item itself. */
+export const ERP_SIDEBAR_ACTIVE_BAR = "hidden";

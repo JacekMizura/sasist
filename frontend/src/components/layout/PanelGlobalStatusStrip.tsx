@@ -43,7 +43,7 @@ export default function PanelGlobalStatusStrip() {
   };
 
   return (
-    <div className="sticky top-0 z-[100] flex w-full min-w-0 shrink-0 items-center justify-between gap-4 border-b border-slate-200 bg-white/95 px-4 shadow-sm backdrop-blur-sm h-[60px]">
+    <div className="sticky top-0 z-[100] flex h-[60px] w-full min-w-0 shrink-0 items-center justify-between gap-4 border-b border-slate-200 bg-white/95 py-0 pl-14 pr-4 shadow-sm backdrop-blur-sm lg:px-4">
       
       {/* LEWA STRONA: Wskaźniki KPI (Pigułki) */}
       <div className="flex items-center min-w-0">

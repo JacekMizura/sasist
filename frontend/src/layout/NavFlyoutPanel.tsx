@@ -95,6 +95,8 @@ type NavFlyoutPanelProps = {
   category: NavCategoryConfig | null;
   anchorTop: number;
   pathname: string;
+  /** Left edge offset in px (expanded / collapsed / mobile drawer). */
+  sidebarOffsetLeft?: number;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
 };
@@ -103,6 +105,7 @@ export default function NavFlyoutPanel({
   category,
   anchorTop,
   pathname,
+  sidebarOffsetLeft = ERP_SIDEBAR_WIDTH_PX + 8,
   onMouseEnter,
   onMouseLeave,
 }: NavFlyoutPanelProps) {
@@ -146,7 +149,7 @@ export default function NavFlyoutPanel({
       aria-label={category.label}
       className="fixed z-[200] flex min-h-0 min-w-[220px] max-w-[300px] max-h-[calc(100vh-16px)] flex-col overflow-hidden rounded-xl bg-white shadow-lg ring-1 ring-slate-200/80"
       style={{
-        left: ERP_SIDEBAR_WIDTH_PX + 8,
+        left: sidebarOffsetLeft,
         top,
       }}
       onMouseEnter={onMouseEnter}

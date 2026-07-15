@@ -75,7 +75,7 @@ export type NavCategoryConfig = {
   activePathPrefix?: string;
 };
 
-/** Direct WMS entry — used by {@link NAV_FLYOUT_CATEGORIES} WMS section (path unchanged). */
+/** Direct WMS entry — sticky MAGAZYN section (path unchanged). */
 export const WMS_SIDEBAR_DIRECT = {
   id: "wms" as const,
   path: "/wms/menu",
@@ -83,7 +83,41 @@ export const WMS_SIDEBAR_DIRECT = {
   Icon: Tablet,
 };
 
-/** Categories that open a hover fly-out (WMS is a normal section between Etykiety and Dokumenty). */
+export type NavSidebarSectionId = "sales" | "operations" | "warehouse";
+
+export type NavSidebarSectionConfig = {
+  id: NavSidebarSectionId;
+  label: string;
+  /** Categories in this section (order = sidebar order). */
+  categoryIds: string[];
+  /** Sticky footer block (MAGAZYN + WMS). */
+  pinToBottom?: boolean;
+};
+
+/**
+ * ERP sidebar grouping — SPRZEDAŻ / OPERACJE / MAGAZYN.
+ * Magazyn (projektant/wozki) stays under MAGAZYN above WMS so no module is dropped.
+ */
+export const NAV_SIDEBAR_SECTIONS: NavSidebarSectionConfig[] = [
+  {
+    id: "sales",
+    label: "Sprzedaż",
+    categoryIds: ["orders", "customers", "assortment", "documents"],
+  },
+  {
+    id: "operations",
+    label: "Operacje",
+    categoryIds: ["purchasing", "analytics", "labels", "settings", "system"],
+  },
+  {
+    id: "warehouse",
+    label: "Magazyn",
+    categoryIds: ["warehouse", "wms"],
+    pinToBottom: true,
+  },
+];
+
+/** Categories that open a hover fly-out. Order follows {@link NAV_SIDEBAR_SECTIONS}. */
 export const NAV_FLYOUT_CATEGORIES: NavCategoryConfig[] = [
   {
     id: "orders",

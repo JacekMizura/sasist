@@ -20,11 +20,24 @@ type UserAccountMenuProps = {
   hideChevron?: boolean;
   /** WMS minimal profile — slate avatar, no gradient. */
   profileVariant?: "default" | "minimal";
+  /**
+   * `sidebar` — ERP left nav footer (avatar + name + role, no gray tile).
+   * When set, `compact` / header layout are ignored.
+   */
+  variant?: "default" | "sidebar";
+  /** Icon-only footer when the ERP sidebar is collapsed. */
+  collapsed?: boolean;
 };
 
 const MENU_Z = 10050;
 
-export default function UserAccountMenu({ compact = false, hideChevron = false, profileVariant = "default" }: UserAccountMenuProps) {
+export default function UserAccountMenu({
+  compact = false,
+  hideChevron = false,
+  profileVariant = "default",
+  variant = "default",
+  collapsed = false,
+}: UserAccountMenuProps) {
   const { user, logout, hasPermission } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -36,6 +49,13 @@ export default function UserAccountMenu({ compact = false, hideChevron = false, 
   const updateMenuPos = () => {
     const b = triggerRef.current?.getBoundingClientRect();
     if (!b) return;
+    if (variant === "sidebar") {
+      // Open above the footer trigger; align to left edge of button (sidebar).
+      const menuApproxH = 220;
+      const top = Math.max(8, b.top - menuApproxH - 8);
+      setMenuPos({ top, right: Math.max(8, window.innerWidth - b.left - 240) });
+      return;
+    }
     setMenuPos({ top: b.bottom + 8, right: window.innerWidth - b.right });
   };
 
@@ -141,6 +161,42 @@ export default function UserAccountMenu({ compact = false, hideChevron = false, 
     </div>
   );
 
+  if (variant === "sidebar") {
+    return (
+      <div className="relative w-full" ref={rootRef}>
+        <button
+          ref={triggerRef}
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          title={collapsed ? `${display} (${user.role})` : undefined}
+          className={[
+            "group flex w-full items-center rounded-xl text-left transition-colors hover:bg-orange-50",
+            collapsed ? "justify-center p-2" : "gap-3 px-2 py-1.5",
+          ].join(" ")}
+          aria-expanded={open}
+          aria-haspopup="menu"
+          aria-label={display}
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-violet-600 text-sm font-bold text-white">
+            {initials(user)}
+          </span>
+          {!collapsed ? (
+            <>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-semibold text-slate-900">{display}</span>
+                <span className="mt-0.5 block truncate text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                  {user.role}
+                </span>
+              </span>
+              <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" aria-hidden />
+            </>
+          ) : null}
+        </button>
+        {open && typeof document !== "undefined" ? createPortal(menuBody, document.body) : null}
+      </div>
+    );
+  }
+
   return (
     <div className="relative" ref={rootRef}>
       <button
@@ -154,8 +210,6 @@ export default function UserAccountMenu({ compact = false, hideChevron = false, 
         aria-expanded={open}
         aria-haspopup="menu"
       >
-        
-        {/* TEKST (Dla wersji compact pokazujemy go po LEWEJ stronie od awatara) */}
         {compact ? (
           <span className="hidden min-w-0 flex-col text-right sm:flex">
             <span className="max-w-[9.5rem] truncate text-sm font-bold leading-tight text-slate-800">{display}</span>
@@ -171,15 +225,14 @@ export default function UserAccountMenu({ compact = false, hideChevron = false, 
             profileVariant === "minimal"
               ? "h-9 w-9 bg-slate-800 text-sm text-white"
               : [
-                  "bg-gradient-to-br from-indigo-100 to-blue-50 text-indigo-700 border border-indigo-200 transition-transform group-hover:scale-105",
+                  "bg-violet-600 text-white",
                   compact ? "h-9 w-9 text-sm" : "h-10 w-10 text-sm",
                 ].join(" "),
           ].join(" ")}
         >
           {initials(user)}
         </span>
-        
-        {/* TEKST (Dla wersji normalnej pokazujemy go po PRAWEJ stronie od awatara) */}
+
         {!compact ? (
           <span className="hidden max-w-[10rem] truncate text-sm font-bold text-slate-700 group-hover:text-slate-900 transition-colors sm:inline">
             {display}
@@ -194,7 +247,6 @@ export default function UserAccountMenu({ compact = false, hideChevron = false, 
             aria-hidden
           />
         ) : null}
-
       </button>
       {open && typeof document !== "undefined" ? createPortal(menuBody, document.body) : null}
     </div>
