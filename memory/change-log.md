@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-07-15 — Szablony list UI rebuild
+
+- `LabelTemplatesList`: single inner rail (260–280px) for typ etykiety + grupy; full-width right content.
+- Row cards (`TemplateListRow`): checkbox, thumbnail, name/type/size/date/uses, actions; click selects; Lista/Karty toggle kept.
+- Split into `templatesList/*`; no SASIST sidebar/navbar/tab changes; same APIs.
+
 ## 2026-07-15 — CSV mapping modal live label preview
 
 - `CsvMappingModal`: two-column layout with right panel „Podgląd etykiety” (`CsvMappingPreviewPanel`).
