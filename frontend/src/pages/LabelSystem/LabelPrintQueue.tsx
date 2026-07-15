@@ -2026,6 +2026,7 @@ export function LabelPrintQueue({ template }: Props) {
             setCsvMappingModalOpen(false);
           }}
           csvHeaders={csvHeaders}
+          csvRows={csvRows}
           initialMapping={csvColumnToField}
           csvRowCount={csvRows.length}
           labelCount={csvRecordsFiltered.length}

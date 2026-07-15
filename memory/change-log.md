@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-07-15 — CSV mapping modal live label preview
+
+- `CsvMappingModal`: two-column layout with right panel „Podgląd etykiety” (`CsvMappingPreviewPanel`).
+- Live `LabelPreviewCard` from draft mapping + in-memory CSV; record nav, single/grid (6), field values with orange „Brak mapowania”.
+- Mapping table column „Przykład (1. rekord)”: `Kolumna → Pole → wartość`. No PDF/backend.
+
 ## 2026-07-15 — Print queue unified 3-column layout
 
 - All print modes (Lokalizacje, Regały, Pasek, Wózki, Import PDF, Import CSV) share `PrintQueueWorkspaceShell`: `380px | minmax(700px,1fr) | 320px`.

@@ -11,6 +11,7 @@ import {
   type CsvFileRowStats,
 } from "../labelCsvImport";
 import CsvFieldMappingCombobox from "./CsvFieldMappingCombobox";
+import CsvMappingPreviewPanel from "./CsvMappingPreviewPanel";
 import {
   buildCsvMappingFieldGroups,
   csvColumnMappingStatus,
@@ -24,6 +25,7 @@ type Props = {
   /** Commit mapping and close. */
   onSave: (mapping: Record<string, string>) => void;
   csvHeaders: string[];
+  csvRows: Record<string, string>[];
   initialMapping: Record<string, string>;
   csvRowCount: number;
   labelCount: number;
@@ -34,6 +36,14 @@ type Props = {
   bindingKeys: Iterable<string>;
 };
 
+function sampleCsvValue(rows: Record<string, string>[], header: string): string {
+  if (rows.length === 0) return "—";
+  const raw = rows[0][header];
+  if (raw == null || String(raw).trim() === "") return "—";
+  const s = String(raw).trim();
+  return s.length > 48 ? `${s.slice(0, 45)}…` : s;
+}
+
 /**
  * Full-screen CSV → label field mapping modal (Import CSV UX).
  */
@@ -42,6 +52,7 @@ export default function CsvMappingModal({
   onClose,
   onSave,
   csvHeaders,
+  csvRows,
   initialMapping,
   csvRowCount,
   labelCount,
@@ -126,7 +137,7 @@ export default function CsvMappingModal({
   if (!open) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 sm:p-6">
+    <div className="fixed inset-0 z-[80] flex items-center justify-center p-3 sm:p-5">
       <button
         type="button"
         className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
@@ -137,15 +148,15 @@ export default function CsvMappingModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="csv-mapping-modal-title"
-        className="relative flex max-h-[90vh] w-full max-w-[1400px] min-w-0 flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl min-[1600px]:max-w-[min(1400px,calc(100vw-3rem))]"
+        className="relative flex max-h-[92vh] w-full max-w-[min(1920px,calc(100vw-1.5rem))] min-w-0 flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl"
       >
-        <header className="flex shrink-0 items-start justify-between gap-3 border-b border-gray-200 px-6 py-5">
+        <header className="flex shrink-0 items-start justify-between gap-3 border-b border-gray-200 px-5 py-4 sm:px-6">
           <div className="min-w-0">
             <h2 id="csv-mapping-modal-title" className="text-lg font-semibold text-slate-900">
               Mapowanie kolumn CSV
             </h2>
             <p className="mt-1 text-sm text-slate-500">
-              Przypisz kolumny pliku do pól wybranego szablonu etykiety.
+              Przypisz kolumny pliku do pól wybranego szablonu etykiety. Podgląd aktualizuje się na żywo.
             </p>
           </div>
           <button
@@ -158,91 +169,125 @@ export default function CsvMappingModal({
           </button>
         </header>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-5 [scrollbar-width:thin]">
-          <section className="mb-6 grid gap-3 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:grid-cols-2 lg:grid-cols-4">
-            <Stat label="Plik" value={fileLabel} />
-            <Stat label="Rekordów" value={String(csvRowCount)} />
-            <Stat label="Etykiet (po filtrach)" value={String(labelCount)} />
-            <Stat
-              label="Brakujące wymagane pola"
-              value={
-                missingRequired.length === 0
-                  ? "Brak — komplet"
-                  : missingRequired.map((m) => m.label).join(", ")
-              }
-              tone={missingRequired.length === 0 ? "ok" : "warn"}
-            />
-          </section>
+        <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+          <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4 sm:px-6 [scrollbar-width:thin]">
+            <section className="mb-5 grid gap-3 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:grid-cols-2 xl:grid-cols-4">
+              <Stat label="Plik" value={fileLabel} />
+              <Stat label="Rekordów" value={String(csvRowCount)} />
+              <Stat label="Etykiet (po filtrach)" value={String(labelCount)} />
+              <Stat
+                label="Brakujące wymagane pola"
+                value={
+                  missingRequired.length === 0
+                    ? "Brak — komplet"
+                    : missingRequired.map((m) => m.label).join(", ")
+                }
+                tone={missingRequired.length === 0 ? "ok" : "warn"}
+              />
+            </section>
 
-          {requiredBadges.length > 0 ? (
-            <section className="mb-5">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Pola szablonu
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {requiredBadges.map((b) => (
-                  <span
-                    key={b.field}
-                    className={[
-                      "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold",
-                      b.covered
-                        ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                        : "border-red-200 bg-red-50 text-red-800",
-                    ].join(" ")}
-                  >
-                    <span aria-hidden>{b.covered ? "🟢" : "🔴"}</span>
-                    {b.label}
-                  </span>
-                ))}
+            {requiredBadges.length > 0 ? (
+              <section className="mb-4">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Pola szablonu
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {requiredBadges.map((b) => (
+                    <span
+                      key={b.field}
+                      className={[
+                        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold",
+                        b.covered
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                          : "border-red-200 bg-red-50 text-red-800",
+                      ].join(" ")}
+                    >
+                      <span aria-hidden>{b.covered ? "🟢" : "🔴"}</span>
+                      {b.label}
+                    </span>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
+            <section className="overflow-hidden rounded-2xl border border-gray-200 shadow-sm">
+              <div className="max-h-[min(52vh,560px)] overflow-auto [scrollbar-width:thin]">
+                <table className="w-full min-w-[640px] text-left text-sm">
+                  <thead className="sticky top-0 z-10 border-b border-gray-200 bg-white">
+                    <tr>
+                      <th className="px-4 py-3 font-semibold text-slate-600">Kolumna CSV</th>
+                      <th className="px-4 py-3 font-semibold text-slate-600">Pole etykiety</th>
+                      <th className="px-4 py-3 font-semibold text-slate-600">Przykład (1. rekord)</th>
+                      <th className="w-16 px-4 py-3 font-semibold text-slate-600">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {csvHeaders.map((h) => {
+                      const mapped = draft[h] ?? "";
+                      const status = csvColumnMappingStatus(mapped, availableSet);
+                      const ok = status === "required" || (Boolean(mapped) && status === "optional");
+                      const sample = sampleCsvValue(csvRows, h);
+                      const fieldLabel = mapped ? polishLabelCsvFieldForUi(mapped) : null;
+                      return (
+                        <tr key={h} className="border-b border-gray-100 last:border-0">
+                          <td className="px-4 py-2.5 align-middle font-medium text-slate-900">{h}</td>
+                          <td className="px-4 py-2 align-middle">
+                            <CsvFieldMappingCombobox
+                              value={mapped}
+                              groups={groups}
+                              templateType={templateType}
+                              onChange={(field) => setMapping(h, field)}
+                            />
+                          </td>
+                          <td className="px-4 py-2.5 align-middle">
+                            <p className="text-xs leading-relaxed text-slate-600">
+                              <span className="font-medium text-slate-800">{h}</span>
+                              <span className="mx-1 text-slate-400">→</span>
+                              {fieldLabel ? (
+                                <>
+                                  <span className="font-medium text-slate-700">{fieldLabel}</span>
+                                  <span className="mx-1 text-slate-400">→</span>
+                                  <span className="font-mono text-slate-900">{sample}</span>
+                                </>
+                              ) : (
+                                <>
+                                  <span className="italic text-orange-700">nie wybrano</span>
+                                  <span className="mx-1 text-slate-400">→</span>
+                                  <span className="font-mono text-slate-500">{sample}</span>
+                                </>
+                              )}
+                            </p>
+                          </td>
+                          <td className="px-4 py-2.5 align-middle">
+                            {ok ? (
+                              <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+                                <Check className="h-4 w-4" strokeWidth={2.5} aria-label="Zmapowano" />
+                              </span>
+                            ) : (
+                              <span className="text-xs font-medium text-slate-400">—</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             </section>
-          ) : null}
+          </div>
 
-          <section className="overflow-hidden rounded-2xl border border-gray-200 shadow-sm">
-            <div className="max-h-[min(48vh,520px)] overflow-auto [scrollbar-width:thin]">
-              <table className="w-full min-w-[720px] text-left text-sm">
-                <thead className="sticky top-0 z-10 border-b border-gray-200 bg-white">
-                  <tr>
-                    <th className="px-4 py-3 font-semibold text-slate-600">Kolumna CSV</th>
-                    <th className="px-4 py-3 font-semibold text-slate-600">Pole etykiety</th>
-                    <th className="w-24 px-4 py-3 font-semibold text-slate-600">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {csvHeaders.map((h) => {
-                    const mapped = draft[h] ?? "";
-                    const status = csvColumnMappingStatus(mapped, availableSet);
-                    const ok = status === "required" || (Boolean(mapped) && status === "optional");
-                    return (
-                      <tr key={h} className="border-b border-gray-100 last:border-0">
-                        <td className="px-4 py-2.5 font-medium text-slate-900 align-middle">{h}</td>
-                        <td className="px-4 py-2 align-middle">
-                          <CsvFieldMappingCombobox
-                            value={mapped}
-                            groups={groups}
-                            templateType={templateType}
-                            onChange={(field) => setMapping(h, field)}
-                          />
-                        </td>
-                        <td className="px-4 py-2.5 align-middle">
-                          {ok ? (
-                            <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
-                              <Check className="h-4 w-4" strokeWidth={2.5} aria-label="Zmapowano" />
-                            </span>
-                          ) : (
-                            <span className="text-xs font-medium text-slate-400">—</span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </section>
+          <aside className="flex min-h-[320px] w-full shrink-0 flex-col border-t border-gray-200 bg-slate-50/50 lg:min-h-0 lg:w-[min(400px,38%)] lg:border-t-0 lg:border-l">
+            <CsvMappingPreviewPanel
+              template={template}
+              csvRows={csvRows}
+              draftMapping={draft}
+              usedFields={usedFields.length > 0 ? usedFields : availableVariables}
+              mappedTargets={mappedTargets}
+            />
+          </aside>
         </div>
 
-        <footer className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-gray-200 bg-white px-6 py-4">
+        <footer className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-gray-200 bg-white px-5 py-4 sm:px-6">
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
