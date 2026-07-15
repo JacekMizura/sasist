@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -19,8 +20,11 @@ from ..schemas.supplier_product_link import (
 )
 from ..schemas.supplier_products import SupplierCatalogPriceTier
 from ..services.delivery_line_pricing import parse_supplier_product_tier_steps
+from ..services.supplier_product_links.create_service import create_supplier_product_link_for_tenant
+from ..services.supplier_product_links.errors import SupplierProductLinkError
 
 router = APIRouter(prefix="/supplier-product-links", tags=["Supplier catalog"])
+logger = logging.getLogger(__name__)
 
 
 def _tiers_json_from_body(tiers: Optional[List[SupplierCatalogPriceTier]]) -> Optional[str]:
@@ -75,7 +79,6 @@ def list_supplier_product_links(
         if not pr:
             raise HTTPException(status_code=400, detail="Invalid product_id for tenant")
         q = q.filter(SupplierProduct.product_id == product_id)
-    # Tenant safety: joined rows must belong to tenant
     q = (
         q.join(Supplier, Supplier.id == SupplierProduct.supplier_id)
         .join(Product, Product.id == SupplierProduct.product_id)
@@ -87,37 +90,33 @@ def list_supplier_product_links(
 
 @router.post("/", response_model=SupplierProductLinkRead, status_code=201)
 def create_supplier_product_link(body: SupplierProductLinkCreateBody, db: Session = Depends(get_db)):
-    if body.tenant_id < 1:
-        raise HTTPException(status_code=400, detail="Invalid tenant_id")
-    sup = db.query(Supplier).filter(Supplier.id == body.supplier_id, Supplier.tenant_id == body.tenant_id).first()
-    if not sup:
-        raise HTTPException(status_code=400, detail="Invalid supplier_id for tenant")
-    pr = db.query(Product).filter(Product.id == body.product_id, Product.tenant_id == body.tenant_id).first()
-    if not pr:
-        raise HTTPException(status_code=400, detail="Invalid product_id for tenant")
-    dup = (
-        db.query(SupplierProduct)
-        .filter(
-            SupplierProduct.supplier_id == body.supplier_id,
-            SupplierProduct.product_id == body.product_id,
+    payload = body.model_dump()
+    tenant_id = body.tenant_id
+    try:
+        row = create_supplier_product_link_for_tenant(db, body)
+        return _serialize(db, row)
+    except SupplierProductLinkError as exc:
+        logger.exception(
+            "[supplier-product-links] tenant_id=%s payload=%s error=%s",
+            tenant_id,
+            payload,
+            exc,
         )
-        .first()
-    )
-    if dup:
-        raise HTTPException(status_code=400, detail="This product is already linked to this supplier")
-    row = SupplierProduct(
-        tenant_id=body.tenant_id,
-        supplier_id=body.supplier_id,
-        product_id=body.product_id,
-        purchase_price=body.purchase_price,
-        purchase_price_tiers_json=_tiers_json_from_body(body.purchase_price_tiers),
-        lead_time_days=body.lead_time_days,
-        min_order_qty=body.min_order_qty,
-    )
-    db.add(row)
-    db.commit()
-    db.refresh(row)
-    return _serialize(db, row)
+        raise HTTPException(status_code=exc.http_status, detail=exc.as_detail()) from exc
+    except Exception as exc:
+        mapped = SupplierProductLinkError(
+            "Nie udało się utworzyć powiązania produkt–dostawca. Spróbuj ponownie za chwilę.",
+            code="SUPPLIER_PRODUCT_LINK_CREATE_FAILED",
+            details=str(exc),
+            http_status=503,
+        )
+        logger.exception(
+            "[supplier-product-links] tenant_id=%s payload=%s error=%s",
+            tenant_id,
+            payload,
+            exc,
+        )
+        raise HTTPException(status_code=mapped.http_status, detail=mapped.as_detail()) from exc
 
 
 @router.patch("/{link_id}", response_model=SupplierProductLinkRead)

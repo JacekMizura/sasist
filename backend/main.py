@@ -358,6 +358,7 @@ from .api.fulfillment_configuration import router as fulfillment_configuration_r
 from .api.order_consolidation import consolidation_plans_router, router as order_consolidation_router
 from .api.wms_consolidation import router as wms_consolidation_router
 from .api.admin_users import router as admin_users_router
+from .api.admin_schema import router as admin_schema_router
 from .api.uploads import router as uploads_router
 from .api.bdo_packaging import router as bdo_packaging_router
 from .api.user_list_views import router as user_list_views_router
@@ -1861,6 +1862,7 @@ _API_ROUTERS = (
     consolidation_plans_router,
     wms_consolidation_router,
     admin_users_router,
+    admin_schema_router,
     api_keys_router,
     uploads_router,
     tenant_router,
