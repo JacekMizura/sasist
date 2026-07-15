@@ -29,6 +29,7 @@ import {
   PurchasingKpiGrid,
   PurchasingPageHeader,
   PurchasingPageShell,
+  PurchasingRightDrawer,
   PurchasingTableHeader,
   PurchasingTableSection,
   purchasingBtnSecondary,
@@ -374,124 +375,121 @@ export default function PurchasingSupplierAnalyticsPage() {
 
   const drawer =
     drawerSid != null ? (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/40" role="presentation" onClick={() => setDrawerSid(null)}>
-          <div
-            className="h-full w-full max-w-lg overflow-y-auto bg-white shadow-2xl"
-            role="dialog"
-            aria-modal="true"
-            onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-start justify-between border-b border-slate-200 px-5 py-4">
-              <div>
-                <h2 className="text-lg font-semibold text-slate-900">{drawerRow?.supplier_name ?? "Dostawca"}</h2>
-                <p className="text-xs text-slate-500">Szczegóły i trendy (okres {rangeDays} dni)</p>
-              </div>
-              <button
-                type="button"
-                className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
-                aria-label="Zamknij"
-                onClick={() => setDrawerSid(null)}
-              >
-                <X className="h-5 w-5" />
-              </button>
+      <PurchasingRightDrawer
+        open
+        onClose={() => setDrawerSid(null)}
+        ariaLabel="Szczegóły dostawcy"
+        header={
+          <div className="flex items-start justify-between border-b border-slate-200 px-5 py-4">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900">{drawerRow?.supplier_name ?? "Dostawca"}</h2>
+              <p className="text-xs text-slate-500">Szczegóły i trendy (okres {rangeDays} dni)</p>
             </div>
-
-            <div className="space-y-6 px-5 py-4">
-              {drawerLoading ? <p className="text-sm text-slate-500">Ładowanie wykresów…</p> : null}
-              {!drawerLoading && drawerRow?.insufficient_data ? (
-                <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                  Niewystarczające dane historyczne w tym oknie — brak zamówień i przyjętych dostaw.
-                </p>
-              ) : null}
-
-              <div className="flex flex-wrap gap-2">
-                <Link
-                  className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white"
-                  to={supplierEditHref(drawerSid)}
-                >
-                  Otwórz dostawcę
-                </Link>
-                <Link
-                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800"
-                  to={replenishmentHref(drawerSid)}
-                >
-                  Utwórz PO
-                </Link>
-                <Link className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800" to={replenishmentHref(drawerSid)}>
-                  Porównaj ceny (generator)
-                </Link>
-                <Link className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800" to={ordersHref}>
-                  Lista zamówień
-                </Link>
-              </div>
-
-              {drawerSeries && drawerSeries.score_trend.length > 0 ? (
-                <div>
-                  <h3 className="text-sm font-semibold text-slate-800">Trend oceny (miesięcznie)</h3>
-                  <div className="mt-2 h-48 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={drawerSeries.score_trend}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                        <XAxis dataKey="period" tick={{ fontSize: 11 }} />
-                        <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} width={32} />
-                        <Tooltip />
-                        <Legend />
-                        <Line type="monotone" dataKey="score" name="Ocena" stroke="#0f172a" strokeWidth={2} dot />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-              ) : null}
-
-              {drawerSeries && drawerSeries.punctuality_trend.length > 0 ? (
-                <div>
-                  <h3 className="text-sm font-semibold text-slate-800">Terminowość dostaw (%)</h3>
-                  <div className="mt-2 h-48 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={drawerSeries.punctuality_trend}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                        <XAxis dataKey="period" tick={{ fontSize: 11 }} />
-                        <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} width={32} />
-                        <Tooltip />
-                        <Legend />
-                        <Line type="monotone" dataKey="on_time_percent" name="Terminowość %" stroke="#0284c7" strokeWidth={2} dot />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-              ) : null}
-
-              {drawerSeries && drawerSeries.order_history.length > 0 ? (
-                <div>
-                  <h3 className="text-sm font-semibold text-slate-800">Historia zamówień</h3>
-                  <div className="mt-2 h-48 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <ComposedChart data={drawerSeries.order_history}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                        <XAxis dataKey="period" tick={{ fontSize: 11 }} />
-                        <YAxis yAxisId="left" tick={{ fontSize: 11 }} width={28} allowDecimals={false} />
-                        <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} width={44} />
-                        <Tooltip />
-                        <Legend />
-                        <Bar yAxisId="left" dataKey="orders" name="Liczba PO" fill="#64748b" radius={[4, 4, 0, 0]} />
-                        <Line
-                          yAxisId="right"
-                          type="monotone"
-                          dataKey="value"
-                          name="Wartość"
-                          stroke="#0f172a"
-                          strokeWidth={2}
-                          dot={false}
-                        />
-                      </ComposedChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-              ) : null}
-            </div>
+            <button
+              type="button"
+              className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
+              aria-label="Zamknij"
+              onClick={() => setDrawerSid(null)}
+            >
+              <X className="h-5 w-5" />
+            </button>
           </div>
+        }
+      >
+        <div className="space-y-6 px-5 py-4">
+          {drawerLoading ? <p className="text-sm text-slate-500">Ładowanie wykresów…</p> : null}
+          {!drawerLoading && drawerRow?.insufficient_data ? (
+            <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              Niewystarczające dane historyczne w tym oknie — brak zamówień i przyjętych dostaw.
+            </p>
+          ) : null}
+
+          <div className="flex flex-wrap gap-2">
+            <Link
+              className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white"
+              to={supplierEditHref(drawerSid)}
+            >
+              Otwórz dostawcę
+            </Link>
+            <Link
+              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800"
+              to={replenishmentHref(drawerSid)}
+            >
+              Utwórz PO
+            </Link>
+            <Link className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800" to={replenishmentHref(drawerSid)}>
+              Porównaj ceny (generator)
+            </Link>
+            <Link className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800" to={ordersHref}>
+              Lista zamówień
+            </Link>
+          </div>
+
+          {drawerSeries && drawerSeries.score_trend.length > 0 ? (
+            <div>
+              <h3 className="text-sm font-semibold text-slate-800">Trend oceny (miesięcznie)</h3>
+              <div className="mt-2 h-48 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={drawerSeries.score_trend}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis dataKey="period" tick={{ fontSize: 11 }} />
+                    <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} width={32} />
+                    <Tooltip />
+                    <Legend />
+                    <Line type="monotone" dataKey="score" name="Ocena" stroke="#0f172a" strokeWidth={2} dot />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          ) : null}
+
+          {drawerSeries && drawerSeries.punctuality_trend.length > 0 ? (
+            <div>
+              <h3 className="text-sm font-semibold text-slate-800">Terminowość dostaw (%)</h3>
+              <div className="mt-2 h-48 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={drawerSeries.punctuality_trend}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis dataKey="period" tick={{ fontSize: 11 }} />
+                    <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} width={32} />
+                    <Tooltip />
+                    <Legend />
+                    <Line type="monotone" dataKey="on_time_percent" name="Terminowość %" stroke="#0284c7" strokeWidth={2} dot />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          ) : null}
+
+          {drawerSeries && drawerSeries.order_history.length > 0 ? (
+            <div>
+              <h3 className="text-sm font-semibold text-slate-800">Historia zamówień</h3>
+              <div className="mt-2 h-48 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={drawerSeries.order_history}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis dataKey="period" tick={{ fontSize: 11 }} />
+                    <YAxis yAxisId="left" tick={{ fontSize: 11 }} width={28} allowDecimals={false} />
+                    <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} width={44} />
+                    <Tooltip />
+                    <Legend />
+                    <Bar yAxisId="left" dataKey="orders" name="Liczba PO" fill="#64748b" radius={[4, 4, 0, 0]} />
+                    <Line
+                      yAxisId="right"
+                      type="monotone"
+                      dataKey="value"
+                      name="Wartość"
+                      stroke="#0f172a"
+                      strokeWidth={2}
+                      dot={false}
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          ) : null}
         </div>
+      </PurchasingRightDrawer>
     ) : null;
 
   if (isSuppliersModule) {

@@ -1024,6 +1024,7 @@ export default function PurchasingReplenishmentPage({ variant = "standalone" }: 
         open={inspectorProductId != null}
         loading={inspectorLoading}
         detail={inspectorData?.product_detail ?? null}
+        tenantId={tenantId}
         onClose={() => setInspectorProductId(null)}
         formatQty={formatPipelineQty}
         incomingQty={inspectorRow?.incoming_qty}

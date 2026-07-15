@@ -458,6 +458,7 @@ export default function PurchasingForecastPage({ variant = "page" }: { variant?:
         open={drawerOpen && selectedProductId != null}
         loading={loading && selectedProductId != null && !data?.product_detail}
         detail={data?.product_detail ?? null}
+        tenantId={tenantId}
         onClose={() => {
           setDrawerOpen(false);
           selectProduct(null);

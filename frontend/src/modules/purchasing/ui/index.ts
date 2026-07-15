@@ -35,6 +35,8 @@ export {
   PurchasingProductCell,
 } from "./PurchasingProductThumbnail";
 export type { PurchasingProductThumbnailProps } from "./PurchasingProductThumbnail";
+export { PurchasingRightDrawer } from "./PurchasingRightDrawer";
+export type { PurchasingRightDrawerProps } from "./PurchasingRightDrawer";
 export { PurchasingProductInspectorDrawer } from "./PurchasingProductInspectorDrawer";
 export { PurchasingPriceOpportunityDrawer } from "./PurchasingPriceOpportunityDrawer";
 export {
