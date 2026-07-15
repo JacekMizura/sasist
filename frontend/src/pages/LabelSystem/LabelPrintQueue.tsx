@@ -25,7 +25,6 @@ import { drawSvgVector } from "../../utils/labels/svgToPdfVector";
 import { getRecordsFromLayout } from "./labelData";
 import { filterLabelRecordsByExcludeFloors } from "../../utils/labelFloorFilter";
 import {
-  allSuggestedLabelFieldsForCsvMapping,
   buildColumnMappingWithPersistence,
   filterDerivedGroupSlotsFromCsvMapping,
   buildLabelRecordsFromCsvRows,
@@ -40,8 +39,8 @@ import {
   validateCsvAgainstTemplate,
   validateGroupedVariablesRequireGrouping,
   csvGroupingPdfBlockedByTemplate,
-  polishLabelCsvFieldForUi,
 } from "./labelCsvImport";
+import CsvColumnMappingSection from "./csvMapping/CsvColumnMappingSection";
 import {
   CSV_GROUPING_PREVIEW_LIMIT,
   getCsvGroupingPreview,
@@ -91,6 +90,8 @@ type ApiLabelTemplateRow = {
   name: string;
   template_type?: string | null;
   template_json?: string;
+  available_variables?: string[] | null;
+  variables?: string[] | null;
 };
 
 export function LabelPrintQueue({ template }: Props) {
@@ -284,34 +285,45 @@ export function LabelPrintQueue({ template }: Props) {
     };
   }, [printMode]);
 
+  const selectedCsvTemplateRow = useMemo(
+    () => allLabelTemplatesForCsv.find((t) => t.id === selectedCsvTemplateId) ?? null,
+    [allLabelTemplatesForCsv, selectedCsvTemplateId],
+  );
+
   const csvTemplateParsed = useMemo((): LabelTemplate | null => {
-    const row = allLabelTemplatesForCsv.find((t) => t.id === selectedCsvTemplateId);
-    const raw = row?.template_json;
+    const raw = selectedCsvTemplateRow?.template_json;
     if (!raw?.trim()) return null;
     try {
-      return JSON.parse(raw) as LabelTemplate;
+      const parsed = JSON.parse(raw) as LabelTemplate;
+      if (!parsed.template_type && selectedCsvTemplateRow?.template_type) {
+        parsed.template_type = selectedCsvTemplateRow.template_type as LabelTemplate["template_type"];
+      }
+      if (!parsed.available_variables?.length && selectedCsvTemplateRow?.available_variables?.length) {
+        parsed.available_variables = selectedCsvTemplateRow.available_variables;
+      }
+      if (!parsed.variables?.length && selectedCsvTemplateRow?.variables?.length) {
+        parsed.variables = selectedCsvTemplateRow.variables;
+      }
+      return parsed;
     } catch {
       return null;
     }
-  }, [allLabelTemplatesForCsv, selectedCsvTemplateId]);
+  }, [selectedCsvTemplateRow]);
 
   const csvTemplateBindingInfo = useMemo(
     () => extractTemplateDataBindingKeys(csvTemplateParsed),
     [csvTemplateParsed],
   );
 
+  const csvSelectedTemplateType =
+    selectedCsvTemplateRow?.template_type ?? csvTemplateParsed?.template_type ?? null;
+
   /** Warn / note when stored template_json uses office-sheet mm; PDF request uses sanitized dimensions. */
   const csvTemplateDimensionHints = useMemo(() => {
-    const row = allLabelTemplatesForCsv.find((t) => t.id === selectedCsvTemplateId);
-    const raw = row?.template_json?.trim();
+    const raw = selectedCsvTemplateRow?.template_json?.trim();
     if (!raw) return { warnings: [] as string[], replacedA4Like: false };
     return sanitizeTemplateJsonDimensionsForCsvExport(raw);
-  }, [allLabelTemplatesForCsv, selectedCsvTemplateId]);
-
-  const csvFieldOptions = useMemo(
-    () => allSuggestedLabelFieldsForCsvMapping([...csvTemplateBindingInfo.keys]),
-    [csvTemplateBindingInfo.keys],
-  );
+  }, [selectedCsvTemplateRow]);
 
   const csvGroupingPdfBlocked = useMemo(
     () => csvGroupingPdfBlockedByTemplate(csvTemplateBindingInfo.keys, csvGroupMode),
@@ -1741,47 +1753,26 @@ export function LabelPrintQueue({ template }: Props) {
                     </ul>
                   </div>
                 )}
-                <div className="max-h-56 overflow-auto rounded border border-[#E2E8F0]">
-                  <table className="w-full text-left text-xs">
-                    <thead className="sticky top-0 bg-slate-50 border-b border-[#E2E8F0]">
-                      <tr>
-                        <th className="px-2 py-1.5 font-medium text-slate-600">Kolumna CSV</th>
-                        <th className="px-2 py-1.5 font-medium text-slate-600">Pole etykiety</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {csvHeaders.map((h) => (
-                        <tr key={h} className="border-b border-slate-100">
-                          <td className="px-2 py-1.5 text-slate-800 align-middle">{h}</td>
-                          <td className="px-2 py-1 align-middle">
-                            <select
-                              value={csvColumnToField[h] ?? ""}
-                              onChange={(e) => {
-                                const v = e.target.value;
-                                setCsvColumnToField((prev) => {
-                                  const next = filterDerivedGroupSlotsFromCsvMapping({
-                                    ...prev,
-                                    [h]: v,
-                                  });
-                                  saveCsvLabelMapping(csvHeaders, next);
-                                  return next;
-                                });
-                              }}
-                              className="w-full min-w-[160px] rounded border border-[#E2E8F0] bg-white px-2 py-1 text-[#1E293B]"
-                            >
-                              <option value="">— Pomiń —</option>
-                              {csvFieldOptions.map((f) => (
-                                <option key={f} value={f}>
-                                  {polishLabelCsvFieldForUi(f)}
-                                </option>
-                              ))}
-                            </select>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <CsvColumnMappingSection
+                  csvHeaders={csvHeaders}
+                  csvColumnToField={csvColumnToField}
+                  template={csvTemplateParsed}
+                  templateType={csvSelectedTemplateType}
+                  apiAvailableVariables={
+                    selectedCsvTemplateRow?.available_variables ?? selectedCsvTemplateRow?.variables ?? null
+                  }
+                  bindingKeys={csvTemplateBindingInfo.keys}
+                  onMappingChange={(header, field) => {
+                    setCsvColumnToField((prev) => {
+                      const next = filterDerivedGroupSlotsFromCsvMapping({
+                        ...prev,
+                        [header]: field,
+                      });
+                      saveCsvLabelMapping(csvHeaders, next);
+                      return next;
+                    });
+                  }}
+                />
                 {csvGroupMode && csvGroupingPdfBlocked && (
                   <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
                     <span>

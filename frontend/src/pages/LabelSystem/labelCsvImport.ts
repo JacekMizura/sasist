@@ -100,7 +100,10 @@ export function filterDerivedGroupSlotsFromCsvMapping(mapping: Record<string, st
   return out;
 }
 
-/** Suggested field options for dropdowns (deduped). */
+/**
+ * Full catalog field ids (auto-map / header recognition only).
+ * CSV mapping UI uses {@link resolveTemplateAvailableVariables} instead — never dump this into dropdowns.
+ */
 export function allSuggestedLabelFields(templateKeys: string[]): string[] {
   const fromCatalog = LABEL_VARIABLE_CATEGORIES.flatMap((c) =>
     c.items.map((i) => i.token.replace(/^\{|\}$/g, "")),
@@ -110,7 +113,7 @@ export function allSuggestedLabelFields(templateKeys: string[]): string[] {
   return [...set].sort((a, b) => a.localeCompare(b));
 }
 
-/** CSV column mapping: raw + template keys, excluding merge-generated slot fields. */
+/** @deprecated Prefer template-scoped options from csvMapping/labelCsvMappingFields. Kept for auto-map header checks. */
 export function allSuggestedLabelFieldsForCsvMapping(templateKeys: string[]): string[] {
   return allSuggestedLabelFields(templateKeys).filter((f) => !isCsvDerivedGroupSlotField(f));
 }

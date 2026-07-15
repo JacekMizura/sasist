@@ -1,5 +1,10 @@
 # Change log
 
+## 2026-07-15 — Label CSV mapping UX
+
+- Dropdown no longer lists full `LABEL_VARIABLE_CATEGORIES`; scoped to `available_variables` / bindings / type fallback.
+- New `csvMapping/*`: grouped searchable combobox, template field checklist, Wymagane/Opcjonalne/Nie znaleziono status.
+
 ## 2026-07-15 — Sidebar IA + new Sasist logo
 
 - Removed MAGAZYN section and System/WMS menu rows; Magazyn + Ustawienia open right flyouts under OPERACJE.

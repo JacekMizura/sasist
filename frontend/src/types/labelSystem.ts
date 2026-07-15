@@ -611,6 +611,8 @@ export interface LabelTemplate {
   seedSlug?: string;
   jinjaTemplate?: string;
   variables?: string[];
+  /** Explicit list of bindable fields for CSV / print mapping (preferred over scanning elements). */
+  available_variables?: string[];
   category?: string;
   /** Optional: change colors by metadata (e.g. Reserve -> red background) */
   conditionalFormatting?: ConditionalFormatRule[];
