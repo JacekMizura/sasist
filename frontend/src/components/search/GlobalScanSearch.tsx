@@ -12,7 +12,7 @@ type ScanResponse = {
 const PLACEHOLDER = "Skanuj kod lub wyszukaj...";
 
 function useKbdShortcutLabel(): string {
-  const [label, setLabel] = useState("Ctrl+K");
+  const [label, setLabel] = useState("CTRL+K");
   useEffect(() => {
     try {
       const p = typeof navigator !== "undefined" ? navigator.platform : "";
@@ -24,7 +24,7 @@ function useKbdShortcutLabel(): string {
   return label;
 }
 
-export type GlobalScanSearchVariant = "default" | "wmsTopbar" | "wmsCompact" | "panelStrip";
+export type GlobalScanSearchVariant = "default" | "wmsTopbar" | "wmsCompact" | "panelStrip" | "erpTopbar";
 
 type GlobalScanSearchProps = {
   /** `wmsTopbar` / `wmsCompact`: icon + shortcut inside field (WMS uses compact for density). */
@@ -116,6 +116,56 @@ export default function GlobalScanSearch({ variant = "default", className, input
       handleSubmit(e as unknown as React.FormEvent);
     }
   };
+
+  if (variant === "erpTopbar") {
+    return (
+      <form
+        onSubmit={handleSubmit}
+        className={["flex min-w-0 w-full flex-col items-stretch", className ?? ""].filter(Boolean).join(" ")}
+      >
+        <div className="relative w-full min-w-0">
+          <Search
+            className="pointer-events-none absolute left-3.5 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-[#64748B]"
+            strokeWidth={2}
+            aria-hidden
+          />
+          <input
+            ref={inputRef}
+            id={inputId}
+            type="text"
+            value={value}
+            onChange={(e) => {
+              setValue(e.target.value);
+              setError(null);
+            }}
+            onKeyDown={handleKeyDown}
+            placeholder={PLACEHOLDER}
+            disabled={loading}
+            className="h-11 w-full rounded-xl border border-[#E5E7EB] bg-white py-2 pl-11 pr-[4.5rem] text-sm font-medium text-[#0F172A] placeholder:font-normal placeholder:text-[#94A3B8] transition-[border-color,box-shadow] duration-150 ease-out hover:border-[#CBD5E1] focus:border-[#F97316] focus:outline-none focus:shadow-[0_0_0_3px_rgba(249,115,22,0.12)] disabled:opacity-60"
+            aria-label={PLACEHOLDER}
+          />
+          {!loading ? (
+            <kbd
+              className="pointer-events-none absolute right-2.5 top-1/2 hidden -translate-y-1/2 select-none rounded-md border border-[#E5E7EB] bg-[#F8FAFC] px-1.5 py-0.5 font-sans text-[10px] font-semibold uppercase tracking-wide text-[#64748B] sm:inline-block"
+              aria-hidden
+            >
+              {kbdLabel}
+            </kbd>
+          ) : (
+            <span
+              className="absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 rounded-full border-2 border-slate-200 border-t-orange-500 animate-spin"
+              aria-hidden
+            />
+          )}
+        </div>
+        {error ? (
+          <span className="mt-1 text-left text-[11px] font-medium text-red-600" role="alert">
+            {error}
+          </span>
+        ) : null}
+      </form>
+    );
+  }
 
   if (variant === "wmsTopbar" || variant === "wmsCompact" || variant === "panelStrip") {
     const dense = variant === "wmsCompact" || variant === "panelStrip";

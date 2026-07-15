@@ -1,6 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
-import { ChevronsLeft, ChevronsRight, Menu, X, type LucideIcon } from "lucide-react";
+import { useMemo, type LucideIcon } from "react";
 import { useLocation } from "react-router-dom";
 
 import ErpCompactBrandLink from "../components/layout/ErpCompactBrandLink";
@@ -15,31 +13,21 @@ import {
 import {
   ERP_SIDEBAR_COLLAPSED_WIDTH_CLASS,
   ERP_SIDEBAR_COLLAPSED_WIDTH_PX,
-  ERP_SIDEBAR_COLLAPSE_STORAGE_KEY,
   ERP_SIDEBAR_ICON_CLASS,
   ERP_SIDEBAR_ICON_COLLAPSED_CLASS,
   ERP_SIDEBAR_ITEM_ACTIVE,
   ERP_SIDEBAR_ITEM_BASE,
   ERP_SIDEBAR_ITEM_HOVER,
   ERP_SIDEBAR_ITEM_INACTIVE,
-  ERP_SIDEBAR_MOBILE_WIDTH_CLASS,
-  ERP_SIDEBAR_MOBILE_WIDTH_PX,
   ERP_SIDEBAR_NAV_SCROLL,
   ERP_SIDEBAR_SECTION_LABEL,
   ERP_SIDEBAR_SURFACE,
   ERP_SIDEBAR_WIDTH_CLASS,
   ERP_SIDEBAR_WIDTH_PX,
 } from "./erpSidebarStyles";
+import { useErpSidebarUi } from "./ErpSidebarUiContext";
 import { useNavFlyout } from "./useNavFlyout";
 import NavFlyoutPanel from "./NavFlyoutPanel";
-
-function readCollapsedPreference(): boolean {
-  try {
-    return localStorage.getItem(ERP_SIDEBAR_COLLAPSE_STORAGE_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
 
 function categoryById(id: string): NavCategoryConfig | undefined {
   return NAV_FLYOUT_CATEGORIES.find((c) => c.id === id);
@@ -127,123 +115,13 @@ function SectionBlock({
   );
 }
 
-type ErpSidebarChromeProps = {
-  collapsed: boolean;
-  onToggleCollapsed: () => void;
-  onCloseMobile?: () => void;
-  showCollapseToggle: boolean;
-  pathname: string;
-  onTriggerEnter: (id: string, el: HTMLElement) => void;
-  onTriggerLeave: () => void;
-};
-
-function ErpSidebarChrome({
-  collapsed,
-  onToggleCollapsed,
-  onCloseMobile,
-  showCollapseToggle,
-  pathname,
-  onTriggerEnter,
-  onTriggerLeave,
-}: ErpSidebarChromeProps) {
-  const mainSections = NAV_SIDEBAR_SECTIONS.filter((s) => !s.pinToBottom);
-  const bottomSections = NAV_SIDEBAR_SECTIONS.filter((s) => s.pinToBottom);
-
-  return (
-    <div className={`flex h-full min-h-0 flex-col ${ERP_SIDEBAR_SURFACE}`}>
-      <div
-        className={[
-          "flex h-14 shrink-0 items-center gap-2 border-b border-[#E2E8F0]",
-          collapsed ? "justify-center px-2" : "px-4",
-        ].join(" ")}
-      >
-        {!collapsed ? (
-          <div className="min-w-0 flex-1">
-            <ErpCompactBrandLink />
-          </div>
-        ) : (
-          <ErpCompactBrandLink collapsed />
-        )}
-        {onCloseMobile ? (
-          <button
-            type="button"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 hover:bg-orange-50 hover:text-orange-600"
-            aria-label="Zamknij menu"
-            onClick={onCloseMobile}
-          >
-            <X className="h-5 w-5" aria-hidden />
-          </button>
-        ) : null}
-        {showCollapseToggle && !onCloseMobile ? (
-          <button
-            type="button"
-            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-orange-50 hover:text-orange-600"
-            aria-label={collapsed ? "Rozwiń menu" : "Zwiń menu"}
-            onClick={onToggleCollapsed}
-          >
-            {collapsed ? (
-              <ChevronsRight className="h-5 w-5" aria-hidden />
-            ) : (
-              <ChevronsLeft className="h-5 w-5" aria-hidden />
-            )}
-          </button>
-        ) : null}
-      </div>
-
-      <nav className={`min-h-0 flex-1 ${ERP_SIDEBAR_NAV_SCROLL}`} aria-label="Menu główne">
-        <div className="flex min-h-full flex-col pb-2">
-          <div className="flex flex-col">
-            {mainSections.map((section) => (
-              <SectionBlock
-                key={section.id}
-                section={section}
-                collapsed={collapsed}
-                pathname={pathname}
-                onTriggerEnter={onTriggerEnter}
-                onTriggerLeave={onTriggerLeave}
-              />
-            ))}
-          </div>
-
-          <div className="mt-auto border-t border-[#E2E8F0] pt-6">
-            {bottomSections.map((section) => (
-              <SectionBlock
-                key={section.id}
-                section={section}
-                collapsed={collapsed}
-                pathname={pathname}
-                onTriggerEnter={onTriggerEnter}
-                onTriggerLeave={onTriggerLeave}
-              />
-            ))}
-          </div>
-        </div>
-      </nav>
-
-      <div
-        className={[
-          "shrink-0 border-t border-[#E2E8F0] bg-white pt-4",
-          collapsed ? "flex justify-center px-2 pb-4" : "px-4 pb-4",
-        ].join(" ")}
-      >
-        <UserAccountMenu variant="sidebar" collapsed={collapsed} />
-      </div>
-    </div>
-  );
-}
-
-export type ErpSidebarProps = {
-  /** Current sidebar width in px (for fly-out offset). */
-  onWidthChange?: (widthPx: number) => void;
-};
-
 /**
- * Left ERP navigation — sections, sticky MAGAZYN/WMS, collapse, mobile drawer.
+ * Left ERP navigation — sections, sticky MAGAZYN/WMS, collapse via top-bar hamburger.
+ * Desktop-first; no mobile overlay drawer.
  */
-export default function ErpSidebar({ onWidthChange }: ErpSidebarProps) {
+export default function ErpSidebar() {
   const { pathname } = useLocation();
-  const [collapsed, setCollapsed] = useState(readCollapsedPreference);
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const { collapsed } = useErpSidebarUi();
   const {
     hoveredCategoryId,
     anchorTop,
@@ -255,102 +133,78 @@ export default function ErpSidebar({ onWidthChange }: ErpSidebarProps) {
 
   const desktopWidthPx = collapsed ? ERP_SIDEBAR_COLLAPSED_WIDTH_PX : ERP_SIDEBAR_WIDTH_PX;
 
-  useEffect(() => {
-    onWidthChange?.(desktopWidthPx);
-  }, [desktopWidthPx, onWidthChange]);
-
-  useEffect(() => {
-    setMobileOpen(false);
-  }, [pathname]);
-
-  useEffect(() => {
-    if (!mobileOpen) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, [mobileOpen]);
-
-  const toggleCollapsed = useCallback(() => {
-    setCollapsed((prev) => {
-      const next = !prev;
-      try {
-        localStorage.setItem(ERP_SIDEBAR_COLLAPSE_STORAGE_KEY, next ? "1" : "0");
-      } catch {
-        /* ignore */
-      }
-      return next;
-    });
-  }, []);
+  const mainSections = NAV_SIDEBAR_SECTIONS.filter((s) => !s.pinToBottom);
+  const bottomSections = NAV_SIDEBAR_SECTIONS.filter((s) => s.pinToBottom);
 
   const openCategory = useMemo(
     () => (hoveredCategoryId ? NAV_FLYOUT_CATEGORIES.find((c) => c.id === hoveredCategoryId) ?? null : null),
     [hoveredCategoryId],
   );
 
-  const flyoutLeft = (typeof window !== "undefined" && window.innerWidth < 1024
-    ? ERP_SIDEBAR_MOBILE_WIDTH_PX
-    : desktopWidthPx) + 8;
-
-  const chromeProps: Omit<ErpSidebarChromeProps, "collapsed" | "showCollapseToggle" | "onCloseMobile"> = {
-    onToggleCollapsed: toggleCollapsed,
-    pathname,
-    onTriggerEnter: (id, el) => onTriggerEnter(id, el),
-    onTriggerLeave,
-  };
-
   return (
     <>
-      {/* Desktop / tablet sidebar */}
       <aside
         className={[
-          "relative z-20 hidden h-screen shrink-0 flex-col lg:flex",
+          "relative z-20 flex h-screen shrink-0 flex-col",
           collapsed ? ERP_SIDEBAR_COLLAPSED_WIDTH_CLASS : ERP_SIDEBAR_WIDTH_CLASS,
         ].join(" ")}
       >
-        <ErpSidebarChrome {...chromeProps} collapsed={collapsed} showCollapseToggle />
+        <div className={`flex h-full min-h-0 flex-col ${ERP_SIDEBAR_SURFACE}`}>
+          <div
+            className={[
+              "flex h-14 shrink-0 items-center border-b border-[#E2E8F0]",
+              collapsed ? "justify-center px-2" : "px-4",
+            ].join(" ")}
+          >
+            <ErpCompactBrandLink collapsed={collapsed} />
+          </div>
+
+          <nav className={`min-h-0 flex-1 ${ERP_SIDEBAR_NAV_SCROLL}`} aria-label="Menu główne">
+            <div className="flex min-h-full flex-col pb-2">
+              <div className="flex flex-col">
+                {mainSections.map((section) => (
+                  <SectionBlock
+                    key={section.id}
+                    section={section}
+                    collapsed={collapsed}
+                    pathname={pathname}
+                    onTriggerEnter={(id, el) => onTriggerEnter(id, el)}
+                    onTriggerLeave={onTriggerLeave}
+                  />
+                ))}
+              </div>
+
+              <div className="mt-auto border-t border-[#E2E8F0] pt-6">
+                {bottomSections.map((section) => (
+                  <SectionBlock
+                    key={section.id}
+                    section={section}
+                    collapsed={collapsed}
+                    pathname={pathname}
+                    onTriggerEnter={(id, el) => onTriggerEnter(id, el)}
+                    onTriggerLeave={onTriggerLeave}
+                  />
+                ))}
+              </div>
+            </div>
+          </nav>
+
+          <div
+            className={[
+              "shrink-0 border-t border-[#E2E8F0] bg-white pt-4",
+              collapsed ? "flex justify-center px-2 pb-4" : "px-4 pb-4",
+            ].join(" ")}
+          >
+            <UserAccountMenu variant="sidebar" collapsed={collapsed} />
+          </div>
+        </div>
       </aside>
-
-      {/* Mobile open control (portaled next to main chrome via shell) */}
-      <button
-        type="button"
-        className="fixed left-3 top-3 z-[55] inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#E2E8F0] bg-white text-slate-700 shadow-sm hover:bg-orange-50 hover:text-orange-600 lg:hidden"
-        aria-label="Otwórz menu"
-        onClick={() => setMobileOpen(true)}
-      >
-        <Menu className="h-5 w-5" aria-hidden />
-      </button>
-
-      {mobileOpen && typeof document !== "undefined"
-        ? createPortal(
-            <>
-              <div
-                className="fixed inset-0 z-[69] bg-black/30 lg:hidden"
-                role="presentation"
-                aria-hidden
-                onClick={() => setMobileOpen(false)}
-              />
-              <aside
-                className={`fixed inset-y-0 left-0 z-[70] flex h-screen ${ERP_SIDEBAR_MOBILE_WIDTH_CLASS} flex-col bg-white shadow-2xl lg:hidden`}
-              >
-                <ErpSidebarChrome
-                  {...chromeProps}
-                  collapsed={false}
-                  showCollapseToggle={false}
-                  onCloseMobile={() => setMobileOpen(false)}
-                />
-              </aside>
-            </>,
-            document.body,
-          )
-        : null}
 
       <NavFlyoutPanel
         category={openCategory}
         anchorTop={anchorTop}
         pathname={pathname}
-        sidebarOffsetLeft={mobileOpen ? ERP_SIDEBAR_MOBILE_WIDTH_PX + 8 : flyoutLeft}
+        sidebarOffsetLeft={desktopWidthPx + 8}
         onMouseEnter={onPanelEnter}
         onMouseLeave={onPanelLeave}
       />

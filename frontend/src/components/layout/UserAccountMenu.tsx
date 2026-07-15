@@ -21,10 +21,10 @@ type UserAccountMenuProps = {
   /** WMS minimal profile — slate avatar, no gradient. */
   profileVariant?: "default" | "minimal";
   /**
-   * `sidebar` — ERP left nav footer (avatar + name + role, no gray tile).
-   * When set, `compact` / header layout are ignored.
+   * `sidebar` — ERP left nav footer (avatar + name + role).
+   * `topbar` — header avatar (44px, indigo tint) + chevron only.
    */
-  variant?: "default" | "sidebar";
+  variant?: "default" | "sidebar" | "topbar";
   /** Icon-only footer when the ERP sidebar is collapsed. */
   collapsed?: boolean;
 };
@@ -161,6 +161,29 @@ export default function UserAccountMenu({
     </div>
   );
 
+  if (variant === "topbar") {
+    return (
+      <div className="relative shrink-0" ref={rootRef}>
+        <button
+          ref={triggerRef}
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          className="group flex items-center gap-1.5 rounded-xl p-0.5 pr-1.5 transition-colors duration-150 ease-out hover:bg-[#F8FAFC] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500"
+          aria-expanded={open}
+          aria-haspopup="menu"
+          aria-label={display}
+          title={display}
+        >
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#EEF2FF] text-sm font-bold text-[#4338CA]">
+            {initials(user)}
+          </span>
+          <ChevronDown className="h-4 w-4 shrink-0 text-[#64748B]" aria-hidden />
+        </button>
+        {open && typeof document !== "undefined" ? createPortal(menuBody, document.body) : null}
+      </div>
+    );
+  }
+
   if (variant === "sidebar") {
     return (
       <div className="relative w-full" ref={rootRef}>
@@ -170,14 +193,14 @@ export default function UserAccountMenu({
           onClick={() => setOpen((o) => !o)}
           title={collapsed ? `${display} (${user.role})` : undefined}
           className={[
-            "group flex w-full items-center rounded-xl text-left transition-colors hover:bg-orange-50",
+            "group flex w-full items-center rounded-xl text-left transition-colors duration-150 ease-out hover:bg-[#F8FAFC]",
             collapsed ? "justify-center p-2" : "gap-3 px-2 py-1.5",
           ].join(" ")}
           aria-expanded={open}
           aria-haspopup="menu"
           aria-label={display}
         >
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-violet-600 text-sm font-bold text-white">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#EEF2FF] text-sm font-bold text-[#4338CA]">
             {initials(user)}
           </span>
           {!collapsed ? (

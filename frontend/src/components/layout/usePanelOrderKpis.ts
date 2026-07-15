@@ -77,7 +77,8 @@ export function usePanelOrderKpis(opts?: UsePanelOrderKpisOpts) {
   const opoznione = ordersDelayed;
   const pilne = packingBraki;
   const countsDisabled = loading;
-  const alertCount = 0;
+  /** Sum of packing braki + delayed orders — badge on top-bar notification bell. */
+  const alertCount = Math.max(0, (Number(pilne) || 0) + (Number(opoznione) || 0));
 
   return {
     user,
