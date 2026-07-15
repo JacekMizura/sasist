@@ -5,14 +5,13 @@ import type { NavCategoryConfig, NavFlyoutLinkConfig } from "./mainNavConfig";
 import { isNavPathActive } from "./navActive";
 import { isSuperRole } from "../auth/isSuperRole";
 import { useAuth } from "../context/AuthContext";
+import { ERP_FLYOUT_WIDTH_PX, ERP_SIDEBAR_WIDTH_PX } from "./erpSidebarStyles";
 
-import { ERP_SIDEBAR_WIDTH_PX } from "./erpSidebarStyles";
-
-const FLYOUT_ICON = 17;
+const FLYOUT_ICON = 20;
 const VIEWPORT_MARGIN = 8;
 
 const plusBtnClass =
-  "relative z-[210] flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 shadow-sm transition-colors hover:border-blue-300 hover:bg-blue-50 hover:text-blue-800";
+  "relative z-[210] flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors duration-150 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700";
 
 function FlyoutRow({
   item,
@@ -35,13 +34,13 @@ function FlyoutRow({
   const plusTarget = item.plusLinkTo?.trim();
   const rowActive =
     active || (plusTarget != null && plusTarget !== "" && isNavPathActive(pathname, plusTarget));
-  const linkPartClass = `flex h-9 min-h-9 min-w-0 flex-1 items-center gap-2 rounded-md px-2.5 py-1.5 text-[13px] font-medium transition-colors [&_svg]:shrink-0 ${
-    rowActive ? "bg-blue-100 text-blue-900" : "text-slate-700 hover:bg-blue-50"
+  const linkPartClass = `flex min-h-10 min-w-0 flex-1 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors duration-150 [&_svg]:shrink-0 ${
+    rowActive ? "bg-blue-50 text-blue-700" : "text-slate-700 hover:bg-slate-50 hover:text-slate-900"
   }`;
 
   const iconWrap = (
-    <span className="text-slate-500 [&_svg]:h-[17px] [&_svg]:w-[17px]">
-      <Icon size={FLYOUT_ICON} />
+    <span className={rowActive ? "text-blue-600" : "text-slate-500"}>
+      <Icon size={FLYOUT_ICON} strokeWidth={1.75} />
     </span>
   );
 
@@ -57,26 +56,15 @@ function FlyoutRow({
   if (plusTarget) {
     return (
       <div
-        className={`flex h-9 min-h-9 items-center gap-1 rounded-md py-0.5 pr-1 pl-0.5 transition-colors ${
-          rowActive ? "bg-blue-100/80" : "hover:bg-blue-50"
+        className={`flex min-h-10 items-center gap-1 rounded-xl py-0.5 pr-1 pl-0.5 transition-colors duration-150 ${
+          rowActive ? "bg-blue-50/80" : "hover:bg-slate-50"
         }`}
       >
         <Link to={item.path} className={linkPartClass}>
           {iconWrap}
           <span className="min-w-0 truncate">{item.label}</span>
         </Link>
-        <Link
-          to={plusTarget}
-          title={item.plusLinkTitle ?? "Dodaj"}
-          className={plusBtnClass}
-          onClick={(e) => {
-            e.stopPropagation();
-            if (import.meta.env.DEV) {
-              // eslint-disable-next-line no-console
-              console.log("[Nav] ADD USER — sidebar + →", plusTarget);
-            }
-          }}
-        >
+        <Link to={plusTarget} title={item.plusLinkTitle ?? "Dodaj"} className={plusBtnClass}>
           <Plus size={16} strokeWidth={2.5} aria-hidden />
         </Link>
       </div>
@@ -86,7 +74,7 @@ function FlyoutRow({
   return (
     <Link to={item.path} className={linkPartClass}>
       {iconWrap}
-      {item.label}
+      <span className="min-w-0 truncate">{item.label}</span>
     </Link>
   );
 }
@@ -95,28 +83,35 @@ type NavFlyoutPanelProps = {
   category: NavCategoryConfig | null;
   anchorTop: number;
   pathname: string;
-  /** Left edge offset in px (expanded / collapsed / mobile drawer). */
+  /** Left edge offset in px (expanded / collapsed sidebar). */
   sidebarOffsetLeft?: number;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
 };
 
+/**
+ * Side fly-out for sidebar categories (Magazyn, etc.) —
+ * anchored next to the rail, not an accordion.
+ */
 export default function NavFlyoutPanel({
   category,
   anchorTop,
   pathname,
-  sidebarOffsetLeft = ERP_SIDEBAR_WIDTH_PX + 8,
+  sidebarOffsetLeft = ERP_SIDEBAR_WIDTH_PX,
   onMouseEnter,
   onMouseLeave,
 }: NavFlyoutPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const [top, setTop] = useState(anchorTop);
+  const [visible, setVisible] = useState(false);
 
   useLayoutEffect(() => {
     if (!category) {
+      setVisible(false);
       setTop(anchorTop);
       return;
     }
+    setVisible(true);
     const measure = () => {
       if (!panelRef.current) {
         setTop(anchorTop);
@@ -145,22 +140,31 @@ export default function NavFlyoutPanel({
   return (
     <div
       ref={panelRef}
+      data-erp-nav-flyout
       role="navigation"
       aria-label={category.label}
-      className="fixed z-[200] flex min-h-0 min-w-[220px] max-w-[300px] max-h-[calc(100vh-16px)] flex-col overflow-hidden rounded-xl bg-white shadow-lg ring-1 ring-slate-200/80"
+      className={[
+        "fixed z-[200] flex max-h-[calc(100vh-16px)] flex-col overflow-hidden border border-slate-200 bg-white shadow-2xl transition-all duration-200 ease-out",
+        "rounded-r-3xl rounded-l-none",
+        visible ? "translate-x-0 opacity-100" : "pointer-events-none -translate-x-1 opacity-0",
+      ].join(" ")}
       style={{
         left: sidebarOffsetLeft,
         top,
+        width: ERP_FLYOUT_WIDTH_PX,
       }}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
     >
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-3 [-webkit-overflow-scrolling:touch] [scrollbar-width:thin] [scrollbar-gutter:stable] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300/90">
+      <div className="border-b border-slate-100 px-4 py-3">
+        <p className="text-xs font-bold uppercase tracking-wider text-slate-400">{category.label}</p>
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-3 [-webkit-overflow-scrolling:touch] [scrollbar-width:thin]">
         {category.flyoutSections.map((section, si) => (
           <div key={si}>
-            {si > 0 ? <div className="my-1.5 border-t border-slate-200" role="separator" /> : null}
+            {si > 0 ? <div className="my-2 border-t border-slate-100" role="separator" /> : null}
             {section.title ? (
-              <div className="mb-1 px-1 pt-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-400">
+              <div className="mb-1.5 px-2 pt-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">
                 {section.title}
               </div>
             ) : null}

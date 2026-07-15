@@ -1,7 +1,8 @@
-import { useMemo, type LucideIcon } from "react";
+import { useEffect, useMemo, type LucideIcon } from "react";
+import { ChevronRight, Menu } from "lucide-react";
 import { useLocation } from "react-router-dom";
 
-import ErpCompactBrandLink from "../components/layout/ErpCompactBrandLink";
+import HeaderLogo from "../components/layout/topbar/HeaderLogo";
 import UserAccountMenu from "../components/layout/UserAccountMenu";
 import {
   NAV_FLYOUT_CATEGORIES,
@@ -11,6 +12,7 @@ import {
   type NavSidebarSectionConfig,
 } from "./mainNavConfig";
 import {
+  ERP_SIDEBAR_ACTIVE_BAR,
   ERP_SIDEBAR_COLLAPSED_WIDTH_CLASS,
   ERP_SIDEBAR_COLLAPSED_WIDTH_PX,
   ERP_SIDEBAR_ICON_CLASS,
@@ -18,7 +20,6 @@ import {
   ERP_SIDEBAR_ITEM_ACTIVE,
   ERP_SIDEBAR_ITEM_BASE,
   ERP_SIDEBAR_ITEM_HOVER,
-  ERP_SIDEBAR_ITEM_INACTIVE,
   ERP_SIDEBAR_NAV_SCROLL,
   ERP_SIDEBAR_SECTION_LABEL,
   ERP_SIDEBAR_SURFACE,
@@ -38,8 +39,11 @@ type SidebarNavButtonProps = {
   collapsed: boolean;
   icon: LucideIcon;
   label: string;
+  showChevron?: boolean;
+  flyoutOpen?: boolean;
   onMouseEnter: (e: React.MouseEvent<HTMLButtonElement>) => void;
   onMouseLeave: () => void;
+  onClick: (e: React.MouseEvent<HTMLButtonElement>) => void;
 };
 
 function SidebarNavButton({
@@ -47,8 +51,11 @@ function SidebarNavButton({
   collapsed,
   icon: Icon,
   label,
+  showChevron,
+  flyoutOpen,
   onMouseEnter,
   onMouseLeave,
+  onClick,
 }: SidebarNavButtonProps) {
   return (
     <button
@@ -56,22 +63,39 @@ function SidebarNavButton({
       title={collapsed ? label : undefined}
       aria-label={label}
       aria-current={active ? "page" : undefined}
+      aria-expanded={showChevron ? flyoutOpen : undefined}
+      data-erp-nav-trigger
       className={[
         ERP_SIDEBAR_ITEM_BASE,
-        active ? ERP_SIDEBAR_ITEM_ACTIVE : `${ERP_SIDEBAR_ITEM_INACTIVE} ${ERP_SIDEBAR_ITEM_HOVER}`,
+        active || flyoutOpen ? ERP_SIDEBAR_ITEM_ACTIVE : ERP_SIDEBAR_ITEM_HOVER,
         collapsed ? "justify-center px-0" : "",
       ]
         .filter(Boolean)
         .join(" ")}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
+      onClick={onClick}
     >
+      {active || flyoutOpen ? <span className={ERP_SIDEBAR_ACTIVE_BAR} aria-hidden /> : null}
       <Icon
-        className={collapsed ? ERP_SIDEBAR_ICON_COLLAPSED_CLASS : ERP_SIDEBAR_ICON_CLASS}
-        strokeWidth={active ? 2.25 : 1.75}
+        className={[
+          collapsed ? ERP_SIDEBAR_ICON_COLLAPSED_CLASS : ERP_SIDEBAR_ICON_CLASS,
+          active || flyoutOpen ? "text-blue-600" : "text-slate-600 group-hover:text-slate-900",
+        ].join(" ")}
+        strokeWidth={active || flyoutOpen ? 2.25 : 1.75}
         aria-hidden
       />
-      {!collapsed ? <span className="min-w-0 flex-1 truncate text-[15px] leading-tight">{label}</span> : null}
+      {!collapsed ? (
+        <>
+          <span className="min-w-0 flex-1 truncate leading-tight">{label}</span>
+          {showChevron ? (
+            <ChevronRight
+              className={`h-4 w-4 shrink-0 transition-transform duration-200 ${flyoutOpen ? "translate-x-0.5 text-blue-600" : "text-slate-400"}`}
+              aria-hidden
+            />
+          ) : null}
+        </>
+      ) : null}
     </button>
   );
 }
@@ -80,14 +104,18 @@ function SectionBlock({
   section,
   collapsed,
   pathname,
+  openCategoryId,
   onTriggerEnter,
   onTriggerLeave,
+  onTriggerClick,
 }: {
   section: NavSidebarSectionConfig;
   collapsed: boolean;
   pathname: string;
+  openCategoryId: string | null;
   onTriggerEnter: (id: string, el: HTMLElement) => void;
   onTriggerLeave: () => void;
+  onTriggerClick: (id: string, el: HTMLElement) => void;
 }) {
   const items = section.categoryIds
     .map((id) => categoryById(id))
@@ -98,38 +126,52 @@ function SectionBlock({
   return (
     <div>
       {!collapsed ? <p className={ERP_SIDEBAR_SECTION_LABEL}>{section.label}</p> : null}
-      <div className="flex flex-col gap-1 px-2">
-        {items.map((cat) => (
-          <SidebarNavButton
-            key={cat.id}
-            active={isCategoryActive(cat, pathname)}
-            collapsed={collapsed}
-            icon={cat.Icon}
-            label={cat.label}
-            onMouseEnter={(e) => onTriggerEnter(cat.id, e.currentTarget)}
-            onMouseLeave={onTriggerLeave}
-          />
-        ))}
+      <div className="flex flex-col gap-1.5 px-2">
+        {items.map((cat) => {
+          const flyoutOpen = openCategoryId === cat.id;
+          const active = isCategoryActive(cat, pathname);
+          const hasFlyout = cat.flyoutSections.some((s) => s.items.length > 0);
+          const isWarehouse = cat.id === "warehouse";
+          return (
+            <SidebarNavButton
+              key={cat.id}
+              active={active}
+              collapsed={collapsed}
+              icon={cat.Icon}
+              label={cat.label}
+              showChevron={isWarehouse && hasFlyout && !collapsed}
+              flyoutOpen={flyoutOpen}
+              onMouseEnter={(e) => onTriggerEnter(cat.id, e.currentTarget)}
+              onMouseLeave={onTriggerLeave}
+              onClick={(e) => onTriggerClick(cat.id, e.currentTarget)}
+            />
+          );
+        })}
       </div>
     </div>
   );
 }
 
 /**
- * Left ERP navigation — sections, sticky MAGAZYN/WMS, collapse via top-bar hamburger.
- * Desktop-first; no mobile overlay drawer.
+ * Left ERP navigation — 260px white rail, blue active, Magazyn side-flyout.
  */
 export default function ErpSidebar() {
   const { pathname } = useLocation();
-  const { collapsed } = useErpSidebarUi();
+  const { collapsed, toggleCollapsed } = useErpSidebarUi();
   const {
     hoveredCategoryId,
     anchorTop,
     onTriggerEnter,
     onTriggerLeave,
+    onTriggerClick,
     onPanelEnter,
     onPanelLeave,
+    closeFlyout,
   } = useNavFlyout();
+
+  useEffect(() => {
+    closeFlyout();
+  }, [pathname, closeFlyout]);
 
   const desktopWidthPx = collapsed ? ERP_SIDEBAR_COLLAPSED_WIDTH_PX : ERP_SIDEBAR_WIDTH_PX;
 
@@ -145,18 +187,31 @@ export default function ErpSidebar() {
     <>
       <aside
         className={[
-          "relative z-20 flex h-screen shrink-0 flex-col",
+          "relative z-30 flex h-screen shrink-0 flex-col",
           collapsed ? ERP_SIDEBAR_COLLAPSED_WIDTH_CLASS : ERP_SIDEBAR_WIDTH_CLASS,
         ].join(" ")}
       >
         <div className={`flex h-full min-h-0 flex-col ${ERP_SIDEBAR_SURFACE}`}>
           <div
             className={[
-              "flex h-14 shrink-0 items-center border-b border-[#E2E8F0]",
-              collapsed ? "justify-center px-2" : "px-4",
+              "flex h-[70px] shrink-0 items-center gap-1 border-b border-slate-200",
+              collapsed ? "justify-center px-2" : "px-3",
             ].join(" ")}
           >
-            <ErpCompactBrandLink collapsed={collapsed} />
+            <button
+              type="button"
+              onClick={toggleCollapsed}
+              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-slate-600 transition-colors duration-150 ease-out hover:bg-[#EFF6FF] hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563EB]"
+              aria-label={collapsed ? "Rozwiń menu boczne" : "Zwiń menu boczne"}
+              title={collapsed ? "Rozwiń menu" : "Zwiń menu"}
+            >
+              <Menu className="h-5 w-5" strokeWidth={2} aria-hidden />
+            </button>
+            {!collapsed ? (
+              <div className="min-w-0 flex-1">
+                <HeaderLogo compact />
+              </div>
+            ) : null}
           </div>
 
           <nav className={`min-h-0 flex-1 ${ERP_SIDEBAR_NAV_SCROLL}`} aria-label="Menu główne">
@@ -168,21 +223,25 @@ export default function ErpSidebar() {
                     section={section}
                     collapsed={collapsed}
                     pathname={pathname}
+                    openCategoryId={hoveredCategoryId}
                     onTriggerEnter={(id, el) => onTriggerEnter(id, el)}
                     onTriggerLeave={onTriggerLeave}
+                    onTriggerClick={(id, el) => onTriggerClick(id, el)}
                   />
                 ))}
               </div>
 
-              <div className="mt-auto border-t border-[#E2E8F0] pt-6">
+              <div className="mt-auto border-t border-slate-200 pt-5">
                 {bottomSections.map((section) => (
                   <SectionBlock
                     key={section.id}
                     section={section}
                     collapsed={collapsed}
                     pathname={pathname}
+                    openCategoryId={hoveredCategoryId}
                     onTriggerEnter={(id, el) => onTriggerEnter(id, el)}
                     onTriggerLeave={onTriggerLeave}
+                    onTriggerClick={(id, el) => onTriggerClick(id, el)}
                   />
                 ))}
               </div>
@@ -191,8 +250,8 @@ export default function ErpSidebar() {
 
           <div
             className={[
-              "shrink-0 border-t border-[#E2E8F0] bg-white pt-4",
-              collapsed ? "flex justify-center px-2 pb-4" : "px-4 pb-4",
+              "shrink-0 border-t border-slate-200 bg-white pt-3",
+              collapsed ? "flex justify-center px-2 pb-4" : "px-3 pb-4",
             ].join(" ")}
           >
             <UserAccountMenu variant="sidebar" collapsed={collapsed} />
@@ -204,7 +263,7 @@ export default function ErpSidebar() {
         category={openCategory}
         anchorTop={anchorTop}
         pathname={pathname}
-        sidebarOffsetLeft={desktopWidthPx + 8}
+        sidebarOffsetLeft={desktopWidthPx}
         onMouseEnter={onPanelEnter}
         onMouseLeave={onPanelLeave}
       />

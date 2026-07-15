@@ -9,7 +9,7 @@ export const appLayoutTokens = {
   appPanelBackground: "bg-white",
   appBorder: "border-slate-200",
   appPagePadding: erpDensityClasses.dashboardPagePadding,
-  appSidebarWidth: "w-[268px]",
+  appSidebarWidth: "w-[260px]",
   appRightPanelWidth: "w-[400px]",
   appRightPanelMaxWidth: "max-w-[420px]",
 } as const;

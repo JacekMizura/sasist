@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-07-15 — ERP shell polish (blue active + Magazyn flyout)
+
+- Sidebar 260px: hamburger + logo in rail; active `bg-blue-50` + `w-1 bg-blue-600`; larger icons/gaps.
+- Top bar: search + bell + warehouse (≥220px) + avatar only (no logo).
+- Magazyn: side flyout 300px `rounded-r-3xl shadow-2xl` (click/hover, not accordion).
+
 ## 2026-07-15 — ERP AppTopBar rebuild
 
 - New `components/layout/topbar/*`: HeaderLogo, GlobalSearch, NotificationBell, WarehouseSwitcher, UserMenu, AppTopBar.

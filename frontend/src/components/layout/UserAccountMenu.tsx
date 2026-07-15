@@ -193,7 +193,7 @@ export default function UserAccountMenu({
           onClick={() => setOpen((o) => !o)}
           title={collapsed ? `${display} (${user.role})` : undefined}
           className={[
-            "group flex w-full items-center rounded-xl text-left transition-colors duration-150 ease-out hover:bg-[#F8FAFC]",
+            "group flex w-full items-center rounded-xl text-left transition-colors duration-150 ease-out hover:bg-[#EFF6FF]",
             collapsed ? "justify-center p-2" : "gap-3 px-2 py-1.5",
           ].join(" ")}
           aria-expanded={open}
@@ -204,15 +204,12 @@ export default function UserAccountMenu({
             {initials(user)}
           </span>
           {!collapsed ? (
-            <>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-semibold text-slate-900">{display}</span>
-                <span className="mt-0.5 block truncate text-[11px] font-medium uppercase tracking-wide text-slate-500">
-                  {user.role}
-                </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-semibold text-slate-900">{display}</span>
+              <span className="mt-0.5 block truncate text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                {user.role}
               </span>
-              <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" aria-hidden />
-            </>
+            </span>
           ) : null}
         </button>
         {open && typeof document !== "undefined" ? createPortal(menuBody, document.body) : null}

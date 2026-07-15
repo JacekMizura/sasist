@@ -33,7 +33,7 @@ export default function WarehouseSwitcher({ className = "" }: Props) {
             .catch((err) => setError(extractApiErrorMessage(err)))
             .finally(() => setBusy(false));
         }}
-        className="h-[42px] min-w-[10.5rem] max-w-[16rem] appearance-none rounded-xl border border-[#E5E7EB] bg-white py-0 pl-10 pr-9 text-sm font-medium text-[#0F172A] transition-colors duration-150 ease-out hover:border-[#CBD5E1] hover:bg-[#F8FAFC] focus:border-[#F97316] focus:outline-none focus:shadow-[0_0_0_3px_rgba(249,115,22,0.12)] disabled:opacity-60"
+        className="h-[42px] min-w-[220px] max-w-[280px] truncate appearance-none rounded-xl border border-[#E2E8F0] bg-white py-0 pl-10 pr-9 text-sm font-medium text-[#334155] transition-colors duration-150 ease-out hover:border-[#CBD5E1] hover:bg-[#EFF6FF] focus:border-[#2563EB] focus:outline-none focus:shadow-[0_0_0_3px_rgba(37,99,235,0.12)] disabled:opacity-60"
       >
         {warehouses.map((w) => (
           <option key={w.id} value={w.id}>
