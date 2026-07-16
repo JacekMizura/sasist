@@ -55,6 +55,9 @@ export type CartCardProps = {
   wms_picking_order_count?: number;
   wms_picking_product_count?: number;
   wms_picking_quantity?: number;
+  /** Controlled expand — only one cart open in the list. */
+  expanded?: boolean;
+  onToggleExpand?: () => void;
   onSimulateSuccess?: () => void;
   onClearSuccess?: () => void;
   onEdit: (id: number) => void;
@@ -62,7 +65,7 @@ export type CartCardProps = {
   onPrintLabel?: (cart: { id: number; name: string }) => void;
 };
 
-/** Compact fleet resource row (~68px) — wózki BULK i MULTI. */
+/** Compact fleet resource row (~68px) — wózki BULK i MULTI; content expands under the row. */
 export default function CartCard(props: CartCardProps) {
   const {
     id,
@@ -90,6 +93,8 @@ export default function CartCard(props: CartCardProps) {
     wms_picking_order_count = 0,
     wms_picking_product_count = 0,
     wms_picking_quantity = 0,
+    expanded = false,
+    onToggleExpand,
     onSimulateSuccess,
     onClearSuccess,
     onEdit,
@@ -100,7 +105,6 @@ export default function CartCard(props: CartCardProps) {
   const isSectional = total_baskets != null && total_baskets > 0;
   const t = useTranslation();
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [detailOpen, setDetailOpen] = useState(false);
   const [simulating, setSimulating] = useState(false);
   const [simulationResult, setSimulationResult] = useState<SimulationResult | null>(null);
   const [clearingCart, setClearingCart] = useState(false);
@@ -117,7 +121,15 @@ export default function CartCard(props: CartCardProps) {
       total_products: total_products_prop,
       baskets_used: baskets_used_prop,
     }),
-    [assigned_orders, used_volume, total_volume_dm3, total_weight_kg, total_orders_prop, total_products_prop, baskets_used_prop],
+    [
+      assigned_orders,
+      used_volume,
+      total_volume_dm3,
+      total_weight_kg,
+      total_orders_prop,
+      total_products_prop,
+      baskets_used_prop,
+    ],
   );
   const cardStats = useMemo(() => calculateCartStats(listCart), [listCart]);
   const usedVol = cardStats.used_volume_dm3;
@@ -157,7 +169,7 @@ export default function CartCard(props: CartCardProps) {
   const sectionsLabel = isSectional ? `${total_baskets} sekc.` : "1 sekc.";
   const occupiedLabel = isSectional ? `${occupiedSections} zajęte` : `${cardStats.total_orders} zam.`;
 
-  const openDetail = () => setDetailOpen(true);
+  const toggleExpand = () => onToggleExpand?.();
 
   const handleSimulate = async () => {
     if (!canSimulate) return;
@@ -189,15 +201,29 @@ export default function CartCard(props: CartCardProps) {
   };
 
   return (
-    <>
+    <div className={`w-full max-w-none ${expanded ? "bg-slate-50/40" : ""}`}>
       <div
-        className={`${fleetResourceRowClass} ${simulating ? "pointer-events-none opacity-70" : ""}`}
-        onDoubleClick={openDetail}
+        className={`${fleetResourceRowClass} cursor-pointer ${simulating ? "pointer-events-none opacity-70" : ""} ${
+          expanded ? "bg-slate-50" : ""
+        }`}
+        onClick={toggleExpand}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            toggleExpand();
+          }
+        }}
+        role="button"
+        tabIndex={0}
+        aria-expanded={expanded}
       >
         <button
           type="button"
           className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md border border-slate-200 bg-white text-slate-300 hover:border-slate-400"
-          onClick={() => setPreviewOpen(true)}
+          onClick={(e) => {
+            e.stopPropagation();
+            setPreviewOpen(true);
+          }}
           aria-label="Podgląd zdjęcia"
         >
           {hasImage && imageSrc ? (
@@ -235,50 +261,63 @@ export default function CartCard(props: CartCardProps) {
           ) : null}
         </div>
 
-        <FleetResourceProgressBar percent={displayPercent} isSimulated={isSimulated} />
+        <div
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+          className="flex shrink-0 items-center gap-1"
+        >
+          <FleetResourceProgressBar percent={displayPercent} isSimulated={isSimulated} />
 
-        <FleetResourceActionBar aria-label="Akcje wózka">
-          <FleetResourceActionButton onClick={() => onEdit(id)} title={t.edit} aria-label={t.edit}>
-            <Pencil strokeWidth={2} aria-hidden />
-          </FleetResourceActionButton>
-          {onPrintLabel ? (
-            <FleetResourceActionButton
-              onClick={() => onPrintLabel({ id, name })}
-              title="Drukuj etykietę"
-              aria-label="Drukuj etykietę"
-            >
-              <Printer strokeWidth={2} aria-hidden />
+          <FleetResourceActionBar aria-label="Akcje wózka">
+            <FleetResourceActionButton onClick={() => onEdit(id)} title={t.edit} aria-label={t.edit}>
+              <Pencil strokeWidth={2} aria-hidden />
             </FleetResourceActionButton>
-          ) : null}
-          {canClearCart ? (
-            <FleetResourceActionButton
-              variant="warn"
-              disabled={clearingCart}
-              onClick={() => setConfirmWholeCartClearOpen(true)}
-              title={t.clear_cart}
-              aria-label={t.clear_cart}
-            >
-              <Eraser strokeWidth={2} aria-hidden />
+            {onPrintLabel ? (
+              <FleetResourceActionButton
+                onClick={() => onPrintLabel({ id, name })}
+                title="Drukuj etykietę"
+                aria-label="Drukuj etykietę"
+              >
+                <Printer strokeWidth={2} aria-hidden />
+              </FleetResourceActionButton>
+            ) : null}
+            {canClearCart ? (
+              <FleetResourceActionButton
+                variant="warn"
+                disabled={clearingCart}
+                onClick={() => setConfirmWholeCartClearOpen(true)}
+                title={t.clear_cart}
+                aria-label={t.clear_cart}
+              >
+                <Eraser strokeWidth={2} aria-hidden />
+              </FleetResourceActionButton>
+            ) : null}
+            <FleetResourceActionButton variant="danger" onClick={() => onDelete(id)} title={t.delete} aria-label={t.delete}>
+              <Trash2 strokeWidth={2} aria-hidden />
             </FleetResourceActionButton>
-          ) : null}
-          <FleetResourceActionButton variant="danger" onClick={() => onDelete(id)} title={t.delete} aria-label={t.delete}>
-            <Trash2 strokeWidth={2} aria-hidden />
-          </FleetResourceActionButton>
-          {canSimulate ? (
-            <FleetResourceActionButton
-              disabled={simulating}
-              onClick={() => void handleSimulate()}
-              title={t.simulation_assign_button}
-              aria-label={t.simulation_assign_button}
-            >
-              <Wand2 strokeWidth={2} aria-hidden />
-            </FleetResourceActionButton>
-          ) : null}
-        </FleetResourceActionBar>
+            {canSimulate ? (
+              <FleetResourceActionButton
+                disabled={simulating}
+                onClick={() => void handleSimulate()}
+                title={t.simulation_assign_button}
+                aria-label={t.simulation_assign_button}
+              >
+                <Wand2 strokeWidth={2} aria-hidden />
+              </FleetResourceActionButton>
+            ) : null}
+          </FleetResourceActionBar>
 
-        <button type="button" className={fleetResourceShowContentBtnClass} onClick={openDetail}>
-          {t.cart_show_content}
-        </button>
+          <button
+            type="button"
+            className={fleetResourceShowContentBtnClass}
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleExpand();
+            }}
+          >
+            {expanded ? t.cart_hide_content : t.cart_show_content}
+          </button>
+        </div>
 
         {simulating ? (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/80">
@@ -288,11 +327,13 @@ export default function CartCard(props: CartCardProps) {
       </div>
 
       <CartFleetDetailPanel
-        open={detailOpen}
+        open={expanded}
         cartId={id}
         cartName={name}
         isSectional={isSectional}
-        onClose={() => setDetailOpen(false)}
+        onClose={() => {
+          if (expanded) onToggleExpand?.();
+        }}
         onClearSuccess={onClearSuccess}
       />
 
@@ -310,12 +351,19 @@ export default function CartCard(props: CartCardProps) {
       />
 
       {confirmWholeCartClearOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setConfirmWholeCartClearOpen(false)}>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setConfirmWholeCartClearOpen(false)}
+        >
           <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
             <h4 className="mb-2 font-bold text-slate-900">{t.clear_cart_confirm_title}</h4>
             <p className="mb-4 text-sm text-slate-600">{t.clear_cart_confirm_body}</p>
             <div className="flex justify-end gap-2">
-              <button type="button" onClick={() => setConfirmWholeCartClearOpen(false)} className="rounded-lg border border-slate-300 px-3 py-1.5 text-slate-700 hover:bg-slate-100">
+              <button
+                type="button"
+                onClick={() => setConfirmWholeCartClearOpen(false)}
+                className="rounded-lg border border-slate-300 px-3 py-1.5 text-slate-700 hover:bg-slate-100"
+              >
                 {t.cancel}
               </button>
               <button
@@ -330,6 +378,6 @@ export default function CartCard(props: CartCardProps) {
           </div>
         </div>
       ) : null}
-    </>
+    </div>
   );
 }

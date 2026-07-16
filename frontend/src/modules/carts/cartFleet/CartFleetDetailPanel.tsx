@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { Eraser } from "lucide-react";
+import { ChevronDown, Eraser } from "lucide-react";
 
 import api from "../../../api/axios";
 import { useTranslation } from "../../../locales";
-import { FleetResourceDetailDrawer } from "../../fleetResource/FleetResourceDetailDrawer";
 import { calculateCartStats } from "../../../pages/CartsComponents/cartStats";
 import OrderProductPreviewModal from "../../../pages/CartsComponents/ui/OrderProductPreviewModal";
 import { ClearIcon } from "../../../pages/CartsComponents/ui/Icons";
@@ -19,6 +18,10 @@ type CartFleetDetailPanelProps = {
   onClearSuccess?: () => void;
 };
 
+/**
+ * Inline expand under cart row — full width (no right Drawer).
+ * Stats + section grid + order/product links.
+ */
 export function CartFleetDetailPanel({
   open,
   cartId,
@@ -126,7 +129,7 @@ export function CartFleetDetailPanel({
         : "bg-blue-50 border-blue-300";
 
     return (
-      <div key={b.id} className={`relative flex min-h-[4rem] flex-col gap-1 rounded-lg border p-2 ${basketTone}`}>
+      <div key={b.id} className={`relative flex min-h-[4.5rem] flex-col gap-1 rounded-lg border p-2.5 ${basketTone}`}>
         {hasOrders ? (
           <button
             type="button"
@@ -180,131 +183,154 @@ export function CartFleetDetailPanel({
 
   return (
     <>
-      <FleetResourceDetailDrawer
-        open={open && cartId != null}
-        title={cartName}
-        subtitle={isSectional ? "Wózek sekcyjny — zawartość" : "Wózek — zawartość"}
-        onClose={onClose}
-        wide={isSectional}
+      <div
+        className="grid w-full max-w-none transition-[grid-template-rows] duration-200 ease-out"
+        style={{ gridTemplateRows: open ? "1fr" : "0fr" }}
+        aria-hidden={!open}
       >
-        {loading ? (
-          <div className="flex h-40 items-center justify-center text-sm text-slate-400">Ładowanie…</div>
-        ) : (
-          <div className="space-y-5 p-5">
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-              <div className="flex flex-wrap gap-x-5 gap-y-1">
-                <span>
-                  Zamówienia: <strong>{stats.total_orders}</strong>
-                </span>
-                <span>
-                  Produkty: <strong>{stats.total_products}</strong>
-                </span>
-                {isSectional ? (
-                  <span>
-                    Zajęte sekcje: <strong>{stats.baskets_used}</strong> / {baskets.length}
-                  </span>
-                ) : null}
-                <span>
-                  Objętość: <strong>{stats.used_volume_dm3.toFixed(1)}</strong> dm³
-                </span>
-                {stats.used_weight > 0 ? (
-                  <span>
-                    Waga: <strong>{stats.used_weight.toFixed(2)}</strong> kg
-                  </span>
-                ) : null}
-              </div>
-              {(stats.total_orders > 0 || stats.used_volume_dm3 > 0) && (
-                <button
-                  type="button"
-                  onClick={() => setConfirmWholeCartClearOpen(true)}
-                  disabled={clearingCart}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100 disabled:opacity-50"
-                >
-                  <Eraser className="h-3.5 w-3.5" aria-hidden />
-                  {t.clear_cart}
-                </button>
-              )}
+        <div className="min-h-0 overflow-hidden">
+          <div className="w-full max-w-none border-t border-slate-200 bg-slate-50/80">
+            <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-2.5">
+              <ChevronDown className="h-4 w-4 shrink-0 text-slate-500" aria-hidden />
+              <p className="text-sm font-semibold text-slate-900">
+                Zawartość wózka
+                {cartName ? <span className="font-medium text-slate-500"> · {cartName}</span> : null}
+              </p>
             </div>
 
-            {isSectional && baskets.length > 0 ? (
-              <div className="space-y-3">
-                {[...new Set(baskets.map((b) => b.row))]
-                  .sort((a, b) => b - a)
-                  .map((rowNum) => {
-                    const rowBaskets = baskets.filter((b) => b.row === rowNum).sort((a, b) => a.column - b.column);
-                    return (
-                      <div
-                        key={rowNum}
-                        className="grid w-full gap-2"
-                        style={{ gridTemplateColumns: `repeat(${rowBaskets.length}, minmax(0, 1fr))` }}
+            {open ? (
+              loading ? (
+                <div className="flex h-32 items-center justify-center text-sm text-slate-400">Ładowanie…</div>
+              ) : (
+                <div className="space-y-5 px-4 py-4 sm:px-5">
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
+                    <div className="flex flex-wrap gap-x-5 gap-y-1">
+                      <span>
+                        Zamówienia: <strong>{stats.total_orders}</strong>
+                      </span>
+                      <span>
+                        Produkty: <strong>{stats.total_products}</strong>
+                      </span>
+                      {isSectional ? (
+                        <span>
+                          Zajęte sekcje: <strong>{stats.baskets_used}</strong> / {baskets.length}
+                        </span>
+                      ) : null}
+                      <span>
+                        Objętość: <strong>{stats.used_volume_dm3.toFixed(1)}</strong> dm³
+                      </span>
+                      {stats.used_weight > 0 ? (
+                        <span>
+                          Waga: <strong>{stats.used_weight.toFixed(2)}</strong> kg
+                        </span>
+                      ) : null}
+                    </div>
+                    {(stats.total_orders > 0 || stats.used_volume_dm3 > 0) && (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmWholeCartClearOpen(true)}
+                        disabled={clearingCart}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100 disabled:opacity-50"
                       >
-                        {rowBaskets.map(renderBasketCell)}
-                      </div>
-                    );
-                  })}
-              </div>
-            ) : null}
+                        <Eraser className="h-3.5 w-3.5" aria-hidden />
+                        {t.clear_cart}
+                      </button>
+                    )}
+                  </div>
 
-            {!isSectional && assignedOrders.length > 0 ? (
-              <div>
-                <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">
-                  {t.assigned_orders ?? "Przypisane zamówienia"}
-                </h3>
-                <ul className="flex flex-wrap gap-2">
-                  {assignedOrders.map((ref, i) => {
-                    const label = orderNumbers[i] ? `#${orderNumbers[i]}` : `#${ref.order_id}`;
-                    return (
-                      <li key={ref.order_id}>
-                        <button
-                          type="button"
-                          onClick={() => setOrderPreview({ orderId: ref.order_id })}
-                          className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-700 hover:bg-violet-100"
-                        >
-                          [{label}]
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            ) : null}
+                  {isSectional && baskets.length > 0 ? (
+                    <div className="space-y-3">
+                      <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500">Siatka sekcji</h3>
+                      {[...new Set(baskets.map((b) => b.row))]
+                        .sort((a, b) => b - a)
+                        .map((rowNum) => {
+                          const rowBaskets = baskets.filter((b) => b.row === rowNum).sort((a, b) => a.column - b.column);
+                          return (
+                            <div
+                              key={rowNum}
+                              className="grid w-full gap-2"
+                              style={{ gridTemplateColumns: `repeat(${rowBaskets.length}, minmax(0, 1fr))` }}
+                            >
+                              {rowBaskets.map(renderBasketCell)}
+                            </div>
+                          );
+                        })}
+                    </div>
+                  ) : null}
 
-            {isSectional
-              ? (() => {
-                  const byOrder = new Map<number, { order_id: number; order_number: string | null; basket: BasketDetail }>();
-                  for (const b of baskets) {
-                    if (b.order_id == null || byOrder.has(b.order_id)) continue;
-                    byOrder.set(b.order_id, { order_id: b.order_id, order_number: b.order_number ?? null, basket: b });
-                  }
-                  const uniqueOrders = Array.from(byOrder.values());
-                  if (uniqueOrders.length === 0) return null;
-                  return (
+                  {!isSectional && assignedOrders.length > 0 ? (
                     <div>
                       <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">
-                        Lista zamówień na wózku
+                        {t.assigned_orders ?? "Przypisane zamówienia"}
                       </h3>
                       <ul className="flex flex-wrap gap-2">
-                        {uniqueOrders.map((o) => (
-                          <li key={o.order_id}>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setOrderPreview({ orderId: o.order_id, basketCode: basketSlotCode(o.basket) })
-                              }
-                              className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-700 hover:bg-violet-100"
-                            >
-                              [{o.order_number ? `#${o.order_number}` : `#${o.order_id}`}]
-                            </button>
-                          </li>
-                        ))}
+                        {assignedOrders.map((ref, i) => {
+                          const label = orderNumbers[i] ? `#${orderNumbers[i]}` : `#${ref.order_id}`;
+                          return (
+                            <li key={ref.order_id}>
+                              <button
+                                type="button"
+                                onClick={() => setOrderPreview({ orderId: ref.order_id })}
+                                className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-700 hover:bg-violet-100"
+                              >
+                                [{label}]
+                              </button>
+                            </li>
+                          );
+                        })}
                       </ul>
                     </div>
-                  );
-                })()
-              : null}
+                  ) : null}
+
+                  {isSectional
+                    ? (() => {
+                        const byOrder = new Map<
+                          number,
+                          { order_id: number; order_number: string | null; basket: BasketDetail }
+                        >();
+                        for (const b of baskets) {
+                          if (b.order_id == null || byOrder.has(b.order_id)) continue;
+                          byOrder.set(b.order_id, {
+                            order_id: b.order_id,
+                            order_number: b.order_number ?? null,
+                            basket: b,
+                          });
+                        }
+                        const uniqueOrders = Array.from(byOrder.values());
+                        if (uniqueOrders.length === 0) return null;
+                        return (
+                          <div>
+                            <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">
+                              Lista zamówień na wózku
+                            </h3>
+                            <ul className="flex flex-wrap gap-2">
+                              {uniqueOrders.map((o) => (
+                                <li key={o.order_id}>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setOrderPreview({
+                                        orderId: o.order_id,
+                                        basketCode: basketSlotCode(o.basket),
+                                      })
+                                    }
+                                    className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-700 hover:bg-violet-100"
+                                  >
+                                    [{o.order_number ? `#${o.order_number}` : `#${o.order_id}`}]
+                                  </button>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        );
+                      })()
+                    : null}
+                </div>
+              )
+            ) : null}
           </div>
-        )}
-      </FleetResourceDetailDrawer>
+        </div>
+      </div>
 
       <OrderProductPreviewModal
         open={orderPreview != null}
@@ -314,12 +340,19 @@ export function CartFleetDetailPanel({
       />
 
       {confirmWholeCartClearOpen ? (
-        <div className="fixed inset-0 z-[290] flex items-center justify-center bg-black/50 p-4" onClick={() => setConfirmWholeCartClearOpen(false)}>
+        <div
+          className="fixed inset-0 z-[290] flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setConfirmWholeCartClearOpen(false)}
+        >
           <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
             <h4 className="mb-2 font-bold text-slate-900">{t.clear_cart_confirm_title}</h4>
             <p className="mb-4 text-sm text-slate-600">{t.clear_cart_confirm_body}</p>
             <div className="flex justify-end gap-2">
-              <button type="button" onClick={() => setConfirmWholeCartClearOpen(false)} className="rounded-lg border border-slate-300 px-3 py-1.5 text-slate-700 hover:bg-slate-100">
+              <button
+                type="button"
+                onClick={() => setConfirmWholeCartClearOpen(false)}
+                className="rounded-lg border border-slate-300 px-3 py-1.5 text-slate-700 hover:bg-slate-100"
+              >
                 {t.cancel}
               </button>
               <button
@@ -336,18 +369,31 @@ export function CartFleetDetailPanel({
       ) : null}
 
       {basketToConfirmClear ? (
-        <div className="fixed inset-0 z-[290] flex items-center justify-center bg-black/50 p-4" onClick={() => setBasketToConfirmClear(null)}>
+        <div
+          className="fixed inset-0 z-[290] flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setBasketToConfirmClear(null)}
+        >
           <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
             <p className="mb-4 text-slate-800">
               Usunąć zamówienie{" "}
-              {basketToConfirmClear.order_number ? `#${basketToConfirmClear.order_number}` : `#${basketToConfirmClear.order_id}`}{" "}
+              {basketToConfirmClear.order_number
+                ? `#${basketToConfirmClear.order_number}`
+                : `#${basketToConfirmClear.order_id}`}{" "}
               z koszyka {basketSlotCode(basketToConfirmClear)}?
             </p>
             <div className="flex justify-end gap-2">
-              <button type="button" onClick={() => setBasketToConfirmClear(null)} className="rounded-lg border border-slate-300 px-3 py-1.5 text-slate-700 hover:bg-slate-100">
+              <button
+                type="button"
+                onClick={() => setBasketToConfirmClear(null)}
+                className="rounded-lg border border-slate-300 px-3 py-1.5 text-slate-700 hover:bg-slate-100"
+              >
                 Anuluj
               </button>
-              <button type="button" onClick={() => void handleClearBasketConfirm()} className="rounded-lg bg-amber-600 px-3 py-1.5 text-white hover:bg-amber-700">
+              <button
+                type="button"
+                onClick={() => void handleClearBasketConfirm()}
+                className="rounded-lg bg-amber-600 px-3 py-1.5 text-white hover:bg-amber-700"
+              >
                 Usuń
               </button>
             </div>

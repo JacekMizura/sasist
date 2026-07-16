@@ -105,6 +105,7 @@ export function CartsFleetList({ cartType, refreshTrigger = 0, onAddNew, onEdit 
   const [editingGroupId, setEditingGroupId] = useState<number | null>(null);
   const [editingGroupName, setEditingGroupName] = useState("");
   const [printCart, setPrintCart] = useState<{ id: number; name: string } | null>(null);
+  const [expandedCartId, setExpandedCartId] = useState<number | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -137,6 +138,10 @@ export function CartsFleetList({ cartType, refreshTrigger = 0, onAddNew, onEdit 
   useEffect(() => {
     void fetchData();
   }, [fetchData, refreshTrigger]);
+
+  useEffect(() => {
+    setExpandedCartId(null);
+  }, [cartType]);
 
   const handleResetFleet = async () => {
     if (!warehouse?.id) return;
@@ -277,7 +282,7 @@ export function CartsFleetList({ cartType, refreshTrigger = 0, onAddNew, onEdit 
                 onAddCart={() => onAddNew(isMulti ? group.id : undefined)}
                 editLabel={t.editGroup}
                 deleteLabel={t.deleteGroup}
-                addCartLabel={config.addCartLabel}
+                addCartLabel={`+ ${t.addCart}`}
                 saveLabel={t.save}
                 cancelLabel={t.cancel}
               />
@@ -298,38 +303,42 @@ export function CartsFleetList({ cartType, refreshTrigger = 0, onAddNew, onEdit 
                     group.items.map((c) => (
                       <CartCard
                         key={c.id}
-                          id={c.id}
-                          name={c.name}
-                          code={c.code}
-                          status={c.status}
-                          used_volume={c.used_volume}
-                          total_volume_dm3={c.total_volume_dm3}
-                          assigned_orders={c.assigned_orders}
-                          order_numbers={c.order_numbers}
-                          total_weight_kg={c.total_weight_kg}
-                          total_orders={c.total_orders}
-                          total_products={c.total_products}
-                          baskets_used={c.baskets_used}
-                          capacity_mode={c.capacity_mode}
-                          max_orders={c.max_orders}
-                          max_volume_dm3={c.max_volume_dm3}
-                          wms_picking_order_count={c.wms_picking_order_count}
-                          wms_picking_product_count={c.wms_picking_product_count}
-                          wms_picking_quantity={c.wms_picking_quantity}
-                          image_url={c.image_url}
-                          updated_at={c.updated_at}
-                          length={c.length}
-                          width={c.width}
-                          height={c.height}
-                          total_baskets={c.total_baskets}
-                          tenant_id={isMulti ? TENANT_ID : undefined}
-                          warehouse_id={isMulti ? warehouse?.id : undefined}
-                          onSimulateSuccess={fetchData}
-                          onClearSuccess={fetchData}
-                          onEdit={onEdit}
-                          onDelete={handleDeleteCart}
-                          onPrintLabel={setPrintCart}
-                        />
+                        id={c.id}
+                        name={c.name}
+                        code={c.code}
+                        status={c.status}
+                        used_volume={c.used_volume}
+                        total_volume_dm3={c.total_volume_dm3}
+                        assigned_orders={c.assigned_orders}
+                        order_numbers={c.order_numbers}
+                        total_weight_kg={c.total_weight_kg}
+                        total_orders={c.total_orders}
+                        total_products={c.total_products}
+                        baskets_used={c.baskets_used}
+                        capacity_mode={c.capacity_mode}
+                        max_orders={c.max_orders}
+                        max_volume_dm3={c.max_volume_dm3}
+                        wms_picking_order_count={c.wms_picking_order_count}
+                        wms_picking_product_count={c.wms_picking_product_count}
+                        wms_picking_quantity={c.wms_picking_quantity}
+                        image_url={c.image_url}
+                        updated_at={c.updated_at}
+                        length={c.length}
+                        width={c.width}
+                        height={c.height}
+                        total_baskets={c.total_baskets}
+                        tenant_id={isMulti ? TENANT_ID : undefined}
+                        warehouse_id={isMulti ? warehouse?.id : undefined}
+                        expanded={expandedCartId === c.id}
+                        onToggleExpand={() =>
+                          setExpandedCartId((prev) => (prev === c.id ? null : c.id))
+                        }
+                        onSimulateSuccess={fetchData}
+                        onClearSuccess={fetchData}
+                        onEdit={onEdit}
+                        onDelete={handleDeleteCart}
+                        onPrintLabel={setPrintCart}
+                      />
                     ))
                   )}
                 </div>

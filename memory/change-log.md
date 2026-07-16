@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-07-16 — Cart content: expand under row (no Drawer)
+
+- Wózki / Wózki z koszykami: content preview expands under the cart row (full width), not right Drawer.
+- One open cart at a time (`expandedCartId` in `CartsFleetList`); 200ms grid-rows animation.
+- `CartBasketEditDrawer` / edit flows unchanged.
+
 ## 2026-07-16 — Wózki: single module header
 
 - `CartsModuleLayout` alone owns Magazyn > Wózki + title + tabs (incl. Nośniki list).
