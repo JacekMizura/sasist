@@ -6,7 +6,6 @@ import { getOrderUiStatusSummary } from "../../api/orderUiStatusApi";
 import type { OrderUiStatusWithCount } from "../../types/orderUiStatus";
 import { useAuth } from "../../context/AuthContext";
 import { isSuperRole } from "../../auth/isSuperRole";
-import { PageHeader } from "../../components/layout/PageHeader";
 import { PLATFORM_ROLE_OPTIONS } from "../../settings/platformRoles";
 import { translateMainGroup } from "../../utils/workforceUiLabels";
 
@@ -146,15 +145,13 @@ export default function WorkforceStatusMatrixPage() {
 
   return (
     <div className="min-w-0 space-y-4">
-      <PageHeader
-        title="Dostęp do statusów (domyślnie dla roli)"
-        subtitle="Ustal, które statusy zamówień są widoczne i w których można pracować — jako szablon dla danej roli w magazynie."
-        breadcrumbs={[
-          { label: "Administratorzy", to: "/settings/administrators" },
-          { label: "Czas pracy", to: "/settings/administrators/workforce" },
-          { label: "Statusy" },
-        ]}
-      />
+      <div>
+        <h2 className="text-lg font-semibold text-slate-900">Role i uprawnienia</h2>
+        <p className="mt-1 text-sm text-slate-500">
+          Domyślny dostęp do statusów zamówień dla wybranej roli w magazynie. Uprawnienia konta
+          (permission tree) nadal edytujesz w karcie użytkownika.
+        </p>
+      </div>
 
       <div className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm ring-1 ring-slate-900/5">
         <div className="min-w-[14rem] flex-1">

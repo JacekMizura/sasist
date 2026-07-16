@@ -28,13 +28,13 @@ export default function AdministratorsModuleFrame() {
     <SettingsModuleStack
       breadcrumbs={[
         { label: "Ustawienia", to: "/settings/company" },
-        { label: "Administratorzy" },
+        { label: "Użytkownicy" },
       ]}
-      title="Administratorzy"
+      title="Użytkownicy"
       actions={primaryAction}
       tabs={ADMINISTRATORS_TABS}
       tabsExact
-      tabsAriaLabel="Moduł Administratorzy"
+      tabsAriaLabel="Moduł Użytkownicy"
     >
       <Outlet />
     </SettingsModuleStack>

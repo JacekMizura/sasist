@@ -24,7 +24,6 @@ import {
   ShoppingBag,
   Layers,
   Users,
-  UserCog,
   Key,
   Building2,
 } from "lucide-react";
@@ -324,12 +323,6 @@ export const NAV_FLYOUT_CATEGORIES: NavCategoryConfig[] = [
             path: "/settings/administrators",
             label: "Użytkownicy",
             Icon: Users,
-            permissionsAny: ["settings.users"],
-          },
-          {
-            path: "/settings/administrators/groups",
-            label: "Uprawnienia",
-            Icon: UserCog,
             permissionsAny: ["settings.users"],
           },
           {

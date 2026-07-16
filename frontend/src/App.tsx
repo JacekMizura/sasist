@@ -75,6 +75,7 @@ import EmployeeCostsOverviewPage from "./pages/Settings/EmployeeCostsOverviewPag
 import WorkforceLayout from "./pages/Settings/WorkforceLayout"
 import WorkforceDashboardPage from "./pages/Settings/WorkforceDashboardPage"
 import WorkforceActivityPage from "./pages/Settings/WorkforceActivityPage"
+import WorkforceStatusMatrixPage from "./pages/Settings/WorkforceStatusMatrixPage"
 import PrintingSettingsModule from "./pages/Settings/printing"
 import WmsSettingsPage from "./pages/Settings/WmsSettingsPage"
 import ReturnsModuleLayout from "./pages/Orders/ReturnsModuleLayout"
@@ -549,12 +550,13 @@ export const router = createBrowserRouter(
                   <Route element={<AdministratorsModuleFrame />}>
                     <Route index element={<AdministratorsPage />} />
                     <Route path="audit" element={<AdministratorsAuditPage />} />
+                    <Route path="roles" element={<WorkforceStatusMatrixPage />} />
                     <Route path="groups" element={<WorkforceUserGroupsPage />} />
                     <Route path="costs" element={<EmployeeCostsOverviewPage />} />
                     <Route path="workforce" element={<WorkforceLayout />}>
                       <Route index element={<WorkforceDashboardPage />} />
                       <Route path="activity" element={<WorkforceActivityPage />} />
-                      <Route path="status-matrix" element={<Navigate to="/settings/administrators" replace />} />
+                      <Route path="status-matrix" element={<Navigate to="/settings/administrators/roles" replace />} />
                     </Route>
                   </Route>
                   {/* Static segments above must win over ``:id`` — in RR7 wzorzec ``:id(\\d+)`` nie dopasowuje się; walidacja liczbowego id w {@link AdministratorEditPage}. */}

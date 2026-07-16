@@ -583,7 +583,7 @@ export default function AdministratorEditPage() {
           className="space-y-2"
           breadcrumbs={[
             { label: "Ustawienia", to: "/settings/company" },
-            { label: "Administratorzy", to: "/settings/administrators" },
+            { label: "Użytkownicy", to: "/settings/administrators" },
             { label: isNew ? "Nowy" : "Edycja" },
           ]}
           title={isNew ? "Nowy użytkownik" : `Edytuj: ${login}`}

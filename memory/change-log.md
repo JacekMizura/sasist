@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-07-16 — Settings: merge Uprawnienia into Użytkownicy
+
+- Removed fly-out item „Uprawnienia” (was a duplicate entry to groups).
+- Users module tabs: Użytkownicy · Role i uprawnienia · Grupy użytkowników (+ audit/costs/workforce).
+- Restored status-access matrix at `/settings/administrators/roles` as „Role i uprawnienia”.
+
 ## 2026-07-16 — Restore Ustawienia WMS in ERP sidebar
 
 - Re-added top-level sidebar item ``Ustawienia WMS`` (`Settings2`) → `/settings/wms`.
