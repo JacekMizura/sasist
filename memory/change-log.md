@@ -1,5 +1,16 @@
 # Change log
 
+## 2026-07-16 — Wózki: single module header
+
+- `CartsModuleLayout` alone owns Magazyn > Wózki + title + tabs (incl. Nośniki list).
+- Tab pages keep description/actions/KPI only — no duplicate PageHeader/breadcrumb/title.
+- Carriers list no longer self-hosts tabs.
+
+## 2026-07-16 — Product link from location/carrier → full edit card
+
+- `LocationPreviewCarrierContents` + `CarrierItemsTable`: navigate to `/products/:id/edit` (catalog card), not simplified `/products/:id`.
+- Pass `tenantId` in location state when available.
+
 ## 2026-07-16 — Nośniki header rebuild
 
 - KPI: Wszystkie / Zajęte / Puste (occupied = sku_count|total_qty > 0); removed „Grupy”.

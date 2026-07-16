@@ -138,7 +138,6 @@ export default function FleetPlanner() {
   return (
     <div className={`${cartsPageShellClass} space-y-4`}>
       <CartsListPageHeader
-        title={t.optimizer_fleet_planner ?? "Planer floty"}
         description={
           t.optimizer_analyze_subtitle ?? "Oblicz minimalne zapotrzebowanie na wózki dla zamówień NEW."
         }

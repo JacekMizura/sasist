@@ -10,6 +10,7 @@ type Props = {
   selectedLabel?: string | null;
   emptyHint?: string;
   occupancy?: LocationVisualOccupancy | null;
+  tenantId?: number | null;
   className?: string;
 };
 
@@ -44,13 +45,17 @@ export function LocationPreviewCarrierContents({
   selectedLabel,
   emptyHint,
   occupancy,
+  tenantId,
   className = "",
 }: Props) {
   const navigate = useNavigate();
 
+  /** Pełna karta produktu z katalogu (jak „Edytuj” na liście) — nie uproszczony `/products/:id`. */
   const openProduct = (productId: number) => {
     if (productId < 1) return;
-    navigate(`/products/${productId}`);
+    navigate(`/products/${productId}/edit`, {
+      state: tenantId != null && tenantId >= 1 ? { tenantId } : undefined,
+    });
   };
 
   return (

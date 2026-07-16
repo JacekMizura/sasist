@@ -1,3 +1,5 @@
+import { useNavigate } from "react-router-dom";
+
 import type { WarehouseCarrierItemRead } from "../../../api/wmsCarrierApi";
 import { DamageDispositionBadge } from "../../inventory/DamageDispositionBadge";
 import { formatExpiryDatePl } from "../../../pages/wms/putawayFormat";
@@ -52,7 +54,22 @@ function ExpiryCell({ iso }: { iso: string | null | undefined }) {
   );
 }
 
-export function CarrierItemsTable({ items }: { items: WarehouseCarrierItemRead[] }) {
+type Props = {
+  items: WarehouseCarrierItemRead[];
+  tenantId?: number | null;
+};
+
+export function CarrierItemsTable({ items, tenantId }: Props) {
+  const navigate = useNavigate();
+
+  /** Pełna karta produktu z katalogu (jak „Edytuj” na liście) — nie uproszczony `/products/:id`. */
+  const openProduct = (productId: number) => {
+    if (productId < 1) return;
+    navigate(`/products/${productId}/edit`, {
+      state: tenantId != null && tenantId >= 1 ? { tenantId } : undefined,
+    });
+  };
+
   if (!items.length) {
     return <p className="text-[14px] text-slate-500">Brak pozycji na nośniku.</p>;
   }
@@ -81,7 +98,19 @@ export function CarrierItemsTable({ items }: { items: WarehouseCarrierItemRead[]
             const serial = (it.serial_number || "").trim() || "—";
 
             return (
-              <tr key={itemRowKey(it)} className="border-b border-slate-100 last:border-0 align-middle">
+              <tr
+                key={itemRowKey(it)}
+                role="link"
+                tabIndex={0}
+                onClick={() => openProduct(it.product_id)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    openProduct(it.product_id);
+                  }
+                }}
+                className="cursor-pointer border-b border-slate-100 align-middle last:border-0 hover:bg-slate-50"
+              >
                 <td className="px-2 py-2">
                   <CarrierProductThumb imageUrl={it.product_image_url} alt={name} size="lg" />
                 </td>

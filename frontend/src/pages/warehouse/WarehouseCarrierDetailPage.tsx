@@ -178,7 +178,7 @@ export default function WarehouseCarrierDetailPage() {
           <section className={cartsSectionClass}>
             <h3 className={wmsSectionTitle}>Produkty na nośniku</h3>
             <div className="mt-3">
-              <CarrierItemsTable items={detail.items} />
+              <CarrierItemsTable items={detail.items} tenantId={tenantId} />
             </div>
           </section>
 

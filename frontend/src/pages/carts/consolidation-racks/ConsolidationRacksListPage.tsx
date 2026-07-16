@@ -9,11 +9,11 @@ import {
   type ConsolidationRackListRow,
 } from "../../../components/consolidationRacks/rackList/ConsolidationRacksListTable";
 import { filterToolbarBtnApply } from "../../../components/filters/filterUiTokens";
-import { ListPageHeader } from "../../../components/listPage/ListPageHeader";
 import { moduleTableCardClass } from "../../../components/listPage/moduleList";
 import { useActiveWarehouseContext, ACTIVE_WAREHOUSE_REQUIRED_MESSAGE } from "../../../hooks/useActiveWarehouseContext";
 import type { ConsolidationRack } from "../../../modules/consolidation-racks/consolidationRackTypes";
 import { rackOccupancyStats } from "../../../modules/consolidation-racks/rackLayoutUtils";
+import { CartsListPageHeader } from "../../../modules/carts/CartsListPageHeader";
 import { PurchasingKpiCard, PurchasingKpiGrid } from "../../../modules/purchasing/ui";
 import { DAMAGE_TENANT_ID } from "../../damage/damageShared";
 
@@ -109,14 +109,8 @@ export default function ConsolidationRacksListPage() {
 
   return (
     <div className="space-y-6">
-      <ListPageHeader
-        title="Regały"
+      <CartsListPageHeader
         description="Konfiguracja regałów magazynowych wykorzystywanych przez procesy WMS."
-        breadcrumbs={[
-          { label: "Magazyn", to: "/carts/bulk" },
-          { label: "WMS", to: "/carts/racks" },
-          { label: "Regały" },
-        ]}
         actions={
           <button
             type="button"

@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 
 import api from "../../api/axios";
 import { AppEmptyState } from "../../components/app-shell/AppEmptyState";
-import { CartsListPageHeader } from "../../modules/carts/CartsListPageHeader";
 import { cartsPageShellClass } from "../../modules/carts/cartsModuleTokens";
 import { MapPin } from "lucide-react";
 import ZoneConfigurator from "./ZoneConfigurator";
@@ -72,7 +71,6 @@ export default function ZonesTab() {
 
   return (
     <div className={cartsPageShellClass}>
-      <CartsListPageHeader title="Strefy gabarytowe" />
       <ZoneConfigurator zones={zones} onZoneAdded={fetchZones} />
       {zones.length === 0 ? (
         <AppEmptyState

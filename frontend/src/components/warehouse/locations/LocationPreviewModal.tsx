@@ -241,6 +241,7 @@ export function LocationPreviewModal({
                   products={ctx.products}
                   selectedLabel={code}
                   occupancy={ctx.occupancy}
+                  tenantId={tenantId}
                   className="h-full min-h-[240px]"
                 />
               </div>

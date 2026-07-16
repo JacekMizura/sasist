@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import { Plus } from "lucide-react";
 
 import api from "../../../api/axios";
-import { ListPageHeader } from "../../../components/listPage/ListPageHeader";
 import {
   filterToolbarBtnApply,
   filterToolbarBtnSecondary,
@@ -13,6 +12,7 @@ import { useCartsRefresh } from "../../../context/CartsRefreshContext";
 import CartCard from "../../../pages/CartsComponents/ui/CartCard";
 import { CartLabelPrintModal } from "../../../pages/CartsComponents/CartLabelPrintModal";
 import { CartsInlineGroupForm } from "../CartsInlineGroupForm";
+import { CartsListPageHeader } from "../CartsListPageHeader";
 import { CartsFleetGroupActions } from "./CartsFleetGroupActions";
 import { CartsFleetGroupSection } from "./CartsFleetGroupSection";
 import { CartsFleetSummaryKpi } from "./CartsFleetSummaryKpi";
@@ -61,10 +61,7 @@ export type CartsFleetListProps = {
 };
 
 type FleetConfig = {
-  pageTitle: string;
   description: string;
-  breadcrumbLabel: string;
-  addCartLabel: string;
   headerExtraActions?: (ctx: { resetting: boolean; onResetFleet: () => void }) => ReactNode;
   showHeaderAddCart: boolean;
 };
@@ -72,18 +69,12 @@ type FleetConfig = {
 function useFleetConfig(cartType: CartsFleetCartType, t: ReturnType<typeof useTranslation>): FleetConfig {
   if (cartType === "BULK") {
     return {
-      pageTitle: t.bulkCarts,
       description: t.singleCompartmentManagement,
-      breadcrumbLabel: "Wózki",
-      addCartLabel: `+ ${t.addCart}`,
       showHeaderAddCart: true,
     };
   }
   return {
-    pageTitle: t.sectionalCarts,
     description: t.multiBasketManagement,
-    breadcrumbLabel: "Wózki z koszykami",
-    addCartLabel: `+ ${t.addCart}`,
     showHeaderAddCart: false,
     headerExtraActions: ({ resetting, onResetFleet }) => (
       <button
@@ -221,16 +212,10 @@ export function CartsFleetList({ cartType, refreshTrigger = 0, onAddNew, onEdit 
 
   return (
     <div className="w-full min-w-0 space-y-6">
-      <ListPageHeader
-        title={config.pageTitle}
+      <CartsListPageHeader
         description={config.description}
-        breadcrumbs={[
-          { label: "Magazyn", to: "/carts/bulk" },
-          { label: "WMS", to: cartType === "BULK" ? "/carts/bulk" : "/carts/baskets" },
-          { label: config.breadcrumbLabel },
-        ]}
         actions={
-          <div className="flex flex-wrap items-center justify-end gap-2">
+          <>
             {config.headerExtraActions?.({ resetting, onResetFleet: () => void handleResetFleet() })}
             <button type="button" onClick={() => setShowGroupForm((v) => !v)} className={filterToolbarBtnSecondary}>
               {showGroupForm ? t.cancel : `+ ${t.newGroup}`}
@@ -241,7 +226,7 @@ export function CartsFleetList({ cartType, refreshTrigger = 0, onAddNew, onEdit 
                 {cartType === "BULK" ? t.addBulkCart : t.addMultiCart}
               </button>
             ) : null}
-          </div>
+          </>
         }
       />
 

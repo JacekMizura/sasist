@@ -13,16 +13,12 @@ import { CarrierGroupCard } from "../../components/warehouse/carriers/CarrierGro
 import { CarriersGroupTable } from "../../components/warehouse/carriers/CarriersGroupTable";
 import { CreateCarrierGroupModal } from "../../components/warehouse/carriers/CreateCarrierGroupModal";
 import { AppEmptyState } from "../../components/app-shell/AppEmptyState";
-import { flatSectionDividerClass } from "../../components/layout/flatSectionTokens";
-import { TabsNav } from "../../components/layout/TabsNav";
-import { ListPageHeader } from "../../components/listPage/ListPageHeader";
 import {
   filterToolbarBtnApply,
   filterToolbarBtnSecondary,
 } from "../../components/filters/filterUiTokens";
 import { listSellasistInputClass } from "../../components/listPage/listSellasistTokens";
-import { UI_STRINGS } from "../../constants/uiStrings";
-import { CARTS_TABS } from "../../modules/carts/cartsTabs";
+import { CartsListPageHeader } from "../../modules/carts/CartsListPageHeader";
 import { PurchasingKpiCard, PurchasingKpiGrid } from "../../modules/purchasing/ui";
 
 import {
@@ -142,17 +138,10 @@ export default function WarehouseCarriersPage() {
 
   return (
     <div className="space-y-4">
-      <ListPageHeader
-        className="space-y-2"
-        title={UI_STRINGS.navigation.warehouseCarriers}
+      <CartsListPageHeader
         description="Rejestr nośników magazynowych pogrupowanych według typu (palety, kartony, wózki)."
-        breadcrumbs={[
-          { label: "Magazyn", to: "/carts/bulk" },
-          { label: UI_STRINGS.navigation.carts, to: "/carts/bulk" },
-          { label: UI_STRINGS.navigation.warehouseCarriers },
-        ]}
         actions={
-          <div className="flex flex-wrap items-center justify-end gap-2">
+          <>
             {tenantSelectVisible ? (
               <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
                 <span className="text-xs font-medium text-slate-500">Podmiot</span>
@@ -189,13 +178,7 @@ export default function WarehouseCarriersPage() {
               <Plus className="mr-1.5 inline h-4 w-4" strokeWidth={2} aria-hidden />
               Nowa grupa
             </button>
-          </div>
-        }
-        tabs={
-          <div>
-            <TabsNav items={CARTS_TABS} exact aria-label="Wózki — zakładki" className="gap-8" />
-            <div className={`${flatSectionDividerClass} mt-2`} aria-hidden />
-          </div>
+          </>
         }
       />
 

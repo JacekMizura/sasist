@@ -12,19 +12,15 @@ import { CARTS_TABS } from "./cartsTabs";
 const FULL_PAGE_CONTENT =
   /^\/carts\/(?:carriers\/[^/]+|racks\/(?:new|[^/]+(?:\/(?:edit|preview))?))$/;
 
-/** Lista nośników — własny breadcrumb/tytuł + zakładki wewnątrz strony (bez dublowania „Magazyn > Wózki”). */
-const CARRIERS_LIST_SELF_HEADER = /^\/carts\/carriers\/?$/;
-
 /**
- * Shell modułu Wózki — breadcrumb → tytuł → zakładki → treść
- * (wzorzec Dostawcy / Materiały magazynowe / Zwroty; bez karty wokół tabów).
+ * Shell modułu Wózki — jeden breadcrumb + tytuł + zakładki.
+ * Zakładki wewnętrzne nie renderują własnego PageHeader / breadcrumb.
  */
 export default function CartsModuleLayout() {
   const { pathname } = useLocation();
   const fullPageContent = useMemo(() => FULL_PAGE_CONTENT.test(pathname), [pathname]);
-  const carriersListSelfHeader = useMemo(() => CARRIERS_LIST_SELF_HEADER.test(pathname), [pathname]);
 
-  if (fullPageContent || carriersListSelfHeader) {
+  if (fullPageContent) {
     return (
       <PageLayout fullBleed>
         <Outlet />
@@ -41,14 +37,9 @@ export default function CartsModuleLayout() {
         ]}
       />
       <h1 className="text-2xl font-semibold text-slate-900">{UI_STRINGS.navigation.carts}</h1>
-      <TabsNav
-        items={CARTS_TABS}
-        exact
-        aria-label="Wózki — zakładki"
-        className="mt-6 gap-8"
-      />
-      <div className={`${flatSectionDividerClass} mt-3`} aria-hidden />
-      <div className="pt-6">
+      <TabsNav items={CARTS_TABS} exact aria-label="Wózki — zakładki" className="mt-4 gap-8" />
+      <div className={`${flatSectionDividerClass} mt-2`} aria-hidden />
+      <div className="pt-4">
         <Outlet />
       </div>
     </PageLayout>
