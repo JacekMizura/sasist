@@ -40,22 +40,17 @@ import {
   saveWmsPackingExtendedUi,
 } from "../../types/wmsPackingExtendedUi";
 import { WmsSettingsLayout } from "./WmsSettingsLayout";
-import { WMS_SETTINGS_SECTION_ANCHOR_CLASS } from "./wmsSettingsSectionConstants";
-import { useWmsSettingsSectionAnchor } from "./WmsSettingsSectionRegistryContext";
+import { WmsSettingsSection } from "./WmsSettingsSection";
+import { WmsSettingCard } from "./WmsSettingCard";
 import { WMS_PACKING_SETTINGS_NAV_SECTIONS } from "./wmsPackingSettingsNavSections";
+import { wmsSettingsTokens } from "./wmsSettingsTokens";
 
 type LabelTemplateOption = { id: number; name: string };
 
-const selectClass =
-  "mt-1.5 w-full max-w-md rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40";
-
-const numberInputClass =
-  "mt-1.5 w-full max-w-xs rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40";
-
-const textInputClass =
-  "mt-1.5 w-full max-w-md rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40";
-
-const checkboxClass = "mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-blue-600 focus:ring-blue-500";
+const selectClass = wmsSettingsTokens.select;
+const numberInputClass = wmsSettingsTokens.input.replace("max-w-md", "max-w-xs") + " tabular-nums";
+const textInputClass = wmsSettingsTokens.input;
+const checkboxClass = wmsSettingsTokens.checkbox;
 
 function stableStringify(v: unknown): string {
   if (v === null || v === undefined) return JSON.stringify(v);
@@ -92,35 +87,26 @@ function SectionCard({
   summary?: string;
   children: ReactNode;
 }) {
-  const anchorRef = useWmsSettingsSectionAnchor(id);
   return (
-    <section ref={anchorRef} id={id} data-wms-section="" className={WMS_SETTINGS_SECTION_ANCHOR_CLASS}>
-      <div className="rounded-xl border border-slate-200/90 bg-white p-5 shadow-sm">
-        <div className="mb-4">
-          <h2 className="text-base font-semibold text-slate-900">{title}</h2>
-          {summary ? <p className="mt-0.5 text-xs text-slate-500">{summary}</p> : null}
-        </div>
-        {children}
-      </div>
-    </section>
+    <WmsSettingsSection id={id} title={title} summary={summary}>
+      {children}
+    </WmsSettingsSection>
   );
 }
 
 function Help({ children }: { children: ReactNode }) {
-  return <p className="mt-1 text-xs leading-relaxed text-slate-500">{children}</p>;
+  return <p className={wmsSettingsTokens.help}>{children}</p>;
 }
 
 function FieldGrid({ children }: { children: ReactNode }) {
-  return <div className="grid gap-4 sm:grid-cols-2">{children}</div>;
+  return <div className={wmsSettingsTokens.fieldGrid}>{children}</div>;
 }
 
 function Subsection({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
   return (
-    <div className="rounded-lg border border-slate-200/90 bg-slate-50/50 p-4 shadow-sm">
-      <h4 className="text-sm font-semibold text-slate-900">{title}</h4>
-      {description ? <p className="mt-1 text-xs text-slate-500">{description}</p> : null}
-      <div className="mt-3">{children}</div>
-    </div>
+    <WmsSettingCard title={title} description={description}>
+      {children}
+    </WmsSettingCard>
   );
 }
 
@@ -433,7 +419,7 @@ const WmsPackingSettingsPanel = forwardRef<
         <div className="space-y-3">
           <SectionCard
             id="wms-pack-appearance"
-            title="1. Wygląd i prezentacja"
+            title="Widok"
             summary="Układ interfejsu, panel klienta i dokumentów, widok produktów przy pakowaniu oraz lista zamówień."
           >
             <div className="space-y-5">
@@ -648,7 +634,7 @@ const WmsPackingSettingsPanel = forwardRef<
             </div>
           </SectionCard>
 
-          <SectionCard id="wms-pack-workflow" title="2. Workflow / statusy" summary="Powiązanie statusów panelu z procesem pakowania.">
+          <SectionCard id="wms-pack-workflow" title="Workflow" summary="Powiązanie statusów panelu z procesem pakowania.">
             <FieldGrid>
               <label className="block text-sm font-medium text-slate-700">
                 Status na początku pakowania
@@ -717,7 +703,7 @@ const WmsPackingSettingsPanel = forwardRef<
 
           <SectionCard
             id="wms-pack-automation"
-            title="3. Automatyzacja pakowania"
+            title="Automatyzacja"
             summary="Czynności po pakowaniu, tryb wykonania oraz zachowanie operatora — bez mieszania ustawień technicznych z trybem testowym."
           >
             <div className="space-y-5">
@@ -879,7 +865,7 @@ const WmsPackingSettingsPanel = forwardRef<
             </div>
           </SectionCard>
 
-          <SectionCard id="wms-pack-documents" title="4. Dokumenty sprzedaży" summary="Typ dokumentu (lokalnie) + serie z API.">
+          <SectionCard id="wms-pack-documents" title="Integracje" summary="Typ dokumentu (lokalnie) + serie z API.">
             <FieldGrid>
               <label className="block text-sm font-medium text-slate-700">
                 Typ dokumentu (preferencja, lokalnie)
@@ -975,7 +961,7 @@ const WmsPackingSettingsPanel = forwardRef<
 
           <SectionCard
             id="wms-pack-labels"
-            title="5. Etykiety / Kurierzy"
+            title="Drukowanie"
             summary="Przesyłki, limity paczek, etykiety zastępcze (lokalnie) oraz reguły etykiet."
           >
             <div className="space-y-5">
@@ -1056,7 +1042,7 @@ const WmsPackingSettingsPanel = forwardRef<
             </div>
           </SectionCard>
 
-          <SectionCard id="wms-pack-permissions" title="6. Uprawnienia / Walidacja" summary="Reguły dla pakującego i magazynu.">
+          <SectionCard id="wms-pack-permissions" title="Ogólne" summary="Reguły dla pakującego i magazynu.">
             <div className="space-y-3">
               <BoolRow
                 label="Pakujący ≠ kompletujący"
@@ -1079,7 +1065,7 @@ const WmsPackingSettingsPanel = forwardRef<
             </div>
           </SectionCard>
 
-          <SectionCard id="wms-pack-assistant" title="7. Asystent pakowania" summary="Przyciski automatyzacji na ekranie pakowania oraz etykieta zastępcza zapisana w ustawieniach magazynu.">
+          <SectionCard id="wms-pack-assistant" title="Automatyzacja" summary="Przyciski automatyzacji na ekranie pakowania oraz etykieta zastępcza zapisana w ustawieniach magazynu.">
             <div className="space-y-3">
               <BoolRow
                 label="Pokazuj przyciski automatyzacji"
@@ -1138,7 +1124,7 @@ const WmsPackingSettingsPanel = forwardRef<
             </div>
           </SectionCard>
 
-          <SectionCard id="wms-pack-advanced" title="8. Zaawansowane" summary="Magazyn domyślny, szablony legacy, strategia jedno/wielopozycyjne.">
+          <SectionCard id="wms-pack-advanced" title="Zaawansowane" summary="Magazyn domyślny, szablony legacy, strategia jedno/wielopozycyjne.">
             <FieldGrid>
               <label className="block text-sm font-medium text-slate-700" title="Identyfikator lub nazwa magazynu — placeholder">
                 Główny magazyn pakowania

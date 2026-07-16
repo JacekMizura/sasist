@@ -10,8 +10,7 @@ import {
 import { ProductReceivingRequirementsSection } from "../../components/wms/receiving/ProductReceivingRequirementsSection";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { WmsSettingsLayout } from "./WmsSettingsLayout";
-import { WMS_SETTINGS_SECTION_ANCHOR_CLASS } from "./wmsSettingsSectionConstants";
-import { useWmsSettingsSectionAnchor } from "./WmsSettingsSectionRegistryContext";
+import { WmsSettingsSection } from "./WmsSettingsSection";
 
 const SECTION_ID = "wms-receiving-product-validation";
 
@@ -20,12 +19,7 @@ type Props = {
 };
 
 function SectionCard({ sectionId, children }: { sectionId: string; children: ReactNode }) {
-  const anchorRef = useWmsSettingsSectionAnchor(sectionId);
-  return (
-    <section ref={anchorRef} id={sectionId} data-wms-section="" className={WMS_SETTINGS_SECTION_ANCHOR_CLASS}>
-      <div className="rounded-xl border border-slate-200/90 bg-white p-5 shadow-sm">{children}</div>
-    </section>
-  );
+  return <WmsSettingsSection id={sectionId}>{children}</WmsSettingsSection>;
 }
 
 function toDraft(s: WmsProductValidationSettings) {

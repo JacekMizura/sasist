@@ -6,10 +6,10 @@ import { getWmsReturnsModeSettings, setWmsReturnsModeSettings } from "../../api/
 import type { ReturnsMode } from "../../types/wmsReturn";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { WmsSettingsLayout } from "./WmsSettingsLayout";
+import { WmsSettingsSection } from "./WmsSettingsSection";
 import { DocumentTemplateScopeSection } from "./document-templates/components/DocumentTemplateScopeSection";
 import { RETURNS_SCOPE_KINDS } from "./document-templates/documentTemplateScopeKinds";
-import { WMS_SETTINGS_SECTION_ANCHOR_CLASS } from "./wmsSettingsSectionConstants";
-import { useWmsSettingsSectionAnchor } from "./WmsSettingsSectionRegistryContext";
+import { wmsSettingsTokens } from "./wmsSettingsTokens";
 
 const MODE_SECTION_ID = "wms-returns-workflow-mode";
 const ZPZ_LABEL_SECTION_ID = "wms-returns-z-pz-label";
@@ -31,8 +31,7 @@ const radioOuter =
 const radioInput = "mt-1 h-4 w-4 shrink-0 border-slate-300 text-blue-600 focus:ring-blue-500";
 const fieldLabel = "text-sm font-medium text-slate-800";
 const fieldHint = "mt-0.5 text-xs text-slate-500";
-const selectCls =
-  "mt-1.5 w-full max-w-md rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30";
+const selectCls = wmsSettingsTokens.select;
 
 function SettingsSectionCard({
   sectionId,
@@ -41,12 +40,7 @@ function SettingsSectionCard({
   sectionId: string;
   children: ReactNode;
 }) {
-  const anchorRef = useWmsSettingsSectionAnchor(sectionId);
-  return (
-    <section ref={anchorRef} id={sectionId} data-wms-section="" className={WMS_SETTINGS_SECTION_ANCHOR_CLASS}>
-      <div className="rounded-xl border border-slate-200/90 bg-white p-5 shadow-sm">{children}</div>
-    </section>
-  );
+  return <WmsSettingsSection id={sectionId}>{children}</WmsSettingsSection>;
 }
 
 type Props = {

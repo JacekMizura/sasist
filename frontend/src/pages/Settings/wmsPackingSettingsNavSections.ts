@@ -1,17 +1,16 @@
 import type { WmsSettingsSectionConfig } from "./wmsSettingsSectionConfig";
+import { WMS_SETTINGS_CANONICAL_SECTION } from "./wmsSettingsTokens";
+
+/** DOM ids — keep in sync with packing panel section ids. Nav order follows canonical vocabulary. */
+export const WMS_PACKING_SETTINGS_NAV_SECTIONS: WmsSettingsSectionConfig[] = [
+  { id: "wms-pack-permissions", label: WMS_SETTINGS_CANONICAL_SECTION.general },
+  { id: "wms-pack-workflow", label: WMS_SETTINGS_CANONICAL_SECTION.workflow },
+  { id: "wms-pack-appearance", label: WMS_SETTINGS_CANONICAL_SECTION.view },
+  { id: "wms-pack-automation", label: WMS_SETTINGS_CANONICAL_SECTION.automation },
+  { id: "wms-pack-documents", label: WMS_SETTINGS_CANONICAL_SECTION.integrations },
+  { id: "wms-pack-labels", label: WMS_SETTINGS_CANONICAL_SECTION.printing },
+  { id: "wms-pack-advanced", label: WMS_SETTINGS_CANONICAL_SECTION.advanced },
+];
 
 /** @deprecated Use {@link WmsSettingsSectionConfig} */
 export type WmsSettingsNavSection = WmsSettingsSectionConfig;
-
-/** DOM ids on packing settings sections — keep in sync with `WmsPackingSettingsPanel` SectionCard `id` props. */
-/** Unique ids — picking tab mounts in parallel; duplicate ids break querySelector / scrollIntoView. */
-export const WMS_PACKING_SETTINGS_NAV_SECTIONS: WmsSettingsSectionConfig[] = [
-  { id: "wms-pack-appearance", label: "1. Wygląd i prezentacja" },
-  { id: "wms-pack-workflow", label: "2. Workflow / statusy" },
-  { id: "wms-pack-automation", label: "3. Automatyzacja pakowania" },
-  { id: "wms-pack-documents", label: "4. Dokumenty sprzedaży" },
-  { id: "wms-pack-labels", label: "5. Etykiety / Kurierzy" },
-  { id: "wms-pack-permissions", label: "6. Uprawnienia / Walidacja" },
-  { id: "wms-pack-assistant", label: "7. Asystent pakowania" },
-  { id: "wms-pack-advanced", label: "8. Zaawansowane" },
-];

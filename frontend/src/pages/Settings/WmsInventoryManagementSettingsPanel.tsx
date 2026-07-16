@@ -8,10 +8,14 @@ import {
   type InventoryManagementModeUi,
 } from "../../api/inventoryManagementPolicyApi";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
+import { WmsSettingsLayout } from "./WmsSettingsLayout";
+import { WmsSettingsSection } from "./WmsSettingsSection";
+import { WMS_SETTINGS_CANONICAL_SECTION, wmsSettingsTokens } from "./wmsSettingsTokens";
 
 const SCREEN_TITLE = "Sposób aktualizacji stanów magazynowych";
 const SCREEN_LEAD =
   "Określa, w jaki sposób system może zmieniać ilości na stanach magazynowych w wybranym magazynie.";
+const SECTION_ID = "wms-inventory-general";
 
 type ModeCopy = {
   value: InventoryManagementModeUi;
@@ -69,9 +73,8 @@ function modeByValue(value: InventoryManagementModeUi): ModeCopy {
 const radioOuter =
   "flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm transition hover:border-slate-300 hover:bg-slate-50/80 has-[:checked]:border-blue-400 has-[:checked]:bg-blue-50/40";
 const radioInput = "mt-1 h-4 w-4 shrink-0 border-slate-300 text-blue-600 focus:ring-blue-500";
-const fieldHint = "mt-0.5 text-xs leading-relaxed text-slate-500";
-const cardClass = "rounded-xl border border-slate-200/90 bg-white p-5 shadow-sm";
-const sectionTitleClass = "text-sm font-semibold text-slate-900";
+const fieldHint = wmsSettingsTokens.help;
+const sectionTitleClass = wmsSettingsTokens.cardTitle;
 
 function BoolCell({ value }: { value: boolean }) {
   return value ? (
@@ -169,136 +172,143 @@ export default function WmsInventoryManagementSettingsPanel({ warehouseId }: Pro
   };
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <header className="space-y-3 border-b border-slate-200 pb-4">
-        <div>
-          <h2 className="text-lg font-semibold text-slate-900">{SCREEN_TITLE}</h2>
-          <p className="mt-1 text-sm text-slate-600">{SCREEN_LEAD}</p>
-          <p className="mt-1 text-xs text-slate-500">
-            Magazyn: <span className="font-medium text-slate-700">{resolvedWarehouseLabel ?? "—"}</span>
-          </p>
-        </div>
-        {!loading && !loadError ? (
-          <div
-            className="inline-flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm"
-            role="status"
-            aria-live="polite"
-          >
-            <span className="text-slate-600">Aktywny tryb:</span>
-            <span className="inline-flex items-center gap-1.5 font-semibold text-slate-900">
-              <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" aria-hidden />
-              {activeCopy.label}
-            </span>
-            {dirty ? (
-              <span className="text-xs text-amber-700">
-                (Niezapisana zmiana: {previewCopy.shortLabel})
-              </span>
-            ) : null}
-          </div>
-        ) : null}
-      </header>
-
-      <section className={cardClass} aria-labelledby="inventory-mode-choice-heading">
-        <h3 id="inventory-mode-choice-heading" className={sectionTitleClass}>
-          Wybór trybu
-        </h3>
-        <p className="mt-1 text-xs text-slate-500">
-          Decyzja dotyczy całego magazynu. Nie wpływa na procesy WMS (zbieranie, pakowanie, przyjęcia).
-        </p>
-        {loading ? <p className="mt-3 text-sm text-slate-500">Wczytywanie…</p> : null}
-        {loadError ? <p className="mt-3 text-sm text-red-600">{loadError}</p> : null}
-        {!loading && !loadError ? (
-          <div className="mt-4 space-y-3" role="radiogroup" aria-label={SCREEN_TITLE}>
-            {MODES.map((opt) => (
-              <label key={opt.value} className={radioOuter}>
-                <input
-                  type="radio"
-                  name="wms-inventory-management-mode"
-                  className={radioInput}
-                  checked={draftMode === opt.value}
-                  onChange={() => setDraftMode(opt.value)}
-                />
-                <span>
-                  <span className="block text-sm font-medium text-slate-900">{opt.label}</span>
-                  <span className={fieldHint}>{opt.description}</span>
+    <WmsSettingsLayout
+      sections={[{ id: SECTION_ID, label: WMS_SETTINGS_CANONICAL_SECTION.general }]}
+      asideLabel="Stany magazynowe"
+      observeSections={false}
+    >
+      <WmsSettingsSection id={SECTION_ID} title={WMS_SETTINGS_CANONICAL_SECTION.general} summary={SCREEN_LEAD}>
+        <div className="space-y-6">
+          <header className="space-y-3 border-b border-slate-100 pb-4">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900">{SCREEN_TITLE}</h3>
+              <p className="mt-1 text-xs text-slate-500">
+                Magazyn: <span className="font-medium text-slate-700">{resolvedWarehouseLabel ?? "—"}</span>
+              </p>
+            </div>
+            {!loading && !loadError ? (
+              <div
+                className="inline-flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm"
+                role="status"
+                aria-live="polite"
+              >
+                <span className="text-slate-600">Aktywny tryb:</span>
+                <span className="inline-flex items-center gap-1.5 font-semibold text-slate-900">
+                  <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" aria-hidden />
+                  {activeCopy.label}
                 </span>
-              </label>
-            ))}
-          </div>
-        ) : null}
-        <div className="mt-5 flex flex-wrap gap-2">
-          <button
-            type="button"
-            disabled={!canSave}
-            onClick={() => void save()}
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {saving ? "Zapisywanie…" : "Zapisz zmiany"}
-          </button>
-          {dirty ? (
-            <button
-              type="button"
-              disabled={saving}
-              onClick={() => setDraftMode(savedMode)}
-              className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              Cofnij zmiany
-            </button>
-          ) : null}
-        </div>
-      </section>
+                {dirty ? (
+                  <span className="text-xs text-amber-700">
+                    (Niezapisana zmiana: {previewCopy.shortLabel})
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
+          </header>
 
-      {!loading && !loadError ? (
-        <>
-          <section className={cardClass} aria-labelledby="inventory-mode-effects-heading">
-            <h3 id="inventory-mode-effects-heading" className={sectionTitleClass}>
-              Co oznacza wybrany tryb?
+          <div aria-labelledby="inventory-mode-choice-heading">
+            <h3 id="inventory-mode-choice-heading" className={sectionTitleClass}>
+              Wybór trybu
             </h3>
             <p className="mt-1 text-xs text-slate-500">
-              Podgląd skutków dla:{" "}
-              <span className="font-medium text-slate-700">{previewCopy.label}</span>
-              {dirty ? " — zapisz, aby ustawić jako aktywny." : ""}
+              Decyzja dotyczy całego magazynu. Nie wpływa na procesy WMS (zbieranie, pakowanie, przyjęcia).
             </p>
-            <ModeEffectsList mode={draftMode} />
-          </section>
+            {loading ? <p className="mt-3 text-sm text-slate-500">Wczytywanie…</p> : null}
+            {loadError ? <p className="mt-3 text-sm text-red-600">{loadError}</p> : null}
+            {!loading && !loadError ? (
+              <div className="mt-4 space-y-3" role="radiogroup" aria-label={SCREEN_TITLE}>
+                {MODES.map((opt) => (
+                  <label key={opt.value} className={radioOuter}>
+                    <input
+                      type="radio"
+                      name="wms-inventory-management-mode"
+                      className={radioInput}
+                      checked={draftMode === opt.value}
+                      onChange={() => setDraftMode(opt.value)}
+                    />
+                    <span>
+                      <span className="block text-sm font-medium text-slate-900">{opt.label}</span>
+                      <span className={fieldHint}>{opt.description}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            ) : null}
+          </div>
+          <div className="mt-5 flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={!canSave}
+              onClick={() => void save()}
+              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {saving ? "Zapisywanie…" : "Zapisz zmiany"}
+            </button>
+            {dirty ? (
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => setDraftMode(savedMode)}
+                className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Cofnij zmiany
+              </button>
+            ) : null}
+          </div>
 
-          <section className={cardClass} aria-labelledby="inventory-mode-compare-heading">
-            <h3 id="inventory-mode-compare-heading" className={sectionTitleClass}>
-              Porównanie trybów
-            </h3>
-            <div className="mt-4 overflow-x-auto">
-              <table className="w-full min-w-[520px] border-collapse text-left text-sm">
-                <thead>
-                  <tr className="border-b border-slate-200">
-                    <th scope="col" className="py-2 pr-4 font-medium text-slate-600">
-                      Funkcja
-                    </th>
-                    <th scope="col" className="px-3 py-2 font-medium text-slate-900">
-                      Wyłącznie dokumenty
-                    </th>
-                    <th scope="col" className="px-3 py-2 font-medium text-slate-900">
-                      Dokumenty + korekty
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {COMPARISON_ROWS.map((row) => (
-                    <tr key={row.feature} className="border-b border-slate-100 last:border-0">
-                      <td className="py-2.5 pr-4 text-slate-700">{row.feature}</td>
-                      <td className="px-3 py-2.5">
-                        <BoolCell value={row.documentsOnly} />
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <BoolCell value={row.hybrid} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        </>
-      ) : null}
-    </div>
+          {!loading && !loadError ? (
+            <>
+              <div aria-labelledby="inventory-mode-effects-heading">
+                <h3 id="inventory-mode-effects-heading" className={sectionTitleClass}>
+                  Co oznacza wybrany tryb?
+                </h3>
+                <p className="mt-1 text-xs text-slate-500">
+                  Podgląd skutków dla:{" "}
+                  <span className="font-medium text-slate-700">{previewCopy.label}</span>
+                  {dirty ? " — zapisz, aby ustawić jako aktywny." : ""}
+                </p>
+                <ModeEffectsList mode={draftMode} />
+              </div>
+
+              <div aria-labelledby="inventory-mode-compare-heading">
+                <h3 id="inventory-mode-compare-heading" className={sectionTitleClass}>
+                  Porównanie trybów
+                </h3>
+                <div className="mt-4 overflow-x-auto">
+                  <table className="w-full min-w-[520px] border-collapse text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-200">
+                        <th scope="col" className="py-2 pr-4 font-medium text-slate-600">
+                          Funkcja
+                        </th>
+                        <th scope="col" className="px-3 py-2 font-medium text-slate-900">
+                          Wyłącznie dokumenty
+                        </th>
+                        <th scope="col" className="px-3 py-2 font-medium text-slate-900">
+                          Dokumenty + korekty
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {COMPARISON_ROWS.map((row) => (
+                        <tr key={row.feature} className="border-b border-slate-100 last:border-0">
+                          <td className="py-2.5 pr-4 text-slate-700">{row.feature}</td>
+                          <td className="px-3 py-2.5">
+                            <BoolCell value={row.documentsOnly} />
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <BoolCell value={row.hybrid} />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          ) : null}
+        </div>
+      </WmsSettingsSection>
+    </WmsSettingsLayout>
   );
 }

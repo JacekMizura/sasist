@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-07-16 — WMS settings UI standardization
+
+- Shared: `WmsSettingsLayout` (hide aside ≤1 section), `WmsSettingsSection`, `WmsSettingCard`, `WmsSettingsFooter`.
+- Coming soon tabs (Reklamacje, Crossdocking, Rozlokowania, Przesunięcia): no dashed empty boxes.
+- Canonical section labels: Ogólne / Workflow / Widok / Automatyzacja / Integracje / Drukowanie / Zaawansowane.
+- Global sticky save bar via `WmsSettingsFooter` for dirty packing/picking/direct sales.
+
 ## 2026-07-16 — Settings: merge Uprawnienia into Użytkownicy
 
 - Removed fly-out item „Uprawnienia” (was a duplicate entry to groups).

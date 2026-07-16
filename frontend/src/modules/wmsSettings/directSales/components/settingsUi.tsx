@@ -1,12 +1,10 @@
 import type { ReactNode } from "react";
 
-import { WMS_SETTINGS_SECTION_ANCHOR_CLASS } from "../../../../pages/Settings/wmsSettingsSectionConstants";
-import { useWmsSettingsSectionAnchor } from "../../../../pages/Settings/WmsSettingsSectionRegistryContext";
+import { WmsSettingsSection } from "../../../../pages/Settings/WmsSettingsSection";
+import { wmsSettingsTokens } from "../../../../pages/Settings/wmsSettingsTokens";
 
-export const selectClass =
-  "mt-1.5 w-full max-w-md rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40";
-
-export const checkboxClass = "mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-blue-600 focus:ring-blue-500";
+export const selectClass = wmsSettingsTokens.select;
+export const checkboxClass = wmsSettingsTokens.checkbox;
 
 export function SettingsCard({
   id,
@@ -19,17 +17,10 @@ export function SettingsCard({
   summary?: string;
   children: ReactNode;
 }) {
-  const anchorRef = useWmsSettingsSectionAnchor(id);
   return (
-    <section ref={anchorRef} id={id} data-wms-section="" className={WMS_SETTINGS_SECTION_ANCHOR_CLASS}>
-      <div className="rounded-xl border border-slate-200/90 bg-white p-5 shadow-sm">
-        <div className="mb-4">
-          <h2 className="text-base font-semibold text-slate-900">{title}</h2>
-          {summary ? <p className="mt-1 text-sm text-slate-500">{summary}</p> : null}
-        </div>
-        <div className="space-y-4">{children}</div>
-      </div>
-    </section>
+    <WmsSettingsSection id={id} title={title} summary={summary}>
+      {children}
+    </WmsSettingsSection>
   );
 }
 

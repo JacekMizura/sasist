@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import WmsSettingsSectionNav from "./WmsSettingsSectionNav";
 import { WmsSettingsSectionRegistryProvider } from "./WmsSettingsSectionRegistryContext";
 import type { WmsSettingsSectionConfig } from "./wmsSettingsSectionConfig";
+import { cnParts, wmsSettingsTokens } from "./wmsSettingsTokens";
 
 export type WmsSettingsLayoutProps = {
   sections: WmsSettingsSectionConfig[];
@@ -15,8 +16,8 @@ export type WmsSettingsLayoutProps = {
 };
 
 /**
- * Sticky subsection rail + content. `md:items-stretch` makes the aside as tall as the content
- * column so `position: sticky` can act through the full scroll of the row (not a short `items-start` box).
+ * Shared WMS settings body: optional left section rail + content column.
+ * Sidebar is hidden when there is at most one section (content uses full width).
  */
 export function WmsSettingsLayout({
   sections,
@@ -27,19 +28,32 @@ export function WmsSettingsLayout({
   footer,
   mainClassName = "",
 }: WmsSettingsLayoutProps) {
+  const showAside = sections.length > 1;
+  const observe = observeSections && showAside;
+
   return (
     <WmsSettingsSectionRegistryProvider
       orderedSections={sections}
-      observe={observeSections}
+      observe={observe}
       observeRevision={observeRevision}
     >
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-[280px_minmax(0,1fr)] md:items-stretch">
-        <aside className="relative min-h-0" aria-label={asideLabel}>
-          <div className="sticky top-24">
-            <WmsSettingsSectionNav />
-          </div>
-        </aside>
-        <main className={["min-w-0", mainClassName].filter(Boolean).join(" ")}>{children}</main>
+      <div
+        className={
+          showAside
+            ? "grid grid-cols-1 gap-6 md:grid-cols-[240px_minmax(0,1fr)] md:items-stretch"
+            : "w-full min-w-0"
+        }
+      >
+        {showAside ? (
+          <aside className="relative min-h-0" aria-label={asideLabel ?? "Sekcje ustawień"}>
+            <div className="sticky top-24">
+              <WmsSettingsSectionNav />
+            </div>
+          </aside>
+        ) : null}
+        <main className={cnParts("min-w-0 w-full", wmsSettingsTokens.mainStack, mainClassName)}>
+          {children}
+        </main>
       </div>
       {footer}
     </WmsSettingsSectionRegistryProvider>

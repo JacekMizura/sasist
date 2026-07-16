@@ -12,10 +12,9 @@ import {
 } from "../../api/wmsProductionSettingsApi";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { WmsSettingsLayout } from "./WmsSettingsLayout";
+import { WmsSettingsSection } from "./WmsSettingsSection";
 import { DocumentTemplateScopeSection } from "./document-templates/components/DocumentTemplateScopeSection";
 import { PRODUCTION_SCOPE_KINDS } from "./document-templates/documentTemplateScopeKinds";
-import { WMS_SETTINGS_SECTION_ANCHOR_CLASS } from "./wmsSettingsSectionConstants";
-import { useWmsSettingsSectionAnchor } from "./WmsSettingsSectionRegistryContext";
 
 const SECTION_FORECAST = "wms-production-forecast";
 const SECTION_RESERVATION = "wms-production-reservation";
@@ -42,12 +41,7 @@ type Props = {
 };
 
 function SectionCard({ sectionId, children }: { sectionId: string; children: ReactNode }) {
-  const anchorRef = useWmsSettingsSectionAnchor(sectionId);
-  return (
-    <section ref={anchorRef} id={sectionId} data-wms-section="" className={WMS_SETTINGS_SECTION_ANCHOR_CLASS}>
-      <div className="rounded-xl border border-slate-200/90 bg-white p-5 shadow-sm">{children}</div>
-    </section>
-  );
+  return <WmsSettingsSection id={sectionId}>{children}</WmsSettingsSection>;
 }
 
 function BoolRow({

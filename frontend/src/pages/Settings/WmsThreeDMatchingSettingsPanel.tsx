@@ -6,8 +6,7 @@ import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import type { OrderStatusOption } from "../../types/wmsPackingSettings";
 import { orderPanelStatusSelectLabel } from "../../utils/orderPanelStatusUi";
 import { WmsSettingsLayout } from "./WmsSettingsLayout";
-import { WMS_SETTINGS_SECTION_ANCHOR_CLASS } from "./wmsSettingsSectionConstants";
-import { useWmsSettingsSectionAnchor } from "./WmsSettingsSectionRegistryContext";
+import { WmsSettingsSection } from "./WmsSettingsSection";
 import { WMS_THREE_D_MATCHING_NAV_SECTIONS } from "./wmsThreeDMatchingSettingsNavSections";
 import {
   PackagingIntelligenceAuditPlaceholderTable,
@@ -40,17 +39,10 @@ function SectionCard({
   summary?: string;
   children: ReactNode;
 }) {
-  const anchorRef = useWmsSettingsSectionAnchor(id);
   return (
-    <section ref={anchorRef} id={id} data-wms-section="" className={WMS_SETTINGS_SECTION_ANCHOR_CLASS}>
-      <div className="rounded-xl border border-slate-200/90 bg-white p-5 shadow-sm">
-        <div className="mb-4">
-          <h2 className="text-base font-semibold text-slate-900">{title}</h2>
-          {summary ? <p className="mt-0.5 text-xs text-slate-500">{summary}</p> : null}
-        </div>
-        {children}
-      </div>
-    </section>
+    <WmsSettingsSection id={id} title={title} summary={summary}>
+      {children}
+    </WmsSettingsSection>
   );
 }
 

@@ -39,12 +39,13 @@ import WmsSmartMatchingSettingsPanel from "./WmsSmartMatchingSettingsPanel";
 import WmsThreeDMatchingSettingsPanel from "./WmsThreeDMatchingSettingsPanel";
 import WmsProductValidationSettingsPanel from "./WmsProductValidationSettingsPanel";
 import WmsProductionSettingsPanel from "./WmsProductionSettingsPanel";
-import StickySaveBar from "./StickySaveBar";
+import { WmsSettingsComingSoon } from "./WmsSettingsComingSoon";
+import { WmsSettingsFooter } from "./WmsSettingsFooter";
 import { WmsSettingsLayout } from "./WmsSettingsLayout";
+import { WmsSettingsSection } from "./WmsSettingsSection";
+import { WmsSettingCard } from "./WmsSettingCard";
 import { WMS_PICKING_SETTINGS_NAV_SECTIONS } from "./wmsPickingSettingsNavSections";
-import { getWmsSettingsPlaceholderSections } from "./wmsPlaceholderSettingsSections";
-import { WMS_SETTINGS_SECTION_ANCHOR_CLASS } from "./wmsSettingsSectionConstants";
-import { useWmsSettingsSectionAnchor } from "./WmsSettingsSectionRegistryContext";
+import { wmsSettingsTokens } from "./wmsSettingsTokens";
 import {
   getWmsPickingShortageSettings,
   saveWmsPickingShortageSettings,
@@ -126,8 +127,7 @@ const WMS_SETTINGS_TABS = [
 
 type WmsSettingsTabId = (typeof WMS_SETTINGS_TABS)[number]["id"];
 
-const textInputClassPicking =
-  "mt-1.5 w-full max-w-md rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition-all focus-visible:border-blue-500 focus-visible:ring-1 focus-visible:ring-blue-500";
+const textInputClassPicking = wmsSettingsTokens.input;
 
 function stableStringifyPicking(v: unknown): string {
   if (v === null || v === undefined) return JSON.stringify(v);
@@ -151,38 +151,27 @@ function SectionCardPicking({
   summary?: string;
   children: ReactNode;
 }) {
-  const anchorRef = useWmsSettingsSectionAnchor(id);
   return (
-    <section ref={anchorRef} id={id} data-wms-section="" className={`pt-8 mt-8 border-t border-slate-200 first:border-t-0 first:pt-0 first:mt-0 ${WMS_SETTINGS_SECTION_ANCHOR_CLASS}`}>
-      <div className="mb-5">
-        <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
-        {summary ? <p className="mt-1 text-sm text-slate-500">{summary}</p> : null}
-      </div>
-      <div className="space-y-6">
-        {children}
-      </div>
-    </section>
+    <WmsSettingsSection id={id} title={title} summary={summary}>
+      {children}
+    </WmsSettingsSection>
   );
 }
 
 function SubsectionPicking({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
   return (
-    <div className="rounded-xl border border-slate-200/60 bg-slate-50/50 p-5 shadow-sm">
-      <div className="mb-4 pb-4 border-b border-slate-100/80">
-        <h4 className="text-sm font-semibold text-slate-900">{title}</h4>
-        {description ? <p className="mt-1 text-xs text-slate-500">{description}</p> : null}
-      </div>
-      <div className="mt-2">{children}</div>
-    </div>
+    <WmsSettingCard title={title} description={description}>
+      {children}
+    </WmsSettingCard>
   );
 }
 
 function FieldGridPicking({ children }: { children: ReactNode }) {
-  return <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2">{children}</div>;
+  return <div className={wmsSettingsTokens.fieldGrid}>{children}</div>;
 }
 
 function HelpPicking({ children }: { children: ReactNode }) {
-  return <p className="mt-1 text-xs leading-relaxed text-slate-500">{children}</p>;
+  return <p className={wmsSettingsTokens.help}>{children}</p>;
 }
 
 function BoolRowPicking({
@@ -256,35 +245,8 @@ function CustomCheckbox({ checked, onChange, label, hint, disabled }: { checked:
   );
 }
 
-function WmsSettingsPlaceholderOverviewSection({ label, sectionId }: { label: string; sectionId: string }) {
-  const anchorRef = useWmsSettingsSectionAnchor(sectionId);
-  return (
-    <section
-      ref={anchorRef}
-      id={sectionId}
-      data-wms-section=""
-      className={`min-h-[240px] rounded-xl border border-dashed border-slate-300 bg-slate-50/50 ${WMS_SETTINGS_SECTION_ANCHOR_CLASS}`}
-      aria-label={`Sekcja: ${label}`}
-    />
-  );
-}
-
-function WmsSettingsFutureTabShell({ label, tabId }: { label: string; tabId: string }) {
-  const placeholderSections = useMemo(() => getWmsSettingsPlaceholderSections(tabId), [tabId]);
-  const overviewId = placeholderSections[0].id;
-  return (
-    <WmsSettingsLayout
-      sections={placeholderSections}
-      asideLabel={`Sekcje: ${label}`}
-      mainClassName="space-y-5"
-    >
-      <header className="border-b border-slate-200 pb-3">
-        <h2 className="text-base font-semibold text-slate-900">{label}</h2>
-        <p className="mt-1 text-xs text-slate-500">Konfiguracja modułu będzie rozwijana w kolejnych wersjach.</p>
-      </header>
-      <WmsSettingsPlaceholderOverviewSection label={label} sectionId={overviewId} />
-    </WmsSettingsLayout>
-  );
+function WmsSettingsFutureTabShell({ label }: { label: string; tabId?: string }) {
+  return <WmsSettingsComingSoon label={label} />;
 }
 
 const PRIORITY_OPTIONS: Array<{ value: WmsShortageResolvePriorityApi; label: string }> = [
@@ -2249,7 +2211,7 @@ function WmsPickingSettingsSections({
       <div className="space-y-4">
         <SectionCardPicking
           id="wms-pick-appearance"
-          title="1. Wygląd i prezentacja"
+          title="Widok"
           summary="Kolumny na liście zbierania, magazyny, układ i gęstość listy."
         >
           <SubsectionPicking title="Kolumny produktu (lista zbierania)" description="Wybór informacji widocznych na liście zbierania.">
@@ -2312,7 +2274,7 @@ function WmsPickingSettingsSections({
 
         <SectionCardPicking
           id="wms-pick-workflow"
-          title="2. Workflow / statusy"
+          title="Workflow"
           summary="Konfiguracja reguł statusów, braki, limity zbioru i obsługa braków."
         >
           <SubsectionPicking title="Konfiguracja trybu zbierania" description="Mapowanie statusów panelu na tryb zbierania — zapis do API.">
@@ -2442,7 +2404,7 @@ function WmsPickingSettingsSections({
           </SubsectionPicking>
         </SectionCardPicking>
 
-        <SectionCardPicking id="wms-pick-automation" title="3. Automatyzacja" summary="Automatyczne akcje podczas i po zbieraniu.">
+        <SectionCardPicking id="wms-pick-automation" title="Automatyzacja" summary="Automatyczne akcje podczas i po zbieraniu.">
           <FieldGridPicking>
             <CustomCheckbox label="Auto: następne zamówienie" checked={extended.autoStartNextOrder} onChange={(v) => patchExtended("autoStartNextOrder", v)} />
             <CustomCheckbox label="Auto: otwórz skaner" checked={extended.autoOpenScanner} onChange={(v) => patchExtended("autoOpenScanner", v)} />
@@ -2451,14 +2413,14 @@ function WmsPickingSettingsSections({
           </FieldGridPicking>
         </SectionCardPicking>
 
-        <SectionCardPicking id="wms-pick-documents" title="4. Dokumenty sprzedaży" summary="Powiązanie z dokumentami sprzedaży.">
+        <SectionCardPicking id="wms-pick-documents" title="Integracje" summary="Powiązanie z dokumentami sprzedaży.">
           <HelpPicking>
             Dokumenty sprzedaży konfigurujesz w zakładce <strong className="font-semibold text-slate-900">Pakowanie</strong> — w module
             zbierania nie ma osobnych pól dokumentów.
           </HelpPicking>
         </SectionCardPicking>
 
-        <SectionCardPicking id="wms-pick-labels" title="5. Etykiety / Kurierzy" summary="Plakietki kurierskie, sortowanie, etykiety przesunięć oraz kontenery i trasy.">
+        <SectionCardPicking id="wms-pick-labels" title="Drukowanie" summary="Plakietki kurierskie, sortowanie, etykiety przesunięć oraz kontenery i trasy.">
           <SubsectionPicking title="Kurier i kolejka" description="Widoczność i priorytety powiązane z kurierem.">
             <FieldGridPicking>
               <CustomCheckbox label="Plakietka kuriera" checked={extended.showCourierBadge} onChange={(v) => patchExtended("showCourierBadge", v)} />
@@ -2494,7 +2456,7 @@ function WmsPickingSettingsSections({
           </SubsectionPicking>
         </SectionCardPicking>
 
-        <SectionCardPicking id="wms-pick-permissions" title="6. Uprawnienia / Walidacja" summary="Wymagania skanów i reguły walidacji podczas zbierania.">
+        <SectionCardPicking id="wms-pick-permissions" title="Ogólne" summary="Wymagania skanów i reguły walidacji podczas zbierania.">
           <FieldGridPicking>
             <CustomCheckbox
               label="Wymagaj skanu produktu (min. raz)"
@@ -2525,7 +2487,7 @@ function WmsPickingSettingsSections({
           </FieldGridPicking>
         </SectionCardPicking>
 
-        <SectionCardPicking id="wms-pick-assistant" title="7. Asystent zbierania" summary="Zbiory, kolejka zamówień oraz notatki i ostrzeżenia.">
+        <SectionCardPicking id="wms-pick-assistant" title="Automatyzacja" summary="Zbiory, kolejka zamówień oraz notatki i ostrzeżenia.">
           <SubsectionPicking title="Zbiory / kolejka">
             <FieldGridPicking>
               <label className="block text-sm font-medium text-slate-700">
@@ -2594,7 +2556,7 @@ function WmsPickingSettingsSections({
           </SubsectionPicking>
         </SectionCardPicking>
 
-        <SectionCardPicking id="wms-pick-advanced" title="8. Zaawansowane" summary="Diagnostyka, legacy i routing.">
+        <SectionCardPicking id="wms-pick-advanced" title="Zaawansowane" summary="Diagnostyka, legacy i routing.">
           <SubsectionPicking title="Zaawansowane">
             <FieldGridPicking>
               <CustomCheckbox
@@ -2779,8 +2741,8 @@ export default function WmsSettingsPage() {
               ) : null}
             </div>
           </div>
-          <StickySaveBar
-            className="-mx-5"
+          <WmsSettingsFooter
+            className="-mx-4 sm:-mx-5"
             visible={isDirty}
             saving={globalSaving}
             onCancel={() => void handleReset()}
