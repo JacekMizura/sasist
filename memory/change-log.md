@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-07-16 — Konfigurator zbierania: modal 1400px + nazwy Sellasist 1:1
+
+- Drawer → `PickingSettingsModal` (max-width 1400px), sekcje pionowe / gęste, A|B obok siebie na XL.
+- Etykiety opcji: „Do wózka z/bez wymuszenia skanowania…”, „Do wózków z koszykami”, „Wózkiem mobilnym…”, kolejność daty/kurierów jak w Sellasist.
+- Bez zmian API / wartości enum / zapisu.
+
 ## 2026-07-16 — Zbieranie settings UX: mniej scrolla, 2 kolumny
 
 - Usunięto prawy sticky „Podgląd konfiguracji” (`PickingConfigPreviewPanel` deleted).
