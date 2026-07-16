@@ -49,6 +49,24 @@ import { PickingSettingsShell } from "./PickingSettingsShell";
 
 const PANEL_STATUS_GROUP_ORDER: OrderUiMainGroup[] = ["NEW", "IN_PROGRESS", "DONE"];
 
+/** Flat status list for picking selects — NEW → IN_PROGRESS → DONE, then sort_order. */
+function flattenOrderUiStatusOptions(
+  summary: OrderUiStatusPanelSummary | null,
+): Array<{ id: number; name: string }> {
+  if (!summary) return [];
+  const byMain = new Map(summary.groups.map((g) => [g.main_group, g]));
+  const out: Array<{ id: number; name: string }> = [];
+  for (const mg of PANEL_STATUS_GROUP_ORDER) {
+    const block = byMain.get(mg);
+    if (!block) continue;
+    const subs = [...block.sub_statuses].sort((a, b) => a.sort_order - b.sort_order || a.id - b.id);
+    for (const s of subs) {
+      out.push({ id: s.id, name: s.name });
+    }
+  }
+  return out;
+}
+
 const selectClass = wmsSettingsTokens.select;
 const radioLabelClass =
   "flex cursor-pointer items-center gap-2.5 rounded-lg border border-transparent px-3 py-2 hover:bg-slate-50 transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-blue-500/30";
