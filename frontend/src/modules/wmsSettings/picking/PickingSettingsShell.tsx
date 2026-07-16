@@ -8,39 +8,35 @@ import { PickingSettingsSectionNav } from "./PickingSettingsSectionNav";
 type ShellProps = {
   observe?: boolean;
   observeRevision?: unknown;
-  preview: ReactNode;
   children: ReactNode;
 };
 
-function ShellInner({ preview, children }: { preview: ReactNode; children: ReactNode }) {
+function ShellInner({ children }: { children: ReactNode }) {
   const { activeSectionId, scrollToSection } = useWmsSettingsSectionRegistry();
   return (
-    <div className="grid grid-cols-1 gap-6 xl:grid-cols-[220px_minmax(0,1fr)_260px] xl:items-start">
+    <div className="grid grid-cols-1 gap-5 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-start">
       <aside className="relative min-h-0" aria-label="Sekcje ustawień zbierania">
-        <div className="xl:sticky xl:top-24">
+        <div className="lg:sticky lg:top-4">
           <PickingSettingsSectionNav activeSectionId={activeSectionId} onSelect={scrollToSection} />
         </div>
       </aside>
-      <main className="min-w-0 space-y-6">{children}</main>
-      <aside className="relative min-h-0" aria-label="Podgląd konfiguracji">
-        <div className="xl:sticky xl:top-24">{preview}</div>
-      </aside>
+      <main className="min-w-0 space-y-5">{children}</main>
     </div>
   );
 }
 
 /**
- * 3-column picking settings chrome: section nav · content · sticky preview.
- * Uses the same section registry / scrollspy as other WMS settings modules.
+ * 2-column picking settings chrome: sticky section nav · content.
+ * Scroll-spy via shared WmsSettingsSectionRegistryProvider (IntersectionObserver).
  */
-export function PickingSettingsShell({ observe = true, observeRevision, preview, children }: ShellProps) {
+export function PickingSettingsShell({ observe = true, observeRevision, children }: ShellProps) {
   return (
     <WmsSettingsSectionRegistryProvider
       orderedSections={WMS_PICKING_SETTINGS_NAV_SECTIONS}
       observe={observe}
       observeRevision={observeRevision}
     >
-      <ShellInner preview={preview}>{children}</ShellInner>
+      <ShellInner>{children}</ShellInner>
     </WmsSettingsSectionRegistryProvider>
   );
 }

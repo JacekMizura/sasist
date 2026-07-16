@@ -50,7 +50,7 @@ export function PickingSettingsSectionNav({
             type="button"
             onClick={() => onSelect(section.id)}
             className={[
-              "flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm transition-colors",
+              "flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition-colors",
               active
                 ? "bg-blue-50 font-semibold text-blue-700 ring-1 ring-inset ring-blue-200"
                 : "font-medium text-slate-700 hover:bg-slate-100",

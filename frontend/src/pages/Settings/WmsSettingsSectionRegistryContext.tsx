@@ -117,35 +117,48 @@ export function WmsSettingsSectionRegistryProvider({
 
     let cancelled = false;
     let retryRaf = 0;
+    let observer: IntersectionObserver | null = null;
     let detach: (() => void) | undefined;
 
     const attach = () => {
-      const firstEl = orderedSections.map((s) => anchorsRef.current.get(s.id)).find(Boolean) as HTMLElement | undefined;
-      if (!firstEl) {
+      const els = orderedSections
+        .map((s) => ({ id: s.id, el: anchorsRef.current.get(s.id) }))
+        .filter((x): x is { id: string; el: HTMLElement } => Boolean(x.el));
+
+      if (els.length === 0) {
         retryRaf = requestAnimationFrame(() => {
           if (!cancelled) attach();
         });
         return;
       }
 
-      const scrollRoot = findVerticalScrollContainer(firstEl);
+      const scrollRoot = findVerticalScrollContainer(els[0].el);
 
-      const onScrollOrResize = () => {
+      const refresh = () => {
         if (!cancelled) computeActive();
       };
 
-      computeActive();
+      // IntersectionObserver drives highlight as sections enter/leave the sticky band.
+      observer = new IntersectionObserver(refresh, {
+        root: scrollRoot,
+        rootMargin: `-${WMS_SETTINGS_STICKY_LINE_PX}px 0px -45% 0px`,
+        threshold: [0, 0.05, 0.1, 0.25, 0.5, 0.75, 1],
+      });
+      for (const { el } of els) observer.observe(el);
 
+      // Scroll keeps the active item correct inside tall sections (IO alone can go quiet mid-section).
       const opts = { passive: true } as const;
-      if (scrollRoot) scrollRoot.addEventListener("scroll", onScrollOrResize, opts);
-      else window.addEventListener("scroll", onScrollOrResize, opts);
-      window.addEventListener("resize", onScrollOrResize);
+      if (scrollRoot) scrollRoot.addEventListener("scroll", refresh, opts);
+      else window.addEventListener("scroll", refresh, opts);
+      window.addEventListener("resize", refresh);
 
       detach = () => {
-        if (scrollRoot) scrollRoot.removeEventListener("scroll", onScrollOrResize);
-        else window.removeEventListener("scroll", onScrollOrResize);
-        window.removeEventListener("resize", onScrollOrResize);
+        if (scrollRoot) scrollRoot.removeEventListener("scroll", refresh);
+        else window.removeEventListener("scroll", refresh);
+        window.removeEventListener("resize", refresh);
       };
+
+      refresh();
     };
 
     attach();
@@ -153,6 +166,7 @@ export function WmsSettingsSectionRegistryProvider({
     return () => {
       cancelled = true;
       cancelAnimationFrame(retryRaf);
+      observer?.disconnect();
       detach?.();
     };
   }, [observe, observeRevision, orderedSections, computeActive, registrationTick]);

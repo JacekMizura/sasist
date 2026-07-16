@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-07-16 — Zbieranie settings UX: mniej scrolla, 2 kolumny
+
+- Usunięto prawy sticky „Podgląd konfiguracji” (`PickingConfigPreviewPanel` deleted).
+- Shell: `sticky menu | content`, lewa nawigacja `lg:sticky lg:top-4`.
+- Scroll-spy: `IntersectionObserver` w `WmsSettingsSectionRegistryContext` (+ scroll dla wysokich sekcji).
+- Nagłówek uproszczony do „Zbieranie”; karty kompaktowe bez badge Aktywny/Nieaktywny (brak pojęcia default w API).
+
 ## 2026-07-16 — Ustawienia zbierania: audit brakujących helperów po refaktorze
 
 - Przywrócono lokalne helpery w `WmsPickingSettingsPanel.tsx`: `flattenOrderUiStatusOptions`, limity `BULK_ORDER_*` + `parseBulkOrderLimitInput`, `fieldHintClass`, `configBlockTitleClass`.
