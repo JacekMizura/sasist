@@ -1,5 +1,9 @@
 # Change log
 
+## 2026-07-16 — Wózki: breadcrumb/title follow active tab
+
+- `CartsModuleLayout`: Magazyn > {active tab} + h1 = tab label (not always „Wózki”).
+
 ## 2026-07-16 — Cart content: expand under row (no Drawer)
 
 - Wózki / Wózki z koszykami: content preview expands under the cart row (full width), not right Drawer.
