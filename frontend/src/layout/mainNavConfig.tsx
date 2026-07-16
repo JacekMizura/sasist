@@ -7,6 +7,7 @@ import {
   BarChart3,
   Tag,
   Settings,
+  Settings2,
   Cpu,
   Zap,
   Tablet,
@@ -68,6 +69,11 @@ export type NavCategoryConfig = {
   activePathPrefix?: string;
   /** Show › chevron — category opens a right fly-out panel (Magazyn / Ustawienia). */
   opensSideFlyout?: boolean;
+  /**
+   * Direct sidebar link (no fly-out). Used for top-level modules like Ustawienia WMS.
+   * When set, click navigates here; hover does not open a panel.
+   */
+  directPath?: string;
 };
 
 /** WMS entry CTA at bottom of sidebar (not a menu row). */
@@ -89,7 +95,7 @@ export type NavSidebarSectionConfig = {
 
 /**
  * ERP sidebar grouping — SPRZEDAŻ / OPERACJE.
- * Magazyn & Ustawienia open side fly-outs; WMS is a footer CTA.
+ * Magazyn & Ustawienia open side fly-outs; Ustawienia WMS is a direct link above WMS CTA.
  */
 export const NAV_SIDEBAR_SECTIONS: NavSidebarSectionConfig[] = [
   {
@@ -100,7 +106,7 @@ export const NAV_SIDEBAR_SECTIONS: NavSidebarSectionConfig[] = [
   {
     id: "operations",
     label: "Operacje",
-    categoryIds: ["purchasing", "analytics", "labels", "warehouse", "settings"],
+    categoryIds: ["purchasing", "analytics", "labels", "warehouse", "settings", "wms-settings"],
   },
 ];
 
@@ -341,6 +347,13 @@ export const NAV_FLYOUT_CATEGORIES: NavCategoryConfig[] = [
       },
     ],
   },
+  {
+    id: "wms-settings",
+    label: UI_STRINGS.navigation.wmsSettings,
+    Icon: Settings2,
+    directPath: "/settings/wms",
+    flyoutSections: [],
+  },
 ];
 
 export function categoryFlyoutPaths(category: NavCategoryConfig): string[] {
@@ -369,10 +382,15 @@ export function isCategoryActive(category: NavCategoryConfig, pathname: string):
     if (pathname === "/production" || pathname.startsWith("/production/")) return true;
   }
   if (category.id === "settings") {
+    // Ustawienia WMS is its own sidebar row — do not highlight Ogólne Ustawienia there.
+    if (pathname === "/settings/wms" || pathname.startsWith("/settings/wms/")) return false;
     if (pathname.startsWith("/settings")) return true;
     if (pathname === "/system" || pathname.startsWith("/system/")) return true;
     if (pathname.startsWith("/admin/message-templates")) return true;
     if (pathname.startsWith("/admin/print-templates")) return true;
+  }
+  if (category.id === "wms-settings") {
+    return pathname === "/settings/wms" || pathname.startsWith("/settings/wms/");
   }
   if (category.id === "documents") {
     if (pathname.startsWith("/documents")) return true;

@@ -129,6 +129,41 @@ function SectionBlock({
       {!collapsed ? <p className={ERP_SIDEBAR_SECTION_LABEL}>{section.label}</p> : null}
       <div className="flex flex-col gap-1.5 px-2">
         {items.map((cat) => {
+          const directPath = cat.directPath?.trim();
+          if (directPath) {
+            const active = isCategoryActive(cat, pathname);
+            const Icon = cat.Icon;
+            return (
+              <Link
+                key={cat.id}
+                to={directPath}
+                title={collapsed ? cat.label : undefined}
+                aria-label={cat.label}
+                aria-current={active ? "page" : undefined}
+                className={[
+                  ERP_SIDEBAR_ITEM_BASE,
+                  active ? ERP_SIDEBAR_ITEM_ACTIVE : ERP_SIDEBAR_ITEM_HOVER,
+                  collapsed ? "justify-center px-0" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+              >
+                {active ? <span className={ERP_SIDEBAR_ACTIVE_BAR} aria-hidden /> : null}
+                <Icon
+                  className={[
+                    collapsed ? ERP_SIDEBAR_ICON_COLLAPSED_CLASS : ERP_SIDEBAR_ICON_CLASS,
+                    active ? "text-blue-600" : "text-slate-600 group-hover:text-slate-900",
+                  ].join(" ")}
+                  strokeWidth={active ? 2.25 : 1.75}
+                  aria-hidden
+                />
+                {!collapsed ? (
+                  <span className="min-w-0 flex-1 truncate leading-tight">{cat.label}</span>
+                ) : null}
+              </Link>
+            );
+          }
+
           const flyoutOpen = openCategoryId === cat.id;
           const active = isCategoryActive(cat, pathname);
           const showChevron = Boolean(cat.opensSideFlyout) && !collapsed;

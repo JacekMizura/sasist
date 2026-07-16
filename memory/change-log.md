@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-07-16 — Restore Ustawienia WMS in ERP sidebar
+
+- Re-added top-level sidebar item ``Ustawienia WMS`` (`Settings2`) → `/settings/wms`.
+- Placed after ``Ustawienia``, above ``Przejdź do WMS`` (not inside Settings fly-out).
+- Page/route were intact; only nav entry was missing after sidebar refactor.
+
 ## 2026-07-16 — Global WMS scanner emulator restored
 
 - `DevScannerPanel` always on under WMS (unless `VITE_ENABLE_DEV_SCANNER=false`).
