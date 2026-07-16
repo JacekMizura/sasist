@@ -30,6 +30,8 @@ export type LocationVisualRackGridCell = {
   color?: string | null;
   zone_code: string;
   is_active: boolean;
+  aisle_letter?: string;
+  is_same_aisle?: boolean;
 };
 
 export type LocationVisualBin = {
@@ -40,6 +42,13 @@ export type LocationVisualBin = {
   segment_index: number;
   segment_label: string;
   is_active: boolean;
+  storage_type?: string | null;
+  location_kind?: string | null;
+  is_empty?: boolean;
+  is_blocked?: boolean;
+  sku?: string | null;
+  quantity?: number;
+  carrier_code?: string | null;
 };
 
 export type LocationVisualCarrier = {
@@ -55,6 +64,7 @@ export type LocationVisualCarrier = {
 export type LocationVisualProduct = {
   product_id: number;
   sku?: string | null;
+  ean?: string | null;
   name?: string | null;
   image_url?: string | null;
   quantity: number;
@@ -65,11 +75,21 @@ export type LocationVisualProduct = {
   row_key?: string | null;
 };
 
+export type LocationVisualCapacityBasis = "volume" | "weight" | "slots" | "none";
+
 export type LocationVisualOccupancy = {
   sku_count: number;
   total_qty: number;
   occupied_volume_dm3: number;
-  capacity_utilization_percent: number;
+  used_volume_dm3?: number;
+  max_volume_dm3?: number | null;
+  used_weight_kg?: number;
+  max_weight_kg?: number | null;
+  used_slots?: number | null;
+  total_slots?: number | null;
+  capacity_basis?: LocationVisualCapacityBasis;
+  capacity_utilization_percent?: number | null;
+  capacity_label?: string | null;
   storage_type?: string | null;
   location_type: string;
 };

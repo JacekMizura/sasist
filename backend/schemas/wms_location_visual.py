@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -42,6 +42,8 @@ class LocationVisualRackGridCellOut(BaseModel):
     color: Optional[str] = None
     zone_code: str = ""
     is_active: bool = False
+    aisle_letter: str = ""
+    is_same_aisle: bool = False
 
 
 class LocationVisualBinOut(BaseModel):
@@ -52,6 +54,13 @@ class LocationVisualBinOut(BaseModel):
     segment_index: int = 0
     segment_label: str = ""
     is_active: bool = False
+    storage_type: Optional[str] = None
+    location_kind: Optional[str] = None
+    is_empty: bool = True
+    is_blocked: bool = False
+    sku: Optional[str] = None
+    quantity: float = 0
+    carrier_code: Optional[str] = None
 
 
 class LocationVisualCarrierOut(BaseModel):
@@ -67,6 +76,7 @@ class LocationVisualCarrierOut(BaseModel):
 class LocationVisualProductOut(BaseModel):
     product_id: int
     sku: Optional[str] = None
+    ean: Optional[str] = None
     name: Optional[str] = None
     image_url: Optional[str] = None
     quantity: float = 0
@@ -77,11 +87,22 @@ class LocationVisualProductOut(BaseModel):
     row_key: Optional[str] = Field(default=None, description="Unique key when same SKU split by disposition")
 
 
+CapacityBasis = Literal["volume", "weight", "slots", "none"]
+
+
 class LocationVisualOccupancyOut(BaseModel):
     sku_count: int = 0
     total_qty: float = 0
     occupied_volume_dm3: float = 0
-    capacity_utilization_percent: float = 0
+    used_volume_dm3: float = 0
+    max_volume_dm3: Optional[float] = None
+    used_weight_kg: float = 0
+    max_weight_kg: Optional[float] = None
+    used_slots: Optional[int] = None
+    total_slots: Optional[int] = None
+    capacity_basis: CapacityBasis = "none"
+    capacity_utilization_percent: Optional[float] = None
+    capacity_label: Optional[str] = None
     storage_type: Optional[str] = None
     location_type: str = "PICK"
 

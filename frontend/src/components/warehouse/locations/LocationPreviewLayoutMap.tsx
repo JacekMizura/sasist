@@ -9,6 +9,7 @@ type Props = {
   warehouseId: number;
   locationUuid?: string | null;
   activeRackId?: number | null;
+  activeAisleLetter?: string | null;
   className?: string;
   layout?: LayoutState | null;
   layoutLoading?: boolean;
@@ -20,6 +21,7 @@ export function LocationPreviewLayoutMap({
   warehouseId,
   locationUuid,
   activeRackId,
+  activeAisleLetter,
   className = "",
   layout: layoutProp,
   layoutLoading: layoutLoadingProp,
@@ -90,6 +92,7 @@ export function LocationPreviewLayoutMap({
     <LocationPreviewFloorPlan
       layout={layout}
       activeRackId={activeRackId}
+      activeAisleLetter={activeAisleLetter}
       activeLocationUuid={locationUuid}
       className={`h-full overflow-hidden ${className}`}
     />

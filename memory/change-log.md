@@ -1,5 +1,13 @@
 # Change log
 
+## 2026-07-16 — Location preview modal rebuild
+
+- Modal wider (`max-w` ~1760px), 3-column layout for 27–32" screens.
+- Occupancy: volume/weight/slots only when max known; else `— %` + „Brak danych o pojemności nośnika” (no fake 0%).
+- Rack front: all levels/positions, color legend (primary/reserve/active/blocked/empty), hover tip (kod/typ/nośnik/SKU/ilość).
+- Floor plan: highlight rack + aisle + location; carrier contents show photo/name/SKU/EAN/qty.
+- API `visual-context`: `ean`, capacity fields, enriched `rack_bins` / `rack_grid.aisle`.
+
 ## 2026-07-16 — Szablony / Gotowe szablony card polish
 
 - Cards: white `#FFFFFF`, border `#E5E7EB`, radius 16px, soft shadow + hover lift; removed grey preview backgrounds.

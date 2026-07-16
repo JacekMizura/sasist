@@ -41,11 +41,72 @@ from .document_number_service import stock_document_display_label
 from .inventory_damage_trace_service import inventory_damage_trace_out
 from .location_badge import batch_location_storage_types, wms_location_badge_kind
 from .location_label_parse import parse_location
+from .slotting.capacity_service import location_volume_capacity_dm3
 from .wms_carrier_service import _carrier_items_from_inventory, _carrier_stats, carrier_operation_label
 
 
 class LocationVisualContextError(LookupError):
     pass
+
+
+def _product_ean(prod: Product) -> str | None:
+    ean = (getattr(prod, "ean", None) or "").strip()
+    return ean or None
+
+
+def _build_occupancy(
+    *,
+    loc: Location,
+    sku_count: int,
+    total_qty: float,
+    storage_type: str | None,
+    used_slots: int | None,
+    total_slots: int | None,
+) -> LocationVisualOccupancyOut:
+    used_vol = float(getattr(loc, "occupied_volume_dm3", 0) or 0)
+    max_vol = float(location_volume_capacity_dm3(loc) or 0)
+    used_w = float(getattr(loc, "occupied_weight_kg", 0) or 0)
+    explicit_max_w = getattr(loc, "max_weight_kg", None)
+    max_w = float(explicit_max_w) if explicit_max_w is not None and float(explicit_max_w) > 0 else None
+
+    basis: str = "none"
+    percent: float | None = None
+    label: str | None = None
+
+    if max_vol > 0:
+        basis = "volume"
+        percent = round(min(100.0, max(0.0, (used_vol / max_vol) * 100.0)), 1)
+        label = f"{round(used_vol, 1)} / {round(max_vol, 1)} dm³"
+    elif max_w is not None and max_w > 0:
+        basis = "weight"
+        percent = round(min(100.0, max(0.0, (used_w / max_w) * 100.0)), 1)
+        label = f"{round(used_w, 1)} / {round(max_w, 1)} kg"
+    elif total_slots is not None and total_slots > 0 and used_slots is not None:
+        basis = "slots"
+        percent = round(min(100.0, max(0.0, (used_slots / total_slots) * 100.0)), 1)
+        label = f"{used_slots} / {total_slots} slotów"
+    else:
+        # Stored percent alone is not trustworthy when capacity is unknown (often defaults to 0).
+        basis = "none"
+        percent = None
+        label = None
+
+    return LocationVisualOccupancyOut(
+        sku_count=sku_count,
+        total_qty=round(total_qty, 2),
+        occupied_volume_dm3=used_vol,
+        used_volume_dm3=used_vol,
+        max_volume_dm3=max_vol if max_vol > 0 else None,
+        used_weight_kg=used_w,
+        max_weight_kg=max_w,
+        used_slots=used_slots,
+        total_slots=total_slots,
+        capacity_basis=basis,  # type: ignore[arg-type]
+        capacity_utilization_percent=percent,
+        capacity_label=label,
+        storage_type=storage_type,
+        location_type=wms_location_badge_kind(loc),
+    )
 
 
 _STOCK_OP_LABELS: dict[str, str] = {
@@ -208,6 +269,7 @@ def _products_at_location(db: Session, *, tenant_id: int, location_id: int) -> l
             LocationVisualProductOut(
                 product_id=int(prod.id),
                 sku=(prod.sku or "").strip() or None,
+                ean=_product_ean(prod),
                 name=(prod.name or "").strip() or None,
                 image_url=(getattr(prod, "image_url", None) or "").strip() or None,
                 quantity=qty,
@@ -286,8 +348,10 @@ def build_location_visual_context(
                 .order_by(Rack.y.asc(), Rack.x.asc(), Rack.id.asc())
                 .all()
             )
+            aisle_active = (rack_row.aisle_letter or "").strip().upper()
             for r in racks:
                 rid = int(r.id)
+                aisle = (r.aisle_letter or "").strip()
                 rack_grid.append(
                     LocationVisualRackGridCellOut(
                         id=rid,
@@ -299,6 +363,8 @@ def build_location_visual_context(
                         color=(r.color or "").strip() or None,
                         zone_code=_zone_code_from_rack_name(r.name or ""),
                         is_active=rid == int(rack_row.id),
+                        aisle_letter=aisle,
+                        is_same_aisle=bool(aisle_active) and aisle.upper() == aisle_active,
                     )
                 )
 
@@ -315,11 +381,62 @@ def build_location_visual_context(
                 u = (lrow.location_uuid or "").strip()
                 if u:
                     loc_by_uuid[u] = lrow
+
+        loc_ids = [int(l.id) for l in loc_by_uuid.values()]
+        stock_by_lid: dict[int, tuple[float, str | None]] = {}
+        if loc_ids:
+            stock_rows = (
+                db.query(Inventory.location_id, Inventory.product_id, Inventory.quantity, Product.sku)
+                .join(Product, Product.id == Inventory.product_id)
+                .filter(
+                    Inventory.tenant_id == int(tenant_id),
+                    Inventory.location_id.in_(loc_ids),
+                    Inventory.quantity > 0,
+                )
+                .all()
+            )
+            for lid, _pid, qty, sku in stock_rows:
+                key = int(lid)
+                prev_qty, prev_sku = stock_by_lid.get(key, (0.0, None))
+                q = float(qty or 0)
+                stock_by_lid[key] = (prev_qty + q, prev_sku or ((sku or "").strip() or None))
+
+        carrier_by_lid: dict[int, str] = {}
+        if loc_ids:
+            for crow in (
+                db.query(WarehouseCarrier)
+                .filter(
+                    WarehouseCarrier.tenant_id == int(tenant_id),
+                    WarehouseCarrier.current_location_id.in_(loc_ids),
+                    WarehouseCarrier.deleted_at.is_(None),
+                )
+                .all()
+            ):
+                lid = int(crow.current_location_id) if crow.current_location_id else None
+                if lid and lid not in carrier_by_lid:
+                    carrier_by_lid[lid] = (crow.code or "").strip()
+
+        storage_for_bins = batch_location_storage_types(
+            db, warehouse_id=int(loc.warehouse_id), locations=list(loc_by_uuid.values())
+        )
+
         for b in bins:
             buuid = (b.location_uuid or "").strip()
             lmatch = loc_by_uuid.get(buuid)
             lcode = (lmatch.name if lmatch else (b.label or "")).strip()
             lid = int(lmatch.id) if lmatch else None
+            qty, sku = stock_by_lid.get(lid, (0.0, None)) if lid else (0.0, None)
+            st = None
+            kind = None
+            blocked = False
+            if lmatch is not None:
+                st = storage_for_bins.get(int(lmatch.id)) or (getattr(b, "storage_type", None) or None)
+                kind = wms_location_badge_kind(lmatch)
+                blocked = (st or "").lower() in ("damaged", "blocked") or not bool(
+                    getattr(lmatch, "is_active", True)
+                )
+            else:
+                st = (getattr(b, "storage_type", None) or None)
             rack_bins.append(
                 LocationVisualBinOut(
                     code=lcode,
@@ -329,6 +446,13 @@ def build_location_visual_context(
                     segment_index=int(b.segment_index),
                     segment_label=_segment_label(int(b.segment_index)),
                     is_active=lid == int(loc.id) if lid else buuid == loc_uuid,
+                    storage_type=(str(st).strip().lower() if st else None),
+                    location_kind=kind,
+                    is_empty=qty <= 0,
+                    is_blocked=blocked,
+                    sku=sku,
+                    quantity=round(float(qty), 2),
+                    carrier_code=carrier_by_lid.get(lid) if lid else None,
                 )
             )
 
@@ -353,6 +477,7 @@ def build_location_visual_context(
             LocationVisualProductOut(
                 product_id=int(it.product_id),
                 sku=it.product_sku,
+                ean=(it.product_ean or "").strip() or None,
                 name=it.product_name,
                 image_url=it.product_image_url,
                 quantity=float(it.quantity or 0),
@@ -392,13 +517,16 @@ def build_location_visual_context(
     total_qty = sum(float(p.quantity or 0) for p in products)
     storage_map = batch_location_storage_types(db, warehouse_id=int(loc.warehouse_id), locations=[loc])
     storage_type = storage_map.get(int(loc.id))
-    occupancy = LocationVisualOccupancyOut(
+
+    used_slots = sum(1 for b in rack_bins if not b.is_empty) if rack_bins else None
+    total_slots = len(rack_bins) if rack_bins else None
+    occupancy = _build_occupancy(
+        loc=loc,
         sku_count=sku_count,
-        total_qty=round(total_qty, 2),
-        occupied_volume_dm3=float(getattr(loc, "occupied_volume_dm3", 0) or 0),
-        capacity_utilization_percent=float(getattr(loc, "capacity_utilization_percent", 0) or 0),
+        total_qty=total_qty,
         storage_type=storage_type,
-        location_type=wms_location_badge_kind(loc),
+        used_slots=used_slots,
+        total_slots=total_slots,
     )
 
     return LocationVisualContextOut(
