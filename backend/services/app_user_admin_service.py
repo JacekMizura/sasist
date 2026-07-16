@@ -12,6 +12,12 @@ from ..auth.passwords import hash_password
 from ..auth.deps import explicit_permission_keys, normalize_stored_permission_keys
 from ..auth.permission_catalog import PERMISSION_KEYS
 from ..auth.roles import is_super_role, normalize_role_for_storage
+from .user_protection import (
+    UserProtectionError,
+    apply_create_protection_flags,
+    assert_deactivate_allowed,
+    assert_role_change_allowed,
+)
 from ..models.app_user import AppUser, AppUserWarehouse, UserPermission, UserWmsProfile
 from ..models.user_warehouse_assignment import UserWarehouseAssignment
 from ..models.warehouse import Warehouse
@@ -318,6 +324,8 @@ def create_user_transaction(
     db.add(u)
     db.flush()
 
+    apply_create_protection_flags(db, u)
+
     wms_for_profile = WmsProfileInput(**{**body.wms_profile.model_dump(), "language": wl})
     apply_wms_profile_create(db, u.id, wms_for_profile, role=role_stored)
 
@@ -360,8 +368,10 @@ def update_user_transaction(
     if body.avatar_url is not None:
         u.avatar_url = body.avatar_url.strip() or None
     if body.role is not None:
+        assert_role_change_allowed(u, body.role)
         u.role = normalize_role_for_storage(body.role)
     if body.is_active is not None:
+        assert_deactivate_allowed(u, body.is_active)
         u.is_active = body.is_active
     if body.language is not None:
         u.language = (body.language or "").strip() or "pl"
@@ -557,6 +567,10 @@ def app_user_to_list_item(db: Session, u: AppUser) -> AppUserListItem:
         warehouse_names=warehouse_names_for_user(db, u.id),
         default_warehouse_id=wp.get("default_warehouse_id"),
         is_system_seed=bool(getattr(u, "is_system_seed", False)),
+        is_system_user=bool(getattr(u, "is_system_user", False)),
+        is_owner=bool(getattr(u, "is_owner", False)),
+        is_deletable=bool(getattr(u, "is_deletable", True)),
+        is_role_changeable=bool(getattr(u, "is_role_changeable", True)),
         wms_language=wms_lang,
         primary_workforce_group=badge,
         wms_operational_modes=list(modes) if isinstance(modes, list) else [],

@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 
 import { UI_STRINGS } from "../constants/uiStrings";
+import { getLabel } from "../labels/labelStore";
 import { DOCUMENTS_MAIN_FLYOUT_SECTIONS } from "../pages/documents/documentsNavConfig";
 import { navGroupHasActivePath } from "./navActive";
 
@@ -47,6 +48,8 @@ export type NavFlyoutLinkConfig = {
    * Takes precedence over `permission` when non-empty.
    */
   permissionsAny?: string[];
+  /** Visible only for SUPER_ADMIN (super_admin / superadmin). */
+  superRoleOnly?: boolean;
 };
 
 export type NavFlyoutSectionConfig = {
@@ -110,7 +113,8 @@ export const NAV_SIDEBAR_SECTIONS: NavSidebarSectionConfig[] = [
 ];
 
 /** Categories that open a hover fly-out. Order follows {@link NAV_SIDEBAR_SECTIONS}. */
-export const NAV_FLYOUT_CATEGORIES: NavCategoryConfig[] = [
+export function buildNavFlyoutCategories(): NavCategoryConfig[] {
+  return [
   {
     id: "orders",
     label: UI_STRINGS.navigation.groups.orders,
@@ -336,6 +340,12 @@ export const NAV_FLYOUT_CATEGORIES: NavCategoryConfig[] = [
             label: UI_STRINGS.navigation.system,
             Icon: Cpu,
           },
+          {
+            path: "/system/labels",
+            label: getLabel("system.tab.labels", "Słownik aplikacji"),
+            Icon: SlidersHorizontal,
+            superRoleOnly: true,
+          },
         ],
       },
     ],
@@ -348,6 +358,10 @@ export const NAV_FLYOUT_CATEGORIES: NavCategoryConfig[] = [
     flyoutSections: [],
   },
 ];
+}
+
+/** Snapshot at module load — prefer {@link buildNavFlyoutCategories} in React render. */
+export const NAV_FLYOUT_CATEGORIES: NavCategoryConfig[] = buildNavFlyoutCategories();
 
 export function categoryFlyoutPaths(category: NavCategoryConfig): string[] {
   return category.flyoutSections.flatMap((s) => s.items.map((l) => l.path));

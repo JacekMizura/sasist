@@ -95,6 +95,10 @@ def _me_response(db: Session, user: AppUser) -> MeResponse:
         last_login_at=user.last_login_at,
         password_must_change=must,
         is_system_seed=seed,
+        is_system_user=bool(getattr(user, "is_system_user", False)),
+        is_owner=bool(getattr(user, "is_owner", False)),
+        is_deletable=bool(getattr(user, "is_deletable", True)),
+        is_role_changeable=bool(getattr(user, "is_role_changeable", True)),
         show_dev_credentials_warning=show_dev,
         phone=user.phone,
         avatar_url=user.avatar_url,
@@ -502,6 +506,10 @@ def update_user(
         return app_user_to_list_item(db, u)
     except ValueError as e:
         db.rollback()
+        from ..services.user_protection import UserProtectionError
+
+        if isinstance(e, UserProtectionError):
+            raise HTTPException(status_code=400, detail=e.message) from e
         msg = str(e)
         if msg == "EMAIL_EXISTS":
             raise HTTPException(status_code=400, detail="Email already exists") from e
@@ -596,6 +604,13 @@ def delete_user(
         raise HTTPException(status_code=400, detail="Cannot delete seeded system administrator")
     if actor.id == u.id:
         raise HTTPException(status_code=400, detail="Cannot delete your own account")
+
+    from ..services.user_protection import UserProtectionError, assert_user_deletable
+
+    try:
+        assert_user_deletable(u)
+    except UserProtectionError as e:
+        raise HTTPException(status_code=400, detail=e.message) from e
 
     db.query(UserSession).filter(UserSession.user_id == u.id).delete()
     db.query(AppUserWarehouse).filter(AppUserWarehouse.user_id == u.id).delete()

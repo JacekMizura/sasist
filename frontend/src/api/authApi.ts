@@ -69,6 +69,10 @@ export type MeResponse = {
   last_login_at: string | null;
   password_must_change?: boolean;
   is_system_seed?: boolean;
+  is_system_user?: boolean;
+  is_owner?: boolean;
+  is_deletable?: boolean;
+  is_role_changeable?: boolean;
   show_dev_credentials_warning?: boolean;
   phone?: string | null;
   avatar_url?: string | null;
@@ -100,6 +104,10 @@ export type AppUserListItem = {
   warehouse_names?: string[];
   default_warehouse_id?: number | null;
   is_system_seed?: boolean;
+  is_system_user?: boolean;
+  is_owner?: boolean;
+  is_deletable?: boolean;
+  is_role_changeable?: boolean;
   wms_language?: string | null;
   primary_workforce_group?: PrimaryWorkforceGroupBadge | null;
   wms_operational_modes?: string[];

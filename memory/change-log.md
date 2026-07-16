@@ -1,5 +1,13 @@
 # Change log
 
+## 2026-07-16 — SUPER_ADMIN + słownik aplikacji (system_labels)
+
+- `app_users`: `is_system_user`, `is_owner`, `is_deletable`, `is_role_changeable` (+ schema upgrade / migracja `024`).
+- SUPER_ADMIN: nieusuwalny, bez zmiany roli, bez dezaktywacji; pierwszy ADMIN → `is_owner` (lock delete/role).
+- Tabela `system_labels` + API `/api/system/labels/*`; seed katalogu (nav/system).
+- Frontend: `getLabel(key, fallback)` + cache localStorage + Support mode; panel **System → Słownik aplikacji** (tylko SUPER_ADMIN).
+- `UI_STRINGS` przez Proxy → `getLabel` (centralne etykiety); dalsza migracja hardcoded stringów poza `UI_STRINGS` przyrostowo.
+
 ## 2026-07-16 — Modal „Nowy tryb zbierania”: layout + Select statusów
 
 - Tryb zbierania | Kolejność zamówień w 2 kolumnach; w „Po produktach” kolejność widoczna, disabled z opisem.

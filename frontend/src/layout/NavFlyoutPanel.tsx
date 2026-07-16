@@ -5,6 +5,7 @@ import type { NavCategoryConfig, NavFlyoutLinkConfig } from "./mainNavConfig";
 import { isNavPathActive } from "./navActive";
 import { isSuperRole } from "../auth/isSuperRole";
 import { useAuth } from "../context/AuthContext";
+import { useLabels } from "../labels";
 import { ERP_FLYOUT_WIDTH_PX, ERP_SIDEBAR_WIDTH_PX } from "./erpSidebarStyles";
 
 const FLYOUT_ICON = 20;
@@ -21,6 +22,9 @@ function FlyoutRow({
   pathname: string;
 }) {
   const { user, hasPermission } = useAuth();
+  if (item.superRoleOnly && !isSuperRole(user?.role ?? "")) {
+    return null;
+  }
   const anyPerms = item.permissionsAny?.filter(Boolean) ?? [];
   const allowLink =
     anyPerms.length > 0
@@ -101,6 +105,7 @@ export default function NavFlyoutPanel({
   onMouseEnter,
   onMouseLeave,
 }: NavFlyoutPanelProps) {
+  useLabels();
   const panelRef = useRef<HTMLDivElement>(null);
   const [top, setTop] = useState(anchorTop);
   const [visible, setVisible] = useState(false);

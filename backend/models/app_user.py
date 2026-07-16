@@ -40,6 +40,12 @@ class AppUser(Base, BaseModelMixin):
     is_system_seed = Column(Boolean, nullable=False, default=False)
     password_must_change = Column(Boolean, nullable=False, default=False)
 
+    # System / owner protection (UI + API guards).
+    is_system_user = Column(Boolean, nullable=False, default=False, server_default=text("0"))
+    is_owner = Column(Boolean, nullable=False, default=False, server_default=text("0"))
+    is_deletable = Column(Boolean, nullable=False, default=True, server_default=text("1"))
+    is_role_changeable = Column(Boolean, nullable=False, default=True, server_default=text("1"))
+
     primary_workforce_group_id = Column(
         Integer,
         ForeignKey("workforce_user_groups.id", ondelete="SET NULL"),

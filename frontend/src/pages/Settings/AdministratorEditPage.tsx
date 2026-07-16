@@ -136,6 +136,8 @@ export default function AdministratorEditPage() {
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [role, setRole] = useState<string>("user");
   const [isActive, setIsActive] = useState(true);
+  const [roleLocked, setRoleLocked] = useState(false);
+  const [activeLocked, setActiveLocked] = useState(false);
   const [language, setLanguage] = useState("pl");
   const [permissions, setPermissions] = useState<string[]>([]);
   const [permSearch, setPermSearch] = useState("");
@@ -237,6 +239,8 @@ export default function AdministratorEditPage() {
     setAvatarUrl(u.avatar_url ?? "");
     setRole(u.role);
     setIsActive(u.is_active);
+    setRoleLocked(Boolean(u.is_role_changeable === false || u.is_system_user || u.is_owner || isSuperRole(u.role)));
+    setActiveLocked(Boolean(u.is_system_user || isSuperRole(u.role)));
     setLanguage(u.language);
     setPermissions(isSuperRole(u.role) ? [] : [...(u.explicit_permissions ?? [])]);
     if (u.wms_profile) {
@@ -267,12 +271,12 @@ export default function AdministratorEditPage() {
       first_name: firstName.trim() || null,
       last_name: lastName.trim() || null,
       phone: phone.trim() || null,
-      role,
-      is_active: isActive,
+      ...(roleLocked ? {} : { role }),
+      ...(activeLocked ? {} : { is_active: isActive }),
       language,
       ...(password.trim() ? { password } : {}),
     }),
-    [email, firstName, lastName, phone, role, isActive, language, password],
+    [email, firstName, lastName, phone, role, isActive, language, password, roleLocked, activeLocked],
   );
 
   const buildWmsPayload = useCallback((): WmsProfilePayload => {
@@ -627,9 +631,11 @@ export default function AdministratorEditPage() {
                   <div className="flex items-center justify-between">
                     <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-wider ${isActive ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
                       {isActive ? "Aktywny" : "Nieaktywny"}
+                      {activeLocked ? " · zablokowane" : ""}
                     </span>
                     <span className="rounded-full bg-indigo-50 px-3 py-1 text-[11px] font-black uppercase tracking-wider text-indigo-700 ring-1 ring-indigo-200">
                       {roleLabel(role)}
+                      {roleLocked ? " · zablokowane" : ""}
                     </span>
                   </div>
 

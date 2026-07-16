@@ -1,9 +1,12 @@
 import WmsModuleLayout from "../../components/layout/WmsModuleLayout";
-import { SYSTEM_TABS } from "../../constants/systemTabs";
+import { useSystemTabs } from "../../constants/systemTabs";
+import { useLabels } from "../../labels";
 
 /**
- * System module: Health, Database Size, API Metrics, Error Logs.
+ * System module: Health, Database Size, API Metrics, Error Logs, App Dictionary (SUPER_ADMIN).
  */
 export default function SystemLayout() {
-  return <WmsModuleLayout tabs={SYSTEM_TABS} exact />;
+  useLabels();
+  const tabs = useSystemTabs();
+  return <WmsModuleLayout tabs={tabs} exact />;
 }

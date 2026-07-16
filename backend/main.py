@@ -213,6 +213,7 @@ from .db.schema_upgrade import (
     ensure_order_custom_fields_tables,
     ensure_app_users_bootstrap_columns,
     ensure_user_wms_profiles_table,
+    ensure_system_labels_table,
     ensure_wms_audit_tables,
     ensure_company_profile_table,
 )
@@ -304,6 +305,7 @@ from .api.inventory_count_wms import router as inventory_count_wms_router
 from .api.slotting import router as slotting_router
 from .api.picks import router as picks_router
 from .api.system import router as system_router
+from .api.system_labels import router as system_labels_router
 from .api.dev import router as dev_router
 from .api.reports import router as reports_router
 from .api.damage_reports import router as damage_reports_router
@@ -1615,6 +1617,7 @@ def _upgrade_schema_background() -> None:
     try:
         ensure_app_users_bootstrap_columns(engine)
         ensure_user_wms_profiles_table(engine)
+        ensure_system_labels_table(engine)
     except Exception:
         logging.getLogger(__name__).exception("ensure_app_users_bootstrap_columns failed")
     try:
@@ -1625,12 +1628,16 @@ def _upgrade_schema_background() -> None:
     try:
         from .database import SessionLocal
         from .db.seed_basic_data import seed_app_users, seed_basic_data, seed_wms_panel_defaults
+        from .services.system_label_service import seed_system_labels
+        from .services.user_protection import backfill_protection_flags
 
         _seed_db = SessionLocal()
         try:
             seed_basic_data(_seed_db)
             seed_app_users(_seed_db)
             seed_wms_panel_defaults(_seed_db)
+            backfill_protection_flags(_seed_db)
+            seed_system_labels(_seed_db)
         finally:
             _seed_db.close()
     except Exception:
@@ -1927,6 +1934,7 @@ _API_ROUTERS = (
     slotting_router,
     picks_router,
     system_router,
+    system_labels_router,
     dev_router,
     reports_router,
     damage_reports_router,

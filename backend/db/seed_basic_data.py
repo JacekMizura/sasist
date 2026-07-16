@@ -188,6 +188,9 @@ def seed_app_users(db: Session) -> None:
         wms_language="pl",
         wms_currency="PLN",
         is_system_seed=True,
+        is_system_user=True,
+        is_deletable=False,
+        is_role_changeable=False,
         password_must_change=True,
     )
     db.add(u)

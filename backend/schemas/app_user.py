@@ -112,6 +112,10 @@ class MeResponse(BaseModel):
     last_login_at: datetime | None
     password_must_change: bool = False
     is_system_seed: bool = False
+    is_system_user: bool = False
+    is_owner: bool = False
+    is_deletable: bool = True
+    is_role_changeable: bool = True
     show_dev_credentials_warning: bool = False
     phone: str | None = None
     avatar_url: str | None = None
@@ -148,6 +152,10 @@ class AppUserListItem(BaseModel):
     warehouse_names: list[str] = Field(default_factory=list)
     default_warehouse_id: int | None = None
     is_system_seed: bool = False
+    is_system_user: bool = False
+    is_owner: bool = False
+    is_deletable: bool = True
+    is_role_changeable: bool = True
     wms_language: str | None = None
     primary_workforce_group: PrimaryWorkforceGroupBadge | None = None
     wms_operational_modes: list[str] = Field(default_factory=list)

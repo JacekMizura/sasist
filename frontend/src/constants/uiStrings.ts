@@ -1,9 +1,12 @@
 /**
  * Centralized UI labels, table headers, and sidebar names.
- * Use for navigation, warehouse designer, label designer, and tables.
+ * Defaults live here; runtime resolution goes through getLabel(key, fallback).
+ * Use UI_STRINGS in render paths (Proxy → dictionary cache + support mode).
  */
 
-export const UI_STRINGS = {
+import { getLabel } from "../labels/labelStore";
+
+const UI_STRINGS_DEFAULTS = {
   app: {
     /** Marka aplikacji (sidebar, tytuły). */
     brandMark: "Sasist",
@@ -326,4 +329,30 @@ export const UI_STRINGS = {
   },
 } as const;
 
-export type UIStrings = typeof UI_STRINGS;
+function deepLabelProxy(obj: Record<string, unknown>, prefix: string): Record<string, unknown> {
+  return new Proxy(obj, {
+    get(target, prop, receiver) {
+      if (typeof prop === "symbol") return Reflect.get(target, prop, receiver);
+      const value = target[prop as string];
+      const key = prefix ? `${prefix}.${String(prop)}` : String(prop);
+      if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+        return deepLabelProxy(value as Record<string, unknown>, key);
+      }
+      if (typeof value === "string") {
+        return getLabel(key, value);
+      }
+      return value;
+    },
+  });
+}
+
+/** Resolved labels (dictionary cache + fallback defaults). */
+export const UI_STRINGS = deepLabelProxy(
+  UI_STRINGS_DEFAULTS as unknown as Record<string, unknown>,
+  "",
+) as typeof UI_STRINGS_DEFAULTS;
+
+/** Raw defaults for seeding / docs (never go through custom overrides). */
+export const UI_STRINGS_DEFAULTS_EXPORT = UI_STRINGS_DEFAULTS;
+
+export type UIStrings = typeof UI_STRINGS_DEFAULTS;

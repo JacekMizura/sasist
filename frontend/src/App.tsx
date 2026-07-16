@@ -11,6 +11,7 @@ import {
 } from "react-router-dom"
 import { WarehouseProvider } from "./context/WarehouseContext"
 import { AuthProvider } from "./context/AuthContext"
+import { LabelProvider } from "./labels"
 import { CartsRefreshProvider } from "./context/CartsRefreshContext"
 
 import MainPanelLayout from "./layout/MainPanelLayout"
@@ -120,6 +121,7 @@ import SystemDbSize from "./pages/System/SystemDbSize"
 import SystemMetrics from "./pages/System/SystemMetrics"
 import SystemErrorLogs from "./pages/System/SystemErrorLogs"
 import SystemChangelog from "./pages/System/SystemChangelog"
+import SystemAppDictionaryPage from "./pages/System/SystemAppDictionaryPage"
 import PlanningPlaceholder from "./pages/PlanningPlaceholder"
 import AnalyticsDashboardPage from "./pages/analytics/AnalyticsDashboard"
 import InventoryValue from "./pages/analytics/InventoryValue"
@@ -337,15 +339,17 @@ function WmsProductionPutawayRedirect() {
 function AppRootLayout() {
   return (
     <AuthProvider>
-      <WarehouseProvider>
-        <CartsRefreshProvider>
-          <Toaster position="top-right" toastOptions={{ duration: 3000 }} />
-          <PasswordChangeGate />
-          <ErrorBoundary>
-            <Outlet />
-          </ErrorBoundary>
-        </CartsRefreshProvider>
-      </WarehouseProvider>
+      <LabelProvider>
+        <WarehouseProvider>
+          <CartsRefreshProvider>
+            <Toaster position="top-right" toastOptions={{ duration: 3000 }} />
+            <PasswordChangeGate />
+            <ErrorBoundary>
+              <Outlet />
+            </ErrorBoundary>
+          </CartsRefreshProvider>
+        </WarehouseProvider>
+      </LabelProvider>
     </AuthProvider>
   )
 }
@@ -961,6 +965,7 @@ export const router = createBrowserRouter(
                   <Route path="metrics" element={<SystemMetrics />} />
                   <Route path="errors" element={<SystemErrorLogs />} />
                   <Route path="changelog" element={<SystemChangelog />} />
+                  <Route path="labels" element={<SystemAppDictionaryPage />} />
                 </Route>
                 <Route path="labels/*" element={<LabelSystem />} />
                 <Route path="system-etykiet/*" element={<LabelSystem />} />

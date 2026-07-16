@@ -5,7 +5,7 @@ import { Link, useLocation } from "react-router-dom";
 import HeaderLogo from "../components/layout/topbar/HeaderLogo";
 import UserAccountMenu from "../components/layout/UserAccountMenu";
 import {
-  NAV_FLYOUT_CATEGORIES,
+  buildNavFlyoutCategories,
   NAV_SIDEBAR_SECTIONS,
   WMS_SIDEBAR_DIRECT,
   isCategoryActive,
@@ -30,9 +30,11 @@ import {
 import { useErpSidebarUi } from "./ErpSidebarUiContext";
 import { useNavFlyout } from "./useNavFlyout";
 import NavFlyoutPanel from "./NavFlyoutPanel";
+import { useLabels } from "../labels";
+import { getLabel } from "../labels/labelStore";
 
-function categoryById(id: string): NavCategoryConfig | undefined {
-  return NAV_FLYOUT_CATEGORIES.find((c) => c.id === id);
+function categoryById(id: string, categories: NavCategoryConfig[]): NavCategoryConfig | undefined {
+  return categories.find((c) => c.id === id);
 }
 
 type SidebarNavButtonProps = {
@@ -103,6 +105,7 @@ function SidebarNavButton({
 
 function SectionBlock({
   section,
+  categories,
   collapsed,
   pathname,
   openCategoryId,
@@ -111,6 +114,7 @@ function SectionBlock({
   onTriggerClick,
 }: {
   section: NavSidebarSectionConfig;
+  categories: NavCategoryConfig[];
   collapsed: boolean;
   pathname: string;
   openCategoryId: string | null;
@@ -119,7 +123,7 @@ function SectionBlock({
   onTriggerClick: (id: string, el: HTMLElement) => void;
 }) {
   const items = section.categoryIds
-    .map((id) => categoryById(id))
+    .map((id) => categoryById(id, categories))
     .filter((c): c is NavCategoryConfig => c != null);
 
   if (items.length === 0) return null;
@@ -189,12 +193,13 @@ function SectionBlock({
 
 function WmsCtaButton({ collapsed }: { collapsed: boolean }) {
   const WmsIcon = WMS_SIDEBAR_DIRECT.Icon;
+  const label = getLabel("navigation.wmsEntry", WMS_SIDEBAR_DIRECT.label);
   if (collapsed) {
     return (
       <Link
         to={WMS_SIDEBAR_DIRECT.path}
-        title={WMS_SIDEBAR_DIRECT.label}
-        aria-label={WMS_SIDEBAR_DIRECT.label}
+        title={label}
+        aria-label={label}
         className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-[#E2E8F0] bg-white text-slate-700 transition-colors duration-150 ease-out hover:bg-[#F8FAFC] hover:text-slate-900"
       >
         <WmsIcon className="h-6 w-6" strokeWidth={1.75} aria-hidden />
@@ -207,7 +212,7 @@ function WmsCtaButton({ collapsed }: { collapsed: boolean }) {
       className="flex h-[56px] w-full items-center justify-center gap-2 rounded-2xl border border-[#E2E8F0] bg-white px-4 text-[15px] font-semibold text-slate-800 transition-colors duration-150 ease-out hover:bg-[#F8FAFC] hover:text-slate-900"
     >
       <WmsIcon className="h-5 w-5 shrink-0 text-slate-600" strokeWidth={1.75} aria-hidden />
-      {WMS_SIDEBAR_DIRECT.label}
+      {label}
     </Link>
   );
 }
@@ -217,6 +222,8 @@ function WmsCtaButton({ collapsed }: { collapsed: boolean }) {
  */
 export default function ErpSidebar() {
   const { pathname } = useLocation();
+  useLabels(); // re-render when dictionary / support mode changes
+  const navCategories = buildNavFlyoutCategories();
   const { collapsed, toggleCollapsed } = useErpSidebarUi();
   const {
     hoveredCategoryId,
@@ -235,10 +242,9 @@ export default function ErpSidebar() {
 
   const desktopWidthPx = collapsed ? ERP_SIDEBAR_COLLAPSED_WIDTH_PX : ERP_SIDEBAR_WIDTH_PX;
 
-  const openCategory = useMemo(
-    () => (hoveredCategoryId ? NAV_FLYOUT_CATEGORIES.find((c) => c.id === hoveredCategoryId) ?? null : null),
-    [hoveredCategoryId],
-  );
+  const openCategory = hoveredCategoryId
+    ? navCategories.find((c) => c.id === hoveredCategoryId) ?? null
+    : null;
 
   return (
     <>
@@ -277,6 +283,7 @@ export default function ErpSidebar() {
                 <SectionBlock
                   key={section.id}
                   section={section}
+                  categories={navCategories}
                   collapsed={collapsed}
                   pathname={pathname}
                   openCategoryId={hoveredCategoryId}

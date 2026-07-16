@@ -143,6 +143,11 @@ export default function AdministratorsPage() {
   };
 
   const onToggleActive = async (row: AppUserListItem) => {
+    if (row.is_system_user || isSuperRole(row.role)) {
+      toast.error("Nie można dezaktywować konta SUPER_ADMIN / użytkownika systemowego.");
+      setMenu(null);
+      return;
+    }
     try {
       await updateUser(row.id, { is_active: !row.is_active });
       toast.success(
@@ -175,8 +180,8 @@ export default function AdministratorsPage() {
   };
 
   const onDelete = async (row: AppUserListItem) => {
-    if (row.is_system_seed) {
-      toast.error("Nie można usunąć konta systemowego seed.");
+    if (row.is_system_seed || row.is_system_user || row.is_deletable === false || row.is_owner) {
+      toast.error("Tego użytkownika nie można usunąć.");
       return;
     }
     if (
@@ -249,8 +254,12 @@ export default function AdministratorsPage() {
             </button>
             <button
               type="button"
-              className="flex w-full items-center px-3 py-2 text-left text-sm text-slate-800 hover:bg-slate-50"
+              className="flex w-full items-center px-3 py-2 text-left text-sm text-slate-800 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
               role="menuitem"
+              disabled={(() => {
+                const row = rows.find((x) => x.id === menu.userId);
+                return Boolean(row && (row.is_system_user || isSuperRole(row.role)));
+              })()}
               onClick={() => {
                 const row = rows.find((x) => x.id === menu.userId);
                 if (row) void onToggleActive(row);
@@ -263,7 +272,16 @@ export default function AdministratorsPage() {
             <div className="my-1 border-t border-slate-100" role="separator" />
             <button
               type="button"
-              disabled={Boolean(rows.find((x) => x.id === menu.userId)?.is_system_seed)}
+              disabled={(() => {
+                const row = rows.find((x) => x.id === menu.userId);
+                return Boolean(
+                  row &&
+                    (row.is_system_seed ||
+                      row.is_system_user ||
+                      row.is_owner ||
+                      row.is_deletable === false),
+                );
+              })()}
               className="flex w-full items-center px-3 py-2 text-left text-sm text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
               role="menuitem"
               onClick={() => {

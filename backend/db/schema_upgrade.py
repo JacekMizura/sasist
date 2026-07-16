@@ -5464,9 +5464,44 @@ def ensure_app_users_bootstrap_columns(engine: Engine) -> None:
         if "wms_currency" not in cols:
             conn.execute(text("ALTER TABLE app_users ADD COLUMN wms_currency VARCHAR(8) NOT NULL DEFAULT 'PLN'"))
 
+        false_b = _bool_col_default(engine, default_true=False)
+        true_b = _bool_col_default(engine, default_true=True)
+        if "is_system_user" not in cols:
+            conn.execute(text(f"ALTER TABLE app_users ADD COLUMN is_system_user {false_b}"))
+        if "is_owner" not in cols:
+            conn.execute(text(f"ALTER TABLE app_users ADD COLUMN is_owner {false_b}"))
+        if "is_deletable" not in cols:
+            conn.execute(text(f"ALTER TABLE app_users ADD COLUMN is_deletable {true_b}"))
+        if "is_role_changeable" not in cols:
+            conn.execute(text(f"ALTER TABLE app_users ADD COLUMN is_role_changeable {true_b}"))
+
         try:
             conn.execute(text("UPDATE app_users SET wms_language = 'pl' WHERE wms_language IS NULL"))
             conn.execute(text("UPDATE app_users SET wms_currency = 'PLN' WHERE wms_currency IS NULL"))
+        except Exception:
+            pass
+
+        try:
+            if engine.dialect.name == "postgresql":
+                conn.execute(
+                    text(
+                        """
+                        UPDATE app_users
+                        SET is_system_user = true, is_deletable = false, is_role_changeable = false
+                        WHERE lower(role) IN ('super_admin', 'superadmin')
+                        """
+                    )
+                )
+            else:
+                conn.execute(
+                    text(
+                        """
+                        UPDATE app_users
+                        SET is_system_user = 1, is_deletable = 0, is_role_changeable = 0
+                        WHERE lower(role) IN ('super_admin', 'superadmin')
+                        """
+                    )
+                )
         except Exception:
             pass
 
@@ -5489,6 +5524,13 @@ def ensure_app_users_bootstrap_columns(engine: Engine) -> None:
                 text("CREATE INDEX ix_app_user_warehouses_warehouse_id ON app_user_warehouses(warehouse_id)")
             )
         conn.commit()
+
+
+def ensure_system_labels_table(engine: Engine) -> None:
+    """Create system_labels dictionary table if missing."""
+    from ..models.system_label import SystemLabel
+
+    SystemLabel.__table__.create(bind=engine, checkfirst=True)
 
 
 def _sqlite_ensure_user_wms_profiles_operational_columns(conn) -> None:
