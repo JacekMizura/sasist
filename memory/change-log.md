@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-07-16 — Nośniki header rebuild
+
+- KPI: Wszystkie / Zajęte / Puste (occupied = sku_count|total_qty > 0); removed „Grupy”.
+- Page owns breadcrumb + title + tabs (no duplicate „Magazyn > Wózki” from CartsModuleLayout).
+- Compact spacing (`space-y-2`/`space-y-4`, compact KPI) for large monitors.
+
 ## 2026-07-16 — Location preview UX fixes
 
 - Slot hover: Floating UI only (`LocationSlotHoverCard`) — no native `title` tooltip; flip/shift so popup stays on screen.

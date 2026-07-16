@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CheckCircle2, Layers, Package, Plus } from "lucide-react";
+import { Package, PackageOpen, PackageCheck, Plus } from "lucide-react";
 
 import {
   listWmsCarrierGroups,
@@ -13,6 +13,8 @@ import { CarrierGroupCard } from "../../components/warehouse/carriers/CarrierGro
 import { CarriersGroupTable } from "../../components/warehouse/carriers/CarriersGroupTable";
 import { CreateCarrierGroupModal } from "../../components/warehouse/carriers/CreateCarrierGroupModal";
 import { AppEmptyState } from "../../components/app-shell/AppEmptyState";
+import { flatSectionDividerClass } from "../../components/layout/flatSectionTokens";
+import { TabsNav } from "../../components/layout/TabsNav";
 import { ListPageHeader } from "../../components/listPage/ListPageHeader";
 import {
   filterToolbarBtnApply,
@@ -20,6 +22,7 @@ import {
 } from "../../components/filters/filterUiTokens";
 import { listSellasistInputClass } from "../../components/listPage/listSellasistTokens";
 import { UI_STRINGS } from "../../constants/uiStrings";
+import { CARTS_TABS } from "../../modules/carts/cartsTabs";
 import { PurchasingKpiCard, PurchasingKpiGrid } from "../../modules/purchasing/ui";
 
 import {
@@ -28,8 +31,9 @@ import {
   useWarehouseCarriersTenant,
 } from "./warehouseCarriersTenant";
 
-function countActive(carriers: WarehouseCarrierRead[]) {
-  return carriers.filter((c) => String(c.status || "").toUpperCase() === "ACTIVE").length;
+/** Nośnik zajęty = ma pozycje (API: sku_count / total_qty; brak osobnego items_count). */
+function carrierHasItems(c: WarehouseCarrierRead) {
+  return (c.sku_count ?? 0) > 0 || (c.total_qty ?? 0) > 0;
 }
 
 function sortCarriers(list: WarehouseCarrierRead[]) {
@@ -88,9 +92,12 @@ export default function WarehouseCarriersPage() {
 
   const stats = useMemo(() => {
     const total = rows.length;
-    const active = countActive(rows);
-    return { total, active, groupCount: groups.length };
-  }, [rows, groups]);
+    const occupied = rows.filter(carrierHasItems).length;
+    const empty = total - occupied;
+    const occupiedPct = total > 0 ? Math.round((occupied / total) * 100) : 0;
+    const emptyPct = total > 0 ? Math.round((empty / total) * 100) : 0;
+    return { total, occupied, empty, occupiedPct, emptyPct };
+  }, [rows]);
 
   const navState = { tenantId };
 
@@ -134,8 +141,9 @@ export default function WarehouseCarriersPage() {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <ListPageHeader
+        className="space-y-2"
         title={UI_STRINGS.navigation.warehouseCarriers}
         description="Rejestr nośników magazynowych pogrupowanych według typu (palety, kartony, wózki)."
         breadcrumbs={[
@@ -151,7 +159,7 @@ export default function WarehouseCarriersPage() {
                 <select
                   value={tenantId}
                   onChange={(e) => setTenantId(Number(e.target.value) || 1)}
-                  className={`${listSellasistInputClass} !h-10 w-auto min-w-[8rem]`}
+                  className={`${listSellasistInputClass} !h-9 w-auto min-w-[8rem]`}
                 >
                   {tenants.map((t) => (
                     <option key={t.id} value={t.id}>
@@ -183,10 +191,16 @@ export default function WarehouseCarriersPage() {
             </button>
           </div>
         }
+        tabs={
+          <div>
+            <TabsNav items={CARTS_TABS} exact aria-label="Wózki — zakładki" className="gap-8" />
+            <div className={`${flatSectionDividerClass} mt-2`} aria-hidden />
+          </div>
+        }
       />
 
       {toast ? (
-        <div className="flex items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-medium text-emerald-900">
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-900">
           <span>{toast}</span>
           <button type="button" onClick={() => setToast(null)} className="text-xs font-semibold text-emerald-800">
             Zamknij
@@ -197,22 +211,28 @@ export default function WarehouseCarriersPage() {
       {!loading && !err ? (
         <PurchasingKpiGrid columns={3}>
           <PurchasingKpiCard
-            title="Grupy"
-            value={stats.groupCount}
-            tone="indigo"
-            icon={<Layers aria-hidden />}
-          />
-          <PurchasingKpiCard
             title="Nośniki"
             value={stats.total}
+            subtitle="wszystkie"
             tone="blue"
+            density="compact"
             icon={<Package aria-hidden />}
           />
           <PurchasingKpiCard
-            title="Aktywne"
-            value={stats.active}
+            title="Zajęte"
+            value={stats.occupied}
+            subtitle={`${stats.occupiedPct}% nośników`}
+            tone="amber"
+            density="compact"
+            icon={<PackageCheck aria-hidden />}
+          />
+          <PurchasingKpiCard
+            title="Puste"
+            value={stats.empty}
+            subtitle={`${stats.emptyPct}% nośników`}
             tone="emerald"
-            icon={<CheckCircle2 aria-hidden />}
+            density="compact"
+            icon={<PackageOpen aria-hidden />}
           />
         </PurchasingKpiGrid>
       ) : null}

@@ -12,6 +12,9 @@ import { CARTS_TABS } from "./cartsTabs";
 const FULL_PAGE_CONTENT =
   /^\/carts\/(?:carriers\/[^/]+|racks\/(?:new|[^/]+(?:\/(?:edit|preview))?))$/;
 
+/** Lista nośników — własny breadcrumb/tytuł + zakładki wewnątrz strony (bez dublowania „Magazyn > Wózki”). */
+const CARRIERS_LIST_SELF_HEADER = /^\/carts\/carriers\/?$/;
+
 /**
  * Shell modułu Wózki — breadcrumb → tytuł → zakładki → treść
  * (wzorzec Dostawcy / Materiały magazynowe / Zwroty; bez karty wokół tabów).
@@ -19,8 +22,9 @@ const FULL_PAGE_CONTENT =
 export default function CartsModuleLayout() {
   const { pathname } = useLocation();
   const fullPageContent = useMemo(() => FULL_PAGE_CONTENT.test(pathname), [pathname]);
+  const carriersListSelfHeader = useMemo(() => CARRIERS_LIST_SELF_HEADER.test(pathname), [pathname]);
 
-  if (fullPageContent) {
+  if (fullPageContent || carriersListSelfHeader) {
     return (
       <PageLayout fullBleed>
         <Outlet />

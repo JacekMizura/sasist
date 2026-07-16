@@ -51,7 +51,7 @@ export function PageHeader({ title, actions, subtitle, breadcrumbs = [], tabs, c
 
       {subtitle ? <p className="mt-1.5 text-sm leading-relaxed text-slate-500">{subtitle}</p> : null}
 
-      {tabs ? <div className="mt-4">{tabs}</div> : null}
+      {tabs ? <div className="mt-2">{tabs}</div> : null}
     </section>
   );
 }
