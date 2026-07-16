@@ -67,6 +67,23 @@ function flattenOrderUiStatusOptions(
   return out;
 }
 
+const BULK_ORDER_LIMIT_MAX = 100;
+const BULK_ORDER_LIMIT_DEFAULT_SINGLE = "20";
+const BULK_ORDER_LIMIT_DEFAULT_MULTI = "10";
+
+function parseBulkOrderLimitInput(
+  raw: string,
+  max: number,
+): { ok: true; value: number } | { ok: false; message: string } {
+  const s = raw.trim();
+  if (s === "") return { ok: false, message: "Wymagana wartość." };
+  const n = Number(s);
+  if (!Number.isFinite(n) || !Number.isInteger(n)) return { ok: false, message: "Podaj liczbę całkowitą." };
+  if (n <= 0) return { ok: false, message: "Wartość musi być większa od 0." };
+  if (n > max) return { ok: false, message: `Maksimum ${max}.` };
+  return { ok: true, value: n };
+}
+
 const selectClass = wmsSettingsTokens.select;
 const radioLabelClass =
   "flex cursor-pointer items-center gap-2.5 rounded-lg border border-transparent px-3 py-2 hover:bg-slate-50 transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-blue-500/30";
