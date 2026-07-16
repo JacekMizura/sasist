@@ -431,7 +431,7 @@ const PickingShortageSettingsPanel = forwardRef<
       ) : (
         <div className="space-y-6">
           <div>
-            <label className="text-sm font-medium text-slate-900">Status po zgłoszeniu braku podczas zbierania</label>
+            <label className="text-sm font-medium text-slate-900">Status zamówienia z brakującymi produktami</label>
             <select
               className={selectClass}
               value={reportedStatus}
@@ -534,7 +534,7 @@ type PickingOrderSort = PickingConfigOrderSortDb;
 const PICKING_WHERE_OPTIONS: Array<{ value: PickingContainers; label: string }> = [
   { value: "cart_scan", label: "Do wózka z wymuszeniem skanowania kodu kreskowego" },
   { value: "cart_no_scan", label: "Do wózka bez wymuszenia skanowania kodu kreskowego" },
-  { value: "baskets", label: "Do wózków z koszykami" },
+  { value: "baskets", label: "Do wózka z koszykami" },
   { value: "mobile_cart", label: "Wózkiem mobilnym z procesem pakowania zamówienia" },
   { value: "consolidation_rack", label: "Do regału kompletacyjnego" },
 ];
@@ -560,7 +560,7 @@ const PICKING_ORDER_SORT_OPTIONS: Array<{ value: PickingOrderSort; label: string
   },
   {
     value: "location",
-    label: "Po lokalizacjach na trasie zbierania",
+    label: "Po lokalizacjach",
     hint: "Kolejka zamówień wg pierwszej lokalizacji na trasie.",
   },
   {
@@ -1525,7 +1525,7 @@ function WmsPickingStatusConfig({
           }}
           disabled={draft != null || pickingConfigsLoading || pickingPersisting}
         >
-          + Dodaj tryb zbierania
+          + Dodaj kolejny status zbierania zamówień do obsługi
         </button>
       </div>
 
@@ -1861,7 +1861,7 @@ export function WmsPickingSettingsSections({
 
     if (d.pickingMode === "by_products" && d.blocks.multi_item.containers === "cart_no_scan") {
       setSaveFormError(
-        "Przy zbieraniu po produktach (wieloelementowe) wybierz „Do wózków z koszykami”, skan lub wózek mobilny — wymagane jest rozdzielenie zamówień.",
+        "Przy zbieraniu po produktach (wieloelementowe) wybierz „Do wózka z koszykami”, skan lub wózek mobilny — wymagane jest rozdzielenie zamówień.",
       );
       return false;
     }
@@ -2102,7 +2102,11 @@ export function WmsPickingSettingsSections({
           <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800">{saveFormError}</p>
         ) : null}
 
-        <SectionCardPicking id="wms-pick-modes" title="Tryby zbierania" summary="Karty reguł statusów — edycja w panelu bocznym.">
+        <SectionCardPicking
+          id="wms-pick-modes"
+          title="Konfiguracja statusów"
+          summary="Konfiguracja trybów zbierania — reguły statusów panelu."
+        >
           <WmsPickingStatusConfig
             savedConfigs={savedConfigs}
             draft={draft}
@@ -2117,34 +2121,72 @@ export function WmsPickingSettingsSections({
           />
         </SectionCardPicking>
 
-        <SectionCardPicking id="wms-pick-workflow" title="Workflow i statusy" summary="Zachowanie po zbiorze, reguły procesu i dokumenty.">
-          <SubsectionPicking title="Status przy braku (preferencja lokalna)" description="Docelowo powiązanie z procesem OMS; na razie zapis w przeglądarce.">
-            <label className="block text-sm font-medium text-slate-700">
-              Status zamówienia przy braku
-              <select
-                className={selectClass}
-                value={extended.shortageOrderStatusId ?? ""}
-                onChange={(e) => {
-                  const v = e.target.value.trim();
-                  patchExtended("shortageOrderStatusId", v === "" ? null : Number(v));
-                }}
-              >
-                <option value="">— brak —</option>
-                {statusOptionsFlat.map((o) => (
-                  <option key={o.id} value={String(o.id)}>
-                    {o.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+        <SectionCardPicking id="wms-pick-queue" title="Zarządzanie zbiorami" summary="Zbiory, objętość, kurierzy i akcja po zebraniu.">
+          <SubsectionPicking title="Zarządzanie zbiorami">
+            <FieldGridPicking>
+              <label className="block text-sm font-medium text-slate-700">
+                Liczba zamówień w zbiorze wieloelementowych zamówień
+                <input
+                  type="number"
+                  min={1}
+                  max={200}
+                  className={numberInputClass}
+                  value={extended.multiItemBatchOrdersCount}
+                  onChange={(e) =>
+                    patchExtended("multiItemBatchOrdersCount", Math.max(1, Math.min(200, Math.floor(Number(e.target.value) || 1))))
+                  }
+                />
+              </label>
+              <label className="block text-sm font-medium text-slate-700">
+                Liczba zamówień w zbiorze jednoelementowych zamówień
+                <input
+                  type="number"
+                  min={1}
+                  max={200}
+                  className={numberInputClass}
+                  value={extended.singleItemBatchOrdersCount}
+                  onChange={(e) =>
+                    patchExtended("singleItemBatchOrdersCount", Math.max(1, Math.min(200, Math.floor(Number(e.target.value) || 1))))
+                  }
+                />
+              </label>
+              <label className="block text-sm font-medium text-slate-700 sm:col-span-2" title="0 = bez limitu objętości">
+                Objętość zamówień jednoelementowych
+                <input
+                  type="number"
+                  min={0}
+                  max={999999}
+                  className={numberInputClass}
+                  value={extended.singleItemVolumeLimit}
+                  onChange={(e) => patchExtended("singleItemVolumeLimit", Math.max(0, Math.floor(Number(e.target.value) || 0)))}
+                />
+              </label>
+              <label className="block pb-2 text-sm font-medium text-slate-700 sm:col-span-2">
+                Zarządzanie zbiorami
+                <select
+                  className={selectClass}
+                  value={extended.batchManagementMode}
+                  onChange={(e) =>
+                    patchExtended("batchManagementMode", e.target.value as WmsPickingExtendedUiSettings["batchManagementMode"])
+                  }
+                >
+                  <option value="manual">Ręczny</option>
+                  <option value="auto_assign_picker">Auto przypisanie zbierającego</option>
+                  <option value="full_auto">Pełna automatyzacja</option>
+                </select>
+              </label>
+            </FieldGridPicking>
+            <div className="mt-6 grid gap-x-6 gap-y-4 border-t border-slate-200/50 pt-6 sm:grid-cols-2">
+              <CustomCheckbox label="Sortuj po wieku zamówienia" checked={extended.sortOrdersByAge} onChange={(v) => patchExtended("sortOrdersByAge", v)} />
+            </div>
           </SubsectionPicking>
 
-          <SubsectionPicking title="Po zakończeniu zbioru (wsadowego)" description="Zachowanie po domknięciu partii — lokalnie.">
+          <SubsectionPicking title="Akcja po zebraniu zbioru zamówień">
             <div className="mt-2 flex flex-col gap-3">
               {(
                 [
-                  ["assign_new_batch", "Przypisz nowy zbiór"],
-                  ["back_to_list", "Wróć na listę"],
+                  ["assign_new_batch", "Przydziel nowy zbiór"],
+                  ["back_to_list", "Powrót na listę"],
                   ["stay_here", "Zostań na ekranie"],
                 ] as const
               ).map(([value, label]) => (
@@ -2168,90 +2210,22 @@ export function WmsPickingSettingsSections({
           <SubsectionPicking title="Reguły procesu">
             <FieldGridPicking>
               <CustomCheckbox
-                label="Oddziel zamówienia sprzedaży bezpośredniej"
+                label="Oddziel zamówienia z trybu sprzedaży bezpośredniej"
                 checked={extended.separateDirectSalesOrders}
                 onChange={(v) => patchExtended("separateDirectSalesOrders", v)}
               />
               <CustomCheckbox
-                label="Zezwól na zbieranie w trybie pakowania"
+                label="Zbieraj wybrane produkty w Trybie Pakowania"
                 checked={extended.allowPickInsidePackingMode}
                 onChange={(v) => patchExtended("allowPickInsidePackingMode", v)}
               />
             </FieldGridPicking>
           </SubsectionPicking>
 
-          <SubsectionPicking title="Integracje / dokumenty">
-            <HelpPicking>
-              Dokumenty sprzedaży konfigurujesz w zakładce <strong className="font-semibold text-slate-900">Pakowanie</strong> — w module
-              zbierania nie ma osobnych pól dokumentów.
-            </HelpPicking>
-          </SubsectionPicking>
-        </SectionCardPicking>
-
-        <SectionCardPicking id="wms-pick-queue" title="Kolejkowanie zamówień" summary="Batch, limity objętości, kolejki kurierskie i zbiory.">
-          <SubsectionPicking title="Zbiory / kolejka">
-            <FieldGridPicking>
-              <label className="block text-sm font-medium text-slate-700">
-                Liczba zamówień w batchu (wielopoz.)
-                <input
-                  type="number"
-                  min={1}
-                  max={200}
-                  className={numberInputClass}
-                  value={extended.multiItemBatchOrdersCount}
-                  onChange={(e) =>
-                    patchExtended("multiItemBatchOrdersCount", Math.max(1, Math.min(200, Math.floor(Number(e.target.value) || 1))))
-                  }
-                />
-              </label>
-              <label className="block text-sm font-medium text-slate-700">
-                Liczba zamówień w batchu (jednopoz.)
-                <input
-                  type="number"
-                  min={1}
-                  max={200}
-                  className={numberInputClass}
-                  value={extended.singleItemBatchOrdersCount}
-                  onChange={(e) =>
-                    patchExtended("singleItemBatchOrdersCount", Math.max(1, Math.min(200, Math.floor(Number(e.target.value) || 1))))
-                  }
-                />
-              </label>
-              <label className="block text-sm font-medium text-slate-700 sm:col-span-2" title="0 = bez limitu objętości (placeholder)">
-                Limit objętości jednopoz. (0 = brak)
-                <input
-                  type="number"
-                  min={0}
-                  max={999999}
-                  className={numberInputClass}
-                  value={extended.singleItemVolumeLimit}
-                  onChange={(e) => patchExtended("singleItemVolumeLimit", Math.max(0, Math.floor(Number(e.target.value) || 0)))}
-                />
-              </label>
-              <label className="block text-sm font-medium text-slate-700 sm:col-span-2 pb-2">
-                Tryb zarządzania zbiorem
-                <select
-                  className={selectClass}
-                  value={extended.batchManagementMode}
-                  onChange={(e) =>
-                    patchExtended("batchManagementMode", e.target.value as WmsPickingExtendedUiSettings["batchManagementMode"])
-                  }
-                >
-                  <option value="manual">Ręczny</option>
-                  <option value="auto_assign_picker">Auto przypisanie zbierającego</option>
-                  <option value="full_auto">Pełna automatyzacja</option>
-                </select>
-              </label>
-            </FieldGridPicking>
-            <div className="mt-6 grid gap-x-6 gap-y-4 border-t border-slate-200/50 pt-6 sm:grid-cols-2">
-              <CustomCheckbox label="Sortuj po wieku zamówienia" checked={extended.sortOrdersByAge} onChange={(v) => patchExtended("sortOrdersByAge", v)} />
-            </div>
-          </SubsectionPicking>
-
-          <SubsectionPicking title="Kolejki kurierskie">
+          <SubsectionPicking title="Kolejność zbierania według kurierów">
             <FieldGridPicking>
               <CustomCheckbox label="Plakietka kuriera" checked={extended.showCourierBadge} onChange={(v) => patchExtended("showCourierBadge", v)} />
-              <CustomCheckbox label="Sortuj zamówienia po kurierze" checked={extended.sortOrdersByCourier} onChange={(v) => patchExtended("sortOrdersByCourier", v)} />
+              <CustomCheckbox label="Sortuj zamówienia według kurierów" checked={extended.sortOrdersByCourier} onChange={(v) => patchExtended("sortOrdersByCourier", v)} />
               <CustomCheckbox label="Priorytetyzuj ekspres" checked={extended.prioritizeExpressOrders} onChange={(v) => patchExtended("prioritizeExpressOrders", v)} />
             </FieldGridPicking>
           </SubsectionPicking>
@@ -2287,16 +2261,27 @@ export function WmsPickingSettingsSections({
               kreskowego”.
             </p>
           )}
+
+          <SubsectionPicking title="Integracje / dokumenty">
+            <HelpPicking>
+              Dokumenty sprzedaży konfigurujesz w zakładce <strong className="font-semibold text-slate-900">Pakowanie</strong> — w module
+              zbierania nie ma osobnych pól dokumentów.
+            </HelpPicking>
+          </SubsectionPicking>
         </SectionCardPicking>
 
-        <SectionCardPicking id="wms-pick-scan" title="Skanowanie i walidacja" summary="Wymagania skanów i reguły walidacji podczas zbierania.">
+        <SectionCardPicking id="wms-pick-scan" title="Ustawienia wspólne" summary="Wymagania skanów i reguły walidacji podczas zbierania.">
           <FieldGridPicking>
             <CustomCheckbox
-              label="Wymagaj skanu produktu (min. raz)"
+              label="Wymagane skanowanie produktu przynajmniej jeden raz"
               checked={extended.requireProductScanAtLeastOnce}
               onChange={(v) => patchExtended("requireProductScanAtLeastOnce", v)}
             />
-            <CustomCheckbox label="Wymagaj skanu lokalizacji" checked={extended.requireLocationScan} onChange={(v) => patchExtended("requireLocationScan", v)} />
+            <CustomCheckbox
+              label="Wymagane skanowanie lokalizacji"
+              checked={extended.requireLocationScan}
+              onChange={(v) => patchExtended("requireLocationScan", v)}
+            />
             <CustomCheckbox
               label="Wyłącz wymuszenie skanu lokalizacji przy wielu lokalizacjach"
               checked={extended.disableForceLocationScanWhenManyLocations}
@@ -2315,7 +2300,7 @@ export function WmsPickingSettingsSections({
           </FieldGridPicking>
         </SectionCardPicking>
 
-        <SectionCardPicking id="wms-pick-carts" title="Wózki i koszyki" summary="Typ kontenera, skany startowe i auto-sugestie.">
+        <SectionCardPicking id="wms-pick-carts" title="Metody zbierania" summary="Typ kontenera, skany startowe i auto-sugestie.">
           <FieldGridPicking>
             <label className="block pb-2 text-sm font-medium text-slate-700 sm:col-span-2">
               Domyślny typ kontenera
@@ -2341,7 +2326,28 @@ export function WmsPickingSettingsSections({
           </FieldGridPicking>
         </SectionCardPicking>
 
-        <SectionCardPicking id="wms-pick-shortage" title="Braki i wyjątki" summary="Statusy po zgłoszeniu braku, priorytety i dogrywka (API).">
+        <SectionCardPicking id="wms-pick-shortage" title="Braki przy zbieraniu" summary="Statusy po zgłoszeniu braku, priorytety i dogrywka.">
+          <SubsectionPicking title="Status zamówienia z brakującymi produktami" description="Preferencja lokalna (przeglądarka) — uzupełnienie do ustawień API poniżej.">
+            <label className="block text-sm font-medium text-slate-700">
+              Status zamówienia z brakującymi produktami
+              <select
+                className={selectClass}
+                value={extended.shortageOrderStatusId ?? ""}
+                onChange={(e) => {
+                  const v = e.target.value.trim();
+                  patchExtended("shortageOrderStatusId", v === "" ? null : Number(v));
+                }}
+              >
+                <option value="">— brak —</option>
+                {statusOptionsFlat.map((o) => (
+                  <option key={o.id} value={String(o.id)}>
+                    {o.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </SubsectionPicking>
+
           <PickingShortageSettingsPanel
             ref={shortageRef}
             tenantId={DAMAGE_TENANT_ID}
@@ -2361,10 +2367,18 @@ export function WmsPickingSettingsSections({
           </SubsectionPicking>
         </SectionCardPicking>
 
-        <SectionCardPicking id="wms-pick-warehouses" title="Magazyny i strefy" summary="Podział pracy i identyfikatory magazynów.">
+        <SectionCardPicking id="wms-pick-warehouses" title="Magazyny" summary="Podział pracy i identyfikatory magazynów.">
           <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
-            <CustomCheckbox label="Dziel pracę między magazynami" checked={extended.splitWorkBetweenWarehouses} onChange={(v) => patchExtended("splitWorkBetweenWarehouses", v)} />
-            <CustomCheckbox label="Ignoruj poziomy stanów w lokalizacjach" checked={extended.ignoreLocationStockLevels} onChange={(v) => patchExtended("ignoreLocationStockLevels", v)} />
+            <CustomCheckbox
+              label="Rozdziel pracę między magazynami"
+              checked={extended.splitWorkBetweenWarehouses}
+              onChange={(v) => patchExtended("splitWorkBetweenWarehouses", v)}
+            />
+            <CustomCheckbox
+              label="Ignoruj stany magazynowe lokalizacji"
+              checked={extended.ignoreLocationStockLevels}
+              onChange={(v) => patchExtended("ignoreLocationStockLevels", v)}
+            />
             <CustomCheckbox label="Zbieranie strefowe" checked={extended.zonePickingEnabled} onChange={(v) => patchExtended("zonePickingEnabled", v)} />
           </div>
           <div className="mt-6 grid gap-x-6 gap-y-4 sm:grid-cols-2">
@@ -2437,7 +2451,7 @@ export function WmsPickingSettingsSections({
         <SectionCardPicking id="wms-pick-advanced" title="Zaawansowane" summary="Diagnostyka, legacy i routing.">
           <FieldGridPicking>
             <CustomCheckbox
-              label="Sprawdzanie dostępności u dostawcy"
+              label="[BETA] Korzystaj z dostępności produktów u dostawców"
               checked={extended.supplierAvailabilityCheck}
               onChange={(v) => patchExtended("supplierAvailabilityCheck", v)}
             />

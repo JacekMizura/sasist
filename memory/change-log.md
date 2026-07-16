@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-07-16 — Zbieranie: nazewnictwo Sellasist 1:1 (UI)
+
+- Nav: Konfiguracja statusów, Zarządzanie zbiorami, Ustawienia wspólne, Metody zbierania, Braki przy zbieraniu, Magazyny, …
+- Etykiety pól/checkboxów/przycisku dodawania wg briefu; opcje trybów 1:1.
+- Sekcja `wms-pick-workflow` usunięta z nav — treść przeniesiona (bez zmian API).
+- Raport: `memory/wms-picking-naming-deploy-report.md`.
+
 ## 2026-07-16 — Konfigurator zbierania: modal 1400px + nazwy Sellasist 1:1
 
 - Drawer → `PickingSettingsModal` (max-width 1400px), sekcje pionowe / gęste, A|B obok siebie na XL.

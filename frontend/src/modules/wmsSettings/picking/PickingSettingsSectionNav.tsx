@@ -9,7 +9,6 @@ import {
   Settings2,
   ShoppingCart,
   Sparkles,
-  Workflow,
 } from "lucide-react";
 
 import type { WmsSettingsSectionConfig } from "../../../pages/Settings/wmsSettingsSectionConfig";
@@ -17,7 +16,6 @@ import { WMS_PICKING_SETTINGS_NAV_SECTIONS } from "./pickingSettingsNavSections"
 
 const ICONS: Record<string, LucideIcon> = {
   "wms-pick-modes": Layers,
-  "wms-pick-workflow": Workflow,
   "wms-pick-queue": ClipboardList,
   "wms-pick-scan": ScanLine,
   "wms-pick-carts": ShoppingCart,
