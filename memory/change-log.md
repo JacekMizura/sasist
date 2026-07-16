@@ -1,5 +1,13 @@
 # Change log
 
+## 2026-07-16 — Modal „Nowy tryb zbierania”: layout + Select statusów
+
+- Tryb zbierania | Kolejność zamówień w 2 kolumnach; w „Po produktach” kolejność widoczna, disabled z opisem.
+- Sekcje A/B zawsze widoczne; nieobsługiwane opcje/pola disabled z powodem (bez ukrywania).
+- Krótsze etykiety pojemników (Wózek skan/bez, Pick & Pack, Regał…); opisy pod opcjami.
+- Statusy: `PickingStatusSelect` (szukaj, badge koloru, grupy, max-h 300px, sticky search); etykieta „Status po zakończeniu zbierania”.
+- Tylko UI — bez zmian API / enum / zapisu.
+
 ## 2026-07-16 — Zbieranie: nazewnictwo Sellasist 1:1 (UI)
 
 - Nav: Konfiguracja statusów, Zarządzanie zbiorami, Ustawienia wspólne, Metody zbierania, Braki przy zbieraniu, Magazyny, …
