@@ -9,7 +9,7 @@ import { filterToolbarBtnApply } from "@/components/filters/filterUiTokens";
 import { ERP_INVENTORY_COUNT_TABS } from "../../erpInventoryCountTabs";
 import { erpInventoryCountPaths } from "../../inventoryCountPaths";
 
-/** ERP inventory — shell modułu (breadcrumb → tytuł + CTA → zakładki → treść). */
+/** ERP inventory — breadcrumb → zakładki (+ CTA) → treść (bez pośredniego h1). */
 export default function InventoryLayout() {
   const { pathname } = useLocation();
   const onWizard = pathname.startsWith(erpInventoryCountPaths.wizard);
@@ -17,23 +17,22 @@ export default function InventoryLayout() {
   return (
     <PageLayout fullBleed>
       <ModuleListBreadcrumb items={[{ label: "Magazyn" }, { label: "Inwentaryzacja" }]} />
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-2xl font-semibold text-slate-900">Inwentaryzacja magazynowa</h1>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <TabsNav
+          items={ERP_INVENTORY_COUNT_TABS}
+          exact
+          aria-label="Inwentaryzacja magazynowa — zakładki"
+          className="min-w-0 flex-1 gap-8"
+        />
         {!onWizard ? (
-          <Link to={erpInventoryCountPaths.wizard} className={filterToolbarBtnApply}>
+          <Link to={erpInventoryCountPaths.wizard} className={`${filterToolbarBtnApply} shrink-0`}>
             <Plus className="mr-1.5 inline h-4 w-4" strokeWidth={2} aria-hidden />
             Nowa inwentaryzacja
           </Link>
         ) : null}
       </div>
-      <TabsNav
-        items={ERP_INVENTORY_COUNT_TABS}
-        exact
-        aria-label="Inwentaryzacja magazynowa — zakładki"
-        className="mt-6 gap-8"
-      />
-      <div className={`${flatSectionDividerClass} mt-3`} aria-hidden />
-      <div className="pt-6">
+      <div className={`${flatSectionDividerClass} mt-2`} aria-hidden />
+      <div className="pt-4">
         <Outlet />
       </div>
     </PageLayout>

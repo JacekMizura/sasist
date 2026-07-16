@@ -15,9 +15,7 @@ type WmsModuleLayoutProps = {
 
 /**
  * Tab-first module shell: renders the tab row **above** the route outlet.
- * Use only when child routes do not render their own breadcrumbs/title above the tabs;
- * for settings-style pages prefer {@link SettingsModuleStack} in a layout route so order is:
- * breadcrumbs → title → tabs → content.
+ * Prefer layouts that use breadcrumb → tabs → content (no intermediate page title).
  */
 export default function WmsModuleLayout({
   tabs,

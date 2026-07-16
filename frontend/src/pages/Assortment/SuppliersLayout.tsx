@@ -8,8 +8,7 @@ import { ModuleListBreadcrumb } from "../../components/listPage/moduleList";
 import { SUPPLIER_MODULE_TABS } from "../../modules/suppliers/supplierModuleTabs";
 
 /**
- * Shell modułu Dostawcy — breadcrumb → tytuł → zakładki → treść (wzorzec Zwroty / akcje automatyczne).
- * Bez dodatkowej karty wokół tabów; jeden {@link PageLayout} na cały moduł.
+ * Shell modułu Dostawcy — breadcrumb → zakładki → treść (bez pośredniego h1).
  */
 export default function SuppliersLayout() {
   const location = useLocation();
@@ -26,16 +25,15 @@ export default function SuppliersLayout() {
           { label: "Dostawcy" },
         ]}
       />
-      <h1 className="text-2xl font-semibold text-slate-900">Dostawcy</h1>
       <TabsNav
         items={SUPPLIER_MODULE_TABS}
         tabLinkSearch={tabLinkSearch || undefined}
         exact
         aria-label="Dostawcy — zakładki"
-        className="mt-6 gap-8"
+        className="gap-8"
       />
-      <div className={`${flatSectionDividerClass} mt-3`} aria-hidden />
-      <div className="pt-6">
+      <div className={`${flatSectionDividerClass} mt-2`} aria-hidden />
+      <div className="pt-4">
         <Outlet />
       </div>
     </PageLayout>

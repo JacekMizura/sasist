@@ -11,7 +11,7 @@ import { CARTS_TABS } from "./cartsTabs";
 const FULL_PAGE_CONTENT =
   /^\/carts\/(?:carriers\/[^/]+|racks\/(?:new|[^/]+(?:\/(?:edit|preview))?))$/;
 
-/** Aktywna zakładka z pathname — breadcrumb i tytuł odzwierciedlają bieżący widok. */
+/** Aktywna zakładka z pathname — breadcrumb odzwierciedla bieżący widok. */
 function resolveActiveCartsTab(pathname: string) {
   for (const tab of CARTS_TABS) {
     if (tab.end === false && (pathname === tab.path || pathname.startsWith(`${tab.path}/`))) {
@@ -29,8 +29,7 @@ function resolveActiveCartsTab(pathname: string) {
 }
 
 /**
- * Shell modułu Wózki — breadcrumb + tytuł zależne od aktywnej zakładki, potem taby.
- * Zakładki wewnętrzne nie renderują własnego PageHeader / breadcrumb.
+ * Shell modułu Wózki — breadcrumb → taby → treść (bez pośredniego h1).
  */
 export default function CartsModuleLayout() {
   const { pathname } = useLocation();
@@ -50,8 +49,7 @@ export default function CartsModuleLayout() {
       <ModuleListBreadcrumb
         items={[{ label: "Magazyn", to: "/carts/bulk" }, { label: activeTab.label }]}
       />
-      <h1 className="text-2xl font-semibold text-slate-900">{activeTab.label}</h1>
-      <TabsNav items={CARTS_TABS} exact aria-label="Magazyn — zakładki" className="mt-4 gap-8" />
+      <TabsNav items={CARTS_TABS} exact aria-label="Magazyn — zakładki" className="gap-8" />
       <div className={`${flatSectionDividerClass} mt-2`} aria-hidden />
       <div className="pt-4">
         <Outlet />

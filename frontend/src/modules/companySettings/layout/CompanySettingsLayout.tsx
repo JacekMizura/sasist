@@ -57,25 +57,21 @@ function CompanySettingsLayoutInner() {
           ...(location.pathname !== "/settings/company" ? [{ label: meta.title }] : []),
         ]}
       />
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-900">{meta.title}</h1>
-          <p className="mt-1 max-w-4xl text-sm text-slate-500">{meta.description}</p>
-        </div>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <TabsNav
+          items={COMPANY_SETTINGS_TABS}
+          exact
+          aria-label="Firma — zakładki"
+          className="min-w-0 flex-1 gap-8"
+        />
         {location.pathname.includes("/branding") ? (
-          <Link to="/settings/printers" className={`${purchasingLinkClass} shrink-0 text-sm`}>
+          <Link to="/settings/printers" className={`${purchasingLinkClass} shrink-0 pb-2.5 text-sm`}>
             Drukarki i kalibracja etykiet →
           </Link>
         ) : null}
       </div>
-      <TabsNav
-        items={COMPANY_SETTINGS_TABS}
-        exact
-        aria-label="Firma — zakładki"
-        className="mt-6 gap-8"
-      />
-      <div className={`${flatSectionDividerClass} mt-3`} aria-hidden />
-      <div className="pt-6">
+      <div className={`${flatSectionDividerClass} mt-2`} aria-hidden />
+      <div className="pt-4">
         <PurchasingContentArea>
           <Outlet />
         </PurchasingContentArea>

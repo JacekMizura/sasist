@@ -1,5 +1,10 @@
 # Change log
 
+## 2026-07-16 — Remove intermediate module h1 (breadcrumb → tabs)
+
+- Dropped duplicate page titles between breadcrumb and tabs in module shells.
+- `ModuleListBreadcrumb` margin `mb-6` → `mb-2` (tabs sit directly under nav).
+
 ## 2026-07-16 — Wózki: breadcrumb/title follow active tab
 
 - `CartsModuleLayout`: Magazyn > {active tab} + h1 = tab label (not always „Wózki”).

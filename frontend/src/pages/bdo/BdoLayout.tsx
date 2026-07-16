@@ -8,6 +8,7 @@ import { ModuleListBreadcrumb } from "@/components/listPage/moduleList";
 import { BDO_TABS } from "../../modules/bdo/bdoTabs";
 import { resolveBdoTabMeta } from "../../modules/bdo/bdoTabMeta";
 
+/** Shell BDO — breadcrumb → zakładki → treść (bez pośredniego h1 / opisu). */
 export default function BdoLayout() {
   const location = useLocation();
   const tabLinkSearch = useMemo(() => {
@@ -26,26 +27,15 @@ export default function BdoLayout() {
           ...(meta ? [{ label: meta.breadcrumbLabel }] : []),
         ]}
       />
-      {meta ? (
-        <>
-          <h1 className="text-2xl font-semibold text-slate-900">{meta.title}</h1>
-          <p className="mt-1 text-sm text-slate-500">{meta.description}</p>
-        </>
-      ) : (
-        <>
-          <h1 className="text-2xl font-semibold text-slate-900">BDO</h1>
-          <p className="mt-1 text-sm text-slate-500">Ewidencja materiałów opakowaniowych</p>
-        </>
-      )}
       <TabsNav
         items={BDO_TABS}
         tabLinkSearch={tabLinkSearch || undefined}
         exact
         aria-label="BDO — zakładki"
-        className="mt-6 gap-8"
+        className="gap-8"
       />
-      <div className={`${flatSectionDividerClass} mt-3`} aria-hidden />
-      <div className="pt-6">
+      <div className={`${flatSectionDividerClass} mt-2`} aria-hidden />
+      <div className="pt-4">
         <Outlet />
       </div>
     </PageLayout>

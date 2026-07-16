@@ -12,6 +12,7 @@ const AUTOMATION_TABS = [
   { path: "/orders/automation/settings", label: "Ustawienia", end: true as const },
 ];
 
+/** Shell automatyzacji — breadcrumb → zakładki → treść (bez pośredniego h1 / opisu). */
 export default function OrderAutomationModuleShell() {
   const { pathname } = useLocation();
   const onEditor =
@@ -30,12 +31,13 @@ export default function OrderAutomationModuleShell() {
               { label: "Akcje automatyczne" },
             ]}
           />
-          <div className="mb-4 mt-6">
-            <h1 className="text-2xl font-semibold text-slate-900">Akcje automatyczne</h1>
-            <p className="mt-1 text-sm text-slate-500">Zarządzaj regułami automatyzującymi procesy w Twoim sklepie.</p>
-          </div>
-          <TabsNav items={AUTOMATION_TABS} aria-label="Akcje automatyczne — zakładki" tabSize="comfortable" className="gap-8 border-0" />
-          <div className={`${flatSectionDividerClass} mt-3`} aria-hidden />
+          <TabsNav
+            items={AUTOMATION_TABS}
+            aria-label="Akcje automatyczne — zakładki"
+            tabSize="comfortable"
+            className="gap-8 border-0"
+          />
+          <div className={`${flatSectionDividerClass} mt-2`} aria-hidden />
         </div>
       ) : null}
       <div className={`${moduleAutomationShellClass} min-h-0 flex-1 pb-6`}>

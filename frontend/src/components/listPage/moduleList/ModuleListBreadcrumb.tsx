@@ -13,7 +13,7 @@ type Props = {
 /** Spójna ścieżka nawigacji list modułu (wzorzec zwrotów). */
 export function ModuleListBreadcrumb({ items }: Props) {
   return (
-    <nav className="mb-6 flex flex-wrap items-center gap-2 text-sm text-slate-400" aria-label="Ścieżka nawigacji">
+    <nav className="mb-2 flex flex-wrap items-center gap-2 text-sm text-slate-400" aria-label="Ścieżka nawigacji">
       <Link
         to="/dashboard"
         className="inline-flex items-center gap-1 transition hover:text-slate-900"
