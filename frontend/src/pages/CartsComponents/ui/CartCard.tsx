@@ -15,6 +15,10 @@ import {
   fleetResourceRowClass,
   fleetResourceShowContentBtnClass,
 } from "../../../modules/fleetResource/fleetResourceTokens";
+import {
+  CartAssignmentBadge,
+  type CartAssignmentType,
+} from "../../../modules/carts/cartFleet/CartAssignmentBadge";
 import ImagePreviewModal from "./ImagePreviewModal";
 import SimulationResultModal from "./SimulationResultModal";
 import { calculateCartStats } from "../cartStats";
@@ -55,6 +59,10 @@ export type CartCardProps = {
   wms_picking_order_count?: number;
   wms_picking_product_count?: number;
   wms_picking_quantity?: number;
+  assigned_user_id?: number | null;
+  assigned_user_name?: string | null;
+  assignment_type?: CartAssignmentType;
+  assignment_since?: string | null;
   /** Controlled expand — only one cart open in the list. */
   expanded?: boolean;
   onToggleExpand?: () => void;
@@ -93,6 +101,10 @@ export default function CartCard(props: CartCardProps) {
     wms_picking_order_count = 0,
     wms_picking_product_count = 0,
     wms_picking_quantity = 0,
+    assigned_user_id = null,
+    assigned_user_name = null,
+    assignment_type = null,
+    assignment_since = null,
     expanded = false,
     onToggleExpand,
     onSimulateSuccess,
@@ -259,6 +271,19 @@ export default function CartCard(props: CartCardProps) {
               </span>
             </>
           ) : null}
+          <span className={fleetResourceMetaSepClass}>|</span>
+          <span
+            className="inline-flex shrink-0"
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+          >
+            <CartAssignmentBadge
+              assigned_user_id={assigned_user_id}
+              assigned_user_name={assigned_user_name}
+              assignment_type={assignment_type}
+              assignment_since={assignment_since}
+            />
+          </span>
         </div>
 
         <div

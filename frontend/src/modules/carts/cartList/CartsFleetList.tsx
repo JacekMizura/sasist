@@ -47,6 +47,10 @@ type CartItemType = {
   wms_picking_order_count?: number;
   wms_picking_product_count?: number;
   wms_picking_quantity?: number;
+  assigned_user_id?: number | null;
+  assigned_user_name?: string | null;
+  assignment_type?: "collecting" | "packing" | null;
+  assignment_since?: string | null;
 };
 
 type GroupType = { id: number; name: string; items: CartItemType[] };
@@ -321,6 +325,10 @@ export function CartsFleetList({ cartType, refreshTrigger = 0, onAddNew, onEdit 
                         wms_picking_order_count={c.wms_picking_order_count}
                         wms_picking_product_count={c.wms_picking_product_count}
                         wms_picking_quantity={c.wms_picking_quantity}
+                        assigned_user_id={c.assigned_user_id}
+                        assigned_user_name={c.assigned_user_name}
+                        assignment_type={c.assignment_type}
+                        assignment_since={c.assignment_since}
                         image_url={c.image_url}
                         updated_at={c.updated_at}
                         length={c.length}

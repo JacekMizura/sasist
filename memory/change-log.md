@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-07-16 — Cart list: assignment badge (who uses the cart)
+
+- API list/detail: `assigned_user_id`, `assigned_user_name`, `assignment_type` (`packing` | `collecting` | null), `assignment_since`.
+- Source: open `WmsPackingSession` via `order.cart_id` (priority) → open picking `WmsOperationSession` → unassigned. No new tables.
+- UI: badge on each cart row (gray / blue / green) + hover tooltip (assignee, mode, since).
+
 ## 2026-07-16 — Cart orders hover preview
 
 - API `orders_preview` on cart list/detail (eager: customer, ui status, items+product).

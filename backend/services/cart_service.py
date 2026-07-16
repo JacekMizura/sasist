@@ -17,6 +17,9 @@ from ..models.product import Product
 from ..models.tenant import Tenant
 from ..models.label_template import SavedLabelTemplate
 from ..models.enums import CartType, CartStatus
+from ..models.wms_operation_session import WmsOperationSession
+from ..models.wms_packing_session import WmsPackingSession
+from ..models.app_user import AppUser
 from ..schemas.cart import CartBulkCreate, CartUpdate
 from .barcode_pdf_service import build_barcodes_pdf
 from .esp_scan_codes import (
@@ -26,7 +29,6 @@ from .esp_scan_codes import (
 )
 from .label_pdf_generation_log import log_label_pdf_flow, log_label_pdf_stage
 from .label_render_service import build_label_pdf, template_json_to_dict
-
 logger = logging.getLogger(__name__)
 
 # Fallback volume per unit when product volume is missing (avoid 0% fill for assigned orders)
@@ -245,6 +247,117 @@ _CART_ORDER_EAGER = (
     joinedload(Order.order_ui_status),
     joinedload(Order.items).joinedload(OrderItem.product),
 )
+
+_PICKING_SESSION_KINDS = ("picking_active", "picking_recovery_active")
+
+
+def _empty_cart_assignment() -> dict:
+    return {
+        "assigned_user_id": None,
+        "assigned_user_name": None,
+        "assignment_type": None,
+        "assignment_since": None,
+    }
+
+
+def _session_activity_ts(started_at, last_activity_at):
+    return last_activity_at or started_at
+
+
+def _batch_cart_assignments(db: Session, cart_ids: list[int]) -> dict[int, dict]:
+    """
+    Live cart ownership from open WMS sessions (no new tables).
+
+    Priority per cart: packing (open WmsPackingSession via order.cart_id)
+    → collecting (open WmsOperationSession picking_*) → unassigned.
+    """
+    ids = sorted({int(cid) for cid in cart_ids if cid is not None and int(cid) > 0})
+    out: dict[int, dict] = {cid: _empty_cart_assignment() for cid in ids}
+    if not ids:
+        return out
+
+    collecting_best: dict[int, tuple] = {}
+    packing_best: dict[int, tuple] = {}
+
+    picking_rows = (
+        db.query(
+            WmsOperationSession.cart_id,
+            WmsOperationSession.operator_user_id,
+            WmsOperationSession.started_at,
+            WmsOperationSession.last_activity_at,
+        )
+        .filter(
+            WmsOperationSession.completed_at.is_(None),
+            WmsOperationSession.cart_id.in_(ids),
+            WmsOperationSession.session_kind.in_(_PICKING_SESSION_KINDS),
+            WmsOperationSession.operator_user_id.isnot(None),
+        )
+        .all()
+    )
+    for cart_id, user_id, started_at, last_activity_at in picking_rows:
+        if cart_id is None or user_id is None:
+            continue
+        cid = int(cart_id)
+        ts = _session_activity_ts(started_at, last_activity_at)
+        prev = collecting_best.get(cid)
+        if prev is None or (ts is not None and (prev[2] is None or ts > prev[2])):
+            collecting_best[cid] = (int(user_id), started_at, ts)
+
+    packing_rows = (
+        db.query(
+            Order.cart_id,
+            WmsPackingSession.operator_user_id,
+            WmsPackingSession.started_at,
+            WmsPackingSession.last_activity_at,
+        )
+        .join(Order, Order.id == WmsPackingSession.order_id)
+        .filter(
+            WmsPackingSession.completed_at.is_(None),
+            Order.cart_id.in_(ids),
+            WmsPackingSession.operator_user_id.isnot(None),
+        )
+        .all()
+    )
+    for cart_id, user_id, started_at, last_activity_at in packing_rows:
+        if cart_id is None or user_id is None:
+            continue
+        cid = int(cart_id)
+        ts = _session_activity_ts(started_at, last_activity_at)
+        prev = packing_best.get(cid)
+        if prev is None or (ts is not None and (prev[2] is None or ts > prev[2])):
+            packing_best[cid] = (int(user_id), started_at, ts)
+
+    user_ids = sorted(
+        {
+            *(uid for uid, _, _ in collecting_best.values()),
+            *(uid for uid, _, _ in packing_best.values()),
+        }
+    )
+    name_by_id: dict[int, str] = {}
+    if user_ids:
+        for u in db.query(AppUser).filter(AppUser.id.in_(user_ids)).all():
+            fn = (getattr(u, "first_name", None) or "").strip()
+            ln = (getattr(u, "last_name", None) or "").strip()
+            full = f"{fn} {ln}".strip()
+            name_by_id[int(u.id)] = full or (getattr(u, "login", None) or "").strip() or f"Użytkownik #{u.id}"
+    for cid in ids:
+        if cid in packing_best:
+            uid, started_at, _ = packing_best[cid]
+            out[cid] = {
+                "assigned_user_id": uid,
+                "assigned_user_name": name_by_id.get(uid) or f"Użytkownik #{uid}",
+                "assignment_type": "packing",
+                "assignment_since": started_at.isoformat() if started_at is not None else None,
+            }
+        elif cid in collecting_best:
+            uid, started_at, _ = collecting_best[cid]
+            out[cid] = {
+                "assigned_user_id": uid,
+                "assigned_user_name": name_by_id.get(uid) or f"Użytkownik #{uid}",
+                "assignment_type": "collecting",
+                "assignment_since": started_at.isoformat() if started_at is not None else None,
+            }
+    return out
 
 def _cart_stats(db: Session, cart_id: int, assigned, baskets_iter):
     """
@@ -496,6 +609,14 @@ class CartService:
             joinedload(Cart.assigned_orders).options(*_CART_ORDER_EAGER),
         ).all()
 
+        all_carts: list = []
+        for g in groups:
+            for c in g.carts or []:
+                if (ct is None or c.type == ct) and (not hasattr(g, "cart_type") or c.type == g.cart_type):
+                    all_carts.append(c)
+        all_carts.extend(unassigned_carts)
+        assignment_by_cart = _batch_cart_assignments(self.db, [int(c.id) for c in all_carts])
+
         def format_item(cart):
             cart.recalculate_total_volume()
             raw_type = cart.type.value if hasattr(cart.type, 'value') else str(cart.type)
@@ -512,6 +633,7 @@ class CartService:
                 for o in assigned
             ]
             order_numbers = [str(o.number) for o in assigned if getattr(o, "number", None) not in (None, "")]
+            assignment = assignment_by_cart.get(int(cart.id)) or _empty_cart_assignment()
             return {
                 "id": cart.id,
                 "name": cart.name,
@@ -538,6 +660,7 @@ class CartService:
                 "baskets_used": stats["baskets_used"],
                 "capacity_mode": getattr(cart, "capacity_mode", None) or "volume",
                 "max_orders": getattr(cart, "max_orders", None),
+                **assignment,
                 **pick_extra,
             }
 
@@ -600,6 +723,7 @@ class CartService:
             {"order_id": o.id, "total_volume_dm3": round(getattr(o, "total_volume_dm3", 0) or 0, 2)}
             for o in assigned
         ]
+        assignment = _batch_cart_assignments(self.db, [int(cart.id)]).get(int(cart.id)) or _empty_cart_assignment()
 
         baskets_out = []
         for b in cart.baskets or []:
@@ -653,6 +777,7 @@ class CartService:
             "baskets_used": stats["baskets_used"],
             "capacity_mode": getattr(cart, "capacity_mode", None) or "volume",
             "max_orders": getattr(cart, "max_orders", None),
+            **assignment,
             **pick_extra,
         }
 
