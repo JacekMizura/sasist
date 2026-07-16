@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-07-16 — Ustawienia WMS → Zbieranie: redesign UX (3 kolumny)
+
+- Tylko UI: bez zmian API / pól / zapisu (configs API + shortage API + localStorage extended).
+- Moduł: `frontend/src/modules/wmsSettings/picking/` — shell 3-kolumnowy, lewa nawigacja IA, sticky podgląd, drawer edycji trybu.
+- Karty trybów (status → sposób → 1-poz./multi → po zakończeniu → Edytuj/Usuń); sekcje: tryby, workflow, kolejka, skan, wózki, braki, magazyny, automatyzacja, widok, zaawansowane.
+- `WmsSettingsPage` oczyszczony z martwego kodu po ekstrakcji panelu.
+
 ## 2026-07-16 — WMS settings UI standardization
 
 - Shared: `WmsSettingsLayout` (hide aside ≤1 section), `WmsSettingsSection`, `WmsSettingCard`, `WmsSettingsFooter`.
