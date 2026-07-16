@@ -6,7 +6,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
 } from "react";
-import { Loader2, Package, ScanLine, Star, X } from "lucide-react";
+import { Keyboard, Loader2, Package, ScanLine, Star, X } from "lucide-react";
 import { createPortal } from "react-dom";
 import {
   DEV_SCANNER_HISTORY_UI,
@@ -35,7 +35,7 @@ const TENANT_STORAGE_KEY = "wms.receiving.tenantId";
 const Z_DEV_SCAN_BACKDROP = 10000;
 const Z_DEV_SCAN_HANDLE = 10001;
 const Z_DEV_SCAN_TOAST = 10050;
-const PANEL_W = 340;
+const PANEL_W = 360;
 
 function modeHint(mode: string): string {
   switch (mode) {
@@ -49,12 +49,14 @@ function modeHint(mode: string): string {
       return "Rozlokowanie PZ — EAN, lokalizacja, nośnik.";
     case "product_preview":
       return "Podgląd produktu — skan EAN/SKU.";
+    case "packing":
+      return "Pakowanie — skan wózka / produktu / kartonu.";
     case "operational":
       return "Kolejki operacyjne.";
     case "operational-relocation":
       return "Rozlokowanie produktów — skan nośnika logistycznego (PAL, BOX…) lub lokacji.";
     default:
-      return "Symulacja skanera — zależnie od aktywnej strony WMS.";
+      return "Emulator skanera — ten sam tor co fizyczny skaner (handleScan).";
   }
 }
 
@@ -136,7 +138,7 @@ function SuggestionRow({
     <li role="presentation">
       <div
         className={`flex w-full items-start gap-2 rounded-lg border px-2 py-2 transition-colors ${
-          active ? "border-violet-400 bg-violet-50 ring-1 ring-violet-200" : "border-transparent hover:bg-slate-50"
+          active ? "border-sky-400 bg-sky-50 ring-1 ring-sky-200" : "border-transparent hover:bg-slate-50"
         }`}
       >
         {item.kind === "product" ? <ProductThumb url={item.imageUrl} title={item.title} /> : null}
@@ -215,8 +217,11 @@ export default function DevScannerPanel() {
     appendScanToHistory,
     mode,
     activeDocument,
+    activeScanReceiverLabel,
+    hasActiveScanHandler,
     devEanInput,
     setDevEanInput,
+    clearDevScannerInput,
     scannerInputRef,
     scannerInputDisabled,
     scannerInputPlaceholder,
@@ -293,13 +298,6 @@ export default function DevScannerPanel() {
   }, [setDrawerExpanded]);
 
   useEffect(() => {
-    if (!SHOW_WMS_DEV_SCANNER || mode !== "picking") return;
-    setDrawerExpanded(true);
-    const t = window.setTimeout(() => scannerInputRef.current?.focus(), 80);
-    return () => window.clearTimeout(t);
-  }, [mode, setDrawerExpanded, scannerInputRef]);
-
-  useEffect(() => {
     if (!SHOW_WMS_DEV_SCANNER) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "s") {
@@ -328,6 +326,12 @@ export default function DevScannerPanel() {
     },
     [appendScanToHistory, handleScan, suggestDropdown.closeList],
   );
+
+  const scanCurrentInput = useCallback(() => {
+    const raw = devEanInput.trim();
+    if (!raw) return;
+    performScan(raw, { kind: scanKindToHistoryKind(classifyWmsScanCode(raw)) });
+  }, [devEanInput, performScan]);
 
   const applySuggestion = useCallback(
     (s: DevScannerSuggestion) => {
@@ -387,10 +391,7 @@ export default function DevScannerPanel() {
 
       if (e.key === "Enter") {
         e.preventDefault();
-        const raw = devEanInput.trim();
-        if (!raw) return;
-        const kind = scanKindToHistoryKind(classifyWmsScanCode(raw));
-        performScan(raw, { kind });
+        scanCurrentInput();
         return;
       }
 
@@ -420,8 +421,7 @@ export default function DevScannerPanel() {
       suggestions,
       suggestIndex,
       applySuggestion,
-      devEanInput,
-      performScan,
+      scanCurrentInput,
       devScanHistory,
       historyIndex,
       setDevEanInput,
@@ -430,21 +430,10 @@ export default function DevScannerPanel() {
     ],
   );
 
-  const historyGroups = useMemo(() => {
-    const products: DevScanHistoryEntry[] = [];
-    const locations: DevScanHistoryEntry[] = [];
-    const carriers: DevScanHistoryEntry[] = [];
-    for (const e of devScanHistory.slice(0, DEV_SCANNER_HISTORY_UI * 3)) {
-      if (e.kind === "product") products.push(e);
-      else if (e.kind === "location") locations.push(e);
-      else if (e.kind === "carrier") carriers.push(e);
-    }
-    return {
-      products: products.slice(0, DEV_SCANNER_HISTORY_UI),
-      locations: locations.slice(0, DEV_SCANNER_HISTORY_UI),
-      carriers: carriers.slice(0, DEV_SCANNER_HISTORY_UI),
-    };
-  }, [devScanHistory]);
+  const recentScans = useMemo(
+    () => devScanHistory.slice(0, DEV_SCANNER_HISTORY_UI),
+    [devScanHistory],
+  );
 
   if (!SHOW_WMS_DEV_SCANNER) return null;
 
@@ -452,6 +441,8 @@ export default function DevScannerPanel() {
     activeDocument?.kind === "pz"
       ? `PZ #${activeDocument.pzId}`
       : activeDocument?.label ?? (activeDocument?.kind ? activeDocument.kind : null);
+
+  const canScan = !scannerInputDisabled && Boolean(devEanInput.trim());
 
   return createPortal(
     <>
@@ -484,7 +475,10 @@ export default function DevScannerPanel() {
       >
         <div className="flex items-start justify-between gap-2 border-b border-slate-100 px-3 py-3">
           <div className="min-w-0">
-            <h2 className="text-sm font-black leading-tight text-slate-900">Skaner testowy</h2>
+            <h2 className="flex items-center gap-1.5 text-sm font-black leading-tight text-slate-900">
+              <Keyboard size={16} className="shrink-0 text-sky-600" aria-hidden />
+              Emulator skanera
+            </h2>
             <p className="mt-0.5 text-[10px] leading-snug text-slate-500">{modeHint(mode)}</p>
             <div className="mt-2 flex flex-wrap gap-1">
               <span className="rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase text-slate-600">
@@ -511,7 +505,7 @@ export default function DevScannerPanel() {
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-3">
           <div ref={suggestDropdown.containerRef} className="relative shrink-0">
             <label htmlFor="wms-dev-ean" className="mb-1 block text-[10px] font-black uppercase tracking-wide text-slate-400">
-              Kod skanu
+              Kod do zeskanowania
             </label>
             <input
               id="wms-dev-ean"
@@ -531,8 +525,8 @@ export default function DevScannerPanel() {
               onBlur={() => setInputFocused(false)}
               onKeyDown={onKeyDown}
               disabled={scannerInputDisabled}
-              placeholder={scannerInputPlaceholder || "EAN, SKU, lokalizacja, PAL-/BOX-…"}
-              className="w-full rounded-xl border-2 border-slate-200 px-3 py-2.5 font-mono text-sm text-slate-900 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 disabled:bg-slate-50"
+              placeholder={scannerInputPlaceholder || "EAN, SKU, lokalizacja, CART-…"}
+              className="w-full rounded-xl border-2 border-slate-200 px-3 py-2.5 font-mono text-sm text-slate-900 outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100 disabled:bg-slate-50"
             />
             {loadingProducts ? (
               <Loader2 className="pointer-events-none absolute right-3 top-[calc(50%+6px)] h-4 w-4 -translate-y-1/2 animate-spin text-slate-400" />
@@ -558,17 +552,37 @@ export default function DevScannerPanel() {
               </ul>
             </AutocompleteDropdownPanel>
 
-            <button
-              type="button"
-              disabled={scannerInputDisabled || !devEanInput.trim()}
-              onClick={() => {
-                const raw = devEanInput.trim();
-                performScan(raw, { kind: scanKindToHistoryKind(classifyWmsScanCode(raw)) });
-              }}
-              className="mt-2 w-full rounded-xl bg-slate-900 py-2.5 text-sm font-black uppercase tracking-wide text-white hover:bg-slate-800 disabled:opacity-40"
-            >
-              Skanuj Enter
-            </button>
+            <div className="mt-2 grid grid-cols-3 gap-1.5">
+              <button
+                type="button"
+                disabled={!canScan}
+                onClick={scanCurrentInput}
+                className="rounded-xl bg-slate-900 py-2.5 text-xs font-black uppercase tracking-wide text-white hover:bg-slate-800 disabled:opacity-40"
+              >
+                Skanuj
+              </button>
+              <button
+                type="button"
+                disabled={!canScan}
+                onClick={scanCurrentInput}
+                className="rounded-xl border border-slate-300 bg-white py-2.5 text-xs font-black uppercase tracking-wide text-slate-800 hover:bg-slate-50 disabled:opacity-40"
+                title="Jak Enter na skanerze klinowym"
+              >
+                Enter
+              </button>
+              <button
+                type="button"
+                disabled={!devEanInput}
+                onClick={() => {
+                  clearDevScannerInput();
+                  setHistoryIndex(null);
+                  suggestDropdown.closeList();
+                }}
+                className="rounded-xl border border-slate-200 bg-slate-50 py-2.5 text-xs font-black uppercase tracking-wide text-slate-600 hover:bg-slate-100 disabled:opacity-40"
+              >
+                Wyczyść
+              </button>
+            </div>
           </div>
 
           {favorites.length > 0 ? (
@@ -619,70 +633,79 @@ export default function DevScannerPanel() {
           ) : null}
 
           <section className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-0.5">
-            <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">Ostatnie skany</p>
-
-            {historyGroups.products.length > 0 ? (
-              <div>
-                <p className="mb-1 text-[9px] font-bold uppercase tracking-wide text-slate-500">Produkty</p>
-                <ul className="space-y-1">
-                  {historyGroups.products.map((e) => (
-                    <HistoryRow key={`${e.code}-${e.scannedAt}`} entry={e} onReuse={() => performScan(e.code, e)} />
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-
-            {historyGroups.locations.length > 0 ? (
-              <div>
-                <p className="mb-1 text-[9px] font-bold uppercase tracking-wide text-slate-500">Lokalizacje</p>
-                <ul className="space-y-1">
-                  {historyGroups.locations.map((e) => (
-                    <HistoryRow key={`${e.code}-${e.scannedAt}`} entry={e} onReuse={() => performScan(e.code, e)} />
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-
-            {historyGroups.carriers.length > 0 ? (
-              <div>
-                <p className="mb-1 text-[9px] font-bold uppercase tracking-wide text-slate-500">Nośniki</p>
-                <ul className="space-y-1">
-                  {historyGroups.carriers.map((e) => (
-                    <HistoryRow key={`${e.code}-${e.scannedAt}`} entry={e} onReuse={() => performScan(e.code, e)} />
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-
-            {devScanHistory.length === 0 ? (
-              <p className="py-4 text-center text-xs text-slate-400">Brak historii skanów</p>
-            ) : null}
+            <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">Ostatnio skanowane</p>
+            {recentScans.length > 0 ? (
+              <ul className="space-y-1">
+                {recentScans.map((e) => (
+                  <HistoryRow
+                    key={`${e.code}-${e.scannedAt}`}
+                    entry={e}
+                    onReuse={() => {
+                      setDevEanInput(e.code);
+                      performScan(e.code, e);
+                    }}
+                  />
+                ))}
+              </ul>
+            ) : (
+              <p className="py-4 text-center text-xs text-slate-400">
+                Brak historii — wpisz kod i kliknij Skanuj
+              </p>
+            )}
           </section>
+        </div>
+
+        <div className="shrink-0 border-t border-slate-100 bg-slate-50 px-3 py-3">
+          <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">Aktywny odbiorca skanów</p>
+          <p
+            className={`mt-1 text-sm font-bold ${
+              hasActiveScanHandler || activeScanReceiverLabel !== "Brak aktywnego odbiorcy"
+                ? "text-sky-800"
+                : "text-slate-500"
+            }`}
+          >
+            {activeScanReceiverLabel}
+          </p>
+          <p className="mt-1 text-[10px] text-slate-400">Ctrl+Shift+S — otwórz / zamknij</p>
         </div>
       </aside>
 
-      <button
-        type="button"
-        aria-expanded={expanded}
-        aria-controls="wms-dev-scanner-drawer"
-        aria-label={expanded ? "Zwiń panel skanera (Ctrl+Shift+S)" : "Otwórz panel skanera (Ctrl+Shift+S)"}
-        title={expanded ? "Zwiń skaner (Ctrl+Shift+S)" : "Otwórz skaner (Ctrl+Shift+S)"}
-        className={`fixed right-0 top-1/2 flex h-[88px] w-8 -translate-y-1/2 flex-col items-center justify-center gap-1 rounded-l-lg border border-r-0 border-slate-700 bg-[#111] py-2 text-white shadow-lg transition-all hover:bg-neutral-900 ${
-          scannerInputActive
-            ? "shadow-[0_0_14px_rgba(139,92,246,0.55)] ring-1 ring-violet-400/70"
-            : ""
-        }`}
-        style={{ zIndex: Z_DEV_SCAN_HANDLE }}
-        onClick={toggleDrawer}
-      >
-        <ScanLine size={16} strokeWidth={2.25} className="shrink-0 text-violet-300" aria-hidden />
-        <span
-          className="text-[8px] font-black uppercase tracking-[0.2em] text-white/80 [writing-mode:vertical-lr]"
-          aria-hidden
+      {!expanded ? (
+        <button
+          type="button"
+          aria-expanded={false}
+          aria-controls="wms-dev-scanner-drawer"
+          aria-label="Otwórz emulator skanera (Ctrl+Shift+S)"
+          title="Emulator skanera (Ctrl+Shift+S)"
+          className={`fixed right-3 bottom-6 flex items-center gap-2 rounded-full border border-slate-700 bg-[#111] px-3.5 py-2.5 text-white shadow-lg transition-all hover:bg-neutral-900 ${
+            scannerInputActive ? "ring-2 ring-sky-400/80 shadow-[0_0_16px_rgba(56,189,248,0.45)]" : ""
+          }`}
+          style={{ zIndex: Z_DEV_SCAN_HANDLE }}
+          onClick={toggleDrawer}
         >
-          SCAN
-        </span>
-      </button>
+          <ScanLine size={18} strokeWidth={2.25} className="shrink-0 text-sky-300" aria-hidden />
+          <span className="text-xs font-bold tracking-wide">Skaner</span>
+        </button>
+      ) : (
+        <button
+          type="button"
+          aria-expanded
+          aria-controls="wms-dev-scanner-drawer"
+          aria-label="Zwiń emulator skanera (Ctrl+Shift+S)"
+          title="Zwiń skaner (Ctrl+Shift+S)"
+          className="fixed top-1/2 flex h-[88px] w-8 -translate-y-1/2 flex-col items-center justify-center gap-1 rounded-l-lg border border-r-0 border-slate-700 bg-[#111] py-2 text-white shadow-lg transition-all hover:bg-neutral-900"
+          style={{ zIndex: Z_DEV_SCAN_HANDLE, right: PANEL_W }}
+          onClick={toggleDrawer}
+        >
+          <ScanLine size={16} strokeWidth={2.25} className="shrink-0 text-sky-300" aria-hidden />
+          <span
+            className="text-[8px] font-black uppercase tracking-[0.2em] text-white/80 [writing-mode:vertical-lr]"
+            aria-hidden
+          >
+            SCAN
+          </span>
+        </button>
+      )}
     </>,
     document.body,
   );

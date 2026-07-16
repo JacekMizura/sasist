@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-07-16 — Global WMS scanner emulator restored
+
+- `DevScannerPanel` always on under WMS (unless `VITE_ENABLE_DEV_SCANNER=false`).
+- FAB „Skaner”, drawer: Skanuj / Enter / Wyczyść, last 20 scans, active receiver footer.
+- Ctrl+Shift+S; localStorage open + history. Same `handleScan` path as physical scanner.
+- Keyboard wedge only in DEV or when flag explicitly `true`.
+
 ## 2026-07-16 — Cart list: assignment badge (who uses the cart)
 
 - API list/detail: `assigned_user_id`, `assigned_user_name`, `assignment_type` (`packing` | `collecting` | null), `assignment_since`.

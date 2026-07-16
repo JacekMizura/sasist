@@ -25,13 +25,24 @@ import { resolveWmsPreviewScanToProductId } from "../pages/wms/wmsResolveProduct
 import { WMS_ROUTES } from "../pages/wms/wmsRoutes";
 import { useWarehouse } from "./WarehouseContext";
 
-/** Dev / wedge scanner UI and global listener (also VITE_ENABLE_DEV_SCANNER). */
+/**
+ * Floating scanner emulator (drawer) — always on under WMS layout unless
+ * ``VITE_ENABLE_DEV_SCANNER=false``. Manual scans call the same ``handleScan`` as pages.
+ */
 export const SHOW_WMS_DEV_SCANNER =
+  String(import.meta.env.VITE_ENABLE_DEV_SCANNER ?? "true").toLowerCase() !== "false";
+
+/**
+ * Keyboard wedge (HID) buffer on window — only in Vite DEV or when explicitly enabled.
+ * Avoids eating keystrokes on production operator terminals.
+ */
+export const ENABLE_WMS_KEYBOARD_WEDGE =
   import.meta.env.DEV || String(import.meta.env.VITE_ENABLE_DEV_SCANNER ?? "").toLowerCase() === "true";
 
-export const DEV_SCANNER_HISTORY_CAP = 40;
-/** How many history rows the panel shows per category. */
-export const DEV_SCANNER_HISTORY_UI = 12;
+/** Persist / show last N scans in the emulator. */
+export const DEV_SCANNER_HISTORY_CAP = 20;
+/** How many history rows the panel shows (flat list + per-category). */
+export const DEV_SCANNER_HISTORY_UI = 20;
 
 export type DevScanHistoryAppendMeta = Partial<
   Omit<DevScanHistoryEntry, "code" | "scannedAt">
@@ -98,12 +109,50 @@ export function deriveWmsScannerMode(pathname: string): WmsScannerMode {
   return "idle";
 }
 
+/** Human-readable active scan consumer for the emulator footer. */
+export function deriveActiveScanReceiverLabel(
+  pathname: string,
+  hasScanHandler: boolean,
+  mode: WmsScannerMode,
+): string {
+  const p = pathname.replace(/\/+$/, "") || "/";
+  const builtInPreview = isWmsProductPreviewPath(p);
+  if (!hasScanHandler && !builtInPreview) {
+    return "Brak aktywnego odbiorcy";
+  }
+  if (p === "/wms/picking/cart" || p === "/wms/packing/scan-cart") {
+    return "Skanowanie wózków";
+  }
+  if (
+    p === "/wms/picking/locations" ||
+    /^\/wms\/putaway\/\d+\/item\/\d+\/execute$/.test(p) ||
+    p === "/wms/mm" ||
+    p.startsWith("/wms/mm/") ||
+    mode === "operational-relocation"
+  ) {
+    return "Lokacje";
+  }
+  if (mode === "packing") return "Pakowanie";
+  if (mode === "picking") return "Zbieranie";
+  if (builtInPreview || mode === "product_preview") return "Podgląd produktu";
+  if (mode === "receiving-count" || mode === "receiving") return "Przyjęcie";
+  if (mode === "putaway") return "Lokacje";
+  if (mode === "returns") return "Zwroty";
+  if (mode === "operational") return "Kolejki operacyjne";
+  if (hasScanHandler) return "Aktywny ekran WMS";
+  return "Brak aktywnego odbiorcy";
+}
+
 type ScanHandler = (ean: string) => void;
 
 export type WmsScannerContextValue = {
   /** Dispatches to the scan handler registered by the active WMS page. */
   handleScan: (raw: string) => void;
   mode: WmsScannerMode;
+  /** Polish label of who currently consumes scans (emulator footer). */
+  activeScanReceiverLabel: string;
+  /** True when a page registered ``registerScanHandler``. */
+  hasActiveScanHandler: boolean;
   activeDocument: WmsActiveDocument | null;
   setActiveDocument: (doc: WmsActiveDocument | null) => void;
   registerScanHandler: (handler: ScanHandler | null) => void;
@@ -143,10 +192,16 @@ export function WmsScannerProvider({ children }: { children: ReactNode }) {
   const [scannerError, setScannerError] = useState<string | null>(null);
   const [scannerInputDisabled, setScannerInputDisabled] = useState(false);
   const [scannerInputPlaceholder, setScannerInputPlaceholder] = useState("Wpisz lub wklej EAN (↑↓ historia)");
+  const [hasActiveScanHandler, setHasActiveScanHandler] = useState(false);
 
   const scanHandlerRef = useRef<ScanHandler | null>(null);
   const scannerInputRef = useRef<HTMLInputElement | null>(null);
   const previewScanBusyRef = useRef(false);
+
+  const activeScanReceiverLabel = useMemo(
+    () => deriveActiveScanReceiverLabel(location.pathname, hasActiveScanHandler, mode),
+    [location.pathname, hasActiveScanHandler, mode],
+  );
 
   useEffect(() => {
     if (!SHOW_WMS_DEV_SCANNER) return;
@@ -167,6 +222,7 @@ export function WmsScannerProvider({ children }: { children: ReactNode }) {
 
   const registerScanHandler = useCallback((handler: ScanHandler | null) => {
     scanHandlerRef.current = handler;
+    setHasActiveScanHandler(handler != null);
   }, []);
 
   const appendScanToHistory = useCallback((ean: string, meta?: DevScanHistoryAppendMeta) => {
@@ -283,7 +339,7 @@ export function WmsScannerProvider({ children }: { children: ReactNode }) {
   handleScanRef.current = handleScan;
 
   useEffect(() => {
-    if (!SHOW_WMS_DEV_SCANNER) return;
+    if (!ENABLE_WMS_KEYBOARD_WEDGE) return;
 
     let buffer = "";
     let idleTimer: ReturnType<typeof window.setTimeout> | undefined;
@@ -345,6 +401,8 @@ export function WmsScannerProvider({ children }: { children: ReactNode }) {
     () => ({
       handleScan,
       mode,
+      activeScanReceiverLabel,
+      hasActiveScanHandler,
       activeDocument,
       setActiveDocument: setActiveDocumentState,
       registerScanHandler,
@@ -368,6 +426,8 @@ export function WmsScannerProvider({ children }: { children: ReactNode }) {
     [
       handleScan,
       mode,
+      activeScanReceiverLabel,
+      hasActiveScanHandler,
       activeDocument,
       registerScanHandler,
       appendScanToHistory,
