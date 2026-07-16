@@ -28,8 +28,13 @@ function resolveActiveCartsTab(pathname: string) {
   return CARTS_TABS[0];
 }
 
+/** Białe tło kolumny treści (bez szarego canvasu shella ERP). */
+const CARTS_PAGE_SHELL =
+  "flex min-h-0 flex-1 flex-col bg-white p-4 md:p-6";
+
 /**
- * Shell modułu Wózki — breadcrumb → taby → treść (bez pośredniego h1).
+ * Shell modułu Wózki — breadcrumb → taby → treść.
+ * `omitCard` + `bg-white`: pełne białe tło jak w innych modułach (bez szarej ramki wokół karty).
  */
 export default function CartsModuleLayout() {
   const { pathname } = useLocation();
@@ -38,14 +43,14 @@ export default function CartsModuleLayout() {
 
   if (fullPageContent) {
     return (
-      <PageLayout fullBleed>
+      <PageLayout fullBleed omitCard className={CARTS_PAGE_SHELL}>
         <Outlet />
       </PageLayout>
     );
   }
 
   return (
-    <PageLayout fullBleed>
+    <PageLayout fullBleed omitCard className={CARTS_PAGE_SHELL}>
       <ModuleListBreadcrumb
         items={[{ label: "Magazyn", to: "/carts/bulk" }, { label: activeTab.label }]}
       />

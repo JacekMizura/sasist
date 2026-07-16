@@ -1,5 +1,15 @@
 # Change log
 
+## 2026-07-16 — Cart orders hover preview
+
+- API `orders_preview` on cart list/detail (eager: customer, ui status, items+product).
+- Expand panel: hover on order count → Floating UI popover (scroll, max 500px); click → `/orders/:id`.
+
+## 2026-07-16 — Wózki: white page background
+
+- `CartsModuleLayout`: `omitCard` + `bg-white` fill (no slate canvas around nested card).
+- Expand panel content on white; row hover highlight kept light.
+
 ## 2026-07-16 — Remove intermediate module h1 (breadcrumb → tabs)
 
 - Dropped duplicate page titles between breadcrumb and tabs in module shells.

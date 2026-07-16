@@ -201,10 +201,10 @@ export default function CartCard(props: CartCardProps) {
   };
 
   return (
-    <div className={`w-full max-w-none ${expanded ? "bg-slate-50/40" : ""}`}>
+    <div className="w-full max-w-none">
       <div
         className={`${fleetResourceRowClass} cursor-pointer ${simulating ? "pointer-events-none opacity-70" : ""} ${
-          expanded ? "bg-slate-50" : ""
+          expanded ? "bg-slate-50/80" : ""
         }`}
         onClick={toggleExpand}
         onKeyDown={(e) => {

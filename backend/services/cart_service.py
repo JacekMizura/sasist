@@ -138,11 +138,113 @@ def _order_customer_name(order) -> str | None:
     shipping = data.get("shipping") if isinstance(data, dict) else None
     billing = data.get("billing") if isinstance(data, dict) else None
     src = shipping if isinstance(shipping, dict) and shipping else (billing if isinstance(billing, dict) else {})
+    company = str(src.get("company") or src.get("company_name") or "").strip()
+    if company:
+        return company
     fn = str(src.get("first_name") or "").strip()
     ln = str(src.get("last_name") or "").strip()
     full = f"{fn} {ln}".strip()
     return full or None
 
+
+def _order_display_customer(order) -> str:
+    """Customer label for cart order preview (company preferred)."""
+    cust = getattr(order, "customer", None)
+    if cust is not None:
+        company = (getattr(cust, "company_name", None) or "").strip()
+        if company:
+            return company
+        name = f"{getattr(cust, 'first_name', '') or ''} {getattr(cust, 'last_name', '') or ''}".strip()
+        if name:
+            return name
+    return _order_customer_name(order) or "—"
+
+
+def _order_display_status(order) -> str:
+    ui = getattr(order, "order_ui_status", None)
+    if ui is not None:
+        label = (getattr(ui, "name", None) or "").strip()
+        if label:
+            return label
+    return str(getattr(order, "status", None) or "—")
+
+
+def _serialize_cart_order_product_lines(order) -> list[dict]:
+    from .bundle_order_item_ops import order_item_is_operational_picking_line
+
+    lines: list[dict] = []
+    for item in getattr(order, "items", None) or []:
+        if not order_item_is_operational_picking_line(item):
+            continue
+        qty = int(getattr(item, "quantity", 0) or 0)
+        if qty <= 0:
+            continue
+        prod = getattr(item, "product", None)
+        name = (
+            (getattr(prod, "name", None) or "").strip()
+            if prod is not None
+            else ""
+        )
+        if not name:
+            name = (getattr(item, "offer_name_snapshot", None) or "").strip()
+        if not name:
+            pid = getattr(item, "product_id", None)
+            name = f"Produkt #{pid}" if pid else "Produkt"
+        lines.append({"name": name, "quantity": qty})
+    return lines
+
+
+def _serialize_cart_order_preview(order, *, order_id: int | None = None) -> dict:
+    """
+    One order entry for cart content hover.
+    Missing / soft-deleted order → exists=False („Zamówienie nie istnieje”).
+    """
+    oid = int(order_id) if order_id is not None else (int(order.id) if order is not None else None)
+    if order is None or getattr(order, "deleted_at", None) is not None:
+        return {
+            "exists": False,
+            "order_id": oid,
+            "number": None,
+            "customer_name": None,
+            "status": None,
+            "products": [],
+            "missing_label": "Zamówienie nie istnieje",
+        }
+    number = getattr(order, "number", None)
+    return {
+        "exists": True,
+        "order_id": int(order.id),
+        "number": str(number) if number not in (None, "") else str(order.id),
+        "customer_name": _order_display_customer(order),
+        "status": _order_display_status(order),
+        "products": _serialize_cart_order_product_lines(order),
+        "missing_label": None,
+    }
+
+
+def _build_cart_orders_preview(assigned, baskets_iter) -> list[dict]:
+    """Unique orders from assigned_orders + basket.order_id (eager-loaded)."""
+    by_id: dict[int, object | None] = {}
+    for o in assigned or []:
+        oid = getattr(o, "id", None)
+        if oid is None:
+            continue
+        by_id[int(oid)] = o
+    for b in baskets_iter or []:
+        oid = getattr(b, "order_id", None)
+        if oid is None:
+            continue
+        oid_i = int(oid)
+        if oid_i not in by_id:
+            by_id[oid_i] = getattr(b, "order", None)
+    return [_serialize_cart_order_preview(o, order_id=oid) for oid, o in sorted(by_id.items())]
+
+
+_CART_ORDER_EAGER = (
+    joinedload(Order.customer),
+    joinedload(Order.order_ui_status),
+    joinedload(Order.items).joinedload(OrderItem.product),
+)
 
 def _cart_stats(db: Session, cart_id: int, assigned, baskets_iter):
     """
@@ -378,11 +480,8 @@ class CartService:
             self.db.query(CartGroup)
             .filter(CartGroup.tenant_id == tenant_id)
             .options(
-                joinedload(CartGroup.carts).joinedload(Cart.baskets),
-                joinedload(CartGroup.carts)
-                .joinedload(Cart.assigned_orders)
-                .joinedload(Order.items)
-                .joinedload(OrderItem.product),
+                joinedload(CartGroup.carts).joinedload(Cart.baskets).joinedload(CartBasket.order).options(*_CART_ORDER_EAGER),
+                joinedload(CartGroup.carts).joinedload(Cart.assigned_orders).options(*_CART_ORDER_EAGER),
             )
         )
         if ct is not None:
@@ -393,8 +492,8 @@ class CartService:
         if ct is not None:
             carts_q = carts_q.filter(Cart.type == ct)
         unassigned_carts = carts_q.options(
-            joinedload(Cart.baskets),
-            joinedload(Cart.assigned_orders).joinedload(Order.items).joinedload(OrderItem.product),
+            joinedload(Cart.baskets).joinedload(CartBasket.order).options(*_CART_ORDER_EAGER),
+            joinedload(Cart.assigned_orders).options(*_CART_ORDER_EAGER),
         ).all()
 
         def format_item(cart):
@@ -407,6 +506,7 @@ class CartService:
             baskets_iter = getattr(cart, "baskets", None) or []
             stats = _cart_stats(self.db, int(cart.id), assigned, baskets_iter)
             pick_extra = _wms_pick_stats_for_cart(self.db, cart.id)
+            orders_preview = _build_cart_orders_preview(assigned, baskets_iter)
             assigned_orders = [
                 {"order_id": o.id, "total_volume_dm3": round(getattr(o, "total_volume_dm3", 0) or 0, 2)}
                 for o in assigned
@@ -428,6 +528,7 @@ class CartService:
                 "used_volume": stats["used_volume_dm3"],
                 "assigned_orders": assigned_orders,
                 "order_numbers": order_numbers,
+                "orders_preview": orders_preview,
                 "total_weight_kg": stats["used_weight_kg"],
                 "width": cart.width or 0,
                 "length": cart.length or 0,
@@ -465,8 +566,8 @@ class CartService:
 
     def get_details(self, cart_id: int):
         cart = self.db.query(Cart).options(
-            joinedload(Cart.baskets).joinedload(CartBasket.order).joinedload(Order.items).joinedload(OrderItem.product),
-            joinedload(Cart.assigned_orders).joinedload(Order.items).joinedload(OrderItem.product),
+            joinedload(Cart.baskets).joinedload(CartBasket.order).options(*_CART_ORDER_EAGER),
+            joinedload(Cart.assigned_orders).options(*_CART_ORDER_EAGER),
         ).filter(Cart.id == cart_id).first()
         if not cart:
             raise HTTPException(status_code=404, detail="Wózek nie istnieje")
@@ -494,6 +595,11 @@ class CartService:
         stats = _cart_stats(self.db, int(cart.id), assigned, baskets_iter)
         pick_extra = _wms_pick_stats_for_cart(self.db, cart.id)
         order_numbers = [str(o.number) for o in assigned if getattr(o, "number", None) not in (None, "")]
+        orders_preview = _build_cart_orders_preview(assigned, baskets_iter)
+        assigned_orders = [
+            {"order_id": o.id, "total_volume_dm3": round(getattr(o, "total_volume_dm3", 0) or 0, 2)}
+            for o in assigned
+        ]
 
         baskets_out = []
         for b in cart.baskets or []:
@@ -539,6 +645,8 @@ class CartService:
             "total_volume_dm3": round(cart.total_volume or 0, 2),
             "max_volume_dm3": round(cart.total_volume or 0, 2),
             "order_numbers": order_numbers,
+            "assigned_orders": assigned_orders,
+            "orders_preview": orders_preview,
             "total_weight_kg": stats["used_weight_kg"],
             "total_orders": stats["total_orders"],
             "total_products": stats["total_products"],

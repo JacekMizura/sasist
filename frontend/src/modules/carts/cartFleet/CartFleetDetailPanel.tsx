@@ -8,6 +8,7 @@ import OrderProductPreviewModal from "../../../pages/CartsComponents/ui/OrderPro
 import { ClearIcon } from "../../../pages/CartsComponents/ui/Icons";
 import type { BasketDetail } from "./cartFleetTypes";
 import { basketSlotCode } from "./cartFleetTypes";
+import { CartOrdersHoverPopover, type CartOrderPreview } from "./CartOrdersHoverPopover";
 
 type CartFleetDetailPanelProps = {
   open: boolean;
@@ -37,6 +38,7 @@ export function CartFleetDetailPanel({
     baskets?: BasketDetail[];
     assigned_orders?: Array<{ order_id: number; total_volume_dm3?: number }>;
     order_numbers?: string[];
+    orders_preview?: CartOrderPreview[];
     total_orders?: number;
     total_products?: number;
     baskets_used?: number;
@@ -180,6 +182,7 @@ export function CartFleetDetailPanel({
 
   const assignedOrders = detailData?.assigned_orders ?? [];
   const orderNumbers = detailData?.order_numbers ?? [];
+  const ordersPreview = detailData?.orders_preview ?? [];
 
   return (
     <>
@@ -189,7 +192,7 @@ export function CartFleetDetailPanel({
         aria-hidden={!open}
       >
         <div className="min-h-0 overflow-hidden">
-          <div className="w-full max-w-none border-t border-slate-200 bg-slate-50/80">
+          <div className="w-full max-w-none border-t border-slate-200 bg-white">
             <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-2.5">
               <ChevronDown className="h-4 w-4 shrink-0 text-slate-500" aria-hidden />
               <p className="text-sm font-semibold text-slate-900">
@@ -205,8 +208,11 @@ export function CartFleetDetailPanel({
                 <div className="space-y-5 px-4 py-4 sm:px-5">
                   <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
                     <div className="flex flex-wrap gap-x-5 gap-y-1">
-                      <span>
-                        Zamówienia: <strong>{stats.total_orders}</strong>
+                      <span className="inline-flex items-center gap-1">
+                        Zamówienia:{" "}
+                        <CartOrdersHoverPopover orders={ordersPreview}>
+                          <strong className="tabular-nums text-slate-900">{stats.total_orders}</strong>
+                        </CartOrdersHoverPopover>
                       </span>
                       <span>
                         Produkty: <strong>{stats.total_products}</strong>
