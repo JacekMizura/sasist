@@ -11,7 +11,9 @@ import {
   type PresetType,
 } from "../../services/labelPresets";
 import type { LabelTemplate } from "../../types/labelSystem";
+import { formatLabelSizeMm } from "../../utils/formatMm";
 import { labelModuleBasePath } from "./labelModuleBasePath";
+import { printModuleTypeLabel } from "./labelPrintModuleTypes";
 import ReadyTemplateCard from "./readyTemplates/ReadyTemplateCard";
 import {
   PRESET_SECTION,
@@ -40,6 +42,7 @@ type CustomTemplateRow = {
   template_type?: string | null;
   template_json: string;
   is_default?: boolean;
+  updated_at?: string | null;
 };
 
 type LibraryCard =
@@ -70,12 +73,23 @@ type LibraryCard =
       templateType: string | null;
     };
 
+function formatEditedDate(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  return `Edytowano ${date.toLocaleDateString("pl-PL")}`;
+}
+
 function parseCustomTemplate(row: CustomTemplateRow): LibraryCard | null {
   try {
     const parsed = JSON.parse(row.template_json) as LabelTemplate;
     const widthMm = Number(parsed.widthMm) || 50;
     const heightMm = Number(parsed.heightMm) || 30;
     const dpi = Number(parsed.dpi) || 300;
+    const typeLabel = printModuleTypeLabel(row.template_type ?? parsed.template_type);
+    const size = formatLabelSizeMm(widthMm, heightMm);
+    const edited = formatEditedDate(row.updated_at ?? parsed.updatedAt);
+    const metaLine = edited ? `${typeLabel} • ${size} • ${edited}` : `${typeLabel} • ${size}`;
     return {
       kind: "custom",
       key: `custom-${row.id}`,
@@ -92,9 +106,7 @@ function parseCustomTemplate(row: CustomTemplateRow): LibraryCard | null {
       },
       name: row.name || "Bez nazwy",
       description: "Twój zapisany szablon — edytuj pola i układ w projektancie.",
-      metaLine: `${widthMm}×${heightMm} mm • ${dpi} DPI${
-        row.template_type ? ` • ${row.template_type}` : ""
-      }`,
+      metaLine,
       isSystem: false,
       isDefault: Boolean(row.is_default),
       rawJson: row.template_json,

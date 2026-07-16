@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-07-16 — Szablony / Gotowe szablony card polish
+
+- Cards: white `#FFFFFF`, border `#E5E7EB`, radius 16px, soft shadow + hover lift; removed grey preview backgrounds.
+- Ready filter tabs: wrap + horizontal scroll, never clipped.
+- Dimensions via `formatMm` / `formatLabelSizeMm` (max 1 decimal); no DPI / raw type ids in card meta — Polish labels (`Lokalizacja • 93 × 67 mm • Edytowano…`).
+
 ## 2026-07-15 — Szablony list UI rebuild
 
 - `LabelTemplatesList`: single inner rail (260–280px) for typ etykiety + grupy; full-width right content.

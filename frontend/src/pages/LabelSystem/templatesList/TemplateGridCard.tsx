@@ -1,5 +1,5 @@
 import { TemplatePreview } from "../../../components/labels/TemplatePreview";
-import { formatMm } from "../../../utils/formatMm";
+import { formatLabelSizeMm } from "../../../utils/formatMm";
 import { printModuleTypeLabel } from "../labelPrintModuleTypes";
 import {
   formatEditedMeta,
@@ -52,12 +52,13 @@ export default function TemplateGridCard({
         }
       }}
       className={[
-        "flex w-full cursor-pointer flex-col overflow-hidden rounded-2xl border bg-white shadow-sm transition",
+        "flex w-full cursor-pointer flex-col overflow-hidden border bg-white shadow-sm transition",
         "hover:-translate-y-0.5 hover:shadow-md",
         selected
           ? "border-orange-400 ring-2 ring-orange-300/60"
-          : "border-gray-200 hover:border-gray-300",
+          : "border-[#E5E7EB] hover:border-gray-300",
       ].join(" ")}
+      style={{ borderRadius: 16 }}
     >
       <button
         type="button"
@@ -65,10 +66,10 @@ export default function TemplateGridCard({
           e.stopPropagation();
           onPreview();
         }}
-        className="border-b border-gray-100 bg-slate-50/80 p-3 text-left"
+        className="border-b border-[#E5E7EB] bg-white p-3 text-left"
         aria-label={`Podgląd szablonu ${t.name}`}
       >
-        <div className="flex h-32 w-full items-center justify-center overflow-hidden rounded-xl border border-gray-200 bg-white p-1">
+        <div className="flex h-32 w-full items-center justify-center overflow-hidden rounded-xl border border-[#E5E7EB] bg-white p-1">
           <TemplatePreview
             templateId={t.id}
             template={parseTemplateJson(t.template_json)}
@@ -98,10 +99,8 @@ export default function TemplateGridCard({
               ) : null}
             </div>
             <p className="mt-1 text-xs text-slate-500">
-              {printModuleTypeLabel(typeKey)} · {formatMm(t.widthMm)} × {formatMm(t.heightMm)} mm
-            </p>
-            <p className="mt-0.5 text-xs text-slate-500">
-              {formatEditedMeta(t.updated_at)} · Brak statystyk użyć
+              {printModuleTypeLabel(typeKey)} • {formatLabelSizeMm(t.widthMm, t.heightMm)} •{" "}
+              {formatEditedMeta(t.updated_at)}
             </p>
           </div>
         </div>
@@ -110,21 +109,21 @@ export default function TemplateGridCard({
           <button
             type="button"
             onClick={onPreview}
-            className="rounded-xl border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:shadow-md"
+            className="rounded-xl border border-[#E5E7EB] bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:shadow-md"
           >
             Podgląd
           </button>
           <button
             type="button"
             onClick={onEdit}
-            className="rounded-xl border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:shadow-md"
+            className="rounded-xl border border-[#E5E7EB] bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:shadow-md"
           >
             Edytuj
           </button>
           <button
             type="button"
             onClick={onDuplicate}
-            className="rounded-xl border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:shadow-md"
+            className="rounded-xl border border-[#E5E7EB] bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:shadow-md"
           >
             Duplikuj
           </button>
@@ -132,7 +131,7 @@ export default function TemplateGridCard({
             type="button"
             onClick={onDelete}
             disabled={deleting}
-            className="rounded-xl border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:opacity-50"
+            className="rounded-xl border border-red-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"
           >
             {deleting ? "…" : "Usuń"}
           </button>
@@ -148,7 +147,7 @@ export default function TemplateGridCard({
                 onMoveToGroup(v === "" ? null : Number(v));
               }}
               disabled={moving}
-              className="w-full rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs text-slate-700"
+              className="w-full rounded-lg border border-[#E5E7EB] bg-white px-2 py-1 text-xs text-slate-700"
             >
               <option value="">Bez grupy</option>
               {groups.map((g) => (

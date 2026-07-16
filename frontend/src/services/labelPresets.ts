@@ -62,10 +62,10 @@ export const PRESET_CARD_META: Record<PresetType, PresetCardMeta> = {
   RACK_BEAM_MULTISECTION: { widthMm: 300, heightMm: 40, barcodeLabel: "Kod 128", formatLabel: "Zebra" },
 };
 
-/** Jedna linia metadanych: np. „Zebra • 100×50 mm • Kod 128”. */
+/** Jedna linia metadanych: np. „Lokalizacja • 100 × 50 mm”. */
 export function formatPresetSpecLine(type: PresetType): string {
   const m = PRESET_CARD_META[type];
-  return `${m.formatLabel} • ${m.widthMm}×${m.heightMm} mm • ${m.barcodeLabel}`;
+  return `Lokalizacja • ${m.widthMm} × ${m.heightMm} mm`;
 }
 
 /**

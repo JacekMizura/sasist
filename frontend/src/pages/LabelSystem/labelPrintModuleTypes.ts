@@ -33,14 +33,19 @@ export const DOCUMENT_PRINT_MODULE_TYPE_LABELS: Record<DocumentPrintModuleType, 
   document_correction: "Korekta",
 };
 
-export function printModuleTypeLabel(type: string): string {
-  if (type in LABEL_PRINT_MODULE_TYPE_LABELS) {
-    return LABEL_PRINT_MODULE_TYPE_LABELS[type as LabelPrintModuleType];
+/** Polish UI label — never expose raw ids like `location` to users. */
+export function printModuleTypeLabel(type: string | null | undefined): string {
+  const key = String(type ?? "")
+    .trim()
+    .toLowerCase();
+  if (key in LABEL_PRINT_MODULE_TYPE_LABELS) {
+    return LABEL_PRINT_MODULE_TYPE_LABELS[key as LabelPrintModuleType];
   }
-  if (type in DOCUMENT_PRINT_MODULE_TYPE_LABELS) {
-    return DOCUMENT_PRINT_MODULE_TYPE_LABELS[type as DocumentPrintModuleType];
+  if (key in DOCUMENT_PRINT_MODULE_TYPE_LABELS) {
+    return DOCUMENT_PRINT_MODULE_TYPE_LABELS[key as DocumentPrintModuleType];
   }
-  return type;
+  if (!key) return "Szablon";
+  return "Szablon";
 }
 
 export function isDocumentPrintModuleType(type: string): type is DocumentPrintModuleType {

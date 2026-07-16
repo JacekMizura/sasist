@@ -49,12 +49,15 @@ export default function ReadyTemplateCard({
   }, [menuOpen]);
 
   return (
-    <article className="group relative flex h-[300px] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition duration-200 hover:-translate-y-1 hover:border-orange-300 hover:shadow-lg">
-      <div className="relative h-[48%] shrink-0">
+    <article
+      className="group relative flex h-[300px] flex-col overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-sm transition duration-200 hover:-translate-y-1 hover:border-orange-300 hover:shadow-md"
+      style={{ borderRadius: 16 }}
+    >
+      <div className="relative h-[48%] shrink-0 bg-white">
         <LabelGalleryThumbnail
           template={template}
           cacheKey={cacheKey}
-          className="h-full border-b border-gray-200 bg-white"
+          className="h-full border-b border-[#E5E7EB] bg-white"
         />
         <div className="pointer-events-none absolute left-2.5 top-2.5 flex flex-wrap gap-1.5">
           {isSystem ? (
