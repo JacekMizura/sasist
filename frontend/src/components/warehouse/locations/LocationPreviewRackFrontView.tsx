@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import type { LocationVisualBin } from "../../../api/wmsLocationVisualApi";
 import type { BinState, LayoutState, RackState } from "../../../types/warehouse";
 import {
@@ -14,6 +14,7 @@ import {
   storageTypeLabelPl,
   type LocationSlotVisualKind,
 } from "./locationPreviewVisual";
+import { LocationSlotHoverCard } from "./LocationSlotHoverCard";
 
 export type RackSlotSelection = {
   level_index: number;
@@ -60,7 +61,6 @@ export function LocationPreviewRackFrontView({
   const binRtl = useMemo(() => isBinDirectionRtl(layout, rack), [layout, rack]);
   const uuid = (activeLocationUuid ?? "").trim();
   const code = (activeLocationCode ?? "").trim();
-  const [hoverKey, setHoverKey] = useState<string | null>(null);
 
   const rows = useMemo(() => {
     const out: {
@@ -149,38 +149,21 @@ export function LocationPreviewRackFrontView({
               >
                 {row.slots.map((slot) => {
                   const colors = LOCATION_SLOT_COLORS[slot.kind];
-                  const showTip = hoverKey === slot.key;
                   return (
-                    <div
+                    <LocationSlotHoverCard
                       key={slot.key}
-                      className="relative"
-                      onMouseEnter={() => setHoverKey(slot.key)}
-                      onMouseLeave={() => setHoverKey((k) => (k === slot.key ? null : k))}
-                      onFocus={() => setHoverKey(slot.key)}
-                      onBlur={() => setHoverKey((k) => (k === slot.key ? null : k))}
+                      lines={slot.tip}
+                      isActive={slot.kind === "active"}
+                      ariaLabel={`${slot.label} — ${storageTypeLabelPl(slot.apiBin?.storage_type, slot.apiBin?.location_kind)}`}
+                      className="flex min-h-[3.75rem] w-full flex-col items-center justify-center rounded-xl border-2 px-1.5 py-2 text-center shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                      style={{
+                        backgroundColor: colors.bg,
+                        borderColor: colors.border,
+                        color: colors.text,
+                      }}
                     >
-                      <button
-                        type="button"
-                        className="flex min-h-[3.75rem] w-full flex-col items-center justify-center rounded-xl border-2 px-1.5 py-2 text-center shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-                        style={{
-                          backgroundColor: colors.bg,
-                          borderColor: colors.border,
-                          color: colors.text,
-                        }}
-                        aria-current={slot.kind === "active" ? "true" : undefined}
-                        aria-label={`${slot.label} — ${storageTypeLabelPl(slot.apiBin?.storage_type, slot.apiBin?.location_kind)}`}
-                        title={slot.tip.join(" · ")}
-                      >
-                        <span className="font-mono text-xs font-bold leading-tight sm:text-sm">{slot.label}</span>
-                      </button>
-                      {showTip ? (
-                        <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 w-max min-w-[11rem] -translate-x-1/2 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-left text-[11px] leading-relaxed text-slate-700 shadow-lg">
-                          {slot.tip.map((line) => (
-                            <p key={line}>{line}</p>
-                          ))}
-                        </div>
-                      ) : null}
-                    </div>
+                      <span className="font-mono text-xs font-bold leading-tight sm:text-sm">{slot.label}</span>
+                    </LocationSlotHoverCard>
                   );
                 })}
               </div>

@@ -41,7 +41,7 @@ from .document_number_service import stock_document_display_label
 from .inventory_damage_trace_service import inventory_damage_trace_out
 from .location_badge import batch_location_storage_types, wms_location_badge_kind
 from .location_label_parse import parse_location
-from .slotting.capacity_service import location_volume_capacity_dm3
+from .slotting.capacity_service import cm3_to_dm3, location_volume_capacity_dm3
 from .wms_carrier_service import _carrier_items_from_inventory, _carrier_stats, carrier_operation_label
 
 
@@ -54,6 +54,48 @@ def _product_ean(prod: Product) -> str | None:
     return ean or None
 
 
+def _product_unit_volume_dm3(prod: Product) -> float | None:
+    """Unit volume in dm³ from L×W×H (cm) or stored ``volume``."""
+    length = float(getattr(prod, "length", None) or 0)
+    width = float(getattr(prod, "width", None) or 0)
+    height = float(getattr(prod, "height", None) or 0)
+    if length > 0 and width > 0 and height > 0:
+        return cm3_to_dm3(length * width * height)
+    vol = float(getattr(prod, "volume", None) or 0)
+    if vol > 0:
+        return vol
+    return None
+
+
+def _sum_products_used_volume_dm3(
+    db: Session,
+    lines: list[tuple[int, float]],
+) -> tuple[float | None, bool]:
+    """
+    Sum qty × unit volume for product lines.
+
+    Returns ``(used_volume_dm3, volume_complete)``.
+    ``volume_complete`` is False when any line with qty>0 lacks dimensions/volume.
+    """
+    usable = [(int(pid), float(qty)) for pid, qty in lines if int(pid) > 0 and float(qty) > 0]
+    if not usable:
+        return 0.0, True
+    ids = sorted({pid for pid, _ in usable})
+    by_id: dict[int, Product] = {
+        int(p.id): p for p in db.query(Product).filter(Product.id.in_(ids)).all()
+    }
+    total = 0.0
+    for pid, qty in usable:
+        prod = by_id.get(pid)
+        if prod is None:
+            return None, False
+        unit = _product_unit_volume_dm3(prod)
+        if unit is None:
+            return None, False
+        total += unit * qty
+    return round(total, 4), True
+
+
 def _build_occupancy(
     *,
     loc: Location,
@@ -62,9 +104,11 @@ def _build_occupancy(
     storage_type: str | None,
     used_slots: int | None,
     total_slots: int | None,
+    products_used_volume_dm3: float | None,
+    products_volume_complete: bool,
 ) -> LocationVisualOccupancyOut:
-    used_vol = float(getattr(loc, "occupied_volume_dm3", 0) or 0)
     max_vol = float(location_volume_capacity_dm3(loc) or 0)
+    stored_used = float(getattr(loc, "occupied_volume_dm3", 0) or 0)
     used_w = float(getattr(loc, "occupied_weight_kg", 0) or 0)
     explicit_max_w = getattr(loc, "max_weight_kg", None)
     max_w = float(explicit_max_w) if explicit_max_w is not None and float(explicit_max_w) > 0 else None
@@ -73,29 +117,42 @@ def _build_occupancy(
     percent: float | None = None
     label: str | None = None
 
-    if max_vol > 0:
-        basis = "volume"
-        percent = round(min(100.0, max(0.0, (used_vol / max_vol) * 100.0)), 1)
-        label = f"{round(used_vol, 1)} / {round(max_vol, 1)} dm³"
-    elif max_w is not None and max_w > 0:
-        basis = "weight"
-        percent = round(min(100.0, max(0.0, (used_w / max_w) * 100.0)), 1)
-        label = f"{round(used_w, 1)} / {round(max_w, 1)} kg"
-    elif total_slots is not None and total_slots > 0 and used_slots is not None:
-        basis = "slots"
-        percent = round(min(100.0, max(0.0, (used_slots / total_slots) * 100.0)), 1)
-        label = f"{used_slots} / {total_slots} slotów"
-    else:
-        # Stored percent alone is not trustworthy when capacity is unknown (often defaults to 0).
+    has_product_qty = total_qty > 0 or sku_count > 0
+
+    if has_product_qty and not products_volume_complete:
+        # Products present but dimensions missing — never show fake 0%.
         basis = "none"
         percent = None
-        label = None
+        label = "Brak danych o objętości produktów"
+        used_vol = stored_used
+    else:
+        used_vol = (
+            float(products_used_volume_dm3)
+            if products_used_volume_dm3 is not None
+            else stored_used
+        )
+        if max_vol > 0 and products_volume_complete:
+            basis = "volume"
+            percent = round(min(100.0, max(0.0, (used_vol / max_vol) * 100.0)), 1)
+            label = f"{round(used_vol, 1)} / {round(max_vol, 1)} dm³"
+        elif max_w is not None and max_w > 0:
+            basis = "weight"
+            percent = round(min(100.0, max(0.0, (used_w / max_w) * 100.0)), 1)
+            label = f"{round(used_w, 1)} / {round(max_w, 1)} kg"
+        elif total_slots is not None and total_slots > 0 and used_slots is not None:
+            basis = "slots"
+            percent = round(min(100.0, max(0.0, (used_slots / total_slots) * 100.0)), 1)
+            label = f"{used_slots} / {total_slots} slotów"
+        else:
+            basis = "none"
+            percent = None
+            label = None
 
     return LocationVisualOccupancyOut(
         sku_count=sku_count,
         total_qty=round(total_qty, 2),
-        occupied_volume_dm3=used_vol,
-        used_volume_dm3=used_vol,
+        occupied_volume_dm3=float(used_vol or 0),
+        used_volume_dm3=float(used_vol or 0),
         max_volume_dm3=max_vol if max_vol > 0 else None,
         used_weight_kg=used_w,
         max_weight_kg=max_w,
@@ -520,6 +577,8 @@ def build_location_visual_context(
 
     used_slots = sum(1 for b in rack_bins if not b.is_empty) if rack_bins else None
     total_slots = len(rack_bins) if rack_bins else None
+    volume_lines = [(int(p.product_id), float(p.quantity or 0)) for p in products]
+    products_used_vol, products_vol_ok = _sum_products_used_volume_dm3(db, volume_lines)
     occupancy = _build_occupancy(
         loc=loc,
         sku_count=sku_count,
@@ -527,6 +586,8 @@ def build_location_visual_context(
         storage_type=storage_type,
         used_slots=used_slots,
         total_slots=total_slots,
+        products_used_volume_dm3=products_used_vol,
+        products_volume_complete=products_vol_ok,
     )
 
     return LocationVisualContextOut(

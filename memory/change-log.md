@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-07-16 — Location preview UX fixes
+
+- Slot hover: Floating UI only (`LocationSlotHoverCard`) — no native `title` tooltip; flip/shift so popup stays on screen.
+- Occupancy: `used_volume` from Σ(L×W×H×qty) in dm³; if product dims missing → `— %` + „Brak danych o objętości produktów” (no fake 0%).
+- Carrier product cards: whole card clickable → `/products/:id`, hover cursor + „Otwórz kartę produktu”.
+
 ## 2026-07-16 — Location preview modal rebuild
 
 - Modal wider (`max-w` ~1760px), 3-column layout for 27–32" screens.

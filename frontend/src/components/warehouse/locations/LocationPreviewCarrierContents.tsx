@@ -1,3 +1,6 @@
+import { ExternalLink } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+
 import type { LocationVisualOccupancy, LocationVisualProduct } from "../../../api/wmsLocationVisualApi";
 import { DamageDispositionBadge } from "../../inventory/DamageDispositionBadge";
 import { CarrierProductThumb } from "../carriers/CarrierProductThumb";
@@ -16,10 +19,14 @@ function OccupancyBadge({ occupancy }: { occupancy?: LocationVisualOccupancy | n
   const label = (occupancy?.capacity_label || "").trim();
 
   if (basis === "none" || percent == null || !Number.isFinite(percent)) {
+    const hint =
+      label === "Brak danych o objętości produktów"
+        ? "Brak danych o objętości produktów."
+        : label || "Brak danych o pojemności nośnika";
     return (
       <div className="text-right">
         <p className="text-sm font-semibold tabular-nums text-slate-500">— %</p>
-        <p className="max-w-[11rem] text-[10px] leading-snug text-slate-500">Brak danych o pojemności nośnika</p>
+        <p className="max-w-[12rem] text-[10px] leading-snug text-slate-500">{hint}</p>
       </div>
     );
   }
@@ -27,7 +34,7 @@ function OccupancyBadge({ occupancy }: { occupancy?: LocationVisualOccupancy | n
   return (
     <div className="text-right">
       <p className="text-sm font-semibold tabular-nums text-slate-800">{Math.round(percent)}%</p>
-      {label ? <p className="max-w-[11rem] text-[10px] leading-snug text-slate-500">{label}</p> : null}
+      {label ? <p className="max-w-[12rem] text-[10px] leading-snug text-slate-500">{label}</p> : null}
     </div>
   );
 }
@@ -39,6 +46,13 @@ export function LocationPreviewCarrierContents({
   occupancy,
   className = "",
 }: Props) {
+  const navigate = useNavigate();
+
+  const openProduct = (productId: number) => {
+    if (productId < 1) return;
+    navigate(`/products/${productId}`);
+  };
+
   return (
     <div
       className={`flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white ${className}`}
@@ -66,36 +80,43 @@ export function LocationPreviewCarrierContents({
               const rowKey = p.row_key || String(p.product_id);
               const ean = (p.ean || "").trim();
               return (
-                <li
-                  key={rowKey}
-                  className="flex items-start gap-3 rounded-xl border border-[#E5E7EB] bg-white p-3 shadow-sm"
-                >
-                  <CarrierProductThumb imageUrl={p.image_url} alt={name} size="xl" />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <p className="line-clamp-2 text-sm font-semibold leading-snug text-slate-900">{name}</p>
-                      <DamageDispositionBadge
-                        stockDisposition={p.stock_disposition}
-                        damageClass={p.damage_class}
-                        dispositionBadge={p.disposition_badge}
-                        damageTrace={p.damage_trace}
-                      />
+                <li key={rowKey}>
+                  <button
+                    type="button"
+                    onClick={() => openProduct(p.product_id)}
+                    className="group flex w-full cursor-pointer items-start gap-3 rounded-xl border border-[#E5E7EB] bg-white p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-orange-300 hover:shadow-md"
+                  >
+                    <CarrierProductThumb imageUrl={p.image_url} alt={name} size="xl" />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <p className="line-clamp-2 text-sm font-semibold leading-snug text-slate-900">{name}</p>
+                        <DamageDispositionBadge
+                          stockDisposition={p.stock_disposition}
+                          damageClass={p.damage_class}
+                          dispositionBadge={p.disposition_badge}
+                          damageTrace={p.damage_trace}
+                        />
+                      </div>
+                      <dl className="mt-1.5 space-y-0.5 text-xs text-slate-600">
+                        <div className="flex gap-2">
+                          <dt className="w-10 shrink-0 text-slate-400">SKU</dt>
+                          <dd className="min-w-0 truncate font-mono text-slate-800">{p.sku?.trim() || "—"}</dd>
+                        </div>
+                        <div className="flex gap-2">
+                          <dt className="w-10 shrink-0 text-slate-400">EAN</dt>
+                          <dd className="min-w-0 truncate font-mono text-slate-800">{ean || "—"}</dd>
+                        </div>
+                        <div className="flex gap-2">
+                          <dt className="w-10 shrink-0 text-slate-400">Ilość</dt>
+                          <dd className="font-semibold tabular-nums text-slate-900">{p.quantity} szt.</dd>
+                        </div>
+                      </dl>
+                      <p className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium text-orange-700 opacity-80 group-hover:opacity-100">
+                        <ExternalLink className="h-3 w-3" strokeWidth={2} aria-hidden />
+                        Otwórz kartę produktu
+                      </p>
                     </div>
-                    <dl className="mt-1.5 space-y-0.5 text-xs text-slate-600">
-                      <div className="flex gap-2">
-                        <dt className="w-10 shrink-0 text-slate-400">SKU</dt>
-                        <dd className="min-w-0 truncate font-mono text-slate-800">{p.sku?.trim() || "—"}</dd>
-                      </div>
-                      <div className="flex gap-2">
-                        <dt className="w-10 shrink-0 text-slate-400">EAN</dt>
-                        <dd className="min-w-0 truncate font-mono text-slate-800">{ean || "—"}</dd>
-                      </div>
-                      <div className="flex gap-2">
-                        <dt className="w-10 shrink-0 text-slate-400">Ilość</dt>
-                        <dd className="font-semibold tabular-nums text-slate-900">{p.quantity} szt.</dd>
-                      </div>
-                    </dl>
-                  </div>
+                  </button>
                 </li>
               );
             })}
