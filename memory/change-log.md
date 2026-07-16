@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-07-16 — Ustawienia zbierania: audit brakujących helperów po refaktorze
+
+- Przywrócono lokalne helpery w `WmsPickingSettingsPanel.tsx`: `flattenOrderUiStatusOptions`, limity `BULK_ORDER_*` + `parseBulkOrderLimitInput`, `fieldHintClass`, `configBlockTitleClass`.
+- Przyczyna: usunięcie przy czyszczeniu `WmsSettingsPage` bez przeniesienia do panelu.
+- `npm run build` OK.
+
 ## 2026-07-16 — Ustawienia WMS → Zbieranie: redesign UX (3 kolumny)
 
 - Tylko UI: bez zmian API / pól / zapisu (configs API + shortage API + localStorage extended).

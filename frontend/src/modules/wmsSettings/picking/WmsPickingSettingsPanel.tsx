@@ -92,6 +92,8 @@ const radioInputClass = "h-4 w-4 shrink-0 border-slate-300 text-blue-600 focus:r
 const textInputClassPicking = wmsSettingsTokens.input;
 const numberInputClass =
   "mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40";
+const fieldHintClass = "mt-1.5 text-xs leading-relaxed text-slate-500";
+const configBlockTitleClass = "text-sm font-semibold text-slate-900";
 
 function stableStringifyPicking(v: unknown): string {
   if (v === null || v === undefined) return JSON.stringify(v);
