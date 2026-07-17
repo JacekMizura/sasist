@@ -2,7 +2,7 @@ import { memo, type LucideIcon } from "react";
 
 import type { WmsTabId } from "../wmsTabConfig";
 import { resolveWmsModuleAccent } from "./wmsLauncherTypes";
-import { WMS_HOME_BORDER, WMS_HOME_PRIMARY } from "./wmsHomeSections";
+import { WMS_HOME_BORDER } from "./wmsHomeSections";
 
 type Props = {
   moduleId: WmsTabId;
@@ -26,7 +26,10 @@ const BADGE_TONE: Partial<Record<WmsTabId, string>> = {
   inventory_count: "bg-blue-500",
 };
 
-/** Desktop home tile — compact, max-width 280, min-height 120. */
+/**
+ * Desktop module card — fully clickable.
+ * Content only: icon, name, description, optional badge. No CTA labels.
+ */
 export const WmsHomeDesktopTile = memo(function WmsHomeDesktopTile({
   moduleId,
   label,
@@ -45,36 +48,36 @@ export const WmsHomeDesktopTile = memo(function WmsHomeDesktopTile({
       type="button"
       onClick={onActivate}
       className={[
-        "group flex min-h-[120px] w-full flex-col rounded-xl border bg-white p-3 text-left",
-        "transition-[box-shadow,transform] duration-150 ease-out",
-        "hover:-translate-y-[2px] hover:shadow-[0_8px_20px_rgba(15,23,42,0.07)]",
-        focused ? "ring-2 ring-[#5a4fcf]/20" : "",
+        "group flex min-h-[148px] w-full cursor-pointer flex-col rounded-2xl border bg-white p-4 text-left shadow-[0_1px_3px_rgba(15,23,42,0.04)]",
+        "transition-[box-shadow,transform,border-color] duration-150 ease-out",
+        "hover:-translate-y-[2px] hover:border-[#5a4fcf]/35 hover:shadow-[0_10px_28px_rgba(15,23,42,0.08)]",
+        focused ? "border-[#5a4fcf]/40 ring-2 ring-[#5a4fcf]/15" : "",
       ].join(" ")}
       style={{ borderColor: WMS_HOME_BORDER }}
     >
-      <div className="flex items-start gap-2.5">
+      <div className="flex items-start gap-3.5">
         <div
           className={[
-            "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1",
+            "flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ring-1",
             accent.iconBg,
             accent.iconRing,
             accent.iconText,
           ].join(" ")}
         >
-          <Icon size={20} strokeWidth={2.25} aria-hidden />
+          <Icon size={28} strokeWidth={2.25} aria-hidden />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
             <h3
-              className="line-clamp-2 text-[14px] font-bold text-slate-900"
-              style={{ whiteSpace: "normal", lineHeight: 1.2, wordBreak: "break-word" }}
+              className="line-clamp-2 text-[17px] font-bold text-slate-900"
+              style={{ whiteSpace: "normal", lineHeight: 1.25, wordBreak: "break-word" }}
             >
               {label}
             </h3>
             {count > 0 ? (
               <span
                 className={[
-                  "inline-flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full px-1.5 text-[11px] font-bold tabular-nums text-white",
+                  "inline-flex h-7 min-w-7 shrink-0 items-center justify-center rounded-full px-2 text-xs font-bold tabular-nums text-white",
                   badgeBg,
                 ].join(" ")}
               >
@@ -82,21 +85,22 @@ export const WmsHomeDesktopTile = memo(function WmsHomeDesktopTile({
               </span>
             ) : null}
           </div>
-          <p className="mt-1 line-clamp-2 text-[11px] leading-snug text-slate-500">{description}</p>
+          <p
+            className="mt-1.5 line-clamp-2 text-[13px] text-slate-500"
+            style={{ whiteSpace: "normal", lineHeight: 1.35, wordBreak: "break-word" }}
+          >
+            {description}
+          </p>
         </div>
       </div>
 
-      <div className="mt-auto flex items-end justify-between pt-2">
-        <span className="text-[11px] font-medium tabular-nums text-slate-400">
-          {shortcut != null ? String(shortcut) : ""}
-        </span>
-        <span
-          className="text-[11px] font-bold uppercase tracking-wide"
-          style={{ color: WMS_HOME_PRIMARY }}
-        >
-          Otwórz →
-        </span>
-      </div>
+      {shortcut != null ? (
+        <div className="mt-auto pt-3">
+          <span className="text-[11px] font-medium tabular-nums text-slate-400">{String(shortcut)}</span>
+        </div>
+      ) : (
+        <div className="mt-auto" />
+      )}
     </button>
   );
 });

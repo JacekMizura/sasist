@@ -8,7 +8,15 @@ type Props = {
   onOpenModule?: (moduleId: string) => void;
 };
 
-/** Compact KPI cards — number on top, label below. Not input-like. */
+const TONE_ACCENT: Record<(typeof WMS_HOME_KPI_DEFS)[number]["tone"], string> = {
+  blue: "#2563eb",
+  green: "#059669",
+  orange: "#ea580c",
+  red: "#dc2626",
+  purple: "#7c3aed",
+};
+
+/** KPI informational tiles — large numbers, not form fields. */
 export function WmsHomeKpiStrip({ kpi, onOpenModule }: Props) {
   const items = useMemo(
     () =>
@@ -20,17 +28,22 @@ export function WmsHomeKpiStrip({ kpi, onOpenModule }: Props) {
   );
 
   return (
-    <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-0.5 md:grid md:grid-cols-5 md:overflow-visible md:pb-0 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+    <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-0.5 md:grid md:grid-cols-5 md:overflow-visible md:pb-0 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
       {items.map((item) => (
         <button
           key={item.key}
           type="button"
           onClick={() => onOpenModule?.(item.moduleId)}
-          className="flex h-[76px] w-[132px] shrink-0 flex-col justify-center rounded-xl border bg-white px-3 py-2 text-left transition-[box-shadow,transform] duration-150 hover:-translate-y-0.5 hover:shadow-[0_6px_16px_rgba(15,23,42,0.06)] md:h-[76px] md:w-auto md:min-w-0"
+          className="flex h-[88px] w-[148px] shrink-0 cursor-pointer flex-col justify-center rounded-2xl border bg-white px-4 py-3 text-left shadow-[0_1px_3px_rgba(15,23,42,0.04)] transition-[box-shadow,transform,border-color] duration-150 hover:-translate-y-0.5 hover:border-[#5a4fcf]/30 hover:shadow-[0_8px_20px_rgba(15,23,42,0.07)] md:h-[88px] md:w-auto md:min-w-0"
           style={{ borderColor: WMS_HOME_BORDER }}
         >
-          <span className="text-2xl font-bold tabular-nums leading-none text-slate-900">{item.value}</span>
-          <span className="mt-1.5 text-[12px] font-medium leading-tight text-slate-500">{item.label}</span>
+          <span
+            className="text-[2rem] font-bold tabular-nums leading-none tracking-tight"
+            style={{ color: TONE_ACCENT[item.tone] }}
+          >
+            {item.value}
+          </span>
+          <span className="mt-2 text-[13px] font-semibold leading-tight text-slate-600">{item.label}</span>
         </button>
       ))}
     </div>

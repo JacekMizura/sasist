@@ -1,5 +1,13 @@
 # Change log
 
+## 2026-07-17 — WMS home: większe karty, bez „Otwórz”, belka
+
+- Karty desktop ~148px, większe ikony/nazwy; cała karta klikalna — usunięto „Otwórz →”.
+- KPI: duże liczby w kolorze tonu, cień/border, nie jak inputy.
+- Belka: biała, większe ikony, gap, aktywny = `#f5f8ff` + border primary; bez truncate nazw.
+- Hint: „Enter — wybierz”; sekcje wyraźniejsze; grid `minmax(280px,1fr)`.
+- Preview: `/dev/wms-home-preview`.
+
 ## 2026-07-17 — WMS home: dopracowanie UI (ewolucja)
 
 - Belka: 56px, `#ffffff`, border `#e9edf5`; aktywny moduł `#f5f8ff` + primary, bez szarych filli / GripVertical.

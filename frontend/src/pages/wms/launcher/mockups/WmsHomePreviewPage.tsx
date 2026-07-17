@@ -1,6 +1,6 @@
 /**
  * Podgląd dashboardu WMS (desktop + kolektor) — mock KPI.
- * Otwórz: /dev/wms-home-preview
+ * Route: /dev/wms-home-preview
  */
 import { useMemo, useState } from "react";
 import { Menu } from "lucide-react";
@@ -80,20 +80,24 @@ function PreviewTopBar() {
   return (
     <div
       className="flex items-center border-b bg-white"
-      style={{ height: 56, borderColor: WMS_HOME_BORDER }}
+      style={{ height: 60, borderColor: WMS_HOME_BORDER }}
     >
       <div
-        className="flex h-full items-center border-r px-3"
+        className="flex h-full items-center border-r px-4"
         style={{ borderColor: WMS_HOME_BORDER }}
       >
         <span
-          className="inline-flex h-10 w-10 items-center justify-center rounded-[10px]"
-          style={{ backgroundColor: "#f5f8ff", color: WMS_HOME_PRIMARY }}
+          className="inline-flex h-11 w-11 items-center justify-center rounded-[10px] border"
+          style={{
+            backgroundColor: "#f5f8ff",
+            color: WMS_HOME_PRIMARY,
+            borderColor: "rgba(90, 79, 207, 0.35)",
+          }}
         >
-          <Menu size={22} strokeWidth={2} aria-hidden />
+          <Menu size={24} strokeWidth={2.25} aria-hidden />
         </span>
       </div>
-      <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto px-1">
+      <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto px-2">
         {PREVIEW_PINNED.map((id, i) => {
           const mod = WMS_MODULES.find((m) => m.id === id);
           if (!mod) return null;
@@ -102,21 +106,25 @@ function PreviewTopBar() {
           return (
             <span
               key={id}
-              className="inline-flex h-10 shrink-0 items-center gap-2 rounded-[10px] px-3 text-sm font-medium"
+              className="inline-flex h-11 shrink-0 items-center gap-2.5 rounded-[10px] border px-3.5 text-[15px] font-semibold"
               style={
                 active
-                  ? { backgroundColor: "#f5f8ff", color: WMS_HOME_PRIMARY }
-                  : { color: "#475569" }
+                  ? {
+                      backgroundColor: "#f5f8ff",
+                      color: WMS_HOME_PRIMARY,
+                      borderColor: "rgba(90, 79, 207, 0.35)",
+                    }
+                  : { color: "#475569", borderColor: "transparent" }
               }
             >
-              <Icon size={18} strokeWidth={2} aria-hidden />
+              <Icon size={22} strokeWidth={2.25} aria-hidden />
               {mod.label}
             </span>
           );
         })}
       </div>
       <div
-        className="flex h-full shrink-0 items-center border-l px-3 text-xs font-medium text-slate-500"
+        className="flex h-full shrink-0 items-center border-l px-4 text-sm font-medium text-slate-500"
         style={{ borderColor: WMS_HOME_BORDER }}
       >
         Magazyn główny
@@ -149,9 +157,9 @@ export default function WmsHomePreviewPage() {
           <p className="text-xs font-bold uppercase tracking-wider" style={{ color: WMS_HOME_PRIMARY }}>
             Dev preview
           </p>
-          <h1 className="mt-1 text-2xl font-bold text-slate-900">WMS Home — iteracja UI</h1>
+          <h1 className="mt-1 text-2xl font-bold text-slate-900">WMS Home — przed wdrożeniem</h1>
           <p className="mt-1 max-w-2xl text-sm text-slate-500">
-            Desktop + kolektor z mock KPI. Klik loguje ścieżkę — bez nawigacji.
+            Desktop + kolektor. Karty bez napisu „Otwórz”. Klik loguje ścieżkę.
           </p>
           {log.length > 0 ? (
             <ul className="mt-3 space-y-0.5 font-mono text-xs text-slate-500">
@@ -164,14 +172,14 @@ export default function WmsHomePreviewPage() {
 
         <div className="grid gap-8 xl:grid-cols-[1fr_360px]">
           <Frame title="Desktop">
-            <div className="max-h-[920px] overflow-y-auto">
+            <div className="max-h-[960px] overflow-y-auto">
               <PreviewTopBar />
               <WmsDesktopHome tiles={tiles} metrics={metrics} kpi={MOCK_KPI} onOpenModule={onOpen} />
             </div>
           </Frame>
 
           <Frame title="Mobile / kolektor" width={360}>
-            <div className="max-h-[920px] overflow-y-auto">
+            <div className="max-h-[960px] overflow-y-auto">
               <div
                 className="flex h-12 items-center justify-between border-b px-3"
                 style={{ borderColor: WMS_HOME_BORDER }}

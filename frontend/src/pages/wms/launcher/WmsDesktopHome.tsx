@@ -140,23 +140,24 @@ export function WmsDesktopHome({ tiles, metrics, kpi, onOpenModule }: WmsDesktop
   return (
     <div className="min-h-full" style={{ backgroundColor: WMS_HOME_BG }}>
       <div
-        className="mx-auto w-full max-w-[1800px] px-6 py-6"
+        className="mx-auto w-full max-w-[1800px] px-6 py-5"
         tabIndex={0}
         onKeyDown={onShellKeyDown}
         role="region"
         aria-label="Start WMS"
       >
-        <header className="mb-4">
-          <h1 className="text-xl font-bold tracking-tight text-slate-900">
+        <header className="mb-5">
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
             {greetingForHour(new Date().getHours())}
           </h1>
+          <p className="mt-1 text-sm text-slate-500">Centrum operacyjne magazynu</p>
         </header>
 
-        <div className="mb-4">
+        <div className="mb-5">
           <WmsHomeKpiStrip kpi={kpi} onOpenModule={openByModuleId} />
         </div>
 
-        <div className="mb-5 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
+        <div className="mb-6 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
           <div className="relative min-w-0 max-w-xl flex-1">
             <Search
               size={18}
@@ -175,7 +176,7 @@ export function WmsDesktopHome({ tiles, metrics, kpi, onOpenModule }: WmsDesktop
               style={{ borderColor: WMS_HOME_BORDER }}
             />
           </div>
-          <p className="shrink-0 text-xs text-slate-400">Skróty: 1-9 • Enter - otwórz</p>
+          <p className="shrink-0 text-xs text-slate-400">Skróty: 1-9 • Enter — wybierz</p>
         </div>
 
         {flatItems.length === 0 ? (
@@ -188,19 +189,19 @@ export function WmsDesktopHome({ tiles, metrics, kpi, onOpenModule }: WmsDesktop
             </p>
           </div>
         ) : (
-          <div className="space-y-5">
+          <div className="space-y-7">
             {sections.map((section) => (
               <section key={section.id} aria-labelledby={`wms-home-${section.id}`}>
-                <div className="mb-2 border-b pb-1.5" style={{ borderColor: WMS_HOME_BORDER }}>
+                <div className="mb-3 border-b pb-2" style={{ borderColor: WMS_HOME_BORDER }}>
                   <h2
                     id={`wms-home-${section.id}`}
-                    className="text-xs font-bold uppercase tracking-wide text-slate-800"
+                    className="text-sm font-bold uppercase tracking-wide text-slate-900"
                   >
                     {section.title}
                   </h2>
-                  <p className="mt-0.5 text-[11px] text-slate-500">{section.description}</p>
+                  <p className="mt-1 text-xs text-slate-500">{section.description}</p>
                 </div>
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-2.5">
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-3.5">
                   {section.items.map((tab) => {
                     shortcutCounter += 1;
                     const shortcut = shortcutCounter <= 9 ? shortcutCounter : undefined;
@@ -233,7 +234,7 @@ export function WmsDesktopHome({ tiles, metrics, kpi, onOpenModule }: WmsDesktop
         >
           <p>
             <span className="font-semibold text-slate-500">Wskazówka: </span>
-            Naciśnij 1–9, aby otworzyć moduł, lub / aby wyszukać.
+            Naciśnij 1–9, aby wybrać moduł, lub / aby wyszukać.
           </p>
           <p style={{ color: WMS_HOME_PRIMARY }} className="font-medium opacity-70">
             Sasist WMS

@@ -29,19 +29,26 @@ const TabLink = memo(function TabLink({ tab, active }: { tab: WmsTabConfigItem; 
       to={tab.path}
       title={tab.label}
       className={[
-        "inline-flex h-10 shrink-0 items-center gap-2 self-center whitespace-nowrap rounded-[10px] px-3 text-sm font-medium transition-colors",
-        active ? "" : "text-slate-600 hover:text-[#5a4fcf]",
+        "inline-flex h-11 shrink-0 items-center gap-2.5 self-center whitespace-nowrap rounded-[10px] border px-3.5 text-[15px] font-semibold transition-colors",
+        active ? "" : "border-transparent text-slate-600 hover:text-[#5a4fcf]",
       ].join(" ")}
-      style={active ? { backgroundColor: ACTIVE_BG, color: WMS_HOME_PRIMARY } : undefined}
+      style={
+        active
+          ? {
+              backgroundColor: ACTIVE_BG,
+              color: WMS_HOME_PRIMARY,
+              borderColor: "rgba(90, 79, 207, 0.35)",
+            }
+          : undefined
+      }
     >
       <Icon
-        size={18}
-        strokeWidth={2}
+        size={22}
+        strokeWidth={2.25}
         aria-hidden
-        className={active ? "" : "opacity-70"}
         style={active ? { color: WMS_HOME_PRIMARY } : undefined}
       />
-      <span className="max-w-[9rem] truncate sm:max-w-[12rem]">{tab.label}</span>
+      <span className="whitespace-nowrap">{tab.label}</span>
     </NavLink>
   );
 });
@@ -85,7 +92,7 @@ function WmsTopBarModuleNav({ tabs, className, onReorder }: Props) {
 
   if (tabs.length === 0) {
     return (
-      <span className="inline-flex h-full items-center px-3 text-sm text-slate-500">
+      <span className="inline-flex h-full items-center px-4 text-sm text-slate-500">
         Przypnij moduły w menu startowym
       </span>
     );
@@ -106,7 +113,7 @@ function WmsTopBarModuleNav({ tabs, className, onReorder }: Props) {
     />
   ));
 
-  const navClass = ["flex h-full items-center gap-0.5", className].filter(Boolean).join(" ");
+  const navClass = ["flex h-full items-center gap-2", className].filter(Boolean).join(" ");
 
   if (!onReorder) {
     return (

@@ -9,7 +9,7 @@ import { useWmsPinnedModes } from "../hooks/useWmsPinnedModes";
 import { WMS_ROUTES } from "../pages/wms/wmsRoutes";
 import { WMS_HOME_BORDER } from "../pages/wms/launcher/wmsHomeSections";
 
-const TOPBAR_H = 56;
+const TOPBAR_H = 60;
 
 export default function WmsTopBar() {
   const { user } = useAuth();
@@ -22,30 +22,32 @@ export default function WmsTopBar() {
     >
       <div className="flex items-stretch" style={{ height: TOPBAR_H }}>
         <div
-          className="flex shrink-0 items-center border-r px-3"
+          className="flex shrink-0 items-center border-r px-4"
           style={{ borderColor: WMS_HOME_BORDER }}
         >
           <NavLink
             to={WMS_ROUTES.menu}
             className={({ isActive }) =>
               [
-                "inline-flex h-10 w-10 items-center justify-center rounded-[10px] transition-colors",
-                isActive ? "bg-[#f5f8ff] text-[#5a4fcf]" : "text-[#5a4fcf] hover:opacity-80",
+                "inline-flex h-11 w-11 items-center justify-center rounded-[10px] border transition-colors",
+                isActive
+                  ? "border-[#5a4fcf]/35 bg-[#f5f8ff] text-[#5a4fcf]"
+                  : "border-transparent text-[#5a4fcf] hover:border-[#5a4fcf]/25",
               ].join(" ")
             }
             title="Menu główne"
             aria-label="Menu główne"
           >
-            <Menu size={22} strokeWidth={2} aria-hidden />
+            <Menu size={24} strokeWidth={2.25} aria-hidden />
           </NavLink>
         </div>
 
-        <nav className="flex min-w-0 flex-1 overflow-x-auto px-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+        <nav className="flex min-w-0 flex-1 overflow-x-auto px-2 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
           <WmsTopBarModuleNav tabs={pinnedTabsInOrder} className="h-full min-w-0" onReorder={reorderPinned} />
         </nav>
 
         <div
-          className="flex shrink-0 items-center gap-3 border-l px-3"
+          className="flex shrink-0 items-center gap-4 border-l px-4"
           style={{ borderColor: WMS_HOME_BORDER }}
         >
           <GlobalWarehouseSelect variant="topbar" showErrorInline />
