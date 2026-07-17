@@ -1,5 +1,10 @@
 # Change log
 
+## 2026-07-17 — Fix Cart FOR UPDATE + joinedload (PostgreSQL)
+
+- Przyczyna 500 picking/start: `FeatureNotSupported: FOR UPDATE cannot be applied to the nullable side of an outer join`.
+- `_lock_cart` / `cancel_picking` / timeout workers: najpierw `SELECT carts FOR UPDATE`, potem `selectinload(Cart.baskets)` — bez OUTER JOIN na tym samym statement.
+
 ## 2026-07-17 — Fix silent HTTP 500 (log in exception handler)
 
 - Root cause: handler zwracał `request_id`, ale tylko `attach_http_500_exception`; middleware (`BaseHTTPMiddleware`) nie widzi `request.state` → brak tracebacku w Deploy Logs.

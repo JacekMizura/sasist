@@ -37,7 +37,7 @@ import logging
 from datetime import datetime
 from typing import Any, Literal, Optional, Sequence
 
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from ..models.cart import Cart
 from ..models.enums import CartStatus, normalize_cart_status_value
@@ -225,22 +225,59 @@ def _require_status(cart: Cart, allowed: Sequence[CartStatus], *, action: str) -
     return cur
 
 
+def _populate_cart_baskets(db: Session, cart: Cart) -> Cart:
+    """
+    Dograj ``cart.baskets`` osobnym SELECT (selectinload).
+
+    Nie łączyć z ``with_for_update()`` — PostgreSQL:
+    ``FOR UPDATE cannot be applied to the nullable side of an outer join``
+    (``joinedload`` / LEFT OUTER JOIN).
+    """
+    cid = int(cart.id)
+    loaded = (
+        db.query(Cart)
+        .options(selectinload(Cart.baskets))
+        .filter(Cart.id == cid)
+        .first()
+    )
+    return loaded if loaded is not None else cart
+
+
 def _lock_cart(db: Session, cart: Cart) -> Cart:
     """
-    SELECT … FOR UPDATE na wierszu carts (+ baskets).
-    Wszystkie mutacje lifecycle muszą brać blokadę przed zmianą stanu.
+    SELECT … FOR UPDATE wyłącznie na wierszu ``carts``.
+
+    Relacje (baskets) ładujemy dopiero po uzyskaniu blokady — bez OUTER JOIN.
     """
     cid = int(cart.id)
     locked = (
         db.query(Cart)
-        .options(joinedload(Cart.baskets))
         .filter(Cart.id == cid)
         .with_for_update()
         .first()
     )
     if locked is None:
         raise CartLifecycleError("Nie znaleziono wózka.", code="cart_not_found")
-    return locked
+    return _populate_cart_baskets(db, locked)
+
+
+def _lock_cart_by_keys(
+    db: Session,
+    *,
+    cart_id: int,
+    tenant_id: int | None = None,
+    warehouse_id: int | None = None,
+) -> Cart:
+    """FOR UPDATE na ``carts`` po id (+ opcjonalny tenant/warehouse), potem baskets."""
+    q = db.query(Cart).filter(Cart.id == int(cart_id))
+    if tenant_id is not None:
+        q = q.filter(Cart.tenant_id == int(tenant_id))
+    if warehouse_id is not None:
+        q = q.filter(Cart.warehouse_id == int(warehouse_id))
+    locked = q.with_for_update().first()
+    if locked is None:
+        raise CartLifecycleError("Nie znaleziono wózka.", code="cart_not_found")
+    return _populate_cart_baskets(db, locked)
 
 
 def assert_cart_lifecycle_invariants(db: Session, cart: Cart, *, strict: bool = False) -> list[str]:
@@ -765,19 +802,12 @@ def cancel_picking(
     reason: str = "cancel_picking",
 ) -> dict[str, Any]:
     """Anuluj z ASSIGNED | PICKING → AVAILABLE. Idempotentne gdy już AVAILABLE."""
-    cart = (
-        db.query(Cart)
-        .options(joinedload(Cart.baskets))
-        .filter(
-            Cart.id == int(cart_id),
-            Cart.tenant_id == int(tenant_id),
-            Cart.warehouse_id == int(warehouse_id),
-        )
-        .with_for_update()
-        .first()
+    cart = _lock_cart_by_keys(
+        db,
+        cart_id=int(cart_id),
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
     )
-    if cart is None:
-        raise CartLifecycleError("Nie znaleziono wózka.", code="cart_not_found")
 
     st = get_cart_status(cart)
     if st == CartStatus.AVAILABLE:
@@ -1271,14 +1301,11 @@ def release_stale_assigned_carts(db: Session, *, timeout_minutes: int | None = N
     ]
     released = 0
     for cid in cart_ids:
-        cart = (
-            db.query(Cart)
-            .options(joinedload(Cart.baskets))
-            .filter(Cart.id == cid)
-            .with_for_update()
-            .first()
-        )
-        if cart is None or get_cart_status(cart) != CartStatus.ASSIGNED:
+        try:
+            cart = _lock_cart_by_keys(db, cart_id=cid)
+        except CartLifecycleError:
+            continue
+        if get_cart_status(cart) != CartStatus.ASSIGNED:
             continue
         claimed = getattr(cart, "claimed_at", None)
         if claimed is None:
@@ -1328,14 +1355,11 @@ def auto_release_picking_without_confirmed_picks(
     ]
     released = 0
     for cid in cart_ids:
-        cart = (
-            db.query(Cart)
-            .options(joinedload(Cart.baskets))
-            .filter(Cart.id == cid)
-            .with_for_update()
-            .first()
-        )
-        if cart is None or get_cart_status(cart) != CartStatus.PICKING:
+        try:
+            cart = _lock_cart_by_keys(db, cart_id=cid)
+        except CartLifecycleError:
+            continue
+        if get_cart_status(cart) != CartStatus.PICKING:
             continue
         picks_n = count_confirmed_picks_on_cart(db, int(cart.id))
         if picks_n > 0:
