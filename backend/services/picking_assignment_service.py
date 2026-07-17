@@ -106,7 +106,9 @@ def refresh_cart_used_volume_wms(db: Session, cart: Cart) -> None:
     orders_on = db.query(Order).filter(Order.cart_id == cart.id).all()
     cart.used_volume = round(sum(float(o.total_volume_dm3 or 0) for o in orders_on), 2)
     if cart.used_volume and cart.used_volume > 0:
-        cart.status = CartStatus.IN_PROGRESS
+        from .cart_picking_lifecycle_service import mark_cart_picking
+
+        mark_cart_picking(cart)
     db.add(cart)
 
 
@@ -397,8 +399,16 @@ class PickingAssignmentService:
             sum(float(o.total_volume_dm3 or 0) for o in orders_on),
             2,
         )
-        if cart.used_volume and cart.used_volume > 0:
-            cart.status = CartStatus.IN_PROGRESS
+        if orders_on:
+            from .cart_picking_lifecycle_service import ensure_picking_session_for_cart
+
+            ensure_picking_session_for_cart(
+                self.db,
+                cart=cart,
+                orders=orders_on,
+                operator_user_id=None,
+                source_status_id=None,
+            )
         self.db.add(cart)
 
     def _assign_bulk(

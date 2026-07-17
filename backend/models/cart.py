@@ -1,5 +1,6 @@
 from sqlalchemy import Column, Integer, String, Float, ForeignKey, Enum, UniqueConstraint
 from sqlalchemy.orm import relationship
+
 from ..database import Base
 from .enums import CartType, CartStatus
 
@@ -48,7 +49,13 @@ class Cart(Base):
     capacity_mode = Column(String(20), nullable=False, default="volume")
     max_orders = Column(Integer, nullable=True)  # used when capacity_mode is "orders" or "mixed"
 
-    status = Column(Enum(CartStatus), default=CartStatus.AVAILABLE)
+    # String — unika natywnego PG ENUM przy migracji AVAILABLE/ASSIGNED/PICKING/…
+    status = Column(String(32), nullable=False, default=CartStatus.AVAILABLE.value, index=True)
+
+    #: Operator przypisany do aktywnej sesji zbierania/pakowania (SSOT lifecycle).
+    assigned_user_id = Column(Integer, ForeignKey("app_users.id", ondelete="SET NULL"), nullable=True, index=True)
+    #: Otwarta ``wms_operation_sessions.id`` (picking_active) — bez FK (cykl carts ↔ sessions).
+    current_session_id = Column(Integer, nullable=True, index=True)
 
     # ==========================================================
     # RELACJE STRUKTURALNE

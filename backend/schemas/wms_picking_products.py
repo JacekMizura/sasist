@@ -188,6 +188,14 @@ class WmsPickingOrderBundleTree(BaseModel):
     components: list[WmsPickingBundleComponentStatus] = Field(default_factory=list)
 
 
+class WmsPickingSessionStats(BaseModel):
+    """Liczniki sesji zbierania — SSOT z backendu (nie lokalny React)."""
+
+    zebrane: int = Field(0, ge=0)
+    do_zebrania: int = Field(0, ge=0)
+    w_trakcie: int = Field(0, ge=0)
+
+
 class WmsPickingProductLinesResponse(BaseModel):
     products: list[WmsPickingProductLine]
     cohort_order_count: int = Field(0, ge=0, description="Liczba zamówień w kohortcie (ten sam status + filtr typu)")
@@ -214,6 +222,10 @@ class WmsPickingProductLinesResponse(BaseModel):
     recovery_completed: bool = Field(
         default=False,
         description="True gdy dogrywka nie ma już linii do zebrania (200 OK, pusta lista)",
+    )
+    session_stats: WmsPickingSessionStats = Field(
+        default_factory=WmsPickingSessionStats,
+        description="Do zebrania / W trakcie / Zebrane — z aktywnej sesji i przypisanych zamówień.",
     )
 
 

@@ -63,7 +63,16 @@ export default function WmsPickingStatusPage() {
       ]);
       let hubOrderCount = Number(r.order_count) || 0;
       let hubPickStats = { zebrane: 0, doZebrania: 0, wTrakcie: 0 };
-      if (linesResult) {
+      if (linesResult?.session_stats) {
+        hubPickStats = {
+          zebrane: linesResult.session_stats.zebrane ?? 0,
+          doZebrania: linesResult.session_stats.do_zebrania ?? 0,
+          wTrakcie: linesResult.session_stats.w_trakcie ?? 0,
+        };
+        if (typeof linesResult.cohort_order_count === "number") {
+          hubOrderCount = linesResult.cohort_order_count;
+        }
+      } else if (linesResult) {
         const normalized = (linesResult.products ?? []).map((row) => ({
           ...row,
           picked_quantity: wmsPickingDisplayPickedQuantity(row),

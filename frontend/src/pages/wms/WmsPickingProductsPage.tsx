@@ -6,11 +6,13 @@ import {
   getWmsPickingDefaultCart,
   getWmsPickingProductLines,
   getWmsPickingResolveCart,
+  postWmsPickingCancelSession,
   postWmsPickingFinalizeCart,
   postWmsPickingRecoveryFinalize,
   postWmsPickingQuickPick,
   type WmsPickingCohortMissingLineApi,
   type WmsPickingProductLineApi,
+  type WmsPickingSessionStatsApi,
 } from "../../api/wmsPickingProductsApi";
 import { useMergedPickingSession, useWmsPickingCart } from "../../context/WmsPickingCartContext";
 import { useWarehouse } from "../../context/WarehouseContext";
@@ -25,7 +27,6 @@ import type { WmsPickingProductsNavState } from "./wmsPickingFlowTypes";
 import { clearActivePriorityTask, loadActivePriorityTask, priorityTaskAppliesTo, priorityTaskOrderIds, type ActivePriorityTask } from "./activePriorityTask";
 import { formatWmsPickingLocationPillLabel } from "./wmsPickingLocationPill";
 import {
-  computeWmsPickingProductLineSessionStats,
   pickingFinalizeHasShortageSignals,
   polishProductShortageModalSkuLine,
   sortWmsPickingProductLinesPickFlow,
@@ -148,6 +149,9 @@ export default function WmsPickingProductsPage() {
   const [rows, setRows] = useState<WmsPickingProductLineApi[]>([]);
   const [bundlePickScan, setBundlePickScan] = useState<BundleScanOut | null>(null);
   const [cohortOrderCount, setCohortOrderCount] = useState(0);
+  const [sessionStats, setSessionStats] = useState<WmsPickingSessionStatsApi | null>(null);
+  const [exitModalOpen, setExitModalOpen] = useState(false);
+  const [cancelBusy, setCancelBusy] = useState(false);
   const [cohortMissingLines, setCohortMissingLines] = useState<WmsPickingCohortMissingLineApi[]>([]);
   const [allowContinueAfterShortage, setAllowContinueAfterShortage] = useState(true);
   const [warnings, setWarnings] = useState<string[]>([]);
@@ -349,6 +353,13 @@ export default function WmsPickingProductsPage() {
       }));
       setRows(normalized);
       setCohortOrderCount(typeof data.cohort_order_count === "number" ? data.cohort_order_count : 0);
+      if (data.session_stats) {
+        setSessionStats({
+          zebrane: data.session_stats.zebrane ?? 0,
+          do_zebrania: data.session_stats.do_zebrania ?? 0,
+          w_trakcie: data.session_stats.w_trakcie ?? 0,
+        });
+      }
       setCohortMissingLines(data.cohort_missing_lines ?? []);
       setAllowContinueAfterShortage(data.allow_continue_other_lines_after_shortage !== false);
       setWarnings(data.warnings ?? []);
@@ -588,14 +599,18 @@ export default function WmsPickingProductsPage() {
   const shortageSkuCount = useMemo(() => rows.filter((r) => wmsPickingLineMissingQty(r) > 1e-9).length, [rows]);
 
   const pickStatsForBar = useMemo(() => {
-    if (rows.length > 0) {
-      return computeWmsPickingProductLineSessionStats(rows);
+    if (sessionStats != null) {
+      return {
+        zebrane: sessionStats.zebrane,
+        doZebrania: sessionStats.do_zebrania,
+        wTrakcie: sessionStats.w_trakcie,
+      };
     }
     if (!loading) {
-      return { zebrane: 0, doZebrania: 0, wTrakcie: 0 };
+      return pickingSession?.hubPickStats ?? { zebrane: 0, doZebrania: 0, wTrakcie: 0 };
     }
     return pickingSession?.hubPickStats ?? null;
-  }, [rows, loading, pickingSession?.hubPickStats]);
+  }, [sessionStats, loading, pickingSession?.hubPickStats]);
 
   const orderCountForBar = useMemo(() => {
     if (loading && rows.length === 0) {
@@ -872,7 +887,11 @@ export default function WmsPickingProductsPage() {
           ) {
             return;
           }
-          navigate(recoveryOrderId != null && recoveryOrderId > 0 ? WMS_ROUTES.braki() : WMS_ROUTES.picking);
+          if (recoveryOrderId != null && recoveryOrderId > 0) {
+            navigate(WMS_ROUTES.braki());
+            return;
+          }
+          setExitModalOpen(true);
         }}
         backAriaLabel={recoveryOrderId != null && recoveryOrderId > 0 ? "Wróć do kolejki braków" : "Wróć do wyboru statusu"}
         orderCount={orderCountForBar}
@@ -1217,6 +1236,50 @@ export default function WmsPickingProductsPage() {
               </button>
               <button type="button" onClick={() => void rejectPriorityTask()} disabled={!rejectReason.trim()} className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-bold text-white disabled:opacity-40">
                 Potwierdź
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {exitModalOpen ? (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/40 px-4">
+          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-xl">
+            <div className="text-base font-black text-slate-900">Opuścić zbieranie?</div>
+            <p className="mt-2 text-sm text-slate-600">
+              Kontynuuj — wróć do zbierania. Anuluj zbieranie — przywróć status zamówień i zwolnij wózek.
+            </p>
+            <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                disabled={cancelBusy}
+                onClick={() => setExitModalOpen(false)}
+                className="rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+              >
+                Kontynuuj
+              </button>
+              <button
+                type="button"
+                disabled={cancelBusy || !(mergedSession?.cartId || snapshot?.cartId) || warehouseId == null}
+                onClick={() => {
+                  void (async () => {
+                    const cartId = mergedSession?.cartId ?? snapshot?.cartId;
+                    if (cartId == null || warehouseId == null) return;
+                    setCancelBusy(true);
+                    try {
+                      await postWmsPickingCancelSession(DAMAGE_TENANT_ID, warehouseId, cartId);
+                      clearPickingCart();
+                      setExitModalOpen(false);
+                      navigate(WMS_ROUTES.picking, { replace: true });
+                    } catch (e) {
+                      showScannerToast(extractApiErrorMessage(e) || "Nie udało się anulować zbierania.");
+                    } finally {
+                      setCancelBusy(false);
+                    }
+                  })();
+                }}
+                className="rounded-xl bg-red-600 px-4 py-3 text-sm font-bold text-white hover:bg-red-700 disabled:opacity-40"
+              >
+                {cancelBusy ? "Anulowanie…" : "Anuluj zbieranie"}
               </button>
             </div>
           </div>

@@ -3836,6 +3836,47 @@ def ensure_carts_code_column(engine: Engine) -> None:
         conn.commit()
 
 
+def ensure_carts_picking_lifecycle_columns(engine: Engine) -> None:
+    """
+    SSOT cyklu wózka: ``assigned_user_id``, ``current_session_id``,
+    migracja statusów PL → AVAILABLE/PICKING/FULL/SERVICE + nowe ASSIGNED/READY_FOR_PACKING/PACKING.
+    """
+    with engine.connect() as conn:
+        if not _table_exists(conn, "carts"):
+            return
+        cols = _table_column_names(conn, "carts")
+        if "assigned_user_id" not in cols:
+            conn.execute(
+                text(
+                    "ALTER TABLE carts ADD COLUMN assigned_user_id INTEGER "
+                    "REFERENCES app_users(id) ON DELETE SET NULL"
+                )
+            )
+        if "current_session_id" not in cols:
+            conn.execute(text("ALTER TABLE carts ADD COLUMN current_session_id INTEGER"))
+        # Migracja legacy PL → kanoniczne stringi (bezpieczne dla VARCHAR / TEXT)
+        for old, new in (
+            ("pusty", "AVAILABLE"),
+            ("w trakcie zbierania", "PICKING"),
+            ("pełny", "FULL"),
+            ("w serwisie", "SERVICE"),
+        ):
+            try:
+                conn.execute(
+                    text("UPDATE carts SET status = :new WHERE status = :old"),
+                    {"new": new, "old": old},
+                )
+            except Exception:
+                pass
+        try:
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_carts_assigned_user_id ON carts(assigned_user_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_carts_current_session_id ON carts(current_session_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_carts_status ON carts(status)"))
+        except Exception:
+            pass
+        conn.commit()
+
+
 def ensure_esp_scan_code_columns(engine: Engine) -> None:
     """
     Internal WMS scan tokens: ESP:shpcart: / ESP:brck: / ESP:bsh: / ESP:sh: / ESP:O: + PK.

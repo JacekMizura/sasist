@@ -1,5 +1,11 @@
 # Current context
 
+## Cart/picking SSOT (2026-07-17)
+- SSOT: `backend/services/cart_picking_lifecycle_service.py`.
+- Finalize picking **keeps** cart on orders until last pack release.
+- Cancel: `POST /wms/picking/cancel-session`.
+- Panel counters: `session_stats` from product-lines API (not local React).
+
 ## Scanner Helper (2026-07-17)
 - Emulator skanera = pomocnik magazyniera (kategorie, search, relacje wózek/koszyk, ulubione, quick access).
 - Bez zmian backendu; katalog z `/carts/`, lokalizacji, `searchWmsProducts`, lookup zamówień.

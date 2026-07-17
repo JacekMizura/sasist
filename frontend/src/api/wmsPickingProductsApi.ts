@@ -58,6 +58,12 @@ export type WmsPickingProductLineApi = {
   bundle_breakdown?: WmsPickingProductBundleBreakdownRowApi[];
 };
 
+export type WmsPickingSessionStatsApi = {
+  zebrane: number;
+  do_zebrania: number;
+  w_trakcie: number;
+};
+
 export type WmsPickingProductLinesResponseApi = {
   products: WmsPickingProductLineApi[];
   cohort_order_count?: number;
@@ -69,6 +75,8 @@ export type WmsPickingProductLinesResponseApi = {
   picking_mode?: "normal" | "recovery" | string | null;
   recovery_order_id?: number | null;
   recovery_completed?: boolean;
+  /** SSOT z backendu — nie licz lokalnie z wierszy React. */
+  session_stats?: WmsPickingSessionStatsApi | null;
 };
 
 export type WmsPickingProductLocationRowApi = {
@@ -308,6 +316,25 @@ export async function postWmsPickingFinalizeCart(
     cart_id: cartId,
   };
   const res = await api.post<WmsPickingFinalizeCartResponseApi>("/wms/picking/finalize-cart", null, { params });
+  return res.data;
+}
+
+export async function postWmsPickingCancelSession(
+  tenantId: number,
+  warehouseId: number,
+  cartId: number,
+): Promise<{ cart_id: number; orders_restored: number; cart_status: string }> {
+  const res = await api.post<{ cart_id: number; orders_restored: number; cart_status: string }>(
+    "/wms/picking/cancel-session",
+    null,
+    {
+      params: {
+        tenant_id: tenantId,
+        warehouse_id: warehouseId,
+        cart_id: cartId,
+      },
+    },
+  );
   return res.data;
 }
 

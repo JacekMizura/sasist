@@ -488,7 +488,7 @@ class CartService:
             height=data.height,
             total_volume=round(vol, 2),
             type=CartType.BULK,
-            status=CartStatus.AVAILABLE,
+            status=CartStatus.AVAILABLE.value,
             capacity_mode=_norm_capacity_mode(getattr(data, "capacity_mode", None)),
             max_orders=getattr(data, "max_orders", None),
         )
@@ -522,7 +522,7 @@ class CartService:
             image_url=getattr(data, 'image_url', None),
             type=CartType.MULTI,
             total_volume=0,
-            status=CartStatus.AVAILABLE,
+            status=CartStatus.AVAILABLE.value,
             capacity_mode=_norm_capacity_mode(getattr(data, "capacity_mode", None)),
             max_orders=getattr(data, "max_orders", None),
         )
@@ -1129,7 +1129,7 @@ class CartService:
             synchronize_session="fetch",
         )
         cart.used_volume = 0
-        cart.status = CartStatus.AVAILABLE
+        cart.status = CartStatus.AVAILABLE.value
         self.db.add(cart)
         self.db.commit()
         return {
@@ -1159,7 +1159,11 @@ class CartService:
         cart = self.db.query(Cart).filter(Cart.id == cart_id).first()
         if cart:
             cart.used_volume = round(sum(getattr(o, "total_volume_dm3", 0) or 0 for o in orders_on_cart), 2)
-            cart.status = CartStatus.IN_PROGRESS if cart.used_volume and cart.used_volume > 0 else CartStatus.AVAILABLE
+            cart.status = (
+                CartStatus.PICKING.value
+                if cart.used_volume and cart.used_volume > 0
+                else CartStatus.AVAILABLE.value
+            )
             self.db.add(cart)
         self.db.commit()
         return {"status": "OK", "order_cleared": order_id}

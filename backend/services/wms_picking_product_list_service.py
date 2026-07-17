@@ -46,6 +46,7 @@ def _order_item_not_replaced_clause():
 from .order_fulfillment_state import (
     MISSING as FS_MISSING,
     NEEDS_DECISION as FS_NEEDS_DECISION,
+    PACKING as FS_PACKING,
     PICKING,
     READY_TO_PACK as FS_READY_TO_PACK,
     apply_fulfillment_state,
@@ -601,12 +602,13 @@ def _sync_order_operational_state_after_picking_finalize(
 
 
 def _release_cart_after_picking_finalize(db: Session, cart: Cart) -> None:
-    """Zwolnij wózek do kolejnego operatora — bez kasowania sfinalizowanych Pick (audyt)."""
-    for basket in list(cart.baskets or []):
-        basket.order_id = None
-        basket.used_volume = 0.0
-    cart.used_volume = 0.0
-    cart.status = CartStatus.AVAILABLE
+    """Deprecated — finalize NIE zwalnia wózka (SSOT: zwolnienie po ostatnim pakowaniu)."""
+    from .cart_picking_lifecycle_service import complete_picking_keep_cart
+
+    _ = db
+    _ = cart
+    # retained name for call sites during transition; no-op body (see finalize_wms_picking_cart)
+    return
 
 
 def _missing_qty_by_product_from_orders(
@@ -1396,6 +1398,8 @@ def build_wms_picking_product_lines(
 
     cohort_missing = _build_cohort_missing_line_rows(db, order_ids, tenant_id=tenant_id)
 
+    all_lines_for_stats = list(lines)
+
     if recovery_mode:
         lines = [ln for ln in lines if _picking_product_line_still_active(ln)]
         logger.info(
@@ -1412,6 +1416,11 @@ def build_wms_picking_product_lines(
     recovery_completed = bool(recovery_mode and len(lines) == 0)
     recovery_oid = int(order_ids[0]) if recovery_mode and order_ids else None
 
+    from .cart_picking_lifecycle_service import compute_session_stats_from_product_lines
+    from ..schemas.wms_picking_products import WmsPickingSessionStats
+
+    stats = compute_session_stats_from_product_lines(all_lines_for_stats)
+
     return WmsPickingProductLinesResponse(
         products=lines,
         cohort_order_count=len(order_ids),
@@ -1423,6 +1432,7 @@ def build_wms_picking_product_lines(
         picking_mode="recovery" if recovery_mode else "normal",
         recovery_order_id=recovery_oid,
         recovery_completed=recovery_completed,
+        session_stats=WmsPickingSessionStats(**stats),
     )
 
 
@@ -1877,8 +1887,10 @@ def record_wms_quick_pick(
     )
     if not cart_row:
         raise ValueError("Nie znaleziono aktywnego wózka (sesja).")
-    if cart_row.status == CartStatus.AVAILABLE:
-        cart_row.status = CartStatus.IN_PROGRESS
+    if cart_row.status in (CartStatus.AVAILABLE.value, CartStatus.AVAILABLE, "pusty", None, ""):
+        from .cart_picking_lifecycle_service import set_cart_status
+
+        set_cart_status(cart_row, CartStatus.PICKING)
 
     cid = int(cart_row.id)
     q_remain = float(quantity)
@@ -1920,6 +1932,16 @@ def record_wms_quick_pick(
                 ps_before = getattr(o, "picking_started_at", None)
                 o.cart_id = cid
                 touch_picking_in_progress(o)
+                from .cart_picking_lifecycle_service import ensure_picking_session_for_cart, mark_cart_picking
+
+                ensure_picking_session_for_cart(
+                    db,
+                    cart=cart_row,
+                    orders=[o],
+                    operator_user_id=operator_user_id,
+                    source_status_id=int(source_status_id) if source_status_id else None,
+                )
+                mark_cart_picking(cart_row)
                 if ps_before is None and getattr(o, "picking_started_at", None) is not None:
                     emit_wms_picking_started(
                         db,
@@ -2993,7 +3015,7 @@ def finalize_wms_picking_cart(
                 if consolidation_blocks_ready_to_pack(db, int(o.id)):
                     fs = PICKING
                 else:
-                    fs = FS_READY_TO_PACK
+                    fs = FS_PACKING
             elif kind == "all_missing":
                 fs = FS_MISSING
             else:
@@ -3003,7 +3025,10 @@ def finalize_wms_picking_cart(
                 pc=pc,
                 kind=panel_kind,
             )
-            apply_fulfillment_state(o, fs, clear_cart=True, clear_session=True)
+            # SSOT: wózek zostaje przypięty do pakowania
+            apply_fulfillment_state(o, fs, clear_cart=False, clear_session=False)
+            if fs == FS_PACKING:
+                o.status = "PACKING"
             emit_wms_picking_finished(
                 db,
                 tenant_id=int(tenant_id),
@@ -3166,7 +3191,22 @@ def finalize_wms_picking_cart(
             warehouse_id=int(warehouse_id),
             cart_id=cid,
         )
-        _release_cart_after_picking_finalize(db, cart)
+        from .cart_picking_lifecycle_service import set_cart_status
+        from ..models.enums import CartStatus
+        from .wms_audit_service import complete_wms_operation_session
+
+        set_cart_status(cart, CartStatus.READY_FOR_PACKING)
+        db.add(cart)
+        complete_wms_operation_session(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            session_kind="picking_active",
+            operator_user_id=operator_user_id,
+            cart_id=cid,
+            completed_reason="picking_finished",
+            metadata={"cart_id": cid, "orders": [int(o.id) for o in orders]},
+        )
 
         record_picking_cart_finalize_session(
             db,
@@ -3336,8 +3376,10 @@ def finalize_wms_recovery_picking_cart(
     from .recovery_workflow_service import apply_fulfillment_state_from_resolver
 
     post_state = apply_fulfillment_state_from_resolver(db, o, session_cart_id=cid, log=True)
-    fs = FS_READY_TO_PACK if post_state.packing_allowed else FS_NEEDS_DECISION
-    apply_fulfillment_state(o, fs, clear_cart=True, clear_session=True)
+    fs = FS_PACKING if post_state.packing_allowed else FS_NEEDS_DECISION
+    apply_fulfillment_state(o, fs, clear_cart=False, clear_session=False)
+    if fs == FS_PACKING:
+        o.status = "PACKING"
 
     mark_recovery_task_done(db, rt)
     recompute_order_fulfillment(db, int(order_id), commit=False, session_cart_id=cid)

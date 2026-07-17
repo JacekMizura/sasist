@@ -1033,6 +1033,39 @@ def get_recovery_batch_detail(
     return WmsRecoveryBatchSessionRead.model_validate(_batch_session_to_read(sess))
 
 
+@router.post("/picking/cancel-session")
+def post_picking_cancel_session(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
+    cart_id: int = Query(..., ge=1, description="Wózek aktywnej sesji zbierania"),
+    db: Session = Depends(get_db),
+    current_user: AppUser = Depends(get_current_user),
+):
+    """
+    Anuluj zbieranie: usuń order.cart_id / picking_session_id, przywróć poprzedni status,
+    zwolnij wózek (AVAILABLE).
+    """
+    from ..services.cart_picking_lifecycle_service import CartLifecycleError, cancel_picking_session
+
+    try:
+        out = cancel_picking_session(
+            db,
+            cart_id=int(cart_id),
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            operator_user_id=int(current_user.id),
+        )
+        db.commit()
+        return out
+    except CartLifecycleError as e:
+        db.rollback()
+        raise HTTPException(status_code=404 if e.code == "cart_not_found" else 409, detail={"code": e.code, "error": e.message}) from e
+    except Exception as e:
+        db.rollback()
+        logger.exception("picking.cancel-session failed cart_id=%s", cart_id)
+        raise HTTPException(status_code=500, detail=str(e)[:500]) from e
+
+
 @router.post("/picking/finalize-cart", response_model=WmsPickingFinalizeCartResponse)
 def post_picking_finalize_cart(
     tenant_id: int = Query(..., ge=1),
@@ -1048,8 +1081,9 @@ def post_picking_finalize_cart(
     current_user: AppUser = Depends(get_current_user),
 ):
     """
-    Zakończenie zbiórki: zdejmowanie ilości z Inventory wg Pick sesji; per zamówienie ``fulfillment_state``
-    (``READY_TO_PACK`` / ``NEEDS_DECISION`` / ``MISSING``) i status panelu z konfiguracji; wózek ``cart_id`` sesji.
+    Zakończenie zbiórki: zdejmowanie ilości z Inventory wg Pick sesji; per zamówienie
+    ``fulfillment_state`` (``PACKING`` / ``NEEDS_DECISION`` / ``MISSING``) i status panelu;
+    wózek pozostaje przypięty (``READY_FOR_PACKING``) do zakończenia pakowania.
     """
     try:
         out = finalize_wms_picking_cart(

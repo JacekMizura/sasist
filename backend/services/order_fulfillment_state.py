@@ -18,7 +18,12 @@ PARTIAL = "PARTIAL"
 MISSING = "MISSING"
 NEEDS_DECISION = "NEEDS_DECISION"
 READY_TO_PACK = "READY_TO_PACK"
+PACKING = "PACKING"
 TO_PUTAWAY = "TO_PUTAWAY"
+
+# Alias: użytkownik / SSOT lifecycle — to samo co PICKING
+PICKING_IN_PROGRESS = PICKING
+
 
 
 def clear_order_picking_session_context(order: Order) -> None:
@@ -61,8 +66,8 @@ def apply_fulfillment_state(
         getattr(order, "cart_id", None),
     )
     state_u = (state or "").strip().upper()
-    # Domknięcie zbierania (w tym braki / decyzja) — znacznik czasu, nie wyprowadzamy ze stanów picków.
-    if state_u in (READY_TO_PACK, "NEEDS_DECISION", "MISSING"):
+    # Domknięcie zbierania (w tym braki / decyzja / przekazanie do pakowania)
+    if state_u in (READY_TO_PACK, PACKING, "NEEDS_DECISION", "MISSING"):
         if invoke_packing_lifecycle:
             from .order_fulfillment_lifecycle_service import on_packing_started
 
@@ -70,7 +75,7 @@ def apply_fulfillment_state(
         now = datetime.utcnow()
         if getattr(order, "picking_finished_at", None) is None:
             order.picking_finished_at = now
-        if state_u == READY_TO_PACK and getattr(order, "picked_at", None) is None:
+        if state_u in (READY_TO_PACK, PACKING) and getattr(order, "picked_at", None) is None:
             order.picked_at = now
 
 

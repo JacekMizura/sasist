@@ -1,5 +1,14 @@
 # Change log
 
+## 2026-07-17 — Cart/picking SSOT lifecycle
+
+- Backend SSOT: `cart_picking_lifecycle_service` — AVAILABLE→ASSIGNED→PICKING→READY_FOR_PACKING→PACKING→AVAILABLE.
+- Assign: `picking_session` + `order.cart_id` / `picking_session_id` + `PICKING_IN_PROGRESS`.
+- Finalize: **nie** odłącza wózka; `cart=READY_FOR_PACKING`, `order=PACKING`; zwolnienie po ostatnim pack.
+- Cancel: `POST /wms/picking/cancel-session` — restore status + free cart.
+- FE: liczniki z `session_stats` API; modal wyjścia Kontynuuj / Anuluj zbieranie.
+- Test: `backend/tests/test_cart_picking_lifecycle_ssot.py`.
+
 ## 2026-07-17 — Scanner Helper: pomocnik kodów magazynowych
 
 - Przebudowa Emulatora skanera (FE only): usunięto przycisk ENTER; Enter/Skanuj = skan, Wyczyść zostaje.

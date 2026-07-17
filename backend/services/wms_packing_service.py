@@ -324,7 +324,7 @@ def _packing_orders_base_query(
     mode: str,
     cart_id: int | None,
 ):
-    """Kolejka pakowania: ``fulfillment_state == READY_TO_PACK`` (źródło prawdy), bez filtrowania po wózku."""
+    """Kolejka pakowania: ``fulfillment_state`` READY_TO_PACK | PACKING (SSOT po finalize z wózkiem)."""
     m = (mode or "").strip().lower()
     if m not in ("no_cart", "bulk", "baskets"):
         raise ValueError("Parametr mode musi być: no_cart, bulk lub baskets.")
@@ -344,7 +344,7 @@ def _packing_orders_base_query(
         Order.tenant_id == int(tenant_id),
         Order.warehouse_id == int(warehouse_id),
         or_(
-            Order.fulfillment_state == "READY_TO_PACK",
+            Order.fulfillment_state.in_(("READY_TO_PACK", "PACKING")),
             and_(Order.fulfillment_state.is_(None), Order.order_ui_status_id.in_(status_ids)),
         ),
         *wms_queue_fulfillment_mode_clauses(
@@ -1772,6 +1772,26 @@ def packing_finish_order(
 
     on_order_shipped(order, db)
     db.flush()
+
+    # SSOT: zwolnij wózek dopiero po spakowaniu ostatniego zamówienia na wózku
+    from .cart_picking_lifecycle_service import mark_cart_packing, release_cart_after_last_order_packed
+
+    packed_cart_id = int(order.cart_id) if getattr(order, "cart_id", None) else (
+        int(cart_id) if cart_id is not None else None
+    )
+    if packed_cart_id:
+        cart_row = db.query(Cart).filter(Cart.id == int(packed_cart_id)).first()
+        if cart_row is not None:
+            mark_cart_packing(cart_row)
+            db.add(cart_row)
+        release_cart_after_last_order_packed(
+            db,
+            cart_id=packed_cart_id,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            packed_order_id=int(order_id),
+        )
+
     step_rows = [
         {
             "step": getattr(s, "step", None),
@@ -2030,7 +2050,7 @@ def packing_mode_distribution(
             Order.tenant_id == int(tenant_id),
             Order.warehouse_id == int(warehouse_id),
             or_(
-                Order.fulfillment_state == "READY_TO_PACK",
+                Order.fulfillment_state.in_(("READY_TO_PACK", "PACKING")),
                 and_(Order.fulfillment_state.is_(None), Order.order_ui_status_id.in_(status_ids)),
             ),
         )
@@ -2096,7 +2116,7 @@ def list_packing_target_statuses(
                 Order.warehouse_id == int(warehouse_id),
                 Order.order_ui_status_id.in_(target_ids),
                 or_(
-                    Order.fulfillment_state == "READY_TO_PACK",
+                    Order.fulfillment_state.in_(("READY_TO_PACK", "PACKING")),
                     Order.fulfillment_state.is_(None),
                 ),
             )
@@ -2271,7 +2291,7 @@ def resolve_packing_order_for_shelf_scan(
         raise PackingScanError("SHELF_NOT_FOUND")
 
     fs = (getattr(order, "fulfillment_state", None) or "").strip().upper()
-    if fs != "READY_TO_PACK":
+    if fs not in ("READY_TO_PACK", "PACKING"):
         raise PackingScanError(
             "SHELF_ORDER_NOT_READY",
             message="Zamówienie nie jest jeszcze kompletne.",
