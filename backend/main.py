@@ -488,6 +488,16 @@ UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 async def record_error(request: Request, exc: Exception):
     """Log full traceback before returning Internal server error JSON."""
+    # logger.exception: always emit stack here — this is the only place that returns
+    # {"detail": "Internal server error", "request_id": ...} for unhandled route errors.
+    logger.exception(
+        "ERROR [HTTP 500] %s %s request_id=%s exception_type=%s",
+        request.method,
+        request.url.path,
+        get_or_create_request_id(request),
+        type(exc).__name__,
+        exc_info=exc,
+    )
     log_request_server_error(
         request,
         exc,
