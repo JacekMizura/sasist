@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-07-17 — Fix postgres_sequence_sync `is_called`
+
+- Błąd: `SELECT last_value, is_called FROM pg_catalog.pg_sequences` — `pg_sequences` (PG 10+) **nigdy** nie miało `is_called`.
+- `is_called` jest potrzebne do `next_sequence_value` / `setval` semantics — odczyt z relacji sekwencji: `SELECT last_value, is_called FROM "schema"."seq"`.
+- Logika sync bez zmian; testy sequence sync: 9 passed.
+
 ## 2026-07-17 — Event Log: event_code + severity
 
 - `event_code` (system) oddzielony od `description` (PL UI); logika tylko po kodzie.

@@ -79,16 +79,26 @@ def sequence_needs_fix(
 
 
 def _read_sequence_state(conn: Connection, sequence_fq: str) -> tuple[int, bool] | None:
+    """
+    Odczyt last_value + is_called.
+
+    ``pg_catalog.pg_sequences`` (PG 10+) ma ``last_value``, ale **nie** ma ``is_called``.
+    Flaga ``is_called`` jest wyłącznie w relacji sekwencji:
+    ``SELECT last_value, is_called FROM schema.seq_name``.
+    """
     schema, name = _parse_pg_sequence_name(sequence_fq)
+    # Bezpieczne identyfikatory: tylko znaki dozwolone w nazwach PG
+    if not all(c.isalnum() or c == "_" for c in schema) or not all(
+        c.isalnum() or c == "_" for c in name
+    ):
+        logger.error(
+            "[postgres_sequence_sync] unsafe sequence identifier schema=%r name=%r",
+            schema,
+            name,
+        )
+        return None
     row = conn.execute(
-        text(
-            """
-            SELECT last_value, is_called
-            FROM pg_catalog.pg_sequences
-            WHERE schemaname = :schema AND sequencename = :name
-            """
-        ),
-        {"schema": schema, "name": name},
+        text(f'SELECT last_value, is_called FROM "{schema}"."{name}"'),
     ).fetchone()
     if row is None:
         return None
