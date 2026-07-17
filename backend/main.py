@@ -174,6 +174,7 @@ from .db.schema_upgrade import (
     ensure_carts_code_column,
     ensure_carts_picking_lifecycle_columns,
     ensure_cart_lifecycle_history_table,
+    ensure_cart_lifecycle_events_table,
     ensure_esp_scan_code_columns,
     ensure_order_items_packing_quantity_packed_column,
     ensure_direct_sales_settings_table,
@@ -1581,6 +1582,7 @@ def _upgrade_schema_background() -> None:
         ensure_carts_code_column(engine)
         ensure_carts_picking_lifecycle_columns(engine)
         ensure_cart_lifecycle_history_table(engine)
+        ensure_cart_lifecycle_events_table(engine)
         try:
             from .database import SessionLocal
             from .services.cart_picking_lifecycle_service import heal_carts_with_orphaned_picking_sessions

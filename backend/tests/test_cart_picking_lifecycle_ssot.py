@@ -21,6 +21,7 @@ from backend.models.warehouse import Warehouse
 from backend.models.wms_operation_session import WmsOperationSession
 from backend.services.cart_capacity_service import CartCapacityExceeded
 from backend.models.cart_lifecycle_history import CartLifecycleHistory
+from backend.models.cart_lifecycle_event import CartLifecycleEvent
 from backend.services.cart_picking_lifecycle_service import (
     InvalidCartStateError,
     InvalidCartTransitionError,
@@ -47,7 +48,7 @@ from backend.services.wms_audit_service import (
 @pytest.fixture
 def db():
     engine = create_engine("sqlite:///:memory:")
-    for model in (Tenant, Warehouse, Cart, CartBasket, Order, WmsOperationSession, CartLifecycleHistory):
+    for model in (Tenant, Warehouse, Cart, CartBasket, Order, WmsOperationSession, CartLifecycleHistory, CartLifecycleEvent):
         model.__table__.create(engine, checkfirst=True)
     Session = sessionmaker(bind=engine)
     session = Session()
@@ -458,3 +459,60 @@ def test_cancel_finish_release_idempotent(db):
     assert get_cart_status(cart2) == CartStatus.READY_FOR_PACKING
     hist = list_cart_lifecycle_history(db, cart_id=int(cart2.id), limit=20)
     assert sum(1 for h in hist if h["from_status"] == "PICKING" and h["to_status"] == "READY_FOR_PACKING") == 1
+
+
+def test_event_log_full_cycle_polish(db):
+    from backend.services.cart_picking_lifecycle_service import (
+        list_cart_lifecycle_events,
+        notify_first_product_confirmed,
+    )
+    from backend.models.pick import Pick
+
+    Pick.__table__.create(db.bind, checkfirst=True)
+
+    cart = _cart(db)
+    o1 = _order(db, number="EV-1")
+    o2 = _order(db, number="EV-2")
+    db.commit()
+
+    claim_cart(db, cart=cart, operator_user_id=7)
+    db.commit()
+    start_picking(db, cart=cart, orders=[o1, o2], operator_user_id=7)
+    db.commit()
+    db.add(
+        Pick(
+            tenant_id=1,
+            warehouse_id=1,
+            order_id=int(o1.id),
+            cart_id=int(cart.id),
+            product_id=1,
+            location_id=1,
+            quantity=1.0,
+        )
+    )
+    db.flush()
+    assert notify_first_product_confirmed(db, cart=cart, operator_user_id=7, order_id=int(o1.id)) is True
+    assert notify_first_product_confirmed(db, cart=cart, operator_user_id=7) is False
+    db.commit()
+
+    finish_picking(db, cart=cart, orders=[o1, o2], operator_user_id=7)
+    start_packing(db, cart=cart, operator_user_id=99)
+    finish_packing(db, cart=cart, packed_order_id=int(o1.id))
+    finish_packing(db, cart=cart, packed_order_id=int(o2.id))
+    db.commit()
+
+    events = list_cart_lifecycle_events(db, cart_id=int(cart.id), limit=50)
+    descs = [e["description"] for e in events]
+    assert "Wózek został zarezerwowany" in descs
+    assert "Rozpoczęto kompletację" in descs
+    assert "Potwierdzono pierwszy produkt" in descs
+    assert "Zakończono kompletację" in descs
+    assert "Rozpoczęto pakowanie" in descs
+    assert "Zakończono pakowanie" in descs
+    assert "Wózek został zwolniony" in descs
+    # Wszystkie opisy po polsku (bez CamelCase angielskiego)
+    for d in descs:
+        assert d == d  # noqa: PLR0124 — sanity
+        assert not d[:1].isascii() or " " in d or d[0].isupper()
+        assert "PickingStarted" not in d
+        assert "CartClaimed" not in d

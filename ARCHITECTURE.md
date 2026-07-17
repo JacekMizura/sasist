@@ -15,6 +15,22 @@ jest jedynym właścicielem lifecycle wózków.
 
 Każda taka zmiana musi przechodzić przez CartLifecycleService.
 
+## Event Log (biznesowy, PL)
+
+Tabela `cart_lifecycle_events` — pełny dziennik zdarzeń (nie status→status).
+
+- Opisy **wyłącznie po polsku**, gotowe do UI.
+- Zapis wyłącznie przez `CartLifecycleService._record_event`.
+- API: `GET /wms/carts/{id}/events`
+- Katalog: `backend/services/cart_lifecycle_event_catalog.py`
+
+## Active Picking (Aktywna kompletacja)
+
+Snapshot w `carts.current_task_json` (bez encji Task).
+
+API: `GET /wms/carts/{id}/active-picking` (+ alias `/current-task`).
+Pola: batch/session, operator, zamówienia, produkty, confirmed/remaining, progress, started_at.
+
 ## Public API (mutacje)
 
 | Operacja | Funkcja |

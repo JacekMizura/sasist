@@ -1,7 +1,9 @@
 """
-Rozszerzenia Current Task (liczniki zbierania) + konfiguracja timeoutów.
+Aktywna kompletacja (Active Picking) + Event Log + timeouty.
 
-Odczyt/enrich — wolny. Zapis current_task_json wyłącznie przez CartLifecycleService.
+Odczyt/enrich — wolny.
+Zapis current_task_json (snapshot Active Picking) i Event Log —
+wyłącznie przez CartLifecycleService.
 """
 
 from __future__ import annotations
@@ -9,7 +11,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
@@ -17,17 +19,27 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ..models.cart import Cart
+from ..models.cart_lifecycle_event import CartLifecycleEvent
 from ..models.cart_lifecycle_history import CartLifecycleHistory
 from ..models.enums import CartStatus
 from ..models.pick import Pick
+from .cart_lifecycle_event_catalog import description_pl
 
 logger = logging.getLogger(__name__)
 
-TASK_NONE = "NONE"
-TASK_CLAIMED = "CLAIMED"
-TASK_PICKING = "PICKING"
-TASK_READY_FOR_PACKING = "READY_FOR_PACKING"
-TASK_PACKING = "PACKING"
+# Snapshot Active Picking — wartości wewnętrzne (nie uniwersalna encja Task)
+ACTIVE_NONE = "NONE"
+ACTIVE_CLAIMED = "CLAIMED"
+ACTIVE_PICKING = "PICKING"
+ACTIVE_READY_FOR_PACKING = "READY_FOR_PACKING"
+ACTIVE_PACKING = "PACKING"
+
+# Aliasy legacy (testy / stary kod)
+TASK_NONE = ACTIVE_NONE
+TASK_CLAIMED = ACTIVE_CLAIMED
+TASK_PICKING = ACTIVE_PICKING
+TASK_READY_FOR_PACKING = ACTIVE_READY_FOR_PACKING
+TASK_PACKING = ACTIVE_PACKING
 
 
 def assigned_timeout_minutes() -> int:
@@ -48,20 +60,42 @@ def picking_idle_no_picks_minutes() -> int:
 
 
 @dataclass
-class CartCurrentTask:
-    task_type: str
-    task_id: int | None = None
+class CartActivePicking:
+    """Snapshot aktywnej kompletacji (nie encja Task)."""
+
+    phase: str
+    session_id: int | None = None
     batch_id: int | None = None
     operator_id: int | None = None
     started_at: str | None = None
     progress: float = 0.0
     total_orders: int = 0
     total_products: int = 0
-    picked_count: int = 0
-    remaining_count: int = 0
+    confirmed_products: int = 0
+    remaining_products: int = 0
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        return {
+            "phase": self.phase,
+            "session_id": self.session_id,
+            "batch_id": self.batch_id,
+            "operator_id": self.operator_id,
+            "started_at": self.started_at,
+            "progress": self.progress,
+            "total_orders": self.total_orders,
+            "total_products": self.total_products,
+            "confirmed_products": self.confirmed_products,
+            "remaining_products": self.remaining_products,
+            # Kompatybilność ze starym current_task
+            "task_type": self.phase,
+            "task_id": self.session_id,
+            "picked_count": self.confirmed_products,
+            "remaining_count": self.remaining_products,
+        }
+
+
+# Legacy alias
+CartCurrentTask = CartActivePicking
 
 
 def _dump(data: dict[str, Any] | None) -> str | None:
@@ -83,34 +117,92 @@ def _load(raw: str | None) -> dict[str, Any]:
         return {}
 
 
-def parse_current_task(cart: Cart) -> CartCurrentTask | None:
+def parse_active_picking(cart: Cart) -> CartActivePicking | None:
     raw = getattr(cart, "current_task_json", None)
     data = _load(raw if isinstance(raw, str) else None)
     if not data:
         return None
-    tt = str(data.get("task_type") or TASK_NONE).strip().upper() or TASK_NONE
-    if tt == TASK_NONE:
+    phase = str(
+        data.get("phase") or data.get("task_type") or ACTIVE_NONE
+    ).strip().upper() or ACTIVE_NONE
+    if phase == ACTIVE_NONE:
         return None
-    return CartCurrentTask(
-        task_type=tt,
-        task_id=int(data["task_id"]) if data.get("task_id") is not None else None,
+    return CartActivePicking(
+        phase=phase,
+        session_id=int(data["session_id"])
+        if data.get("session_id") is not None
+        else (int(data["task_id"]) if data.get("task_id") is not None else None),
         batch_id=int(data["batch_id"]) if data.get("batch_id") is not None else None,
         operator_id=int(data["operator_id"]) if data.get("operator_id") is not None else None,
         started_at=str(data["started_at"]) if data.get("started_at") else None,
         progress=float(data.get("progress") or 0),
         total_orders=int(data.get("total_orders") or 0),
         total_products=int(data.get("total_products") or 0),
-        picked_count=int(data.get("picked_count") or 0),
-        remaining_count=int(data.get("remaining_count") or 0),
+        confirmed_products=int(
+            data.get("confirmed_products")
+            if data.get("confirmed_products") is not None
+            else data.get("picked_count")
+            or 0
+        ),
+        remaining_products=int(
+            data.get("remaining_products")
+            if data.get("remaining_products") is not None
+            else data.get("remaining_count")
+            or 0
+        ),
     )
 
 
-def write_current_task(cart: Cart, task: CartCurrentTask | None) -> None:
+parse_current_task = parse_active_picking
+
+
+def write_active_picking(cart: Cart, snapshot: CartActivePicking | None) -> None:
     """Jedyny writer pola carts.current_task_json (woła CartLifecycleService)."""
-    if task is None or task.task_type == TASK_NONE:
+    if snapshot is None or snapshot.phase == ACTIVE_NONE:
         cart.current_task_json = None
     else:
-        cart.current_task_json = _dump(task.to_dict())
+        cart.current_task_json = _dump(snapshot.to_dict())
+
+
+write_current_task = write_active_picking
+
+
+def build_active_picking_for_status(
+    *,
+    status: CartStatus,
+    operator_id: int | None,
+    session_id: int | None = None,
+    batch_id: int | None = None,
+    started_at: datetime | None = None,
+    progress: float = 0.0,
+    total_orders: int = 0,
+    total_products: int = 0,
+    confirmed_products: int = 0,
+    remaining_products: int = 0,
+) -> CartActivePicking | None:
+    mapping = {
+        CartStatus.AVAILABLE: None,
+        CartStatus.ASSIGNED: ACTIVE_CLAIMED,
+        CartStatus.PICKING: ACTIVE_PICKING,
+        CartStatus.READY_FOR_PACKING: ACTIVE_READY_FOR_PACKING,
+        CartStatus.PACKING: ACTIVE_PACKING,
+    }
+    phase = mapping.get(status)
+    if phase is None:
+        return None
+    started = started_at or datetime.utcnow()
+    return CartActivePicking(
+        phase=phase,
+        session_id=session_id,
+        batch_id=batch_id,
+        operator_id=operator_id,
+        started_at=started.isoformat(sep=" ", timespec="seconds"),
+        progress=float(progress),
+        total_orders=int(total_orders),
+        total_products=int(total_products),
+        confirmed_products=int(confirmed_products),
+        remaining_products=int(remaining_products),
+    )
 
 
 def build_task_for_status(
@@ -125,29 +217,18 @@ def build_task_for_status(
     total_products: int = 0,
     picked_count: int = 0,
     remaining_count: int = 0,
-) -> CartCurrentTask | None:
-    mapping = {
-        CartStatus.AVAILABLE: None,
-        CartStatus.ASSIGNED: TASK_CLAIMED,
-        CartStatus.PICKING: TASK_PICKING,
-        CartStatus.READY_FOR_PACKING: TASK_READY_FOR_PACKING,
-        CartStatus.PACKING: TASK_PACKING,
-    }
-    tt = mapping.get(status)
-    if tt is None:
-        return None
-    started = started_at or datetime.utcnow()
-    return CartCurrentTask(
-        task_type=tt,
-        task_id=task_id,
-        batch_id=batch_id,
+) -> CartActivePicking | None:
+    return build_active_picking_for_status(
+        status=status,
         operator_id=operator_id,
-        started_at=started.isoformat(sep=" ", timespec="seconds"),
-        progress=float(progress),
-        total_orders=int(total_orders),
-        total_products=int(total_products),
-        picked_count=int(picked_count),
-        remaining_count=int(remaining_count),
+        session_id=task_id,
+        batch_id=batch_id,
+        started_at=started_at,
+        progress=progress,
+        total_orders=total_orders,
+        total_products=total_products,
+        confirmed_products=picked_count,
+        remaining_products=remaining_count,
     )
 
 
@@ -202,31 +283,102 @@ def compute_pick_progress(db: Session, cart: Cart) -> tuple[int, int, float]:
         return 0, 0, 0.0
 
 
-def enrich_current_task_with_stats(db: Session, cart: Cart, task: CartCurrentTask) -> CartCurrentTask:
-    """Uzupełnij totals + picked/remaining (odczyt) — bez zapisu."""
+def enrich_active_picking_with_stats(
+    db: Session, cart: Cart, snapshot: CartActivePicking
+) -> CartActivePicking:
+    """Uzupełnij totals + confirmed/remaining (odczyt) — bez zapisu."""
     try:
         from .cart_stats_service import compute_cart_stats
 
         stats = compute_cart_stats(db, cart)
-        task.total_orders = int(stats.get("orders_count") or 0)
-        task.total_products = int(stats.get("products_count") or 0)
+        snapshot.total_orders = int(stats.get("orders_count") or 0)
+        snapshot.total_products = int(stats.get("products_count") or 0)
         picked, remaining, progress = compute_pick_progress(db, cart)
-        task.picked_count = picked
-        task.remaining_count = remaining
-        if task.task_type in (TASK_PICKING, TASK_READY_FOR_PACKING):
-            task.progress = progress if task.task_type == TASK_PICKING else 100.0
+        snapshot.confirmed_products = picked
+        snapshot.remaining_products = remaining
+        if snapshot.phase in (ACTIVE_PICKING, ACTIVE_READY_FOR_PACKING):
+            snapshot.progress = progress if snapshot.phase == ACTIVE_PICKING else 100.0
     except Exception:
-        logger.exception("enrich_current_task_with_stats failed cart_id=%s", getattr(cart, "id", None))
-    return task
+        logger.exception(
+            "enrich_active_picking_with_stats failed cart_id=%s", getattr(cart, "id", None)
+        )
+    return snapshot
 
 
-def get_current_task(db: Session, cart: Cart, *, enrich: bool = True) -> dict[str, Any] | None:
-    task = parse_current_task(cart)
-    if task is None:
+enrich_current_task_with_stats = enrich_active_picking_with_stats
+
+
+def get_active_picking(db: Session, cart: Cart, *, enrich: bool = True) -> dict[str, Any] | None:
+    snapshot = parse_active_picking(cart)
+    if snapshot is None:
         return None
     if enrich:
-        task = enrich_current_task_with_stats(db, cart, task)
-    return task.to_dict()
+        snapshot = enrich_active_picking_with_stats(db, cart, snapshot)
+    return snapshot.to_dict()
+
+
+get_current_task = get_active_picking
+
+
+def append_lifecycle_event(
+    db: Session,
+    *,
+    cart: Cart,
+    event_type: str,
+    operator_user_id: int | None = None,
+    session_id: int | None = None,
+    batch_id: int | None = None,
+    order_id: int | None = None,
+    description: str | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> CartLifecycleEvent:
+    """
+    Zapis Event Log — wywoływać wyłącznie z CartLifecycleService.
+    Opis zawsze po polsku (katalog lub override PL).
+    """
+    code = str(event_type or "").strip()
+    row = CartLifecycleEvent(
+        tenant_id=int(cart.tenant_id),
+        warehouse_id=int(cart.warehouse_id),
+        cart_id=int(cart.id),
+        event_type=code[:64],
+        description=description_pl(code, override=description),
+        operator_user_id=int(operator_user_id) if operator_user_id and int(operator_user_id) > 0 else None,
+        occurred_at=datetime.utcnow(),
+        session_id=int(session_id) if session_id is not None else None,
+        batch_id=int(batch_id) if batch_id is not None else None,
+        order_id=int(order_id) if order_id is not None else None,
+        metadata_json=_dump(metadata),
+    )
+    db.add(row)
+    db.flush()
+    logger.info(
+        "cart_lifecycle.event cart_id=%s type=%s desc=%s",
+        int(cart.id),
+        code,
+        row.description,
+    )
+    return row
+
+
+def list_lifecycle_events(
+    db: Session,
+    *,
+    cart_id: int,
+    tenant_id: int | None = None,
+    warehouse_id: int | None = None,
+    limit: int = 100,
+) -> list[CartLifecycleEvent]:
+    q = db.query(CartLifecycleEvent).filter(CartLifecycleEvent.cart_id == int(cart_id))
+    if tenant_id is not None:
+        q = q.filter(CartLifecycleEvent.tenant_id == int(tenant_id))
+    if warehouse_id is not None:
+        q = q.filter(CartLifecycleEvent.warehouse_id == int(warehouse_id))
+    return (
+        q.order_by(CartLifecycleEvent.id.desc())
+        .limit(max(1, min(int(limit), 500)))
+        .all()
+    )
 
 
 def append_lifecycle_history(

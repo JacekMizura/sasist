@@ -3985,6 +3985,79 @@ def ensure_cart_lifecycle_history_table(engine: Engine) -> None:
         conn.commit()
 
 
+def ensure_cart_lifecycle_events_table(engine: Engine) -> None:
+    """Event Log biznesowy wózka (PL) — SSOT: CartLifecycleService."""
+    dialect = engine.dialect.name
+    with engine.connect() as conn:
+        if dialect == "postgresql":
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE IF NOT EXISTS cart_lifecycle_events (
+                        id SERIAL PRIMARY KEY,
+                        tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+                        warehouse_id INTEGER NOT NULL REFERENCES warehouses(id),
+                        cart_id INTEGER NOT NULL REFERENCES carts(id) ON DELETE CASCADE,
+                        event_type VARCHAR(64) NOT NULL,
+                        description VARCHAR(512) NOT NULL,
+                        operator_user_id INTEGER REFERENCES app_users(id) ON DELETE SET NULL,
+                        occurred_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW(),
+                        session_id INTEGER,
+                        batch_id INTEGER,
+                        order_id INTEGER,
+                        metadata_json TEXT
+                    )
+                    """
+                )
+            )
+        else:
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE IF NOT EXISTS cart_lifecycle_events (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        tenant_id INTEGER NOT NULL,
+                        warehouse_id INTEGER NOT NULL,
+                        cart_id INTEGER NOT NULL,
+                        event_type VARCHAR(64) NOT NULL,
+                        description VARCHAR(512) NOT NULL,
+                        operator_user_id INTEGER,
+                        occurred_at DATETIME NOT NULL,
+                        session_id INTEGER,
+                        batch_id INTEGER,
+                        order_id INTEGER,
+                        metadata_json TEXT,
+                        FOREIGN KEY(tenant_id) REFERENCES tenants (id),
+                        FOREIGN KEY(warehouse_id) REFERENCES warehouses (id),
+                        FOREIGN KEY(cart_id) REFERENCES carts (id) ON DELETE CASCADE
+                    )
+                    """
+                )
+            )
+        try:
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_cart_lifecycle_events_cart_occurred "
+                    "ON cart_lifecycle_events(cart_id, occurred_at)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_cart_lifecycle_events_tenant_wh "
+                    "ON cart_lifecycle_events(tenant_id, warehouse_id)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_cart_lifecycle_events_type "
+                    "ON cart_lifecycle_events(event_type)"
+                )
+            )
+        except Exception:
+            pass
+        conn.commit()
+
+
 def ensure_esp_scan_code_columns(engine: Engine) -> None:
     """
     Internal WMS scan tokens: ESP:shpcart: / ESP:brck: / ESP:bsh: / ESP:sh: / ESP:O: + PK.

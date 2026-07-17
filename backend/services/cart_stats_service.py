@@ -167,7 +167,9 @@ def get_cart_stats_or_404(db: Session, cart_id: int) -> dict[str, Any]:
     from .cart_picking_lifecycle_service import get_cart_current_task, get_cart_status
 
     stats["status"] = get_cart_status(cart).value
-    stats["current_task"] = get_cart_current_task(db, cart, enrich=True)
+    active = get_cart_current_task(db, cart, enrich=True)
+    stats["active_picking"] = active
+    stats["current_task"] = active
     return stats
 
 
@@ -239,7 +241,9 @@ def batch_cart_stats(db: Session, carts: list[Cart]) -> dict[int, dict[str, Any]
         from .cart_picking_lifecycle_service import get_cart_current_task, get_cart_status
 
         stats["status"] = get_cart_status(cart).value
-        stats["current_task"] = get_cart_current_task(db, cart, enrich=False)
+        active = get_cart_current_task(db, cart, enrich=False)
+        stats["active_picking"] = active
+        stats["current_task"] = active
         out[cid] = stats
 
     return out

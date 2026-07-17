@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-07-17 — Event Log (PL) + Active Picking
+
+- Tabela `cart_lifecycle_events` — dziennik biznesowy po polsku; writer tylko CartLifecycleService.
+- API: `GET /wms/carts/{id}/events`; Active Picking: `/active-picking` (+ alias current-task).
+- Eventy: rezerwacja, start/koniec kompletacji, pierwszy produkt, pakowanie, zwolnienie, timeout, auto-release, podwójny claim…
+- `notify_first_product_confirmed` z quick-pick; test pełnego cyklu PL.
+
 ## 2026-07-17 — Architecture Health Check (CartLifecycleService)
 
 - FOR UPDATE na wszystkich mutacjach; heal bez wewnętrznego commit.

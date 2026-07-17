@@ -449,7 +449,8 @@ def post_picking_claim_cart(
         claim_cart(db, cart=cart, operator_user_id=int(current_user.id))
         db.commit()
     except CartAlreadyClaimedError as e:
-        db.rollback()
+        # Zachowaj event audytowy „Wykryto próbę podwójnej rezerwacji”
+        db.commit()
         raise HTTPException(
             status_code=409,
             detail={"code": "CartAlreadyClaimed", "error": e.message},
@@ -555,7 +556,7 @@ def post_picking_start(
         db.rollback()
         raise http_exception_cart_capacity_exceeded(e) from e
     except CartAlreadyClaimedError as e:
-        db.rollback()
+        db.commit()
         raise HTTPException(
             status_code=409,
             detail={"code": "CartAlreadyClaimed", "error": e.message},

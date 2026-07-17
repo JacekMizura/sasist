@@ -22,6 +22,9 @@ CartLifecycleService jest jedynym właścicielem lifecycle wózków.
 
 Każda taka zmiana musi przechodzić przez CartLifecycleService.
 
+Event Log (`cart_lifecycle_events`) — dziennik zdarzeń biznesowych po polsku —
+zapisuje wyłącznie CartLifecycleService (`_record_event`).
+
 Operacje mutujące są atomowe w transakcji wywołującego (flush, bez wewnętrznego commit).
 Współbieżność: mutacje biorą SELECT … FOR UPDATE na wierszu carts.
 ---------------------------------------------------------------------------
@@ -455,6 +458,34 @@ def _apply_capacity_slice(
 # ---------------------------------------------------------------------------
 
 
+def _record_event(
+    db: Session,
+    cart: Cart,
+    event_type: str,
+    *,
+    operator_user_id: int | None = None,
+    session_id: int | None = None,
+    batch_id: int | None = None,
+    order_id: int | None = None,
+    metadata: dict[str, Any] | None = None,
+    description: str | None = None,
+) -> None:
+    """Jedyny zapis Event Log — wyłącznie z tego modułu."""
+    from .cart_lifecycle_extensions import append_lifecycle_event
+
+    append_lifecycle_event(
+        db,
+        cart=cart,
+        event_type=event_type,
+        operator_user_id=operator_user_id,
+        session_id=session_id if session_id is not None else getattr(cart, "current_session_id", None),
+        batch_id=batch_id,
+        order_id=order_id,
+        description=description,
+        metadata=metadata,
+    )
+
+
 def claim_cart(
     db: Session,
     *,
@@ -476,6 +507,14 @@ def claim_cart(
     if st == CartStatus.ASSIGNED:
         existing = getattr(cart, "assigned_user_id", None)
         if existing is not None and int(existing) != uid:
+            _record_event(
+                db,
+                cart,
+                "double_claim_attempt",
+                operator_user_id=uid,
+                metadata={"claimed_by": int(existing)},
+            )
+            db.flush()
             raise CartAlreadyClaimedError()
         cart.assigned_user_id = uid
         if hasattr(cart, "claimed_at") and getattr(cart, "claimed_at", None) is None:
@@ -496,6 +535,14 @@ def claim_cart(
     if st != CartStatus.AVAILABLE:
         existing = getattr(cart, "assigned_user_id", None) or getattr(cart, "packing_user_id", None)
         if existing is not None and int(existing) != uid:
+            _record_event(
+                db,
+                cart,
+                "double_claim_attempt",
+                operator_user_id=uid,
+                metadata={"status": st.value, "owner": int(existing)},
+            )
+            db.flush()
             raise CartAlreadyClaimedError()
         _require_status(cart, (CartStatus.AVAILABLE,), action="claimCart")
 
@@ -531,6 +578,7 @@ def claim_cart(
         total_orders=0,
         total_products=0,
     )
+    _record_event(db, cart, "cart_claimed", operator_user_id=uid)
     _after_mutation(db, cart)
     logger.info(
         "cart_lifecycle.claim cart_id=%s operator=%s status=ASSIGNED",
@@ -571,6 +619,14 @@ def start_picking(
     if st == CartStatus.ASSIGNED:
         existing = getattr(cart, "assigned_user_id", None)
         if existing is not None and int(existing) != uid:
+            _record_event(
+                db,
+                cart,
+                "double_claim_attempt",
+                operator_user_id=uid,
+                metadata={"context": "start_picking", "claimed_by": int(existing)},
+            )
+            db.flush()
             raise CartAlreadyClaimedError(
                 "Wózek jest zarezerwowany przez innego operatora — nie można rozpocząć zbierania."
             )
@@ -680,6 +736,14 @@ def start_picking(
         total_orders=len(selected),
         metadata={"order_ids": [int(o.id) for o in selected]},
     )
+    _record_event(
+        db,
+        cart,
+        "picking_started",
+        operator_user_id=uid,
+        session_id=sid,
+        metadata={"order_ids": [int(o.id) for o in selected], "orders_count": len(selected)},
+    )
     _after_mutation(db, cart)
     logger.info(
         "cart_lifecycle.start_picking cart_id=%s session_id=%s orders=%s operator=%s",
@@ -771,6 +835,18 @@ def cancel_picking(
         db.add(sess)
 
     release_cart(db, cart=cart, reason=reason, _already_locked=True)
+    if reason in ("auto_release_no_picks",):
+        pass  # event emitted inside release_cart
+    elif reason == "assigned_timeout":
+        pass
+    else:
+        _record_event(
+            db,
+            cart,
+            "picking_cancelled",
+            operator_user_id=operator_user_id,
+            metadata={"orders_restored": restored, "reason": reason},
+        )
     _after_mutation(db, cart)
     logger.info("cart_lifecycle.cancel cart_id=%s restored=%s reason=%s", int(cart_id), restored, reason)
     return {
@@ -838,6 +914,14 @@ def finish_picking(
         total_orders=len(order_list),
         metadata={"order_ids": [int(o.id) for o in order_list]},
     )
+    _record_event(
+        db,
+        cart,
+        "picking_finished",
+        operator_user_id=operator_user_id or getattr(cart, "assigned_user_id", None),
+        session_id=sess_id,
+        metadata={"order_ids": [int(o.id) for o in order_list]},
+    )
     _after_mutation(db, cart)
     logger.info(
         "cart_lifecycle.finish_picking cart_id=%s orders=%s assigned_user=%s",
@@ -892,6 +976,7 @@ def start_packing(
         reason="start_packing",
         progress=0.0,
     )
+    _record_event(db, cart, "packing_started", operator_user_id=uid)
     _after_mutation(db, cart)
     logger.info(
         "cart_lifecycle.start_packing cart_id=%s packing_user=%s",
@@ -947,7 +1032,6 @@ def finish_packing(
                 reason="finish_packing_continue",
             )
         else:
-            # Odśwież current_task bez historii statusu
             apply_cart_transition(
                 db,
                 cart,
@@ -955,9 +1039,24 @@ def finish_packing(
                 operator_user_id=getattr(cart, "packing_user_id", None),
                 reason="refresh_task",
             )
+        _record_event(
+            db,
+            cart,
+            "order_packed",
+            operator_user_id=getattr(cart, "packing_user_id", None),
+            order_id=int(packed_order_id),
+            metadata={"remaining_orders": remaining},
+        )
         _after_mutation(db, cart)
         return False
 
+    _record_event(
+        db,
+        cart,
+        "packing_finished",
+        operator_user_id=getattr(cart, "packing_user_id", None),
+        order_id=int(packed_order_id),
+    )
     release_cart(db, cart=cart, reason="last_order_packed", _already_locked=True)
     _after_mutation(db, cart)
     return True
@@ -1003,6 +1102,17 @@ def release_cart(
         total_orders=0,
         total_products=0,
     )
+    # Jeden event biznesowy zależnie od powodu zwolnienia
+    if reason == "assigned_timeout":
+        _record_event(db, cart, "reservation_timed_out")
+    elif reason == "auto_release_no_picks":
+        _record_event(db, cart, "cart_auto_released_idle")
+    elif reason in ("cancel_picking",) or str(reason).startswith("cancel"):
+        pass  # event „Anulowano kompletację” w cancel_picking
+    elif reason == "last_order_packed":
+        _record_event(db, cart, "cart_released", metadata={"reason": reason})
+    else:
+        _record_event(db, cart, "cart_released", metadata={"reason": reason})
     if not _already_locked:
         _after_mutation(db, cart)
     logger.info("cart_lifecycle.release cart_id=%s reason=%s", int(cart.id), reason)
@@ -1288,9 +1398,100 @@ def compute_session_stats_from_product_lines(lines: Sequence[Any]) -> dict[str, 
 
 # Public re-exports for screens (read-only)
 def get_cart_current_task(db: Session, cart: Cart, *, enrich: bool = True) -> dict[str, Any] | None:
-    from .cart_lifecycle_extensions import get_current_task
+    from .cart_lifecycle_extensions import get_active_picking
 
-    return get_current_task(db, cart, enrich=enrich)
+    return get_active_picking(db, cart, enrich=enrich)
+
+
+get_active_picking = get_cart_current_task
+
+
+def notify_first_product_confirmed(
+    db: Session,
+    *,
+    cart: Cart,
+    operator_user_id: int | None = None,
+    order_id: int | None = None,
+    product_id: int | None = None,
+) -> bool:
+    """
+    Wywoływane po udanym potwierdzeniu picka.
+    Zapisuje dokładnie jeden event „Potwierdzono pierwszy produkt” na sesję/wózek.
+    """
+    from .cart_lifecycle_event_catalog import EVENT_FIRST_PRODUCT_CONFIRMED
+    from .cart_lifecycle_extensions import count_confirmed_picks_on_cart, list_lifecycle_events
+
+    if get_cart_status(cart) != CartStatus.PICKING:
+        return False
+    if count_confirmed_picks_on_cart(db, int(cart.id)) != 1:
+        return False
+    sid = getattr(cart, "current_session_id", None)
+    existing = list_lifecycle_events(db, cart_id=int(cart.id), limit=50)
+    for ev in existing:
+        if ev.event_type == EVENT_FIRST_PRODUCT_CONFIRMED:
+            if sid is None or ev.session_id is None or int(ev.session_id) == int(sid):
+                return False
+    _record_event(
+        db,
+        cart,
+        EVENT_FIRST_PRODUCT_CONFIRMED,
+        operator_user_id=operator_user_id or getattr(cart, "assigned_user_id", None),
+        session_id=int(sid) if sid is not None else None,
+        order_id=order_id,
+        metadata={"product_id": product_id} if product_id is not None else None,
+    )
+    refresh_current_task_progress(db, cart)
+    return True
+
+
+def list_cart_lifecycle_events(
+    db: Session,
+    *,
+    cart_id: int,
+    tenant_id: int | None = None,
+    warehouse_id: int | None = None,
+    limit: int = 100,
+) -> list[dict[str, Any]]:
+    """Historia Event Log gotowa do UI (opisy PL)."""
+    from .cart_lifecycle_extensions import list_lifecycle_events
+
+    rows = list_lifecycle_events(
+        db,
+        cart_id=cart_id,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        limit=limit,
+    )
+    # Chronologicznie rosnąco dla widoku historii
+    rows_asc = list(reversed(rows))
+    out: list[dict[str, Any]] = []
+    for r in rows_asc:
+        out.append(
+            {
+                "id": int(r.id),
+                "cart_id": int(r.cart_id),
+                "event_type": r.event_type,
+                "description": r.description,
+                "operator_user_id": r.operator_user_id,
+                "occurred_at": r.occurred_at.isoformat(sep=" ", timespec="seconds")
+                if getattr(r, "occurred_at", None)
+                else None,
+                "session_id": r.session_id,
+                "batch_id": r.batch_id,
+                "order_id": r.order_id,
+                "metadata": None,
+            }
+        )
+        raw = getattr(r, "metadata_json", None)
+        if raw:
+            try:
+                import json as _json
+
+                parsed = _json.loads(raw)
+                out[-1]["metadata"] = parsed if isinstance(parsed, dict) else {"raw": raw}
+            except Exception:
+                out[-1]["metadata"] = {"raw": raw}
+    return out
 
 
 def list_cart_lifecycle_history(

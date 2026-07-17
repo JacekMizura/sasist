@@ -1,5 +1,10 @@
 # Current context
 
+## Event Log + Active Picking (2026-07-17)
+- Event Log PL: `cart_lifecycle_events`, SSOT = CartLifecycleService, API `/wms/carts/{id}/events`.
+- Active Picking (nie Task): snapshot + `/active-picking`; stats zawierają `active_picking`.
+- Katalog opisów: `cart_lifecycle_event_catalog.py`.
+
 ## Cart lifecycle — Architecture Health Check DONE (2026-07-17)
 - Ocena **8.5/10**; raport: `memory/cart-lifecycle-architecture-health-check.md`.
 - Hardening: FOR UPDATE, atomic start, idempotencja, invariants, brak commit w serwisie.

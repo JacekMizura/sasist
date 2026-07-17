@@ -2064,6 +2064,21 @@ def record_wms_quick_pick(
                     pick.picker_id = int(operator_user_id)
                 db.add(pick)
                 db.flush()
+                try:
+                    from .cart_picking_lifecycle_service import notify_first_product_confirmed
+
+                    notify_first_product_confirmed(
+                        db,
+                        cart=cart_row,
+                        operator_user_id=operator_user_id,
+                        order_id=int(o.id),
+                        product_id=int(product_id),
+                    )
+                except Exception:
+                    logger.exception(
+                        "notify_first_product_confirmed failed cart_id=%s",
+                        cid,
+                    )
                 record_pick_event_for_wms_pick(db, pick)
                 pr = getattr(oi, "product", None)
                 sku_hint = None
