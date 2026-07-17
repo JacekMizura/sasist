@@ -461,7 +461,7 @@ def _apply_capacity_slice(
 def _record_event(
     db: Session,
     cart: Cart,
-    event_type: str,
+    event_code: str,
     *,
     operator_user_id: int | None = None,
     session_id: int | None = None,
@@ -470,13 +470,13 @@ def _record_event(
     metadata: dict[str, Any] | None = None,
     description: str | None = None,
 ) -> None:
-    """Jedyny zapis Event Log — wyłącznie z tego modułu."""
+    """Jedyny zapis Event Log — wyłącznie z tego modułu. Logika = event_code, nie description."""
     from .cart_lifecycle_extensions import append_lifecycle_event
 
     append_lifecycle_event(
         db,
         cart=cart,
-        event_type=event_type,
+        event_code=event_code,
         operator_user_id=operator_user_id,
         session_id=session_id if session_id is not None else getattr(cart, "current_session_id", None),
         batch_id=batch_id,
@@ -1428,7 +1428,7 @@ def notify_first_product_confirmed(
     sid = getattr(cart, "current_session_id", None)
     existing = list_lifecycle_events(db, cart_id=int(cart.id), limit=50)
     for ev in existing:
-        if ev.event_type == EVENT_FIRST_PRODUCT_CONFIRMED:
+        if ev.event_code == EVENT_FIRST_PRODUCT_CONFIRMED:
             if sid is None or ev.session_id is None or int(ev.session_id) == int(sid):
                 return False
     _record_event(
@@ -1470,8 +1470,9 @@ def list_cart_lifecycle_events(
             {
                 "id": int(r.id),
                 "cart_id": int(r.cart_id),
-                "event_type": r.event_type,
+                "event_code": r.event_code,
                 "description": r.description,
+                "severity": r.severity,
                 "operator_user_id": r.operator_user_id,
                 "occurred_at": r.occurred_at.isoformat(sep=" ", timespec="seconds")
                 if getattr(r, "occurred_at", None)

@@ -3986,54 +3986,89 @@ def ensure_cart_lifecycle_history_table(engine: Engine) -> None:
 
 
 def ensure_cart_lifecycle_events_table(engine: Engine) -> None:
-    """Event Log biznesowy wózka (PL) — SSOT: CartLifecycleService."""
+    """Event Log biznesowy wózka (event_code + description PL + severity)."""
     dialect = engine.dialect.name
     with engine.connect() as conn:
-        if dialect == "postgresql":
-            conn.execute(
-                text(
-                    """
-                    CREATE TABLE IF NOT EXISTS cart_lifecycle_events (
-                        id SERIAL PRIMARY KEY,
-                        tenant_id INTEGER NOT NULL REFERENCES tenants(id),
-                        warehouse_id INTEGER NOT NULL REFERENCES warehouses(id),
-                        cart_id INTEGER NOT NULL REFERENCES carts(id) ON DELETE CASCADE,
-                        event_type VARCHAR(64) NOT NULL,
-                        description VARCHAR(512) NOT NULL,
-                        operator_user_id INTEGER REFERENCES app_users(id) ON DELETE SET NULL,
-                        occurred_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW(),
-                        session_id INTEGER,
-                        batch_id INTEGER,
-                        order_id INTEGER,
-                        metadata_json TEXT
+        if not _table_exists(conn, "cart_lifecycle_events"):
+            if dialect == "postgresql":
+                conn.execute(
+                    text(
+                        """
+                        CREATE TABLE cart_lifecycle_events (
+                            id SERIAL PRIMARY KEY,
+                            tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+                            warehouse_id INTEGER NOT NULL REFERENCES warehouses(id),
+                            cart_id INTEGER NOT NULL REFERENCES carts(id) ON DELETE CASCADE,
+                            event_code VARCHAR(64) NOT NULL,
+                            description VARCHAR(512) NOT NULL,
+                            severity VARCHAR(16) NOT NULL DEFAULT 'INFO',
+                            operator_user_id INTEGER REFERENCES app_users(id) ON DELETE SET NULL,
+                            occurred_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW(),
+                            session_id INTEGER,
+                            batch_id INTEGER,
+                            order_id INTEGER,
+                            metadata_json TEXT
+                        )
+                        """
                     )
-                    """
                 )
-            )
+            else:
+                conn.execute(
+                    text(
+                        """
+                        CREATE TABLE cart_lifecycle_events (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                            tenant_id INTEGER NOT NULL,
+                            warehouse_id INTEGER NOT NULL,
+                            cart_id INTEGER NOT NULL,
+                            event_code VARCHAR(64) NOT NULL,
+                            description VARCHAR(512) NOT NULL,
+                            severity VARCHAR(16) NOT NULL DEFAULT 'INFO',
+                            operator_user_id INTEGER,
+                            occurred_at DATETIME NOT NULL,
+                            session_id INTEGER,
+                            batch_id INTEGER,
+                            order_id INTEGER,
+                            metadata_json TEXT,
+                            FOREIGN KEY(tenant_id) REFERENCES tenants (id),
+                            FOREIGN KEY(warehouse_id) REFERENCES warehouses (id),
+                            FOREIGN KEY(cart_id) REFERENCES carts (id) ON DELETE CASCADE
+                        )
+                        """
+                    )
+                )
         else:
-            conn.execute(
-                text(
-                    """
-                    CREATE TABLE IF NOT EXISTS cart_lifecycle_events (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-                        tenant_id INTEGER NOT NULL,
-                        warehouse_id INTEGER NOT NULL,
-                        cart_id INTEGER NOT NULL,
-                        event_type VARCHAR(64) NOT NULL,
-                        description VARCHAR(512) NOT NULL,
-                        operator_user_id INTEGER,
-                        occurred_at DATETIME NOT NULL,
-                        session_id INTEGER,
-                        batch_id INTEGER,
-                        order_id INTEGER,
-                        metadata_json TEXT,
-                        FOREIGN KEY(tenant_id) REFERENCES tenants (id),
-                        FOREIGN KEY(warehouse_id) REFERENCES warehouses (id),
-                        FOREIGN KEY(cart_id) REFERENCES carts (id) ON DELETE CASCADE
+            cols = _table_column_names(conn, "cart_lifecycle_events")
+            if "event_code" not in cols:
+                conn.execute(text("ALTER TABLE cart_lifecycle_events ADD COLUMN event_code VARCHAR(64)"))
+                if "event_type" in cols:
+                    conn.execute(
+                        text(
+                            "UPDATE cart_lifecycle_events SET event_code = event_type "
+                            "WHERE event_code IS NULL OR event_code = ''"
+                        )
                     )
-                    """
+            if "severity" not in cols:
+                conn.execute(
+                    text(
+                        "ALTER TABLE cart_lifecycle_events ADD COLUMN severity VARCHAR(16) "
+                        "DEFAULT 'INFO'"
+                    )
                 )
-            )
+                # Backfill severity for known codes (best-effort)
+                try:
+                    from ..services.cart_lifecycle_event_catalog import EVENT_SEVERITY
+
+                    for code, sev in EVENT_SEVERITY.items():
+                        conn.execute(
+                            text(
+                                "UPDATE cart_lifecycle_events SET severity = :sev "
+                                "WHERE event_code = :code"
+                            ),
+                            {"sev": sev, "code": code},
+                        )
+                except Exception:
+                    pass
         try:
             conn.execute(
                 text(
@@ -4049,8 +4084,14 @@ def ensure_cart_lifecycle_events_table(engine: Engine) -> None:
             )
             conn.execute(
                 text(
-                    "CREATE INDEX IF NOT EXISTS ix_cart_lifecycle_events_type "
-                    "ON cart_lifecycle_events(event_type)"
+                    "CREATE INDEX IF NOT EXISTS ix_cart_lifecycle_events_code "
+                    "ON cart_lifecycle_events(event_code)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_cart_lifecycle_events_severity "
+                    "ON cart_lifecycle_events(severity)"
                 )
             )
         except Exception:

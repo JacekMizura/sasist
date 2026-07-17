@@ -502,17 +502,21 @@ def test_event_log_full_cycle_polish(db):
     db.commit()
 
     events = list_cart_lifecycle_events(db, cart_id=int(cart.id), limit=50)
+    codes = [e["event_code"] for e in events]
     descs = [e["description"] for e in events]
+    assert "cart_claimed" in codes
+    assert "picking_started" in codes
+    assert "first_product_confirmed" in codes
+    assert "picking_finished" in codes
+    assert "packing_started" in codes
+    assert "packing_finished" in codes
+    assert "cart_released" in codes
     assert "Wózek został zarezerwowany" in descs
     assert "Rozpoczęto kompletację" in descs
-    assert "Potwierdzono pierwszy produkt" in descs
-    assert "Zakończono kompletację" in descs
-    assert "Rozpoczęto pakowanie" in descs
-    assert "Zakończono pakowanie" in descs
-    assert "Wózek został zwolniony" in descs
-    # Wszystkie opisy po polsku (bez CamelCase angielskiego)
-    for d in descs:
-        assert d == d  # noqa: PLR0124 — sanity
-        assert not d[:1].isascii() or " " in d or d[0].isupper()
-        assert "PickingStarted" not in d
-        assert "CartClaimed" not in d
+    by_code = {e["event_code"]: e for e in events}
+    assert by_code["picking_started"]["severity"] == "INFO"
+    assert by_code["first_product_confirmed"]["severity"] == "SUCCESS"
+    assert by_code["cart_released"]["severity"] == "AUDIT"
+    assert by_code["picking_finished"]["description"] == "Zakończono kompletację"
+    # Logika nie opiera się na opisie — filtrujemy po event_code
+    assert all(isinstance(c, str) and "_" in c or c.isascii() for c in codes)

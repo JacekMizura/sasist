@@ -23,7 +23,6 @@ from ..models.cart_lifecycle_event import CartLifecycleEvent
 from ..models.cart_lifecycle_history import CartLifecycleHistory
 from ..models.enums import CartStatus
 from ..models.pick import Pick
-from .cart_lifecycle_event_catalog import description_pl
 
 logger = logging.getLogger(__name__)
 
@@ -324,25 +323,31 @@ def append_lifecycle_event(
     db: Session,
     *,
     cart: Cart,
-    event_type: str,
+    event_code: str,
     operator_user_id: int | None = None,
     session_id: int | None = None,
     batch_id: int | None = None,
     order_id: int | None = None,
     description: str | None = None,
+    severity: str | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> CartLifecycleEvent:
     """
     Zapis Event Log — wywoływać wyłącznie z CartLifecycleService.
-    Opis zawsze po polsku (katalog lub override PL).
+
+    Logika / filtry: wyłącznie ``event_code`` (+ severity z katalogu).
+    ``description`` — tylko UI (PL); nigdy nie używać w warunkach biznesowych.
     """
-    code = str(event_type or "").strip()
+    from .cart_lifecycle_event_catalog import description_pl, severity_for
+
+    code = str(event_code or "").strip()[:64]
     row = CartLifecycleEvent(
         tenant_id=int(cart.tenant_id),
         warehouse_id=int(cart.warehouse_id),
         cart_id=int(cart.id),
-        event_type=code[:64],
+        event_code=code,
         description=description_pl(code, override=description),
+        severity=severity_for(code, override=severity),
         operator_user_id=int(operator_user_id) if operator_user_id and int(operator_user_id) > 0 else None,
         occurred_at=datetime.utcnow(),
         session_id=int(session_id) if session_id is not None else None,
@@ -353,10 +358,10 @@ def append_lifecycle_event(
     db.add(row)
     db.flush()
     logger.info(
-        "cart_lifecycle.event cart_id=%s type=%s desc=%s",
+        "cart_lifecycle.event cart_id=%s code=%s severity=%s",
         int(cart.id),
         code,
-        row.description,
+        row.severity,
     )
     return row
 

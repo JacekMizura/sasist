@@ -1,4 +1,8 @@
-"""Event Log wózka — pełny dziennik zdarzeń biznesowych (PL).
+"""Event Log wózka — dziennik zdarzeń biznesowych.
+
+event_code  = kod systemowy (logika)
+description = opis PL dla użytkownika
+severity    = INFO | SUCCESS | WARNING | ERROR | AUDIT
 
 Zapis wyłącznie przez CartLifecycleService.
 """
@@ -16,7 +20,6 @@ class CartLifecycleEvent(Base):
     __table_args__ = (
         Index("ix_cart_lifecycle_events_cart_occurred", "cart_id", "occurred_at"),
         Index("ix_cart_lifecycle_events_tenant_wh", "tenant_id", "warehouse_id"),
-        Index("ix_cart_lifecycle_events_type", "event_type"),
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -24,10 +27,12 @@ class CartLifecycleEvent(Base):
     warehouse_id = Column(Integer, ForeignKey("warehouses.id"), nullable=False, index=True)
     cart_id = Column(Integer, ForeignKey("carts.id", ondelete="CASCADE"), nullable=False, index=True)
 
-    #: Stabilny kod techniczny (np. picking_started) — opis PL w description.
-    event_type = Column(String(64), nullable=False, index=True)
-    #: Gotowy do UI opis po polsku.
+    #: Kod systemowy (np. picking_started) — jedyne pole do logiki / filtrów.
+    event_code = Column(String(64), nullable=False, index=True)
+    #: Opis po polsku — wyłącznie prezentacja UI.
     description = Column(String(512), nullable=False)
+    #: INFO | SUCCESS | WARNING | ERROR | AUDIT
+    severity = Column(String(16), nullable=False, default="INFO", index=True)
 
     operator_user_id = Column(Integer, ForeignKey("app_users.id", ondelete="SET NULL"), nullable=True)
     occurred_at = Column(DateTime, nullable=False, server_default=func.now())

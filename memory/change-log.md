@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-07-17 — Event Log: event_code + severity
+
+- `event_code` (system) oddzielony od `description` (PL UI); logika tylko po kodzie.
+- `severity`: INFO / SUCCESS / WARNING / ERROR / AUDIT (katalog).
+- Analiza uogólnienia `audit_events`: odłożona — `memory/audit-events-generalization-analysis.md`.
+
 ## 2026-07-17 — Event Log (PL) + Active Picking
 
 - Tabela `cart_lifecycle_events` — dziennik biznesowy po polsku; writer tylko CartLifecycleService.

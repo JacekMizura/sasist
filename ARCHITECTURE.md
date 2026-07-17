@@ -17,12 +17,17 @@ Każda taka zmiana musi przechodzić przez CartLifecycleService.
 
 ## Event Log (biznesowy, PL)
 
-Tabela `cart_lifecycle_events` — pełny dziennik zdarzeń (nie status→status).
+Tabela `cart_lifecycle_events`:
 
-- Opisy **wyłącznie po polsku**, gotowe do UI.
-- Zapis wyłącznie przez `CartLifecycleService._record_event`.
-- API: `GET /wms/carts/{id}/events`
-- Katalog: `backend/services/cart_lifecycle_event_catalog.py`
+| Pole | Rola |
+|------|------|
+| `event_code` | kod systemowy — logika, filtry, KPI |
+| `description` | opis PL — wyłącznie UI |
+| `severity` | INFO \| SUCCESS \| WARNING \| ERROR \| AUDIT |
+
+Zapis wyłącznie przez `CartLifecycleService._record_event`.  
+API: `GET /wms/carts/{id}/events`.  
+Uogólnienie do `audit_events`: **nie teraz** — patrz `memory/audit-events-generalization-analysis.md`.
 
 ## Active Picking (Aktywna kompletacja)
 
