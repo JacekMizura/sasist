@@ -1,5 +1,13 @@
 # Change log
 
+## 2026-07-17 — Scanner Helper: pomocnik kodów magazynowych
+
+- Przebudowa Emulatora skanera (FE only): usunięto przycisk ENTER; Enter/Skanuj = skan, Wyczyść zostaje.
+- Kategorie z licznikami, wyszukiwanie nazwa/kod/EAN/SKU, ulubione ⭐, szybki dostęp (ostatni wózek/koszyk/lokacja/produkt).
+- Relacje wózek ↔ koszyki (drzewo, kopiuj kod, ponowny skan) na istniejących `/carts/`, lokalizacjach, produktach, lookup zamówień.
+- Mobile: poziomy scroll kategorii, większe kafelki (`useIsHandheldDevice`).
+- Moduł: `frontend/src/components/wms/dev-scanner/*` + `useDevScannerCatalog`.
+
 ## 2026-07-17 — Warehouse policy v2: OperationContext + OMS/WMS split
 
 - FE: `getOperationPolicy` / `OperationContext` w `warehouseOperationPolicy.ts`.

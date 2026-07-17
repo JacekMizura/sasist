@@ -1,5 +1,10 @@
 # Current context
 
+## Scanner Helper (2026-07-17)
+- Emulator skanera = pomocnik magazyniera (kategorie, search, relacje wózek/koszyk, ulubione, quick access).
+- Bez zmian backendu; katalog z `/carts/`, lokalizacji, `searchWmsProducts`, lookup zamówień.
+- Pliki: `components/wms/dev-scanner/*`, `hooks/useDevScannerCatalog.ts`.
+
 ## WMS home rebuild (2026-07-17)
 - `/wms/menu` → `WmsHomePage` (desktop sekcje vs kolektor lista via `useIsHandheldDevice`).
 - Preview: `/dev/wms-home-preview` — ocenić UI przed dalszym refaktorem (stary `WmsLauncherPage` nadal w repo, nieużywany).
