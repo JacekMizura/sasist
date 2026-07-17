@@ -1,5 +1,10 @@
 # Change log
 
+## 2026-07-17 — Fix silent HTTP 500 (log in exception handler)
+
+- Root cause: handler zwracał `request_id`, ale tylko `attach_http_500_exception`; middleware (`BaseHTTPMiddleware`) nie widzi `request.state` → brak tracebacku w Deploy Logs.
+- Fix: `record_error` / `global_exception_handler` woła `log_request_server_error` **przed** JSON 500; `exc_info=exc` (nie `format_exc()`).
+
 ## 2026-07-17 — Log flood control + HTTP 500 middleware
 
 - `schema.reconcile`: jeden summary `FK cycles detected: N` + fallback (bez per-`fk_cycle_break`).

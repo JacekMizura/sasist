@@ -222,7 +222,6 @@ from .db.schema_upgrade import (
     ensure_company_profile_table,
 )
 from .middleware.exception_logging import (
-    attach_http_500_exception,
     format_exception_traceback,
     get_or_create_request_id,
     log_request_server_error,
@@ -488,8 +487,12 @@ UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 async def record_error(request: Request, exc: Exception):
-    # Attach for middleware ERROR log (avoids duplicate; middleware has duration).
-    attach_http_500_exception(request, exc)
+    """Log full traceback before returning Internal server error JSON."""
+    log_request_server_error(
+        request,
+        exc,
+        context=f"{request.method} {request.url.path} (exception_handler)",
+    )
 
 
 def _cors_headers_for_request(request: Request) -> dict[str, str]:
@@ -509,9 +512,13 @@ def _attach_request_id(request: Request, response: JSONResponse) -> JSONResponse
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
-    # HTTP 5xx raised as HTTPException — attach for middleware traceback log.
+    # HTTP 5xx — log here (BaseHTTPMiddleware isolates request.state from middleware).
     if int(exc.status_code) >= 500:
-        attach_http_500_exception(request, exc)
+        log_request_server_error(
+            request,
+            exc,
+            context=f"{request.method} {request.url.path} (http_exception_{exc.status_code})",
+        )
     response = JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
     for k, v in _cors_headers_for_request(request).items():
         response.headers[k] = v
@@ -555,10 +562,15 @@ def _is_direct_sales_complete_path(path: str) -> bool:
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
+    """
+    Catch-all → JSON 500 with request_id.
+
+    Logging MUST happen here. ``@app.middleware("http")`` uses BaseHTTPMiddleware,
+    which isolates ``request.state``, so middleware never sees attached exceptions
+    and previously produced silent 500s (request_id in body, no Deploy Logs traceback).
+    """
     tb = format_exception_traceback(exc)
     request_id = get_or_create_request_id(request)
-    # Do not print full traceback here — middleware logs once with duration + scope.
-    attach_http_500_exception(request, exc)
     try:
         if _is_direct_sales_complete_path(request.url.path):
             from .services.direct_sale.complete_debug_log import (
@@ -567,6 +579,11 @@ async def global_exception_handler(request: Request, exc: Exception):
             )
 
             log_raw_exception(exc, stage="global_exception_handler", context="main_handler")
+            log_request_server_error(
+                request,
+                exc,
+                context=f"{request.method} {request.url.path} (exception_handler)",
+            )
             response = raw_complete_failure_response(
                 exc,
                 stage="global_exception_handler",
@@ -585,7 +602,6 @@ async def global_exception_handler(request: Request, exc: Exception):
             response.headers[k] = v
         return _attach_request_id(request, response)
     except Exception as handler_exc:
-        attach_http_500_exception(request, handler_exc)
         log_request_server_error(
             request,
             handler_exc,

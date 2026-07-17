@@ -100,10 +100,16 @@ def log_http_500_error(
     request: Request,
     exc: BaseException | None,
     *,
-    duration_ms: float,
+    duration_ms: float = 0.0,
     context: str = "http_500",
 ) -> None:
-    """Canonical ERROR log for every HTTP 500 — once per request."""
+    """
+    Canonical ERROR log for every HTTP 500 — call from the exception handler.
+
+    Must not rely on middleware reading ``request.state``: Starlette
+    ``@app.middleware("http")`` (BaseHTTPMiddleware) isolates state, so
+    ``attach_http_500_exception`` is invisible to the outer middleware.
+    """
     if getattr(request.state, HTTP_500_LOGGED_ATTR, False):
         return
     setattr(request.state, HTTP_500_LOGGED_ATTR, True)
@@ -141,7 +147,8 @@ def log_http_500_error(
         f"  duration_ms={duration_ms:.2f}\n"
         f"{tb}"
     )
-    _LOG.error(message)
+    # exc_info=exc: real stack even when sys.exc_info() is cleared in handlers.
+    _LOG.error(message, exc_info=exc)
     print(message, file=sys.stderr, flush=True)
 
 
@@ -170,7 +177,7 @@ def log_unhandled_exception(
         f"  {' '.join(meta_parts)}\n"
         f"{tb}"
     )
-    _LOG.error(message)
+    _LOG.error(message, exc_info=exc)
     print(message, file=sys.stderr, flush=True)
     return tb
 
@@ -182,20 +189,24 @@ def log_request_server_error(
     context: str = "unhandled",
     duration_ms: float | None = None,
 ) -> str:
+    """Log HTTP 500 immediately (exception-handler safe)."""
     attach_http_500_exception(request, exc)
-    if duration_ms is None:
-        duration_ms = 0.0
-    log_http_500_error(request, exc, duration_ms=duration_ms, context=context)
+    log_http_500_error(
+        request,
+        exc,
+        duration_ms=0.0 if duration_ms is None else duration_ms,
+        context=context,
+    )
     return format_exception_traceback(exc)
 
 
 async def outer_request_logger_middleware(request: Request, call_next: CallNext) -> Response:
     """
-    Global middleware: quiet on success; full ERROR + traceback on every HTTP 500.
+    Backup logger for exceptions that bubble past FastAPI handlers.
 
-    FastAPI exception handlers convert exceptions to JSONResponse(500) without
-    re-raising — handlers must ``attach_http_500_exception`` so this middleware
-    can log the real stack after ``call_next`` returns.
+    Primary logging is in ``global_exception_handler`` — BaseHTTPMiddleware
+    does not reliably share ``request.state`` with the inner app, so do not
+    expect attached exceptions here.
     """
     path = request.url.path
     request_id = get_or_create_request_id(request)
@@ -218,14 +229,17 @@ async def outer_request_logger_middleware(request: Request, call_next: CallNext)
         )
         raise
 
-    duration_ms = (time.perf_counter() - t0) * 1000.0
+    # Handled 500s are logged in the exception handler. Only log here when the
+    # exception object is visible on this request (same Request instance).
     if response.status_code >= 500:
         exc = getattr(request.state, HTTP_500_EXC_ATTR, None)
-        log_http_500_error(
-            request,
-            exc if isinstance(exc, BaseException) else None,
-            duration_ms=duration_ms,
-            context="middleware_http_500",
-        )
+        if isinstance(exc, BaseException) and not getattr(request.state, HTTP_500_LOGGED_ATTR, False):
+            duration_ms = (time.perf_counter() - t0) * 1000.0
+            log_http_500_error(
+                request,
+                exc,
+                duration_ms=duration_ms,
+                context="middleware_http_500",
+            )
     response.headers.setdefault(REQUEST_ID_HEADER, request_id)
     return response
