@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-07-17 — Startup fixes + global 500 traceback
+
+- `postgres_sequence_sync`: `is_called` z relacji sekwencji (nie z `pg_sequences`).
+- `z_pz_schema._migrate_z_pz_series_padding`: SQL używa kolumny `"type"` (ORM `series_type`); guard gdy brak kolumny.
+- Exception logging: `format_exception_traceback(exc)` zamiast `traceback.format_exc()` w handlerze (usuwa fałszywe `NoneType: None`); log z request_id / method / path / file / line; HTTP 5xx z `HTTPException` też logowane.
+
 ## 2026-07-17 — Fix postgres_sequence_sync `is_called`
 
 - Błąd: `SELECT last_value, is_called FROM pg_catalog.pg_sequences` — `pg_sequences` (PG 10+) **nigdy** nie miało `is_called`.

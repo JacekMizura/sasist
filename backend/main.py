@@ -222,7 +222,9 @@ from .db.schema_upgrade import (
     ensure_company_profile_table,
 )
 from .middleware.exception_logging import (
-    log_unhandled_exception,
+    format_exception_traceback,
+    get_or_create_request_id,
+    log_request_server_error,
     outer_request_logger_middleware,
 )
 from .middleware.readiness_gate import platform_readiness_gate_middleware
@@ -485,7 +487,11 @@ UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 async def record_error(request: Request, exc: Exception):
-    log_unhandled_exception(f"{request.method} {request.url.path} (exception_handler)", exc)
+    log_request_server_error(
+        request,
+        exc,
+        context=f"{request.method} {request.url.path} (exception_handler)",
+    )
 
 
 def _cors_headers_for_request(request: Request) -> dict[str, str]:
@@ -498,12 +504,24 @@ def _cors_headers_for_request(request: Request) -> dict[str, str]:
     return {}
 
 
+def _attach_request_id(request: Request, response: JSONResponse) -> JSONResponse:
+    response.headers.setdefault("X-Request-Id", get_or_create_request_id(request))
+    return response
+
+
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
+    # HTTP 5xx raised as HTTPException still needs a full stack for ops diagnosis.
+    if int(exc.status_code) >= 500:
+        log_request_server_error(
+            request,
+            exc,
+            context=f"{request.method} {request.url.path} (http_exception_{exc.status_code})",
+        )
     response = JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
     for k, v in _cors_headers_for_request(request).items():
         response.headers[k] = v
-    return response
+    return _attach_request_id(request, response)
 
 
 @app.exception_handler(RequestValidationError)
@@ -514,7 +532,7 @@ async def request_validation_exception_handler(request: Request, exc: RequestVal
     response = JSONResponse(status_code=422, content={"detail": exc.errors()})
     for k, v in _cors_headers_for_request(request).items():
         response.headers[k] = v
-    return response
+    return _attach_request_id(request, response)
 
 
 @app.exception_handler(PdfGenerationUnavailable)
@@ -522,7 +540,7 @@ async def pdf_generation_unavailable_handler(request: Request, exc: PdfGeneratio
     response = JSONResponse(status_code=503, content={"detail": str(exc)})
     for k, v in _cors_headers_for_request(request).items():
         response.headers[k] = v
-    return response
+    return _attach_request_id(request, response)
 
 
 @app.exception_handler(WarehouseScopeError)
@@ -533,7 +551,7 @@ async def warehouse_scope_error_handler(request: Request, exc: WarehouseScopeErr
     )
     for k, v in _cors_headers_for_request(request).items():
         response.headers[k] = v
-    return response
+    return _attach_request_id(request, response)
 
 
 def _is_direct_sales_complete_path(path: str) -> bool:
@@ -543,6 +561,7 @@ def _is_direct_sales_complete_path(path: str) -> bool:
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
+    tb = format_exception_traceback(exc)
     try:
         from .services.direct_sale.complete_debug_log import (
             log_raw_exception,
@@ -554,15 +573,15 @@ async def global_exception_handler(request: Request, exc: Exception):
     except Exception:
         summary = type(exc).__name__
 
+    request_id = get_or_create_request_id(request)
     print(
         f"[exception_handler] {request.method} {request.url.path} "
-        f"{type(exc).__name__}: {summary}",
+        f"request_id={request_id} {type(exc).__name__}: {summary}",
         flush=True,
     )
-    print(traceback.format_exc(), flush=True)
+    print(tb, flush=True)
     try:
         if _is_direct_sales_complete_path(request.url.path):
-            tb = traceback.format_exc()
             log_raw_exception(exc, stage="global_exception_handler", context="main_handler")
             response = raw_complete_failure_response(
                 exc,
@@ -571,16 +590,23 @@ async def global_exception_handler(request: Request, exc: Exception):
             )
         else:
             await record_error(request, exc)
-            response = JSONResponse(status_code=500, content={"detail": "Internal server error"})
+            response = JSONResponse(
+                status_code=500,
+                content={
+                    "detail": "Internal server error",
+                    "request_id": request_id,
+                },
+            )
         for k, v in _cors_headers_for_request(request).items():
             response.headers[k] = v
-        return response
+        return _attach_request_id(request, response)
     except Exception as handler_exc:
         print("[exception_handler] handler itself failed", flush=True)
-        print(traceback.format_exc(), flush=True)
-        log_unhandled_exception(
-            f"{request.method} {request.url.path} (exception_handler wrapper)",
+        print(format_exception_traceback(handler_exc), flush=True)
+        log_request_server_error(
+            request,
             handler_exc,
+            context=f"{request.method} {request.url.path} (exception_handler wrapper)",
         )
         raise
 

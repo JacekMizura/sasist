@@ -250,10 +250,17 @@ def _migrate_collective_z_pz_open_status(engine: Engine) -> None:
 
 
 def _migrate_z_pz_series_padding(engine: Engine) -> None:
+    """
+    Zero padding for warehouse document series.
+
+    ORM maps Python ``series_type`` → DB column ``type`` (not ``series_type``).
+    Skip when the live schema lacks required columns (older DBs / partial migrate).
+    """
     if not has_table(engine, "document_series"):
         return
     cols = set(get_table_column_names(engine, "document_series"))
-    if "padding_length" not in cols or "subtype" not in cols:
+    # ``type`` is the physical column; ``series_type`` is only the ORM attribute name.
+    if "padding_length" not in cols or "subtype" not in cols or "type" not in cols:
         return
     with engine.begin() as conn:
         conn.execute(
@@ -261,7 +268,7 @@ def _migrate_z_pz_series_padding(engine: Engine) -> None:
                 """
                 UPDATE document_series
                 SET padding_length = 0
-                WHERE series_type = 'WAREHOUSE' AND COALESCE(padding_length, 6) != 0
+                WHERE "type" = 'WAREHOUSE' AND COALESCE(padding_length, 6) != 0
                 """
             )
         )
