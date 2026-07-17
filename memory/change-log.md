@@ -1,5 +1,13 @@
 # Change log
 
+## 2026-07-17 — Fix: cart AVAILABLE mimo aktywnej picking_session
+
+- Root cause: sesja tworzona (`touch` / ensure), wózek bez `current_session_id` / status≠PICKING.
+- `bind_cart_to_picking_session`: status=PICKING, current_session_id, assigned_user_id, started_at.
+- `assert_cart_ready_for_quick_pick` + quick-pick bootstrap: self-heal AVAILABLE+sesja → PICKING.
+- Startup: `heal_carts_with_orphaned_picking_sessions`.
+- Stats: zamówienia też po `picking_session_id` aktywnej sesji (gdy current_session_id NULL).
+
 ## 2026-07-17 — Capacity ORDERS: enforce na wszystkich assign paths
 
 - SSOT: `enforce_cart_orders_capacity(db, cart, new_orders=N)` → 409 `{code, current_orders, max_orders, attempted}`.

@@ -35,14 +35,22 @@ def _norm_capacity_mode(val: Any) -> str:
 
 def query_orders_on_cart(db: Session, cart: Cart):
     """
-    Zamówienia na wózku: Order.cart_id == cart.id
-    oraz (gdy jest aktywna sesja) Order.picking_session_id == cart.current_session_id.
+    Zamówienia na wózku (SSOT):
+    - Order.cart_id == cart.id
+    - Order.picking_session_id == cart.current_session_id (gdy ustawione)
+    - Order.picking_session_id == aktywna sesja wózka (gdy current_session_id NULL — heal path)
     """
+    from .cart_picking_lifecycle_service import find_open_picking_session
+
     cid = int(cart.id)
     clauses = [Order.cart_id == cid]
     sid = getattr(cart, "current_session_id", None)
     if sid is not None and int(sid) > 0:
         clauses.append(Order.picking_session_id == int(sid))
+    else:
+        sess = find_open_picking_session(db, cart=cart)
+        if sess is not None:
+            clauses.append(Order.picking_session_id == int(sess.id))
     return (
         db.query(Order)
         .options(joinedload(Order.items).joinedload(OrderItem.product))
@@ -160,16 +168,44 @@ def get_cart_stats_or_404(db: Session, cart_id: int) -> dict[str, Any]:
 
 def batch_cart_stats(db: Session, carts: list[Cart]) -> dict[int, dict[str, Any]]:
     """Agregaty dla listy wózków (ta sama reguła co GET /wms/carts/{id}/stats)."""
+    from .cart_picking_lifecycle_service import (
+        SESSION_KIND_PICKING_ACTIVE,
+        find_open_picking_session,
+    )
+    from ..models.wms_operation_session import WmsOperationSession
+
     out: dict[int, dict[str, Any]] = {}
     if not carts:
         return out
     ids = [int(c.id) for c in carts]
-    session_ids = [
-        int(c.current_session_id)
-        for c in carts
-        if getattr(c, "current_session_id", None) is not None and int(c.current_session_id) > 0
-    ]
+    session_to_cart: dict[int, int] = {}
+    for c in carts:
+        sid = getattr(c, "current_session_id", None)
+        if sid is not None and int(sid) > 0:
+            session_to_cart[int(sid)] = int(c.id)
+        else:
+            sess = find_open_picking_session(db, cart=c)
+            if sess is not None:
+                session_to_cart[int(sess.id)] = int(c.id)
 
+    # Fallback: any open picking session for these carts
+    if ids:
+        for sess in (
+            db.query(WmsOperationSession)
+            .filter(
+                WmsOperationSession.cart_id.in_(ids),
+                WmsOperationSession.completed_at.is_(None),
+                WmsOperationSession.session_kind.in_(
+                    (SESSION_KIND_PICKING_ACTIVE, "picking_recovery_active")
+                ),
+            )
+            .all()
+        ):
+            cid = int(sess.cart_id)
+            if int(sess.id) not in session_to_cart:
+                session_to_cart[int(sess.id)] = cid
+
+    session_ids = list(session_to_cart.keys())
     clauses = [Order.cart_id.in_(ids)]
     if session_ids:
         clauses.append(Order.picking_session_id.in_(session_ids))
@@ -181,32 +217,18 @@ def batch_cart_stats(db: Session, carts: list[Cart]) -> dict[int, dict[str, Any]
         .all()
     )
 
-    cart_by_id = {int(c.id): c for c in carts}
-    session_to_cart: dict[int, int] = {}
-    for c in carts:
-        sid = getattr(c, "current_session_id", None)
-        if sid is not None and int(sid) > 0:
-            session_to_cart[int(sid)] = int(c.id)
-
     orders_by_cart: dict[int, dict[int, Order]] = {cid: {} for cid in ids}
     for o in orders:
-        placed = False
         if o.cart_id is not None and int(o.cart_id) in orders_by_cart:
             orders_by_cart[int(o.cart_id)][int(o.id)] = o
-            placed = True
         sid = getattr(o, "picking_session_id", None)
         if sid is not None and int(sid) in session_to_cart:
             cid = session_to_cart[int(sid)]
-            orders_by_cart[cid][int(o.id)] = o
-            placed = True
-        if not placed and o.cart_id is not None:
-            # ignore foreign carts
-            pass
+            if cid in orders_by_cart:
+                orders_by_cart[cid][int(o.id)] = o
 
     for cart in carts:
         cid = int(cart.id)
-        # Temporarily attach filtered list via compute path using in-memory orders
-        # Reuse compute_cart_stats by setting a lightweight path:
         orders_list = list(orders_by_cart.get(cid, {}).values())
         out[cid] = _stats_from_orders(cart, orders_list)
 

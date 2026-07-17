@@ -1910,7 +1910,7 @@ def record_wms_quick_pick(
             status=st.value,
         )
 
-    # Bootstrap SSOT: otwórz picking_session jeśli brak (bez crasha → 503)
+    # Bootstrap / heal SSOT: aktywna sesja ⇒ cart=PICKING + current_session_id
     sess = find_open_picking_session(db, cart=cart_row)
     if sess is None:
         if st not in (CartStatus.AVAILABLE, CartStatus.ASSIGNED, CartStatus.PICKING):
@@ -1926,6 +1926,17 @@ def record_wms_quick_pick(
             source_status_id=int(source_status_id) if source_status_id else None,
         )
         mark_cart_picking(cart_row)
+        db.flush()
+    else:
+        from .cart_picking_lifecycle_service import bind_cart_to_picking_session
+
+        bind_cart_to_picking_session(
+            db,
+            cart_row,
+            sess,
+            operator_user_id=operator_user_id,
+            force_picking=True,
+        )
         db.flush()
 
     try:

@@ -1,5 +1,10 @@
 # Current context
 
+## Cart/session SSOT fix (2026-07-17)
+- Przy starcie zbierania: `bind_cart_to_picking_session` → PICKING + current_session_id + assigned_user_id + started_at.
+- Self-heal: AVAILABLE + aktywna sesja → PICKING (quick-pick + startup).
+- Stats: `orders.cart_id` / `picking_session_id`; capacity ORDERS enforced backendowo.
+
 ## Cart stats SSOT (2026-07-17)
 - Occupancy: `GET /wms/carts/{id}/stats` from `orders.cart_id` / `picking_session_id`.
 - FE fleet/kartoteka: `fetchWmsCartStats` only — no local assigned_orders math.

@@ -18,13 +18,14 @@ from backend.models.order_item import OrderItem
 from backend.models.product import Product
 from backend.models.tenant import Tenant
 from backend.models.warehouse import Warehouse
+from backend.models.wms_operation_session import WmsOperationSession
 from backend.services.cart_stats_service import compute_cart_stats, get_cart_stats_or_404
 
 
 @pytest.fixture()
 def db():
     engine = create_engine("sqlite:///:memory:")
-    for model in (Tenant, Warehouse, Cart, CartBasket, Order, OrderItem, Product):
+    for model in (Tenant, Warehouse, Cart, CartBasket, Order, OrderItem, Product, WmsOperationSession):
         model.__table__.create(engine, checkfirst=True)
     Session = sessionmaker(bind=engine)
     session = Session()

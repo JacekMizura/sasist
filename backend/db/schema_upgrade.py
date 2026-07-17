@@ -3856,6 +3856,8 @@ def ensure_carts_picking_lifecycle_columns(engine: Engine) -> None:
             )
         if "current_session_id" not in cols:
             conn.execute(text("ALTER TABLE carts ADD COLUMN current_session_id INTEGER"))
+        if "started_at" not in cols:
+            conn.execute(text(_timestamp_column_ddl(engine, "carts", "started_at")))
         conn.commit()
 
     # PG: natywny ENUM z „pusty” / „w trakcie zbierania” → VARCHAR, inaczej zapis PICKING = 503

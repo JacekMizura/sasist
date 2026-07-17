@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, Enum, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, Enum, UniqueConstraint, DateTime
 from sqlalchemy.orm import relationship
 
 from ..database import Base
@@ -56,6 +56,8 @@ class Cart(Base):
     assigned_user_id = Column(Integer, ForeignKey("app_users.id", ondelete="SET NULL"), nullable=True, index=True)
     #: Otwarta ``wms_operation_sessions.id`` (picking_active) — bez FK (cykl carts ↔ sessions).
     current_session_id = Column(Integer, nullable=True, index=True)
+    #: Start aktywnego zbierania (ustawiane przy wejściu w PICKING).
+    started_at = Column(DateTime, nullable=True)
 
     # ==========================================================
     # RELACJE STRUKTURALNE

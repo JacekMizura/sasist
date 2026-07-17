@@ -108,26 +108,151 @@ def find_open_picking_session(
     )
 
 
+def bind_cart_to_picking_session(
+    db: Session,
+    cart: Cart,
+    sess: WmsOperationSession,
+    *,
+    operator_user_id: int | None = None,
+    force_picking: bool = True,
+) -> None:
+    """
+    SSOT: przy aktywnej sesji zbierania wózek MUSI mieć:
+      status=PICKING, current_session_id=session.id, assigned_user_id, started_at.
+    Wszystko w tej samej transakcji co sesja (caller robi commit/rollback).
+    """
+    now = datetime.utcnow()
+    sid = int(sess.id)
+    uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
+
+    cart.current_session_id = sid
+    if uid is not None:
+        cart.assigned_user_id = uid
+    elif getattr(sess, "operator_user_id", None) is not None:
+        cart.assigned_user_id = int(sess.operator_user_id)
+
+    if force_picking:
+        set_cart_status(cart, CartStatus.PICKING)
+
+    # started_at — pierwsze wejście w zbieranie
+    if getattr(cart, "started_at", None) is None:
+        cart.started_at = getattr(sess, "started_at", None) or now
+
+    db.add(cart)
+
+
 def assert_cart_ready_for_quick_pick(db: Session, cart: Cart) -> WmsOperationSession:
     """
     SSOT przed quick-pick:
-    - cart.status musi być PICKING (legacy „w trakcie zbierania” też OK),
-    - musi istnieć otwarta picking_session + cart.current_session_id.
+    - musi istnieć otwarta picking_session,
+    - cart.status = PICKING + current_session_id (self-heal gdy sesja jest, a wózek AVAILABLE).
     """
     st = get_cart_status(cart)
-    if st != CartStatus.PICKING:
+    if st in (
+        CartStatus.READY_FOR_PACKING,
+        CartStatus.PACKING,
+        CartStatus.FULL,
+        CartStatus.SERVICE,
+    ):
         raise InvalidCartStateError(
             f"Wózek musi być w stanie PICKING (jest: {st.value}).",
             status=st.value,
         )
+
     sess = find_open_picking_session(db, cart=cart)
     if sess is None:
         raise SessionNotFoundError()
-    cur_sid = getattr(cart, "current_session_id", None)
-    if cur_sid is None or int(cur_sid) != int(sess.id):
-        cart.current_session_id = int(sess.id)
-        db.add(cart)
+
+    needs_heal = (
+        st != CartStatus.PICKING
+        or getattr(cart, "current_session_id", None) is None
+        or int(cart.current_session_id or 0) != int(sess.id)
+    )
+    if needs_heal:
+        if st not in (CartStatus.AVAILABLE, CartStatus.ASSIGNED, CartStatus.PICKING):
+            raise InvalidCartStateError(
+                f"Wózek musi być w stanie PICKING (jest: {st.value}).",
+                status=st.value,
+            )
+        logger.warning(
+            "cart_lifecycle.heal_before_quick_pick cart_id=%s was_status=%s session_id=%s current_session_id=%s",
+            int(cart.id),
+            st.value,
+            int(sess.id),
+            getattr(cart, "current_session_id", None),
+        )
+        bind_cart_to_picking_session(db, cart, sess, force_picking=True)
+        db.flush()
+
+    st2 = get_cart_status(cart)
+    if st2 != CartStatus.PICKING:
+        raise InvalidCartStateError(
+            f"Wózek musi być w stanie PICKING (jest: {st2.value}).",
+            status=st2.value,
+        )
+    if getattr(cart, "current_session_id", None) is None:
+        raise SessionNotFoundError("Brak current_session_id na wózku mimo aktywnej sesji.")
     return sess
+
+
+def heal_carts_with_orphaned_picking_sessions(db: Session) -> int:
+    """
+    Invariant: aktywna picking_session dla cart_id ⇒ cart.status=PICKING + current_session_id.
+
+    Self-heal przy starcie aplikacji. Zwraca liczbę naprawionych wózków.
+    """
+    open_sessions = (
+        db.query(WmsOperationSession)
+        .filter(
+            WmsOperationSession.completed_at.is_(None),
+            WmsOperationSession.cart_id.isnot(None),
+            WmsOperationSession.session_kind.in_(
+                (SESSION_KIND_PICKING_ACTIVE, "picking_recovery_active")
+            ),
+        )
+        .order_by(WmsOperationSession.id.desc())
+        .all()
+    )
+    best_by_cart: dict[int, WmsOperationSession] = {}
+    for sess in open_sessions:
+        cid = int(sess.cart_id)
+        if cid not in best_by_cart:
+            best_by_cart[cid] = sess
+
+    healed = 0
+    for cid, sess in best_by_cart.items():
+        cart = db.query(Cart).filter(Cart.id == cid).first()
+        if cart is None:
+            continue
+        st = get_cart_status(cart)
+        cur_sid = getattr(cart, "current_session_id", None)
+        if st == CartStatus.AVAILABLE or cur_sid is None or int(cur_sid or 0) != int(sess.id):
+            if st in (
+                CartStatus.READY_FOR_PACKING,
+                CartStatus.PACKING,
+                CartStatus.FULL,
+                CartStatus.SERVICE,
+            ):
+                continue
+            logger.warning(
+                "cart_lifecycle.self_heal cart_id=%s status=%s→PICKING "
+                "current_session_id=%s→%s",
+                cid,
+                st.value,
+                cur_sid,
+                int(sess.id),
+            )
+            bind_cart_to_picking_session(
+                db,
+                cart,
+                sess,
+                operator_user_id=getattr(sess, "operator_user_id", None),
+                force_picking=True,
+            )
+            healed += 1
+    if healed:
+        db.commit()
+    return healed
 
 
 def _dump_meta(data: dict[str, Any] | None) -> str | None:
@@ -246,16 +371,14 @@ def ensure_picking_session_for_cart(
         db.flush()
 
     sid = int(sess.id)
-    cart.current_session_id = sid
-    if uid is not None:
-        cart.assigned_user_id = uid
-
-    cur = get_cart_status(cart)
-    if cur in (CartStatus.AVAILABLE, CartStatus.ASSIGNED):
-        # Pierwsze przypisanie → ASSIGNED, od razu PICKING gdy są zamówienia
-        set_cart_status(cart, CartStatus.PICKING if orders else CartStatus.ASSIGNED)
-    elif cur == CartStatus.AVAILABLE:
-        set_cart_status(cart, CartStatus.ASSIGNED)
+    # Zawsze zsynchronizuj wózek z sesją (PICKING + current_session_id + assigned_user + started_at)
+    bind_cart_to_picking_session(
+        db,
+        cart,
+        sess,
+        operator_user_id=uid,
+        force_picking=True,
+    )
 
     # Nowe przypisania (jeszcze bez cart_id lub inny wózek) — capacity ORDERS
     incoming = [
@@ -284,12 +407,14 @@ def ensure_picking_session_for_cart(
         db.add(o)
 
     db.add(cart)
+    db.flush()
     logger.info(
-        "cart_lifecycle.ensure_session cart_id=%s session_id=%s orders=%s status=%s",
+        "cart_lifecycle.ensure_session cart_id=%s session_id=%s orders=%s status=%s current_session_id=%s",
         cid,
         sid,
         [int(o.id) for o in orders],
         get_cart_status(cart).value,
+        getattr(cart, "current_session_id", None),
     )
     return sess
 
@@ -469,6 +594,8 @@ def release_cart_to_available(db: Session, cart: Cart, *, reason: str = "release
     set_cart_status(cart, CartStatus.AVAILABLE)
     cart.assigned_user_id = None
     cart.current_session_id = None
+    if hasattr(cart, "started_at"):
+        cart.started_at = None
     db.add(cart)
     logger.info("cart_lifecycle.release cart_id=%s reason=%s", int(cart.id), reason)
 

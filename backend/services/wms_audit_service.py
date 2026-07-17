@@ -323,6 +323,7 @@ def touch_wms_operation_session(
     cart_id: Optional[int] = None,
     order_id: Optional[int] = None,
     metadata: Optional[dict[str, Any]] = None,
+    bind_cart: bool = True,
 ) -> Optional[WmsOperationSession]:
     uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
     if uid is None:
@@ -364,6 +365,26 @@ def touch_wms_operation_session(
         sess.last_activity_at = now
         sess.metadata_json = _merge_session_metadata(sess.metadata_json, metadata)
     db.add(sess)
+    # Picking session ⇒ zsynchronizuj wózek (nie przy complete — bind_cart=False)
+    if (
+        bind_cart
+        and cart_id is not None
+        and kind in ("picking_active", "picking_recovery_active")
+        and getattr(sess, "completed_at", None) is None
+    ):
+        from ..models.cart import Cart
+        from .cart_picking_lifecycle_service import bind_cart_to_picking_session
+
+        cart = db.query(Cart).filter(Cart.id == int(cart_id)).first()
+        if cart is not None:
+            db.flush()
+            bind_cart_to_picking_session(
+                db,
+                cart,
+                sess,
+                operator_user_id=uid,
+                force_picking=True,
+            )
     return sess
 
 
@@ -388,6 +409,7 @@ def complete_wms_operation_session(
         cart_id=cart_id,
         order_id=order_id,
         metadata=metadata,
+        bind_cart=False,
     )
     if sess is None:
         return

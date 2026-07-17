@@ -188,8 +188,12 @@ def test_assert_quick_pick_ssot_invalid_state_and_missing_session(db):
         InvalidCartStateError,
         SessionNotFoundError,
         assert_cart_ready_for_quick_pick,
+        bind_cart_to_picking_session,
+        get_cart_status,
         set_cart_status,
     )
+    from backend.models.wms_operation_session import WmsOperationSession
+    from datetime import datetime
 
     cart = _cart(db)
     db.commit()
@@ -206,3 +210,39 @@ def test_assert_quick_pick_ssot_invalid_state_and_missing_session(db):
     with pytest.raises(SessionNotFoundError) as es:
         assert_cart_ready_for_quick_pick(db, cart)
     assert es.value.code == "SessionNotFound"
+
+
+def test_assert_quick_pick_heals_available_with_orphan_session(db):
+    from backend.services.cart_picking_lifecycle_service import (
+        assert_cart_ready_for_quick_pick,
+        get_cart_status,
+        set_cart_status,
+    )
+    from backend.models.wms_operation_session import WmsOperationSession
+    from datetime import datetime
+
+    cart = _cart(db)
+    set_cart_status(cart, CartStatus.AVAILABLE)
+    cart.current_session_id = None
+    db.flush()
+    sess = WmsOperationSession(
+        tenant_id=1,
+        warehouse_id=1,
+        cart_id=cart.id,
+        session_kind="picking_active",
+        operator_user_id=None,
+        started_at=datetime.utcnow(),
+        last_activity_at=datetime.utcnow(),
+        completed_at=None,
+        paused_duration_seconds=0,
+    )
+    db.add(sess)
+    db.commit()
+    db.refresh(cart)
+
+    got = assert_cart_ready_for_quick_pick(db, cart)
+    db.commit()
+    db.refresh(cart)
+    assert int(got.id) == int(sess.id)
+    assert get_cart_status(cart) == CartStatus.PICKING
+    assert int(cart.current_session_id) == int(sess.id)

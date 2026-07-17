@@ -1579,6 +1579,21 @@ def _upgrade_schema_background() -> None:
         ensure_picks_cart_id_column(engine)
         ensure_carts_code_column(engine)
         ensure_carts_picking_lifecycle_columns(engine)
+        try:
+            from .database import SessionLocal
+            from .services.cart_picking_lifecycle_service import heal_carts_with_orphaned_picking_sessions
+
+            _heal_db = SessionLocal()
+            try:
+                n = heal_carts_with_orphaned_picking_sessions(_heal_db)
+                if n:
+                    logging.getLogger(__name__).warning(
+                        "cart_lifecycle.self_heal_startup repaired=%s", n
+                    )
+            finally:
+                _heal_db.close()
+        except Exception:
+            logging.getLogger(__name__).exception("cart_lifecycle.self_heal_startup failed")
         ensure_esp_scan_code_columns(engine)
         ensure_picking_config_workflow_columns(engine)
         ensure_picking_shortage_support(engine)
