@@ -641,29 +641,44 @@ def start_picking(
     Capacity walidowana tutaj — nie wcześniej.
     Idempotentne: PICKING + otwarta sesja → zwraca istniejącą (bez nowej historii).
     """
+    # TEMP DIAG: STEP logs — remove after locating production 500
+    logger.info(
+        "START_PICKING STEP 1 enter cart_id=%s orders=%s operator=%s source_status_id=%s",
+        getattr(cart, "id", None),
+        len(orders),
+        operator_user_id,
+        source_status_id,
+    )
     uid = int(operator_user_id)
     if uid <= 0:
         raise CartLifecycleError("Wymagany operator.", code="operator_required")
 
     cart = _lock_cart(db, cart)
+    logger.info("START_PICKING STEP 2 after_lock cart_id=%s status=%s", int(cart.id), get_cart_status(cart).value)
     st = get_cart_status(cart)
     if st == CartStatus.PICKING:
         sess = find_open_picking_session(db, cart=cart)
         if sess is not None:
+            logger.info("START_PICKING STEP 2b idempotent_existing_session session_id=%s", int(sess.id))
             return sess
         raise SessionNotFoundError("Status PICKING bez aktywnej sesji — użyj cancel lub heal.")
 
     if st == CartStatus.ASSIGNED:
         existing = getattr(cart, "assigned_user_id", None)
         if existing is not None and int(existing) != uid:
-            _record_event(
-                db,
-                cart,
-                "double_claim_attempt",
-                operator_user_id=uid,
-                metadata={"context": "start_picking", "claimed_by": int(existing)},
-            )
-            db.flush()
+            try:
+                logger.info("START_PICKING STEP 2c write double_claim_attempt event")
+                _record_event(
+                    db,
+                    cart,
+                    "double_claim_attempt",
+                    operator_user_id=uid,
+                    metadata={"context": "start_picking", "claimed_by": int(existing)},
+                )
+                db.flush()
+            except Exception:
+                logger.exception("START_PICKING FAIL at double_claim_attempt/_record_event+flush")
+                raise
             raise CartAlreadyClaimedError(
                 "Wózek jest zarezerwowany przez innego operatora — nie można rozpocząć zbierania."
             )
@@ -681,9 +696,17 @@ def start_picking(
     # Nie wolno mieć premature order.cart_id przed assign
     existing_orders = _orders_on_cart(db, int(cart.id))
     if existing_orders:
-        for o in existing_orders:
-            clear_order_picking_session_context(o)
-            db.add(o)
+        try:
+            logger.info(
+                "START_PICKING STEP 3 clear_premature_orders count=%s",
+                len(existing_orders),
+            )
+            for o in existing_orders:
+                clear_order_picking_session_context(o)
+                db.add(o)
+        except Exception:
+            logger.exception("START_PICKING FAIL at clear_premature_orders")
+            raise
         logger.warning(
             "cart_lifecycle.start_cleared_premature_orders cart_id=%s count=%s",
             int(cart.id),
@@ -693,6 +716,11 @@ def start_picking(
     free_candidates = [o for o in orders if getattr(o, "cart_id", None) is None]
 
     selected = _apply_capacity_slice(db, cart, free_candidates, on_capacity=on_capacity)
+    logger.info(
+        "START_PICKING STEP 4 capacity_slice selected=%s free_candidates=%s",
+        len(selected),
+        len(free_candidates),
+    )
     if not selected and free_candidates:
         from .cart_capacity_service import CartCapacityExceeded
 
@@ -718,23 +746,30 @@ def start_picking(
         "cart_id": cid,
     }
 
-    sess = WmsOperationSession(
-        tenant_id=tid,
-        warehouse_id=wid,
-        cart_id=cid,
-        order_id=None,
-        session_kind=SESSION_KIND_PICKING_ACTIVE,
-        operator_user_id=uid,
-        started_at=now,
-        last_activity_at=now,
-        completed_at=None,
-        paused_duration_seconds=0,
-        metadata_json=_dump_meta(meta),
-    )
-    db.add(sess)
-    db.flush()
+    try:
+        logger.info("START_PICKING STEP 5 create_WmsOperationSession cart_id=%s", cid)
+        sess = WmsOperationSession(
+            tenant_id=tid,
+            warehouse_id=wid,
+            cart_id=cid,
+            order_id=None,
+            session_kind=SESSION_KIND_PICKING_ACTIVE,
+            operator_user_id=uid,
+            started_at=now,
+            last_activity_at=now,
+            completed_at=None,
+            paused_duration_seconds=0,
+            metadata_json=_dump_meta(meta),
+        )
+        db.add(sess)
+        logger.info("START_PICKING STEP 6 flush_session")
+        db.flush()
+    except Exception:
+        logger.exception("START_PICKING FAIL at create_WmsOperationSession/flush")
+        raise
 
     sid = int(sess.id)
+    logger.info("START_PICKING STEP 7 assign_cart_fields session_id=%s", sid)
     cart.current_session_id = sid
     cart.assigned_user_id = uid
     cart.started_at = now
@@ -744,44 +779,74 @@ def start_picking(
         cart.packing_user_id = None
 
     used_vol = 0.0
-    for o in selected:
-        o.cart_id = cid
-        if hasattr(o, "picking_session_id"):
-            o.picking_session_id = sid
-        on_picking_started(o)
-        fs = (getattr(o, "fulfillment_state", None) or "").strip().upper()
-        if fs in ("", FS_PICKING, "PARTIAL"):
-            o.fulfillment_state = PICKING_IN_PROGRESS
-        if getattr(o, "picking_started_at", None) is None:
-            o.picking_started_at = now
-        st_o = (getattr(o, "status", None) or "").strip().upper()
-        if st_o in ("", "NEW", "ASSIGNED", "READY"):
-            o.status = "PICKING_IN_PROGRESS"
-        used_vol += float(getattr(o, "total_volume_dm3", None) or 0)
-        db.add(o)
+    try:
+        logger.info("START_PICKING STEP 8 assign_orders count=%s", len(selected))
+        for o in selected:
+            o.cart_id = cid
+            if hasattr(o, "picking_session_id"):
+                o.picking_session_id = sid
+            on_picking_started(o)
+            fs = (getattr(o, "fulfillment_state", None) or "").strip().upper()
+            if fs in ("", FS_PICKING, "PARTIAL"):
+                o.fulfillment_state = PICKING_IN_PROGRESS
+            if getattr(o, "picking_started_at", None) is None:
+                o.picking_started_at = now
+            st_o = (getattr(o, "status", None) or "").strip().upper()
+            if st_o in ("", "NEW", "ASSIGNED", "READY"):
+                o.status = "PICKING_IN_PROGRESS"
+            used_vol += float(getattr(o, "total_volume_dm3", None) or 0)
+            db.add(o)
+        cart.used_volume = round(used_vol, 2)
+    except Exception:
+        logger.exception("START_PICKING FAIL at assign_orders")
+        raise
 
-    cart.used_volume = round(used_vol, 2)
-    # Jedna historia: AVAILABLE|ASSIGNED → PICKING (nigdy AVAILABLE→ASSIGNED→PICKING w tym wywołaniu)
-    apply_cart_transition(
-        db,
-        cart,
-        CartStatus.PICKING,
-        operator_user_id=uid,
-        reason="start_picking",
-        task_id=sid,
-        progress=0.0,
-        total_orders=len(selected),
-        metadata={"order_ids": [int(o.id) for o in selected]},
+    try:
+        logger.info("START_PICKING STEP 9 apply_cart_transition → PICKING")
+        # Jedna historia: AVAILABLE|ASSIGNED → PICKING (nigdy AVAILABLE→ASSIGNED→PICKING w tym wywołaniu)
+        apply_cart_transition(
+            db,
+            cart,
+            CartStatus.PICKING,
+            operator_user_id=uid,
+            reason="start_picking",
+            task_id=sid,
+            progress=0.0,
+            total_orders=len(selected),
+            metadata={"order_ids": [int(o.id) for o in selected]},
+        )
+    except Exception:
+        logger.exception("START_PICKING FAIL at apply_cart_transition")
+        raise
+
+    try:
+        logger.info("START_PICKING STEP 10 _record_event picking_started")
+        _record_event(
+            db,
+            cart,
+            "picking_started",
+            operator_user_id=uid,
+            session_id=sid,
+            metadata={"order_ids": [int(o.id) for o in selected], "orders_count": len(selected)},
+        )
+    except Exception:
+        logger.exception("START_PICKING FAIL at _record_event")
+        raise
+
+    try:
+        logger.info("START_PICKING STEP 11 _after_mutation (flush+invariants)")
+        _after_mutation(db, cart)
+    except Exception:
+        logger.exception("START_PICKING FAIL at _after_mutation")
+        raise
+
+    logger.info(
+        "START_PICKING STEP 12 done cart_id=%s session_id=%s orders=%s operator=%s",
+        cid,
+        sid,
+        [int(o.id) for o in selected],
+        uid,
     )
-    _record_event(
-        db,
-        cart,
-        "picking_started",
-        operator_user_id=uid,
-        session_id=sid,
-        metadata={"order_ids": [int(o.id) for o in selected], "orders_count": len(selected)},
-    )
-    _after_mutation(db, cart)
     logger.info(
         "cart_lifecycle.start_picking cart_id=%s session_id=%s orders=%s operator=%s",
         cid,

@@ -541,6 +541,12 @@ def post_picking_start(
     from ..models.cart import Cart
 
     try:
+        logger.info(
+            "START_PICKING STEP A post_picking_start bootstrap cart_id=%s tenant=%s warehouse=%s",
+            cart_id,
+            tenant_id,
+            warehouse_id,
+        )
         sess = bootstrap_start_picking_if_needed(
             db,
             tenant_id=int(tenant_id),
@@ -551,7 +557,9 @@ def post_picking_start(
             operator_user_id=int(current_user.id),
             fixed_order_ids=[int(x) for x in order_ids] if order_ids else None,
         )
+        logger.info("START_PICKING STEP B post_picking_start commit")
         db.commit()
+        logger.info("START_PICKING STEP C post_picking_start commit_ok")
     except CartCapacityExceeded as e:
         db.rollback()
         raise http_exception_cart_capacity_exceeded(e) from e
@@ -567,6 +575,13 @@ def post_picking_start(
     except ValueError as e:
         db.rollback()
         raise HTTPException(status_code=404, detail=str(e)) from e
+    except Exception:
+        logger.exception(
+            "START_PICKING FAIL at post_picking_start bootstrap/commit cart_id=%s",
+            cart_id,
+        )
+        db.rollback()
+        raise
 
     cart = db.query(Cart).filter(Cart.id == int(cart_id)).first()
     return {
