@@ -23,7 +23,7 @@ const BADGE_TONE: Partial<Record<WmsTabId, string>> = {
   mm: "bg-sky-500",
 };
 
-/** Collector list row ~72px — full-row tap target. */
+/** Collector list row ~70px — full-row tap target. */
 export const WmsHomeCollectorRow = memo(function WmsHomeCollectorRow({
   moduleId,
   label,
@@ -39,18 +39,18 @@ export const WmsHomeCollectorRow = memo(function WmsHomeCollectorRow({
     <button
       type="button"
       onClick={onActivate}
-      className="flex h-[72px] w-full items-center gap-3 border-b bg-white px-3 text-left active:bg-indigo-50/40"
+      className="flex h-[70px] w-full items-center gap-3 border-b bg-white px-3 text-left last:border-b-0 active:bg-[#f5f8ff]"
       style={{ borderColor: WMS_HOME_BORDER }}
     >
       <div
         className={[
-          "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ring-1",
+          "flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ring-1",
           accent.iconBg,
           accent.iconRing,
           accent.iconText,
         ].join(" ")}
       >
-        <Icon size={22} strokeWidth={2.25} aria-hidden />
+        <Icon size={24} strokeWidth={2.25} aria-hidden />
       </div>
       <div className="min-w-0 flex-1">
         <p className="truncate text-[15px] font-bold text-slate-900">{label}</p>
@@ -61,7 +61,7 @@ export const WmsHomeCollectorRow = memo(function WmsHomeCollectorRow({
       {count > 0 ? (
         <span
           className={[
-            "inline-flex h-7 min-w-7 shrink-0 items-center justify-center rounded-full px-2 text-xs font-bold tabular-nums text-white",
+            "inline-flex h-8 min-w-8 shrink-0 items-center justify-center rounded-full px-2.5 text-sm font-bold tabular-nums text-white",
             badgeBg,
           ].join(" ")}
         >

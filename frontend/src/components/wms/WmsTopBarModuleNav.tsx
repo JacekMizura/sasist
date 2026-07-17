@@ -9,16 +9,18 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, horizontalListSortingStrategy, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 
 import { isWmsTabPathActive, type WmsTabConfigItem } from "../../pages/wms/wmsTabConfig";
+import { WMS_HOME_PRIMARY } from "../../pages/wms/launcher/wmsHomeSections";
 
 type Props = {
   tabs: WmsTabConfigItem[];
   className?: string;
   onReorder?: (activeId: string, overId: string) => void;
 };
+
+const ACTIVE_BG = "#f5f8ff";
 
 const TabLink = memo(function TabLink({ tab, active }: { tab: WmsTabConfigItem; active: boolean }) {
   const Icon = tab.icon;
@@ -27,14 +29,19 @@ const TabLink = memo(function TabLink({ tab, active }: { tab: WmsTabConfigItem; 
       to={tab.path}
       title={tab.label}
       className={[
-        "inline-flex h-full shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-3 py-1 text-sm font-medium transition-colors sm:px-4",
-        active
-          ? "border-orange-500 bg-orange-50/70 text-slate-800"
-          : "border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-700",
+        "inline-flex h-10 shrink-0 items-center gap-2 self-center whitespace-nowrap rounded-[10px] px-3 text-sm font-medium transition-colors",
+        active ? "" : "text-slate-600 hover:text-[#5a4fcf]",
       ].join(" ")}
+      style={active ? { backgroundColor: ACTIVE_BG, color: WMS_HOME_PRIMARY } : undefined}
     >
-      <Icon size={18} strokeWidth={2} aria-hidden className={active ? "text-orange-500" : "text-slate-400"} />
-      <span className="max-w-[8rem] truncate sm:max-w-none">{tab.label}</span>
+      <Icon
+        size={18}
+        strokeWidth={2}
+        aria-hidden
+        className={active ? "" : "opacity-70"}
+        style={active ? { color: WMS_HOME_PRIMARY } : undefined}
+      />
+      <span className="max-w-[9rem] truncate sm:max-w-[12rem]">{tab.label}</span>
     </NavLink>
   );
 });
@@ -61,18 +68,12 @@ const SortableTab = memo(function SortableTab({
   };
 
   return (
-    <div ref={setNodeRef} style={style} className="flex h-full shrink-0 items-stretch">
-      {draggable ? (
-        <button
-          type="button"
-          className="mr-0.5 hidden cursor-grab touch-none self-center rounded p-0.5 text-slate-300 opacity-0 transition-opacity hover:text-slate-500 group-hover/pinned-nav:opacity-100 active:cursor-grabbing md:inline-flex"
-          aria-label={`Zmień kolejność: ${tab.label}`}
-          {...attributes}
-          {...listeners}
-        >
-          <GripVertical size={12} strokeWidth={2} aria-hidden />
-        </button>
-      ) : null}
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="flex h-full shrink-0 items-stretch"
+      {...(draggable ? { ...attributes, ...listeners } : {})}
+    >
       <TabLink tab={tab} active={active} />
     </div>
   );
@@ -84,7 +85,7 @@ function WmsTopBarModuleNav({ tabs, className, onReorder }: Props) {
 
   if (tabs.length === 0) {
     return (
-      <span className="inline-flex h-full items-center px-4 text-sm text-slate-400">
+      <span className="inline-flex h-full items-center px-3 text-sm text-slate-500">
         Przypnij moduły w menu startowym
       </span>
     );
@@ -105,7 +106,7 @@ function WmsTopBarModuleNav({ tabs, className, onReorder }: Props) {
     />
   ));
 
-  const navClass = ["group/pinned-nav flex h-full items-stretch", className].filter(Boolean).join(" ");
+  const navClass = ["flex h-full items-center gap-0.5", className].filter(Boolean).join(" ");
 
   if (!onReorder) {
     return (

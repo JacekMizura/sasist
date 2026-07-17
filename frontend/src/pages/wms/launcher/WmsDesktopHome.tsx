@@ -21,7 +21,6 @@ function normalizeSearch(value: string): string {
 }
 
 function greetingForHour(hour: number): string {
-  if (hour < 12) return "Dzień dobry!";
   if (hour < 18) return "Dzień dobry!";
   return "Dobry wieczór!";
 }
@@ -61,7 +60,6 @@ export function WmsDesktopHome({ tiles, metrics, kpi, onOpenModule }: WmsDesktop
     }).filter((s) => s.items.length > 0);
   }, [tilesById, q]);
 
-  /** Flat list for keyboard shortcuts 1–9 and Enter. */
   const flatItems = useMemo(() => sections.flatMap((s) => s.items), [sections]);
 
   useEffect(() => {
@@ -142,25 +140,24 @@ export function WmsDesktopHome({ tiles, metrics, kpi, onOpenModule }: WmsDesktop
   return (
     <div className="min-h-full" style={{ backgroundColor: WMS_HOME_BG }}>
       <div
-        className="w-full px-6 py-5 lg:px-8 lg:py-6 xl:px-10"
+        className="mx-auto w-full max-w-[1800px] px-6 py-6"
         tabIndex={0}
         onKeyDown={onShellKeyDown}
         role="region"
         aria-label="Start WMS"
       >
-        <header className="mb-5">
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+        <header className="mb-4">
+          <h1 className="text-xl font-bold tracking-tight text-slate-900">
             {greetingForHour(new Date().getHours())}
           </h1>
-          <p className="mt-1 text-sm text-slate-500">Wybierz moduł lub użyj skrótu klawiszowego.</p>
         </header>
 
-        <div className="mb-5">
+        <div className="mb-4">
           <WmsHomeKpiStrip kpi={kpi} onOpenModule={openByModuleId} />
         </div>
 
-        <div className="mb-7 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
-          <div className="relative min-w-0 max-w-2xl flex-1">
+        <div className="mb-5 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
+          <div className="relative min-w-0 max-w-xl flex-1">
             <Search
               size={18}
               strokeWidth={2}
@@ -174,7 +171,7 @@ export function WmsDesktopHome({ tiles, metrics, kpi, onOpenModule }: WmsDesktop
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Szukaj modułu…"
               aria-label="Szukaj modułu WMS"
-              className="h-11 w-full rounded-xl border bg-white pl-11 pr-4 text-sm text-slate-800 placeholder:text-slate-400 transition-shadow focus:outline-none focus:ring-2 focus:ring-[#5a4fcf]/20"
+              className="h-10 w-full rounded-xl border bg-white pl-11 pr-4 text-sm text-slate-800 placeholder:text-slate-400 transition-shadow focus:outline-none focus:ring-2 focus:ring-[#5a4fcf]/20"
               style={{ borderColor: WMS_HOME_BORDER }}
             />
           </div>
@@ -183,7 +180,7 @@ export function WmsDesktopHome({ tiles, metrics, kpi, onOpenModule }: WmsDesktop
 
         {flatItems.length === 0 ? (
           <div
-            className="rounded-xl border border-dashed bg-white px-8 py-14 text-center"
+            className="rounded-xl border border-dashed bg-white px-6 py-10 text-center"
             style={{ borderColor: WMS_HOME_BORDER }}
           >
             <p className="text-sm font-medium text-slate-600">
@@ -191,22 +188,19 @@ export function WmsDesktopHome({ tiles, metrics, kpi, onOpenModule }: WmsDesktop
             </p>
           </div>
         ) : (
-          <div className="space-y-8">
+          <div className="space-y-5">
             {sections.map((section) => (
               <section key={section.id} aria-labelledby={`wms-home-${section.id}`}>
-                <div
-                  className="mb-3 border-b pb-2"
-                  style={{ borderColor: WMS_HOME_BORDER }}
-                >
+                <div className="mb-2 border-b pb-1.5" style={{ borderColor: WMS_HOME_BORDER }}>
                   <h2
                     id={`wms-home-${section.id}`}
-                    className="text-sm font-bold uppercase tracking-wide text-slate-800"
+                    className="text-xs font-bold uppercase tracking-wide text-slate-800"
                   >
                     {section.title}
                   </h2>
-                  <p className="mt-0.5 text-xs text-slate-500">{section.description}</p>
+                  <p className="mt-0.5 text-[11px] text-slate-500">{section.description}</p>
                 </div>
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,320px))] gap-3">
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-2.5">
                   {section.items.map((tab) => {
                     shortcutCounter += 1;
                     const shortcut = shortcutCounter <= 9 ? shortcutCounter : undefined;
@@ -234,7 +228,7 @@ export function WmsDesktopHome({ tiles, metrics, kpi, onOpenModule }: WmsDesktop
         )}
 
         <footer
-          className="mt-8 flex flex-col gap-2 border-t pt-4 text-xs text-slate-400 sm:flex-row sm:items-center sm:justify-between"
+          className="mt-6 flex flex-col gap-1 border-t pt-3 text-xs text-slate-400 sm:flex-row sm:items-center sm:justify-between"
           style={{ borderColor: WMS_HOME_BORDER }}
         >
           <p>

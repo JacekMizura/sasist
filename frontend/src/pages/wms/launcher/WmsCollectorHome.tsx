@@ -52,14 +52,16 @@ export function WmsCollectorHome({ tiles, metrics, onOpenModule }: WmsCollectorH
   const renderGroup = (title: string, rows: WmsTabConfigItem[]) => {
     if (rows.length === 0) return null;
     return (
-      <section className="mb-4">
+      <section className="mb-6">
         <h2
-          className="border-b px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-slate-500"
-          style={{ borderColor: WMS_HOME_BORDER }}
+          className="mb-1 px-3 text-[11px] font-bold uppercase tracking-wider text-slate-500"
         >
           {title}
         </h2>
-        <div className="border-x border-b bg-white" style={{ borderColor: WMS_HOME_BORDER }}>
+        <div
+          className="overflow-hidden rounded-xl border bg-white [&_button:last-child]:border-b-0"
+          style={{ borderColor: WMS_HOME_BORDER }}
+        >
           {rows.map((tab) => {
             const moduleDef = getWmsModule(tab.id);
             return (
@@ -81,7 +83,7 @@ export function WmsCollectorHome({ tiles, metrics, onOpenModule }: WmsCollectorH
 
   return (
     <div className="min-h-full" style={{ backgroundColor: WMS_HOME_BG }}>
-      <div className="px-0 pb-6 pt-2 sm:px-3">
+      <div className="px-3 pb-8 pt-3">
         {todoRows.length === 0 && otherRows.length === 0 ? (
           <div className="px-4 py-12 text-center text-sm text-slate-500">
             Brak modułów WMS dla tego użytkownika.

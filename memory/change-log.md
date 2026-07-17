@@ -1,5 +1,14 @@
 # Change log
 
+## 2026-07-17 — WMS home: dopracowanie UI (ewolucja)
+
+- Belka: 56px, `#ffffff`, border `#e9edf5`; aktywny moduł `#f5f8ff` + primary, bez szarych filli / GripVertical.
+- KPI: karty liczba→etykieta (h~76), desktop 5 kolumn, mobile scroll poziomy.
+- Kafelki: min-h 120, max-w 280, hover `translateY(-2px)`; nazwy 2 linie (bez ellipsis).
+- Krótsze `shortDescription`; kontener `max-w 1800`; grid `minmax(260px,1fr)`; sekcje ciaśniej.
+- Kolektor: wiersz ~70px, większe ikony/badge, większy odstęp sekcji.
+- Preview: `/dev/wms-home-preview`.
+
 ## 2026-07-17 — WMS home: sekcje desktop + lista kolektor
 
 - `/wms/menu`: `WmsHomePage` — `useIsHandheldDevice` → `WmsDesktopHome` | `WmsCollectorHome` (wspólne tiles/KPI/API).

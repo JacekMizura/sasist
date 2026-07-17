@@ -63,10 +63,10 @@ export const WMS_HOME_KPI_DEFS: Array<{
   tone: "blue" | "green" | "orange" | "red" | "purple";
 }> = [
   { key: "picking", label: "Do zebrania", moduleId: "picking", tone: "blue" },
-  { key: "receiving", label: "Przyjęcia", moduleId: "receiving", tone: "green" },
-  { key: "putaway", label: "Do rozlokowania", moduleId: "putaway", tone: "orange" },
-  { key: "issues", label: "Braki", moduleId: "issues", tone: "red" },
   { key: "packing", label: "Do spakowania", moduleId: "packing", tone: "purple" },
+  { key: "issues", label: "Braki", moduleId: "issues", tone: "red" },
+  { key: "putaway", label: "Do rozlokowania", moduleId: "putaway", tone: "orange" },
+  { key: "receiving", label: "Przyjęcia", moduleId: "receiving", tone: "green" },
 ];
 
 export const WMS_HOME_BORDER = "#e9edf5";
@@ -76,6 +76,6 @@ export const WMS_HOME_PRIMARY = "#5a4fcf";
 /** Optional shorter titles on the home screen (module registry keeps full labels). */
 export const WMS_HOME_DISPLAY_LABEL: Partial<Record<WmsTabId, string>> = {
   production: "Produkcja",
-  consolidations: "Kompletacja między-magazynowa",
+  consolidations: "Kompletacja międzymagazynowa",
   mm: "Przesunięcia magazynowe",
 };

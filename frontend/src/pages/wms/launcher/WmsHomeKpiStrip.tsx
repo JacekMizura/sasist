@@ -1,74 +1,36 @@
 import { useMemo } from "react";
-import type { LucideIcon } from "lucide-react";
-import {
-  AlertTriangle,
-  ClipboardList,
-  Inbox,
-  Package,
-  Warehouse,
-} from "lucide-react";
 
 import type { WmsHomeKpiCounts } from "./useWmsLauncherBadges";
-import { WMS_HOME_BORDER, WMS_HOME_KPI_DEFS, type WmsHomeKpiKey } from "./wmsHomeSections";
-
-const KPI_ICON: Record<WmsHomeKpiKey, LucideIcon> = {
-  picking: ClipboardList,
-  receiving: Inbox,
-  putaway: Warehouse,
-  issues: AlertTriangle,
-  packing: Package,
-};
-
-const KPI_TONE_CLASS: Record<(typeof WMS_HOME_KPI_DEFS)[number]["tone"], string> = {
-  blue: "text-blue-600 ring-blue-100 bg-blue-50",
-  green: "text-emerald-600 ring-emerald-100 bg-emerald-50",
-  orange: "text-orange-600 ring-orange-100 bg-orange-50",
-  red: "text-red-600 ring-red-100 bg-red-50",
-  purple: "text-violet-600 ring-violet-100 bg-violet-50",
-};
+import { WMS_HOME_BORDER, WMS_HOME_KPI_DEFS } from "./wmsHomeSections";
 
 type Props = {
   kpi: WmsHomeKpiCounts;
   onOpenModule?: (moduleId: string) => void;
 };
 
+/** Compact KPI cards — number on top, label below. Not input-like. */
 export function WmsHomeKpiStrip({ kpi, onOpenModule }: Props) {
   const items = useMemo(
     () =>
       WMS_HOME_KPI_DEFS.map((def) => ({
         ...def,
         value: kpi[def.key] ?? 0,
-        Icon: KPI_ICON[def.key],
       })),
     [kpi],
   );
 
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+    <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-0.5 md:grid md:grid-cols-5 md:overflow-visible md:pb-0 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
       {items.map((item) => (
         <button
           key={item.key}
           type="button"
           onClick={() => onOpenModule?.(item.moduleId)}
-          className="flex items-center gap-2.5 rounded-xl border bg-white px-3 py-2.5 text-left transition-shadow hover:shadow-[0_4px_14px_rgba(15,23,42,0.06)]"
+          className="flex h-[76px] w-[132px] shrink-0 flex-col justify-center rounded-xl border bg-white px-3 py-2 text-left transition-[box-shadow,transform] duration-150 hover:-translate-y-0.5 hover:shadow-[0_6px_16px_rgba(15,23,42,0.06)] md:h-[76px] md:w-auto md:min-w-0"
           style={{ borderColor: WMS_HOME_BORDER }}
         >
-          <span
-            className={[
-              "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ring-1",
-              KPI_TONE_CLASS[item.tone],
-            ].join(" ")}
-          >
-            <item.Icon size={18} strokeWidth={2.25} aria-hidden />
-          </span>
-          <span className="min-w-0">
-            <span className="block text-lg font-bold tabular-nums leading-none text-slate-900">
-              {item.value}
-            </span>
-            <span className="mt-0.5 block truncate text-[11px] font-medium text-slate-500">
-              {item.label}
-            </span>
-          </span>
+          <span className="text-2xl font-bold tabular-nums leading-none text-slate-900">{item.value}</span>
+          <span className="mt-1.5 text-[12px] font-medium leading-tight text-slate-500">{item.label}</span>
         </button>
       ))}
     </div>

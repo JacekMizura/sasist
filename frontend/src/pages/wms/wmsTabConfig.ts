@@ -66,7 +66,7 @@ export const WMS_MODULES: WmsModuleDefinition[] = [
     sortOrder: 10,
     dashboard: true,
     operationalMode: "returns",
-    shortDescription: "Przyjmowanie zwrotów, reklamacje i decyzje magazynowe",
+    shortDescription: "Zwroty i reklamacje",
   },
   {
     id: "receiving",
@@ -76,7 +76,7 @@ export const WMS_MODULES: WmsModuleDefinition[] = [
     sortOrder: 20,
     dashboard: true,
     operationalMode: "receiving",
-    shortDescription: "Przyjęcia PZ i dostaw",
+    shortDescription: "Przyjęcia PZ",
   },
   {
     id: "putaway",
@@ -85,7 +85,7 @@ export const WMS_MODULES: WmsModuleDefinition[] = [
     icon: Warehouse,
     sortOrder: 30,
     dashboard: true,
-    shortDescription: "Rozlokowanie po przyjęciu",
+    shortDescription: "Rozlokowanie po PZ",
   },
   {
     id: "mm",
@@ -94,7 +94,7 @@ export const WMS_MODULES: WmsModuleDefinition[] = [
     icon: ArrowLeftRight,
     sortOrder: 40,
     dashboard: true,
-    shortDescription: "Przesunięcia między lokalizacjami i strefami magazynu",
+    shortDescription: "Przesunięcia magazynowe",
   },
   {
     id: "consolidations",
@@ -103,7 +103,7 @@ export const WMS_MODULES: WmsModuleDefinition[] = [
     icon: PackageCheck,
     sortOrder: 45,
     dashboard: true,
-    shortDescription: "Zamówienia oczekujące na kompletację w magazynie docelowym",
+    shortDescription: "Kompletacja między magazynami",
   },
   {
     id: "consolidation_racks",
@@ -112,7 +112,7 @@ export const WMS_MODULES: WmsModuleDefinition[] = [
     icon: LayoutGrid,
     sortOrder: 82,
     dashboard: false,
-    shortDescription: "Mapa półek kompletacyjnych (narzędzie pomocnicze)",
+    shortDescription: "Mapa półek",
   },
   {
     id: "picking",
@@ -131,7 +131,7 @@ export const WMS_MODULES: WmsModuleDefinition[] = [
     icon: Factory,
     sortOrder: 55,
     dashboard: true,
-    shortDescription: "Zbieranie surowców, wykonanie i odkładanie wyrobów",
+    shortDescription: "Wykonanie produkcji",
   },
   {
     id: "inventory_count",
@@ -140,7 +140,7 @@ export const WMS_MODULES: WmsModuleDefinition[] = [
     icon: ListChecks,
     sortOrder: 56,
     dashboard: true,
-    shortDescription: "Liczenie stanów magazynowych i kontrola różnic",
+    shortDescription: "Liczenie stanów",
   },
   {
     id: "packing",
@@ -159,7 +159,7 @@ export const WMS_MODULES: WmsModuleDefinition[] = [
     icon: AlertTriangle,
     sortOrder: 70,
     dashboard: true,
-    shortDescription: "Braki, odzyski i rozlokowanie nośników",
+    shortDescription: "Braki i odzyski",
   },
   {
     id: "product_preview",
@@ -168,7 +168,7 @@ export const WMS_MODULES: WmsModuleDefinition[] = [
     icon: ScanSearch,
     sortOrder: 80,
     dashboard: true,
-    shortDescription: "Szybki podgląd produktu, stanów i lokalizacji",
+    shortDescription: "Stan i lokalizacje",
   },
   {
     id: "operations",
@@ -177,7 +177,7 @@ export const WMS_MODULES: WmsModuleDefinition[] = [
     icon: Activity,
     sortOrder: 90,
     dashboard: true,
-    shortDescription: "Runtime operacji magazynowych",
+    shortDescription: "Runtime operacji",
   },
   {
     id: "direct_sales",
@@ -186,7 +186,7 @@ export const WMS_MODULES: WmsModuleDefinition[] = [
     icon: ShoppingCart,
     sortOrder: 100,
     dashboard: true,
-    shortDescription: "Sprzedaż bezpośrednia i wydanie z magazynu",
+    shortDescription: "Sprzedaż bezpośrednia",
   },
 ];
 
