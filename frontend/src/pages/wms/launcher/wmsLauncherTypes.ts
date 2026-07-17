@@ -19,6 +19,8 @@ export type WmsModuleStatChip = {
 
 export type WmsModuleTileMetrics = {
   stats: WmsModuleStatChip[];
+  /** Numeric task count for badge (home KPI / collector). */
+  count?: number;
 };
 
 export type WmsLauncherMetricsMap = Partial<Record<WmsTabId, WmsModuleTileMetrics>>;
@@ -33,11 +35,11 @@ export type WmsModuleAccent = {
 
 /** Safe fallback when a new WmsTabId lacks an explicit accent entry. */
 export const WMS_MODULE_ACCENT_DEFAULT: WmsModuleAccent = {
-  iconBg: "bg-slate-100",
-  iconRing: "ring-slate-200/80",
-  iconText: "text-slate-600",
-  hoverBorder: "hover:border-slate-300",
-  hoverShadow: "hover:shadow-slate-200/80",
+  iconBg: "bg-indigo-50",
+  iconRing: "ring-indigo-100",
+  iconText: "text-indigo-600",
+  hoverBorder: "hover:border-indigo-200",
+  hoverShadow: "hover:shadow-indigo-100/80",
 };
 
 export function resolveWmsModuleAccent(moduleId: WmsTabId): WmsModuleAccent {
@@ -60,18 +62,18 @@ export const WMS_MODULE_ACCENTS: Record<WmsTabId, WmsModuleAccent> = {
     hoverShadow: "hover:shadow-emerald-100/80",
   },
   putaway: {
-    iconBg: "bg-cyan-50",
-    iconRing: "ring-cyan-100",
-    iconText: "text-cyan-600",
-    hoverBorder: "hover:border-cyan-200",
-    hoverShadow: "hover:shadow-cyan-100/80",
+    iconBg: "bg-orange-50",
+    iconRing: "ring-orange-100",
+    iconText: "text-orange-600",
+    hoverBorder: "hover:border-orange-200",
+    hoverShadow: "hover:shadow-orange-100/80",
   },
   mm: {
-    iconBg: "bg-slate-100",
-    iconRing: "ring-slate-200/80",
-    iconText: "text-slate-600",
-    hoverBorder: "hover:border-slate-300",
-    hoverShadow: "hover:shadow-slate-200/80",
+    iconBg: "bg-sky-50",
+    iconRing: "ring-sky-100",
+    iconText: "text-sky-600",
+    hoverBorder: "hover:border-sky-200",
+    hoverShadow: "hover:shadow-sky-100/80",
   },
   consolidations: {
     iconBg: "bg-violet-50",
@@ -88,11 +90,11 @@ export const WMS_MODULE_ACCENTS: Record<WmsTabId, WmsModuleAccent> = {
     hoverShadow: "hover:shadow-purple-100/80",
   },
   picking: {
-    iconBg: "bg-indigo-50",
-    iconRing: "ring-indigo-100",
-    iconText: "text-indigo-600",
-    hoverBorder: "hover:border-indigo-200",
-    hoverShadow: "hover:shadow-indigo-100/80",
+    iconBg: "bg-blue-50",
+    iconRing: "ring-blue-100",
+    iconText: "text-blue-600",
+    hoverBorder: "hover:border-blue-200",
+    hoverShadow: "hover:shadow-blue-100/80",
   },
   production: {
     iconBg: "bg-orange-50",
@@ -109,18 +111,18 @@ export const WMS_MODULE_ACCENTS: Record<WmsTabId, WmsModuleAccent> = {
     hoverShadow: "hover:shadow-blue-100/80",
   },
   packing: {
-    iconBg: "bg-fuchsia-50",
-    iconRing: "ring-fuchsia-100",
-    iconText: "text-fuchsia-600",
-    hoverBorder: "hover:border-fuchsia-200",
-    hoverShadow: "hover:shadow-fuchsia-100/80",
+    iconBg: "bg-violet-50",
+    iconRing: "ring-violet-100",
+    iconText: "text-violet-600",
+    hoverBorder: "hover:border-violet-200",
+    hoverShadow: "hover:shadow-violet-100/80",
   },
   issues: {
-    iconBg: "bg-amber-50",
-    iconRing: "ring-amber-100",
-    iconText: "text-amber-600",
-    hoverBorder: "hover:border-amber-200",
-    hoverShadow: "hover:shadow-amber-100/80",
+    iconBg: "bg-red-50",
+    iconRing: "ring-red-100",
+    iconText: "text-red-600",
+    hoverBorder: "hover:border-red-200",
+    hoverShadow: "hover:shadow-red-100/80",
   },
   product_preview: {
     iconBg: "bg-teal-50",

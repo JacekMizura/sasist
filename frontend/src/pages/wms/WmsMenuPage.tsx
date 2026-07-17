@@ -1,6 +1,6 @@
-import WmsLauncherPage from "./launcher/WmsLauncherPage";
+import WmsHomePage from "./launcher/WmsHomePage";
 
-/** Kanoniczny ekran startowy WMS — launcher kafelków modułów. */
+/** Kanoniczny ekran startowy WMS — desktop sekcje / kolektor lista. */
 export default function WmsMenuPage() {
-  return <WmsLauncherPage />;
+  return <WmsHomePage />;
 }

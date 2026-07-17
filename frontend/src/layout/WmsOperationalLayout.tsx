@@ -8,20 +8,20 @@ import { WarehouseExecutionProvider } from "../context/WarehouseExecutionContext
 import { WmsScannerProvider } from "../context/WmsScannerContext";
 import WmsTopBar from "./WmsTopBar";
 import WmsWarehouseAccessGate from "./WmsWarehouseAccessGate";
-import { appLayoutTokens } from "./appLayoutTokens";
 
 /**
  * Unified WMS shell — one top navigation for every mode (picking, recovery, braki, packing, …).
  * Workflow headers live inside page content, not as duplicate fixed layers.
+ * Background: white (#ffffff) — no grey page fills in WMS operator UI.
  */
 function WmsLayoutChrome() {
   return (
-    <div className={`flex h-screen min-h-0 w-full flex-1 flex-col overflow-hidden ${appLayoutTokens.appBackground}`}>
+    <div className="flex h-screen min-h-0 w-full flex-1 flex-col overflow-hidden bg-white">
       <div className="shrink-0" style={{ zIndex: WMS_Z.topNav }}>
         <WmsTopBar />
       </div>
       <ScanFeedbackOverlay />
-      <main className={`min-h-0 w-full max-w-none flex-1 overflow-y-auto ${appLayoutTokens.appBackground}`}>
+      <main className="min-h-0 w-full max-w-none flex-1 overflow-y-auto bg-white">
         <WmsWarehouseAccessGate>
           <Outlet />
         </WmsWarehouseAccessGate>

@@ -1,5 +1,13 @@
 # Change log
 
+## 2026-07-17 — WMS home: sekcje desktop + lista kolektor
+
+- `/wms/menu`: `WmsHomePage` — `useIsHandheldDevice` → `WmsDesktopHome` | `WmsCollectorHome` (wspólne tiles/KPI/API).
+- Desktop: KPI strip, wyszukiwarka + „Skróty: 1-9 • Enter - otwórz”, sekcje Operacje / Kontrola / Pozostałe, kafelki ~320×140.
+- Kolektor: listy DO ZROBIENIA / POZOSTAŁE (~72px), bez dużych kart.
+- Tło WMS shell + home: `#ffffff`, obramowania `#e9edf5` (bez szarych powierzchni).
+- Podgląd UI: `/dev/wms-home-preview` (mock KPI, desktop + kolektor obok siebie).
+
 ## 2026-07-17 — Fix login HTTP 500 (app_users protection columns)
 
 - Przyczyna: ORM mapuje `is_system_user|is_owner|is_deletable|is_role_changeable`, a na PG kolumny mogły nie powstać — `ensure_app_users_bootstrap_columns` dodawał je w tej samej transakcji co `CREATE TABLE app_user_warehouses (... AUTOINCREMENT)` (składnia SQLite) → wyjątek + rollback ALTER → SELECT przy loginie = 500.

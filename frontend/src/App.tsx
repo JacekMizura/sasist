@@ -27,6 +27,7 @@ import PanelStatusSidebarMockupV3, {
 import PanelStatusV3ScreenshotsPage from "./components/panel/mockups/PanelStatusV3ScreenshotsPage"
 import ModuleListOrdersVsReturnsScreenshotPage from "./components/listPage/moduleList/mockups/ModuleListOrdersVsReturnsScreenshotPage"
 import ReturnsStatusesConfiguratorScreenshotPage from "./pages/Settings/returnsStatusesConfigurator/mockups/ReturnsStatusesConfiguratorScreenshotPage"
+import WmsHomePreviewPage from "./pages/wms/launcher/mockups/WmsHomePreviewPage"
 import ProductsLayout from "./pages/Products/ProductsLayout"
 import ProductList from "./pages/Products/ProductList"
 import ProductNewPage from "./pages/Products/ProductNewPage"
@@ -405,6 +406,7 @@ export const router = createBrowserRouter(
       <Route path="dev/panel-status-v3-screenshots" element={<PanelStatusV3ScreenshotsPage />} />
       <Route path="dev/module-list-orders-vs-returns" element={<ModuleListOrdersVsReturnsScreenshotPage />} />
       <Route path="dev/returns-statuses-configurator-screenshots" element={<ReturnsStatusesConfiguratorScreenshotPage />} />
+      <Route path="dev/wms-home-preview" element={<WmsHomePreviewPage />} />
       <Route path="wms-upload/:sessionId" element={<WmsPhoneUploadPage />} />
       <Route element={<ProtectedRoute />}>
       <Route index element={<Navigate to="/dashboard" replace />} />

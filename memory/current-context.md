@@ -1,5 +1,10 @@
 # Current context
 
+## WMS home rebuild (2026-07-17)
+- `/wms/menu` → `WmsHomePage` (desktop sekcje vs kolektor lista via `useIsHandheldDevice`).
+- Preview: `/dev/wms-home-preview` — ocenić UI przed dalszym refaktorem (stary `WmsLauncherPage` nadal w repo, nieużywany).
+- WMS shell tło: `bg-white`.
+
 ## Printing MVP — Faza 1B–1D done (2026-07-11)
 - Pełne API `/api/printing/*` (agents, jobs, printers, defaults).
 - Serwisy + testy (16/16 pass). Agent Windows i frontend — nie ruszane.
