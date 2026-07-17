@@ -1144,9 +1144,10 @@ class CartService:
             {CartBasket.used_volume: 0, CartBasket.order_id: None},
             synchronize_session="fetch",
         )
-        cart.used_volume = 0
-        cart.status = CartStatus.AVAILABLE.value
-        self.db.add(cart)
+        from .cart_picking_lifecycle_service import release_cart
+
+        self.db.refresh(cart)
+        release_cart(self.db, cart=cart, reason="clear_cart")
         self.db.commit()
         return {
             "status": "OK",
@@ -1175,12 +1176,11 @@ class CartService:
         cart = self.db.query(Cart).filter(Cart.id == cart_id).first()
         if cart:
             cart.used_volume = round(sum(getattr(o, "total_volume_dm3", 0) or 0 for o in orders_on_cart), 2)
-            cart.status = (
-                CartStatus.PICKING.value
-                if cart.used_volume and cart.used_volume > 0
-                else CartStatus.AVAILABLE.value
-            )
             self.db.add(cart)
+            if not orders_on_cart:
+                from .cart_picking_lifecycle_service import release_cart
+
+                release_cart(self.db, cart=cart, reason="clear_basket")
         self.db.commit()
         return {"status": "OK", "order_cleared": order_id}
 

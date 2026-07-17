@@ -40,7 +40,10 @@ from ..services.wms_operational_task_service import (
     resolve_operational_task_scan,
     start_operational_task,
 )
-from ..services.wms_audit_service import complete_wms_operation_session, touch_wms_operation_session
+from ..services.wms_audit_service import (
+    complete_wms_operation_session,
+    ensure_wms_operation_session,
+)
 from ..services.wms_relocation_workflow import (
     RelocationSessionLockedError,
     acquire_relocation_session,
@@ -145,7 +148,7 @@ def get_operational_task_resolve_scan(
     )
     if not detail:
         raise HTTPException(status_code=404, detail="Zadanie nie istnieje.")
-    touch_wms_operation_session(
+    ensure_wms_operation_session(
         db,
         tenant_id=int(tenant_id),
         warehouse_id=int(warehouse_id),
@@ -179,7 +182,7 @@ def get_operational_task(
         .first()
     )
     if t is not None:
-        touch_wms_operation_session(
+        ensure_wms_operation_session(
             db,
             tenant_id=int(tenant_id),
             warehouse_id=int(t.warehouse_id),
@@ -202,7 +205,7 @@ def post_operational_task_start(
     t = start_operational_task(db, int(task_id), tenant_id=tenant_id)
     if not t:
         raise HTTPException(status_code=404, detail="Nie można rozpocząć zadania.")
-    touch_wms_operation_session(
+    ensure_wms_operation_session(
         db,
         tenant_id=int(tenant_id),
         warehouse_id=int(t.warehouse_id),

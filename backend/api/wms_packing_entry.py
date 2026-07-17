@@ -9,7 +9,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from ..auth.deps import get_optional_current_user
+from ..auth.deps import get_current_user, get_optional_current_user
 from fastapi import Depends
 from ..auth.warehouse_deps import (
     require_operable_warehouse,
@@ -87,6 +87,50 @@ def get_packing_modes(
     except SQLAlchemyError:
         logger.exception("get_packing_modes")
         return WmsPackingModeDistribution(no_cart=0, bulk=0, baskets=0)
+
+
+@router.post("/packing/start-cart")
+def post_packing_start_cart(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
+    cart_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    current_user: AppUser = Depends(get_current_user),
+):
+    """
+    Pakowacz skanuje wózek: READY_FOR_PACKING → PACKING.
+    assigned_user=NULL, packing_user=operator.
+    """
+    from ..models.cart import Cart
+    from ..services.cart_picking_lifecycle_service import (
+        CartLifecycleError,
+        get_cart_status,
+        start_packing,
+    )
+
+    cart = (
+        db.query(Cart)
+        .filter(
+            Cart.id == int(cart_id),
+            Cart.tenant_id == int(tenant_id),
+            Cart.warehouse_id == int(warehouse_id),
+        )
+        .first()
+    )
+    if cart is None:
+        raise HTTPException(status_code=404, detail="Nie znaleziono wózka.")
+    try:
+        start_packing(db, cart=cart, operator_user_id=int(current_user.id))
+        db.commit()
+    except CartLifecycleError as e:
+        db.rollback()
+        raise HTTPException(status_code=409, detail={"code": e.code, "error": e.message}) from e
+    return {
+        "cart_id": int(cart.id),
+        "status": get_cart_status(cart).value,
+        "packing_user_id": getattr(cart, "packing_user_id", None),
+        "assigned_user_id": cart.assigned_user_id,
+    }
 
 
 @router.get("/packing/orders", response_model=list[WmsPackingOrderCard])

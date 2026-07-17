@@ -197,222 +197,59 @@ class SimulationService:
         wave_id: int | None = None,
     ) -> dict:
         """
-        Przypisuje zamówienia ze statusem NEW do wózka.
-        Gdy wave_id podane: tylko zamówienia z tej fali (Order.wave_id == wave_id).
-        - MULTI: do wolnych koszyków (basket.order_id IS NULL).
-        - BULK: cały wózek jako jeden pojemnik; sum(order_volumes) <= total_volume.
-        Zwraca: assigned_orders_count, unassigned_orders_count, cart_utilization_percent, status.
+        LEGACY PERSIST WYŁĄCZONY.
+
+        Simulation tylko liczy — nie zapisuje order.cart_id / cart.status.
         """
-        try:
-            cart = (
-                self.db.query(Cart)
-                .options(joinedload(Cart.baskets))
-                .filter(
-                    Cart.id == cart_id,
-                    Cart.tenant_id == tenant_id,
-                    Cart.warehouse_id == warehouse_id,
-                )
-                .first()
-            )
-            if not cart:
-                raise HTTPException(status_code=404, detail="Wózek nie znaleziony")
-
-            is_multi = (cart.type == CartType.MULTI or
-                        str(getattr(cart.type, "value", cart.type) or "").upper() == "MULTI")
-
-            # Zamówienia NEW; opcjonalnie tylko z fali (wave_id)
-            orders_q = (
-                self.db.query(Order)
-                .options(joinedload(Order.items).joinedload(OrderItem.product))
-                .filter(
-                    Order.tenant_id == tenant_id,
-                    Order.warehouse_id == warehouse_id,
-                    Order.status == "NEW",
-                )
-            )
-            if wave_id is not None:
-                orders_q = orders_q.filter(Order.wave_id == wave_id)
-            if not is_multi:
-                orders_q = orders_q.filter(Order.cart_id == None)
-            orders_all = orders_q.all()
-
-            # Order clustering + sort: cluster by main SKU, then within cluster by (items_count DESC, volume DESC)
-            orders_new = _sort_orders_for_assignment(orders_all)
-
-            current_orders = count_orders_on_cart(self.db, int(cart.id))
-            enforce_cart_orders_capacity(self.db, cart, new_orders=len(orders_new))
-
-            assigned_count = 0
-            unassigned_count = 0
-
-            if is_multi:
-                # Best-fit: track remaining capacity per basket; sort by remaining ASC before each assignment
-                empty_baskets = [b for b in (cart.baskets or []) if b.order_id is None]
-                basket_remaining = {b.id: (b.usable_volume or 0) / 1000.0 for b in empty_baskets}
-                running_orders = current_orders
-                running_used_vol = float(cart.used_volume or 0)
-
-                for order in orders_new:
-                    order_volume, max_l, max_w, max_h = _order_total_volume_and_dimensions(order)
-                    if not _can_assign_order(cart, running_orders, running_used_vol, order_volume):
-                        unassigned_count += 1
-                        continue
-                    # Sort baskets by remaining capacity ASC (best fit: try smallest that fits first)
-                    basket_ids_sorted = sorted(
-                        (bid for bid, rem in basket_remaining.items() if rem >= order_volume),
-                        key=lambda bid: basket_remaining[bid],
-                    )
-                    placed = False
-                    for basket_id in basket_ids_sorted:
-                        basket = next((b for b in (cart.baskets or []) if b.id == basket_id), None)
-                        if not basket or basket.order_id is not None:
-                            continue
-                        bl = basket.inner_length or 0
-                        bw = basket.inner_width or 0
-                        bh = basket.inner_height or 0
-                        if not _fits_in_basket(max_l, max_w, max_h, bl, bw, bh):
-                            continue
-                        basket.order_id = order.id
-                        basket.used_volume = round(order_volume, 2)
-                        order.cart_id = cart.id
-                        order.basket_id = basket.id
-                        order.total_volume_dm3 = round(order_volume, 2)
-                        order.status = "ASSIGNED"
-                        assigned_count += 1
-                        running_orders += 1
-                        running_used_vol += order_volume
-                        basket_remaining[basket_id] = basket_remaining.get(basket_id, 0) - order_volume
-                        if basket_remaining[basket_id] <= 0:
-                            del basket_remaining[basket_id]
-                        placed = True
-                        break
-                    if not placed:
-                        unassigned_count += 1
-                # used_volume set below from assigned orders
-            else:
-                # BULK: cały wózek jako jeden pojemnik
-                total_vol = cart.total_volume or 0
-                if total_vol <= 0 and cart.length and cart.width and cart.height:
-                    total_vol = (float(cart.length) * float(cart.width) * float(cart.height)) / 1000.0
-                    cart.total_volume = round(total_vol, 2)
-                used = cart.used_volume or 0
-                running_orders = current_orders
-                cl = float(cart.length or 0)
-                cw = float(cart.width or 0)
-                ch = float(cart.height or 0)
-                assigned_volumes = []
-                for order in orders_new:
-                    order_volume, max_l, max_w, max_h = _order_total_volume_and_dimensions(order)
-                    if not _can_assign_order(cart, running_orders, used, order_volume):
-                        unassigned_count += 1
-                        continue
-                    if cl and cw and ch and not _fits_in_basket(max_l, max_w, max_h, cl, cw, ch):
-                        unassigned_count += 1
-                        continue
-                    order.cart_id = cart.id
-                    order.total_volume_dm3 = round(order_volume, 2)
-                    order.status = "ASSIGNED"
-                    used += order_volume
-                    running_orders += 1
-                    assigned_volumes.append(order_volume)
-                    assigned_count += 1
-                # used_volume set below from assigned orders
-
-            # Recompute used_volume from assigned orders (single source of truth)
-            self.db.flush()
-            orders_on_cart = self.db.query(Order).filter(Order.cart_id == cart.id).all()
-            cart.used_volume = round(sum(getattr(o, "total_volume_dm3", None) or 0 for o in orders_on_cart), 2)
-
-            total_vol = cart.total_volume or 0
-            used_vol = cart.used_volume or 0
-            if total_vol > 0:
-                utilization_percent = round((used_vol / total_vol) * 100.0, 2)
-            else:
-                utilization_percent = 0.0
-
-            if utilization_percent > 90:
-                cart.status = CartStatus.FULL
-            elif used_vol > 0:
-                cart.status = CartStatus.IN_PROGRESS
-            else:
-                cart.status = CartStatus.AVAILABLE
-
-            self.db.add(cart)
-            for b in cart.baskets or []:
-                self.db.add(b)
-            self.db.commit()
-            self.db.refresh(cart)
-            print(f"DEBUG: Cart {cart.id} new used_volume: {cart.used_volume}")  # noqa: T201
-
-            return {
-                "assigned_orders_count": assigned_count,
-                "unassigned_orders_count": unassigned_count,
-                "cart_utilization_percent": utilization_percent,
-                "status": "SUCCESS",
-            }
-        except HTTPException:
-            self.db.rollback()
-            raise
-        except Exception as e:
-            self.db.rollback()
-            logger.exception("assign_orders_to_cart failed: %s", e)
-            raise
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "legacy_sim_assign_forbidden",
+                "error": (
+                    "Symulacja nie zapisuje lifecycle wózka. "
+                    "Przypisanie zamówień tylko przez startPicking po skanie wózka."
+                ),
+            },
+        )
 
     def reset_fleet(self, tenant_id: int, warehouse_id: int) -> dict:
         """
-        Resetuj Flotę: ustaw order.cart_id = None, order.basket_id = None, order.total_volume_dm3 = None,
-        order.status = 'NEW' dla przypisanych zamówień; cart.used_volume = 0; basket.used_volume = 0, basket.order_id = None.
+        Admin reset: wyczyść occupancy zamówień i zwolnij wózki przez CartLifecycleService.release_cart.
         """
-        # Orders assigned to carts in this warehouse
-        orders_updated = (
+        from .cart_picking_lifecycle_service import release_cart
+        from .order_fulfillment_state import clear_order_picking_session_context
+
+        orders = (
             self.db.query(Order)
             .filter(
                 Order.tenant_id == tenant_id,
                 Order.warehouse_id == warehouse_id,
-                Order.cart_id != None,
+                Order.cart_id.isnot(None),
             )
-            .update(
-                {
-                    Order.cart_id: None,
-                    Order.basket_id: None,
-                    Order.total_volume_dm3: None,
-                    Order.status: "NEW",
-                },
-                synchronize_session="fetch",
-            )
+            .all()
         )
-        # Carts in this warehouse: used_volume = 0
-        carts_updated = (
+        for o in orders:
+            clear_order_picking_session_context(o)
+            o.total_volume_dm3 = None
+            o.status = "NEW"
+            self.db.add(o)
+        orders_updated = len(orders)
+
+        carts = (
             self.db.query(Cart)
+            .options(joinedload(Cart.baskets))
             .filter(
                 Cart.tenant_id == tenant_id,
                 Cart.warehouse_id == warehouse_id,
             )
-            .update({Cart.used_volume: 0}, synchronize_session="fetch")
+            .all()
         )
-        # Baskets of those carts: used_volume = 0, order_id = None
-        cart_ids = [
-            r[0]
-            for r in self.db.query(Cart.id).filter(
-                Cart.tenant_id == tenant_id,
-                Cart.warehouse_id == warehouse_id,
-            ).all()
-        ]
-        if cart_ids:
-            baskets_updated = (
-                self.db.query(CartBasket)
-                .filter(CartBasket.cart_id.in_(cart_ids))
-                .update(
-                    {CartBasket.used_volume: 0, CartBasket.order_id: None},
-                    synchronize_session="fetch",
-                )
-            )
-        else:
-            baskets_updated = 0
+        for cart in carts:
+            release_cart(self.db, cart=cart, reason="reset_fleet")
         self.db.commit()
         return {
             "status": "OK",
             "orders_reset": orders_updated,
-            "carts_reset": carts_updated,
-            "baskets_reset": baskets_updated,
+            "carts_reset": len(carts),
+            "baskets_reset": sum(len(c.baskets or []) for c in carts),
         }

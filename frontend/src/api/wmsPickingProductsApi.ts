@@ -268,6 +268,66 @@ export async function getWmsPickingResolveCart(
   return res.data;
 }
 
+/** AVAILABLE → ASSIGNED (wybór wózka bez zamówień). */
+export async function postWmsPickingClaimCart(
+  tenantId: number,
+  warehouseId: number,
+  cartId: number,
+): Promise<{ cart_id: number; status: string; assigned_user_id: number | null }> {
+  const res = await api.post("/wms/picking/claim-cart", null, {
+    params: { tenant_id: tenantId, warehouse_id: warehouseId, cart_id: cartId },
+  });
+  return res.data;
+}
+
+/**
+ * Skan wózka → startPicking (sesja + przypisanie zamówień + PICKING).
+ * Capacity walidowana tutaj.
+ */
+export async function postWmsPickingStart(
+  tenantId: number,
+  warehouseId: number,
+  cartId: number,
+  sourceStatusId: number,
+  orderType: string,
+  orderIds?: number[],
+): Promise<{
+  cart_id: number;
+  status: string | null;
+  session_id: number | null;
+  current_session_id: number | null;
+  assigned_user_id: number | null;
+}> {
+  const res = await api.post("/wms/picking/start", null, {
+    params: {
+      tenant_id: tenantId,
+      warehouse_id: warehouseId,
+      cart_id: cartId,
+      source_status_id: sourceStatusId,
+      order_type: orderType,
+      ...(orderIds?.length ? { order_ids: orderIds } : {}),
+    },
+  });
+  return res.data;
+}
+
+/** Pakowacz skanuje wózek: READY_FOR_PACKING → PACKING. */
+export async function postWmsPackingStartCart(
+  tenantId: number,
+  warehouseId: number,
+  cartId: number,
+): Promise<{
+  cart_id: number;
+  status: string;
+  packing_user_id: number | null;
+  assigned_user_id: number | null;
+}> {
+  const res = await api.post("/wms/packing/start-cart", null, {
+    params: { tenant_id: tenantId, warehouse_id: warehouseId, cart_id: cartId },
+  });
+  return res.data;
+}
+
 export async function getWmsPickingDefaultCart(
   tenantId: number,
   warehouseId: number,

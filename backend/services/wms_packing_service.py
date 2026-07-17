@@ -1774,23 +1774,37 @@ def packing_finish_order(
     db.flush()
 
     # SSOT: zwolnij wózek dopiero po spakowaniu ostatniego zamówienia na wózku
-    from .cart_picking_lifecycle_service import mark_cart_packing, release_cart_after_last_order_packed
+    from .cart_picking_lifecycle_service import finish_packing, get_cart_status
+    from ..models.enums import CartStatus as _CartStatus
 
     packed_cart_id = int(order.cart_id) if getattr(order, "cart_id", None) else (
-        int(cart_id) if cart_id is not None else None
+        int(cart_id) if cart_id else None
     )
     if packed_cart_id:
-        cart_row = db.query(Cart).filter(Cart.id == int(packed_cart_id)).first()
-        if cart_row is not None:
-            mark_cart_packing(cart_row)
-            db.add(cart_row)
-        release_cart_after_last_order_packed(
-            db,
-            cart_id=packed_cart_id,
-            tenant_id=int(tenant_id),
-            warehouse_id=int(warehouse_id),
-            packed_order_id=int(order_id),
+        cart_row = (
+            db.query(Cart)
+            .options(joinedload(Cart.baskets))
+            .filter(
+                Cart.id == int(packed_cart_id),
+                Cart.tenant_id == int(tenant_id),
+                Cart.warehouse_id == int(warehouse_id),
+            )
+            .first()
         )
+        if cart_row is not None:
+            st = get_cart_status(cart_row)
+            if st == _CartStatus.READY_FOR_PACKING:
+                raise PackingScanError(
+                    "CART_NOT_IN_PACKING",
+                    message="Najpierw zeskanuj wózek (startPacking) — status musi być PACKING.",
+                )
+            finish_packing(
+                db,
+                cart=cart_row,
+                packed_order_id=int(order.id),
+                tenant_id=tenant_id,
+                warehouse_id=warehouse_id,
+            )
 
     step_rows = [
         {

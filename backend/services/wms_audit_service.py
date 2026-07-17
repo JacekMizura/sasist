@@ -313,7 +313,17 @@ def touch_wms_packing_session_activity(
     return sess
 
 
-def touch_wms_operation_session(
+class WmsOperationSessionNotFound(Exception):
+    """Brak otwartej sesji — touch NIGDY nie tworzy (409 SessionNotFound)."""
+
+    code = "SessionNotFound"
+
+    def __init__(self, message: str = "Brak aktywnej sesji operacyjnej."):
+        super().__init__(message)
+        self.message = message
+
+
+def find_open_wms_operation_session(
     db: Session,
     *,
     tenant_id: int,
@@ -322,8 +332,6 @@ def touch_wms_operation_session(
     operator_user_id: Optional[int],
     cart_id: Optional[int] = None,
     order_id: Optional[int] = None,
-    metadata: Optional[dict[str, Any]] = None,
-    bind_cart: bool = True,
 ) -> Optional[WmsOperationSession]:
     uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
     if uid is None:
@@ -344,7 +352,42 @@ def touch_wms_operation_session(
         q = q.filter(WmsOperationSession.order_id.is_(None))
     else:
         q = q.filter(WmsOperationSession.order_id == int(order_id))
-    sess = q.order_by(WmsOperationSession.id.desc()).first()
+    return q.order_by(WmsOperationSession.id.desc()).first()
+
+
+def ensure_wms_operation_session(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    session_kind: str,
+    operator_user_id: Optional[int],
+    cart_id: Optional[int] = None,
+    order_id: Optional[int] = None,
+    metadata: Optional[dict[str, Any]] = None,
+) -> Optional[WmsOperationSession]:
+    """
+    Utwórz sesję operacyjną jeśli brak (putaway / MM / tasks).
+    NIE używać dla picking_active — to robi wyłącznie CartLifecycleService.start_picking.
+    """
+    kind = str(session_kind or "operation_active").strip()[:32] or "operation_active"
+    if kind in ("picking_active", "picking_recovery_active"):
+        raise ValueError(
+            "Sesji picking nie wolno tworzyć przez ensure_wms_operation_session — "
+            "użyj CartLifecycleService.start_picking."
+        )
+    uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
+    if uid is None:
+        return None
+    sess = find_open_wms_operation_session(
+        db,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        session_kind=kind,
+        operator_user_id=uid,
+        cart_id=cart_id,
+        order_id=order_id,
+    )
     now = datetime.utcnow()
     if sess is None:
         sess = WmsOperationSession(
@@ -365,26 +408,49 @@ def touch_wms_operation_session(
         sess.last_activity_at = now
         sess.metadata_json = _merge_session_metadata(sess.metadata_json, metadata)
     db.add(sess)
-    # Picking session ⇒ zsynchronizuj wózek (nie przy complete — bind_cart=False)
-    if (
-        bind_cart
-        and cart_id is not None
-        and kind in ("picking_active", "picking_recovery_active")
-        and getattr(sess, "completed_at", None) is None
-    ):
-        from ..models.cart import Cart
-        from .cart_picking_lifecycle_service import bind_cart_to_picking_session
+    return sess
 
-        cart = db.query(Cart).filter(Cart.id == int(cart_id)).first()
-        if cart is not None:
-            db.flush()
-            bind_cart_to_picking_session(
-                db,
-                cart,
-                sess,
-                operator_user_id=uid,
-                force_picking=True,
-            )
+
+def touch_wms_operation_session(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    session_kind: str,
+    operator_user_id: Optional[int],
+    cart_id: Optional[int] = None,
+    order_id: Optional[int] = None,
+    metadata: Optional[dict[str, Any]] = None,
+    bind_cart: bool = True,
+) -> Optional[WmsOperationSession]:
+    """
+    Wyłącznie UPDATE last_activity_at. NIGDY nie tworzy sesji.
+    Brak sesji → WmsOperationSessionNotFound (API: 409 SessionNotFound).
+
+    ``bind_cart`` zignorowane (lifecycle wózka tylko w CartLifecycleService).
+    """
+    del bind_cart  # legacy kwarg — no-op
+    uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
+    if uid is None:
+        return None
+    sess = find_open_wms_operation_session(
+        db,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        session_kind=session_kind,
+        operator_user_id=uid,
+        cart_id=cart_id,
+        order_id=order_id,
+    )
+    if sess is None:
+        raise WmsOperationSessionNotFound(
+            f"Brak aktywnej sesji ({session_kind}) — najpierw start operacji."
+        )
+    now = datetime.utcnow()
+    sess.last_activity_at = now
+    if metadata:
+        sess.metadata_json = _merge_session_metadata(sess.metadata_json, metadata)
+    db.add(sess)
     return sess
 
 
@@ -400,7 +466,7 @@ def complete_wms_operation_session(
     completed_reason: str = "finished",
     metadata: Optional[dict[str, Any]] = None,
 ) -> None:
-    sess = touch_wms_operation_session(
+    sess = find_open_wms_operation_session(
         db,
         tenant_id=tenant_id,
         warehouse_id=warehouse_id,
@@ -408,11 +474,11 @@ def complete_wms_operation_session(
         operator_user_id=operator_user_id,
         cart_id=cart_id,
         order_id=order_id,
-        metadata=metadata,
-        bind_cart=False,
     )
     if sess is None:
         return
+    if metadata:
+        sess.metadata_json = _merge_session_metadata(sess.metadata_json, metadata)
     done = datetime.utcnow()
     sess.last_activity_at = done
     sess.completed_at = done

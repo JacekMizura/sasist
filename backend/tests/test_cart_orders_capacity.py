@@ -102,25 +102,43 @@ def test_assert_skips_non_orders_mode(db):
     assert_cart_orders_capacity(cart, current_orders=10, incoming_orders=50)
 
 
-def test_picking_assignment_returns_409_when_orders_capacity_exceeded(db):
+def test_legacy_assignment_forbidden(db):
     cart = _cart(db, max_orders=2)
-    _order(db, number="A", cart_id=cart.id)
     o2 = _order(db, number="B")
-    o3 = _order(db, number="C")
     db.commit()
-
-    assert count_orders_on_cart(db, cart.id) == 1
+    from backend.services.cart_picking_lifecycle_service import CartLifecycleError
 
     svc = PickingAssignmentService(db)
-    with pytest.raises(HTTPException) as ei:
+    with pytest.raises(CartLifecycleError) as ei:
         svc.assign_orders_to_cart(
-            [o2.id, o3.id],
+            [o2.id],
             cart.id,
             PickingAssignmentConfig(),
             tenant_id=1,
         )
-    assert ei.value.status_code == 409
-    assert ei.value.detail["code"] == "CART_CAPACITY_EXCEEDED"
-    assert ei.value.detail["current_orders"] == 1
-    assert ei.value.detail["max_orders"] == 2
-    assert ei.value.detail["attempted"] == 2
+    assert ei.value.code == "legacy_assign_forbidden"
+
+
+def test_start_picking_capacity_exceeded_error(db):
+    from backend.models.wms_operation_session import WmsOperationSession
+    from backend.services.cart_picking_lifecycle_service import claim_cart, start_picking
+
+    # need session table for start_picking
+    WmsOperationSession.__table__.create(db.get_bind(), checkfirst=True)
+
+    cart = _cart(db, max_orders=1)
+    o1 = _order(db, number="B")
+    o2 = _order(db, number="C")
+    db.commit()
+    claim_cart(db, cart=cart, operator_user_id=1)
+    with pytest.raises(CartCapacityExceeded) as ei:
+        start_picking(
+            db,
+            cart=cart,
+            orders=[o1, o2],
+            operator_user_id=1,
+            on_capacity="error",
+        )
+    assert ei.value.code == "CART_CAPACITY_EXCEEDED"
+    assert ei.value.max_orders == 1
+    assert ei.value.attempted == 2

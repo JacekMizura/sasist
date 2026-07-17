@@ -52,8 +52,10 @@ class Cart(Base):
     # String — unika natywnego PG ENUM przy migracji AVAILABLE/ASSIGNED/PICKING/…
     status = Column(String(32), nullable=False, default=CartStatus.AVAILABLE.value, index=True)
 
-    #: Operator przypisany do aktywnej sesji zbierania/pakowania (SSOT lifecycle).
+    #: Operator zbierający (PICKING / READY_FOR_PACKING); czyszczone przy startPacking.
     assigned_user_id = Column(Integer, ForeignKey("app_users.id", ondelete="SET NULL"), nullable=True, index=True)
+    #: Operator pakujący (PACKING) — ustawiane przy skanie wózka przez pakowacza.
+    packing_user_id = Column(Integer, ForeignKey("app_users.id", ondelete="SET NULL"), nullable=True, index=True)
     #: Otwarta ``wms_operation_sessions.id`` (picking_active) — bez FK (cykl carts ↔ sessions).
     current_session_id = Column(Integer, nullable=True, index=True)
     #: Start aktywnego zbierania (ustawiane przy wejściu w PICKING).

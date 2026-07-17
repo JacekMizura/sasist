@@ -39,7 +39,7 @@ from ..services.wms_mm_transfer_service import (
     resolve_mm_location_scan,
 )
 from ..services.wms_workforce_activity import MODULE_MOVEMENTS, log_wms_workforce_activity
-from ..services.wms_audit_service import touch_wms_operation_session
+from ..services.wms_audit_service import ensure_wms_operation_session
 
 router = APIRouter(prefix="/wms", tags=["WMS MM transfer"])
 
@@ -131,7 +131,7 @@ def get_wms_mm_relocation_document(
         if current_user.id is not None and getattr(doc, "warehouse_id", None) is not None:
             total = sum(float(getattr(it, "received_quantity", 0) or getattr(it, "ordered_quantity", 0) or 0) for it in doc.items or [])
             done = sum(float(getattr(it, "quantity_putaway", 0) or 0) for it in doc.items or [])
-            touch_wms_operation_session(
+            ensure_wms_operation_session(
                 db,
                 tenant_id=int(tenant_id),
                 warehouse_id=int(doc.warehouse_id),

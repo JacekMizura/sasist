@@ -3858,6 +3858,13 @@ def ensure_carts_picking_lifecycle_columns(engine: Engine) -> None:
             conn.execute(text("ALTER TABLE carts ADD COLUMN current_session_id INTEGER"))
         if "started_at" not in cols:
             conn.execute(text(_timestamp_column_ddl(engine, "carts", "started_at")))
+        if "packing_user_id" not in cols:
+            conn.execute(
+                text(
+                    "ALTER TABLE carts ADD COLUMN packing_user_id INTEGER "
+                    "REFERENCES app_users(id) ON DELETE SET NULL"
+                )
+            )
         conn.commit()
 
     # PG: natywny ENUM z „pusty” / „w trakcie zbierania” → VARCHAR, inaczej zapis PICKING = 503
@@ -3892,6 +3899,7 @@ def ensure_carts_picking_lifecycle_columns(engine: Engine) -> None:
                 pass
         try:
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_carts_assigned_user_id ON carts(assigned_user_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_carts_packing_user_id ON carts(packing_user_id)"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_carts_current_session_id ON carts(current_session_id)"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_carts_status ON carts(status)"))
         except Exception:

@@ -62,6 +62,7 @@ from ..services.tenant_default_warehouse import resolve_quick_pick_warehouse_for
 from ..services.warehouse_service import WarehouseService
 from ..services.wms_picking_product_list_service import (
     PickingFinalizeError,
+    bootstrap_start_picking_if_needed,
     build_wms_picking_product_detail,
     build_wms_picking_product_lines,
     finalize_wms_picking_cart,
@@ -72,7 +73,11 @@ from ..services.wms_picking_product_list_service import (
     resolve_wms_picking_cart_row,
 )
 from ..services.wms_recovery_pick_service import get_open_recovery_task_for_order, prepare_recovery_picking_for_order
-from ..services.wms_audit_service import complete_wms_operation_session, touch_wms_operation_session
+from ..services.wms_audit_service import (
+    complete_wms_operation_session,
+    touch_wms_operation_session,
+    WmsOperationSessionNotFound,
+)
 from ..utils.ui_status_color import normalize_stored_color
 
 router = APIRouter(prefix="/wms", tags=["WMS picking"])
@@ -401,6 +406,107 @@ def get_picking_status_workload(
         return WmsPickingStatusWorkloadResponse(statuses=[])
 
 
+def _safe_touch_picking_session(**kwargs):
+    """touch nigdy nie tworzy — brak sesji = 409 SessionNotFound."""
+    try:
+        return touch_wms_operation_session(**kwargs)
+    except WmsOperationSessionNotFound as e:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "SessionNotFound", "error": e.message},
+        ) from e
+
+
+@router.post("/picking/claim-cart")
+def post_picking_claim_cart(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
+    cart_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    current_user: AppUser = Depends(get_current_user),
+):
+    """AVAILABLE → ASSIGNED (wybór wózka bez zamówień)."""
+    from ..models.cart import Cart
+    from ..services.cart_picking_lifecycle_service import (
+        CartLifecycleError,
+        claim_cart,
+        get_cart_status,
+    )
+
+    cart = (
+        db.query(Cart)
+        .filter(
+            Cart.id == int(cart_id),
+            Cart.tenant_id == int(tenant_id),
+            Cart.warehouse_id == int(warehouse_id),
+        )
+        .first()
+    )
+    if cart is None:
+        raise HTTPException(status_code=404, detail="Nie znaleziono wózka.")
+    try:
+        claim_cart(db, cart=cart, operator_user_id=int(current_user.id))
+        db.commit()
+    except CartLifecycleError as e:
+        db.rollback()
+        raise HTTPException(status_code=409, detail={"code": e.code, "error": e.message}) from e
+    return {
+        "cart_id": int(cart.id),
+        "status": get_cart_status(cart).value,
+        "assigned_user_id": cart.assigned_user_id,
+    }
+
+
+@router.post("/picking/start")
+def post_picking_start(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
+    cart_id: int = Query(..., ge=1),
+    source_status_id: int = Query(..., ge=1),
+    order_type: WmsPickingOrderTypeFilter = Query(...),
+    order_ids: list[int] | None = Query(None),
+    db: Session = Depends(get_db),
+    current_user: AppUser = Depends(get_current_user),
+):
+    """
+    Skan wózka → startPicking: capacity + sesja + order.cart_id + PICKING.
+    """
+    from ..services.cart_capacity_service import CartCapacityExceeded, http_exception_cart_capacity_exceeded
+    from ..services.cart_picking_lifecycle_service import CartLifecycleError, get_cart_status
+    from ..models.cart import Cart
+
+    try:
+        sess = bootstrap_start_picking_if_needed(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            cart_id=int(cart_id),
+            source_status_id=int(source_status_id),
+            order_type=order_type,
+            operator_user_id=int(current_user.id),
+            fixed_order_ids=[int(x) for x in order_ids] if order_ids else None,
+        )
+        db.commit()
+    except CartCapacityExceeded as e:
+        db.rollback()
+        raise http_exception_cart_capacity_exceeded(e) from e
+    except CartLifecycleError as e:
+        db.rollback()
+        raise HTTPException(status_code=409, detail={"code": e.code, "error": e.message}) from e
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+    cart = db.query(Cart).filter(Cart.id == int(cart_id)).first()
+    return {
+        "cart_id": int(cart_id),
+        "status": get_cart_status(cart).value if cart else None,
+        "session_id": int(sess.id) if sess is not None else None,
+        "current_session_id": getattr(cart, "current_session_id", None) if cart else None,
+        "assigned_user_id": getattr(cart, "assigned_user_id", None) if cart else None,
+    }
+
+
 @router.get("/picking/resolve-cart", response_model=WmsPickingResolveCartResponse)
 def get_picking_resolve_cart(
     tenant_id: int = Query(..., ge=1),
@@ -536,7 +642,7 @@ def get_picking_product_lines(
                 recovery_mode=True,
             )
         if current_user is not None and current_user.id is not None:
-            touch_wms_operation_session(
+            _safe_touch_picking_session(
                 db,
                 tenant_id=int(tenant_id),
                 warehouse_id=int(warehouse_id),
@@ -554,6 +660,33 @@ def get_picking_product_lines(
         if v.strip().isdigit() and int(v.strip()) > 0
     ]
     fixed_order_ids = ([int(v) for v in (order_ids or []) if int(v) > 0] + csv_ids) or None
+    if (
+        cart_id is not None
+        and current_user is not None
+        and current_user.id is not None
+        and not recovery_mode
+    ):
+        from ..services.cart_capacity_service import CartCapacityExceeded, http_exception_cart_capacity_exceeded
+        from ..services.cart_picking_lifecycle_service import CartLifecycleError
+
+        try:
+            bootstrap_start_picking_if_needed(
+                db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+                cart_id=int(cart_id),
+                source_status_id=int(source_status_id),
+                order_type=order_type,
+                operator_user_id=int(current_user.id),
+                fixed_order_ids=fixed_order_ids,
+            )
+            db.flush()
+        except CartCapacityExceeded as e:
+            db.rollback()
+            raise http_exception_cart_capacity_exceeded(e) from e
+        except CartLifecycleError as e:
+            db.rollback()
+            raise HTTPException(status_code=409, detail={"code": e.code, "error": e.message}) from e
     resp = build_wms_picking_product_lines(
         db,
         tenant_id=tenant_id,
@@ -563,16 +696,28 @@ def get_picking_product_lines(
         cart_id=cart_id,
         fixed_order_ids=fixed_order_ids,
     )
-    if current_user is not None and current_user.id is not None:
-        touch_wms_operation_session(
-            db,
-            tenant_id=int(tenant_id),
-            warehouse_id=int(warehouse_id),
-            session_kind="picking_active",
-            operator_user_id=int(current_user.id),
-            cart_id=cart_id,
-            metadata=_picking_session_progress_metadata(resp, source_status_id=source_status_id, order_type=order_type),
-        )
+    if current_user is not None and current_user.id is not None and cart_id is not None:
+        from ..services.cart_picking_lifecycle_service import find_open_picking_session, get_cart_status
+        from ..models.cart import Cart as CartModel
+        from ..models.enums import CartStatus as _CS
+
+        cart_row = db.query(CartModel).filter(CartModel.id == int(cart_id)).first()
+        if (
+            cart_row is not None
+            and get_cart_status(cart_row) == _CS.PICKING
+            and find_open_picking_session(db, cart=cart_row) is not None
+        ):
+            _safe_touch_picking_session(
+                db=db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+                session_kind="picking_active",
+                operator_user_id=int(current_user.id),
+                cart_id=cart_id,
+                metadata=_picking_session_progress_metadata(
+                    resp, source_status_id=source_status_id, order_type=order_type
+                ),
+            )
         db.commit()
     return resp
 
@@ -651,7 +796,7 @@ def get_picking_product_detail(
     if row is None:
         raise HTTPException(status_code=404, detail="Produkt nie występuje na liście zbiórki.")
     if current_user is not None and current_user.id is not None:
-        touch_wms_operation_session(
+        _safe_touch_picking_session(
             db,
             tenant_id=int(tenant_id),
             warehouse_id=int(warehouse_id),
@@ -867,7 +1012,7 @@ def post_picking_quick_pick(
                 fixed_order_ids=[recovery_oid] if recovery_oid is not None else None,
                 recovery_mode=recovery_oid is not None,
             )
-            touch_wms_operation_session(
+            _safe_touch_picking_session(
                 db,
                 tenant_id=tid,
                 warehouse_id=int(effective_wh),
@@ -984,7 +1129,7 @@ def post_picking_report_shortage(
                 order_type=order_type,
                 cart_id=body.cart_id,
             )
-            touch_wms_operation_session(
+            _safe_touch_picking_session(
                 db,
                 tenant_id=int(tenant_id),
                 warehouse_id=int(warehouse_id),

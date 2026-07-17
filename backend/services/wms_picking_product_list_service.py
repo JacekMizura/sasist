@@ -384,6 +384,87 @@ def _picking_queue_eligibility_clauses(
     )
 
 
+def bootstrap_start_picking_if_needed(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    cart_id: int,
+    source_status_id: int,
+    order_type: OrderTypeFilter,
+    operator_user_id: int,
+    fixed_order_ids: list[int] | None = None,
+) -> WmsOperationSession | None:
+    """
+    Po skanie wózka / wejściu na listę produktów:
+    AVAILABLE|ASSIGNED → start_picking (jedyny writer order.cart_id).
+    PICKING → no-op (zwraca istniejącą sesję).
+    """
+    from .cart_picking_lifecycle_service import (
+        claim_cart,
+        find_open_picking_session,
+        get_cart_status,
+        start_picking,
+    )
+    from ..models.enums import CartStatus
+    from ..models.wms_operation_session import WmsOperationSession
+
+    cart = (
+        db.query(Cart)
+        .options(joinedload(Cart.baskets))
+        .filter(
+            Cart.id == int(cart_id),
+            Cart.tenant_id == int(tenant_id),
+            Cart.warehouse_id == int(warehouse_id),
+        )
+        .first()
+    )
+    if cart is None:
+        raise ValueError("Nie znaleziono wózka.")
+
+    st = get_cart_status(cart)
+    if st == CartStatus.PICKING:
+        return find_open_picking_session(db, cart=cart)
+    if st not in (CartStatus.AVAILABLE, CartStatus.ASSIGNED):
+        return None
+
+    if fixed_order_ids is not None:
+        order_ids = [int(x) for x in fixed_order_ids if int(x) > 0]
+    else:
+        order_ids = _query_order_ids_for_status(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            source_status_id=int(source_status_id),
+            order_type=order_type,
+        )
+    orders: list[Order] = []
+    if order_ids:
+        orders = (
+            db.query(Order)
+            .filter(
+                Order.id.in_(order_ids),
+                Order.cart_id.is_(None),
+                Order.deleted_at.is_(None),
+            )
+            .order_by(Order.id.asc())
+            .all()
+        )
+
+    if not orders:
+        claim_cart(db, cart=cart, operator_user_id=int(operator_user_id))
+        return None
+
+    return start_picking(
+        db,
+        cart=cart,
+        orders=orders,
+        operator_user_id=int(operator_user_id),
+        source_status_id=int(source_status_id),
+        on_capacity="truncate",
+    )
+
+
 def _query_order_ids_for_status(
     db: Session,
     *,
@@ -1892,52 +1973,16 @@ def record_wms_quick_pick(
         InvalidCartStateError,
         SessionNotFoundError,
         assert_cart_ready_for_quick_pick,
-        ensure_picking_session_for_cart,
-        find_open_picking_session,
         get_cart_status,
-        mark_cart_picking,
     )
 
     st = get_cart_status(cart_row)
-    if st in (
-        CartStatus.READY_FOR_PACKING,
-        CartStatus.PACKING,
-        CartStatus.FULL,
-        CartStatus.SERVICE,
-    ):
+    if st != CartStatus.PICKING:
         raise InvalidCartStateError(
-            f"Wózek nie jest w stanie zbierania (status={st.value}).",
+            f"Wózek musi być w stanie PICKING (jest: {st.value}). "
+            "Najpierw zeskanuj wózek (startPicking).",
             status=st.value,
         )
-
-    # Bootstrap / heal SSOT: aktywna sesja ⇒ cart=PICKING + current_session_id
-    sess = find_open_picking_session(db, cart=cart_row)
-    if sess is None:
-        if st not in (CartStatus.AVAILABLE, CartStatus.ASSIGNED, CartStatus.PICKING):
-            raise InvalidCartStateError(
-                f"Wózek nie jest w stanie PICKING (status={st.value}).",
-                status=st.value,
-            )
-        ensure_picking_session_for_cart(
-            db,
-            cart=cart_row,
-            orders=[],
-            operator_user_id=operator_user_id,
-            source_status_id=int(source_status_id) if source_status_id else None,
-        )
-        mark_cart_picking(cart_row)
-        db.flush()
-    else:
-        from .cart_picking_lifecycle_service import bind_cart_to_picking_session
-
-        bind_cart_to_picking_session(
-            db,
-            cart_row,
-            sess,
-            operator_user_id=operator_user_id,
-            force_picking=True,
-        )
-        db.flush()
 
     try:
         assert_cart_ready_for_quick_pick(db, cart_row)
@@ -1976,29 +2021,17 @@ def record_wms_quick_pick(
                 if rem <= 1e-9:
                     continue
                 take = min(q_remain, rem)
-                if o.cart_id is not None and int(o.cart_id) != cid:
+                if o.cart_id is None or int(o.cart_id) != cid:
                     num = str(o.number or o.id)
                     raise ValueError(
-                        f"Zamówienie #{num} jest przypisane do innego wózka — użyj właściwej sesji."
+                        f"Zamówienie #{num} nie jest na tym wózku. "
+                        "Przypisanie następuje wyłącznie przy skanie wózka (startPicking)."
                     )
-                if o.cart_id is None or int(o.cart_id) != cid:
-                    from .cart_capacity_service import enforce_cart_orders_capacity
-
-                    enforce_cart_orders_capacity(db, cart_row, new_orders=1)
                 ps_before = getattr(o, "picking_started_at", None)
-                o.cart_id = cid
                 touch_picking_in_progress(o)
-                ensure_picking_session_for_cart(
-                    db,
-                    cart=cart_row,
-                    orders=[o],
-                    operator_user_id=operator_user_id,
-                    source_status_id=int(source_status_id) if source_status_id else None,
-                )
-                mark_cart_picking(cart_row)
                 if getattr(o, "picking_session_id", None) is None:
                     raise SessionNotFoundError(
-                        "order.picking_session_id nie zostało ustawione po ensure_picking_session."
+                        "Brak picking_session_id na zamówieniu — wymagany startPicking (skan wózka)."
                     )
                 if ps_before is None and getattr(o, "picking_started_at", None) is not None:
                     emit_wms_picking_started(
@@ -3249,32 +3282,27 @@ def finalize_wms_picking_cart(
             warehouse_id=int(warehouse_id),
             cart_id=cid,
         )
-        from .cart_picking_lifecycle_service import set_cart_status
-        from ..models.enums import CartStatus
-        from .wms_audit_service import complete_wms_operation_session
+        from .cart_picking_lifecycle_service import finish_picking
 
-        set_cart_status(cart, CartStatus.READY_FOR_PACKING)
-        db.add(cart)
-        complete_wms_operation_session(
+        finish_picking(
             db,
-            tenant_id=int(tenant_id),
-            warehouse_id=int(warehouse_id),
-            session_kind="picking_active",
+            cart=cart,
+            orders=orders,
             operator_user_id=operator_user_id,
-            cart_id=cid,
-            completed_reason="picking_finished",
-            metadata={"cart_id": cid, "orders": [int(o.id) for o in orders]},
         )
-
-        record_picking_cart_finalize_session(
-            db,
-            tenant_id=int(tenant_id),
-            warehouse_id=int(warehouse_id),
-            cart_id=cid,
-            operator_user_id=operator_user_id,
-            orders=list(orders),
-            completed_at=datetime.utcnow(),
-        )
+        # Telemetria finalize (bez ponownego sterowania lifecycle)
+        try:
+            record_picking_cart_finalize_session(
+                db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+                cart_id=cid,
+                operator_user_id=operator_user_id,
+                orders=list(orders),
+                completed_at=datetime.utcnow(),
+            )
+        except Exception:
+            logger.exception("[picking.finalize] telemetry record failed cart_id=%s", cid)
         logger.info(
             "[picking.finalize.finish] cart_id=%s source_status_id=%s orders_updated=%s target_status_id=%s",
             cid,

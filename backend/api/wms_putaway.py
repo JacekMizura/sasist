@@ -42,7 +42,7 @@ from ..services.wms_putaway_service import (
     suggest_putaway_locations,
 )
 from ..services.wms_workforce_activity import MODULE_PUTAWAY, log_wms_workforce_activity
-from ..services.wms_audit_service import touch_wms_operation_session
+from ..services.wms_audit_service import touch_wms_operation_session, ensure_wms_operation_session
 
 router = APIRouter(prefix="/wms", tags=["WMS putaway"])
 
@@ -112,7 +112,7 @@ def get_wms_putaway_pz_document(
         raise HTTPException(status_code=404, detail="Brak przyjętych pozycji do rozlokowania")
     doc.items = received_lines
     if current_user.id is not None and getattr(doc, "warehouse_id", None) is not None:
-        touch_wms_operation_session(
+        ensure_wms_operation_session(
             db,
             tenant_id=int(tenant_id),
             warehouse_id=int(doc.warehouse_id),

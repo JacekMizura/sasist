@@ -62,7 +62,7 @@ from ..services.stock_document_service import (
 )
 from ..services.purchase_sales_block_service import PurchaseSalesBlockError, patch_purchase_line_sales_block
 from ..services.document_series_seed_service import ensure_default_document_series
-from ..services.wms_audit_service import touch_wms_operation_session
+from ..services.wms_audit_service import ensure_wms_operation_session
 
 router = APIRouter(prefix="/stock-documents", tags=["Stock documents"])
 documents_router = APIRouter(prefix="/documents", tags=["Documents"])
@@ -412,7 +412,7 @@ def get_stock_document(
         if dtype in {"PZ", "Z_PZ", "PZ_RT", "RETURN_RECEIPT"} and receiving_status != "DONE":
             total = sum(float(getattr(it, "ordered_quantity", 0) or 0) for it in read.items or [])
             done = sum(float(getattr(it, "received_quantity", 0) or 0) for it in read.items or [])
-            touch_wms_operation_session(
+            ensure_wms_operation_session(
                 db,
                 tenant_id=int(tenant_id),
                 warehouse_id=int(read.warehouse_id),

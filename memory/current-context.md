@@ -1,5 +1,18 @@
 # Current context
 
+## Cart lifecycle NEW MODEL (2026-07-17) — implementing
+- Orders assigned **only** on physical cart scan (`start_picking`), not before.
+- ASSIGNED = cart claimed, no orders/session.
+- SSOT: `cart_picking_lifecycle_service.py`; APIs: claim-cart, picking/start, packing/start-cart.
+- touch never creates; sim/optimizer/assignment no longer write lifecycle.
+- Design: `memory/cart-lifecycle-target-design.md`
+
+## Cart lifecycle TARGET DESIGN (2026-07-17) — awaiting approval
+- Superseded by implementation notes above.
+
+## Architecture Audit — picking lifecycle (2026-07-17)
+- As-is map only: `memory/architecture-picking-lifecycle-audit.md`.
+
 ## Cart/session SSOT fix (2026-07-17)
 - Przy starcie zbierania: `bind_cart_to_picking_session` → PICKING + current_session_id + assigned_user_id + started_at.
 - Self-heal: AVAILABLE + aktywna sesja → PICKING (quick-pick + startup).

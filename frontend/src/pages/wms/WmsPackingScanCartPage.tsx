@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { getWmsPickingResolveCart } from "../../api/wmsPickingProductsApi";
+import { getWmsPickingResolveCart, postWmsPackingStartCart } from "../../api/wmsPickingProductsApi";
+import { extractApiErrorMessage } from "../../api/apiErrorMessage";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { useWmsScanner } from "../../context/WmsScannerContext";
 import { playScanBeep } from "../../utils/playScanBeep";
@@ -72,6 +73,7 @@ export default function WmsPackingScanCartPage() {
           );
           return;
         }
+        await postWmsPackingStartCart(DAMAGE_TENANT_ID, warehouseId, r.cart_id);
         playScanBeep();
         appendScanToHistory(code);
         const resolvedCode = (r.code && r.code.trim()) || r.barcode?.trim() || code;
@@ -81,8 +83,11 @@ export default function WmsPackingScanCartPage() {
           cartType: r.cart_type?.trim() || undefined,
         });
         navigate(WMS_ROUTES.packingOrders, { replace: true });
-      } catch {
-        setResolveErr("Nie rozpoznano wózka — sprawdź kod lub konfigurację w magazynie.");
+      } catch (e) {
+        setResolveErr(
+          extractApiErrorMessage(e) ||
+            "Nie rozpoznano wózka lub nie udało się rozpocząć pakowania.",
+        );
       } finally {
         setResolving(false);
       }

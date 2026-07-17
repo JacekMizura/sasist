@@ -77,7 +77,7 @@ from ..services.recovery_workflow_service import (
     resolve_order_recovery_state,
 )
 from ..services.wms_recovery_pick_service import braki_queue_bucket
-from ..services.wms_audit_service import complete_wms_operation_session, touch_wms_operation_session
+from ..services.wms_audit_service import complete_wms_operation_session, ensure_wms_operation_session
 
 router = APIRouter(prefix="/wms", tags=["WMS order issues"])
 
@@ -609,7 +609,7 @@ def resolve_order_issue_task_scan(
         db.commit()
         raise HTTPException(status_code=404, detail="Brak aktywnych nierozwiązanych braków dla tego zamówienia.")
     if current_user is not None and current_user.id is not None:
-        touch_wms_operation_session(
+        ensure_wms_operation_session(
             db,
             tenant_id=int(tenant_id),
             warehouse_id=int(warehouse_id),
@@ -682,7 +682,7 @@ def get_order_issue_task(
         db.commit()
         raise HTTPException(status_code=404, detail="Brak aktywnych nierozwiązanych braków na tym zamówieniu.")
     if current_user is not None and current_user.id is not None:
-        touch_wms_operation_session(
+        ensure_wms_operation_session(
             db,
             tenant_id=int(tenant_id),
             warehouse_id=int(warehouse_id),

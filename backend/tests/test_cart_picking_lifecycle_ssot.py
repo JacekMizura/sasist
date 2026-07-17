@@ -1,5 +1,7 @@
 """
-Integracja SSOT: przypisanie → sesja zbierania → koniec zbierania → pakowanie → zwolnienie wózka.
+SSOT CartLifecycleService — nowy model:
+AVAILABLE → claim → ASSIGNED → startPicking(skan) → PICKING → finish → READY_FOR_PACKING
+→ startPacking → PACKING → finishPacking → AVAILABLE
 
   python -m pytest backend/tests/test_cart_picking_lifecycle_ssot.py -q
 """
@@ -17,14 +19,26 @@ from backend.models.order import Order
 from backend.models.tenant import Tenant
 from backend.models.warehouse import Warehouse
 from backend.models.wms_operation_session import WmsOperationSession
+from backend.services.cart_capacity_service import CartCapacityExceeded
 from backend.services.cart_picking_lifecycle_service import (
-    cancel_picking_session,
-    complete_picking_keep_cart,
-    ensure_picking_session_for_cart,
+    InvalidCartStateError,
+    InvalidCartTransitionError,
+    SessionNotFoundError,
+    assert_cart_ready_for_quick_pick,
+    cancel_picking,
+    claim_cart,
+    finish_packing,
+    finish_picking,
     get_cart_status,
-    release_cart_after_last_order_packed,
+    release_cart,
+    start_packing,
+    start_picking,
 )
 from backend.services.order_fulfillment_state import PACKING, PICKING
+from backend.services.wms_audit_service import (
+    WmsOperationSessionNotFound,
+    touch_wms_operation_session,
+)
 
 
 @pytest.fixture
@@ -43,12 +57,12 @@ def db():
         session.close()
 
 
-def _cart(db) -> Cart:
+def _cart(db, *, max_orders=None, capacity_mode="volume", code: str = "CART-001") -> Cart:
     c = Cart(
         tenant_id=1,
         warehouse_id=1,
-        name="WÓZ-001",
-        code="CART-001",
+        name="WOZ-001",
+        code=code,
         type=CartType.BULK,
         status=CartStatus.AVAILABLE.value,
         length=100,
@@ -56,7 +70,8 @@ def _cart(db) -> Cart:
         height=80,
         total_volume=480.0,
         used_volume=0.0,
-        capacity_mode="volume",
+        capacity_mode=capacity_mode,
+        max_orders=max_orders,
     )
     db.add(c)
     db.flush()
@@ -77,14 +92,32 @@ def _order(db, *, number: str, status: str = "NEW") -> Order:
     return o
 
 
-def test_assign_picking_finish_pack_release_cart(db):
+def test_claim_has_no_orders_or_session(db):
+    cart = _cart(db)
+    o1 = _order(db, number="A-1")
+    db.commit()
+
+    claim_cart(db, cart=cart, operator_user_id=7)
+    db.commit()
+
+    assert get_cart_status(cart) == CartStatus.ASSIGNED
+    assert cart.assigned_user_id == 7
+    assert cart.current_session_id is None
+    db.refresh(o1)
+    assert o1.cart_id is None
+
+
+def test_full_lifecycle_scan_assigns_orders(db):
     cart = _cart(db)
     o1 = _order(db, number="A-1")
     o2 = _order(db, number="A-2")
     db.commit()
 
-    # 1) Przypisanie → picking_session + cart_id + picking_session_id + PICKING
-    sess = ensure_picking_session_for_cart(
+    claim_cart(db, cart=cart, operator_user_id=7)
+    db.commit()
+    assert o1.cart_id is None
+
+    sess = start_picking(
         db,
         cart=cart,
         orders=[o1, o2],
@@ -100,149 +133,123 @@ def test_assign_picking_finish_pack_release_cart(db):
     for o in (o1, o2):
         db.refresh(o)
         assert o.cart_id == cart.id
-        assert o.picking_session_id == sess.id
         assert (o.fulfillment_state or "").upper() == PICKING
-        assert (o.status or "").upper() == "PICKING_IN_PROGRESS"
 
-    # 2) Koniec zbierania — NIE odpinaj wózka; READY_FOR_PACKING + PACKING
-    complete_picking_keep_cart(db, cart=cart, orders=[o1, o2], operator_user_id=7)
+    finish_picking(db, cart=cart, orders=[o1, o2], operator_user_id=7)
     db.commit()
     db.refresh(cart)
-    db.refresh(o1)
-    db.refresh(o2)
-
     assert get_cart_status(cart) == CartStatus.READY_FOR_PACKING
+    assert cart.assigned_user_id == 7
+    assert cart.current_session_id is None
     assert o1.cart_id == cart.id
-    assert o2.cart_id == cart.id
-    assert o1.picking_session_id == sess.id
-    assert (o1.fulfillment_state or "").upper() == PACKING
-    assert (o1.status or "").upper() == "PACKING"
 
-    # 3) Spakuj pierwsze — wózek zostaje
-    released = release_cart_after_last_order_packed(
-        db,
-        cart_id=cart.id,
-        tenant_id=1,
-        warehouse_id=1,
-        packed_order_id=int(o1.id),
-    )
+    start_packing(db, cart=cart, operator_user_id=99)
+    db.commit()
+    db.refresh(cart)
+    assert get_cart_status(cart) == CartStatus.PACKING
+    assert cart.assigned_user_id is None
+    assert getattr(cart, "packing_user_id", None) == 99
+
+    released = finish_packing(db, cart=cart, packed_order_id=int(o1.id))
     db.commit()
     assert released is False
-    db.refresh(cart)
-    db.refresh(o1)
-    db.refresh(o2)
-    assert o1.cart_id is None
     assert o2.cart_id == cart.id
-    assert get_cart_status(cart) == CartStatus.PACKING
 
-    # 4) Spakuj ostatnie — zwolnij wózek
-    released2 = release_cart_after_last_order_packed(
-        db,
-        cart_id=cart.id,
-        tenant_id=1,
-        warehouse_id=1,
-        packed_order_id=int(o2.id),
-    )
+    released2 = finish_packing(db, cart=cart, packed_order_id=int(o2.id))
     db.commit()
     assert released2 is True
     db.refresh(cart)
-    db.refresh(o2)
-    assert o2.cart_id is None
-    assert o2.picking_session_id is None
     assert get_cart_status(cart) == CartStatus.AVAILABLE
     assert cart.assigned_user_id is None
     assert cart.current_session_id is None
+    assert getattr(cart, "packing_user_id", None) is None
 
 
-def test_cancel_picking_restores_orders_and_frees_cart(db):
+def test_capacity_truncate_on_start_picking(db):
+    cart = _cart(db, max_orders=2, capacity_mode="orders")
+    orders = [_order(db, number=f"C-{i}") for i in range(5)]
+    db.commit()
+    claim_cart(db, cart=cart, operator_user_id=1)
+    sess = start_picking(db, cart=cart, orders=orders, operator_user_id=1, on_capacity="truncate")
+    db.commit()
+    on_cart = db.query(Order).filter(Order.cart_id == cart.id).count()
+    assert on_cart == 2
+    assert get_cart_status(cart) == CartStatus.PICKING
+    assert sess is not None
+
+
+def test_capacity_error_on_start_picking(db):
+    cart = _cart(db, max_orders=1, capacity_mode="orders")
+    o1 = _order(db, number="E-1")
+    o2 = _order(db, number="E-2")
+    db.commit()
+    claim_cart(db, cart=cart, operator_user_id=1)
+    with pytest.raises(CartCapacityExceeded):
+        start_picking(db, cart=cart, orders=[o1, o2], operator_user_id=1, on_capacity="error")
+
+
+def test_cancel_only_assigned_or_picking(db):
     cart = _cart(db)
-    o1 = _order(db, number="B-1", status="NEW")
+    o1 = _order(db, number="B-1")
+    db.commit()
+    claim_cart(db, cart=cart, operator_user_id=3)
+    start_picking(db, cart=cart, orders=[o1], operator_user_id=3)
     db.commit()
 
-    ensure_picking_session_for_cart(db, cart=cart, orders=[o1], operator_user_id=3, source_status_id=10)
+    out = cancel_picking(db, cart_id=int(cart.id), tenant_id=1, warehouse_id=1, operator_user_id=3)
     db.commit()
-    assert o1.cart_id == cart.id
-
-    out = cancel_picking_session(
-        db,
-        cart_id=int(cart.id),
-        tenant_id=1,
-        warehouse_id=1,
-        operator_user_id=3,
-    )
-    db.commit()
-    db.refresh(cart)
     db.refresh(o1)
-
     assert out["cart_status"] == CartStatus.AVAILABLE.value
     assert o1.cart_id is None
-    assert o1.picking_session_id is None
-    assert (o1.status or "").upper() == "NEW"
-    assert get_cart_status(cart) == CartStatus.AVAILABLE
-    assert cart.assigned_user_id is None
-    assert cart.current_session_id is None
+
+    # READY_FOR_PACKING cannot cancel
+    cart2 = _cart(db, code="CART-002")
+    o2 = _order(db, number="B-2")
+    db.commit()
+    claim_cart(db, cart=cart2, operator_user_id=3)
+    start_picking(db, cart=cart2, orders=[o2], operator_user_id=3)
+    finish_picking(db, cart=cart2, orders=[o2])
+    db.commit()
+    with pytest.raises(InvalidCartTransitionError):
+        cancel_picking(db, cart_id=int(cart2.id), tenant_id=1, warehouse_id=1)
 
 
-def test_assert_quick_pick_ssot_invalid_state_and_missing_session(db):
-    from backend.services.cart_picking_lifecycle_service import (
-        InvalidCartStateError,
-        SessionNotFoundError,
-        assert_cart_ready_for_quick_pick,
-        bind_cart_to_picking_session,
-        get_cart_status,
-        set_cart_status,
-    )
-    from backend.models.wms_operation_session import WmsOperationSession
-    from datetime import datetime
+def test_touch_never_creates_session(db):
+    with pytest.raises(WmsOperationSessionNotFound):
+        touch_wms_operation_session(
+            db,
+            tenant_id=1,
+            warehouse_id=1,
+            session_kind="picking_active",
+            operator_user_id=7,
+            cart_id=1,
+        )
 
+
+def test_quick_pick_requires_picking(db):
     cart = _cart(db)
     db.commit()
-
-    set_cart_status(cart, CartStatus.READY_FOR_PACKING)
+    claim_cart(db, cart=cart, operator_user_id=1)
     db.commit()
-    with pytest.raises(InvalidCartStateError) as ei:
+    with pytest.raises(InvalidCartStateError):
         assert_cart_ready_for_quick_pick(db, cart)
-    assert ei.value.code == "InvalidCartState"
 
-    set_cart_status(cart, CartStatus.PICKING)
-    cart.current_session_id = None
+    o1 = _order(db, number="Q-1")
+    start_picking(db, cart=cart, orders=[o1], operator_user_id=1)
     db.commit()
-    with pytest.raises(SessionNotFoundError) as es:
-        assert_cart_ready_for_quick_pick(db, cart)
-    assert es.value.code == "SessionNotFound"
+    sess = assert_cart_ready_for_quick_pick(db, cart)
+    assert sess is not None
 
 
-def test_assert_quick_pick_heals_available_with_orphan_session(db):
+def test_ensure_picking_session_forbidden(db):
     from backend.services.cart_picking_lifecycle_service import (
-        assert_cart_ready_for_quick_pick,
-        get_cart_status,
-        set_cart_status,
+        CartLifecycleError,
+        ensure_picking_session_for_cart,
     )
-    from backend.models.wms_operation_session import WmsOperationSession
-    from datetime import datetime
 
     cart = _cart(db)
-    set_cart_status(cart, CartStatus.AVAILABLE)
-    cart.current_session_id = None
-    db.flush()
-    sess = WmsOperationSession(
-        tenant_id=1,
-        warehouse_id=1,
-        cart_id=cart.id,
-        session_kind="picking_active",
-        operator_user_id=None,
-        started_at=datetime.utcnow(),
-        last_activity_at=datetime.utcnow(),
-        completed_at=None,
-        paused_duration_seconds=0,
-    )
-    db.add(sess)
+    o1 = _order(db, number="X-1")
     db.commit()
-    db.refresh(cart)
-
-    got = assert_cart_ready_for_quick_pick(db, cart)
-    db.commit()
-    db.refresh(cart)
-    assert int(got.id) == int(sess.id)
-    assert get_cart_status(cart) == CartStatus.PICKING
-    assert int(cart.current_session_id) == int(sess.id)
+    with pytest.raises(CartLifecycleError) as ei:
+        ensure_picking_session_for_cart(db, cart=cart, orders=[o1], operator_user_id=1)
+    assert ei.value.code == "legacy_ensure_forbidden"

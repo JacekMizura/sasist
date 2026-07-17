@@ -1,5 +1,15 @@
 # Change log
 
+## 2026-07-17 — Cart lifecycle SSOT (nowy model biznesowy)
+
+- Zamówienia **nie** są przypisywane przed skanem wózka.
+- `ASSIGNED` = wybór wózka (bez orders/session); `start_picking` (skan) = sesja + cart_id + capacity + PICKING.
+- SSOT: `cart_picking_lifecycle_service.py`; API: `POST /picking/claim-cart`, `/picking/start`, `/packing/start-cart`.
+- `touch` nigdy nie tworzy sesji (409 SessionNotFound).
+- Assignment / simulation / optimizer: bez zapisu lifecycle.
+- READY_FOR_PACKING: cart_id + assigned_user zostają; PACKING przy skanie pakowacza (`packing_user`).
+- Testy: `test_cart_picking_lifecycle_ssot.py`.
+
 ## 2026-07-17 — Fix: cart AVAILABLE mimo aktywnej picking_session
 
 - Root cause: sesja tworzona (`touch` / ensure), wózek bez `current_session_id` / status≠PICKING.

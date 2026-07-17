@@ -181,11 +181,8 @@ def ensure_order_basket_for_wms_pick(db: Session, cart: Cart, order: Order) -> O
     order_list = [basket_by_id[i] for i in sorted(runtimes.keys())]
 
     if int(order.cart_id or 0) != int(cart.id):
-        if order.cart_id is not None:
-            return None
-        enforce_cart_orders_capacity(db, cart, new_orders=1)
-        order.cart_id = int(cart.id)
-        db.add(order)
+        # cart_id ustawia wyłącznie CartLifecycleService.start_picking
+        return None
 
     if _is_multi_item_order(order):
         for b in order_list:
@@ -247,157 +244,19 @@ class PickingAssignmentService:
         tenant_id: Optional[int] = None,
     ) -> PickingAssignmentServiceResult:
         """
-        Przypisz zamówienia do wózka. Tylko rekordy z ``cart_id IS NULL``.
+        LEGACY WYŁĄCZONE.
 
-        Reguły: ``config`` — dla każdego zamówienia wybierane są ``single_item`` lub ``multi_item``
-        (klasyfikacja po liczbie pozycji). BULK wymaga ``allow_bulk``, koszyki MULTI — ``allow_basket``.
+        Przypisanie ``order.cart_id`` wyłącznie przy skanie wózka
+        (``CartLifecycleService.start_picking``).
         """
-        assigned: list[PickingAssignmentOrderResult] = []
-        rejected: list[PickingAssignmentRejected] = []
+        del order_ids, cart_id, config, tenant_id
+        from .cart_picking_lifecycle_service import CartLifecycleError
 
-        unique_ids: list[int] = []
-        for oid in order_ids:
-            if oid not in unique_ids:
-                unique_ids.append(int(oid))
-
-        try:
-            cart = (
-                self.db.query(Cart)
-                .options(joinedload(Cart.baskets))
-                .filter(Cart.id == cart_id)
-                .first()
-            )
-            if not cart:
-                for oid in unique_ids:
-                    rejected.append(
-                        PickingAssignmentRejected(
-                            order_id=oid,
-                            reason="not_found",
-                            detail="Wózek nie istnieje",
-                        )
-                    )
-                return PickingAssignmentServiceResult(
-                    assigned=[],
-                    rejected=rejected,
-                    summary=PickingAssignmentSummary(
-                        cart_id=cart_id,
-                        cart_type="UNKNOWN",
-                        cart_used_volume_dm3=0.0,
-                        cart_total_volume_dm3=0.0,
-                        basket_summaries=[],
-                    ),
-                )
-
-            ctype = _normalize_cart_type(cart)
-            if tenant_id is not None and int(cart.tenant_id) != int(tenant_id):
-                for oid in unique_ids:
-                    rejected.append(
-                        PickingAssignmentRejected(
-                            order_id=oid,
-                            reason="warehouse_mismatch",
-                            detail="tenant_id nie zgadza się z wózkiem",
-                        )
-                    )
-                return PickingAssignmentServiceResult(
-                    assigned=[],
-                    rejected=rejected,
-                    summary=self._empty_summary(cart, ctype),
-                )
-
-            incoming_count = 0
-            if unique_ids:
-                for oid, cid in (
-                    self.db.query(Order.id, Order.cart_id).filter(Order.id.in_(unique_ids)).all()
-                ):
-                    if cid is None:
-                        incoming_count += 1
-            enforce_cart_orders_capacity(self.db, cart, new_orders=incoming_count)
-
-            orders_map: dict[int, Order] = {}
-            if unique_ids:
-                loaded = (
-                    self.db.query(Order)
-                    .options(joinedload(Order.items).joinedload(OrderItem.product))
-                    .filter(Order.id.in_(unique_ids))
-                    .all()
-                )
-                orders_map = {int(o.id): o for o in loaded}
-
-            def _order_sort_key(oid: int):
-                o = orders_map.get(oid)
-                if not o:
-                    return (2, datetime.min, oid)
-                dt = o.order_date or o.created_at or datetime.min
-                return (0, dt, oid)
-
-            sorted_candidates = sorted(unique_ids, key=_order_sort_key)
-
-            if ctype == "BULK":
-                self._assign_bulk(
-                    cart,
-                    sorted_candidates,
-                    orders_map,
-                    assigned,
-                    rejected,
-                    config,
-                )
-            elif ctype == "MULTI":
-                self._assign_multi(
-                    cart,
-                    sorted_candidates,
-                    orders_map,
-                    assigned,
-                    rejected,
-                    config,
-                )
-            else:
-                for oid in unique_ids:
-                    rejected.append(
-                        PickingAssignmentRejected(
-                            order_id=oid,
-                            reason="internal_error",
-                            detail=f"Nieobsługiwany typ wózka: {ctype}",
-                        )
-                    )
-
-            self._finalize_cart(cart, ctype)
-            self.db.commit()
-        except (HTTPException, CartCapacityExceeded):
-            self.db.rollback()
-            raise
-        except Exception as e:
-            logger.exception("PickingAssignmentService failed: %s", e)
-            self.db.rollback()
-            for oid in unique_ids:
-                if oid not in {r.order_id for r in rejected}:
-                    rejected.append(
-                        PickingAssignmentRejected(
-                            order_id=oid,
-                            reason="internal_error",
-                            detail=str(e)[:500],
-                        )
-                    )
-            assigned.clear()
-            try:
-                cart2 = self.db.query(Cart).filter(Cart.id == cart_id).first()
-                summary = (
-                    self._empty_summary(cart2, _normalize_cart_type(cart2))
-                    if cart2
-                    else self._empty_summary(None, "UNKNOWN", cart_id)
-                )
-            except Exception:
-                summary = PickingAssignmentSummary(
-                    cart_id=cart_id,
-                    cart_type="UNKNOWN",
-                    cart_used_volume_dm3=0.0,
-                    cart_total_volume_dm3=0.0,
-                    basket_summaries=[],
-                )
-            return PickingAssignmentServiceResult(assigned=[], rejected=rejected, summary=summary)
-
-        cart_refreshed = self.db.query(Cart).options(joinedload(Cart.baskets)).filter(Cart.id == cart_id).first()
-        summary = self._build_summary_from_db(cart_refreshed, ctype)
-        return PickingAssignmentServiceResult(assigned=assigned, rejected=rejected, summary=summary)
+        raise CartLifecycleError(
+            "Przypisanie zamówień do wózka przed skanem jest zabronione. "
+            "Użyj CartLifecycleService.start_picking po fizycznym skanie wózka.",
+            code="legacy_assign_forbidden",
+        )
 
     def _empty_summary(self, cart: Cart | None, ctype: str, cart_id_fallback: int | None = None) -> PickingAssignmentSummary:
         cid = int(cart.id) if cart else int(cart_id_fallback or 0)
@@ -411,23 +270,12 @@ class PickingAssignmentService:
         )
 
     def _finalize_cart(self, cart: Cart, _ctype: str) -> None:
-        orders_on = (
-            self.db.query(Order).filter(Order.cart_id == cart.id).all()
-        )
+        """Volume refresh only — lifecycle (status/session/cart_id) wyłącznie w CartLifecycleService."""
+        orders_on = self.db.query(Order).filter(Order.cart_id == cart.id).all()
         cart.used_volume = round(
             sum(float(o.total_volume_dm3 or 0) for o in orders_on),
             2,
         )
-        if orders_on:
-            from .cart_picking_lifecycle_service import ensure_picking_session_for_cart
-
-            ensure_picking_session_for_cart(
-                self.db,
-                cart=cart,
-                orders=orders_on,
-                operator_user_id=None,
-                source_status_id=None,
-            )
         self.db.add(cart)
 
     def _assign_bulk(
