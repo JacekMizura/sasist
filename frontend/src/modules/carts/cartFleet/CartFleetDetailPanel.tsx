@@ -2,8 +2,13 @@ import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, Eraser } from "lucide-react";
 
 import api from "../../../api/axios";
+import {
+  EMPTY_WMS_CART_STATS,
+  fetchWmsCartStats,
+  type WmsCartStats,
+} from "../../../api/wmsCartStatsApi";
 import { useTranslation } from "../../../locales";
-import { calculateCartStats } from "../../../pages/CartsComponents/cartStats";
+import { cartStatsFromWms } from "../../../pages/CartsComponents/cartStats";
 import OrderProductPreviewModal from "../../../pages/CartsComponents/ui/OrderProductPreviewModal";
 import { ClearIcon } from "../../../pages/CartsComponents/ui/Icons";
 import type { BasketDetail } from "./cartFleetTypes";
@@ -21,7 +26,7 @@ type CartFleetDetailPanelProps = {
 
 /**
  * Inline expand under cart row — full width (no right Drawer).
- * Stats + section grid + order/product links.
+ * Occupancy counters: GET /wms/carts/{id}/stats only.
  */
 export function CartFleetDetailPanel({
   open,
@@ -39,13 +44,9 @@ export function CartFleetDetailPanel({
     assigned_orders?: Array<{ order_id: number; total_volume_dm3?: number }>;
     order_numbers?: string[];
     orders_preview?: CartOrderPreview[];
-    total_orders?: number;
-    total_products?: number;
-    baskets_used?: number;
-    used_volume?: number;
     total_weight_kg?: number;
-    total_volume_dm3?: number;
   } | null>(null);
+  const [wmsStats, setWmsStats] = useState<WmsCartStats>(EMPTY_WMS_CART_STATS);
   const [clearingCart, setClearingCart] = useState(false);
   const [clearingBasketId, setClearingBasketId] = useState<number | null>(null);
   const [basketToConfirmClear, setBasketToConfirmClear] = useState<BasketDetail | null>(null);
@@ -56,21 +57,26 @@ export function CartFleetDetailPanel({
     if (!open || cartId == null) {
       setBaskets([]);
       setDetailData(null);
+      setWmsStats(EMPTY_WMS_CART_STATS);
       return;
     }
     let cancelled = false;
     setLoading(true);
-    api
-      .get<typeof detailData & { baskets: BasketDetail[] }>(`/carts/${cartId}/`)
-      .then((res) => {
+    Promise.all([
+      api.get<typeof detailData & { baskets: BasketDetail[] }>(`/carts/${cartId}/`),
+      fetchWmsCartStats(cartId),
+    ])
+      .then(([detailRes, stats]) => {
         if (cancelled) return;
-        setBaskets(res.data.baskets ?? []);
-        setDetailData(res.data);
+        setBaskets(detailRes.data.baskets ?? []);
+        setDetailData(detailRes.data);
+        setWmsStats(stats);
       })
       .catch(() => {
         if (!cancelled) {
           setBaskets([]);
           setDetailData(null);
+          setWmsStats(EMPTY_WMS_CART_STATS);
         }
       })
       .finally(() => {
@@ -81,7 +87,8 @@ export function CartFleetDetailPanel({
     };
   }, [open, cartId]);
 
-  const stats = useMemo(() => calculateCartStats(detailData), [detailData]);
+  const stats = useMemo(() => cartStatsFromWms(wmsStats), [wmsStats]);
+  const weightKg = Number(detailData?.total_weight_kg ?? 0);
 
   const handleClearCartConfirm = async () => {
     if (cartId == null) return;
@@ -105,9 +112,13 @@ export function CartFleetDetailPanel({
     setClearingBasketId(b.id);
     try {
       await api.post(`/carts/basket/${b.id}/clear/`);
-      const detailRes = await api.get<{ baskets: BasketDetail[] } & typeof detailData>(`/carts/${cartId}/`);
+      const [detailRes, statsRes] = await Promise.all([
+        api.get<{ baskets: BasketDetail[] } & typeof detailData>(`/carts/${cartId}/`),
+        fetchWmsCartStats(cartId),
+      ]);
       setBaskets(detailRes.data.baskets ?? []);
       setDetailData(detailRes.data);
+      setWmsStats(statsRes);
       onClearSuccess?.();
     } finally {
       setClearingBasketId(null);
@@ -219,15 +230,15 @@ export function CartFleetDetailPanel({
                       </span>
                       {isSectional ? (
                         <span>
-                          Zajęte sekcje: <strong>{stats.baskets_used}</strong> / {baskets.length}
+                          Zajęte sekcje: <strong>{stats.baskets_used}</strong> / {stats.sections_count || baskets.length}
                         </span>
                       ) : null}
                       <span>
                         Objętość: <strong>{stats.used_volume_dm3.toFixed(1)}</strong> dm³
                       </span>
-                      {stats.used_weight > 0 ? (
+                      {weightKg > 0 ? (
                         <span>
-                          Waga: <strong>{stats.used_weight.toFixed(2)}</strong> kg
+                          Waga: <strong>{weightKg.toFixed(2)}</strong> kg
                         </span>
                       ) : null}
                     </div>

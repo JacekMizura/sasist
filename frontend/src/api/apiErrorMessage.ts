@@ -37,6 +37,22 @@ export function extractApiOperationalErrorDetail(err: unknown): ApiOperationalEr
   };
 }
 
+/** CART_CAPACITY_EXCEEDED → „Wózek może pomieścić maksymalnie X zamówień.” */
+export function extractCartCapacityExceededMessage(err: unknown): string | null {
+  if (!err || typeof err !== "object" || !("response" in err)) return null;
+  const data = (err as { response?: { data?: unknown } }).response?.data;
+  if (!data || typeof data !== "object" || !("detail" in data)) return null;
+  const detail = (data as { detail?: unknown }).detail;
+  if (!detail || typeof detail !== "object" || Array.isArray(detail)) return null;
+  const d = detail as { code?: unknown; max_orders?: unknown };
+  if (d.code !== "CART_CAPACITY_EXCEEDED") return null;
+  const maxOrders = typeof d.max_orders === "number" ? d.max_orders : Number(d.max_orders);
+  if (!Number.isFinite(maxOrders) || maxOrders < 0) {
+    return "Wózek może pomieścić maksymalnie 0 zamówień.";
+  }
+  return `Wózek może pomieścić maksymalnie ${Math.trunc(maxOrders)} zamówień.`;
+}
+
 /** Extract FastAPI / axios error message for toasts and console. */
 export function extractApiErrorMessage(err: unknown, fallback = "Wystąpił błąd operacji."): string {
   const op = extractApiOperationalErrorDetail(err);

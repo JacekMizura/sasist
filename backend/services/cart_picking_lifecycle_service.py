@@ -43,6 +43,17 @@ class CartLifecycleError(ValueError):
         self.message = message
 
 
+class SessionNotFoundError(CartLifecycleError):
+    def __init__(self, message: str = "Brak aktywnej sesji zbierania dla wózka."):
+        super().__init__(message, code="SessionNotFound")
+
+
+class InvalidCartStateError(CartLifecycleError):
+    def __init__(self, message: str, *, status: str | None = None):
+        super().__init__(message, code="InvalidCartState")
+        self.cart_status = status
+
+
 def _status_enum(value: str) -> CartStatus:
     canon = normalize_cart_status_value(value)
     for st in CartStatus:
@@ -62,6 +73,61 @@ def get_cart_status(cart: Cart) -> CartStatus:
 
 def set_cart_status(cart: Cart, status: CartStatus) -> None:
     cart.status = status.value
+
+
+def find_open_picking_session(
+    db: Session,
+    *,
+    cart: Cart,
+) -> WmsOperationSession | None:
+    """Aktywna sesja picking_active: current_session_id lub ostatnia otwarta dla wózka."""
+    cid = int(cart.id)
+    sid = getattr(cart, "current_session_id", None)
+    if sid is not None and int(sid) > 0:
+        sess = (
+            db.query(WmsOperationSession)
+            .filter(
+                WmsOperationSession.id == int(sid),
+                WmsOperationSession.completed_at.is_(None),
+            )
+            .first()
+        )
+        if sess is not None:
+            return sess
+    return (
+        db.query(WmsOperationSession)
+        .filter(
+            WmsOperationSession.cart_id == cid,
+            WmsOperationSession.session_kind.in_(
+                (SESSION_KIND_PICKING_ACTIVE, "picking_recovery_active")
+            ),
+            WmsOperationSession.completed_at.is_(None),
+        )
+        .order_by(WmsOperationSession.id.desc())
+        .first()
+    )
+
+
+def assert_cart_ready_for_quick_pick(db: Session, cart: Cart) -> WmsOperationSession:
+    """
+    SSOT przed quick-pick:
+    - cart.status musi być PICKING (legacy „w trakcie zbierania” też OK),
+    - musi istnieć otwarta picking_session + cart.current_session_id.
+    """
+    st = get_cart_status(cart)
+    if st != CartStatus.PICKING:
+        raise InvalidCartStateError(
+            f"Wózek musi być w stanie PICKING (jest: {st.value}).",
+            status=st.value,
+        )
+    sess = find_open_picking_session(db, cart=cart)
+    if sess is None:
+        raise SessionNotFoundError()
+    cur_sid = getattr(cart, "current_session_id", None)
+    if cur_sid is None or int(cur_sid) != int(sess.id):
+        cart.current_session_id = int(sess.id)
+        db.add(cart)
+    return sess
 
 
 def _dump_meta(data: dict[str, Any] | None) -> str | None:

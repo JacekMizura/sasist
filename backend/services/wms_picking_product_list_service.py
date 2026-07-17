@@ -1887,10 +1887,51 @@ def record_wms_quick_pick(
     )
     if not cart_row:
         raise ValueError("Nie znaleziono aktywnego wózka (sesja).")
-    if cart_row.status in (CartStatus.AVAILABLE.value, CartStatus.AVAILABLE, "pusty", None, ""):
-        from .cart_picking_lifecycle_service import set_cart_status
 
-        set_cart_status(cart_row, CartStatus.PICKING)
+    from .cart_picking_lifecycle_service import (
+        InvalidCartStateError,
+        SessionNotFoundError,
+        assert_cart_ready_for_quick_pick,
+        ensure_picking_session_for_cart,
+        find_open_picking_session,
+        get_cart_status,
+        mark_cart_picking,
+    )
+
+    st = get_cart_status(cart_row)
+    if st in (
+        CartStatus.READY_FOR_PACKING,
+        CartStatus.PACKING,
+        CartStatus.FULL,
+        CartStatus.SERVICE,
+    ):
+        raise InvalidCartStateError(
+            f"Wózek nie jest w stanie zbierania (status={st.value}).",
+            status=st.value,
+        )
+
+    # Bootstrap SSOT: otwórz picking_session jeśli brak (bez crasha → 503)
+    sess = find_open_picking_session(db, cart=cart_row)
+    if sess is None:
+        if st not in (CartStatus.AVAILABLE, CartStatus.ASSIGNED, CartStatus.PICKING):
+            raise InvalidCartStateError(
+                f"Wózek nie jest w stanie PICKING (status={st.value}).",
+                status=st.value,
+            )
+        ensure_picking_session_for_cart(
+            db,
+            cart=cart_row,
+            orders=[],
+            operator_user_id=operator_user_id,
+            source_status_id=int(source_status_id) if source_status_id else None,
+        )
+        mark_cart_picking(cart_row)
+        db.flush()
+
+    try:
+        assert_cart_ready_for_quick_pick(db, cart_row)
+    except (SessionNotFoundError, InvalidCartStateError):
+        raise
 
     cid = int(cart_row.id)
     q_remain = float(quantity)
@@ -1932,8 +1973,6 @@ def record_wms_quick_pick(
                 ps_before = getattr(o, "picking_started_at", None)
                 o.cart_id = cid
                 touch_picking_in_progress(o)
-                from .cart_picking_lifecycle_service import ensure_picking_session_for_cart, mark_cart_picking
-
                 ensure_picking_session_for_cart(
                     db,
                     cart=cart_row,
@@ -1942,6 +1981,10 @@ def record_wms_quick_pick(
                     source_status_id=int(source_status_id) if source_status_id else None,
                 )
                 mark_cart_picking(cart_row)
+                if getattr(o, "picking_session_id", None) is None:
+                    raise SessionNotFoundError(
+                        "order.picking_session_id nie zostało ustawione po ensure_picking_session."
+                    )
                 if ps_before is None and getattr(o, "picking_started_at", None) is not None:
                     emit_wms_picking_started(
                         db,

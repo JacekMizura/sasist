@@ -361,31 +361,33 @@ def _batch_cart_assignments(db: Session, cart_ids: list[int]) -> dict[int, dict]
 
 def _cart_stats(db: Session, cart_id: int, assigned, baskets_iter):
     """
-    Single source of truth for cart statistics.
-    Returns total_orders, total_products (sum of item quantities), baskets_used, used_volume_dm3, used_weight_kg.
+    SSOT: agregat z orders.cart_id / picking_session_id (cart_stats_service).
+    Parametry assigned/baskets_iter zachowane dla kompatybilności wywołań — nieużywane do liczników.
     """
-    basket_order_ids = {int(getattr(b, "order_id")) for b in baskets_iter if getattr(b, "order_id", None) is not None}
-    assigned_order_ids = {int(getattr(o, "id")) for o in assigned if getattr(o, "id", None) is not None}
-    picked = _wms_pick_stats_for_cart(db, cart_id)
-    total_orders = max(len(assigned_order_ids | basket_order_ids), int(picked["wms_picking_order_count"]))
-    assigned_products = sum(
-        sum(int(getattr(item, "quantity", 0) or 0) for item in (getattr(o, "items", None) or []))
-        for o in assigned
-    )
-    total_products = max(assigned_products, int(round(float(picked["wms_picking_quantity"] or 0.0))))
-    baskets_used = sum(1 for b in baskets_iter if getattr(b, "order_id", None) is not None)
-    assigned_used_volume = round(sum(getattr(o, "total_volume_dm3", 0) or 0 for o in assigned), 3)
-    basket_used_volume = round(sum(float(getattr(b, "used_volume", 0) or 0) for b in baskets_iter), 3)
-    picked_volume = _wms_pick_volume_dm3_for_cart(db, cart_id)
-    used_volume_dm3 = max(assigned_used_volume, basket_used_volume, picked_volume)
-    used_weight_kg = round(sum(_order_total_weight_kg(o) for o in assigned), 3)
+    from .cart_stats_service import get_cart_stats_or_404, query_orders_on_cart
+    from ..models.cart import Cart
+
+    s = get_cart_stats_or_404(db, int(cart_id))
+    cart = db.query(Cart).filter(Cart.id == int(cart_id)).first()
+    orders = query_orders_on_cart(db, cart).all() if cart else []
     return {
-        "total_orders": total_orders,
-        "total_products": total_products,
-        "baskets_used": baskets_used,
-        "used_volume_dm3": round(used_volume_dm3, 2),
-        "used_weight_kg": used_weight_kg,
+        "total_orders": s["orders_count"],
+        "total_products": s["products_count"],
+        "baskets_used": s["occupied_sections"],
+        "used_volume_dm3": s["volume_used"],
+        "used_weight_kg": round(sum(_order_total_weight_kg(o) for o in orders), 3),
+        "sections_count": s["sections_count"],
+        "percent_used": s["percent_used"],
     }
+
+
+def _orders_for_cart_preview(db: Session, cart) -> list:
+    from .cart_stats_service import query_orders_on_cart
+
+    by_id: dict[int, object] = {}
+    for o in query_orders_on_cart(db, cart).all():
+        by_id[int(o.id)] = o
+    return list(by_id.values())
 
 
 def _order_total_weight_kg(order) -> float:
@@ -616,6 +618,9 @@ class CartService:
                     all_carts.append(c)
         all_carts.extend(unassigned_carts)
         assignment_by_cart = _batch_cart_assignments(self.db, [int(c.id) for c in all_carts])
+        from .cart_stats_service import batch_cart_stats
+
+        stats_by_cart = batch_cart_stats(self.db, all_carts)
 
         def format_item(cart):
             cart.recalculate_total_volume()
@@ -623,16 +628,22 @@ class CartService:
             clean_type = raw_type.split('.')[-1].upper()
             raw_status = cart.status.value if hasattr(cart.status, 'value') else str(cart.status)
             clean_status = raw_status.split('.')[-1].upper()
-            assigned = getattr(cart, "assigned_orders", None) or []
-            baskets_iter = getattr(cart, "baskets", None) or []
-            stats = _cart_stats(self.db, int(cart.id), assigned, baskets_iter)
+            orders_ssot = _orders_for_cart_preview(self.db, cart)
+            s = stats_by_cart.get(int(cart.id)) or {
+                "orders_count": 0,
+                "products_count": 0,
+                "sections_count": 1 if clean_type != "MULTI" else 0,
+                "occupied_sections": 0,
+                "volume_used": 0.0,
+                "percent_used": 0.0,
+            }
             pick_extra = _wms_pick_stats_for_cart(self.db, cart.id)
-            orders_preview = _build_cart_orders_preview(assigned, baskets_iter)
+            orders_preview = [_serialize_cart_order_preview(o, order_id=int(o.id)) for o in orders_ssot]
             assigned_orders = [
                 {"order_id": o.id, "total_volume_dm3": round(getattr(o, "total_volume_dm3", 0) or 0, 2)}
-                for o in assigned
+                for o in orders_ssot
             ]
-            order_numbers = [str(o.number) for o in assigned if getattr(o, "number", None) not in (None, "")]
+            order_numbers = [str(o.number) for o in orders_ssot if getattr(o, "number", None) not in (None, "")]
             assignment = assignment_by_cart.get(int(cart.id)) or _empty_cart_assignment()
             return {
                 "id": cart.id,
@@ -647,17 +658,20 @@ class CartService:
                 "total_baskets": len(cart.baskets) if clean_type == "MULTI" else 1,
                 "total_volume_dm3": round(cart.total_volume or 0, 2),
                 "max_volume_dm3": round(cart.total_volume or 0, 2),
-                "used_volume": stats["used_volume_dm3"],
+                "used_volume": s["volume_used"],
                 "assigned_orders": assigned_orders,
                 "order_numbers": order_numbers,
                 "orders_preview": orders_preview,
-                "total_weight_kg": stats["used_weight_kg"],
+                "total_weight_kg": round(sum(_order_total_weight_kg(o) for o in orders_ssot), 3),
                 "width": cart.width or 0,
                 "length": cart.length or 0,
                 "height": cart.height or 0,
-                "total_orders": stats["total_orders"],
-                "total_products": stats["total_products"],
-                "baskets_used": stats["baskets_used"],
+                "total_orders": s["orders_count"],
+                "total_products": s["products_count"],
+                "baskets_used": s["occupied_sections"],
+                "sections_count": s["sections_count"],
+                "occupied_sections": s["occupied_sections"],
+                "percent_used": s["percent_used"],
                 "capacity_mode": getattr(cart, "capacity_mode", None) or "volume",
                 "max_orders": getattr(cart, "max_orders", None),
                 **assignment,
@@ -713,15 +727,14 @@ class CartService:
 
         raw_type = cart.type.value if hasattr(cart.type, 'value') else str(cart.type)
         clean_type = raw_type.split('.')[-1].upper()
-        assigned = getattr(cart, "assigned_orders", None) or []
-        baskets_iter = getattr(cart, "baskets", None) or []
-        stats = _cart_stats(self.db, int(cart.id), assigned, baskets_iter)
+        orders_ssot = _orders_for_cart_preview(self.db, cart)
+        stats = _cart_stats(self.db, int(cart.id), orders_ssot, getattr(cart, "baskets", None) or [])
         pick_extra = _wms_pick_stats_for_cart(self.db, cart.id)
-        order_numbers = [str(o.number) for o in assigned if getattr(o, "number", None) not in (None, "")]
-        orders_preview = _build_cart_orders_preview(assigned, baskets_iter)
+        order_numbers = [str(o.number) for o in orders_ssot if getattr(o, "number", None) not in (None, "")]
+        orders_preview = [_serialize_cart_order_preview(o, order_id=int(o.id)) for o in orders_ssot]
         assigned_orders = [
             {"order_id": o.id, "total_volume_dm3": round(getattr(o, "total_volume_dm3", 0) or 0, 2)}
-            for o in assigned
+            for o in orders_ssot
         ]
         assignment = _batch_cart_assignments(self.db, [int(cart.id)]).get(int(cart.id)) or _empty_cart_assignment()
 
@@ -775,6 +788,9 @@ class CartService:
             "total_orders": stats["total_orders"],
             "total_products": stats["total_products"],
             "baskets_used": stats["baskets_used"],
+            "sections_count": stats.get("sections_count"),
+            "occupied_sections": stats.get("baskets_used"),
+            "percent_used": stats.get("percent_used"),
             "capacity_mode": getattr(cart, "capacity_mode", None) or "volume",
             "max_orders": getattr(cart, "max_orders", None),
             **assignment,

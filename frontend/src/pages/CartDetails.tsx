@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import api from "../api/axios";
+import {
+  EMPTY_WMS_CART_STATS,
+  fetchWmsCartStats,
+  type WmsCartStats,
+} from "../api/wmsCartStatsApi";
 import { BarcodeIcon, ChevronIcon } from "./CartsComponents/ui/Icons";
 
 type Basket = {
@@ -19,13 +24,19 @@ type LabelPack = { id: number; name: string };
 export default function CartDetails() {
   const { id } = useParams();
   const [cart, setCart] = useState<any>(null);
+  const [stats, setStats] = useState<WmsCartStats>(EMPTY_WMS_CART_STATS);
   const [editing, setEditing] = useState<Basket | null>(null);
   const [labelsDropdownOpen, setLabelsDropdownOpen] = useState(false);
   const [labelPacks, setLabelPacks] = useState<LabelPack[]>([]);
 
   const load = async () => {
-    const res = await api.get(`/carts/${id}/`);
+    if (!id) return;
+    const [res, s] = await Promise.all([
+      api.get(`/carts/${id}/`),
+      fetchWmsCartStats(Number(id)),
+    ]);
     setCart(res.data);
+    setStats(s);
   };
 
   useEffect(() => {
@@ -101,10 +112,15 @@ export default function CartDetails() {
             </div>
           )}
           <div className="mt-3 flex gap-8 text-sm text-gray-600">
-            <div>Wszystkie: {cart.total_baskets ?? cart.baskets?.length}</div>
-            <div>Wolne: {cart.free_baskets ?? (cart.baskets?.filter((b: Basket) => !b.order_id).length ?? 0)}</div>
-            <div>Zajęte: {cart.used_baskets ?? cart.baskets_used ?? 0}</div>
-            <div>Zajętość: {cart.fill_percent ?? (cart.total_volume_dm3 ? Math.round(((cart.used_volume ?? 0) / cart.total_volume_dm3) * 100) : 0)}%</div>
+            <div>Wszystkie: {stats.sections_count || cart.total_baskets || cart.baskets?.length || 0}</div>
+            <div>
+              Wolne:{" "}
+              {Math.max(0, (stats.sections_count || 0) - (stats.occupied_sections || 0))}
+            </div>
+            <div>Zajęte: {stats.occupied_sections}</div>
+            <div>Zamówienia: {stats.orders_count}</div>
+            <div>Produkty: {stats.products_count}</div>
+            <div>Zajętość: {Math.round(stats.percent_used)}%</div>
           </div>
         </div>
         <div className="relative shrink-0">

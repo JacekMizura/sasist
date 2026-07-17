@@ -1,75 +1,74 @@
 /**
- * Single source of truth for cart statistics.
- * All UI components must use calculateCartStats(cart) instead of computing metrics separately.
- * Stats are computed on the backend and returned by GET /carts/ (list) and GET /carts/:id/ (detail).
+ * Cart occupancy display helpers.
+ * Liczniki zajętości: wyłącznie z GET /wms/carts/{id}/stats (WmsCartStats).
+ * Nie wyliczaj lokalnie z assigned_orders / baskets.
  */
+
+import type { WmsCartStats } from "../../api/wmsCartStatsApi";
+import { EMPTY_WMS_CART_STATS } from "../../api/wmsCartStatsApi";
 
 export type CartStats = {
   total_orders: number;
   total_products: number;
   baskets_used: number;
+  sections_count: number;
   used_volume_dm3: number;
+  percent_used: number;
   used_weight: number;
 };
 
-type CartLike = {
-  total_orders?: number;
-  total_products?: number;
-  baskets_used?: number;
-  used_volume?: number;
-  used_volume_dm3?: number;
-  total_weight_kg?: number;
-  assigned_orders?: Array<{ order_id: number; total_volume_dm3?: number }>;
-  baskets?: Array<{ order_id?: number | null }>;
-};
+/** Map backend SSOT stats → legacy CartStats shape used by fleet UI. */
+export function cartStatsFromWms(stats: WmsCartStats | null | undefined): CartStats {
+  const s = stats ?? EMPTY_WMS_CART_STATS;
+  return {
+    total_orders: s.orders_count,
+    total_products: s.products_count,
+    baskets_used: s.occupied_sections,
+    sections_count: s.sections_count,
+    used_volume_dm3: s.volume_used,
+    percent_used: s.percent_used,
+    used_weight: 0,
+  };
+}
 
-/**
- * Returns unified cart statistics. Prefers backend-provided fields (total_orders, total_products, baskets_used).
- * Falls back to deriving from assigned_orders / baskets when opening detail before list refresh.
- */
-export function calculateCartStats(cart: CartLike | null | undefined): CartStats {
+/** @deprecated Prefer cartStatsFromWms(fetchWmsCartStats(...)). Kept for gradual migration. */
+export function calculateCartStats(
+  cart:
+    | {
+        total_orders?: number;
+        total_products?: number;
+        baskets_used?: number;
+        sections_count?: number;
+        occupied_sections?: number;
+        used_volume?: number;
+        used_volume_dm3?: number;
+        percent_used?: number;
+        total_weight_kg?: number;
+      }
+    | null
+    | undefined
+): CartStats {
   if (!cart) {
     return {
       total_orders: 0,
       total_products: 0,
       baskets_used: 0,
+      sections_count: 0,
       used_volume_dm3: 0,
+      percent_used: 0,
       used_weight: 0,
     };
   }
-
-  const total_orders =
-    typeof cart.total_orders === "number"
-      ? cart.total_orders
-      : (cart.assigned_orders?.length ?? 0);
-
-  const total_products =
-    typeof cart.total_products === "number" ? cart.total_products : 0;
-
-  const baskets_used =
-    typeof cart.baskets_used === "number"
-      ? cart.baskets_used
-      : (cart.baskets?.filter((b) => b.order_id != null).length ?? 0);
-
-  const used_volume_dm3 =
-    typeof cart.used_volume_dm3 === "number"
-      ? cart.used_volume_dm3
-      : typeof cart.used_volume === "number"
-        ? cart.used_volume
-        : Array.isArray(cart.assigned_orders) && cart.assigned_orders.length > 0
-          ? cart.assigned_orders.reduce(
-              (s, o) => s + Number(o.total_volume_dm3 ?? 0),
-              0
-            )
-          : 0;
-
-  const used_weight = Number(cart.total_weight_kg ?? 0);
-
   return {
-    total_orders,
-    total_products,
-    baskets_used,
-    used_volume_dm3,
-    used_weight,
+    total_orders: Number(cart.total_orders) || 0,
+    total_products: Number(cart.total_products) || 0,
+    baskets_used: Number(cart.occupied_sections ?? cart.baskets_used) || 0,
+    sections_count: Number(cart.sections_count) || 0,
+    used_volume_dm3:
+      typeof cart.used_volume_dm3 === "number"
+        ? cart.used_volume_dm3
+        : Number(cart.used_volume) || 0,
+    percent_used: Number(cart.percent_used) || 0,
+    used_weight: Number(cart.total_weight_kg) || 0,
   };
 }

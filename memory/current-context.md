@@ -1,5 +1,9 @@
 # Current context
 
+## Cart stats SSOT (2026-07-17)
+- Occupancy: `GET /wms/carts/{id}/stats` from `orders.cart_id` / `picking_session_id`.
+- FE fleet/kartoteka: `fetchWmsCartStats` only — no local assigned_orders math.
+
 ## Cart/picking SSOT (2026-07-17)
 - SSOT: `backend/services/cart_picking_lifecycle_service.py`.
 - Finalize picking **keeps** cart on orders until last pack release.

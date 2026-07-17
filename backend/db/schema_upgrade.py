@@ -3839,8 +3839,10 @@ def ensure_carts_code_column(engine: Engine) -> None:
 def ensure_carts_picking_lifecycle_columns(engine: Engine) -> None:
     """
     SSOT cyklu wózka: ``assigned_user_id``, ``current_session_id``,
-    migracja statusów PL → AVAILABLE/PICKING/FULL/SERVICE + nowe ASSIGNED/READY_FOR_PACKING/PACKING.
+    ``status`` jako VARCHAR(32) (unika PG ENUM z wartościami PL → crash przy PICKING),
+    migracja statusów PL → AVAILABLE/PICKING/FULL/SERVICE.
     """
+    dialect = engine.dialect.name
     with engine.connect() as conn:
         if not _table_exists(conn, "carts"):
             return
@@ -3854,12 +3856,30 @@ def ensure_carts_picking_lifecycle_columns(engine: Engine) -> None:
             )
         if "current_session_id" not in cols:
             conn.execute(text("ALTER TABLE carts ADD COLUMN current_session_id INTEGER"))
-        # Migracja legacy PL → kanoniczne stringi (bezpieczne dla VARCHAR / TEXT)
+        conn.commit()
+
+    # PG: natywny ENUM z „pusty” / „w trakcie zbierania” → VARCHAR, inaczej zapis PICKING = 503
+    if dialect == "postgresql":
+        try:
+            with engine.begin() as conn:
+                conn.execute(
+                    text(
+                        "ALTER TABLE carts ALTER COLUMN status TYPE VARCHAR(32) "
+                        "USING TRIM(BOTH FROM status::text)"
+                    )
+                )
+        except Exception:
+            logger = __import__("logging").getLogger(__name__)
+            logger.exception("ensure_carts_picking_lifecycle_columns: status→VARCHAR failed")
+
+    with engine.connect() as conn:
         for old, new in (
             ("pusty", "AVAILABLE"),
             ("w trakcie zbierania", "PICKING"),
             ("pełny", "FULL"),
             ("w serwisie", "SERVICE"),
+            ("AVAILABLE", "AVAILABLE"),
+            ("PICKING", "PICKING"),
         ):
             try:
                 conn.execute(

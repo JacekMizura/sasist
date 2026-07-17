@@ -181,3 +181,28 @@ def test_cancel_picking_restores_orders_and_frees_cart(db):
     assert get_cart_status(cart) == CartStatus.AVAILABLE
     assert cart.assigned_user_id is None
     assert cart.current_session_id is None
+
+
+def test_assert_quick_pick_ssot_invalid_state_and_missing_session(db):
+    from backend.services.cart_picking_lifecycle_service import (
+        InvalidCartStateError,
+        SessionNotFoundError,
+        assert_cart_ready_for_quick_pick,
+        set_cart_status,
+    )
+
+    cart = _cart(db)
+    db.commit()
+
+    set_cart_status(cart, CartStatus.READY_FOR_PACKING)
+    db.commit()
+    with pytest.raises(InvalidCartStateError) as ei:
+        assert_cart_ready_for_quick_pick(db, cart)
+    assert ei.value.code == "InvalidCartState"
+
+    set_cart_status(cart, CartStatus.PICKING)
+    cart.current_session_id = None
+    db.commit()
+    with pytest.raises(SessionNotFoundError) as es:
+        assert_cart_ready_for_quick_pick(db, cart)
+    assert es.value.code == "SessionNotFound"

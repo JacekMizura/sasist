@@ -684,62 +684,112 @@ def post_picking_quick_pick(
     current_user: AppUser = Depends(get_current_user),
 ):
     """Zapis postępu: rekord Pick (roboczy, picked_at po finalizacji wózka) — FIFO po zamówieniach w kohortcie."""
-    tid = int(tenant_id)
-    logger.info(
-        "post_picking_quick_pick: tenant_id=%s warehouse_id=%s",
-        tid,
-        warehouse_id,
+    from ..models.cart import Cart
+    from ..services.cart_picking_lifecycle_service import (
+        CartLifecycleError,
+        InvalidCartStateError,
+        SessionNotFoundError,
+        find_open_picking_session,
+        get_cart_status,
     )
-    ws = WarehouseService(db)
-    req_wh: int | None = int(warehouse_id) if warehouse_id is not None else None
-    if req_wh is not None and req_wh < 1:
-        req_wh = None
 
-    auto_selected = False
-    if req_wh is not None and ws.can_tenant_access_warehouse(tid, req_wh):
-        effective_wh = req_wh
-    else:
-        try:
-            effective_wh = resolve_quick_pick_warehouse_for_tenant(db, tid)
-            auto_selected = True
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e)) from e
-        logger.info("Auto-selected warehouse_id=%s", effective_wh)
+    tid = int(tenant_id)
+    uid = int(current_user.id) if current_user is not None else None
+    cart_id = int(body.cart_id) if body.cart_id is not None else None
+    barcode = None
+    session_id = None
+    cart_status = None
+    effective_wh: int | None = None
 
-    if body.recovery_order_id is None or int(body.recovery_order_id) < 1:
-        st = (
-            db.query(OrderUiStatus)
-            .filter(
-                OrderUiStatus.id == int(source_status_id),
-                OrderUiStatus.tenant_id == tid,
-                OrderUiStatus.warehouse_id == int(effective_wh),
-            )
-            .first()
-        )
-        if not st:
-            return JSONResponse(
-                status_code=404,
-                content={
-                    "error": (
-                        f"Status panelu id={source_status_id} nie istnieje dla "
-                        f"tenant_id={tid}, warehouse_id={effective_wh}."
-                    )
-                },
-            )
+    def _log_ctx(**extra: object) -> dict:
+        return {
+            "tenant_id": tid,
+            "warehouse_id": effective_wh,
+            "source_status_id": int(source_status_id),
+            "barcode": barcode,
+            "session_id": session_id,
+            "cart_id": cart_id,
+            "user_id": uid,
+            "product_id": getattr(body, "product_id", None),
+            "location_id": getattr(body, "location_id", None),
+            "quantity": getattr(body, "quantity", None),
+            "cart_status": cart_status,
+            **extra,
+        }
 
     try:
+        logger.info("post_picking_quick_pick:start %s", _log_ctx())
+        ws = WarehouseService(db)
+        req_wh: int | None = int(warehouse_id) if warehouse_id is not None else None
+        if req_wh is not None and req_wh < 1:
+            req_wh = None
+
+        if req_wh is not None and ws.can_tenant_access_warehouse(tid, req_wh):
+            effective_wh = req_wh
+        else:
+            try:
+                effective_wh = resolve_quick_pick_warehouse_for_tenant(db, tid)
+            except ValueError as e:
+                logger.exception("post_picking_quick_pick:warehouse_resolve %s", _log_ctx(error=str(e)))
+                raise HTTPException(status_code=400, detail=str(e)) from e
+            logger.info("post_picking_quick_pick:auto_warehouse %s", _log_ctx())
+
+        if cart_id is not None:
+            cart_row = (
+                db.query(Cart)
+                .filter(
+                    Cart.id == int(cart_id),
+                    Cart.tenant_id == tid,
+                    Cart.warehouse_id == int(effective_wh),
+                )
+                .first()
+            )
+            if cart_row is not None:
+                barcode = (
+                    str(getattr(cart_row, "barcode", None) or getattr(cart_row, "code", None) or "").strip()
+                    or None
+                )
+                cart_status = get_cart_status(cart_row).value
+                sess = find_open_picking_session(db, cart=cart_row)
+                session_id = int(sess.id) if sess is not None else getattr(cart_row, "current_session_id", None)
+
+        if body.recovery_order_id is None or int(body.recovery_order_id) < 1:
+            st = (
+                db.query(OrderUiStatus)
+                .filter(
+                    OrderUiStatus.id == int(source_status_id),
+                    OrderUiStatus.tenant_id == tid,
+                    OrderUiStatus.warehouse_id == int(effective_wh),
+                )
+                .first()
+            )
+            if not st:
+                logger.warning("post_picking_quick_pick:status_not_found %s", _log_ctx())
+                return JSONResponse(
+                    status_code=404,
+                    content={
+                        "error": (
+                            f"Status panelu id={source_status_id} nie istnieje dla "
+                            f"tenant_id={tid}, warehouse_id={effective_wh}."
+                        ),
+                        "code": "StatusNotFound",
+                    },
+                )
+
         oid, oiid = record_wms_quick_pick(
             db,
             tenant_id=tid,
-            warehouse_id=effective_wh,
+            warehouse_id=int(effective_wh),
             source_status_id=source_status_id,
             order_type=order_type,
             product_id=body.product_id,
             location_id=body.location_id,
             quantity=body.quantity,
             cart_id=body.cart_id,
-            fixed_order_id=int(body.recovery_order_id) if body.recovery_order_id is not None and int(body.recovery_order_id) > 0 else None,
-            operator_user_id=int(current_user.id),
+            fixed_order_id=int(body.recovery_order_id)
+            if body.recovery_order_id is not None and int(body.recovery_order_id) > 0
+            else None,
+            operator_user_id=uid,
         )
         if body.cart_id is not None:
             recovery_oid = (
@@ -750,7 +800,7 @@ def post_picking_quick_pick(
             resp = build_wms_picking_product_lines(
                 db,
                 tenant_id=tid,
-                warehouse_id=effective_wh,
+                warehouse_id=int(effective_wh),
                 source_status_id=source_status_id,
                 order_type=order_type,
                 cart_id=body.cart_id,
@@ -760,33 +810,88 @@ def post_picking_quick_pick(
             touch_wms_operation_session(
                 db,
                 tenant_id=tid,
-                warehouse_id=effective_wh,
+                warehouse_id=int(effective_wh),
                 session_kind="picking_recovery_active"
                 if body.recovery_order_id is not None and int(body.recovery_order_id) > 0
                 else "picking_active",
-                operator_user_id=int(current_user.id),
+                operator_user_id=uid,
                 cart_id=body.cart_id,
                 order_id=int(body.recovery_order_id)
                 if body.recovery_order_id is not None and int(body.recovery_order_id) > 0
                 else None,
-                metadata=_picking_session_progress_metadata(resp, source_status_id=source_status_id, order_type=order_type),
+                metadata=_picking_session_progress_metadata(
+                    resp, source_status_id=source_status_id, order_type=order_type
+                ),
             )
         db.commit()
+        logger.info(
+            "post_picking_quick_pick:ok %s",
+            _log_ctx(order_id=oid, order_item_id=oiid),
+        )
+        return {"ok": True, "order_id": oid, "order_item_id": oiid}
+    except SessionNotFoundError as e:
+        db.rollback()
+        logger.exception("post_picking_quick_pick:SessionNotFound %s", _log_ctx(error=e.message))
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "SessionNotFound", "error": e.message},
+        ) from e
+    except InvalidCartStateError as e:
+        db.rollback()
+        logger.exception(
+            "post_picking_quick_pick:InvalidCartState %s",
+            _log_ctx(error=e.message, cart_status=e.cart_status),
+        )
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "InvalidCartState", "error": e.message, "cart_status": e.cart_status},
+        ) from e
+    except CartLifecycleError as e:
+        db.rollback()
+        logger.exception("post_picking_quick_pick:CartLifecycleError %s", _log_ctx(error=e.message, code=e.code))
+        raise HTTPException(
+            status_code=409,
+            detail={"code": e.code, "error": e.message},
+        ) from e
     except ValueError as e:
         db.rollback()
+        logger.exception("post_picking_quick_pick:ValueError %s", _log_ctx(error=str(e)))
         raise HTTPException(status_code=400, detail=str(e)) from e
-    except SQLAlchemyError:
+    except SQLAlchemyError as e:
         db.rollback()
-        logger.exception("post_picking_quick_pick")
-        raise HTTPException(status_code=503, detail="Zapis kompletacji nie powiódł się.") from None
-    except Exception:
-        db.rollback()
-        logger.exception("quick-pick failed")
-        return JSONResponse(
+        logger.exception("post_picking_quick_pick:SQLAlchemyError %s", _log_ctx(error=str(e)))
+        # Brak kolumn / ENUM status — nie maskuj jako „ogólny 503” bez kontekstu SSOT
+        msg = str(getattr(e, "orig", None) or e)
+        lower = msg.lower()
+        if "current_session_id" in lower or "assigned_user_id" in lower:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "SessionNotFound",
+                    "error": "Brak kolumn sesji wózka (current_session_id) — uruchom schema upgrade.",
+                },
+            ) from None
+        if "invalid input value for enum" in lower or "cartstatus" in lower:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "InvalidCartState",
+                    "error": "Nieobsługiwana wartość statusu wózka w DB (wymagana migracja status→VARCHAR).",
+                },
+            ) from None
+        raise HTTPException(
             status_code=500,
-            content={"error": "Wewnętrzny błąd serwera"},
-        )
-    return {"ok": True, "order_id": oid, "order_item_id": oiid}
+            detail={"code": "QuickPickDatabaseError", "error": "Zapis kompletacji nie powiódł się."},
+        ) from None
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.exception("post_picking_quick_pick:unhandled %s", _log_ctx(error=str(e)))
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "QuickPickInternalError", "error": "Wewnętrzny błąd serwera"},
+        ) from None
 
 
 @router.post("/picking/report-shortage", response_model=WmsPickingReportShortageResponse)

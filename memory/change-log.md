@@ -1,5 +1,28 @@
 # Change log
 
+## 2026-07-17 — Cart stats SSOT: GET /wms/carts/{id}/stats
+
+- Jedno źródło prawdy: `orders.cart_id` + `orders.picking_session_id` (`cart_stats_service`).
+- Endpoint: `GET /wms/carts/{id}/stats` → orders/products/sections/occupied/volume/percent.
+- Lista/detail cartów używa tego samego agregatu (bez picks / ORM-only fallback).
+- FE: CartCard, CartFleetDetailPanel, CartDetails, BulkCartEditor → `fetchWmsCartStats`.
+- Test: `backend/tests/test_cart_stats_ssot.py`.
+
+## 2026-07-17 — Cart capacity ORDERS: 409 CART_CAPACITY_EXCEEDED
+
+- SSOT: `cart_capacity_service.assert_cart_orders_capacity` — przy `capacity_mode=orders`:
+  `current_orders + incoming_orders <= max_orders`.
+- Przekroczenie → HTTP 409 `{ code, current_orders, max_orders, attempted_orders }`.
+- Wpięte: `simulation_service.assign_orders_to_cart`, `PickingAssignmentService`, WMS basket attach.
+- FE CartCard: toast „Wózek może pomieścić maksymalnie X zamówień.”
+- Test: `backend/tests/test_cart_orders_capacity.py`.
+
+## 2026-07-17 — quick-pick: 409 zamiast 503 + logi SSOT
+
+- Przyczyna 503: `SQLAlchemyError` przy zapisie `cart.status=PICKING` do starego PG ENUM (PL) / brak `current_session_id`.
+- Fix: status→VARCHAR w `ensure_carts_picking_lifecycle_columns`; walidacja SSOT → 409 `SessionNotFound` / `InvalidCartState`.
+- `POST /wms/picking/quick-pick`: `logger.exception` z tenant/warehouse/source_status/barcode/session/cart/user_id; brak nieobsłużonych wyjątków.
+
 ## 2026-07-17 — Cart/picking SSOT lifecycle
 
 - Backend SSOT: `cart_picking_lifecycle_service` — AVAILABLE→ASSIGNED→PICKING→READY_FOR_PACKING→PACKING→AVAILABLE.

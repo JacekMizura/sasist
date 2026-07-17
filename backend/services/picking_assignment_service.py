@@ -33,6 +33,14 @@ from ..schemas.picking_assignment import (
     PickingAssignmentServiceResult,
     PickingAssignmentSummary,
 )
+from fastapi import HTTPException
+
+from .cart_capacity_service import (
+    CartCapacityExceeded,
+    assert_cart_orders_capacity,
+    count_orders_on_cart,
+    http_exception_cart_capacity_exceeded,
+)
 from .cart_service import _order_used_volume_dm3_from_items
 
 logger = logging.getLogger(__name__)
@@ -177,6 +185,14 @@ def ensure_order_basket_for_wms_pick(db: Session, cart: Cart, order: Order) -> O
     if int(order.cart_id or 0) != int(cart.id):
         if order.cart_id is not None:
             return None
+        try:
+            assert_cart_orders_capacity(
+                cart,
+                current_orders=count_orders_on_cart(db, int(cart.id)),
+                incoming_orders=1,
+            )
+        except CartCapacityExceeded as exc:
+            raise http_exception_cart_capacity_exceeded(exc) from exc
         order.cart_id = int(cart.id)
         db.add(order)
 
@@ -297,6 +313,22 @@ class PickingAssignmentService:
                     summary=self._empty_summary(cart, ctype),
                 )
 
+            incoming_count = 0
+            if unique_ids:
+                for oid, cid in (
+                    self.db.query(Order.id, Order.cart_id).filter(Order.id.in_(unique_ids)).all()
+                ):
+                    if cid is None:
+                        incoming_count += 1
+            try:
+                assert_cart_orders_capacity(
+                    cart,
+                    current_orders=count_orders_on_cart(self.db, int(cart.id)),
+                    incoming_orders=incoming_count,
+                )
+            except CartCapacityExceeded as exc:
+                raise http_exception_cart_capacity_exceeded(exc) from exc
+
             orders_map: dict[int, Order] = {}
             if unique_ids:
                 loaded = (
@@ -346,6 +378,9 @@ class PickingAssignmentService:
 
             self._finalize_cart(cart, ctype)
             self.db.commit()
+        except (HTTPException, CartCapacityExceeded):
+            self.db.rollback()
+            raise
         except Exception as e:
             logger.exception("PickingAssignmentService failed: %s", e)
             self.db.rollback()

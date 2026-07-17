@@ -15,6 +15,7 @@ import { cartsSectionClass } from "../../modules/carts/cartsModuleTokens";
 import { wmsSectionTitle } from "../../modules/carts/wmsOperationalUi";
 import { log } from "../../utils/logger";
 import api from "../../api/axios";
+import { fetchWmsCartStats } from "../../api/wmsCartStatsApi";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { useTranslation } from "../../locales";
 import CartImageUrlField from "./ui/CartImageUrlField";
@@ -77,7 +78,10 @@ export default function BulkCartEditor({
         setAvailableGroups(groups);
 
         if (cartId) {
-          const res = await api.get(`/carts/${cartId}/`);
+          const [res, stats] = await Promise.all([
+            api.get(`/carts/${cartId}/`),
+            fetchWmsCartStats(cartId),
+          ]);
           if (cancelled) return;
 
           const data = res.data;
@@ -95,7 +99,7 @@ export default function BulkCartEditor({
           setCartScanCode(sc);
           setImageUrl(data.image_url ?? "");
           setStatus(String(data.status ?? ""));
-          setUsedVolume(Number(data.used_volume) || 0);
+          setUsedVolume(Number(stats.volume_used) || 0);
           setTotalVolumeDm3(Number(data.total_volume_dm3) || 0);
 
           const rawGroupId = data.group_id;

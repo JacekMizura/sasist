@@ -10,12 +10,20 @@ import logging
 from collections import defaultdict
 from sqlalchemy.orm import Session, joinedload
 
+from fastapi import HTTPException
+
 from ..models.cart import Cart
 from ..models.cart_basket import CartBasket
 from ..models.order import Order
 from ..models.order_item import OrderItem
 from ..models.product import Product
 from ..models.enums import CartStatus, CartType
+from .cart_capacity_service import (
+    CartCapacityExceeded,
+    assert_cart_orders_capacity,
+    count_orders_on_cart,
+    http_exception_cart_capacity_exceeded,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -209,7 +217,6 @@ class SimulationService:
                 .first()
             )
             if not cart:
-                from fastapi import HTTPException
                 raise HTTPException(status_code=404, detail="Wózek nie znaleziony")
 
             is_multi = (cart.type == CartType.MULTI or
@@ -234,6 +241,16 @@ class SimulationService:
             # Order clustering + sort: cluster by main SKU, then within cluster by (items_count DESC, volume DESC)
             orders_new = _sort_orders_for_assignment(orders_all)
 
+            current_orders = count_orders_on_cart(self.db, int(cart.id))
+            try:
+                assert_cart_orders_capacity(
+                    cart,
+                    current_orders=current_orders,
+                    incoming_orders=len(orders_new),
+                )
+            except CartCapacityExceeded as exc:
+                raise http_exception_cart_capacity_exceeded(exc) from exc
+
             assigned_count = 0
             unassigned_count = 0
 
@@ -241,7 +258,7 @@ class SimulationService:
                 # Best-fit: track remaining capacity per basket; sort by remaining ASC before each assignment
                 empty_baskets = [b for b in (cart.baskets or []) if b.order_id is None]
                 basket_remaining = {b.id: (b.usable_volume or 0) / 1000.0 for b in empty_baskets}
-                running_orders = 0
+                running_orders = current_orders
                 running_used_vol = float(cart.used_volume or 0)
 
                 for order in orders_new:
@@ -288,7 +305,7 @@ class SimulationService:
                     total_vol = (float(cart.length) * float(cart.width) * float(cart.height)) / 1000.0
                     cart.total_volume = round(total_vol, 2)
                 used = cart.used_volume or 0
-                running_orders = len(getattr(cart, "assigned_orders", None) or [])
+                running_orders = current_orders
                 cl = float(cart.length or 0)
                 cw = float(cart.width or 0)
                 ch = float(cart.height or 0)
@@ -342,6 +359,9 @@ class SimulationService:
                 "cart_utilization_percent": utilization_percent,
                 "status": "SUCCESS",
             }
+        except HTTPException:
+            self.db.rollback()
+            raise
         except Exception as e:
             self.db.rollback()
             logger.exception("assign_orders_to_cart failed: %s", e)

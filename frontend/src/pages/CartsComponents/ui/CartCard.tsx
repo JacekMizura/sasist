@@ -1,7 +1,14 @@
 import { Eraser, Pencil, Printer, Trash2, Wand2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import toast from "react-hot-toast";
 
+import { extractCartCapacityExceededMessage } from "../../../api/apiErrorMessage";
 import api from "../../../api/axios";
+import {
+  EMPTY_WMS_CART_STATS,
+  fetchWmsCartStats,
+  type WmsCartStats,
+} from "../../../api/wmsCartStatsApi";
 import { useTranslation } from "../../../locales";
 import { CartFleetDetailPanel } from "../../../modules/carts/cartFleet/CartFleetDetailPanel";
 import {
@@ -21,7 +28,7 @@ import {
 } from "../../../modules/carts/cartFleet/CartAssignmentBadge";
 import ImagePreviewModal from "./ImagePreviewModal";
 import SimulationResultModal from "./SimulationResultModal";
-import { calculateCartStats } from "../cartStats";
+import { cartStatsFromWms } from "../cartStats";
 
 type SimulationResult = {
   assigned_orders_count: number;
@@ -91,16 +98,6 @@ export default function CartCard(props: CartCardProps) {
     tenant_id,
     warehouse_id,
     order_numbers = [],
-    total_weight_kg,
-    total_orders: total_orders_prop,
-    total_products: total_products_prop,
-    baskets_used: baskets_used_prop,
-    capacity_mode: capacity_mode_prop,
-    max_orders: max_orders_prop,
-    max_volume_dm3: max_volume_dm3_prop,
-    wms_picking_order_count = 0,
-    wms_picking_product_count = 0,
-    wms_picking_quantity = 0,
     assigned_user_id = null,
     assigned_user_name = null,
     assignment_type = null,
@@ -121,29 +118,28 @@ export default function CartCard(props: CartCardProps) {
   const [simulationResult, setSimulationResult] = useState<SimulationResult | null>(null);
   const [clearingCart, setClearingCart] = useState(false);
   const [confirmWholeCartClearOpen, setConfirmWholeCartClearOpen] = useState(false);
+  const [wmsStats, setWmsStats] = useState<WmsCartStats>(EMPTY_WMS_CART_STATS);
+  const [statsTick, setStatsTick] = useState(0);
 
   const cartCodeDisplay = (cartCodeProp ?? "").trim();
-  const listCart = useMemo(
-    () => ({
-      assigned_orders,
-      used_volume,
-      total_volume_dm3,
-      total_weight_kg,
-      total_orders: total_orders_prop,
-      total_products: total_products_prop,
-      baskets_used: baskets_used_prop,
-    }),
-    [
-      assigned_orders,
-      used_volume,
-      total_volume_dm3,
-      total_weight_kg,
-      total_orders_prop,
-      total_products_prop,
-      baskets_used_prop,
-    ],
-  );
-  const cardStats = useMemo(() => calculateCartStats(listCart), [listCart]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchWmsCartStats(id)
+      .then((s) => {
+        if (!cancelled) setWmsStats(s);
+      })
+      .catch(() => {
+        if (!cancelled) setWmsStats(EMPTY_WMS_CART_STATS);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [id, statsTick]);
+
+  const refreshStats = () => setStatsTick((n) => n + 1);
+
+  const cardStats = useMemo(() => cartStatsFromWms(wmsStats), [wmsStats]);
   const usedVol = cardStats.used_volume_dm3;
   const isSimulated =
     (used_volume == null || used_volume === 0) &&
@@ -157,28 +153,16 @@ export default function CartCard(props: CartCardProps) {
   );
   const canSimulate = isSectional && tenant_id != null && warehouse_id != null;
 
-  const wmsPickOrders = Number(wms_picking_order_count) || 0;
-  const wmsPickProducts = Number(wms_picking_product_count) || 0;
-  const wmsPickQty = Number(wms_picking_quantity) || 0;
-  const wmsPickingActive = wmsPickOrders > 0 || wmsPickProducts > 0 || wmsPickQty > 0;
   const orderNumbersList = Array.isArray(order_numbers) ? order_numbers : [];
-  const assignedOrderCount = assigned_orders?.length ?? 0;
   const canClearCart =
-    usedVol > 0 ||
-    orderNumbersList.length > 0 ||
-    cardStats.total_orders > 0 ||
-    assignedOrderCount > 0 ||
-    wmsPickingActive;
+    usedVol > 0 || orderNumbersList.length > 0 || cardStats.total_orders > 0;
 
-  const mode = (capacity_mode_prop ?? "volume").toLowerCase();
-  const maxVol = Number(max_volume_dm3_prop ?? total_volume_dm3 ?? 0);
-  const maxOrd = max_orders_prop != null ? Number(max_orders_prop) : null;
-  const volPercent = maxVol > 0 ? Math.min(100, (usedVol / maxVol) * 100) : 0;
-  const ordPercent = maxOrd != null && maxOrd > 0 ? Math.min(100, (cardStats.total_orders / maxOrd) * 100) : 0;
-  const displayPercent = mode === "orders" ? ordPercent : mode === "mixed" ? Math.min(volPercent, ordPercent) : volPercent;
+  const displayPercent = Math.min(100, Math.max(0, cardStats.percent_used || 0));
 
-  const occupiedSections = isSectional ? (baskets_used_prop ?? cardStats.baskets_used) : cardStats.total_orders;
-  const sectionsLabel = isSectional ? `${total_baskets} sekc.` : "1 sekc.";
+  const occupiedSections = isSectional ? cardStats.baskets_used : cardStats.total_orders;
+  const sectionsLabel = isSectional
+    ? `${cardStats.sections_count || total_baskets || 0} sekc.`
+    : "1 sekc.";
   const occupiedLabel = isSectional ? `${occupiedSections} zajęte` : `${cardStats.total_orders} zam.`;
 
   const toggleExpand = () => onToggleExpand?.();
@@ -191,9 +175,16 @@ export default function CartCard(props: CartCardProps) {
         params: { tenant_id, warehouse_id, cart_id: id },
       });
       setSimulationResult(res.data);
+      refreshStats();
       onSimulateSuccess?.();
     } catch (err) {
-      console.error("Simulation assign error:", err);
+      const capacityMsg = extractCartCapacityExceededMessage(err);
+      if (capacityMsg) {
+        toast.error(capacityMsg);
+      } else {
+        console.error("Simulation assign error:", err);
+        toast.error("Nie udało się przypisać zamówień do wózka.");
+      }
     } finally {
       setSimulating(false);
     }
@@ -204,6 +195,7 @@ export default function CartCard(props: CartCardProps) {
     try {
       await api.post(`/carts/${id}/clear/`);
       setConfirmWholeCartClearOpen(false);
+      refreshStats();
       onClearSuccess?.();
     } catch (e) {
       console.error("clear_cart failed:", e);
