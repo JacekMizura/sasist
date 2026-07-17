@@ -408,12 +408,25 @@ function assertPositiveQty(name: string, v: unknown): number {
   return n;
 }
 
-/** Czytelny komunikat z odpowiedzi FastAPI (``detail`` string | tablica walidacji). */
+/** Czytelny komunikat z odpowiedzi FastAPI (``detail`` string | obiekt | tablica walidacji). */
 export function formatFastApiErrorDetail(data: unknown): string {
-  if (data == null || typeof data !== "object") {
+  if (data == null) {
     return "Błąd walidacji.";
   }
-  const detail = (data as { detail?: unknown }).detail;
+  if (typeof data === "string" && data.trim()) {
+    return data.trim();
+  }
+  if (typeof data !== "object") {
+    return "Błąd walidacji.";
+  }
+  const top = data as { message?: unknown; error?: unknown; detail?: unknown };
+  if (typeof top.message === "string" && top.message.trim()) {
+    return top.message.trim();
+  }
+  if (typeof top.error === "string" && top.error.trim()) {
+    return top.error.trim();
+  }
+  const detail = top.detail;
   if (detail == null) {
     return "Błąd walidacji.";
   }
@@ -429,6 +442,11 @@ export function formatFastApiErrorDetail(data: unknown): string {
         return JSON.stringify(item);
       })
       .join(" ");
+  }
+  if (typeof detail === "object") {
+    const d = detail as { message?: unknown; error?: unknown };
+    if (typeof d.message === "string" && d.message.trim()) return d.message.trim();
+    if (typeof d.error === "string" && d.error.trim()) return d.error.trim();
   }
   return String(detail);
 }
@@ -489,8 +507,15 @@ export async function postWmsPickingQuickPick(
     );
     return res.data;
   } catch (e: unknown) {
-    if (axios.isAxiosError(e) && e.response?.status === 422) {
-      console.error("[WMS quick-pick] 422:", e.response.data?.detail);
+    if (axios.isAxiosError(e)) {
+      if (e.response?.status === 422) {
+        console.error("[WMS quick-pick] 422:", e.response.data?.detail);
+      }
+      if (e.response?.status === 409) {
+        const msg = formatFastApiErrorDetail(e.response.data);
+        console.warn("[WMS quick-pick] 409:", e.response.data);
+        throw new Error(msg || "Operacja zbierania odrzucona (409).");
+      }
     }
     throw e;
   }

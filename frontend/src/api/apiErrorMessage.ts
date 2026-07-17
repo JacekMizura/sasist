@@ -20,6 +20,17 @@ export type ApiOperationalErrorDetail = {
   document_type?: string;
 };
 
+function messageFromDetailObject(detail: object): string | null {
+  const d = detail as { message?: unknown; error?: unknown; step?: unknown };
+  const rawMsg = d.message ?? d.error;
+  if (typeof rawMsg !== "string" || !rawMsg.trim() || rawMsg.trim() === "[object Object]") {
+    return null;
+  }
+  const msg = rawMsg.trim();
+  const step = d.step;
+  return typeof step === "string" && step.trim() ? `${msg} (${step})` : msg;
+}
+
 /** Structured operational error from FastAPI `detail` object (e.g. missing document series). */
 export function extractApiOperationalErrorDetail(err: unknown): ApiOperationalErrorDetail | null {
   if (!err || typeof err !== "object" || !("response" in err)) return null;
@@ -57,6 +68,7 @@ export function extractCartCapacityExceededMessage(err: unknown): string | null 
 export function extractApiErrorMessage(err: unknown, fallback = "Wystąpił błąd operacji."): string {
   const op = extractApiOperationalErrorDetail(err);
   if (op?.message) return op.message;
+
   if (err && typeof err === "object" && "response" in err) {
     const res = (err as { response?: { data?: unknown; status?: number } }).response;
     const data = res?.data;
@@ -68,50 +80,46 @@ export function extractApiErrorMessage(err: unknown, fallback = "Wystąpił bł�
       }
       return msg;
     }
-    if (data && typeof data === "object" && "detail" in data) {
-      const detail = (data as { detail?: unknown }).detail;
-      if (typeof detail === "string" && detail.trim()) {
-        const msg = detail.trim();
-        if (looksLikeRawDbError(msg)) {
-          console.error("[api] raw server error:", msg);
-          return fallback;
-        }
-        return msg;
-      }
-      if (typeof detail === "number" || typeof detail === "boolean") {
-        return String(detail);
-      }
-      if (detail && typeof detail === "object" && !Array.isArray(detail)) {
-        const d = detail as { message?: unknown; error?: unknown; step?: unknown };
-        const rawMsg = d.message ?? d.error;
-        const step = d.step;
-        if (typeof rawMsg === "string" && rawMsg.trim() && rawMsg.trim() !== "[object Object]") {
-          const msg = rawMsg.trim();
-          return typeof step === "string" && step.trim() ? `${msg} (${step})` : msg;
-        }
-      }
-      if (Array.isArray(detail)) {
-        const parts = detail
-          .map((item) => {
-            if (typeof item === "string") return item;
-            if (item && typeof item === "object" && "msg" in item) {
-              return String((item as { msg?: unknown }).msg ?? "");
-            }
-            return "";
-          })
-          .filter(Boolean);
-        if (parts.length) return parts.join("; ");
-      }
-    }
     if (data && typeof data === "object") {
-      const top = data as { error?: unknown; message?: unknown };
-      const topMsg = String(top.message ?? "").trim();
-      if (topMsg && topMsg !== "[object Object]") return topMsg;
-      const er = String(top.error ?? "").trim();
-      if (er && er !== "[object Object]") return er;
+      const top = data as { message?: unknown; error?: unknown; detail?: unknown };
+      // Flat body { code, message, debug } or legacy { error }
+      const topMsg = messageFromDetailObject(top);
+      if (topMsg) return topMsg;
+
+      if ("detail" in data) {
+        const detail = top.detail;
+        if (typeof detail === "string" && detail.trim()) {
+          const msg = detail.trim();
+          if (looksLikeRawDbError(msg)) {
+            console.error("[api] raw server error:", msg);
+            return fallback;
+          }
+          return msg;
+        }
+        if (typeof detail === "number" || typeof detail === "boolean") {
+          return String(detail);
+        }
+        if (detail && typeof detail === "object" && !Array.isArray(detail)) {
+          const nested = messageFromDetailObject(detail);
+          if (nested) return nested;
+        }
+        if (Array.isArray(detail)) {
+          const parts = detail
+            .map((item) => {
+              if (typeof item === "string") return item;
+              if (item && typeof item === "object" && "msg" in item) {
+                return String((item as { msg?: unknown }).msg ?? "");
+              }
+              return "";
+            })
+            .filter(Boolean);
+          if (parts.length) return parts.join("; ");
+        }
+      }
     }
     return fallback;
   }
+
   if (err instanceof Error) {
     const msg = err.message.trim();
     if (msg && !/^Request failed with status code \d+/i.test(msg)) {

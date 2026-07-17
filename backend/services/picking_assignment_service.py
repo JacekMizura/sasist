@@ -37,9 +37,7 @@ from fastapi import HTTPException
 
 from .cart_capacity_service import (
     CartCapacityExceeded,
-    assert_cart_orders_capacity,
-    count_orders_on_cart,
-    http_exception_cart_capacity_exceeded,
+    enforce_cart_orders_capacity,
 )
 from .cart_service import _order_used_volume_dm3_from_items
 
@@ -185,14 +183,7 @@ def ensure_order_basket_for_wms_pick(db: Session, cart: Cart, order: Order) -> O
     if int(order.cart_id or 0) != int(cart.id):
         if order.cart_id is not None:
             return None
-        try:
-            assert_cart_orders_capacity(
-                cart,
-                current_orders=count_orders_on_cart(db, int(cart.id)),
-                incoming_orders=1,
-            )
-        except CartCapacityExceeded as exc:
-            raise http_exception_cart_capacity_exceeded(exc) from exc
+        enforce_cart_orders_capacity(db, cart, new_orders=1)
         order.cart_id = int(cart.id)
         db.add(order)
 
@@ -320,14 +311,7 @@ class PickingAssignmentService:
                 ):
                     if cid is None:
                         incoming_count += 1
-            try:
-                assert_cart_orders_capacity(
-                    cart,
-                    current_orders=count_orders_on_cart(self.db, int(cart.id)),
-                    incoming_orders=incoming_count,
-                )
-            except CartCapacityExceeded as exc:
-                raise http_exception_cart_capacity_exceeded(exc) from exc
+            enforce_cart_orders_capacity(self.db, cart, new_orders=incoming_count)
 
             orders_map: dict[int, Order] = {}
             if unique_ids:

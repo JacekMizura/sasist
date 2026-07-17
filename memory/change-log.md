@@ -1,5 +1,18 @@
 # Change log
 
+## 2026-07-17 — Capacity ORDERS: enforce na wszystkich assign paths
+
+- SSOT: `enforce_cart_orders_capacity(db, cart, new_orders=N)` → 409 `{code, current_orders, max_orders, attempted}`.
+- Wpięte: simulation, picking assignment, ensure_order_basket, ensure_picking_session,
+  quick-pick (`record_wms_quick_pick`), optimizer `_apply_fleet`.
+- Bez polegania na FE.
+
+## 2026-07-17 — quick-pick 409: log + message/debug
+
+- Przed każdym 409: `logger.warning("quick_pick rejected", extra={code, cart_*, session_*, order_count, …})`.
+- Body: `{ code, message, debug: { cart_id, cart_status, session_id, current_session_id } }`.
+- FE: `formatFastApiErrorDetail` / `extractApiErrorMessage` czytają `message`; toast bez „Request failed with status code 409”.
+
 ## 2026-07-17 — Cart stats SSOT: GET /wms/carts/{id}/stats
 
 - Jedno źródło prawdy: `orders.cart_id` + `orders.picking_session_id` (`cart_stats_service`).

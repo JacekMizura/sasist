@@ -87,7 +87,7 @@ def test_assert_orders_capacity_raises_when_exceeded(db):
         "code": "CART_CAPACITY_EXCEEDED",
         "current_orders": 1,
         "max_orders": 2,
-        "attempted_orders": 2,
+        "attempted": 2,
     }
 
 
@@ -123,4 +123,4 @@ def test_picking_assignment_returns_409_when_orders_capacity_exceeded(db):
     assert ei.value.detail["code"] == "CART_CAPACITY_EXCEEDED"
     assert ei.value.detail["current_orders"] == 1
     assert ei.value.detail["max_orders"] == 2
-    assert ei.value.detail["attempted_orders"] == 2
+    assert ei.value.detail["attempted"] == 2

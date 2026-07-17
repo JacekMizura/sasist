@@ -1970,6 +1970,10 @@ def record_wms_quick_pick(
                     raise ValueError(
                         f"Zamówienie #{num} jest przypisane do innego wózka — użyj właściwej sesji."
                     )
+                if o.cart_id is None or int(o.cart_id) != cid:
+                    from .cart_capacity_service import enforce_cart_orders_capacity
+
+                    enforce_cart_orders_capacity(db, cart_row, new_orders=1)
                 ps_before = getattr(o, "picking_started_at", None)
                 o.cart_id = cid
                 touch_picking_in_progress(o)

@@ -19,10 +19,8 @@ from ..models.order_item import OrderItem
 from ..models.product import Product
 from ..models.enums import CartStatus, CartType
 from .cart_capacity_service import (
-    CartCapacityExceeded,
-    assert_cart_orders_capacity,
+    enforce_cart_orders_capacity,
     count_orders_on_cart,
-    http_exception_cart_capacity_exceeded,
 )
 
 logger = logging.getLogger(__name__)
@@ -242,14 +240,7 @@ class SimulationService:
             orders_new = _sort_orders_for_assignment(orders_all)
 
             current_orders = count_orders_on_cart(self.db, int(cart.id))
-            try:
-                assert_cart_orders_capacity(
-                    cart,
-                    current_orders=current_orders,
-                    incoming_orders=len(orders_new),
-                )
-            except CartCapacityExceeded as exc:
-                raise http_exception_cart_capacity_exceeded(exc) from exc
+            enforce_cart_orders_capacity(self.db, cart, new_orders=len(orders_new))
 
             assigned_count = 0
             unassigned_count = 0

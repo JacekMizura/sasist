@@ -257,6 +257,17 @@ def ensure_picking_session_for_cart(
     elif cur == CartStatus.AVAILABLE:
         set_cart_status(cart, CartStatus.ASSIGNED)
 
+    # Nowe przypisania (jeszcze bez cart_id lub inny wózek) — capacity ORDERS
+    incoming = [
+        o
+        for o in orders
+        if getattr(o, "cart_id", None) is None or int(o.cart_id) != cid
+    ]
+    if incoming:
+        from .cart_capacity_service import enforce_cart_orders_capacity
+
+        enforce_cart_orders_capacity(db, cart, new_orders=len(incoming))
+
     for o in orders:
         o.cart_id = cid
         o.picking_session_id = sid

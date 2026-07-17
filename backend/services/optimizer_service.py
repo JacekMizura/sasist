@@ -19,6 +19,7 @@ from .simulation_service import (
     _sort_orders_for_assignment,
     FALLBACK_VOLUME_DM3,
 )
+from .cart_capacity_service import enforce_cart_orders_capacity
 
 logger = logging.getLogger(__name__)
 
@@ -297,6 +298,8 @@ def _apply_fleet(db: Session, tenant_id: int, warehouse_id: int) -> dict:
             cart_used[cid] = cart_used.get(cid, 0) + spec["volume"]
             order = order_by_id.get(spec["order_id"])
             if order:
+                if cart is not None:
+                    enforce_cart_orders_capacity(db, cart, new_orders=1)
                 order.cart_id = slot["cart_id"]
                 order.basket_id = slot["basket_id"]
                 order.total_volume_dm3 = round(spec["volume"], 2)
@@ -319,6 +322,7 @@ def _apply_fleet(db: Session, tenant_id: int, warehouse_id: int) -> dict:
                     bc["orders_count"] = bc.get("orders_count", 0) + 1
                     order = order_by_id.get(spec["order_id"])
                     if order:
+                        enforce_cart_orders_capacity(db, bc["cart"], new_orders=1)
                         order.cart_id = bc["cart_id"]
                         order.basket_id = None
                         order.total_volume_dm3 = round(spec["volume"], 2)
