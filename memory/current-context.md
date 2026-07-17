@@ -1,5 +1,21 @@
 # Current context
 
+## Cart lifecycle SSOT — complete rules (2026-07-17)
+- **SSOT:** `CartLifecycleService` (`cart_picking_lifecycle_service.py`) — jedyny writer: status, session, cart_id, assigned/packing user, history, current_task.
+- **Claim opcjonalny:** A) claim→ASSIGNED→scan→PICKING; B) scan→atomic claim+start→PICKING.
+- **ASSIGNED:** tylko rezerwacja wózka (`claimed_at`); zero orders/session/`current_session_id`.
+- **startPicking:** jedyne miejsce assign orders + capacity + session + PICKING.
+- **Timeouts:** ASSIGNED→AVAILABLE; PICKING+0 picks+idle→AVAILABLE; ≥1 Pick → świadome zakończenie.
+- **Heartbeat:** `POST /wms/picking/heartbeat` — tylko `last_activity_at` (409 SessionNotFound).
+- **Current Task:** backend snapshot (picked/remaining/progress) — FE nie liczy lokalnie.
+- Env: `CART_ASSIGNED_TIMEOUT_MINUTES` (30), `CART_PICKING_IDLE_NO_PICKS_MINUTES` (15).
+
+## Cart Current Task + Lifecycle History (2026-07-17)
+- `carts.current_task_json` — snapshot zadania (PICKING/PACKING/…); writer: CartLifecycleService.
+- Tabela `cart_lifecycle_history` — audyt przejść statusów (tylko lifecycle).
+- API: `GET /wms/carts/{id}/stats` (+ current_task), `/current-task`, `/lifecycle-history`.
+- Helper: `backend/services/cart_lifecycle_extensions.py` (używany wyłącznie przez lifecycle).
+
 ## Cart lifecycle NEW MODEL (2026-07-17) — implementing
 - Orders assigned **only** on physical cart scan (`start_picking`), not before.
 - ASSIGNED = cart claimed, no orders/session.

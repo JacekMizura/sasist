@@ -163,7 +163,12 @@ def get_cart_stats_or_404(db: Session, cart_id: int) -> dict[str, Any]:
     )
     if not cart:
         raise HTTPException(status_code=404, detail="Wózek nie istnieje")
-    return compute_cart_stats(db, cart)
+    stats = compute_cart_stats(db, cart)
+    from .cart_picking_lifecycle_service import get_cart_current_task, get_cart_status
+
+    stats["status"] = get_cart_status(cart).value
+    stats["current_task"] = get_cart_current_task(db, cart, enrich=True)
+    return stats
 
 
 def batch_cart_stats(db: Session, carts: list[Cart]) -> dict[int, dict[str, Any]]:
@@ -230,7 +235,12 @@ def batch_cart_stats(db: Session, carts: list[Cart]) -> dict[int, dict[str, Any]
     for cart in carts:
         cid = int(cart.id)
         orders_list = list(orders_by_cart.get(cid, {}).values())
-        out[cid] = _stats_from_orders(cart, orders_list)
+        stats = _stats_from_orders(cart, orders_list)
+        from .cart_picking_lifecycle_service import get_cart_current_task, get_cart_status
+
+        stats["status"] = get_cart_status(cart).value
+        stats["current_task"] = get_cart_current_task(db, cart, enrich=False)
+        out[cid] = stats
 
     return out
 

@@ -3865,6 +3865,14 @@ def ensure_carts_picking_lifecycle_columns(engine: Engine) -> None:
                     "REFERENCES app_users(id) ON DELETE SET NULL"
                 )
             )
+        if "current_task_json" not in cols:
+            # TEXT/CLOB — snapshot Current Task (JSON)
+            if dialect == "postgresql":
+                conn.execute(text("ALTER TABLE carts ADD COLUMN current_task_json TEXT"))
+            else:
+                conn.execute(text("ALTER TABLE carts ADD COLUMN current_task_json TEXT"))
+        if "claimed_at" not in cols:
+            conn.execute(text(_timestamp_column_ddl(engine, "carts", "claimed_at")))
         conn.commit()
 
     # PG: natywny ENUM z „pusty” / „w trakcie zbierania” → VARCHAR, inaczej zapis PICKING = 503
@@ -3902,6 +3910,76 @@ def ensure_carts_picking_lifecycle_columns(engine: Engine) -> None:
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_carts_packing_user_id ON carts(packing_user_id)"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_carts_current_session_id ON carts(current_session_id)"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_carts_status ON carts(status)"))
+        except Exception:
+            pass
+        conn.commit()
+
+
+def ensure_cart_lifecycle_history_table(engine: Engine) -> None:
+    """Tabela audytu przejść statusu wózka (SSOT: CartLifecycleService)."""
+    dialect = engine.dialect.name
+    with engine.connect() as conn:
+        if dialect == "postgresql":
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE IF NOT EXISTS cart_lifecycle_history (
+                        id SERIAL PRIMARY KEY,
+                        tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+                        warehouse_id INTEGER NOT NULL REFERENCES warehouses(id),
+                        cart_id INTEGER NOT NULL REFERENCES carts(id) ON DELETE CASCADE,
+                        from_status VARCHAR(32),
+                        to_status VARCHAR(32) NOT NULL,
+                        operator_user_id INTEGER REFERENCES app_users(id) ON DELETE SET NULL,
+                        changed_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW(),
+                        reason VARCHAR(64) NOT NULL DEFAULT 'transition',
+                        task_type VARCHAR(32),
+                        task_id INTEGER,
+                        batch_id INTEGER,
+                        metadata_json TEXT
+                    )
+                    """
+                )
+            )
+        else:
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE IF NOT EXISTS cart_lifecycle_history (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        tenant_id INTEGER NOT NULL,
+                        warehouse_id INTEGER NOT NULL,
+                        cart_id INTEGER NOT NULL,
+                        from_status VARCHAR(32),
+                        to_status VARCHAR(32) NOT NULL,
+                        operator_user_id INTEGER,
+                        changed_at DATETIME NOT NULL,
+                        reason VARCHAR(64) NOT NULL DEFAULT 'transition',
+                        task_type VARCHAR(32),
+                        task_id INTEGER,
+                        batch_id INTEGER,
+                        metadata_json TEXT,
+                        FOREIGN KEY(tenant_id) REFERENCES tenants (id),
+                        FOREIGN KEY(warehouse_id) REFERENCES warehouses (id),
+                        FOREIGN KEY(cart_id) REFERENCES carts (id) ON DELETE CASCADE,
+                        FOREIGN KEY(operator_user_id) REFERENCES app_users (id) ON DELETE SET NULL
+                    )
+                    """
+                )
+            )
+        try:
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_cart_lifecycle_history_cart_changed "
+                    "ON cart_lifecycle_history(cart_id, changed_at)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_cart_lifecycle_history_tenant_wh "
+                    "ON cart_lifecycle_history(tenant_id, warehouse_id)"
+                )
+            )
         except Exception:
             pass
         conn.commit()

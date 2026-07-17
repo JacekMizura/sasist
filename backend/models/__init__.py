@@ -18,6 +18,7 @@ from .label_template_group import LabelTemplateGroup  # noqa: F401 - register fo
 from .cart import Cart
 from .cart_basket import CartBasket
 from .cart_group import CartGroup
+from .cart_lifecycle_history import CartLifecycleHistory  # noqa: F401
 from .enums import CartType, CartStatus
 from .manufacturer import Manufacturer  # noqa: F401 - before Product (FK)
 from .supplier import Supplier  # noqa: F401 - before Product (default_supplier_id FK)

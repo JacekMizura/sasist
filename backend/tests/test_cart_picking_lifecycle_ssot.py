@@ -20,6 +20,7 @@ from backend.models.tenant import Tenant
 from backend.models.warehouse import Warehouse
 from backend.models.wms_operation_session import WmsOperationSession
 from backend.services.cart_capacity_service import CartCapacityExceeded
+from backend.models.cart_lifecycle_history import CartLifecycleHistory
 from backend.services.cart_picking_lifecycle_service import (
     InvalidCartStateError,
     InvalidCartTransitionError,
@@ -29,7 +30,9 @@ from backend.services.cart_picking_lifecycle_service import (
     claim_cart,
     finish_packing,
     finish_picking,
+    get_cart_current_task,
     get_cart_status,
+    list_cart_lifecycle_history,
     release_cart,
     start_packing,
     start_picking,
@@ -44,7 +47,7 @@ from backend.services.wms_audit_service import (
 @pytest.fixture
 def db():
     engine = create_engine("sqlite:///:memory:")
-    for model in (Tenant, Warehouse, Cart, CartBasket, Order, WmsOperationSession):
+    for model in (Tenant, Warehouse, Cart, CartBasket, Order, WmsOperationSession, CartLifecycleHistory):
         model.__table__.create(engine, checkfirst=True)
     Session = sessionmaker(bind=engine)
     session = Session()
@@ -103,6 +106,12 @@ def test_claim_has_no_orders_or_session(db):
     assert get_cart_status(cart) == CartStatus.ASSIGNED
     assert cart.assigned_user_id == 7
     assert cart.current_session_id is None
+    task = get_cart_current_task(db, cart, enrich=False)
+    assert task is not None
+    assert task["task_type"] == "CLAIMED"
+    assert task["operator_id"] == 7
+    hist = list_cart_lifecycle_history(db, cart_id=int(cart.id))
+    assert any(h["from_status"] == "AVAILABLE" and h["to_status"] == "ASSIGNED" for h in hist)
     db.refresh(o1)
     assert o1.cart_id is None
 
@@ -130,6 +139,11 @@ def test_full_lifecycle_scan_assigns_orders(db):
     assert cart.current_session_id == sess.id
     assert cart.assigned_user_id == 7
     assert get_cart_status(cart) == CartStatus.PICKING
+    task = get_cart_current_task(db, cart, enrich=False)
+    assert task is not None
+    assert task["task_type"] == "PICKING"
+    assert task["task_id"] == sess.id
+    assert task["total_orders"] == 2
     for o in (o1, o2):
         db.refresh(o)
         assert o.cart_id == cart.id
@@ -142,6 +156,10 @@ def test_full_lifecycle_scan_assigns_orders(db):
     assert cart.assigned_user_id == 7
     assert cart.current_session_id is None
     assert o1.cart_id == cart.id
+    task_r = get_cart_current_task(db, cart, enrich=False)
+    assert task_r is not None
+    assert task_r["task_type"] == "READY_FOR_PACKING"
+    assert float(task_r["progress"]) == 100.0
 
     start_packing(db, cart=cart, operator_user_id=99)
     db.commit()
@@ -149,6 +167,17 @@ def test_full_lifecycle_scan_assigns_orders(db):
     assert get_cart_status(cart) == CartStatus.PACKING
     assert cart.assigned_user_id is None
     assert getattr(cart, "packing_user_id", None) == 99
+    task_p = get_cart_current_task(db, cart, enrich=False)
+    assert task_p is not None
+    assert task_p["task_type"] == "PACKING"
+    assert task_p["operator_id"] == 99
+
+    hist = list_cart_lifecycle_history(db, cart_id=int(cart.id), limit=20)
+    transitions = [(h["from_status"], h["to_status"]) for h in hist]
+    assert ("AVAILABLE", "ASSIGNED") in transitions
+    assert ("ASSIGNED", "PICKING") in transitions
+    assert ("PICKING", "READY_FOR_PACKING") in transitions
+    assert ("READY_FOR_PACKING", "PACKING") in transitions
 
     released = finish_packing(db, cart=cart, packed_order_id=int(o1.id))
     db.commit()
@@ -253,3 +282,113 @@ def test_ensure_picking_session_forbidden(db):
     with pytest.raises(CartLifecycleError) as ei:
         ensure_picking_session_for_cart(db, cart=cart, orders=[o1], operator_user_id=1)
     assert ei.value.code == "legacy_ensure_forbidden"
+
+
+def test_start_picking_from_available_atomic(db):
+    """Scenariusz B: AVAILABLE → skan → claim+start atomowo."""
+    cart = _cart(db)
+    o1 = _order(db, number="S-1")
+    db.commit()
+    sess = start_picking(db, cart=cart, orders=[o1], operator_user_id=5)
+    db.commit()
+    assert get_cart_status(cart) == CartStatus.PICKING
+    assert cart.assigned_user_id == 5
+    assert cart.current_session_id == sess.id
+    assert getattr(cart, "claimed_at", None) is None
+    db.refresh(o1)
+    assert o1.cart_id == cart.id
+
+
+def test_cart_already_claimed(db):
+    from backend.services.cart_picking_lifecycle_service import CartAlreadyClaimedError
+
+    cart = _cart(db)
+    db.commit()
+    claim_cart(db, cart=cart, operator_user_id=1)
+    db.commit()
+    with pytest.raises(CartAlreadyClaimedError) as ei:
+        claim_cart(db, cart=cart, operator_user_id=2)
+    assert ei.value.code == "CartAlreadyClaimed"
+
+
+def test_assigned_timeout_releases(db):
+    from datetime import datetime, timedelta
+
+    from backend.services.cart_picking_lifecycle_service import release_stale_assigned_carts
+
+    cart = _cart(db)
+    db.commit()
+    claim_cart(db, cart=cart, operator_user_id=1)
+    cart.claimed_at = datetime.utcnow() - timedelta(minutes=45)
+    db.commit()
+    n = release_stale_assigned_carts(db, timeout_minutes=30)
+    db.commit()
+    assert n == 1
+    db.refresh(cart)
+    assert get_cart_status(cart) == CartStatus.AVAILABLE
+    assert cart.assigned_user_id is None
+
+
+def test_auto_release_no_picks_vs_blocked(db):
+    from datetime import datetime, timedelta
+
+    from backend.models.pick import Pick
+    from backend.services.cart_picking_lifecycle_service import (
+        auto_release_picking_without_confirmed_picks,
+    )
+
+    Pick.__table__.create(db.bind, checkfirst=True)
+
+    cart = _cart(db)
+    o1 = _order(db, number="AR-1")
+    db.commit()
+    start_picking(db, cart=cart, orders=[o1], operator_user_id=1)
+    sess = db.query(WmsOperationSession).filter(WmsOperationSession.id == cart.current_session_id).one()
+    sess.last_activity_at = datetime.utcnow() - timedelta(minutes=30)
+    cart.started_at = sess.last_activity_at
+    db.commit()
+
+    n = auto_release_picking_without_confirmed_picks(db, idle_minutes=15)
+    db.commit()
+    assert n == 1
+    db.refresh(cart)
+    assert get_cart_status(cart) == CartStatus.AVAILABLE
+
+    # Drugi przebieg: po pierwszym picku — brak auto-release
+    cart2 = _cart(db, code="CART-AR2")
+    o2 = _order(db, number="AR-2")
+    db.commit()
+    start_picking(db, cart=cart2, orders=[o2], operator_user_id=1)
+    db.add(
+        Pick(
+            tenant_id=1,
+            warehouse_id=1,
+            order_id=int(o2.id),
+            cart_id=int(cart2.id),
+            product_id=1,
+            location_id=1,
+            quantity=1.0,
+        )
+    )
+    sess2 = db.query(WmsOperationSession).filter(WmsOperationSession.id == cart2.current_session_id).one()
+    sess2.last_activity_at = datetime.utcnow() - timedelta(minutes=30)
+    cart2.started_at = sess2.last_activity_at
+    db.commit()
+    n2 = auto_release_picking_without_confirmed_picks(db, idle_minutes=15)
+    db.commit()
+    assert n2 == 0
+    db.refresh(cart2)
+    assert get_cart_status(cart2) == CartStatus.PICKING
+
+
+def test_current_task_has_picked_remaining_fields(db):
+    cart = _cart(db)
+    o1 = _order(db, number="CT-1")
+    db.commit()
+    start_picking(db, cart=cart, orders=[o1], operator_user_id=1)
+    db.commit()
+    task = get_cart_current_task(db, cart, enrich=False)
+    assert task is not None
+    assert "picked_count" in task
+    assert "remaining_count" in task
+    assert task["picked_count"] == 0

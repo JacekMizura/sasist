@@ -280,6 +280,23 @@ export async function postWmsPickingClaimCart(
   return res.data;
 }
 
+/** Heartbeat PICKING — tylko last_activity_at; 409 SessionNotFound gdy brak sesji. */
+export async function postWmsPickingHeartbeat(
+  tenantId: number,
+  warehouseId: number,
+  cartId: number,
+): Promise<{
+  cart_id: number;
+  session_id: number | null;
+  last_activity_at: string | null;
+  status: string;
+}> {
+  const res = await api.post("/wms/picking/heartbeat", null, {
+    params: { tenant_id: tenantId, warehouse_id: warehouseId, cart_id: cartId },
+  });
+  return res.data;
+}
+
 /**
  * Skan wózka → startPicking (sesja + przypisanie zamówień + PICKING).
  * Capacity walidowana tutaj.

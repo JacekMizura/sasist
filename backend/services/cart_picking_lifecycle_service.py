@@ -66,6 +66,11 @@ class InvalidCartTransitionError(CartLifecycleError):
         self.to_status = to_status
 
 
+class CartAlreadyClaimedError(CartLifecycleError):
+    def __init__(self, message: str = "Wózek jest już zarezerwowany przez innego operatora."):
+        super().__init__(message, code="CartAlreadyClaimed")
+
+
 # ---------------------------------------------------------------------------
 # Status helpers (read / write — write only via this module)
 # ---------------------------------------------------------------------------
@@ -91,6 +96,104 @@ def get_cart_status(cart: Cart) -> CartStatus:
 def set_cart_status(cart: Cart, status: CartStatus) -> None:
     """Internal — only CartLifecycleService transitions."""
     cart.status = status.value
+
+
+def _counts_for_cart(db: Session, cart: Cart) -> tuple[int, int]:
+    try:
+        from .cart_stats_service import compute_cart_stats
+
+        stats = compute_cart_stats(db, cart)
+        return int(stats.get("orders_count") or 0), int(stats.get("products_count") or 0)
+    except Exception:
+        return 0, 0
+
+
+def apply_cart_transition(
+    db: Session,
+    cart: Cart,
+    new_status: CartStatus,
+    *,
+    operator_user_id: int | None,
+    reason: str,
+    task_id: int | None = None,
+    batch_id: int | None = None,
+    progress: float | None = None,
+    total_orders: int | None = None,
+    total_products: int | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> None:
+    """
+    Jedyna brama zmiany carts.status + current_task + historii.
+    """
+    from .cart_lifecycle_extensions import (
+        append_lifecycle_history,
+        build_task_for_status,
+        write_current_task,
+    )
+
+    prev = get_cart_status(cart)
+    if prev != new_status:
+        append_lifecycle_history(
+            db,
+            cart=cart,
+            from_status=prev.value,
+            to_status=new_status.value,
+            operator_user_id=operator_user_id,
+            reason=reason,
+            task_type=new_status.value if new_status != CartStatus.AVAILABLE else None,
+            task_id=task_id,
+            batch_id=batch_id,
+            metadata=metadata,
+        )
+        set_cart_status(cart, new_status)
+
+    orders_n = total_orders
+    products_n = total_products
+    if orders_n is None or products_n is None:
+        o2, p2 = _counts_for_cart(db, cart)
+        if orders_n is None:
+            orders_n = o2
+        if products_n is None:
+            products_n = p2
+
+    prog = 0.0 if progress is None else float(progress)
+    if new_status == CartStatus.READY_FOR_PACKING and progress is None:
+        prog = 100.0
+    picked_n, remaining_n = 0, int(products_n or 0)
+    if new_status in (CartStatus.PICKING, CartStatus.READY_FOR_PACKING, CartStatus.PACKING):
+        from .cart_lifecycle_extensions import compute_pick_progress
+
+        picked_n, remaining_n, prog_live = compute_pick_progress(db, cart)
+        if progress is None and new_status == CartStatus.PICKING:
+            prog = prog_live
+        if new_status == CartStatus.READY_FOR_PACKING:
+            prog = 100.0
+            remaining_n = 0
+    if new_status == CartStatus.AVAILABLE:
+        write_current_task(cart, None)
+    else:
+        op = operator_user_id
+        if new_status == CartStatus.PACKING:
+            op = getattr(cart, "packing_user_id", None) or operator_user_id
+        elif new_status in (CartStatus.ASSIGNED, CartStatus.PICKING, CartStatus.READY_FOR_PACKING):
+            op = getattr(cart, "assigned_user_id", None) or operator_user_id
+        started = getattr(cart, "started_at", None)
+        if new_status == CartStatus.ASSIGNED:
+            started = getattr(cart, "claimed_at", None) or started or datetime.utcnow()
+        task = build_task_for_status(
+            status=new_status,
+            operator_id=int(op) if op is not None else None,
+            task_id=task_id if task_id is not None else getattr(cart, "current_session_id", None),
+            batch_id=batch_id,
+            started_at=started if isinstance(started, datetime) else datetime.utcnow(),
+            progress=prog,
+            total_orders=int(orders_n or 0),
+            total_products=int(products_n or 0),
+            picked_count=int(picked_n),
+            remaining_count=int(remaining_n),
+        )
+        write_current_task(cart, task)
+    db.add(cart)
 
 
 def _require_status(cart: Cart, allowed: Sequence[CartStatus], *, action: str) -> CartStatus:
@@ -267,24 +370,47 @@ def claim_cart(
     if uid <= 0:
         raise CartLifecycleError("Wymagany operator.", code="operator_required")
 
+    # Blokada podwójnego claim (Postgres: FOR UPDATE; SQLite: best-effort)
+    cid = int(cart.id)
+    try:
+        locked = db.query(Cart).filter(Cart.id == cid).with_for_update().first()
+        if locked is not None:
+            cart = locked
+    except Exception:
+        logger.debug("cart_lifecycle.claim_lock_fallback cart_id=%s", cid, exc_info=True)
+
     st = get_cart_status(cart)
     if st == CartStatus.ASSIGNED:
         existing = getattr(cart, "assigned_user_id", None)
         if existing is not None and int(existing) != uid:
-            raise InvalidCartStateError(
-                "Wózek jest już wybrany przez innego operatora.",
-                status=st.value,
-            )
+            raise CartAlreadyClaimedError()
         cart.assigned_user_id = uid
-        db.add(cart)
+        if hasattr(cart, "claimed_at") and getattr(cart, "claimed_at", None) is None:
+            cart.claimed_at = datetime.utcnow()
+        apply_cart_transition(
+            db,
+            cart,
+            CartStatus.ASSIGNED,
+            operator_user_id=uid,
+            reason="refresh_task",
+            progress=0.0,
+            total_orders=0,
+            total_products=0,
+        )
         db.flush()
         return cart
+
+    if st != CartStatus.AVAILABLE:
+        # Wózek w użyciu przez innego procesu
+        existing = getattr(cart, "assigned_user_id", None) or getattr(cart, "packing_user_id", None)
+        if existing is not None and int(existing) != uid:
+            raise CartAlreadyClaimedError()
+        _require_status(cart, (CartStatus.AVAILABLE,), action="claimCart")
 
     _require_status(cart, (CartStatus.AVAILABLE,), action="claimCart")
 
     orphans = _orders_on_cart(db, int(cart.id))
     if orphans:
-        # Dane niespójne względem nowego modelu — wyczyść occupancy przed claim.
         for o in orphans:
             clear_order_picking_session_context(o)
             db.add(o)
@@ -294,14 +420,25 @@ def claim_cart(
             len(orphans),
         )
 
-    set_cart_status(cart, CartStatus.ASSIGNED)
+    now = datetime.utcnow()
     cart.assigned_user_id = uid
     cart.current_session_id = None
     if hasattr(cart, "packing_user_id"):
         cart.packing_user_id = None
     if hasattr(cart, "started_at"):
         cart.started_at = None
-    db.add(cart)
+    if hasattr(cart, "claimed_at"):
+        cart.claimed_at = now
+    apply_cart_transition(
+        db,
+        cart,
+        CartStatus.ASSIGNED,
+        operator_user_id=uid,
+        reason="claim_cart",
+        progress=0.0,
+        total_orders=0,
+        total_products=0,
+    )
     db.flush()
     logger.info(
         "cart_lifecycle.claim cart_id=%s operator=%s status=ASSIGNED",
@@ -323,7 +460,7 @@ def start_picking(
     """
     Jedyny moment: tworzy sesję, przypisuje zamówienia, PICKING.
 
-    Wejście: ASSIGNED (po claim) lub AVAILABLE (claim+start w jednej transakcji).
+    Wejście: ASSIGNED (po claim) lub AVAILABLE (claim+start atomowo w tej samej transakcji).
     Capacity walidowana tutaj — nie wcześniej.
     """
     uid = int(operator_user_id)
@@ -337,7 +474,15 @@ def start_picking(
             return sess
         raise SessionNotFoundError("Status PICKING bez aktywnej sesji — użyj cancel lub heal.")
 
+    if st == CartStatus.ASSIGNED:
+        existing = getattr(cart, "assigned_user_id", None)
+        if existing is not None and int(existing) != uid:
+            raise CartAlreadyClaimedError(
+                "Wózek jest zarezerwowany przez innego operatora — nie można rozpocząć zbierania."
+            )
+
     if st == CartStatus.AVAILABLE:
+        # Scenariusz B: skan bez wcześniejszego claim — atomowo claim + start
         claim_cart(db, cart=cart, operator_user_id=uid)
         st = get_cart_status(cart)
 
@@ -407,10 +552,11 @@ def start_picking(
     db.flush()
 
     sid = int(sess.id)
-    set_cart_status(cart, CartStatus.PICKING)
     cart.current_session_id = sid
     cart.assigned_user_id = uid
     cart.started_at = now
+    if hasattr(cart, "claimed_at"):
+        cart.claimed_at = None
     if hasattr(cart, "packing_user_id"):
         cart.packing_user_id = None
 
@@ -433,7 +579,17 @@ def start_picking(
         db.add(o)
 
     cart.used_volume = round(used_vol, 2)
-    db.add(cart)
+    apply_cart_transition(
+        db,
+        cart,
+        CartStatus.PICKING,
+        operator_user_id=uid,
+        reason="start_picking",
+        task_id=sid,
+        progress=0.0,
+        total_orders=len(selected),
+        metadata={"order_ids": [int(o.id) for o in selected]},
+    )
     db.flush()
     logger.info(
         "cart_lifecycle.start_picking cart_id=%s session_id=%s orders=%s operator=%s",
@@ -452,6 +608,7 @@ def cancel_picking(
     tenant_id: int,
     warehouse_id: int,
     operator_user_id: int | None = None,
+    reason: str = "cancel_picking",
 ) -> dict[str, Any]:
     """Anuluj tylko z ASSIGNED | PICKING → AVAILABLE."""
     cart = (
@@ -515,9 +672,9 @@ def cancel_picking(
         sess.completed_reason = "cancelled"
         db.add(sess)
 
-    release_cart(db, cart=cart, reason="cancel_picking")
+    release_cart(db, cart=cart, reason=reason)
     db.flush()
-    logger.info("cart_lifecycle.cancel cart_id=%s restored=%s", int(cart_id), restored)
+    logger.info("cart_lifecycle.cancel cart_id=%s restored=%s reason=%s", int(cart_id), restored, reason)
     return {
         "cart_id": int(cart_id),
         "orders_restored": restored,
@@ -559,16 +716,26 @@ def finish_picking(
 
     sess = find_open_picking_session(db, cart=cart)
     now = datetime.utcnow()
+    sess_id = int(sess.id) if sess is not None else None
     if sess is not None and sess.completed_at is None:
         sess.completed_at = now
         sess.last_activity_at = now
         sess.completed_reason = "picking_finished"
         db.add(sess)
 
-    set_cart_status(cart, CartStatus.READY_FOR_PACKING)
     cart.current_session_id = None
     # assigned_user_id ZOSTAJE (wymaganie biznesowe)
-    db.add(cart)
+    apply_cart_transition(
+        db,
+        cart,
+        CartStatus.READY_FOR_PACKING,
+        operator_user_id=operator_user_id or getattr(cart, "assigned_user_id", None),
+        reason="finish_picking",
+        task_id=sess_id,
+        progress=100.0,
+        total_orders=len(order_list),
+        metadata={"order_ids": [int(o.id) for o in order_list]},
+    )
     db.flush()
     logger.info(
         "cart_lifecycle.finish_picking cart_id=%s orders=%s assigned_user=%s",
@@ -597,17 +764,30 @@ def start_packing(
         if hasattr(cart, "packing_user_id"):
             cart.packing_user_id = uid
         cart.assigned_user_id = None
-        db.add(cart)
+        apply_cart_transition(
+            db,
+            cart,
+            CartStatus.PACKING,
+            operator_user_id=uid,
+            reason="refresh_task",
+            progress=0.0,
+        )
         db.flush()
         return cart
 
     _require_status(cart, (CartStatus.READY_FOR_PACKING,), action="startPacking")
 
-    set_cart_status(cart, CartStatus.PACKING)
     cart.assigned_user_id = None
     if hasattr(cart, "packing_user_id"):
         cart.packing_user_id = uid
-    db.add(cart)
+    apply_cart_transition(
+        db,
+        cart,
+        CartStatus.PACKING,
+        operator_user_id=uid,
+        reason="start_packing",
+        progress=0.0,
+    )
     db.flush()
     logger.info(
         "cart_lifecycle.start_packing cart_id=%s packing_user=%s",
@@ -653,8 +833,21 @@ def finish_packing(
     )
     if remaining > 0:
         if st != CartStatus.PACKING:
-            set_cart_status(cart, CartStatus.PACKING)
-            db.add(cart)
+            apply_cart_transition(
+                db,
+                cart,
+                CartStatus.PACKING,
+                operator_user_id=getattr(cart, "packing_user_id", None),
+                reason="finish_packing_continue",
+            )
+        else:
+            apply_cart_transition(
+                db,
+                cart,
+                CartStatus.PACKING,
+                operator_user_id=getattr(cart, "packing_user_id", None),
+                reason="refresh_task",
+            )
         db.flush()
         return False
 
@@ -669,14 +862,24 @@ def release_cart(db: Session, *, cart: Cart, reason: str = "release") -> None:
         basket.used_volume = 0.0
         db.add(basket)
     cart.used_volume = 0.0
-    set_cart_status(cart, CartStatus.AVAILABLE)
     cart.assigned_user_id = None
     cart.current_session_id = None
     if hasattr(cart, "packing_user_id"):
         cart.packing_user_id = None
     if hasattr(cart, "started_at"):
         cart.started_at = None
-    db.add(cart)
+    if hasattr(cart, "claimed_at"):
+        cart.claimed_at = None
+    apply_cart_transition(
+        db,
+        cart,
+        CartStatus.AVAILABLE,
+        operator_user_id=None,
+        reason=reason,
+        progress=0.0,
+        total_orders=0,
+        total_products=0,
+    )
     logger.info("cart_lifecycle.release cart_id=%s reason=%s", int(cart.id), reason)
 
 
@@ -742,13 +945,19 @@ def heal_carts_with_orphaned_picking_sessions(db: Session) -> int:
             continue
         cur_sid = getattr(cart, "current_session_id", None)
         if st != CartStatus.PICKING or cur_sid is None or int(cur_sid or 0) != int(sess.id):
-            set_cart_status(cart, CartStatus.PICKING)
             cart.current_session_id = int(sess.id)
             if getattr(cart, "assigned_user_id", None) is None and getattr(sess, "operator_user_id", None):
                 cart.assigned_user_id = int(sess.operator_user_id)
             if getattr(cart, "started_at", None) is None:
                 cart.started_at = getattr(sess, "started_at", None) or datetime.utcnow()
-            db.add(cart)
+            apply_cart_transition(
+                db,
+                cart,
+                CartStatus.PICKING,
+                operator_user_id=getattr(sess, "operator_user_id", None),
+                reason="self_heal",
+                task_id=int(sess.id),
+            )
             healed += 1
             logger.warning(
                 "cart_lifecycle.self_heal cart_id=%s → PICKING session_id=%s",
@@ -758,6 +967,164 @@ def heal_carts_with_orphaned_picking_sessions(db: Session) -> int:
     if healed:
         db.commit()
     return healed
+
+
+def refresh_current_task_progress(db: Session, cart: Cart) -> dict[str, Any] | None:
+    """
+    Odśwież snapshot Current Task (picked/remaining/progress) bez zapisu historii.
+    Nie zmienia statusu ani powiązań.
+    """
+    from .cart_lifecycle_extensions import (
+        build_task_for_status,
+        compute_pick_progress,
+        get_current_task,
+        write_current_task,
+    )
+
+    st = get_cart_status(cart)
+    if st == CartStatus.AVAILABLE:
+        write_current_task(cart, None)
+        db.add(cart)
+        db.flush()
+        return None
+
+    orders_n, products_n = _counts_for_cart(db, cart)
+    picked_n, remaining_n, prog = 0, int(products_n or 0), 0.0
+    if st in (CartStatus.PICKING, CartStatus.READY_FOR_PACKING, CartStatus.PACKING):
+        picked_n, remaining_n, prog = compute_pick_progress(db, cart)
+        if st == CartStatus.READY_FOR_PACKING:
+            prog = 100.0
+            remaining_n = 0
+    op = getattr(cart, "assigned_user_id", None) or getattr(cart, "packing_user_id", None)
+    if st == CartStatus.PACKING:
+        op = getattr(cart, "packing_user_id", None) or op
+    started = getattr(cart, "started_at", None)
+    if st == CartStatus.ASSIGNED:
+        started = getattr(cart, "claimed_at", None) or started
+    task = build_task_for_status(
+        status=st,
+        operator_id=int(op) if op is not None else None,
+        task_id=getattr(cart, "current_session_id", None),
+        started_at=started if isinstance(started, datetime) else datetime.utcnow(),
+        progress=prog,
+        total_orders=orders_n,
+        total_products=products_n,
+        picked_count=picked_n,
+        remaining_count=remaining_n,
+    )
+    write_current_task(cart, task)
+    db.add(cart)
+    db.flush()
+    return get_current_task(db, cart, enrich=True)
+
+
+def release_stale_assigned_carts(db: Session, *, timeout_minutes: int | None = None) -> int:
+    """
+    ASSIGNED dłużej niż timeout bez startPicking → AVAILABLE.
+    """
+    from datetime import timedelta
+
+    from .cart_lifecycle_extensions import assigned_timeout_minutes, parse_current_task
+
+    minutes = int(timeout_minutes) if timeout_minutes is not None else assigned_timeout_minutes()
+    cutoff = datetime.utcnow() - timedelta(minutes=minutes)
+    carts = (
+        db.query(Cart)
+        .options(joinedload(Cart.baskets))
+        .filter(Cart.status == CartStatus.ASSIGNED.value)
+        .all()
+    )
+    released = 0
+    for cart in carts:
+        claimed = getattr(cart, "claimed_at", None)
+        if claimed is None:
+            task = parse_current_task(cart)
+            if task and task.started_at:
+                try:
+                    claimed = datetime.fromisoformat(task.started_at.replace("Z", ""))
+                except ValueError:
+                    claimed = None
+        if claimed is None:
+            # Brak znacznika czasu — zwolnij (niespójny ASSIGNED)
+            claimed = datetime.min
+        if claimed > cutoff:
+            continue
+        release_cart(db, cart=cart, reason="assigned_timeout")
+        released += 1
+        logger.info(
+            "cart_lifecycle.assigned_timeout cart_id=%s claimed_at=%s",
+            int(cart.id),
+            claimed,
+        )
+    return released
+
+
+def auto_release_picking_without_confirmed_picks(
+    db: Session,
+    *,
+    idle_minutes: int | None = None,
+) -> int:
+    """
+    PICKING + 0 potwierdzonych picków + idle session → AVAILABLE.
+
+    Jeżeli jest ≥1 Pick na wózku — auto-release zabronione.
+    """
+    from datetime import timedelta
+
+    from .cart_lifecycle_extensions import (
+        count_confirmed_picks_on_cart,
+        picking_idle_no_picks_minutes,
+    )
+
+    minutes = int(idle_minutes) if idle_minutes is not None else picking_idle_no_picks_minutes()
+    cutoff = datetime.utcnow() - timedelta(minutes=minutes)
+    carts = (
+        db.query(Cart)
+        .options(joinedload(Cart.baskets))
+        .filter(Cart.status == CartStatus.PICKING.value)
+        .all()
+    )
+    released = 0
+    for cart in carts:
+        picks_n = count_confirmed_picks_on_cart(db, int(cart.id))
+        if picks_n > 0:
+            continue
+        sess = find_open_picking_session(db, cart=cart)
+        last_act = None
+        if sess is not None:
+            last_act = getattr(sess, "last_activity_at", None) or getattr(sess, "started_at", None)
+        if last_act is None:
+            last_act = getattr(cart, "started_at", None)
+        if last_act is None or last_act > cutoff:
+            continue
+        try:
+            cancel_picking(
+                db,
+                cart_id=int(cart.id),
+                tenant_id=int(cart.tenant_id),
+                warehouse_id=int(cart.warehouse_id),
+                operator_user_id=getattr(cart, "assigned_user_id", None),
+                reason="auto_release_no_picks",
+            )
+            released += 1
+            logger.info(
+                "cart_lifecycle.auto_release_no_picks cart_id=%s last_activity=%s",
+                int(cart.id),
+                last_act,
+            )
+        except CartLifecycleError:
+            logger.exception(
+                "cart_lifecycle.auto_release_no_picks_failed cart_id=%s",
+                int(cart.id),
+            )
+    return released
+
+
+def run_cart_lifecycle_maintenance(db: Session) -> dict[str, int]:
+    """Timeout ASSIGNED + auto-release PICKING bez picków."""
+    a = release_stale_assigned_carts(db)
+    b = auto_release_picking_without_confirmed_picks(db)
+    return {"assigned_timeout_released": a, "picking_no_picks_released": b}
 
 
 def compute_session_stats_from_product_lines(lines: Sequence[Any]) -> dict[str, int]:
@@ -778,9 +1145,52 @@ def compute_session_stats_from_product_lines(lines: Sequence[Any]) -> dict[str, 
     return {"zebrane": zebrane, "do_zebrania": do_zebrania, "w_trakcie": w_trakcie}
 
 
-# ---------------------------------------------------------------------------
+# Public re-exports for screens (read-only)
+def get_cart_current_task(db: Session, cart: Cart, *, enrich: bool = True) -> dict[str, Any] | None:
+    from .cart_lifecycle_extensions import get_current_task
+
+    return get_current_task(db, cart, enrich=enrich)
+
+
+def list_cart_lifecycle_history(
+    db: Session,
+    *,
+    cart_id: int,
+    tenant_id: int | None = None,
+    warehouse_id: int | None = None,
+    limit: int = 100,
+) -> list[dict[str, Any]]:
+    from .cart_lifecycle_extensions import list_lifecycle_history
+
+    rows = list_lifecycle_history(
+        db,
+        cart_id=cart_id,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        limit=limit,
+    )
+    out: list[dict[str, Any]] = []
+    for r in rows:
+        out.append(
+            {
+                "id": int(r.id),
+                "cart_id": int(r.cart_id),
+                "from_status": r.from_status,
+                "to_status": r.to_status,
+                "operator_user_id": r.operator_user_id,
+                "changed_at": r.changed_at.isoformat(sep=" ", timespec="seconds")
+                if getattr(r, "changed_at", None)
+                else None,
+                "reason": r.reason,
+                "task_type": r.task_type,
+                "task_id": r.task_id,
+                "batch_id": r.batch_id,
+            }
+        )
+    return out
+
+
 # Backward-compatible aliases (deprecated names → new API)
-# ---------------------------------------------------------------------------
 
 # Public names matching approved design
 assignOrders = None  # removed: orders assigned only inside start_picking
@@ -831,8 +1241,13 @@ def release_cart_after_last_order_packed(
     # Dla kompatybilności ścieżki finish order: jeśli READY, najpierw wymuś PACKING bez usera (legacy).
     st = get_cart_status(cart)
     if st == CartStatus.READY_FOR_PACKING:
-        set_cart_status(cart, CartStatus.PACKING)
-        db.add(cart)
+        apply_cart_transition(
+            db,
+            cart,
+            CartStatus.PACKING,
+            operator_user_id=getattr(cart, "packing_user_id", None),
+            reason="legacy_finish_pack_promoted",
+        )
         db.flush()
     return finish_packing(
         db,
@@ -844,17 +1259,19 @@ def release_cart_after_last_order_packed(
 
 
 def mark_cart_packing(cart: Cart) -> None:
-    """Deprecated — użyj start_packing. Zostawione tylko jako no-op guard."""
-    cur = get_cart_status(cart)
-    if cur == CartStatus.READY_FOR_PACKING:
-        set_cart_status(cart, CartStatus.PACKING)
+    """Deprecated — użyj start_packing. Nie mutuje statusu poza SSOT transition."""
+    raise CartLifecycleError(
+        "mark_cart_packing zabronione. Użyj CartLifecycleService.start_packing.",
+        code="legacy_mark_packing_forbidden",
+    )
 
 
 def mark_cart_picking(cart: Cart) -> None:
     """Deprecated — użyj start_picking."""
-    cur = get_cart_status(cart)
-    if cur in (CartStatus.AVAILABLE, CartStatus.ASSIGNED, CartStatus.PICKING):
-        set_cart_status(cart, CartStatus.PICKING)
+    raise CartLifecycleError(
+        "mark_cart_picking zabronione. Użyj CartLifecycleService.start_picking.",
+        code="legacy_mark_picking_forbidden",
+    )
 
 
 def bind_cart_to_picking_session(
@@ -874,11 +1291,19 @@ def bind_cart_to_picking_session(
         cart.assigned_user_id = uid
     elif getattr(sess, "operator_user_id", None) is not None:
         cart.assigned_user_id = int(sess.operator_user_id)
-    if force_picking:
-        set_cart_status(cart, CartStatus.PICKING)
     if getattr(cart, "started_at", None) is None:
         cart.started_at = getattr(sess, "started_at", None) or now
-    db.add(cart)
+    if force_picking:
+        apply_cart_transition(
+            db,
+            cart,
+            CartStatus.PICKING,
+            operator_user_id=getattr(cart, "assigned_user_id", None),
+            reason="self_heal_bind",
+            task_id=sid,
+        )
+    else:
+        db.add(cart)
 
 
 def ensure_picking_session_for_cart(

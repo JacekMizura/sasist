@@ -428,6 +428,7 @@ def post_picking_claim_cart(
     """AVAILABLE → ASSIGNED (wybór wózka bez zamówień)."""
     from ..models.cart import Cart
     from ..services.cart_picking_lifecycle_service import (
+        CartAlreadyClaimedError,
         CartLifecycleError,
         claim_cart,
         get_cart_status,
@@ -447,6 +448,12 @@ def post_picking_claim_cart(
     try:
         claim_cart(db, cart=cart, operator_user_id=int(current_user.id))
         db.commit()
+    except CartAlreadyClaimedError as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "CartAlreadyClaimed", "error": e.message},
+        ) from e
     except CartLifecycleError as e:
         db.rollback()
         raise HTTPException(status_code=409, detail={"code": e.code, "error": e.message}) from e
@@ -454,6 +461,59 @@ def post_picking_claim_cart(
         "cart_id": int(cart.id),
         "status": get_cart_status(cart).value,
         "assigned_user_id": cart.assigned_user_id,
+    }
+
+
+@router.post("/picking/heartbeat")
+def post_picking_heartbeat(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
+    cart_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    current_user: AppUser = Depends(get_current_user),
+):
+    """
+    Heartbeat PICKING — aktualizuje wyłącznie last_activity_at.
+    Nigdy nie tworzy sesji, nie zmienia statusów, nie przypisuje zamówień.
+    Brak sesji → 409 SessionNotFound.
+    """
+    from ..models.cart import Cart
+    from ..services.cart_picking_lifecycle_service import get_cart_status, refresh_current_task_progress
+    from ..models.enums import CartStatus
+
+    cart = (
+        db.query(Cart)
+        .filter(
+            Cart.id == int(cart_id),
+            Cart.tenant_id == int(tenant_id),
+            Cart.warehouse_id == int(warehouse_id),
+        )
+        .first()
+    )
+    if cart is None:
+        raise HTTPException(status_code=404, detail="Nie znaleziono wózka.")
+
+    sess = _safe_touch_picking_session(
+        db=db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        session_kind="picking_active",
+        operator_user_id=int(current_user.id),
+        cart_id=int(cart_id),
+    )
+    # Odśwież current_task (picked/remaining) bez historii / statusu
+    if get_cart_status(cart) == CartStatus.PICKING:
+        refresh_current_task_progress(db, cart)
+    db.commit()
+    return {
+        "cart_id": int(cart_id),
+        "session_id": int(sess.id) if sess is not None else None,
+        "last_activity_at": (
+            sess.last_activity_at.isoformat(sep=" ", timespec="seconds")
+            if sess is not None and getattr(sess, "last_activity_at", None)
+            else None
+        ),
+        "status": get_cart_status(cart).value,
     }
 
 
@@ -472,7 +532,11 @@ def post_picking_start(
     Skan wózka → startPicking: capacity + sesja + order.cart_id + PICKING.
     """
     from ..services.cart_capacity_service import CartCapacityExceeded, http_exception_cart_capacity_exceeded
-    from ..services.cart_picking_lifecycle_service import CartLifecycleError, get_cart_status
+    from ..services.cart_picking_lifecycle_service import (
+        CartAlreadyClaimedError,
+        CartLifecycleError,
+        get_cart_status,
+    )
     from ..models.cart import Cart
 
     try:
@@ -490,6 +554,12 @@ def post_picking_start(
     except CartCapacityExceeded as e:
         db.rollback()
         raise http_exception_cart_capacity_exceeded(e) from e
+    except CartAlreadyClaimedError as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "CartAlreadyClaimed", "error": e.message},
+        ) from e
     except CartLifecycleError as e:
         db.rollback()
         raise HTTPException(status_code=409, detail={"code": e.code, "error": e.message}) from e

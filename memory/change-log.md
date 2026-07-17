@@ -1,5 +1,23 @@
 # Change log
 
+## 2026-07-17 — Cart lifecycle: claim opcjonalny, timeout, heartbeat, auto-release
+
+- Claim opcjonalny: AVAILABLE→start = atomowy claim+start; ASSIGNED bez orders/session.
+- `CartAlreadyClaimed` (409); `claimed_at`; timeout ASSIGNED (`CART_ASSIGNED_TIMEOUT_MINUTES`).
+- Auto-release PICKING przy 0 Pick (`CART_PICKING_IDLE_NO_PICKS_MINUTES`); ≥1 pick → zabronione.
+- Worker: `backend/workers/cart_lifecycle_worker.py` (startup + maintenance).
+- Heartbeat: `POST /wms/picking/heartbeat` → tylko `last_activity_at` (+ refresh current_task).
+- Current Task: `picked_count` / `remaining_count`; capacity tylko w `startPicking`.
+- Legacy assign (`_assign_bulk`/`_assign_multi`/`mark_cart_*`) → raise; writerzy lifecycle tylko w CartLifecycleService.
+- Testy: atomic start, claim conflict, timeout, auto-release, current_task fields.
+
+## 2026-07-17 — Cart Current Task + Lifecycle History
+
+- `carts.current_task_json` + `apply_cart_transition` w CartLifecycleService.
+- Tabela `cart_lifecycle_history` (from/to status, operator, reason, task_id).
+- API: stats z `current_task`, `GET .../current-task`, `GET .../lifecycle-history`.
+- Zapisy historii wyłącznie przez lifecycle.
+
 ## 2026-07-17 — Cart lifecycle SSOT (nowy model biznesowy)
 
 - Zamówienia **nie** są przypisywane przed skanem wózka.

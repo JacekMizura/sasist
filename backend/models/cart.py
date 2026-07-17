@@ -60,6 +60,10 @@ class Cart(Base):
     current_session_id = Column(Integer, nullable=True, index=True)
     #: Start aktywnego zbierania (ustawiane przy wejściu w PICKING).
     started_at = Column(DateTime, nullable=True)
+    #: Moment claim (ASSIGNED) — do timeoutu rezerwacji.
+    claimed_at = Column(DateTime, nullable=True)
+    #: Snapshot aktualnego zadania roboczego (JSON) — SSOT: CartLifecycleService.
+    current_task_json = Column(String, nullable=True)
 
     # ==========================================================
     # RELACJE STRUKTURALNE

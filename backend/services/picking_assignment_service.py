@@ -108,13 +108,10 @@ def format_cart_basket_label(b: CartBasket) -> str:
 
 
 def refresh_cart_used_volume_wms(db: Session, cart: Cart) -> None:
-    """Sumuje ``Order.total_volume_dm3`` dla zamówień na wózku — po zmianie koszyków."""
+    """Sumuje ``Order.total_volume_dm3`` dla zamówień na wózku — po zmianie koszyków.
+    Nie zmienia statusu lifecycle (wyłącznie volume)."""
     orders_on = db.query(Order).filter(Order.cart_id == cart.id).all()
     cart.used_volume = round(sum(float(o.total_volume_dm3 or 0) for o in orders_on), 2)
-    if cart.used_volume and cart.used_volume > 0:
-        from .cart_picking_lifecycle_service import mark_cart_picking
-
-        mark_cart_picking(cart)
     db.add(cart)
 
 
@@ -287,107 +284,13 @@ class PickingAssignmentService:
         rejected: list[PickingAssignmentRejected],
         config: PickingAssignmentConfig,
     ) -> None:
-        existing_on_cart = (
-            self.db.query(Order)
-            .options(joinedload(Order.items))
-            .filter(Order.cart_id == cart.id)
-            .all()
+        del cart, sorted_ids, orders_map, assigned, rejected, config
+        from .cart_picking_lifecycle_service import CartLifecycleError
+
+        raise CartLifecycleError(
+            "Legacy _assign_bulk zabronione. Użyj CartLifecycleService.start_picking.",
+            code="legacy_assign_forbidden",
         )
-        singles_on_bulk = sum(1 for o in existing_on_cart if _is_single_item_order(o))
-        multis_on_bulk = sum(1 for o in existing_on_cart if _is_multi_item_order(o))
-        order_count_on_bulk = len(existing_on_cart)
-        used_vol = sum(_order_volume_dm3(o) for o in existing_on_cart)
-        cap = float(cart.total_volume or 0)
-        use_per_type_limits = (
-            config.max_orders_in_bulk_single_item is not None or config.max_orders_in_bulk_multi_item is not None
-        )
-
-        def _bulk_exceeds_order_limit(order: Order) -> tuple[bool, str | None]:
-            if not use_per_type_limits:
-                if config.max_orders_in_bulk is not None and order_count_on_bulk + 1 > config.max_orders_in_bulk:
-                    return True, f"limit zamówień na BULK (łącznie): {config.max_orders_in_bulk}"
-                return False, None
-            if _is_single_item_order(order):
-                lim = config.max_orders_in_bulk_single_item
-                if lim is None:
-                    lim = config.max_orders_in_bulk
-                cnt = singles_on_bulk
-            elif _is_multi_item_order(order):
-                lim = config.max_orders_in_bulk_multi_item
-                if lim is None:
-                    lim = config.max_orders_in_bulk
-                cnt = multis_on_bulk
-            else:
-                return False, None
-            if lim is not None and cnt + 1 > lim:
-                return True, f"limit zamówień BULK dla tego typu: {lim}"
-            return False, None
-
-        for oid in sorted_ids:
-            order = orders_map.get(oid)
-            if not order:
-                rejected.append(PickingAssignmentRejected(order_id=oid, reason="not_found"))
-                continue
-            if order.cart_id is not None:
-                rejected.append(
-                    PickingAssignmentRejected(order_id=oid, reason="already_assigned", detail="cart_id != NULL"),
-                )
-                continue
-            if int(order.warehouse_id) != int(cart.warehouse_id):
-                rejected.append(PickingAssignmentRejected(order_id=oid, reason="warehouse_mismatch"))
-                continue
-            if len(order.items) == 0:
-                rejected.append(PickingAssignmentRejected(order_id=oid, reason="not_found", detail="Brak pozycji"))
-                continue
-
-            if not _is_single_item_order(order) and not _is_multi_item_order(order):
-                rejected.append(
-                    PickingAssignmentRejected(order_id=oid, reason="not_found", detail="Niejednoznaczna klasyfikacja pozycji"),
-                )
-                continue
-
-            rules = _mode_rules_for_order(order, config)
-            if not rules.allow_bulk:
-                rejected.append(
-                    PickingAssignmentRejected(
-                        order_id=oid,
-                        reason="config_disallows_bulk",
-                        detail="Konfiguracja: brak zgody na BULK dla tego typu zamówienia",
-                    )
-                )
-                continue
-
-            exceeds, lim_msg = _bulk_exceeds_order_limit(order)
-            if exceeds:
-                rejected.append(
-                    PickingAssignmentRejected(
-                        order_id=oid,
-                        reason="bulk_max_orders_exceeded",
-                        detail=lim_msg,
-                    )
-                )
-                continue
-
-            vol = _order_volume_dm3(order)
-            if cap > 0 and used_vol + vol > cap + 1e-6:
-                rejected.append(
-                    PickingAssignmentRejected(order_id=oid, reason="bulk_volume_exceeded", detail=f"limit {cap} dm³"),
-                )
-                continue
-
-            order.cart_id = cart.id
-            order.basket_id = None
-            order.total_volume_dm3 = vol
-            self.db.add(order)
-            used_vol += vol
-            order_count_on_bulk += 1
-            if _is_single_item_order(order):
-                singles_on_bulk += 1
-            elif _is_multi_item_order(order):
-                multis_on_bulk += 1
-            assigned.append(
-                PickingAssignmentOrderResult(order_id=oid, cart_id=cart.id, basket_id=None, volume_dm3=vol),
-            )
 
     def _assign_multi(
         self,
@@ -398,179 +301,13 @@ class PickingAssignmentService:
         rejected: list[PickingAssignmentRejected],
         config: PickingAssignmentConfig,
     ) -> None:
-        baskets_db = sorted(
-            list(cart.baskets or []),
-            key=lambda b: (getattr(b, "row", 0), getattr(b, "column", 0), getattr(b, "id", 0)),
+        del cart, sorted_ids, orders_map, assigned, rejected, config
+        from .cart_picking_lifecycle_service import CartLifecycleError
+
+        raise CartLifecycleError(
+            "Legacy _assign_multi zabronione. Użyj CartLifecycleService.start_picking.",
+            code="legacy_assign_forbidden",
         )
-        runtimes: dict[int, _BasketRuntime] = {}
-        basket_by_id: dict[int, CartBasket] = {int(b.id): b for b in baskets_db}
-
-        for b in baskets_db:
-            bid = int(b.id)
-            cap = _basket_capacity_dm3(b)
-            if cap <= 0:
-                logger.warning("PickingAssignment: koszyk %s ma pojemność 0 — pomijany", bid)
-                continue
-            runtimes[bid] = _BasketRuntime(basket_id=bid, capacity_dm3=cap, used_dm3=0.0, order_ids=[], holds_multi_order=False)
-
-        existing_on_cart = (
-            self.db.query(Order)
-            .options(joinedload(Order.items))
-            .filter(Order.cart_id == cart.id)
-            .all()
-        )
-        for o in existing_on_cart:
-            if o.basket_id is None or int(o.basket_id) not in runtimes:
-                continue
-            br = runtimes[int(o.basket_id)]
-            vol = _order_volume_dm3(o)
-            br.used_dm3 = round(br.used_dm3 + vol, 4)
-            if o.id not in br.order_ids:
-                br.order_ids.append(int(o.id))
-            if _is_multi_item_order(o):
-                br.holds_multi_order = True
-
-        for bid, br in runtimes.items():
-            bobj = basket_by_id[bid]
-            if br.order_ids:
-                bobj.order_id = br.order_ids[0]
-            else:
-                bobj.order_id = None
-            bobj.used_volume = round(br.used_dm3, 4)
-            self.db.add(bobj)
-
-        order_list = [basket_by_id[i] for i in sorted(runtimes.keys())]
-
-        if not order_list:
-            for oid in sorted_ids:
-                order = orders_map.get(oid)
-                if not order:
-                    rejected.append(PickingAssignmentRejected(order_id=oid, reason="not_found"))
-                elif order.cart_id is not None:
-                    rejected.append(
-                        PickingAssignmentRejected(order_id=oid, reason="already_assigned", detail="cart_id != NULL"),
-                    )
-                elif int(order.warehouse_id) != int(cart.warehouse_id):
-                    rejected.append(PickingAssignmentRejected(order_id=oid, reason="warehouse_mismatch"))
-                elif len(order.items) == 0:
-                    rejected.append(PickingAssignmentRejected(order_id=oid, reason="not_found", detail="Brak pozycji"))
-                elif not _mode_rules_for_order(order, config).allow_basket:
-                    rejected.append(
-                        PickingAssignmentRejected(
-                            order_id=oid,
-                            reason="config_disallows_basket",
-                            detail="Konfiguracja: brak zgody na koszyk dla tego typu zamówienia",
-                        )
-                    )
-                else:
-                    rejected.append(
-                        PickingAssignmentRejected(
-                            order_id=oid,
-                            reason="multi_no_basket",
-                            detail="Brak koszyków z pojemnością",
-                        )
-                    )
-            return
-
-        for oid in sorted_ids:
-            order = orders_map.get(oid)
-            if not order:
-                rejected.append(PickingAssignmentRejected(order_id=oid, reason="not_found"))
-                continue
-            if order.cart_id is not None:
-                rejected.append(
-                    PickingAssignmentRejected(order_id=oid, reason="already_assigned", detail="cart_id != NULL"),
-                )
-                continue
-            if int(order.warehouse_id) != int(cart.warehouse_id):
-                rejected.append(PickingAssignmentRejected(order_id=oid, reason="warehouse_mismatch"))
-                continue
-            if len(order.items) == 0:
-                rejected.append(PickingAssignmentRejected(order_id=oid, reason="not_found", detail="Brak pozycji"))
-                continue
-
-            rules = _mode_rules_for_order(order, config)
-            if not rules.allow_basket:
-                rejected.append(
-                    PickingAssignmentRejected(
-                        order_id=oid,
-                        reason="config_disallows_basket",
-                        detail="Konfiguracja: brak zgody na koszyk dla tego typu zamówienia",
-                    )
-                )
-                continue
-
-            vol = _order_volume_dm3(order)
-
-            if _is_multi_item_order(order):
-                placed = False
-                for b in order_list:
-                    bid = int(b.id)
-                    if bid not in runtimes:
-                        continue
-                    br = runtimes[bid]
-                    if br.holds_multi_order or len(br.order_ids) > 0:
-                        continue
-                    if br.used_dm3 > 1e-6:
-                        continue
-                    if vol > br.capacity_dm3 + 1e-6:
-                        continue
-                    br.used_dm3 = round(vol, 4)
-                    br.order_ids = [oid]
-                    br.holds_multi_order = True
-                    b.order_id = oid
-                    b.used_volume = br.used_dm3
-                    self.db.add(b)
-                    order.cart_id = cart.id
-                    order.basket_id = bid
-                    order.total_volume_dm3 = vol
-                    self.db.add(order)
-                    assigned.append(
-                        PickingAssignmentOrderResult(order_id=oid, cart_id=cart.id, basket_id=bid, volume_dm3=vol),
-                    )
-                    placed = True
-                    break
-                if not placed:
-                    max_cap = max((r.capacity_dm3 for r in runtimes.values()), default=0.0)
-                    rej_reason = "multi_oversized" if vol > max_cap + 1e-6 else "multi_no_basket"
-                    rejected.append(PickingAssignmentRejected(order_id=oid, reason=rej_reason))
-                continue
-
-            if not _is_single_item_order(order):
-                rejected.append(
-                    PickingAssignmentRejected(order_id=oid, reason="not_found", detail="Niejednoznaczna klasyfikacja pozycji"),
-                )
-                continue
-
-            placed = False
-            for b in order_list:
-                bid = int(b.id)
-                if bid not in runtimes:
-                    continue
-                br = runtimes[bid]
-                if br.holds_multi_order:
-                    continue
-                if br.remaining_dm3 + 1e-6 >= vol:
-                    br.used_dm3 = round(br.used_dm3 + vol, 4)
-                    br.order_ids.append(oid)
-                    b.used_volume = br.used_dm3
-                    if b.order_id is None:
-                        b.order_id = oid
-                    self.db.add(b)
-                    order.cart_id = cart.id
-                    order.basket_id = bid
-                    order.total_volume_dm3 = vol
-                    self.db.add(order)
-                    assigned.append(
-                        PickingAssignmentOrderResult(order_id=oid, cart_id=cart.id, basket_id=bid, volume_dm3=vol),
-                    )
-                    placed = True
-                    break
-
-            if not placed:
-                max_cap = max((r.capacity_dm3 for r in runtimes.values()), default=0.0)
-                reason = "multi_oversized" if vol > max_cap + 1e-6 else "multi_no_basket"
-                rejected.append(PickingAssignmentRejected(order_id=oid, reason=reason))
 
     def _build_summary_from_db(self, cart: Cart | None, ctype: str) -> PickingAssignmentSummary:
         if not cart:
