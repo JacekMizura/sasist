@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-07-17 — Log flood control + HTTP 500 middleware
+
+- `schema.reconcile`: jeden summary `FK cycles detected: N` + fallback (bez per-`fk_cycle_break`).
+- Per-column/index/FK sync → DEBUG; jeden INFO summary reconcile.
+- `postgres_sequence_sync`: fix odczytu `is_called` + fallback `pg_sequences.last_value`; tylko summary (+ max 5 error samples).
+- Middleware `outer_request_logger`: każdy HTTP 500 → ERROR z request_id/method/path/user/tenant/warehouse/file/line/traceback/duration (handler tylko attach exc).
+
 ## 2026-07-17 — Startup fixes + global 500 traceback
 
 - `postgres_sequence_sync`: `is_called` z relacji sekwencji (nie z `pg_sequences`).

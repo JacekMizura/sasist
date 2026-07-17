@@ -73,16 +73,11 @@ def iter_metadata_tables_ordered(metadata: Any) -> list[Table]:
     Falls back to manual topological sort when FK cycles are detected.
     """
     if _metadata_has_fk_cycles(metadata):
-        logger.warning("[schema.reconcile] fk_cycles_detected — fallback_topological_sort")
         return _topological_sort_tables_fallback(metadata)
 
     try:
         ordered = list(metadata.sorted_tables)
-    except CircularDependencyError as exc:
-        logger.warning(
-            "[schema.reconcile] sorted_tables_cycle err=%s — fallback_topological_sort",
-            exc,
-        )
+    except CircularDependencyError:
         return _topological_sort_tables_fallback(metadata)
 
     return ordered if ordered else _topological_sort_tables_fallback(metadata)
@@ -100,20 +95,23 @@ def _topological_sort_tables_fallback(metadata: Any) -> list[Table]:
 
     ordered: list[Table] = []
     remaining = set(tables.keys())
+    cycle_breaks = 0
     while remaining:
         done = {t.name for t in ordered}
         ready = sorted(n for n in remaining if deps[n].issubset(done))
         if not ready:
+            cycle_breaks += 1
             cycle_pick = min(remaining)
-            logger.warning(
-                "[schema.reconcile] fk_cycle_break table=%s remaining=%s",
-                cycle_pick,
-                len(remaining),
-            )
             ready = [cycle_pick]
         for name in ready:
             ordered.append(tables[name])
             remaining.remove(name)
+    if cycle_breaks:
+        # One summary only — never log each fk_cycle_break (Railway drops flooded logs).
+        logger.warning(
+            "[schema.reconcile] FK cycles detected: %s\nFallback topological sort enabled",
+            cycle_breaks,
+        )
     return ordered
 
 
@@ -253,14 +251,20 @@ def reconcile_orm_schema(
         duration_ms=duration_ms,
         errors=tuple(errors),
     )
-    print(
-        f"[schema.reconcile] phase={phase} dialect={dialect} "
-        f"models={models_synced} tables_created={tables_created} "
-        f"columns={columns_added} indexes={indexes_added} fks={foreign_keys_added} "
-        f"duration_ms={duration_ms} errors={len(errors)}",
-        flush=True,
+    # Single startup line (avoid print+logger duplicate spam).
+    logger.info(
+        "[schema.reconcile] phase=%s dialect=%s models=%s tables_created=%s "
+        "columns=%s indexes=%s fks=%s duration_ms=%s errors=%s",
+        phase,
+        dialect,
+        models_synced,
+        tables_created,
+        columns_added,
+        indexes_added,
+        foreign_keys_added,
+        duration_ms,
+        len(errors),
     )
-    logger.info("[schema.reconcile] complete %s", summary)
     return summary
 
 

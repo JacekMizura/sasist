@@ -83,26 +83,43 @@ def _read_sequence_state(conn: Connection, sequence_fq: str) -> tuple[int, bool]
     Odczyt last_value + is_called.
 
     ``pg_catalog.pg_sequences`` (PG 10+) ma ``last_value``, ale **nie** ma ``is_called``.
-    Flaga ``is_called`` jest wyłącznie w relacji sekwencji:
+    Flaga ``is_called`` jest w relacji sekwencji:
     ``SELECT last_value, is_called FROM schema.seq_name``.
+
+    Fallback: tylko ``last_value`` z ``pg_sequences`` + ``is_called=True``
+    (bezpieczne przy sync do MAX(id)).
     """
     schema, name = _parse_pg_sequence_name(sequence_fq)
-    # Bezpieczne identyfikatory: tylko znaki dozwolone w nazwach PG
     if not all(c.isalnum() or c == "_" for c in schema) or not all(
         c.isalnum() or c == "_" for c in name
     ):
-        logger.error(
-            "[postgres_sequence_sync] unsafe sequence identifier schema=%r name=%r",
-            schema,
-            name,
-        )
         return None
-    row = conn.execute(
-        text(f'SELECT last_value, is_called FROM "{schema}"."{name}"'),
-    ).fetchone()
-    if row is None:
-        return None
-    return int(row[0]), bool(row[1])
+
+    try:
+        row = conn.execute(
+            text(f'SELECT last_value, is_called FROM "{schema}"."{name}"'),
+        ).fetchone()
+        if row is not None and row[0] is not None:
+            return int(row[0]), bool(row[1])
+    except Exception:
+        pass
+
+    try:
+        row = conn.execute(
+            text(
+                """
+                SELECT last_value
+                FROM pg_catalog.pg_sequences
+                WHERE schemaname = :schema AND sequencename = :name
+                """
+            ),
+            {"schema": schema, "name": name},
+        ).fetchone()
+        if row is not None and row[0] is not None:
+            return int(row[0]), True
+    except Exception:
+        pass
+    return None
 
 
 def _apply_sequence_fix(conn: Connection, sequence_fq: str, max_id: int | None) -> None:
@@ -188,14 +205,6 @@ def _sync_table_sequence(conn: Connection, table: Table) -> SequenceSyncResult:
             next_val = 1
         else:
             next_val = max_id_int + 1
-        logger.info(
-            "[postgres_sequence_sync] fixed table=%s column=%s sequence=%s max_id=%s next_value=%s",
-            table_label,
-            pk.name,
-            sequence_fq,
-            max_id_int if max_id_int is not None else "NULL",
-            next_val,
-        )
 
     return SequenceSyncResult(
         table=table_label,
@@ -232,6 +241,7 @@ def ensure_postgres_sequences_synced(
 
         metadata = Base.metadata
 
+    error_samples: list[str] = []
     names = sorted(table_names if table_names is not None else metadata.tables.keys())
     for name in names:
         table = metadata.tables.get(name)
@@ -241,12 +251,9 @@ def ensure_postgres_sequences_synced(
             with engine.begin() as conn:
                 result = _sync_table_sequence(conn, table)
         except Exception as exc:
-            logger.error(
-                "[postgres_sequence_sync] table=%s error=%s",
-                name,
-                exc,
-            )
             report.errors += 1
+            if len(error_samples) < 5:
+                error_samples.append(f"{name}: {exc}")
             report.results.append(
                 SequenceSyncResult(
                     table=name,
@@ -267,6 +274,8 @@ def ensure_postgres_sequences_synced(
             continue
         if result.action == "error":
             report.errors += 1
+            if len(error_samples) < 5:
+                error_samples.append(f"{result.table}: read_sequence_failed")
             continue
 
         report.checked += 1
@@ -275,13 +284,19 @@ def ensure_postgres_sequences_synced(
         else:
             report.ok += 1
 
-    if report.fixed:
-        logger.info(
-            "[postgres_sequence_sync] summary checked=%s fixed=%s ok=%s skipped=%s errors=%s",
-            report.checked,
-            report.fixed,
-            report.ok,
-            report.skipped,
+    # One summary line only — never per-table INFO/ERROR (Railway message drop).
+    logger.info(
+        "[postgres_sequence_sync] summary checked=%s fixed=%s ok=%s skipped=%s errors=%s",
+        report.checked,
+        report.fixed,
+        report.ok,
+        report.skipped,
+        report.errors,
+    )
+    if error_samples:
+        logger.warning(
+            "[postgres_sequence_sync] error_samples count=%s samples=%s",
             report.errors,
+            "; ".join(error_samples),
         )
     return report

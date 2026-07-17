@@ -605,7 +605,7 @@ def _ensure_model_foreign_keys(
             with engine.begin() as conn:
                 conn.execute(text(stmt))
             added += 1
-            logger.info(
+            logger.debug(
                 "[%s] added_fk table=%s constraint=%s dialect=%s",
                 log_prefix,
                 table,
@@ -613,7 +613,7 @@ def _ensure_model_foreign_keys(
                 engine.dialect.name,
             )
         except Exception as exc:
-            logger.warning(
+            logger.debug(
                 "[%s] add_fk_failed table=%s constraint=%s dialect=%s err=%s",
                 log_prefix,
                 table,
@@ -665,7 +665,7 @@ def _ensure_model_indexes(
         idx_cols = {c.name for c in idx.columns}
         missing_cols = idx_cols - db_col_set
         if missing_cols:
-            logger.warning(
+            logger.debug(
                 "[%s] skip_index table=%s index=%s reason=missing_columns missing=%s",
                 log_prefix,
                 table,
@@ -679,7 +679,7 @@ def _ensure_model_indexes(
             with engine.begin() as conn:
                 conn.execute(text(stmt))
             added += 1
-            logger.info("[%s] added_index table=%s index=%s dialect=%s", log_prefix, table, idx_name, engine.dialect.name)
+            logger.debug("[%s] added_index table=%s index=%s dialect=%s", log_prefix, table, idx_name, engine.dialect.name)
         except Exception as exc:
             logger.exception("[%s] add_index_failed table=%s index=%s", log_prefix, table, idx_name)
             errors.append(f"{table}.index.{idx_name}: {exc}")
@@ -712,7 +712,7 @@ def ensure_model_table_from_orm(engine: Engine, model: Any, *, log_prefix: str =
     ddl = str(CreateTable(model.__table__).compile(dialect=engine.dialect))
     with engine.begin() as conn:
         conn.execute(text(ddl))
-    logger.info("[%s] created_table table=%s dialect=%s", log_prefix, table, engine.dialect.name)
+    logger.debug("[%s] created_table table=%s dialect=%s", log_prefix, table, engine.dialect.name)
     return True
 
 
@@ -732,7 +732,7 @@ def sync_model_columns(
     failed = failed_columns if failed_columns is not None else set()
     table = model.__tablename__
     if not has_table(engine, table):
-        logger.info("[%s] skip table=%s reason=missing_table", log_prefix, table)
+        logger.debug("[%s] skip table=%s reason=missing_table", log_prefix, table)
         return 0
 
     columns_added = 0
@@ -753,11 +753,7 @@ def sync_model_columns(
             )
             columns_added += 1
             db_cols.add(col.key)
-            print(
-                f"SCHEMA_SYNC_ADDED_COLUMN table={table} column={col.key} dialect={dialect}",
-                flush=True,
-            )
-            logger.info(
+            logger.debug(
                 "[%s] added_column table=%s column=%s dialect=%s",
                 log_prefix,
                 table,

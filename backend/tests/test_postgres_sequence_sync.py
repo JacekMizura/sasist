@@ -106,7 +106,7 @@ class TestSequenceSyncPerTableTransactions(unittest.TestCase):
 
         mock_sync.side_effect = side_effect
 
-        with self.assertLogs("backend.db.postgres_sequence_sync", level="ERROR") as logs:
+        with self.assertLogs("backend.db.postgres_sequence_sync", level="INFO") as logs:
             report = ensure_postgres_sequences_synced(
                 self.engine,
                 metadata=self.metadata,
@@ -128,9 +128,11 @@ class TestSequenceSyncPerTableTransactions(unittest.TestCase):
             "broken_table": "error",
             "good_table": "fixed",
         })
-        self.assertEqual(len(logs.output), 1)
-        self.assertIn("[postgres_sequence_sync] table=broken_table error=setval failed", logs.output[0])
-
+        joined = "\n".join(logs.output)
+        self.assertIn("[postgres_sequence_sync] summary", joined)
+        self.assertIn("errors=1", joined)
+        # No per-table ERROR spam
+        self.assertNotIn("table=broken_table error=setval failed", joined)
     @patch("backend.db.postgres_sequence_sync._sync_table_sequence")
     def test_each_table_uses_its_own_transaction(self, mock_sync) -> None:
         mock_sync.return_value = _make_result("good_table", action="ok")

@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import unittest
+from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 from backend.middleware.exception_logging import (
     exception_origin,
     format_exception_traceback,
+    log_http_500_error,
     log_unhandled_exception,
 )
 
@@ -19,7 +22,6 @@ class TestExceptionTracebackFormatting(unittest.TestCase):
         try:
             _inner()
         except RuntimeError as exc:
-            # Simulate FastAPI handler context: exc_info already cleared.
             tb = format_exception_traceback(exc)
 
         self.assertIn("RuntimeError: boom-diag", tb)
@@ -59,6 +61,35 @@ class TestExceptionTracebackFormatting(unittest.TestCase):
         self.assertIn("path=/api/wms/picking/start", joined)
         self.assertIn("KeyError", joined)
         self.assertIn("missing-col", joined)
+
+    def test_http_500_middleware_log_shape(self) -> None:
+        request = MagicMock()
+        request.method = "POST"
+        request.url.path = "/api/wms/picking/start"
+        request.query_params = {"tenant_id": "1", "warehouse_id": "2"}
+        request.headers = {}
+        request.state = SimpleNamespace(request_id="rid-1", http_500_logged=False)
+
+        def _boom() -> None:
+            raise RuntimeError("pick-fail")
+
+        try:
+            _boom()
+        except RuntimeError as exc:
+            with self.assertLogs("wms.exceptions", level="ERROR") as logs:
+                log_http_500_error(request, exc, duration_ms=12.5, context="unit")
+
+        joined = "\n".join(logs.output)
+        self.assertIn("ERROR [HTTP 500]", joined)
+        self.assertIn("request_id=", joined)
+        self.assertIn("method=POST", joined)
+        self.assertIn("path=/api/wms/picking/start", joined)
+        self.assertIn("tenant=1", joined)
+        self.assertIn("warehouse=2", joined)
+        self.assertIn("exception_type=RuntimeError", joined)
+        self.assertIn("duration_ms=12.50", joined)
+        self.assertIn("pick-fail", joined)
+        self.assertIn("_boom", joined)
 
 
 if __name__ == "__main__":
