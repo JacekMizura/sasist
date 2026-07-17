@@ -392,3 +392,69 @@ def test_current_task_has_picked_remaining_fields(db):
     assert "picked_count" in task
     assert "remaining_count" in task
     assert task["picked_count"] == 0
+
+
+def test_atomic_available_start_single_history_entry(db):
+    """AVAILABLE→PICKING: jedna historia, bez pośredniego ASSIGNED."""
+    cart = _cart(db)
+    o1 = _order(db, number="H-1")
+    db.commit()
+    start_picking(db, cart=cart, orders=[o1], operator_user_id=3)
+    db.commit()
+    hist = list_cart_lifecycle_history(db, cart_id=int(cart.id), limit=20)
+    transitions = [(h["from_status"], h["to_status"]) for h in hist]
+    assert transitions.count(("AVAILABLE", "PICKING")) == 1
+    assert ("AVAILABLE", "ASSIGNED") not in transitions
+    assert ("ASSIGNED", "PICKING") not in transitions
+
+
+def test_start_picking_idempotent_no_second_session(db):
+    cart = _cart(db)
+    o1 = _order(db, number="ID-1")
+    db.commit()
+    s1 = start_picking(db, cart=cart, orders=[o1], operator_user_id=1)
+    db.commit()
+    s2 = start_picking(db, cart=cart, orders=[o1], operator_user_id=1)
+    db.commit()
+    assert s1.id == s2.id
+    open_n = (
+        db.query(WmsOperationSession)
+        .filter(
+            WmsOperationSession.cart_id == cart.id,
+            WmsOperationSession.completed_at.is_(None),
+        )
+        .count()
+    )
+    assert open_n == 1
+    hist = list_cart_lifecycle_history(db, cart_id=int(cart.id), limit=50)
+    assert sum(1 for h in hist if h["to_status"] == "PICKING" and h["from_status"] == "AVAILABLE") == 1
+
+
+def test_cancel_finish_release_idempotent(db):
+    from backend.services.cart_picking_lifecycle_service import assert_cart_lifecycle_invariants
+
+    cart = _cart(db)
+    o1 = _order(db, number="IDM-1")
+    db.commit()
+    start_picking(db, cart=cart, orders=[o1], operator_user_id=1)
+    db.commit()
+    cancel_picking(db, cart_id=int(cart.id), tenant_id=1, warehouse_id=1)
+    db.commit()
+    out2 = cancel_picking(db, cart_id=int(cart.id), tenant_id=1, warehouse_id=1)
+    assert out2.get("idempotent") is True
+    assert get_cart_status(cart) == CartStatus.AVAILABLE
+    release_cart(db, cart=cart, reason="again")
+    db.commit()
+    assert assert_cart_lifecycle_invariants(db, cart, strict=True) == []
+
+    cart2 = _cart(db, code="CART-IDM2")
+    o2 = _order(db, number="IDM-2")
+    db.commit()
+    start_picking(db, cart=cart2, orders=[o2], operator_user_id=1)
+    finish_picking(db, cart=cart2, orders=[o2], operator_user_id=1)
+    db.commit()
+    finish_picking(db, cart=cart2, orders=[o2], operator_user_id=1)  # idempotent
+    db.commit()
+    assert get_cart_status(cart2) == CartStatus.READY_FOR_PACKING
+    hist = list_cart_lifecycle_history(db, cart_id=int(cart2.id), limit=20)
+    assert sum(1 for h in hist if h["from_status"] == "PICKING" and h["to_status"] == "READY_FOR_PACKING") == 1

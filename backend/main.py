@@ -1589,9 +1589,12 @@ def _upgrade_schema_background() -> None:
             try:
                 n = heal_carts_with_orphaned_picking_sessions(_heal_db)
                 if n:
+                    _heal_db.commit()
                     logging.getLogger(__name__).warning(
                         "cart_lifecycle.self_heal_startup repaired=%s", n
                     )
+                else:
+                    _heal_db.rollback()
             finally:
                 _heal_db.close()
         except Exception:

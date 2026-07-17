@@ -1,5 +1,13 @@
 # Change log
 
+## 2026-07-17 — Architecture Health Check (CartLifecycleService)
+
+- FOR UPDATE na wszystkich mutacjach; heal bez wewnętrznego commit.
+- Atomic AVAILABLE→PICKING (1 historia); idempotencja cancel/finish/release/start.
+- `assert_cart_lifecycle_invariants` + `_after_mutation`.
+- `ARCHITECTURE.md` + docstring ownership; raport: `memory/cart-lifecycle-architecture-health-check.md`.
+- Testy: 16 passed (historia, idempotencja).
+
 ## 2026-07-17 — Cart lifecycle: claim opcjonalny, timeout, heartbeat, auto-release
 
 - Claim opcjonalny: AVAILABLE→start = atomowy claim+start; ASSIGNED bez orders/session.

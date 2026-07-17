@@ -1,5 +1,11 @@
 # Current context
 
+## Cart lifecycle — Architecture Health Check DONE (2026-07-17)
+- Ocena **8.5/10**; raport: `memory/cart-lifecycle-architecture-health-check.md`.
+- Hardening: FOR UPDATE, atomic start, idempotencja, invariants, brak commit w serwisie.
+- Ownership: `ARCHITECTURE.md` + docstring CartLifecycleService.
+- Refaktor lifecycle uznany za zamknięty (bez nowych funkcji biznesowych).
+
 ## Cart lifecycle SSOT — complete rules (2026-07-17)
 - **SSOT:** `CartLifecycleService` (`cart_picking_lifecycle_service.py`) — jedyny writer: status, session, cart_id, assigned/packing user, history, current_task.
 - **Claim opcjonalny:** A) claim→ASSIGNED→scan→PICKING; B) scan→atomic claim+start→PICKING.
