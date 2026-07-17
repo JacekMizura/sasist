@@ -332,9 +332,9 @@ def delete_status(
 
 
 def _load_order_for_panel(
-    db: Session, order_id: int, tenant_id: int, warehouse_id: int
+    db: Session, order_id: int, tenant_id: int, warehouse_id: int | None = None
 ) -> Order | None:
-    return (
+    q = (
         db.query(Order)
         .options(
             joinedload(Order.items).joinedload(OrderItem.product),
@@ -343,10 +343,11 @@ def _load_order_for_panel(
         .filter(
             Order.id == order_id,
             Order.tenant_id == tenant_id,
-            Order.warehouse_id == warehouse_id,
         )
-        .first()
     )
+    if warehouse_id is not None:
+        q = q.filter(Order.warehouse_id == warehouse_id)
+    return q.first()
 
 
 @router.patch("/orders/{order_id}/ui-status", response_model=OrderRead)
@@ -354,24 +355,26 @@ def patch_order_ui_status(
     order_id: int,
     body: OrderUiStatusPatch,
     tenant_id: int = Query(...),
-    warehouse_id: int = Query(...),
+    warehouse_id: int | None = Query(
+        None,
+        description="Opcjonalny; gdy brak — używany jest orders.warehouse_id (operacja workflow).",
+    ),
     db: Session = Depends(get_db),
 ):
     """Set or clear panel sub-status on an order (does not touch Order.status)."""
     row = _load_order_for_panel(db, order_id, tenant_id, warehouse_id)
     if not row:
         raise HTTPException(status_code=404, detail="Order not found")
+    effective_wh = getattr(row, "warehouse_id", None)
     sid = body.sub_status_id
     if sid is not None:
-        us = (
-            db.query(OrderUiStatus)
-            .filter(
-                OrderUiStatus.id == sid,
-                OrderUiStatus.tenant_id == tenant_id,
-                OrderUiStatus.warehouse_id == warehouse_id,
-            )
-            .first()
+        q_status = db.query(OrderUiStatus).filter(
+            OrderUiStatus.id == sid,
+            OrderUiStatus.tenant_id == tenant_id,
         )
+        if effective_wh is not None:
+            q_status = q_status.filter(OrderUiStatus.warehouse_id == int(effective_wh))
+        us = q_status.first()
         if not us:
             raise HTTPException(status_code=400, detail="Unknown panel sub-status for this warehouse")
         if not bool(getattr(us, "is_active", True)):
@@ -379,7 +382,7 @@ def patch_order_ui_status(
     row.order_ui_status_id = sid
     clear_order_picking_session_context(row)
     db.commit()
-    row = _load_order_for_panel(db, order_id, tenant_id, warehouse_id)
+    row = _load_order_for_panel(db, order_id, tenant_id, int(effective_wh) if effective_wh is not None else None)
     assert row is not None
     return build_order_read(db, row)
 

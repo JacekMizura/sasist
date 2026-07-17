@@ -695,7 +695,9 @@ def _collect_order_list_built_rows(
     return built
 
 
-def _resolve_bulk_order_ids(db: Session, tenant_id: int, warehouse_id: int, selection: BulkOrdersSelection) -> List[int]:
+def _resolve_bulk_order_ids(
+    db: Session, tenant_id: int, warehouse_id: Optional[int], selection: BulkOrdersSelection
+) -> List[int]:
     if selection.mode == "explicit_ids":
         return sorted({int(i) for i in selection.ids if isinstance(i, int) and i > 0})
     assert selection.filters is not None
@@ -954,7 +956,7 @@ def _commit_or_rollback_bulk_orders(db: Session, result: dict) -> None:
         db.commit()
 
 
-def _execute_orders_bulk_delete(db: Session, tenant_id: int, warehouse_id: int, id_list: List[int]) -> dict:
+def _execute_orders_bulk_delete(db: Session, tenant_id: int, warehouse_id: Optional[int], id_list: List[int]) -> dict:
     """Zwraca słownik jak ``BulkOrdersDeleteResult`` (m.in. deleted, blocked, errors)."""
     r = delete_orders_bulk(db, tenant_id, warehouse_id, id_list)
     dc = int(r.get("deleted_count") or r.get("deleted") or 0)
@@ -1006,10 +1008,21 @@ def bulk_delete_orders_by_selection(body: BulkOrdersDeleteBody, db: Session = De
 def orders_bulk_panel_status(
     body: BulkOrderPanelStatusPayload,
     tenant_id: int = Query(..., ge=1),
-    warehouse_id: int = Query(..., ge=1),
+    warehouse_id: Optional[int] = Query(
+        None,
+        ge=1,
+        description="Opcjonalny filtr magazynu; workflow OMS nie wymaga WH (także dla filtered_query).",
+    ),
     db: Session = Depends(get_db),
 ):
     """Set the same panel ``order_ui_status`` on many orders (does not change ``Order.status``)."""
+    from ..services.warehouse_operation_policy import assert_warehouse_if_required
+
+    try:
+        assert_warehouse_if_required("order.bulk_panel_status", warehouse_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
     if body.selection_mode == "filtered_query":
         assert body.filters is not None
         unique_ids = _resolve_bulk_order_ids(
@@ -1026,7 +1039,7 @@ def orders_bulk_panel_status(
                 raw_ids.append(int(s))
         unique_ids = list(dict.fromkeys(raw_ids))
     if not unique_ids:
-        return {"updated": 0}
+        return {"updated": 0, "skipped": 0}
     sid: Optional[int] = None
     st = (body.status or "").strip()
     if st != "":
@@ -1034,40 +1047,68 @@ def orders_bulk_panel_status(
             sid = int(st)
         except ValueError as e:
             raise HTTPException(status_code=400, detail="Invalid status id") from e
-        us = (
-            db.query(OrderUiStatus)
-            .filter(
-                OrderUiStatus.id == sid,
-                OrderUiStatus.tenant_id == tenant_id,
-                OrderUiStatus.warehouse_id == warehouse_id,
-            )
-            .first()
-        )
-        if not us:
-            raise HTTPException(status_code=400, detail="Unknown panel sub-status for this warehouse")
-    rows = (
-        db.query(Order)
-        .filter(
-            Order.tenant_id == tenant_id,
-            Order.warehouse_id == warehouse_id,
-            Order.id.in_(unique_ids),
-            Order.deleted_at.is_(None),
-        )
-        .all()
+
+    q = db.query(Order).filter(
+        Order.tenant_id == tenant_id,
+        Order.id.in_(unique_ids),
+        Order.deleted_at.is_(None),
     )
-    if body.selection_mode == "explicit_ids":
+    if warehouse_id is not None:
+        q = q.filter(Order.warehouse_id == warehouse_id)
+    rows = q.all()
+    if body.selection_mode == "explicit_ids" and warehouse_id is not None:
         found: Set[int] = {int(r.id) for r in rows}
         if found != set(unique_ids):
             raise HTTPException(status_code=400, detail="Some order ids were not found in this warehouse")
+    elif body.selection_mode == "explicit_ids":
+        found = {int(r.id) for r in rows}
+        if found != set(unique_ids):
+            raise HTTPException(status_code=400, detail="Some order ids were not found")
+
+    updated = 0
+    skipped = 0
     for row in rows:
+        if sid is not None:
+            row_wh = getattr(row, "warehouse_id", None)
+            if row_wh is None:
+                # Zamówienie bez magazynu (routing / marketplace) — status tenant-scoped jeśli istnieje
+                us = (
+                    db.query(OrderUiStatus)
+                    .filter(
+                        OrderUiStatus.id == sid,
+                        OrderUiStatus.tenant_id == tenant_id,
+                    )
+                    .first()
+                )
+            else:
+                us = (
+                    db.query(OrderUiStatus)
+                    .filter(
+                        OrderUiStatus.id == sid,
+                        OrderUiStatus.tenant_id == tenant_id,
+                        OrderUiStatus.warehouse_id == int(row_wh),
+                    )
+                    .first()
+                )
+            if not us:
+                skipped += 1
+                continue
         row.order_ui_status_id = sid
+        updated += 1
     db.commit()
-    return {"updated": len(rows)}
+    return {"updated": updated, "skipped": skipped}
 
 
 @router.post("/bulk-patch")
 def orders_bulk_patch(body: BulkOrdersPatchBody, db: Session = Depends(get_db)):
     """Apply the same panel-oriented patch fields to many orders (ids or filtered_query)."""
+    from ..services.warehouse_operation_policy import assert_warehouse_if_required
+
+    try:
+        assert_warehouse_if_required("order.bulk_patch", body.warehouse_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
     id_list = _resolve_bulk_order_ids(db, body.tenant_id, body.warehouse_id, body.selection)
     if not id_list:
         return {"updated": 0}
@@ -1091,17 +1132,18 @@ def orders_bulk_patch(body: BulkOrdersPatchBody, db: Session = Depends(get_db)):
     chunk = 250
     for i in range(0, len(id_list), chunk):
         part = id_list[i : i + chunk]
-        rows = (
+        q = (
             db.query(Order)
             .options(joinedload(Order.shipping_method_row))
             .filter(
                 Order.tenant_id == body.tenant_id,
-                Order.warehouse_id == body.warehouse_id,
                 Order.id.in_(part),
                 Order.deleted_at.is_(None),
             )
-            .all()
         )
+        if body.warehouse_id is not None:
+            q = q.filter(Order.warehouse_id == body.warehouse_id)
+        rows = q.all()
         for row in rows:
             _apply_order_patch_to_order(db, row, patch_body)
             updated += 1

@@ -161,11 +161,14 @@ export async function deleteOrderUiStatus(statusId: number, tenantId: number, wa
 export async function patchOrderUiStatus(
   orderId: number,
   tenantId: number,
-  warehouseId: number,
+  warehouseId: number | null | undefined,
   subStatusId: number | null,
 ): Promise<OrderReadApi> {
   const res = await api.patch<OrderReadApi>(`office/order-ui/orders/${orderId}/ui-status`, { sub_status_id: subStatusId }, {
-    params: { tenant_id: tenantId, warehouse_id: warehouseId },
+    params: {
+      tenant_id: tenantId,
+      ...(warehouseId != null && warehouseId > 0 ? { warehouse_id: warehouseId } : {}),
+    },
   });
   return res.data;
 }

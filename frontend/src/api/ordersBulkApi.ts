@@ -19,16 +19,19 @@ export type OrdersBulkDeleteResult = {
 
 export async function postOrdersBulkDelete(body: {
   tenant_id: number;
-  warehouse_id: number;
+  warehouse_id?: number | null;
   selection: OrderBulkSelectionDto;
 }): Promise<OrdersBulkDeleteResult> {
-  const res = await api.post<OrdersBulkDeleteResult>("/orders/bulk-delete", body);
+  const res = await api.post<OrdersBulkDeleteResult>("/orders/bulk-delete", {
+    ...body,
+    warehouse_id: body.warehouse_id ?? undefined,
+  });
   return res.data;
 }
 
 export async function postOrdersBulkPatch(body: {
   tenant_id: number;
-  warehouse_id: number;
+  warehouse_id?: number | null;
   selection: OrderBulkSelectionDto;
   document_type?: string | null;
   shipping_method_id?: string | null;
@@ -39,6 +42,10 @@ export async function postOrdersBulkPatch(body: {
   payment_method?: string | null;
   payment_status?: string | null;
 }): Promise<{ updated: number }> {
-  const res = await api.post<{ updated: number }>("/orders/bulk-patch", body);
+  const payload = {
+    ...body,
+    warehouse_id: body.warehouse_id ?? undefined,
+  };
+  const res = await api.post<{ updated: number }>("/orders/bulk-patch", payload);
   return res.data;
 }

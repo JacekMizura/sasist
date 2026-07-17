@@ -14,12 +14,14 @@ export type OrdersBulkPanelStatusBody =
 
 export async function postOrdersBulkPanelStatus(
   tenantId: number,
-  warehouseId: number,
+  warehouseId: number | null | undefined,
   body: OrdersBulkPanelStatusBody,
 ): Promise<{ updated: number }> {
-  const res = await api.post<{ updated: number }>("orders/bulk-status", body, {
-    params: { tenant_id: tenantId, warehouse_id: warehouseId },
-  });
+  const params: Record<string, number> = { tenant_id: tenantId };
+  if (warehouseId != null && Number.isFinite(warehouseId) && warehouseId > 0) {
+    params.warehouse_id = warehouseId;
+  }
+  const res = await api.post<{ updated: number }>("orders/bulk-status", body, { params });
   return res.data;
 }
 

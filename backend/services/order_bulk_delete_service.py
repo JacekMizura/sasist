@@ -86,13 +86,13 @@ def _normalize_integrity_errors(errors: list[str]) -> list[str]:
 def bulk_delete_orders_transaction(
     db: Session,
     tenant_id: int,
-    warehouse_id: int,
+    warehouse_id: int | None,
     id_list: list[int],
 ) -> dict[str, Any]:
     """
     Usuwa lub archiwizuje zamówienia w jednej transakcji (caller robi commit/rollback).
 
-    Zwraca m.in. ``deleted_count``, ``soft_deleted_count`` (zarchiwizowane), ``errors``.
+    ``warehouse_id`` opcjonalny — gdy None, scope tylko tenant + ids (operacja OMS).
     """
     errors: list[str] = []
     blocked: list[dict[str, Any]] = []
@@ -119,16 +119,15 @@ def bulk_delete_orders_transaction(
 
     unique_requested = list(dict.fromkeys(raw_ids))
 
-    scoped = list(
-        db.scalars(
-            select(Order.id).where(
-                Order.tenant_id == tenant_id,
-                Order.warehouse_id == warehouse_id,
-                Order.id.in_(unique_requested),
-                Order.deleted_at.is_(None),
-            )
-        ).all()
-    )
+    scope = [
+        Order.tenant_id == tenant_id,
+        Order.id.in_(unique_requested),
+        Order.deleted_at.is_(None),
+    ]
+    if warehouse_id is not None:
+        scope.append(Order.warehouse_id == warehouse_id)
+
+    scoped = list(db.scalars(select(Order.id).where(*scope)).all())
     scoped_ints = [int(x) for x in scoped]
     scoped_set = set(scoped_ints)
     skipped_not_found = len([i for i in unique_requested if i not in scoped_set])
@@ -153,16 +152,14 @@ def bulk_delete_orders_transaction(
 
     if archive_ids:
         now = datetime.utcnow()
-        res = db.execute(
-            update(Order)
-            .where(
-                Order.tenant_id == tenant_id,
-                Order.warehouse_id == warehouse_id,
-                Order.id.in_(archive_ids),
-                Order.deleted_at.is_(None),
-            )
-            .values(deleted_at=now)
-        )
+        arch_scope = [
+            Order.tenant_id == tenant_id,
+            Order.id.in_(archive_ids),
+            Order.deleted_at.is_(None),
+        ]
+        if warehouse_id is not None:
+            arch_scope.append(Order.warehouse_id == warehouse_id)
+        res = db.execute(update(Order).where(*arch_scope).values(deleted_at=now))
         try:
             rc = int(res.rowcount or 0)
         except (TypeError, ValueError):
@@ -205,13 +202,13 @@ def bulk_delete_orders_transaction(
                 db.execute(delete(order_zone_association).where(order_zone_association.c.order_id.in_(hard_ids)))
                 db.execute(delete(OrderItem).where(OrderItem.order_id.in_(hard_ids)))
 
-                res = db.execute(
-                    delete(Order).where(
-                        Order.tenant_id == tenant_id,
-                        Order.warehouse_id == warehouse_id,
-                        Order.id.in_(hard_ids),
-                    )
-                )
+                del_scope = [
+                    Order.tenant_id == tenant_id,
+                    Order.id.in_(hard_ids),
+                ]
+                if warehouse_id is not None:
+                    del_scope.append(Order.warehouse_id == warehouse_id)
+                res = db.execute(delete(Order).where(*del_scope))
                 deleted_n = res.rowcount
                 if deleted_n is None or deleted_n < 0:
                     deleted_n = len(hard_ids)

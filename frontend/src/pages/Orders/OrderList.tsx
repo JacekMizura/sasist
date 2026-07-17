@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import axios from "axios";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import api from "../../api/axios";
 import { getOrderPanelSubgroups, getOrderUiStatusSummary } from "../../api/orderUiStatusApi";
@@ -23,6 +22,11 @@ import {
 } from "../../api/ordersBulkApi";
 import { buildOrderBulkListFiltersPayload } from "../../utils/orderListBulkFilters";
 import type { OrderListBulkSelectionArg } from "../../components/orders/orderList/executeOrderBulkActions";
+import {
+  getOrderListBulkActionPolicy,
+  WAREHOUSE_REQUIRED_FOR_STOCK_OP_MESSAGE,
+  type OrderListBulkActionKind,
+} from "../../lib/warehouseOperationPolicy";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { dispatchOrdersOperationsUpdated } from "../wms/wmsRoutes";
 import { dispatchWmsShortagesUpdated } from "../../utils/wmsRefresh";
@@ -439,8 +443,9 @@ export default function OrderList() {
 
   const bulkDelete = async () => {
     if (effectiveSelectionCount === 0) return;
-    const bulkWh = requireFulfillmentWarehouseForBulk();
-    if (bulkWh == null) return;
+    const gate = resolveWarehouseForBulkAction("delete");
+    if (!gate.ok) return;
+    const bulkWh = gate.warehouseId;
     const n = effectiveSelectionCount;
     setDeleting(true);
     try {
@@ -452,15 +457,12 @@ export default function OrderList() {
           selection: { mode: "filtered_query", filters: orderBulkFiltersPayload },
         });
       } else {
-        const baseURL = api.defaults.baseURL;
-        if (!baseURL) {
-          console.error("[OrderList] VITE_API_URL is not set; cannot call bulk delete.");
-          return;
-        }
-        const res = await axios.delete<OrdersBulkDeleteResult>(
-          `${String(baseURL).replace(/\/$/, "")}/orders/bulk?tenant_id=${DAMAGE_TENANT_ID}&warehouse_id=${bulkWh}&ids=${selectedIds.join(",")}`
-        );
-        summary = res.data;
+        const ids = selectedIds.map((s) => Number(s)).filter((id) => Number.isFinite(id) && id > 0);
+        summary = await postOrdersBulkDelete({
+          tenant_id: DAMAGE_TENANT_ID,
+          warehouse_id: bulkWh,
+          selection: { mode: "explicit_ids", ids },
+        });
       }
       clearSelection();
       setBulkSelectMenuKey((k) => k + 1);
@@ -551,14 +553,14 @@ export default function OrderList() {
 
   const handleQuickChangeStatus = async (statusId: string) => {
     if (effectiveSelectionCount === 0) return;
-    const bulkWh = requireFulfillmentWarehouseForBulk();
-    if (bulkWh == null) return;
+    const gate = resolveWarehouseForBulkAction("change_status");
+    if (!gate.ok) return;
     setQuickBusy(true);
     setFetchError(null);
     try {
       const { errors } = await executeOrderBulkActions({
         tenantId: DAMAGE_TENANT_ID,
-        warehouseId: bulkWh,
+        warehouseId: gate.warehouseId,
         selection: orderListBulkSelectionArg(),
         rows: [{ id: rowId(), kind: "change_status", expanded: true }],
         config: { change_status: { statusId } },
@@ -583,14 +585,14 @@ export default function OrderList() {
 
   const handleQuickIssueDocument = async (documentType: "INVOICE" | "PARAGON") => {
     if (effectiveSelectionCount === 0) return;
-    const bulkWh = requireFulfillmentWarehouseForBulk();
-    if (bulkWh == null) return;
+    const gate = resolveWarehouseForBulkAction("issue_document");
+    if (!gate.ok) return;
     setQuickBusy(true);
     setFetchError(null);
     try {
       const { errors } = await executeOrderBulkActions({
         tenantId: DAMAGE_TENANT_ID,
-        warehouseId: bulkWh,
+        warehouseId: gate.warehouseId,
         selection: orderListBulkSelectionArg(),
         rows: [{ id: rowId(), kind: "issue_document", expanded: true }],
         config: { issue_document: { documentType } },
@@ -617,14 +619,14 @@ export default function OrderList() {
     priorityColor: "gray" | "blue" | "green" | "yellow" | "orange" | "red" | null,
   ) => {
     if (effectiveSelectionCount === 0) return;
-    const bulkWh = requireFulfillmentWarehouseForBulk();
-    if (bulkWh == null) return;
+    const gate = resolveWarehouseForBulkAction("set_priority");
+    if (!gate.ok) return;
     setQuickBusy(true);
     setFetchError(null);
     try {
       const { errors } = await executeOrderBulkActions({
         tenantId: DAMAGE_TENANT_ID,
-        warehouseId: bulkWh,
+        warehouseId: gate.warehouseId,
         selection: orderListBulkSelectionArg(),
         rows: [{ id: rowId(), kind: "set_priority", expanded: true }],
         config: { set_priority: { priorityColor } },
@@ -649,8 +651,8 @@ export default function OrderList() {
 
   const handleQuickAddNote = async (text: string) => {
     if (effectiveSelectionCount === 0) return;
-    const bulkWh = requireFulfillmentWarehouseForBulk();
-    if (bulkWh == null) return;
+    const gate = resolveWarehouseForBulkAction("add_note");
+    if (!gate.ok) return;
     const tx = text.trim();
     if (!tx) return;
     setQuickBusy(true);
@@ -658,7 +660,7 @@ export default function OrderList() {
     try {
       const { errors } = await executeOrderBulkActions({
         tenantId: DAMAGE_TENANT_ID,
-        warehouseId: bulkWh,
+        warehouseId: gate.warehouseId,
         selection: orderListBulkSelectionArg(),
         rows: [{ id: rowId(), kind: "add_note", expanded: true }],
         config: { add_note: { text: tx } },
@@ -683,8 +685,8 @@ export default function OrderList() {
 
   const handleQuickPaymentStatus = async (paymentStatus: string | null) => {
     if (effectiveSelectionCount === 0) return;
-    const bulkWh = requireFulfillmentWarehouseForBulk();
-    if (bulkWh == null) return;
+    const gate = resolveWarehouseForBulkAction("change_payment_status");
+    if (!gate.ok) return;
     const sel = toBulkSelectionDto();
     if (!sel) return;
     setQuickBusy(true);
@@ -692,7 +694,7 @@ export default function OrderList() {
     try {
       await postOrdersBulkPatch({
         tenant_id: DAMAGE_TENANT_ID,
-        warehouse_id: bulkWh,
+        warehouse_id: gate.warehouseId,
         selection: sel,
         payment_status: paymentStatus === null ? "" : paymentStatus,
       });
@@ -729,14 +731,14 @@ export default function OrderList() {
     text: string;
   }) => {
     if (quickNoteSelection == null) return;
-    const bulkWh = requireFulfillmentWarehouseForBulk();
-    if (bulkWh == null) return;
+    const gate = resolveWarehouseForBulkAction("add_note");
+    if (!gate.ok) return;
     setQuickNoteBusy(true);
     setFetchError(null);
     try {
       const base = {
         tenant_id: DAMAGE_TENANT_ID,
-        warehouse_id: bulkWh,
+        warehouse_id: gate.warehouseId,
         selection: quickNoteSelection,
       };
       if (audience === "internal") {
@@ -780,10 +782,23 @@ export default function OrderList() {
   const bulkBusy = multiBusy || quickBusy || deleting || quickNoteBusy;
   const bulkToolbarDisabled = bulkBusy || effectiveSelectionCount === 0;
 
-  const requireFulfillmentWarehouseForBulk = (): number | null => {
-    if (fulfillmentWarehouseFilter != null) return fulfillmentWarehouseFilter;
-    setToast("Wybierz magazyn realizacji w filtrach, aby wykonać operacje masowe.");
-    return null;
+  /**
+   * Warehouse gate — only blocks when policy.requiresWarehouse.
+   * „Wszystkie z filtra” / filtered_query does NOT imply warehouse.
+   */
+  const resolveWarehouseForBulkAction = (
+    kind: OrderListBulkActionKind,
+  ): { ok: true; warehouseId: number | null } | { ok: false } => {
+    const contextWh = fulfillmentWarehouseFilter ?? warehouse?.id ?? null;
+    const policy = getOrderListBulkActionPolicy(kind);
+
+    if (policy.requiresWarehouse) {
+      if (contextWh != null) return { ok: true, warehouseId: contextWh };
+      setToast(WAREHOUSE_REQUIRED_FOR_STOCK_OP_MESSAGE);
+      return { ok: false };
+    }
+
+    return { ok: true, warehouseId: contextWh };
   };
 
   const openBulkPrint = () => {
@@ -843,7 +858,7 @@ export default function OrderList() {
           setToast("Ta akcja wymaga zaznaczenia rekordów na stronie (nie „wszystkie z filtra”).");
           return;
         }
-        if (requireFulfillmentWarehouseForBulk() == null) return;
+        if (!resolveWarehouseForBulkAction("custom_field_value").ok) return;
         setCustomFieldModalOpen(true);
         break;
       case "delete":
@@ -859,8 +874,17 @@ export default function OrderList() {
 
   const handleMultiExecute = async (payload: { rows: BulkActionRow[]; config: BulkActionConfig }) => {
     if (effectiveSelectionCount === 0) return;
-    const bulkWh = requireFulfillmentWarehouseForBulk();
-    if (bulkWh == null) return;
+    const primaryKind = (payload.rows[0]?.kind ?? "change_status") as OrderListBulkActionKind;
+    const gate = resolveWarehouseForBulkAction(
+      primaryKind === "change_status" ||
+        primaryKind === "set_priority" ||
+        primaryKind === "add_note" ||
+        primaryKind === "change_shipping" ||
+        primaryKind === "issue_document"
+        ? primaryKind
+        : "change_status",
+    );
+    if (!gate.ok) return;
     for (const row of payload.rows) {
       if (row.kind === "change_status") {
         const sid = (payload.config.change_status?.statusId ?? "").trim();
@@ -889,7 +913,7 @@ export default function OrderList() {
     try {
       const { errors } = await executeOrderBulkActions({
         tenantId: DAMAGE_TENANT_ID,
-        warehouseId: bulkWh,
+        warehouseId: gate.warehouseId,
         selection: orderListBulkSelectionArg(),
         rows: payload.rows,
         config: payload.config,
@@ -1166,16 +1190,20 @@ export default function OrderList() {
         onSubmit={submitQuickNote}
       />
 
-      {fulfillmentWarehouseFilter != null ? (
-        <OrderBulkCustomFieldModal
-          open={customFieldModalOpen}
-          warehouseId={fulfillmentWarehouseFilter}
-          orderIds={selectedIds.map((s) => Number(s)).filter((n) => Number.isFinite(n))}
-          onClose={() => setCustomFieldModalOpen(false)}
-          onApplied={onBulkCustomFieldApplied}
-          onError={onBulkCustomFieldError}
-        />
-      ) : null}
+      {(() => {
+        const cfWh = fulfillmentWarehouseFilter ?? warehouse?.id ?? null;
+        if (cfWh == null) return null;
+        return (
+          <OrderBulkCustomFieldModal
+            open={customFieldModalOpen}
+            warehouseId={cfWh}
+            orderIds={selectedIds.map((s) => Number(s)).filter((n) => Number.isFinite(n))}
+            onClose={() => setCustomFieldModalOpen(false)}
+            onApplied={onBulkCustomFieldApplied}
+            onError={onBulkCustomFieldError}
+          />
+        );
+      })()}
 
       {toast ? (
         <div

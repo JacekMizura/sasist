@@ -20,7 +20,7 @@ from .product_bulk_delete_service import bulk_delete_products_transaction
 from .wms_return_delete_service import archive_wms_returns_bulk_transaction
 
 
-def delete_orders_bulk(db: Session, tenant_id: int, warehouse_id: int, id_list: list[int]) -> dict[str, Any]:
+def delete_orders_bulk(db: Session, tenant_id: int, warehouse_id: int | None, id_list: list[int]) -> dict[str, Any]:
     """Usuwanie twarde lub archiwizacja (``orders.deleted_at``) przy historii zwrotów / dokumentów / reklamacji."""
     r = bulk_delete_orders_transaction(db, tenant_id, warehouse_id, id_list)
     deleted = int(r.get("deleted_count") or r.get("deleted") or 0)

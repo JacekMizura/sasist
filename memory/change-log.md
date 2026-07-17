@@ -1,5 +1,22 @@
 # Change log
 
+## 2026-07-17 — Warehouse policy v2: OperationContext + OMS/WMS split
+
+- FE: `getOperationPolicy` / `OperationContext` w `warehouseOperationPolicy.ts`.
+- BE: `warehouse_operation_policy.py` (lustrzana polityka + `assert_warehouse_if_required`).
+- „Wszystkie z filtra” ≠ wymóg magazynu dla workflow (status, priorytet, notatki, …).
+- `order.delete_orders` = OMS (bez WH); delete lokalizacji/zbiorów/rezerwacji = WMS.
+- Bulk status/patch/delete: WH opcjonalny; soft-skip statusów cross-warehouse.
+- Raport: `memory/warehouse-operation-policy-report.md`.
+
+## 2026-07-17 — Warehouse gate: workflow zamówień bez wymogu magazynu
+
+- Problem: `requireFulfillmentWarehouseForBulk` blokował zmianę statusu panelu (i inne ops OMS) bez filtra magazynu.
+- Policy: `frontend/src/lib/warehouseOperationPolicy.ts` → `requiresWarehouse(operationType)`.
+- OrderList: bramka per akcja; explicit IDs + workflow bez blokady; delete / filtered_all nadal potrzebują WH.
+- Backend: optional `warehouse_id` na bulk-status / bulk-patch (explicit) i PATCH ui-status.
+- Audyt: `memory/warehouse-requirement-audit.md`.
+
 ## 2026-07-17 — WMS home: większe karty, bez „Otwórz”, belka
 
 - Karty desktop ~148px, większe ikony/nazwy; cała karta klikalna — usunięto „Otwórz →”.

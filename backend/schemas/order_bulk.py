@@ -71,7 +71,11 @@ class BulkOrderPanelStatusPayload(BaseModel):
 
 class BulkOrdersDeleteBody(BaseModel):
     tenant_id: int = Field(..., ge=1)
-    warehouse_id: int = Field(..., ge=1)
+    warehouse_id: Optional[int] = Field(
+        None,
+        ge=1,
+        description="Opcjonalny filtr magazynu; usuwanie zamówień to operacja OMS (nie wymaga WH).",
+    )
     selection: BulkOrdersSelection
 
 
@@ -93,7 +97,11 @@ class BulkOrdersPatchBody(BaseModel):
     """Subset of OrderPatchBody fields applied to each matching order (bulk)."""
 
     tenant_id: int = Field(..., ge=1)
-    warehouse_id: int = Field(..., ge=1)
+    warehouse_id: Optional[int] = Field(
+        None,
+        ge=1,
+        description="Wymagany dla filtered_query; opcjonalny dla explicit_ids (operacje workflow bez bramki magazynu).",
+    )
     selection: BulkOrdersSelection
     document_type: Optional[str] = None
     shipping_method_id: Optional[str] = None
@@ -122,6 +130,9 @@ class BulkOrdersPatchBody(BaseModel):
             raise ValueError(
                 "Provide at least one patch field (document_type, shipping_method_id, notes, priority_color, payment_*)"
             )
+        if self.selection.mode == "filtered_query" and self.warehouse_id is None:
+            # Workflow OMS (priority, notes, …) may run filtered_query without warehouse scope.
+            pass
         return self
 
 
