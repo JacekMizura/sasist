@@ -66,6 +66,44 @@ from ..services.user_activity_service import log_user_activity
 router = APIRouter(prefix="/auth", tags=["Auth"])
 logger = logging.getLogger(__name__)
 
+_protection_columns_ready = False
+
+
+def _ensure_auth_schema() -> None:
+    """Self-heal missing app_users protection columns (once per process)."""
+    global _protection_columns_ready
+    if _protection_columns_ready:
+        return
+    try:
+        from ..database import engine
+        from ..db.schema_upgrade import ensure_app_users_protection_columns
+
+        ensure_app_users_protection_columns(engine)
+        _protection_columns_ready = True
+    except Exception:
+        logger.exception("auth schema self-heal (protection columns) failed")
+        raise
+
+
+def _reraise_auth_error(exc: BaseException, *, action: str, login_hint: str | None = None) -> None:
+    """Log full traceback then map to HTTPException — never silent 500."""
+    if isinstance(exc, HTTPException):
+        raise exc
+    logger.exception(
+        "auth.%s failed login=%r err=%s",
+        action,
+        login_hint,
+        type(exc).__name__,
+    )
+    raise HTTPException(
+        status_code=500,
+        detail={
+            "message": f"Auth {action} failed — see server logs.",
+            "code": f"AUTH_{action.upper()}_ERROR",
+            "error": type(exc).__name__,
+        },
+    ) from exc
+
 
 def _allowed_role(role: str) -> bool:
     return role.strip().lower() in {r.lower() for r in SYSTEM_ROLE_VALUES}
@@ -116,77 +154,115 @@ def _me_response(db: Session, user: AppUser) -> MeResponse:
 
 @router.post("/login", response_model=TokenResponse)
 def login(body: LoginRequest, db: Session = Depends(get_db)):
-    ident = body.login.strip()
-    user = db.query(AppUser).filter(AppUser.login == ident).first()
-    if user is None and "@" in ident:
-        user = db.query(AppUser).filter(AppUser.email == ident).first()
-    if user is None or not user.is_active:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-    if not verify_password(body.password, user.password_hash):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+    ident = (body.login or "").strip()
+    try:
+        _ensure_auth_schema()
+        user = db.query(AppUser).filter(AppUser.login == ident).first()
+        if user is None and "@" in ident:
+            user = db.query(AppUser).filter(AppUser.email == ident).first()
+        if user is None or not user.is_active:
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+        if not verify_password(body.password, user.password_hash):
+            raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    user.last_login_at = datetime.now(timezone.utc).replace(tzinfo=None)
-    raw_refresh, refresh_hash, exp = new_refresh_token_values()
-    db.add(UserSession(user_id=user.id, refresh_token_hash=refresh_hash, expires_at=exp))
-    log_audit_entry(db, user_id=user.id, action="auth.login", detail={"login": user.login})
-    log_user_activity(
-        db,
-        user_id=user.id,
-        action_type="login",
-        module="auth",
-        metadata={"login": user.login},
-    )
-    ensure_active_warehouse_on_login(db, user)
-    db.commit()
+        user.last_login_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        raw_refresh, refresh_hash, exp = new_refresh_token_values()
+        db.add(UserSession(user_id=user.id, refresh_token_hash=refresh_hash, expires_at=exp))
+        log_audit_entry(db, user_id=user.id, action="auth.login", detail={"login": user.login})
+        log_user_activity(
+            db,
+            user_id=user.id,
+            action_type="login",
+            module="auth",
+            metadata={"login": user.login},
+        )
+        ensure_active_warehouse_on_login(db, user)
+        db.commit()
 
-    return TokenResponse(access_token=create_access_token(user.id), refresh_token=raw_refresh)
+        return TokenResponse(access_token=create_access_token(user.id), refresh_token=raw_refresh)
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as exc:
+        db.rollback()
+        _reraise_auth_error(exc, action="login", login_hint=ident)
 
 
 @router.post("/refresh", response_model=TokenResponse)
 def refresh(body: RefreshRequest, db: Session = Depends(get_db)):
-    h = hash_refresh_token(body.refresh_token.strip())
-    sess = db.query(UserSession).filter(UserSession.refresh_token_hash == h).first()
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
-    if sess is None or sess.expires_at < now:
-        raise HTTPException(status_code=401, detail="Invalid refresh token")
+    try:
+        _ensure_auth_schema()
+        h = hash_refresh_token(body.refresh_token.strip())
+        sess = db.query(UserSession).filter(UserSession.refresh_token_hash == h).first()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        if sess is None or sess.expires_at < now:
+            raise HTTPException(status_code=401, detail="Invalid refresh token")
 
-    user = db.query(AppUser).filter(AppUser.id == sess.user_id).first()
-    if user is None or not user.is_active:
-        raise HTTPException(status_code=401, detail="Invalid refresh token")
+        user = db.query(AppUser).filter(AppUser.id == sess.user_id).first()
+        if user is None or not user.is_active:
+            raise HTTPException(status_code=401, detail="Invalid refresh token")
 
-    db.delete(sess)
-    raw_refresh, refresh_hash, exp = new_refresh_token_values()
-    db.add(UserSession(user_id=user.id, refresh_token_hash=refresh_hash, expires_at=exp))
-    db.commit()
+        db.delete(sess)
+        raw_refresh, refresh_hash, exp = new_refresh_token_values()
+        db.add(UserSession(user_id=user.id, refresh_token_hash=refresh_hash, expires_at=exp))
+        db.commit()
 
-    return TokenResponse(access_token=create_access_token(user.id), refresh_token=raw_refresh)
+        return TokenResponse(access_token=create_access_token(user.id), refresh_token=raw_refresh)
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as exc:
+        db.rollback()
+        _reraise_auth_error(exc, action="refresh")
 
 
 @router.post("/logout")
 def logout(body: RefreshRequest, db: Session = Depends(get_db)):
-    h = hash_refresh_token(body.refresh_token.strip())
-    sess = db.query(UserSession).filter(UserSession.refresh_token_hash == h).first()
-    if sess is not None:
-        uid = sess.user_id
-        db.delete(sess)
-        log_user_activity(db, user_id=uid, action_type="logout", module="auth", metadata=None)
-        log_audit_entry(db, user_id=uid, action="auth.logout", detail=None)
-        db.commit()
-    return {"ok": True}
+    try:
+        h = hash_refresh_token(body.refresh_token.strip())
+        sess = db.query(UserSession).filter(UserSession.refresh_token_hash == h).first()
+        if sess is not None:
+            uid = sess.user_id
+            db.delete(sess)
+            log_user_activity(db, user_id=uid, action_type="logout", module="auth", metadata=None)
+            log_audit_entry(db, user_id=uid, action="auth.logout", detail=None)
+            db.commit()
+        return {"ok": True}
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as exc:
+        db.rollback()
+        _reraise_auth_error(exc, action="logout")
 
 
 @router.get("/me", response_model=MeResponse)
 def me(current: AppUser = Depends(get_current_user), db: Session = Depends(get_db)):
-    ensure_active_warehouse_on_login(db, current)
-    db.commit()
-    return _me_response(db, current)
+    try:
+        _ensure_auth_schema()
+        ensure_active_warehouse_on_login(db, current)
+        db.commit()
+        return _me_response(db, current)
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as exc:
+        db.rollback()
+        _reraise_auth_error(exc, action="me", login_hint=getattr(current, "login", None))
 
 
 @router.get("/me/warehouse-context", response_model=WarehouseContextResponse)
 def me_warehouse_context(current: AppUser = Depends(get_current_user), db: Session = Depends(get_db)):
-    payload = warehouse_context_payload(db, current)
-    db.commit()
-    return WarehouseContextResponse(**payload)
+    try:
+        payload = warehouse_context_payload(db, current)
+        db.commit()
+        return WarehouseContextResponse(**payload)
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as exc:
+        db.rollback()
+        _reraise_auth_error(exc, action="me_warehouse_context", login_hint=getattr(current, "login", None))
 
 
 @router.put("/me/active-warehouse", response_model=WarehouseContextResponse)
@@ -195,16 +271,23 @@ def me_set_active_warehouse(
     current: AppUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    set_active_warehouse(db, current, int(body.warehouse_id))
-    log_audit_entry(
-        db,
-        user_id=current.id,
-        action="auth.active_warehouse",
-        detail={"warehouse_id": int(body.warehouse_id)},
-    )
-    payload = warehouse_context_payload(db, current)
-    db.commit()
-    return WarehouseContextResponse(**payload)
+    try:
+        set_active_warehouse(db, current, int(body.warehouse_id))
+        log_audit_entry(
+            db,
+            user_id=current.id,
+            action="auth.active_warehouse",
+            detail={"warehouse_id": int(body.warehouse_id)},
+        )
+        payload = warehouse_context_payload(db, current)
+        db.commit()
+        return WarehouseContextResponse(**payload)
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as exc:
+        db.rollback()
+        _reraise_auth_error(exc, action="me_set_active_warehouse", login_hint=getattr(current, "login", None))
 
 
 @router.post("/change-password")
@@ -213,13 +296,20 @@ def change_password(
     db: Session = Depends(get_db),
     user: AppUser = Depends(get_current_user),
 ):
-    if not verify_password(body.current_password, user.password_hash):
-        raise HTTPException(status_code=400, detail="Current password is incorrect")
-    user.password_hash = hash_password(body.new_password)
-    user.password_must_change = False
-    log_audit_entry(db, user_id=user.id, action="auth.change_password", detail={"login": user.login})
-    db.commit()
-    return {"ok": True}
+    try:
+        if not verify_password(body.current_password, user.password_hash):
+            raise HTTPException(status_code=400, detail="Current password is incorrect")
+        user.password_hash = hash_password(body.new_password)
+        user.password_must_change = False
+        log_audit_entry(db, user_id=user.id, action="auth.change_password", detail={"login": user.login})
+        db.commit()
+        return {"ok": True}
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as exc:
+        db.rollback()
+        _reraise_auth_error(exc, action="change_password", login_hint=getattr(user, "login", None))
 
 
 @router.get("/permissions/catalog")
@@ -471,6 +561,11 @@ def create_user(
                 detail="Domyślny magazyn musi być wśród przypisanych magazynów.",
             ) from e
         raise HTTPException(status_code=400, detail=msg) from e
+    except HTTPException:
+        raise
+    except Exception as exc:
+        db.rollback()
+        _reraise_auth_error(exc, action="users_create", login_hint=body.login)
 
 
 @router.patch("/users/{user_id}", response_model=AppUserListItem)
@@ -535,8 +630,7 @@ def update_user(
         raise HTTPException(status_code=400, detail=f"Błąd integralności danych: {orig}") from e
     except Exception as e:
         db.rollback()
-        logger.exception("update_user failed user_id=%s", user_id)
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        _reraise_auth_error(e, action="users_update", login_hint=getattr(u, "login", None))
 
 
 @router.post("/users/{user_id}/avatar", response_model=AvatarUploadResponse)
@@ -597,38 +691,45 @@ def delete_user(
     db: Session = Depends(get_db),
     actor: AppUser = Depends(require_permission("settings.users")),
 ):
-    u = db.query(AppUser).filter(AppUser.id == user_id).first()
-    if u is None:
-        raise HTTPException(status_code=404)
-    if bool(getattr(u, "is_system_seed", False)):
-        raise HTTPException(status_code=400, detail="Cannot delete seeded system administrator")
-    if actor.id == u.id:
-        raise HTTPException(status_code=400, detail="Cannot delete your own account")
-
-    from ..services.user_protection import UserProtectionError, assert_user_deletable
-
     try:
-        assert_user_deletable(u)
-    except UserProtectionError as e:
-        raise HTTPException(status_code=400, detail=e.message) from e
+        u = db.query(AppUser).filter(AppUser.id == user_id).first()
+        if u is None:
+            raise HTTPException(status_code=404)
+        if bool(getattr(u, "is_system_seed", False)):
+            raise HTTPException(status_code=400, detail="Cannot delete seeded system administrator")
+        if actor.id == u.id:
+            raise HTTPException(status_code=400, detail="Cannot delete your own account")
 
-    db.query(UserSession).filter(UserSession.user_id == u.id).delete()
-    db.query(AppUserWarehouse).filter(AppUserWarehouse.user_id == u.id).delete()
-    from ..models.user_warehouse_assignment import UserWarehouseAssignment
+        from ..services.user_protection import UserProtectionError, assert_user_deletable
 
-    db.query(UserWarehouseAssignment).filter(UserWarehouseAssignment.user_id == u.id).delete()
-    db.query(UserPermission).filter(UserPermission.user_id == u.id).delete()
-    log_audit_entry(
-        db,
-        user_id=actor.id,
-        action="users.delete",
-        entity_type="app_user",
-        entity_id=u.id,
-        detail={"login": u.login},
-    )
-    db.delete(u)
-    db.commit()
-    return {"ok": True}
+        try:
+            assert_user_deletable(u)
+        except UserProtectionError as e:
+            raise HTTPException(status_code=400, detail=e.message) from e
+
+        db.query(UserSession).filter(UserSession.user_id == u.id).delete()
+        db.query(AppUserWarehouse).filter(AppUserWarehouse.user_id == u.id).delete()
+        from ..models.user_warehouse_assignment import UserWarehouseAssignment
+
+        db.query(UserWarehouseAssignment).filter(UserWarehouseAssignment.user_id == u.id).delete()
+        db.query(UserPermission).filter(UserPermission.user_id == u.id).delete()
+        log_audit_entry(
+            db,
+            user_id=actor.id,
+            action="users.delete",
+            entity_type="app_user",
+            entity_id=u.id,
+            detail={"login": u.login},
+        )
+        db.delete(u)
+        db.commit()
+        return {"ok": True}
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as exc:
+        db.rollback()
+        _reraise_auth_error(exc, action="users_delete")
 
 
 @router.get("/users/{user_id}", response_model=MeResponse)
@@ -637,10 +738,15 @@ def get_user(
     db: Session = Depends(get_db),
     actor: AppUser = Depends(require_permission("settings.users")),
 ):
-    u = db.query(AppUser).filter(AppUser.id == user_id).first()
-    if u is None:
-        raise HTTPException(status_code=404)
-    return _me_response(db, u)
+    try:
+        u = db.query(AppUser).filter(AppUser.id == user_id).first()
+        if u is None:
+            raise HTTPException(status_code=404)
+        return _me_response(db, u)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        _reraise_auth_error(exc, action="users_get")
 
 
 from .auth_workforce_groups import workforce_user_groups_router as _workforce_user_groups_router

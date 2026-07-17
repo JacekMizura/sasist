@@ -1,5 +1,13 @@
 # Change log
 
+## 2026-07-17 — Fix login HTTP 500 (app_users protection columns)
+
+- Przyczyna: ORM mapuje `is_system_user|is_owner|is_deletable|is_role_changeable`, a na PG kolumny mogły nie powstać — `ensure_app_users_bootstrap_columns` dodawał je w tej samej transakcji co `CREATE TABLE app_user_warehouses (... AUTOINCREMENT)` (składnia SQLite) → wyjątek + rollback ALTER → SELECT przy loginie = 500.
+- Fix: `ensure_app_users_protection_columns` w osobnej transakcji; DDL junction dialect-aware; wywołanie w Tier 0 bootstrap + self-heal w `/auth/login`.
+- Migracja ops: `025_app_users_protection_columns.sql` (brak Alembic w repo).
+- Auth endpoints: `logger.exception` + detail z `error`/`code` zamiast cichego 500.
+- Role w DB: `super_admin` (nie `SUPER_ADMIN`).
+
 ## 2026-07-16 — SUPER_ADMIN + słownik aplikacji (system_labels)
 
 - `app_users`: `is_system_user`, `is_owner`, `is_deletable`, `is_role_changeable` (+ schema upgrade / migracja `024`).

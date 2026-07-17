@@ -212,6 +212,7 @@ from .db.schema_upgrade import (
     ensure_order_operational_notes_table,
     ensure_order_custom_fields_tables,
     ensure_app_users_bootstrap_columns,
+    ensure_app_users_protection_columns,
     ensure_user_wms_profiles_table,
     ensure_system_labels_table,
     ensure_wms_audit_tables,
@@ -1756,6 +1757,15 @@ def _bootstrap_tier0_platform_schema(*, phase: str) -> None:
         )
         raise
     ensure_sqlite_tables(announce=(phase == "import"))
+    # Auth-critical app_users flags before any /api/auth/login can run.
+    try:
+        ensure_app_users_protection_columns(engine)
+    except Exception:
+        logging.getLogger(__name__).exception(
+            "[startup] ensure_app_users_protection_columns failed phase=%s",
+            phase,
+        )
+        raise
     tier0, validation = bootstrap_tier0_platform_schema(engine)
     try:
         from .db.customer_schema import ensure_customer_crm_schema, verify_customer_schema_columns

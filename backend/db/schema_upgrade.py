@@ -5435,12 +5435,84 @@ def ensure_order_operational_notes_table(engine: Engine) -> None:
         conn.commit()
 
 
+def ensure_app_users_protection_columns(engine: Engine) -> list[str]:
+    """
+    Add SUPER_ADMIN / owner protection flags on app_users.
+
+    Commits independently so a later failure (e.g. warehouse junction table DDL)
+    cannot roll back these auth-critical columns.
+    Returns names of columns that were added.
+    """
+    from sqlalchemy import inspect
+
+    added: list[str] = []
+    if not _table_exists(engine, "app_users"):
+        return added
+
+    # Drop inspector cache so we see columns added by a previous failed partial run.
+    try:
+        inspect(engine).clear_cache()
+    except Exception:
+        pass
+
+    false_b = _bool_col_default(engine, default_true=False)
+    true_b = _bool_col_default(engine, default_true=True)
+    wanted: list[tuple[str, str]] = [
+        ("is_system_user", false_b),
+        ("is_owner", false_b),
+        ("is_deletable", true_b),
+        ("is_role_changeable", true_b),
+    ]
+
+    with engine.begin() as conn:
+        cols = _table_column_names(conn, "app_users")
+        for name, ddl_type in wanted:
+            if name in cols:
+                continue
+            conn.execute(text(f"ALTER TABLE app_users ADD COLUMN {name} {ddl_type}"))
+            added.append(name)
+            logger.info("ensure_app_users_protection_columns: added %s", name)
+
+        if engine.dialect.name == "postgresql":
+            conn.execute(
+                text(
+                    """
+                    UPDATE app_users
+                    SET is_system_user = true, is_deletable = false, is_role_changeable = false
+                    WHERE lower(role) IN ('super_admin', 'superadmin')
+                    """
+                )
+            )
+        else:
+            conn.execute(
+                text(
+                    """
+                    UPDATE app_users
+                    SET is_system_user = 1, is_deletable = 0, is_role_changeable = 0
+                    WHERE lower(role) IN ('super_admin', 'superadmin')
+                    """
+                )
+            )
+
+    try:
+        inspect(engine).clear_cache()
+    except Exception:
+        pass
+    return added
+
+
 def ensure_app_users_bootstrap_columns(engine: Engine) -> None:
     """Add is_system_seed and password_must_change for bootstrap / forced password change UX."""
-    with engine.connect() as conn:
+    # Auth-critical flags first — own transaction (must not roll back with later DDL).
+    try:
+        ensure_app_users_protection_columns(engine)
+    except Exception:
+        logger.exception("ensure_app_users_protection_columns failed")
+        raise
+
+    with engine.begin() as conn:
         ex = _table_exists(conn, "app_users")
         if not ex:
-            conn.commit()
             return
         cols = _table_column_names(conn, "app_users")
         if "is_system_seed" not in cols:
@@ -5464,31 +5536,24 @@ def ensure_app_users_bootstrap_columns(engine: Engine) -> None:
         if "wms_currency" not in cols:
             conn.execute(text("ALTER TABLE app_users ADD COLUMN wms_currency VARCHAR(8) NOT NULL DEFAULT 'PLN'"))
 
-        false_b = _bool_col_default(engine, default_true=False)
-        true_b = _bool_col_default(engine, default_true=True)
-        if "is_system_user" not in cols:
-            conn.execute(text(f"ALTER TABLE app_users ADD COLUMN is_system_user {false_b}"))
-        if "is_owner" not in cols:
-            conn.execute(text(f"ALTER TABLE app_users ADD COLUMN is_owner {false_b}"))
-        if "is_deletable" not in cols:
-            conn.execute(text(f"ALTER TABLE app_users ADD COLUMN is_deletable {true_b}"))
-        if "is_role_changeable" not in cols:
-            conn.execute(text(f"ALTER TABLE app_users ADD COLUMN is_role_changeable {true_b}"))
-
         try:
             conn.execute(text("UPDATE app_users SET wms_language = 'pl' WHERE wms_language IS NULL"))
             conn.execute(text("UPDATE app_users SET wms_currency = 'PLN' WHERE wms_currency IS NULL"))
         except Exception:
             pass
 
-        try:
+        tw = _table_exists(conn, "app_user_warehouses")
+        if not tw:
             if engine.dialect.name == "postgresql":
                 conn.execute(
                     text(
                         """
-                        UPDATE app_users
-                        SET is_system_user = true, is_deletable = false, is_role_changeable = false
-                        WHERE lower(role) IN ('super_admin', 'superadmin')
+                        CREATE TABLE app_user_warehouses (
+                            id SERIAL PRIMARY KEY,
+                            user_id INTEGER NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+                            warehouse_id INTEGER NOT NULL REFERENCES warehouses(id) ON DELETE CASCADE,
+                            UNIQUE(user_id, warehouse_id)
+                        )
                         """
                     )
                 )
@@ -5496,34 +5561,21 @@ def ensure_app_users_bootstrap_columns(engine: Engine) -> None:
                 conn.execute(
                     text(
                         """
-                        UPDATE app_users
-                        SET is_system_user = 1, is_deletable = 0, is_role_changeable = 0
-                        WHERE lower(role) IN ('super_admin', 'superadmin')
+                        CREATE TABLE app_user_warehouses (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            user_id INTEGER NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+                            warehouse_id INTEGER NOT NULL REFERENCES warehouses(id) ON DELETE CASCADE,
+                            UNIQUE(user_id, warehouse_id)
+                        )
                         """
                     )
                 )
-        except Exception:
-            pass
-
-        tw = _table_exists(conn, "app_user_warehouses")
-        if not tw:
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_app_user_warehouses_user_id ON app_user_warehouses(user_id)"))
             conn.execute(
                 text(
-                    """
-                    CREATE TABLE app_user_warehouses (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        user_id INTEGER NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
-                        warehouse_id INTEGER NOT NULL REFERENCES warehouses(id) ON DELETE CASCADE,
-                        UNIQUE(user_id, warehouse_id)
-                    )
-                    """
+                    "CREATE INDEX IF NOT EXISTS ix_app_user_warehouses_warehouse_id ON app_user_warehouses(warehouse_id)"
                 )
             )
-            conn.execute(text("CREATE INDEX ix_app_user_warehouses_user_id ON app_user_warehouses(user_id)"))
-            conn.execute(
-                text("CREATE INDEX ix_app_user_warehouses_warehouse_id ON app_user_warehouses(warehouse_id)")
-            )
-        conn.commit()
 
 
 def ensure_system_labels_table(engine: Engine) -> None:

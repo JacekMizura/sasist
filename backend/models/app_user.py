@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, text
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, false, text, true
 
 from ..database import Base
 from .base import BaseModelMixin
@@ -41,10 +41,10 @@ class AppUser(Base, BaseModelMixin):
     password_must_change = Column(Boolean, nullable=False, default=False)
 
     # System / owner protection (UI + API guards).
-    is_system_user = Column(Boolean, nullable=False, default=False, server_default=text("0"))
-    is_owner = Column(Boolean, nullable=False, default=False, server_default=text("0"))
-    is_deletable = Column(Boolean, nullable=False, default=True, server_default=text("1"))
-    is_role_changeable = Column(Boolean, nullable=False, default=True, server_default=text("1"))
+    is_system_user = Column(Boolean, nullable=False, default=False, server_default=false())
+    is_owner = Column(Boolean, nullable=False, default=False, server_default=false())
+    is_deletable = Column(Boolean, nullable=False, default=True, server_default=true())
+    is_role_changeable = Column(Boolean, nullable=False, default=True, server_default=true())
 
     primary_workforce_group_id = Column(
         Integer,
