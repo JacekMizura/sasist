@@ -3982,8 +3982,32 @@ def ensure_cart_lifecycle_history_table(engine: Engine) -> None:
         conn.commit()
 
 
+def _live_table_columns(conn, table: str) -> set[str]:
+    """Column names via dialect SQL — bypasses SQLAlchemy Inspector cache."""
+    dialect = conn.engine.dialect.name
+    if dialect == "postgresql":
+        rows = conn.execute(
+            text(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_schema = current_schema() AND table_name = :t"
+            ),
+            {"t": table},
+        ).fetchall()
+        return {str(r[0]) for r in rows}
+    # SQLite
+    rows = conn.execute(text(f"PRAGMA table_info({table})")).fetchall()
+    return {str(r[1]) for r in rows}
+
+
 def ensure_cart_lifecycle_events_table(engine: Engine) -> None:
-    """Event Log biznesowy wózka (event_code + description PL + severity)."""
+    """Event Log biznesowy wózka (event_code + description PL + severity).
+
+    Canonical field is ``event_code`` (ORM + writers). Legacy ``event_type`` is
+    retired: backfill into ``event_code``, then DROP COLUMN so NOT NULL on
+    ``event_type`` cannot break INSERTs that only set ``event_code``.
+
+    Idempotent: re-runs after retirement are no-ops (no error, no schema churn).
+    """
     dialect = engine.dialect.name
     with engine.connect() as conn:
         if not _table_exists(conn, "cart_lifecycle_events"):
@@ -4035,16 +4059,95 @@ def ensure_cart_lifecycle_events_table(engine: Engine) -> None:
                     )
                 )
         else:
-            cols = _table_column_names(conn, "cart_lifecycle_events")
-            if "event_code" not in cols:
+            # Live column set (not Inspector cache) — required for idempotent DROP.
+            cols = _live_table_columns(conn, "cart_lifecycle_events")
+            has_event_type = "event_type" in cols
+            has_event_code = "event_code" in cols
+
+            if not has_event_code:
                 conn.execute(text("ALTER TABLE cart_lifecycle_events ADD COLUMN event_code VARCHAR(64)"))
-                if "event_type" in cols:
+                has_event_code = True
+                if has_event_type:
                     conn.execute(
                         text(
                             "UPDATE cart_lifecycle_events SET event_code = event_type "
                             "WHERE event_code IS NULL OR event_code = ''"
                         )
                     )
+
+            # Retire leftover event_type (often NOT NULL) from pre-event_code schemas.
+            # ORM / append_lifecycle_event write only event_code — never event_type.
+            # Skip entirely when column already gone (2nd/3rd ensure = no-op).
+            if has_event_type and has_event_code:
+                if dialect == "postgresql":
+                    conn.execute(
+                        text(
+                            "UPDATE cart_lifecycle_events SET event_code = CAST(event_type AS text) "
+                            "WHERE (event_code IS NULL OR btrim(event_code) = '') "
+                            "AND event_type IS NOT NULL"
+                        )
+                    )
+                    conn.execute(
+                        text(
+                            "UPDATE cart_lifecycle_events SET event_code = 'unknown' "
+                            "WHERE event_code IS NULL OR btrim(event_code) = ''"
+                        )
+                    )
+                    try:
+                        conn.execute(
+                            text(
+                                "ALTER TABLE cart_lifecycle_events "
+                                "ALTER COLUMN event_code SET NOT NULL"
+                            )
+                        )
+                    except Exception as exc:
+                        logger.warning(
+                            "cart_lifecycle_events: could not SET event_code NOT NULL: %s",
+                            exc,
+                        )
+                    conn.execute(
+                        text(
+                            "ALTER TABLE cart_lifecycle_events "
+                            "DROP COLUMN IF EXISTS event_type"
+                        )
+                    )
+                    # Persist DDL before further reflection / ALTERs on this connection.
+                    conn.commit()
+                    logger.info(
+                        "cart_lifecycle_events: retired legacy column event_type "
+                        "(canonical: event_code)"
+                    )
+                else:
+                    conn.execute(
+                        text(
+                            "UPDATE cart_lifecycle_events SET event_code = event_type "
+                            "WHERE (event_code IS NULL OR event_code = '') "
+                            "AND event_type IS NOT NULL"
+                        )
+                    )
+                    conn.execute(
+                        text(
+                            "UPDATE cart_lifecycle_events SET event_code = 'unknown' "
+                            "WHERE event_code IS NULL OR event_code = ''"
+                        )
+                    )
+                    try:
+                        conn.execute(
+                            text("ALTER TABLE cart_lifecycle_events DROP COLUMN event_type")
+                        )
+                        conn.commit()
+                        logger.info(
+                            "cart_lifecycle_events: retired legacy column event_type "
+                            "(canonical: event_code)"
+                        )
+                    except Exception as exc:
+                        logger.warning(
+                            "cart_lifecycle_events: could not DROP event_type (%s); "
+                            "column left unused if present",
+                            exc,
+                        )
+
+            cols = _live_table_columns(conn, "cart_lifecycle_events")
             if "severity" not in cols:
                 conn.execute(
                     text(

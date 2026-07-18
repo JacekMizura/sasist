@@ -1,5 +1,13 @@
 # Change log
 
+## 2026-07-18 — Event Log: retire legacy `event_type`
+
+- Root cause 500 admin-release: PG `cart_lifecycle_events.event_type NOT NULL` while ORM/writers use only `event_code`.
+- `ensure_cart_lifecycle_events_table`: backfill `event_code` ← `event_type`, then `DROP COLUMN event_type` (+ commit so DDL sticks).
+- Idempotent: live column check (`PRAGMA` / `information_schema`), 2nd/3rd run = no-op.
+- Audit: 0 consumer/runtime refs to `event_type` for cart Event Log; SSOT = `event_code`.
+- Regression: `backend/tests/test_cart_lifecycle_event_type_migration.py` (incl. 3× ensure).
+
 ## 2026-07-18 — WMS stabilization health check (critical fixes)
 
 - Fix: duplicate ORM index `ix_activity_events_category` crashed `create_all` on boot.

@@ -10,6 +10,7 @@ Cel: produkcyjny, spójny flow (CartLifecycle + Capacity + Event/Activity Log + 
 - Duplikat indeksu `ix_activity_events_category` → crash `create_all`
 - `ensure_activity_log_tables` zawsze reconciliuje indeksy (`IF NOT EXISTS`)
 - PG allowlist: `ensure_carts_picking_lifecycle_columns` + lifecycle history/events
+- **Event Log:** legacy `event_type NOT NULL` → DROP po backfill do `event_code` (NotNullViolation 500)
 
 ## Open (stabilizacja)
 
