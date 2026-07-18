@@ -898,17 +898,60 @@ def get_picking_product_detail(
         fixed = [int(v) for v in order_ids if int(v) > 0] or None
     elif order_ids_csv:
         fixed = [int(v) for v in order_ids_csv.replace(";", ",").split(",") if v.strip().isdigit() and int(v.strip()) > 0] or None
-    row = build_wms_picking_product_detail(
-        db,
-        tenant_id=tenant_id,
-        warehouse_id=warehouse_id,
-        source_status_id=source_status_id,
-        order_type=order_type,
-        product_id=product_id,
-        cart_id=cart_id,
-        fixed_order_ids=fixed,
-        recovery_mode=recovery_detail_mode and recovery_order_id is not None,
-    )
+    # TEMP AUDIT (remove after root-cause): capture exact exception for product-lines/detail 500
+    import logging as _audit_logging
+    import traceback as _audit_traceback
+
+    _audit_log = _audit_logging.getLogger("wms.picking.detail.audit")
+    try:
+        from ..services.wms_picking_product_list_service import resolve_wms_picking_order_ids as _resolve_ids
+
+        _audit_resolved = _resolve_ids(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            source_status_id=int(source_status_id),
+            order_type=str(order_type),  # type: ignore[arg-type]
+            cart_id=int(cart_id) if cart_id is not None else None,
+            fixed_order_ids=fixed,
+            recovery_mode=recovery_detail_mode and recovery_order_id is not None,
+        )
+        _audit_log.error(
+            "[AUDIT detail] pre tenant=%s wh=%s status=%s product=%s cart=%s fixed=%s resolved_order_ids=%s",
+            tenant_id,
+            warehouse_id,
+            source_status_id,
+            product_id,
+            cart_id,
+            fixed,
+            _audit_resolved,
+        )
+    except Exception as _pre_exc:
+        _audit_log.error(
+            "[AUDIT detail] pre-resolve FAILED: %s\n%s",
+            _pre_exc,
+            _audit_traceback.format_exc(),
+        )
+    try:
+        row = build_wms_picking_product_detail(
+            db,
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+            source_status_id=source_status_id,
+            order_type=order_type,
+            product_id=product_id,
+            cart_id=cart_id,
+            fixed_order_ids=fixed,
+            recovery_mode=recovery_detail_mode and recovery_order_id is not None,
+        )
+    except Exception as _detail_exc:
+        _audit_log.error(
+            "[AUDIT detail] build_wms_picking_product_detail FAILED type=%s err=%s\n%s",
+            type(_detail_exc).__name__,
+            _detail_exc,
+            _audit_traceback.format_exc(),
+        )
+        raise
     if row is None:
         raise HTTPException(status_code=404, detail="Produkt nie występuje na liście zbiórki.")
     if current_user is not None and current_user.id is not None:
@@ -928,6 +971,17 @@ def get_picking_product_detail(
             },
         )
         db.commit()
+    try:
+        # Force same validation FastAPI response_model would do
+        WmsPickingProductDetailResponse.model_validate(row.model_dump())
+    except Exception as _val_exc:
+        _audit_log.error(
+            "[AUDIT detail] response_model ValidationError type=%s err=%s\n%s",
+            type(_val_exc).__name__,
+            _val_exc,
+            _audit_traceback.format_exc(),
+        )
+        raise
     return row
 
 

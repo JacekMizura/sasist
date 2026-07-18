@@ -19,6 +19,7 @@ Cel: produkcyjny, spójny flow (CartLifecycle + Capacity + Event/Activity Log + 
 - **SSOT Panel↔WMS:** product-lines / licznik / pick / shortage / finalize / bundle → `list_orders_on_cart` gdy `cart_id` (`resolve_wms_picking_order_ids`); hub bez wózka = kohorta
 - **Activity Log:** When/Who/What; `#` tylko przy assign/detach (`show_order_numbers`); Capacity = zwinięta historia ostatniego doboru
 - **Wózki szczegóły UX:** KPI Podsumowanie → tabela zamówień → Historia doboru → ActivityLogTable (`memory/cart-details-ux-redesign.md`)
+- **OPEN:** `product-lines/detail` HTTP 500 post-SSOT — audit `memory/product-lines-detail-500-audit.md` (temp `[AUDIT detail]` logs in endpoint; fix blocked until live stack)
 
 ## Open (stabilizacja)
 
