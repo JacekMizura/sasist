@@ -224,6 +224,7 @@ from .db.schema_upgrade import (
 from .middleware.exception_logging import (
     format_exception_traceback,
     get_or_create_request_id,
+    http_500_diagnostic_fields,
     log_request_server_error,
     outer_request_logger_middleware,
 )
@@ -490,21 +491,48 @@ UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 async def record_error(request: Request, exc: Exception):
     """Log full traceback before returning Internal server error JSON."""
-    # logger.exception: always emit stack here — this is the only place that returns
-    # {"detail": "Internal server error", "request_id": ...} for unhandled route errors.
-    logger.exception(
-        "ERROR [HTTP 500] %s %s request_id=%s exception_type=%s",
-        request.method,
-        request.url.path,
-        get_or_create_request_id(request),
-        type(exc).__name__,
-        exc_info=exc,
-    )
+    # Canonical structured log (request_id + exception_type + file/function/line + traceback)
+    # lives in log_request_server_error → log_http_500_error. Avoid a second incomplete
+    # logger.exception that can mask root-cause frames when HTTPException wraps ``from e``.
     log_request_server_error(
         request,
         exc,
         context=f"{request.method} {request.url.path} (exception_handler)",
     )
+
+
+def _http_500_debug_body_enabled() -> bool:
+    """Expose exception_type / file / line in JSON (never full traceback) outside production."""
+    flag = (os.environ.get("DEBUG_HTTP_500") or "").strip().lower()
+    if flag in ("1", "true", "yes", "on"):
+        return True
+    if flag in ("0", "false", "no", "off"):
+        return False
+    from .auth.config import APP_ENV
+
+    return str(APP_ENV or "").strip().lower() not in ("production", "prod")
+
+
+def _internal_server_error_payload(request: Request, exc: Exception) -> dict:
+    request_id = get_or_create_request_id(request)
+    body: dict = {
+        "detail": "Internal server error",
+        "request_id": request_id,
+    }
+    if _http_500_debug_body_enabled():
+        diag = http_500_diagnostic_fields(exc)
+        body.update(
+            {
+                "exception_type": diag["exception_type"],
+                "exception_message": diag["exception_message"],
+                "file": diag["file"],
+                "function": diag["function"],
+                "line": diag["line"],
+            }
+        )
+        if "validation_errors" in diag:
+            body["validation_errors"] = diag["validation_errors"]
+    return body
 
 
 def _cors_headers_for_request(request: Request) -> dict[str, str]:
@@ -525,13 +553,22 @@ def _attach_request_id(request: Request, response: JSONResponse) -> JSONResponse
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
     # HTTP 5xx — log here (BaseHTTPMiddleware isolates request.state from middleware).
+    # ``log_http_500_error`` walks ``__cause__`` / ``__context__`` for the real origin.
+    # Prefer ``raise HTTPException(...) from e`` (not ``from None``) so the root cause
+    # is preserved for exception_type / file / line / traceback under request_id.
     if int(exc.status_code) >= 500:
         log_request_server_error(
             request,
             exc,
             context=f"{request.method} {request.url.path} (http_exception_{exc.status_code})",
         )
-    response = JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+        content = _internal_server_error_payload(request, exc)
+        # Preserve structured API details when callers already set a dict/code payload.
+        if exc.detail is not None and exc.detail != "Internal server error":
+            content["detail"] = exc.detail
+        response = JSONResponse(status_code=exc.status_code, content=content)
+    else:
+        response = JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
     for k, v in _cors_headers_for_request(request).items():
         response.headers[k] = v
     return _attach_request_id(request, response)
@@ -572,6 +609,31 @@ def _is_direct_sales_complete_path(path: str) -> bool:
     return "/direct-sales/session/" in norm and norm.endswith("/complete")
 
 
+try:
+    from fastapi.exceptions import ResponseValidationError
+except ImportError:  # pragma: no cover
+    ResponseValidationError = None  # type: ignore[misc, assignment]
+
+if ResponseValidationError is not None:
+
+    @app.exception_handler(ResponseValidationError)
+    async def response_validation_exception_handler(request: Request, exc: ResponseValidationError):
+        """
+        ``response_model=...`` failed after the route returned.
+
+        This is a common silent-looking 500 for WMS detail endpoints — must log
+        exception_type / file / line / validation_errors under the same request_id.
+        """
+        await record_error(request, exc)
+        response = JSONResponse(
+            status_code=500,
+            content=_internal_server_error_payload(request, exc),
+        )
+        for k, v in _cors_headers_for_request(request).items():
+            response.headers[k] = v
+        return _attach_request_id(request, response)
+
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     """
@@ -582,7 +644,6 @@ async def global_exception_handler(request: Request, exc: Exception):
     and previously produced silent 500s (request_id in body, no Deploy Logs traceback).
     """
     tb = format_exception_traceback(exc)
-    request_id = get_or_create_request_id(request)
     try:
         if _is_direct_sales_complete_path(request.url.path):
             from .services.direct_sale.complete_debug_log import (
@@ -605,10 +666,7 @@ async def global_exception_handler(request: Request, exc: Exception):
             await record_error(request, exc)
             response = JSONResponse(
                 status_code=500,
-                content={
-                    "detail": "Internal server error",
-                    "request_id": request_id,
-                },
+                content=_internal_server_error_payload(request, exc),
             )
         for k, v in _cors_headers_for_request(request).items():
             response.headers[k] = v

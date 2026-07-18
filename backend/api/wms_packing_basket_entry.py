@@ -52,6 +52,6 @@ def get_basket_packing_order(
         raise _packing_scan_http_exception(e) from e
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
-    except SQLAlchemyError:
+    except SQLAlchemyError as e:
         logger.exception("get_basket_packing_order")
-        raise HTTPException(status_code=500, detail="Database error") from None
+        raise HTTPException(status_code=500, detail="Database error") from e

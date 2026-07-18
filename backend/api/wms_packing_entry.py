@@ -224,9 +224,9 @@ def get_packing_resolve_shelf(
         raise _packing_scan_http_exception(e) from e
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
-    except SQLAlchemyError:
+    except SQLAlchemyError as e:
         logger.exception("get_packing_resolve_shelf")
-        raise HTTPException(status_code=500, detail="Database error") from None
+        raise HTTPException(status_code=500, detail="Database error") from e
 
 
 @router.get("/packing/resolve-ean", response_model=WmsPackingResolveEanOut)
@@ -252,9 +252,9 @@ def get_packing_resolve_ean(
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
-    except SQLAlchemyError:
+    except SQLAlchemyError as e:
         logger.exception("get_packing_resolve_ean")
-        raise HTTPException(status_code=500, detail="Database error") from None
+        raise HTTPException(status_code=500, detail="Database error") from e
     if oid is None:
         raise HTTPException(status_code=404, detail={"code": "PRODUCT_NOT_FOUND"})
     return WmsPackingResolveEanOut(order_id=int(oid))
@@ -286,10 +286,10 @@ def post_packing_order_enter(
     except ValueError as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e)) from e
-    except SQLAlchemyError:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.exception("post_packing_order_enter order_id=%s", order_id)
-        raise HTTPException(status_code=500, detail="Database error") from None
+        raise HTTPException(status_code=500, detail="Database error") from e
 
 
 @router.get("/packing/orders/{order_id}/detail", response_model=WmsPackingOrderDetailOut)
@@ -346,10 +346,10 @@ def get_packing_order_detail(
     except ValueError as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e)) from e
-    except SQLAlchemyError:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.exception("get_packing_order_detail")
-        raise HTTPException(status_code=500, detail="Database error") from None
+        raise HTTPException(status_code=500, detail="Database error") from e
     if detail is None:
         raise HTTPException(status_code=404, detail={"code": "ORDER_NOT_IN_QUEUE"})
     return detail
@@ -385,10 +385,10 @@ def post_packing_order_scan(
     except ValueError as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e)) from e
-    except SQLAlchemyError:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.exception("post_packing_order_scan")
-        raise HTTPException(status_code=500, detail="Database error") from None
+        raise HTTPException(status_code=500, detail="Database error") from e
 
 
 @router.post("/packing/orders/{order_id}/line-pack", response_model=WmsPackingScanOut)
@@ -426,10 +426,10 @@ def post_packing_order_line_pack(
     except ValueError as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e)) from e
-    except SQLAlchemyError:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.exception("post_packing_order_line_pack")
-        raise HTTPException(status_code=500, detail="Database error") from None
+        raise HTTPException(status_code=500, detail="Database error") from e
 
 
 @router.post("/packing/orders/{order_id}/finish", response_model=WmsPackingScanOut)
@@ -481,7 +481,7 @@ def post_packing_order_finish(
                 "error": "Błąd bazy danych podczas domknięcia pakowania",
                 "message": str(e)[:400],
             },
-        ) from None
+        ) from e
     except Exception as e:
         db.rollback()
         logger.exception("post_packing_order_finish")
@@ -492,7 +492,7 @@ def post_packing_order_finish(
                 "error": "Nie udało się domknąć pakowania",
                 "message": str(e)[:400],
             },
-        ) from None
+        ) from e
 
 
 @router.post("/packing/orders/{order_id}/pack-all", response_model=WmsPackingScanOut)
@@ -523,10 +523,10 @@ def post_packing_order_pack_all(
     except ValueError as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e)) from e
-    except SQLAlchemyError:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.exception("post_packing_order_pack_all")
-        raise HTTPException(status_code=500, detail="Database error") from None
+        raise HTTPException(status_code=500, detail="Database error") from e
 
 
 @router.post("/packing/orders/{order_id}/pause")
@@ -560,10 +560,10 @@ def post_packing_order_pause(
             reason=reason,
         )
         db.commit()
-    except SQLAlchemyError:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.exception("post_packing_order_pause")
-        raise HTTPException(status_code=500, detail="Database error") from None
+        raise HTTPException(status_code=500, detail="Database error") from e
     return {"ok": True}
 
 
@@ -596,8 +596,8 @@ def post_packing_order_resume(
             operator_user_id=int(current_user.id) if current_user is not None else None,
         )
         db.commit()
-    except SQLAlchemyError:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.exception("post_packing_order_resume")
-        raise HTTPException(status_code=500, detail="Database error") from None
+        raise HTTPException(status_code=500, detail="Database error") from e
     return {"ok": True}

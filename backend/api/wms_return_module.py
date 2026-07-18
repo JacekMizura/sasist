@@ -40,7 +40,7 @@ def wms_return_module_config(
         out = read_wms_bundle_session(db, tenant_id, warehouse_id)
         db.commit()
         return out
-    except SQLAlchemyError:
+    except SQLAlchemyError as e:
         logger.exception("wms_return_module_config")
         db.rollback()
-        raise HTTPException(status_code=500, detail="Błąd bazy danych") from None
+        raise HTTPException(status_code=500, detail="Błąd bazy danych") from e

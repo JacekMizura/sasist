@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-07-18 — HTTP 500 diagnostics + product-lines/detail root cause
+
+- Canonical `wms.exceptions` log always includes `exception_type`, message, traceback, `file`/`function`/`line` under `request_id`.
+- Added `ResponseValidationError` handler; HTTP 5xx keeps `__cause__` (`from e`); `exception_origin` prefers `backend/` frames.
+- Local PG repro: detail 500 = `ValidationError` at `wms_picking_product_list_service.py` `build_wms_picking_product_detail` **L1867** (`bundle_component_index=0`).
+- Reports: `memory/wms-http-500-diagnostics-audit.md`. No business fix yet.
+
 ## 2026-07-18 — Cart details UX (ERP layout)
 
 - Layout: Podsumowanie KPI → tabela zamówień → Historia doboru (collapsed) → Historia czynności (table).

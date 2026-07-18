@@ -46,14 +46,36 @@ def format_exception_traceback(exc: BaseException) -> str:
 
 
 def exception_origin(exc: BaseException) -> tuple[str | None, str | None, int | None]:
-    """Return (filename, function_name, lineno) of the innermost traceback frame."""
+    """
+    Return (filename, function_name, lineno) for diagnostics.
+
+    Prefer the innermost frame that lives under the application tree (``backend/``),
+    so Pydantic/SQLAlchemy frames inside site-packages do not hide the call site
+    (e.g. ``build_wms_picking_product_detail`` line that constructed an invalid model).
+    Fall back to the absolute innermost frame when no app frame exists.
+    """
     tb = exc.__traceback__
     if tb is None:
         return None, None, None
-    while tb.tb_next is not None:
+    frames: list[tuple[str, str, int]] = []
+    while tb is not None:
+        frame = tb.tb_frame
+        frames.append((frame.f_code.co_filename, frame.f_code.co_name, tb.tb_lineno))
         tb = tb.tb_next
-    frame = tb.tb_frame
-    return frame.f_code.co_filename, frame.f_code.co_name, tb.tb_lineno
+    if not frames:
+        return None, None, None
+
+    def _is_app_frame(path: str) -> bool:
+        norm = path.replace("\\", "/").lower()
+        if "/site-packages/" in norm or "/dist-packages/" in norm:
+            return False
+        return "/backend/" in norm or norm.rstrip("/").endswith("/backend")
+
+    for file_name, func_name, line_no in reversed(frames):
+        if _is_app_frame(file_name):
+            return file_name, func_name, line_no
+    file_name, func_name, line_no = frames[-1]
+    return file_name, func_name, line_no
 
 
 def get_or_create_request_id(request: Request) -> str:
@@ -96,6 +118,72 @@ def _scope_from_request(request: Request) -> dict[str, str]:
     }
 
 
+# Framework noise that often appears as ``__context__`` when BaseHTTPMiddleware
+# re-raises app exceptions — never treat these as the diagnostic root cause.
+_FRAMEWORK_NOISE_TYPES = frozenset(
+    {
+        "WouldBlock",
+        "CancelledError",
+        "BrokenResourceError",
+        "EndOfStream",
+        "ClosedResourceError",
+    }
+)
+
+
+def _root_cause(exc: BaseException) -> BaseException:
+    """
+    Prefer explicit ``__cause__`` (``raise ... from e``).
+
+    Do **not** blindly walk all ``__context__`` — Starlette BaseHTTPMiddleware
+    often attaches anyio ``WouldBlock`` there and that must not replace the real
+    application exception in logs.
+
+    Special case: ``raise HTTPException(...) from None`` clears ``__cause__`` but
+    leaves the original in ``__context__``; for HTTPException we still surface
+    that context so WMS opaque 500s stay diagnosable under ``request_id``.
+    """
+    cur: BaseException = exc
+    seen: set[int] = set()
+    while id(cur) not in seen:
+        seen.add(id(cur))
+        nxt: BaseException | None = cur.__cause__
+        if nxt is None and type(cur).__name__ == "HTTPException" and cur.__context__ is not None:
+            nxt = cur.__context__
+        if nxt is None or nxt is cur:
+            break
+        if type(nxt).__name__ in _FRAMEWORK_NOISE_TYPES:
+            break
+        cur = nxt
+    return cur
+
+
+def http_500_diagnostic_fields(exc: BaseException) -> dict[str, object]:
+    """Structured fields for logs / optional debug JSON body."""
+    origin_exc = _root_cause(exc)
+    file_name, func_name, line_no = exception_origin(origin_exc)
+    # Prefer origin for type/message when HTTPException(500) wrapped a real cause.
+    report = origin_exc if origin_exc is not exc else exc
+    fields: dict[str, object] = {
+        "exception_type": type(report).__name__,
+        "exception_message": _safe_exc_summary(report),
+        "file": file_name or "-",
+        "function": func_name or "-",
+        "line": line_no if line_no is not None else "-",
+    }
+    if origin_exc is not exc:
+        fields["wrapper_type"] = type(exc).__name__
+        fields["wrapper_message"] = _safe_exc_summary(exc)
+    # FastAPI response_model failures carry structured errors.
+    errs = getattr(exc, "errors", None)
+    if callable(errs):
+        try:
+            fields["validation_errors"] = errs()
+        except Exception:
+            pass
+    return fields
+
+
 def log_http_500_error(
     request: Request,
     exc: BaseException | None,
@@ -128,9 +216,17 @@ def log_http_500_error(
         print(message, file=sys.stderr, flush=True)
         return
 
-    tb = format_exception_traceback(exc)
-    file_name, func_name, line_no = exception_origin(exc)
-    summary = _safe_exc_summary(exc)
+    diag = http_500_diagnostic_fields(exc)
+    # Log stack of the root cause when wrapped; otherwise the raised exc.
+    stack_exc = _root_cause(exc)
+    tb = format_exception_traceback(stack_exc)
+    # Also append wrapper traceback when different (shows raise HTTPException site).
+    if stack_exc is not exc and exc.__traceback__ is not None:
+        tb = (
+            tb
+            + "\n--- wrapper ---\n"
+            + format_exception_traceback(exc)
+        )
     message = (
         f"ERROR [HTTP 500] {context}\n"
         f"  request_id={rid}\n"
@@ -139,16 +235,16 @@ def log_http_500_error(
         f"  user={scope['user']}\n"
         f"  tenant={scope['tenant']}\n"
         f"  warehouse={scope['warehouse']}\n"
-        f"  exception_type={type(exc).__name__}\n"
-        f"  exception={summary}\n"
-        f"  file={file_name or '-'}\n"
-        f"  func={func_name or '-'}\n"
-        f"  line={line_no if line_no is not None else '-'}\n"
+        f"  exception_type={diag['exception_type']}\n"
+        f"  exception_message={diag['exception_message']}\n"
+        f"  file={diag['file']}\n"
+        f"  function={diag['function']}\n"
+        f"  line={diag['line']}\n"
         f"  duration_ms={duration_ms:.2f}\n"
         f"{tb}"
     )
-    # exc_info=exc: real stack even when sys.exc_info() is cleared in handlers.
-    _LOG.error(message, exc_info=exc)
+    # exc_info=stack_exc: real stack even when sys.exc_info() is cleared in handlers.
+    _LOG.error(message, exc_info=stack_exc)
     print(message, file=sys.stderr, flush=True)
 
 
@@ -198,6 +294,40 @@ def log_request_server_error(
         context=context,
     )
     return format_exception_traceback(exc)
+
+
+def raise_logged_http_500(
+    request: Request | None,
+    exc: BaseException,
+    *,
+    detail: object = "Internal server error",
+    context: str = "wms_http_500",
+) -> None:
+    """
+    Log the real exception, then raise HTTPException(500) **keeping** ``__cause__``.
+
+    Prefer this over ``raise HTTPException(...) from None`` which hides the stack
+    from the global HTTP 500 logger.
+    """
+    from fastapi import HTTPException
+
+    if request is not None:
+        log_request_server_error(request, exc, context=context)
+    else:
+        tb = format_exception_traceback(exc)
+        file_name, func_name, line_no = exception_origin(exc)
+        message = (
+            f"ERROR [HTTP 500] {context}\n"
+            f"  exception_type={type(exc).__name__}\n"
+            f"  exception_message={_safe_exc_summary(exc)}\n"
+            f"  file={file_name or '-'}\n"
+            f"  function={func_name or '-'}\n"
+            f"  line={line_no if line_no is not None else '-'}\n"
+            f"{tb}"
+        )
+        _LOG.error(message, exc_info=exc)
+        print(message, file=sys.stderr, flush=True)
+    raise HTTPException(status_code=500, detail=detail) from exc
 
 
 async def outer_request_logger_middleware(request: Request, call_next: CallNext) -> Response:

@@ -2018,9 +2018,9 @@ def lookup_orders(
         if status == 404:
             return _lookup_orders_empty_response(reason="swallowed http 404")
         raise
-    except SQLAlchemyError:
+    except SQLAlchemyError as e:
         logger.exception("[returns.lookup] database error q=%r", q)
-        raise HTTPException(status_code=500, detail="Błąd wyszukiwania zamówienia") from None
+        raise HTTPException(status_code=500, detail="Błąd wyszukiwania zamówienia") from e
 
     found = len(results)
     print(f"[returns.lookup] found={found}", flush=True)
@@ -2072,9 +2072,9 @@ def lookup_orders_advanced(
         )
     except HTTPException:
         raise
-    except SQLAlchemyError:
+    except SQLAlchemyError as e:
         logger.exception("[returns.advanced_lookup] database error")
-        raise HTTPException(status_code=500, detail="Błąd wyszukiwania zamówienia") from None
+        raise HTTPException(status_code=500, detail="Błąd wyszukiwania zamówienia") from e
 
 
 @router.get("/active-z-pz", response_model=Optional[ActiveZPzRead])
@@ -2134,10 +2134,10 @@ def close_active_collective_z_pz_endpoint(
     except ValueError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception:
+    except Exception as e:
         db.rollback()
         logger.exception("[Z-PZ] close failed tenant=%s wh=%s", tenant_id, wh_id)
-        raise HTTPException(status_code=500, detail="Nie udało się zamknąć dokumentu Z-PZ.") from None
+        raise HTTPException(status_code=500, detail="Nie udało się zamknąć dokumentu Z-PZ.") from e
     summary = summarize_collective_z_pz(db, doc)
     return ActiveZPzCloseRead(
         stock_document_id=int(summary["stock_document_id"]),
@@ -2874,10 +2874,10 @@ def finalize_wms_return(
     except RmzFinalizeError as exc:
         db.rollback()
         raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
-    except Exception:
+    except Exception as e:
         db.rollback()
         logger.exception("[returns.finalize] failed return_id=%s", return_id)
-        raise HTTPException(status_code=500, detail="Return finalize failed") from None
+        raise HTTPException(status_code=500, detail="Return finalize failed") from e
 
     row = _load_rmz(db, return_id, tenant_id, wh_id)
     if not row:
@@ -2963,10 +2963,10 @@ def commit_wms_return_workflow(
     except HTTPException:
         db.rollback()
         raise
-    except Exception:
+    except Exception as e:
         db.rollback()
         logger.exception("[returns.finalize] failed return_id=%s", return_id)
-        raise HTTPException(status_code=500, detail="Return finalize failed") from None
+        raise HTTPException(status_code=500, detail="Return finalize failed") from e
 
     row = _load_rmz(db, return_id, tenant_id, wh_id)
     if not row:
