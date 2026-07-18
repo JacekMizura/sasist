@@ -12,6 +12,7 @@ from ...models.order_item import OrderItem
 from ..bundle_operational_mode import ON_DEMAND_ASSEMBLY, STOCK_PRODUCTION
 from ..bundle_order_item_ops import order_item_skip_bundle_commercial_header_for_ops
 from .bundle_barcode_resolver import BundleBarcodeMatch, resolve_bundle_barcode
+from .bundle_component_index import bundle_component_index_sort_key
 from .bundle_line_resolver import bundle_line_resolver
 from .bundle_operational_ux_service import build_bundle_ux_index_for_order
 from .bundle_traceability_service import bundle_lot_tree_for_order
@@ -88,7 +89,9 @@ def _missing_components_for_order(
         if order_item_skip_bundle_commercial_header_for_ops(oi):
             continue
         meta = ux.get(int(oi.id))
-        if meta is None or meta.parent_bundle_order_line_id != int(bundle_parent_line_id):
+        if meta is None or not bool(meta.is_bundle_component):
+            continue
+        if meta.parent_bundle_order_line_id != int(bundle_parent_line_id):
             continue
         if product_id_filter is not None and int(oi.product_id) != int(product_id_filter):
             continue
@@ -109,7 +112,13 @@ def _missing_components_for_order(
                 pick_done=to_pick <= 1e-9 and qty > 0,
             )
         )
-    return sorted(out, key=lambda x: int(x.bundle_component_index or 0))
+    return sorted(
+        out,
+        key=lambda x: bundle_component_index_sort_key(
+            x.bundle_component_index,
+            order_item_id=int(x.order_item_id),
+        ),
+    )
 
 
 def handle_picking_bundle_scan(

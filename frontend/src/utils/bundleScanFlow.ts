@@ -52,26 +52,34 @@ export function buildPickingBundleDisplay(scan: BundleScanOut): BundlePickingDis
     };
   }
   const comps = scan.missing_components ?? [];
-  const total = comps.length > 0 ? Math.max(...comps.map((c) => c.bundle_component_index ?? 0)) : comps.length;
-  const totalCount = total > 0 ? total : comps.length;
+  const knownIdx = comps
+    .map((c) => c.bundle_component_index)
+    .filter((n): n is number => n != null && n >= 1);
+  const totalFromIdx = knownIdx.length > 0 ? Math.max(...knownIdx) : 0;
+  const totalCount = Math.max(totalFromIdx, comps.length, 1);
   const doneCount = comps.filter((c) => c.pick_done).length;
   return {
     title: bundleDisplayTitle(scan.bundle_name),
     subtitle: `${totalCount} składnik${totalCount === 1 ? "" : totalCount < 5 ? "i" : "ów"}`,
     mode: "ON_DEMAND",
-    components: comps.map((c) => componentRow(c, totalCount)),
+    components: comps.map((c, i) => componentRow(c, totalCount, i + 1)),
     doneCount,
     totalCount,
   };
 }
 
-function componentRow(c: BundleScanComponentOut, fallbackTotal: number): BundlePickingDisplay["components"][0] {
-  const idx = c.bundle_component_index ?? 0;
+function componentRow(
+  c: BundleScanComponentOut,
+  fallbackTotal: number,
+  fallbackIndex: number,
+): BundlePickingDisplay["components"][0] {
+  const raw = c.bundle_component_index;
+  const idx = raw != null && raw >= 1 ? raw : fallbackIndex;
   const total = fallbackTotal > 0 ? fallbackTotal : 1;
   return {
     order_item_id: c.order_item_id,
     product_name: c.product_name,
-    index: idx > 0 ? idx : 1,
+    index: idx,
     total,
     pick_done: c.pick_done,
     quantity_to_pick: c.quantity_to_pick,

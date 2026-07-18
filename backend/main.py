@@ -502,15 +502,14 @@ async def record_error(request: Request, exc: Exception):
 
 
 def _http_500_debug_body_enabled() -> bool:
-    """Expose exception_type / file / line in JSON (never full traceback) outside production."""
-    flag = (os.environ.get("DEBUG_HTTP_500") or "").strip().lower()
-    if flag in ("1", "true", "yes", "on"):
-        return True
-    if flag in ("0", "false", "no", "off"):
-        return False
-    from .auth.config import APP_ENV
+    """
+    Opt-in only: expose exception_type / file / line in JSON body.
 
-    return str(APP_ENV or "").strip().lower() not in ("production", "prod")
+    Never auto-enable from APP_ENV — production (and default deploys) must only
+    return ``detail`` + ``request_id``. Full traceback stays in server logs.
+    """
+    flag = (os.environ.get("DEBUG_HTTP_500") or "").strip().lower()
+    return flag in ("1", "true", "yes", "on")
 
 
 def _internal_server_error_payload(request: Request, exc: Exception) -> dict:

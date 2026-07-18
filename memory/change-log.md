@@ -1,5 +1,14 @@
 # Change log
 
+## 2026-07-18 — bundle_component_index: canonical normalize (detail 500 fix)
+
+- Root cause: `or 0` in tree builder → `WmsPickingBundleComponentStatus(ge=1)` ValidationError at detail L1867.
+- Semantics: index is projected (not DB column); NULL = unassigned; valid = unique ≥1 among siblings.
+- Canonical: `backend/services/bundles/bundle_component_index.py` + reindex in UX index / trees / scan.
+- Skip non-components (`is_bundle_component=False`); never map all NULL→1; safe sort; per-bundle try/except.
+- `DEBUG_HTTP_500` body opt-in only (no APP_ENV auto-leak). Logs keep full traceback + request_id.
+- Tests: `test_bundle_component_index_normalize.py`, detail endpoint 200 with NULL/0 meta.
+
 ## 2026-07-18 — HTTP 500 diagnostics + product-lines/detail root cause
 
 - Canonical `wms.exceptions` log always includes `exception_type`, message, traceback, `file`/`function`/`line` under `request_id`.
