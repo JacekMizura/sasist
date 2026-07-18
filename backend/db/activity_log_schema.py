@@ -59,19 +59,25 @@ def ensure_activity_log_tables(engine: Engine) -> None:
                         """
                     )
                 )
-            for idx_sql in (
-                "CREATE INDEX IF NOT EXISTS ix_activity_events_tenant_wh_occurred "
-                "ON activity_events(tenant_id, warehouse_id, occurred_at)",
-                "CREATE INDEX IF NOT EXISTS ix_activity_events_code_occurred "
-                "ON activity_events(event_code, occurred_at)",
-                "CREATE INDEX IF NOT EXISTS ix_activity_events_category ON activity_events(category)",
-                "CREATE INDEX IF NOT EXISTS ix_activity_events_severity ON activity_events(severity)",
-            ):
-                try:
-                    conn.execute(text(idx_sql))
-                except Exception:
-                    pass
         logger.info("[activity_log] created activity_events")
+
+    # Always reconcile indexes (table may exist from create_all without indexes).
+    with engine.begin() as conn:
+        for idx_sql in (
+            "CREATE INDEX IF NOT EXISTS ix_activity_events_tenant_wh_occurred "
+            "ON activity_events(tenant_id, warehouse_id, occurred_at)",
+            "CREATE INDEX IF NOT EXISTS ix_activity_events_code_occurred "
+            "ON activity_events(event_code, occurred_at)",
+            "CREATE INDEX IF NOT EXISTS ix_activity_events_category ON activity_events(category)",
+            "CREATE INDEX IF NOT EXISTS ix_activity_events_severity ON activity_events(severity)",
+            "CREATE INDEX IF NOT EXISTS ix_activity_events_event_code ON activity_events(event_code)",
+            "CREATE INDEX IF NOT EXISTS ix_activity_events_occurred_at ON activity_events(occurred_at)",
+            "CREATE INDEX IF NOT EXISTS ix_activity_events_correlation_id ON activity_events(correlation_id)",
+        ):
+            try:
+                conn.execute(text(idx_sql))
+            except Exception:
+                logger.debug("[activity_log] index ensure skipped: %s", idx_sql, exc_info=True)
 
     if not has_table(engine, "activity_event_links"):
         with engine.begin() as conn:
@@ -108,13 +114,24 @@ def ensure_activity_log_tables(engine: Engine) -> None:
                         """
                     )
                 )
-            try:
-                conn.execute(
-                    text(
-                        "CREATE INDEX IF NOT EXISTS ix_activity_event_links_object "
-                        "ON activity_event_links(object_type, object_id, event_id)"
-                    )
-                )
-            except Exception:
-                pass
         logger.info("[activity_log] created activity_event_links")
+
+    with engine.begin() as conn:
+        try:
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_activity_event_links_object "
+                    "ON activity_event_links(object_type, object_id, event_id)"
+                )
+            )
+        except Exception:
+            logger.debug("[activity_log] links index ensure skipped", exc_info=True)
+        try:
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_activity_event_links_event_id "
+                    "ON activity_event_links(event_id)"
+                )
+            )
+        except Exception:
+            logger.debug("[activity_log] links event_id index ensure skipped", exc_info=True)

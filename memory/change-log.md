@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-07-18 — WMS stabilization health check (critical fixes)
+
+- Fix: duplicate ORM index `ix_activity_events_category` crashed `create_all` on boot.
+- Fix: activity log indexes always `CREATE INDEX IF NOT EXISTS` (even if table pre-existed).
+- Fix: PostgreSQL allowlist runs cart lifecycle / capacity / cartstatus ensures (was SQLite-only no-op).
+
 ## 2026-07-18 — Admin force-release cart (OMS)
 
 - `admin_release_cart` w CartLifecycleService (ASSIGNED/PICKING; blokada READY/PACKING).

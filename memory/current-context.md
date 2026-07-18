@@ -2,14 +2,18 @@
 
 ## Active
 
-Awaryjne **Zwolnij wózek** (panel OMS): `admin_release_cart` w CartLifecycleService,
-`POST /carts/{id}/admin-release/`, UI `AdminReleaseCartButton` w `CartFleetDetailPanel`.
-Uprawnienie: `warehouse.carts.admin_release` (lub `warehouse.picking.override`).
+**FAZA STABILIZACJI WMS** — bez nowych funkcji.
+Cel: produkcyjny, spójny flow (CartLifecycle + Capacity + Event/Activity Log + CartStatus).
 
-Panel Activity Log + Capacity Engine + Cart.status lifecycle — bez zmian reguł.
+## Naprawione w audycie (2026-07-18)
 
-## Next
+- Duplikat indeksu `ix_activity_events_category` → crash `create_all`
+- `ensure_activity_log_tables` zawsze reconciliuje indeksy (`IF NOT EXISTS`)
+- PG allowlist: `ensure_carts_picking_lifecycle_columns` + lifecycle history/events
 
-- Dual-write OMS order events → `activity_events`
-- Filtry UI Activity Log
-- Osadzenie Activity Log w kolejnych modułach
+## Open (stabilizacja)
+
+- Heartbeat / claim FE nieużywane
+- READY/PACKING brak ścieżki admin abort (dead-end poza finish packing)
+- Optimizer MULTI vs Capacity Engine
+- GET product-lines mutuje lifecycle

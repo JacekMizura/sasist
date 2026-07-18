@@ -680,6 +680,10 @@ _POSTGRES_SAFE_SCHEMA_FUNCS = frozenset({
     # Workforce — ORM-based sync (PostgreSQL + SQLite).
     "ensure_workforce_operational_tables",
     "ensure_workforce_user_groups_schema",
+    # Cart lifecycle / Capacity / CartStatus — required on Railway PostgreSQL.
+    "ensure_carts_picking_lifecycle_columns",
+    "ensure_cart_lifecycle_history_table",
+    "ensure_cart_lifecycle_events_table",
 })
 _POSTGRES_SQLITE_ONLY_HELPERS: list[str] = []
 if not _is_sqlite_engine():

@@ -42,7 +42,8 @@ class ActivityEvent(Base):
     #: INFO | SUCCESS | WARNING | ERROR | AUDIT
     severity = Column(String(16), nullable=False, default="INFO")
     #: Coarse filter bucket: picking | packing | status | capacity | system | …
-    category = Column(String(32), nullable=False, default="system", index=True)
+    # index via __table_args__ only — do not also set index=True (duplicate name → create_all crash)
+    category = Column(String(32), nullable=False, default="system")
 
     actor_user_id = Column(Integer, ForeignKey("app_users.id", ondelete="SET NULL"), nullable=True)
     occurred_at = Column(DateTime, nullable=False, server_default=func.now(), index=True)
