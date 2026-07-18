@@ -163,14 +163,20 @@ export function wmsPickingRowScanEligible(row: {
   return false;
 }
 
-/** Zwraca true, gdy UI nie powinno pozwalać na zgłoszenie braku (brak wózka lub brak ilości do oznaczenia). */
+/** Zwraca true, gdy UI nie powinno pozwalać na zgłoszenie braku (brak wózka lub brak ilości do oznaczenia / konwersji pick→shortage). */
 export function cannotReportPickingShortage(opts: {
   remaining: number;
   cartId: number | null | undefined;
+  /** Efektywne zebranie sesji — pozwala zgłosić brak także po completed (1/1). */
+  pickedQuantity?: number;
 }): boolean {
   const { remaining, cartId } = opts;
   if (cartId == null || !Number.isFinite(cartId) || cartId < 1) return true;
-  return remaining <= 1e-9;
+  const picked = Math.max(0, Number(opts.pickedQuantity) || 0);
+  if (remaining > 1e-9) return false;
+  // Po pełnym picku: brak nadal możliwy przez cofnięcie draftów (backend).
+  if (picked > 1e-9) return false;
+  return true;
 }
 
 /** Liczniki nagłówka listy produktów (linie SKU — jak „Spakowane / Do spakowania” w pakowaniu). */

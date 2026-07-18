@@ -375,6 +375,10 @@ class WmsPickingReportShortageBody(BaseModel):
         ge=1,
         description="Konkretna linia zamówienia (zamiennik / recovery) — bez zgadywania po product_id",
     )
+    problem_kind: Optional[Literal["product_shortage", "qty_mismatch"]] = Field(
+        default="product_shortage",
+        description="product_shortage = klasyczny brak; qty_mismatch = rozbieżność bez zerowania lokalizacji",
+    )
 
 
 class WmsPickingReportShortageResponse(BaseModel):
@@ -393,6 +397,57 @@ class WmsPickingReportShortageResponse(BaseModel):
         default=True,
         description="Z ustawień WMS — dla UI po zgłoszeniu (kontynuacja vs pauza).",
     )
+
+
+class WmsPickingUndoPickBody(BaseModel):
+    product_id: int = Field(..., ge=1)
+    cart_id: int = Field(..., ge=1)
+    quantity: float = Field(1, gt=0, description="Ile szt. draft picków cofnąć (LIFO)")
+    location_id: Optional[int] = Field(default=None, ge=1)
+    order_ids: Optional[list[int]] = None
+    recovery_order_id: Optional[int] = Field(default=None, ge=1)
+
+
+class WmsPickingUndoPickResponse(BaseModel):
+    ok: bool = True
+    undone_qty: float = Field(..., ge=0)
+    inventory_unchanged: bool = True
+    order_ids: list[int] = Field(default_factory=list)
+    location_id: Optional[int] = None
+
+
+class WmsPickingEmptyLocationBody(BaseModel):
+    product_id: int = Field(..., ge=1)
+    location_id: int = Field(..., ge=1)
+    cart_id: int = Field(..., ge=1)
+    observed_stock_qty: Optional[float] = Field(
+        default=None,
+        ge=0,
+        description="Stan widziany na UI — concurrency check (odrzut gdy DB się różni)",
+    )
+    order_ids: Optional[list[int]] = None
+    recovery_order_id: Optional[int] = Field(default=None, ge=1)
+
+
+class WmsPickingAlternateLocation(BaseModel):
+    location_id: int
+    location_code: str
+    stock_quantity: float = Field(..., ge=0)
+
+
+class WmsPickingEmptyLocationResponse(BaseModel):
+    ok: bool = True
+    shortage_kind: str = Field(..., description="LOCATION_SHORTAGE | PRODUCT_SHORTAGE")
+    location_id: int
+    location_code: str
+    product_id: int
+    product_ean: Optional[str] = None
+    previous_qty: float
+    new_qty: float = 0
+    undone_pick_qty: float = 0
+    alternate_locations: list[WmsPickingAlternateLocation] = Field(default_factory=list)
+    stock_document_id: Optional[int] = None
+
 
 
 class WmsRecoveryBatchRouteGroup(BaseModel):

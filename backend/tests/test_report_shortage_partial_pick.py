@@ -33,9 +33,10 @@ class LineShortageReportQuantitiesTests(unittest.TestCase):
         self.assertEqual(q["required_qty"], 2.0)
         self.assertEqual(q["picked_qty"], 1.0)
         self.assertEqual(q["remaining_qty"], 1.0)
-        self.assertEqual(q["declarable_qty"], 1.0)
+        # remaining + picked (konwersja draftów) = ordered − missing
+        self.assertEqual(q["declarable_qty"], 2.0)
 
-    def test_fully_picked_not_declarable(self):
+    def test_fully_picked_still_declarable_via_pick_conversion(self):
         oi = SimpleNamespace(
             id=1,
             quantity=2.0,
@@ -49,10 +50,10 @@ class LineShortageReportQuantitiesTests(unittest.TestCase):
         ):
             q = _line_shortage_report_quantities(db, oi, 9)
         self.assertEqual(q["remaining_qty"], 0.0)
-        self.assertEqual(q["declarable_qty"], 0.0)
+        self.assertEqual(q["declarable_qty"], 2.0)
 
     def test_partial_with_existing_shortage(self):
-        """required=5, picked=3, missing=1 → jeszcze 1 do zgłoszenia."""
+        """required=5, picked=3, missing=1 → remaining=1; declarable=4 (można też cofnąć picki)."""
         oi = SimpleNamespace(
             id=2,
             quantity=5.0,
@@ -66,7 +67,7 @@ class LineShortageReportQuantitiesTests(unittest.TestCase):
         ):
             q = _line_shortage_report_quantities(db, oi, 9)
         self.assertEqual(q["remaining_qty"], 1.0)
-        self.assertEqual(q["declarable_qty"], 1.0)
+        self.assertEqual(q["declarable_qty"], 4.0)
 
 
 class ReportShortagePartialPickIntegrationTests(unittest.TestCase):

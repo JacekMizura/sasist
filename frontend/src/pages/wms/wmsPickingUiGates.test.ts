@@ -78,8 +78,11 @@ describe("cannotReportPickingShortage", () => {
     expect(cannotReportPickingShortage({ remaining: 5, cartId: null })).toBe(true);
     expect(cannotReportPickingShortage({ remaining: 5, cartId: undefined })).toBe(true);
   });
-  it("blocks first-line edge: remaining 0", () => {
+  it("blocks first-line edge: remaining 0 and no picks", () => {
     expect(cannotReportPickingShortage({ remaining: 0, cartId: 1 })).toBe(true);
+  });
+  it("allows shortage after completed pick (remaining 0, picked > 0)", () => {
+    expect(cannotReportPickingShortage({ remaining: 0, cartId: 1, pickedQuantity: 1 })).toBe(false);
   });
 });
 

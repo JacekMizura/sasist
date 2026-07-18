@@ -2270,8 +2270,9 @@ def _line_shortage_report_quantities(
     """
     Ilości do zgłoszenia braku — ta sama semantyka co karta produktu (``quantity_to_pick``).
 
-    ``remaining_qty`` = ordered − picked (sesja) − już zapisany brak operacyjny (``wms_picking_line_missing_qty``).
-    Częściowe zbieranie (np. 1/2) pozostaje kwalifikowane do zgłoszenia braku.
+    ``remaining_qty`` = ordered − picked (sesja) − już zapisany brak operacyjny.
+    ``declarable_qty`` = remaining + picked_eff — pozwala zgłosić brak po pełnym skanie
+    (najpierw cofamy draft picki, potem zapisujemy MISSING; invariant picked+shortage ≤ required).
     """
     qty = float(oi.quantity or 0)
     cid = int(cart_id)
@@ -2281,6 +2282,8 @@ def _line_shortage_report_quantities(
     picked_eff = min(picked_raw, max(0.0, qty - miss_ln))
     remaining_qty = max(0.0, qty - picked_eff - miss_ln)
     shortage_existing = max(miss_ln, declared)
+    # Nie przekraczaj ordered − już zgłoszony brak
+    declarable_qty = max(0.0, qty - miss_ln)
     return {
         "required_qty": qty,
         "picked_qty": picked_eff,
@@ -2289,7 +2292,7 @@ def _line_shortage_report_quantities(
         "missing_qty_line": miss_ln,
         "declared_qty": declared,
         "remaining_qty": remaining_qty,
-        "declarable_qty": remaining_qty,
+        "declarable_qty": declarable_qty,
     }
 
 
@@ -2635,21 +2638,24 @@ def report_wms_picking_product_shortage(
             declared_ln = float(q["declared_qty"])
             oi.wms_shortage_declared_qty = round(declared_ln + take, 6)
             oi.wms_picking_line_status = "missing"
-            pending_pick_rows = (
-                db.query(Pick.id)
-                .filter(
-                    Pick.order_item_id == int(oi.id),
-                    Pick.cart_id == cid,
-                    Pick.picked_at.is_(None),
+            # Cofnij tylko tyle draft picków, ile trzeba, by picked + shortage ≤ required
+            rem_before = float(q["remaining_qty"])
+            need_undo = max(0.0, float(take) - rem_before)
+            if need_undo > 1e-9:
+                from .wms_picking_corrections.undo_pick_service import undo_wms_session_picks
+
+                undo_wms_session_picks(
+                    db,
+                    tenant_id=int(tenant_id),
+                    warehouse_id=int(warehouse_id),
+                    cart_id=cid,
+                    product_id=int(oi.product_id),
+                    quantity=float(need_undo),
+                    location_id=int(location_id) if location_id is not None else None,
+                    order_ids=[int(o.id)],
+                    order_item_id=int(oi.id),
+                    operator_user_id=operator_user_id,
                 )
-                .all()
-            )
-            delete_pick_events_for_pick_ids(db, [int(r[0]) for r in pending_pick_rows])
-            db.query(Pick).filter(
-                Pick.order_item_id == int(oi.id),
-                Pick.cart_id == cid,
-                Pick.picked_at.is_(None),
-            ).delete(synchronize_session=False)
             append_event(
                 db,
                 order_item_id=int(oi.id),
@@ -2660,6 +2666,7 @@ def report_wms_picking_product_shortage(
                     "source": "wms_report_shortage",
                     "recovery": is_recovery,
                     "replacement": bool(getattr(oi, "replaced_from_order_item_id", None)),
+                    "undid_picks_qty": float(need_undo),
                 },
             )
             sync_declared_shortage_column_from_missing_events(db, int(oi.id))

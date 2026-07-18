@@ -1,5 +1,13 @@
 # Change log
 
+## 2026-07-18 — picking corrections: undo pick + empty location + shortage after completed
+
+- Audit: draft Pick does not touch Inventory; stock only at finalize.
+- `POST /wms/picking/undo-pick` — LIFO delete/reduce draft picks + audit `PICK_UNDONE`.
+- Shortage after 1/1: `declarable = ordered − missing`; undoes picks as needed before `FE_MISSING`.
+- `POST /wms/picking/confirm-empty-location` — RK via `apply_manual_stock_correction`, concurrency `observed_stock_qty`, LOCATION vs PRODUCT shortage.
+- Detail UI: corrective CTAs when completed; problem modal (empty / qty mismatch / product shortage).
+
 ## 2026-07-18 — picking session keeps completed products on list
 
 - ROOT: backend `build_wms_picking_product_lines` filtered via `_picking_product_line_still_active` (remaining≈0 dropped).

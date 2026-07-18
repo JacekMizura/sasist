@@ -38,6 +38,8 @@ from ..schemas.wms_picking_flow import (
     WmsPickingFlowLimits,
 )
 from ..schemas.wms_picking_products import (
+    WmsPickingEmptyLocationBody,
+    WmsPickingEmptyLocationResponse,
     WmsPickingFinalizeCartResponse,
     WmsPickingOrderTypeFilter,
     WmsPickingProductDetailResponse,
@@ -48,6 +50,8 @@ from ..schemas.wms_picking_products import (
     WmsPickingReportShortageBody,
     WmsPickingReportShortageResponse,
     WmsPickingResolveCartResponse,
+    WmsPickingUndoPickBody,
+    WmsPickingUndoPickResponse,
     WmsRecoveryBatchCreateBody,
     WmsRecoveryBatchSessionRead,
 )
@@ -1197,6 +1201,159 @@ def post_picking_quick_pick(
             status_code=500,
             detail={"code": "QuickPickInternalError", "message": "Wewnętrzny błąd serwera"},
         ) from e
+
+
+@router.post("/picking/undo-pick", response_model=WmsPickingUndoPickResponse)
+def post_picking_undo_pick(
+    body: WmsPickingUndoPickBody,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
+    source_status_id: int = Query(..., ge=1),
+    order_type: WmsPickingOrderTypeFilter = Query(...),
+    db: Session = Depends(get_db),
+    current_user: Optional[AppUser] = Depends(get_optional_current_user),
+):
+    """Cofnij draft Pick sesji (bez zmiany Inventory) — korekta pomyłki operatora."""
+    from ..services.wms_picking_corrections import undo_wms_session_picks
+    from ..services.wms_picking_corrections.undo_pick_service import UndoPickError
+
+    _ = source_status_id, order_type
+    try:
+        out = undo_wms_session_picks(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            cart_id=int(body.cart_id),
+            product_id=int(body.product_id),
+            quantity=float(body.quantity),
+            location_id=int(body.location_id) if body.location_id is not None else None,
+            order_ids=body.order_ids,
+            operator_user_id=int(current_user.id) if current_user is not None else None,
+        )
+        if current_user is not None and current_user.id is not None:
+            resp = build_wms_picking_product_lines(
+                db,
+                tenant_id=tenant_id,
+                warehouse_id=warehouse_id,
+                source_status_id=source_status_id,
+                order_type=order_type,
+                cart_id=body.cart_id,
+            )
+            _safe_touch_picking_session(
+                db=db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+                session_kind="picking_active",
+                operator_user_id=int(current_user.id),
+                cart_id=body.cart_id,
+                metadata=_picking_session_progress_metadata(
+                    resp, source_status_id=source_status_id, order_type=order_type
+                ),
+            )
+        db.commit()
+        return WmsPickingUndoPickResponse(
+            ok=True,
+            undone_qty=float(out.get("undone_qty") or 0),
+            inventory_unchanged=True,
+            order_ids=list(out.get("order_ids") or []),
+            location_id=out.get("location_id"),
+        )
+    except UndoPickError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail={"code": e.code, "message": str(e)}) from e
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.exception("post_picking_undo_pick:SQLAlchemyError")
+        raise HTTPException(status_code=500, detail="Cofnięcie pobrania nie powiodło się.") from e
+
+
+@router.post("/picking/confirm-empty-location", response_model=WmsPickingEmptyLocationResponse)
+def post_picking_confirm_empty_location(
+    body: WmsPickingEmptyLocationBody,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
+    source_status_id: int = Query(..., ge=1),
+    order_type: WmsPickingOrderTypeFilter = Query(...),
+    db: Session = Depends(get_db),
+    current_user: Optional[AppUser] = Depends(get_optional_current_user),
+):
+    """Potwierdź pustą lokalizację: stock produktu → 0 (RK), undo draftów, alternatywy / product shortage."""
+    from ..services.wms_picking_corrections import confirm_empty_pick_location
+    from ..services.wms_picking_corrections.empty_location_service import EmptyLocationError
+    from ..schemas.wms_picking_products import WmsPickingAlternateLocation
+
+    try:
+        out = confirm_empty_pick_location(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            cart_id=int(body.cart_id),
+            product_id=int(body.product_id),
+            location_id=int(body.location_id),
+            observed_stock_qty=float(body.observed_stock_qty)
+            if body.observed_stock_qty is not None
+            else None,
+            order_ids=body.order_ids,
+            operator_user_id=int(current_user.id) if current_user is not None else None,
+            source_status_id=int(source_status_id),
+            order_type=str(order_type),
+        )
+        if current_user is not None and current_user.id is not None:
+            resp = build_wms_picking_product_lines(
+                db,
+                tenant_id=tenant_id,
+                warehouse_id=warehouse_id,
+                source_status_id=source_status_id,
+                order_type=order_type,
+                cart_id=body.cart_id,
+            )
+            _safe_touch_picking_session(
+                db=db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+                session_kind="picking_active",
+                operator_user_id=int(current_user.id),
+                cart_id=body.cart_id,
+                metadata=_picking_session_progress_metadata(
+                    resp, source_status_id=source_status_id, order_type=order_type
+                ),
+            )
+        db.commit()
+        alts = [
+            WmsPickingAlternateLocation(
+                location_id=int(a["location_id"]),
+                location_code=str(a["location_code"]),
+                stock_quantity=float(a["stock_quantity"]),
+            )
+            for a in (out.get("alternate_locations") or [])
+        ]
+        return WmsPickingEmptyLocationResponse(
+            ok=True,
+            shortage_kind=str(out.get("shortage_kind") or "LOCATION_SHORTAGE"),
+            location_id=int(out["location_id"]),
+            location_code=str(out["location_code"]),
+            product_id=int(out["product_id"]),
+            product_ean=out.get("product_ean"),
+            previous_qty=float(out.get("previous_qty") or 0),
+            new_qty=float(out.get("new_qty") or 0),
+            undone_pick_qty=float(out.get("undone_pick_qty") or 0),
+            alternate_locations=alts,
+            stock_document_id=out.get("stock_document_id"),
+        )
+    except EmptyLocationError as e:
+        db.rollback()
+        status = 409 if e.code == "STOCK_CHANGED" else 400
+        raise HTTPException(status_code=status, detail={"code": e.code, "message": str(e)}) from e
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.exception("post_picking_confirm_empty_location:SQLAlchemyError")
+        raise HTTPException(status_code=500, detail="Wyzerowanie lokalizacji nie powiodło się.") from e
 
 
 @router.post("/picking/report-shortage", response_model=WmsPickingReportShortageResponse)

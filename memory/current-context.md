@@ -6,9 +6,10 @@
 
 ## Latest (2026-07-18)
 
-- Picking list UX: completed SKUs stay in session product-lines (backend filter was dropping them).
-- Prior: prod detail 500 TypeError `_safe_touch_picking_session` — kwargs fix (deploy separately).
+- Picking corrections: undo draft pick, shortage after completed, confirm empty location (RK HYBRID).
+- Prior: completed SKUs stay on product-lines; detail TypeError `_safe_touch_picking_session`.
 
 ## Notes
 
-- Do not declare full WMS flow fixed until prod verify after deploys.
+- Empty location requires HYBRID inventory mode (`apply_manual_stock_correction`).
+- Classic picking does not use StockReservation — routing reads on-hand Inventory.

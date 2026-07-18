@@ -5,8 +5,10 @@ import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   formatFastApiErrorDetail,
   getWmsPickingProductDetail,
+  postWmsPickingConfirmEmptyLocation,
   postWmsPickingQuickPick,
   postWmsPickingReportShortage,
+  postWmsPickingUndoPick,
   type WmsPickingProductDetailApi,
   type WmsPickingProductLocationRowApi,
 } from "../../api/wmsPickingProductsApi";
@@ -146,6 +148,11 @@ export default function WmsPickingProductDetailPage() {
   const [shortageBusy, setShortageBusy] = useState(false);
   const [shortageErr, setShortageErr] = useState<string | null>(null);
   const [shortageQtyInput, setShortageQtyInput] = useState(1);
+  /** empty_location | qty_mismatch | product_shortage */
+  const [shortageProblemKind, setShortageProblemKind] = useState<"empty_location" | "qty_mismatch" | "product_shortage">(
+    "product_shortage",
+  );
+  const [undoBusy, setUndoBusy] = useState(false);
   const [depositBusy, setDepositBusy] = useState(false);
   const [bundlePickScan, setBundlePickScan] = useState<BundleScanOut | null>(null);
   const [consolidationRackRows, setConsolidationRackRows] = useState<ConsolidationRackBundleRowOut[]>([]);
@@ -250,7 +257,16 @@ export default function WmsPickingProductDetailPage() {
 
   const fullyPickedNoMissing = pickQueueDone && missingTotal <= 1e-9;
 
-  const reportShortageBlocked = useMemo(() => cannotReportPickingShortage({ remaining, cartId: pickingSession?.cartId }), [remaining, pickingSession?.cartId]);
+  const reportShortageBlocked = useMemo(
+    () =>
+      cannotReportPickingShortage({
+        remaining,
+        cartId: pickingSession?.cartId,
+        pickedQuantity: displayPickedDetail,
+      }),
+    [remaining, pickingSession?.cartId, displayPickedDetail],
+  );
+  const canUndoPick = Boolean(pickingSession?.cartId) && displayPickedDetail > 1e-9 && missingTotal <= 1e-9;
   const ordersWithShortageCount = useMemo(() => {
     if (!detail?.orders?.length) return 0;
     return detail.orders.filter((o) => (o.missing_quantity ?? 0) > 1e-9).length;
@@ -453,11 +469,39 @@ export default function WmsPickingProductDetailPage() {
 
   const openShortageModal = useCallback(() => {
     if (!detail || reportShortageBlocked) return;
-    setShortageQtyInput(wmsPickingShortageDefaultQty(detail));
+    const rem = wmsPickingRemainingQty(detail);
+    const picked = wmsPickingEffectivePickedQuantity(detail);
+    // Po completed: domyślnie konwertuj zebrane szt. na brak
+    setShortageQtyInput(rem > 1e-9 ? wmsPickingShortageDefaultQty(detail) : Math.max(picked, 1));
+    setShortageProblemKind(picked > 1e-9 && rem <= 1e-9 ? "empty_location" : "product_shortage");
     setShortageErr(null);
-    console.info("[shortage.modal] OPEN", { product_id: productId, line_id: productId });
     window.requestAnimationFrame(() => setShortageConfirmOpen(true));
-  }, [detail, reportShortageBlocked, productId]);
+  }, [detail, reportShortageBlocked]);
+
+  const submitUndoPick = async () => {
+    if (undoBusy || !pickingSession?.cartId || warehouseId == null || !detail || !canUndoPick) return;
+    setUndoBusy(true);
+    setPickMsg(null);
+    try {
+      await postWmsPickingUndoPick(pickingTenantId, warehouseId, pickingSession.orderUiStatusId, orderType, {
+        product_id: productId,
+        cart_id: pickingSession.cartId,
+        quantity: 1,
+        location_id: selectedLocation?.location_id ?? activeLocationId ?? null,
+        order_ids: detail.orders.map((o) => o.order_id),
+        ...(recoveryOrderId != null && recoveryOrderId > 0 ? { recovery_order_id: recoveryOrderId } : {}),
+      });
+      playScanBeep();
+      showScannerToast("Cofnięto pobranie 1 szt.");
+      await load();
+      refocusScannerInput();
+    } catch (e: unknown) {
+      const ax = e as { response?: { data?: unknown } };
+      showScannerToast(formatFastApiErrorDetail(ax.response?.data) || "Cofnięcie nie powiodło się.");
+    } finally {
+      setUndoBusy(false);
+    }
+  };
 
   useEffect(() => {
     if (shortageConfirmOpen || manualOpen) return;
@@ -467,50 +511,79 @@ export default function WmsPickingProductDetailPage() {
   const submitShortage = async () => {
     if (shortageBusy) return;
     if (!pickingSession || warehouseId == null || !detail || reportShortageBlocked || shortageQtyInput <= 0) {
-      console.warn("[shortage.modal] SUBMIT skipped", {
-        blocked: reportShortageBlocked,
-        qty: shortageQtyInput,
-        has_detail: Boolean(detail),
-      });
       return;
     }
     const fifoOrder =
       detail.orders.find((o) => o.order_id === detail.active_fifo_order_id) ?? detail.orders[0] ?? null;
     const lineId = fifoOrder?.order_item_id ?? null;
-    console.info("[shortage.modal] SUBMIT", {
-      payload: {
-        product_id: productId,
-        missing_qty: shortageQtyInput,
-        cart_id: pickingSession.cartId,
-        order_item_id: lineId,
-      },
-      line_id: lineId,
-      qty: shortageQtyInput,
-    });
+    const locId = selectedLocation?.location_id ?? activeLocationId ?? detail.locations[0]?.location_id ?? null;
     setShortageBusy(true);
     setShortageErr(null);
     try {
+      if (shortageProblemKind === "empty_location") {
+        if (locId == null) {
+          setShortageErr("Wybierz lokalizację, aby potwierdzić pustkę.");
+          return;
+        }
+        const observed = locStock(selectedLocation ?? detail.locations[0]);
+        const emptyRes = await postWmsPickingConfirmEmptyLocation(
+          pickingTenantId,
+          warehouseId,
+          pickingSession.orderUiStatusId,
+          orderType,
+          {
+            product_id: productId,
+            location_id: locId,
+            cart_id: pickingSession.cartId!,
+            observed_stock_qty: observed,
+            order_ids: detail.orders.map((o) => o.order_id),
+            ...(recoveryOrderId != null && recoveryOrderId > 0 ? { recovery_order_id: recoveryOrderId } : {}),
+          },
+        );
+        playScanBeep();
+        setShortageConfirmOpen(false);
+        const alt = emptyRes.alternate_locations?.[0];
+        if (alt) {
+          showScannerToast(`Lokalizacja wyzerowana. Alternatywa: ${alt.location_code}`);
+          setActiveLocationId(alt.location_id);
+        } else {
+          showScannerToast(
+            emptyRes.shortage_kind === "PRODUCT_SHORTAGE"
+              ? "Brak stocku na innych lokalizacjach — zgłoszono brak produktu."
+              : "Potwierdzono pustą lokalizację.",
+          );
+        }
+        dispatchWmsShortagesUpdated();
+        await load();
+        refocusScannerInput();
+        return;
+      }
+
       await postWmsPickingReportShortage(pickingTenantId, warehouseId, pickingSession.orderUiStatusId, orderType, {
         product_id: productId,
-        location_id: selectedLocation?.location_id ?? activeLocationId ?? null,
+        location_id: locId,
         missing_qty: shortageQtyInput,
         cart_id: pickingSession.cartId!,
         order_ids: detail.orders.map((o) => o.order_id),
+        problem_kind: shortageProblemKind === "qty_mismatch" ? "qty_mismatch" : "product_shortage",
         ...(recoveryOrderId != null && recoveryOrderId > 0 ? { recovery_order_id: recoveryOrderId } : {}),
         ...(lineId != null && lineId > 0 ? { order_item_id: lineId } : {}),
       });
-      console.info("[shortage.modal] API_OK", { line_id: lineId, qty: shortageQtyInput });
       const optimistic = applyWmsPickingShortageToDetail(detail, shortageQtyInput);
       applyDetailToState(optimistic);
       dispatchWmsShortagesUpdated();
       playScanBeep();
       setShortageConfirmOpen(false);
-      showScannerToast("Brak zapisany. Kontynuuj zbieranie.");
+      showScannerToast(
+        shortageProblemKind === "qty_mismatch"
+          ? "Zgłoszono rozbieżność ilości — bez zerowania lokalizacji."
+          : "Brak zapisany. Kontynuuj zbieranie.",
+      );
       void refreshDetailSilently();
       refocusScannerInput();
     } catch (e: unknown) {
-      console.error("[shortage.modal] API_ERROR", e);
-      setShortageErr("Zgłoszenie braku nie powiodło się.");
+      const ax = e as { response?: { data?: unknown } };
+      setShortageErr(formatFastApiErrorDetail(ax.response?.data) || "Zgłoszenie braku nie powiodło się.");
     } finally {
       setShortageBusy(false);
     }
@@ -587,8 +660,28 @@ export default function WmsPickingProductDetailPage() {
                   Odłożono na półkę {detail.consolidation_shelf_label ?? ""}
                 </button>
               ) : (
-                <div className="flex items-center gap-2 px-6 py-3 bg-emerald-500 text-white rounded-2xl font-black uppercase tracking-wider text-xs shadow-lg shadow-emerald-500/10">
-                  <Check size={14} strokeWidth={3} /> Skompletowano pozycję
+                <div className="flex flex-col items-center gap-3 w-full max-w-md">
+                  <div className="flex items-center gap-2 px-6 py-3 bg-emerald-500 text-white rounded-2xl font-black uppercase tracking-wider text-xs shadow-lg shadow-emerald-500/10">
+                    <Check size={14} strokeWidth={3} /> Skompletowano pozycję
+                  </div>
+                  <div className="flex flex-wrap items-center justify-center gap-2">
+                    <button
+                      type="button"
+                      disabled={undoBusy || !canUndoPick}
+                      onClick={() => void submitUndoPick()}
+                      className="px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-700 text-[11px] font-bold uppercase tracking-wider hover:bg-slate-50 disabled:opacity-40"
+                    >
+                      {undoBusy ? "Cofanie…" : "Cofnij pobranie"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={reportShortageBlocked}
+                      onClick={openShortageModal}
+                      className="px-4 py-2.5 rounded-xl border border-amber-300 bg-amber-50 text-amber-900 text-[11px] font-bold uppercase tracking-wider hover:bg-amber-100 disabled:opacity-40"
+                    >
+                      Zgłoś problem / brak
+                    </button>
+                  </div>
                 </div>
               )
             ) : (
@@ -660,6 +753,16 @@ export default function WmsPickingProductDetailPage() {
         <div className="max-w-4xl mx-auto flex items-center justify-between gap-3">
           <div className="flex gap-2">
             <button type="button" onClick={openManual} disabled={pickQueueDone} className="px-4 py-3 bg-white border border-slate-200 hover:bg-slate-50 text-slate-800 font-bold rounded-xl text-xs uppercase tracking-wider transition-colors active:scale-95 disabled:opacity-40">Ręczny wpis</button>
+            {canUndoPick ? (
+              <button
+                type="button"
+                disabled={undoBusy}
+                onClick={() => void submitUndoPick()}
+                className="px-4 py-3 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl text-xs uppercase tracking-wider transition-colors active:scale-95 disabled:opacity-40"
+              >
+                {undoBusy ? "Cofanie…" : "Cofnij pobranie"}
+              </button>
+            ) : null}
             <button type="button" onClick={openShortageModal} disabled={reportShortageBlocked} className="px-4 py-3 bg-amber-50 border border-amber-200 text-amber-800 font-bold rounded-xl text-xs uppercase tracking-wider transition-colors active:scale-95 disabled:opacity-40">Zgłoś brak</button>
           </div>
           
@@ -680,20 +783,80 @@ export default function WmsPickingProductDetailPage() {
         </ModalShell>
       )}
 
-      {/* MODAL POTWIERDZENIA BRAKU */}
+      {/* MODAL POTWIERDZENIA BRAKU / ROZBIEŻNOŚCI */}
       {shortageConfirmOpen && detail && (
         <ModalShell
-          title="Zgłosić brak produktu?"
+          title="Zgłoś problem / brak"
           onClose={() => {
             if (!shortageBusy) setShortageConfirmOpen(false);
           }}
           closeDisabled={shortageBusy}
         >
-          <p className="text-sm text-slate-600 mb-4">Czy na pewno chcesz oznaczyć tę pozycję jako brak w magazynie?</p>
+          <p className="text-sm text-slate-600 mb-3">
+            Lokalizacja: <span className="font-mono font-bold text-slate-900">{shortageLocationLabel}</span>
+          </p>
+          <div className="space-y-2 mb-4">
+            <label className={`flex gap-3 p-3 rounded-xl border cursor-pointer ${shortageProblemKind === "empty_location" ? "border-amber-400 bg-amber-50" : "border-slate-200 bg-white"}`}>
+              <input
+                type="radio"
+                name="shortageKind"
+                checked={shortageProblemKind === "empty_location"}
+                onChange={() => setShortageProblemKind("empty_location")}
+                className="mt-1"
+              />
+              <span>
+                <span className="block text-sm font-bold text-slate-900">Lokalizacja jest pusta</span>
+                <span className="block text-xs text-slate-500 mt-0.5">
+                  Potwierdzam, że na lokalizacji {shortageLocationLabel} nie ma tego produktu. Stan systemu zostanie wyzerowany.
+                </span>
+              </span>
+            </label>
+            <label className={`flex gap-3 p-3 rounded-xl border cursor-pointer ${shortageProblemKind === "qty_mismatch" ? "border-amber-400 bg-amber-50" : "border-slate-200 bg-white"}`}>
+              <input
+                type="radio"
+                name="shortageKind"
+                checked={shortageProblemKind === "qty_mismatch"}
+                onChange={() => setShortageProblemKind("qty_mismatch")}
+                className="mt-1"
+              />
+              <span>
+                <span className="block text-sm font-bold text-slate-900">Nie znalazłem wymaganej ilości / stan niezgodny</span>
+                <span className="block text-xs text-slate-500 mt-0.5">
+                  Zapisze brak w zbieraniu bez automatycznego zerowania całej lokalizacji.
+                </span>
+              </span>
+            </label>
+            <label className={`flex gap-3 p-3 rounded-xl border cursor-pointer ${shortageProblemKind === "product_shortage" ? "border-amber-400 bg-amber-50" : "border-slate-200 bg-white"}`}>
+              <input
+                type="radio"
+                name="shortageKind"
+                checked={shortageProblemKind === "product_shortage"}
+                onChange={() => setShortageProblemKind("product_shortage")}
+                className="mt-1"
+              />
+              <span>
+                <span className="block text-sm font-bold text-slate-900">Brak produktu (bez korekty stocku lokalizacji)</span>
+                <span className="block text-xs text-slate-500 mt-0.5">Klasyczne zgłoszenie braku na zamówieniu.</span>
+              </span>
+            </label>
+          </div>
+          {shortageProblemKind !== "empty_location" ? (
+            <label className="block mb-4">
+              <span className="text-xs font-semibold text-slate-600">Ilość braku (szt.)</span>
+              <input
+                type="number"
+                min={0.01}
+                step={0.01}
+                className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-lg font-semibold outline-none"
+                value={shortageQtyInput || ""}
+                onChange={(e) => setShortageQtyInput(Number(e.target.value))}
+              />
+            </label>
+          ) : null}
           {shortageErr ? <p className="mb-3 text-sm font-semibold text-red-700">{shortageErr}</p> : null}
           <button
             type="button"
-            disabled={shortageBusy || shortageQtyInput <= 0}
+            disabled={shortageBusy || (shortageProblemKind !== "empty_location" && shortageQtyInput <= 0)}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -701,7 +864,11 @@ export default function WmsPickingProductDetailPage() {
             }}
             className="w-full py-4 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-sm font-bold uppercase tracking-wider disabled:opacity-50"
           >
-            {shortageBusy ? "Zapisywanie…" : "Zgłoś brak produktu"}
+            {shortageBusy
+              ? "Zapisywanie…"
+              : shortageProblemKind === "empty_location"
+                ? "Potwierdź pustą lokalizację"
+                : "Zgłoś brak produktu"}
           </button>
         </ModalShell>
       )}

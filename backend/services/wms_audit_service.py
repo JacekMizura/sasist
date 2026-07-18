@@ -17,6 +17,7 @@ from ..models.location import Location
 from ..models.order import Order
 from ..models.order_activity_log import OrderActivityLog
 from ..models.order_ui_status import OrderUiStatus
+from ..models.product import Product
 from ..models.wms_operation_session import WmsOperationSession
 from ..models.wms_packing_session import WmsPackingSession
 from ..models.wms_order_event import (
@@ -24,6 +25,7 @@ from ..models.wms_order_event import (
     EVT_CARTON_SELECTED,
     EVT_LABEL_GENERATED,
     EVT_LABEL_REPRINTED,
+    EVT_LOCATION_EMPTIED,
     EVT_PACKED_ITEM,
     EVT_PACKAGE_WEIGHT_CONFIRMED,
     EVT_PACKING_FINISHED,
@@ -32,6 +34,7 @@ from ..models.wms_order_event import (
     EVT_PACKING_RESUMED,
     EVT_PACKING_STARTED,
     EVT_PICKED_ITEM,
+    EVT_PICK_UNDONE,
     EVT_PICKING_FINISHED,
     EVT_PICKING_STARTED,
     EVT_SHORTAGE_REPORTED,
@@ -708,6 +711,172 @@ def emit_wms_picked_item(
         event_type=EVT_PICKED_ITEM,
         message=f"{title}" + (f" — {op_name}" if op_name else ""),
     )
+
+
+def emit_wms_pick_undone(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    order_id: int,
+    order_item_id: Optional[int],
+    product_id: int,
+    location_id: Optional[int],
+    cart_id: int,
+    quantity: float,
+    operator_user_id: Optional[int],
+) -> None:
+    product = db.query(Product).filter(Product.id == int(product_id)).first() if product_id else None
+    ean = (getattr(product, "ean", None) or "").strip() if product is not None else ""
+    sku = ean or (getattr(product, "sku", None) or "").strip() or f"#{product_id}"
+    loc_label = location_display_label(db, int(location_id)) if location_id is not None else None
+    order = db.query(Order).filter(Order.id == int(order_id)).first()
+    order_no = (getattr(order, "order_number", None) or "").strip() if order is not None else f"#{order_id}"
+    uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
+    op_name = operator_display_name(db, uid)
+    qtxt = _fmt_qty(float(quantity))
+    meta = {
+        "product_id": int(product_id),
+        "ean": ean or None,
+        "quantity": float(quantity),
+        "location_id": int(location_id) if location_id is not None else None,
+        "source_location": loc_label,
+        "cart_id": int(cart_id),
+        "order_item_id": int(order_item_id) if order_item_id is not None else None,
+        "event_code": EVT_PICK_UNDONE,
+    }
+    insert_wms_order_event(
+        db,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        order_id=int(order_id),
+        operator_user_id=uid,
+        event_type=EVT_PICK_UNDONE,
+        product_id=int(product_id),
+        order_item_id=int(order_item_id) if order_item_id is not None else None,
+        source_location_id=int(location_id) if location_id is not None else None,
+        target_cart_id=int(cart_id),
+        quantity=float(quantity),
+        metadata=meta,
+    )
+    loc_part = f" z lokalizacji {loc_label}" if loc_label else ""
+    msg = (
+        f"Cofnięto pobranie {qtxt} szt. produktu EAN {sku}{loc_part} "
+        f"dla zamówienia #{order_no}."
+    )
+    if op_name:
+        msg = f"{msg} — {op_name}"
+    append_order_activity_for_wms(
+        db,
+        order_id=int(order_id),
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        event_type=EVT_PICK_UNDONE,
+        message=msg,
+        operator_user_id=uid,
+        metadata=meta,
+    )
+
+
+def emit_wms_location_emptied(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    order_id: Optional[int],
+    cart_id: int,
+    product_id: int,
+    product_ean: Optional[str],
+    location_id: int,
+    location_code: str,
+    previous_qty: float,
+    new_qty: float,
+    operator_user_id: Optional[int],
+    stock_document_id: Optional[int] = None,
+) -> None:
+    uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
+    op_name = operator_display_name(db, uid)
+    ean = (product_ean or "").strip() or f"#{product_id}"
+    meta = {
+        "product_id": int(product_id),
+        "ean": product_ean,
+        "location_id": int(location_id),
+        "location_code": location_code,
+        "previous_qty": float(previous_qty),
+        "new_qty": float(new_qty),
+        "cart_id": int(cart_id),
+        "stock_document_id": int(stock_document_id) if stock_document_id is not None else None,
+        "event_code": EVT_LOCATION_EMPTIED,
+        "reason": "picking_confirm_empty_location",
+    }
+    oid = int(order_id) if order_id is not None and int(order_id) > 0 else None
+    if oid is None:
+        # Activity without order row — still dual-write via a cart-scoped order if possible
+        from .cart_stats_service import list_orders_on_cart
+
+        try:
+            rows = list_orders_on_cart(db, int(cart_id))
+            if rows:
+                oid = int(rows[0].id)
+        except Exception:
+            oid = None
+    msg = (
+        f"Potwierdzono pustą lokalizację {location_code}. "
+        f"Stan produktu EAN {ean} skorygowano z {_fmt_qty(float(previous_qty))} szt. "
+        f"do {_fmt_qty(float(new_qty))} szt."
+    )
+    if op_name:
+        msg = f"{msg} — {op_name}"
+    if oid is not None:
+        insert_wms_order_event(
+            db,
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+            order_id=int(oid),
+            operator_user_id=uid,
+            event_type=EVT_LOCATION_EMPTIED,
+            product_id=int(product_id),
+            source_location_id=int(location_id),
+            target_cart_id=int(cart_id),
+            quantity=float(previous_qty),
+            metadata=meta,
+        )
+        append_order_activity_for_wms(
+            db,
+            order_id=int(oid),
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+            event_type=EVT_LOCATION_EMPTIED,
+            message=msg,
+            operator_user_id=uid,
+            metadata=meta,
+        )
+    else:
+        try:
+            from .activity_log import ActivityLinkSpec, record_activity
+
+            record_activity(
+                db,
+                event_code=EVT_LOCATION_EMPTIED,
+                description=msg[:512],
+                links=[
+                    ActivityLinkSpec(
+                        object_type="cart",
+                        object_id=int(cart_id),
+                        role="primary",
+                        object_label=f"Wózek #{int(cart_id)}",
+                    )
+                ],
+                severity="WARNING",
+                category="inventory",
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+                actor_user_id=uid,
+                source_module="wms_picking",
+                metadata=dict(meta),
+            )
+        except Exception:
+            logger.exception("emit_wms_location_emptied activity_log failed")
 
 
 def emit_wms_picking_finished(

@@ -440,6 +440,7 @@ export async function postWmsPickingReportShortage(
     order_ids?: number[] | null;
     recovery_order_id?: number | null;
     order_item_id?: number | null;
+    problem_kind?: "product_shortage" | "qty_mismatch" | null;
   },
 ): Promise<WmsPickingReportShortageResponseApi> {
   const payload = { ...body };
@@ -452,6 +453,78 @@ export async function postWmsPickingReportShortage(
     payload.order_item_id = Math.floor(Number(oiid));
   }
   const res = await api.post<WmsPickingReportShortageResponseApi>("/wms/picking/report-shortage", payload, {
+    params: {
+      tenant_id: tenantId,
+      warehouse_id: warehouseId,
+      source_status_id: sourceStatusId,
+      order_type: orderType,
+    },
+  });
+  return res.data;
+}
+
+export type WmsPickingUndoPickResponseApi = {
+  ok: boolean;
+  undone_qty: number;
+  inventory_unchanged: boolean;
+  order_ids: number[];
+  location_id?: number | null;
+};
+
+export async function postWmsPickingUndoPick(
+  tenantId: number,
+  warehouseId: number,
+  sourceStatusId: number,
+  orderType: WmsPickingOrderTypeQuery,
+  body: {
+    product_id: number;
+    cart_id: number;
+    quantity: number;
+    location_id?: number | null;
+    order_ids?: number[] | null;
+    recovery_order_id?: number | null;
+  },
+): Promise<WmsPickingUndoPickResponseApi> {
+  const res = await api.post<WmsPickingUndoPickResponseApi>("/wms/picking/undo-pick", body, {
+    params: {
+      tenant_id: tenantId,
+      warehouse_id: warehouseId,
+      source_status_id: sourceStatusId,
+      order_type: orderType,
+    },
+  });
+  return res.data;
+}
+
+export type WmsPickingEmptyLocationResponseApi = {
+  ok: boolean;
+  shortage_kind: string;
+  location_id: number;
+  location_code: string;
+  product_id: number;
+  product_ean?: string | null;
+  previous_qty: number;
+  new_qty: number;
+  undone_pick_qty: number;
+  alternate_locations: Array<{ location_id: number; location_code: string; stock_quantity: number }>;
+  stock_document_id?: number | null;
+};
+
+export async function postWmsPickingConfirmEmptyLocation(
+  tenantId: number,
+  warehouseId: number,
+  sourceStatusId: number,
+  orderType: WmsPickingOrderTypeQuery,
+  body: {
+    product_id: number;
+    location_id: number;
+    cart_id: number;
+    observed_stock_qty?: number | null;
+    order_ids?: number[] | null;
+    recovery_order_id?: number | null;
+  },
+): Promise<WmsPickingEmptyLocationResponseApi> {
+  const res = await api.post<WmsPickingEmptyLocationResponseApi>("/wms/picking/confirm-empty-location", body, {
     params: {
       tenant_id: tenantId,
       warehouse_id: warehouseId,
