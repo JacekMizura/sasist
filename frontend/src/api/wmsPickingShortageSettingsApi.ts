@@ -11,6 +11,7 @@ export type WmsPickingShortageSettingsReadApi = {
   priority_after_shortage_resolved: WmsShortageResolvePriorityApi;
   auto_reopen_picking_after_shortage_resolved: boolean;
   recovery_completed_order_ui_status_id: number | null;
+  wms_validation_failed_order_ui_status_id?: number | null;
 };
 
 export type WmsPickingShortageSettingsSaveApi = {
@@ -22,6 +23,7 @@ export type WmsPickingShortageSettingsSaveApi = {
   priority_after_shortage_resolved: WmsShortageResolvePriorityApi;
   auto_reopen_picking_after_shortage_resolved: boolean;
   recovery_completed_order_ui_status_id: number | null;
+  wms_validation_failed_order_ui_status_id?: number | null;
 };
 
 export async function getWmsPickingShortageSettings(

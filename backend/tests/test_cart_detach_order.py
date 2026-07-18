@@ -58,6 +58,17 @@ def db():
         session.close()
 
 
+@pytest.fixture(autouse=True)
+def _bypass_wms_validation_gate_for_detach_unit_tests(monkeypatch):
+    def _pass_through(db, *, orders, tenant_id, warehouse_id, operator_user_id=None):
+        return list(orders)
+
+    monkeypatch.setattr(
+        "backend.services.wms_order_validation.gate.gate_orders_before_capacity",
+        _pass_through,
+    )
+
+
 def _cart(db) -> Cart:
     c = Cart(
         tenant_id=1,

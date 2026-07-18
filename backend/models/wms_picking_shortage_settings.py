@@ -27,5 +27,10 @@ class WmsPickingShortageSettings(Base):
     #: Status OMS po domknięciu dogrywki zbierki (NULL = użyj start_status_id z ustawień pakowania, jeśli jest).
     recovery_completed_order_ui_status_id = Column(Integer, ForeignKey("order_ui_statuses.id", ondelete="SET NULL"), nullable=True)
 
+    #: Status panelu po nieudanej Walidacji WMS (pre-Capacity). NULL = gate bez zmiany statusu.
+    wms_validation_failed_order_ui_status_id = Column(
+        Integer, ForeignKey("order_ui_statuses.id", ondelete="SET NULL"), nullable=True
+    )
+
     created_at = Column(DateTime, nullable=True, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=True, default=datetime.utcnow, onupdate=datetime.utcnow)

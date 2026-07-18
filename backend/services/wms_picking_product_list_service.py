@@ -456,6 +456,19 @@ def bootstrap_start_picking_if_needed(
         claim_cart(db, cart=cart, operator_user_id=int(operator_user_id))
         return None
 
+    from .wms_order_validation.gate import gate_orders_before_capacity
+
+    orders = gate_orders_before_capacity(
+        db,
+        orders=orders,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        operator_user_id=None,  # automatyczny gate — Activity Log: System
+    )
+    if not orders:
+        claim_cart(db, cart=cart, operator_user_id=int(operator_user_id))
+        return None
+
     return start_picking(
         db,
         cart=cart,
@@ -1450,6 +1463,39 @@ def build_wms_picking_product_lines(
         fixed_order_ids=fixed_order_ids,
         recovery_mode=recovery_mode,
     )
+    # Race: zamówienia na wózku bez picków — rewalidacja (nie niszczy sesji z częściowym pickiem).
+    if cart_id is not None and not recovery_mode and order_ids:
+        try:
+            from .wms_order_validation.gate import defensive_revalidate_cart_orders_without_picks
+
+            cart_orders = (
+                db.query(Order)
+                .filter(Order.id.in_(list(order_ids)), Order.tenant_id == int(tenant_id))
+                .all()
+            )
+            detached = defensive_revalidate_cart_orders_without_picks(
+                db,
+                cart_id=int(cart_id),
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+                orders=cart_orders,
+                operator_user_id=None,
+            )
+            if detached:
+                order_ids = resolve_wms_picking_order_ids(
+                    db,
+                    tenant_id=tenant_id,
+                    warehouse_id=warehouse_id,
+                    source_status_id=source_status_id,
+                    order_type=ot,
+                    cart_id=cart_id,
+                    fixed_order_ids=fixed_order_ids,
+                    recovery_mode=recovery_mode,
+                )
+        except Exception:
+            logger.exception(
+                "[wms.validation] defensive cart revalidate failed cart_id=%s", cart_id
+            )
     if not order_ids:
         empty_msg = (
             f"Brak zamówień przypisanych do wózka (filtr: {ot})."

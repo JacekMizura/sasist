@@ -33,6 +33,10 @@ class WmsPickingShortageSettingsRead(BaseModel):
         default=None,
         description="Status OMS po domknięciu dogrywki zbierki (null = ustawienia pakowania start_status_id jeśli jest).",
     )
+    wms_validation_failed_order_ui_status_id: Optional[int] = Field(
+        default=None,
+        description="Status panelu po nieudanej Walidacji WMS (null = gate bez zmiany statusu).",
+    )
 
 
 class WmsPickingShortageSettingsSave(BaseModel):
@@ -44,3 +48,4 @@ class WmsPickingShortageSettingsSave(BaseModel):
     priority_after_shortage_resolved: ShortageResolvePriority = "high"
     auto_reopen_picking_after_shortage_resolved: bool = True
     recovery_completed_order_ui_status_id: Optional[int] = None
+    wms_validation_failed_order_ui_status_id: Optional[int] = None

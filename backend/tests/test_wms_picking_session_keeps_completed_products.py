@@ -203,7 +203,9 @@ class TestSessionKeepsCompletedProducts(unittest.TestCase):
         self.assertFalse(multi.completed)
         self.assertEqual(multi.picked_quantity, 1.0)
         self.assertEqual(multi.remaining_to_pick, 4.0)
-        self.assertNotEqual(mid.products[-1].product_id, 10)
+        # PARTIAL (10) after ACTIVE (20) — resolution_status sort SSOT
+        self.assertEqual(mid.products[0].product_id, 20)
+        self.assertEqual(mid.products[-1].product_id, 10)
 
         with patch(
             "backend.services.wms_picking_product_list_service.get_or_create_wms_picking_shortage_settings",

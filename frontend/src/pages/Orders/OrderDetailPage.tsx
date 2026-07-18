@@ -83,6 +83,7 @@ import OrderEditProductModal from "../../components/orders/OrderEditProductModal
 import { EditBuyerModal } from "../../components/orders/EditBuyerModal";
 import { OrderPriorityFlamePicker } from "../../components/orders/OrderPriorityFlame";
 import { OrderHistoryTimeline } from "../../components/orders/OrderHistoryTimeline";
+import { WmsOrderValidationPanel } from "../../components/orders/WmsOrderValidationPanel";
 import { buildOrderHistoryTimelineEvents } from "../../components/orders/orderHistoryTimelineModel";
 import { OrderEventTypeLabel } from "../../components/orders/OrderEventTypeLabel";
 import { getOrderEventLabel } from "../../utils/orderEventLabels";
@@ -2435,6 +2436,13 @@ export default function OrderDetailPage() {
                 </div>
                 <aside className="space-y-6">
                   <WmsOperationTimesKpiPanel cells={wmsSidebarTimeCells} />
+                  {orderFulfillmentWhId != null ? (
+                    <WmsOrderValidationPanel
+                      tenantId={order.tenant_id ?? DAMAGE_TENANT_ID}
+                      warehouseId={orderFulfillmentWhId}
+                      orderId={order.id}
+                    />
+                  ) : null}
                   <div className="bg-white rounded-md border border-slate-200 shadow-sm p-5">
                      <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-4">HISTORIA WMS</h3>
                      <OrderHistoryTimeline compact events={orderHistoryTimelineEvents} formatDate={formatDetailDate} />

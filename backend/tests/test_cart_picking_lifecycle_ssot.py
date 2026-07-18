@@ -62,6 +62,19 @@ def db():
         session.close()
 
 
+@pytest.fixture(autouse=True)
+def _bypass_wms_validation_gate_for_lifecycle_unit_tests(monkeypatch):
+    """CartLifecycle SSOT tests nie budują Inventory — walidacja jest osobnym pakietem testów."""
+
+    def _pass_through(db, *, orders, tenant_id, warehouse_id, operator_user_id=None):
+        return list(orders)
+
+    monkeypatch.setattr(
+        "backend.services.wms_order_validation.gate.gate_orders_before_capacity",
+        _pass_through,
+    )
+
+
 def _cart(db, *, capacity_orders=None, capacity_strategy="LIMIT_VOLUME", code: str = "CART-001") -> Cart:
     c = Cart(
         tenant_id=1,
@@ -554,7 +567,7 @@ def test_admin_release_assigned(db):
     codes = [e["event_code"] for e in list_cart_lifecycle_events(db, cart_id=int(cart.id), limit=20)]
     assert "admin_cart_released" in codes
     descs = [e["description"] for e in list_cart_lifecycle_events(db, cart_id=int(cart.id), limit=20)]
-    assert "Administrator ręcznie zwolnił wózek." in descs
+    assert "Zwolniono wózek." in descs
 
 
 def test_admin_release_blocks_ready_and_packing(db):

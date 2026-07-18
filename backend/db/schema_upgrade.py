@@ -3750,7 +3750,18 @@ def ensure_picking_shortage_support(engine: Engine) -> None:
             conn.execute(text("CREATE INDEX ix_wms_shortage_wh ON wms_picking_shortage_reports(warehouse_id)"))
             conn.execute(text("CREATE INDEX ix_wms_shortage_product ON wms_picking_shortage_reports(product_id)"))
         conn.commit()
-
+    with engine.connect() as conn:
+        if _table_exists(conn, "wms_picking_shortage_settings"):
+            cols = _table_column_names(conn, "wms_picking_shortage_settings")
+            if "wms_validation_failed_order_ui_status_id" not in cols:
+                conn.execute(
+                    text(
+                        "ALTER TABLE wms_picking_shortage_settings "
+                        "ADD COLUMN wms_validation_failed_order_ui_status_id INTEGER "
+                        "REFERENCES order_ui_statuses(id) ON DELETE SET NULL"
+                    )
+                )
+        conn.commit()
 
 def ensure_carts_code_column(engine: Engine) -> None:
     """

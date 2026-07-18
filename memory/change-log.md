@@ -1,5 +1,22 @@
 # Change log
 
+## 2026-07-18 — WMS Validation hardening (detach SSOT + tests)
+
+- `detach_order_from_cart(..., operator_user_id=None)` = System actor; gate no longer uses `clear_order_picking_session_context` bypass.
+- Technical `ERROR`/`ORDER_NOT_FOUND` separated from product issues (no fake WMS_VALIDATION_FAILED).
+- Integration: race G, active session H, multi-tenant J, activity L, perf (1 routing / batch).
+- DEV audit test.db: 0 active cart orders would_fail.
+
+## 2026-07-18 — WMS Order Validation SSOT (pre-Capacity)
+
+- Package `backend/services/wms_order_validation/` — routing shortfalls → PASS/FAIL + issues/reason_label.
+- Settings: `wms_validation_failed_order_ui_status_id` (NULL = gate without status mutate).
+- Gates: bootstrap + start_picking before Capacity; defensive revalidate on cart (no picks → detach).
+- Activity: one `WMS_VALIDATION_FAILED` / `PASSED` event; no PASS spam on auto gate.
+- Revalidate: previous UI status in order metadata; order detail panel + API.
+- Legacy: `audit_active_cart_orders_validation_failures` read-only.
+- Tests: `test_wms_order_validation.py` (10).
+
 ## 2026-07-18 — shortage multi-order / remaining-first audit
 
 - Audyt: FE wysyłało `order_item_id` FIFO → shortage tylko na 1 linii; alokacja budgetem zjadała `declarable` (konwersja picków) przed remaining.

@@ -654,6 +654,21 @@ def start_picking(
     already_assigned = [o for o in orders if getattr(o, "cart_id", None) is not None]
     free_candidates = [o for o in orders if getattr(o, "cart_id", None) is None]
 
+    # Defensywna Walidacja WMS — przed Capacity (ten sam SSOT co bootstrap).
+    try:
+        from .wms_order_validation.gate import gate_orders_before_capacity
+
+        free_candidates = gate_orders_before_capacity(
+            db,
+            orders=free_candidates,
+            tenant_id=int(cart.tenant_id),
+            warehouse_id=int(cart.warehouse_id),
+            operator_user_id=None,
+        )
+    except Exception:
+        logger.exception("START_PICKING validation gate failed cart_id=%s", int(cart.id))
+        raise
+
     selected, basket_assignments, engine_rejected = _apply_capacity_slice(
         db, cart, free_candidates, on_capacity=on_capacity
     )
@@ -1561,15 +1576,20 @@ def detach_order_from_cart(
     order_id: int,
     tenant_id: int,
     warehouse_id: int,
-    operator_user_id: int,
+    operator_user_id: int | None = None,
+    reason: str | None = None,
 ) -> dict[str, Any]:
     """
-    Odłącz jedno zamówienie od wózka (admin). Nie zwalnia całego wózka,
-    dopóki zostają inne zamówienia SSOT.
+    Kanoniczne odłączenie jednego zamówienia od wózka (operator / admin / System).
+
+    ``operator_user_id=None`` = actor System (audit bez usera) — ta sama ścieżka lifecycle,
+    bez obchodzenia przez bezpośrednie clear pól.
     """
     from .cart_capacity.engine import order_volume_dm3
     from .cart_display import cart_display_name_for_wms
     from .cart_stats_service import activity_orders_meta, format_orders_operation_description
+
+    uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
 
     cart = _lock_cart_by_keys(
         db,
@@ -1645,25 +1665,31 @@ def detach_order_from_cart(
                 db,
                 cart,
                 CartStatus.PICKING,
-                operator_user_id=operator_user_id,
+                operator_user_id=uid,
                 reason="order_detached",
                 total_orders=len(remaining),
                 metadata={"detached_order_id": int(order_id)},
             )
 
     cart_label = cart_display_name_for_wms(cart)
+    default_reason = (
+        "Automatyczne odłączenie zamówienia (System) — Walidacja WMS."
+        if uid is None
+        else "Ręczne odłączenie zamówienia z panelu administracyjnego."
+    )
     meta = {
         **activity_orders_meta(snapshot, show_order_numbers=True),
-        "reason": "Ręczne odłączenie zamówienia z panelu administracyjnego.",
+        "reason": (reason or default_reason),
         "remaining_orders": len(remaining),
         "cart_released": released,
         "cart_label": cart_label,
+        "actor": "system" if uid is None else "operator",
     }
     _record_event(
         db,
         cart,
         "order_detached",
-        operator_user_id=int(operator_user_id),
+        operator_user_id=uid,
         order_id=int(order_id),
         description=format_orders_operation_description(
             "Odłączono",

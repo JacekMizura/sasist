@@ -425,6 +425,7 @@ def _shortage_settings_row_to_read(row: WmsPickingShortageSettings) -> WmsPickin
         priority_after_shortage_resolved=pr,  # type: ignore[arg-type]
         auto_reopen_picking_after_shortage_resolved=bool(row.auto_reopen_picking_after_shortage_resolved),
         recovery_completed_order_ui_status_id=getattr(row, "recovery_completed_order_ui_status_id", None),
+        wms_validation_failed_order_ui_status_id=getattr(row, "wms_validation_failed_order_ui_status_id", None),
     )
 
 
@@ -468,6 +469,13 @@ def save_wms_picking_shortage_settings(
         status_id=body.recovery_completed_order_ui_status_id,
         field="recovery_completed_order_ui_status_id",
     )
+    _assert_ui_status(
+        db,
+        tenant_id=body.tenant_id,
+        warehouse_id=wh_id,
+        status_id=body.wms_validation_failed_order_ui_status_id,
+        field="wms_validation_failed_order_ui_status_id",
+    )
 
     row = get_or_create_wms_picking_shortage_settings(db, tenant_id=int(body.tenant_id), warehouse_id=int(wh_id))
     row.shortage_reported_order_ui_status_id = body.shortage_reported_order_ui_status_id
@@ -476,6 +484,7 @@ def save_wms_picking_shortage_settings(
     row.priority_after_shortage_resolved = str(body.priority_after_shortage_resolved or "high").strip().lower()
     row.auto_reopen_picking_after_shortage_resolved = bool(body.auto_reopen_picking_after_shortage_resolved)
     row.recovery_completed_order_ui_status_id = body.recovery_completed_order_ui_status_id
+    row.wms_validation_failed_order_ui_status_id = body.wms_validation_failed_order_ui_status_id
     touch_wms_picking_shortage_settings_row(row)
     db.commit()
     db.refresh(row)

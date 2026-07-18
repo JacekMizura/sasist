@@ -229,6 +229,7 @@ const PRIORITY_OPTIONS: Array<{ value: WmsShortageResolvePriorityApi; label: str
 function shortageUiFingerprint(params: {
   reportedStatus: string;
   recoveryStatus: string;
+  validationFailedStatus: string;
   autoBraki: boolean;
   allowContinue: boolean;
   priority: WmsShortageResolvePriorityApi;
@@ -265,6 +266,7 @@ const PickingShortageSettingsPanel = forwardRef<
 
   const [reportedStatus, setReportedStatus] = useState<string>("");
   const [recoveryStatus, setRecoveryStatus] = useState<string>("");
+  const [validationFailedStatus, setValidationFailedStatus] = useState<string>("");
   const [autoBraki, setAutoBraki] = useState(true);
   const [allowContinue, setAllowContinue] = useState(true);
   const [priority, setPriority] = useState<WmsShortageResolvePriorityApi>("high");
@@ -309,6 +311,11 @@ const PickingShortageSettingsPanel = forwardRef<
       }
       setReportedStatus(reported);
       setRecoveryStatus(recoveryResolved);
+      const validationFailed =
+        r.wms_validation_failed_order_ui_status_id != null
+          ? String(r.wms_validation_failed_order_ui_status_id)
+          : "";
+      setValidationFailedStatus(validationFailed);
       setAutoBraki(r.auto_enqueue_braki);
       setAllowContinue(r.allow_continue_other_lines_after_shortage);
       setPriority(r.priority_after_shortage_resolved ?? "high");
@@ -317,6 +324,7 @@ const PickingShortageSettingsPanel = forwardRef<
         shortageUiFingerprint({
           reportedStatus: reported,
           recoveryStatus: recoveryResolved,
+          validationFailedStatus: validationFailed,
           autoBraki: r.auto_enqueue_braki,
           allowContinue: r.allow_continue_other_lines_after_shortage,
           priority: r.priority_after_shortage_resolved ?? "high",
@@ -344,6 +352,7 @@ const PickingShortageSettingsPanel = forwardRef<
     try {
       const rs = reportedStatus.trim() === "" ? null : Number(reportedStatus);
       const rc = recoveryStatus.trim() === "" ? null : Number(recoveryStatus);
+      const vf = validationFailedStatus.trim() === "" ? null : Number(validationFailedStatus);
       await saveWmsPickingShortageSettings({
         tenant_id: tenantId,
         warehouse_id: warehouseId,
@@ -353,11 +362,13 @@ const PickingShortageSettingsPanel = forwardRef<
         priority_after_shortage_resolved: priority,
         auto_reopen_picking_after_shortage_resolved: autoReopen,
         recovery_completed_order_ui_status_id: rc != null && Number.isFinite(rc) && rc > 0 ? rc : null,
+        wms_validation_failed_order_ui_status_id: vf != null && Number.isFinite(vf) && vf > 0 ? vf : null,
       });
       setBaselineShortageFp(
         shortageUiFingerprint({
           reportedStatus,
           recoveryStatus,
+          validationFailedStatus,
           autoBraki,
           allowContinue,
           priority,
@@ -378,6 +389,7 @@ const PickingShortageSettingsPanel = forwardRef<
     tenantId,
     reportedStatus,
     recoveryStatus,
+    validationFailedStatus,
     autoBraki,
     allowContinue,
     priority,
@@ -389,12 +401,13 @@ const PickingShortageSettingsPanel = forwardRef<
       shortageUiFingerprint({
         reportedStatus,
         recoveryStatus,
+        validationFailedStatus,
         autoBraki,
         allowContinue,
         priority,
         autoReopen,
       }),
-    [reportedStatus, recoveryStatus, autoBraki, allowContinue, priority, autoReopen],
+    [reportedStatus, recoveryStatus, validationFailedStatus, autoBraki, allowContinue, priority, autoReopen],
   );
 
   const shortageDirty =
@@ -520,6 +533,28 @@ const PickingShortageSettingsPanel = forwardRef<
               <option value="">— Jak w ustawieniach Pakowanie (status startu)</option>
               {statusOptionsFlat.map((s) => (
                 <option key={`r-${s.id}`} value={String(s.id)}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="rounded-xl border border-amber-200/80 bg-amber-50/50 p-4 space-y-2">
+            <h4 className="text-sm font-black uppercase tracking-widest text-amber-950">Walidacja WMS</h4>
+            <p className={fieldHintClass}>
+              Zamówienie, którego nie da się skompletować (brak lokalizacji / stock / blokada), nie wejdzie do Capacity.
+              Bez wybranego statusu — gate działa, ale status panelu nie jest zmieniany.
+            </p>
+            <label className="text-sm font-medium text-slate-900">Status po błędzie walidacji</label>
+            <select
+              className={selectClass}
+              value={validationFailedStatus}
+              onChange={(e) => setValidationFailedStatus(e.target.value)}
+              disabled={saving}
+            >
+              <option value="">— Bez zmiany statusu (tylko gate)</option>
+              {statusOptionsFlat.map((s) => (
+                <option key={`v-${s.id}`} value={String(s.id)}>
                   {s.name}
                 </option>
               ))}
