@@ -28,6 +28,9 @@ class LineShortageReportQuantitiesTests(unittest.TestCase):
         with patch(
             "backend.services.wms_picking_product_list_service.sum_pick_events_for_line_cart",
             return_value=1.0,
+        ), patch(
+            "backend.services.wms_picking_product_list_service.sum_line_events",
+            return_value=0.0,
         ):
             q = _line_shortage_report_quantities(db, oi, 9)
         self.assertEqual(q["required_qty"], 2.0)
@@ -47,6 +50,9 @@ class LineShortageReportQuantitiesTests(unittest.TestCase):
         with patch(
             "backend.services.wms_picking_product_list_service.sum_pick_events_for_line_cart",
             return_value=2.0,
+        ), patch(
+            "backend.services.wms_picking_product_list_service.sum_line_events",
+            return_value=0.0,
         ):
             q = _line_shortage_report_quantities(db, oi, 9)
         self.assertEqual(q["remaining_qty"], 0.0)
@@ -64,6 +70,9 @@ class LineShortageReportQuantitiesTests(unittest.TestCase):
         with patch(
             "backend.services.wms_picking_product_list_service.sum_pick_events_for_line_cart",
             return_value=3.0,
+        ), patch(
+            "backend.services.wms_picking_product_list_service.sum_line_events",
+            return_value=1.0,
         ):
             q = _line_shortage_report_quantities(db, oi, 9)
         self.assertEqual(q["remaining_qty"], 1.0)
@@ -131,6 +140,10 @@ class ReportShortagePartialPickIntegrationTests(unittest.TestCase):
             patch(
                 "backend.services.wms_picking_product_list_service.sum_pick_events_for_line_cart",
                 return_value=1.0,
+            ),
+            patch(
+                "backend.services.wms_picking_product_list_service.sum_line_events",
+                return_value=0.0,
             ),
             patch(
                 "backend.services.wms_picking_product_list_service._allowed_pick_location_ids_for_product",

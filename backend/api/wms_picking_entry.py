@@ -1440,6 +1440,14 @@ def post_picking_report_shortage(
             traceback.format_exc(),
         )
         raise HTTPException(status_code=503, detail="Zgłoszenie braku nie powiodło się.") from None
+    except Exception:
+        db.rollback()
+        logger.error(
+            "[report_shortage] UNEXPECTED payload=%s traceback=%s",
+            payload_dump,
+            traceback.format_exc(),
+        )
+        raise
     return WmsPickingReportShortageResponse(**out)
 
 

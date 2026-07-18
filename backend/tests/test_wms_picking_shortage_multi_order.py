@@ -85,6 +85,9 @@ class MultiOrderShortageAllocationTests(unittest.TestCase):
             "backend.services.wms_picking_product_list_service.sum_pick_events_for_line_cart",
             side_effect=sum_pick,
         ), patch(
+            "backend.services.wms_picking_product_list_service.sum_line_events",
+            return_value=0.0,
+        ), patch(
             "backend.services.wms_picking_product_list_service.append_event",
             side_effect=append_event,
         ), patch(
@@ -164,6 +167,9 @@ class MultiOrderShortageAllocationTests(unittest.TestCase):
             return_value=(MagicMock(), {"workflow_scoped": True, "workflow_type": "line", "resolved_source_status_id": 1, "order_id": 1002}),
         ), patch(
             "backend.services.wms_picking_product_list_service.sum_pick_events_for_line_cart",
+            return_value=0.0,
+        ), patch(
+            "backend.services.wms_picking_product_list_service.sum_line_events",
             return_value=0.0,
         ), patch(
             "backend.services.wms_picking_product_list_service.append_event",

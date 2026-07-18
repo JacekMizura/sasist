@@ -161,15 +161,21 @@ class ReportShortageWorkflowTests(unittest.TestCase):
         def query_side(model):
             q = MagicMock()
             q.filter.return_value = q
+            q.order_by.return_value = q
+            q.options.return_value = q
+            q.with_for_update.return_value = q
             if model is Cart:
                 q.first.return_value = cart
             elif model is OrderItem:
-                q.options.return_value.filter.return_value.first.return_value = oi
+                # Zielone ścieżki: options→filter→first (target line) oraz filter→with_for_update→all (lock).
+                q.first.return_value = oi
+                q.all.return_value = [oi]
             elif model is Order:
-                q.options.return_value.filter.return_value.all.return_value = [order]
+                q.all.return_value = [order]
+                q.first.return_value = order
             elif model is Pick:
-                q.filter.return_value.all.return_value = []
-                q.filter.return_value.delete.return_value = None
+                q.all.return_value = []
+                q.delete.return_value = None
             return q
 
         db.query.side_effect = query_side
@@ -209,6 +215,10 @@ class ReportShortageWorkflowTests(unittest.TestCase):
                 return_value=0.0,
             ),
             patch(
+                "backend.services.wms_picking_product_list_service.sum_line_events",
+                return_value=0.0,
+            ),
+            patch(
                 "backend.services.wms_picking_product_list_service._allowed_pick_location_ids_for_product",
                 return_value=set(),
             ),
@@ -226,6 +236,10 @@ class ReportShortageWorkflowTests(unittest.TestCase):
             ),
             patch(
                 "backend.services.wms_picking_product_list_service.recompute_order_fulfillment",
+            ),
+            patch(
+                "backend.services.wms_picking_product_list_service.upsert_order_issue_tasks_from_shortage",
+                return_value=[],
             ),
             patch(
                 "backend.services.wms_audit_service.emit_line_shortage_reported",
@@ -304,7 +318,15 @@ class ReportShortageWorkflowTests(unittest.TestCase):
                 return_value=SimpleNamespace(id=1),
             ),
             patch(
-                "backend.services.fulfillment_event_service.sum_pick_events_for_line_cart",
+                "backend.services.wms_recovery_pick_service.prepare_recovery_picking_for_order",
+                return_value={"ok": True, "completed": False},
+            ),
+            patch(
+                "backend.services.wms_picking_product_list_service.sum_pick_events_for_line_cart",
+                return_value=0.0,
+            ),
+            patch(
+                "backend.services.wms_picking_product_list_service.sum_line_events",
                 return_value=0.0,
             ),
             patch(
@@ -325,6 +347,10 @@ class ReportShortageWorkflowTests(unittest.TestCase):
             ),
             patch(
                 "backend.services.wms_picking_product_list_service.recompute_order_fulfillment",
+            ),
+            patch(
+                "backend.services.wms_picking_product_list_service.upsert_order_issue_tasks_from_shortage",
+                return_value=[],
             ),
             patch(
                 "backend.services.wms_audit_service.emit_line_shortage_reported",
@@ -384,7 +410,6 @@ class RelocationOnPickedReplacementRemovalTests(unittest.TestCase):
                     visible_in_queue=False,
                     visible_in_recovery_pick=False,
                     visible_in_relocation=True,
-                    visible_in_recovery_pick=False,
                     visible_in_finalize=True,
                     packing_eligible=True,
                     finalize_allowed=True,

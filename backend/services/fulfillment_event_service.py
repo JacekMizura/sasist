@@ -25,6 +25,19 @@ def _meta(ev: FulfillmentEvent) -> dict[str, Any]:
         return {}
 
 
+def _coerce_event_qty(v: Any) -> float:
+    """Normalize SQL aggregate scalar to float (None / int / float / Decimal)."""
+    if v is None or isinstance(v, bool):
+        return 0.0
+    if isinstance(v, (int, float)):
+        return float(v)
+    from decimal import Decimal
+
+    if isinstance(v, Decimal):
+        return float(v)
+    raise TypeError(f"unexpected event quantity type: {type(v).__name__}")
+
+
 def append_event(
     db: Session,
     *,
@@ -33,6 +46,7 @@ def append_event(
     quantity: float,
     metadata: Optional[dict[str, Any]] = None,
 ) -> FulfillmentEvent:
+    """Kanoniczny zapis zdarzenia fulfillment (bez flush — widoczność write→read w sum_*)."""
     q = float(quantity or 0.0)
     row = FulfillmentEvent(
         order_item_id=int(order_item_id),
@@ -45,6 +59,13 @@ def append_event(
 
 
 def sum_line_events(db: Session, order_item_id: int, event_type: str) -> float:
+    """
+    Suma ilości zdarzeń danego typu na linii.
+
+    SSOT widoczności przy ``SessionLocal(autoflush=False)``: flush przed agregacją,
+    żeby pending ``db.add`` (np. FE_MISSING) było widoczne w SUM w tej samej transakcji.
+    """
+    db.flush()
     v = (
         db.query(func.coalesce(func.sum(FulfillmentEvent.quantity), 0.0))
         .filter(
@@ -53,11 +74,12 @@ def sum_line_events(db: Session, order_item_id: int, event_type: str) -> float:
         )
         .scalar()
     )
-    return float(v or 0.0)
+    return _coerce_event_qty(v)
 
 
 def sum_missing_events_for_line_cart(db: Session, order_item_id: int, cart_id: int) -> float:
     """Suma zdarzeń MISSING dla linii w sesji wózka (``metadata.cart_id``; legacy bez cart_id też liczy)."""
+    db.flush()
     rows = (
         db.query(FulfillmentEvent)
         .filter(
@@ -231,6 +253,7 @@ def picked_location_breakdown_for_order_line(
 
 
 def sum_pick_events_for_line_cart(db: Session, order_item_id: int, cart_id: int) -> float:
+    db.flush()
     rows = (
         db.query(FulfillmentEvent)
         .filter(FulfillmentEvent.order_item_id == int(order_item_id), FulfillmentEvent.type == FE_PICK)

@@ -167,6 +167,10 @@ class ReportShortageIdempotencyMockTests(unittest.TestCase):
                 return_value=0.0,
             ),
             patch(
+                "backend.services.wms_picking_product_list_service.sum_line_events",
+                return_value=1.0,
+            ),
+            patch(
                 "backend.services.wms_picking_product_list_service._allowed_pick_location_ids_for_product",
                 return_value=set(),
             ),
@@ -217,6 +221,10 @@ class ReportShortageIdempotencyMockTests(unittest.TestCase):
             ),
             patch(
                 "backend.services.wms_picking_product_list_service.sum_pick_events_for_line_cart",
+                return_value=0.0,
+            ),
+            patch(
+                "backend.services.wms_picking_product_list_service.sum_line_events",
                 return_value=0.0,
             ),
             patch(

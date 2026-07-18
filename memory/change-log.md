@@ -1,5 +1,21 @@
 # Change log
 
+## 2026-07-19 — SHORTAGE hardening verification (final)
+
+- Flush SSOT: **flush-before-aggregate** in `sum_line_events` / `sum_missing` / `sum_pick` (nie globalny flush w `append_event`).
+- Concurrent PG: `FOR UPDATE` na candidate `OrderItem`; test `ConcurrentShortagePostgresTests` (SHORTAGE_PG_URL).
+- Legacy: audit raw vs effective; runtime clamp; bez MagicMock w produkcji.
+- Logi: order + cart dual-write z `#order` / EAN / 1/1 / operator / CART.
+- Related regression: 131 BE + 22 FE. Production deploy/repro: NOT VERIFIED.
+
+## 2026-07-19 — SHORTAGE hardening (flush SSOT + concurrent + legacy clamp)
+
+- SSOT: `append_event` flush + `sum_line_events`/`sum_missing`/`sum_pick` flush; safe scalar coerce (no `float(MagicMock)`→1).
+- Concurrent: `SELECT … FOR UPDATE` on candidate OrderItems before declarable/write.
+- Legacy: display/report clamp `missing ≤ required−picked`; read-only `audit_fe_missing_duplicates`.
+- Atomicity: report-shortage endpoint rolls back on any unexpected Exception before commit.
+- Tests: `test_wms_picking_shortage_hardening.py`.
+
 ## 2026-07-18 — ZGŁOŚ BRAK: first-submit wipe + idempotency + red UI
 
 - ROOT: `SessionLocal(autoflush=False)` → `sync_declared` / `recompute` SUM(MISSING) nie widziały pending `FE_MISSING` → zerowały `wms_picking_line_missing_qty` mimo Activity eventu; drugie kliknięcie „naprawiało” UI i dublowało log.

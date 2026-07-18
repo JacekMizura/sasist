@@ -1051,17 +1051,24 @@ def emit_line_shortage_reported(
     ean_bit = f" — EAN {ean_s}" if ean_s else ""
     if req_f is not None and req_f > 1e-9:
         order_msg = (
-            f"Zgłoszono brak produktu: {pname}{ean_bit} — brak {_fmt_qty(miss_f)} z {_fmt_qty(req_f)} szt."
-            f" — operator: {op_name or 'System'} — wózek {cart_code_eff}"
+            f"Zamówienie {order_num}: zgłoszono brak produktu {pname}{ean_bit}"
+            f" — brak {_fmt_qty(miss_f)}/{_fmt_qty(req_f)}"
+            f" — operator: {op_name or 'System'} — {cart_code_eff}"
+        )
+        cart_msg = (
+            f"Zgłoszono brak {_fmt_qty(miss_f)}/{_fmt_qty(req_f)} — zamówienie {order_num}"
+            f" — {pname}{ean_bit} — operator: {op_name or 'System'} — {cart_code_eff}"
         )
     else:
         order_msg = (
-            f"Zgłoszono brak produktu: {pname}{ean_bit} — brak {_fmt_qty(miss_f)} szt."
-            f" — operator: {op_name or 'System'} — wózek {cart_code_eff}"
+            f"Zamówienie {order_num}: zgłoszono brak produktu {pname}{ean_bit}"
+            f" — brak {_fmt_qty(miss_f)} szt."
+            f" — operator: {op_name or 'System'} — {cart_code_eff}"
         )
-    cart_msg = (
-        f"Zgłoszono brak {_fmt_qty(miss_f)} szt. — zamówienie {order_num} — {pname}{ean_bit}"
-    )
+        cart_msg = (
+            f"Zgłoszono brak {_fmt_qty(miss_f)} szt. — zamówienie {order_num}"
+            f" — {pname}{ean_bit} — operator: {op_name or 'System'} — {cart_code_eff}"
+        )
 
     append_order_activity_for_wms(
         db,

@@ -60,6 +60,7 @@ from .fulfillment_event_service import (
     mark_pick_events_finalized_for_pick_ids,
     picked_by_product_from_events,
     record_pick_event_for_wms_pick,
+    sum_line_events,
     sum_pick_events_for_line_cart,
     sync_declared_shortage_column_from_missing_events,
     sync_pick_fulfillment_traceability,
@@ -835,11 +836,15 @@ def _missing_qty_by_product_from_orders(
     *,
     tenant_id: int,
 ) -> dict[int, float]:
-    """Suma ``OrderItem.wms_picking_line_missing_qty`` po ``product_id`` dla kohorty."""
+    """Suma capped ``OrderItem.wms_picking_line_missing_qty`` po ``product_id`` (legacy overcount-safe)."""
     if not order_ids:
         return {}
     rows = (
-        db.query(OrderItem.product_id, func.coalesce(func.sum(OrderItem.wms_picking_line_missing_qty), 0.0))
+        db.query(
+            OrderItem.product_id,
+            OrderItem.quantity,
+            OrderItem.wms_picking_line_missing_qty,
+        )
         .join(Order, Order.id == OrderItem.order_id)
         .filter(
             Order.id.in_(list(order_ids)),
@@ -847,16 +852,18 @@ def _missing_qty_by_product_from_orders(
             _order_item_not_replaced_clause(),
             sqlalchemy_operational_picking_order_item_clause(OrderItem),
         )
-        .group_by(OrderItem.product_id)
         .all()
     )
     out: dict[int, float] = {}
-    for pid, qty in rows:
+    for pid, qty, miss in rows:
         if pid is None:
             continue
-        q = float(qty or 0)
+        ordered = float(qty or 0)
+        raw = float(miss or 0)
+        # Invariant: missing ≤ required (picked accounted later in line builder).
+        q = min(max(0.0, raw), max(0.0, ordered)) if ordered > 1e-12 else 0.0
         if q > 1e-12:
-            out[int(pid)] = round(q, 6)
+            out[int(pid)] = round(float(out.get(int(pid), 0.0)) + q, 6)
     return out
 
 
@@ -1604,7 +1611,6 @@ def build_wms_picking_product_lines(
         loc = by_product_first_loc.get(pid, "")
         tq = float(demand_by_product[pid])
         pq = round(picked_map.get(pid, 0.0), 6)
-        miss_sum = round(float(missing_by_product.get(pid, 0.0)), 6)
         primary_stock = 0.0
         n_distinct_locs = len(prod_lid_qty[pid]) if pid in prod_lid_qty else 0
         if loc and pid in prod_lid_qty:
@@ -1615,8 +1621,10 @@ def build_wms_picking_product_lines(
         primary_stock = round(primary_stock, 6)
         extra_locs = max(0, n_distinct_locs - 1) if n_distinct_locs > 0 else 0
         # Pick + zgłoszony brak linii = „rozliczone” dla UI; reszta = wymagane − zebrano − braki.
+        # Legacy overcount: missing nie może przekroczyć required − picked.
         picked_raw = round(float(pq), 6)
-        picked_eff = min(picked_raw, max(0.0, float(tq) - miss_sum))
+        picked_eff = min(picked_raw, float(tq))
+        miss_sum = min(round(float(missing_by_product.get(pid, 0.0)), 6), max(0.0, float(tq) - picked_eff))
         rem_pick = max(0.0, float(tq) - picked_eff - miss_sum)
         line_completed = rem_pick <= 1e-9
         resolution = _picking_line_resolution_status(
@@ -2365,12 +2373,18 @@ def _line_shortage_report_quantities(
     qty = float(oi.quantity or 0)
     cid = int(cart_id)
     picked_raw = float(sum_pick_events_for_line_cart(db, int(oi.id), cid))
-    miss_ln = float(getattr(oi, "wms_picking_line_missing_qty", None) or 0.0)
-    declared = float(getattr(oi, "wms_shortage_declared_qty", None) or 0.0)
+    # RAW event/column sum vs EFFECTIVE missing (capped do ordered − picked).
+    raw_miss_col = float(getattr(oi, "wms_picking_line_missing_qty", None) or 0.0)
+    declared_col = float(getattr(oi, "wms_shortage_declared_qty", None) or 0.0)
+    raw_event_miss = float(sum_line_events(db, int(oi.id), FE_MISSING))
+    miss_uncapped = max(raw_miss_col, raw_event_miss, declared_col)
+    gap = max(0.0, qty - min(picked_raw, qty))
+    miss_ln = min(miss_uncapped, gap) if gap > 1e-12 else 0.0
+    declared = min(max(declared_col, raw_event_miss), gap) if gap > 1e-12 else 0.0
     picked_eff = min(picked_raw, max(0.0, qty - miss_ln))
     remaining_qty = max(0.0, qty - picked_eff - miss_ln)
     shortage_existing = max(miss_ln, declared)
-    # Nie przekraczaj ordered − już zgłoszony brak
+    # Nie przekraczaj ordered − już zgłoszony brak (capped)
     declarable_qty = max(0.0, qty - miss_ln)
     return {
         "required_qty": qty,
@@ -2675,6 +2689,28 @@ def report_wms_picking_product_shortage(
                 continue
             yield oi, q
 
+    # Concurrent double-submit: zablokuj te same OrderItem przed declarable / FE_MISSING.
+    candidate_item_ids: list[int] = []
+    for o in orders:
+        for oi, _q in _iter_report_lines(o):
+            candidate_item_ids.append(int(oi.id))
+    if candidate_item_ids:
+        locked_rows = list(
+            db.query(OrderItem)
+            .filter(OrderItem.id.in_(list(dict.fromkeys(candidate_item_ids))))
+            .with_for_update()
+            .all()
+        )
+        if locked_rows:
+            locked_by_id = {int(r.id): r for r in locked_rows}
+            for o in orders:
+                refreshed: list[OrderItem] = []
+                for oi in o.items or []:
+                    locked = locked_by_id.get(int(oi.id))
+                    refreshed.append(locked if locked is not None else oi)
+                o.items = refreshed
+
+
     affected: list[int] = []
     for o in orders:
         for oi, q in _iter_report_lines(o):
@@ -2802,8 +2838,7 @@ def report_wms_picking_product_shortage(
                 "product_id": int(oi.product_id),
             },
         )
-        # SessionLocal autoflush=False — bez flush SUM(MISSING) w sync/recompute zeruje kolumny.
-        db.flush()
+        # Widoczność FE_MISSING: flush w sum_line_events (SSOT write→read), nie w append_event.
         sync_declared_shortage_column_from_missing_events(db, int(oi.id))
         line_audit_rows.append((o, oi, float(take)))
 
