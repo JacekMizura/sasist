@@ -26,8 +26,11 @@ import {
   CartAssignmentBadge,
   type CartAssignmentType,
 } from "../../../modules/carts/cartFleet/CartAssignmentBadge";
+import type { CapacitySnapshot } from "../../../types/cartCapacity";
 import ImagePreviewModal from "./ImagePreviewModal";
 import SimulationResultModal from "./SimulationResultModal";
+import CartCapacitySection from "./CartCapacitySection";
+import StatusPill from "./StatusPill";
 import { cartStatsFromWms } from "../cartStats";
 
 type SimulationResult = {
@@ -60,9 +63,10 @@ export type CartCardProps = {
   total_orders?: number;
   total_products?: number;
   baskets_used?: number;
-  capacity_mode?: string;
-  max_orders?: number | null;
-  max_volume_dm3?: number;
+  capacity?: CapacitySnapshot | null;
+  capacity_strategy?: string;
+  capacity_orders?: number | null;
+  capacity_volume?: number | null;
   wms_picking_order_count?: number;
   wms_picking_product_count?: number;
   wms_picking_quantity?: number;
@@ -86,6 +90,8 @@ export default function CartCard(props: CartCardProps) {
     id,
     name,
     code: cartCodeProp,
+    status,
+    capacity: capacityProp,
     used_volume,
     total_volume_dm3,
     assigned_orders,
@@ -140,6 +146,8 @@ export default function CartCard(props: CartCardProps) {
   const refreshStats = () => setStatsTick((n) => n + 1);
 
   const cardStats = useMemo(() => cartStatsFromWms(wmsStats), [wmsStats]);
+  const capacitySnapshot = wmsStats.capacity ?? capacityProp ?? null;
+  const lifecycleStatus = wmsStats.status ?? status;
   const usedVol = cardStats.used_volume_dm3;
   const isSimulated =
     (used_volume == null || used_volume === 0) &&
@@ -157,7 +165,10 @@ export default function CartCard(props: CartCardProps) {
   const canClearCart =
     usedVol > 0 || orderNumbersList.length > 0 || cardStats.total_orders > 0;
 
-  const displayPercent = Math.min(100, Math.max(0, cardStats.percent_used || 0));
+  const displayPercent = Math.min(
+    100,
+    Math.max(0, capacitySnapshot?.capacity_usage_percent ?? cardStats.percent_used ?? 0),
+  );
 
   const occupiedSections = isSectional ? cardStats.baskets_used : cardStats.total_orders;
   const sectionsLabel = isSectional
@@ -269,6 +280,14 @@ export default function CartCard(props: CartCardProps) {
             onClick={(e) => e.stopPropagation()}
             onKeyDown={(e) => e.stopPropagation()}
           >
+            <StatusPill status={lifecycleStatus} />
+          </span>
+          <span className={fleetResourceMetaSepClass}>|</span>
+          <span
+            className="inline-flex shrink-0"
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+          >
             <CartAssignmentBadge
               assigned_user_id={assigned_user_id}
               assigned_user_name={assigned_user_name}
@@ -342,6 +361,12 @@ export default function CartCard(props: CartCardProps) {
           </div>
         ) : null}
       </div>
+
+      {capacitySnapshot ? (
+        <div className="border-t border-slate-100 bg-slate-50/50 px-4 py-1.5">
+          <CartCapacitySection capacity={capacitySnapshot} />
+        </div>
+      ) : null}
 
       <CartFleetDetailPanel
         open={expanded}

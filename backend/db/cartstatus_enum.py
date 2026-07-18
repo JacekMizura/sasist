@@ -1,4 +1,12 @@
-"""PostgreSQL cartstatus enum ↔ CartStatus lifecycle values."""
+"""
+One-shot PostgreSQL migration: rebuild ``cartstatus`` to the clean lifecycle enum.
+
+Target labels only:
+  AVAILABLE | ASSIGNED | PICKING | READY_FOR_PACKING | PACKING
+
+Does **not** ``ADD VALUE`` onto a legacy type — creates a new type, remaps rows,
+swaps the column, drops the old type, renames the new type to ``cartstatus``.
+"""
 
 from __future__ import annotations
 
@@ -10,44 +18,36 @@ from sqlalchemy.engine import Connection, Engine
 
 logger = logging.getLogger(__name__)
 
-# Canonical lifecycle + legacy operational labels (SQLAlchemy CartStatus values).
-CARTSTATUS_REQUIRED_LABELS: tuple[str, ...] = (
+CARTSTATUS_CANONICAL: tuple[str, ...] = (
     "AVAILABLE",
     "ASSIGNED",
     "PICKING",
     "READY_FOR_PACKING",
     "PACKING",
-    "FULL",
-    "SERVICE",
 )
 
-# Legacy labels that may exist on production (old Enum values / PL).
-CARTSTATUS_LEGACY_TO_CANONICAL: tuple[tuple[str, str], ...] = (
-    ("pusty", "AVAILABLE"),
-    ("w trakcie zbierania", "PICKING"),
-    ("pełny", "FULL"),
-    ("w serwisie", "SERVICE"),
-    ("IN_PROGRESS", "PICKING"),  # old English member name if present as label
-)
+# Migration-only remap (never expose these as CartStatus members).
+CARTSTATUS_LEGACY_TO_CANONICAL: dict[str, str] = {
+    "pusty": "AVAILABLE",
+    "AVAILABLE": "AVAILABLE",
+    "FREE": "AVAILABLE",
+    "ASSIGNED": "ASSIGNED",
+    "w trakcie zbierania": "PICKING",
+    "IN_PROGRESS": "PICKING",
+    "PICKING": "PICKING",
+    "READY_FOR_PACKING": "READY_FOR_PACKING",
+    "PACKING": "PACKING",
+    "pełny": "AVAILABLE",
+    "FULL": "AVAILABLE",
+    "w serwisie": "AVAILABLE",
+    "SERVICE": "AVAILABLE",
+}
+
+_NEW_TYPE = "cartstatus_lifecycle_v2"
+_FINAL_TYPE = "cartstatus"
 
 
 def pg_enum_labels(conn: Connection, enum_name: str) -> list[str]:
-    rows = conn.execute(
-        text(
-            """
-            SELECT e.enumlabel
-            FROM pg_catalog.pg_enum e
-            JOIN pg_catalog.pg_type t ON t.oid = e.enumtypid
-            JOIN pg_catalog.pg_namespace n ON n.oid = t.typnamespace
-            WHERE t.typname = :enum_name
-              AND n.nspname = ANY (current_schemas(false))
-            ORDER BY e.enumsortorder
-            """
-        ),
-        {"enum_name": enum_name},
-    ).fetchall()
-    if rows:
-        return [str(r[0]) for r in rows]
     rows = conn.execute(
         text(
             """
@@ -63,177 +63,243 @@ def pg_enum_labels(conn: Connection, enum_name: str) -> list[str]:
     return [str(r[0]) for r in rows]
 
 
-def carts_status_udt_name(conn: Connection) -> str | None:
-    """Return PostgreSQL udt_name for carts.status (e.g. cartstatus), or None if not enum."""
+def carts_status_column_meta(conn: Connection) -> tuple[str | None, str | None]:
+    """Return (data_type, udt_name) for carts.status."""
     row = conn.execute(
         text(
             """
-            SELECT udt_name, data_type
+            SELECT data_type, udt_name
             FROM information_schema.columns
             WHERE table_schema = ANY (current_schemas(false))
               AND table_name = 'carts'
               AND column_name = 'status'
+            LIMIT 1
             """
         )
     ).fetchone()
     if row is None:
-        return None
-    data_type = str(row[1] or "")
-    udt = str(row[0] or "")
-    if data_type == "USER-DEFINED" or (
-        udt
-        and udt
-        not in (
-            "varchar",
-            "text",
-            "bpchar",
-            "int4",
-            "int8",
-            "bool",
-            "timestamp",
-            "timestamptz",
-        )
-    ):
-        is_enum = conn.execute(
-            text(
-                """
-                SELECT 1
-                FROM pg_catalog.pg_type t
-                WHERE t.typname = :udt AND t.typtype = 'e'
-                LIMIT 1
-                """
-            ),
-            {"udt": udt},
-        ).fetchone()
-        if is_enum:
-            return udt
-    return None
+        return None, None
+    return str(row[0] or ""), str(row[1] or "")
 
 
-def missing_cartstatus_labels(
-    existing: Sequence[str],
-    *,
-    required: Sequence[str] = CARTSTATUS_REQUIRED_LABELS,
-) -> list[str]:
-    have = set(existing)
-    return [lab for lab in required if lab not in have]
+def _type_exists(conn: Connection, typname: str) -> bool:
+    row = conn.execute(
+        text(
+            """
+            SELECT 1 FROM pg_catalog.pg_type t
+            WHERE t.typname = :n AND t.typtype = 'e'
+            LIMIT 1
+            """
+        ),
+        {"n": typname},
+    ).fetchone()
+    return row is not None
 
 
-def _add_enum_label(engine: Engine, udt: str, label: str) -> bool:
-    """ADD VALUE for one label. Returns True if added or already present."""
-    safe = label.replace("'", "''")
-    if not all(c.isalnum() or c == "_" for c in label):
-        logger.error("[cartstatus.enum] refusing unsafe label=%r", label)
-        return False
-    try:
-        with engine.begin() as conn:
-            conn.execute(text(f"ALTER TYPE \"{udt}\" ADD VALUE IF NOT EXISTS '{safe}'"))
-        return True
-    except Exception:
-        try:
-            with engine.begin() as conn:
-                conn.execute(text(f"ALTER TYPE \"{udt}\" ADD VALUE '{safe}'"))
-            return True
-        except Exception as exc:
-            # Concurrent / already exists
-            msg = str(exc).lower()
-            if "already exists" in msg or "duplicate" in msg:
-                return True
-            logger.exception(
-                "[cartstatus.enum] ADD VALUE failed enum=%s label=%s",
-                udt,
-                label,
-            )
-            return False
-
-
-def ensure_cartstatus_enum(engine: Engine) -> dict[str, object]:
+def _canonical_case_sql() -> str:
+    """CASE expression mapping status::text → canonical label (untyped)."""
+    parts: list[str] = []
+    for old, new in CARTSTATUS_LEGACY_TO_CANONICAL.items():
+        safe_old = old.replace("'", "''")
+        safe_new = new.replace("'", "''")
+        parts.append(f"WHEN '{safe_old}' THEN '{safe_new}'")
+    body = "\n            ".join(parts)
+    return f"""
+        CASE trim(both from status::text)
+            {body}
+            ELSE 'AVAILABLE'
+        END
     """
-    Align PostgreSQL enum ``cartstatus`` with CartStatus lifecycle values.
 
-    Does **not** convert the column to TEXT/VARCHAR.
-    Adds missing enum labels via ``ALTER TYPE ... ADD VALUE``, then remaps
-    legacy row values (PL / IN_PROGRESS) to canonical English labels.
+
+def _labels_are_exactly_canonical(labels: Sequence[str]) -> bool:
+    return set(labels) == set(CARTSTATUS_CANONICAL)
+
+
+def migrate_cartstatus_enum_clean(engine: Engine) -> dict[str, object]:
+    """
+    Idempotent rebuild of ``cartstatus`` to the five lifecycle labels.
+
+    Returns a report dict for logs / ops.
     """
     report: dict[str, object] = {
         "dialect": engine.dialect.name,
-        "enum_name": None,
+        "action": "none",
         "before": [],
-        "added": [],
         "after": [],
-        "remapped": [],
+        "remapped_preview": {},
         "skipped": False,
     }
     if engine.dialect.name != "postgresql":
-        report["skipped"] = True
+        # SQLite / others: string column — remap legacy strings only
+        report["action"] = "sqlite_string_remap"
+        with engine.begin() as conn:
+            for old, new in CARTSTATUS_LEGACY_TO_CANONICAL.items():
+                if old == new:
+                    continue
+                conn.execute(
+                    text("UPDATE carts SET status = :new WHERE status = :old"),
+                    {"new": new, "old": old},
+                )
+        report["after"] = list(CARTSTATUS_CANONICAL)
         return report
 
     with engine.connect() as conn:
-        udt = carts_status_udt_name(conn)
-        if not udt:
+        if not conn.execute(
+            text(
+                """
+                SELECT 1 FROM information_schema.tables
+                WHERE table_schema = ANY (current_schemas(false))
+                  AND table_name = 'carts'
+                LIMIT 1
+                """
+            )
+        ).fetchone():
             report["skipped"] = True
-            report["reason"] = "carts.status is not a PostgreSQL enum (already varchar/text or missing)"
+            report["reason"] = "no carts table"
             return report
-        report["enum_name"] = udt
-        before = pg_enum_labels(conn, udt)
-        report["before"] = list(before)
 
-    added: list[str] = []
-    for label in missing_cartstatus_labels(before):
-        ok = _add_enum_label(engine, udt, label)
-        with engine.connect() as conn:
-            now = set(pg_enum_labels(conn, udt))
-        if label in now and label not in before:
-            added.append(label)
-        elif not ok:
-            logger.error("[cartstatus.enum] label still missing after ADD VALUE: %s", label)
-    report["added"] = added
+        data_type, udt = carts_status_column_meta(conn)
+        report["data_type"] = data_type
+        report["udt_before"] = udt
 
-    remapped: list[str] = []
-    with engine.begin() as conn:
-        current = set(pg_enum_labels(conn, udt))
-        for old, new in CARTSTATUS_LEGACY_TO_CANONICAL:
-            if new not in current:
-                continue
+        # Already on final type with exact lifecycle labels → noop
+        if udt == _FINAL_TYPE and _type_exists(conn, _FINAL_TYPE):
+            before = pg_enum_labels(conn, _FINAL_TYPE)
+            report["before"] = before
+            if _labels_are_exactly_canonical(before):
+                report["skipped"] = True
+                report["action"] = "already_clean"
+                report["after"] = before
+                logger.info("[cartstatus.enum] already clean labels=%s", before)
+                return report
+
+        # Partial previous run: column already on v2 with clean labels → rename only
+        if udt == _NEW_TYPE and _type_exists(conn, _NEW_TYPE):
+            before = pg_enum_labels(conn, _NEW_TYPE)
+            report["before"] = before
+            if _labels_are_exactly_canonical(before):
+                with engine.begin() as conn2:
+                    if _type_exists(conn2, _FINAL_TYPE):
+                        conn2.execute(text(f'DROP TYPE IF EXISTS "{_FINAL_TYPE}" CASCADE'))
+                    conn2.execute(text(f'ALTER TYPE "{_NEW_TYPE}" RENAME TO "{_FINAL_TYPE}"'))
+                    conn2.execute(
+                        text(
+                            f"ALTER TABLE carts ALTER COLUMN status SET DEFAULT "
+                            f"'AVAILABLE'::{_FINAL_TYPE}"
+                        )
+                    )
+                report["action"] = "renamed_v2_to_cartstatus"
+                report["after"] = list(CARTSTATUS_CANONICAL)
+                report["udt_after"] = _FINAL_TYPE
+                logger.info("[cartstatus.enum] renamed %s → %s", _NEW_TYPE, _FINAL_TYPE)
+                return report
+
+    # Count remaps for report (read-only)
+    preview: dict[str, int] = {}
+    with engine.connect() as conn:
+        legacy_keys = {
+            k
+            for k, v in CARTSTATUS_LEGACY_TO_CANONICAL.items()
+            if k != v and k not in CARTSTATUS_CANONICAL
+        }
+        for old in legacy_keys:
             try:
-                result = conn.execute(
-                    text(
-                        f"""
-                        UPDATE carts
-                        SET status = CAST(:new AS "{udt}")
-                        WHERE status::text = :old
-                        """
-                    ),
-                    {"new": new, "old": old},
-                )
-                rc = int(result.rowcount or 0)
-                if rc > 0:
-                    remapped.append(f"{old}→{new}:{rc}")
-            except Exception as exc:
-                logger.warning(
-                    "[cartstatus.enum] remap skipped old=%s new=%s err=%s",
-                    old,
-                    new,
-                    exc,
-                )
+                n = conn.execute(
+                    text("SELECT count(*) FROM carts WHERE status::text = :old"),
+                    {"old": old},
+                ).scalar()
+                if n:
+                    preview[old] = int(n)
+            except Exception:
+                pass
+        report["remapped_preview"] = preview
+        if not report.get("before") and report.get("udt_before"):
+            udt_b = str(report["udt_before"])
+            if _type_exists(conn, udt_b):
+                report["before"] = pg_enum_labels(conn, udt_b)
+
+    case_expr = _canonical_case_sql()
+
+    with engine.begin() as conn:
+        old_udt = report.get("udt_before")
+        column_on_new = old_udt == _NEW_TYPE
+
+        # Drop unused leftover v2 only when the column does not reference it
+        if _type_exists(conn, _NEW_TYPE) and not column_on_new:
+            try:
+                conn.execute(text(f'DROP TYPE IF EXISTS "{_NEW_TYPE}" CASCADE'))
+            except Exception:
+                pass
+
+        if not _type_exists(conn, _NEW_TYPE):
+            labels_sql = ", ".join(f"'{lab}'" for lab in CARTSTATUS_CANONICAL)
+            conn.execute(text(f'CREATE TYPE "{_NEW_TYPE}" AS ENUM ({labels_sql})'))
+
+        conn.execute(text("ALTER TABLE carts ALTER COLUMN status DROP DEFAULT"))
+
+        # Swap column type onto the new enum with remap in USING
+        conn.execute(
+            text(
+                f"""
+                ALTER TABLE carts
+                ALTER COLUMN status TYPE "{_NEW_TYPE}"
+                USING ({case_expr})::{_NEW_TYPE}
+                """
+            )
+        )
+
+        conn.execute(
+            text(
+                f"""
+                ALTER TABLE carts
+                ALTER COLUMN status SET DEFAULT 'AVAILABLE'::{_NEW_TYPE}
+                """
+            )
+        )
+
+        # Drop the previous enum bound to carts.status (typically ``cartstatus``)
+        if isinstance(old_udt, str) and old_udt and old_udt not in (_NEW_TYPE,):
+            if _type_exists(conn, old_udt):
+                conn.execute(text(f'DROP TYPE IF EXISTS "{old_udt}" CASCADE'))
+
+        # Orphaned final name (wrong labels) while column is on v2
+        if _type_exists(conn, _FINAL_TYPE) and old_udt != _FINAL_TYPE:
+            try:
+                conn.execute(text(f'DROP TYPE IF EXISTS "{_FINAL_TYPE}" CASCADE'))
+            except Exception:
+                pass
+
+        conn.execute(text(f'ALTER TYPE "{_NEW_TYPE}" RENAME TO "{_FINAL_TYPE}"'))
+
+        conn.execute(text("ALTER TABLE carts ALTER COLUMN status SET NOT NULL"))
+        conn.execute(
+            text(
+                f"ALTER TABLE carts ALTER COLUMN status SET DEFAULT "
+                f"'AVAILABLE'::{_FINAL_TYPE}"
+            )
+        )
 
     with engine.connect() as conn:
-        after = pg_enum_labels(conn, udt)
-        report["after"] = list(after)
-        report["remapped"] = remapped
+        after = pg_enum_labels(conn, _FINAL_TYPE)
+        report["after"] = after
+        report["action"] = "rebuilt"
+        report["udt_after"] = _FINAL_TYPE
 
     logger.info(
-        "[cartstatus.enum] enum=%s before=%s added=%s after=%s remapped=%s",
-        udt,
-        report["before"],
-        report["added"],
-        report["after"],
-        remapped,
+        "[cartstatus.enum] rebuilt before=%s after=%s preview=%s",
+        report.get("before"),
+        after,
+        preview,
     )
-    missing_after = missing_cartstatus_labels(after)
-    if missing_after:
+    if not _labels_are_exactly_canonical(after):
         logger.error(
-            "[cartstatus.enum] still missing labels after ensure: %s",
-            missing_after,
+            "[cartstatus.enum] unexpected labels after rebuild: %s",
+            after,
         )
     return report
+
+
+# Back-compat name used by schema_upgrade
+def ensure_cartstatus_enum(engine: Engine) -> dict[str, object]:
+    return migrate_cartstatus_enum_clean(engine)

@@ -532,7 +532,7 @@ def post_picking_start(
     """
     Skan wózka → startPicking: capacity + sesja + order.cart_id + PICKING.
     """
-    from ..services.cart_capacity_service import CartCapacityExceeded, http_exception_cart_capacity_exceeded
+    from ..services.cart_capacity import CartCapacityExceeded, http_exception_cart_capacity_exceeded
     from ..services.cart_picking_lifecycle_service import (
         CartAlreadyClaimedError,
         CartLifecycleError,
@@ -541,12 +541,6 @@ def post_picking_start(
     from ..models.cart import Cart
 
     try:
-        logger.info(
-            "START_PICKING STEP A post_picking_start bootstrap cart_id=%s tenant=%s warehouse=%s",
-            cart_id,
-            tenant_id,
-            warehouse_id,
-        )
         sess = bootstrap_start_picking_if_needed(
             db,
             tenant_id=int(tenant_id),
@@ -557,9 +551,7 @@ def post_picking_start(
             operator_user_id=int(current_user.id),
             fixed_order_ids=[int(x) for x in order_ids] if order_ids else None,
         )
-        logger.info("START_PICKING STEP B post_picking_start commit")
         db.commit()
-        logger.info("START_PICKING STEP C post_picking_start commit_ok")
     except CartCapacityExceeded as e:
         db.rollback()
         raise http_exception_cart_capacity_exceeded(e) from e
@@ -752,7 +744,7 @@ def get_picking_product_lines(
         and current_user.id is not None
         and not recovery_mode
     ):
-        from ..services.cart_capacity_service import CartCapacityExceeded, http_exception_cart_capacity_exceeded
+        from ..services.cart_capacity import CartCapacityExceeded, http_exception_cart_capacity_exceeded
         from ..services.cart_picking_lifecycle_service import CartLifecycleError
 
         try:

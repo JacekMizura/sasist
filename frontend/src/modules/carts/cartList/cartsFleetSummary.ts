@@ -1,3 +1,5 @@
+import { CartStatus } from "../../../types/cartStatus";
+
 export type CartsFleetSummary = {
   totalUnits: number;
   inUse: number;
@@ -24,8 +26,11 @@ export function computeCartsFleetSummary(groups: CartsFleetGroup[]): CartsFleetS
   const items = groups.flatMap((g) => g.items ?? []);
   const totalUnits = items.length;
   const available = items.filter((c) => {
-    const s = String(c.status).toUpperCase();
-    return s === "PUSTY" || s === "AVAILABLE" || s === "FREE";
+    const s = String(c.status ?? "")
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, "_");
+    return s === CartStatus.AVAILABLE;
   }).length;
   const inUse = totalUnits - available;
   const totalVolume = items.reduce((acc, c) => acc + Number(c.total_volume_dm3 || 0), 0);

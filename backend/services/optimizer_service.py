@@ -15,11 +15,10 @@ from ..models.enums import CartType, CartStatus
 from .simulation_service import (
     _order_total_volume_and_dimensions,
     _fits_in_basket,
-    _can_assign_order,
     _sort_orders_for_assignment,
     FALLBACK_VOLUME_DM3,
 )
-from .cart_capacity_service import enforce_cart_orders_capacity
+from .cart_capacity.engine import CartCapacityEngine
 
 logger = logging.getLogger(__name__)
 
@@ -123,7 +122,11 @@ def _analyze_fleet(
             slot = multi_slots[i]
             cid = slot["cart_id"]
             cart = multi_cart_by_id.get(cid)
-            if cart and not _can_assign_order(cart, cart_orders.get(cid, 0), cart_used.get(cid, 0), spec["volume"]):
+            if cart and not CartCapacityEngine.from_cart(
+                cart,
+                assigned_orders=cart_orders.get(cid, 0),
+                assigned_volume=cart_used.get(cid, 0),
+            ).can_accept(spec["volume"]):
                 continue
             if slot["vol"] < spec["volume"]:
                 continue
@@ -141,7 +144,11 @@ def _analyze_fleet(
                             not _fits_in_basket(spec["max_l"], spec["max_w"], spec["max_h"], bc["l"], bc["w"], bc["h"])):
                         continue
                     cc = bc["cart"]
-                    if not _can_assign_order(cc, bc.get("orders_count", 0), bc["used"], spec["volume"]):
+                    if not CartCapacityEngine.from_cart(
+                        cc,
+                        assigned_orders=bc.get("orders_count", 0),
+                        assigned_volume=bc["used"],
+                    ).can_accept(spec["volume"]):
                         continue
                     bc["free"] -= spec["volume"]
                     bc["used"] += spec["volume"]

@@ -5,13 +5,17 @@ import api from "../../../api/axios";
 import {
   EMPTY_WMS_CART_STATS,
   fetchWmsCartStats,
+  parseCapacitySnapshot,
   type WmsCartStats,
 } from "../../../api/wmsCartStatsApi";
 import { useTranslation } from "../../../locales";
 import { cartStatsFromWms } from "../../../pages/CartsComponents/cartStats";
 import OrderProductPreviewModal from "../../../pages/CartsComponents/ui/OrderProductPreviewModal";
+import CartCapacitySection from "../../../pages/CartsComponents/ui/CartCapacitySection";
+import StatusPill from "../../../pages/CartsComponents/ui/StatusPill";
 import { ClearIcon } from "../../../pages/CartsComponents/ui/Icons";
 import type { BasketDetail } from "./cartFleetTypes";
+import type { CapacitySnapshot } from "../../../types/cartCapacity";
 import { basketSlotCode } from "./cartFleetTypes";
 import { CartOrdersHoverPopover, type CartOrderPreview } from "./CartOrdersHoverPopover";
 
@@ -45,6 +49,8 @@ export function CartFleetDetailPanel({
     order_numbers?: string[];
     orders_preview?: CartOrderPreview[];
     total_weight_kg?: number;
+    capacity?: CapacitySnapshot | null;
+    status?: string;
   } | null>(null);
   const [wmsStats, setWmsStats] = useState<WmsCartStats>(EMPTY_WMS_CART_STATS);
   const [clearingCart, setClearingCart] = useState(false);
@@ -68,8 +74,13 @@ export function CartFleetDetailPanel({
     ])
       .then(([detailRes, stats]) => {
         if (cancelled) return;
-        setBaskets(detailRes.data.baskets ?? []);
-        setDetailData(detailRes.data);
+        const detail = detailRes.data as typeof detailData & { baskets: BasketDetail[] };
+        setBaskets(detail.baskets ?? []);
+        setDetailData({
+          ...detail,
+          capacity: parseCapacitySnapshot(detail.capacity) ?? stats.capacity ?? null,
+          status: detail.status != null ? String(detail.status) : stats.status,
+        });
         setWmsStats(stats);
       })
       .catch(() => {
@@ -89,6 +100,8 @@ export function CartFleetDetailPanel({
 
   const stats = useMemo(() => cartStatsFromWms(wmsStats), [wmsStats]);
   const weightKg = Number(detailData?.total_weight_kg ?? 0);
+  const capacitySnapshot = wmsStats.capacity ?? detailData?.capacity ?? null;
+  const lifecycleStatus = wmsStats.status ?? detailData?.status;
 
   const handleClearCartConfirm = async () => {
     if (cartId == null) return;
@@ -116,8 +129,13 @@ export function CartFleetDetailPanel({
         api.get<{ baskets: BasketDetail[] } & typeof detailData>(`/carts/${cartId}/`),
         fetchWmsCartStats(cartId),
       ]);
-      setBaskets(detailRes.data.baskets ?? []);
-      setDetailData(detailRes.data);
+      const detail = detailRes.data;
+      setBaskets(detail.baskets ?? []);
+      setDetailData({
+        ...detail,
+        capacity: parseCapacitySnapshot(detail.capacity) ?? statsRes.capacity ?? null,
+        status: detail.status != null ? String(detail.status) : statsRes.status,
+      });
       setWmsStats(statsRes);
       onClearSuccess?.();
     } finally {
@@ -218,7 +236,12 @@ export function CartFleetDetailPanel({
               ) : (
                 <div className="space-y-5 px-4 py-4 sm:px-5">
                   <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
-                    <div className="flex flex-wrap gap-x-5 gap-y-1">
+                    <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+                      {lifecycleStatus ? (
+                        <span className="inline-flex items-center gap-1.5">
+                          Status: <StatusPill status={lifecycleStatus} />
+                        </span>
+                      ) : null}
                       <span className="inline-flex items-center gap-1">
                         Zamówienia:{" "}
                         <CartOrdersHoverPopover orders={ordersPreview}>
@@ -254,6 +277,12 @@ export function CartFleetDetailPanel({
                       </button>
                     )}
                   </div>
+
+                  {capacitySnapshot ? (
+                    <div className="rounded-lg border border-slate-200 bg-slate-50/80 px-4 py-3">
+                      <CartCapacitySection capacity={capacitySnapshot} />
+                    </div>
+                  ) : null}
 
                   {isSectional && baskets.length > 0 ? (
                     <div className="space-y-3">

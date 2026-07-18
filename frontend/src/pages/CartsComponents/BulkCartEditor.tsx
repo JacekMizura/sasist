@@ -5,21 +5,27 @@ import {
   productLikeFieldLabelClass,
   productLikeInputClass,
 } from "../../components/catalog/productLikeTokens";
-import { CapacityModeFields } from "../../modules/warehouse-structure/CapacityModeFields";
+import { CapacityStrategyFields } from "../../modules/warehouse-structure/CapacityStrategyFields";
 import {
-  capacityModeLabel,
+  capacityStrategyLabel,
   formatScanCodeLabel,
-  type CapacityMode,
 } from "../../modules/warehouse-structure/labels";
 import { cartsSectionClass } from "../../modules/carts/cartsModuleTokens";
 import { wmsSectionTitle } from "../../modules/carts/wmsOperationalUi";
 import { log } from "../../utils/logger";
 import api from "../../api/axios";
-import { fetchWmsCartStats } from "../../api/wmsCartStatsApi";
+import { fetchWmsCartStats, parseCapacitySnapshot } from "../../api/wmsCartStatsApi";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { useTranslation } from "../../locales";
+import {
+  CapacityStrategy,
+  type CapacitySnapshot,
+  type CapacityStrategyValue,
+} from "../../types/cartCapacity";
 import CartImageUrlField from "./ui/CartImageUrlField";
+import CartCapacitySection from "./ui/CartCapacitySection";
 import ProgressBar from "./ui/ProgressBar";
+import StatusPill from "./ui/StatusPill";
 
 type BulkFormState = {
   name: string;
@@ -29,6 +35,12 @@ type BulkFormState = {
 };
 
 type CartGroup = { id: number; name: string };
+
+const VOLUME_STRATEGIES: CapacityStrategyValue[] = [
+  CapacityStrategy.LIMIT_VOLUME,
+  CapacityStrategy.HYBRID_STOP_FIRST,
+  CapacityStrategy.HYBRID_STOP_VOLUME,
+];
 
 export default function BulkCartEditor({
   cartId,
@@ -50,14 +62,17 @@ export default function BulkCartEditor({
   const [imageUrl, setImageUrl] = useState("");
   const [groupId, setGroupId] = useState<number | null>(null);
   const [availableGroups, setAvailableGroups] = useState<CartGroup[]>([]);
-  const [capacityMode, setCapacityMode] = useState<CapacityMode>("volume");
-  const [maxOrders, setMaxOrders] = useState<number | "">("");
-  const [maxVolumeDm3, setMaxVolumeDm3] = useState<number | "">("");
+  const [capacityStrategy, setCapacityStrategy] = useState<CapacityStrategyValue>(
+    CapacityStrategy.LIMIT_VOLUME,
+  );
+  const [capacityOrders, setCapacityOrders] = useState<number | "">("");
+  const [capacityVolume, setCapacityVolume] = useState<number | "">("");
   const [cartCode, setCartCode] = useState("");
   const [cartScanCode, setCartScanCode] = useState<string | null>(null);
   const [status, setStatus] = useState<string>("");
   const [usedVolume, setUsedVolume] = useState(0);
   const [totalVolumeDm3, setTotalVolumeDm3] = useState(0);
+  const [capacitySnapshot, setCapacitySnapshot] = useState<CapacitySnapshot | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -98,9 +113,10 @@ export default function BulkCartEditor({
               : null;
           setCartScanCode(sc);
           setImageUrl(data.image_url ?? "");
-          setStatus(String(data.status ?? ""));
+          setStatus(String(data.status ?? stats.status ?? ""));
           setUsedVolume(Number(stats.volume_used) || 0);
           setTotalVolumeDm3(Number(data.total_volume_dm3) || 0);
+          setCapacitySnapshot(parseCapacitySnapshot(data.capacity) ?? stats.capacity ?? null);
 
           const rawGroupId = data.group_id;
           const initialGroupId =
@@ -108,11 +124,17 @@ export default function BulkCartEditor({
               ? Number(rawGroupId)
               : null;
           setGroupId(initialGroupId);
-          setCapacityMode((data.capacity_mode ?? "volume") as CapacityMode);
-          setMaxOrders(data.max_orders != null ? data.max_orders : "");
-          setMaxVolumeDm3(data.max_volume_dm3 != null ? data.max_volume_dm3 : "");
+
+          const rawStrategy = String(data.capacity_strategy ?? CapacityStrategy.LIMIT_VOLUME).toUpperCase();
+          const strategy = (Object.values(CapacityStrategy) as string[]).includes(rawStrategy)
+            ? (rawStrategy as CapacityStrategyValue)
+            : CapacityStrategy.LIMIT_VOLUME;
+          setCapacityStrategy(strategy);
+          setCapacityOrders(data.capacity_orders != null ? Number(data.capacity_orders) : "");
+          setCapacityVolume(data.capacity_volume != null ? Number(data.capacity_volume) : "");
         } else {
           setCartScanCode(null);
+          setCapacitySnapshot(null);
         }
       } catch (err) {
         if (!cancelled) console.error("BulkCartEditor init error:", err);
@@ -129,18 +151,23 @@ export default function BulkCartEditor({
 
   const computedVolume = useMemo(
     () => (Number(formData.length) * Number(formData.width) * Number(formData.height)) / 1000,
-    [formData.length, formData.width, formData.height]
+    [formData.length, formData.width, formData.height],
   );
 
   const fillPercent = useMemo(() => {
+    if (capacitySnapshot?.capacity_usage_percent != null) {
+      return Math.min(100, Math.max(0, capacitySnapshot.capacity_usage_percent));
+    }
     const cap = totalVolumeDm3 || computedVolume || 1;
     return Math.min(100, Math.round((usedVolume / cap) * 100));
-  }, [usedVolume, totalVolumeDm3, computedVolume]);
+  }, [usedVolume, totalVolumeDm3, computedVolume, capacitySnapshot]);
 
   const groupName = useMemo(() => {
     if (groupId == null) return t.unassigned;
     return availableGroups.find((g) => g.id === groupId)?.name ?? t.unassigned;
   }, [groupId, availableGroups, t.unassigned]);
+
+  const showVolumeField = VOLUME_STRATEGIES.includes(capacityStrategy);
 
   const handleSave = async (e?: FormEvent) => {
     e?.preventDefault();
@@ -162,13 +189,17 @@ export default function BulkCartEditor({
         length: Number(formData.length),
         width: Number(formData.width),
         height: Number(formData.height),
-        capacity_mode: capacityMode,
+        capacity_strategy: capacityStrategy,
       };
-      if (capacityMode === "orders" || capacityMode === "mixed") {
-        payload.max_orders = maxOrders === "" ? null : Number(maxOrders);
+      if (
+        capacityStrategy === CapacityStrategy.LIMIT_ORDERS ||
+        capacityStrategy === CapacityStrategy.HYBRID_STOP_FIRST ||
+        capacityStrategy === CapacityStrategy.HYBRID_STOP_VOLUME
+      ) {
+        payload.capacity_orders = capacityOrders === "" ? null : Number(capacityOrders);
       }
-      if (capacityMode === "volume" || capacityMode === "mixed") {
-        payload.max_volume_dm3 = maxVolumeDm3 === "" ? vol : Number(maxVolumeDm3);
+      if (showVolumeField) {
+        payload.capacity_volume = capacityVolume === "" ? vol : Number(capacityVolume);
       }
       if (cartId) {
         payload.code = trimmedCode;
@@ -263,7 +294,9 @@ export default function BulkCartEditor({
           {cartId ? (
             <div>
               <label className={productLikeFieldLabelClass}>Status</label>
-              <p className="mt-1 text-[15px] font-semibold text-slate-800">{(status || "—").toString()}</p>
+              <div className="mt-1">
+                <StatusPill status={status} />
+              </div>
             </div>
           ) : null}
         </div>
@@ -298,17 +331,31 @@ export default function BulkCartEditor({
 
       <section className={cartsSectionClass}>
         <h3 className={wmsSectionTitle}>Pojemność operacyjna</h3>
-        <div className="mt-3">
-          <CapacityModeFields
-            mode={capacityMode}
-            onModeChange={setCapacityMode}
-            maxVolumeDm3={maxVolumeDm3}
-            onMaxVolumeChange={setMaxVolumeDm3}
-            maxOrders={maxOrders}
-            onMaxOrdersChange={setMaxOrders}
-            volumePlaceholder={computedVolume.toFixed(1)}
-            namePrefix="bulkCapacityMode"
+        <div className="mt-3 space-y-4">
+          <CapacityStrategyFields
+            strategy={capacityStrategy}
+            onStrategyChange={setCapacityStrategy}
+            capacityOrders={capacityOrders}
+            onCapacityOrdersChange={setCapacityOrders}
+            cartKind="BULK"
+            namePrefix="bulkCapacityStrategy"
           />
+          {showVolumeField ? (
+            <label className="block max-w-xs text-sm">
+              <span className={productLikeFieldLabelClass}>Limit objętości (dm³)</span>
+              <input
+                type="number"
+                min={0}
+                step={0.1}
+                className={`${productLikeInputClass} mt-1`}
+                value={capacityVolume === "" ? "" : capacityVolume}
+                onChange={(e) =>
+                  setCapacityVolume(e.target.value === "" ? "" : Number(e.target.value))
+                }
+                placeholder={computedVolume.toFixed(1)}
+              />
+            </label>
+          ) : null}
         </div>
       </section>
 
@@ -317,8 +364,10 @@ export default function BulkCartEditor({
           <h3 className={wmsSectionTitle}>Operacje</h3>
           <div className="mt-3 grid gap-3 sm:grid-cols-3">
             <div className="rounded-md border border-slate-200 bg-slate-50/80 px-3 py-2">
-              <p className="text-[12px] font-bold uppercase text-slate-500">Tryb</p>
-              <p className="mt-1 text-[15px] font-bold text-slate-900">{capacityModeLabel(capacityMode)}</p>
+              <p className="text-[12px] font-bold uppercase text-slate-500">Strategia</p>
+              <p className="mt-1 text-[15px] font-bold text-slate-900">
+                {capacityStrategyLabel(capacityStrategy)}
+              </p>
             </div>
             <div className="rounded-md border border-slate-200 bg-slate-50/80 px-3 py-2">
               <p className="text-[12px] font-bold uppercase text-slate-500">Objętość</p>
@@ -334,6 +383,11 @@ export default function BulkCartEditor({
           <div className="mt-3 max-w-xl">
             <ProgressBar percent={fillPercent} />
           </div>
+          {capacitySnapshot ? (
+            <div className="mt-3 max-w-md rounded-md border border-slate-200 bg-white px-3 py-2">
+              <CartCapacitySection capacity={capacitySnapshot} />
+            </div>
+          ) : null}
         </section>
       ) : null}
 
@@ -360,7 +414,7 @@ export default function BulkCartEditor({
         ...(cartId
           ? [
               { label: "Pojemność", value: `${(totalVolumeDm3 || computedVolume).toFixed(1)} dm³`, variant: "blue" as const },
-              { label: "Tryb", value: capacityModeLabel(capacityMode) },
+              { label: "Strategia", value: capacityStrategyLabel(capacityStrategy) },
               { label: "Grupa", value: groupName },
             ]
           : []),

@@ -35,10 +35,6 @@ from ..schemas.picking_assignment import (
 )
 from fastapi import HTTPException
 
-from .cart_capacity_service import (
-    CartCapacityExceeded,
-    enforce_cart_orders_capacity,
-)
 from .cart_service import _order_used_volume_dm3_from_items
 
 logger = logging.getLogger(__name__)

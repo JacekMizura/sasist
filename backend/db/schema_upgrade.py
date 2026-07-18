@@ -3839,8 +3839,8 @@ def ensure_carts_code_column(engine: Engine) -> None:
 def ensure_carts_picking_lifecycle_columns(engine: Engine) -> None:
     """
     SSOT cyklu wózka: ``assigned_user_id``, ``current_session_id``, ``claimed_at``, …
-    PostgreSQL: ensure enum ``cartstatus`` contains lifecycle labels (ADD VALUE),
-    then remap legacy PL / IN_PROGRESS row values → canonical English labels.
+    PostgreSQL: one-shot rebuild of enum ``cartstatus`` to the five lifecycle labels
+    (``migrate_cartstatus_enum_clean`` — no ``ADD VALUE`` on the legacy type).
     """
     dialect = engine.dialect.name
     with engine.connect() as conn:
@@ -3875,21 +3875,23 @@ def ensure_carts_picking_lifecycle_columns(engine: Engine) -> None:
             conn.execute(text(_timestamp_column_ddl(engine, "carts", "claimed_at")))
         conn.commit()
 
-    # Keep PostgreSQL enum cartstatus — add missing lifecycle labels (do not cast to VARCHAR).
+    from .cart_capacity_schema import ensure_cart_capacity_columns
+
+    ensure_cart_capacity_columns(engine)
+
+    # Rebuild PostgreSQL enum cartstatus to the five lifecycle labels (variant B).
     if dialect == "postgresql":
         from .cartstatus_enum import ensure_cartstatus_enum
 
         ensure_cartstatus_enum(engine)
     else:
-        # SQLite / others: string status — remap legacy PL labels only
+        # SQLite / others: string status — remap legacy PL / dead labels only
+        from .cartstatus_enum import CARTSTATUS_LEGACY_TO_CANONICAL
+
         with engine.connect() as conn:
-            for old, new in (
-                ("pusty", "AVAILABLE"),
-                ("w trakcie zbierania", "PICKING"),
-                ("pełny", "FULL"),
-                ("w serwisie", "SERVICE"),
-                ("IN_PROGRESS", "PICKING"),
-            ):
+            for old, new in CARTSTATUS_LEGACY_TO_CANONICAL.items():
+                if old == new:
+                    continue
                 try:
                     conn.execute(
                         text("UPDATE carts SET status = :new WHERE status = :old"),

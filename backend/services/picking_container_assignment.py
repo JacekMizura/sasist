@@ -1,5 +1,5 @@
 """
-Order-to-Container Assignment Engine (volume-based first-fit).
+Order-to-Container Assignment Engine (volume-based best-fit, one order per basket).
 
 Czysta logika przygotowania przypisań zamówień → koszyki na wózku MULTI.
 - Nie modyfikuje zapisów Pick / PickTask / fal.
@@ -120,17 +120,18 @@ class _BasketWorkingState:
         )
 
 
-def assign_orders_to_baskets_first_fit_volume(
+def assign_orders_to_baskets_best_fit(
     request: PickingCartSessionAssignmentRequest,
 ) -> PickingCartSessionAssignmentResult:
     """
-    Algorytm first-fit po posortowanej liście zamówień:
-    kolejne zamówienie trafia do pierwszego koszyka z wolnym miejscem (remaining >= volume).
+    Capacity Engine SSOT — BASKETS strategy (best-fit, one order per basket).
 
-    - Zamówienie większe niż pojemność **największego** koszyka → ``oversized``.
-    - Mieści się pojedynczo, ale brak miejsca w sesji → ``no_capacity_remaining``.
-    - Wiele zamówień na jednym koszyku: dozwolone (sumaryczna objętość).
+    Ranking/sort of orders stays outside the engine (``sort_orders_by``).
     """
+    from .cart_capacity.engine import CartCapacityEngine
+    from .cart_capacity.enums import CapacityStrategy
+    from .cart_capacity.types import BasketWorking, EngineState
+
     if not request.baskets:
         return PickingCartSessionAssignmentResult(
             cart_id=request.cart_id,
@@ -156,37 +157,66 @@ def assign_orders_to_baskets_first_fit_volume(
 
     order_volumes_out = [PickingOrderVolumeComputed(order_id=o.order_id, volume_dm3=v) for o, v in prepared]
 
-    states = [_BasketWorkingState.from_slot(s) for s in request.baskets]
-    unassigned: list[PickingUnassignedOrderOut] = []
+    baskets = [
+        BasketWorking(
+            basket_id=int(s.basket_id),
+            usable_volume=float(s.capacity_volume_dm3),
+            order_id=None,
+            used_volume=0.0,
+        )
+        for s in request.baskets
+    ]
+    engine = CartCapacityEngine(
+        EngineState(
+            strategy=CapacityStrategy.BASKETS,
+            capacity_orders=len(baskets),
+            capacity_volume=None,
+            assigned_orders=0,
+            assigned_volume=0.0,
+            baskets=baskets,
+        )
+    )
 
+    unassigned: list[PickingUnassignedOrderOut] = []
     for order, vol in ordered:
-        oid = order.order_id
+        oid = int(order.order_id)
         if vol > max_cap + 1e-9:
             unassigned.append(
                 PickingUnassignedOrderOut(order_id=oid, reason="oversized", order_volume_dm3=vol),
             )
             continue
-        placed = False
-        for st in states:
-            if st.remaining + 1e-9 >= vol:
-                st.assigned_order_ids.append(oid)
-                st.used_volume = round(st.used_volume + vol, 4)
-                st.remaining = round(max(0.0, st.capacity - st.used_volume), 4)
-                placed = True
-                break
-        if not placed:
+        res = engine.accept(vol, order_id=oid, dry_run=False)
+        if not res.accepted:
             unassigned.append(
                 PickingUnassignedOrderOut(order_id=oid, reason="no_capacity_remaining", order_volume_dm3=vol),
             )
 
+    snap = engine.snapshot()
+    slots_by_id = {
+        int(s.id): s for s in (snap.basket_summary.slots if snap.basket_summary else ())
+    }
     basket_rows = [
         PickingBasketAssignmentRow(
-            basket_id=st.basket_id,
-            assigned_order_ids=list(st.assigned_order_ids),
-            used_volume_dm3=round(st.used_volume, 4),
-            remaining_capacity_dm3=round(st.remaining, 4),
+            basket_id=int(s.basket_id),
+            assigned_order_ids=(
+                [int(slots_by_id[int(s.basket_id)].order_id)]
+                if int(s.basket_id) in slots_by_id
+                and slots_by_id[int(s.basket_id)].occupied
+                and slots_by_id[int(s.basket_id)].order_id
+                else []
+            ),
+            used_volume_dm3=round(
+                float(slots_by_id[int(s.basket_id)].used_volume) if int(s.basket_id) in slots_by_id else 0.0,
+                4,
+            ),
+            remaining_capacity_dm3=round(
+                float(slots_by_id[int(s.basket_id)].remaining_volume)
+                if int(s.basket_id) in slots_by_id
+                else float(s.capacity_volume_dm3),
+                4,
+            ),
         )
-        for st in states
+        for s in request.baskets
     ]
 
     return PickingCartSessionAssignmentResult(
@@ -260,16 +290,16 @@ def build_cart_session_assignment_from_orm(
         orders=[picking_order_volume_in_from_orm(o) for o in orders],
         sort_orders_by=sort_orders_by,  # type: ignore[arg-type]
     )
-    return assign_orders_to_baskets_first_fit_volume(req)
+    return assign_orders_to_baskets_best_fit(req)
 
 
 class OrderToContainerAssignmentEngine:
     """
     Stabilna fasada: w przyszłości można dodać wstrzykiwanie strategii (best-fit, wagowy, seed RNG).
-    Obecnie deleguje do ``assign_orders_to_baskets_first_fit_volume``.
+    Obecnie deleguje do ``assign_orders_to_baskets_best_fit``.
     """
 
-    assign = staticmethod(assign_orders_to_baskets_first_fit_volume)
+    assign = staticmethod(assign_orders_to_baskets_best_fit)
 
     @staticmethod
     def assign_from_orm(

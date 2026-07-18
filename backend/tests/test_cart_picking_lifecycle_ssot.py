@@ -19,7 +19,7 @@ from backend.models.order import Order
 from backend.models.tenant import Tenant
 from backend.models.warehouse import Warehouse
 from backend.models.wms_operation_session import WmsOperationSession
-from backend.services.cart_capacity_service import CartCapacityExceeded
+from backend.services.cart_capacity import CartCapacityExceeded
 from backend.models.cart_lifecycle_history import CartLifecycleHistory
 from backend.models.cart_lifecycle_event import CartLifecycleEvent
 from backend.services.cart_picking_lifecycle_service import (
@@ -61,7 +61,7 @@ def db():
         session.close()
 
 
-def _cart(db, *, max_orders=None, capacity_mode="volume", code: str = "CART-001") -> Cart:
+def _cart(db, *, capacity_orders=None, capacity_strategy="LIMIT_VOLUME", code: str = "CART-001") -> Cart:
     c = Cart(
         tenant_id=1,
         warehouse_id=1,
@@ -74,8 +74,8 @@ def _cart(db, *, max_orders=None, capacity_mode="volume", code: str = "CART-001"
         height=80,
         total_volume=480.0,
         used_volume=0.0,
-        capacity_mode=capacity_mode,
-        max_orders=max_orders,
+        capacity_strategy=capacity_strategy,
+        capacity_orders=capacity_orders,
     )
     db.add(c)
     db.flush()
@@ -196,7 +196,7 @@ def test_full_lifecycle_scan_assigns_orders(db):
 
 
 def test_capacity_truncate_on_start_picking(db):
-    cart = _cart(db, max_orders=2, capacity_mode="orders")
+    cart = _cart(db, capacity_orders=2, capacity_strategy="LIMIT_ORDERS")
     orders = [_order(db, number=f"C-{i}") for i in range(5)]
     db.commit()
     claim_cart(db, cart=cart, operator_user_id=1)
@@ -209,13 +209,16 @@ def test_capacity_truncate_on_start_picking(db):
 
 
 def test_capacity_error_on_start_picking(db):
-    cart = _cart(db, max_orders=1, capacity_mode="orders")
+    cart = _cart(db, capacity_strategy="LIMIT_VOLUME")
+    cart.capacity_volume = 1.0
+    cart.total_volume = 1.0
     o1 = _order(db, number="E-1")
-    o2 = _order(db, number="E-2")
+    o1.total_volume_dm3 = 5.0
+    db.add(o1)
     db.commit()
     claim_cart(db, cart=cart, operator_user_id=1)
     with pytest.raises(CartCapacityExceeded):
-        start_picking(db, cart=cart, orders=[o1, o2], operator_user_id=1, on_capacity="error")
+        start_picking(db, cart=cart, orders=[o1], operator_user_id=1, on_capacity="error")
 
 
 def test_cancel_only_assigned_or_picking(db):

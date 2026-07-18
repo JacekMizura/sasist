@@ -17,40 +17,36 @@ class CartStatus(enum.Enum):
 
     AVAILABLE → ASSIGNED → PICKING → READY_FOR_PACKING → PACKING → AVAILABLE
 
-    Wartości muszą istnieć w PostgreSQL enum ``cartstatus``
-    (``backend.db.cartstatus_enum.ensure_cartstatus_enum`` / startup schema).
-
-    ``IN_PROGRESS`` jest aliasem ``PICKING`` (kompatybilność wsteczna w kodzie).
-    Wartości legacy PL („pusty”, …) mapowane przy odczycie / remap wierszy.
+    PostgreSQL enum ``cartstatus`` must match these five values exactly
+    (``backend.db.cartstatus_enum.migrate_cartstatus_enum_clean``).
     """
 
     AVAILABLE = "AVAILABLE"
     ASSIGNED = "ASSIGNED"
     PICKING = "PICKING"
-    IN_PROGRESS = "PICKING"  # alias → PICKING
     READY_FOR_PACKING = "READY_FOR_PACKING"
     PACKING = "PACKING"
-    FULL = "FULL"
-    SERVICE = "SERVICE"
-
-
-# Mapowanie starych wartości PL → kanoniczne (DB / API).
-CART_STATUS_LEGACY_MAP: dict[str, str] = {
-    "pusty": CartStatus.AVAILABLE.value,
-    "w trakcie zbierania": CartStatus.PICKING.value,
-    "pełny": CartStatus.FULL.value,
-    "w serwisie": CartStatus.SERVICE.value,
-}
 
 
 def normalize_cart_status_value(raw: str | None) -> str:
+    """
+    Normalize a raw DB/API string to a canonical ``CartStatus`` value.
+
+    Legacy labels (IN_PROGRESS / FULL / SERVICE / PL) are mapped for read safety
+    during/after migration — they are not members of ``CartStatus``.
+    """
+    from ..db.cartstatus_enum import CARTSTATUS_LEGACY_TO_CANONICAL
+
     s = (raw or "").strip()
     if not s:
         return CartStatus.AVAILABLE.value
-    mapped = CART_STATUS_LEGACY_MAP.get(s)
+    mapped = CARTSTATUS_LEGACY_TO_CANONICAL.get(s)
     if mapped:
         return mapped
     up = s.upper().replace(" ", "_")
+    mapped_up = CARTSTATUS_LEGACY_TO_CANONICAL.get(up)
+    if mapped_up:
+        return mapped_up
     for st in CartStatus:
         if st.value == up or st.name == up:
             return st.value

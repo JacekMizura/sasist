@@ -6,7 +6,7 @@ import { log } from "../../utils/logger";
 import api from "../../api/axios";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { useTranslation } from "../../locales";
-import type { CapacityMode } from "../../modules/warehouse-structure/labels";
+import { CapacityStrategy } from "../../types/cartCapacity";
 import { CartEditorMetaBar } from "./CartEditorMetaBar";
 import { CartRowAddToolbar } from "./CartRowAddToolbar";
 import { CartSectionGrid, basketVolume } from "./CartSectionGrid";
@@ -47,10 +47,6 @@ export default function CartEditor({ cartId, onClose }: { cartId: number | null;
   const [addRowLength, setAddRowLength] = useState(40);
   const [addRowWidth, setAddRowWidth] = useState(40);
   const [addRowHeight, setAddRowHeight] = useState(40);
-
-  const [capacityMode, setCapacityMode] = useState<CapacityMode>("volume");
-  const [maxOrders, setMaxOrders] = useState<number | "">("");
-  const [maxVolumeDm3, setMaxVolumeDm3] = useState<number | "">("");
 
   useEffect(() => {
     let cancelled = false;
@@ -107,9 +103,6 @@ export default function CartEditor({ cartId, onClose }: { cartId: number | null;
             }
           );
           setRows(newRows);
-          setCapacityMode((data.capacity_mode ?? "volume") as CapacityMode);
-          setMaxOrders(data.max_orders != null ? data.max_orders : "");
-          setMaxVolumeDm3(data.max_volume_dm3 != null ? data.max_volume_dm3 : "");
 
           if (data.warehouse_id && resWarehouses.data) {
             const wh = resWarehouses.data.find((w: { id: number }) => w.id === data.warehouse_id);
@@ -217,17 +210,10 @@ export default function CartEditor({ cartId, onClose }: { cartId: number | null;
         image_url: imageUrl.trim() || null,
         baskets: basketsPayload,
         total_volume_dm3: vol,
-        capacity_mode: capacityMode,
+        capacity_strategy: CapacityStrategy.BASKETS,
       };
       if (cartId) payload.code = trimmedCode;
       else if (trimmedCode) payload.code = trimmedCode;
-
-      if (capacityMode === "orders" || capacityMode === "mixed") {
-        payload.max_orders = maxOrders === "" ? null : Number(maxOrders);
-      }
-      if (capacityMode === "volume" || capacityMode === "mixed") {
-        payload.max_volume_dm3 = maxVolumeDm3 === "" ? vol : Number(maxVolumeDm3);
-      }
 
       if (cartId) await api.put(`/carts/${cartId}/`, payload);
       else await api.post("/carts/multi/", { ...payload, tenant_id: 1 });

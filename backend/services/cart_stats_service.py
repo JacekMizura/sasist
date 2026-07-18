@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session, joinedload
 from ..models.cart import Cart
 from ..models.order import Order
 from ..models.order_item import OrderItem
+from .cart_capacity.engine import CartCapacityEngine, order_volume_dm3
 
 
 def _norm_cart_type(cart: Cart) -> str:
@@ -22,15 +23,14 @@ def _norm_cart_type(cart: Cart) -> str:
     return str(raw).split(".")[-1].upper()
 
 
-def _norm_capacity_mode(val: Any) -> str:
-    if val is None:
-        return "volume"
-    if hasattr(val, "value"):
-        val = val.value
-    s = str(val).strip().lower()
-    if s in ("volume", "orders", "mixed"):
-        return s
-    return "volume"
+def _capacity_snapshot_for_orders(cart: Cart, orders: list[Order]):
+    assigned_orders = len(orders)
+    assigned_volume = round(sum(order_volume_dm3(o) for o in orders), 4)
+    return CartCapacityEngine.from_cart(
+        cart,
+        assigned_orders=assigned_orders,
+        assigned_volume=assigned_volume,
+    ).snapshot()
 
 
 def query_orders_on_cart(db: Session, cart: Cart):
@@ -88,7 +88,7 @@ def compute_cart_stats(db: Session, cart: Cart) -> dict[str, Any]:
     """
     Agregat SSOT:
       orders_count, products_count, sections_count, occupied_sections,
-      volume_used, percent_used
+      volume_used, percent_used, capacity
     """
     orders = query_orders_on_cart(db, cart).all()
     # Dedup by id (cart_id + session overlap)
@@ -97,61 +97,11 @@ def compute_cart_stats(db: Session, cart: Cart) -> dict[str, Any]:
         by_id[int(o.id)] = o
     orders = list(by_id.values())
 
-    orders_count = len(orders)
-
-    product_ids: set[int] = set()
-    for o in orders:
-        for item in getattr(o, "items", None) or []:
-            pid = getattr(item, "product_id", None)
-            if pid is not None:
-                product_ids.add(int(pid))
-    products_count = len(product_ids)
-
-    ctype = _norm_cart_type(cart)
-    baskets = list(getattr(cart, "baskets", None) or [])
-    if ctype == "MULTI":
-        sections_count = len(baskets)
-        occupied_ids: set[int] = set()
-        for b in baskets:
-            if getattr(b, "order_id", None) is not None:
-                occupied_ids.add(int(b.id))
-        for o in orders:
-            bid = getattr(o, "basket_id", None)
-            if bid is not None:
-                occupied_ids.add(int(bid))
-        occupied_sections = len(occupied_ids)
-    else:
-        sections_count = 1
-        occupied_sections = orders_count
-
-    volume_used = round(sum(_order_volume_dm3(o) for o in orders), 2)
-
-    mode = _norm_capacity_mode(getattr(cart, "capacity_mode", None))
-    max_vol = float(getattr(cart, "total_volume", None) or 0)
-    max_ord = getattr(cart, "max_orders", None)
-
-    vol_pct = (volume_used / max_vol * 100.0) if max_vol > 0 else 0.0
-    ord_pct = (
-        (orders_count / float(max_ord) * 100.0)
-        if max_ord is not None and int(max_ord) > 0
-        else 0.0
-    )
-
-    if mode == "orders":
-        percent_used = ord_pct
-    elif mode == "mixed":
-        percent_used = min(vol_pct, ord_pct) if max_ord is not None else vol_pct
-    else:
-        percent_used = vol_pct
-
-    return {
-        "orders_count": int(orders_count),
-        "products_count": int(products_count),
-        "sections_count": int(sections_count),
-        "occupied_sections": int(occupied_sections),
-        "volume_used": float(volume_used),
-        "percent_used": round(float(percent_used), 2),
-    }
+    stats = _stats_from_orders(cart, orders)
+    snap = _capacity_snapshot_for_orders(cart, orders)
+    stats["percent_used"] = round(float(snap.capacity_usage_percent), 2)
+    stats["capacity"] = snap.to_dict()
+    return stats
 
 
 def get_cart_stats_or_404(db: Session, cart_id: int) -> dict[str, Any]:
@@ -238,6 +188,9 @@ def batch_cart_stats(db: Session, carts: list[Cart]) -> dict[int, dict[str, Any]
         cid = int(cart.id)
         orders_list = list(orders_by_cart.get(cid, {}).values())
         stats = _stats_from_orders(cart, orders_list)
+        snap = _capacity_snapshot_for_orders(cart, orders_list)
+        stats["percent_used"] = round(float(snap.capacity_usage_percent), 2)
+        stats["capacity"] = snap.to_dict()
         from .cart_picking_lifecycle_service import get_cart_current_task, get_cart_status
 
         stats["status"] = get_cart_status(cart).value
@@ -277,21 +230,6 @@ def _stats_from_orders(cart: Cart, orders: list[Order]) -> dict[str, Any]:
         occupied_sections = orders_count
 
     volume_used = round(sum(_order_volume_dm3(o) for o in orders), 2)
-    mode = _norm_capacity_mode(getattr(cart, "capacity_mode", None))
-    max_vol = float(getattr(cart, "total_volume", None) or 0)
-    max_ord = getattr(cart, "max_orders", None)
-    vol_pct = (volume_used / max_vol * 100.0) if max_vol > 0 else 0.0
-    ord_pct = (
-        (orders_count / float(max_ord) * 100.0)
-        if max_ord is not None and int(max_ord) > 0
-        else 0.0
-    )
-    if mode == "orders":
-        percent_used = ord_pct
-    elif mode == "mixed":
-        percent_used = min(vol_pct, ord_pct) if max_ord is not None else vol_pct
-    else:
-        percent_used = vol_pct
 
     return {
         "orders_count": int(orders_count),
@@ -299,5 +237,5 @@ def _stats_from_orders(cart: Cart, orders: list[Order]) -> dict[str, Any]:
         "sections_count": int(sections_count),
         "occupied_sections": int(occupied_sections),
         "volume_used": float(volume_used),
-        "percent_used": round(float(percent_used), 2),
+        "percent_used": 0.0,
     }

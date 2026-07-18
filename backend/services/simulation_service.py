@@ -18,10 +18,6 @@ from ..models.order import Order
 from ..models.order_item import OrderItem
 from ..models.product import Product
 from ..models.enums import CartStatus, CartType
-from .cart_capacity_service import (
-    enforce_cart_orders_capacity,
-    count_orders_on_cart,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -97,33 +93,6 @@ def _fits_in_basket(
         and order_max_w <= basket_width
         and order_max_h <= basket_height
     )
-
-
-def _can_assign_order(
-    cart: Cart,
-    orders_count: int,
-    used_volume_dm3: float,
-    order_volume_dm3: float,
-) -> bool:
-    """
-    Returns True if assigning one more order (with order_volume_dm3) is allowed
-    given current orders_count and used_volume_dm3, according to cart.capacity_mode.
-    """
-    mode = (getattr(cart, "capacity_mode", None) or "volume").lower()
-    max_vol = cart.total_volume or 0
-    max_ord = getattr(cart, "max_orders", None)
-
-    if mode == "volume":
-        return (used_volume_dm3 + order_volume_dm3) <= max_vol
-    if mode == "orders":
-        if max_ord is None:
-            return True
-        return (orders_count + 1) <= max_ord
-    if mode == "mixed":
-        vol_ok = (used_volume_dm3 + order_volume_dm3) <= max_vol
-        ord_ok = (max_ord is None) or ((orders_count + 1) <= max_ord)
-        return vol_ok and ord_ok
-    return (used_volume_dm3 + order_volume_dm3) <= max_vol
 
 
 def _sku_frequency(orders: list) -> dict:

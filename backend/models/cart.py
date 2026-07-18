@@ -45,9 +45,12 @@ class Cart(Base):
     total_volume = Column(Float, default=0)
     used_volume = Column(Float, default=0)
 
-    # Capacity limits: "volume" | "orders" | "mixed" (default volume)
-    capacity_mode = Column(String(20), nullable=False, default="volume")
-    max_orders = Column(Integer, nullable=True)  # used when capacity_mode is "orders" or "mixed"
+    # Capacity Engine (independent of Cart.status lifecycle):
+    # LIMIT_ORDERS | LIMIT_VOLUME | HYBRID_STOP_FIRST | HYBRID_STOP_VOLUME | BASKETS
+    capacity_strategy = Column(String(32), nullable=False, default="LIMIT_VOLUME")
+    capacity_orders = Column(Integer, nullable=True)
+    #: Optional override; when null, geometry ``total_volume`` is the volume capacity (dm³).
+    capacity_volume = Column(Float, nullable=True)
 
     # String — unika natywnego PG ENUM przy migracji AVAILABLE/ASSIGNED/PICKING/…
     status = Column(String(32), nullable=False, default=CartStatus.AVAILABLE.value, index=True)

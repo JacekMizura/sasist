@@ -16,7 +16,7 @@ from ..models.pick_task import PickTask
 from ..models.product import Product
 from ..models.tenant import Tenant
 from ..models.label_template import SavedLabelTemplate
-from ..models.enums import CartType, CartStatus
+from ..models.enums import CartType, CartStatus, normalize_cart_status_value
 from ..models.wms_operation_session import WmsOperationSession
 from ..models.wms_packing_session import WmsPackingSession
 from ..models.app_user import AppUser
@@ -29,20 +29,25 @@ from .esp_scan_codes import (
 )
 from .label_pdf_generation_log import log_label_pdf_flow, log_label_pdf_stage
 from .label_render_service import build_label_pdf, template_json_to_dict
+from .cart_capacity import build_capacity_snapshot
+from .cart_capacity.profile import normalize_capacity_strategy
+
 logger = logging.getLogger(__name__)
 
 # Fallback volume per unit when product volume is missing (avoid 0% fill for assigned orders)
 
 
-def _norm_capacity_mode(val):  # Enum or str -> str
-    if val is None:
-        return "volume"
-    if hasattr(val, "value"):
-        return str(val.value).lower()
-    return str(val).lower() if str(val).lower() in ("volume", "orders", "mixed") else "volume"
-
-
 _ORDER_VOLUME_FALLBACK_DM3 = 0.05
+
+
+def _cart_capacity_fields(db: Session, cart: Cart) -> dict:
+    snap = build_capacity_snapshot(db, cart).to_dict()
+    return {
+        "capacity": snap,
+        "capacity_strategy": getattr(cart, "capacity_strategy", None),
+        "capacity_orders": getattr(cart, "capacity_orders", None),
+        "capacity_volume": getattr(cart, "capacity_volume", None),
+    }
 
 
 def _wms_pick_stats_for_cart(db: Session, cart_id: int) -> dict:
@@ -491,8 +496,12 @@ class CartService:
             total_volume=round(vol, 2),
             type=CartType.BULK,
             status=CartStatus.AVAILABLE.value,
-            capacity_mode=_norm_capacity_mode(getattr(data, "capacity_mode", None)),
-            max_orders=getattr(data, "max_orders", None),
+            capacity_strategy=normalize_capacity_strategy(
+                getattr(data, "capacity_strategy", None),
+                cart_type="BULK",
+            ).value,
+            capacity_orders=getattr(data, "capacity_orders", None),
+            capacity_volume=getattr(data, "capacity_volume", None),
         )
         self.db.add(new_cart)
         self.db.flush()
@@ -525,8 +534,12 @@ class CartService:
             type=CartType.MULTI,
             total_volume=0,
             status=CartStatus.AVAILABLE.value,
-            capacity_mode=_norm_capacity_mode(getattr(data, "capacity_mode", None)),
-            max_orders=getattr(data, "max_orders", None),
+            capacity_strategy=normalize_capacity_strategy(
+                getattr(data, "capacity_strategy", None),
+                cart_type="MULTI",
+            ).value,
+            capacity_orders=getattr(data, "capacity_orders", None),
+            capacity_volume=getattr(data, "capacity_volume", None),
         )
         self.db.add(cart)
         self.db.flush()
@@ -627,7 +640,7 @@ class CartService:
             raw_type = cart.type.value if hasattr(cart.type, 'value') else str(cart.type)
             clean_type = raw_type.split('.')[-1].upper()
             raw_status = cart.status.value if hasattr(cart.status, 'value') else str(cart.status)
-            clean_status = raw_status.split('.')[-1].upper()
+            clean_status = normalize_cart_status_value(raw_status.split('.')[-1])
             orders_ssot = _orders_for_cart_preview(self.db, cart)
             s = stats_by_cart.get(int(cart.id)) or {
                 "orders_count": 0,
@@ -672,8 +685,7 @@ class CartService:
                 "sections_count": s["sections_count"],
                 "occupied_sections": s["occupied_sections"],
                 "percent_used": s["percent_used"],
-                "capacity_mode": getattr(cart, "capacity_mode", None) or "volume",
-                "max_orders": getattr(cart, "max_orders", None),
+                **_cart_capacity_fields(self.db, cart),
                 **assignment,
                 **pick_extra,
             }
@@ -791,8 +803,7 @@ class CartService:
             "sections_count": stats.get("sections_count"),
             "occupied_sections": stats.get("baskets_used"),
             "percent_used": stats.get("percent_used"),
-            "capacity_mode": getattr(cart, "capacity_mode", None) or "volume",
-            "max_orders": getattr(cart, "max_orders", None),
+            **_cart_capacity_fields(self.db, cart),
             **assignment,
             **pick_extra,
         }
@@ -1342,30 +1353,47 @@ class CartService:
                             changes.append(("total_volume", old_vol, new_vol))
                 break
 
-        # capacity_mode, max_orders
-        if "capacity_mode" in update_data:
-            val = update_data["capacity_mode"]
+        # capacity_strategy, capacity_orders, capacity_volume
+        if "capacity_strategy" in update_data:
+            val = update_data["capacity_strategy"]
             if val is not None:
-                new_m = _norm_capacity_mode(val)
-                old_m = getattr(cart, "capacity_mode", None) or "volume"
-                if old_m != new_m:
-                    cart.capacity_mode = new_m
-                    changes.append(("capacity_mode", old_m, new_m))
-        if "max_orders" in update_data:
-            val = update_data["max_orders"]
-            old_max_ord = getattr(cart, "max_orders", None)
+                raw_type = cart.type.value if hasattr(cart.type, "value") else str(cart.type)
+                clean_type = str(raw_type).split(".")[-1].upper()
+                new_s = normalize_capacity_strategy(val, cart_type=clean_type).value
+                old_s = getattr(cart, "capacity_strategy", None)
+                if old_s != new_s:
+                    cart.capacity_strategy = new_s
+                    changes.append(("capacity_strategy", old_s, new_s))
+        if "capacity_orders" in update_data:
+            val = update_data["capacity_orders"]
+            old_cap_ord = getattr(cart, "capacity_orders", None)
             if val is not None:
                 try:
                     n = int(val)
-                    if n >= 0 and old_max_ord != n:
-                        cart.max_orders = n
-                        changes.append(("max_orders", old_max_ord, n))
+                    if n >= 0 and old_cap_ord != n:
+                        cart.capacity_orders = n
+                        changes.append(("capacity_orders", old_cap_ord, n))
                 except (TypeError, ValueError):
                     pass
             else:
-                if old_max_ord is not None:
-                    cart.max_orders = None
-                    changes.append(("max_orders", old_max_ord, None))
+                if old_cap_ord is not None:
+                    cart.capacity_orders = None
+                    changes.append(("capacity_orders", old_cap_ord, None))
+        if "capacity_volume" in update_data:
+            val = update_data["capacity_volume"]
+            old_cap_vol = getattr(cart, "capacity_volume", None)
+            if val is not None:
+                try:
+                    v = float(val)
+                    if v >= 0 and old_cap_vol != v:
+                        cart.capacity_volume = v
+                        changes.append(("capacity_volume", old_cap_vol, v))
+                except (TypeError, ValueError):
+                    pass
+            else:
+                if old_cap_vol is not None:
+                    cart.capacity_volume = None
+                    changes.append(("capacity_volume", old_cap_vol, None))
 
         # --- Replace basket structure when provided (MULTI carts) ---
         if "baskets" in update_data and update_data["baskets"] is not None:

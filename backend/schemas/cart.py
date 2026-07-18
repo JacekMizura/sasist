@@ -1,6 +1,7 @@
 """
 SCHEMAS: CART
 Dynamiczne koszyki dla MULTI.
+Capacity strategy is independent of Cart.status lifecycle.
 """
 
 from pydantic import BaseModel, Field, field_validator
@@ -11,6 +12,21 @@ from typing import List, Optional
 class CartType(str, Enum):
     MULTI = "MULTI"
     BULK = "BULK"
+
+
+class CapacityStrategy(str, Enum):
+    LIMIT_ORDERS = "LIMIT_ORDERS"
+    LIMIT_VOLUME = "LIMIT_VOLUME"
+    HYBRID_STOP_FIRST = "HYBRID_STOP_FIRST"
+    HYBRID_STOP_VOLUME = "HYBRID_STOP_VOLUME"
+    BASKETS = "BASKETS"
+
+
+class OccupancyState(str, Enum):
+    AVAILABLE = "AVAILABLE"
+    WARNING = "WARNING"
+    FULL = "FULL"
+    OVERFLOW = "OVERFLOW"
 
 
 # ================================
@@ -27,16 +43,6 @@ class BasketCreate(BaseModel):
     height: float = Field(gt=0)
 
     fill_ratio: float = Field(default=0.9, gt=0, le=1)
-
-
-# ================================
-# CAPACITY MODE
-# ================================
-
-class CapacityMode(str, Enum):
-    volume = "volume"
-    orders = "orders"
-    mixed = "mixed"
 
 
 # ================================
@@ -61,9 +67,9 @@ class CartMultiCreate(BaseModel):
         s = str(v).strip()
         return s or None
 
-    capacity_mode: Optional[CapacityMode] = CapacityMode.volume
-    max_orders: Optional[int] = None
-    max_volume_dm3: Optional[float] = None
+    capacity_strategy: Optional[CapacityStrategy] = CapacityStrategy.BASKETS
+    capacity_orders: Optional[int] = None
+    capacity_volume: Optional[float] = None
 
 
 # ================================
@@ -90,9 +96,9 @@ class CartBulkCreate(BaseModel):
     width: float = Field(gt=0)
     height: float = Field(gt=0)
 
-    capacity_mode: Optional[CapacityMode] = CapacityMode.volume
-    max_orders: Optional[int] = None
-    max_volume_dm3: Optional[float] = None
+    capacity_strategy: Optional[CapacityStrategy] = CapacityStrategy.LIMIT_VOLUME
+    capacity_orders: Optional[int] = None
+    capacity_volume: Optional[float] = None
 
 
 # ================================
@@ -110,9 +116,9 @@ class CartUpdate(BaseModel):
     height: Optional[float] = None
     baskets: Optional[List[BasketCreate]] = None
     total_volume_dm3: Optional[float] = None
-    capacity_mode: Optional[str] = None
-    max_orders: Optional[int] = None
-    max_volume_dm3: Optional[float] = None
+    capacity_strategy: Optional[str] = None
+    capacity_orders: Optional[int] = None
+    capacity_volume: Optional[float] = None
 
     @field_validator("code", mode="before")
     @classmethod

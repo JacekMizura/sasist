@@ -14,8 +14,11 @@
 
   "//_section_status": "--- Statusy wózków (pills) ---",
   "statusAvailable": "DOSTĘPNY",
+  "statusAssigned": "PRZYPISANY",
+  "statusPicking": "ZBIERANIE",
+  "statusReadyForPacking": "GOTOWE DO PAKOWANIA",
+  "statusPacking": "PAKOWANIE",
   "statusInUse": "W UŻYCIU",
-  "statusFull": "Gotowe do pakowania",
   "statusUnknown": "—",
 
   "//_section_groups": "--- Grupy i nagłówki list ---",

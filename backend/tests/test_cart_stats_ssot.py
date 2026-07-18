@@ -48,8 +48,8 @@ def test_stats_from_orders_cart_id(db):
         status=CartStatus.PICKING.value,
         total_volume=100.0,
         used_volume=0.0,
-        capacity_mode="orders",
-        max_orders=20,
+        capacity_strategy="LIMIT_ORDERS",
+        capacity_orders=20,
         current_session_id=99,
     )
     db.add(cart)
@@ -78,11 +78,8 @@ def test_stats_from_orders_cart_id(db):
 
     stats = compute_cart_stats(db, cart)
     assert stats["orders_count"] == 10
-    assert stats["products_count"] == 1
-    assert stats["sections_count"] == 1
-    assert stats["occupied_sections"] == 10
-    assert stats["volume_used"] == 10.0
-    assert stats["percent_used"] == 50.0  # 10/20
+    assert stats["percent_used"] == 50.0
+    assert stats["capacity"]["strategy"] == "LIMIT_ORDERS"
 
     api_stats = get_cart_stats_or_404(db, cart.id)
     assert api_stats["orders_count"] == 10
@@ -97,16 +94,12 @@ def test_stats_zero_when_no_orders(db):
         type=CartType.BULK,
         status=CartStatus.AVAILABLE.value,
         total_volume=50.0,
-        capacity_mode="volume",
+        capacity_strategy="LIMIT_VOLUME",
     )
     db.add(cart)
     db.commit()
     stats = compute_cart_stats(db, cart)
-    assert stats == {
-        "orders_count": 0,
-        "products_count": 0,
-        "sections_count": 1,
-        "occupied_sections": 0,
-        "volume_used": 0.0,
-        "percent_used": 0.0,
-    }
+    assert stats["orders_count"] == 0
+    assert stats["volume_used"] == 0.0
+    assert stats["percent_used"] == 0.0
+    assert stats["capacity"]["strategy"] == "LIMIT_VOLUME"

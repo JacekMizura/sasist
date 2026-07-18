@@ -419,75 +419,21 @@ def _apply_capacity_slice(
     candidates: Sequence[Order],
     *,
     on_capacity: CapacityPolicy,
-) -> list[Order]:
+) -> tuple[list[Order], dict[int, int]]:
     """
-    Walidacja pojemności wyłącznie przy starcie PICKING.
-    truncate: weź max ile się mieści; error: CartCapacityExceeded / ValueError.
+    Capacity Engine SSOT at startPicking.
+    Returns (selected_orders, basket_assignments order_id→basket_id).
     """
-    from .cart_capacity_service import (
-        CartCapacityExceeded,
-        assert_cart_orders_capacity,
-        count_orders_on_cart,
-        normalize_capacity_mode,
-    )
+    from .cart_capacity import CartCapacityExceeded, select_orders_for_cart
 
     cand = list(candidates)
     if not cand:
-        return []
-
-    mode = normalize_capacity_mode(getattr(cart, "capacity_mode", None))
-    current = count_orders_on_cart(db, int(cart.id))
-
-    if mode == "orders":
-        max_orders = getattr(cart, "max_orders", None)
-        if max_orders is not None:
-            room = max(0, int(max_orders) - current)
-            if len(cand) > room:
-                if on_capacity == "error" or room <= 0:
-                    raise CartCapacityExceeded(
-                        current_orders=current,
-                        max_orders=int(max_orders),
-                        attempted=len(cand),
-                    )
-                cand = cand[:room]
-
-    if mode in ("volume", "mixed"):
-        cap = float(getattr(cart, "total_volume", None) or 0)
-        if cap > 0:
-            used = float(getattr(cart, "used_volume", None) or 0)
-            kept: list[Order] = []
-            for o in cand:
-                vol = float(getattr(o, "total_volume_dm3", None) or 0)
-                if used + vol > cap + 1e-9:
-                    if on_capacity == "error" and not kept:
-                        raise CartLifecycleError(
-                            f"Objętość zamówień przekracza pojemność wózka "
-                            f"({used + vol:.1f} > {cap:.1f} dm³).",
-                            code="CART_CAPACITY_EXCEEDED",
-                        )
-                    if on_capacity == "error":
-                        break
-                    break
-                kept.append(o)
-                used += vol
-            if on_capacity == "error" and len(kept) < len(cand) and not kept:
-                raise CartLifecycleError(
-                    "Żadne zamówienie nie mieści się w pojemności objętościowej wózka.",
-                    code="CART_CAPACITY_EXCEEDED",
-                )
-            cand = kept if mode == "volume" or kept else cand
-
-    # Ponowna twarda asercja orders (gdy truncate zostawił ok)
-    if mode == "orders" and cand:
-        try:
-            assert_cart_orders_capacity(
-                cart,
-                current_orders=current,
-                incoming_orders=len(cand),
-            )
-        except CartCapacityExceeded:
-            raise
-    return cand
+        return [], {}
+    try:
+        result = select_orders_for_cart(db, cart, cand, on_capacity=on_capacity)
+    except CartCapacityExceeded:
+        raise
+    return list(result.orders), dict(result.basket_assignments)
 
 
 # ---------------------------------------------------------------------------
@@ -641,25 +587,15 @@ def start_picking(
     Capacity walidowana tutaj — nie wcześniej.
     Idempotentne: PICKING + otwarta sesja → zwraca istniejącą (bez nowej historii).
     """
-    # TEMP DIAG: STEP logs — remove after locating production 500
-    logger.info(
-        "START_PICKING STEP 1 enter cart_id=%s orders=%s operator=%s source_status_id=%s",
-        getattr(cart, "id", None),
-        len(orders),
-        operator_user_id,
-        source_status_id,
-    )
     uid = int(operator_user_id)
     if uid <= 0:
         raise CartLifecycleError("Wymagany operator.", code="operator_required")
 
     cart = _lock_cart(db, cart)
-    logger.info("START_PICKING STEP 2 after_lock cart_id=%s status=%s", int(cart.id), get_cart_status(cart).value)
     st = get_cart_status(cart)
     if st == CartStatus.PICKING:
         sess = find_open_picking_session(db, cart=cart)
         if sess is not None:
-            logger.info("START_PICKING STEP 2b idempotent_existing_session session_id=%s", int(sess.id))
             return sess
         raise SessionNotFoundError("Status PICKING bez aktywnej sesji — użyj cancel lub heal.")
 
@@ -667,7 +603,6 @@ def start_picking(
         existing = getattr(cart, "assigned_user_id", None)
         if existing is not None and int(existing) != uid:
             try:
-                logger.info("START_PICKING STEP 2c write double_claim_attempt event")
                 _record_event(
                     db,
                     cart,
@@ -697,10 +632,6 @@ def start_picking(
     existing_orders = _orders_on_cart(db, int(cart.id))
     if existing_orders:
         try:
-            logger.info(
-                "START_PICKING STEP 3 clear_premature_orders count=%s",
-                len(existing_orders),
-            )
             for o in existing_orders:
                 clear_order_picking_session_context(o)
                 db.add(o)
@@ -715,19 +646,17 @@ def start_picking(
 
     free_candidates = [o for o in orders if getattr(o, "cart_id", None) is None]
 
-    selected = _apply_capacity_slice(db, cart, free_candidates, on_capacity=on_capacity)
-    logger.info(
-        "START_PICKING STEP 4 capacity_slice selected=%s free_candidates=%s",
-        len(selected),
-        len(free_candidates),
+    selected, basket_assignments = _apply_capacity_slice(
+        db, cart, free_candidates, on_capacity=on_capacity
     )
     if not selected and free_candidates:
-        from .cart_capacity_service import CartCapacityExceeded
+        from .cart_capacity import CartCapacityExceeded
 
         raise CartCapacityExceeded(
             current_orders=0,
-            max_orders=int(getattr(cart, "max_orders", None) or 0),
+            capacity_orders=int(getattr(cart, "capacity_orders", None) or 0),
             attempted=len(free_candidates),
+            strategy=str(getattr(cart, "capacity_strategy", None) or ""),
         )
     if not selected:
         raise CartLifecycleError(
@@ -747,7 +676,6 @@ def start_picking(
     }
 
     try:
-        logger.info("START_PICKING STEP 5 create_WmsOperationSession cart_id=%s", cid)
         sess = WmsOperationSession(
             tenant_id=tid,
             warehouse_id=wid,
@@ -762,14 +690,12 @@ def start_picking(
             metadata_json=_dump_meta(meta),
         )
         db.add(sess)
-        logger.info("START_PICKING STEP 6 flush_session")
         db.flush()
     except Exception:
         logger.exception("START_PICKING FAIL at create_WmsOperationSession/flush")
         raise
 
     sid = int(sess.id)
-    logger.info("START_PICKING STEP 7 assign_cart_fields session_id=%s", sid)
     cart.current_session_id = sid
     cart.assigned_user_id = uid
     cart.started_at = now
@@ -780,11 +706,21 @@ def start_picking(
 
     used_vol = 0.0
     try:
-        logger.info("START_PICKING STEP 8 assign_orders count=%s", len(selected))
+        baskets_by_id = {
+            int(b.id): b for b in (getattr(cart, "baskets", None) or [])
+        }
         for o in selected:
             o.cart_id = cid
             if hasattr(o, "picking_session_id"):
                 o.picking_session_id = sid
+            bid = basket_assignments.get(int(o.id))
+            if bid is not None:
+                o.basket_id = int(bid)
+                basket = baskets_by_id.get(int(bid))
+                if basket is not None:
+                    basket.order_id = int(o.id)
+                    basket.used_volume = float(getattr(o, "total_volume_dm3", None) or 0)
+                    db.add(basket)
             on_picking_started(o)
             fs = (getattr(o, "fulfillment_state", None) or "").strip().upper()
             if fs in ("", FS_PICKING, "PARTIAL"):
@@ -802,7 +738,6 @@ def start_picking(
         raise
 
     try:
-        logger.info("START_PICKING STEP 9 apply_cart_transition → PICKING")
         # Jedna historia: AVAILABLE|ASSIGNED → PICKING (nigdy AVAILABLE→ASSIGNED→PICKING w tym wywołaniu)
         apply_cart_transition(
             db,
@@ -820,7 +755,6 @@ def start_picking(
         raise
 
     try:
-        logger.info("START_PICKING STEP 10 _record_event picking_started")
         _record_event(
             db,
             cart,
@@ -834,19 +768,11 @@ def start_picking(
         raise
 
     try:
-        logger.info("START_PICKING STEP 11 _after_mutation (flush+invariants)")
         _after_mutation(db, cart)
     except Exception:
         logger.exception("START_PICKING FAIL at _after_mutation")
         raise
 
-    logger.info(
-        "START_PICKING STEP 12 done cart_id=%s session_id=%s orders=%s operator=%s",
-        cid,
-        sid,
-        [int(o.id) for o in selected],
-        uid,
-    )
     logger.info(
         "cart_lifecycle.start_picking cart_id=%s session_id=%s orders=%s operator=%s",
         cid,
@@ -1269,8 +1195,6 @@ def heal_carts_with_orphaned_picking_sessions(db: Session) -> int:
         if st in (
             CartStatus.READY_FOR_PACKING,
             CartStatus.PACKING,
-            CartStatus.FULL,
-            CartStatus.SERVICE,
         ):
             continue
         cur_sid = getattr(cart, "current_session_id", None)

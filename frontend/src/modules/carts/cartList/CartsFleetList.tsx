@@ -16,6 +16,7 @@ import { CartsListPageHeader } from "../CartsListPageHeader";
 import { CartsFleetGroupActions } from "./CartsFleetGroupActions";
 import { CartsFleetGroupSection } from "./CartsFleetGroupSection";
 import { CartsFleetSummaryKpi } from "./CartsFleetSummaryKpi";
+import type { CapacitySnapshot } from "../../../types/cartCapacity";
 import { computeCartsFleetSummary } from "./cartsFleetSummary";
 
 const TENANT_ID = 1;
@@ -41,9 +42,10 @@ type CartItemType = {
   total_orders?: number;
   total_products?: number;
   baskets_used?: number;
-  capacity_mode?: string;
-  max_orders?: number | null;
-  max_volume_dm3?: number;
+  capacity?: CapacitySnapshot | null;
+  capacity_strategy?: string;
+  capacity_orders?: number | null;
+  capacity_volume?: number | null;
   wms_picking_order_count?: number;
   wms_picking_product_count?: number;
   wms_picking_quantity?: number;
@@ -319,9 +321,10 @@ export function CartsFleetList({ cartType, refreshTrigger = 0, onAddNew, onEdit 
                         total_orders={c.total_orders}
                         total_products={c.total_products}
                         baskets_used={c.baskets_used}
-                        capacity_mode={c.capacity_mode}
-                        max_orders={c.max_orders}
-                        max_volume_dm3={c.max_volume_dm3}
+                        capacity={c.capacity}
+                        capacity_strategy={c.capacity_strategy}
+                        capacity_orders={c.capacity_orders}
+                        capacity_volume={c.capacity_volume}
                         wms_picking_order_count={c.wms_picking_order_count}
                         wms_picking_product_count={c.wms_picking_product_count}
                         wms_picking_quantity={c.wms_picking_quantity}

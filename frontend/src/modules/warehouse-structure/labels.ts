@@ -1,17 +1,17 @@
 /** Polskie etykiety UI — struktura magazynu (bez nazw technicznych w interfejsie). */
 
-export type CapacityMode = "volume" | "orders" | "mixed";
+import {
+  CAPACITY_STRATEGY_OPTIONS,
+  type CapacityStrategyValue,
+} from "../../types/cartCapacity";
 
-export const CAPACITY_MODE_OPTIONS: { value: CapacityMode; label: string; hint: string }[] = [
-  { value: "volume", label: "Objętość", hint: "Limit wg zajętej objętości (dm³)" },
-  { value: "orders", label: "Zamówienia", hint: "Limit wg liczby przypisanych zamówień" },
-  { value: "mixed", label: "Mieszany", hint: "Oba limity muszą być spełnione" },
-];
-
-export function capacityModeLabel(mode: string | null | undefined): string {
-  const m = (mode || "volume").toLowerCase() as CapacityMode;
-  return CAPACITY_MODE_OPTIONS.find((o) => o.value === m)?.label ?? "Objętość";
+export function capacityStrategyLabel(strategy: string | null | undefined): string {
+  const key = String(strategy ?? "").trim().toUpperCase();
+  const opt = CAPACITY_STRATEGY_OPTIONS.find((o) => o.value === key);
+  return opt?.label ?? (key || "—");
 }
+
+export type { CapacityStrategyValue };
 
 const CARRIER_STATUS_PL: Record<string, string> = {
   ACTIVE: "Aktywny",

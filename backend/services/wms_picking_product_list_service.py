@@ -423,12 +423,6 @@ def bootstrap_start_picking_if_needed(
         raise ValueError("Nie znaleziono wózka.")
 
     st = get_cart_status(cart)
-    logger.info(
-        "START_PICKING STEP bootstrap cart_id=%s status=%s operator=%s",
-        int(cart_id),
-        st.value,
-        operator_user_id,
-    )
     if st == CartStatus.PICKING:
         return find_open_picking_session(db, cart=cart)
     if st not in (CartStatus.AVAILABLE, CartStatus.ASSIGNED):
@@ -457,17 +451,10 @@ def bootstrap_start_picking_if_needed(
             .all()
         )
 
-    logger.info(
-        "START_PICKING STEP bootstrap orders_ready count=%s order_ids_sample=%s",
-        len(orders),
-        [int(o.id) for o in orders[:5]],
-    )
     if not orders:
-        logger.info("START_PICKING STEP bootstrap claim_cart_only (no orders)")
         claim_cart(db, cart=cart, operator_user_id=int(operator_user_id))
         return None
 
-    logger.info("START_PICKING STEP bootstrap → start_picking")
     return start_picking(
         db,
         cart=cart,

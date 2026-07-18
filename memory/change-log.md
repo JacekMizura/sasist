@@ -1,11 +1,37 @@
 # Change log
 
+## 2026-07-18 — Capacity Engine (target architecture)
+
+- Nowy SSOT: `backend/services/cart_capacity/` (strategie LIMIT_ORDERS / LIMIT_VOLUME / HYBRID_* / BASKETS).
+- Lifecycle `Cart.status` nietknięty; occupancy (`OccupancyState`) tylko wyliczane.
+- Model: `capacity_strategy` / `capacity_orders` / `capacity_volume`; drop `capacity_mode` / `max_orders`.
+- Usunięto `cart_capacity_service.py`; `_apply_capacity_slice` → engine; optimizer/basket best-fit → engine.
+- FE: StatusPill = lifecycle; CartCapacitySection = pojemność; edytory strategii.
+
+## 2026-07-18 — Capacity Engine architecture (design)
+
+- Status wózka = wyłącznie lifecycle; zapełnienie = osobna logika strategii.
+- Docelowo jeden Capacity Engine: LIMIT_ORDERS / LIMIT_VOLUME / HYBRID (+ BASKETS dla MULTI).
+- Szczegóły: `memory/capacity-engine-architecture.md`.
+
+## 2026-07-18 — Frontend cart capacity UI
+
+- Fleet list/card/detail/editors: `capacity_strategy` + `CapacitySnapshot`; `StatusPill` (lifecycle) + `CartCapacitySection` (occupancy).
+- Removed `CapacityModeFields.tsx`; `capacityStrategyLabel` in `labels.ts`.
+
+## 2026-07-18 — CartStatus variant B (clean enum rebuild)
+
+- Docelowy enum: AVAILABLE | ASSIGNED | PICKING | READY_FOR_PACKING | PACKING.
+- PG: `migrate_cartstatus_enum_clean` — nowy typ → remap → swap kolumny → drop starego → rename (bez ADD VALUE).
+- ORM: `CartStatus` tylko 5 członków; legacy tylko w `CARTSTATUS_LEGACY_TO_CANONICAL` / `normalize_cart_status_value`.
+- FE: `types/cartStatus.ts`, StatusPill, fleet summary, locale keys bez FULL/PEŁNY.
+- Usunięto TEMP `START_PICKING STEP` diagnostykę (po ustaleniu root cause enum).
+
 ## 2026-07-18 — Fix cartstatus PG enum (PICKING missing)
 
 - Root cause: `InvalidTextRepresentation: invalid input value for enum cartstatus: "PICKING"`.
 - Kod używa lifecycle: AVAILABLE/ASSIGNED/PICKING/READY_FOR_PACKING/PACKING; stary enum miał PL lub IN_PROGRESS.
-- Fix: `ensure_cartstatus_enum` — `ALTER TYPE cartstatus ADD VALUE` (bez cast do VARCHAR); remap PL/IN_PROGRESS → kanoniczne.
-- Usunięto próbę `status→VARCHAR` z `ensure_carts_picking_lifecycle_columns`.
+- **Superseded by variant B** (clean rebuild instead of ADD VALUE).
 
 ## 2026-07-17 — Fix Cart FOR UPDATE + joinedload (PostgreSQL)
 
