@@ -303,10 +303,27 @@ def admin_release_cart_endpoint(
     Awaryjne zwolnienie wózka z panelu administracyjnego.
     Wyłącznie przez CartLifecycleService — bez lokalnych UPDATE poza SSOT.
     """
-    cart = db.query(Cart).filter(Cart.id == int(cart_id)).first()
-    if cart is None:
-        raise HTTPException(status_code=404, detail="Wózek nie istnieje")
+    import logging
+    import traceback as _tb
+
+    _log = logging.getLogger("admin_release.diag")
+    step = 0
+
+    def _step(n: int, msg: str) -> None:
+        nonlocal step
+        step = n
+        _log.error("ADMIN_RELEASE STEP %s cart_id=%s %s", n, cart_id, msg)
+
     try:
+        _step(1, f"endpoint enter actor_id={getattr(actor, 'id', None)} ack={getattr(body, 'acknowledge', None)}")
+        cart = db.query(Cart).filter(Cart.id == int(cart_id)).first()
+        _step(2, f"cart loaded id={getattr(cart, 'id', None)} status={getattr(cart, 'status', None)}")
+        if cart is None:
+            raise HTTPException(status_code=404, detail="Wózek nie istnieje")
+        _step(
+            3,
+            f"calling admin_release_cart tenant={cart.tenant_id} wh={cart.warehouse_id}",
+        )
         result = admin_release_cart(
             db,
             cart_id=int(cart_id),
@@ -315,17 +332,55 @@ def admin_release_cart_endpoint(
             admin_user_id=int(actor.id),
             acknowledge=bool(body.acknowledge),
         )
+        _step(4, f"admin_release_cart returned keys={list(result.keys())}")
         db.commit()
-        return {"status": "OK", **result}
+        _step(5, "db.commit OK")
+        out = {"status": "OK", **result}
+        _step(6, "response built")
+        return out
     except InvalidCartTransitionError as e:
+        _log.error(
+            "ADMIN_RELEASE FAIL AT STEP %s (InvalidCartTransition) cart_id=%s\n%s",
+            step,
+            cart_id,
+            _tb.format_exc(),
+        )
         db.rollback()
         raise HTTPException(status_code=409, detail=str(e.message or e)) from e
     except CartLifecycleError as e:
+        _log.error(
+            "ADMIN_RELEASE FAIL AT STEP %s (CartLifecycleError) cart_id=%s\n%s",
+            step,
+            cart_id,
+            _tb.format_exc(),
+        )
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e.message or e)) from e
-    except Exception:
-        db.rollback()
+    except HTTPException:
         raise
+    except Exception as e:
+        tb_list = _tb.extract_tb(e.__traceback__)
+        last = tb_list[-1] if tb_list else None
+        _log.error(
+            "ADMIN_RELEASE FAIL AT STEP %s cart_id=%s\n%s",
+            step,
+            cart_id,
+            _tb.format_exc(),
+        )
+        db.rollback()
+        # TEMP diagnostics: surface step + exception in 500 body (remove after fix)
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "message": "ADMIN_RELEASE FAIL",
+                "step": step,
+                "exception_type": type(e).__name__,
+                "exception": str(e)[:800],
+                "file": last.filename if last else None,
+                "line": last.lineno if last else None,
+                "func": last.name if last else None,
+            },
+        ) from e
 
 
 # Slash-safe: proxy / axios may strip or keep trailing slash → both must resolve (no 307→404).

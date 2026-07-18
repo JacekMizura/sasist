@@ -1244,142 +1244,194 @@ def admin_release_cart(
       PICKING z potwierdzonymi → anuluj kompletację, potem zwolnij
       READY_FOR_PACKING / PACKING → blokada (osobny komunikat)
     """
-    if not acknowledge:
-        raise CartLifecycleError(
-            "Potwierdź, że rozumiesz konsekwencje tej operacji.",
-            code="AcknowledgeRequired",
-        )
+    import traceback as _tb
 
-    cart = _lock_cart_by_keys(
-        db,
-        cart_id=int(cart_id),
-        tenant_id=int(tenant_id),
-        warehouse_id=int(warehouse_id),
-    )
-    st = get_cart_status(cart)
+    step = 10
 
-    if st == CartStatus.READY_FOR_PACKING:
-        raise InvalidCartTransitionError(
-            ADMIN_RELEASE_READY_MSG,
-            from_status=st.value,
-        )
-    if st == CartStatus.PACKING:
-        raise InvalidCartTransitionError(
-            ADMIN_RELEASE_PACKING_MSG,
-            from_status=st.value,
-        )
+    def _step(n: int, msg: str) -> None:
+        nonlocal step
+        step = n
+        logger.error("ADMIN_RELEASE STEP %s cart_id=%s %s", n, cart_id, msg)
 
-    from .cart_lifecycle_extensions import count_confirmed_picks_on_cart
-
-    orders_before = _orders_on_cart(db, int(cart_id))
-    orders_n = len(orders_before)
     try:
-        picks_n = count_confirmed_picks_on_cart(db, int(cart_id))
-    except Exception:
-        logger.exception("admin_release pick count failed cart_id=%s", int(cart_id))
-        picks_n = 0
-    has_operator = bool(
-        getattr(cart, "assigned_user_id", None) or getattr(cart, "packing_user_id", None)
-    )
-    has_session = bool(getattr(cart, "current_session_id", None)) or (
-        find_open_picking_session(db, cart=cart) is not None
-    )
+        _step(10, f"service enter ack={acknowledge} admin={admin_user_id}")
+        if not acknowledge:
+            raise CartLifecycleError(
+                "Potwierdź, że rozumiesz konsekwencje tej operacji.",
+                code="AcknowledgeRequired",
+            )
 
-    if (
-        st == CartStatus.AVAILABLE
-        and not has_operator
-        and orders_n == 0
-        and not has_session
-    ):
-        return {
-            "cart_id": int(cart_id),
-            "cart_status": CartStatus.AVAILABLE.value,
-            "idempotent": True,
-            "orders_detached": 0,
-            "picking_cancelled": False,
-        }
-
-    picking_cancelled = False
-    orders_detached = 0
-
-    if st in (CartStatus.ASSIGNED, CartStatus.PICKING):
-        if st == CartStatus.PICKING and picks_n > 0:
-            picking_cancelled = True
-        out = cancel_picking(
-            db,
-            cart_id=int(cart_id),
-            tenant_id=int(tenant_id),
-            warehouse_id=int(warehouse_id),
-            operator_user_id=int(admin_user_id),
-            reason=ADMIN_RELEASE_REASON,
-        )
-        orders_detached = int(out.get("orders_restored") or 0)
+        _step(11, "lock cart FOR UPDATE")
         cart = _lock_cart_by_keys(
             db,
             cart_id=int(cart_id),
             tenant_id=int(tenant_id),
             warehouse_id=int(warehouse_id),
         )
-    else:
-        # AVAILABLE z artefaktami / inny stan awaryjny — odłącz i zwolnij w SSOT
-        for o in orders_before:
-            clear_order_picking_session_context(o)
-            db.add(o)
-            orders_detached += 1
-        _close_open_picking_session(db, cart)
-        release_cart(db, cart=cart, reason=ADMIN_RELEASE_REASON, _already_locked=True)
+        st = get_cart_status(cart)
+        _step(
+            12,
+            f"locked status={st.value} assigned={getattr(cart, 'assigned_user_id', None)} "
+            f"session={getattr(cart, 'current_session_id', None)}",
+        )
 
-    artifacts = _detach_cart_pick_artifacts(db, int(cart_id))
-    db.refresh(cart)
+        if st == CartStatus.READY_FOR_PACKING:
+            raise InvalidCartTransitionError(
+                ADMIN_RELEASE_READY_MSG,
+                from_status=st.value,
+            )
+        if st == CartStatus.PACKING:
+            raise InvalidCartTransitionError(
+                ADMIN_RELEASE_PACKING_MSG,
+                from_status=st.value,
+            )
 
-    meta_base = {
-        "reason": "Ręczne zwolnienie z panelu administracyjnego.",
-        "orders_detached": orders_detached,
-        "picking_cancelled": picking_cancelled,
-        "confirmed_picks_before": picks_n,
-        **artifacts,
-    }
-    _record_event(
-        db,
-        cart,
-        "admin_cart_released",
-        operator_user_id=int(admin_user_id),
-        metadata=meta_base,
-    )
-    if orders_detached > 0:
+        from .cart_lifecycle_extensions import count_confirmed_picks_on_cart
+
+        _step(13, "query orders_on_cart")
+        orders_before = _orders_on_cart(db, int(cart_id))
+        orders_n = len(orders_before)
+        _step(14, f"orders_n={orders_n}")
+        try:
+            _step(15, "count_confirmed_picks_on_cart")
+            picks_n = count_confirmed_picks_on_cart(db, int(cart_id))
+            _step(16, f"picks_n={picks_n}")
+        except Exception:
+            logger.exception("admin_release pick count failed cart_id=%s", int(cart_id))
+            picks_n = 0
+            _step(16, "picks_n=0 (count failed, recovered)")
+        has_operator = bool(
+            getattr(cart, "assigned_user_id", None) or getattr(cart, "packing_user_id", None)
+        )
+        has_session = bool(getattr(cart, "current_session_id", None)) or (
+            find_open_picking_session(db, cart=cart) is not None
+        )
+        _step(17, f"has_operator={has_operator} has_session={has_session}")
+
+        if (
+            st == CartStatus.AVAILABLE
+            and not has_operator
+            and orders_n == 0
+            and not has_session
+        ):
+            _step(18, "idempotent no-op AVAILABLE")
+            return {
+                "cart_id": int(cart_id),
+                "cart_status": CartStatus.AVAILABLE.value,
+                "idempotent": True,
+                "orders_detached": 0,
+                "picking_cancelled": False,
+            }
+
+        picking_cancelled = False
+        orders_detached = 0
+
+        if st in (CartStatus.ASSIGNED, CartStatus.PICKING):
+            if st == CartStatus.PICKING and picks_n > 0:
+                picking_cancelled = True
+            _step(20, f"cancel_picking reason={ADMIN_RELEASE_REASON} picking_cancelled={picking_cancelled}")
+            out = cancel_picking(
+                db,
+                cart_id=int(cart_id),
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+                operator_user_id=int(admin_user_id),
+                reason=ADMIN_RELEASE_REASON,
+            )
+            orders_detached = int(out.get("orders_restored") or 0)
+            _step(21, f"cancel_picking done orders_detached={orders_detached} out={out}")
+            _step(22, "re-lock cart after cancel")
+            cart = _lock_cart_by_keys(
+                db,
+                cart_id=int(cart_id),
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+            )
+            _step(23, f"re-locked status={get_cart_status(cart).value}")
+        else:
+            _step(30, f"orphan/AVAILABLE path status={st.value}")
+            for o in orders_before:
+                clear_order_picking_session_context(o)
+                db.add(o)
+                orders_detached += 1
+            _step(31, f"orders cleared n={orders_detached}")
+            closed = _close_open_picking_session(db, cart)
+            _step(32, f"session closed={closed}")
+            _step(33, "release_cart")
+            release_cart(db, cart=cart, reason=ADMIN_RELEASE_REASON, _already_locked=True)
+            _step(34, "release_cart done")
+
+        _step(40, "detach pick artifacts")
+        artifacts = _detach_cart_pick_artifacts(db, int(cart_id))
+        _step(41, f"artifacts={artifacts}")
+        _step(42, "db.refresh(cart)")
+        db.refresh(cart)
+        _step(43, f"refreshed status={getattr(cart, 'status', None)}")
+
+        meta_base = {
+            "reason": "Ręczne zwolnienie z panelu administracyjnego.",
+            "orders_detached": orders_detached,
+            "picking_cancelled": picking_cancelled,
+            "confirmed_picks_before": picks_n,
+            **artifacts,
+        }
+        _step(50, "record admin_cart_released")
         _record_event(
             db,
             cart,
-            "admin_orders_detached",
+            "admin_cart_released",
             operator_user_id=int(admin_user_id),
-            description=f"Odłączono {orders_detached} zamówień od wózka.",
-            metadata={"orders_detached": orders_detached},
+            metadata=meta_base,
         )
-    if picking_cancelled:
-        _record_event(
-            db,
-            cart,
-            "admin_picking_cancelled",
-            operator_user_id=int(admin_user_id),
-            metadata={"confirmed_picks_before": picks_n},
-        )
+        _step(51, "admin_cart_released flushed")
+        if orders_detached > 0:
+            _step(52, "record admin_orders_detached")
+            _record_event(
+                db,
+                cart,
+                "admin_orders_detached",
+                operator_user_id=int(admin_user_id),
+                description=f"Odłączono {orders_detached} zamówień od wózka.",
+                metadata={"orders_detached": orders_detached},
+            )
+            _step(53, "admin_orders_detached flushed")
+        if picking_cancelled:
+            _step(54, "record admin_picking_cancelled")
+            _record_event(
+                db,
+                cart,
+                "admin_picking_cancelled",
+                operator_user_id=int(admin_user_id),
+                metadata={"confirmed_picks_before": picks_n},
+            )
+            _step(55, "admin_picking_cancelled flushed")
 
-    _after_mutation(db, cart)
-    logger.info(
-        "cart_lifecycle.admin_release cart_id=%s admin=%s orders=%s cancelled=%s",
-        int(cart_id),
-        int(admin_user_id),
-        orders_detached,
-        picking_cancelled,
-    )
-    return {
-        "cart_id": int(cart_id),
-        "cart_status": CartStatus.AVAILABLE.value,
-        "idempotent": False,
-        "orders_detached": orders_detached,
-        "picking_cancelled": picking_cancelled,
-        **artifacts,
-    }
+        _step(60, "_after_mutation")
+        _after_mutation(db, cart)
+        _step(61, "done")
+        logger.info(
+            "cart_lifecycle.admin_release cart_id=%s admin=%s orders=%s cancelled=%s",
+            int(cart_id),
+            int(admin_user_id),
+            orders_detached,
+            picking_cancelled,
+        )
+        return {
+            "cart_id": int(cart_id),
+            "cart_status": CartStatus.AVAILABLE.value,
+            "idempotent": False,
+            "orders_detached": orders_detached,
+            "picking_cancelled": picking_cancelled,
+            **artifacts,
+        }
+    except Exception:
+        logger.error(
+            "ADMIN_RELEASE FAIL AT STEP %s cart_id=%s\n%s",
+            step,
+            cart_id,
+            _tb.format_exc(),
+        )
+        raise
 
 
 # ---------------------------------------------------------------------------
