@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-07-18 — shortage multi-order / remaining-first audit
+
+- Audyt: FE wysyłało `order_item_id` FIFO → shortage tylko na 1 linii; alokacja budgetem zjadała `declarable` (konwersja picków) przed remaining.
+- Fix: product-level shortage bez `order_item_id` (tylko recovery); Orders `order_by(id)`; pass1=remaining, pass2=pick→shortage; PARTIAL gdy rem>0 i (picked|miss)>0.
+- Tests: `test_wms_picking_shortage_multi_order.py`.
+
 ## 2026-07-18 — shortage resolved ≠ DO POBRANIA / ≠ ZEBRANO
 
 - ROOT: lista FE liczyła `remaining = total − picked` (ignorując `missing`); `completed` renderowane zawsze jako zielone ZEBRANO; powrót z detail bez refresh → stale „DO POBRANIA” + „BRAK LOKALIZACJI”.

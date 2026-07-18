@@ -38,7 +38,15 @@ class TestPickingLineResolutionStatus(unittest.TestCase):
             "ACTIVE",
         )
         self.assertEqual(
+            _picking_line_resolution_status(remaining_to_pick=4, picked_quantity=0, missing_quantity=1),
+            "PARTIAL",
+        )
+        self.assertEqual(
             _picking_line_resolution_status(remaining_to_pick=2, picked_quantity=3, missing_quantity=0),
+            "PARTIAL",
+        )
+        self.assertEqual(
+            _picking_line_resolution_status(remaining_to_pick=2, picked_quantity=2, missing_quantity=1),
             "PARTIAL",
         )
         self.assertEqual(

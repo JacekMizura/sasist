@@ -78,6 +78,7 @@ class ReportShortagePartialPickIntegrationTests(unittest.TestCase):
             q = MagicMock()
             q.filter.return_value = q
             q.options.return_value = q
+            q.order_by.return_value = q
             from backend.models.cart import Cart
             from backend.models.order import Order
             from backend.models.order_item import OrderItem
@@ -88,6 +89,7 @@ class ReportShortagePartialPickIntegrationTests(unittest.TestCase):
                 q.first.return_value = cart
             elif model is Order:
                 q.filter.return_value.all.return_value = [order]
+                q.all.return_value = [order]
                 q.first.return_value = order
             else:
                 q.first.return_value = None

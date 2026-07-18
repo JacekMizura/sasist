@@ -694,12 +694,16 @@ def _picking_line_resolution_status(
 
     ``completed=True`` (remaining≈0) obejmuje zarówno pełne zebranie, jak i pełny brak —
     ``resolution_status`` rozróżnia te przypadki (SHORTAGE ≠ COMPLETED_PICK).
+
+    Przy remaining>0: PARTIAL gdy jest jakikolwiek postęp (picked lub shortage), inaczej ACTIVE.
     """
     rem = float(remaining_to_pick or 0)
     miss = float(missing_quantity or 0)
     picked = float(picked_quantity or 0)
     if rem > 1e-9:
-        return "PARTIAL" if picked > 1e-9 else "ACTIVE"
+        if picked > 1e-9 or miss > 1e-9:
+            return "PARTIAL"
+        return "ACTIVE"
     if miss > 1e-9:
         return "SHORTAGE"
     return "COMPLETED_PICK"
@@ -2536,6 +2540,7 @@ def report_wms_picking_product_shortage(
             db.query(Order)
             .options(joinedload(Order.items).joinedload(OrderItem.product))
             .filter(Order.id.in_(session_scope_ids))
+            .order_by(Order.id.asc())
             .all()
         )
     else:
@@ -2570,6 +2575,7 @@ def report_wms_picking_product_shortage(
             db.query(Order)
             .options(joinedload(Order.items).joinedload(OrderItem.product))
             .filter(Order.id.in_(session_scope_ids))
+            .order_by(Order.id.asc())
             .all()
         )
 
@@ -2660,55 +2666,79 @@ def report_wms_picking_product_shortage(
     shortage_by_order: dict[int, float] = defaultdict(float)
     line_audit_rows: list[tuple[Order, OrderItem, float]] = []
 
+    def _apply_shortage_take(o: Order, oi: OrderItem, *, take: float, rem_before: float) -> None:
+        nonlocal remaining_budget
+        if take <= 1e-9:
+            return
+        remaining_budget = max(0.0, remaining_budget - take)
+        shortage_by_order[int(o.id)] += float(take)
+        declared_ln = float(getattr(oi, "wms_shortage_declared_qty", None) or 0.0)
+        oi.wms_shortage_declared_qty = round(declared_ln + take, 6)
+        miss_ln = float(getattr(oi, "wms_picking_line_missing_qty", None) or 0.0)
+        oi.wms_picking_line_missing_qty = round(miss_ln + take, 6)
+        oi.wms_picking_line_status = "missing"
+        need_undo = max(0.0, float(take) - float(rem_before))
+        if need_undo > 1e-9:
+            from .wms_picking_corrections.undo_pick_service import undo_wms_session_picks
+
+            undo_wms_session_picks(
+                db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+                cart_id=cid,
+                product_id=int(oi.product_id),
+                quantity=float(need_undo),
+                location_id=int(location_id) if location_id is not None else None,
+                order_ids=[int(o.id)],
+                order_item_id=int(oi.id),
+                operator_user_id=operator_user_id,
+            )
+        append_event(
+            db,
+            order_item_id=int(oi.id),
+            event_type=FE_MISSING,
+            quantity=float(take),
+            metadata={
+                "cart_id": cid,
+                "source": "wms_report_shortage",
+                "recovery": is_recovery,
+                "replacement": bool(getattr(oi, "replaced_from_order_item_id", None)),
+                "undid_picks_qty": float(need_undo),
+            },
+        )
+        sync_declared_shortage_column_from_missing_events(db, int(oi.id))
+        line_audit_rows.append((o, oi, float(take)))
+
+    # Pass 1: tylko remaining_qty — typowy „Zgłoś brak” nie konwertuje już zebranych sztuk.
     for o in orders:
-        if int(o.id) not in aff_set:
+        if int(o.id) not in aff_set or remaining_budget <= 1e-9:
             continue
         touch_picking_in_progress(o)
         for oi, q in _iter_report_lines(o):
-            rem_line = float(q["declarable_qty"])
-            if rem_line <= 1e-9:
+            if remaining_budget <= 1e-9:
+                break
+            rem_only = float(q["remaining_qty"])
+            if rem_only <= 1e-9:
                 continue
-            take = min(rem_line, remaining_budget)
-            if take <= 1e-9:
-                continue
-            remaining_budget = max(0.0, remaining_budget - take)
-            shortage_by_order[int(o.id)] += float(take)
-            declared_ln = float(q["declared_qty"])
-            oi.wms_shortage_declared_qty = round(declared_ln + take, 6)
-            oi.wms_picking_line_status = "missing"
-            # Cofnij tylko tyle draft picków, ile trzeba, by picked + shortage ≤ required
-            rem_before = float(q["remaining_qty"])
-            need_undo = max(0.0, float(take) - rem_before)
-            if need_undo > 1e-9:
-                from .wms_picking_corrections.undo_pick_service import undo_wms_session_picks
+            take = min(rem_only, remaining_budget)
+            _apply_shortage_take(o, oi, take=take, rem_before=rem_only)
 
-                undo_wms_session_picks(
-                    db,
-                    tenant_id=int(tenant_id),
-                    warehouse_id=int(warehouse_id),
-                    cart_id=cid,
-                    product_id=int(oi.product_id),
-                    quantity=float(need_undo),
-                    location_id=int(location_id) if location_id is not None else None,
-                    order_ids=[int(o.id)],
-                    order_item_id=int(oi.id),
-                    operator_user_id=operator_user_id,
-                )
-            append_event(
-                db,
-                order_item_id=int(oi.id),
-                event_type=FE_MISSING,
-                quantity=float(take),
-                metadata={
-                    "cart_id": cid,
-                    "source": "wms_report_shortage",
-                    "recovery": is_recovery,
-                    "replacement": bool(getattr(oi, "replaced_from_order_item_id", None)),
-                    "undid_picks_qty": float(need_undo),
-                },
-            )
-            sync_declared_shortage_column_from_missing_events(db, int(oi.id))
-            line_audit_rows.append((o, oi, float(take)))
+    # Pass 2: konwersja draft pick → shortage (np. po 1/1, gdy remaining=0).
+    if remaining_budget > 1e-9:
+        for o in orders:
+            if int(o.id) not in aff_set or remaining_budget <= 1e-9:
+                continue
+            touch_picking_in_progress(o)
+            for oi, q in _iter_report_lines(o):
+                if remaining_budget <= 1e-9:
+                    break
+                q2 = _line_shortage_report_quantities(db, oi, cid)
+                rem_left = float(q2["remaining_qty"])
+                convert_cap = max(0.0, float(q2["declarable_qty"]) - rem_left)
+                if convert_cap <= 1e-9:
+                    continue
+                take = min(convert_cap, remaining_budget)
+                _apply_shortage_take(o, oi, take=take, rem_before=rem_left)
 
     for oid in aff_set:
         recompute_order_fulfillment(db, int(oid), commit=False, session_cart_id=cid)

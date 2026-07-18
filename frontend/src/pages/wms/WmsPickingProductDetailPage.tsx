@@ -580,7 +580,11 @@ export default function WmsPickingProductDetailPage() {
         order_ids: detail.orders.map((o) => o.order_id),
         problem_kind: shortageProblemKind === "qty_mismatch" ? "qty_mismatch" : "product_shortage",
         ...(recoveryOrderId != null && recoveryOrderId > 0 ? { recovery_order_id: recoveryOrderId } : {}),
-        ...(lineId != null && lineId > 0 ? { order_item_id: lineId } : {}),
+        // product-level remaining shortage: rozdzielaj FE_MISSING po liniach zamówień (budget).
+        // order_item_id tylko przy dogrywce — inaczej max_declarable = 1 linia FIFO i multi-order FAIL.
+        ...(recoveryOrderId != null && recoveryOrderId > 0 && lineId != null && lineId > 0
+          ? { order_item_id: lineId }
+          : {}),
       });
       const optimistic = applyWmsPickingShortageToDetail(detail, shortageQtyInput);
       applyDetailToState(optimistic);

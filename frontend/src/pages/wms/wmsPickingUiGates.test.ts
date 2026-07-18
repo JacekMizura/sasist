@@ -225,6 +225,33 @@ describe("sortWmsPickingProductLinesPickFlow", () => {
     expect(wmsPickingLineResolutionStatus(rows[0])).toBe("SHORTAGE");
     expect(wmsPickingDisplayProgressParts(rows[0]).remaining).toBe(0);
   });
+
+  it("partial with shortage stays PARTIAL until remaining=0", () => {
+    expect(
+      wmsPickingLineResolutionStatus({
+        total_quantity: 5,
+        picked_quantity: 2,
+        missing_quantity: 1,
+        remaining_to_pick: 2,
+      }),
+    ).toBe("PARTIAL");
+    expect(
+      wmsPickingLineResolutionStatus({
+        total_quantity: 5,
+        picked_quantity: 0,
+        missing_quantity: 1,
+        remaining_to_pick: 4,
+      }),
+    ).toBe("PARTIAL");
+    expect(
+      wmsPickingLineResolutionStatus({
+        total_quantity: 5,
+        picked_quantity: 2,
+        missing_quantity: 3,
+        remaining_to_pick: 0,
+      }),
+    ).toBe("SHORTAGE");
+  });
 });
 
 describe("computeWmsPickingProductLineSessionStats", () => {

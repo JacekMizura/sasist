@@ -152,7 +152,10 @@ export function wmsPickingLineResolutionStatus(row: {
   const rem = wmsPickingRemainingQty(row);
   const miss = wmsPickingLineMissingQty(row as WmsPickingProductLineApi);
   const picked = wmsPickingEffectivePickedQuantity(row);
-  if (rem > 1e-9) return picked > 1e-9 ? "PARTIAL" : "ACTIVE";
+  if (rem > 1e-9) {
+    if (picked > 1e-9 || miss > 1e-9) return "PARTIAL";
+    return "ACTIVE";
+  }
   if (miss > 1e-9) return "SHORTAGE";
   return "COMPLETED_PICK";
 }
