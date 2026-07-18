@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { getWmsPickingResolveCart, postWmsPickingStart } from "../../api/wmsPickingProductsApi";
-import { extractApiErrorMessage } from "../../api/apiErrorMessage";
+import { useWmsMessage } from "../../components/wms/WmsMessageProvider";
 import { useWmsPickingCart } from "../../context/WmsPickingCartContext";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { useWmsScanner } from "../../context/WmsScannerContext";
@@ -20,6 +20,7 @@ export default function WmsPickingCartScanPage() {
   const { warehouse } = useWarehouse();
   const warehouseId = warehouse?.id ?? null;
   const { setPickingCart } = useWmsPickingCart();
+  const { showWmsError } = useWmsMessage();
   const {
     registerScanHandler,
     setActiveDocument,
@@ -30,7 +31,6 @@ export default function WmsPickingCartScanPage() {
 
   const session = (routerLocation.state as WmsPickingCartNavState | null)?.pickingSession;
 
-  const [resolveErr, setResolveErr] = useState<string | null>(null);
   const [resolving, setResolving] = useState(false);
 
   useEffect(() => {
@@ -54,7 +54,6 @@ export default function WmsPickingCartScanPage() {
       if (!session || warehouseId == null) return;
       const code = cartCode.trim();
       if (!code) return;
-      setResolveErr(null);
       setResolving(true);
       try {
         const r = await getWmsPickingResolveCart(DAMAGE_TENANT_ID, warehouseId, code);
@@ -67,36 +66,33 @@ export default function WmsPickingCartScanPage() {
         );
         playScanBeep();
         appendScanToHistory(code);
-        const cartCode = (r.code && r.code.trim()) || r.barcode?.trim() || code;
+        const cartCodeResolved = (r.code && r.code.trim()) || r.barcode?.trim() || code;
         const cartName =
           (r.display_name && r.display_name.trim()) || (r.name && r.name.trim()) || undefined;
         setPickingCart({
           tenantId: DAMAGE_TENANT_ID,
           warehouseId,
           cartId: r.cart_id,
-          cartCode,
+          cartCode: cartCodeResolved,
           cartName,
         });
         navigate(WMS_ROUTES.pickingProducts, {
           state: {
             pickingSession: {
               ...session,
-              cartCode,
+              cartCode: cartCodeResolved,
               cartName: cartName ?? null,
               cartId: r.cart_id,
             },
           },
         });
       } catch (e) {
-        setResolveErr(
-          extractApiErrorMessage(e) ||
-            "Nie rozpoznano wózka lub nie udało się rozpocząć zbierania.",
-        );
+        showWmsError(e);
       } finally {
         setResolving(false);
       }
     },
-    [session, warehouseId, navigate, appendScanToHistory, setPickingCart],
+    [session, warehouseId, navigate, appendScanToHistory, setPickingCart, showWmsError],
   );
 
   useEffect(() => {
@@ -160,12 +156,6 @@ export default function WmsPickingCartScanPage() {
       <div className="flex-1 flex flex-col items-center justify-center p-6 sm:p-10 animate-in fade-in duration-500">
         <div className="w-full max-w-[580px] flex flex-col items-center">
           
-          {resolveErr ? (
-            <p className="mb-8 w-full rounded-2xl border border-red-200 bg-red-50 px-6 py-4 text-center text-sm font-bold text-red-800 shadow-sm animate-in zoom-in-95">
-              {resolveErr}
-            </p>
-          ) : null}
-
           {/* Animowany, pulsujący okrąg wokół ikony urządzenia */}
           <div className="relative mb-10 flex items-center justify-center">
             {resolving ? (

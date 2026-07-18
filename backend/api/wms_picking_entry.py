@@ -444,20 +444,51 @@ def post_picking_claim_cart(
         .first()
     )
     if cart is None:
-        raise HTTPException(status_code=404, detail="Nie znaleziono wózka.")
+        from ..services.wms_http_messages import raise_wms_cart_not_found
+
+        raise_wms_cart_not_found()
     try:
         claim_cart(db, cart=cart, operator_user_id=int(current_user.id))
         db.commit()
     except CartAlreadyClaimedError as e:
         # Zachowaj event audytowy „Wykryto próbę podwójnej rezerwacji”
         db.commit()
-        raise HTTPException(
-            status_code=409,
-            detail={"code": "CartAlreadyClaimed", "error": e.message},
-        ) from e
+        from ..services.wms_http_messages import raise_wms_from_lifecycle
+        from ..services.cart_picking_lifecycle_service import get_cart_status
+
+        op_name = None
+        started = None
+        aid = getattr(cart, "assigned_user_id", None)
+        if aid:
+            from ..models.app_user import AppUser
+
+            u = db.query(AppUser).filter(AppUser.id == int(aid)).first()
+            if u is not None:
+                op_name = (
+                    getattr(u, "display_name", None)
+                    or getattr(u, "full_name", None)
+                    or getattr(u, "email", None)
+                    or f"Operator #{aid}"
+                )
+        ca = getattr(cart, "claimed_at", None) or getattr(cart, "started_at", None)
+        if ca is not None:
+            try:
+                started = ca.strftime("%H:%M")
+            except Exception:
+                started = str(ca)
+        raise_wms_from_lifecycle(
+            e,
+            extra={
+                "operator_name": op_name,
+                "started_at": started,
+                "lifecycle_state": get_cart_status(cart).value,
+            },
+        )
     except CartLifecycleError as e:
         db.rollback()
-        raise HTTPException(status_code=409, detail={"code": e.code, "error": e.message}) from e
+        from ..services.wms_http_messages import raise_wms_from_lifecycle
+
+        raise_wms_from_lifecycle(e)
     return {
         "cart_id": int(cart.id),
         "status": get_cart_status(cart).value,
@@ -557,16 +588,21 @@ def post_picking_start(
         raise http_exception_cart_capacity_exceeded(e) from e
     except CartAlreadyClaimedError as e:
         db.commit()
-        raise HTTPException(
-            status_code=409,
-            detail={"code": "CartAlreadyClaimed", "error": e.message},
-        ) from e
+        from ..services.wms_http_messages import raise_wms_from_lifecycle
+
+        raise_wms_from_lifecycle(e)
     except CartLifecycleError as e:
         db.rollback()
-        raise HTTPException(status_code=409, detail={"code": e.code, "error": e.message}) from e
+        from ..services.wms_http_messages import raise_wms_from_lifecycle
+
+        raise_wms_from_lifecycle(e)
     except ValueError as e:
         db.rollback()
-        raise HTTPException(status_code=404, detail=str(e)) from e
+        from ..services.wms_http_messages import raise_wms_cart_not_found, raise_wms_generic
+
+        if "nie znaleziono" in str(e).lower() or "not found" in str(e).lower():
+            raise_wms_cart_not_found()
+        raise_wms_generic(detail=None, status_code=404)
     except Exception:
         logger.exception(
             "START_PICKING FAIL at post_picking_start bootstrap/commit cart_id=%s",
@@ -764,7 +800,9 @@ def get_picking_product_lines(
             raise http_exception_cart_capacity_exceeded(e) from e
         except CartLifecycleError as e:
             db.rollback()
-            raise HTTPException(status_code=409, detail={"code": e.code, "error": e.message}) from e
+            from ..services.wms_http_messages import raise_wms_from_lifecycle
+
+            raise_wms_from_lifecycle(e)
     resp = build_wms_picking_product_lines(
         db,
         tenant_id=tenant_id,
@@ -978,7 +1016,15 @@ def post_picking_quick_pick(
             return None
 
     def _raise_409(code: str, message: str) -> None:
-        """Log + HTTP 409 with code/message/debug (always before raise)."""
+        """Log + HTTP 409 with WmsUserMessage (always before raise)."""
+        from ..services.wms_user_messages import from_cart_lifecycle_error
+
+        class _E:
+            pass
+
+        e = _E()
+        e.code = code
+        e.message = message
         _refresh_cart_debug()
         order_count = _order_count()
         logger.warning(
@@ -999,23 +1045,17 @@ def post_picking_quick_pick(
                 "barcode": barcode,
             },
         )
-        raise HTTPException(
-            status_code=409,
-            detail={
-                "code": code,
-                "message": message,
-                "debug": {
-                    "cart_id": int(cart_ref.id) if cart_ref is not None else cart_id,
-                    "cart_status": cart_status if cart_ref is not None else None,
-                    "session_id": int(session_ref.id) if session_ref is not None else session_id,
-                    "current_session_id": (
-                        int(cart_ref.current_session_id)
-                        if cart_ref is not None and getattr(cart_ref, "current_session_id", None) is not None
-                        else current_session_id
-                    ),
-                },
-            },
+        msg = from_cart_lifecycle_error(
+            e,
+            extra={"action": "quick_pick", "current": str(cart_status or "")},
         )
+        detail = msg.to_detail()
+        detail["debug"] = {
+            "cart_id": int(cart_ref.id) if cart_ref is not None else cart_id,
+            "cart_status": cart_status if cart_ref is not None else None,
+            "session_id": int(session_ref.id) if session_ref is not None else session_id,
+        }
+        raise HTTPException(status_code=409, detail=detail)
 
     try:
         logger.info("post_picking_quick_pick:start %s", _log_ctx())
@@ -1427,11 +1467,17 @@ def post_picking_cancel_session(
         return out
     except CartLifecycleError as e:
         db.rollback()
-        raise HTTPException(status_code=404 if e.code == "cart_not_found" else 409, detail={"code": e.code, "error": e.message}) from e
-    except Exception as e:
+        from ..services.wms_http_messages import raise_wms_cart_not_found, raise_wms_from_lifecycle
+
+        if e.code == "cart_not_found":
+            raise_wms_cart_not_found()
+        raise_wms_from_lifecycle(e)
+    except Exception:
         db.rollback()
         logger.exception("picking.cancel-session failed cart_id=%s", cart_id)
-        raise HTTPException(status_code=500, detail=str(e)[:500]) from e
+        from ..services.wms_http_messages import raise_wms_generic
+
+        raise_wms_generic(status_code=500)
 
 
 @router.post("/picking/finalize-cart", response_model=WmsPickingFinalizeCartResponse)

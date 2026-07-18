@@ -5,6 +5,7 @@ import { flatSectionDividerClass } from "../../components/layout/flatSectionToke
 import PageLayout from "../../components/layout/PageLayout";
 import { TabsNav } from "../../components/layout/TabsNav";
 import { ModuleListBreadcrumb } from "../../components/listPage/moduleList";
+import { WmsMessageProvider } from "../../components/wms/WmsMessageProvider";
 import { CARTS_TABS } from "./cartsTabs";
 
 /** Pełnoekranowy widok szczegółu / edycji — bez zakładek modułu (wzorzec Materiały magazynowe). */
@@ -43,22 +44,26 @@ export default function CartsModuleLayout() {
 
   if (fullPageContent) {
     return (
-      <PageLayout fullBleed omitCard className={CARTS_PAGE_SHELL}>
-        <Outlet />
-      </PageLayout>
+      <WmsMessageProvider>
+        <PageLayout fullBleed omitCard className={CARTS_PAGE_SHELL}>
+          <Outlet />
+        </PageLayout>
+      </WmsMessageProvider>
     );
   }
 
   return (
-    <PageLayout fullBleed omitCard className={CARTS_PAGE_SHELL}>
-      <ModuleListBreadcrumb
-        items={[{ label: "Magazyn", to: "/carts/bulk" }, { label: activeTab.label }]}
-      />
-      <TabsNav items={CARTS_TABS} exact aria-label="Magazyn — zakładki" className="gap-8" />
-      <div className={`${flatSectionDividerClass} mt-2`} aria-hidden />
-      <div className="pt-4">
-        <Outlet />
-      </div>
-    </PageLayout>
+    <WmsMessageProvider>
+      <PageLayout fullBleed omitCard className={CARTS_PAGE_SHELL}>
+        <ModuleListBreadcrumb
+          items={[{ label: "Magazyn", to: "/carts/bulk" }, { label: activeTab.label }]}
+        />
+        <TabsNav items={CARTS_TABS} exact aria-label="Magazyn — zakładki" className="gap-8" />
+        <div className={`${flatSectionDividerClass} mt-2`} aria-hidden />
+        <div className="pt-4">
+          <Outlet />
+        </div>
+      </PageLayout>
+    </WmsMessageProvider>
   );
 }

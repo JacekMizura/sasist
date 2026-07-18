@@ -3,6 +3,7 @@ import { Outlet } from "react-router-dom";
 import DevScannerPanel from "../components/wms/DevScannerPanel";
 import { ScanFeedbackOverlay } from "../components/wms/execution/ScanFeedbackOverlay";
 import { WMS_Z } from "../components/wms/execution/wmsLayoutTokens";
+import { WmsMessageProvider } from "../components/wms/WmsMessageProvider";
 import { WmsPickingCartProvider } from "../context/WmsPickingCartContext";
 import { WarehouseExecutionProvider } from "../context/WarehouseExecutionContext";
 import { WmsScannerProvider } from "../context/WmsScannerContext";
@@ -35,8 +36,10 @@ export default function WmsOperationalLayout() {
     <WarehouseExecutionProvider>
       <WmsScannerProvider>
         <WmsPickingCartProvider>
-          <DevScannerPanel />
-          <WmsLayoutChrome />
+          <WmsMessageProvider>
+            <DevScannerPanel />
+            <WmsLayoutChrome />
+          </WmsMessageProvider>
         </WmsPickingCartProvider>
       </WmsScannerProvider>
     </WarehouseExecutionProvider>

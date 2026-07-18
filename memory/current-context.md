@@ -2,10 +2,9 @@
 
 ## Active
 
-Capacity Engine implemented as SSOT (`backend/services/cart_capacity/`).
-Cart.status lifecycle unchanged (5 values). Occupancy is computed only.
+WMS user messaging SSOT + Event Log PL landed.
+Capacity Engine remains SSOT for occupancy; Cart.status = lifecycle only.
 
-## Next (ops)
+## Next
 
-Deploy → `ensure_cart_capacity_columns` migrates `capacity_mode`/`max_orders` → strategy fields.
-Smoke: cart list shows `capacity` snapshot; picking/start uses engine select_orders.
+Rozszerzyć `showWmsError` na pozostałe ekrany WMS (packing scan, products cancel) oraz panel Event Log w detalu wózka (`GET /wms/carts/{id}/events`).

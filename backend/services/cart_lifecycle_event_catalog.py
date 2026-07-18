@@ -35,23 +35,31 @@ EVENT_PICKING_RESUMED = "picking_resumed"
 EVENT_CART_TRANSFERRED = "cart_transferred"
 EVENT_RESERVATION_TIMED_OUT = "reservation_timed_out"
 EVENT_DOUBLE_CLAIM_ATTEMPT = "double_claim_attempt"
+EVENT_ORDERS_ASSIGNED = "orders_assigned"
+EVENT_ORDER_ADDED = "order_added"
+EVENT_CAPACITY_BLOCKED = "capacity_blocked"
+EVENT_BASKET_ASSIGNED = "basket_assigned"
 
 # event_code → opis PL (tylko prezentacja)
 EVENT_DESCRIPTIONS_PL: dict[str, str] = {
-    EVENT_CART_CLAIMED: "Wózek został zarezerwowany",
-    EVENT_PICKING_STARTED: "Rozpoczęto kompletację",
-    EVENT_FIRST_PRODUCT_CONFIRMED: "Potwierdzono pierwszy produkt",
-    EVENT_PICKING_FINISHED: "Zakończono kompletację",
-    EVENT_PACKING_STARTED: "Rozpoczęto pakowanie",
-    EVENT_ORDER_PACKED: "Spakowano zamówienie",
-    EVENT_PACKING_FINISHED: "Zakończono pakowanie",
-    EVENT_CART_RELEASED: "Wózek został zwolniony",
-    EVENT_CART_AUTO_RELEASED_IDLE: "Automatycznie zwolniono wózek z powodu braku aktywności",
-    EVENT_PICKING_CANCELLED: "Anulowano kompletację",
-    EVENT_PICKING_RESUMED: "Wznowiono kompletację",
-    EVENT_CART_TRANSFERRED: "Przekazano wózek innemu operatorowi",
-    EVENT_RESERVATION_TIMED_OUT: "Upłynął czas rezerwacji",
-    EVENT_DOUBLE_CLAIM_ATTEMPT: "Wykryto próbę podwójnej rezerwacji",
+    EVENT_CART_CLAIMED: "Zarezerwowano wózek.",
+    EVENT_PICKING_STARTED: "Rozpoczęto kompletację.",
+    EVENT_FIRST_PRODUCT_CONFIRMED: "Potwierdzono pierwszy produkt.",
+    EVENT_PICKING_FINISHED: "Zakończono kompletację.",
+    EVENT_PACKING_STARTED: "Rozpoczęto pakowanie.",
+    EVENT_ORDER_PACKED: "Spakowano zamówienie.",
+    EVENT_PACKING_FINISHED: "Zakończono pakowanie.",
+    EVENT_CART_RELEASED: "Zwolniono wózek.",
+    EVENT_CART_AUTO_RELEASED_IDLE: "Sesja kompletacji została zakończona. Wózek został zwolniony z powodu braku aktywności.",
+    EVENT_PICKING_CANCELLED: "Anulowano kompletację.",
+    EVENT_PICKING_RESUMED: "Wznowiono kompletację.",
+    EVENT_CART_TRANSFERRED: "Wózek został przejęty przez innego magazyniera.",
+    EVENT_RESERVATION_TIMED_OUT: "Upłynął czas rezerwacji wózka.",
+    EVENT_DOUBLE_CLAIM_ATTEMPT: "Wykryto próbę użycia wózka zajętego przez innego operatora.",
+    EVENT_ORDERS_ASSIGNED: "Przypisano zamówienia do wózka.",
+    EVENT_ORDER_ADDED: "Dodano zamówienie do wózka.",
+    EVENT_CAPACITY_BLOCKED: "Nie udało się przypisać kolejnego zamówienia. Powód: brak wolnej pojemności.",
+    EVENT_BASKET_ASSIGNED: "Przypisano zamówienie do koszyka.",
 }
 
 # event_code → severity
@@ -70,6 +78,10 @@ EVENT_SEVERITY: dict[str, Severity] = {
     EVENT_CART_TRANSFERRED: SEVERITY_AUDIT,
     EVENT_RESERVATION_TIMED_OUT: SEVERITY_WARNING,
     EVENT_DOUBLE_CLAIM_ATTEMPT: SEVERITY_ERROR,
+    EVENT_ORDERS_ASSIGNED: SEVERITY_SUCCESS,
+    EVENT_ORDER_ADDED: SEVERITY_INFO,
+    EVENT_CAPACITY_BLOCKED: SEVERITY_WARNING,
+    EVENT_BASKET_ASSIGNED: SEVERITY_INFO,
 }
 
 

@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-07-18 — WMS user messages + Event Log PL
+
+- Katalog `WmsUserMessage` (code/severity/title/message/details/suggested_action) — PL, bez HTTP/exception w UI.
+- Picking claim/start/cancel → komunikaty biznesowe; FE `WmsMessageModal` + Provider.
+- Event Log: bogatsze opisy PL + `orders_assigned` / `basket_assigned` przy starcie zbierania.
+
 ## 2026-07-18 — Capacity Engine (target architecture)
 
 - Nowy SSOT: `backend/services/cart_capacity/` (strategie LIMIT_ORDERS / LIMIT_VOLUME / HYBRID_* / BASKETS).

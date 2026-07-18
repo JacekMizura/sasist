@@ -1,14 +1,13 @@
 import { Eraser, Pencil, Printer, Trash2, Wand2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import toast from "react-hot-toast";
 
-import { extractCartCapacityExceededMessage } from "../../../api/apiErrorMessage";
 import api from "../../../api/axios";
 import {
   EMPTY_WMS_CART_STATS,
   fetchWmsCartStats,
   type WmsCartStats,
 } from "../../../api/wmsCartStatsApi";
+import { useWmsMessage } from "../../../components/wms/WmsMessageProvider";
 import { useTranslation } from "../../../locales";
 import { CartFleetDetailPanel } from "../../../modules/carts/cartFleet/CartFleetDetailPanel";
 import {
@@ -119,6 +118,7 @@ export default function CartCard(props: CartCardProps) {
 
   const isSectional = total_baskets != null && total_baskets > 0;
   const t = useTranslation();
+  const { showWmsError } = useWmsMessage();
   const [previewOpen, setPreviewOpen] = useState(false);
   const [simulating, setSimulating] = useState(false);
   const [simulationResult, setSimulationResult] = useState<SimulationResult | null>(null);
@@ -189,13 +189,7 @@ export default function CartCard(props: CartCardProps) {
       refreshStats();
       onSimulateSuccess?.();
     } catch (err) {
-      const capacityMsg = extractCartCapacityExceededMessage(err);
-      if (capacityMsg) {
-        toast.error(capacityMsg);
-      } else {
-        console.error("Simulation assign error:", err);
-        toast.error("Nie udało się przypisać zamówień do wózka.");
-      }
+      showWmsError(err);
     } finally {
       setSimulating(false);
     }

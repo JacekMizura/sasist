@@ -514,12 +514,13 @@ def test_event_log_full_cycle_polish(db):
     assert "packing_started" in codes
     assert "packing_finished" in codes
     assert "cart_released" in codes
-    assert "Wózek został zarezerwowany" in descs
-    assert "Rozpoczęto kompletację" in descs
+    assert "Zarezerwowano wózek." in descs
+    assert "Rozpoczęto kompletację." in descs
     by_code = {e["event_code"]: e for e in events}
     assert by_code["picking_started"]["severity"] == "INFO"
     assert by_code["first_product_confirmed"]["severity"] == "SUCCESS"
     assert by_code["cart_released"]["severity"] == "AUDIT"
-    assert by_code["picking_finished"]["description"] == "Zakończono kompletację"
+    assert by_code["picking_finished"]["description"] == "Zakończono kompletację."
+    assert "orders_assigned" in codes
     # Logika nie opiera się na opisie — filtrujemy po event_code
     assert all(isinstance(c, str) and "_" in c or c.isascii() for c in codes)

@@ -705,10 +705,8 @@ def start_picking(
         cart.packing_user_id = None
 
     used_vol = 0.0
+    baskets_by_id = {int(b.id): b for b in (getattr(cart, "baskets", None) or [])}
     try:
-        baskets_by_id = {
-            int(b.id): b for b in (getattr(cart, "baskets", None) or [])
-        }
         for o in selected:
             o.cart_id = cid
             if hasattr(o, "picking_session_id"):
@@ -755,14 +753,44 @@ def start_picking(
         raise
 
     try:
+        n = len(selected)
+        vol = round(used_vol, 2)
         _record_event(
             db,
             cart,
             "picking_started",
             operator_user_id=uid,
             session_id=sid,
-            metadata={"order_ids": [int(o.id) for o in selected], "orders_count": len(selected)},
+            description="Rozpoczęto kompletację.",
+            metadata={"order_ids": [int(o.id) for o in selected], "orders_count": n},
         )
+        _record_event(
+            db,
+            cart,
+            "orders_assigned",
+            operator_user_id=uid,
+            session_id=sid,
+            description=f"Przypisano {n} zamówień.",
+            metadata={"orders_count": n, "assigned_volume": vol},
+        )
+        for o in selected:
+            bid = basket_assignments.get(int(o.id))
+            if bid is None:
+                continue
+            basket = baskets_by_id.get(int(bid))
+            bname = None
+            if basket is not None:
+                bname = getattr(basket, "name", None) or getattr(basket, "barcode", None) or f"#{bid}"
+            _record_event(
+                db,
+                cart,
+                "basket_assigned",
+                operator_user_id=uid,
+                session_id=sid,
+                order_id=int(o.id),
+                description=f"Przypisano zamówienie do koszyka {bname}.",
+                metadata={"basket_id": int(bid), "order_id": int(o.id)},
+            )
     except Exception:
         logger.exception("START_PICKING FAIL at _record_event")
         raise
