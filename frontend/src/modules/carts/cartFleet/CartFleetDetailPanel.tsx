@@ -20,6 +20,7 @@ import ActivityLogPanel from "../../../components/activityLog/ActivityLogPanel";
 import { AdminReleaseCartButton } from "../../../components/carts/AdminReleaseCartButton";
 import { CartOrdersHoverPopover, type CartOrderPreview } from "./CartOrdersHoverPopover";
 import { AssignedOrdersSection, type AssignedOrderRow } from "./AssignedOrdersSection";
+import { CapacityAnalyticsSection } from "./CapacityAnalyticsSection";
 
 type CartFleetDetailPanelProps = {
   open: boolean;
@@ -352,6 +353,8 @@ export function CartFleetDetailPanel({
                       reloadCartSurfaces();
                     }}
                   />
+
+                  <CapacityAnalyticsSection cartId={cartId} refreshKey={activityRefreshKey} />
 
                   {isSectional && baskets.length > 0 ? (
                     <div className="space-y-3">

@@ -21,6 +21,11 @@ from .cart_group import CartGroup
 from .cart_lifecycle_history import CartLifecycleHistory  # noqa: F401
 from .cart_lifecycle_event import CartLifecycleEvent  # noqa: F401
 from .activity_event import ActivityEvent, ActivityEventLink  # noqa: F401
+from .capacity_analytics import (  # noqa: F401
+    CapacityAnalyticsDetail,
+    CapacityAnalyticsReasonAgg,
+    CapacityAnalyticsRun,
+)
 from .enums import CartType, CartStatus
 from .manufacturer import Manufacturer  # noqa: F401 - before Product (FK)
 from .supplier import Supplier  # noqa: F401 - before Product (default_supplier_id FK)

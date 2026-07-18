@@ -7,7 +7,7 @@ Does not rank orders, optimize routes, or touch Cart.status lifecycle.
 from __future__ import annotations
 
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Literal, Sequence
 
 from sqlalchemy.orm import Session
@@ -68,9 +68,16 @@ class AcceptResult:
 
 
 @dataclass
+class RejectedCandidate:
+    order: Any
+    reason: str
+
+
+@dataclass
 class SelectionResult:
     orders: list
     basket_assignments: dict[int, int]  # order_id -> basket_id (BASKETS only)
+    rejected: list[RejectedCandidate] = field(default_factory=list)
 
 
 class CartCapacityEngine:
@@ -374,11 +381,14 @@ class CartCapacityEngine:
         """
         Walk candidates in given order; accept while capacity allows.
         Caller owns ranking; engine only gates fit.
+        Rejected candidates are returned for Capacity Analytics (not Activity Log).
         """
         selected: list[Any] = []
         basket_assignments: dict[int, int] = {}
+        rejected: list[RejectedCandidate] = []
         baskets = self._state.strategy == CapacityStrategy.BASKETS
-        for o in candidates:
+        cand_iter = iter(list(candidates))
+        for o in cand_iter:
             vol = order_volume_dm3(o)
             oid = getattr(o, "id", None)
             res = self.accept(vol, order_id=int(oid) if oid is not None else None, dry_run=False)
@@ -387,6 +397,7 @@ class CartCapacityEngine:
                 if res.basket_id is not None and oid is not None:
                     basket_assignments[int(oid)] = int(res.basket_id)
                 continue
+            reason = str(res.reason or "capacity_reached")
             if on_capacity == "error":
                 if not selected:
                     raise CartCapacityExceeded(
@@ -394,15 +405,26 @@ class CartCapacityEngine:
                         capacity_orders=int(self._state.capacity_orders or 0),
                         attempted=len(candidates),
                         strategy=self._state.strategy.value,
-                        reason=res.reason or "capacity_reached",
+                        reason=reason,
                     )
+                rejected.append(RejectedCandidate(order=o, reason=reason))
+                for rest in cand_iter:
+                    rejected.append(RejectedCandidate(order=rest, reason=reason))
                 break
             # BASKETS: skip order that does not fit any free basket; try next candidate.
             # Other strategies: stop (greedy prefix of ranked list).
             if baskets:
+                rejected.append(RejectedCandidate(order=o, reason=reason))
                 continue
+            rejected.append(RejectedCandidate(order=o, reason=reason))
+            for rest in cand_iter:
+                rejected.append(RejectedCandidate(order=rest, reason=reason))
             break
-        return SelectionResult(orders=selected, basket_assignments=basket_assignments)
+        return SelectionResult(
+            orders=selected,
+            basket_assignments=basket_assignments,
+            rejected=rejected,
+        )
 
 
 def build_capacity_snapshot(db: Session, cart: Cart) -> CapacitySnapshot:

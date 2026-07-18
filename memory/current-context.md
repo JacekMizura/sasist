@@ -15,6 +15,7 @@ Cel: produkcyjny, spójny flow (CartLifecycle + Capacity + Event/Activity Log + 
 - **Wózki:** SSOT `list_orders_on_cart`; sekcja Przypisane zamówienia; Activity Log z numerami; jedna Pojemność
 - **Wózki close-out:** pełny audyt spójności A–E (`memory/carts-consistency-audit.md`); regresje volume/clear/finish_packing/Activity refresh naprawione
 - **Wózki UX:** odłączenie 1 zamówienia (lifecycle), tooltips numer/pozycje, Activity Log expand + inline numery
+- **Capacity Analytics:** osobny raport silnika (agregaty + lazy szczegóły); Activity Log bez skipów; admin „Analiza Capacity”
 
 ## Open (stabilizacja)
 

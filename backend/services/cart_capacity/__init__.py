@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from .engine import (
     CartCapacityEngine,
+    RejectedCandidate,
     SelectionResult,
     build_capacity_snapshot,
     select_orders_for_cart,
@@ -21,6 +22,7 @@ __all__ = [
     "CartCapacityEngine",
     "CartCapacityExceeded",
     "OccupancyState",
+    "RejectedCandidate",
     "SelectionResult",
     "build_capacity_snapshot",
     "http_exception_cart_capacity_exceeded",

@@ -66,6 +66,7 @@ import { useDocumentTemplatePrint } from "../../hooks/useDocumentTemplatePrint";
 import { saleKindFromSubtype, stockKindFromType } from "../../utils/documentTemplatePrint";
 import { OrderDirectSalesBadge } from "../../components/orders/orderList/OrderDirectSalesBadge";
 import ActivityLogPanel from "../../components/activityLog/ActivityLogPanel";
+import OrderCapacityHistoryPanel from "../../components/orders/OrderCapacityHistoryPanel";
 import OrderFulfillmentWarehousePanel from "../../components/orders/OrderFulfillmentWarehousePanel";
 import OrderConsolidationPanel from "../../components/orders/OrderConsolidationPanel";
 import OrderFulfillmentAssignmentHistory from "../../components/orders/OrderFulfillmentAssignmentHistory";
@@ -2493,10 +2494,12 @@ export default function OrderDetailPage() {
                   defaultCollapsed={false}
                   className="mt-0 border-t-0 pt-0"
                 />
+                <OrderCapacityHistoryPanel orderId={order.id} />
               </div>
             ) : (
               <div className="max-w-[1200px] px-1 pb-8">
                 <ActivityLogPanel objectType="order" objectId={order.id} />
+                <OrderCapacityHistoryPanel orderId={order.id} />
               </div>
             )}
           </div>

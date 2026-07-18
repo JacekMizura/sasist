@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-07-18 — Capacity Analytics (diag layer)
+
+- Activity Log: tylko wynik operacji (bez basket_assigned / skipów); meta numerów capped.
+- Nowy magazyn: `capacity_analytics_runs` + reason aggs + details (lazy).
+- API `/capacity-analytics/*`; admin sekcja „Analiza Capacity”; historia Capacity na zamówieniu.
+- Report: `memory/capacity-analytics.md`.
+
 ## 2026-07-18 — Carts: detach one order + tooltips + Activity Log UX
 
 - Lifecycle: `detach_order_from_cart` + `POST /carts/{id}/orders/{order_id}/detach` (blocked after picks / READY|PACKING).

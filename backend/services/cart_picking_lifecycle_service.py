@@ -421,21 +421,26 @@ def _apply_capacity_slice(
     candidates: Sequence[Order],
     *,
     on_capacity: CapacityPolicy,
-) -> tuple[list[Order], dict[int, int]]:
+) -> tuple[list[Order], dict[int, int], list[tuple[Order, str]]]:
     """
     Capacity Engine SSOT at startPicking.
-    Returns (selected_orders, basket_assignments order_id→basket_id).
+    Returns (selected_orders, basket_assignments, rejected[(order, reason_code)]).
     """
     from .cart_capacity import CartCapacityExceeded, select_orders_for_cart
 
     cand = list(candidates)
     if not cand:
-        return [], {}
+        return [], {}, []
     try:
         result = select_orders_for_cart(db, cart, cand, on_capacity=on_capacity)
     except CartCapacityExceeded:
         raise
-    return list(result.orders), dict(result.basket_assignments)
+    rejected = [
+        (r.order, str(r.reason or "capacity_reached"))
+        for r in (getattr(result, "rejected", None) or [])
+        if r.order is not None
+    ]
+    return list(result.orders), dict(result.basket_assignments), rejected
 
 
 # ---------------------------------------------------------------------------
@@ -646,11 +651,16 @@ def start_picking(
             len(existing_orders),
         )
 
+    already_assigned = [o for o in orders if getattr(o, "cart_id", None) is not None]
     free_candidates = [o for o in orders if getattr(o, "cart_id", None) is None]
 
-    selected, basket_assignments = _apply_capacity_slice(
+    selected, basket_assignments, engine_rejected = _apply_capacity_slice(
         db, cart, free_candidates, on_capacity=on_capacity
     )
+    # Capacity Analytics (not Activity Log): already-assigned + engine rejects
+    analytics_rejected: list[tuple[Order, str]] = [
+        (o, "already_assigned") for o in already_assigned
+    ] + list(engine_rejected)
     if not selected and free_candidates:
         from .cart_capacity import CartCapacityExceeded
 
@@ -757,7 +767,11 @@ def start_picking(
     try:
         from .cart_stats_service import format_orders_operation_description, orders_event_meta
 
-        assign_meta = {**orders_event_meta(selected), "assigned_volume": round(used_vol, 2)}
+        # Activity Log: operation result only (no per-order basket spam, no skip list).
+        assign_meta = {
+            **orders_event_meta(selected, for_activity_log=True),
+            "assigned_volume": round(used_vol, 2),
+        }
         _record_event(
             db,
             cart,
@@ -773,27 +787,28 @@ def start_picking(
             "orders_assigned",
             operator_user_id=uid,
             session_id=sid,
-            description=format_orders_operation_description("Przypisano", selected),
+            description=format_orders_operation_description(
+                "Przypisano", selected, for_activity_log=True
+            ),
             metadata=dict(assign_meta),
         )
-        for o in selected:
-            bid = basket_assignments.get(int(o.id))
-            if bid is None:
-                continue
-            basket = baskets_by_id.get(int(bid))
-            bname = None
-            if basket is not None:
-                bname = getattr(basket, "name", None) or getattr(basket, "barcode", None) or f"#{bid}"
-            _record_event(
+        # Capacity Analytics — aggregates + lazy details (never Activity Log skips).
+        try:
+            from .cart_capacity.analytics_service import persist_capacity_run
+            from .cart_capacity.profile import resolve_capacity_strategy
+
+            persist_capacity_run(
                 db,
-                cart,
-                "basket_assigned",
+                cart=cart,
+                source="start_picking",
+                strategy=resolve_capacity_strategy(cart).value,
                 operator_user_id=uid,
-                session_id=sid,
-                order_id=int(o.id),
-                description=f"Przypisano zamówienie do koszyka {bname}.",
-                metadata={"basket_id": int(bid), "order_id": int(o.id)},
+                assigned=selected,
+                rejected=analytics_rejected,
+                occurred_at=now,
             )
+        except Exception:
+            logger.exception("capacity_analytics persist failed at start_picking")
     except Exception:
         logger.exception("START_PICKING FAIL at _record_event")
         raise

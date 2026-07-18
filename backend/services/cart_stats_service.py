@@ -71,29 +71,53 @@ def list_orders_on_cart(
     return list(by_id.values())
 
 
-def orders_event_meta(orders: list[Order] | Sequence[Order]) -> dict[str, Any]:
-    """Metadata Activity/Event Log: order_ids + order_numbers (nie tylko count)."""
+def orders_event_meta(
+    orders: list[Order] | Sequence[Order],
+    *,
+    for_activity_log: bool = False,
+    activity_number_cap: int = 50,
+) -> dict[str, Any]:
+    """Metadata for Activity/Event Log.
+
+    ``for_activity_log=True`` caps stored number lists (full lists → Capacity Analytics).
+    """
+    order_list = list(orders)
     order_ids: list[int] = []
     order_numbers: list[str] = []
-    for o in orders:
+    for o in order_list:
         oid = int(o.id)
         order_ids.append(oid)
         num = getattr(o, "number", None)
         order_numbers.append(str(num).strip() if num not in (None, "") else str(oid))
-    return {
+    truncated = False
+    if for_activity_log and len(order_numbers) > int(activity_number_cap):
+        truncated = True
+        order_ids = order_ids[: int(activity_number_cap)]
+        order_numbers = order_numbers[: int(activity_number_cap)]
+    meta: dict[str, Any] = {
         "order_ids": order_ids,
         "order_numbers": order_numbers,
-        "orders_count": len(order_ids),
+        "orders_count": len(order_list),
     }
+    if truncated:
+        meta["order_numbers_truncated"] = True
+    return meta
 
 
-def format_orders_operation_description(verb: str, orders: list[Order] | Sequence[Order]) -> str:
+def format_orders_operation_description(
+    verb: str,
+    orders: list[Order] | Sequence[Order],
+    *,
+    for_activity_log: bool = False,
+) -> str:
     """
-    Opis zdarzenia z listą numerów — nigdy sam „Przypisano N zamówień” bez numerów.
-    Przykład: „Przypisano 5 zamówień: #A-1, #A-2, #A-3, #A-4, #A-5.”
+    Activity Log: „Przypisano N zamówień.” (wynik operacji, bez listy tysięcy #).
+    Inne konteksty: krótka lista numerów gdy N ≤ 15.
     """
-    meta = orders_event_meta(orders)
+    meta = orders_event_meta(orders, for_activity_log=for_activity_log)
     n = int(meta["orders_count"])
+    if for_activity_log or n > 15:
+        return f"{verb} {n} zamówień."
     nums = [f"#{x}" for x in meta["order_numbers"]]
     if n <= 0:
         return f"{verb} 0 zamówień."
