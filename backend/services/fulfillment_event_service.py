@@ -494,6 +494,8 @@ def backfill_pick_events_from_picks(db: Session) -> int:
 
 def sync_declared_shortage_column_from_missing_events(db: Session, order_item_id: int) -> None:
     """Keep ``wms_shortage_declared_qty`` aligned with sum(MISSING) for legacy readers."""
+    # SessionLocal uses autoflush=False — pending FE_MISSING must be visible before SUM.
+    db.flush()
     oi = db.query(OrderItem).filter(OrderItem.id == int(order_item_id)).first()
     if oi is None:
         return

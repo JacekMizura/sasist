@@ -208,6 +208,7 @@ class WmsPickingSessionStats(BaseModel):
     zebrane: int = Field(0, ge=0)
     do_zebrania: int = Field(0, ge=0)
     w_trakcie: int = Field(0, ge=0)
+    braki: int = Field(0, ge=0, description="SKU z resolution_status=SHORTAGE — nie liczone jako zebrane")
 
 
 class WmsPickingProductLinesResponse(BaseModel):
@@ -397,6 +398,10 @@ class WmsPickingReportShortageBody(BaseModel):
 
 class WmsPickingReportShortageResponse(BaseModel):
     ok: bool = True
+    already_resolved: bool = Field(
+        False,
+        description="True gdy shortage był już pełny — NO-OP bez nowego eventu biznesowego",
+    )
     orders_updated: int = Field(..., ge=0)
     target_status_id: Optional[int] = Field(
         default=None,

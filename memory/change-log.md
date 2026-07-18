@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-07-18 — ZGŁOŚ BRAK: first-submit wipe + idempotency + red UI
+
+- ROOT: `SessionLocal(autoflush=False)` → `sync_declared` / `recompute` SUM(MISSING) nie widziały pending `FE_MISSING` → zerowały `wms_picking_line_missing_qty` mimo Activity eventu; drugie kliknięcie „naprawiało” UI i dublowało log.
+- Fix: `db.flush()` po append + w sync/recompute; idempotent `already_resolved` NO-OP; order-aware Activity + `operator_user_id`; SHORTAGE ≠ zebrane (`braki`); czerwony wiersz; badge zamówień niekompletnych; defensive revalidate nie odłącza przy shortage.
+- Tests: `test_wms_picking_shortage_first_submit.py` + FE `wmsPickingUiGates`.
+
 ## 2026-07-18 — CartLifecycle invariant: panel status + clear_cart
 
 - `office_order_ui` patch status → `apply_order_panel_ui_status` → `detach_order_from_cart` (no raw clear).

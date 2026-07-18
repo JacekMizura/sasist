@@ -185,6 +185,7 @@ describe("sortWmsPickingProductLinesPickFlow", () => {
       zebrane: 1,
       doZebrania: 1,
       wTrakcie: 1,
+      braki: 0,
     });
   });
 
@@ -265,6 +266,29 @@ describe("computeWmsPickingProductLineSessionStats", () => {
       zebrane: 1,
       doZebrania: 1,
       wTrakcie: 1,
+      braki: 0,
+    });
+  });
+
+  it("counts SHORTAGE as braki, never zebrane", () => {
+    const rows = [
+      line({
+        product_id: 1,
+        total_quantity: 1,
+        picked_quantity: 0,
+        missing_quantity: 1,
+        remaining_to_pick: 0,
+        resolution_status: "SHORTAGE",
+      }),
+      line({ product_id: 2, total_quantity: 1, picked_quantity: 0, remaining_to_pick: 1 }),
+      line({ product_id: 3, total_quantity: 1, picked_quantity: 0, remaining_to_pick: 1 }),
+      line({ product_id: 4, total_quantity: 1, picked_quantity: 0, remaining_to_pick: 1 }),
+    ];
+    expect(computeWmsPickingProductLineSessionStats(rows)).toEqual({
+      zebrane: 0,
+      doZebrania: 3,
+      wTrakcie: 0,
+      braki: 1,
     });
   });
 });

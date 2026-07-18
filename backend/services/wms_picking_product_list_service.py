@@ -2682,7 +2682,39 @@ def report_wms_picking_product_shortage(
                 affected.append(int(o.id))
                 break
 
+    ss_ui_early = get_or_create_wms_picking_shortage_settings(
+        db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id)
+    )
+    allow_continue_early = bool(getattr(ss_ui_early, "allow_continue_other_lines_after_shortage", True))
+
     if not affected:
+        # Idempotencja: brak już pełny (picked + missing >= required) → NO-OP, bez drugiego eventu.
+        already_full = False
+        already_order_ids: list[int] = []
+        for o in orders:
+            for oi, q in _iter_report_lines(o):
+                req = float(q["required_qty"])
+                miss_ex = float(q["missing_qty_line"])
+                picked_ex = float(q["picked_qty"])
+                if req > 1e-9 and miss_ex + 1e-9 >= max(0.0, req - picked_ex) and miss_ex > 1e-9:
+                    already_full = True
+                    already_order_ids.append(int(o.id))
+        if already_full:
+            logger.info(
+                "[shortage.report] NOOP already_resolved product_id=%s cart_id=%s order_ids=%s",
+                pid,
+                cid,
+                already_order_ids,
+            )
+            return {
+                "ok": True,
+                "already_resolved": True,
+                "orders_updated": 0,
+                "target_status_id": None,
+                "order_ids": list(dict.fromkeys(already_order_ids)),
+                "order_issue_task_ids": [],
+                "allow_continue_other_lines_after_shortage": allow_continue_early,
+            }
         _report_shortage_reject(
             "Cała wymagana ilość została już rozliczona (zebrano + brak = zamówione).",
             payload=payload_log,
@@ -2698,6 +2730,21 @@ def report_wms_picking_product_shortage(
         for _oi, q in _iter_report_lines(o):
             max_declarable += max(0.0, float(q["declarable_qty"]))
     max_declarable = round(max_declarable, 6)
+    if max_declarable <= 1e-9:
+        logger.info(
+            "[shortage.report] NOOP already_resolved (max_declarable=0) product_id=%s cart_id=%s",
+            pid,
+            cid,
+        )
+        return {
+            "ok": True,
+            "already_resolved": True,
+            "orders_updated": 0,
+            "target_status_id": None,
+            "order_ids": aff_set,
+            "order_issue_task_ids": [],
+            "allow_continue_other_lines_after_shortage": allow_continue_early,
+        }
     if float(missing_qty) > max_declarable + 1e-6:
         _report_shortage_reject(
             f"Nie można zgłosić więcej niż {max_declarable:g} szt. braku "
@@ -2750,8 +2797,13 @@ def report_wms_picking_product_shortage(
                 "recovery": is_recovery,
                 "replacement": bool(getattr(oi, "replaced_from_order_item_id", None)),
                 "undid_picks_qty": float(need_undo),
+                "order_id": int(o.id),
+                "order_number": str(getattr(o, "number", None) or f"#{o.id}"),
+                "product_id": int(oi.product_id),
             },
         )
+        # SessionLocal autoflush=False — bez flush SUM(MISSING) w sync/recompute zeruje kolumny.
+        db.flush()
         sync_declared_shortage_column_from_missing_events(db, int(oi.id))
         line_audit_rows.append((o, oi, float(take)))
 
@@ -2793,6 +2845,10 @@ def report_wms_picking_product_shortage(
         if take <= 1e-9:
             continue
         ctx = _shortage_line_report_context(db, oi, is_recovery=is_recovery)
+        q_after = _line_shortage_report_quantities(db, oi, cid)
+        pr = oi.product if getattr(oi, "product", None) is not None else None
+        ean_v = getattr(pr, "ean", None) if pr is not None else None
+        sku_v = getattr(pr, "sku", None) if pr is not None else None
         emit_line_shortage_reported(
             db,
             tenant_id=int(tenant_id),
@@ -2810,6 +2866,14 @@ def report_wms_picking_product_shortage(
             original_order_item_id=ctx.get("original_order_item_id"),
             original_product_name=ctx.get("original_product_name"),
             reason="wms_report_shortage",
+            order_number=str(getattr(o, "number", None) or f"#{o.id}"),
+            ean=str(ean_v).strip() if ean_v else None,
+            sku=str(sku_v).strip() if sku_v else None,
+            required_qty=float(q_after["required_qty"]),
+            picked_qty=float(q_after["picked_qty"]),
+            remaining_qty=float(q_after["remaining_qty"]),
+            cart_code=(getattr(cart_row, "code", None) or None),
+            picking_session_id=getattr(cart_row, "current_session_id", None),
         )
 
     logger.info(
@@ -2847,16 +2911,14 @@ def report_wms_picking_product_shortage(
         pid,
     )
 
-    ss_ui = get_or_create_wms_picking_shortage_settings(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id))
     return {
         "ok": True,
+        "already_resolved": False,
         "orders_updated": len(aff_set),
         "target_status_id": None,
         "order_ids": aff_set,
         "order_issue_task_ids": task_ids,
-        "allow_continue_other_lines_after_shortage": bool(
-            getattr(ss_ui, "allow_continue_other_lines_after_shortage", True)
-        ),
+        "allow_continue_other_lines_after_shortage": allow_continue_early,
     }
 
 

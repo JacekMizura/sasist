@@ -289,6 +289,8 @@ def _recompute_line_missing_columns(
     *,
     session_cart_id: int | None = None,
 ) -> None:
+    # autoflush=False: SUM(MISSING) musi widzieć świeżo dodane zdarzenia w tej samej transakcji.
+    db.flush()
     for oi in order.items or []:
         mq = compute_line_missing_qty(db, order, oi, session_cart_id=session_cart_id)
         oi.wms_picking_line_missing_qty = mq

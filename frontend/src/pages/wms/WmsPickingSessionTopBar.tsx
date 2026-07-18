@@ -9,7 +9,7 @@ export type WmsPickingSessionTopBarProps = {
   /** `null` → wyświetlane „…” (ładowanie). */
   orderCount: number | null;
   /** Gdy brak — nie renderujemy pastylek Zebrane / Do zebrania / W trakcie. */
-  pickStats: { zebrane: number; doZebrania: number; wTrakcie: number } | null;
+  pickStats: { zebrane: number; doZebrania: number; wTrakcie: number; braki?: number } | null;
   statusName: string;
   statusBadgeStyle: CSSProperties;
   cartCode?: string | null;
@@ -57,7 +57,8 @@ export function WmsPickingSessionTopBar({
                 variant="picking" 
                 done={pickStats.zebrane} 
                 todo={pickStats.doZebrania} 
-                progress={pickStats.wTrakcie} 
+                progress={pickStats.wTrakcie}
+                shortage={pickStats.braki ?? 0}
               />
             </div>
           ) : null}

@@ -359,6 +359,7 @@ export default function WmsPickingProductsPage() {
           zebrane: data.session_stats.zebrane ?? 0,
           do_zebrania: data.session_stats.do_zebrania ?? 0,
           w_trakcie: data.session_stats.w_trakcie ?? 0,
+          braki: data.session_stats.braki ?? 0,
         });
       }
       setCohortMissingLines(data.cohort_missing_lines ?? []);
@@ -605,13 +606,14 @@ export default function WmsPickingProductsPage() {
         zebrane: sessionStats.zebrane,
         doZebrania: sessionStats.do_zebrania,
         wTrakcie: sessionStats.w_trakcie,
+        braki: sessionStats.braki ?? shortageSkuCount,
       };
     }
     if (!loading) {
-      return pickingSession?.hubPickStats ?? { zebrane: 0, doZebrania: 0, wTrakcie: 0 };
+      return pickingSession?.hubPickStats ?? { zebrane: 0, doZebrania: 0, wTrakcie: 0, braki: shortageSkuCount };
     }
     return pickingSession?.hubPickStats ?? null;
-  }, [sessionStats, loading, pickingSession?.hubPickStats]);
+  }, [sessionStats, loading, pickingSession?.hubPickStats, shortageSkuCount]);
 
   const orderCountForBar = useMemo(() => {
     if (loading && rows.length === 0) {
@@ -647,6 +649,20 @@ export default function WmsPickingProductsPage() {
     }
     return [...m.values()].sort((a, b) => a.order_number.localeCompare(b.order_number, "pl"));
   }, [finalizeShortageModal]);
+
+  const cohortMissingByOrder = useMemo(() => {
+    if (cohortMissingLines.length === 0) return [];
+    const m = new Map<number, { order_number: string; lines: WmsPickingCohortMissingLineApi[] }>();
+    for (const ln of cohortMissingLines) {
+      const cur = m.get(ln.order_id);
+      if (cur) {
+        cur.lines.push(ln);
+      } else {
+        m.set(ln.order_id, { order_number: ln.order_number, lines: [ln] });
+      }
+    }
+    return [...m.values()].sort((a, b) => a.order_number.localeCompare(b.order_number, "pl"));
+  }, [cohortMissingLines]);
 
   const activeCartId = mergedSession?.cartId ?? null;
 
@@ -944,10 +960,27 @@ export default function WmsPickingProductsPage() {
           <p className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-center text-sm font-bold text-red-900 shadow-sm">{err}</p>
         )}
         {blockOtherProductLines && (
-          <p className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm font-bold text-amber-950 shadow-sm">
+          <p className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm font-bold text-red-950 shadow-sm">
             Zgłoszono brak — dokończ tylko dotknięte linie (SKU z brakiem). Pozostałe produkty są zablokowane.
           </p>
         )}
+        {cohortMissingByOrder.length > 0 ? (
+          <div className="rounded-2xl border border-red-200 bg-red-50/70 px-4 py-3 shadow-sm">
+            <p className="text-[11px] font-black uppercase tracking-widest text-red-800">Zamówienia niekompletne</p>
+            <ul className="mt-2 flex flex-wrap gap-2 list-none p-0 m-0">
+              {cohortMissingByOrder.map((g) => (
+                <li
+                  key={g.order_number}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 bg-white px-3 py-1.5 text-xs font-black uppercase tracking-wide text-red-800"
+                >
+                  <AlertTriangle size={12} className="text-red-600 shrink-0" strokeWidth={2.5} />
+                  #{g.order_number.replace(/^#/, "")}
+                  <span className="font-bold text-red-600">· Brak produktu</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
         {(() => {
           const bundleDisplay = bundlePickScan ? buildPickingBundleDisplay(bundlePickScan) : null;
           return bundleDisplay ? <BundlePickingScanCard display={bundleDisplay} /> : null;
@@ -1003,19 +1036,19 @@ export default function WmsPickingProductsPage() {
             const cardBgStyleClass = rowBlocked
               ? "cursor-not-allowed bg-slate-50/50 opacity-40"
               : isShortageResolved
-                ? "bg-amber-50/50 border-b border-amber-100"
+                ? "bg-red-50/80 border-b border-red-100"
                 : isCompletedPick
                   ? "bg-emerald-50/40 border-b border-emerald-100"
                   : "bg-white hover:bg-slate-50/60 border-b border-slate-200/60";
 
             const hasEan = r.ean != null && r.ean.trim() !== "";
             const titleTone = isShortageResolved
-              ? "text-amber-900"
+              ? "text-red-900"
               : isCompletedPick
                 ? "text-emerald-800"
                 : "text-slate-900";
             const nameTone = isShortageResolved
-              ? "text-amber-700/80"
+              ? "text-red-700/80"
               : isCompletedPick
                 ? "text-emerald-600/75"
                 : "text-slate-400 group-hover:text-[#5a4fcf]";
@@ -1084,19 +1117,18 @@ export default function WmsPickingProductsPage() {
 
                   <div className="shrink-0 flex items-center justify-center w-full sm:w-[18rem]">
                     {isShortageResolved ? (
-                      <div className="flex flex-col items-stretch gap-1 w-full max-w-[240px] px-5 py-3 bg-amber-50 border border-amber-200 rounded-2xl text-amber-900">
+                      <div className="flex flex-col items-stretch gap-1 w-full max-w-[240px] px-5 py-3 bg-red-50 border border-red-200 rounded-2xl text-red-900">
                         <div className="flex items-center gap-2 text-sm font-black uppercase tracking-wider">
-                          <AlertTriangle size={16} strokeWidth={2.5} className="text-amber-600 shrink-0" />
-                          Zgłoszono brak
+                          <AlertTriangle size={16} strokeWidth={2.5} className="text-red-600 shrink-0" />
+                          BRAK {fmtQty(miss)}/{fmtQty(total)}
                         </div>
-                        <div className="flex items-center justify-between gap-2 border-t border-amber-200/80 pt-1">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800/80">Brak</span>
-                          <span className="text-lg font-black leading-none tabular-nums">
-                            {fmtQty(miss)}/{fmtQty(total)}
+                        <div className="flex items-center justify-between gap-2 border-t border-red-200/80 pt-1">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-red-800/80">
+                            Zamówienie niekompletne
                           </span>
                         </div>
                         {pickedShown > 1e-9 ? (
-                          <p className="text-[10px] font-semibold text-amber-800/70 tabular-nums">
+                          <p className="text-[10px] font-semibold text-red-800/70 tabular-nums">
                             Zebrano wcześniej: {fmtQty(pickedShown)} szt.
                           </p>
                         ) : null}
@@ -1148,11 +1180,9 @@ export default function WmsPickingProductsPage() {
 
                   <div className="shrink-0 flex flex-col justify-center items-end self-start sm:self-center w-full sm:w-[14rem] text-right">
                     {isShortageResolved ? (
-                      <div className="flex items-center justify-end gap-1.5 px-4 py-2 bg-amber-50 border border-amber-200 rounded-xl text-xs font-black text-amber-800 uppercase tracking-wide">
-                        <AlertTriangle size={14} strokeWidth={2.5} className="text-amber-600" />
-                        {hasLocation
-                          ? `Brak na ${formatWmsPickingLocationPillLabel(locCode, undefined)}`
-                          : "Brak dostępnego towaru"}
+                      <div className="flex items-center justify-end gap-1.5 px-4 py-2 bg-red-50 border border-red-200 rounded-xl text-xs font-black text-red-800 uppercase tracking-wide">
+                        <AlertTriangle size={14} strokeWidth={2.5} className="text-red-600" />
+                        Brak produktu
                       </div>
                     ) : hasLocation ? (
                       <div className="flex flex-col items-end gap-1 w-full">

@@ -109,6 +109,17 @@ def defensive_revalidate_cart_orders_without_picks(
             warehouse_id=int(warehouse_id),
         ):
             continue
+        # Shortage zgłoszony w trakcie pickingu ≠ pre-pick Walidacja WMS — nie odłączaj.
+        has_shortage = False
+        for oi in order.items or []:
+            if float(getattr(oi, "wms_picking_line_missing_qty", None) or 0.0) > 1e-9:
+                has_shortage = True
+                break
+            if float(getattr(oi, "wms_shortage_declared_qty", None) or 0.0) > 1e-9:
+                has_shortage = True
+                break
+        if has_shortage:
+            continue
         result = validate_order_for_picking(
             db, order_id=oid, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id)
         )

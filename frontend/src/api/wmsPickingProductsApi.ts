@@ -69,6 +69,7 @@ export type WmsPickingSessionStatsApi = {
   zebrane: number;
   do_zebrania: number;
   w_trakcie: number;
+  braki?: number;
 };
 
 export type WmsPickingProductLinesResponseApi = {

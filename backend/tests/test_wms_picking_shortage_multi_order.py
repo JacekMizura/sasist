@@ -24,7 +24,7 @@ def _oi(*, oid: int, order_id: int, product_id: int, qty: float, missing: float 
         wms_picking_line_status=None,
         replaced_from_order_item_id=None,
         oms_line_status=None,
-        product=SimpleNamespace(name=f"P{product_id}", sku=None, symbol=None),
+        product=SimpleNamespace(name=f"P{product_id}", sku=None, symbol=None, ean=None),
         _picked=picked,
     )
 

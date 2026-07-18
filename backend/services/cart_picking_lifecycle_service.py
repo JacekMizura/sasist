@@ -1970,21 +1970,38 @@ def run_cart_lifecycle_maintenance(db: Session) -> dict[str, int]:
 
 
 def compute_session_stats_from_product_lines(lines: Sequence[Any]) -> dict[str, int]:
+    """
+    Liczniki SKU w sesji.
+
+    SHORTAGE (remaining≈0, missing>0) → ``braki``, NIGDY ``zebrane``.
+    COMPLETED_PICK (remaining≈0, missing≈0) → ``zebrane``.
+    """
     zebrane = 0
     do_zebrania = 0
     w_trakcie = 0
+    braki = 0
     for ln in lines:
         total = float(getattr(ln, "total_quantity", 0) or 0)
         picked = float(getattr(ln, "picked_quantity", 0) or 0)
         missing = float(getattr(ln, "missing_quantity", 0) or 0)
         remaining = float(getattr(ln, "remaining_to_pick", None) or 0)
-        if remaining <= 1e-9 and (picked + missing + 1e-9 >= total or total <= 1e-9):
+        status = getattr(ln, "resolution_status", None)
+        if status is None:
+            if remaining > 1e-9:
+                status = "PARTIAL" if (picked > 1e-9 or missing > 1e-9) else "ACTIVE"
+            elif missing > 1e-9:
+                status = "SHORTAGE"
+            else:
+                status = "COMPLETED_PICK"
+        if status == "SHORTAGE" or (remaining <= 1e-9 and missing > 1e-9):
+            braki += 1
+        elif remaining <= 1e-9 and (picked + 1e-9 >= total or total <= 1e-9 or status == "COMPLETED_PICK"):
             zebrane += 1
-        elif picked <= 1e-9:
+        elif picked <= 1e-9 and missing <= 1e-9:
             do_zebrania += 1
         else:
             w_trakcie += 1
-    return {"zebrane": zebrane, "do_zebrania": do_zebrania, "w_trakcie": w_trakcie}
+    return {"zebrane": zebrane, "do_zebrania": do_zebrania, "w_trakcie": w_trakcie, "braki": braki}
 
 
 # Public re-exports for screens (read-only)

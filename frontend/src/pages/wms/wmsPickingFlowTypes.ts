@@ -36,7 +36,7 @@ export type WmsPickingSessionState = {
   preCartBack?: "status" | "order-type";
   /** Snapshot z kafelka statusu — belka liczników przed wczytaniem listy produktów. */
   hubOrderCount?: number;
-  hubPickStats?: { zebrane: number; doZebrania: number; wTrakcie: number };
+  hubPickStats?: { zebrane: number; doZebrania: number; wTrakcie: number; braki?: number };
 };
 
 export type WmsPickingLocationNavState = {

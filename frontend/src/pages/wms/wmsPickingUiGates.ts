@@ -223,20 +223,26 @@ export function computeWmsPickingProductLineSessionStats(rows: WmsPickingProduct
   zebrane: number;
   doZebrania: number;
   wTrakcie: number;
+  braki: number;
 } {
   let zebrane = 0;
   let doZebrania = 0;
   let wTrakcie = 0;
+  let braki = 0;
   for (const r of rows) {
     const status = wmsPickingLineResolutionStatus(r);
-    if (status === "COMPLETED_PICK" || status === "SHORTAGE") {
+    if (status === "SHORTAGE") {
+      braki++;
+      continue;
+    }
+    if (status === "COMPLETED_PICK") {
       zebrane++;
       continue;
     }
     if (status === "PARTIAL") wTrakcie++;
     else doZebrania++;
   }
-  return { zebrane, doZebrania, wTrakcie };
+  return { zebrane, doZebrania, wTrakcie, braki };
 }
 
 export function pickingFinalizeHasShortageSignals(resp: {

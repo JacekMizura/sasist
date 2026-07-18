@@ -965,35 +965,74 @@ def emit_line_shortage_reported(
     original_order_item_id: Optional[int] = None,
     original_product_name: Optional[str] = None,
     reason: str = "",
+    order_number: Optional[str] = None,
+    ean: Optional[str] = None,
+    sku: Optional[str] = None,
+    required_qty: Optional[float] = None,
+    picked_qty: Optional[float] = None,
+    remaining_qty: Optional[float] = None,
+    cart_code: Optional[str] = None,
+    picking_session_id: Optional[int] = None,
 ) -> None:
-    """Audyt braku na konkretnej linii (zwykła / zamiennik / dogrywka)."""
+    """Audyt braku na konkretnej linii (zwykła / zamiennik / dogrywka) — order-aware."""
     if is_recovery:
         event_type = EVT_RECOVERY_SHORTAGE_REPORTED
-        title = "Brak na dogrywce (recovery)"
     elif is_replacement:
         event_type = EVT_REPLACEMENT_SHORTAGE_REPORTED
-        title = "Brak na zamienniku"
     else:
         event_type = EVT_ORDER_LINE_SHORTAGE_REPORTED
-        title = "Zgłoszono brak na linii"
     loc_label = location_display_label(db, int(location_id)) if location_id is not None else None
     cart_row = db.query(Cart).filter(Cart.id == int(cart_id)).first()
     cart_label = cart_display_name_for_wms(cart_row) if cart_row is not None else f"#{cart_id}"
+    cart_code_eff = (cart_code or "").strip() or (
+        (getattr(cart_row, "code", None) or "").strip() if cart_row is not None else ""
+    ) or cart_label
+    order_row = db.query(Order).filter(Order.id == int(order_id)).first()
+    order_num = (order_number or "").strip() or (
+        str(getattr(order_row, "number", None) or "").strip() if order_row is not None else ""
+    ) or f"#{int(order_id)}"
+    uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
+    op_name = operator_display_name(db, uid)
+    miss_f = float(shortage_qty)
+    req_f = float(required_qty) if required_qty is not None else None
+    picked_f = float(picked_qty) if picked_qty is not None else None
+    rem_f = float(remaining_qty) if remaining_qty is not None else None
+    ean_s = (ean or "").strip() or None
+    sku_s = (sku or "").strip() or None
+    pname = (product_name or "").strip() or f"Produkt #{int(product_id)}"
+
     meta: dict[str, Any] = {
+        "event_type": event_type,
+        "order_id": int(order_id),
+        "order_number": order_num,
+        "order_item_id": int(order_item_id),
         "product_id": int(product_id),
-        "product_name": product_name[:512],
-        "quantity": float(shortage_qty),
+        "product_name": pname[:512],
+        "ean": ean_s,
+        "sku": sku_s,
+        "missing_qty": miss_f,
+        "required_qty": req_f,
+        "picked_qty": picked_f,
+        "remaining_qty": rem_f,
+        "quantity": miss_f,
+        "cart_id": int(cart_id),
+        "cart_code": cart_code_eff,
+        "picking_session_id": int(picking_session_id) if picking_session_id is not None else None,
+        "operator_user_id": uid,
+        "operator_name": op_name,
+        "reason": (reason[:256] if reason else None) or "wms_report_shortage",
+        "shortage_type": "recovery" if is_recovery else ("replacement" if is_replacement else "product_shortage"),
+        "location_id": int(location_id) if location_id is not None else None,
+        "location_code": loc_label,
         "source_location": loc_label,
         "target_cart": cart_label,
-        "cart_id": int(cart_id),
-        "order_item_id": int(order_item_id),
-        "reason": reason[:256] if reason else None,
+        "timestamp": datetime.utcnow().isoformat() + "Z",
     }
     if original_order_item_id is not None and int(original_order_item_id) > 0:
         meta["original_order_item_id"] = int(original_order_item_id)
     if original_product_name:
         meta["original_product_name"] = original_product_name[:512]
-    uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
+
     insert_wms_order_event(
         db,
         tenant_id=tenant_id,
@@ -1005,24 +1044,71 @@ def emit_line_shortage_reported(
         order_item_id=int(order_item_id),
         source_location_id=int(location_id) if location_id is not None else None,
         target_cart_id=int(cart_id),
-        quantity=float(shortage_qty),
+        quantity=miss_f,
         metadata=meta,
     )
-    msg_parts = [title, f"{product_name} ({_fmt_qty(float(shortage_qty))} szt.)"]
-    if is_replacement and original_product_name:
-        msg_parts.append(f"zamiast: {original_product_name}")
-    if loc_label:
-        msg_parts.append(f"lokalizacja: {loc_label}")
-    if cart_label:
-        msg_parts.append(cart_label)
+
+    ean_bit = f" — EAN {ean_s}" if ean_s else ""
+    if req_f is not None and req_f > 1e-9:
+        order_msg = (
+            f"Zgłoszono brak produktu: {pname}{ean_bit} — brak {_fmt_qty(miss_f)} z {_fmt_qty(req_f)} szt."
+            f" — operator: {op_name or 'System'} — wózek {cart_code_eff}"
+        )
+    else:
+        order_msg = (
+            f"Zgłoszono brak produktu: {pname}{ean_bit} — brak {_fmt_qty(miss_f)} szt."
+            f" — operator: {op_name or 'System'} — wózek {cart_code_eff}"
+        )
+    cart_msg = (
+        f"Zgłoszono brak {_fmt_qty(miss_f)} szt. — zamówienie {order_num} — {pname}{ean_bit}"
+    )
+
     append_order_activity_for_wms(
         db,
         order_id=int(order_id),
         tenant_id=tenant_id,
         warehouse_id=warehouse_id,
         event_type=event_type,
-        message=" — ".join(msg_parts),
+        message=order_msg,
+        operator_user_id=uid,
+        metadata=meta,
     )
+    # Log wózka / sesji — czytelny, order-aware (bez „na linii”).
+    try:
+        from .activity_log import ActivityLinkSpec, record_activity
+
+        record_activity(
+            db,
+            event_code=str(event_type)[:64],
+            description=cart_msg.strip()[:512],
+            links=[
+                ActivityLinkSpec(
+                    object_type="cart",
+                    object_id=int(cart_id),
+                    role="primary",
+                    object_label=cart_code_eff[:64],
+                ),
+                ActivityLinkSpec(
+                    object_type="order",
+                    object_id=int(order_id),
+                    role="related",
+                    object_label=order_num[:64],
+                ),
+            ],
+            severity="WARNING",
+            category="status",
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            actor_user_id=uid,
+            source_module="wms_audit",
+            metadata=dict(meta),
+        )
+    except Exception:
+        logger.exception(
+            "cart activity dual-write failed for shortage order_id=%s cart_id=%s",
+            order_id,
+            cart_id,
+        )
 
 
 def emit_wms_shortage_reported(
@@ -1868,7 +1954,7 @@ def _timeline_event_from_row(db: Session, ev: WmsOrderEvent) -> WmsOrderTimeline
         title = {
             EVT_RECOVERY_SHORTAGE_REPORTED: "Brak na dogrywce",
             EVT_REPLACEMENT_SHORTAGE_REPORTED: "Brak na zamienniku",
-            EVT_ORDER_LINE_SHORTAGE_REPORTED: "Brak na linii",
+            EVT_ORDER_LINE_SHORTAGE_REPORTED: "Zgłoszono brak",
         }.get(et, "Zgłoszono brak")
         if meta.get("product_name"):
             body.append(str(meta["product_name"]))

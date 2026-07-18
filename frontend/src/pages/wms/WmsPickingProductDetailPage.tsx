@@ -664,7 +664,7 @@ export default function WmsPickingProductDetailPage() {
           <div
             className={`flex flex-col items-center justify-center p-8 border rounded-3xl text-center ${
               isShortageResolved
-                ? "bg-amber-50 border-amber-200"
+                ? "bg-red-50 border-red-200"
                 : "bg-slate-50 border-slate-200/60"
             }`}
           >
@@ -673,28 +673,27 @@ export default function WmsPickingProductDetailPage() {
             </p>
             {isShortageResolved ? (
               <div className="w-full max-w-md space-y-4">
-                <div className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl border border-amber-300 bg-amber-100 text-amber-950 text-xs font-black uppercase tracking-wider">
-                  <AlertTriangle size={16} strokeWidth={2.5} className="text-amber-700" />
-                  Zgłoszono brak
+                <div className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl border border-red-300 bg-red-100 text-red-950 text-xs font-black uppercase tracking-wider">
+                  <AlertTriangle size={16} strokeWidth={2.5} className="text-red-700" />
+                  BRAK {fmtQty(missingTotal)}/{fmtQty(detail.total_quantity)}
                 </div>
                 <dl className="grid grid-cols-3 gap-3 text-left">
-                  <div className="rounded-xl border border-amber-200/80 bg-white px-3 py-3">
+                  <div className="rounded-xl border border-red-200/80 bg-white px-3 py-3">
                     <dt className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Zapotrzebowanie</dt>
                     <dd className="mt-1 text-2xl font-black tabular-nums text-slate-900">{fmtQty(detail.total_quantity)}</dd>
                   </div>
-                  <div className="rounded-xl border border-amber-200/80 bg-white px-3 py-3">
+                  <div className="rounded-xl border border-red-200/80 bg-white px-3 py-3">
                     <dt className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Zebrano</dt>
                     <dd className="mt-1 text-2xl font-black tabular-nums text-slate-900">{fmtQty(displayPickedDetail)}</dd>
                   </div>
-                  <div className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-3">
-                    <dt className="text-[10px] font-bold uppercase tracking-wider text-amber-800">Brak</dt>
-                    <dd className="mt-1 text-2xl font-black tabular-nums text-amber-900">{fmtQty(missingTotal)}</dd>
+                  <div className="rounded-xl border border-red-300 bg-red-50 px-3 py-3">
+                    <dt className="text-[10px] font-bold uppercase tracking-wider text-red-800">Brak</dt>
+                    <dd className="mt-1 text-2xl font-black tabular-nums text-red-900">{fmtQty(missingTotal)}</dd>
                   </div>
                 </dl>
-                <p className="text-sm font-semibold text-amber-900/80">
-                  {detail.locations.length > 0
-                    ? `Brak potwierdzony na: ${shortageLocationLabel}`
-                    : "Brak dostępnego towaru / lokalizacji kompletacyjnej."}
+                <p className="text-sm font-semibold text-red-900/80">
+                  Zamówienie niekompletne
+                  {detail.locations.length > 0 ? ` — lokalizacja: ${shortageLocationLabel}` : ""}.
                 </p>
               </div>
             ) : (
