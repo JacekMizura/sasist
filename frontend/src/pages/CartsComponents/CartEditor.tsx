@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Grid3X3 } from "lucide-react";
 
 import { ProductLikePageLayout } from "../../components/catalog/ProductLikePageLayout";
+import ActivityLogPanel from "../../components/activityLog/ActivityLogPanel";
 import { log } from "../../utils/logger";
 import api from "../../api/axios";
 import { useWarehouse } from "../../context/WarehouseContext";
@@ -329,6 +330,8 @@ export default function CartEditor({ cartId, onClose }: { cartId: number | null;
             removeSectionLabel={t.removeSection}
             addLevelLabel={t.addNewLevel}
           />
+
+          {cartId ? <ActivityLogPanel objectType="cart" objectId={cartId} /> : null}
         </div>
       )}
     </ProductLikePageLayout>

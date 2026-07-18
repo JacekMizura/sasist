@@ -2,9 +2,15 @@
 
 ## Active
 
-WMS user messaging SSOT + Event Log PL landed.
-Capacity Engine remains SSOT for occupancy; Cart.status = lifecycle only.
+Panel **Activity Log** (OMS): wspólna historia obiektów — `activity_events` + linki N:N, UI `ActivityLogPanel`.
+Osadzony w: zamówienia, edytory wózków (bulk/multi), fleet detail, regały kompletacyjne (edit/preview).
+
+Capacity Engine = SSOT occupancy; Cart.status = lifecycle only.
+WMS user messaging SSOT + Event Log PL (terminal) — osobny tor od panel Activity Log.
 
 ## Next
 
-Rozszerzyć `showWmsError` na pozostałe ekrany WMS (packing scan, products cancel) oraz panel Event Log w detalu wózka (`GET /wms/carts/{id}/events`).
+- Dual-write OMS order events → `activity_events` (obecnie fallback `order_activity_logs`)
+- Zapisy dla rack lifecycle → Activity Log
+- Filtry UI (severity / category / operator / daty) — API już gotowe
+- Osadzenie w produktach / produkcji / zwrotach / dokumentach gdy powstaną widoki

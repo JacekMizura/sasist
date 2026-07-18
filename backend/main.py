@@ -340,6 +340,7 @@ from .api.document_templates import router as document_templates_router
 from .api.wms_picking_config import router as wms_picking_config_router
 from .api.wms_picking_entry import router as wms_picking_entry_router
 from .api.wms_carts import router as wms_carts_router
+from .api.activity_log import router as activity_log_router
 from .api.wms_order_issue_tasks import router as wms_order_issue_tasks_router
 from .api.wms_operational_tasks import router as wms_operational_tasks_router
 from .api.location_stock import router as location_stock_router
@@ -1619,6 +1620,12 @@ def _upgrade_schema_background() -> None:
         ensure_cart_lifecycle_history_table(engine)
         ensure_cart_lifecycle_events_table(engine)
         try:
+            from .db.activity_log_schema import ensure_activity_log_tables
+
+            ensure_activity_log_tables(engine)
+        except Exception:
+            logging.getLogger(__name__).exception("ensure_activity_log_tables failed")
+        try:
             from .database import SessionLocal
             from .services.cart_picking_lifecycle_service import heal_carts_with_orphaned_picking_sessions
 
@@ -2018,6 +2025,7 @@ _API_ROUTERS = (
     wms_picking_config_router,
     wms_picking_entry_router,
     wms_carts_router,
+    activity_log_router,
     wms_order_issue_tasks_router,
     wms_operational_tasks_router,
     location_stock_router,

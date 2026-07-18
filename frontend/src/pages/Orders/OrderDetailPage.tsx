@@ -65,6 +65,7 @@ import { OrderDocumentsPrintMenu } from "../../components/orders/OrderDocumentsP
 import { useDocumentTemplatePrint } from "../../hooks/useDocumentTemplatePrint";
 import { saleKindFromSubtype, stockKindFromType } from "../../utils/documentTemplatePrint";
 import { OrderDirectSalesBadge } from "../../components/orders/orderList/OrderDirectSalesBadge";
+import ActivityLogPanel from "../../components/activityLog/ActivityLogPanel";
 import OrderFulfillmentWarehousePanel from "../../components/orders/OrderFulfillmentWarehousePanel";
 import OrderConsolidationPanel from "../../components/orders/OrderConsolidationPanel";
 import OrderFulfillmentAssignmentHistory from "../../components/orders/OrderFulfillmentAssignmentHistory";
@@ -2485,25 +2486,19 @@ export default function OrderDetailPage() {
             ) : null}
 
             {activeTab === "logs" ? (
-              <div className="bg-white rounded-md border border-slate-200 p-6 shadow-sm max-w-[1200px]">
-                 <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-6 border-b border-slate-100 pb-3">Dziennik zdarzeń</h3>
-                 <input type="text" value={summaryLogSearch} onChange={(e) => setSummaryLogSearch(e.target.value)} placeholder="Filtruj logi..." className="border border-slate-300 rounded-md px-4 py-2 text-sm w-72 mb-6 outline-none focus:border-orange-500 transition-colors" />
-                 <table className="w-full text-left text-sm">
-                   <thead className="text-[10px] uppercase font-bold text-slate-400 border-b border-slate-100"><tr><th className="py-2 w-48">Czas</th><th className="py-2 w-48">Zdarzenie</th><th className="py-2">Komunikat</th></tr></thead>
-                   <tbody className="divide-y divide-slate-50">
-                     {summaryPanelLogs.map((row) => (
-                       <tr key={String(row.id)} className={row.severity === "error" ? "bg-red-50 text-red-900" : row.severity === "warn" ? "bg-amber-50 text-amber-900" : ""}>
-                         <td className="py-3 text-slate-500 font-mono text-xs">{row.at}</td>
-                         <td className="py-3">
-                           <OrderEventTypeLabel eventType={row.eventKey} />
-                         </td>
-                         <td className="py-3">{row.msg}</td>
-                       </tr>
-                     ))}
-                   </tbody>
-                 </table>
+              <div className="max-w-[1200px] rounded-md border border-slate-200 bg-white p-6 shadow-sm">
+                <ActivityLogPanel
+                  objectType="order"
+                  objectId={order.id}
+                  defaultCollapsed={false}
+                  className="mt-0 border-t-0 pt-0"
+                />
               </div>
-            ) : null}
+            ) : (
+              <div className="max-w-[1200px] px-1 pb-8">
+                <ActivityLogPanel objectType="order" objectId={order.id} />
+              </div>
+            )}
           </div>
         </div>
       </div>

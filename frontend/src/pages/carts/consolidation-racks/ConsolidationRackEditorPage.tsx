@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Loader2, Save } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
+import ActivityLogPanel from "../../../components/activityLog/ActivityLogPanel";
 import api from "../../../api/axios";
 import { useActiveWarehouseContext, ACTIVE_WAREHOUSE_REQUIRED_MESSAGE } from "../../../hooks/useActiveWarehouseContext";
 import { cartsBtnPrimary, cartsPageShellClass } from "../../../modules/carts/cartsModuleTokens";
@@ -304,19 +305,24 @@ export default function ConsolidationRackEditorPage() {
           </div>
         }
         footer={
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-xs text-slate-500">
-              Regał → poziomy → segmenty. Kliknij komórkę, aby edytować wymiary i nazwę.
-            </p>
-            <button
-              type="button"
-              disabled={saving || !validation.valid || !draft.rackName.trim()}
-              className={cartsBtnPrimary}
-              onClick={() => void (isCreate ? handleCreate() : handleSaveEdit())}
-            >
-              {saving ? <Loader2 className="mr-1 inline h-4 w-4 animate-spin" /> : <Save className="mr-1 inline h-4 w-4" />}
-              {isCreate ? "Utwórz regał" : "Zapisz regał"}
-            </button>
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-xs text-slate-500">
+                Regał → poziomy → segmenty. Kliknij komórkę, aby edytować wymiary i nazwę.
+              </p>
+              <button
+                type="button"
+                disabled={saving || !validation.valid || !draft.rackName.trim()}
+                className={cartsBtnPrimary}
+                onClick={() => void (isCreate ? handleCreate() : handleSaveEdit())}
+              >
+                {saving ? <Loader2 className="mr-1 inline h-4 w-4 animate-spin" /> : <Save className="mr-1 inline h-4 w-4" />}
+                {isCreate ? "Utwórz regał" : "Zapisz regał"}
+              </button>
+            </div>
+            {!isCreate && rackId ? (
+              <ActivityLogPanel objectType="rack" objectId={Number(rackId)} className="mt-0 border-t border-slate-100 pt-3" />
+            ) : null}
           </div>
         }
       />

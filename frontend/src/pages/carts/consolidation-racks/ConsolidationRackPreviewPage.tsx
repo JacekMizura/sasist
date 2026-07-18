@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Loader2, Pencil } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 
+import ActivityLogPanel from "../../../components/activityLog/ActivityLogPanel";
 import api from "../../../api/axios";
 import { useWarehouse } from "../../../context/WarehouseContext";
 import { cartsPageShellClass } from "../../../modules/carts/cartsModuleTokens";
@@ -142,6 +143,11 @@ export default function ConsolidationRackPreviewPage() {
               />
             </div>
           </div>
+        }
+        footer={
+          rack?.id ? (
+            <ActivityLogPanel objectType="rack" objectId={rack.id} className="mt-0 border-t-0 pt-0" />
+          ) : null
         }
       />
     </div>

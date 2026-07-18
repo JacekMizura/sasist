@@ -17,6 +17,7 @@ import { ClearIcon } from "../../../pages/CartsComponents/ui/Icons";
 import type { BasketDetail } from "./cartFleetTypes";
 import type { CapacitySnapshot } from "../../../types/cartCapacity";
 import { basketSlotCode } from "./cartFleetTypes";
+import ActivityLogPanel from "../../../components/activityLog/ActivityLogPanel";
 import { CartOrdersHoverPopover, type CartOrderPreview } from "./CartOrdersHoverPopover";
 
 type CartFleetDetailPanelProps = {
@@ -371,6 +372,10 @@ export function CartFleetDetailPanel({
                         );
                       })()
                     : null}
+
+                  {cartId ? (
+                    <ActivityLogPanel objectType="cart" objectId={cartId} className="mt-2 border-t-0 pt-2" />
+                  ) : null}
                 </div>
               )
             ) : null}

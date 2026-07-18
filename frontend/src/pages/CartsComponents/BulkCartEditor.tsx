@@ -22,6 +22,7 @@ import {
   type CapacitySnapshot,
   type CapacityStrategyValue,
 } from "../../types/cartCapacity";
+import ActivityLogPanel from "../../components/activityLog/ActivityLogPanel";
 import CartImageUrlField from "./ui/CartImageUrlField";
 import CartCapacitySection from "./ui/CartCapacitySection";
 import ProgressBar from "./ui/ProgressBar";
@@ -397,6 +398,8 @@ export default function BulkCartEditor({
           <CartImageUrlField value={imageUrl} onChange={setImageUrl} />
         </div>
       </section>
+
+      {cartId ? <ActivityLogPanel objectType="cart" objectId={cartId} /> : null}
     </div>
   );
 

@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-07-18 — Panel Activity Log (OMS)
+
+- SSOT: `activity_events` + `activity_event_links` (jedno zdarzenie → wiele obiektów).
+- API `GET /activity-log`; writer `record_activity` + bridge z CartLifecycle.
+- FE: `ActivityLogPanel` (oś czasu, zwijany) na zamówieniach, wózkach, regałach.
+- Szczegóły: `memory/activity-log-architecture.md`.
+
 ## 2026-07-18 — WMS user messages + Event Log PL
 
 - Katalog `WmsUserMessage` (code/severity/title/message/details/suggested_action) — PL, bez HTTP/exception w UI.
