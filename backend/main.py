@@ -684,6 +684,15 @@ _POSTGRES_SAFE_SCHEMA_FUNCS = frozenset({
     "ensure_carts_picking_lifecycle_columns",
     "ensure_cart_lifecycle_history_table",
     "ensure_cart_lifecycle_events_table",
+    # WMS sessions / picks / order timeline — dialect-safe ADD COLUMN / CREATE.
+    "ensure_wms_audit_tables",
+    "ensure_wms_packing_sessions_automation_finished_at_column",
+    "ensure_orders_wms_timeline_columns",
+    "ensure_orders_wms_packing_automation_finished_at_column",
+    "ensure_picks_cart_id_column",
+    "ensure_pick_lot_columns",
+    "ensure_carts_code_column",
+    "ensure_esp_scan_code_columns",
 })
 _POSTGRES_SQLITE_ONLY_HELPERS: list[str] = []
 if not _is_sqlite_engine():

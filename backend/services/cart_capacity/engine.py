@@ -115,7 +115,9 @@ class CartCapacityEngine:
 
     @classmethod
     def from_db(cls, db: Session, cart: Cart) -> CartCapacityEngine:
-        """Load assigned occupancy from orders / baskets (SSOT)."""
+        """Load assigned occupancy from orders / baskets (SSOT = list_orders_on_cart)."""
+        from ..cart_stats_service import list_orders_on_cart
+
         strategy = resolve_capacity_strategy(cart)
         if is_multi_cart(cart):
             strategy = CapacityStrategy.BASKETS
@@ -144,11 +146,7 @@ class CartCapacityEngine:
                 baskets=bask,
             )
 
-        orders = (
-            db.query(Order)
-            .filter(Order.cart_id == int(cart.id), Order.deleted_at.is_(None))
-            .all()
-        )
+        orders = list_orders_on_cart(db, cart)
         assigned_orders = len(orders)
         assigned_volume = round(sum(order_volume_dm3(o) for o in orders), 4)
         return cls.from_cart(

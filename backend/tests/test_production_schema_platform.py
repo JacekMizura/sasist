@@ -127,6 +127,11 @@ class TestPostgresSchemaWrapperPolicy(unittest.TestCase):
             "ensure_product_compositions_and_batches",
             "ensure_production_batch_schema_sync",
             "ensure_production_schema_evolution",
+            "ensure_carts_picking_lifecycle_columns",
+            "ensure_cart_lifecycle_events_table",
+            "ensure_wms_audit_tables",
+            "ensure_orders_wms_timeline_columns",
+            "ensure_picks_cart_id_column",
         ):
             self.assertIn(name, _POSTGRES_SAFE_SCHEMA_FUNCS)
 

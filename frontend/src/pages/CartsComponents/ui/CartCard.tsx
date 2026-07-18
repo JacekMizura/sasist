@@ -356,7 +356,7 @@ export default function CartCard(props: CartCardProps) {
         ) : null}
       </div>
 
-      {capacitySnapshot ? (
+      {!expanded && capacitySnapshot ? (
         <div className="border-t border-slate-100 bg-slate-50/50 px-4 py-1.5">
           <CartCapacitySection capacity={capacitySnapshot} />
         </div>

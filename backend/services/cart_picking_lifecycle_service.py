@@ -406,11 +406,13 @@ def find_open_picking_session(db: Session, *, cart: Cart) -> WmsOperationSession
 
 
 def _orders_on_cart(db: Session, cart_id: int) -> list[Order]:
-    return (
-        db.query(Order)
-        .filter(Order.cart_id == int(cart_id), Order.deleted_at.is_(None))
-        .all()
-    )
+    """SSOT: same set as cart_stats_service.list_orders_on_cart (cart_id + session heal)."""
+    from .cart_stats_service import list_orders_on_cart
+
+    cart = db.query(Cart).filter(Cart.id == int(cart_id)).first()
+    if cart is None:
+        return []
+    return list_orders_on_cart(db, cart)
 
 
 def _apply_capacity_slice(
@@ -755,6 +757,9 @@ def start_picking(
     try:
         n = len(selected)
         vol = round(used_vol, 2)
+        from .cart_stats_service import orders_event_meta
+
+        assign_meta = {**orders_event_meta(selected), "assigned_volume": vol}
         _record_event(
             db,
             cart,
@@ -762,7 +767,7 @@ def start_picking(
             operator_user_id=uid,
             session_id=sid,
             description="Rozpoczęto kompletację.",
-            metadata={"order_ids": [int(o.id) for o in selected], "orders_count": n},
+            metadata=dict(assign_meta),
         )
         _record_event(
             db,
@@ -771,7 +776,7 @@ def start_picking(
             operator_user_id=uid,
             session_id=sid,
             description=f"Przypisano {n} zamówień.",
-            metadata={"orders_count": n, "assigned_volume": vol},
+            metadata=dict(assign_meta),
         )
         for o in selected:
             bid = basket_assignments.get(int(o.id))
@@ -891,12 +896,18 @@ def cancel_picking(
     elif str(reason).startswith("admin_"):
         pass  # eventy emituje admin_release_cart
     else:
+        from .cart_stats_service import orders_event_meta
+
         _record_event(
             db,
             cart,
             "picking_cancelled",
             operator_user_id=operator_user_id,
-            metadata={"orders_restored": restored, "reason": reason},
+            metadata={
+                **orders_event_meta(orders),
+                "orders_restored": restored,
+                "reason": reason,
+            },
         )
     _after_mutation(db, cart)
     logger.info("cart_lifecycle.cancel cart_id=%s restored=%s reason=%s", int(cart_id), restored, reason)
@@ -953,6 +964,9 @@ def finish_picking(
         sess.completed_reason = "picking_finished"
         db.add(sess)
 
+    from .cart_stats_service import orders_event_meta
+
+    finish_meta = orders_event_meta(order_list)
     cart.current_session_id = None
     apply_cart_transition(
         db,
@@ -963,7 +977,7 @@ def finish_picking(
         task_id=sess_id,
         progress=100.0,
         total_orders=len(order_list),
-        metadata={"order_ids": [int(o.id) for o in order_list]},
+        metadata=dict(finish_meta),
     )
     _record_event(
         db,
@@ -971,7 +985,7 @@ def finish_picking(
         "picking_finished",
         operator_user_id=operator_user_id or getattr(cart, "assigned_user_id", None),
         session_id=sess_id,
-        metadata={"order_ids": [int(o.id) for o in order_list]},
+        metadata=dict(finish_meta),
     )
     _after_mutation(db, cart)
     logger.info(
@@ -1130,6 +1144,11 @@ def release_cart(
         # Już czysty AVAILABLE — no-op (bez historii)
         return
 
+    from .cart_stats_service import list_orders_on_cart, orders_event_meta
+
+    orders_snapshot = list_orders_on_cart(db, cart)
+    release_meta = orders_event_meta(orders_snapshot)
+
     for basket in list(cart.baskets or []):
         basket.order_id = None
         basket.used_volume = 0.0
@@ -1155,17 +1174,21 @@ def release_cart(
     )
     # Jeden event biznesowy zależnie od powodu zwolnienia
     if reason == "assigned_timeout":
-        _record_event(db, cart, "reservation_timed_out")
+        _record_event(db, cart, "reservation_timed_out", metadata=dict(release_meta))
     elif reason == "auto_release_no_picks":
-        _record_event(db, cart, "cart_auto_released_idle")
+        _record_event(db, cart, "cart_auto_released_idle", metadata=dict(release_meta))
     elif reason in ("cancel_picking",) or str(reason).startswith("cancel"):
         pass  # event „Anulowano kompletację” w cancel_picking
     elif str(reason).startswith("admin_"):
         pass  # eventy emituje admin_release_cart
     elif reason == "last_order_packed":
-        _record_event(db, cart, "cart_released", metadata={"reason": reason})
+        _record_event(
+            db, cart, "cart_released", metadata={**release_meta, "reason": reason}
+        )
     else:
-        _record_event(db, cart, "cart_released", metadata={"reason": reason})
+        _record_event(
+            db, cart, "cart_released", metadata={**release_meta, "reason": reason}
+        )
     if not _already_locked:
         _after_mutation(db, cart)
     logger.info("cart_lifecycle.release cart_id=%s reason=%s", int(cart.id), reason)
@@ -1368,11 +1391,15 @@ def admin_release_cart(
         db.refresh(cart)
         _step(43, f"refreshed status={getattr(cart, 'status', None)}")
 
+        from .cart_stats_service import orders_event_meta
+
+        orders_meta = orders_event_meta(orders_before)
         meta_base = {
             "reason": "Ręczne zwolnienie z panelu administracyjnego.",
             "orders_detached": orders_detached,
             "picking_cancelled": picking_cancelled,
             "confirmed_picks_before": picks_n,
+            **orders_meta,
             **artifacts,
         }
         _step(50, "record admin_cart_released")
@@ -1392,7 +1419,10 @@ def admin_release_cart(
                 "admin_orders_detached",
                 operator_user_id=int(admin_user_id),
                 description=f"Odłączono {orders_detached} zamówień od wózka.",
-                metadata={"orders_detached": orders_detached},
+                metadata={
+                    **orders_meta,
+                    "orders_detached": orders_detached,
+                },
             )
             _step(53, "admin_orders_detached flushed")
         if picking_cancelled:

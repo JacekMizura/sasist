@@ -1,5 +1,20 @@
 # Change log
 
+## 2026-07-18 — Carts: assigned orders SSOT + admin UI
+
+- SSOT: `list_orders_on_cart` for admin, WMS stats, Capacity Engine (BULK), lifecycle, WMS entry count.
+- Admin expand: `AssignedOrdersSection` (number/status/items/volume/open + stub detach).
+- Activity Log: `order_numbers` on assign/detach/timeout/admin release/start-finish-cancel picking.
+- Capacity UI: single strip (collapsed card only).
+- Report: `memory/cart-orders-ssot-report.md`.
+
+## 2026-07-18 — Database Schema Health Check
+
+- Tool: `python -m backend.scripts.schema_health_check` (+ `memory/schema-health-check.md`).
+- PG allowlist: `ensure_wms_audit_tables`, packing automation, order WMS timeline, picks, carts code, esp scan.
+- `ensure_wms_audit_tables` dialect-safe for PostgreSQL; capacity legacy DROP hardened.
+- Local SQLite heal: carts capacity/lifecycle columns + `activity_event_links`; KRYTYCZNE focus → 0.
+
 ## 2026-07-18 — Event Log: retire legacy `event_type`
 
 - Root cause 500 admin-release: PG `cart_lifecycle_events.event_type NOT NULL` while ORM/writers use only `event_code`.

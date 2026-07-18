@@ -387,12 +387,26 @@ def _cart_stats(db: Session, cart_id: int, assigned, baskets_iter):
 
 
 def _orders_for_cart_preview(db: Session, cart) -> list:
-    from .cart_stats_service import query_orders_on_cart
+    from .cart_stats_service import list_orders_on_cart
 
-    by_id: dict[int, object] = {}
-    for o in query_orders_on_cart(db, cart).all():
-        by_id[int(o.id)] = o
-    return list(by_id.values())
+    return list_orders_on_cart(db, cart, with_items=True)
+
+
+def _serialize_assigned_order_row(order) -> dict:
+    """Rich row for admin „Przypisane zamówienia” section."""
+    number = getattr(order, "number", None)
+    items = getattr(order, "items", None) or []
+    items_count = len([i for i in items if float(getattr(i, "quantity", 0) or 0) > 0]) or len(items)
+    vol = getattr(order, "total_volume_dm3", None)
+    if vol is None or float(vol or 0) <= 0:
+        vol = _order_used_volume_dm3_from_items(order)
+    return {
+        "order_id": int(order.id),
+        "number": str(number) if number not in (None, "") else str(order.id),
+        "status": _order_display_status(order),
+        "items_count": int(items_count),
+        "total_volume_dm3": round(float(vol or 0), 2),
+    }
 
 
 def _order_total_weight_kg(order) -> float:
@@ -652,10 +666,7 @@ class CartService:
             }
             pick_extra = _wms_pick_stats_for_cart(self.db, cart.id)
             orders_preview = [_serialize_cart_order_preview(o, order_id=int(o.id)) for o in orders_ssot]
-            assigned_orders = [
-                {"order_id": o.id, "total_volume_dm3": round(getattr(o, "total_volume_dm3", 0) or 0, 2)}
-                for o in orders_ssot
-            ]
+            assigned_orders = [_serialize_assigned_order_row(o) for o in orders_ssot]
             order_numbers = [str(o.number) for o in orders_ssot if getattr(o, "number", None) not in (None, "")]
             assignment = assignment_by_cart.get(int(cart.id)) or _empty_cart_assignment()
             return {
@@ -744,10 +755,7 @@ class CartService:
         pick_extra = _wms_pick_stats_for_cart(self.db, cart.id)
         order_numbers = [str(o.number) for o in orders_ssot if getattr(o, "number", None) not in (None, "")]
         orders_preview = [_serialize_cart_order_preview(o, order_id=int(o.id)) for o in orders_ssot]
-        assigned_orders = [
-            {"order_id": o.id, "total_volume_dm3": round(getattr(o, "total_volume_dm3", 0) or 0, 2)}
-            for o in orders_ssot
-        ]
+        assigned_orders = [_serialize_assigned_order_row(o) for o in orders_ssot]
         assignment = _batch_cart_assignments(self.db, [int(cart.id)]).get(int(cart.id)) or _empty_cart_assignment()
         if assignment.get("assigned_user_id") is None:
             lifecycle_uid = getattr(cart, "assigned_user_id", None) or getattr(cart, "packing_user_id", None)

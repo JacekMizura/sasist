@@ -11,7 +11,6 @@ import {
 import { useTranslation } from "../../../locales";
 import { cartStatsFromWms } from "../../../pages/CartsComponents/cartStats";
 import OrderProductPreviewModal from "../../../pages/CartsComponents/ui/OrderProductPreviewModal";
-import CartCapacitySection from "../../../pages/CartsComponents/ui/CartCapacitySection";
 import StatusPill from "../../../pages/CartsComponents/ui/StatusPill";
 import { ClearIcon } from "../../../pages/CartsComponents/ui/Icons";
 import type { BasketDetail } from "./cartFleetTypes";
@@ -20,6 +19,7 @@ import { basketSlotCode } from "./cartFleetTypes";
 import ActivityLogPanel from "../../../components/activityLog/ActivityLogPanel";
 import { AdminReleaseCartButton } from "../../../components/carts/AdminReleaseCartButton";
 import { CartOrdersHoverPopover, type CartOrderPreview } from "./CartOrdersHoverPopover";
+import { AssignedOrdersSection, type AssignedOrderRow } from "./AssignedOrdersSection";
 
 type CartFleetDetailPanelProps = {
   open: boolean;
@@ -47,7 +47,7 @@ export function CartFleetDetailPanel({
   const [baskets, setBaskets] = useState<BasketDetail[]>([]);
   const [detailData, setDetailData] = useState<{
     baskets?: BasketDetail[];
-    assigned_orders?: Array<{ order_id: number; total_volume_dm3?: number }>;
+    assigned_orders?: AssignedOrderRow[];
     order_numbers?: string[];
     orders_preview?: CartOrderPreview[];
     total_weight_kg?: number;
@@ -108,7 +108,6 @@ export function CartFleetDetailPanel({
 
   const stats = useMemo(() => cartStatsFromWms(wmsStats), [wmsStats]);
   const weightKg = Number(detailData?.total_weight_kg ?? 0);
-  const capacitySnapshot = wmsStats.capacity ?? detailData?.capacity ?? null;
   const lifecycleStatus = wmsStats.status ?? detailData?.status;
 
   const handleClearCartConfirm = async () => {
@@ -218,7 +217,6 @@ export function CartFleetDetailPanel({
   };
 
   const assignedOrders = detailData?.assigned_orders ?? [];
-  const orderNumbers = detailData?.order_numbers ?? [];
   const ordersPreview = detailData?.orders_preview ?? [];
 
   return (
@@ -330,11 +328,7 @@ export function CartFleetDetailPanel({
                     </div>
                   </div>
 
-                  {capacitySnapshot ? (
-                    <div className="rounded-lg border border-slate-200 bg-slate-50/80 px-4 py-3">
-                      <CartCapacitySection capacity={capacitySnapshot} />
-                    </div>
-                  ) : null}
+                  <AssignedOrdersSection orders={assignedOrders} />
 
                   {isSectional && baskets.length > 0 ? (
                     <div className="space-y-3">
@@ -355,74 +349,6 @@ export function CartFleetDetailPanel({
                         })}
                     </div>
                   ) : null}
-
-                  {!isSectional && assignedOrders.length > 0 ? (
-                    <div>
-                      <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">
-                        {t.assigned_orders ?? "Przypisane zamówienia"}
-                      </h3>
-                      <ul className="flex flex-wrap gap-2">
-                        {assignedOrders.map((ref, i) => {
-                          const label = orderNumbers[i] ? `#${orderNumbers[i]}` : `#${ref.order_id}`;
-                          return (
-                            <li key={ref.order_id}>
-                              <button
-                                type="button"
-                                onClick={() => setOrderPreview({ orderId: ref.order_id })}
-                                className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-700 hover:bg-violet-100"
-                              >
-                                [{label}]
-                              </button>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </div>
-                  ) : null}
-
-                  {isSectional
-                    ? (() => {
-                        const byOrder = new Map<
-                          number,
-                          { order_id: number; order_number: string | null; basket: BasketDetail }
-                        >();
-                        for (const b of baskets) {
-                          if (b.order_id == null || byOrder.has(b.order_id)) continue;
-                          byOrder.set(b.order_id, {
-                            order_id: b.order_id,
-                            order_number: b.order_number ?? null,
-                            basket: b,
-                          });
-                        }
-                        const uniqueOrders = Array.from(byOrder.values());
-                        if (uniqueOrders.length === 0) return null;
-                        return (
-                          <div>
-                            <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">
-                              Lista zamówień na wózku
-                            </h3>
-                            <ul className="flex flex-wrap gap-2">
-                              {uniqueOrders.map((o) => (
-                                <li key={o.order_id}>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      setOrderPreview({
-                                        orderId: o.order_id,
-                                        basketCode: basketSlotCode(o.basket),
-                                      })
-                                    }
-                                    className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-700 hover:bg-violet-100"
-                                  >
-                                    [{o.order_number ? `#${o.order_number}` : `#${o.order_id}`}]
-                                  </button>
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        );
-                      })()
-                    : null}
 
                   {cartId ? (
                     <ActivityLogPanel objectType="cart" objectId={cartId} className="mt-2 border-t-0 pt-2" />

@@ -5038,15 +5038,16 @@ def ensure_orders_wms_packing_automation_finished_at_column(engine: Engine) -> N
 
 
 def ensure_wms_packing_sessions_automation_finished_at_column(engine: Engine) -> None:
-    """Sesja pakowania: znacznik zakończenia automatyki."""
+    """Sesja pakowania: znacznik zakończenia automatyki (SQLite + PostgreSQL)."""
     with engine.connect() as conn:
-        r = _table_exists(conn, "wms_packing_sessions")
-        if not r:
+        if not _table_exists(conn, "wms_packing_sessions"):
             conn.commit()
             return
         cols = _table_column_names(conn, "wms_packing_sessions")
         if "automation_finished_at" not in cols:
-            conn.execute(text("ALTER TABLE wms_packing_sessions ADD COLUMN automation_finished_at DATETIME"))
+            conn.execute(
+                text(_timestamp_column_ddl(engine, "wms_packing_sessions", "automation_finished_at"))
+            )
         conn.commit()
 
 
@@ -6634,71 +6635,122 @@ def ensure_stock_document_items_return_receipt_columns(engine: Engine) -> None:
 
 
 def ensure_wms_audit_tables(engine: Engine) -> None:
-    """Canonical WMS audit events (event-sourced trail) + operation session aggregates."""
+    """Canonical WMS audit events + operation/packing session aggregates (SQLite + PostgreSQL)."""
+    dialect = engine.dialect.name
+    ts = "TIMESTAMP WITHOUT TIME ZONE" if dialect == "postgresql" else "DATETIME"
+    pk = "SERIAL PRIMARY KEY" if dialect == "postgresql" else "INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL"
     with engine.connect() as conn:
-        conn.execute(
-            text(
-                """
-                CREATE TABLE IF NOT EXISTS wms_order_events (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-                    tenant_id INTEGER NOT NULL,
-                    warehouse_id INTEGER NOT NULL,
-                    order_id INTEGER NOT NULL,
-                    operator_user_id INTEGER,
-                    event_type VARCHAR(64) NOT NULL,
-                    product_id INTEGER,
-                    order_item_id INTEGER,
-                    source_location_id INTEGER,
-                    target_cart_id INTEGER,
-                    quantity REAL,
-                    metadata_json TEXT,
-                    created_at DATETIME NOT NULL,
-                    FOREIGN KEY(tenant_id) REFERENCES tenants (id),
-                    FOREIGN KEY(warehouse_id) REFERENCES warehouses (id),
-                    FOREIGN KEY(order_id) REFERENCES orders (id) ON DELETE CASCADE,
-                    FOREIGN KEY(operator_user_id) REFERENCES app_users (id) ON DELETE SET NULL,
-                    FOREIGN KEY(product_id) REFERENCES products (id) ON DELETE SET NULL,
-                    FOREIGN KEY(order_item_id) REFERENCES order_items (id) ON DELETE SET NULL,
-                    FOREIGN KEY(source_location_id) REFERENCES locations (id) ON DELETE SET NULL,
-                    FOREIGN KEY(target_cart_id) REFERENCES carts (id) ON DELETE SET NULL
+        if dialect == "postgresql":
+            conn.execute(
+                text(
+                    f"""
+                    CREATE TABLE IF NOT EXISTS wms_order_events (
+                        id {pk},
+                        tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+                        warehouse_id INTEGER NOT NULL REFERENCES warehouses(id),
+                        order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+                        operator_user_id INTEGER REFERENCES app_users(id) ON DELETE SET NULL,
+                        event_type VARCHAR(64) NOT NULL,
+                        product_id INTEGER REFERENCES products(id) ON DELETE SET NULL,
+                        order_item_id INTEGER REFERENCES order_items(id) ON DELETE SET NULL,
+                        source_location_id INTEGER REFERENCES locations(id) ON DELETE SET NULL,
+                        target_cart_id INTEGER REFERENCES carts(id) ON DELETE SET NULL,
+                        quantity DOUBLE PRECISION,
+                        metadata_json TEXT,
+                        created_at {ts} NOT NULL DEFAULT NOW()
+                    )
+                    """
                 )
-                """
             )
-        )
+        else:
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE IF NOT EXISTS wms_order_events (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        tenant_id INTEGER NOT NULL,
+                        warehouse_id INTEGER NOT NULL,
+                        order_id INTEGER NOT NULL,
+                        operator_user_id INTEGER,
+                        event_type VARCHAR(64) NOT NULL,
+                        product_id INTEGER,
+                        order_item_id INTEGER,
+                        source_location_id INTEGER,
+                        target_cart_id INTEGER,
+                        quantity REAL,
+                        metadata_json TEXT,
+                        created_at DATETIME NOT NULL,
+                        FOREIGN KEY(tenant_id) REFERENCES tenants (id),
+                        FOREIGN KEY(warehouse_id) REFERENCES warehouses (id),
+                        FOREIGN KEY(order_id) REFERENCES orders (id) ON DELETE CASCADE,
+                        FOREIGN KEY(operator_user_id) REFERENCES app_users (id) ON DELETE SET NULL,
+                        FOREIGN KEY(product_id) REFERENCES products (id) ON DELETE SET NULL,
+                        FOREIGN KEY(order_item_id) REFERENCES order_items (id) ON DELETE SET NULL,
+                        FOREIGN KEY(source_location_id) REFERENCES locations (id) ON DELETE SET NULL,
+                        FOREIGN KEY(target_cart_id) REFERENCES carts (id) ON DELETE SET NULL
+                    )
+                    """
+                )
+            )
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_wms_order_events_order_id ON wms_order_events(order_id)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_wms_order_events_created_at ON wms_order_events(created_at)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_wms_order_events_event_type ON wms_order_events(event_type)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_wms_order_events_operator ON wms_order_events(operator_user_id)"))
-        conn.execute(
-            text(
-                """
-                CREATE TABLE IF NOT EXISTS wms_operation_sessions (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-                    tenant_id INTEGER NOT NULL,
-                    warehouse_id INTEGER NOT NULL,
-                    cart_id INTEGER,
-                    order_id INTEGER,
-                    session_kind VARCHAR(32) NOT NULL,
-                    operator_user_id INTEGER,
-                    started_at DATETIME NOT NULL,
-                    completed_at DATETIME,
-                    paused_duration_seconds INTEGER NOT NULL DEFAULT 0,
-                    active_duration_seconds INTEGER,
-                    metadata_json TEXT,
-                    FOREIGN KEY(tenant_id) REFERENCES tenants (id),
-                    FOREIGN KEY(warehouse_id) REFERENCES warehouses (id),
-                    FOREIGN KEY(cart_id) REFERENCES carts (id) ON DELETE SET NULL,
-                    FOREIGN KEY(order_id) REFERENCES orders (id) ON DELETE SET NULL,
-                    FOREIGN KEY(operator_user_id) REFERENCES app_users (id) ON DELETE SET NULL
+
+        if dialect == "postgresql":
+            conn.execute(
+                text(
+                    f"""
+                    CREATE TABLE IF NOT EXISTS wms_operation_sessions (
+                        id {pk},
+                        tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+                        warehouse_id INTEGER NOT NULL REFERENCES warehouses(id),
+                        cart_id INTEGER REFERENCES carts(id) ON DELETE SET NULL,
+                        order_id INTEGER REFERENCES orders(id) ON DELETE SET NULL,
+                        session_kind VARCHAR(32) NOT NULL,
+                        operator_user_id INTEGER REFERENCES app_users(id) ON DELETE SET NULL,
+                        started_at {ts} NOT NULL DEFAULT NOW(),
+                        last_activity_at {ts},
+                        completed_at {ts},
+                        completed_reason VARCHAR(32),
+                        paused_duration_seconds INTEGER NOT NULL DEFAULT 0,
+                        active_duration_seconds INTEGER,
+                        metadata_json TEXT
+                    )
+                    """
                 )
-                """
             )
-        )
+        else:
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE IF NOT EXISTS wms_operation_sessions (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        tenant_id INTEGER NOT NULL,
+                        warehouse_id INTEGER NOT NULL,
+                        cart_id INTEGER,
+                        order_id INTEGER,
+                        session_kind VARCHAR(32) NOT NULL,
+                        operator_user_id INTEGER,
+                        started_at DATETIME NOT NULL,
+                        completed_at DATETIME,
+                        paused_duration_seconds INTEGER NOT NULL DEFAULT 0,
+                        active_duration_seconds INTEGER,
+                        metadata_json TEXT,
+                        FOREIGN KEY(tenant_id) REFERENCES tenants (id),
+                        FOREIGN KEY(warehouse_id) REFERENCES warehouses (id),
+                        FOREIGN KEY(cart_id) REFERENCES carts (id) ON DELETE SET NULL,
+                        FOREIGN KEY(order_id) REFERENCES orders (id) ON DELETE SET NULL,
+                        FOREIGN KEY(operator_user_id) REFERENCES app_users (id) ON DELETE SET NULL
+                    )
+                    """
+                )
+            )
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_wms_operation_sessions_cart ON wms_operation_sessions(cart_id)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_wms_operation_sessions_order ON wms_operation_sessions(order_id)"))
-        op_cols = _table_column_names(conn, "wms_operation_sessions")
+        op_cols = _live_table_columns(conn, "wms_operation_sessions")
         if "last_activity_at" not in op_cols:
-            conn.execute(text("ALTER TABLE wms_operation_sessions ADD COLUMN last_activity_at DATETIME"))
+            conn.execute(text(_timestamp_column_ddl(engine, "wms_operation_sessions", "last_activity_at")))
         if "completed_reason" not in op_cols:
             conn.execute(text("ALTER TABLE wms_operation_sessions ADD COLUMN completed_reason VARCHAR(32)"))
         conn.execute(
@@ -6707,35 +6759,61 @@ def ensure_wms_audit_tables(engine: Engine) -> None:
                 "ON wms_operation_sessions(last_activity_at)"
             )
         )
-        conn.execute(
-            text(
-                """
-                CREATE TABLE IF NOT EXISTS wms_packing_sessions (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-                    tenant_id INTEGER NOT NULL,
-                    warehouse_id INTEGER NOT NULL,
-                    order_id INTEGER NOT NULL,
-                    operator_user_id INTEGER,
-                    workstation_id INTEGER,
-                    started_at DATETIME NOT NULL,
-                    completed_at DATETIME,
-                    duration_seconds INTEGER,
-                    metadata_json TEXT,
-                    FOREIGN KEY(tenant_id) REFERENCES tenants (id),
-                    FOREIGN KEY(warehouse_id) REFERENCES warehouses (id),
-                    FOREIGN KEY(order_id) REFERENCES orders (id) ON DELETE CASCADE,
-                    FOREIGN KEY(operator_user_id) REFERENCES app_users (id) ON DELETE SET NULL
+
+        if dialect == "postgresql":
+            conn.execute(
+                text(
+                    f"""
+                    CREATE TABLE IF NOT EXISTS wms_packing_sessions (
+                        id {pk},
+                        tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+                        warehouse_id INTEGER NOT NULL REFERENCES warehouses(id),
+                        order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+                        operator_user_id INTEGER REFERENCES app_users(id) ON DELETE SET NULL,
+                        workstation_id INTEGER,
+                        started_at {ts} NOT NULL DEFAULT NOW(),
+                        last_activity_at {ts},
+                        completed_at {ts},
+                        completed_reason VARCHAR(32),
+                        automation_finished_at {ts},
+                        duration_seconds INTEGER,
+                        metadata_json TEXT
+                    )
+                    """
                 )
-                """
             )
-        )
+        else:
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE IF NOT EXISTS wms_packing_sessions (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        tenant_id INTEGER NOT NULL,
+                        warehouse_id INTEGER NOT NULL,
+                        order_id INTEGER NOT NULL,
+                        operator_user_id INTEGER,
+                        workstation_id INTEGER,
+                        started_at DATETIME NOT NULL,
+                        completed_at DATETIME,
+                        duration_seconds INTEGER,
+                        metadata_json TEXT,
+                        FOREIGN KEY(tenant_id) REFERENCES tenants (id),
+                        FOREIGN KEY(warehouse_id) REFERENCES warehouses (id),
+                        FOREIGN KEY(order_id) REFERENCES orders (id) ON DELETE CASCADE,
+                        FOREIGN KEY(operator_user_id) REFERENCES app_users (id) ON DELETE SET NULL
+                    )
+                    """
+                )
+            )
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_wms_packing_sessions_order ON wms_packing_sessions(order_id)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_wms_packing_sessions_open ON wms_packing_sessions(order_id, completed_at)"))
-        pack_cols = _table_column_names(conn, "wms_packing_sessions")
+        pack_cols = _live_table_columns(conn, "wms_packing_sessions")
         if "last_activity_at" not in pack_cols:
-            conn.execute(text("ALTER TABLE wms_packing_sessions ADD COLUMN last_activity_at DATETIME"))
+            conn.execute(text(_timestamp_column_ddl(engine, "wms_packing_sessions", "last_activity_at")))
         if "completed_reason" not in pack_cols:
             conn.execute(text("ALTER TABLE wms_packing_sessions ADD COLUMN completed_reason VARCHAR(32)"))
+        if "automation_finished_at" not in pack_cols:
+            conn.execute(text(_timestamp_column_ddl(engine, "wms_packing_sessions", "automation_finished_at")))
         conn.execute(
             text(
                 "CREATE INDEX IF NOT EXISTS ix_wms_packing_sessions_last_activity "

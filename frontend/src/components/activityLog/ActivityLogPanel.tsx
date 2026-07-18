@@ -70,11 +70,20 @@ function metaLines(meta: Record<string, unknown>): string[] {
   if (typeof reason === "string" && reason.trim()) {
     lines.push(`Powód: ${reason.trim()}`);
   }
-  const ordersCount = meta.orders_count;
+  const ordersCount = meta.orders_count ?? meta.orders_detached;
   if (typeof ordersCount === "number") {
     lines.push(`Zamówienia: ${ordersCount}`);
   }
   return lines;
+}
+
+function orderNumberLines(meta: Record<string, unknown>): string[] {
+  const raw = meta.order_numbers;
+  if (!Array.isArray(raw) || raw.length === 0) return [];
+  return raw
+    .map((n) => String(n ?? "").trim())
+    .filter(Boolean)
+    .map((n) => (n.startsWith("#") ? n : `#${n}`));
 }
 
 function ActivityEntry({
@@ -89,6 +98,7 @@ function ActivityEntry({
   const Icon = severityIcon(item.severity);
   const { time, date } = formatWhen(item.occurred_at);
   const details = metaLines(item.metadata || {});
+  const orderNums = orderNumberLines(item.metadata || {});
   const related = (item.links || []).filter(
     (l) => !(l.object_type === hideObjectType),
   );
@@ -111,6 +121,13 @@ function ActivityEntry({
           {date ? <span className="text-[11px] font-medium text-slate-400">{date}</span> : null}
         </div>
         <p className="mt-1 text-sm font-semibold text-slate-800">{item.description}</p>
+        {orderNums.length ? (
+          <ul className="mt-1 space-y-0.5 text-[12px] font-medium tabular-nums text-slate-600">
+            {orderNums.map((n) => (
+              <li key={n}>{n}</li>
+            ))}
+          </ul>
+        ) : null}
         {item.actor_name ? (
           <p className="mt-0.5 text-[12px] text-slate-500">
             Operator: <span className="font-medium text-slate-700">{item.actor_name}</span>

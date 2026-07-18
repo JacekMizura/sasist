@@ -6,7 +6,7 @@ Nie używa tabeli picks ani lokalnego cache jako źródła prawdy dla zajętośc
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Sequence
 
 from fastapi import HTTPException
 from sqlalchemy import or_
@@ -33,7 +33,7 @@ def _capacity_snapshot_for_orders(cart: Cart, orders: list[Order]):
     ).snapshot()
 
 
-def query_orders_on_cart(db: Session, cart: Cart):
+def query_orders_on_cart(db: Session, cart: Cart, *, with_items: bool = False):
     """
     Zamówienia na wózku (SSOT):
     - Order.cart_id == cart.id
@@ -51,11 +51,36 @@ def query_orders_on_cart(db: Session, cart: Cart):
         sess = find_open_picking_session(db, cart=cart)
         if sess is not None:
             clauses.append(Order.picking_session_id == int(sess.id))
-    return (
-        db.query(Order)
-        .options(joinedload(Order.items).joinedload(OrderItem.product))
-        .filter(or_(*clauses), Order.deleted_at.is_(None))
-    )
+    q = db.query(Order).filter(or_(*clauses), Order.deleted_at.is_(None))
+    if with_items:
+        q = q.options(joinedload(Order.items).joinedload(OrderItem.product))
+    return q
+
+
+def list_orders_on_cart(
+    db: Session, cart: Cart, *, with_items: bool = False
+) -> list[Order]:
+    """Deduplikowana lista zamówień na wózku — jedyne SSOT dla liczników / list / Capacity."""
+    by_id: dict[int, Order] = {}
+    for o in query_orders_on_cart(db, cart, with_items=with_items).all():
+        by_id[int(o.id)] = o
+    return list(by_id.values())
+
+
+def orders_event_meta(orders: list[Order] | Sequence[Order]) -> dict[str, Any]:
+    """Metadata Activity/Event Log: order_ids + order_numbers (nie tylko count)."""
+    order_ids: list[int] = []
+    order_numbers: list[str] = []
+    for o in orders:
+        oid = int(o.id)
+        order_ids.append(oid)
+        num = getattr(o, "number", None)
+        order_numbers.append(str(num).strip() if num not in (None, "") else str(oid))
+    return {
+        "order_ids": order_ids,
+        "order_numbers": order_numbers,
+        "orders_count": len(order_ids),
+    }
 
 
 def _order_volume_dm3(order: Order) -> float:
@@ -90,12 +115,7 @@ def compute_cart_stats(db: Session, cart: Cart) -> dict[str, Any]:
       orders_count, products_count, sections_count, occupied_sections,
       volume_used, percent_used, capacity
     """
-    orders = query_orders_on_cart(db, cart).all()
-    # Dedup by id (cart_id + session overlap)
-    by_id: dict[int, Order] = {}
-    for o in orders:
-        by_id[int(o.id)] = o
-    orders = list(by_id.values())
+    orders = list_orders_on_cart(db, cart)
 
     stats = _stats_from_orders(cart, orders)
     snap = _capacity_snapshot_for_orders(cart, orders)

@@ -1008,10 +1008,12 @@ def post_picking_quick_pick(
         session_id = int(session_ref.id) if session_ref is not None else current_session_id
 
     def _order_count() -> int | None:
-        if cart_id is None:
+        if cart_id is None or cart_ref is None:
             return None
         try:
-            return int(db.query(Order).filter(Order.cart_id == int(cart_id), Order.deleted_at.is_(None)).count())
+            from ..services.cart_stats_service import list_orders_on_cart
+
+            return len(list_orders_on_cart(db, cart_ref))
         except Exception:
             return None
 

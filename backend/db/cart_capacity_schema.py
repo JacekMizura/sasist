@@ -101,18 +101,54 @@ def ensure_cart_capacity_columns(engine: Engine) -> None:
                 {"strategy": strategy.value, "legacy": legacy},
             )
 
-    # Drop legacy columns (target architecture — no dual fields)
-    cols = get_table_column_names(engine, "carts")
-    with engine.begin() as conn:
-        if "capacity_mode" in cols:
+    # Drop legacy columns (target architecture — no dual fields).
+    # Use live column list (PRAGMA / information_schema) — Inspector cache can lie after ADD.
+    with engine.connect() as conn:
+        if dialect == "postgresql":
+            live = {
+                str(r[0])
+                for r in conn.execute(
+                    text(
+                        "SELECT column_name FROM information_schema.columns "
+                        "WHERE table_schema = current_schema() AND table_name = 'carts'"
+                    )
+                ).fetchall()
+            }
+        else:
+            live = {
+                str(r[1])
+                for r in conn.execute(text("PRAGMA table_info(carts)")).fetchall()
+            }
+        if "capacity_mode" in live:
             try:
                 conn.execute(text("ALTER TABLE carts DROP COLUMN capacity_mode"))
+                conn.commit()
             except Exception:
+                conn.rollback()
                 logger.warning("[cart.capacity] could not DROP capacity_mode", exc_info=True)
-        if "max_orders" in cols:
+        if "max_orders" in live:
             try:
-                conn.execute(text("ALTER TABLE carts DROP COLUMN max_orders"))
+                # Re-read after possible prior commit
+                if dialect == "postgresql":
+                    live2 = {
+                        str(r[0])
+                        for r in conn.execute(
+                            text(
+                                "SELECT column_name FROM information_schema.columns "
+                                "WHERE table_schema = current_schema() AND table_name = 'carts'"
+                            )
+                        ).fetchall()
+                    }
+                else:
+                    live2 = {
+                        str(r[1])
+                        for r in conn.execute(text("PRAGMA table_info(carts)")).fetchall()
+                    }
+                if "max_orders" in live2:
+                    conn.execute(text("ALTER TABLE carts DROP COLUMN max_orders"))
+                    conn.commit()
             except Exception:
+                conn.rollback()
                 logger.warning("[cart.capacity] could not DROP max_orders", exc_info=True)
 
     logger.info("[cart.capacity] columns ensured (capacity_strategy / capacity_orders / capacity_volume)")

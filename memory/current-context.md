@@ -11,6 +11,8 @@ Cel: produkcyjny, spójny flow (CartLifecycle + Capacity + Event/Activity Log + 
 - `ensure_activity_log_tables` zawsze reconciliuje indeksy (`IF NOT EXISTS`)
 - PG allowlist: `ensure_carts_picking_lifecycle_columns` + lifecycle history/events
 - **Event Log:** legacy `event_type NOT NULL` → DROP po backfill do `event_code` (NotNullViolation 500)
+- **Schema health:** WMS audit/sessions/picks/orders timeline na PG allowlist; carts capacity healed; report `memory/schema-health-check.md`
+- **Wózki:** SSOT `list_orders_on_cart`; sekcja Przypisane zamówienia; Activity Log z numerami; jedna Pojemność
 
 ## Open (stabilizacja)
 
