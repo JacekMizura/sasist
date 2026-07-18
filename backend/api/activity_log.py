@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..services.activity_log import ActivityListFilters, list_activity_for_object
+from ..services.activity_log.presentation import enrich_activity_item
 
 router = APIRouter(prefix="/activity-log", tags=["activity-log"])
 
@@ -35,17 +36,29 @@ class ActivityLinkOut(BaseModel):
     href: str | None = None
 
 
+class ActivityDetailRowOut(BaseModel):
+    label: str
+    value: str
+
+
 class ActivityEventOut(BaseModel):
+    """Ready-to-display Activity Log entry — FE must not translate."""
+
     id: int
     event_code: str
     description: str
+    action: str = ""
     severity: str
     category: str
     occurred_at: str | None = None
+    occurred_at_display: str = "—"
     actor_user_id: int | None = None
     actor_name: str | None = None
+    operator_display: str = "System"
     source_module: str | None = None
     metadata: dict = Field(default_factory=dict)
+    details: list[ActivityDetailRowOut] = Field(default_factory=list)
+    order_numbers: list[str] = Field(default_factory=list)
     links: list[ActivityLinkOut] = Field(default_factory=list)
 
 
@@ -129,6 +142,17 @@ def _legacy_cart_events(db: Session, *, cart_id: int, limit: int) -> list[dict]:
                 or getattr(actor, "full_name", None)
                 or getattr(actor, "email", None)
             )
+        meta = {}
+        raw_meta = getattr(r, "metadata_json", None)
+        if raw_meta:
+            try:
+                import json
+
+                parsed = json.loads(raw_meta) if isinstance(raw_meta, str) else raw_meta
+                if isinstance(parsed, dict):
+                    meta = parsed
+            except Exception:
+                meta = {}
         links = [
             {
                 "object_type": "cart",
@@ -149,21 +173,23 @@ def _legacy_cart_events(db: Session, *, cart_id: int, limit: int) -> list[dict]:
                 }
             )
         out.append(
-            {
-                "id": int(r.id),
-                "event_code": r.event_code,
-                "description": r.description,
-                "severity": r.severity,
-                "category": CART_EVENT_CATEGORY.get(r.event_code, "system"),
-                "occurred_at": r.occurred_at.isoformat(sep=" ", timespec="seconds")
-                if r.occurred_at
-                else None,
-                "actor_user_id": int(r.operator_user_id) if r.operator_user_id else None,
-                "actor_name": name,
-                "source_module": "cart_lifecycle",
-                "metadata": {},
-                "links": links,
-            }
+            enrich_activity_item(
+                {
+                    "id": int(r.id),
+                    "event_code": r.event_code,
+                    "description": r.description,
+                    "severity": r.severity,
+                    "category": CART_EVENT_CATEGORY.get(r.event_code, "system"),
+                    "occurred_at": r.occurred_at.isoformat(sep=" ", timespec="seconds")
+                    if r.occurred_at
+                    else None,
+                    "actor_user_id": int(r.operator_user_id) if r.operator_user_id else None,
+                    "actor_name": name,
+                    "source_module": "cart_lifecycle",
+                    "metadata": meta,
+                    "links": links,
+                }
+            )
         )
     return out
 
@@ -181,32 +207,33 @@ def _legacy_order_events(db: Session, *, order_id: int, limit: int) -> list[dict
     )
     out = []
     for r in rows:
-        raw = getattr(r, "message", None) or getattr(r, "event_type", None) or "Zdarzenie zamówienia"
-        # Never surface technical English codes as primary copy when PL message exists
+        raw = getattr(r, "message", None) or "Zdarzenie zamówienia"
         desc = str(raw)[:512]
         out.append(
-            {
-                "id": int(r.id),
-                "event_code": str(getattr(r, "event_type", None) or "order_activity")[:64],
-                "description": desc,
-                "severity": "INFO",
-                "category": "status",
-                "occurred_at": r.created_at.isoformat(sep=" ", timespec="seconds")
-                if getattr(r, "created_at", None)
-                else None,
-                "actor_user_id": None,
-                "actor_name": None,
-                "source_module": "order_activity",
-                "metadata": {},
-                "links": [
-                    {
-                        "object_type": "order",
-                        "object_id": int(order_id),
-                        "role": "primary",
-                        "object_label": f"#{int(order_id)}",
-                        "href": _href_for("order", int(order_id)),
-                    }
-                ],
-            }
+            enrich_activity_item(
+                {
+                    "id": int(r.id),
+                    "event_code": str(getattr(r, "event_type", None) or "order_activity")[:64],
+                    "description": desc,
+                    "severity": "INFO",
+                    "category": "status",
+                    "occurred_at": r.created_at.isoformat(sep=" ", timespec="seconds")
+                    if getattr(r, "created_at", None)
+                    else None,
+                    "actor_user_id": None,
+                    "actor_name": None,
+                    "source_module": "order_activity",
+                    "metadata": {},
+                    "links": [
+                        {
+                            "object_type": "order",
+                            "object_id": int(order_id),
+                            "role": "primary",
+                            "object_label": f"#{int(order_id)}",
+                            "href": _href_for("order", int(order_id)),
+                        }
+                    ],
+                }
+            )
         )
     return out

@@ -766,11 +766,14 @@ def start_picking(
 
     try:
         from .cart_stats_service import format_orders_operation_description, orders_event_meta
+        from .cart_display import cart_display_name_for_wms
 
         # Activity Log: operation result only (no per-order basket spam, no skip list).
+        cart_label = cart_display_name_for_wms(cart)
         assign_meta = {
             **orders_event_meta(selected, for_activity_log=True),
             "assigned_volume": round(used_vol, 2),
+            "cart_label": cart_label,
         }
         _record_event(
             db,
@@ -788,7 +791,10 @@ def start_picking(
             operator_user_id=uid,
             session_id=sid,
             description=format_orders_operation_description(
-                "Przypisano", selected, for_activity_log=True
+                "Przypisano",
+                selected,
+                for_activity_log=True,
+                cart_label=cart_label,
             ),
             metadata=dict(assign_meta),
         )
@@ -1401,13 +1407,16 @@ def admin_release_cart(
         _step(43, f"refreshed status={getattr(cart, 'status', None)}")
 
         from .cart_stats_service import format_orders_operation_description, orders_event_meta
+        from .cart_display import cart_display_name_for_wms
 
         orders_meta = orders_event_meta(orders_before)
+        cart_label = cart_display_name_for_wms(cart)
         meta_base = {
             "reason": "Ręczne zwolnienie z panelu administracyjnego.",
             "orders_detached": orders_detached,
             "picking_cancelled": picking_cancelled,
             "confirmed_picks_before": picks_n,
+            "cart_label": cart_label,
             **orders_meta,
             **artifacts,
         }
@@ -1427,7 +1436,12 @@ def admin_release_cart(
                 cart,
                 "admin_orders_detached",
                 operator_user_id=int(admin_user_id),
-                description=format_orders_operation_description("Odłączono", orders_before),
+                description=format_orders_operation_description(
+                    "Odłączono",
+                    orders_before,
+                    cart_label=cart_label,
+                    cart_relation="od",
+                ),
                 metadata={
                     **orders_meta,
                     "orders_detached": orders_detached,
@@ -1523,6 +1537,7 @@ def detach_order_from_cart(
     dopóki zostają inne zamówienia SSOT.
     """
     from .cart_capacity.engine import order_volume_dm3
+    from .cart_display import cart_display_name_for_wms
     from .cart_stats_service import format_orders_operation_description, orders_event_meta
 
     cart = _lock_cart_by_keys(
@@ -1605,11 +1620,13 @@ def detach_order_from_cart(
                 metadata={"detached_order_id": int(order_id)},
             )
 
+    cart_label = cart_display_name_for_wms(cart)
     meta = {
         **orders_event_meta(snapshot),
         "reason": "Ręczne odłączenie zamówienia z panelu administracyjnego.",
         "remaining_orders": len(remaining),
         "cart_released": released,
+        "cart_label": cart_label,
     }
     _record_event(
         db,
@@ -1617,7 +1634,12 @@ def detach_order_from_cart(
         "order_detached",
         operator_user_id=int(operator_user_id),
         order_id=int(order_id),
-        description=format_orders_operation_description("Odłączono", snapshot),
+        description=format_orders_operation_description(
+            "Odłączono",
+            snapshot,
+            cart_label=cart_label,
+            cart_relation="od",
+        ),
         metadata=meta,
     )
     _after_mutation(db, cart)

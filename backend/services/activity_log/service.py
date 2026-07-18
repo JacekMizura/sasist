@@ -301,7 +301,9 @@ def list_activity_for_object(
                 "links": link_items,
             }
         )
-    return out
+    from .presentation import enrich_activity_item
+
+    return [enrich_activity_item(it) for it in out]
 
 
 def _href_for(object_type: str, object_id: int) -> str | None:

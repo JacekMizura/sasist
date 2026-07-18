@@ -1,5 +1,13 @@
 # Change log
 
+## 2026-07-18 — Activity Log Framework (unified panel standard)
+
+- Audit: `memory/activity-log-audit.md`.
+- Backend ready fields: `occurred_at_display`, `operator_display`, `action`, `details`, `order_numbers`.
+- FE `ActivityLogPanel`: DATA → OPERATOR → AKCJA + expand (no client translation).
+- Dual-write WMS order activity → `activity_events`; cart assign/detach full sentences with `#orders`.
+- Capacity Analytics untouched. Report: `memory/activity-log-framework-report.md`.
+
 ## 2026-07-18 — SSOT Panel ↔ WMS picking (capacity truncate regression)
 
 - Root cause: WMS product-lines/count used status cohort while Panel used `list_orders_on_cart`.

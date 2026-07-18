@@ -109,19 +109,41 @@ def format_orders_operation_description(
     orders: list[Order] | Sequence[Order],
     *,
     for_activity_log: bool = False,
+    cart_label: str | None = None,
+    cart_relation: str = "do",
+    preview_limit: int = 15,
 ) -> str:
     """
-    Activity Log: „Przypisano N zamówień.” (wynik operacji, bez listy tysięcy #).
-    Inne konteksty: krótka lista numerów gdy N ≤ 15.
+    Full Polish sentence for Activity Log / Event Log.
+
+    Example:
+      Przypisano zamówienia #1198, #1202, #1203 do wózka CART-0001.
+      Odłączono zamówienie #1203 od wózka.
+    Large sets: first ``preview_limit`` numbers + „…”; full list lives in metadata.
     """
-    meta = orders_event_meta(orders, for_activity_log=for_activity_log)
+    meta = orders_event_meta(orders, for_activity_log=False)
     n = int(meta["orders_count"])
-    if for_activity_log or n > 15:
-        return f"{verb} {n} zamówień."
     nums = [f"#{x}" for x in meta["order_numbers"]]
     if n <= 0:
-        return f"{verb} 0 zamówień."
-    return f"{verb} {n} zamówień: {', '.join(nums)}."
+        base = f"{verb} 0 zamówień"
+    elif n == 1:
+        base = f"{verb} zamówienie {nums[0]}"
+    else:
+        shown = nums[: max(1, int(preview_limit))]
+        joined = ", ".join(shown)
+        if n > len(shown):
+            joined = f"{joined}…"
+        base = f"{verb} zamówienia {joined}"
+    label = (cart_label or "").strip()
+    rel = (cart_relation or "do").strip() or "do"
+    if label:
+        return f"{base} {rel} wózka {label}."
+    if label == "" and cart_label is not None:
+        # Explicit empty label still wants relation (e.g. „od wózka.”)
+        return f"{base} {rel} wózka."
+    if for_activity_log and n > preview_limit:
+        return f"{verb} {n} zamówień."
+    return f"{base}."
 
 
 def _order_volume_dm3(order: Order) -> float:

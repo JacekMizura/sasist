@@ -22,17 +22,29 @@ export type ActivityLink = {
   href?: string | null;
 };
 
+export type ActivityDetailRow = {
+  label: string;
+  value: string;
+};
+
+/** Ready-to-display entry from backend — FE must not translate codes. */
 export type ActivityEventItem = {
   id: number;
   event_code: string;
   description: string;
+  /** Full action sentence (same as description when provided by API). */
+  action?: string;
   severity: ActivitySeverity | string;
   category: string;
   occurred_at: string | null;
+  occurred_at_display?: string;
   actor_user_id: number | null;
   actor_name: string | null;
+  operator_display?: string;
   source_module: string | null;
   metadata: Record<string, unknown>;
+  details?: ActivityDetailRow[];
+  order_numbers?: string[];
   links: ActivityLink[];
 };
 

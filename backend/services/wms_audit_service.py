@@ -557,7 +557,10 @@ def append_order_activity_for_wms(
     warehouse_id: int,
     event_type: str,
     message: str,
+    operator_user_id: Optional[int] = None,
+    metadata: Optional[Dict[str, Any]] = None,
 ) -> None:
+    """OMS text log + dual-write into shared Activity Log (ready PL description)."""
     db.add(
         OrderActivityLog(
             order_id=int(order_id),
@@ -568,6 +571,36 @@ def append_order_activity_for_wms(
             created_at=datetime.utcnow(),
         )
     )
+    try:
+        from .activity_log import ActivityLinkSpec, record_activity
+
+        uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
+        record_activity(
+            db,
+            event_code=str(event_type)[:64],
+            description=str(message).strip()[:512] or "Zdarzenie zamówienia.",
+            links=[
+                ActivityLinkSpec(
+                    object_type="order",
+                    object_id=int(order_id),
+                    role="primary",
+                    object_label=f"#{int(order_id)}",
+                )
+            ],
+            severity="INFO",
+            category="status",
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            actor_user_id=uid,
+            source_module="wms_audit",
+            metadata=dict(metadata or {}),
+        )
+    except Exception:
+        logger.exception(
+            "activity_log dual-write failed for order_id=%s event=%s",
+            order_id,
+            event_type,
+        )
 
 
 def emit_wms_picking_started(
@@ -607,6 +640,8 @@ def emit_wms_picking_started(
         warehouse_id=warehouse_id,
         event_type=EVT_PICKING_STARTED,
         message=title,
+        operator_user_id=uid,
+        metadata=meta,
     )
 
 
