@@ -8,6 +8,7 @@ import {
   polishOrdersWithShortagesLabel,
   polishProductShortageModalSkuLine,
   polishSkuWithShortagesLabel,
+  sortWmsPickingProductLinesPickFlow,
   wmsPickingEffectivePickedQuantity,
   wmsPickingDisplayProgressParts,
   wmsPickingRemainingQty,
@@ -163,6 +164,23 @@ function line(partial: Partial<WmsPickingProductLineApi> & Pick<WmsPickingProduc
     ...partial,
   };
 }
+
+describe("sortWmsPickingProductLinesPickFlow", () => {
+  it("keeps unfinished first and completed last after scan", () => {
+    const rows = [
+      line({ product_id: 1, total_quantity: 1, picked_quantity: 1, remaining_to_pick: 0, completed: true, route_sort_key: "A" }),
+      line({ product_id: 2, total_quantity: 1, picked_quantity: 0, remaining_to_pick: 1, route_sort_key: "B" }),
+      line({ product_id: 3, total_quantity: 5, picked_quantity: 1, remaining_to_pick: 4, route_sort_key: "C" }),
+    ];
+    const sorted = sortWmsPickingProductLinesPickFlow(rows);
+    expect(sorted.map((r) => r.product_id)).toEqual([2, 3, 1]);
+    expect(computeWmsPickingProductLineSessionStats(sorted)).toEqual({
+      zebrane: 1,
+      doZebrania: 1,
+      wTrakcie: 1,
+    });
+  });
+});
 
 describe("computeWmsPickingProductLineSessionStats", () => {
   it("partitions SKU lines into zebrane / doZebrania / wTrakcie", () => {

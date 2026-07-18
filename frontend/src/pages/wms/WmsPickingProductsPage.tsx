@@ -1072,7 +1072,26 @@ export default function WmsPickingProductsPage() {
                     {pickDone ? (
                       <div className="flex items-center gap-2.5 px-5 py-3.5 bg-emerald-500/10 text-emerald-700 rounded-2xl border border-emerald-500/20 text-sm font-black uppercase tracking-wider">
                         <Check size={16} strokeWidth={3} />
-                        Zebrano ({fmtQty(pickedShown)}/{fmtQty(total)})
+                        Zebrano {fmtQty(pickedShown)} / {fmtQty(total)} szt.
+                      </div>
+                    ) : pickedShown > 1e-9 ? (
+                      <div className="flex flex-col items-stretch gap-1 w-full max-w-[220px] px-5 py-3 bg-indigo-50 border border-indigo-100 rounded-2xl group-hover:border-indigo-200 transition-colors">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[10px] font-black text-[#5a4fcf] uppercase tracking-widest">
+                            Zebrano
+                          </span>
+                          <span className="text-sm font-black text-[#5a4fcf] tabular-nums">
+                            {fmtQty(pickedShown)}/{fmtQty(total)}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between gap-2 border-t border-indigo-100/80 pt-1">
+                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                            Pozostało
+                          </span>
+                          <span className="text-lg font-black text-[#5a4fcf] leading-none tabular-nums">
+                            {fmtQty(remainingToPick)}
+                          </span>
+                        </div>
                       </div>
                     ) : (
                       <div className="flex items-center justify-between w-full max-w-[200px] px-5 py-3.5 bg-indigo-50 border border-indigo-100 rounded-2xl group-hover:border-indigo-200 transition-colors">
@@ -1100,12 +1119,19 @@ export default function WmsPickingProductsPage() {
                         <div className={`flex items-center justify-end gap-1.5 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wide border transition-colors duration-300 ${
                           pickDone ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-700' : 'bg-indigo-50 border-indigo-100 text-[#5a4fcf]'
                         }`} title={locCode}>
-                          <MapPin size={14} strokeWidth={2.5} />
-                          {formatWmsPickingLocationPillLabel(locCode, pStock > 1e-9 ? pStock : undefined)}
+                          {pickDone ? <Check size={14} strokeWidth={3} /> : <MapPin size={14} strokeWidth={2.5} />}
+                          {pickDone
+                            ? `Pobrano z ${formatWmsPickingLocationPillLabel(locCode, undefined)}`
+                            : formatWmsPickingLocationPillLabel(locCode, pStock > 1e-9 ? pStock : undefined)}
                         </div>
-                        {extra > 0 && (
+                        {extra > 0 && !pickDone ? (
                           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{extraLocationsHint(extra)}</span>
-                        )}
+                        ) : null}
+                      </div>
+                    ) : pickDone && pickedShown > 1e-9 ? (
+                      <div className="flex items-center justify-end gap-1.5 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wide border bg-emerald-500/10 border-emerald-500/20 text-emerald-700">
+                        <Check size={14} strokeWidth={3} />
+                        Zebrano
                       </div>
                     ) : (
                       <div className="flex items-center justify-end gap-1.5 px-4 py-2 bg-amber-50 border border-amber-200 rounded-xl text-xs font-black text-amber-700 uppercase tracking-wide">

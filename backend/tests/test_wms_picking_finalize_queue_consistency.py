@@ -121,6 +121,7 @@ class TestBuildLinesAfterFinalize(unittest.TestCase):
         svc.build_location_pick_list.return_value = routing
         return svc
 
+    @patch("backend.services.wms_picking_product_list_service._picked_location_code_by_product", return_value={})
     @patch("backend.services.wms_picking_product_list_service._build_cohort_missing_line_rows", return_value=[])
     @patch("backend.services.wms_picking_product_list_service._scanner_active_by_product_id", return_value={})
     @patch("backend.services.wms_picking_product_list_service._inventory_sums_by_product_location", return_value={})
@@ -130,7 +131,7 @@ class TestBuildLinesAfterFinalize(unittest.TestCase):
     @patch("backend.services.wms_picking_product_list_service._missing_qty_by_product_from_orders", return_value={})
     @patch("backend.services.wms_picking_product_list_service.resolve_wms_picking_order_ids", return_value=[501])
     @patch("backend.services.wms_picking_product_list_service.get_or_create_wms_picking_shortage_settings")
-    def test_case_a_full_pick_finalize_queue_empty_products(
+    def test_case_a_full_pick_keeps_completed_product_in_session(
         self,
         mock_ss,
         _mock_orders,
@@ -139,7 +140,7 @@ class TestBuildLinesAfterFinalize(unittest.TestCase):
         mock_routing_cls,
         *_rest,
     ):
-        """Case A: pełna zbiórka → brak produktów w liście (remaining=0)."""
+        """Case A: pełna zbiórka na wózku → produkt zostaje z remaining=0 / completed."""
         mock_ss.return_value = SimpleNamespace(allow_continue_other_lines_after_shortage=True)
         mock_routing_cls.return_value = self._routing_mock()
 
@@ -157,7 +158,14 @@ class TestBuildLinesAfterFinalize(unittest.TestCase):
             cart_id=9,
         )
         self.assertEqual(resp.cohort_order_count, 1)
-        self.assertEqual(resp.products, [])
+        self.assertEqual(len(resp.products), 1)
+        ln = resp.products[0]
+        self.assertEqual(ln.product_id, 197)
+        self.assertEqual(ln.remaining_to_pick, 0.0)
+        self.assertTrue(ln.completed)
+        self.assertEqual(ln.picked_quantity, 2.0)
+        self.assertEqual(resp.session_stats.zebrane, 1)
+        self.assertEqual(resp.session_stats.do_zebrania, 0)
 
     @patch("backend.services.wms_picking_product_list_service._build_cohort_missing_line_rows", return_value=[])
     @patch("backend.services.wms_picking_product_list_service._scanner_active_by_product_id", return_value={197: True})
@@ -232,6 +240,7 @@ class TestSyncAfterFinalize(unittest.TestCase):
 
 
 class TestRecoveryQueueFilter(unittest.TestCase):
+    @patch("backend.services.wms_picking_product_list_service._picked_location_code_by_product", return_value={})
     @patch("backend.services.wms_picking_product_list_service._build_cohort_missing_line_rows", return_value=[])
     @patch("backend.services.wms_picking_product_list_service._scanner_active_by_product_id", return_value={})
     @patch("backend.services.wms_picking_product_list_service._inventory_sums_by_product_location", return_value={})
@@ -239,8 +248,8 @@ class TestRecoveryQueueFilter(unittest.TestCase):
     @patch("backend.services.wms_picking_product_list_service._recovery_demand_by_product_from_orders", return_value={301: 1.0})
     @patch("backend.services.wms_picking_product_list_service.PickingRoutingService")
     @patch("backend.services.wms_picking_product_list_service.get_or_create_wms_picking_shortage_settings")
-    def test_case_c_recovery_complete_empty_lines(self, mock_ss, mock_routing_cls, *_):
-        """Case C: recovery bez remaining → pusta lista + recovery_completed."""
+    def test_case_c_recovery_complete_keeps_products_and_flag(self, mock_ss, mock_routing_cls, *_):
+        """Case C: recovery bez remaining → completed w liście + recovery_completed."""
         mock_ss.return_value = SimpleNamespace(allow_continue_other_lines_after_shortage=True)
         routing = MagicMock()
         routing.pick_list = []
@@ -264,7 +273,9 @@ class TestRecoveryQueueFilter(unittest.TestCase):
             recovery_mode=True,
         )
         self.assertTrue(resp.recovery_completed)
-        self.assertEqual(resp.products, [])
+        self.assertEqual(len(resp.products), 1)
+        self.assertTrue(resp.products[0].completed)
+        self.assertEqual(resp.products[0].remaining_to_pick, 0.0)
 
 
 if __name__ == "__main__":

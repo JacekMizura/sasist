@@ -678,8 +678,64 @@ def _apply_bundle_ux_to_order_row(
 
 
 def _picking_product_line_still_active(line: WmsPickingProductLine) -> bool:
-    """Produkt widoczny w kolejce zbierania — coś do pobrania lub operacyjny brak."""
+    """Linia z otwartą pracą: coś do pobrania lub operacyjny brak (nie = widoczność w sesji)."""
     return float(line.remaining_to_pick or 0) > 1e-9 or float(line.missing_quantity or 0) > 1e-9
+
+
+def _picking_product_line_completed(line: WmsPickingProductLine) -> bool:
+    """Demand sesji rozliczony (remaining≈0) — SKU nadal należy do snapshotu sesji z wózkiem."""
+    return float(line.remaining_to_pick or 0) <= 1e-9
+
+
+def _picking_product_line_session_sort_key(line: WmsPickingProductLine) -> tuple:
+    """unfinished → shortage-only → fully picked; potem trasa / product_id."""
+    rem = float(line.remaining_to_pick or 0)
+    miss = float(line.missing_quantity or 0)
+    if rem > 1e-9:
+        tier = 0
+    elif miss > 1e-9:
+        tier = 1
+    else:
+        tier = 2
+    return (tier, line.route_sort_key or "\uffff", int(line.product_id))
+
+
+def _picked_location_code_by_product(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    order_ids: Sequence[int],
+    cart_id: int,
+    product_ids: Sequence[int],
+) -> dict[int, str]:
+    """Ostatnia lokalizacja Pick per SKU w sesji wózka — historyczny hint dla completed bez routingu."""
+    if not product_ids or not order_ids:
+        return {}
+    from ..models.location import Location
+
+    rows = (
+        db.query(Pick.product_id, Location.name, Pick.picked_at, Pick.id)
+        .join(Location, Location.id == Pick.location_id)
+        .filter(
+            Pick.tenant_id == int(tenant_id),
+            Pick.warehouse_id == int(warehouse_id),
+            Pick.cart_id == int(cart_id),
+            Pick.order_id.in_(list(order_ids)),
+            Pick.product_id.in_([int(x) for x in product_ids]),
+        )
+        .all()
+    )
+    best: dict[int, tuple[tuple[datetime, int], str]] = {}
+    for pid, name, picked_at, pick_id in rows:
+        code = (name or "").strip()
+        if not code:
+            continue
+        key = (picked_at if isinstance(picked_at, datetime) else datetime(1970, 1, 1), int(pick_id))
+        prev = best.get(int(pid))
+        if prev is None or key > prev[0]:
+            best[int(pid)] = (key, code)
+    return {pid: code for pid, (_k, code) in best.items()}
 
 
 def _sync_order_operational_state_after_picking_finalize(
@@ -1486,6 +1542,7 @@ def build_wms_picking_product_lines(
         picked_raw = round(float(pq), 6)
         picked_eff = min(picked_raw, max(0.0, float(tq) - miss_sum))
         rem_pick = max(0.0, float(tq) - picked_eff - miss_sum)
+        line_completed = rem_pick <= 1e-9
         scanner_active = bool(scan_by_pid.get(pid)) if cart_id is not None else (rem_pick > 1e-9)
         shelf_label = consolidation_shelves.get(int(pid))
         breakdown = _bundle_breakdown_for_product(
@@ -1501,6 +1558,7 @@ def build_wms_picking_product_lines(
                 picked_quantity=round(picked_eff, 6),
                 missing_quantity=miss_sum,
                 remaining_to_pick=round(rem_pick, 6),
+                completed=line_completed,
                 primary_location_code=loc,
                 primary_location_stock=primary_stock,
                 extra_locations_count=extra_locs,
@@ -1516,20 +1574,60 @@ def build_wms_picking_product_lines(
 
     all_lines_for_stats = list(lines)
 
-    if recovery_mode:
+    # Sesja z wózkiem: pełny snapshot demandu (w tym completed). Hub bez cart_id: tylko aktywna kolejka.
+    if cart_id is None:
         lines = [ln for ln in lines if _picking_product_line_still_active(ln)]
+    else:
+        need_loc_pids = [
+            int(ln.product_id)
+            for ln in lines
+            if _picking_product_line_completed(ln)
+            and float(ln.picked_quantity or 0) > 1e-9
+            and not (ln.primary_location_code or "").strip()
+        ]
+        if need_loc_pids:
+            picked_locs = _picked_location_code_by_product(
+                db,
+                tenant_id=tenant_id,
+                warehouse_id=warehouse_id,
+                order_ids=order_ids,
+                cart_id=int(cart_id),
+                product_ids=need_loc_pids,
+            )
+            if picked_locs:
+                patched: list[WmsPickingProductLine] = []
+                for ln in lines:
+                    code = picked_locs.get(int(ln.product_id))
+                    if code and not (ln.primary_location_code or "").strip():
+                        patched.append(
+                            ln.model_copy(
+                                update={
+                                    "primary_location_code": code,
+                                    "route_sort_key": code,
+                                }
+                            )
+                        )
+                    else:
+                        patched.append(ln)
+                lines = patched
+                all_lines_for_stats = list(lines)
+
+    lines = sorted(lines, key=_picking_product_line_session_sort_key)
+
+    if recovery_mode:
         logger.info(
             "[wms.recovery.lines.fetch] order_id=%s cart_id=%s recovery_mode=recovery "
-            "product_count=%s cohort_order_count=%s",
+            "product_count=%s active_count=%s cohort_order_count=%s",
             order_ids[0] if order_ids else None,
             cart_id,
             len(lines),
+            sum(1 for ln in lines if _picking_product_line_still_active(ln)),
             len(order_ids),
         )
-    else:
-        lines = [ln for ln in lines if _picking_product_line_still_active(ln)]
 
-    recovery_completed = bool(recovery_mode and len(lines) == 0)
+    recovery_completed = bool(
+        recovery_mode and not any(_picking_product_line_still_active(ln) for ln in all_lines_for_stats)
+    )
     recovery_oid = int(order_ids[0]) if recovery_mode and order_ids else None
 
     from .cart_picking_lifecycle_service import compute_session_stats_from_product_lines

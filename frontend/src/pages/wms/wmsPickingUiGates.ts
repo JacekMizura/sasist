@@ -119,6 +119,7 @@ export function wmsPickingDisplayProgressParts(row: WmsPickingProductLineApi): {
 
 /** Linia domknięta: zebrano + brak ≥ wymagane (wg ``remaining_to_pick`` jeśli jest). */
 export function wmsPickingProductLineComplete(row: WmsPickingProductLineApi): boolean {
+  if (typeof row.completed === "boolean") return row.completed;
   return row.total_quantity <= 1e-9 || wmsPickingRemainingQty(row) <= 1e-9;
 }
 

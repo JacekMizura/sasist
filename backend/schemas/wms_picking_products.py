@@ -65,6 +65,10 @@ class WmsPickingProductLine(BaseModel):
         ge=0,
         description="max(0, wymagane − zebrano − brak zgłoszony) — jeszcze do pobrania z magazynu",
     )
+    completed: bool = Field(
+        False,
+        description="True gdy remaining_to_pick≈0 (zebrano i/lub brak rozliczyły demand) — linia zostaje w snapshotcie sesji",
+    )
     primary_location_code: str = Field("", description="Pierwsza lokalizacja na trasie (lex wg nazwy)")
     primary_location_stock: float = Field(
         0,
@@ -228,7 +232,7 @@ class WmsPickingProductLinesResponse(BaseModel):
     )
     recovery_completed: bool = Field(
         default=False,
-        description="True gdy dogrywka nie ma już linii do zebrania (200 OK, pusta lista)",
+        description="True gdy dogrywka nie ma już linii z remaining/active pick — completed SKU mogą nadal być w products",
     )
     session_stats: WmsPickingSessionStats = Field(
         default_factory=WmsPickingSessionStats,

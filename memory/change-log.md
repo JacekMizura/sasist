@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-07-18 — picking session keeps completed products on list
+
+- ROOT: backend `build_wms_picking_product_lines` filtered via `_picking_product_line_still_active` (remaining≈0 dropped).
+- SSOT: with `cart_id` return full demand snapshot + `completed`; hub without cart still filters active-only.
+- FE: partial multi-qty label; completed shows ✓ ZEBRANO + „Pobrano z …”; sort unfinished→completed (already in `sortWmsPickingProductLinesPickFlow`).
+- Tests: `test_wms_picking_session_keeps_completed_products.py` (SCAN→still 5→completed last).
+
 ## 2026-07-18 — product-lines/detail TypeError `_safe_touch_picking_session`
 
 - Production: `TypeError: takes 0 positional arguments but 1 was given` at detail ~L915.

@@ -43,6 +43,8 @@ export type WmsPickingProductLineApi = {
   missing_quantity?: number;
   /** max(0, wymagane − zebrano − brak) — jeszcze do pobrania z magazynu */
   remaining_to_pick?: number;
+  /** True gdy remaining≈0 — linia zostaje w snapshotcie sesji (nie znika z listy) */
+  completed?: boolean;
   /** Skan EAN tylko gdy true — linie nie „picked”/„missing” z ilością do pobrania (przy braku cart_id: wg remaining) */
   scanner_active?: boolean;
   primary_location_id?: number | null;
