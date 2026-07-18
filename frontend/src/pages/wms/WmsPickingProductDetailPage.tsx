@@ -36,6 +36,7 @@ import {
   cannotReportPickingShortage,
   polishOrdersWithShortagesLabel,
   wmsPickingEffectivePickedQuantity,
+  wmsPickingLineResolutionStatus,
   wmsPickingRemainingQty,
   wmsPickingShortageDefaultQty,
 } from "./wmsPickingUiGates";
@@ -248,6 +249,11 @@ export default function WmsPickingProductDetailPage() {
 
   const toPickTotal = remaining;
   const pickQueueDone = detail != null && remaining <= 1e-9;
+  const resolutionStatus = useMemo(
+    () => (detail ? wmsPickingLineResolutionStatus(detail) : "ACTIVE"),
+    [detail],
+  );
+  const isShortageResolved = resolutionStatus === "SHORTAGE";
 
   const shortageLocationLabel = useMemo(() => {
     if (!detail?.locations?.length) return "—";
@@ -586,6 +592,11 @@ export default function WmsPickingProductDetailPage() {
           ? "Zgłoszono rozbieżność ilości — bez zerowania lokalizacji."
           : "Brak zapisany. Kontynuuj zbieranie.",
       );
+      const nextRem = wmsPickingRemainingQty(optimistic);
+      if (nextRem <= 1e-9) {
+        goBackToList(true);
+        return;
+      }
       void refreshDetailSilently();
       refocusScannerInput();
     } catch (e: unknown) {
@@ -602,7 +613,7 @@ export default function WmsPickingProductDetailPage() {
     <WmsOperationalPageShell className="bg-slate-50/50 font-sans text-slate-900 select-none">
       <WmsOperationalPageBody className="flex flex-col gap-6 !py-3 md:!py-4">
       <div className="flex items-center justify-between px-1">
-        <button type="button" onClick={goBackToList} className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-500 bg-white border border-slate-200 px-4 py-2 rounded-xl shadow-sm hover:bg-slate-50 transition-all active:scale-95">
+        <button type="button" onClick={() => goBackToList(true)} className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-500 bg-white border border-slate-200 px-4 py-2 rounded-xl shadow-sm hover:bg-slate-50 transition-all active:scale-95">
           ← Wróć do listy produktów
         </button>
         <span className="text-[10px] font-black uppercase tracking-widest text-indigo-500 bg-indigo-50 px-3 py-1.5 rounded-xl border border-indigo-100/40">
@@ -646,55 +657,93 @@ export default function WmsPickingProductDetailPage() {
           </div>
 
           {/* POTĘŻNY WIDGET POZOSTAŁYCH SZTUK DO ZEBRANIA */}
-          <div className="flex flex-col items-center justify-center p-8 bg-slate-50 border border-slate-200/60 rounded-3xl text-center">
-            <p className="text-xs font-black uppercase tracking-widest text-slate-400 mb-3">Postęp pobierania pozycji</p>
-            <div className="flex items-baseline gap-2 mb-4">
-              <span className="text-6xl sm:text-7xl font-black text-[#5a4fcf] tabular-nums">{displayPickedDetail}</span>
-              <span className="text-2xl font-bold text-slate-300">/</span>
-              <span className="text-3xl font-black text-slate-500 tabular-nums">{fmtQty(detail.total_quantity)}</span>
-              <span className="text-sm font-bold text-slate-400 ml-1">szt.</span>
-            </div>
-
-            {pickQueueDone ? (
-              detail.pending_shelf_deposit ? (
-                <button
-                  type="button"
-                  disabled={depositBusy}
-                  onClick={() => void confirmShelfDeposit()}
-                  className="flex items-center gap-2 px-6 py-3 bg-violet-600 text-white rounded-2xl font-black uppercase tracking-wider text-xs shadow-lg shadow-violet-500/10 disabled:opacity-50"
-                >
-                  <Check size={14} strokeWidth={3} />
-                  Odłożono na półkę {detail.consolidation_shelf_label ?? ""}
-                </button>
-              ) : (
-                <div className="flex flex-col items-center gap-3 w-full max-w-md">
-                  <div className="flex items-center gap-2 px-6 py-3 bg-emerald-500 text-white rounded-2xl font-black uppercase tracking-wider text-xs shadow-lg shadow-emerald-500/10">
-                    <Check size={14} strokeWidth={3} /> Skompletowano pozycję
-                  </div>
-                  <div className="flex flex-wrap items-center justify-center gap-2">
-                    <button
-                      type="button"
-                      disabled={undoBusy || !canUndoPick}
-                      onClick={() => void submitUndoPick()}
-                      className="px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-700 text-[11px] font-bold uppercase tracking-wider hover:bg-slate-50 disabled:opacity-40"
-                    >
-                      {undoBusy ? "Cofanie…" : "Cofnij pobranie"}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={reportShortageBlocked}
-                      onClick={openShortageModal}
-                      className="px-4 py-2.5 rounded-xl border border-amber-300 bg-amber-50 text-amber-900 text-[11px] font-bold uppercase tracking-wider hover:bg-amber-100 disabled:opacity-40"
-                    >
-                      Zgłoś problem / brak
-                    </button>
-                  </div>
+          <div
+            className={`flex flex-col items-center justify-center p-8 border rounded-3xl text-center ${
+              isShortageResolved
+                ? "bg-amber-50 border-amber-200"
+                : "bg-slate-50 border-slate-200/60"
+            }`}
+          >
+            <p className="text-xs font-black uppercase tracking-widest text-slate-400 mb-3">
+              {isShortageResolved ? "Stan pozycji po zgłoszeniu braku" : "Postęp pobierania pozycji"}
+            </p>
+            {isShortageResolved ? (
+              <div className="w-full max-w-md space-y-4">
+                <div className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl border border-amber-300 bg-amber-100 text-amber-950 text-xs font-black uppercase tracking-wider">
+                  <AlertTriangle size={16} strokeWidth={2.5} className="text-amber-700" />
+                  Zgłoszono brak
                 </div>
-              )
-            ) : (
-              <div className="text-[10px] font-black text-indigo-500 uppercase tracking-widest bg-indigo-50 border border-indigo-100 px-4 py-2 rounded-xl">
-                Zeskanuj kod EAN produktu, aby dodać kolejną sztukę
+                <dl className="grid grid-cols-3 gap-3 text-left">
+                  <div className="rounded-xl border border-amber-200/80 bg-white px-3 py-3">
+                    <dt className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Zapotrzebowanie</dt>
+                    <dd className="mt-1 text-2xl font-black tabular-nums text-slate-900">{fmtQty(detail.total_quantity)}</dd>
+                  </div>
+                  <div className="rounded-xl border border-amber-200/80 bg-white px-3 py-3">
+                    <dt className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Zebrano</dt>
+                    <dd className="mt-1 text-2xl font-black tabular-nums text-slate-900">{fmtQty(displayPickedDetail)}</dd>
+                  </div>
+                  <div className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-3">
+                    <dt className="text-[10px] font-bold uppercase tracking-wider text-amber-800">Brak</dt>
+                    <dd className="mt-1 text-2xl font-black tabular-nums text-amber-900">{fmtQty(missingTotal)}</dd>
+                  </div>
+                </dl>
+                <p className="text-sm font-semibold text-amber-900/80">
+                  {detail.locations.length > 0
+                    ? `Brak potwierdzony na: ${shortageLocationLabel}`
+                    : "Brak dostępnego towaru / lokalizacji kompletacyjnej."}
+                </p>
               </div>
+            ) : (
+              <>
+                <div className="flex items-baseline gap-2 mb-4">
+                  <span className="text-6xl sm:text-7xl font-black text-[#5a4fcf] tabular-nums">{displayPickedDetail}</span>
+                  <span className="text-2xl font-bold text-slate-300">/</span>
+                  <span className="text-3xl font-black text-slate-500 tabular-nums">{fmtQty(detail.total_quantity)}</span>
+                  <span className="text-sm font-bold text-slate-400 ml-1">szt.</span>
+                </div>
+
+                {pickQueueDone ? (
+                  detail.pending_shelf_deposit ? (
+                    <button
+                      type="button"
+                      disabled={depositBusy}
+                      onClick={() => void confirmShelfDeposit()}
+                      className="flex items-center gap-2 px-6 py-3 bg-violet-600 text-white rounded-2xl font-black uppercase tracking-wider text-xs shadow-lg shadow-violet-500/10 disabled:opacity-50"
+                    >
+                      <Check size={14} strokeWidth={3} />
+                      Odłożono na półkę {detail.consolidation_shelf_label ?? ""}
+                    </button>
+                  ) : (
+                    <div className="flex flex-col items-center gap-3 w-full max-w-md">
+                      <div className="flex items-center gap-2 px-6 py-3 bg-emerald-500 text-white rounded-2xl font-black uppercase tracking-wider text-xs shadow-lg shadow-emerald-500/10">
+                        <Check size={14} strokeWidth={3} /> Skompletowano pozycję
+                      </div>
+                      <div className="flex flex-wrap items-center justify-center gap-2">
+                        <button
+                          type="button"
+                          disabled={undoBusy || !canUndoPick}
+                          onClick={() => void submitUndoPick()}
+                          className="px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-700 text-[11px] font-bold uppercase tracking-wider hover:bg-slate-50 disabled:opacity-40"
+                        >
+                          {undoBusy ? "Cofanie…" : "Cofnij pobranie"}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={reportShortageBlocked}
+                          onClick={openShortageModal}
+                          className="px-4 py-2.5 rounded-xl border border-amber-300 bg-amber-50 text-amber-900 text-[11px] font-bold uppercase tracking-wider hover:bg-amber-100 disabled:opacity-40"
+                        >
+                          Zgłoś problem / brak
+                        </button>
+                      </div>
+                    </div>
+                  )
+                ) : (
+                  <div className="text-[10px] font-black text-indigo-500 uppercase tracking-widest bg-indigo-50 border border-indigo-100 px-4 py-2 rounded-xl">
+                    Zeskanuj kod EAN produktu, aby dodać kolejną sztukę
+                  </div>
+                )}
+              </>
             )}
           </div>
 
@@ -759,7 +808,7 @@ export default function WmsPickingProductDetailPage() {
       <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-slate-200 bg-white/95 p-4 backdrop-blur-sm shadow-md">
         <div className="max-w-4xl mx-auto flex items-center justify-between gap-3">
           <div className="flex gap-2">
-            <button type="button" onClick={openManual} disabled={pickQueueDone} className="px-4 py-3 bg-white border border-slate-200 hover:bg-slate-50 text-slate-800 font-bold rounded-xl text-xs uppercase tracking-wider transition-colors active:scale-95 disabled:opacity-40">Ręczny wpis</button>
+            <button type="button" onClick={openManual} disabled={pickQueueDone || isShortageResolved} className="px-4 py-3 bg-white border border-slate-200 hover:bg-slate-50 text-slate-800 font-bold rounded-xl text-xs uppercase tracking-wider transition-colors active:scale-95 disabled:opacity-40">Ręczny wpis</button>
             {canUndoPick ? (
               <button
                 type="button"
@@ -770,10 +819,10 @@ export default function WmsPickingProductDetailPage() {
                 {undoBusy ? "Cofanie…" : "Cofnij pobranie"}
               </button>
             ) : null}
-            <button type="button" onClick={openShortageModal} disabled={reportShortageBlocked} className="px-4 py-3 bg-amber-50 border border-amber-200 text-amber-800 font-bold rounded-xl text-xs uppercase tracking-wider transition-colors active:scale-95 disabled:opacity-40">Zgłoś brak</button>
+            <button type="button" onClick={openShortageModal} disabled={reportShortageBlocked || isShortageResolved} className="px-4 py-3 bg-amber-50 border border-amber-200 text-amber-800 font-bold rounded-xl text-xs uppercase tracking-wider transition-colors active:scale-95 disabled:opacity-40">Zgłoś brak</button>
           </div>
           
-          <button type="button" onClick={goBackToList} className="px-6 py-3.5 bg-[#5a4fcf] hover:bg-[#4a40b2] text-white font-black rounded-xl text-xs uppercase tracking-widest transition-all active:scale-95">
+          <button type="button" onClick={() => goBackToList(true)} className="px-6 py-3.5 bg-[#5a4fcf] hover:bg-[#4a40b2] text-white font-black rounded-xl text-xs uppercase tracking-widest transition-all active:scale-95">
             Zatwierdź i wróć
           </button>
         </div>

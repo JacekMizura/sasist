@@ -1,5 +1,13 @@
 # Change log
 
+## 2026-07-18 — shortage resolved ≠ DO POBRANIA / ≠ ZEBRANO
+
+- ROOT: lista FE liczyła `remaining = total − picked` (ignorując `missing`); `completed` renderowane zawsze jako zielone ZEBRANO; powrót z detail bez refresh → stale „DO POBRANIA” + „BRAK LOKALIZACJI”.
+- SSOT: `resolution_status` ACTIVE|PARTIAL|COMPLETED_PICK|SHORTAGE na product-lines/detail; remaining = req − picked − miss (już w builderze).
+- FE: SHORTAGE → „ZGŁOSZONO BRAK”; sort ACTIVE→PARTIAL→COMPLETED_PICK→SHORTAGE; detail bez CTA skanu przy pełnym shortage; refresh listy po powrocie.
+- Finalize: bez zmian — nadal `all_picked` vs `all_missing`/`some_missing`.
+- Tests: `test_wms_picking_shortage_resolution_status.py`, `wmsPickingUiGates.test.ts`.
+
 ## 2026-07-18 — empty location DOCUMENTS_ONLY + location-aware undo audit
 
 - DOCUMENTS_ONLY: always accept empty-location report; pending CONTROL inventory + `InventoryLocationLock` (block_picking) — no illegal stock write; routing excludes location.

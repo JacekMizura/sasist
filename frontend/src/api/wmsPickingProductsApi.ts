@@ -45,6 +45,11 @@ export type WmsPickingProductLineApi = {
   remaining_to_pick?: number;
   /** True gdy remaining≈0 — linia zostaje w snapshotcie sesji (nie znika z listy) */
   completed?: boolean;
+  /**
+   * SSOT stanu UI linii: ACTIVE | PARTIAL | COMPLETED_PICK | SHORTAGE.
+   * SHORTAGE = remaining≈0 i missing>0 — NIE renderować jako „DO POBRANIA” ani zielone „ZEBRANO”.
+   */
+  resolution_status?: "ACTIVE" | "PARTIAL" | "COMPLETED_PICK" | "SHORTAGE";
   /** Skan EAN tylko gdy true — linie nie „picked”/„missing” z ilością do pobrania (przy braku cart_id: wg remaining) */
   scanner_active?: boolean;
   primary_location_id?: number | null;
@@ -148,6 +153,7 @@ export type WmsPickingProductDetailApi = {
   picked_quantity: number;
   missing_quantity?: number;
   remaining_to_pick?: number;
+  resolution_status?: "ACTIVE" | "PARTIAL" | "COMPLETED_PICK" | "SHORTAGE";
   locations: WmsPickingProductLocationRowApi[];
   orders: WmsPickingProductOrderRowApi[];
   /** Pierwsze zamówienie z niedoborem (FIFO) wśród orders — podświetlenie na UI */

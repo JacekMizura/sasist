@@ -11,6 +11,7 @@ import {
   sortWmsPickingProductLinesPickFlow,
   wmsPickingEffectivePickedQuantity,
   wmsPickingDisplayProgressParts,
+  wmsPickingLineResolutionStatus,
   wmsPickingRemainingQty,
   wmsPickingRowScanEligible,
   wmsPickingShortageDefaultQty,
@@ -37,6 +38,8 @@ describe("applyWmsPickingShortageToDetail", () => {
     expect(after.missing_quantity).toBe(1);
     expect(wmsPickingRemainingQty(after)).toBe(0);
     expect(after.orders[0].missing_quantity).toBe(1);
+    expect(after.resolution_status).toBe("SHORTAGE");
+    expect(wmsPickingLineResolutionStatus(after)).toBe("SHORTAGE");
   });
 });
 
@@ -66,6 +69,7 @@ describe("wmsPickingEffectivePickedQuantity", () => {
       pickedShown: 0,
       total: 1,
       miss: 1,
+      remaining: 0,
     });
   });
 });
@@ -182,6 +186,44 @@ describe("sortWmsPickingProductLinesPickFlow", () => {
       doZebrania: 1,
       wTrakcie: 1,
     });
+  });
+
+  it("places SHORTAGE after COMPLETED_PICK, never as DO POBRANIA", () => {
+    const rows = [
+      line({
+        product_id: 10,
+        total_quantity: 1,
+        picked_quantity: 0,
+        missing_quantity: 1,
+        remaining_to_pick: 0,
+        completed: true,
+        resolution_status: "SHORTAGE",
+        route_sort_key: "A",
+      }),
+      line({
+        product_id: 11,
+        total_quantity: 1,
+        picked_quantity: 1,
+        missing_quantity: 0,
+        remaining_to_pick: 0,
+        completed: true,
+        resolution_status: "COMPLETED_PICK",
+        route_sort_key: "B",
+      }),
+      line({
+        product_id: 12,
+        total_quantity: 1,
+        picked_quantity: 0,
+        missing_quantity: 0,
+        remaining_to_pick: 1,
+        resolution_status: "ACTIVE",
+        route_sort_key: "C",
+      }),
+    ];
+    const sorted = sortWmsPickingProductLinesPickFlow(rows);
+    expect(sorted.map((r) => r.product_id)).toEqual([12, 11, 10]);
+    expect(wmsPickingLineResolutionStatus(rows[0])).toBe("SHORTAGE");
+    expect(wmsPickingDisplayProgressParts(rows[0]).remaining).toBe(0);
   });
 });
 

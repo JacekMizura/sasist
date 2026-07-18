@@ -3,6 +3,8 @@ import type {
   WmsPickingProductLineApi,
 } from "../../api/wmsPickingProductsApi";
 
+export type WmsPickingLineResolutionStatus = "ACTIVE" | "PARTIAL" | "COMPLETED_PICK" | "SHORTAGE";
+
 /** Suma braków na wierszu listy produktów (kohorta). */
 export function wmsPickingLineMissingQty(row: WmsPickingProductLineApi): number {
   const m = row.missing_quantity;
@@ -38,6 +40,9 @@ export function wmsPickingRemainingQty(row: {
   missing_quantity?: number;
   remaining_to_pick?: number;
 }): number {
+  if (typeof row.remaining_to_pick === "number" && Number.isFinite(row.remaining_to_pick)) {
+    return Math.max(0, row.remaining_to_pick);
+  }
   const total = Math.max(0, Number(row.total_quantity) || 0);
   const miss =
     typeof row.missing_quantity === "number" && Number.isFinite(row.missing_quantity)
@@ -89,6 +94,12 @@ export function applyWmsPickingShortageToDetail(
     ...detail,
     missing_quantity: nextMiss,
     remaining_to_pick: nextRem,
+    resolution_status: wmsPickingLineResolutionStatus({
+      total_quantity: total,
+      picked_quantity: pickedEff,
+      missing_quantity: nextMiss,
+      remaining_to_pick: nextRem,
+    }),
     orders,
     shortage_declarable_total: declarable,
   };
@@ -110,11 +121,13 @@ export function wmsPickingDisplayProgressParts(row: WmsPickingProductLineApi): {
   pickedShown: number;
   total: number;
   miss: number;
+  remaining: number;
 } {
   const total = Math.max(0, Number(row.total_quantity) || 0);
   const miss = wmsPickingLineMissingQty(row);
   const pickedShown = wmsPickingEffectivePickedQuantity(row);
-  return { pickedShown, total, miss };
+  const remaining = wmsPickingRemainingQty(row);
+  return { pickedShown, total, miss, remaining };
 }
 
 /** Linia domknięta: zebrano + brak ≥ wymagane (wg ``remaining_to_pick`` jeśli jest). */
@@ -123,11 +136,34 @@ export function wmsPickingProductLineComplete(row: WmsPickingProductLineApi): bo
   return row.total_quantity <= 1e-9 || wmsPickingRemainingQty(row) <= 1e-9;
 }
 
-/** 0 = jeszcze coś pobrać; 1 = brak bez dalszego pobrania; 2 = zebrano bez braków. */
+/** Kanoniczny status UI — preferuj pole backendu, inaczej wylicz z qty. */
+export function wmsPickingLineResolutionStatus(row: {
+  total_quantity: number;
+  picked_quantity: number;
+  missing_quantity?: number;
+  remaining_to_pick?: number;
+  resolution_status?: WmsPickingLineResolutionStatus | string | null;
+  completed?: boolean;
+}): WmsPickingLineResolutionStatus {
+  const raw = row.resolution_status;
+  if (raw === "ACTIVE" || raw === "PARTIAL" || raw === "COMPLETED_PICK" || raw === "SHORTAGE") {
+    return raw;
+  }
+  const rem = wmsPickingRemainingQty(row);
+  const miss = wmsPickingLineMissingQty(row as WmsPickingProductLineApi);
+  const picked = wmsPickingEffectivePickedQuantity(row);
+  if (rem > 1e-9) return picked > 1e-9 ? "PARTIAL" : "ACTIVE";
+  if (miss > 1e-9) return "SHORTAGE";
+  return "COMPLETED_PICK";
+}
+
+/** 0=ACTIVE, 1=PARTIAL, 2=COMPLETED_PICK, 3=SHORTAGE. */
 export function wmsPickingProductRowSortTier(row: WmsPickingProductLineApi): number {
-  if (!wmsPickingProductLineComplete(row)) return 0;
-  if (wmsPickingLineMissingQty(row) > 1e-9) return 1;
-  return 2;
+  const status = wmsPickingLineResolutionStatus(row);
+  if (status === "ACTIVE") return 0;
+  if (status === "PARTIAL") return 1;
+  if (status === "COMPLETED_PICK") return 2;
+  return 3;
 }
 
 /** Ta sama kolejność co na liście zbierania (trasą → product_id). */
@@ -189,13 +225,13 @@ export function computeWmsPickingProductLineSessionStats(rows: WmsPickingProduct
   let doZebrania = 0;
   let wTrakcie = 0;
   for (const r of rows) {
-    if (wmsPickingProductLineComplete(r)) {
+    const status = wmsPickingLineResolutionStatus(r);
+    if (status === "COMPLETED_PICK" || status === "SHORTAGE") {
       zebrane++;
       continue;
     }
-    const { pickedShown } = wmsPickingDisplayProgressParts(r);
-    if (pickedShown <= 1e-9) doZebrania++;
-    else wTrakcie++;
+    if (status === "PARTIAL") wTrakcie++;
+    else doZebrania++;
   }
   return { zebrane, doZebrania, wTrakcie };
 }
@@ -222,7 +258,6 @@ export function polishSkuWithShortagesLabel(count: number): string {
   return `${n} produktów z brakami`;
 }
 
-/** Nagłówek sekcji zamówień na szczególe SKU: „N zamówień z brakami”. */
 /** Tekst wiersza w modalu po finalizacji („X produktów z brakiem”). */
 export function polishProductShortageModalSkuLine(count: number): string {
   const n = Math.floor(count);

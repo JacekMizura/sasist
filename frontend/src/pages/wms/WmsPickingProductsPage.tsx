@@ -33,6 +33,7 @@ import {
   wmsPickingEffectivePickedQuantity,
   wmsPickingDisplayProgressParts,
   wmsPickingLineMissingQty,
+  wmsPickingLineResolutionStatus,
   wmsPickingRemainingQty,
   wmsPickingProductLineComplete,
   wmsPickingRowScanEligible,
@@ -986,8 +987,11 @@ export default function WmsPickingProductsPage() {
 
         <ul className="flex list-none flex-col p-0 m-0 border-t border-slate-200/60 bg-white rounded-2xl shadow-sm overflow-hidden" aria-label="ListaBox">
           {sortedRows.map((r) => {
-            const { pickedShown, total, miss } = wmsPickingDisplayProgressParts(r);
-            const remainingToPick = total - pickedShown;
+            const { pickedShown, total, miss, remaining } = wmsPickingDisplayProgressParts(r);
+            const remainingToPick = remaining;
+            const resolution = wmsPickingLineResolutionStatus(r);
+            const isShortageResolved = resolution === "SHORTAGE";
+            const isCompletedPick = resolution === "COMPLETED_PICK";
             const locCode = (r.primary_location_code ?? "").trim();
             const hasLocation = locCode.length > 0;
             const pStock = primaryStockDisplay(r);
@@ -995,14 +999,26 @@ export default function WmsPickingProductsPage() {
             const pickDone = wmsPickingProductLineComplete(r);
             const rowBlocked = blockOtherProductLines && !shortageProductIds.has(r.product_id) && !pickDone;
             const hasShortage = miss > 1e-9;
-            
+
             const cardBgStyleClass = rowBlocked
               ? "cursor-not-allowed bg-slate-50/50 opacity-40"
-              : pickDone
-                ? "bg-emerald-50/40 border-b border-emerald-100"
-                : "bg-white hover:bg-slate-50/60 border-b border-slate-200/60";
+              : isShortageResolved
+                ? "bg-amber-50/50 border-b border-amber-100"
+                : isCompletedPick
+                  ? "bg-emerald-50/40 border-b border-emerald-100"
+                  : "bg-white hover:bg-slate-50/60 border-b border-slate-200/60";
 
             const hasEan = r.ean != null && r.ean.trim() !== "";
+            const titleTone = isShortageResolved
+              ? "text-amber-900"
+              : isCompletedPick
+                ? "text-emerald-800"
+                : "text-slate-900";
+            const nameTone = isShortageResolved
+              ? "text-amber-700/80"
+              : isCompletedPick
+                ? "text-emerald-600/75"
+                : "text-slate-400 group-hover:text-[#5a4fcf]";
 
             return (
               <li key={r.product_id} className="last:border-b-0">
@@ -1019,7 +1035,7 @@ export default function WmsPickingProductsPage() {
                           src={r.image_url}
                           alt=""
                           className={`max-h-full max-w-full object-contain mix-blend-multiply drop-shadow-sm transition-all duration-300 ${
-                            pickDone ? 'opacity-60 saturate-50' : 'opacity-100'
+                            pickDone ? "opacity-60 saturate-50" : "opacity-100"
                           }`}
                           loading="lazy"
                         />
@@ -1030,16 +1046,14 @@ export default function WmsPickingProductsPage() {
 
                     <div className="min-w-0 flex-1">
                       {hasEan && (
-                        <p className={`text-lg font-black tracking-tight leading-none mb-1.5 transition-colors duration-300 ${
-                          pickDone ? 'text-emerald-800' : 'text-slate-900'
-                        }`}>
+                        <p
+                          className={`text-lg font-black tracking-tight leading-none mb-1.5 transition-colors duration-300 ${titleTone}`}
+                        >
                           EAN: <span className="font-mono">{(r.ean ?? "").trim()}</span>
                         </p>
                       )}
 
-                      <h3 className={`text-xs font-semibold leading-tight line-clamp-1 transition-colors duration-300 ${
-                        pickDone ? 'text-emerald-600/75' : 'text-slate-400 group-hover:text-[#5a4fcf]'
-                      }`}>
+                      <h3 className={`text-xs font-semibold leading-tight line-clamp-1 transition-colors duration-300 ${nameTone}`}>
                         {r.name}
                       </h3>
                       {r.consolidation_pick && r.consolidation_shelf_label ? (
@@ -1069,12 +1083,30 @@ export default function WmsPickingProductsPage() {
                   </div>
 
                   <div className="shrink-0 flex items-center justify-center w-full sm:w-[18rem]">
-                    {pickDone ? (
+                    {isShortageResolved ? (
+                      <div className="flex flex-col items-stretch gap-1 w-full max-w-[240px] px-5 py-3 bg-amber-50 border border-amber-200 rounded-2xl text-amber-900">
+                        <div className="flex items-center gap-2 text-sm font-black uppercase tracking-wider">
+                          <AlertTriangle size={16} strokeWidth={2.5} className="text-amber-600 shrink-0" />
+                          Zgłoszono brak
+                        </div>
+                        <div className="flex items-center justify-between gap-2 border-t border-amber-200/80 pt-1">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800/80">Brak</span>
+                          <span className="text-lg font-black leading-none tabular-nums">
+                            {fmtQty(miss)}/{fmtQty(total)}
+                          </span>
+                        </div>
+                        {pickedShown > 1e-9 ? (
+                          <p className="text-[10px] font-semibold text-amber-800/70 tabular-nums">
+                            Zebrano wcześniej: {fmtQty(pickedShown)} szt.
+                          </p>
+                        ) : null}
+                      </div>
+                    ) : isCompletedPick ? (
                       <div className="flex items-center gap-2.5 px-5 py-3.5 bg-emerald-500/10 text-emerald-700 rounded-2xl border border-emerald-500/20 text-sm font-black uppercase tracking-wider">
                         <Check size={16} strokeWidth={3} />
                         Zebrano {fmtQty(pickedShown)} / {fmtQty(total)} szt.
                       </div>
-                    ) : pickedShown > 1e-9 ? (
+                    ) : resolution === "PARTIAL" || pickedShown > 1e-9 ? (
                       <div className="flex flex-col items-stretch gap-1 w-full max-w-[220px] px-5 py-3 bg-indigo-50 border border-indigo-100 rounded-2xl group-hover:border-indigo-200 transition-colors">
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-[10px] font-black text-[#5a4fcf] uppercase tracking-widest">
@@ -1084,9 +1116,15 @@ export default function WmsPickingProductsPage() {
                             {fmtQty(pickedShown)}/{fmtQty(total)}
                           </span>
                         </div>
+                        {hasShortage ? (
+                          <div className="flex items-center justify-between gap-2 border-t border-indigo-100/80 pt-1">
+                            <span className="text-[10px] font-bold text-rose-600 uppercase tracking-wider">Brak</span>
+                            <span className="text-sm font-black text-rose-700 tabular-nums">{fmtQty(miss)}</span>
+                          </div>
+                        ) : null}
                         <div className="flex items-center justify-between gap-2 border-t border-indigo-100/80 pt-1">
                           <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                            Pozostało
+                            Do pobrania
                           </span>
                           <span className="text-lg font-black text-[#5a4fcf] leading-none tabular-nums">
                             {fmtQty(remainingToPick)}
@@ -1109,26 +1147,35 @@ export default function WmsPickingProductsPage() {
                   </div>
 
                   <div className="shrink-0 flex flex-col justify-center items-end self-start sm:self-center w-full sm:w-[14rem] text-right">
-                    {hasShortage ? (
-                      <div className="flex items-center justify-end gap-1.5 px-4 py-2 bg-rose-50 border border-rose-200 rounded-xl text-xs font-black text-rose-700 uppercase tracking-wide">
-                        <AlertTriangle size={14} strokeWidth={2.5} />
-                        Brak
+                    {isShortageResolved ? (
+                      <div className="flex items-center justify-end gap-1.5 px-4 py-2 bg-amber-50 border border-amber-200 rounded-xl text-xs font-black text-amber-800 uppercase tracking-wide">
+                        <AlertTriangle size={14} strokeWidth={2.5} className="text-amber-600" />
+                        {hasLocation
+                          ? `Brak na ${formatWmsPickingLocationPillLabel(locCode, undefined)}`
+                          : "Brak dostępnego towaru"}
                       </div>
                     ) : hasLocation ? (
                       <div className="flex flex-col items-end gap-1 w-full">
-                        <div className={`flex items-center justify-end gap-1.5 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wide border transition-colors duration-300 ${
-                          pickDone ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-700' : 'bg-indigo-50 border-indigo-100 text-[#5a4fcf]'
-                        }`} title={locCode}>
-                          {pickDone ? <Check size={14} strokeWidth={3} /> : <MapPin size={14} strokeWidth={2.5} />}
-                          {pickDone
+                        <div
+                          className={`flex items-center justify-end gap-1.5 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wide border transition-colors duration-300 ${
+                            isCompletedPick
+                              ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-700"
+                              : "bg-indigo-50 border-indigo-100 text-[#5a4fcf]"
+                          }`}
+                          title={locCode}
+                        >
+                          {isCompletedPick ? <Check size={14} strokeWidth={3} /> : <MapPin size={14} strokeWidth={2.5} />}
+                          {isCompletedPick
                             ? `Pobrano z ${formatWmsPickingLocationPillLabel(locCode, undefined)}`
                             : formatWmsPickingLocationPillLabel(locCode, pStock > 1e-9 ? pStock : undefined)}
                         </div>
                         {extra > 0 && !pickDone ? (
-                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{extraLocationsHint(extra)}</span>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                            {extraLocationsHint(extra)}
+                          </span>
                         ) : null}
                       </div>
-                    ) : pickDone && pickedShown > 1e-9 ? (
+                    ) : isCompletedPick && pickedShown > 1e-9 ? (
                       <div className="flex items-center justify-end gap-1.5 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wide border bg-emerald-500/10 border-emerald-500/20 text-emerald-700">
                         <Check size={14} strokeWidth={3} />
                         Zebrano

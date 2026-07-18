@@ -10,6 +10,9 @@ from .picking_routing import PickListRow, PickingRoutingAllocationShortfall
 
 WmsPickingOrderTypeFilter = Literal["single", "multi", "all"]
 
+# Stan rozliczenia linii SKU w sesji zbierania (SSOT dla UI — nie mylić z completed=True przy braku).
+WmsPickingLineResolutionStatus = Literal["ACTIVE", "PARTIAL", "COMPLETED_PICK", "SHORTAGE"]
+
 
 class WmsPickingProductBundleBreakdownRow(BaseModel):
     """Rozbicie zagregowanego SKU per zamówienie + bundle (P4.15B)."""
@@ -68,6 +71,13 @@ class WmsPickingProductLine(BaseModel):
     completed: bool = Field(
         False,
         description="True gdy remaining_to_pick≈0 (zebrano i/lub brak rozliczyły demand) — linia zostaje w snapshotcie sesji",
+    )
+    resolution_status: WmsPickingLineResolutionStatus = Field(
+        "ACTIVE",
+        description=(
+            "ACTIVE / PARTIAL (jeszcze do pobrania) | COMPLETED_PICK (pełne zebranie bez braku) | "
+            "SHORTAGE (remaining≈0 i missing>0 — zakończone problemowo, NIE mylić z ZEBRANO)"
+        ),
     )
     primary_location_code: str = Field("", description="Pierwsza lokalizacja na trasie (lex wg nazwy)")
     primary_location_stock: float = Field(
@@ -253,6 +263,10 @@ class WmsPickingProductDetailResponse(BaseModel):
         description="Suma braków na liniach tego produktu w kohortcie",
     )
     remaining_to_pick: float = Field(0, ge=0)
+    resolution_status: WmsPickingLineResolutionStatus = Field(
+        "ACTIVE",
+        description="Jak na liście produktów — ACTIVE|PARTIAL|COMPLETED_PICK|SHORTAGE",
+    )
     locations: list[WmsPickingProductLocationRow]
     orders: list[WmsPickingProductOrderRow]
     active_fifo_order_id: Optional[int] = Field(

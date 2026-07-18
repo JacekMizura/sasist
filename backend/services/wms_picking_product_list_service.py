@@ -88,6 +88,7 @@ from ..schemas.picking_routing import PickListRow
 from ..schemas.wms_picking_products import (
     WmsPickingBundleComponentStatus,
     WmsPickingCohortMissingLineRow,
+    WmsPickingLineResolutionStatus,
     WmsPickingOrderBundleTree,
     WmsPickingOrderTypeFilter,
     WmsPickingProductBundleBreakdownRow,
@@ -682,21 +683,46 @@ def _picking_product_line_still_active(line: WmsPickingProductLine) -> bool:
     return float(line.remaining_to_pick or 0) > 1e-9 or float(line.missing_quantity or 0) > 1e-9
 
 
+def _picking_line_resolution_status(
+    *,
+    remaining_to_pick: float,
+    picked_quantity: float,
+    missing_quantity: float,
+) -> WmsPickingLineResolutionStatus:
+    """
+    Kanoniczny stan UI dla linii SKU.
+
+    ``completed=True`` (remaining≈0) obejmuje zarówno pełne zebranie, jak i pełny brak —
+    ``resolution_status`` rozróżnia te przypadki (SHORTAGE ≠ COMPLETED_PICK).
+    """
+    rem = float(remaining_to_pick or 0)
+    miss = float(missing_quantity or 0)
+    picked = float(picked_quantity or 0)
+    if rem > 1e-9:
+        return "PARTIAL" if picked > 1e-9 else "ACTIVE"
+    if miss > 1e-9:
+        return "SHORTAGE"
+    return "COMPLETED_PICK"
+
+
 def _picking_product_line_completed(line: WmsPickingProductLine) -> bool:
     """Demand sesji rozliczony (remaining≈0) — SKU nadal należy do snapshotu sesji z wózkiem."""
     return float(line.remaining_to_pick or 0) <= 1e-9
 
 
 def _picking_product_line_session_sort_key(line: WmsPickingProductLine) -> tuple:
-    """unfinished → shortage-only → fully picked; potem trasa / product_id."""
-    rem = float(line.remaining_to_pick or 0)
-    miss = float(line.missing_quantity or 0)
-    if rem > 1e-9:
-        tier = 0
-    elif miss > 1e-9:
-        tier = 1
-    else:
-        tier = 2
+    """ACTIVE → PARTIAL → COMPLETED_PICK → SHORTAGE; potem trasa / product_id."""
+    status = getattr(line, "resolution_status", None) or _picking_line_resolution_status(
+        remaining_to_pick=float(line.remaining_to_pick or 0),
+        picked_quantity=float(line.picked_quantity or 0),
+        missing_quantity=float(line.missing_quantity or 0),
+    )
+    tier = {
+        "ACTIVE": 0,
+        "PARTIAL": 1,
+        "COMPLETED_PICK": 2,
+        "SHORTAGE": 3,
+    }.get(str(status), 0)
     return (tier, line.route_sort_key or "\uffff", int(line.product_id))
 
 
@@ -1543,6 +1569,11 @@ def build_wms_picking_product_lines(
         picked_eff = min(picked_raw, max(0.0, float(tq) - miss_sum))
         rem_pick = max(0.0, float(tq) - picked_eff - miss_sum)
         line_completed = rem_pick <= 1e-9
+        resolution = _picking_line_resolution_status(
+            remaining_to_pick=rem_pick,
+            picked_quantity=picked_eff,
+            missing_quantity=miss_sum,
+        )
         scanner_active = bool(scan_by_pid.get(pid)) if cart_id is not None else (rem_pick > 1e-9)
         shelf_label = consolidation_shelves.get(int(pid))
         breakdown = _bundle_breakdown_for_product(
@@ -1559,6 +1590,7 @@ def build_wms_picking_product_lines(
                 missing_quantity=miss_sum,
                 remaining_to_pick=round(rem_pick, 6),
                 completed=line_completed,
+                resolution_status=resolution,
                 primary_location_code=loc,
                 primary_location_stock=primary_stock,
                 extra_locations_count=extra_locs,
@@ -1988,6 +2020,12 @@ def build_wms_picking_product_detail(
         picked_quantity=row.picked_quantity,
         missing_quantity=float(getattr(row, "missing_quantity", 0) or 0),
         remaining_to_pick=row.remaining_to_pick,
+        resolution_status=getattr(row, "resolution_status", None)
+        or _picking_line_resolution_status(
+            remaining_to_pick=float(row.remaining_to_pick or 0),
+            picked_quantity=float(row.picked_quantity or 0),
+            missing_quantity=float(getattr(row, "missing_quantity", 0) or 0),
+        ),
         locations=locations,
         orders=order_rows,
         active_fifo_order_id=active_fifo_order_id,
