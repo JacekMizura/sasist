@@ -1202,98 +1202,63 @@ class CartService:
         return build_label_pdf(template, records, one_page_per_label=True)
 
     def clear_cart(self, cart_id: int) -> dict:
-        """Unassign ALL orders from this cart and all its baskets: order.cart_id/basket_id = NULL,
-        basket.order_id = None, basket.used_volume = 0, cart.used_volume = 0.
-        Also detach WMS / enterprise picking from this cart (pick_tasks.cart_id, picks.cart_id → NULL)."""
+        """
+        Odepnij wszystkie zamówienia i zwolnij wózek — wyłącznie przez CartLifecycle
+        (``admin_release_cart``). Legacy API bez actora → System (admin_user_id=0).
+        """
         cart = self.db.query(Cart).filter(Cart.id == cart_id).first()
         if not cart:
             raise HTTPException(status_code=404, detail="Wózek nie istnieje")
-        pick_tasks_updated = self.db.query(PickTask).filter(PickTask.cart_id == cart_id).update(
-            {PickTask.cart_id: None},
-            synchronize_session="fetch",
-        )
-        # Usuń robocze kompletacje (jeszcze bez finalizacji — bez spisu magazynu)
-        self.db.query(Pick).filter(Pick.cart_id == cart_id, Pick.picked_at.is_(None)).delete(
-            synchronize_session=False
-        )
-        picks_updated = self.db.query(Pick).filter(Pick.cart_id == cart_id).update(
-            {Pick.cart_id: None},
-            synchronize_session="fetch",
-        )
-        from .cart_stats_service import list_orders_on_cart
+        from .cart_picking_lifecycle_service import admin_release_cart
 
-        # Detach every order in SSOT set (cart_id OR picking_session heal path).
-        self.db.refresh(cart)
-        ssot_orders = list_orders_on_cart(self.db, cart)
-        orders_updated = 0
-        for o in ssot_orders:
-            o.cart_id = None
-            o.basket_id = None
-            o.total_volume_dm3 = None
-            o.status = "NEW"
-            self.db.add(o)
-            orders_updated += 1
-        # Safety net for any remaining cart_id rows not yet flushed into SSOT view.
-        orders_updated += (
-            self.db.query(Order)
-            .filter(Order.cart_id == cart_id)
-            .update(
-                {
-                    Order.cart_id: None,
-                    Order.basket_id: None,
-                    Order.total_volume_dm3: None,
-                    Order.status: "NEW",
-                },
-                synchronize_session="fetch",
-            )
-            or 0
+        out = admin_release_cart(
+            self.db,
+            cart_id=int(cart_id),
+            tenant_id=int(cart.tenant_id),
+            warehouse_id=int(cart.warehouse_id),
+            admin_user_id=0,
+            acknowledge=True,
         )
-        self.db.query(CartBasket).filter(CartBasket.cart_id == cart_id).update(
-            {CartBasket.used_volume: 0, CartBasket.order_id: None},
-            synchronize_session="fetch",
-        )
-        from .cart_picking_lifecycle_service import release_cart
-
-        self.db.refresh(cart)
-        release_cart(self.db, cart=cart, reason="clear_cart")
         self.db.commit()
         return {
             "status": "OK",
-            "orders_cleared": orders_updated,
-            "pick_tasks_detached": pick_tasks_updated,
-            "picks_detached": picks_updated,
+            "orders_cleared": int(out.get("orders_detached") or 0),
+            "cart_status": out.get("cart_status"),
+            "picking_cancelled": bool(out.get("picking_cancelled")),
+            "via": "cart_lifecycle.admin_release_cart",
         }
 
     def clear_basket(self, basket_id: int) -> dict:
-        """Unassign only the order from this specific basket; update that order's cart_id/basket_id to NULL;
-        recalc parent cart.used_volume from remaining assigned orders."""
+        """Odłącz zamówienie z koszyka MULTI — CartLifecycle.detach_order_from_cart."""
         basket = self.db.query(CartBasket).filter(CartBasket.id == basket_id).first()
         if not basket:
             raise HTTPException(status_code=404, detail="Koszyk nie istnieje")
         order_id = basket.order_id
         cart_id = basket.cart_id
-        basket.order_id = None
-        basket.used_volume = 0
-        self.db.add(basket)
-        if order_id:
-            self.db.query(Order).filter(Order.id == order_id).update(
-                {Order.cart_id: None, Order.basket_id: None, Order.total_volume_dm3: None, Order.status: "NEW"},
-                synchronize_session="fetch",
-            )
-        from .cart_stats_service import list_orders_on_cart
-        from .cart_capacity.engine import order_volume_dm3
+        if order_id and cart_id:
+            cart = self.db.query(Cart).filter(Cart.id == int(cart_id)).first()
+            if cart is None:
+                raise HTTPException(status_code=404, detail="Wózek nie istnieje")
+            from .cart_picking_lifecycle_service import CartLifecycleError, detach_order_from_cart
 
-        cart = self.db.query(Cart).filter(Cart.id == cart_id).first()
-        if cart:
-            orders_on_cart = list_orders_on_cart(self.db, cart)
-            cart.used_volume = round(sum(order_volume_dm3(o) for o in orders_on_cart), 2)
-            self.db.add(cart)
-            if not orders_on_cart:
-                from .cart_picking_lifecycle_service import release_cart
-
-                release_cart(self.db, cart=cart, reason="clear_basket")
+            try:
+                detach_order_from_cart(
+                    self.db,
+                    cart_id=int(cart_id),
+                    order_id=int(order_id),
+                    tenant_id=int(cart.tenant_id),
+                    warehouse_id=int(cart.warehouse_id),
+                    operator_user_id=None,
+                    reason="Odłączenie zamówienia z koszyka (clear_basket).",
+                )
+            except CartLifecycleError as e:
+                raise HTTPException(status_code=409, detail=str(e)) from e
+        else:
+            basket.order_id = None
+            basket.used_volume = 0
+            self.db.add(basket)
         self.db.commit()
-        return {"status": "OK", "order_cleared": order_id}
+        return {"status": "OK", "order_cleared": order_id, "via": "cart_lifecycle.detach_order_from_cart"}
 
     def reset_cart(self, cart_id: int) -> dict:
         """Alias for clear_cart: clear assignments for this cart."""

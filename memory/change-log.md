@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-07-18 — CartLifecycle invariant: panel status + clear_cart
+
+- `office_order_ui` patch status → `apply_order_panel_ui_status` → `detach_order_from_cart` (no raw clear).
+- `cart_service.clear_cart` → `admin_release_cart`; `clear_basket` → `detach_order_from_cart`.
+- `apply_fulfillment_state(clear_cart=True)` raises — cart clear only via lifecycle.
+- Tests: `test_office_order_ui_cart_detach.py`.
+
 ## 2026-07-18 — WMS Validation hardening (detach SSOT + tests)
 
 - `detach_order_from_cart(..., operator_user_id=None)` = System actor; gate no longer uses `clear_order_picking_session_context` bypass.

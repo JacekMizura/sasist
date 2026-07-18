@@ -27,7 +27,12 @@ PICKING_IN_PROGRESS = PICKING
 
 
 def clear_order_picking_session_context(order: Order) -> None:
-    """Przy zmianie statusu panelu: zwolnij wózek i sesję (bez zmiany fulfillment_state)."""
+    """
+    Low-level field clear: cart_id / basket_id / picking_session_id.
+
+    Wyłącznie z wnętrza CartLifecycle (lub orphan-heal gdy wózek nie istnieje).
+    Nie wołać z API / panelu jako „detach”.
+    """
     logger.info(
         "wms fulfillment clear context: order.id=%s status=%s fulfillment_state=%s cart_id(before)=%s",
         order.id,
@@ -45,18 +50,22 @@ def apply_fulfillment_state(
     order: Order,
     state: str,
     *,
-    clear_cart: bool = True,
-    clear_session: bool = True,
+    clear_cart: bool = False,
+    clear_session: bool = False,
     invoke_packing_lifecycle: bool = True,
 ) -> None:
-    """Ustaw ``fulfillment_state`` i opcjonalnie wyczyść kontekst wózka/sesji."""
+    """
+    Ustaw ``fulfillment_state``.
+
+    ``clear_cart`` / ``clear_session`` muszą być False — odłączenie wózka tylko przez CartLifecycle.
+    """
+    if clear_cart or clear_session:
+        raise RuntimeError(
+            "apply_fulfillment_state(clear_cart/clear_session) jest zabronione — "
+            "użyj CartLifecycle.detach_order_from_cart / cancel_picking / release_cart"
+        )
     prev = getattr(order, "fulfillment_state", None)
     order.fulfillment_state = state
-    if clear_cart:
-        order.cart_id = None
-        order.basket_id = None
-    if clear_session and getattr(order, "picking_session_id", None) is not None:
-        order.picking_session_id = None
     logger.info(
         "wms fulfillment: order.id=%s order.status=%s fulfillment_state %s -> %s cart_id=%s",
         order.id,
