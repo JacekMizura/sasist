@@ -197,8 +197,81 @@ def _serialize_cart_order_product_lines(order) -> list[dict]:
         if not name:
             pid = getattr(item, "product_id", None)
             name = f"Produkt #{pid}" if pid else "Produkt"
-        lines.append({"name": name, "quantity": qty})
+        sku = ""
+        ean = ""
+        if prod is not None:
+            sku = str(getattr(prod, "sku", None) or getattr(prod, "symbol", None) or "").strip()
+            ean = str(getattr(prod, "ean", None) or getattr(prod, "barcode", None) or "").strip()
+        lines.append({"name": name, "quantity": qty, "sku": sku or None, "ean": ean or None})
     return lines
+
+
+def _order_ids_with_picks(db: Session, order_ids: list[int], *, cart_id: int | None = None) -> set[int]:
+    if not order_ids:
+        return set()
+    from ..models.pick import Pick
+
+    q = db.query(Pick.order_id).filter(Pick.order_id.in_([int(x) for x in order_ids]))
+    if cart_id is not None:
+        q = q.filter(Pick.cart_id == int(cart_id))
+    return {int(r[0]) for r in q.distinct().all() if r[0] is not None}
+
+
+def _serialize_assigned_order_row(
+    order,
+    *,
+    can_detach: bool = False,
+    detach_block_reason: str | None = None,
+) -> dict:
+    """Rich row for admin „Przypisane zamówienia” section."""
+    number = getattr(order, "number", None)
+    products = _serialize_cart_order_product_lines(order)
+    items_count = len(products) or len(
+        [i for i in (getattr(order, "items", None) or []) if float(getattr(i, "quantity", 0) or 0) > 0]
+    )
+    vol = getattr(order, "total_volume_dm3", None)
+    if vol is None or float(vol or 0) <= 0:
+        vol = _order_used_volume_dm3_from_items(order)
+    weight = _order_total_weight_kg(order)
+    return {
+        "order_id": int(order.id),
+        "number": str(number) if number not in (None, "") else str(order.id),
+        "status": _order_display_status(order),
+        "customer_name": _order_display_customer(order),
+        "items_count": int(items_count),
+        "total_volume_dm3": round(float(vol or 0), 2),
+        "total_weight_kg": float(weight),
+        "products": products,
+        "can_detach": bool(can_detach),
+        "detach_block_reason": detach_block_reason,
+    }
+
+
+def _assigned_orders_payload(db: Session, cart, orders: list) -> list[dict]:
+    from .cart_picking_lifecycle_service import (
+        ORDER_DETACH_BLOCKED_MSG,
+        get_cart_status,
+    )
+    from ..models.enums import CartStatus
+
+    st = get_cart_status(cart)
+    packing_like = st in (CartStatus.READY_FOR_PACKING, CartStatus.PACKING)
+    with_picks = _order_ids_with_picks(
+        db,
+        [int(o.id) for o in orders],
+        cart_id=int(cart.id),
+    )
+    out: list[dict] = []
+    for o in orders:
+        blocked = packing_like or int(o.id) in with_picks
+        out.append(
+            _serialize_assigned_order_row(
+                o,
+                can_detach=not blocked,
+                detach_block_reason=ORDER_DETACH_BLOCKED_MSG if blocked else None,
+            )
+        )
+    return out
 
 
 def _serialize_cart_order_preview(order, *, order_id: int | None = None) -> dict:
@@ -369,12 +442,12 @@ def _cart_stats(db: Session, cart_id: int, assigned, baskets_iter):
     SSOT: agregat z orders.cart_id / picking_session_id (cart_stats_service).
     Parametry assigned/baskets_iter zachowane dla kompatybilności wywołań — nieużywane do liczników.
     """
-    from .cart_stats_service import get_cart_stats_or_404, query_orders_on_cart
+    from .cart_stats_service import get_cart_stats_or_404, list_orders_on_cart
     from ..models.cart import Cart
 
     s = get_cart_stats_or_404(db, int(cart_id))
     cart = db.query(Cart).filter(Cart.id == int(cart_id)).first()
-    orders = query_orders_on_cart(db, cart).all() if cart else []
+    orders = list_orders_on_cart(db, cart) if cart else []
     return {
         "total_orders": s["orders_count"],
         "total_products": s["products_count"],
@@ -390,23 +463,6 @@ def _orders_for_cart_preview(db: Session, cart) -> list:
     from .cart_stats_service import list_orders_on_cart
 
     return list_orders_on_cart(db, cart, with_items=True)
-
-
-def _serialize_assigned_order_row(order) -> dict:
-    """Rich row for admin „Przypisane zamówienia” section."""
-    number = getattr(order, "number", None)
-    items = getattr(order, "items", None) or []
-    items_count = len([i for i in items if float(getattr(i, "quantity", 0) or 0) > 0]) or len(items)
-    vol = getattr(order, "total_volume_dm3", None)
-    if vol is None or float(vol or 0) <= 0:
-        vol = _order_used_volume_dm3_from_items(order)
-    return {
-        "order_id": int(order.id),
-        "number": str(number) if number not in (None, "") else str(order.id),
-        "status": _order_display_status(order),
-        "items_count": int(items_count),
-        "total_volume_dm3": round(float(vol or 0), 2),
-    }
 
 
 def _order_total_weight_kg(order) -> float:
@@ -666,7 +722,7 @@ class CartService:
             }
             pick_extra = _wms_pick_stats_for_cart(self.db, cart.id)
             orders_preview = [_serialize_cart_order_preview(o, order_id=int(o.id)) for o in orders_ssot]
-            assigned_orders = [_serialize_assigned_order_row(o) for o in orders_ssot]
+            assigned_orders = _assigned_orders_payload(self.db, cart, orders_ssot)
             order_numbers = [str(o.number) for o in orders_ssot if getattr(o, "number", None) not in (None, "")]
             assignment = assignment_by_cart.get(int(cart.id)) or _empty_cart_assignment()
             return {
@@ -755,7 +811,7 @@ class CartService:
         pick_extra = _wms_pick_stats_for_cart(self.db, cart.id)
         order_numbers = [str(o.number) for o in orders_ssot if getattr(o, "number", None) not in (None, "")]
         orders_preview = [_serialize_cart_order_preview(o, order_id=int(o.id)) for o in orders_ssot]
-        assigned_orders = [_serialize_assigned_order_row(o) for o in orders_ssot]
+        assigned_orders = _assigned_orders_payload(self.db, cart, orders_ssot)
         assignment = _batch_cart_assignments(self.db, [int(cart.id)]).get(int(cart.id)) or _empty_cart_assignment()
         if assignment.get("assigned_user_id") is None:
             lifecycle_uid = getattr(cart, "assigned_user_id", None) or getattr(cart, "packing_user_id", None)
@@ -1164,13 +1220,33 @@ class CartService:
             {Pick.cart_id: None},
             synchronize_session="fetch",
         )
-        orders_updated = (
+        from .cart_stats_service import list_orders_on_cart
+
+        # Detach every order in SSOT set (cart_id OR picking_session heal path).
+        self.db.refresh(cart)
+        ssot_orders = list_orders_on_cart(self.db, cart)
+        orders_updated = 0
+        for o in ssot_orders:
+            o.cart_id = None
+            o.basket_id = None
+            o.total_volume_dm3 = None
+            o.status = "NEW"
+            self.db.add(o)
+            orders_updated += 1
+        # Safety net for any remaining cart_id rows not yet flushed into SSOT view.
+        orders_updated += (
             self.db.query(Order)
             .filter(Order.cart_id == cart_id)
             .update(
-                {Order.cart_id: None, Order.basket_id: None, Order.total_volume_dm3: None, Order.status: "NEW"},
+                {
+                    Order.cart_id: None,
+                    Order.basket_id: None,
+                    Order.total_volume_dm3: None,
+                    Order.status: "NEW",
+                },
                 synchronize_session="fetch",
             )
+            or 0
         )
         self.db.query(CartBasket).filter(CartBasket.cart_id == cart_id).update(
             {CartBasket.used_volume: 0, CartBasket.order_id: None},
@@ -1204,10 +1280,13 @@ class CartService:
                 {Order.cart_id: None, Order.basket_id: None, Order.total_volume_dm3: None, Order.status: "NEW"},
                 synchronize_session="fetch",
             )
-        orders_on_cart = self.db.query(Order).filter(Order.cart_id == cart_id).all()
+        from .cart_stats_service import list_orders_on_cart
+        from .cart_capacity.engine import order_volume_dm3
+
         cart = self.db.query(Cart).filter(Cart.id == cart_id).first()
         if cart:
-            cart.used_volume = round(sum(getattr(o, "total_volume_dm3", 0) or 0 for o in orders_on_cart), 2)
+            orders_on_cart = list_orders_on_cart(self.db, cart)
+            cart.used_volume = round(sum(order_volume_dm3(o) for o in orders_on_cart), 2)
             self.db.add(cart)
             if not orders_on_cart:
                 from .cart_picking_lifecycle_service import release_cart

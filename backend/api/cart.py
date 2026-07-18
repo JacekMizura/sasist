@@ -22,6 +22,7 @@ from ..services.cart_picking_lifecycle_service import (
     CartLifecycleError,
     InvalidCartTransitionError,
     admin_release_cart,
+    detach_order_from_cart,
 )
 from ..schemas.cart import (
     CartMultiCreate,
@@ -397,6 +398,59 @@ router.add_api_route(
     methods=["POST"],
     response_model=None,
     name="admin_release_cart_slash",
+    include_in_schema=False,
+)
+
+
+def detach_order_from_cart_endpoint(
+    cart_id: int,
+    order_id: int,
+    db: Session = Depends(get_db),
+    actor: AppUser = Depends(
+        require_any_permission("warehouse.carts.admin_release", "warehouse.picking.override")
+    ),
+):
+    """
+    Odłącz pojedyncze zamówienie od wózka (admin).
+    Wyłącznie przez CartLifecycleService.detach_order_from_cart.
+    """
+    cart = db.query(Cart).filter(Cart.id == int(cart_id)).first()
+    if cart is None:
+        raise HTTPException(status_code=404, detail="Wózek nie istnieje")
+    try:
+        result = detach_order_from_cart(
+            db,
+            cart_id=int(cart_id),
+            order_id=int(order_id),
+            tenant_id=int(cart.tenant_id),
+            warehouse_id=int(cart.warehouse_id),
+            operator_user_id=int(actor.id),
+        )
+        db.commit()
+        return {"status": "OK", **result}
+    except InvalidCartTransitionError as e:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(e.message or e)) from e
+    except CartLifecycleError as e:
+        db.rollback()
+        code = getattr(e, "code", None) or ""
+        status_code = 409 if code == "OrderDetachBlocked" else 400
+        raise HTTPException(status_code=status_code, detail=str(e.message or e)) from e
+
+
+router.add_api_route(
+    "/{cart_id}/orders/{order_id}/detach",
+    detach_order_from_cart_endpoint,
+    methods=["POST"],
+    response_model=None,
+    name="detach_order_from_cart",
+)
+router.add_api_route(
+    "/{cart_id}/orders/{order_id}/detach/",
+    detach_order_from_cart_endpoint,
+    methods=["POST"],
+    response_model=None,
+    name="detach_order_from_cart_slash",
     include_in_schema=False,
 )
 

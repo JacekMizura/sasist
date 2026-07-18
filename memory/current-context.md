@@ -13,6 +13,8 @@ Cel: produkcyjny, spójny flow (CartLifecycle + Capacity + Event/Activity Log + 
 - **Event Log:** legacy `event_type NOT NULL` → DROP po backfill do `event_code` (NotNullViolation 500)
 - **Schema health:** WMS audit/sessions/picks/orders timeline na PG allowlist; carts capacity healed; report `memory/schema-health-check.md`
 - **Wózki:** SSOT `list_orders_on_cart`; sekcja Przypisane zamówienia; Activity Log z numerami; jedna Pojemność
+- **Wózki close-out:** pełny audyt spójności A–E (`memory/carts-consistency-audit.md`); regresje volume/clear/finish_packing/Activity refresh naprawione
+- **Wózki UX:** odłączenie 1 zamówienia (lifecycle), tooltips numer/pozycje, Activity Log expand + inline numery
 
 ## Open (stabilizacja)
 

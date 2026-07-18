@@ -53,7 +53,11 @@ def query_orders_on_cart(db: Session, cart: Cart, *, with_items: bool = False):
             clauses.append(Order.picking_session_id == int(sess.id))
     q = db.query(Order).filter(or_(*clauses), Order.deleted_at.is_(None))
     if with_items:
-        q = q.options(joinedload(Order.items).joinedload(OrderItem.product))
+        q = q.options(
+            joinedload(Order.items).joinedload(OrderItem.product),
+            joinedload(Order.customer),
+            joinedload(Order.order_ui_status),
+        )
     return q
 
 
@@ -81,6 +85,19 @@ def orders_event_meta(orders: list[Order] | Sequence[Order]) -> dict[str, Any]:
         "order_numbers": order_numbers,
         "orders_count": len(order_ids),
     }
+
+
+def format_orders_operation_description(verb: str, orders: list[Order] | Sequence[Order]) -> str:
+    """
+    Opis zdarzenia z listą numerów — nigdy sam „Przypisano N zamówień” bez numerów.
+    Przykład: „Przypisano 5 zamówień: #A-1, #A-2, #A-3, #A-4, #A-5.”
+    """
+    meta = orders_event_meta(orders)
+    n = int(meta["orders_count"])
+    nums = [f"#{x}" for x in meta["order_numbers"]]
+    if n <= 0:
+        return f"{verb} 0 zamówień."
+    return f"{verb} {n} zamówień: {', '.join(nums)}."
 
 
 def _order_volume_dm3(order: Order) -> float:

@@ -104,10 +104,13 @@ def format_cart_basket_label(b: CartBasket) -> str:
 
 
 def refresh_cart_used_volume_wms(db: Session, cart: Cart) -> None:
-    """Sumuje ``Order.total_volume_dm3`` dla zamówień na wózku — po zmianie koszyków.
+    """Sumuje objętość zamówień na wózku (SSOT list_orders_on_cart) — po zmianie koszyków.
     Nie zmienia statusu lifecycle (wyłącznie volume)."""
-    orders_on = db.query(Order).filter(Order.cart_id == cart.id).all()
-    cart.used_volume = round(sum(float(o.total_volume_dm3 or 0) for o in orders_on), 2)
+    from .cart_stats_service import list_orders_on_cart
+    from .cart_capacity.engine import order_volume_dm3
+
+    orders_on = list_orders_on_cart(db, cart)
+    cart.used_volume = round(sum(order_volume_dm3(o) for o in orders_on), 2)
     db.add(cart)
 
 
@@ -264,11 +267,11 @@ class PickingAssignmentService:
 
     def _finalize_cart(self, cart: Cart, _ctype: str) -> None:
         """Volume refresh only — lifecycle (status/session/cart_id) wyłącznie w CartLifecycleService."""
-        orders_on = self.db.query(Order).filter(Order.cart_id == cart.id).all()
-        cart.used_volume = round(
-            sum(float(o.total_volume_dm3 or 0) for o in orders_on),
-            2,
-        )
+        from .cart_stats_service import list_orders_on_cart
+        from .cart_capacity.engine import order_volume_dm3
+
+        orders_on = list_orders_on_cart(self.db, cart)
+        cart.used_volume = round(sum(order_volume_dm3(o) for o in orders_on), 2)
         self.db.add(cart)
 
     def _assign_bulk(
@@ -314,8 +317,11 @@ class PickingAssignmentService:
                 cart_total_volume_dm3=0.0,
                 basket_summaries=[],
             )
-        orders_on = self.db.query(Order).filter(Order.cart_id == cart.id).all()
-        used = round(sum(float(o.total_volume_dm3 or 0) for o in orders_on), 2)
+        from .cart_stats_service import list_orders_on_cart
+        from .cart_capacity.engine import order_volume_dm3
+
+        orders_on = list_orders_on_cart(self.db, cart)
+        used = round(sum(order_volume_dm3(o) for o in orders_on), 2)
         summaries: list[PickingAssignmentBasketSummary] = []
         for b in sorted(cart.baskets or [], key=lambda x: (x.row, x.column, x.id)):
             cap = _basket_capacity_dm3(b)

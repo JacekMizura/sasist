@@ -250,7 +250,7 @@ def compute_pick_progress(db: Session, cart: Cart) -> tuple[int, int, float]:
     picked = SKU z co najmniej jednym Pick na wózku; remaining = total_products - picked.
     """
     try:
-        from .cart_stats_service import compute_cart_stats, query_orders_on_cart
+        from .cart_stats_service import compute_cart_stats, list_orders_on_cart
         from ..models.order_item import OrderItem
 
         stats = compute_cart_stats(db, cart)
@@ -266,7 +266,7 @@ def compute_pick_progress(db: Session, cart: Cart) -> tuple[int, int, float]:
         }
         # Ogranicz do produktów z zamówień na wózku
         on_cart_pids: set[int] = set()
-        for o in query_orders_on_cart(db, cart).all():
+        for o in list_orders_on_cart(db, cart):
             for it in getattr(o, "items", None) or []:
                 if getattr(it, "product_id", None) is not None:
                     on_cart_pids.add(int(it.product_id))

@@ -62,6 +62,30 @@ export function CartFleetDetailPanel({
   const [basketToConfirmClear, setBasketToConfirmClear] = useState<BasketDetail | null>(null);
   const [confirmWholeCartClearOpen, setConfirmWholeCartClearOpen] = useState(false);
   const [orderPreview, setOrderPreview] = useState<{ orderId: number; basketCode?: string | null } | null>(null);
+  const [activityRefreshKey, setActivityRefreshKey] = useState(0);
+
+  const reloadCartSurfaces = () => {
+    if (cartId == null) return;
+    void Promise.all([api.get(`/carts/${cartId}/`), fetchWmsCartStats(cartId)]).then(
+      ([detailRes, statsRes]) => {
+        const detail = detailRes.data as NonNullable<typeof detailData> & {
+          baskets: BasketDetail[];
+        };
+        setBaskets(detail.baskets ?? []);
+        setDetailData({
+          ...detail,
+          capacity: parseCapacitySnapshot(detail.capacity) ?? statsRes.capacity ?? null,
+          status: detail.status != null ? String(detail.status) : statsRes.status,
+          assigned_user_id:
+            detail.assigned_user_id != null ? Number(detail.assigned_user_id) : null,
+          current_session_id:
+            detail.current_session_id != null ? Number(detail.current_session_id) : null,
+        });
+        setWmsStats(statsRes);
+        setActivityRefreshKey((n) => n + 1);
+      },
+    );
+  };
 
   useEffect(() => {
     if (!open || cartId == null) {
@@ -109,6 +133,24 @@ export function CartFleetDetailPanel({
   const stats = useMemo(() => cartStatsFromWms(wmsStats), [wmsStats]);
   const weightKg = Number(detailData?.total_weight_kg ?? 0);
   const lifecycleStatus = wmsStats.status ?? detailData?.status;
+
+  // Poll while operator may time out (ASSIGNED) so panel/status stay in sync after backend release.
+  useEffect(() => {
+    if (!open || cartId == null) return;
+    const st = String(lifecycleStatus || "").toUpperCase();
+    if (st !== "ASSIGNED" && st !== "PICKING") return;
+    const timer = window.setInterval(() => {
+      void fetchWmsCartStats(cartId).then((statsRes) => {
+        setWmsStats(statsRes);
+        const next = String(statsRes.status || "").toUpperCase();
+        if (next === "AVAILABLE" || next !== st) {
+          reloadCartSurfaces();
+        }
+      });
+    }, 12_000);
+    return () => window.clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reloadCartSurfaces closes over cartId
+  }, [open, cartId, lifecycleStatus]);
 
   const handleClearCartConfirm = async () => {
     if (cartId == null) return;
@@ -284,33 +326,7 @@ export function CartFleetDetailPanel({
                           }
                           onSuccess={() => {
                             onClearSuccess?.();
-                            void Promise.all([
-                              api.get(`/carts/${cartId}/`),
-                              fetchWmsCartStats(cartId),
-                            ]).then(([detailRes, statsRes]) => {
-                              const detail = detailRes.data as NonNullable<typeof detailData> & {
-                                baskets: BasketDetail[];
-                              };
-                              setBaskets(detail.baskets ?? []);
-                              setDetailData({
-                                ...detail,
-                                capacity:
-                                  parseCapacitySnapshot(detail.capacity) ??
-                                  statsRes.capacity ??
-                                  null,
-                                status:
-                                  detail.status != null ? String(detail.status) : statsRes.status,
-                                assigned_user_id:
-                                  detail.assigned_user_id != null
-                                    ? Number(detail.assigned_user_id)
-                                    : null,
-                                current_session_id:
-                                  detail.current_session_id != null
-                                    ? Number(detail.current_session_id)
-                                    : null,
-                              });
-                              setWmsStats(statsRes);
-                            });
+                            reloadCartSurfaces();
                           }}
                         />
                       ) : null}
@@ -328,7 +344,14 @@ export function CartFleetDetailPanel({
                     </div>
                   </div>
 
-                  <AssignedOrdersSection orders={assignedOrders} />
+                  <AssignedOrdersSection
+                    orders={assignedOrders}
+                    cartId={cartId}
+                    onDetachSuccess={() => {
+                      onClearSuccess?.();
+                      reloadCartSurfaces();
+                    }}
+                  />
 
                   {isSectional && baskets.length > 0 ? (
                     <div className="space-y-3">
@@ -351,7 +374,12 @@ export function CartFleetDetailPanel({
                   ) : null}
 
                   {cartId ? (
-                    <ActivityLogPanel objectType="cart" objectId={cartId} className="mt-2 border-t-0 pt-2" />
+                    <ActivityLogPanel
+                      objectType="cart"
+                      objectId={cartId}
+                      refreshKey={activityRefreshKey}
+                      className="mt-2 border-t-0 pt-2"
+                    />
                   ) : null}
                 </div>
               )

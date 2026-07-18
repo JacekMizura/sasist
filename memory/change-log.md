@@ -1,5 +1,20 @@
 # Change log
 
+## 2026-07-18 — Carts: detach one order + tooltips + Activity Log UX
+
+- Lifecycle: `detach_order_from_cart` + `POST /carts/{id}/orders/{order_id}/detach` (blocked after picks / READY|PACKING).
+- Assigned orders DTO: customer, products/EAN/SKU, weight, `can_detach`.
+- FE tooltips on number + Pozycje; Activity Log expandable with inline order list.
+- Report: `memory/carts-detach-tooltips-activity.md`.
+
+## 2026-07-18 — Carts consistency audit (close-out)
+
+- Full SSOT audit: all live order counts via `list_orders_on_cart` (volume refresh, clear_cart/basket, finish_packing remaining, pick progress).
+- Activity descriptions include `#order_numbers` (no bare „Przypisano N zamówień”).
+- UI: Activity Log `refreshKey` + soft poll after admin release / timeout.
+- Scenarios A–E: `backend/tests/test_cart_orders_consistency_scenarios.py` (PASSED).
+- Report: `memory/carts-consistency-audit.md`.
+
 ## 2026-07-18 — Carts: assigned orders SSOT + admin UI
 
 - SSOT: `list_orders_on_cart` for admin, WMS stats, Capacity Engine (BULK), lifecycle, WMS entry count.

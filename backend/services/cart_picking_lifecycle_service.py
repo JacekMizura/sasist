@@ -755,11 +755,9 @@ def start_picking(
         raise
 
     try:
-        n = len(selected)
-        vol = round(used_vol, 2)
-        from .cart_stats_service import orders_event_meta
+        from .cart_stats_service import format_orders_operation_description, orders_event_meta
 
-        assign_meta = {**orders_event_meta(selected), "assigned_volume": vol}
+        assign_meta = {**orders_event_meta(selected), "assigned_volume": round(used_vol, 2)}
         _record_event(
             db,
             cart,
@@ -775,7 +773,7 @@ def start_picking(
             "orders_assigned",
             operator_user_id=uid,
             session_id=sid,
-            description=f"Przypisano {n} zamówień.",
+            description=format_orders_operation_description("Przypisano", selected),
             metadata=dict(assign_meta),
         )
         for o in selected:
@@ -1082,11 +1080,7 @@ def finish_packing(
             clear_order_picking_session_context(packed)
             db.add(packed)
 
-    remaining = (
-        db.query(Order)
-        .filter(Order.cart_id == cid, Order.deleted_at.is_(None))
-        .count()
-    )
+    remaining = len(_orders_on_cart(db, cid))
     if remaining > 0:
         if st != CartStatus.PACKING:
             apply_cart_transition(
@@ -1391,7 +1385,7 @@ def admin_release_cart(
         db.refresh(cart)
         _step(43, f"refreshed status={getattr(cart, 'status', None)}")
 
-        from .cart_stats_service import orders_event_meta
+        from .cart_stats_service import format_orders_operation_description, orders_event_meta
 
         orders_meta = orders_event_meta(orders_before)
         meta_base = {
@@ -1418,7 +1412,7 @@ def admin_release_cart(
                 cart,
                 "admin_orders_detached",
                 operator_user_id=int(admin_user_id),
-                description=f"Odłączono {orders_detached} zamówień od wózka.",
+                description=format_orders_operation_description("Odłączono", orders_before),
                 metadata={
                     **orders_meta,
                     "orders_detached": orders_detached,
@@ -1462,6 +1456,171 @@ def admin_release_cart(
             _tb.format_exc(),
         )
         raise
+
+
+ORDER_DETACH_BLOCKED_MSG = (
+    "Nie można odłączyć zamówienia, ponieważ rozpoczęto już jego kompletację."
+)
+
+
+def order_has_picking_progress(db: Session, *, order_id: int, cart_id: int | None = None) -> bool:
+    """True gdy z zamówienia pobrano już co najmniej jeden produkt (Pick)."""
+    from sqlalchemy import func
+
+    from ..models.pick import Pick
+
+    q = db.query(func.count(Pick.id)).filter(Pick.order_id == int(order_id))
+    if cart_id is not None:
+        q = q.filter(Pick.cart_id == int(cart_id))
+    return int(q.scalar() or 0) > 0
+
+
+def can_detach_order_from_cart(
+    db: Session,
+    *,
+    cart: Cart,
+    order: Order,
+) -> tuple[bool, str | None]:
+    """
+    Reguły odłączenia pojedynczego zamówienia:
+    - READY_FOR_PACKING / PACKING → zablokowane (kompletacja zakończona / trwa pakowanie)
+    - istnieją Pick dla zamówienia na tym wózku → zablokowane
+    """
+    st = get_cart_status(cart)
+    if st in (CartStatus.READY_FOR_PACKING, CartStatus.PACKING):
+        return False, ORDER_DETACH_BLOCKED_MSG
+    if order_has_picking_progress(db, order_id=int(order.id), cart_id=int(cart.id)):
+        return False, ORDER_DETACH_BLOCKED_MSG
+    return True, None
+
+
+def detach_order_from_cart(
+    db: Session,
+    *,
+    cart_id: int,
+    order_id: int,
+    tenant_id: int,
+    warehouse_id: int,
+    operator_user_id: int,
+) -> dict[str, Any]:
+    """
+    Odłącz jedno zamówienie od wózka (admin). Nie zwalnia całego wózka,
+    dopóki zostają inne zamówienia SSOT.
+    """
+    from .cart_capacity.engine import order_volume_dm3
+    from .cart_stats_service import format_orders_operation_description, orders_event_meta
+
+    cart = _lock_cart_by_keys(
+        db,
+        cart_id=int(cart_id),
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+    )
+    on_cart = _orders_on_cart(db, int(cart_id))
+    target = next((o for o in on_cart if int(o.id) == int(order_id)), None)
+    if target is None:
+        raise CartLifecycleError(
+            "Zamówienie nie jest przypisane do tego wózka.",
+            code="OrderNotOnCart",
+        )
+
+    allowed, block_reason = can_detach_order_from_cart(db, cart=cart, order=target)
+    if not allowed:
+        raise CartLifecycleError(
+            block_reason or ORDER_DETACH_BLOCKED_MSG,
+            code="OrderDetachBlocked",
+        )
+
+    snapshot = [target]
+    remaining = [o for o in on_cart if int(o.id) != int(order_id)]
+
+    clear_order_picking_session_context(target)
+    if (getattr(target, "status", None) or "").upper() in (
+        "PICKING",
+        "PICKING_IN_PROGRESS",
+    ):
+        target.status = "NEW"
+    if (getattr(target, "fulfillment_state", None) or "").upper() == FS_PICKING:
+        target.fulfillment_state = None
+    target.picking_started_at = None
+    target.total_volume_dm3 = None
+    db.add(target)
+
+    # Free MULTI basket slot if linked
+    for basket in list(getattr(cart, "baskets", None) or []):
+        if getattr(basket, "order_id", None) is not None and int(basket.order_id) == int(order_id):
+            basket.order_id = None
+            basket.used_volume = 0.0
+            db.add(basket)
+
+    # Detach draft picks for this order on this cart (no confirmed progress by guard)
+    try:
+        from ..models.pick import Pick
+
+        db.query(Pick).filter(
+            Pick.cart_id == int(cart_id),
+            Pick.order_id == int(order_id),
+            Pick.picked_at.is_(None),
+        ).delete(synchronize_session=False)
+    except Exception:
+        logger.exception(
+            "detach_order draft picks cleanup failed cart_id=%s order_id=%s",
+            cart_id,
+            order_id,
+        )
+
+    cart.used_volume = round(sum(order_volume_dm3(o) for o in remaining), 2)
+    db.add(cart)
+
+    released = False
+    if not remaining:
+        # Empty cart → release (same as clear_basket last order); not a bulk admin release.
+        release_cart(db, cart=cart, reason="order_detached_last", _already_locked=True)
+        released = True
+    else:
+        st = get_cart_status(cart)
+        if st == CartStatus.PICKING:
+            apply_cart_transition(
+                db,
+                cart,
+                CartStatus.PICKING,
+                operator_user_id=operator_user_id,
+                reason="order_detached",
+                total_orders=len(remaining),
+                metadata={"detached_order_id": int(order_id)},
+            )
+
+    meta = {
+        **orders_event_meta(snapshot),
+        "reason": "Ręczne odłączenie zamówienia z panelu administracyjnego.",
+        "remaining_orders": len(remaining),
+        "cart_released": released,
+    }
+    _record_event(
+        db,
+        cart,
+        "order_detached",
+        operator_user_id=int(operator_user_id),
+        order_id=int(order_id),
+        description=format_orders_operation_description("Odłączono", snapshot),
+        metadata=meta,
+    )
+    _after_mutation(db, cart)
+    logger.info(
+        "cart_lifecycle.detach_order cart_id=%s order_id=%s remaining=%s released=%s",
+        int(cart_id),
+        int(order_id),
+        len(remaining),
+        released,
+    )
+    return {
+        "cart_id": int(cart_id),
+        "order_id": int(order_id),
+        "orders_detached": 1,
+        "remaining_orders": len(remaining),
+        "cart_status": get_cart_status(cart).value,
+        "cart_released": released,
+    }
 
 
 # ---------------------------------------------------------------------------

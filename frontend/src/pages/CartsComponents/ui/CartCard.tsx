@@ -143,6 +143,14 @@ export default function CartCard(props: CartCardProps) {
     };
   }, [id, statsTick]);
 
+  // Soft poll while claimed/picking so timeout/admin release reflects without full page reload.
+  useEffect(() => {
+    const st = String(wmsStats.status || status || "").toUpperCase();
+    if (st !== "ASSIGNED" && st !== "PICKING") return;
+    const timer = window.setInterval(() => setStatsTick((n) => n + 1), 12_000);
+    return () => window.clearInterval(timer);
+  }, [wmsStats.status, status, id]);
+
   const refreshStats = () => setStatsTick((n) => n + 1);
 
   const cardStats = useMemo(() => cartStatsFromWms(wmsStats), [wmsStats]);
