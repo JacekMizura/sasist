@@ -116,24 +116,26 @@ def format_orders_operation_description(
     """
     Polish action sentence stored on the event.
 
-    Activity Log (for_activity_log=True) — short, numbers go in metadata/UI line:
-      Przypisano 5 zamówień do wózka.
-      Odłączono zamówienie.
-
-    Other contexts may still embed a short # preview.
+    Activity Log (for_activity_log=True) — action only; #numbers are a separate UI line:
+      Przypisano zamówienia:
+      Odłączono zamówienie:
     """
     meta = orders_event_meta(orders, for_activity_log=False)
     n = int(meta["orders_count"])
     nums = [f"#{x}" for x in meta["order_numbers"]]
 
     if for_activity_log:
+        if cart_relation == "od":
+            if n <= 0:
+                return f"{verb} 0 zamówień."
+            if n == 1:
+                return f"{verb} zamówienie:"
+            return f"{verb} zamówienia:"
         if n <= 0:
             return f"{verb} 0 zamówień."
-        if cart_relation == "od":
-            return f"{verb} zamówienie." if n == 1 else f"{verb} {n} zamówień."
         if n == 1:
-            return f"{verb} 1 zamówienie do wózka."
-        return f"{verb} {n} zamówień do wózka."
+            return f"{verb} zamówienie:"
+        return f"{verb} zamówienia:"
 
     if n <= 0:
         base = f"{verb} 0 zamówień"
@@ -152,6 +154,21 @@ def format_orders_operation_description(
     if cart_label is not None:
         return f"{base} {rel} wózka."
     return f"{base}."
+
+
+def activity_orders_meta(
+    orders: list[Order] | Sequence[Order],
+    *,
+    show_order_numbers: bool = True,
+    for_activity_log: bool = True,
+) -> dict[str, Any]:
+    """Metadata for Activity Log — ``show_order_numbers`` gates the UI # list."""
+    meta = orders_event_meta(orders, for_activity_log=for_activity_log)
+    meta["show_order_numbers"] = bool(show_order_numbers) and int(meta.get("orders_count") or 0) > 0
+    if not meta["show_order_numbers"]:
+        meta.pop("order_numbers", None)
+        meta.pop("order_ids", None)
+    return meta
 
 
 def _order_volume_dm3(order: Order) -> float:

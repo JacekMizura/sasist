@@ -190,18 +190,13 @@ def enrich_activity_item(item: dict[str, Any]) -> dict[str, Any]:
         metadata=meta,
     )
     action = str(item.get("description") or "").strip() or "Zdarzenie."
-    order_nums = order_numbers_from_meta(meta)
-    details = build_detail_rows(
-        occurred_at_display=occurred_display,
-        operator_display=operator,
-        action=action,
-        metadata=meta,
-        order_numbers=order_nums,
-    )
+    # Order # list only when writer opted in (assign / detach) — never for start/stop session noise.
+    show_nums = bool(meta.get("show_order_numbers"))
+    order_nums = order_numbers_from_meta(meta) if show_nums else []
     out = dict(item)
     out["occurred_at_display"] = occurred_display
     out["operator_display"] = operator
     out["action"] = action
-    out["details"] = details
+    out["details"] = []  # UI standard: no expandable metadata
     out["order_numbers"] = order_nums
     return out

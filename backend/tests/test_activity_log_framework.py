@@ -42,7 +42,7 @@ class TestPresentation(unittest.TestCase):
             {
                 "id": 1,
                 "event_code": "orders_assigned",
-                "description": "Przypisano zamówienia #1, #2 do wózka CART-1.",
+                "description": "Przypisano zamówienia:",
                 "severity": "SUCCESS",
                 "category": "assignment",
                 "occurred_at": "2026-07-18 15:45:00",
@@ -51,6 +51,7 @@ class TestPresentation(unittest.TestCase):
                 "source_module": "cart_lifecycle",
                 "metadata": {
                     "order_numbers": ["1", "2"],
+                    "show_order_numbers": True,
                     "reason": "start_picking",
                     "cart_label": "CART-1",
                     "session_id": 44,
@@ -60,19 +61,13 @@ class TestPresentation(unittest.TestCase):
         )
         self.assertEqual(item["occurred_at_display"], "18.07.2026 15:45")
         self.assertEqual(item["operator_display"], "Jacek Mizura")
-        self.assertEqual(item["action"], item["description"])
-        labels = [d["label"] for d in item["details"]]
-        self.assertIn("Data", labels)
-        self.assertIn("Operator", labels)
-        self.assertIn("Akcja", labels)
-        self.assertIn("Powód", labels)
-        self.assertIn("Wózek", labels)
-        self.assertIn("Sesja", labels)
+        self.assertEqual(item["action"], "Przypisano zamówienia:")
+        self.assertEqual(item["details"], [])
         self.assertEqual(item["order_numbers"], ["#1", "#2"])
 
 
 class TestOrdersDescription(unittest.TestCase):
-    def test_assign_activity_log_count_only(self):
+    def test_assign_activity_log_no_embedded_numbers(self):
         orders = [
             SimpleNamespace(id=1198, number="1198"),
             SimpleNamespace(id=1202, number="1202"),
@@ -86,7 +81,8 @@ class TestOrdersDescription(unittest.TestCase):
             for_activity_log=True,
             cart_label="CART-0001",
         )
-        self.assertEqual(text, "Przypisano 5 zamówień do wózka.")
+        self.assertEqual(text, "Przypisano zamówienia:")
+        self.assertNotIn("#", text)
 
     def test_detach_activity_log_short(self):
         orders = [SimpleNamespace(id=1203, number="1203")]
@@ -96,7 +92,49 @@ class TestOrdersDescription(unittest.TestCase):
             for_activity_log=True,
             cart_relation="od",
         )
-        self.assertEqual(text, "Odłączono zamówienie.")
+        self.assertEqual(text, "Odłączono zamówienie:")
+
+
+class TestShowOrderNumbersFlag(unittest.TestCase):
+    def test_enrich_hides_numbers_without_flag(self):
+        item = enrich_activity_item(
+            {
+                "id": 1,
+                "event_code": "picking_started",
+                "description": "Rozpoczęto kompletację.",
+                "severity": "INFO",
+                "category": "picking",
+                "occurred_at": "2026-07-18 16:38:00",
+                "actor_user_id": None,
+                "actor_name": None,
+                "source_module": "cart_lifecycle",
+                "metadata": {"order_numbers": ["1198", "1202"], "show_order_numbers": False},
+                "links": [],
+            }
+        )
+        self.assertEqual(item["order_numbers"], [])
+
+    def test_enrich_shows_numbers_with_flag(self):
+        item = enrich_activity_item(
+            {
+                "id": 2,
+                "event_code": "orders_assigned",
+                "description": "Przypisano zamówienia:",
+                "severity": "SUCCESS",
+                "category": "assignment",
+                "occurred_at": "2026-07-18 16:36:00",
+                "actor_user_id": 1,
+                "actor_name": "admin@local",
+                "source_module": "cart_lifecycle",
+                "metadata": {
+                    "order_numbers": ["1198", "1202"],
+                    "show_order_numbers": True,
+                },
+                "links": [],
+            }
+        )
+        self.assertEqual(item["order_numbers"], ["#1198", "#1202"])
+        self.assertEqual(item["details"], [])
 
 
 if __name__ == "__main__":

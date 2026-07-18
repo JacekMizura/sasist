@@ -765,13 +765,13 @@ def start_picking(
         raise
 
     try:
-        from .cart_stats_service import format_orders_operation_description, orders_event_meta
+        from .cart_stats_service import format_orders_operation_description, activity_orders_meta
         from .cart_display import cart_display_name_for_wms
 
-        # Activity Log: operation result only (no per-order basket spam, no skip list).
+        # Activity Log: assign shows # list; picking_started does not.
         cart_label = cart_display_name_for_wms(cart)
         assign_meta = {
-            **orders_event_meta(selected, for_activity_log=True),
+            **activity_orders_meta(selected, show_order_numbers=True),
             "assigned_volume": round(used_vol, 2),
             "cart_label": cart_label,
         }
@@ -782,7 +782,7 @@ def start_picking(
             operator_user_id=uid,
             session_id=sid,
             description="Rozpoczęto kompletację.",
-            metadata=dict(assign_meta),
+            metadata={"cart_label": cart_label, "show_order_numbers": False},
         )
         _record_event(
             db,
@@ -878,6 +878,18 @@ def cancel_picking(
     }
 
     orders = _orders_on_cart(db, int(cart_id))
+    # Explicit detach history before context clear (release_cart may see empty SSOT).
+    if orders and not str(reason).startswith("admin_"):
+        from .cart_stats_service import activity_orders_meta
+
+        _record_event(
+            db,
+            cart,
+            "admin_orders_detached",
+            operator_user_id=operator_user_id,
+            description="Odłączono wszystkie zamówienia.",
+            metadata=activity_orders_meta(orders, show_order_numbers=True),
+        )
     restored = 0
     for o in orders:
         snap = snap_by_id.get(int(o.id))
@@ -915,18 +927,13 @@ def cancel_picking(
     elif str(reason).startswith("admin_"):
         pass  # eventy emituje admin_release_cart
     else:
-        from .cart_stats_service import orders_event_meta
-
         _record_event(
             db,
             cart,
             "picking_cancelled",
             operator_user_id=operator_user_id,
-            metadata={
-                **orders_event_meta(orders),
-                "orders_restored": restored,
-                "reason": reason,
-            },
+            description="Anulowano kompletację.",
+            metadata={"orders_restored": restored, "reason": reason, "show_order_numbers": False},
         )
     _after_mutation(db, cart)
     logger.info("cart_lifecycle.cancel cart_id=%s restored=%s reason=%s", int(cart_id), restored, reason)
@@ -1159,10 +1166,10 @@ def release_cart(
         # Już czysty AVAILABLE — no-op (bez historii)
         return
 
-    from .cart_stats_service import list_orders_on_cart, orders_event_meta
+    from .cart_stats_service import activity_orders_meta, list_orders_on_cart
 
     orders_snapshot = list_orders_on_cart(db, cart)
-    release_meta = orders_event_meta(orders_snapshot)
+    detach_meta = activity_orders_meta(orders_snapshot, show_order_numbers=True)
 
     for basket in list(cart.baskets or []):
         basket.order_id = None
@@ -1187,22 +1194,53 @@ def release_cart(
         total_orders=0,
         total_products=0,
     )
-    # Jeden event biznesowy zależnie od powodu zwolnienia
+    # Complete history: when orders leave the cart, always leave an explicit detach entry.
+    if orders_snapshot and not str(reason).startswith("admin_"):
+        # admin_release_cart emits its own detach event
+        _record_event(
+            db,
+            cart,
+            "admin_orders_detached",
+            description="Odłączono wszystkie zamówienia.",
+            metadata=dict(detach_meta),
+        )
+    # Business release / timeout — no order list (detach entry above covers that).
+    release_meta = {"show_order_numbers": False, "reason": reason}
     if reason == "assigned_timeout":
-        _record_event(db, cart, "reservation_timed_out", metadata=dict(release_meta))
+        _record_event(
+            db,
+            cart,
+            "reservation_timed_out",
+            description="Sesja została zakończona z powodu braku aktywności.",
+            metadata=dict(release_meta),
+        )
     elif reason == "auto_release_no_picks":
-        _record_event(db, cart, "cart_auto_released_idle", metadata=dict(release_meta))
+        _record_event(
+            db,
+            cart,
+            "cart_auto_released_idle",
+            description="Sesja została zakończona z powodu braku aktywności.",
+            metadata=dict(release_meta),
+        )
     elif reason in ("cancel_picking",) or str(reason).startswith("cancel"):
         pass  # event „Anulowano kompletację” w cancel_picking
     elif str(reason).startswith("admin_"):
         pass  # eventy emituje admin_release_cart
     elif reason == "last_order_packed":
         _record_event(
-            db, cart, "cart_released", metadata={**release_meta, "reason": reason}
+            db,
+            cart,
+            "cart_released",
+            description="Zwolniono wózek.",
+            metadata=dict(release_meta),
         )
     else:
         _record_event(
-            db, cart, "cart_released", metadata={**release_meta, "reason": reason}
+            db,
+            cart,
+            "cart_released",
+            description="Zwolniono wózek.",
+            metadata=dict(release_meta),
         )
     if not _already_locked:
         _after_mutation(db, cart)
@@ -1406,10 +1444,10 @@ def admin_release_cart(
         db.refresh(cart)
         _step(43, f"refreshed status={getattr(cart, 'status', None)}")
 
-        from .cart_stats_service import format_orders_operation_description, orders_event_meta
+        from .cart_stats_service import activity_orders_meta, format_orders_operation_description
         from .cart_display import cart_display_name_for_wms
 
-        orders_meta = orders_event_meta(orders_before)
+        orders_meta = activity_orders_meta(orders_before, show_order_numbers=True)
         cart_label = cart_display_name_for_wms(cart)
         meta_base = {
             "reason": "Ręczne zwolnienie z panelu administracyjnego.",
@@ -1417,7 +1455,7 @@ def admin_release_cart(
             "picking_cancelled": picking_cancelled,
             "confirmed_picks_before": picks_n,
             "cart_label": cart_label,
-            **orders_meta,
+            "show_order_numbers": False,
             **artifacts,
         }
         _step(50, "record admin_cart_released")
@@ -1426,6 +1464,7 @@ def admin_release_cart(
             cart,
             "admin_cart_released",
             operator_user_id=int(admin_user_id),
+            description="Zwolniono wózek.",
             metadata=meta_base,
         )
         _step(51, "admin_cart_released flushed")
@@ -1436,16 +1475,8 @@ def admin_release_cart(
                 cart,
                 "admin_orders_detached",
                 operator_user_id=int(admin_user_id),
-                description=format_orders_operation_description(
-                    "Odłączono",
-                    orders_before,
-                    for_activity_log=True,
-                    cart_relation="od",
-                ),
-                metadata={
-                    **orders_meta,
-                    "orders_detached": orders_detached,
-                },
+                description="Odłączono wszystkie zamówienia.",
+                metadata=dict(orders_meta),
             )
             _step(53, "admin_orders_detached flushed")
         if picking_cancelled:
@@ -1538,7 +1569,7 @@ def detach_order_from_cart(
     """
     from .cart_capacity.engine import order_volume_dm3
     from .cart_display import cart_display_name_for_wms
-    from .cart_stats_service import format_orders_operation_description, orders_event_meta
+    from .cart_stats_service import activity_orders_meta, format_orders_operation_description
 
     cart = _lock_cart_by_keys(
         db,
@@ -1622,7 +1653,7 @@ def detach_order_from_cart(
 
     cart_label = cart_display_name_for_wms(cart)
     meta = {
-        **orders_event_meta(snapshot),
+        **activity_orders_meta(snapshot, show_order_numbers=True),
         "reason": "Ręczne odłączenie zamówienia z panelu administracyjnego.",
         "remaining_orders": len(remaining),
         "cart_released": released,

@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-07-18 — Activity Log final UX (no dupes, complete detach history)
+
+- Capacity Analytics: collapsed by default; shows last-run date + analyzed/assigned/stop reason (historical).
+- Activity: action without embedded #; numbers only when `show_order_numbers`; no metadata expand.
+- Timeout / idle / cancel / admin release: explicit „Odłączono wszystkie zamówienia.” + # list.
+- Report: `memory/activity-log-final-ux-report.md`.
+
 ## 2026-07-18 — Activity Log UX simplify + Capacity summary only
 
 - ActivityLogPanel: only When / Who / What (+ optional #orders line); no expand/details.

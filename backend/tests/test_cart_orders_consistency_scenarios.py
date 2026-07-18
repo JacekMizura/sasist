@@ -159,10 +159,11 @@ def _assert_assign_event_has_order_numbers(db, cart: Cart, expected_numbers: set
     assert latest.occurred_at is not None
     desc = str(latest.description or "")
     assert "Przypisano" in desc
-    assert str(len(expected_numbers)) in desc or f"{len(expected_numbers)}" in desc
-    # Activity Log: count result; full numbers live in metadata (capped) / Capacity Analytics
+    assert "#" not in desc  # numbers live only in metadata / UI line
+    assert meta.get("show_order_numbers") is True
+    # Full numbers live in metadata (capped) — not embedded in description
     meta_nums = {str(x) for x in (meta.get("order_numbers") or [])}
-    assert meta_nums == expected_numbers or meta.get("orders_count") == len(expected_numbers)
+    assert meta_nums == expected_numbers
 
 
 def test_scenarios_a_through_e_order_count_ssot(db):
@@ -217,7 +218,9 @@ def test_scenarios_a_through_e_order_count_ssot(db):
     assert release_ev is not None
     rmeta = _event_meta(release_ev)
     assert rmeta.get("reason")
-    assert {str(x) for x in (rmeta.get("order_numbers") or [])} == numbers
+    # Release entry must not duplicate the order # list (shown only on detach).
+    assert not (rmeta.get("order_numbers") or [])
+    assert rmeta.get("show_order_numbers") is False
 
     # --- C: operator timeout (claim → stale → release) ---
     claim_cart(db, cart=cart, operator_user_id=7)
