@@ -187,7 +187,7 @@ class TestEmptyLocation(unittest.TestCase):
                 )
             self.assertEqual(ctx.exception.code, "STOCK_CHANGED")
 
-    def test_zero_location_keeps_other_stock(self):
+    def test_hybrid_zero_location_keeps_other_stock(self):
         db = MagicMock()
         with patch(
             "backend.services.wms_picking_corrections.empty_location_service.can_manual_adjust_stock",
@@ -201,7 +201,7 @@ class TestEmptyLocation(unittest.TestCase):
         ) as adj, patch(
             "backend.services.wms_picking_corrections.empty_location_service.undo_wms_session_picks",
             return_value={"undone_qty": 1.0},
-        ), patch(
+        ) as undo, patch(
             "backend.services.wms_picking_corrections.empty_location_service._alternate_locations",
             return_value=[{"location_id": 2, "location_code": "A14-C-2", "stock_quantity": 12.0}],
         ), patch(
@@ -222,14 +222,111 @@ class TestEmptyLocation(unittest.TestCase):
                 report_product_shortage_if_no_alt=False,
             )
         self.assertEqual(out["shortage_kind"], "LOCATION_SHORTAGE")
+        self.assertEqual(out["stock_effect"], "zeroed")
         self.assertEqual(out["previous_qty"], 99.0)
         self.assertEqual(out["new_qty"], 0.0)
-        self.assertEqual(len(out["alternate_locations"]), 1)
+        self.assertTrue(out["routing_blocked"])
         self.assertEqual(out["alternate_locations"][0]["location_code"], "A14-C-2")
         adj.assert_called_once()
-        self.assertEqual(adj.call_args.kwargs["quantity_delta"], -99.0)
-        self.assertEqual(adj.call_args.kwargs["location_id"], 1)
-        self.assertEqual(adj.call_args.kwargs["product_id"], 7)
+        self.assertEqual(undo.call_args.kwargs["location_id"], 1)
+        self.assertTrue(undo.call_args.kwargs["undo_all"])
+
+    def test_documents_only_always_allows_report_and_blocks_routing(self):
+        db = MagicMock()
+        with patch(
+            "backend.services.wms_picking_corrections.empty_location_service.can_manual_adjust_stock",
+            return_value=False,
+        ), patch(
+            "backend.services.wms_picking_corrections.empty_location_service._product_qty_at_location",
+            return_value=99.0,
+        ), patch(
+            "backend.services.wms_picking_corrections.empty_location_service.apply_manual_stock_correction"
+        ) as adj, patch(
+            "backend.services.wms_picking_corrections.empty_location_service.create_picking_empty_location_pending_correction",
+            return_value={
+                "inventory_document_id": 88,
+                "inventory_document_number": "INV-PICK-EMPTY-1",
+                "stock_effect": "pending_document_correction",
+                "routing_blocked": True,
+            },
+        ) as pending, patch(
+            "backend.services.wms_picking_corrections.empty_location_service.undo_wms_session_picks",
+            return_value={"undone_qty": 2.0},
+        ) as undo, patch(
+            "backend.services.wms_picking_corrections.empty_location_service._alternate_locations",
+            return_value=[{"location_id": 2, "location_code": "B", "stock_quantity": 12.0}],
+        ), patch(
+            "backend.services.wms_audit_service.emit_wms_location_emptied"
+        ):
+            db.query.return_value.filter.return_value.first.side_effect = [
+                SimpleNamespace(id=1, name="A13-B-1", warehouse_id=1),
+                SimpleNamespace(id=7, ean="590", name="SKU", tenant_id=1),
+            ]
+            out = confirm_empty_pick_location(
+                db,
+                tenant_id=1,
+                warehouse_id=1,
+                cart_id=9,
+                product_id=7,
+                location_id=1,
+                observed_stock_qty=99.0,
+                report_product_shortage_if_no_alt=False,
+            )
+        adj.assert_not_called()
+        pending.assert_called_once()
+        self.assertEqual(out["stock_effect"], "pending_document_correction")
+        self.assertEqual(out["formal_stock_qty"], 99.0)
+        self.assertTrue(out["routing_blocked"])
+        self.assertEqual(out["inventory_document_id"], 88)
+        self.assertEqual(undo.call_args.kwargs["location_id"], 1)
+
+
+class TestUndoLocationAware(unittest.TestCase):
+    def test_empty_a_does_not_undo_picks_from_b(self):
+        """required=5, A picked=2, B picked=2 → empty A undoes only A."""
+        pick_a1 = SimpleNamespace(
+            id=1, order_id=10, order_item_id=20, product_id=7, location_id=100, quantity=2.0, cart_id=9, picked_at=None
+        )
+        pick_b = SimpleNamespace(
+            id=2, order_id=10, order_item_id=20, product_id=7, location_id=200, quantity=2.0, cart_id=9, picked_at=None
+        )
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = SimpleNamespace(id=9)
+
+        def draft_q(**kwargs):
+            loc = kwargs.get("location_id")
+            if loc == 100:
+                return SimpleNamespace(all=lambda: [pick_a1])
+            if loc == 200:
+                return SimpleNamespace(all=lambda: [pick_b])
+            return SimpleNamespace(all=lambda: [pick_b, pick_a1])
+
+        with patch(
+            "backend.services.wms_picking_corrections.undo_pick_service._draft_picks_q",
+            side_effect=lambda *a, **k: draft_q(**k),
+        ), patch(
+            "backend.services.wms_picking_corrections.undo_pick_service.delete_pick_events_for_pick_ids"
+        ) as del_ev, patch(
+            "backend.services.wms_picking_corrections.undo_pick_service.recompute_order_fulfillment"
+        ), patch(
+            "backend.services.wms_audit_service.emit_wms_pick_undone"
+        ):
+            out = undo_wms_session_picks(
+                db,
+                tenant_id=1,
+                warehouse_id=1,
+                cart_id=9,
+                product_id=7,
+                quantity=0,
+                location_id=100,
+                undo_all=True,
+            )
+        self.assertEqual(out["undone_qty"], 2.0)
+        self.assertEqual(out["deleted_pick_ids"], [1])
+        db.delete.assert_called_once_with(pick_a1)
+        # B untouched
+        self.assertEqual(pick_b.quantity, 2.0)
+        del_ev.assert_called_once_with(db, [1])
 
 
 if __name__ == "__main__":

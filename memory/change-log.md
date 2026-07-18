@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-07-18 — empty location DOCUMENTS_ONLY + location-aware undo audit
+
+- DOCUMENTS_ONLY: always accept empty-location report; pending CONTROL inventory + `InventoryLocationLock` (block_picking) — no illegal stock write; routing excludes location.
+- HYBRID: unchanged RK zeroing.
+- Undo/empty-location: Pick.location_id filter confirmed; regression A/B multi-loc undo.
+
 ## 2026-07-18 — picking corrections: undo pick + empty location + shortage after completed
 
 - Audit: draft Pick does not touch Inventory; stock only at finalize.

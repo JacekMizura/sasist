@@ -6,6 +6,7 @@
 
 ## Latest (2026-07-18)
 
+- **Audit only:** WMS whole-order validation before Capacity — missing SSOT; see `memory/wms-order-validation-audit.md`.
 - Picking corrections: undo draft pick, shortage after completed, confirm empty location (RK HYBRID).
 - Prior: completed SKUs stay on product-lines; detail TypeError `_safe_touch_picking_session`.
 

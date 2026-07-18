@@ -1339,9 +1339,16 @@ def post_picking_confirm_empty_location(
             product_ean=out.get("product_ean"),
             previous_qty=float(out.get("previous_qty") or 0),
             new_qty=float(out.get("new_qty") or 0),
+            formal_stock_qty=float(out["formal_stock_qty"])
+            if out.get("formal_stock_qty") is not None
+            else None,
+            stock_effect=str(out.get("stock_effect") or "zeroed"),
+            routing_blocked=bool(out.get("routing_blocked", True)),
             undone_pick_qty=float(out.get("undone_pick_qty") or 0),
             alternate_locations=alts,
             stock_document_id=out.get("stock_document_id"),
+            inventory_document_id=out.get("inventory_document_id"),
+            inventory_document_number=out.get("inventory_document_number"),
         )
     except EmptyLocationError as e:
         db.rollback()

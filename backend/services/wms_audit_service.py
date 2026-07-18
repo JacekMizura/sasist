@@ -793,10 +793,13 @@ def emit_wms_location_emptied(
     new_qty: float,
     operator_user_id: Optional[int],
     stock_document_id: Optional[int] = None,
+    stock_effect: Optional[str] = None,
+    inventory_document_id: Optional[int] = None,
 ) -> None:
     uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
     op_name = operator_display_name(db, uid)
     ean = (product_ean or "").strip() or f"#{product_id}"
+    effect = (stock_effect or "").strip() or None
     meta = {
         "product_id": int(product_id),
         "ean": product_ean,
@@ -806,12 +809,13 @@ def emit_wms_location_emptied(
         "new_qty": float(new_qty),
         "cart_id": int(cart_id),
         "stock_document_id": int(stock_document_id) if stock_document_id is not None else None,
+        "inventory_document_id": int(inventory_document_id) if inventory_document_id is not None else None,
+        "stock_effect": effect,
         "event_code": EVT_LOCATION_EMPTIED,
         "reason": "picking_confirm_empty_location",
     }
     oid = int(order_id) if order_id is not None and int(order_id) > 0 else None
     if oid is None:
-        # Activity without order row — still dual-write via a cart-scoped order if possible
         from .cart_stats_service import list_orders_on_cart
 
         try:
@@ -820,11 +824,18 @@ def emit_wms_location_emptied(
                 oid = int(rows[0].id)
         except Exception:
             oid = None
-    msg = (
-        f"Potwierdzono pustą lokalizację {location_code}. "
-        f"Stan produktu EAN {ean} skorygowano z {_fmt_qty(float(previous_qty))} szt. "
-        f"do {_fmt_qty(float(new_qty))} szt."
-    )
+    if effect == "pending_document_correction":
+        msg = (
+            f"Potwierdzono pustą lokalizację {location_code}. "
+            f"Produkt EAN {ean}: formalny stan {_fmt_qty(float(previous_qty))} szt. bez zmian — "
+            f"lokalizacja zablokowana dla zbierania do korekty dokumentowej."
+        )
+    else:
+        msg = (
+            f"Potwierdzono pustą lokalizację {location_code}. "
+            f"Stan produktu EAN {ean} skorygowano z {_fmt_qty(float(previous_qty))} szt. "
+            f"do {_fmt_qty(float(new_qty))} szt."
+        )
     if op_name:
         msg = f"{msg} — {op_name}"
     if oid is not None:

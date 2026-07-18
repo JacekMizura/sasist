@@ -1,14 +1,17 @@
 """
 Potwierdzenie pustej lokalizacji podczas zbierania.
 
-Zeruje stock TEGO produktu na TEJ lokalizacji przez ``apply_manual_stock_correction`` (RK + FIFO),
-cofając draft picki z tej lokalizacji. Product shortage tylko gdy brak stocku gdzie indziej.
+A) Zgłoszenie faktu — zawsze dostępne.
+B) Skutek magazynowy:
+   - HYBRID: RK → stock produktu@lokalizacja = 0
+   - DOCUMENTS_ONLY: bez direct update; CONTROL inventory + InventoryLocationLock
+     (routing wyklucza lokalizację mimo formalnego stocku).
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional, Sequence
+from typing import Any, Sequence
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -20,6 +23,10 @@ from ..inventory_manual_adjustment_service import apply_manual_stock_correction
 from ..inventory_management_policy_service import (
     InventoryManagementPolicyError,
     can_manual_adjust_stock,
+)
+from ..inventory_count.inventory_movement_guard_service import locked_location_ids_for_picking
+from ..inventory_count.picking_empty_location_pending import (
+    create_picking_empty_location_pending_correction,
 )
 from .undo_pick_service import undo_wms_session_picks
 
@@ -41,15 +48,7 @@ def _product_qty_at_location(
     location_id: int,
     for_update: bool = False,
 ) -> float:
-    q = db.query(func.coalesce(func.sum(Inventory.quantity), 0.0)).filter(
-        Inventory.tenant_id == int(tenant_id),
-        Inventory.warehouse_id == int(warehouse_id),
-        Inventory.product_id == int(product_id),
-        Inventory.location_id == int(location_id),
-        Inventory.quantity > 0,
-    )
     if for_update:
-        # Lock underlying inventory rows before summing
         rows = (
             db.query(Inventory)
             .filter(
@@ -62,6 +61,13 @@ def _product_qty_at_location(
             .all()
         )
         return round(sum(float(r.quantity or 0) for r in rows), 6)
+    q = db.query(func.coalesce(func.sum(Inventory.quantity), 0.0)).filter(
+        Inventory.tenant_id == int(tenant_id),
+        Inventory.warehouse_id == int(warehouse_id),
+        Inventory.product_id == int(product_id),
+        Inventory.location_id == int(location_id),
+        Inventory.quantity > 0,
+    )
     return round(float(q.scalar() or 0), 6)
 
 
@@ -92,8 +98,15 @@ def _alternate_locations(
         .order_by(Location.name.asc())
         .all()
     )
+    locked = locked_location_ids_for_picking(
+        db,
+        tenant_id=int(tenant_id),
+        location_ids={int(lid) for lid, _n, _q in rows},
+    )
     out: list[dict[str, Any]] = []
     for lid, name, qty in rows:
+        if int(lid) in locked:
+            continue
         out.append(
             {
                 "location_id": int(lid),
@@ -120,19 +133,11 @@ def confirm_empty_pick_location(
     report_product_shortage_if_no_alt: bool = True,
 ) -> dict[str, Any]:
     """
-    Wariant A: „Lokalizacja jest pusta”.
+    „Lokalizacja jest pusta” — zawsze dostępne dla pickera.
 
-    - Ponowny odczyt stocku z FOR UPDATE (bez silent overwrite z FE).
-    - Korekta do 0 przez kanoniczny RK (HYBRID).
-    - Undo draft picków z tej lokalizacji.
-    - Alternatywy z Inventory; product shortage tylko gdy brak alt.
+    HYBRID: zeruje stock (RK). DOCUMENTS_ONLY: pending CONTROL + lock pickingu.
+    Undo draft Picków wyłącznie z tej lokalizacji.
     """
-    if not can_manual_adjust_stock(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id)):
-        raise EmptyLocationError(
-            "Magazyn w trybie DOCUMENTS_ONLY — wyzerowanie lokalizacji wymaga dokumentu inwentaryzacji / HYBRID.",
-            code="INVENTORY_POLICY_BLOCKED",
-        )
-
     loc = (
         db.query(Location)
         .filter(Location.id == int(location_id), Location.warehouse_id == int(warehouse_id))
@@ -167,9 +172,14 @@ def confirm_empty_pick_location(
 
     ean = (product.ean or "").strip() or None
     loc_code = (loc.name or "").strip() or f"#{location_id}"
+    hybrid = can_manual_adjust_stock(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id))
 
     adj: dict[str, Any] | None = None
-    if previous_qty > 1e-9:
+    pending: dict[str, Any] | None = None
+    stock_effect = "already_zero"
+    new_qty = float(previous_qty)
+
+    if previous_qty > 1e-9 and hybrid:
         try:
             adj = apply_manual_stock_correction(
                 db,
@@ -185,21 +195,43 @@ def confirm_empty_pick_location(
             raise EmptyLocationError(str(e), code=getattr(e, "code", "INVENTORY_POLICY_BLOCKED")) from e
         except ValueError as e:
             raise EmptyLocationError(str(e), code="STOCK_ADJUST_FAILED") from e
-
-    new_qty = _product_qty_at_location(
-        db,
-        tenant_id=tenant_id,
-        warehouse_id=warehouse_id,
-        product_id=product_id,
-        location_id=location_id,
-        for_update=False,
-    )
-    if new_qty > 1e-9:
-        raise EmptyLocationError(
-            f"Nie udało się wyzerować lokalizacji (pozostało {new_qty:g}).",
-            code="STOCK_NOT_ZERO",
+        new_qty = _product_qty_at_location(
+            db,
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+            product_id=product_id,
+            location_id=location_id,
+            for_update=False,
         )
+        if new_qty > 1e-9:
+            raise EmptyLocationError(
+                f"Nie udało się wyzerować lokalizacji (pozostało {new_qty:g}).",
+                code="STOCK_NOT_ZERO",
+            )
+        stock_effect = "zeroed"
+    elif previous_qty > 1e-9 and not hybrid:
+        # DOCUMENTS_ONLY: fakt + blokada routingu, formalny stock bez zmian do postingu
+        pending = create_picking_empty_location_pending_correction(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            location_id=int(location_id),
+            product_id=int(product_id),
+            expected_quantity=float(previous_qty),
+            cart_id=int(cart_id),
+            operator_user_id=operator_user_id,
+            location_code=loc_code,
+            product_ean=ean,
+        )
+        stock_effect = "pending_document_correction"
+        new_qty = float(previous_qty)
+    else:
+        # Już 0 formalnie — i tak upewnij się, że lokalizacja nie wróci do routingu
+        # (np. stary snapshot); opcjonalny soft lock nie jest konieczny gdy qty=0.
+        stock_effect = "already_zero"
+        new_qty = 0.0
 
+    # Undo WYŁĄCZNIE picków z tej lokalizacji (location-aware)
     undo_res = undo_wms_session_picks(
         db,
         tenant_id=tenant_id,
@@ -213,6 +245,7 @@ def confirm_empty_pick_location(
         undo_all=True,
     )
     undone_qty = float(undo_res.get("undone_qty") or 0)
+
     alts = _alternate_locations(
         db,
         tenant_id=tenant_id,
@@ -237,17 +270,16 @@ def confirm_empty_pick_location(
         location_id=int(location_id),
         location_code=loc_code,
         previous_qty=float(previous_qty),
-        new_qty=0.0,
+        new_qty=0.0 if stock_effect != "pending_document_correction" else float(previous_qty),
         operator_user_id=operator_user_id,
         stock_document_id=int(adj["stock_document_id"]) if adj else None,
+        stock_effect=stock_effect,
+        inventory_document_id=int(pending["inventory_document_id"]) if pending else None,
     )
 
     if not has_alt and report_product_shortage_if_no_alt and source_status_id is not None:
-        # Product shortage for remaining demand on cart — use existing report path
         from ..wms_picking_product_list_service import report_wms_picking_product_shortage
 
-        # Prefer reporting remaining after undo; quantity resolved inside report
-        # Use a large missing_qty capped by declarable
         try:
             shortage_result = report_wms_picking_product_shortage(
                 db,
@@ -257,21 +289,21 @@ def confirm_empty_pick_location(
                 order_type=order_type,  # type: ignore[arg-type]
                 product_id=int(product_id),
                 location_id=int(location_id),
-                missing_qty=1e9,  # capped internally
+                missing_qty=1e9,
                 cart_id=int(cart_id),
                 ui_order_ids=list(order_ids) if order_ids else None,
                 operator_user_id=operator_user_id,
             )
         except ValueError as e:
-            # Already fully accounted — OK for empty location alone
             logger.info("[wms.empty_location] product shortage skipped: %s", e)
             shortage_result = {"ok": False, "skipped": str(e)}
 
     logger.info(
-        "[wms.empty_location] product_id=%s location_id=%s prev=%s alts=%s kind=%s",
+        "[wms.empty_location] product_id=%s location_id=%s prev=%s effect=%s alts=%s kind=%s",
         product_id,
         location_id,
         previous_qty,
+        stock_effect,
         len(alts),
         shortage_kind,
     )
@@ -283,9 +315,14 @@ def confirm_empty_pick_location(
         "product_id": int(product_id),
         "product_ean": ean,
         "previous_qty": float(previous_qty),
-        "new_qty": 0.0,
+        "new_qty": float(new_qty) if stock_effect != "pending_document_correction" else 0.0,
+        "formal_stock_qty": float(previous_qty) if stock_effect == "pending_document_correction" else float(new_qty),
+        "stock_effect": stock_effect,
+        "routing_blocked": True,
         "undone_pick_qty": float(undone_qty),
         "alternate_locations": alts,
         "stock_document_id": int(adj["stock_document_id"]) if adj else None,
+        "inventory_document_id": int(pending["inventory_document_id"]) if pending else None,
+        "inventory_document_number": pending.get("inventory_document_number") if pending else None,
         "product_shortage": shortage_result,
     }

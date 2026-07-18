@@ -505,9 +505,14 @@ export type WmsPickingEmptyLocationResponseApi = {
   product_ean?: string | null;
   previous_qty: number;
   new_qty: number;
+  formal_stock_qty?: number | null;
+  stock_effect?: string;
+  routing_blocked?: boolean;
   undone_pick_qty: number;
   alternate_locations: Array<{ location_id: number; location_code: string; stock_quantity: number }>;
   stock_document_id?: number | null;
+  inventory_document_id?: number | null;
+  inventory_document_number?: string | null;
 };
 
 export async function postWmsPickingConfirmEmptyLocation(

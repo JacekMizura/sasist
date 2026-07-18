@@ -543,7 +543,14 @@ export default function WmsPickingProductDetailPage() {
         playScanBeep();
         setShortageConfirmOpen(false);
         const alt = emptyRes.alternate_locations?.[0];
-        if (alt) {
+        if (emptyRes.stock_effect === "pending_document_correction") {
+          showScannerToast(
+            alt
+              ? `Pusta lokalizacja zgłoszona (korekta dokumentowa). Alternatywa: ${alt.location_code}`
+              : "Pusta lokalizacja zgłoszona — zablokowana do zbierania do korekty dokumentowej.",
+          );
+          if (alt) setActiveLocationId(alt.location_id);
+        } else if (alt) {
           showScannerToast(`Lokalizacja wyzerowana. Alternatywa: ${alt.location_code}`);
           setActiveLocationId(alt.location_id);
         } else {

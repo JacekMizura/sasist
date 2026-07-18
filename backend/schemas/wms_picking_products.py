@@ -444,9 +444,20 @@ class WmsPickingEmptyLocationResponse(BaseModel):
     product_ean: Optional[str] = None
     previous_qty: float
     new_qty: float = 0
+    formal_stock_qty: Optional[float] = Field(
+        default=None,
+        description="Formalny stock po operacji (w DOCUMENTS_ONLY może pozostać previous_qty)",
+    )
+    stock_effect: str = Field(
+        default="zeroed",
+        description="zeroed | pending_document_correction | already_zero",
+    )
+    routing_blocked: bool = True
     undone_pick_qty: float = 0
     alternate_locations: list[WmsPickingAlternateLocation] = Field(default_factory=list)
     stock_document_id: Optional[int] = None
+    inventory_document_id: Optional[int] = None
+    inventory_document_number: Optional[str] = None
 
 
 
