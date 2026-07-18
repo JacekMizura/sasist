@@ -1148,7 +1148,7 @@ def post_picking_quick_pick(
         if "invalid input value for enum" in lower or "cartstatus" in lower:
             _raise_409(
                 "InvalidCartState",
-                "Nieobsługiwana wartość statusu wózka w DB (wymagana migracja status→VARCHAR).",
+                "Nieobsługiwana wartość statusu wózka w DB — wymagany ensure_cartstatus_enum (ADD VALUE).",
             )
         raise HTTPException(
             status_code=500,

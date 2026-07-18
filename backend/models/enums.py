@@ -17,8 +17,11 @@ class CartStatus(enum.Enum):
 
     AVAILABLE → ASSIGNED → PICKING → READY_FOR_PACKING → PACKING → AVAILABLE
 
+    Wartości muszą istnieć w PostgreSQL enum ``cartstatus``
+    (``backend.db.cartstatus_enum.ensure_cartstatus_enum`` / startup schema).
+
     ``IN_PROGRESS`` jest aliasem ``PICKING`` (kompatybilność wsteczna w kodzie).
-    Wartości legacy PL („pusty”, …) mapowane przy odczycie / migracji schema_upgrade.
+    Wartości legacy PL („pusty”, …) mapowane przy odczycie / remap wierszy.
     """
 
     AVAILABLE = "AVAILABLE"

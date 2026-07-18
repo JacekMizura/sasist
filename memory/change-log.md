@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-07-18 — Fix cartstatus PG enum (PICKING missing)
+
+- Root cause: `InvalidTextRepresentation: invalid input value for enum cartstatus: "PICKING"`.
+- Kod używa lifecycle: AVAILABLE/ASSIGNED/PICKING/READY_FOR_PACKING/PACKING; stary enum miał PL lub IN_PROGRESS.
+- Fix: `ensure_cartstatus_enum` — `ALTER TYPE cartstatus ADD VALUE` (bez cast do VARCHAR); remap PL/IN_PROGRESS → kanoniczne.
+- Usunięto próbę `status→VARCHAR` z `ensure_carts_picking_lifecycle_columns`.
+
 ## 2026-07-17 — Fix Cart FOR UPDATE + joinedload (PostgreSQL)
 
 - Przyczyna 500 picking/start: `FeatureNotSupported: FOR UPDATE cannot be applied to the nullable side of an outer join`.

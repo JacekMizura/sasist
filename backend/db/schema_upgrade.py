@@ -3838,9 +3838,9 @@ def ensure_carts_code_column(engine: Engine) -> None:
 
 def ensure_carts_picking_lifecycle_columns(engine: Engine) -> None:
     """
-    SSOT cyklu wózka: ``assigned_user_id``, ``current_session_id``,
-    ``status`` jako VARCHAR(32) (unika PG ENUM z wartościami PL → crash przy PICKING),
-    migracja statusów PL → AVAILABLE/PICKING/FULL/SERVICE.
+    SSOT cyklu wózka: ``assigned_user_id``, ``current_session_id``, ``claimed_at``, …
+    PostgreSQL: ensure enum ``cartstatus`` contains lifecycle labels (ADD VALUE),
+    then remap legacy PL / IN_PROGRESS row values → canonical English labels.
     """
     dialect = engine.dialect.name
     with engine.connect() as conn:
@@ -3875,36 +3875,31 @@ def ensure_carts_picking_lifecycle_columns(engine: Engine) -> None:
             conn.execute(text(_timestamp_column_ddl(engine, "carts", "claimed_at")))
         conn.commit()
 
-    # PG: natywny ENUM z „pusty” / „w trakcie zbierania” → VARCHAR, inaczej zapis PICKING = 503
+    # Keep PostgreSQL enum cartstatus — add missing lifecycle labels (do not cast to VARCHAR).
     if dialect == "postgresql":
-        try:
-            with engine.begin() as conn:
-                conn.execute(
-                    text(
-                        "ALTER TABLE carts ALTER COLUMN status TYPE VARCHAR(32) "
-                        "USING TRIM(BOTH FROM status::text)"
+        from .cartstatus_enum import ensure_cartstatus_enum
+
+        ensure_cartstatus_enum(engine)
+    else:
+        # SQLite / others: string status — remap legacy PL labels only
+        with engine.connect() as conn:
+            for old, new in (
+                ("pusty", "AVAILABLE"),
+                ("w trakcie zbierania", "PICKING"),
+                ("pełny", "FULL"),
+                ("w serwisie", "SERVICE"),
+                ("IN_PROGRESS", "PICKING"),
+            ):
+                try:
+                    conn.execute(
+                        text("UPDATE carts SET status = :new WHERE status = :old"),
+                        {"new": new, "old": old},
                     )
-                )
-        except Exception:
-            logger = __import__("logging").getLogger(__name__)
-            logger.exception("ensure_carts_picking_lifecycle_columns: status→VARCHAR failed")
+                except Exception:
+                    pass
+            conn.commit()
 
     with engine.connect() as conn:
-        for old, new in (
-            ("pusty", "AVAILABLE"),
-            ("w trakcie zbierania", "PICKING"),
-            ("pełny", "FULL"),
-            ("w serwisie", "SERVICE"),
-            ("AVAILABLE", "AVAILABLE"),
-            ("PICKING", "PICKING"),
-        ):
-            try:
-                conn.execute(
-                    text("UPDATE carts SET status = :new WHERE status = :old"),
-                    {"new": new, "old": old},
-                )
-            except Exception:
-                pass
         try:
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_carts_assigned_user_id ON carts(assigned_user_id)"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_carts_packing_user_id ON carts(packing_user_id)"))
