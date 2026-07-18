@@ -888,6 +888,8 @@ def cancel_picking(
         pass  # event emitted inside release_cart
     elif reason == "assigned_timeout":
         pass
+    elif str(reason).startswith("admin_"):
+        pass  # eventy emituje admin_release_cart
     else:
         _record_event(
             db,
@@ -1158,6 +1160,8 @@ def release_cart(
         _record_event(db, cart, "cart_auto_released_idle")
     elif reason in ("cancel_picking",) or str(reason).startswith("cancel"):
         pass  # event „Anulowano kompletację” w cancel_picking
+    elif str(reason).startswith("admin_"):
+        pass  # eventy emituje admin_release_cart
     elif reason == "last_order_packed":
         _record_event(db, cart, "cart_released", metadata={"reason": reason})
     else:
@@ -1165,6 +1169,217 @@ def release_cart(
     if not _already_locked:
         _after_mutation(db, cart)
     logger.info("cart_lifecycle.release cart_id=%s reason=%s", int(cart.id), reason)
+
+
+ADMIN_RELEASE_REASON = "admin_force_release"
+ADMIN_RELEASE_READY_MSG = (
+    "Wózek oczekuje na pakowanie. Aby go zwolnić należy anulować proces pakowania lub zakończyć pakowanie."
+)
+ADMIN_RELEASE_PACKING_MSG = (
+    "Wózek jest w trakcie pakowania. Zwolnienie awaryjne jest zablokowane."
+)
+
+
+def _detach_cart_pick_artifacts(db: Session, cart_id: int) -> dict[str, int]:
+    """Detach pick work from cart (inside lifecycle only — no external callers)."""
+    from ..models.pick import Pick
+    from ..models.pick_task import PickTask
+
+    cid = int(cart_id)
+    empty = {"pick_tasks_detached": 0, "draft_picks_removed": 0, "picks_detached": 0}
+    try:
+        tasks_n = (
+            db.query(PickTask)
+            .filter(PickTask.cart_id == cid)
+            .update({PickTask.cart_id: None}, synchronize_session="fetch")
+        )
+        drafts_n = (
+            db.query(Pick)
+            .filter(Pick.cart_id == cid, Pick.picked_at.is_(None))
+            .delete(synchronize_session=False)
+        )
+        picks_n = (
+            db.query(Pick)
+            .filter(Pick.cart_id == cid)
+            .update({Pick.cart_id: None}, synchronize_session="fetch")
+        )
+        return {
+            "pick_tasks_detached": int(tasks_n or 0),
+            "draft_picks_removed": int(drafts_n or 0),
+            "picks_detached": int(picks_n or 0),
+        }
+    except Exception:
+        logger.exception("cart_lifecycle.detach_pick_artifacts failed cart_id=%s", cid)
+        return empty
+
+
+def _close_open_picking_session(db: Session, cart: Cart) -> bool:
+    sess = find_open_picking_session(db, cart=cart)
+    if sess is None or sess.completed_at is not None:
+        return False
+    now = datetime.utcnow()
+    sess.completed_at = now
+    sess.last_activity_at = now
+    sess.completed_reason = "admin_force_release"
+    db.add(sess)
+    return True
+
+
+def admin_release_cart(
+    db: Session,
+    *,
+    cart_id: int,
+    tenant_id: int,
+    warehouse_id: int,
+    admin_user_id: int,
+    acknowledge: bool = False,
+) -> dict[str, Any]:
+    """
+    Awaryjne zwolnienie wózka z panelu administracyjnego.
+
+    Reguły:
+      AVAILABLE (czysty) → no-op
+      ASSIGNED → zwolnij
+      PICKING bez potwierdzonych produktów → zwolnij
+      PICKING z potwierdzonymi → anuluj kompletację, potem zwolnij
+      READY_FOR_PACKING / PACKING → blokada (osobny komunikat)
+    """
+    if not acknowledge:
+        raise CartLifecycleError(
+            "Potwierdź, że rozumiesz konsekwencje tej operacji.",
+            code="AcknowledgeRequired",
+        )
+
+    cart = _lock_cart_by_keys(
+        db,
+        cart_id=int(cart_id),
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+    )
+    st = get_cart_status(cart)
+
+    if st == CartStatus.READY_FOR_PACKING:
+        raise InvalidCartTransitionError(
+            ADMIN_RELEASE_READY_MSG,
+            from_status=st.value,
+        )
+    if st == CartStatus.PACKING:
+        raise InvalidCartTransitionError(
+            ADMIN_RELEASE_PACKING_MSG,
+            from_status=st.value,
+        )
+
+    from .cart_lifecycle_extensions import count_confirmed_picks_on_cart
+
+    orders_before = _orders_on_cart(db, int(cart_id))
+    orders_n = len(orders_before)
+    try:
+        picks_n = count_confirmed_picks_on_cart(db, int(cart_id))
+    except Exception:
+        logger.exception("admin_release pick count failed cart_id=%s", int(cart_id))
+        picks_n = 0
+    has_operator = bool(
+        getattr(cart, "assigned_user_id", None) or getattr(cart, "packing_user_id", None)
+    )
+    has_session = bool(getattr(cart, "current_session_id", None)) or (
+        find_open_picking_session(db, cart=cart) is not None
+    )
+
+    if (
+        st == CartStatus.AVAILABLE
+        and not has_operator
+        and orders_n == 0
+        and not has_session
+    ):
+        return {
+            "cart_id": int(cart_id),
+            "cart_status": CartStatus.AVAILABLE.value,
+            "idempotent": True,
+            "orders_detached": 0,
+            "picking_cancelled": False,
+        }
+
+    picking_cancelled = False
+    orders_detached = 0
+
+    if st in (CartStatus.ASSIGNED, CartStatus.PICKING):
+        if st == CartStatus.PICKING and picks_n > 0:
+            picking_cancelled = True
+        out = cancel_picking(
+            db,
+            cart_id=int(cart_id),
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            operator_user_id=int(admin_user_id),
+            reason=ADMIN_RELEASE_REASON,
+        )
+        orders_detached = int(out.get("orders_restored") or 0)
+        cart = _lock_cart_by_keys(
+            db,
+            cart_id=int(cart_id),
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+        )
+    else:
+        # AVAILABLE z artefaktami / inny stan awaryjny — odłącz i zwolnij w SSOT
+        for o in orders_before:
+            clear_order_picking_session_context(o)
+            db.add(o)
+            orders_detached += 1
+        _close_open_picking_session(db, cart)
+        release_cart(db, cart=cart, reason=ADMIN_RELEASE_REASON, _already_locked=True)
+
+    artifacts = _detach_cart_pick_artifacts(db, int(cart_id))
+    db.refresh(cart)
+
+    meta_base = {
+        "reason": "Ręczne zwolnienie z panelu administracyjnego.",
+        "orders_detached": orders_detached,
+        "picking_cancelled": picking_cancelled,
+        "confirmed_picks_before": picks_n,
+        **artifacts,
+    }
+    _record_event(
+        db,
+        cart,
+        "admin_cart_released",
+        operator_user_id=int(admin_user_id),
+        metadata=meta_base,
+    )
+    if orders_detached > 0:
+        _record_event(
+            db,
+            cart,
+            "admin_orders_detached",
+            operator_user_id=int(admin_user_id),
+            description=f"Odłączono {orders_detached} zamówień od wózka.",
+            metadata={"orders_detached": orders_detached},
+        )
+    if picking_cancelled:
+        _record_event(
+            db,
+            cart,
+            "admin_picking_cancelled",
+            operator_user_id=int(admin_user_id),
+            metadata={"confirmed_picks_before": picks_n},
+        )
+
+    _after_mutation(db, cart)
+    logger.info(
+        "cart_lifecycle.admin_release cart_id=%s admin=%s orders=%s cancelled=%s",
+        int(cart_id),
+        int(admin_user_id),
+        orders_detached,
+        picking_cancelled,
+    )
+    return {
+        "cart_id": int(cart_id),
+        "cart_status": CartStatus.AVAILABLE.value,
+        "idempotent": False,
+        "orders_detached": orders_detached,
+        "picking_cancelled": picking_cancelled,
+        **artifacts,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -1585,6 +1800,7 @@ finishPicking = finish_picking
 startPacking = start_packing
 finishPacking = finish_packing
 releaseCart = release_cart
+adminReleaseCart = admin_release_cart
 
 
 def cancel_picking_session(*args, **kwargs):

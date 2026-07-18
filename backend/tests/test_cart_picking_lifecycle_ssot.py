@@ -26,6 +26,7 @@ from backend.services.cart_picking_lifecycle_service import (
     InvalidCartStateError,
     InvalidCartTransitionError,
     SessionNotFoundError,
+    admin_release_cart,
     assert_cart_ready_for_quick_pick,
     cancel_picking,
     claim_cart,
@@ -524,3 +525,130 @@ def test_event_log_full_cycle_polish(db):
     assert "orders_assigned" in codes
     # Logika nie opiera się na opisie — filtrujemy po event_code
     assert all(isinstance(c, str) and "_" in c or c.isascii() for c in codes)
+
+
+def test_admin_release_assigned(db):
+    from backend.services.cart_picking_lifecycle_service import list_cart_lifecycle_events
+
+    cart = _cart(db, code="CART-ADM1")
+    db.commit()
+    claim_cart(db, cart=cart, operator_user_id=5)
+    db.commit()
+    assert get_cart_status(cart) == CartStatus.ASSIGNED
+
+    out = admin_release_cart(
+        db,
+        cart_id=int(cart.id),
+        tenant_id=1,
+        warehouse_id=1,
+        admin_user_id=99,
+        acknowledge=True,
+    )
+    db.commit()
+    db.refresh(cart)
+    assert out["cart_status"] == CartStatus.AVAILABLE.value
+    assert out["picking_cancelled"] is False
+    assert get_cart_status(cart) == CartStatus.AVAILABLE
+    assert cart.assigned_user_id is None
+    assert cart.current_session_id is None
+    codes = [e["event_code"] for e in list_cart_lifecycle_events(db, cart_id=int(cart.id), limit=20)]
+    assert "admin_cart_released" in codes
+    descs = [e["description"] for e in list_cart_lifecycle_events(db, cart_id=int(cart.id), limit=20)]
+    assert "Administrator ręcznie zwolnił wózek." in descs
+
+
+def test_admin_release_blocks_ready_and_packing(db):
+    cart = _cart(db, code="CART-ADM2")
+    o1 = _order(db, number="ADM-R1")
+    db.commit()
+    claim_cart(db, cart=cart, operator_user_id=1)
+    start_picking(db, cart=cart, orders=[o1], operator_user_id=1)
+    finish_picking(db, cart=cart, orders=[o1], operator_user_id=1)
+    db.commit()
+    assert get_cart_status(cart) == CartStatus.READY_FOR_PACKING
+
+    with pytest.raises(InvalidCartTransitionError) as ei:
+        admin_release_cart(
+            db,
+            cart_id=int(cart.id),
+            tenant_id=1,
+            warehouse_id=1,
+            admin_user_id=99,
+            acknowledge=True,
+        )
+    assert "pakowanie" in str(ei.value.message).lower()
+
+    start_packing(db, cart=cart, operator_user_id=2)
+    db.commit()
+    with pytest.raises(InvalidCartTransitionError):
+        admin_release_cart(
+            db,
+            cart_id=int(cart.id),
+            tenant_id=1,
+            warehouse_id=1,
+            admin_user_id=99,
+            acknowledge=True,
+        )
+
+
+def test_admin_release_picking_with_confirmed_cancels(db):
+    from backend.models.pick import Pick
+    from backend.services.cart_picking_lifecycle_service import list_cart_lifecycle_events
+
+    Pick.__table__.create(db.bind, checkfirst=True)
+    cart = _cart(db, code="CART-ADM3")
+    o1 = _order(db, number="ADM-P1")
+    db.commit()
+    claim_cart(db, cart=cart, operator_user_id=1)
+    start_picking(db, cart=cart, orders=[o1], operator_user_id=1)
+    db.commit()
+    db.add(
+        Pick(
+            tenant_id=1,
+            warehouse_id=1,
+            order_id=int(o1.id),
+            cart_id=int(cart.id),
+            product_id=1,
+            location_id=1,
+            quantity=1.0,
+        )
+    )
+    db.flush()
+    db.commit()
+
+    out = admin_release_cart(
+        db,
+        cart_id=int(cart.id),
+        tenant_id=1,
+        warehouse_id=1,
+        admin_user_id=42,
+        acknowledge=True,
+    )
+    db.commit()
+    db.refresh(o1)
+    db.refresh(cart)
+    assert out["picking_cancelled"] is True
+    assert out["orders_detached"] >= 1
+    assert o1.cart_id is None
+    assert get_cart_status(cart) == CartStatus.AVAILABLE
+    codes = [e["event_code"] for e in list_cart_lifecycle_events(db, cart_id=int(cart.id), limit=30)]
+    assert "admin_cart_released" in codes
+    assert "admin_picking_cancelled" in codes
+    assert "admin_orders_detached" in codes
+
+
+def test_admin_release_requires_acknowledge(db):
+    cart = _cart(db, code="CART-ADM4")
+    db.commit()
+    claim_cart(db, cart=cart, operator_user_id=1)
+    db.commit()
+    with pytest.raises(Exception) as ei:
+        admin_release_cart(
+            db,
+            cart_id=int(cart.id),
+            tenant_id=1,
+            warehouse_id=1,
+            admin_user_id=1,
+            acknowledge=False,
+        )
+    assert "konsekwencje" in str(ei.value).lower()

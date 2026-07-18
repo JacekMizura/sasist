@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 
 from fastapi import Depends
+from ..auth.deps import require_any_permission
 from ..auth.warehouse_deps import (
     require_operable_warehouse,
     require_active_operable_warehouse,
@@ -13,7 +15,14 @@ from sqlalchemy.orm import Session
 from starlette import status
 
 from ..database import get_db
+from ..models.app_user import AppUser
+from ..models.cart import Cart
 from ..services.cart_service import CartService
+from ..services.cart_picking_lifecycle_service import (
+    CartLifecycleError,
+    InvalidCartTransitionError,
+    admin_release_cart,
+)
 from ..schemas.cart import (
     CartMultiCreate,
     CartBulkCreate,
@@ -28,6 +37,10 @@ router = APIRouter(
     prefix="/carts",
     tags=["Carts"]
 )
+
+
+class AdminReleaseCartBody(BaseModel):
+    acknowledge: bool = Field(..., description="Wymagane potwierdzenie konsekwencji")
 
 # ==========================================================
 # GET ALL: Pobiera listę wózków przypisanych do Tenanta
@@ -276,6 +289,45 @@ def clear_cart(cart_id: int, db: Session = Depends(get_db)):
     """Wyczyść wózek: odepnij wszystkie zamówienia od tego wózka."""
     service = CartService(db)
     return service.clear_cart(cart_id)
+
+
+@router.post("/{cart_id}/admin-release/")
+def admin_release_cart_endpoint(
+    cart_id: int,
+    body: AdminReleaseCartBody,
+    db: Session = Depends(get_db),
+    actor: AppUser = Depends(
+        require_any_permission("warehouse.carts.admin_release", "warehouse.picking.override")
+    ),
+):
+    """
+    Awaryjne zwolnienie wózka z panelu administracyjnego.
+    Wyłącznie przez CartLifecycleService — bez lokalnych UPDATE poza SSOT.
+    """
+    cart = db.query(Cart).filter(Cart.id == int(cart_id)).first()
+    if cart is None:
+        raise HTTPException(status_code=404, detail="Wózek nie istnieje")
+    try:
+        result = admin_release_cart(
+            db,
+            cart_id=int(cart_id),
+            tenant_id=int(cart.tenant_id),
+            warehouse_id=int(cart.warehouse_id),
+            admin_user_id=int(actor.id),
+            acknowledge=bool(body.acknowledge),
+        )
+        db.commit()
+        return {"status": "OK", **result}
+    except InvalidCartTransitionError as e:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(e.message or e)) from e
+    except CartLifecycleError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e.message or e)) from e
+    except Exception:
+        db.rollback()
+        raise
+
 
 # ==========================================================
 # BASKET OPERATIONS: Zarządzanie pojedynczymi koszykami

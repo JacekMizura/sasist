@@ -39,6 +39,9 @@ EVENT_ORDERS_ASSIGNED = "orders_assigned"
 EVENT_ORDER_ADDED = "order_added"
 EVENT_CAPACITY_BLOCKED = "capacity_blocked"
 EVENT_BASKET_ASSIGNED = "basket_assigned"
+EVENT_ADMIN_CART_RELEASED = "admin_cart_released"
+EVENT_ADMIN_ORDERS_DETACHED = "admin_orders_detached"
+EVENT_ADMIN_PICKING_CANCELLED = "admin_picking_cancelled"
 
 # event_code → opis PL (tylko prezentacja)
 EVENT_DESCRIPTIONS_PL: dict[str, str] = {
@@ -60,6 +63,9 @@ EVENT_DESCRIPTIONS_PL: dict[str, str] = {
     EVENT_ORDER_ADDED: "Dodano zamówienie do wózka.",
     EVENT_CAPACITY_BLOCKED: "Nie udało się przypisać kolejnego zamówienia. Powód: brak wolnej pojemności.",
     EVENT_BASKET_ASSIGNED: "Przypisano zamówienie do koszyka.",
+    EVENT_ADMIN_CART_RELEASED: "Administrator ręcznie zwolnił wózek.",
+    EVENT_ADMIN_ORDERS_DETACHED: "Odłączono zamówienia od wózka.",
+    EVENT_ADMIN_PICKING_CANCELLED: "Anulowano kompletację przez administratora.",
 }
 
 # event_code → severity
@@ -82,6 +88,9 @@ EVENT_SEVERITY: dict[str, Severity] = {
     EVENT_ORDER_ADDED: SEVERITY_INFO,
     EVENT_CAPACITY_BLOCKED: SEVERITY_WARNING,
     EVENT_BASKET_ASSIGNED: SEVERITY_INFO,
+    EVENT_ADMIN_CART_RELEASED: SEVERITY_AUDIT,
+    EVENT_ADMIN_ORDERS_DETACHED: SEVERITY_WARNING,
+    EVENT_ADMIN_PICKING_CANCELLED: SEVERITY_WARNING,
 }
 
 

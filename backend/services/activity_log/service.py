@@ -175,28 +175,20 @@ def record_from_cart_lifecycle(
     if batch_id is not None:
         meta.setdefault("batch_id", int(batch_id))
     meta["source"] = "cart_lifecycle"
-    try:
-        return record_activity(
-            db,
-            event_code=event_code,
-            description=description,
-            links=links,
-            severity=severity,
-            category=CART_EVENT_CATEGORY.get(str(event_code), "system"),
-            tenant_id=int(tenant_id),
-            warehouse_id=int(warehouse_id),
-            actor_user_id=operator_user_id,
-            occurred_at=occurred_at,
-            source_module="cart_lifecycle",
-            metadata=meta,
-        )
-    except Exception:
-        logger.exception(
-            "activity_log bridge failed cart_id=%s code=%s",
-            cart_id,
-            event_code,
-        )
-        return None
+    return record_activity(
+        db,
+        event_code=event_code,
+        description=description,
+        links=links,
+        severity=severity,
+        category=CART_EVENT_CATEGORY.get(str(event_code), "system"),
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        actor_user_id=operator_user_id,
+        occurred_at=occurred_at,
+        source_module="cart_lifecycle",
+        metadata=meta,
+    )
 
 
 @dataclass

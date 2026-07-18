@@ -370,24 +370,30 @@ def append_lifecycle_event(
         meta = dict(metadata or {})
         basket_id = meta.get("basket_id")
         cart_label = getattr(cart, "code", None) or getattr(cart, "name", None)
-        record_from_cart_lifecycle(
-            db,
-            cart_id=int(cart.id),
-            tenant_id=int(cart.tenant_id),
-            warehouse_id=int(cart.warehouse_id),
-            event_code=code,
-            description=row.description,
-            severity=row.severity,
-            operator_user_id=row.operator_user_id,
-            occurred_at=row.occurred_at,
-            order_id=int(order_id) if order_id is not None else None,
-            basket_id=int(basket_id) if basket_id is not None else None,
-            session_id=int(session_id) if session_id is not None else None,
-            batch_id=int(batch_id) if batch_id is not None else None,
-            metadata={**meta, "cart_lifecycle_event_id": int(row.id)},
-            cart_label=str(cart_label) if cart_label else None,
-            basket_label=str(meta.get("basket_label")) if meta.get("basket_label") else None,
-        )
+        nested = db.begin_nested()
+        try:
+            record_from_cart_lifecycle(
+                db,
+                cart_id=int(cart.id),
+                tenant_id=int(cart.tenant_id),
+                warehouse_id=int(cart.warehouse_id),
+                event_code=code,
+                description=row.description,
+                severity=row.severity,
+                operator_user_id=row.operator_user_id,
+                occurred_at=row.occurred_at,
+                order_id=int(order_id) if order_id is not None else None,
+                basket_id=int(basket_id) if basket_id is not None else None,
+                session_id=int(session_id) if session_id is not None else None,
+                batch_id=int(batch_id) if batch_id is not None else None,
+                metadata={**meta, "cart_lifecycle_event_id": int(row.id)},
+                cart_label=str(cart_label) if cart_label else None,
+                basket_label=str(meta.get("basket_label")) if meta.get("basket_label") else None,
+            )
+            nested.commit()
+        except Exception:
+            nested.rollback()
+            raise
     except Exception:
         logger.exception(
             "activity_log dual-write failed cart_id=%s code=%s",

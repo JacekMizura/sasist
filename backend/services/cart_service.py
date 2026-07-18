@@ -749,6 +749,15 @@ class CartService:
             for o in orders_ssot
         ]
         assignment = _batch_cart_assignments(self.db, [int(cart.id)]).get(int(cart.id)) or _empty_cart_assignment()
+        if assignment.get("assigned_user_id") is None:
+            lifecycle_uid = getattr(cart, "assigned_user_id", None) or getattr(cart, "packing_user_id", None)
+            if lifecycle_uid is not None:
+                assignment = {
+                    **assignment,
+                    "assigned_user_id": int(lifecycle_uid),
+                    "assigned_user_name": assignment.get("assigned_user_name")
+                    or f"Użytkownik #{int(lifecycle_uid)}",
+                }
 
         baskets_out = []
         for b in cart.baskets or []:
@@ -782,6 +791,10 @@ class CartService:
             "barcode": getattr(cart, "barcode", None),
             "scan_code": getattr(cart, "scan_code", None),
             "type": clean_type,
+            "status": normalize_cart_status_value(
+                cart.status.value if hasattr(cart.status, "value") else str(cart.status)
+            ),
+            "current_session_id": getattr(cart, "current_session_id", None),
             "tenant_id": cart.tenant_id,
             "warehouse_id": cart.warehouse_id,
             "group_id": cart.group_id,

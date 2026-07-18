@@ -136,6 +136,7 @@ PERMISSION_TREE: list[dict[str, Any]] = [
                     _leaf("warehouse.picking.continue", "Kontynuacja"),
                     _leaf("warehouse.picking.assign", "Przypisywanie"),
                     _leaf("warehouse.picking.override", "Override"),
+                    _leaf("warehouse.carts.admin_release", "Awaryjne zwolnienie wózka"),
                 ],
             ),
             _node(
@@ -352,6 +353,7 @@ ROLE_PERMISSION_PRESETS: dict[str, tuple[str, ...]] = {
                     "warehouse.picking.continue",
                     "warehouse.picking.assign",
                     "warehouse.picking.override",
+                    "warehouse.carts.admin_release",
                     "products.view",
                     "products.edit",
                     "products.pricing",

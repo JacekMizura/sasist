@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-07-18 — Admin force-release cart (OMS)
+
+- `admin_release_cart` w CartLifecycleService (ASSIGNED/PICKING; blokada READY/PACKING).
+- API `POST /carts/{id}/admin-release/` + perm `warehouse.carts.admin_release`.
+- FE: `AdminReleaseCartButton` + modal potwierdzenia w `CartFleetDetailPanel`.
+- Eventy: `admin_cart_released` / `admin_orders_detached` / `admin_picking_cancelled`.
+
 ## 2026-07-18 — Panel Activity Log (OMS)
 
 - SSOT: `activity_events` + `activity_event_links` (jedno zdarzenie → wiele obiektów).

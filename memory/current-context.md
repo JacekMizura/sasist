@@ -2,15 +2,14 @@
 
 ## Active
 
-Panel **Activity Log** (OMS): wspólna historia obiektów — `activity_events` + linki N:N, UI `ActivityLogPanel`.
-Osadzony w: zamówienia, edytory wózków (bulk/multi), fleet detail, regały kompletacyjne (edit/preview).
+Awaryjne **Zwolnij wózek** (panel OMS): `admin_release_cart` w CartLifecycleService,
+`POST /carts/{id}/admin-release/`, UI `AdminReleaseCartButton` w `CartFleetDetailPanel`.
+Uprawnienie: `warehouse.carts.admin_release` (lub `warehouse.picking.override`).
 
-Capacity Engine = SSOT occupancy; Cart.status = lifecycle only.
-WMS user messaging SSOT + Event Log PL (terminal) — osobny tor od panel Activity Log.
+Panel Activity Log + Capacity Engine + Cart.status lifecycle — bez zmian reguł.
 
 ## Next
 
-- Dual-write OMS order events → `activity_events` (obecnie fallback `order_activity_logs`)
-- Zapisy dla rack lifecycle → Activity Log
-- Filtry UI (severity / category / operator / daty) — API już gotowe
-- Osadzenie w produktach / produkcji / zwrotach / dokumentach gdy powstaną widoki
+- Dual-write OMS order events → `activity_events`
+- Filtry UI Activity Log
+- Osadzenie Activity Log w kolejnych modułach

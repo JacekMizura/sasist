@@ -50,4 +50,7 @@ CART_EVENT_CATEGORY: dict[str, Category] = {
     "order_added": "assignment",
     "capacity_blocked": "capacity",
     "basket_assigned": "assignment",
+    "admin_cart_released": "system",
+    "admin_orders_detached": "assignment",
+    "admin_picking_cancelled": "cancel",
 }

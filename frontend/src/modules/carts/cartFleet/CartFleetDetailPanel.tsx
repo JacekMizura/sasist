@@ -18,6 +18,7 @@ import type { BasketDetail } from "./cartFleetTypes";
 import type { CapacitySnapshot } from "../../../types/cartCapacity";
 import { basketSlotCode } from "./cartFleetTypes";
 import ActivityLogPanel from "../../../components/activityLog/ActivityLogPanel";
+import { AdminReleaseCartButton } from "../../../components/carts/AdminReleaseCartButton";
 import { CartOrdersHoverPopover, type CartOrderPreview } from "./CartOrdersHoverPopover";
 
 type CartFleetDetailPanelProps = {
@@ -52,6 +53,8 @@ export function CartFleetDetailPanel({
     total_weight_kg?: number;
     capacity?: CapacitySnapshot | null;
     status?: string;
+    assigned_user_id?: number | null;
+    current_session_id?: number | null;
   } | null>(null);
   const [wmsStats, setWmsStats] = useState<WmsCartStats>(EMPTY_WMS_CART_STATS);
   const [clearingCart, setClearingCart] = useState(false);
@@ -81,6 +84,10 @@ export function CartFleetDetailPanel({
           ...detail,
           capacity: parseCapacitySnapshot(detail.capacity) ?? stats.capacity ?? null,
           status: detail.status != null ? String(detail.status) : stats.status,
+          assigned_user_id:
+            detail.assigned_user_id != null ? Number(detail.assigned_user_id) : null,
+          current_session_id:
+            detail.current_session_id != null ? Number(detail.current_session_id) : null,
         });
         setWmsStats(stats);
       })
@@ -266,17 +273,61 @@ export function CartFleetDetailPanel({
                         </span>
                       ) : null}
                     </div>
-                    {(stats.total_orders > 0 || stats.used_volume_dm3 > 0) && (
-                      <button
-                        type="button"
-                        onClick={() => setConfirmWholeCartClearOpen(true)}
-                        disabled={clearingCart}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100 disabled:opacity-50"
-                      >
-                        <Eraser className="h-3.5 w-3.5" aria-hidden />
-                        {t.clear_cart}
-                      </button>
-                    )}
+                    <div className="flex flex-wrap items-center gap-2">
+                      {cartId != null ? (
+                        <AdminReleaseCartButton
+                          cartId={cartId}
+                          status={lifecycleStatus}
+                          assignedUserId={detailData?.assigned_user_id}
+                          ordersCount={stats.total_orders}
+                          hasActiveSession={
+                            detailData?.current_session_id != null &&
+                            Number(detailData.current_session_id) > 0
+                          }
+                          onSuccess={() => {
+                            onClearSuccess?.();
+                            void Promise.all([
+                              api.get(`/carts/${cartId}/`),
+                              fetchWmsCartStats(cartId),
+                            ]).then(([detailRes, statsRes]) => {
+                              const detail = detailRes.data as NonNullable<typeof detailData> & {
+                                baskets: BasketDetail[];
+                              };
+                              setBaskets(detail.baskets ?? []);
+                              setDetailData({
+                                ...detail,
+                                capacity:
+                                  parseCapacitySnapshot(detail.capacity) ??
+                                  statsRes.capacity ??
+                                  null,
+                                status:
+                                  detail.status != null ? String(detail.status) : statsRes.status,
+                                assigned_user_id:
+                                  detail.assigned_user_id != null
+                                    ? Number(detail.assigned_user_id)
+                                    : null,
+                                current_session_id:
+                                  detail.current_session_id != null
+                                    ? Number(detail.current_session_id)
+                                    : null,
+                              });
+                              setWmsStats(statsRes);
+                            });
+                          }}
+                        />
+                      ) : null}
+                      {(stats.total_orders > 0 || stats.used_volume_dm3 > 0) && (
+                        <button
+                          type="button"
+                          onClick={() => setConfirmWholeCartClearOpen(true)}
+                          disabled={clearingCart}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+                        >
+                          <Eraser className="h-3.5 w-3.5" aria-hidden />
+                          {t.clear_cart}
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   {capacitySnapshot ? (
