@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-07-18 — product-lines/detail TypeError `_safe_touch_picking_session`
+
+- Production: `TypeError: takes 0 positional arguments but 1 was given` at detail ~L915.
+- Helper is `def _safe_touch_picking_session(**kwargs)`; 4 call-sites passed positional `db`.
+- Fixed all to `db=db` (product-lines recovery, detail, quick-pick, shortage).
+- E2E regression: `test_wms_picking_detail_safe_touch_session.py` (router + authenticated user).
+
 ## 2026-07-18 — bundle_component_index: canonical normalize (detail 500 fix)
 
 - Root cause: `or 0` in tree builder → `WmsPickingBundleComponentStatus(ge=1)` ValidationError at detail L1867.

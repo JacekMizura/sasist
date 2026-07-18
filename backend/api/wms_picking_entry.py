@@ -757,7 +757,7 @@ def get_picking_product_lines(
             )
         if current_user is not None and current_user.id is not None:
             _safe_touch_picking_session(
-                db,
+                db=db,
                 tenant_id=int(tenant_id),
                 warehouse_id=int(warehouse_id),
                 session_kind="picking_recovery_active",
@@ -913,7 +913,7 @@ def get_picking_product_detail(
         raise HTTPException(status_code=404, detail="Produkt nie występuje na liście zbiórki.")
     if current_user is not None and current_user.id is not None:
         _safe_touch_picking_session(
-            db,
+            db=db,
             tenant_id=int(tenant_id),
             warehouse_id=int(warehouse_id),
             session_kind="picking_recovery_active" if recovery_order_id is not None else "picking_active",
@@ -1133,7 +1133,7 @@ def post_picking_quick_pick(
                 recovery_mode=recovery_oid is not None,
             )
             _safe_touch_picking_session(
-                db,
+                db=db,
                 tenant_id=tid,
                 warehouse_id=int(effective_wh),
                 session_kind="picking_recovery_active"
@@ -1250,7 +1250,7 @@ def post_picking_report_shortage(
                 cart_id=body.cart_id,
             )
             _safe_touch_picking_session(
-                db,
+                db=db,
                 tenant_id=int(tenant_id),
                 warehouse_id=int(warehouse_id),
                 session_kind="picking_active",

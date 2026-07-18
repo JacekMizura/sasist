@@ -4,16 +4,13 @@
 
 **FAZA STABILIZACJI WMS** — bez nowych funkcji.
 
-## Naprawione (2026-07-18, latest)
+## Latest (2026-07-18)
 
-- **product-lines/detail HTTP 500:** `bundle_component_index` NULL/`or 0` → ValidationError L1867.
-  Canonical normalize in `bundle_component_index.py`; reindex in UX index + picking/packing trees + scan.
-  Skip non-components; per-bundle try/except; no blind `max(1,…)`.
-- **HTTP 500 body:** `DEBUG_HTTP_500` opt-in only (no production leak). Logs keep full stack + `request_id`.
+- Prod detail 500 `request_id=7c0e7367…`: **TypeError** `_safe_touch_picking_session(db, …)` vs `**kwargs` — fixed all call-sites to `db=db`.
+- Deploy required before re-checking production request.
+- Do **not** claim full WMS flow fixed until manual prod verify after deploy.
 
-## Open
+## Prior
 
-- Heartbeat / claim FE
-- READY/PACKING admin abort
-- Optimizer MULTI vs Capacity
-- GET product-lines mutates lifecycle
+- bundle_component_index normalize (deployed in `40ba587`) — separate from this TypeError.
+- HTTP 500 diagnostics: logs under `request_id`; body opt-in `DEBUG_HTTP_500` only.
