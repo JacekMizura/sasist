@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-07-18 — Cart details UX (ERP layout)
+
+- Layout: Podsumowanie KPI → tabela zamówień → Historia doboru (collapsed) → Historia czynności (table).
+- Shared `ActivityLogTable` (Data | Operator | Akcja); `ActivityLogPanel` wraps it.
+- Report: `memory/cart-details-ux-redesign.md`.
+
 ## 2026-07-18 — Activity Log final UX (no dupes, complete detach history)
 
 - Capacity Analytics: collapsed by default; shows last-run date + analyzed/assigned/stop reason (historical).

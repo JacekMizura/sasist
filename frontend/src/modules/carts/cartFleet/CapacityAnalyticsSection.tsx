@@ -29,7 +29,6 @@ function formatRunWhen(iso: string | null | undefined): string {
   });
 }
 
-/** Prefer stored Polish reason_label from the run (no FE translation map). */
 function stopReasonLabel(run: CapacityAnalyticsRun): string {
   if (!run.reasons?.length) return "—";
   const sorted = [...run.reasons].sort((a, b) => b.count - a.count);
@@ -37,9 +36,8 @@ function stopReasonLabel(run: CapacityAnalyticsRun): string {
 }
 
 /**
- * Historical Capacity Engine summary — last run only.
- * Default collapsed: operators rarely need this; admins expand on demand.
- * Never presents as current cart occupancy.
+ * Last Capacity Engine run — historical summary only (not current occupancy).
+ * Default collapsed. Label: Historia doboru zamówień.
  */
 export function CapacityAnalyticsSection({ cartId, refreshKey = 0 }: CapacityAnalyticsSectionProps) {
   const { user, hasPermission } = useAuth();
@@ -54,7 +52,7 @@ export function CapacityAnalyticsSection({ cartId, refreshKey = 0 }: CapacityAna
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!allowed || cartId == null || collapsed) return;
+    if (!allowed || cartId == null) return;
     let cancelled = false;
     setLoading(true);
     setError(null);
@@ -74,65 +72,80 @@ export function CapacityAnalyticsSection({ cartId, refreshKey = 0 }: CapacityAna
     return () => {
       cancelled = true;
     };
-  }, [allowed, cartId, refreshKey, collapsed]);
+  }, [allowed, cartId, refreshKey]);
 
   if (!allowed || cartId == null) return null;
 
   return (
-    <div className="border-t border-slate-100 pt-3">
+    <section className="rounded-xl border border-slate-200 bg-white">
       <button
         type="button"
-        className="flex w-full items-center gap-2 text-left"
+        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
         onClick={() => setCollapsed((c) => !c)}
         aria-expanded={!collapsed}
       >
-        {collapsed ? (
-          <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" aria-hidden />
-        ) : (
-          <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" aria-hidden />
-        )}
-        <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
-          Analiza Capacity
+        <span className="flex items-center gap-2">
+          {collapsed ? (
+            <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" aria-hidden />
+          ) : (
+            <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" aria-hidden />
+          )}
+          <span className="text-sm font-semibold text-slate-800">Historia doboru zamówień</span>
         </span>
+        {run?.occurred_at ? (
+          <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-medium text-slate-600">
+            Ostatni dobór: {formatRunWhen(run.occurred_at)}
+          </span>
+        ) : !collapsed && !loading ? (
+          <span className="text-[11px] text-slate-400">Brak uruchomień</span>
+        ) : null}
       </button>
 
       {!collapsed ? (
-        <div className="mt-3 space-y-3 pl-6">
-          <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">
-            Ostatni dobór zamówień
-          </p>
-
+        <div className="border-t border-slate-100 px-4 py-4">
           {loading ? <p className="text-sm text-slate-400">Ładowanie…</p> : null}
           {error ? <p className="text-sm text-rose-600">{error}</p> : null}
-
           {!loading && !run ? (
             <p className="text-sm text-slate-500">Brak zapisanych uruchomień doboru dla tego wózka.</p>
           ) : null}
-
           {run ? (
-            <dl className="space-y-2 text-sm text-slate-800">
+            <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <div>
-                <dt className="sr-only">Data uruchomienia</dt>
-                <dd className="font-semibold tabular-nums text-slate-900">
-                  {formatRunWhen(run.occurred_at)}
+                <dt className="text-[11px] font-bold uppercase tracking-wide text-slate-400">
+                  Przeanalizowano
+                </dt>
+                <dd className="mt-1 text-sm font-semibold tabular-nums text-slate-900">
+                  {run.candidates_count}{" "}
+                  <span className="font-medium text-slate-500">zamówień</span>
                 </dd>
               </div>
-              <div className="flex flex-wrap gap-x-2">
-                <dt className="font-semibold text-slate-500">Przeanalizowano:</dt>
-                <dd className="tabular-nums font-semibold text-slate-900">{run.candidates_count}</dd>
+              <div>
+                <dt className="text-[11px] font-bold uppercase tracking-wide text-slate-400">
+                  Przypisano
+                </dt>
+                <dd className="mt-1 text-sm font-semibold tabular-nums text-slate-900">
+                  {run.assigned_count}{" "}
+                  <span className="font-medium text-slate-500">zamówień</span>
+                </dd>
               </div>
-              <div className="flex flex-wrap gap-x-2">
-                <dt className="font-semibold text-slate-500">Przypisano:</dt>
-                <dd className="tabular-nums font-semibold text-slate-900">{run.assigned_count}</dd>
+              <div className="sm:col-span-2 lg:col-span-1">
+                <dt className="text-[11px] font-bold uppercase tracking-wide text-slate-400">
+                  Powód zakończenia
+                </dt>
+                <dd className="mt-1 text-sm font-bold text-slate-900">{stopReasonLabel(run)}</dd>
               </div>
-              <div className="flex flex-wrap gap-x-2">
-                <dt className="font-semibold text-slate-500">Powód zakończenia:</dt>
-                <dd className="text-slate-900">{stopReasonLabel(run)}</dd>
+              <div>
+                <dt className="text-[11px] font-bold uppercase tracking-wide text-slate-400">
+                  Data uruchomienia
+                </dt>
+                <dd className="mt-1 text-sm font-semibold tabular-nums text-slate-900">
+                  {formatRunWhen(run.occurred_at)}
+                </dd>
               </div>
             </dl>
           ) : null}
         </div>
       ) : null}
-    </div>
+    </section>
   );
 }

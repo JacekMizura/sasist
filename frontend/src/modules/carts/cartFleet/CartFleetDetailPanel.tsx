@@ -16,11 +16,11 @@ import { ClearIcon } from "../../../pages/CartsComponents/ui/Icons";
 import type { BasketDetail } from "./cartFleetTypes";
 import type { CapacitySnapshot } from "../../../types/cartCapacity";
 import { basketSlotCode } from "./cartFleetTypes";
-import ActivityLogPanel from "../../../components/activityLog/ActivityLogPanel";
+import ActivityLogTable from "../../../components/activityLog/ActivityLogTable";
 import { AdminReleaseCartButton } from "../../../components/carts/AdminReleaseCartButton";
-import { CartOrdersHoverPopover, type CartOrderPreview } from "./CartOrdersHoverPopover";
 import { AssignedOrdersSection, type AssignedOrderRow } from "./AssignedOrdersSection";
 import { CapacityAnalyticsSection } from "./CapacityAnalyticsSection";
+import { CartSummaryKpis } from "./CartSummaryKpis";
 
 type CartFleetDetailPanelProps = {
   open: boolean;
@@ -32,8 +32,8 @@ type CartFleetDetailPanelProps = {
 };
 
 /**
- * Inline expand under cart row — full width (no right Drawer).
- * Occupancy counters: GET /wms/carts/{id}/stats only.
+ * Inline expand under cart row — ERP layout:
+ * Podsumowanie → Przypisane zamówienia → Historia doboru → Historia czynności
  */
 export function CartFleetDetailPanel({
   open,
@@ -50,12 +50,16 @@ export function CartFleetDetailPanel({
     baskets?: BasketDetail[];
     assigned_orders?: AssignedOrderRow[];
     order_numbers?: string[];
-    orders_preview?: CartOrderPreview[];
     total_weight_kg?: number;
     capacity?: CapacitySnapshot | null;
     status?: string;
     assigned_user_id?: number | null;
+    assigned_user_name?: string | null;
+    assignment_since?: string | null;
     current_session_id?: number | null;
+    code?: string | null;
+    wms_picking_product_count?: number;
+    total_products?: number;
   } | null>(null);
   const [wmsStats, setWmsStats] = useState<WmsCartStats>(EMPTY_WMS_CART_STATS);
   const [clearingCart, setClearingCart] = useState(false);
@@ -132,8 +136,25 @@ export function CartFleetDetailPanel({
   }, [open, cartId]);
 
   const stats = useMemo(() => cartStatsFromWms(wmsStats), [wmsStats]);
-  const weightKg = Number(detailData?.total_weight_kg ?? 0);
   const lifecycleStatus = wmsStats.status ?? detailData?.status;
+  const capacity = detailData?.capacity ?? wmsStats.capacity ?? null;
+  const pickProgress = {
+    pickedProducts: Number(detailData?.wms_picking_product_count ?? 0),
+    totalProducts: Number(detailData?.total_products ?? stats.total_products) || stats.total_products,
+  };
+
+  const formatAssignmentSince = (iso: string | null | undefined): string | null => {
+    if (!iso) return null;
+    const d = new Date(iso.includes("T") ? iso : iso.replace(" ", "T"));
+    if (Number.isNaN(d.getTime())) return null;
+    return d.toLocaleString("pl-PL", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
 
   // Poll while operator may time out (ASSIGNED) so panel/status stay in sync after backend release.
   useEffect(() => {
@@ -260,7 +281,9 @@ export function CartFleetDetailPanel({
   };
 
   const assignedOrders = detailData?.assigned_orders ?? [];
-  const ordersPreview = detailData?.orders_preview ?? [];
+  const cartCode = detailData?.code || cartName;
+  const operatorName = (detailData?.assigned_user_name || "").trim() || null;
+  const startedLabel = formatAssignmentSince(detailData?.assignment_since);
 
   return (
     <>
@@ -270,80 +293,76 @@ export function CartFleetDetailPanel({
         aria-hidden={!open}
       >
         <div className="min-h-0 overflow-hidden">
-          <div className="w-full max-w-none border-t border-slate-200 bg-white">
-            <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-2.5">
-              <ChevronDown className="h-4 w-4 shrink-0 text-slate-500" aria-hidden />
-              <p className="text-sm font-semibold text-slate-900">
-                Zawartość wózka
-                {cartName ? <span className="font-medium text-slate-500"> · {cartName}</span> : null}
-              </p>
+          <div className="w-full max-w-none border-t border-slate-200 bg-slate-50/40">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 sm:px-5">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <ChevronDown className="h-4 w-4 shrink-0 text-slate-500" aria-hidden />
+                  <p className="text-base font-bold text-slate-900">
+                    {cartName || "Szczegóły wózka"}
+                  </p>
+                  {lifecycleStatus ? <StatusPill status={lifecycleStatus} /> : null}
+                </div>
+                <p className="mt-1 flex flex-wrap gap-x-4 gap-y-1 pl-6 text-[12px] text-slate-500">
+                  {cartCode ? (
+                    <span>
+                      Kod wózka: <span className="font-semibold text-slate-700">{cartCode}</span>
+                    </span>
+                  ) : null}
+                  {operatorName ? (
+                    <span>
+                      Operator: <span className="font-semibold text-slate-700">{operatorName}</span>
+                    </span>
+                  ) : null}
+                  {startedLabel ? (
+                    <span>
+                      Rozpoczęto: <span className="font-semibold text-slate-700">{startedLabel}</span>
+                    </span>
+                  ) : null}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {cartId != null ? (
+                  <AdminReleaseCartButton
+                    cartId={cartId}
+                    status={lifecycleStatus}
+                    assignedUserId={detailData?.assigned_user_id}
+                    ordersCount={stats.total_orders}
+                    hasActiveSession={
+                      detailData?.current_session_id != null &&
+                      Number(detailData.current_session_id) > 0
+                    }
+                    onSuccess={() => {
+                      onClearSuccess?.();
+                      reloadCartSurfaces();
+                    }}
+                  />
+                ) : null}
+                {(stats.total_orders > 0 || stats.used_volume_dm3 > 0) && (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmWholeCartClearOpen(true)}
+                    disabled={clearingCart}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    <Eraser className="h-3.5 w-3.5" aria-hidden />
+                    {t.clear_cart}
+                  </button>
+                )}
+              </div>
             </div>
 
             {open ? (
               loading ? (
                 <div className="flex h-32 items-center justify-center text-sm text-slate-400">Ładowanie…</div>
               ) : (
-                <div className="space-y-5 px-4 py-4 sm:px-5">
-                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
-                    <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-                      {lifecycleStatus ? (
-                        <span className="inline-flex items-center gap-1.5">
-                          Status: <StatusPill status={lifecycleStatus} />
-                        </span>
-                      ) : null}
-                      <span className="inline-flex items-center gap-1">
-                        Zamówienia:{" "}
-                        <CartOrdersHoverPopover orders={ordersPreview}>
-                          <strong className="tabular-nums text-slate-900">{stats.total_orders}</strong>
-                        </CartOrdersHoverPopover>
-                      </span>
-                      <span>
-                        Produkty: <strong>{stats.total_products}</strong>
-                      </span>
-                      {isSectional ? (
-                        <span>
-                          Zajęte sekcje: <strong>{stats.baskets_used}</strong> / {stats.sections_count || baskets.length}
-                        </span>
-                      ) : null}
-                      <span>
-                        Objętość: <strong>{stats.used_volume_dm3.toFixed(1)}</strong> dm³
-                      </span>
-                      {weightKg > 0 ? (
-                        <span>
-                          Waga: <strong>{weightKg.toFixed(2)}</strong> kg
-                        </span>
-                      ) : null}
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      {cartId != null ? (
-                        <AdminReleaseCartButton
-                          cartId={cartId}
-                          status={lifecycleStatus}
-                          assignedUserId={detailData?.assigned_user_id}
-                          ordersCount={stats.total_orders}
-                          hasActiveSession={
-                            detailData?.current_session_id != null &&
-                            Number(detailData.current_session_id) > 0
-                          }
-                          onSuccess={() => {
-                            onClearSuccess?.();
-                            reloadCartSurfaces();
-                          }}
-                        />
-                      ) : null}
-                      {(stats.total_orders > 0 || stats.used_volume_dm3 > 0) && (
-                        <button
-                          type="button"
-                          onClick={() => setConfirmWholeCartClearOpen(true)}
-                          disabled={clearingCart}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100 disabled:opacity-50"
-                        >
-                          <Eraser className="h-3.5 w-3.5" aria-hidden />
-                          {t.clear_cart}
-                        </button>
-                      )}
-                    </div>
-                  </div>
+                <div className="space-y-5 px-4 py-5 sm:px-5">
+                  <CartSummaryKpis
+                    stats={stats}
+                    capacity={capacity}
+                    isSectional={isSectional}
+                    pickProgress={pickProgress}
+                  />
 
                   <AssignedOrdersSection
                     orders={assignedOrders}
@@ -357,17 +376,21 @@ export function CartFleetDetailPanel({
                   <CapacityAnalyticsSection cartId={cartId} refreshKey={activityRefreshKey} />
 
                   {isSectional && baskets.length > 0 ? (
-                    <div className="space-y-3">
-                      <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500">Siatka sekcji</h3>
+                    <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+                      <h3 className="text-sm font-semibold text-slate-800">Siatka sekcji</h3>
                       {[...new Set(baskets.map((b) => b.row))]
                         .sort((a, b) => b - a)
                         .map((rowNum) => {
-                          const rowBaskets = baskets.filter((b) => b.row === rowNum).sort((a, b) => a.column - b.column);
+                          const rowBaskets = baskets
+                            .filter((b) => b.row === rowNum)
+                            .sort((a, b) => a.column - b.column);
                           return (
                             <div
                               key={rowNum}
                               className="grid w-full gap-2"
-                              style={{ gridTemplateColumns: `repeat(${rowBaskets.length}, minmax(0, 1fr))` }}
+                              style={{
+                                gridTemplateColumns: `repeat(${rowBaskets.length}, minmax(0, 1fr))`,
+                              }}
                             >
                               {rowBaskets.map(renderBasketCell)}
                             </div>
@@ -377,12 +400,15 @@ export function CartFleetDetailPanel({
                   ) : null}
 
                   {cartId ? (
-                    <ActivityLogPanel
-                      objectType="cart"
-                      objectId={cartId}
-                      refreshKey={activityRefreshKey}
-                      className="mt-2 border-t-0 pt-2"
-                    />
+                    <div className="rounded-xl border border-slate-200 bg-white p-4">
+                      <ActivityLogTable
+                        objectType="cart"
+                        objectId={cartId}
+                        refreshKey={activityRefreshKey}
+                        defaultCollapsed={false}
+                        title="Historia czynności"
+                      />
+                    </div>
                   ) : null}
                 </div>
               )
