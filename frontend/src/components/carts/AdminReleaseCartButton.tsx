@@ -75,7 +75,7 @@ export function AdminReleaseCartButton({
     if (!ack || busy) return;
     setBusy(true);
     try {
-      await api.post(`/carts/${cartId}/admin-release/`, { acknowledge: true });
+      await api.post(`carts/${cartId}/admin-release`, { acknowledge: true });
       toast.success("Wózek został zwolniony.");
       setOpen(false);
       setAck(false);

@@ -291,7 +291,6 @@ def clear_cart(cart_id: int, db: Session = Depends(get_db)):
     return service.clear_cart(cart_id)
 
 
-@router.post("/{cart_id}/admin-release/")
 def admin_release_cart_endpoint(
     cart_id: int,
     body: AdminReleaseCartBody,
@@ -327,6 +326,24 @@ def admin_release_cart_endpoint(
     except Exception:
         db.rollback()
         raise
+
+
+# Slash-safe: proxy / axios may strip or keep trailing slash → both must resolve (no 307→404).
+router.add_api_route(
+    "/{cart_id}/admin-release",
+    admin_release_cart_endpoint,
+    methods=["POST"],
+    response_model=None,
+    name="admin_release_cart",
+)
+router.add_api_route(
+    "/{cart_id}/admin-release/",
+    admin_release_cart_endpoint,
+    methods=["POST"],
+    response_model=None,
+    name="admin_release_cart_slash",
+    include_in_schema=False,
+)
 
 
 # ==========================================================
