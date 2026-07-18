@@ -72,34 +72,31 @@ class TestPresentation(unittest.TestCase):
 
 
 class TestOrdersDescription(unittest.TestCase):
-    def test_assign_with_cart_and_numbers(self):
+    def test_assign_activity_log_count_only(self):
         orders = [
             SimpleNamespace(id=1198, number="1198"),
             SimpleNamespace(id=1202, number="1202"),
             SimpleNamespace(id=1203, number="1203"),
+            SimpleNamespace(id=1205, number="1205"),
+            SimpleNamespace(id=1214, number="1214"),
         ]
-        # orders_event_meta uses order.number or id — ensure attrs
-        for o in orders:
-            if not hasattr(o, "number"):
-                o.number = str(o.id)
         text = format_orders_operation_description(
             "Przypisano",
             orders,
+            for_activity_log=True,
             cart_label="CART-0001",
         )
-        self.assertIn("Przypisano zamówienia", text)
-        self.assertIn("#1198", text)
-        self.assertIn("do wózka CART-0001.", text)
+        self.assertEqual(text, "Przypisano 5 zamówień do wózka.")
 
-    def test_detach_relation_od(self):
+    def test_detach_activity_log_short(self):
         orders = [SimpleNamespace(id=1203, number="1203")]
         text = format_orders_operation_description(
             "Odłączono",
             orders,
-            cart_label="CART-0001",
+            for_activity_log=True,
             cart_relation="od",
         )
-        self.assertEqual(text, "Odłączono zamówienie #1203 od wózka CART-0001.")
+        self.assertEqual(text, "Odłączono zamówienie.")
 
 
 if __name__ == "__main__":

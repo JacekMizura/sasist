@@ -17,7 +17,7 @@ Cel: produkcyjny, spójny flow (CartLifecycle + Capacity + Event/Activity Log + 
 - **Wózki UX:** odłączenie 1 zamówienia (lifecycle), tooltips numer/pozycje, Activity Log expand + inline numery
 - **Capacity Analytics:** osobny raport silnika (agregaty + lazy szczegóły); Activity Log bez skipów; admin „Analiza Capacity”
 - **SSOT Panel↔WMS:** product-lines / licznik / pick / shortage / finalize / bundle → `list_orders_on_cart` gdy `cart_id` (`resolve_wms_picking_order_ids`); hub bez wózka = kohorta
-- **Activity Log Framework:** jeden układ DATA→OPERATOR→AKCJA; backend ready fields; dual-write WMS order→`activity_events`; Capacity Analytics osobno
+- **Activity Log Framework:** układ When/Who/What (+ #orders); Capacity Analytics = krótkie podsumowanie ostatniego doboru (bez list odrzuceń)
 
 ## Open (stabilizacja)
 

@@ -1439,7 +1439,7 @@ def admin_release_cart(
                 description=format_orders_operation_description(
                     "Odłączono",
                     orders_before,
-                    cart_label=cart_label,
+                    for_activity_log=True,
                     cart_relation="od",
                 ),
                 metadata={
@@ -1637,7 +1637,7 @@ def detach_order_from_cart(
         description=format_orders_operation_description(
             "Odłączono",
             snapshot,
-            cart_label=cart_label,
+            for_activity_log=True,
             cart_relation="od",
         ),
         metadata=meta,

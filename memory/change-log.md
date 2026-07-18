@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-07-18 — Activity Log UX simplify + Capacity summary only
+
+- ActivityLogPanel: only When / Who / What (+ optional #orders line); no expand/details.
+- Assign/detach activity text: short sentences; numbers in metadata line.
+- Capacity Analytics UI: last-run summary only (analyzed/assigned/stop reason); removed reject lists, 24h stats, order Capacity history panel.
+- Report: `memory/activity-log-ux-simplify-report.md`.
+
 ## 2026-07-18 — Activity Log Framework (unified panel standard)
 
 - Audit: `memory/activity-log-audit.md`.

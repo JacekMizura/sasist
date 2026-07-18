@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
 import { fetchActivityLog } from "../../api/activityLogApi";
@@ -14,134 +13,38 @@ type ActivityLogPanelProps = {
   className?: string;
 };
 
-const ORDER_NUMBERS_PREVIEW = 15;
-
-function OrderNumbersBlock({ numbers }: { numbers: string[] }) {
-  const [showAll, setShowAll] = useState(false);
-  if (!numbers.length) return null;
-  const truncated = !showAll && numbers.length > ORDER_NUMBERS_PREVIEW;
-  const visible = truncated ? numbers.slice(0, ORDER_NUMBERS_PREVIEW) : numbers;
-  return (
-    <div className="text-[13px] text-slate-700">
-      <span className="font-semibold text-slate-600">Zamówienia: </span>
-      <span className="tabular-nums">{visible.join(", ")}</span>
-      {truncated ? (
-        <>
-          <span className="text-slate-400"> …</span>
-          <button
-            type="button"
-            className="ml-1.5 font-semibold text-sky-700 hover:underline"
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowAll(true);
-            }}
-          >
-            Pokaż wszystkie
-          </button>
-        </>
-      ) : null}
-      {showAll && numbers.length > ORDER_NUMBERS_PREVIEW ? (
-        <button
-          type="button"
-          className="ml-1.5 font-semibold text-slate-500 hover:underline"
-          onClick={(e) => {
-            e.stopPropagation();
-            setShowAll(false);
-          }}
-        >
-          Zwiń
-        </button>
-      ) : null}
-    </div>
-  );
-}
-
-function ActivityEntry({
-  item,
-  hideObjectType,
-}: {
-  item: ActivityEventItem;
-  hideObjectType: string;
-}) {
-  const [open, setOpen] = useState(false);
-  const navigate = useNavigate();
-
+/**
+ * Shared Activity Log — answers only: When? Who? What?
+ *
+ *   DATA I GODZINA
+ *   Operator
+ *
+ *   Akcja.
+ *
+ *   #zamówienia (opcjonalnie)
+ *
+ * Backend stores ready Polish text; FE only renders.
+ */
+function ActivityEntry({ item }: { item: ActivityEventItem }) {
   const when = item.occurred_at_display || "—";
   const operator = item.operator_display || item.actor_name || "System";
   const action = (item.action || item.description || "").trim() || "Zdarzenie.";
-  const details = Array.isArray(item.details) ? item.details : [];
   const orderNums = Array.isArray(item.order_numbers) ? item.order_numbers : [];
-  const related = (item.links || []).filter((l) => l.object_type !== hideObjectType);
 
   return (
-    <li className="border-b border-slate-100 last:border-b-0">
-      <button
-        type="button"
-        className="w-full py-3 text-left transition hover:bg-slate-50/70"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-      >
-        <div className="flex items-start gap-2">
-          <div className="min-w-0 flex-1 space-y-0.5">
-            <p className="text-sm font-semibold tabular-nums text-slate-900">{when}</p>
-            <p className="text-sm font-medium text-slate-700">{operator}</p>
-            <p className="text-sm leading-snug text-slate-800">{action}</p>
-          </div>
-          {open ? (
-            <ChevronDown className="mt-1 h-4 w-4 shrink-0 text-slate-400" aria-hidden />
-          ) : (
-            <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-slate-400" aria-hidden />
-          )}
-        </div>
-      </button>
-
-      {open ? (
-        <div className="mb-3 space-y-3 rounded-lg border border-slate-100 bg-white px-3 py-2.5">
-          {details.length ? (
-            <dl className="space-y-1.5 text-[13px]">
-              {details.map((row) => (
-                <div key={`${row.label}-${row.value.slice(0, 24)}`} className="flex flex-wrap gap-x-2">
-                  <dt className="font-semibold text-slate-600">{row.label}</dt>
-                  <dd className="text-slate-800">{row.value}</dd>
-                </div>
-              ))}
-            </dl>
-          ) : null}
-          {orderNums.length > ORDER_NUMBERS_PREVIEW ? (
-            <OrderNumbersBlock numbers={orderNums} />
-          ) : null}
-          {related.length ? (
-            <div className="flex flex-wrap gap-2 border-t border-slate-50 pt-2">
-              {related.map((lnk) => {
-                const label = lnk.object_label || `${lnk.object_type} #${lnk.object_id}`;
-                return (
-                  <button
-                    key={`${lnk.object_type}-${lnk.object_id}`}
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (lnk.href) navigate(lnk.href);
-                    }}
-                    disabled={!lnk.href}
-                    className="rounded-md border border-slate-200 px-2.5 py-1 text-[12px] font-semibold text-slate-700 hover:border-slate-400 hover:bg-slate-50 disabled:cursor-default disabled:opacity-60"
-                  >
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
-          ) : null}
-        </div>
+    <li className="border-b border-slate-200 py-4 last:border-b-0">
+      <p className="text-sm font-semibold tabular-nums text-slate-900">{when}</p>
+      <p className="mt-0.5 text-sm text-slate-700">{operator}</p>
+      <p className="mt-3 text-sm leading-snug text-slate-900">{action}</p>
+      {orderNums.length > 0 ? (
+        <p className="mt-2 text-sm tabular-nums leading-relaxed text-slate-600">
+          {orderNums.join(", ")}
+        </p>
       ) : null}
     </li>
   );
 }
 
-/**
- * Shared Activity Log for all Sasist panel objects.
- * Layout (identical everywhere): DATA → OPERATOR → AKCJA + expandable details.
- * Renders only ready fields from the API — no code translation on the client.
- */
 export default function ActivityLogPanel({
   objectType,
   objectId,
@@ -209,7 +112,7 @@ export default function ActivityLogPanel({
       </button>
 
       {!collapsed ? (
-        <div className="mt-3">
+        <div className="mt-2">
           {loading ? (
             <p className="text-sm text-slate-400">Ładowanie historii…</p>
           ) : error ? (
@@ -217,13 +120,9 @@ export default function ActivityLogPanel({
           ) : items.length === 0 ? (
             <p className="text-sm text-slate-400">Brak zapisanych czynności dla tego obiektu.</p>
           ) : (
-            <ol className="divide-y divide-slate-100">
+            <ol>
               {items.map((item) => (
-                <ActivityEntry
-                  key={`${item.source_module || "act"}-${item.id}`}
-                  item={item}
-                  hideObjectType={String(objectType)}
-                />
+                <ActivityEntry key={`${item.source_module || "act"}-${item.id}`} item={item} />
               ))}
             </ol>
           )}

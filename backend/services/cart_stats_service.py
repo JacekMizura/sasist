@@ -114,16 +114,27 @@ def format_orders_operation_description(
     preview_limit: int = 15,
 ) -> str:
     """
-    Full Polish sentence for Activity Log / Event Log.
+    Polish action sentence stored on the event.
 
-    Example:
-      Przypisano zamówienia #1198, #1202, #1203 do wózka CART-0001.
-      Odłączono zamówienie #1203 od wózka.
-    Large sets: first ``preview_limit`` numbers + „…”; full list lives in metadata.
+    Activity Log (for_activity_log=True) — short, numbers go in metadata/UI line:
+      Przypisano 5 zamówień do wózka.
+      Odłączono zamówienie.
+
+    Other contexts may still embed a short # preview.
     """
     meta = orders_event_meta(orders, for_activity_log=False)
     n = int(meta["orders_count"])
     nums = [f"#{x}" for x in meta["order_numbers"]]
+
+    if for_activity_log:
+        if n <= 0:
+            return f"{verb} 0 zamówień."
+        if cart_relation == "od":
+            return f"{verb} zamówienie." if n == 1 else f"{verb} {n} zamówień."
+        if n == 1:
+            return f"{verb} 1 zamówienie do wózka."
+        return f"{verb} {n} zamówień do wózka."
+
     if n <= 0:
         base = f"{verb} 0 zamówień"
     elif n == 1:
@@ -138,11 +149,8 @@ def format_orders_operation_description(
     rel = (cart_relation or "do").strip() or "do"
     if label:
         return f"{base} {rel} wózka {label}."
-    if label == "" and cart_label is not None:
-        # Explicit empty label still wants relation (e.g. „od wózka.”)
+    if cart_label is not None:
         return f"{base} {rel} wózka."
-    if for_activity_log and n > preview_limit:
-        return f"{verb} {n} zamówień."
     return f"{base}."
 
 
