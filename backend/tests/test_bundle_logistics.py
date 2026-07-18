@@ -251,7 +251,7 @@ class TestPickingBundleScan:
 
         with patch("backend.services.bundles.bundle_scan_service.resolve_bundle_barcode", return_value=match):
             with patch(
-                "backend.services.wms_picking_product_list_service._query_order_ids_for_status",
+                "backend.services.wms_picking_product_list_service.resolve_wms_picking_order_ids",
                 return_value=[100],
             ):
                 with patch(
@@ -289,7 +289,7 @@ class TestPickingBundleScan:
         db = MagicMock()
         with patch("backend.services.bundles.bundle_scan_service.resolve_bundle_barcode", return_value=match):
             with patch(
-                "backend.services.wms_picking_product_list_service._query_order_ids_for_status",
+                "backend.services.wms_picking_product_list_service.resolve_wms_picking_order_ids",
                 return_value=[],
             ):
                 r = handle_picking_bundle_scan(
@@ -618,7 +618,7 @@ class TestTraceabilityIntegration:
         db.query.side_effect = _query
         with patch("backend.services.bundles.bundle_scan_service.resolve_bundle_barcode", return_value=match):
             with patch(
-                "backend.services.wms_picking_product_list_service._query_order_ids_for_status",
+                "backend.services.wms_picking_product_list_service.resolve_wms_picking_order_ids",
                 return_value=[100],
             ):
                 with patch(

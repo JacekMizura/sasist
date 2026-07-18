@@ -198,7 +198,14 @@ class WmsPickingSessionStats(BaseModel):
 
 class WmsPickingProductLinesResponse(BaseModel):
     products: list[WmsPickingProductLine]
-    cohort_order_count: int = Field(0, ge=0, description="Liczba zamówień w kohortcie (ten sam status + filtr typu)")
+    cohort_order_count: int = Field(
+        0,
+        ge=0,
+        description=(
+            "Liczba zamówień w zakresie listy: z cart_id = list_orders_on_cart (SSOT); "
+            "bez wózka = kohorta statusu hub."
+        ),
+    )
     cohort_missing_lines: list[WmsPickingCohortMissingLineRow] = Field(
         default_factory=list,
         description="Linie ze zgłoszonym brakiem (podsumowanie przed finalizacją wózka)",

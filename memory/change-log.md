@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-07-18 — SSOT Panel ↔ WMS picking (capacity truncate regression)
+
+- Root cause: WMS product-lines/count used status cohort while Panel used `list_orders_on_cart`.
+- Added `resolve_wms_picking_order_ids` — with `cart_id` always SSOT; hub without cart stays cohort.
+- Wired: product lines, detail, quick pick, shortage, finalize, bundle scan.
+- Tests: `test_wms_picking_cart_ssot.py`; audit+report in `memory/ssot-panel-wms-orders-*.md`.
+
 ## 2026-07-18 — Capacity Analytics (diag layer)
 
 - Activity Log: tylko wynik operacji (bez basket_assigned / skipów); meta numerów capped.

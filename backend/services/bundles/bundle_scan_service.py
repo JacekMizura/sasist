@@ -150,14 +150,16 @@ def handle_picking_bundle_scan(
 
     missing_all: list[BundleComponentPickStatus] = []
     target_order_id: Optional[int] = None
-    from ..wms_picking_product_list_service import _query_order_ids_for_status
+    from ..wms_picking_product_list_service import resolve_wms_picking_order_ids
 
-    cohort = order_ids or _query_order_ids_for_status(
+    ot = order_type if order_type in ("single", "multi", "all") else "all"
+    cohort = order_ids or resolve_wms_picking_order_ids(
         db,
         tenant_id=int(tenant_id),
         warehouse_id=int(warehouse_id),
         source_status_id=int(source_status_id),
-        order_type=order_type if order_type in ("single", "multi", "all") else "all",
+        order_type=ot,
+        cart_id=int(cart_id),
     )
     for oid in cohort:
         for ctx in bundle_line_resolver.resolve_for_order(db, int(oid)):
