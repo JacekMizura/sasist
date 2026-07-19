@@ -665,3 +665,79 @@ def test_admin_release_requires_acknowledge(db):
             acknowledge=False,
         )
     assert "konsekwencje" in str(ei.value).lower()
+
+
+def test_finish_packing_partial_multi_frees_basket_slot(db):
+    """Po spakowaniu jednego zamówienia MULTI: zwolnij CartBasket; cart nie AVAILABLE."""
+    cart = Cart(
+        tenant_id=1,
+        warehouse_id=1,
+        name="MULTI-1",
+        code="CART-MULTI-1",
+        type=CartType.MULTI,
+        status=CartStatus.AVAILABLE.value,
+        length=100,
+        width=60,
+        height=80,
+        total_volume=480.0,
+        used_volume=0.0,
+        capacity_strategy="LIMIT_VOLUME",
+    )
+    db.add(cart)
+    db.flush()
+    b1 = CartBasket(
+        warehouse_id=1,
+        cart_id=int(cart.id),
+        name="B1",
+        barcode="S-1-1",
+        scan_code="S-1-1",
+        row=1,
+        column=1,
+        inner_length=30,
+        inner_width=20,
+        inner_height=15,
+        usable_volume=9.0,
+        used_volume=1.0,
+    )
+    b2 = CartBasket(
+        warehouse_id=1,
+        cart_id=int(cart.id),
+        name="B2",
+        barcode="S-1-2",
+        scan_code="S-1-2",
+        row=1,
+        column=2,
+        inner_length=30,
+        inner_width=20,
+        inner_height=15,
+        usable_volume=9.0,
+        used_volume=1.0,
+    )
+    db.add_all([b1, b2])
+    o1 = _order(db, number="M-1")
+    o2 = _order(db, number="M-2")
+    db.commit()
+
+    claim_cart(db, cart=cart, operator_user_id=7)
+    start_picking(db, cart=cart, orders=[o1, o2], operator_user_id=7)
+    o1.basket_id = int(b1.id)
+    o2.basket_id = int(b2.id)
+    b1.order_id = int(o1.id)
+    b2.order_id = int(o2.id)
+    db.add_all([o1, o2, b1, b2])
+    db.commit()
+
+    finish_picking(db, cart=cart, orders=[o1, o2], operator_user_id=7)
+    start_packing(db, cart=cart, operator_user_id=99)
+    released = finish_packing(db, cart=cart, packed_order_id=int(o1.id))
+    db.commit()
+    db.refresh(b1)
+    db.refresh(b2)
+    db.refresh(o2)
+    db.refresh(cart)
+
+    assert released is False
+    assert b1.order_id is None
+    assert b2.order_id == int(o2.id)
+    assert o2.cart_id == cart.id
+    assert get_cart_status(cart) == CartStatus.PACKING

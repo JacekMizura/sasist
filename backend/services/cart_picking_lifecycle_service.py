@@ -1362,6 +1362,12 @@ def finish_packing(
         if int(packed.cart_id) == cid:
             clear_order_picking_session_context(packed)
             db.add(packed)
+    # MULTI: zwolnij slot koszyka dla spakowanego zamówienia (nie czekaj na full releaseCart).
+    for basket in list(getattr(cart, "baskets", None) or []):
+        if getattr(basket, "order_id", None) is not None and int(basket.order_id) == int(packed_order_id):
+            basket.order_id = None
+            basket.used_volume = 0.0
+            db.add(basket)
 
     remaining = len(_orders_on_cart(db, cid))
     if remaining > 0:

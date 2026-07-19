@@ -1,3 +1,13 @@
+## 2026-07-19 — FINAL PRE-PUSH AUDIT (afc6843a + packing) — fixes
+
+- BUG: cartless finalize used relative import `.picking_handoff_service` → ModuleNotFoundError (CARTLESS handoff never wrote). Fixed → `..picking_handoff_service`.
+- BUG: `finish_packing` partial MULTI left `CartBasket.order_id` set. Fixed: clear basket slot like detach.
+- GAP (open): `PATCH /orders/{id}/select-carton` tenant-only, no packing handoff/cart scope.
+- GAP (open): recovery/consolidation → READY_TO_PACK can leave `picking_handoff_mode=NULL` (not cart/cartless finalize paths).
+- PERF WARN: soft reconcile on every `GET /packing/modes` loads packing-ready orders + completed null-cart sessions.
+- HEAD at audit: `136fed44` (memory+pycache only after afc6843a). 24863af + afc6843a ancestors OK; first-scan helpers intact.
+- Tests matrix: 80 passed (handoff/packing/lifecycle/cartless/finalize); FE packingHelpers 4 passed. Postgres schema: NOT TESTED.
+
 ## 2026-07-19 — Pick→pack handoff provenance + scoped packing
 
 - SSOT: `orders.picking_handoff_mode` = CART|BASKET|CARTLESS (immutable execution snapshot).
