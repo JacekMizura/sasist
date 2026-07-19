@@ -1,3 +1,11 @@
+## 2026-07-19 — AUDIT: picking dashboard 0 vs panel 1 (#1233) + cancel 409
+
+- Dashboard 0 = PRELIMINARY eligibility (cart_id NULL + picking_finished_at NULL + open fulfillment) — **correct**, nie bug licznika.
+- Cancel cart_id=2 → 409 READY_FOR_PACKING/PACKING = **correct**; UI nadal oferuje „Anuluj zbieranie” bez gate na cart status.
+- Reopen Picking: **nie istnieje** (tylko tekst błędu); status panel → picking source bez guarda (`apply_order_panel_ui_status` / bulk).
+- PROD row #1233: nie odczytano (brak DB); rekonstrukcja z 409 + predicates.
+- NEEDS: status guard + kanoniczny Reopen + UI cancel gate. NIE counter fix.
+
 ## 2026-07-19 — Packing finish preflight audit (AVAILABLE)
 
 - AVAILABLE + aktywne `order.cart_id` ≠ legalny flow (lifecycle breach; `finish_packing` no-op bez detach).
