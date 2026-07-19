@@ -478,7 +478,10 @@ class WmsPickingReportShortageBody(BaseModel):
     order_item_id: Optional[int] = Field(
         default=None,
         ge=1,
-        description="Konkretna linia zamówienia (zamiennik / recovery) — bez zgadywania po product_id",
+        description=(
+            "Konkretna linia OrderItem. Wymagane dla wózków MULTI/koszyki — brak scoped "
+            "do order+basket, bez FIFO po całym SKU. Opcjonalne dla BULK/cartless (budget kohorty)."
+        ),
     )
     problem_kind: Optional[Literal["product_shortage", "qty_mismatch"]] = Field(
         default="product_shortage",

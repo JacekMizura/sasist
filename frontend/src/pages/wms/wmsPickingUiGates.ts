@@ -56,6 +56,8 @@ export function wmsPickingRemainingQty(row: {
 export function applyWmsPickingShortageToDetail(
   detail: WmsPickingProductDetailApi,
   qtyReported: number,
+  /** MULTI: scope optimistic miss to one order_item (no FIFO walk). */
+  orderItemId?: number | null,
 ): WmsPickingProductDetailApi {
   const qty = Math.max(0, Number(qtyReported) || 0);
   if (qty <= 1e-9) return detail;
@@ -69,20 +71,33 @@ export function applyWmsPickingShortageToDetail(
   const pickedEff = wmsPickingEffectivePickedQuantity(detail);
   const nextRem = Math.max(0, total - pickedEff - nextMiss);
 
+  const targetOi =
+    orderItemId != null && Number(orderItemId) > 0 ? Math.floor(Number(orderItemId)) : null;
+
   let left = qty;
   const orders = (detail.orders ?? []).map((o) => {
     if (left <= 1e-9) return o;
+    if (targetOi != null && Number(o.order_item_id) !== targetOi) return o;
     const oTotal = Math.max(0, Number(o.quantity) || 0);
     const oMiss = Math.max(0, Number(o.missing_quantity) || 0);
+    const oPicked = Math.max(0, Number(o.picked_quantity) || 0);
     const oRem = wmsPickingRemainingQty({
       total_quantity: oTotal,
-      picked_quantity: o.picked_quantity ?? 0,
+      picked_quantity: oPicked,
       missing_quantity: oMiss,
+      quantity_to_pick: o.quantity_to_pick,
     });
     const add = Math.min(left, oRem);
     if (add <= 1e-9) return o;
     left -= add;
-    return { ...o, missing_quantity: oMiss + add };
+    const nextLineMiss = oMiss + add;
+    const nextLineRem = Math.max(0, oTotal - oPicked - nextLineMiss);
+    return {
+      ...o,
+      missing_quantity: nextLineMiss,
+      quantity_to_pick: nextLineRem,
+      shortage_declarable_qty: Math.max(0, (o.shortage_declarable_qty ?? oRem) - add),
+    };
   });
 
   const declarable =

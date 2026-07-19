@@ -2782,6 +2782,21 @@ def report_wms_picking_product_shortage(
             payload=payload_log,
         )
 
+    # MULTI / baskets: shortage is always per order_item (+ basket allocation).
+    # Product-level FIFO budget must not close other baskets' unresolved qty.
+    try:
+        from .wms_basket_put.resolve import cart_is_baskets_mode
+
+        baskets_mode = cart_is_baskets_mode(cart_row)
+    except Exception:
+        baskets_mode = False
+    if baskets_mode and target_item_id is None:
+        _report_shortage_reject(
+            "Dla wózka z koszykami podaj order_item_id — brak rozliczany per zamówienie/koszyk.",
+            payload=payload_log,
+            cart_type=getattr(getattr(cart_row, "type", None), "value", getattr(cart_row, "type", None)),
+        )
+
     forced_scope_ids: list[int] | None = None
     if target_item_id is not None:
         oi_target = (
@@ -3018,7 +3033,11 @@ def report_wms_picking_product_shortage(
         if int(o.id) not in aff_set:
             continue
         for _oi, q in _iter_report_lines(o):
-            max_declarable += max(0.0, float(q["declarable_qty"]))
+            if baskets_mode and target_item_id is not None:
+                # MULTI: only unresolved remaining — never auto-convert picks to shortage.
+                max_declarable += max(0.0, float(q["remaining_qty"]))
+            else:
+                max_declarable += max(0.0, float(q["declarable_qty"]))
     max_declarable = round(max_declarable, 6)
     if max_declarable <= 1e-9:
         logger.info(
@@ -3111,7 +3130,8 @@ def report_wms_picking_product_shortage(
             _apply_shortage_take(o, oi, take=take, rem_before=rem_only)
 
     # Pass 2: konwersja draft pick → shortage (np. po 1/1, gdy remaining=0).
-    if remaining_budget > 1e-9:
+    # MULTI baskets: skip — shortage is only for unresolved remaining on a chosen line.
+    if remaining_budget > 1e-9 and not (baskets_mode and target_item_id is not None):
         for o in orders:
             if int(o.id) not in aff_set or remaining_budget <= 1e-9:
                 continue

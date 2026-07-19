@@ -6,10 +6,11 @@
 
 ## Latest (2026-07-19)
 
-- **MULTI DEFAULT QUANTITY MODE:** EAN/CLICK = select product; basket scan → quantity modal; confirm → Pick +qty (live revalidate). No auto Pick on basket. Foreign series cleared on product context.
+- **MULTI quantity + per-allocation shortage:** SELECT_PRODUCT → SELECT_BASKET → qty modal → Pick; shortage scoped to `order_item_id`/basket; unresolved = required − picked − shortage. Product-level FIFO shortage blocked on baskets carts.
 - **Packing BASKET ghost count:** active queue requires live basket custody (`a8c6ee39`).
 
 ## Notes
 
-- Legacy unit-scan pending/series paths remain for non-context confirms; default detail path is quantity mode.
+- Detail `quantityMode` suppresses legacy pending/series EAN+1. List MULTI EAN = navigate only (no pending).
+- BULK/cartless still use cohort shortage budget without `order_item_id`.
 - `picking_handoff_mode` = provenance; packing queue = live custody.

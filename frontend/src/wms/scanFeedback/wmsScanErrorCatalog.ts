@@ -47,7 +47,7 @@ const CATALOG: Record<
     severity: "warning",
     title: "OCZEKIWANY KOSZYK",
     message:
-      "Oczekiwany jest teraz skan koszyka. Zeskanowałeś produkt — najpierw odłóż sztukę do koszyka.",
+      "Teraz zeskanuj koszyk, do którego chcesz odłożyć produkt.",
   },
   PENDING_PUT_EXISTS: {
     severity: "warning",

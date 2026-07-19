@@ -1,3 +1,10 @@
+## 2026-07-19 — MULTI: quantity put + shortage per allocation (no FIFO close)
+
+- STATE MACHINE: SELECT_PRODUCT → SELECT_BASKET → ENTER_QUANTITY → CONFIRM → next basket / finish.
+- SHORTAGE SSOT: `report_wms_picking_product_shortage` requires `order_item_id` on baskets carts; MULTI caps declarable to remaining (no pick→shortage convert).
+- FE: per-basket panel + MultiAllocationShortageModal; quantityMode suppresses EAN+1/series; post-partial „oznacz pozostałe jako brak”.
+- Tests: `test_wms_multi_basket_allocation_scenario.py` (20-qty CASE 6); FE allocation + scan route. No push.
+
 ## 2026-07-19 — DEFAULT QUANTITY MODE + fix BASKET_PRODUCT_MISMATCH
 
 - ROOT MISMATCH: leftover `active_series` for foreign SKU blocked product-context basket resolve (`BASKET_PRODUCT_MISMATCH` on S-1-2 while UI showed eligible).

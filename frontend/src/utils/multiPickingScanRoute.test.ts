@@ -17,7 +17,7 @@ describe("looksLikeCartBasketScan", () => {
 describe("resolveMultiPickingDetailScan — strict states", () => {
   const ean = "5905450181208";
 
-  it("STATE A: product → pending pick; basket → select_destination (not EXPECTED_PRODUCT_SCAN)", () => {
+  it("STATE A quantity mode: product EAN → EXPECTED_BASKET_SCAN; basket → select_destination", () => {
     expect(
       resolveMultiPickingDetailScan(ean, {
         requiresBasketPut: true,
@@ -25,19 +25,34 @@ describe("resolveMultiPickingDetailScan — strict states", () => {
         hasActiveSeries: false,
         productEan: ean,
         productRemaining: 9,
+        quantityMode: true,
       }),
-    ).toEqual({ kind: "product_ean_pick" });
+    ).toEqual({ kind: "reject", code: "EXPECTED_BASKET_SCAN", consumed: true });
     expect(
       resolveMultiPickingDetailScan("brck1-B02", {
         requiresBasketPut: true,
         hasPending: false,
         hasActiveSeries: false,
         productEan: ean,
+        quantityMode: true,
       }),
     ).toEqual({ kind: "confirm_basket", reason: "select_destination" });
   });
 
-  it("valid product EAN never yields UNKNOWN_SCAN_CODE", () => {
+  it("quantity mode suppresses leftover series EAN+1", () => {
+    expect(
+      resolveMultiPickingDetailScan(ean, {
+        requiresBasketPut: true,
+        hasPending: false,
+        hasActiveSeries: true,
+        productEan: ean,
+        productRemaining: 8,
+        quantityMode: true,
+      }),
+    ).toEqual({ kind: "reject", code: "EXPECTED_BASKET_SCAN", consumed: true });
+  });
+
+  it("legacy STATE A without quantityMode still allows product_ean_pick", () => {
     const d = resolveMultiPickingDetailScan(ean, {
       requiresBasketPut: true,
       hasPending: false,
@@ -45,7 +60,6 @@ describe("resolveMultiPickingDetailScan — strict states", () => {
       productEan: ean,
       productRemaining: 8,
     });
-    expect(d.kind).not.toBe("reject");
     expect(d).toEqual({ kind: "product_ean_pick" });
   });
 

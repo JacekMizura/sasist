@@ -23,6 +23,8 @@ import {
   BasketPutQuantityModal,
   type BasketPutQuantityDraft,
 } from "../../components/wms/picking/BasketPutQuantityModal";
+import { MultiBasketAllocationPanel } from "./picking-detail/MultiBasketAllocationPanel";
+import { MultiAllocationShortageModal } from "./picking-detail/MultiAllocationShortageModal";
 import type { BundleScanOut, ConsolidationRackBundleRowOut } from "../../api/bundlesLogisticsApi";
 import { getConsolidationRackBundleView } from "../../api/bundlesLogisticsApi";
 import { tryPickingBundleScan } from "../../services/bundleScannerIntegration";
@@ -183,6 +185,16 @@ export default function WmsPickingProductDetailPage() {
   const [bundlePickScan, setBundlePickScan] = useState<BundleScanOut | null>(null);
   const [consolidationRackRows, setConsolidationRackRows] = useState<ConsolidationRackBundleRowOut[]>([]);
   const [quantityDraft, setQuantityDraft] = useState<BasketPutQuantityDraft | null>(null);
+  /** MULTI path A/B: shortage scoped to one order_item. */
+  const [multiShortageOpen, setMultiShortageOpen] = useState(false);
+  const [multiShortageOrderItemId, setMultiShortageOrderItemId] = useState<number | null>(null);
+  const [multiShortageQty, setMultiShortageQty] = useState<number | null>(null);
+  /** After partial put: offer mark-remaining-shortage for that allocation. */
+  const [postPutFollowUp, setPostPutFollowUp] = useState<{
+    orderItemId: number;
+    basketLabel: string;
+    remaining: number;
+  } | null>(null);
 
   const detailLoadSeqRef = useRef(0);
   /** Strip one-shot list→detail markers from history (no second PRODUCT_SCAN). */
@@ -443,6 +455,7 @@ export default function WmsPickingProductDetailPage() {
         productEan: detail?.ean ?? null,
         productRemaining: remaining,
         pendingEligibleLabels: pendingLabels,
+        quantityMode: Boolean(detail?.requires_basket_put_confirm ?? requiresBasketPut),
       });
 
       // Seed-only while detail GET in flight: STATE B (await basket).
@@ -766,10 +779,29 @@ export default function WmsPickingProductDetailPage() {
         return;
       }
 
+      const draftSnap = quantityDraft;
       setQuantityDraft(null);
       setPendingSeed(null);
       setPickMsg(result.message ?? `Koszyk potwierdzony`);
+      const putQty = Number(result.quantity_put ?? 0);
+      const oiid = Number(result.order_item_id || 0);
+      const basketLabel = String(result.active_series?.basket_label || result.expected_basket_label || "");
       await load();
+      if (detail?.requires_basket_put_confirm && putQty > 1e-9 && oiid > 0) {
+        const afterRemGuess =
+          draftSnap && draftSnap.orderItemId === oiid
+            ? Math.max(0, draftSnap.lineRemaining - putQty)
+            : null;
+        if (afterRemGuess != null && afterRemGuess > 1e-9) {
+          setPostPutFollowUp({
+            orderItemId: oiid,
+            basketLabel: basketLabel || draftSnap?.basketLabel || "koszyk",
+            remaining: afterRemGuess,
+          });
+        } else {
+          setPostPutFollowUp(null);
+        }
+      }
       if (
         result.phase === "SERIES_DESTINATION_SWITCHED" ||
         result.phase === "SERIES_ACTIVATED" ||
@@ -891,14 +923,67 @@ export default function WmsPickingProductDetailPage() {
 
   const openShortageModal = useCallback(() => {
     if (!detail || reportShortageBlocked) return;
+    setShortageErr(null);
+    if (detail.requires_basket_put_confirm) {
+      setMultiShortageOrderItemId(null);
+      setMultiShortageQty(null);
+      window.requestAnimationFrame(() => setMultiShortageOpen(true));
+      return;
+    }
     const rem = wmsPickingRemainingQty(detail);
     const picked = wmsPickingEffectivePickedQuantity(detail);
-    // Po completed: domyślnie konwertuj zebrane szt. na brak
     setShortageQtyInput(rem > 1e-9 ? wmsPickingShortageDefaultQty(detail) : Math.max(picked, 1));
     setShortageProblemKind(picked > 1e-9 && rem <= 1e-9 ? "empty_location" : "product_shortage");
-    setShortageErr(null);
     window.requestAnimationFrame(() => setShortageConfirmOpen(true));
   }, [detail, reportShortageBlocked]);
+
+  const openLineShortage = useCallback(
+    (orderItemId: number, maxQty: number) => {
+      if (!detail || reportShortageBlocked) return;
+      setShortageErr(null);
+      setMultiShortageOrderItemId(orderItemId);
+      setMultiShortageQty(maxQty);
+      setPostPutFollowUp(null);
+      window.requestAnimationFrame(() => setMultiShortageOpen(true));
+    },
+    [detail, reportShortageBlocked],
+  );
+
+  const submitMultiAllocationShortage = async (orderItemId: number, shortageQty: number) => {
+    if (shortageBusy || !pickingSession || warehouseId == null || !detail) return;
+    if (orderItemId <= 0 || shortageQty <= 0) return;
+    const locId = selectedLocation?.location_id ?? activeLocationId ?? detail.locations[0]?.location_id ?? null;
+    setShortageBusy(true);
+    setShortageErr(null);
+    try {
+      await postWmsPickingReportShortage(pickingTenantId, warehouseId, pickingSession.orderUiStatusId, orderType, {
+        product_id: productId,
+        location_id: locId,
+        missing_qty: shortageQty,
+        ...(pickingSession.cartless || (pickingSession.pickingSessionId != null && pickingSession.pickingSessionId > 0)
+          ? { picking_session_id: pickingSession.pickingSessionId! }
+          : { cart_id: pickingSession.cartId! }),
+        order_ids: detail.orders.map((o) => o.order_id),
+        problem_kind: "product_shortage",
+        order_item_id: orderItemId,
+        ...(recoveryOrderId != null && recoveryOrderId > 0 ? { recovery_order_id: recoveryOrderId } : {}),
+      });
+      const optimistic = applyWmsPickingShortageToDetail(detail, shortageQty, orderItemId);
+      applyDetailToState(optimistic);
+      dispatchWmsShortagesUpdated();
+      playScanBeep();
+      setMultiShortageOpen(false);
+      setPostPutFollowUp(null);
+      showScannerToast(`Zgłoszono brak ${fmtQty(shortageQty)} szt.`);
+      await load();
+      refocusScannerInput();
+    } catch (e: unknown) {
+      const ax = e as { response?: { data?: unknown } };
+      setShortageErr(formatFastApiErrorDetail(ax.response?.data) || "Nie udało się zgłosić braku.");
+    } finally {
+      setShortageBusy(false);
+    }
+  };
 
   const submitUndoPick = async () => {
     if (undoBusy || !pickingSession?.cartId || warehouseId == null || !detail || !canUndoPick) return;
@@ -926,9 +1011,9 @@ export default function WmsPickingProductDetailPage() {
   };
 
   useEffect(() => {
-    if (shortageConfirmOpen || manualOpen) return;
+    if (shortageConfirmOpen || multiShortageOpen || manualOpen || quantityDraft) return;
     refocusScannerInput();
-  }, [shortageConfirmOpen, manualOpen, refocusScannerInput]);
+  }, [shortageConfirmOpen, multiShortageOpen, manualOpen, quantityDraft, refocusScannerInput]);
 
   const submitShortage = async () => {
     if (shortageBusy) return;
@@ -1135,10 +1220,10 @@ export default function WmsPickingProductDetailPage() {
               ) : detail.requires_basket_put_confirm && detail.orders?.some((o) => (o.quantity_to_pick ?? 0) > 1e-9 && o.basket_slot) ? (
                 <div className="w-full max-w-md rounded-2xl border-2 border-indigo-300 bg-indigo-50 px-5 py-4 text-left">
                   <p className="text-[10px] font-black uppercase tracking-widest text-indigo-700">
-                    Wybierz koszyk
+                    Produkt zeskanowany — wybierz koszyk
                   </p>
                   <p className="mt-1 text-sm font-semibold text-indigo-950">
-                    Zeskanuj koszyk, do którego chcesz odkładać ten produkt — potem podasz ilość.
+                    Zeskanuj dowolny koszyk wymagający tego SKU, potem podaj ilość do odłożenia.
                   </p>
                   <ul className="mt-3 space-y-1.5">
                     {detail.orders
@@ -1236,6 +1321,10 @@ export default function WmsPickingProductDetailPage() {
                       </div>
                     </div>
                   )
+                ) : detail.requires_basket_put_confirm ? (
+                  <div className="text-[10px] font-black text-indigo-500 uppercase tracking-widest bg-indigo-50 border border-indigo-100 px-4 py-2 rounded-xl">
+                    Zeskanuj koszyk, do którego odkładasz produkt
+                  </div>
                 ) : (
                   <div className="text-[10px] font-black text-indigo-500 uppercase tracking-widest bg-indigo-50 border border-indigo-100 px-4 py-2 rounded-xl">
                     Zeskanuj kod EAN produktu, aby dodać kolejną sztukę
@@ -1259,32 +1348,76 @@ export default function WmsPickingProductDetailPage() {
               </ul>
             </div>
 
-            {/* KONTEKST BUNDLE + ZAMÓWIENIA */}
+            {/* KONTEKST BUNDLE + ZAMÓWIENIA / MULTI ALOKACJE */}
             <div className="md:col-span-2 border border-slate-100 rounded-2xl p-5 bg-slate-50/40">
-              <h4 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-3">Kontekst zestawów</h4>
-              {detail.order_bundle_trees && detail.order_bundle_trees.length > 0 ? (
-                <BundlePickingOrderTree trees={detail.order_bundle_trees} />
+              {detail.requires_basket_put_confirm ? (
+                <>
+                  <h4 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-3">
+                    Rozliczenie per koszyk
+                  </h4>
+                  {postPutFollowUp ? (
+                    <div className="mb-4 rounded-2xl border-2 border-amber-400 bg-amber-50 px-4 py-4">
+                      <p className="text-sm font-black text-amber-950">
+                        {postPutFollowUp.basketLabel}: pozostało {fmtQty(postPutFollowUp.remaining)} szt.
+                      </p>
+                      <p className="mt-1 text-xs font-semibold text-amber-900/80">
+                        Możesz dalej zbierać do tego koszyka albo oznaczyć pozostałe jako brak.
+                      </p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setPostPutFollowUp(null)}
+                          className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-slate-700"
+                        >
+                          Kontynuuj zbieranie
+                        </button>
+                        <button
+                          type="button"
+                          disabled={shortageBusy}
+                          onClick={() =>
+                            openLineShortage(postPutFollowUp.orderItemId, postPutFollowUp.remaining)
+                          }
+                          className="rounded-xl border border-amber-400 bg-amber-600 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-white disabled:opacity-40"
+                        >
+                          Oznacz pozostałe jako brak
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                  <MultiBasketAllocationPanel
+                    orders={detail.orders}
+                    onReportLineShortage={openLineShortage}
+                    shortageBusy={shortageBusy}
+                  />
+                </>
               ) : (
-                <ul className="space-y-2">
-                  {detail.orders.map((o, idx) => (
-                    <li key={idx} className="p-3 bg-white rounded-xl border border-slate-200 flex flex-wrap justify-between items-center gap-2 text-xs">
-                      <span className="font-bold text-slate-900">#{o.order_number}</span>
-                      {o.bundle_name ? (
-                        <span className="font-semibold text-indigo-700">
-                          {o.bundle_name}
-                          {o.is_bundle_component && o.bundle_component_index != null && o.bundle_component_count != null
-                            ? ` (${o.bundle_component_index}/${o.bundle_component_count})`
-                            : null}
-                        </span>
-                      ) : null}
-                      {o.basket_slot ? (
-                        <span className="font-black text-[#5a4fcf] bg-indigo-50 border border-indigo-100 px-2 py-1 rounded-lg">
-                          Koszyk: {o.basket_slot}
-                        </span>
-                      ) : null}
-                    </li>
-                  ))}
-                </ul>
+                <>
+                  <h4 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-3">Kontekst zestawów</h4>
+                  {detail.order_bundle_trees && detail.order_bundle_trees.length > 0 ? (
+                    <BundlePickingOrderTree trees={detail.order_bundle_trees} />
+                  ) : (
+                    <ul className="space-y-2">
+                      {detail.orders.map((o, idx) => (
+                        <li key={idx} className="p-3 bg-white rounded-xl border border-slate-200 flex flex-wrap justify-between items-center gap-2 text-xs">
+                          <span className="font-bold text-slate-900">#{o.order_number}</span>
+                          {o.bundle_name ? (
+                            <span className="font-semibold text-indigo-700">
+                              {o.bundle_name}
+                              {o.is_bundle_component && o.bundle_component_index != null && o.bundle_component_count != null
+                                ? ` (${o.bundle_component_index}/${o.bundle_component_count})`
+                                : null}
+                            </span>
+                          ) : null}
+                          {o.basket_slot ? (
+                            <span className="font-black text-[#5a4fcf] bg-indigo-50 border border-indigo-100 px-2 py-1 rounded-lg">
+                              Koszyk: {o.basket_slot}
+                            </span>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </>
               )}
               {(() => {
                 const bundleDisplay = bundlePickScan ? buildPickingBundleDisplay(bundlePickScan) : null;
@@ -1438,6 +1571,22 @@ export default function WmsPickingProductDetailPage() {
           }}
           onConfirm={(qty) => {
             void confirmBasketScan(quantityDraft.basketScan, false, "select_destination", qty);
+          }}
+        />
+      ) : null}
+
+      {multiShortageOpen && detail ? (
+        <MultiAllocationShortageModal
+          orders={detail.orders}
+          initialOrderItemId={multiShortageOrderItemId}
+          initialQty={multiShortageQty}
+          busy={shortageBusy}
+          error={shortageErr}
+          onClose={() => {
+            if (!shortageBusy) setMultiShortageOpen(false);
+          }}
+          onConfirm={(orderItemId, shortageQty) => {
+            void submitMultiAllocationShortage(orderItemId, shortageQty);
           }}
         />
       ) : null}

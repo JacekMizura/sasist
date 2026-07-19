@@ -13,6 +13,13 @@ export type MultiPickingScanContext = {
   /** Aggregate remaining for current product detail (overpick gate). */
   productRemaining?: number;
   pendingEligibleLabels?: string;
+  /**
+   * DEFAULT QUANTITY MODE (MULTI detail):
+   * SELECT_PRODUCT → SELECT_BASKET → ENTER_QUANTITY.
+   * Product EAN does not create pending / Pick; operator must scan a basket.
+   * Legacy active_series EAN+1 is suppressed while this is true.
+   */
+  quantityMode?: boolean;
 };
 
 export type MultiPickingScanDecision =
@@ -69,8 +76,8 @@ export function resolveMultiPickingDetailScan(
     return { kind: "reject", code: "UNKNOWN_SCAN_CODE", consumed: true };
   }
 
-  // --- STATE C: ACTIVE_SERIES ---
-  if (ctx.hasActiveSeries) {
+  // --- STATE C: ACTIVE_SERIES (legacy unit EAN+1) — skipped in quantity mode ---
+  if (ctx.hasActiveSeries && !ctx.quantityMode) {
     if (isProductEan) {
       if (typeof rem === "number" && rem <= 1e-9) {
         return { kind: "reject", code: "OVERPICK_BLOCKED", consumed: true };
@@ -86,12 +93,15 @@ export function resolveMultiPickingDetailScan(
     return { kind: "reject", code: "UNKNOWN_SCAN_CODE", consumed: true };
   }
 
-  // --- STATE A: PRODUCT SELECTED (detail context) — basket OR EAN ---
-  // Detail already knows product_id. Basket selects destination (Pick=0).
-  // EAN creates pending qty=1 (physical confirmation) without requiring basket first.
+  // --- STATE A: SELECT_BASKET (product already selected via click or EAN) ---
+  // Quantity mode: EAN of current product is acknowledgement only — expect basket.
+  // Basket opens QUANTITY_REQUIRED (Pick still 0 until modal confirm).
   if (isProductEan) {
     if (typeof rem === "number" && rem <= 1e-9) {
       return { kind: "reject", code: "PRODUCT_ALREADY_COMPLETE", consumed: true };
+    }
+    if (ctx.quantityMode) {
+      return { kind: "reject", code: "EXPECTED_BASKET_SCAN", consumed: true };
     }
     return { kind: "product_ean_pick" };
   }
