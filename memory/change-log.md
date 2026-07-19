@@ -1,3 +1,9 @@
+## 2026-07-19 — MULTI 409 on S-1-2: foreign/stale series on product detail
+
+- ROOT: `get_basket_put_ui_state` exposed `active_series` for *any* product_id. Detail SKU X showed SERIA S-1-1 from leftover series of SKU Y; progress 0/N for X; basket scan S-1-2 → series switch with `series.product_id=Y` → `BASKET_PRODUCT_MISMATCH` 409.
+- FIX: product-scoped series/pending on detail; sanitize invalid series; pending forces no destination label; clearer mismatch when switch product ≠ basket need.
+- Tests: `test_wms_basket_put_multi_sku_s12_regression.py` CASE 1–7.
+
 ## 2026-07-19 — Pending basket-put list UX + cancel
 
 - List shows banner for `basket_put_pending` only (series ≠ pending).

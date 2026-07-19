@@ -2302,7 +2302,13 @@ def build_wms_picking_product_detail(
                 .first()
             )
             if cart_for_put is not None:
-                ui_put = get_basket_put_ui_state(db, cart=cart_for_put)
+                ui_put = get_basket_put_ui_state(
+                    db,
+                    cart=cart_for_put,
+                    product_id=int(product_id),
+                    order_ids=list(order_ids or []),
+                    sanitize=True,
+                )
                 detail.requires_basket_put_confirm = bool(ui_put.get("requires_basket_put"))
                 detail.basket_put_pending = ui_put.get("pending")
                 detail.basket_put_active_series = ui_put.get("active_series")
@@ -2314,6 +2320,9 @@ def build_wms_picking_product_detail(
                         detail.put_to_basket_label = str(series["basket_label"])
                     else:
                         detail.put_to_basket_label = None
+                # Pending unbound → never show a single destination label.
+                if detail.basket_put_pending:
+                    detail.put_to_basket_label = None
         except Exception:
             logger.exception("basket_put ui state failed cart_id=%s", cart_id)
     return detail
