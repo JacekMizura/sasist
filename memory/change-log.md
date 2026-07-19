@@ -1,3 +1,10 @@
+## 2026-07-19 — Packing finish HTTP 400 (mode=baskets / basket-first)
+
+- ROOT: `packing_finish_order` rzucał `CART_NOT_IN_PACKING` gdy cart = `READY_FOR_PACKING` **po** post-pack pipeline; basket-first nie woła `startPacking`. `finish_packing` już akceptował READY.
+- FIX: preflight cart przed mutacjami; READY_FOR_PACKING OK; usunięty hard-raise; `PACKING_FINISH_TRACE`; idempotentny retry po `automation_finished_at`.
+- Tests: `test_packing_finish_baskets.py` CASE 1–10.
+- ORDER-ISSUE-TASKS 500: UNRELATED.
+
 ## 2026-07-19 — FINAL PRE-PUSH AUDIT (afc6843a + packing) — fixes
 
 - BUG: cartless finalize used relative import `.picking_handoff_service` → ModuleNotFoundError (CARTLESS handoff never wrote). Fixed → `..picking_handoff_service`.

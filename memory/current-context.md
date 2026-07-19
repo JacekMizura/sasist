@@ -6,6 +6,7 @@
 
 ## Latest (2026-07-19)
 
+- **Packing finish baskets 400:** ROOT = `CART_NOT_IN_PACKING` po pipeline gdy MULTI nadal `READY_FOR_PACKING` (basket-first bez skanu wózka). Fix: allow READY + preflight przed mutacją + `PACKING_FINISH_TRACE` + idempotent retry.
 - **Packing handoff:** `picking_handoff_mode` SSOT; scoped CART/BASKET/CARTLESS queues; basket-first entry.
 - **Packing flow:** first list EAN scan packs (+1) via `POST /packing/resolve-ean/scan`; AutoActions only after `wms_packing_automation_finished_at`; no fake ✓✓.
 - **GET /order-issue-tasks 500 (prod):** request-path ensure omijało `archived_at` — ORM SELECT → column missing. Fix lokalny (osobny commit); Railway logs niedostępne (Unauthorized) — PROD SCHEMA VERIFIED: NO.
@@ -19,3 +20,4 @@
 - `cart_scan` / `baskets` nadal CartLifecycle SSOT — bez zmian semantyki.
 - Legacy bulk+CART-xxxx: bez szerokiego auto-heal; tylko kontrolowany repair jeśli potrzeba.
 - Packing SSOT: packed qty = `order_items.packing_quantity_packed` vs `order_item_required_pack_qty`; complete = snapshot `lines_packed_complete`; FINALIZED UI = automation_finished_at.
+- Finish baskets: `mode=baskets` = UI label → scope `picking_handoff_mode=BASKET`; cart_id opcjonalny (basket-first).

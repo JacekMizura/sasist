@@ -1883,6 +1883,156 @@ def _finalize_after_packing_mutations(
     )
 
 
+def _load_order_for_packing_finish_retry(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    order_id: int,
+) -> Optional[Order]:
+    """Idempotent retry: order already left packing queue after successful finish."""
+    return (
+        db.query(Order)
+        .options(
+            joinedload(Order.items).joinedload(OrderItem.product),
+            joinedload(Order.items).joinedload(OrderItem.source_bundle),
+            joinedload(Order.order_ui_status),
+            joinedload(Order.shipping_method_row),
+            joinedload(Order.basket),
+            joinedload(Order.cart),
+        )
+        .filter(
+            Order.id == int(order_id),
+            Order.tenant_id == int(tenant_id),
+            Order.warehouse_id == int(warehouse_id),
+            Order.deleted_at.is_(None),
+        )
+        .first()
+    )
+
+
+def _packing_finish_trace(
+    *,
+    stage: str,
+    order: Order | None,
+    tenant_id: int,
+    warehouse_id: int,
+    mode: str,
+    cart_id: int | None,
+    failure_code: str | None = None,
+    failure_detail: str | None = None,
+    extra: dict | None = None,
+) -> None:
+    handoff = None
+    oid = None
+    order_cart_id = None
+    order_basket_id = None
+    packing_finished_at = None
+    automation_finished_at = None
+    selected_carton = None
+    if order is not None:
+        oid = int(order.id)
+        handoff = getattr(order, "picking_handoff_mode", None)
+        order_cart_id = getattr(order, "cart_id", None)
+        order_basket_id = getattr(order, "basket_id", None)
+        packing_finished_at = getattr(order, "wms_packing_finished_at", None)
+        automation_finished_at = getattr(order, "wms_packing_automation_finished_at", None)
+        raw_c = getattr(order, "selected_carton_id", None)
+        selected_carton = str(raw_c).strip() if raw_c else None
+    payload = {
+        "stage": stage,
+        "order_id": oid,
+        "tenant_id": int(tenant_id),
+        "warehouse_id": int(warehouse_id),
+        "mode": mode,
+        "handoff_mode": handoff,
+        "request_cart_id": int(cart_id) if cart_id else None,
+        "cart_id": int(order_cart_id) if order_cart_id else None,
+        "basket_id": int(order_basket_id) if order_basket_id else None,
+        "packing_finished_at": str(packing_finished_at) if packing_finished_at else None,
+        "automation_finished_at": str(automation_finished_at) if automation_finished_at else None,
+        "carton_selected": bool(selected_carton),
+        "selected_carton_id": selected_carton,
+        "failure_code": failure_code,
+        "failure_detail": failure_detail,
+    }
+    if extra:
+        payload.update(extra)
+    logger.info("PACKING_FINISH_TRACE %s", json.dumps(payload, ensure_ascii=False, default=str))
+
+
+def _resolve_cart_row_for_packing_finish(
+    db: Session,
+    *,
+    order: Order,
+    tenant_id: int,
+    warehouse_id: int,
+    request_cart_id: int | None,
+) -> Optional[Cart]:
+    packed_cart_id = int(order.cart_id) if getattr(order, "cart_id", None) else (
+        int(request_cart_id) if request_cart_id else None
+    )
+    if not packed_cart_id:
+        return None
+    return (
+        db.query(Cart)
+        .options(joinedload(Cart.baskets))
+        .filter(
+            Cart.id == int(packed_cart_id),
+            Cart.tenant_id == int(tenant_id),
+            Cart.warehouse_id == int(warehouse_id),
+        )
+        .first()
+    )
+
+
+def _preflight_cart_for_packing_finish(cart_row: Cart) -> str:
+    """
+    Walidacja statusu wózka **przed** mutacjami pipeline.
+
+    Basket-first / BASKET handoff: cart może być nadal READY_FOR_PACKING
+    (bez skanu MULTI / startPacking) — to jest poprawne; finish_packing to obsługuje.
+    """
+    from .cart_picking_lifecycle_service import get_cart_status
+    from ..models.enums import CartStatus as _CartStatus
+
+    st = get_cart_status(cart_row)
+    if st in (_CartStatus.PACKING, _CartStatus.READY_FOR_PACKING, _CartStatus.AVAILABLE):
+        return st.value
+    raise PackingScanError(
+        "CART_NOT_IN_PACKING",
+        message=(
+            f"Wózek w statusie {st.value} — nie można finalizować pakowania "
+            "(wymagany PACKING lub READY_FOR_PACKING)."
+        ),
+    )
+
+
+def _release_cart_after_packing_finish(
+    db: Session,
+    *,
+    cart_row: Cart,
+    order: Order,
+    tenant_id: int,
+    warehouse_id: int,
+) -> bool:
+    """
+    Zwolnij slot koszyka / wózek po udanym finish.
+    READY_FOR_PACKING jest OK (basket-first) — finish_packing sam promuje / release.
+    """
+    from .cart_picking_lifecycle_service import finish_packing
+
+    return bool(
+        finish_packing(
+            db,
+            cart=cart_row,
+            packed_order_id=int(order.id),
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+        )
+    )
+
+
 def packing_finish_order(
     db: Session,
     *,
@@ -1900,6 +2050,14 @@ def packing_finish_order(
     Wywołaj **po** pełnym spakowaniu (skan / line-pack / pack-all już zacommitowane).
     Potok finish: **status „spakowane” → dokument** (gdy włączone; brak serii = ``ValueError`` / HTTP 400),
     potem opcjonalnie przesyłka / druki; commit na końcu tej funkcji.
+
+    Kolejność (atomowość DB w jednej transakcji do commit):
+      validate (scope + packable + carton + cart preflight)
+      → timestamps / pipeline / shipped
+      → release basket/cart
+      → commit
+
+    Retry po udanym finish jest idempotentny (automation_finished_at).
     """
     order = _load_order_for_packing_mutation(
         db,
@@ -1910,19 +2068,162 @@ def packing_finish_order(
         cart_id=cart_id,
         order_id=order_id,
     )
+    idempotent_replay = False
     if order is None:
-        raise PackingScanError("ORDER_NOT_IN_QUEUE")
-    _assert_order_packable_for_finish(db, order)
+        order = _load_order_for_packing_finish_retry(
+            db,
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+            order_id=order_id,
+        )
+        if order is not None and getattr(order, "wms_packing_automation_finished_at", None):
+            idempotent_replay = True
+        else:
+            _packing_finish_trace(
+                stage="scope_miss",
+                order=order,
+                tenant_id=tenant_id,
+                warehouse_id=warehouse_id,
+                mode=mode,
+                cart_id=cart_id,
+                failure_code="ORDER_NOT_IN_QUEUE",
+                failure_detail="order not in packing scope and not already finalized",
+            )
+            raise PackingScanError("ORDER_NOT_IN_QUEUE")
 
+    snap = _packing_finish_validation_snapshot(db, order, log=True)
     raw_sel = getattr(order, "selected_carton_id", None)
     sel = str(raw_sel).strip() if raw_sel else ""
+    carton_ok = bool(sel) or allow_without_carton
+
+    cart_row = _resolve_cart_row_for_packing_finish(
+        db,
+        order=order,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        request_cart_id=cart_id,
+    )
+    cart_status_pre = None
+    if cart_row is not None and not idempotent_replay:
+        cart_status_pre = _preflight_cart_for_packing_finish(cart_row)
+
+    _packing_finish_trace(
+        stage="validated" if not idempotent_replay else "idempotent_replay",
+        order=order,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        mode=mode,
+        cart_id=cart_id,
+        extra={
+            "required_qty": snap.get("total_required_qty"),
+            "unresolved_count": snap.get("unresolved_count"),
+            "lines_complete": snap.get("lines_packed_complete"),
+            "packable": snap.get("packable"),
+            "carton_selected": bool(sel),
+            "allow_without_carton": bool(allow_without_carton),
+            "cart_status": cart_status_pre,
+            "scope_ok": True,
+            "finish_validation_result": "ok" if (snap.get("packable") and carton_ok) or idempotent_replay else "pending",
+        },
+    )
+
+    if idempotent_replay:
+        # Bezpieczny retry: bez ponownego pipeline / dokumentu; dokończ ewentualny release.
+        if cart_row is not None:
+            try:
+                _release_cart_after_packing_finish(
+                    db,
+                    cart_row=cart_row,
+                    order=order,
+                    tenant_id=tenant_id,
+                    warehouse_id=warehouse_id,
+                )
+            except Exception as e:
+                logger.info(
+                    "PACKING_FINISH_TRACE idempotent release skipped order_id=%s err=%s",
+                    int(order.id),
+                    str(e)[:200],
+                )
+        ps_row = _get_or_create_wms_packing_settings_row(db, tenant_id, warehouse_id)
+        raw_finish = getattr(ps_row, "packing_after_finish_action", None) or "STAY"
+        finish_action = "GO_TO_LIST" if str(raw_finish).strip().upper() == "GO_TO_LIST" else "STAY"
+        next_id = find_next_fifo_packing_order_id(
+            db,
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+            status_id=status_id,
+            mode=mode,
+            cart_id=cart_id,
+            exclude_order_id=int(order_id),
+        )
+        db.commit()
+        _packing_finish_trace(
+            stage="idempotent_ok",
+            order=order,
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+            mode=mode,
+            cart_id=cart_id,
+        )
+        return _packing_build_scan_out_after_commit(
+            db,
+            order_id=int(order_id),
+            order_fallback=order,
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+            status_id=status_id,
+            mode=mode,
+            cart_id=cart_id,
+            fully_packed=True,
+            next_order_id=next_id,
+            last_packed_order_item_id=None,
+            post_pack_pipeline=[],
+            packing_after_finish_action=finish_action,
+        )
+
+    try:
+        _assert_order_packable_for_finish(db, order)
+    except PackingScanError as e:
+        _packing_finish_trace(
+            stage="packable_fail",
+            order=order,
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+            mode=mode,
+            cart_id=cart_id,
+            failure_code=str(e.code),
+            failure_detail=getattr(e, "message", None) or str(e.code),
+            extra={"lines_complete": snap.get("lines_packed_complete"), "packable": snap.get("packable")},
+        )
+        raise
+
     if not sel:
         if allow_without_carton:
             if not _user_allow_finish_without_carton(db, current_user):
+                _packing_finish_trace(
+                    stage="carton_fail",
+                    order=order,
+                    tenant_id=tenant_id,
+                    warehouse_id=warehouse_id,
+                    mode=mode,
+                    cart_id=cart_id,
+                    failure_code="FORBIDDEN_FINISH_WITHOUT_CARTON",
+                )
                 raise PackingScanError("FORBIDDEN_FINISH_WITHOUT_CARTON")
         else:
+            _packing_finish_trace(
+                stage="carton_fail",
+                order=order,
+                tenant_id=tenant_id,
+                warehouse_id=warehouse_id,
+                mode=mode,
+                cart_id=cart_id,
+                failure_code="CARTON_REQUIRED",
+                failure_detail="selected_carton_id empty (gabaryt UI ≠ WMS carton)",
+            )
             raise PackingScanError("CARTON_REQUIRED")
 
+    # Wszystkie guardy przeszły — dopiero teraz mutacje finalizacji.
     _touch_order_wms_packing_timestamps(order, fully_packed=True)
 
     ps_row = _get_or_create_wms_packing_settings_row(db, tenant_id, warehouse_id)
@@ -1944,38 +2245,23 @@ def packing_finish_order(
     on_order_shipped(order, db)
     db.flush()
 
-    # SSOT: zwolnij wózek dopiero po spakowaniu ostatniego zamówienia na wózku
-    from .cart_picking_lifecycle_service import finish_packing, get_cart_status
-    from ..models.enums import CartStatus as _CartStatus
-
-    packed_cart_id = int(order.cart_id) if getattr(order, "cart_id", None) else (
-        int(cart_id) if cart_id else None
-    )
-    if packed_cart_id:
-        cart_row = (
-            db.query(Cart)
-            .options(joinedload(Cart.baskets))
-            .filter(
-                Cart.id == int(packed_cart_id),
-                Cart.tenant_id == int(tenant_id),
-                Cart.warehouse_id == int(warehouse_id),
-            )
-            .first()
+    cart_released = False
+    if cart_row is not None:
+        # Odśwież baskets po pipeline (ten sam obiekt / id).
+        cart_row = _resolve_cart_row_for_packing_finish(
+            db,
+            order=order,
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+            request_cart_id=cart_id,
+        ) or cart_row
+        cart_released = _release_cart_after_packing_finish(
+            db,
+            cart_row=cart_row,
+            order=order,
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
         )
-        if cart_row is not None:
-            st = get_cart_status(cart_row)
-            if st == _CartStatus.READY_FOR_PACKING:
-                raise PackingScanError(
-                    "CART_NOT_IN_PACKING",
-                    message="Najpierw zeskanuj wózek (startPacking) — status musi być PACKING.",
-                )
-            finish_packing(
-                db,
-                cart=cart_row,
-                packed_order_id=int(order.id),
-                tenant_id=tenant_id,
-                warehouse_id=warehouse_id,
-            )
 
     step_rows = [
         {
@@ -2001,6 +2287,19 @@ def packing_finish_order(
         mode=mode,
         cart_id=cart_id,
         exclude_order_id=int(order_id),
+    )
+    _packing_finish_trace(
+        stage="ok",
+        order=order,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        mode=mode,
+        cart_id=cart_id,
+        extra={
+            "cart_released": cart_released,
+            "pipeline_steps": len(step_rows),
+            "finish_validation_result": "ok",
+        },
     )
     db.commit()
     return _packing_build_scan_out_after_commit(
