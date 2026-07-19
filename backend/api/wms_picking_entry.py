@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Dict, List, Optional, cast
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import func
 from sqlalchemy.exc import SQLAlchemyError
@@ -1404,7 +1404,8 @@ def post_picking_report_shortage(
             order_item_id=body.order_item_id,
             operator_user_id=int(current_user.id) if current_user is not None else None,
         )
-        if current_user is not None and current_user.id is not None and body.cart_id is not None:
+        product_line_snapshot = None
+        if body.cart_id is not None:
             resp = build_wms_picking_product_lines(
                 db,
                 tenant_id=tenant_id,
@@ -1413,15 +1414,24 @@ def post_picking_report_shortage(
                 order_type=order_type,
                 cart_id=body.cart_id,
             )
-            _safe_touch_picking_session(
-                db=db,
-                tenant_id=int(tenant_id),
-                warehouse_id=int(warehouse_id),
-                session_kind="picking_active",
-                operator_user_id=int(current_user.id),
-                cart_id=body.cart_id,
-                metadata=_picking_session_progress_metadata(resp, source_status_id=source_status_id, order_type=order_type),
-            )
+            pid = int(body.product_id)
+            for pl in getattr(resp, "products", None) or []:
+                if int(getattr(pl, "product_id", 0) or 0) == pid:
+                    product_line_snapshot = pl
+                    break
+            out = {**out, "product_line": product_line_snapshot}
+            if current_user is not None and current_user.id is not None:
+                _safe_touch_picking_session(
+                    db=db,
+                    tenant_id=int(tenant_id),
+                    warehouse_id=int(warehouse_id),
+                    session_kind="picking_active",
+                    operator_user_id=int(current_user.id),
+                    cart_id=body.cart_id,
+                    metadata=_picking_session_progress_metadata(
+                        resp, source_status_id=source_status_id, order_type=order_type
+                    ),
+                )
         db.commit()
     except ValueError as e:
         db.rollback()
@@ -1656,6 +1666,7 @@ def post_picking_cancel_session(
 
 @router.post("/picking/finalize-cart", response_model=WmsPickingFinalizeCartResponse)
 def post_picking_finalize_cart(
+    request: Request,
     tenant_id: int = Query(..., ge=1),
     warehouse_id: int = Depends(require_operable_warehouse),
     source_status_id: int = Query(..., ge=1),
@@ -1673,6 +1684,13 @@ def post_picking_finalize_cart(
     ``fulfillment_state`` (``PACKING`` / ``NEEDS_DECISION`` / ``MISSING``) i status panelu;
     wózek pozostaje przypięty (``READY_FOR_PACKING``) do zakończenia pakowania.
     """
+    from ..middleware.exception_logging import get_or_create_request_id
+
+    request_id = get_or_create_request_id(request)
+    safe_fail_msg = (
+        "Nie udało się zakończyć zbierania z powodu niespójności danych zamówienia. "
+        "Sesja nie została zakończona."
+    )
     try:
         out = finalize_wms_picking_cart(
             db,
@@ -1688,7 +1706,9 @@ def post_picking_finalize_cart(
     except PickingFinalizeError as e:
         db.rollback()
         logger.warning(
-            "[picking.finalize.error] cart_id=%s source_status_id=%s order_id=%s reason=%s step=%s code=%s",
+            "[picking.finalize.error] request_id=%s cart_id=%s source_status_id=%s order_id=%s "
+            "reason=%s step=%s code=%s",
+            request_id,
             cart_id,
             source_status_id,
             e.order_id,
@@ -1696,53 +1716,77 @@ def post_picking_finalize_cart(
             e.step,
             e.code,
         )
-        raise HTTPException(status_code=int(e.http_status), detail=e.as_detail()) from e
+        detail = e.as_detail()
+        detail["request_id"] = request_id
+        detail["cart_id"] = int(cart_id)
+        # Never leak ORM/SQL text to the operator for data-integrity failures.
+        if e.code in ("apply_order_state_failed", "relocation_sync_failed") or e.reason in (
+            "IntegrityError",
+            "ForeignKeyViolation",
+        ):
+            detail["message"] = safe_fail_msg
+            detail["error"] = safe_fail_msg
+        raise HTTPException(status_code=int(e.http_status), detail=detail) from e
     except ValueError as e:
         db.rollback()
         msg = str(e).strip() or "Nieprawidłowy stan zbierania."
         logger.warning(
-            "[picking.finalize.error] cart_id=%s source_status_id=%s reason=ValueError message=%s",
+            "[picking.finalize.error] request_id=%s cart_id=%s source_status_id=%s reason=ValueError message=%s",
+            request_id,
             cart_id,
             source_status_id,
             msg,
         )
         raise HTTPException(
             status_code=400,
-            detail={"message": msg, "error": msg, "code": "picking_finalize_invalid", "cart_id": int(cart_id)},
+            detail={
+                "message": msg,
+                "error": msg,
+                "code": "picking_finalize_invalid",
+                "cart_id": int(cart_id),
+                "request_id": request_id,
+            },
         ) from e
     except SQLAlchemyError as e:
         db.rollback()
         logger.exception(
-            "[picking.finalize.error] cart_id=%s source_status_id=%s step=database",
+            "[picking.finalize.error] request_id=%s cart_id=%s source_status_id=%s step=database "
+            "exc_type=%s",
+            request_id,
             cart_id,
             source_status_id,
+            type(e).__name__,
         )
         raise HTTPException(
-            status_code=503,
+            status_code=409 if "ForeignKey" in type(e).__name__ or "Integrity" in type(e).__name__ else 503,
             detail={
-                "message": "Zakończenie zbiórki nie powiodło się (błąd bazy danych).",
-                "error": "Zakończenie zbiórki nie powiodło się (błąd bazy danych).",
+                "message": safe_fail_msg,
+                "error": safe_fail_msg,
                 "reason": e.__class__.__name__,
                 "code": "database_error",
                 "cart_id": int(cart_id),
+                "request_id": request_id,
             },
         ) from e
     except Exception as e:
         db.rollback()
         logger.exception(
-            "[picking.finalize.error] cart_id=%s source_status_id=%s step=unexpected",
+            "[picking.finalize.error] request_id=%s cart_id=%s source_status_id=%s step=unexpected "
+            "exc_type=%s",
+            request_id,
             cart_id,
             source_status_id,
+            type(e).__name__,
         )
-        msg = str(e).strip() or e.__class__.__name__
         raise HTTPException(
             status_code=503,
             detail={
-                "message": f"Zakończenie zbiórki nie powiodło się: {msg}",
-                "error": msg,
+                "message": "Zakończenie zbiórki nie powiodło się. Sesja nie została zakończona.",
+                "error": "Zakończenie zbiórki nie powiodło się. Sesja nie została zakończona.",
                 "reason": e.__class__.__name__,
                 "code": "unexpected_error",
                 "cart_id": int(cart_id),
+                "request_id": request_id,
             },
         ) from e
     return WmsPickingFinalizeCartResponse(**out)

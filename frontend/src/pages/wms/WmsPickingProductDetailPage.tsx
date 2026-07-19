@@ -160,9 +160,19 @@ export default function WmsPickingProductDetailPage() {
 
   const detailLoadSeqRef = useRef(0);
 
-  const fetchProductDetail = useCallback(async (): Promise<WmsPickingProductDetailApi | null> => {
+  const fetchProductDetail = useCallback(async (opts?: { force?: boolean }): Promise<WmsPickingProductDetailApi | null> => {
     if (warehouseId == null || !pickingSession || !Number.isFinite(productId) || productId <= 0) return null;
-    return getWmsPickingProductDetail(pickingTenantId, warehouseId, pickingSession.orderUiStatusId, orderType, productId, pickingSession.cartId, recoveryOrderId);
+    return getWmsPickingProductDetail(
+      pickingTenantId,
+      warehouseId,
+      pickingSession.orderUiStatusId,
+      orderType,
+      productId,
+      pickingSession.cartId,
+      recoveryOrderId,
+      undefined,
+      { force: opts?.force === true },
+    );
   }, [warehouseId, pickingSession, orderType, productId, pickingTenantId, recoveryOrderId]);
 
   const applyDetailToState = useCallback((d: WmsPickingProductDetailApi) => {
@@ -174,7 +184,7 @@ export default function WmsPickingProductDetailPage() {
 
   const refreshDetailSilently = useCallback(async () => {
     try {
-      const d = await fetchProductDetail();
+      const d = await fetchProductDetail({ force: true });
       if (d) applyDetailToState(d);
     } catch {}
   }, [fetchProductDetail, applyDetailToState]);

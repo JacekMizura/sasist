@@ -416,6 +416,13 @@ class WmsPickingReportShortageResponse(BaseModel):
         default=True,
         description="Z ustawień WMS — dla UI po zgłoszeniu (kontynuacja vs pauza).",
     )
+    product_line: Optional[WmsPickingProductLine] = Field(
+        default=None,
+        description=(
+            "Snapshot linii produktu po zapisie braku (ten sam builder co product-lines) — "
+            "FE może zaktualizować listę bez wyścigu ze stale GET."
+        ),
+    )
 
 
 class WmsPickingUndoPickBody(BaseModel):

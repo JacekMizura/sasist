@@ -139,6 +139,7 @@ export default function WmsPickingProductsPage() {
   const bootstrapAttemptedRef = useRef<string | null>(null);
   const productLinesLoadSeqRef = useRef(0);
   const productLinesLoadKeyRef = useRef("");
+  const productLinesForceNextLoadRef = useRef(false);
   const pickingListRefreshHandledRef = useRef<number | null>(null);
   const recoveryExitRef = useRef(false);
   useEffect(() => {
@@ -329,6 +330,8 @@ export default function WmsPickingProductsPage() {
       setCohortOrderCount(0);
       return;
     }
+    const force = productLinesForceNextLoadRef.current;
+    productLinesForceNextLoadRef.current = false;
     const seq = ++productLinesLoadSeqRef.current;
     setLoading(true);
     setErr(null);
@@ -342,6 +345,7 @@ export default function WmsPickingProductsPage() {
         mergedSession?.cartId ?? null,
         recoveryOrderId,
         activePriorityOrderIds,
+        { force },
       );
       if (seq !== productLinesLoadSeqRef.current) {
         return;
@@ -430,6 +434,7 @@ export default function WmsPickingProductsPage() {
     const nextSession = st?.pickingSession;
     if (!nextSession) return;
     pickingListRefreshHandledRef.current = at;
+    productLinesForceNextLoadRef.current = true;
     void loadRef.current();
     navigate(routerLocation.pathname, {
       replace: true,
@@ -441,6 +446,7 @@ export default function WmsPickingProductsPage() {
     () => {
       if (recoveryOrderId != null && recoveryOrderId > 0) return;
       productLinesLoadKeyRef.current = "";
+      productLinesForceNextLoadRef.current = true;
       void loadRef.current();
     },
     { enabled: recoveryOrderId == null || recoveryOrderId <= 0, debounceMs: 700 },
@@ -650,20 +656,6 @@ export default function WmsPickingProductsPage() {
     return [...m.values()].sort((a, b) => a.order_number.localeCompare(b.order_number, "pl"));
   }, [finalizeShortageModal]);
 
-  const cohortMissingByOrder = useMemo(() => {
-    if (cohortMissingLines.length === 0) return [];
-    const m = new Map<number, { order_number: string; lines: WmsPickingCohortMissingLineApi[] }>();
-    for (const ln of cohortMissingLines) {
-      const cur = m.get(ln.order_id);
-      if (cur) {
-        cur.lines.push(ln);
-      } else {
-        m.set(ln.order_id, { order_number: ln.order_number, lines: [ln] });
-      }
-    }
-    return [...m.values()].sort((a, b) => a.order_number.localeCompare(b.order_number, "pl"));
-  }, [cohortMissingLines]);
-
   const activeCartId = mergedSession?.cartId ?? null;
 
   const onFinalizeCart = useCallback(async () => {
@@ -736,7 +728,7 @@ export default function WmsPickingProductsPage() {
       console.error("[picking.finalize]", e);
       const msg = extractApiErrorMessage(
         e,
-        "Nie wszystkie pozycje zostały zebrane lub oznaczone jako brak.",
+        "Nie udało się zakończyć zbierania z powodu niespójności danych zamówienia. Sesja nie została zakończona.",
       );
       setFinalizeErr(msg);
     } finally {
@@ -964,23 +956,6 @@ export default function WmsPickingProductsPage() {
             Zgłoszono brak — dokończ tylko dotknięte linie (SKU z brakiem). Pozostałe produkty są zablokowane.
           </p>
         )}
-        {cohortMissingByOrder.length > 0 ? (
-          <div className="rounded-2xl border border-red-200 bg-red-50/70 px-4 py-3 shadow-sm">
-            <p className="text-[11px] font-black uppercase tracking-widest text-red-800">Zamówienia niekompletne</p>
-            <ul className="mt-2 flex flex-wrap gap-2 list-none p-0 m-0">
-              {cohortMissingByOrder.map((g) => (
-                <li
-                  key={g.order_number}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 bg-white px-3 py-1.5 text-xs font-black uppercase tracking-wide text-red-800"
-                >
-                  <AlertTriangle size={12} className="text-red-600 shrink-0" strokeWidth={2.5} />
-                  #{g.order_number.replace(/^#/, "")}
-                  <span className="font-bold text-red-600">· Brak produktu</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
         {(() => {
           const bundleDisplay = bundlePickScan ? buildPickingBundleDisplay(bundlePickScan) : null;
           return bundleDisplay ? <BundlePickingScanCard display={bundleDisplay} /> : null;

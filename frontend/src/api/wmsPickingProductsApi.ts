@@ -184,6 +184,7 @@ export async function getWmsPickingProductLines(
   cartId?: number | null,
   recoveryOrderId?: number | null,
   orderIds?: number[] | null,
+  options?: { force?: boolean },
 ): Promise<WmsPickingProductLinesResponseApi> {
   const params: Record<string, string | number | number[]> = {
     tenant_id: tenantId,
@@ -202,10 +203,14 @@ export async function getWmsPickingProductLines(
     params.order_ids_csv = orderIds.join(",");
   }
   const key = JSON.stringify(params);
-  return pickingProductLinesDeduper(key, async () => {
-    const res = await api.get<WmsPickingProductLinesResponseApi>("/wms/picking/product-lines", { params });
-    return res.data;
-  });
+  return pickingProductLinesDeduper(
+    key,
+    async () => {
+      const res = await api.get<WmsPickingProductLinesResponseApi>("/wms/picking/product-lines", { params });
+      return res.data;
+    },
+    { force: options?.force === true },
+  );
 }
 
 export async function getWmsPickingProductDetail(
@@ -217,6 +222,7 @@ export async function getWmsPickingProductDetail(
   cartId?: number | null,
   recoveryOrderId?: number | null,
   orderIds?: number[] | null,
+  options?: { force?: boolean },
 ): Promise<WmsPickingProductDetailApi> {
   const params: Record<string, string | number | number[]> = {
     tenant_id: tenantId,
@@ -236,10 +242,14 @@ export async function getWmsPickingProductDetail(
     params.order_ids_csv = orderIds.join(",");
   }
   const key = JSON.stringify(params);
-  return pickingProductDetailDeduper(key, async () => {
-    const res = await api.get<WmsPickingProductDetailApi>("/wms/picking/product-lines/detail", { params });
-    return res.data;
-  });
+  return pickingProductDetailDeduper(
+    key,
+    async () => {
+      const res = await api.get<WmsPickingProductDetailApi>("/wms/picking/product-lines/detail", { params });
+      return res.data;
+    },
+    { force: options?.force === true },
+  );
 }
 
 export type WmsPickingFinalizeCartResponseApi = {
@@ -431,6 +441,8 @@ export type WmsPickingReportShortageResponseApi = {
   order_ids: number[];
   order_issue_task_ids?: number[];
   allow_continue_other_lines_after_shortage?: boolean;
+  /** Snapshot linii po zapisie — ten sam SSOT co product-lines. */
+  product_line?: WmsPickingProductLineApi | null;
 };
 
 export async function postWmsPickingReportShortage(

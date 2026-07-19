@@ -4,13 +4,29 @@ export function isDocumentVisible(): boolean {
   return typeof document === "undefined" || document.visibilityState === "visible";
 }
 
+export type RequestDedupeOptions = {
+  /**
+   * Skip joining an in-flight promise for this key and start a fresh request.
+   * Use after mutations (e.g. report-shortage) so a pre-mutation GET cannot win the race.
+   */
+  force?: boolean;
+};
+
 export function createRequestDeduper() {
   const inflight = new Map<string, Promise<unknown>>();
-  return function dedupe<T>(key: string, fn: () => Promise<T>): Promise<T> {
-    const existing = inflight.get(key);
-    if (existing) return existing as Promise<T>;
-    const p = fn().finally(() => {
+  return function dedupe<T>(key: string, fn: () => Promise<T>, options?: RequestDedupeOptions): Promise<T> {
+    if (!options?.force) {
+      const existing = inflight.get(key);
+      if (existing) return existing as Promise<T>;
+    } else {
       inflight.delete(key);
+    }
+    const p = fn().finally(() => {
+      // Only clear if we are still the active promise for this key
+      // (a newer force request may have replaced us).
+      if (inflight.get(key) === p) {
+        inflight.delete(key);
+      }
     });
     inflight.set(key, p);
     return p;

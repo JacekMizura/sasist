@@ -66,42 +66,55 @@ export function extractCartCapacityExceededMessage(err: unknown): string | null 
 
 /** Extract FastAPI / axios error message for toasts and console. */
 export function extractApiErrorMessage(err: unknown, fallback = "Wystąpił błąd operacji."): string {
+  const withRequestId = (msg: string, detailObj: unknown): string => {
+    if (!detailObj || typeof detailObj !== "object") return msg;
+    const rid = (detailObj as { request_id?: unknown }).request_id;
+    if (typeof rid === "string" && rid.trim()) {
+      return `${msg} (ref: ${rid.trim()})`;
+    }
+    return msg;
+  };
+
+  const sanitize = (msg: string): string => {
+    if (looksLikeRawDbError(msg)) {
+      console.error("[api] raw server error:", msg);
+      return fallback;
+    }
+    return msg;
+  };
+
   const op = extractApiOperationalErrorDetail(err);
-  if (op?.message) return op.message;
+  if (op?.message) {
+    const data = (err as { response?: { data?: unknown } }).response?.data;
+    const detail =
+      data && typeof data === "object" && "detail" in data
+        ? (data as { detail: unknown }).detail
+        : data;
+    return withRequestId(sanitize(op.message), detail);
+  }
 
   if (err && typeof err === "object" && "response" in err) {
     const res = (err as { response?: { data?: unknown; status?: number } }).response;
     const data = res?.data;
     if (typeof data === "string" && data.trim()) {
-      const msg = data.trim();
-      if (looksLikeRawDbError(msg)) {
-        console.error("[api] raw server error:", msg);
-        return fallback;
-      }
-      return msg;
+      return sanitize(data.trim());
     }
     if (data && typeof data === "object") {
-      const top = data as { message?: unknown; error?: unknown; detail?: unknown };
-      // Flat body { code, message, debug } or legacy { error }
+      const top = data as { message?: unknown; error?: unknown; detail?: unknown; request_id?: unknown };
       const topMsg = messageFromDetailObject(top);
-      if (topMsg) return topMsg;
+      if (topMsg) return withRequestId(sanitize(topMsg), top);
 
       if ("detail" in data) {
         const detail = top.detail;
         if (typeof detail === "string" && detail.trim()) {
-          const msg = detail.trim();
-          if (looksLikeRawDbError(msg)) {
-            console.error("[api] raw server error:", msg);
-            return fallback;
-          }
-          return msg;
+          return withRequestId(sanitize(detail.trim()), top);
         }
         if (typeof detail === "number" || typeof detail === "boolean") {
           return String(detail);
         }
         if (detail && typeof detail === "object" && !Array.isArray(detail)) {
           const nested = messageFromDetailObject(detail);
-          if (nested) return nested;
+          if (nested) return withRequestId(sanitize(nested), detail);
         }
         if (Array.isArray(detail)) {
           const parts = detail
@@ -113,7 +126,7 @@ export function extractApiErrorMessage(err: unknown, fallback = "Wystąpił bł�
               return "";
             })
             .filter(Boolean);
-          if (parts.length) return parts.join("; ");
+          if (parts.length) return sanitize(parts.join("; "));
         }
       }
     }
@@ -123,7 +136,7 @@ export function extractApiErrorMessage(err: unknown, fallback = "Wystąpił bł�
   if (err instanceof Error) {
     const msg = err.message.trim();
     if (msg && !/^Request failed with status code \d+/i.test(msg)) {
-      return msg;
+      return sanitize(msg);
     }
   }
   return fallback;

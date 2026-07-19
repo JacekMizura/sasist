@@ -1,5 +1,13 @@
 # Change log
 
+## 2026-07-19 — Prod bugs: shortage list race + banner + finalize FK
+
+- **P1 shortage 2×entry:** FE `createRequestDeduper` joined pre-mutation `GET product-lines` after POST → stale ACTIVE. Fix: `force` bypass; list refresh after shortage forces new GET; POST shortage returns `product_line` snapshot (same builder).
+- **P2:** Removed top „Zamówienia niekompletne” banner (+ `cohortMissingByOrder`); row SHORTAGE UI kept.
+- **P3 finalize FK:** orphan `orders.shipping_method_id` breaks UPDATE; sanitize before apply; safe operator message + `request_id`; audit script `audit_orphan_shipping_method_fk`; import assert FK assignable.
+- **P4:** Finalize still classifies per-order (`all_picked`→PACKING, `all_missing`→MISSING, else NEEDS_DECISION) — not bulk PACKING; safe errors + rollback on failure.
+- Tests: BE shortage product-lines / finalize orphan+classify; FE dedupe force + error UX.
+
 ## 2026-07-19 — SHORTAGE hardening verification (final)
 
 - Flush SSOT: **flush-before-aggregate** in `sum_line_events` / `sum_missing` / `sum_pick` (nie globalny flush w `append_event`).

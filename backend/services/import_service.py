@@ -1920,6 +1920,15 @@ class ImportService:
                 warehouse_id=warehouse_id,
                 label=ship_label_for_fk,
             )
+            if ship_fk_id is not None:
+                from ..services.order_shipping_fk_service import assert_shipping_method_fk_assignable
+
+                ship_fk_id = assert_shipping_method_fk_assignable(
+                    self.db,
+                    ship_fk_id,
+                    tenant_id=tenant_id,
+                    warehouse_id=warehouse_id,
+                )
 
             sales_document_number = None
             if sales_doc_col:

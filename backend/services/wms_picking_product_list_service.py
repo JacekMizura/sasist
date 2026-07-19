@@ -3443,6 +3443,9 @@ def finalize_wms_picking_cart(
         rec_state = recovery_by_order[oid]
         kind = order_kinds[oid]
         try:
+            from .order_shipping_fk_service import sanitize_order_orphan_shipping_method_id
+
+            sanitize_order_orphan_shipping_method_id(db, o)
             pack_ok = bool(rec_state.packing_allowed)
             panel_kind: OrderFinalizeKind = kind
             if kind == "all_picked" and not pack_ok:
@@ -3478,14 +3481,17 @@ def finalize_wms_picking_cart(
             )
         except Exception as exc:
             logger.exception(
-                "[picking.finalize.error] order_id=%s cart_id=%s source_status_id=%s step=apply_order_state",
+                "[picking.finalize.error] order_id=%s cart_id=%s source_status_id=%s step=apply_order_state "
+                "exc_type=%s",
                 oid,
                 cid,
                 sid,
+                type(exc).__name__,
             )
             raise PickingFinalizeError(
-                f"Nie udało się domknąć zbierania zamówienia #{o.number or oid}: {exc}",
-                reason=exc.__class__.__name__,
+                "Nie udało się zakończyć zbierania z powodu niespójności danych zamówienia. "
+                "Sesja nie została zakończona.",
+                reason=type(exc).__name__,
                 order_id=oid,
                 step="apply_order_state",
                 http_status=409,
@@ -3503,14 +3509,16 @@ def finalize_wms_picking_cart(
             )
         except Exception as exc:
             logger.exception(
-                "[picking.finalize.error] order_id=%s cart_id=%s source_status_id=%s step=relocation",
+                "[picking.finalize.error] order_id=%s cart_id=%s source_status_id=%s step=relocation "
+                "exc_type=%s",
                 oid,
                 cid,
                 sid,
+                type(exc).__name__,
             )
             raise PickingFinalizeError(
-                f"Nie udało się utworzyć zadań rozlokowania dla zamówienia #{o.number or oid}: {exc}",
-                reason=exc.__class__.__name__,
+                "Nie udało się zakończyć zbierania (zadania rozlokowania). Sesja nie została zakończona.",
+                reason=type(exc).__name__,
                 order_id=oid,
                 step="relocation",
                 http_status=409,
