@@ -1,3 +1,11 @@
+## 2026-07-19 — LIVE finalize-cart 409 audit (product 192 / cart 2) — NO FIX YET
+
+- ERROR: `wymagane 5.0, dostępne 1.0` from `consume_inventory_fifo_slices` via `_decrement_inventory_for_wms_pick` on pending `Pick` (`picked_at IS NULL`).
+- WHY 5: `qty = float(Pick.quantity)` of the failing pending row — **not** required−shortage, **not** product aggregate 9.
+- Stock on QUANTITY_CONFIRM: **NO** (`picked_at=None`). Stock on FINALIZE: **YES**. Double deduction: **NO**. Shortage never enters inventory consume.
+- Finalize preserves `Pick.location_id` (no cross-location re-FIFO). Live Pick/Inventory dump unavailable locally (`warehouse.db` empty, no `.env`).
+- Suspected write-time provenance: MULTI basket confirm can fall back to `locations[0]` when `activeLocationId` unset — stamps all picks on one loc while stock is split. **STOP before changing finalize/quantity/shortage SSOT.**
+
 ## 2026-07-19 — MULTI: quantity put + shortage per allocation (no FIFO close)
 
 - STATE MACHINE: SELECT_PRODUCT → SELECT_BASKET → ENTER_QUANTITY → CONFIRM → next basket / finish.

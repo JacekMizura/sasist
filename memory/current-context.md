@@ -2,12 +2,14 @@
 
 ## Active
 
-**FAZA STABILIZACJI WMS** — bez nowych funkcji.
+**LIVE finalize-cart 409** (product #192, cart_id=2) — audit done, **no fix / no push**.
+Do not change quantity flow or shortage flow that just worked.
 
 ## Latest (2026-07-19)
 
-- **MULTI quantity + per-allocation shortage:** SELECT_PRODUCT → SELECT_BASKET → qty modal → Pick; shortage scoped to `order_item_id`/basket; unresolved = required − picked − shortage. Product-level FIFO shortage blocked on baskets carts.
-- **Packing BASKET ghost count:** active queue requires live basket custody (`a8c6ee39`).
+- Finalize deducts only pending `Pick.quantity` at `Pick.location_id`. Error `wymagane 5` = that Pick row’s qty. Shortage not deducted. Stock only at finalize.
+- Blocked on live Pick dump (location_id / per-loc aggregation). Suspected FE multi-loc stamp to `locations[0]`.
+- **MULTI quantity + per-allocation shortage:** still correct; do not regress.
 
 ## Notes
 
