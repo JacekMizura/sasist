@@ -415,6 +415,50 @@ def _orders_on_cart(db: Session, cart_id: int) -> list[Order]:
     return list_orders_on_cart(db, cart)
 
 
+def _orders_attached_by_cart_id(db: Session, cart_id: int) -> list[Order]:
+    """Strict custody by ``Order.cart_id`` only — no picking_session heal."""
+    return (
+        db.query(Order)
+        .filter(Order.cart_id == int(cart_id), Order.deleted_at.is_(None))
+        .all()
+    )
+
+
+def _occupied_baskets_count(cart: Cart) -> int:
+    n = 0
+    for basket in list(getattr(cart, "baskets", None) or []):
+        if getattr(basket, "order_id", None) is not None and int(basket.order_id) > 0:
+            n += 1
+    return n
+
+
+def cart_is_empty_orphan(
+    db: Session,
+    cart: Cart,
+    *,
+    allow_open_picking_session: bool = False,
+) -> bool:
+    """
+    CASE C: cart looks occupied (status) but has no live custody.
+
+    Requires:
+      - 0 orders with ``cart_id``
+      - 0 baskets with ``order_id``
+      - no open picking session (unless allow_open_picking_session)
+    Does NOT use session-heal order lists (those can falsely keep custody after pack).
+    """
+    cid = int(cart.id)
+    if _orders_attached_by_cart_id(db, cid):
+        return False
+    if _occupied_baskets_count(cart) > 0:
+        return False
+    if not allow_open_picking_session:
+        sess = find_open_picking_session(db, cart=cart)
+        if sess is not None and getattr(sess, "completed_at", None) is None:
+            return False
+    return True
+
+
 def _apply_capacity_slice(
     db: Session,
     cart: Cart,
@@ -1344,6 +1388,10 @@ def finish_packing(
     Odpina spakowane zamówienie. Gdy ostatnie → releaseCart → AVAILABLE.
     Zwraca True gdy wózek zwolniony.
     Idempotentne: ponowne finish tego samego order_id / AVAILABLE → True bez szkody.
+
+    Remaining dla release: wyłącznie ``Order.cart_id`` (nie session-heal).
+    Spakowane zamówienie zawsze traci custody (cart/basket/session), nawet gdy
+    ``cart_id`` było już NULL — inaczej heal po sesji blokuje release i zostawia PACKING.
     """
     del tenant_id, warehouse_id
     cart = _lock_cart(db, cart)
@@ -1358,10 +1406,11 @@ def finish_packing(
 
     cid = int(cart.id)
     packed = db.query(Order).filter(Order.id == int(packed_order_id)).first()
-    if packed is not None and getattr(packed, "cart_id", None) is not None:
-        if int(packed.cart_id) == cid:
-            clear_order_picking_session_context(packed)
-            db.add(packed)
+    if packed is not None:
+        # Zawsze odetnij custody spakowanego zamówienia od tego wózka.
+        # (wcześniej: clear tylko gdy cart_id ustawione → orphan PACKING + event order_packed)
+        clear_order_picking_session_context(packed)
+        db.add(packed)
     # MULTI: zwolnij slot koszyka dla spakowanego zamówienia (nie czekaj na full releaseCart).
     for basket in list(getattr(cart, "baskets", None) or []):
         if getattr(basket, "order_id", None) is not None and int(basket.order_id) == int(packed_order_id):
@@ -1369,7 +1418,8 @@ def finish_packing(
             basket.used_volume = 0.0
             db.add(basket)
 
-    remaining = len(_orders_on_cart(db, cid))
+    db.flush()
+    remaining = len(_orders_attached_by_cart_id(db, cid))
     if remaining > 0:
         if st != CartStatus.PACKING:
             apply_cart_transition(
@@ -1408,6 +1458,81 @@ def finish_packing(
     release_cart(db, cart=cart, reason="last_order_packed", _already_locked=True)
     _after_mutation(db, cart)
     return True
+
+
+def release_empty_orphan_cart(
+    db: Session,
+    *,
+    cart_id: int,
+    tenant_id: int,
+    warehouse_id: int,
+    operator_user_id: int | None = None,
+    reason: str = "empty_orphan_heal",
+    _already_locked: bool = False,
+) -> dict[str, Any]:
+    """
+    CASE C — bezpieczne zwolnienie pustego wózka bez cofania zamówień / reopen pickingu.
+
+    Wymaga: status zajęty (ASSIGNED|PICKING|READY_FOR_PACKING|PACKING) ALBO brudny AVAILABLE,
+    oraz cart_is_empty_orphan (0×cart_id, 0×basket.order_id, brak open picking session).
+    """
+    if _already_locked:
+        cart = db.query(Cart).filter(Cart.id == int(cart_id)).first()
+        if cart is None:
+            raise CartLifecycleError("Wózek nie istnieje.", code="cart_not_found")
+        cart = _lock_cart(db, cart)
+    else:
+        cart = _lock_cart_by_keys(
+            db,
+            cart_id=int(cart_id),
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+        )
+    st = get_cart_status(cart)
+    if (
+        st == CartStatus.AVAILABLE
+        and getattr(cart, "assigned_user_id", None) is None
+        and getattr(cart, "packing_user_id", None) is None
+        and getattr(cart, "current_session_id", None) is None
+        and _occupied_baskets_count(cart) == 0
+    ):
+        return {
+            "cart_id": int(cart_id),
+            "cart_status": CartStatus.AVAILABLE.value,
+            "idempotent": True,
+            "released": False,
+        }
+
+    if not cart_is_empty_orphan(db, cart):
+        raise InvalidCartTransitionError(
+            "Wózek ma nadal custody (zamówienia, zajęte koszyki lub aktywną sesję zbierania). "
+            "Nie można zwolnić jako pusty orphan.",
+            from_status=st.value,
+        )
+
+    release_cart(db, cart=cart, reason=reason, _already_locked=True)
+    _record_event(
+        db,
+        cart,
+        "empty_orphan_cart_released",
+        operator_user_id=operator_user_id,
+        description="Zwolniono pusty wózek (orphan lifecycle).",
+        metadata={"reason": reason, "from_status": st.value, "show_order_numbers": False},
+    )
+    _after_mutation(db, cart)
+    logger.info(
+        "cart_lifecycle.release_empty_orphan cart_id=%s from=%s reason=%s",
+        int(cart_id),
+        st.value,
+        reason,
+    )
+    return {
+        "cart_id": int(cart_id),
+        "cart_status": CartStatus.AVAILABLE.value,
+        "idempotent": False,
+        "released": True,
+        "from_status": st.value,
+    }
 
 
 def release_cart(
@@ -1521,6 +1646,7 @@ ADMIN_RELEASE_READY_MSG = (
 ADMIN_RELEASE_PACKING_MSG = (
     "Wózek jest w trakcie pakowania. Zwolnienie awaryjne jest zablokowane."
 )
+ADMIN_RELEASE_EMPTY_ORPHAN_REASON = "admin_empty_orphan_release"
 
 
 def _detach_cart_pick_artifacts(db: Session, cart_id: int) -> dict[str, int]:
@@ -1585,7 +1711,8 @@ def admin_release_cart(
       ASSIGNED → zwolnij
       PICKING bez potwierdzonych produktów → zwolnij
       PICKING z potwierdzonymi → anuluj kompletację, potem zwolnij
-      READY_FOR_PACKING / PACKING → blokada (osobny komunikat)
+      READY_FOR_PACKING / PACKING z custody → blokada
+      READY_FOR_PACKING / PACKING bez custody (orphan empty) → release_empty_orphan_cart
     """
     import traceback as _tb
 
@@ -1618,14 +1745,47 @@ def admin_release_cart(
             f"session={getattr(cart, 'current_session_id', None)}",
         )
 
-        if st == CartStatus.READY_FOR_PACKING:
+        if st in (CartStatus.READY_FOR_PACKING, CartStatus.PACKING):
+            if cart_is_empty_orphan(db, cart):
+                _step(12, f"empty orphan {st.value} → release_empty_orphan_cart")
+                out = release_empty_orphan_cart(
+                    db,
+                    cart_id=int(cart_id),
+                    tenant_id=int(tenant_id),
+                    warehouse_id=int(warehouse_id),
+                    operator_user_id=int(admin_user_id),
+                    reason=ADMIN_RELEASE_EMPTY_ORPHAN_REASON,
+                    _already_locked=True,
+                )
+                artifacts = _detach_cart_pick_artifacts(db, int(cart_id))
+                db.refresh(cart)
+                _record_event(
+                    db,
+                    cart,
+                    "admin_cart_released",
+                    operator_user_id=int(admin_user_id),
+                    description="Zwolniono wózek.",
+                    metadata={
+                        "reason": "Pusty orphan po pakowaniu — zwolnienie bez cofania zamówień.",
+                        "orders_detached": 0,
+                        "picking_cancelled": False,
+                        "empty_orphan": True,
+                        "from_status": out.get("from_status") or st.value,
+                        "show_order_numbers": False,
+                        **artifacts,
+                    },
+                )
+                _after_mutation(db, cart)
+                return {
+                    "cart_id": int(cart_id),
+                    "cart_status": CartStatus.AVAILABLE.value,
+                    "idempotent": bool(out.get("idempotent")),
+                    "orders_detached": 0,
+                    "picking_cancelled": False,
+                    "empty_orphan_released": True,
+                }
             raise InvalidCartTransitionError(
-                ADMIN_RELEASE_READY_MSG,
-                from_status=st.value,
-            )
-        if st == CartStatus.PACKING:
-            raise InvalidCartTransitionError(
-                ADMIN_RELEASE_PACKING_MSG,
+                ADMIN_RELEASE_READY_MSG if st == CartStatus.READY_FOR_PACKING else ADMIN_RELEASE_PACKING_MSG,
                 from_status=st.value,
             )
 
@@ -2486,6 +2646,7 @@ startPacking = start_packing
 finishPacking = finish_packing
 releaseCart = release_cart
 adminReleaseCart = admin_release_cart
+releaseEmptyOrphanCart = release_empty_orphan_cart
 
 
 def cancel_picking_session(*args, **kwargs):

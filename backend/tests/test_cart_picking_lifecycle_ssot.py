@@ -741,3 +741,138 @@ def test_finish_packing_partial_multi_frees_basket_slot(db):
     assert b2.order_id == int(o2.id)
     assert o2.cart_id == cart.id
     assert get_cart_status(cart) == CartStatus.PACKING
+
+
+def test_finish_packing_last_order_releases_even_if_cart_id_already_null(db):
+    """
+    Regression: clear skipped when cart_id already NULL → session-heal counted order →
+    order_packed + stuck PACKING. Remaining must use cart_id-only; always clear custody.
+    """
+    cart = _cart(db, code="CART-ORPH-PACK")
+    o1 = _order(db, number="ORPH-1")
+    db.commit()
+    claim_cart(db, cart=cart, operator_user_id=1)
+    start_picking(db, cart=cart, orders=[o1], operator_user_id=1)
+    finish_picking(db, cart=cart, orders=[o1], operator_user_id=1)
+    start_packing(db, cart=cart, operator_user_id=2)
+    db.commit()
+
+    # Symuluj drift: cart_id już NULL, ale picking_session_id + current_session_id zostają.
+    sess_id = getattr(o1, "picking_session_id", None) or 1
+    o1.cart_id = None
+    o1.picking_session_id = int(sess_id)
+    cart.current_session_id = int(sess_id)
+    cart.status = CartStatus.PACKING.value
+    db.add_all([o1, cart])
+    db.commit()
+
+    released = finish_packing(db, cart=cart, packed_order_id=int(o1.id))
+    db.commit()
+    db.refresh(o1)
+    db.refresh(cart)
+
+    assert released is True
+    assert o1.cart_id is None
+    assert o1.picking_session_id is None
+    assert get_cart_status(cart) == CartStatus.AVAILABLE
+
+
+def test_admin_release_empty_orphan_packing(db):
+    cart = _cart(db, code="CART-ORPH-ADM")
+    db.commit()
+    cart.status = CartStatus.PACKING.value
+    cart.packing_user_id = 9
+    db.add(cart)
+    db.commit()
+
+    out = admin_release_cart(
+        db,
+        cart_id=int(cart.id),
+        tenant_id=1,
+        warehouse_id=1,
+        admin_user_id=99,
+        acknowledge=True,
+    )
+    db.commit()
+    db.refresh(cart)
+    assert out.get("empty_orphan_released") is True
+    assert get_cart_status(cart) == CartStatus.AVAILABLE
+    assert cart.packing_user_id is None
+
+
+def test_admin_release_still_blocks_packing_with_attached_order(db):
+    cart = _cart(db, code="CART-ORPH-BLOCK")
+    o1 = _order(db, number="BLK-1")
+    db.commit()
+    claim_cart(db, cart=cart, operator_user_id=1)
+    start_picking(db, cart=cart, orders=[o1], operator_user_id=1)
+    finish_picking(db, cart=cart, orders=[o1], operator_user_id=1)
+    start_packing(db, cart=cart, operator_user_id=2)
+    db.commit()
+    assert get_cart_status(cart) == CartStatus.PACKING
+    assert o1.cart_id == cart.id
+
+    with pytest.raises(InvalidCartTransitionError) as ei:
+        admin_release_cart(
+            db,
+            cart_id=int(cart.id),
+            tenant_id=1,
+            warehouse_id=1,
+            admin_user_id=99,
+            acknowledge=True,
+        )
+    assert "pakowania" in str(ei.value.message).lower() or "pakowanie" in str(ei.value.message).lower()
+
+
+def test_release_empty_orphan_blocked_by_open_picking_session(db):
+    from backend.services.cart_picking_lifecycle_service import release_empty_orphan_cart
+
+    cart = _cart(db, code="CART-ORPH-SESS")
+    o1 = _order(db, number="SESS-1")
+    db.commit()
+    claim_cart(db, cart=cart, operator_user_id=1)
+    start_picking(db, cart=cart, orders=[o1], operator_user_id=1)
+    # Detach order custody without closing session — not a valid empty orphan.
+    o1.cart_id = None
+    o1.picking_session_id = None
+    db.add(o1)
+    cart.status = CartStatus.PACKING.value
+    db.add(cart)
+    db.commit()
+
+    with pytest.raises(InvalidCartTransitionError):
+        release_empty_orphan_cart(
+            db,
+            cart_id=int(cart.id),
+            tenant_id=1,
+            warehouse_id=1,
+            operator_user_id=1,
+        )
+
+
+def test_cancel_picking_still_blocks_ready_and_packing(db):
+    cart = _cart(db, code="CART-CXL-R")
+    o1 = _order(db, number="CXL-1")
+    db.commit()
+    claim_cart(db, cart=cart, operator_user_id=1)
+    start_picking(db, cart=cart, orders=[o1], operator_user_id=1)
+    finish_picking(db, cart=cart, orders=[o1], operator_user_id=1)
+    db.commit()
+    with pytest.raises(InvalidCartTransitionError):
+        cancel_picking(
+            db,
+            cart_id=int(cart.id),
+            tenant_id=1,
+            warehouse_id=1,
+            operator_user_id=1,
+        )
+    start_packing(db, cart=cart, operator_user_id=2)
+    db.commit()
+    with pytest.raises(InvalidCartTransitionError):
+        cancel_picking(
+            db,
+            cart_id=int(cart.id),
+            tenant_id=1,
+            warehouse_id=1,
+            operator_user_id=1,
+        )

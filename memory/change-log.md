@@ -1,3 +1,10 @@
+## 2026-07-19 — Orphan PACKING cart after last pack (cart id=2 pattern)
+
+- ROOT: `finish_packing` cleared custody only when `order.cart_id` set; remaining used session-heal (`list_orders_on_cart`). Path: cart_id already NULL + `picking_session_id`/`current_session_id` → remaining>0 → event `order_packed` → stuck PACKING; UI later 0 orders (cart_id-only).
+- cancel-session 409 `InvalidCartTransition` READY/PACKING = correct (CASE A ≠ CASE C). Magazyn→Wózki must use admin-release heal, not cancel-session.
+- FIX: always clear packed-order custody; remaining = `Order.cart_id` only; `release_empty_orphan_cart` SSOT; admin-release allows empty READY/PACKING orphan; UI copy for orphan „Zwolnij wózek”.
+- Tests: lifecycle ssot orphan / last-pack / cancel still blocked.
+
 ## 2026-07-19 — POST /orders 500: missing picking_handoff_mode
 
 - ROOT: ORM INSERT always includes `picking_handoff_mode`; prod schema without column → OperationalError → HTTP 500.

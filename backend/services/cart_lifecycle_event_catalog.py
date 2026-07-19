@@ -43,6 +43,7 @@ EVENT_ADMIN_CART_RELEASED = "admin_cart_released"
 EVENT_ADMIN_ORDERS_DETACHED = "admin_orders_detached"
 EVENT_ADMIN_PICKING_CANCELLED = "admin_picking_cancelled"
 EVENT_ORDER_DETACHED = "order_detached"
+EVENT_EMPTY_ORPHAN_CART_RELEASED = "empty_orphan_cart_released"
 
 # event_code → opis PL (tylko prezentacja)
 EVENT_DESCRIPTIONS_PL: dict[str, str] = {
@@ -68,6 +69,7 @@ EVENT_DESCRIPTIONS_PL: dict[str, str] = {
     EVENT_ADMIN_ORDERS_DETACHED: "Odłączono zamówienia od wózka.",
     EVENT_ADMIN_PICKING_CANCELLED: "Anulowano kompletację przez administratora.",
     EVENT_ORDER_DETACHED: "Odłączono zamówienie od wózka.",
+    EVENT_EMPTY_ORPHAN_CART_RELEASED: "Zwolniono pusty wózek (orphan lifecycle).",
 }
 
 # event_code → severity
@@ -94,6 +96,7 @@ EVENT_SEVERITY: dict[str, Severity] = {
     EVENT_ADMIN_ORDERS_DETACHED: SEVERITY_WARNING,
     EVENT_ADMIN_PICKING_CANCELLED: SEVERITY_WARNING,
     EVENT_ORDER_DETACHED: SEVERITY_WARNING,
+    EVENT_EMPTY_ORPHAN_CART_RELEASED: SEVERITY_AUDIT,
 }
 
 

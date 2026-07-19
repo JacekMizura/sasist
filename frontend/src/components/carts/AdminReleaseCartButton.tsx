@@ -24,6 +24,17 @@ export function canAdminReleaseCart(opts: {
   return false;
 }
 
+/** Empty READY/PACKING cart — CASE C: heal/release, not cancel picking. */
+export function isEmptyOrphanPackingCart(opts: {
+  status?: string | null;
+  ordersCount?: number;
+}): boolean {
+  const st = String(opts.status || "").toUpperCase();
+  return (
+    (st === "PACKING" || st === "READY_FOR_PACKING") && (opts.ordersCount ?? 0) === 0
+  );
+}
+
 type AdminReleaseCartButtonProps = {
   cartId: number;
   status?: string | null;
@@ -36,6 +47,7 @@ type AdminReleaseCartButtonProps = {
 
 /**
  * Panel OMS — awaryjne zwolnienie wózka (nie terminal WMS).
+ * Pusty PACKING/READY → backend release_empty_orphan_cart (bez cofania spakowanych zamówień).
  */
 export function AdminReleaseCartButton({
   cartId,
@@ -62,6 +74,8 @@ export function AdminReleaseCartButton({
     ordersCount,
     hasActiveSession,
   });
+
+  const emptyOrphan = isEmptyOrphanPackingCart({ status, ordersCount });
 
   if (!allowed || !visible) return null;
 
@@ -117,14 +131,28 @@ export function AdminReleaseCartButton({
             <h3 id="admin-release-cart-title" className="text-lg font-bold text-slate-900">
               Zwolnić wózek?
             </h3>
-            <p className="mt-3 text-sm leading-relaxed text-slate-600">
-              Ta operacja odłączy operatora, zakończy aktywną sesję oraz odłączy wszystkie przypisane
-              zamówienia.
-            </p>
-            <p className="mt-2 text-sm leading-relaxed text-slate-600">
-              Jeżeli wózek zawiera już potwierdzone produkty, operacja może wymagać anulowania
-              kompletacji.
-            </p>
+            {emptyOrphan ? (
+              <>
+                <p className="mt-3 text-sm leading-relaxed text-slate-600">
+                  Wózek nie ma przypisanych zamówień ani zajętych koszyków — wygląda na zablokowany
+                  status po pakowaniu. Operacja tylko znormalizuje lifecycle do DOSTĘPNY.
+                </p>
+                <p className="mt-2 text-sm leading-relaxed text-slate-600">
+                  Nie cofnie spakowanych zamówień ani nie anuluje kompletacji.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="mt-3 text-sm leading-relaxed text-slate-600">
+                  Ta operacja odłączy operatora, zakończy aktywną sesję oraz odłączy wszystkie przypisane
+                  zamówienia.
+                </p>
+                <p className="mt-2 text-sm leading-relaxed text-slate-600">
+                  Jeżeli wózek zawiera już potwierdzone produkty, operacja może wymagać anulowania
+                  kompletacji.
+                </p>
+              </>
+            )}
 
             <label className="mt-5 flex cursor-pointer items-start gap-2.5 text-sm text-slate-800">
               <input
