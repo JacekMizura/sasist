@@ -850,7 +850,14 @@ export async function postWmsPickingConfirmBasketPut(
   warehouseId: number,
   sourceStatusId: number,
   orderType: WmsPickingOrderTypeQuery,
-  body: { cart_id: number; basket_scan: string; manual?: boolean; recovery_order_id?: number | null },
+  body: {
+    cart_id: number;
+    basket_scan: string;
+    manual?: boolean;
+    recovery_order_id?: number | null;
+    product_id?: number | null;
+    location_id?: number | null;
+  },
 ): Promise<WmsPickingQuickPickResultApi> {
   const params = {
     tenant_id: tenantId,
@@ -867,6 +874,8 @@ export async function postWmsPickingConfirmBasketPut(
       ...(body.recovery_order_id != null && body.recovery_order_id > 0
         ? { recovery_order_id: body.recovery_order_id }
         : {}),
+      ...(body.product_id != null && body.product_id > 0 ? { product_id: body.product_id } : {}),
+      ...(body.location_id != null && body.location_id > 0 ? { location_id: body.location_id } : {}),
     },
     { params },
   );

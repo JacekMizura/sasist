@@ -317,7 +317,7 @@ def test_audit_basket_scan_without_pending_or_series(db, cart_env):
     cart_env["add_order"](1234, 1, qty=1)
     with pytest.raises(BasketPutError) as cm:
         _confirm(db, cart_env, "S-1-1", order_ids=[1234])
-    assert cm.value.code == "NO_PENDING_PUT"
+    assert cm.value.code == "EXPECTED_PRODUCT_SCAN"
     assert cart_env["pick_calls"] == []
 
 
@@ -494,9 +494,10 @@ def test_double_confirm_no_pending(db, cart_env):
     cart_env["add_order"](1224, 1, qty=1)
     _product_scan(db, cart_env, order_ids=[1224])
     _confirm(db, cart_env, "S-1-1", order_ids=[1224])
+    # Line rem=0 → series stale-cleared; without product context reject (no second Pick).
     with pytest.raises(BasketPutError) as cm:
         _confirm(db, cart_env, "S-1-1", order_ids=[1224])
-    assert cm.value.code == "NO_PENDING_PUT"
+    assert cm.value.code == "EXPECTED_PRODUCT_SCAN"
     assert len(cart_env["pick_calls"]) == 1
 
 

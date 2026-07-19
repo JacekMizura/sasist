@@ -18,7 +18,10 @@ export type MultiPickingScanContext = {
 export type MultiPickingScanDecision =
   | { kind: "noop" }
   | { kind: "reject"; code: string; consumed: true }
-  | { kind: "confirm_basket"; reason: "pending_confirm" | "series_switch" | "no_pending_probe" }
+  | {
+      kind: "confirm_basket";
+      reason: "pending_confirm" | "series_switch" | "select_destination";
+    }
   | { kind: "product_ean_pick" }
   | { kind: "fallthrough" };
 
@@ -83,7 +86,9 @@ export function resolveMultiPickingDetailScan(
     return { kind: "reject", code: "UNKNOWN_SCAN_CODE", consumed: true };
   }
 
-  // --- STATE A: SELECT_PRODUCT ---
+  // --- STATE A: PRODUCT SELECTED (detail context) — basket OR EAN ---
+  // Detail already knows product_id. Basket selects destination (Pick=0).
+  // EAN creates pending qty=1 (physical confirmation) without requiring basket first.
   if (isProductEan) {
     if (typeof rem === "number" && rem <= 1e-9) {
       return { kind: "reject", code: "PRODUCT_ALREADY_COMPLETE", consumed: true };
@@ -91,7 +96,7 @@ export function resolveMultiPickingDetailScan(
     return { kind: "product_ean_pick" };
   }
   if (looksLikeCartBasketScan(scan)) {
-    return { kind: "reject", code: "EXPECTED_PRODUCT_SCAN", consumed: true };
+    return { kind: "confirm_basket", reason: "select_destination" };
   }
   if (looksLikeProductBarcode(scan)) {
     return { kind: "reject", code: "PRODUCT_NOT_IN_PICKING", consumed: true };

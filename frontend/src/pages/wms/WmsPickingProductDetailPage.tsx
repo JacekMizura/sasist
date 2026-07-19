@@ -361,6 +361,8 @@ export default function WmsPickingProductDetailPage() {
       setScannerInputPlaceholder("Zeskanuj lokalizację");
     } else if (detail.basket_put_active_series?.basket_label) {
       setScannerInputPlaceholder("Skanuj EAN produktu");
+    } else if (detail.requires_basket_put_confirm) {
+      setScannerInputPlaceholder("Zeskanuj koszyk lub EAN");
     } else {
       setScannerInputPlaceholder("Skanuj EAN produktu");
     }
@@ -687,7 +689,7 @@ export default function WmsPickingProductDetailPage() {
   async function confirmBasketScan(
     rawScan: string,
     manual = false,
-    routeReason: "pending_confirm" | "series_switch" | "no_pending_probe" = "pending_confirm",
+    routeReason: "pending_confirm" | "series_switch" | "select_destination" = "pending_confirm",
   ) {
     if (!pickingSession || warehouseId == null || !pickingSession.cartId) {
       scanGateRef.current = false;
@@ -700,11 +702,17 @@ export default function WmsPickingProductDetailPage() {
     scanGateRef.current = true;
     setPickBusy(true);
     setPickMsg(null);
+    const locId =
+      activeLocationId ??
+      selectedLocation?.location_id ??
+      detail?.locations?.[0]?.location_id ??
+      null;
     multiScanTrace("BASKET_SCAN", {
       raw_code: normalizeScanEan(rawScan),
       classified_as: routeReason,
-      pending_before_confirm: Boolean(detail?.basket_put_pending),
+      pending_before_confirm: Boolean(detail?.basket_put_pending || pendingSeed),
       product_id: productId,
+      location_id: locId,
     });
     try {
       const result = await postWmsPickingConfirmBasketPut(
@@ -717,6 +725,8 @@ export default function WmsPickingProductDetailPage() {
           basket_scan: rawScan,
           manual,
           recovery_order_id: recoveryOrderId,
+          product_id: Number.isFinite(productId) && productId > 0 ? productId : null,
+          location_id: locId,
         },
       );
       multiScanTrace("BASKET_CONFIRM_OK", {
@@ -726,12 +736,16 @@ export default function WmsPickingProductDetailPage() {
         order_item_id: result.order_item_id ?? null,
         basket_label: result.active_series?.basket_label ?? result.expected_basket_label ?? null,
       });
+      setPendingSeed(null);
       setPickMsg(result.message ?? `Koszyk potwierdzony`);
       await load();
-      // Series destination switch: qty unchanged — stay on detail, await next EAN.
-      if (result.phase === "SERIES_DESTINATION_SWITCHED" || result.picked === false) {
-        if (result.phase === "SERIES_DESTINATION_SWITCHED") {
-          // Exactly one success beep via showScanFeedback (do not also playScanBeep).
+      // Destination-only (click path / series switch): qty unchanged — await next EAN.
+      if (
+        result.phase === "SERIES_DESTINATION_SWITCHED" ||
+        result.phase === "SERIES_ACTIVATED" ||
+        result.picked === false
+      ) {
+        if (result.phase === "SERIES_DESTINATION_SWITCHED" || result.phase === "SERIES_ACTIVATED") {
           showScanFeedback(
             mapWmsScanErrorCode("SERIES_DESTINATION_SWITCHED", {
               backendMessage: result.message,
@@ -765,9 +779,7 @@ export default function WmsPickingProductDetailPage() {
       }
     } catch (e: unknown) {
       const extracted = extractWmsScanErrorDetail(e);
-      let code = extracted.code;
-      if (!code && (routeReason === "no_pending_probe")) code = "EXPECTED_PRODUCT_SCAN";
-      if (!code) code = "UNKNOWN_SCAN_CODE";
+      const code = extracted.code || "UNKNOWN_SCAN_CODE";
       const feedback = mapWmsScanErrorCode(code, {
         backendMessage: extracted.message,
         contextHint: extracted.eligibleLabels,
@@ -1019,13 +1031,10 @@ export default function WmsPickingProductDetailPage() {
               ) : effectivePending ? (
                 <div className="w-full max-w-xl rounded-3xl border-4 border-amber-500 bg-amber-50 px-6 py-6 text-center shadow-lg ring-4 ring-amber-300/40">
                   <p className="text-sm font-black uppercase tracking-[0.2em] text-amber-800">
-                    Produkt zeskanowany — zeskanuj koszyk
+                    Produkt zeskanowany
                   </p>
                   <p className="mt-2 text-lg font-bold text-amber-950">
-                    {fmtQty(effectivePending.quantity ?? 1)} szt. oczekuje na odłożenie
-                  </p>
-                  <p className="mt-4 text-base font-black uppercase tracking-wide text-amber-900">
-                    Oczekuje na koszyk
+                    {fmtQty(effectivePending.quantity ?? 1)} szt. — zeskanuj jeden z koszyków
                   </p>
                   {(effectivePending.eligible_baskets?.length ?? 0) > 0 ? (
                     <ul className="mt-4 space-y-2 text-left">
@@ -1065,9 +1074,12 @@ export default function WmsPickingProductDetailPage() {
                 </div>
               ) : detail.basket_put_active_series?.basket_label ? (
                 <div className={`w-full max-w-md rounded-2xl border-2 px-5 py-4 ${BASKET_PUT_STYLE_RING[(detail.put_to_basket_color_index ?? 0) % BASKET_PUT_STYLE_RING.length]}`}>
-                  <p className="text-[10px] font-black uppercase tracking-widest opacity-80">Seria — skanuj kolejne sztuki</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest opacity-80">Aktywny koszyk</p>
                   <p className="mt-1 text-3xl font-black tabular-nums">{detail.basket_put_active_series.basket_label}</p>
                   <p className="mt-1 text-sm font-semibold">
+                    Zeskanuj EAN produktu, aby dodać sztukę.
+                  </p>
+                  <p className="mt-1 text-sm font-semibold opacity-80">
                     Pozostało:{" "}
                     {fmtQty(
                       typeof detail.basket_put_active_series.line_remaining === "number" &&
@@ -1079,11 +1091,14 @@ export default function WmsPickingProductDetailPage() {
                   </p>
                 </div>
               ) : detail.requires_basket_put_confirm && detail.orders?.some((o) => (o.quantity_to_pick ?? 0) > 1e-9 && o.basket_slot) ? (
-                <div className="w-full max-w-md rounded-2xl border-2 border-slate-300 bg-slate-50 px-5 py-4 text-left">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
-                    Koszyki wymagające tego SKU
+                <div className="w-full max-w-md rounded-2xl border-2 border-indigo-300 bg-indigo-50 px-5 py-4 text-left">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-indigo-700">
+                    Wybierz koszyk
                   </p>
-                  <ul className="mt-2 space-y-1.5">
+                  <p className="mt-1 text-sm font-semibold text-indigo-950">
+                    Zeskanuj koszyk, do którego chcesz odkładać ten produkt.
+                  </p>
+                  <ul className="mt-3 space-y-1.5">
                     {detail.orders
                       .filter((o) => (o.quantity_to_pick ?? 0) > 1e-9 && o.basket_slot)
                       .map((o) => (
@@ -1093,11 +1108,8 @@ export default function WmsPickingProductDetailPage() {
                         </li>
                       ))}
                   </ul>
-                  <p className="mt-3 text-sm font-black uppercase tracking-wide text-slate-700">
-                    Zeskanuj EAN produktu
-                  </p>
-                  <p className="mt-1 text-xs font-semibold text-slate-500">
-                    Dopiero po skanie EAN wybierzesz koszyk. Sam skan koszyka nie zapisuje Pick.
+                  <p className="mt-3 text-xs font-semibold text-slate-500">
+                    Możesz też najpierw zeskanować EAN — wtedy odłożenie +1 nastąpi przy skanie koszyka.
                   </p>
                 </div>
               ) : null}

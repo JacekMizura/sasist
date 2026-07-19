@@ -1,10 +1,13 @@
 """
 Basket put confirmation state machine for MULTI / baskets carts.
 
-PRODUCT_SCAN → pending put (product-level, NO pick, NO forced order_item)
-BASKET_SCAN → resolve order_item for that basket → Pick +1 → PUT_CONFIRMED
-Series: after basket verified for (product, order_item, basket), further product
-scans increment without re-scanning basket until that line is exhausted / context changes.
+SELECTED PRODUCT CONTEXT (detail product_id) is independent of PHYSICAL QTY (pending).
+
+- Product EAN (list or detail) → pending qty=1 (unassigned physical unit), NO Pick.
+- Basket + pending → resolve order_item → Pick + consume pending → series.
+- Basket + product context, no pending, no series → activate series destination, Pick=0.
+- Basket + active series → retarget destination, Pick=0.
+- Product EAN + active series → Pick +1 to series basket.
 """
 
 from __future__ import annotations
@@ -55,6 +58,7 @@ PutPhase = Literal[
     "BASKET_MISMATCH",
     "AWAITING_BASKET_STILL",
     "SERIES_DESTINATION_SWITCHED",
+    "SERIES_ACTIVATED",
 ]
 
 
@@ -694,29 +698,58 @@ def confirm_basket_put(
     record_pick_fn,
     manual: bool = False,
     order_ids: list[int] | None = None,
+    product_id: int | None = None,
+    location_id: int | None = None,
 ) -> BasketPutResult:
     """
-    Basket scan either:
-    - confirms an existing product pending → Pick + series, or
-    - retargets active series destination → NO Pick (qty unchanged).
+    Basket scan outcomes:
 
-    Basket scan alone never invents a product unit / never increments picked qty
-    without a prior product pending (or series product-scan path).
+    - pending exists → Pick + activate/keep series (consume pending)
+    - series exists, no pending → retarget destination, Pick=0
+    - product_id context (detail), no pending, no series → activate destination, Pick=0
+    - no pending, no series, no product context → EXPECTED_PRODUCT_SCAN
+
+    Pending means only: physical unit already scanned, not yet assigned to a basket.
+    Product context (detail route) alone is enough to select an eligible basket.
     """
     sess = _lock_session_for_put(db, assert_cart_ready_for_quick_pick(db, cart))
     uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
     pending = put_state.get_pending(sess)
     oid_scope = list(order_ids or [])
+    ctx_product_id = int(product_id) if product_id is not None and int(product_id) > 0 else None
+    ctx_location_id = int(location_id) if location_id is not None and int(location_id) > 0 else None
 
-    # --- Series destination switch (no pending, no Pick) ---
+    # --- No pending: series switch OR product-context destination activation ---
     if pending is None:
         series = put_state.get_active_series(sess)
         if series is None:
-            raise BasketPutError(
-                "NO_PENDING_PUT",
-                "Brak oczekującego odłożenia — najpierw zeskanuj produkt.",
-                http_status=409,
+            if ctx_product_id is None:
+                raise BasketPutError(
+                    ec.EXPECTED_PRODUCT_SCAN,
+                    ec.operator_message(ec.EXPECTED_PRODUCT_SCAN),
+                    http_status=409,
+                    extra={"phase": "EXPECTED_PRODUCT_SCAN"},
+                )
+            if ctx_location_id is None:
+                raise BasketPutError(
+                    ec.UNKNOWN_SCAN_CODE,
+                    "Brak lokalizacji produktu — nie można aktywować koszyka docelowego.",
+                    http_status=409,
+                    extra={"phase": "NO_LOCATION_FOR_SERIES"},
+                )
+            return _activate_or_switch_series_destination(
+                db,
+                sess=sess,
+                cart=cart,
+                basket_scan=basket_scan,
+                uid=uid,
+                oid_scope=oid_scope,
+                bind_product_id=ctx_product_id,
+                bind_location_id=ctx_location_id,
+                previous_series=None,
+                phase="SERIES_ACTIVATED",
             )
+
         ser_uid = int(series.get("operator_user_id") or 0)
         if uid is not None and ser_uid and ser_uid != uid:
             raise BasketPutError(
@@ -724,7 +757,6 @@ def confirm_basket_put(
                 "Aktywna seria należy do innego operatora.",
                 http_status=409,
             )
-        # Stale series (line exhausted / basket reassigned) → clear; do not invent Pick.
         oid_scope_chk = list(oid_scope or [])
         if not oid_scope_chk and series.get("order_id"):
             oid_scope_chk = [int(series["order_id"])]
@@ -746,110 +778,39 @@ def confirm_basket_put(
                 reason="stale_series_on_basket_scan",
                 previous_basket=series.get("basket_label"),
             )
+            if ctx_product_id is not None and ctx_location_id is not None:
+                return _activate_or_switch_series_destination(
+                    db,
+                    sess=sess,
+                    cart=cart,
+                    basket_scan=basket_scan,
+                    uid=uid,
+                    oid_scope=oid_scope,
+                    bind_product_id=ctx_product_id,
+                    bind_location_id=ctx_location_id,
+                    previous_series=None,
+                    phase="SERIES_ACTIVATED",
+                )
             raise BasketPutError(
-                "NO_PENDING_PUT",
-                "Seria odkładania wygasła — najpierw zeskanuj produkt.",
+                ec.EXPECTED_PRODUCT_SCAN,
+                "Seria odkładania wygasła — wybierz produkt / zeskanuj EAN, potem koszyk.",
                 http_status=409,
                 extra={"phase": "SERIES_STALE_CLEARED"},
             )
-        scanned = _find_scanned_basket(db, cart=cart, basket_scan=basket_scan)
-        if scanned is None:
-            _raise_unknown_basket(
-                db,
-                cart=cart,
-                basket_scan=basket_scan,
-                sess=sess,
-                uid=uid,
-                product_id=int(series["product_id"]) if series.get("product_id") else None,
-                pending=None,
-                oid_scope=list(oid_scope or []),
-            )
-        if not _basket_has_assigned_order(db, cart=cart, basket=scanned):
-            raise BasketPutError(
-                ec.BASKET_EMPTY,
-                ec.operator_message(ec.BASKET_EMPTY),
-                http_status=409,
-                extra={"phase": "BASKET_EMPTY", "scanned_basket": primary_basket_label(scanned)},
-            )
-        scanned_label = primary_basket_label(scanned)
-        if int(scanned.id) == int(series.get("basket_id") or 0):
-            # Same basket — no-op for destination; still no Pick without product.
-            raise BasketPutError(
-                ec.NO_PENDING_PUT,
-                f"Seria już wskazuje koszyk {scanned_label}. Zeskanuj EAN produktu, aby odłożyć kolejną sztukę.",
-                http_status=409,
-                extra={"phase": "SERIES_ACTIVE", "active_series": series},
-            )
         if not oid_scope and series.get("order_id"):
-            # Prefer full cohort from caller; series order alone is insufficient for multi-order SKU.
             oid_scope = [int(series["order_id"])]
-        allocation, err = resolve_allocation_for_basket_scan(
+        return _activate_or_switch_series_destination(
             db,
+            sess=sess,
             cart=cart,
-            order_ids=oid_scope,
-            product_id=int(series["product_id"]),
-            basket=scanned,
-        )
-        if err == "BASKET_PRODUCT_MISMATCH" or allocation is None:
-            raise BasketPutError(
-                "BASKET_PRODUCT_MISMATCH",
-                f"Koszyk {scanned_label} nie przyjmuje aktywnej serii produktu "
-                f"(product_id={series.get('product_id')}). "
-                f"Zeskanuj EAN właściwego produktu, potem koszyk — albo odłóż serię.",
-                http_status=409,
-                extra={
-                    "phase": "BASKET_PRODUCT_MISMATCH",
-                    "scanned_basket": scanned_label,
-                    "series_product_id": series.get("product_id"),
-                    "series_basket_label": series.get("basket_label"),
-                },
-            )
-        if err == "BASKET_PRODUCT_ALREADY_COMPLETE":
-            raise BasketPutError(
-                "BASKET_PRODUCT_ALREADY_COMPLETE",
-                f"Koszyk {scanned_label} ma już komplet tego produktu.",
-                http_status=409,
-                extra={"phase": "BASKET_PRODUCT_ALREADY_COMPLETE", "scanned_basket": scanned_label},
-            )
-        new_series = {
-            "operator_user_id": uid if uid is not None else series.get("operator_user_id"),
-            "product_id": int(series["product_id"]),
-            "order_id": int(allocation.order_id),
-            "order_item_id": int(allocation.order_item_id),
-            "basket_id": int(allocation.basket_id),
-            "basket_label": allocation.basket_label,
-            "location_id": int(series["location_id"]),
-            "activated_at": put_state.utc_now_iso(),
-        }
-        put_state.set_active_series(db, sess, new_series)
-        series_out = project_active_series_with_live_remaining(
-            db,
-            cart=cart,
-            series=new_series,
-            order_ids=list(oid_scope or []),
-        ) or {**new_series, "line_remaining": float(allocation.line_remaining)}
-        _audit(
-            "BASKET_SERIES_DESTINATION_SWITCHED",
-            session_id=sess.id,
-            operator=uid,
-            previous_basket=series.get("basket_label"),
-            next_basket=allocation.basket_label,
-            product_id=series.get("product_id"),
-            quantity_put=0,
-            line_remaining=series_out.get("line_remaining"),
-        )
-        return BasketPutResult(
+            basket_scan=basket_scan,
+            uid=uid,
+            oid_scope=oid_scope,
+            bind_product_id=int(series["product_id"]),
+            bind_location_id=int(series["location_id"]),
+            previous_series=series,
             phase="SERIES_DESTINATION_SWITCHED",
-            order_id=int(allocation.order_id),
-            order_item_id=int(allocation.order_item_id),
-            quantity_put=0.0,
-            active_series=series_out,
-            expected_basket_label=allocation.basket_label,
-            scanned_basket=scanned_label,
-            message=(
-                f"Zmieniono koszyk docelowy serii na {allocation.basket_label}. "
-                f"Qty bez zmian — zeskanuj EAN, aby odłożyć kolejną sztukę."
-            ),
+            operator_user_id_override=uid if uid is not None else series.get("operator_user_id"),
         )
 
     pend_uid = int(pending.get("operator_user_id") or 0)
@@ -860,7 +821,13 @@ def confirm_basket_put(
             http_status=409,
         )
 
-    product_id = int(pending["product_id"])
+    pending_product_id = int(pending["product_id"])
+    if ctx_product_id is not None and ctx_product_id != pending_product_id:
+        raise BasketPutError(
+            ec.FOREIGN_SKU_ON_SERIES,
+            f"Oczekujące odłożenie dotyczy produktu {pending_product_id}, a kontekst ekranu to {ctx_product_id}.",
+            http_status=409,
+        )
     scanned = _find_scanned_basket(db, cart=cart, basket_scan=basket_scan)
     if scanned is None:
         _raise_unknown_basket(
@@ -869,7 +836,7 @@ def confirm_basket_put(
             basket_scan=basket_scan,
             sess=sess,
             uid=uid,
-            product_id=product_id,
+            product_id=pending_product_id,
             pending=pending,
             oid_scope=list(oid_scope or []),
         )
@@ -883,7 +850,6 @@ def confirm_basket_put(
         )
 
     scanned_label = primary_basket_label(scanned)
-    # Authorization SSOT: live DB resolve — never trust pending.eligible_baskets alone.
     if not oid_scope:
         elig = pending.get("eligible_baskets") or []
         oid_scope = [int(r["order_id"]) for r in elig if isinstance(r, dict) and r.get("order_id")]
@@ -892,12 +858,12 @@ def confirm_basket_put(
         db,
         cart=cart,
         order_ids=list(oid_scope or []),
-        product_id=product_id,
+        product_id=pending_product_id,
         basket=scanned,
     )
     if err == "BASKET_PRODUCT_MISMATCH" or (err is None and allocation is None):
         live = (
-            list_eligible_basket_allocations(db, cart=cart, order_ids=oid_scope, product_id=product_id)
+            list_eligible_basket_allocations(db, cart=cart, order_ids=oid_scope, product_id=pending_product_id)
             if oid_scope
             else []
         )
@@ -908,7 +874,7 @@ def confirm_basket_put(
             session_id=sess.id,
             operator=uid,
             scanned_basket=scanned_label,
-            product_id=product_id,
+            product_id=pending_product_id,
         )
         raise BasketPutError(
             ec.BASKET_PRODUCT_MISMATCH,
@@ -929,7 +895,7 @@ def confirm_basket_put(
         if oid_scope:
             live = eligible_baskets_payload(
                 list_eligible_basket_allocations(
-                    db, cart=cart, order_ids=list(oid_scope), product_id=product_id
+                    db, cart=cart, order_ids=list(oid_scope), product_id=pending_product_id
                 )
             )
             if live:
@@ -942,7 +908,7 @@ def confirm_basket_put(
             session_id=sess.id,
             operator=uid,
             scanned_basket=scanned_label,
-            product_id=product_id,
+            product_id=pending_product_id,
         )
         raise BasketPutError(
             "BASKET_PRODUCT_ALREADY_COMPLETE",
@@ -969,13 +935,13 @@ def confirm_basket_put(
         session_id=sess.id,
         operator=uid,
         order_id=oid,
-        product_id=product_id,
+        product_id=pending_product_id,
         scanned_basket=scanned_label,
         quantity=qty,
     )
     series = {
         "operator_user_id": uid,
-        "product_id": int(product_id),
+        "product_id": int(pending_product_id),
         "order_id": int(allocation.order_id),
         "order_item_id": int(allocation.order_item_id),
         "basket_id": int(allocation.basket_id),
@@ -991,8 +957,6 @@ def confirm_basket_put(
         series=series,
         order_ids=list(oid_scope or []),
     )
-    # If pick exhausted the line, live resolve returns None — still report 0 for this response
-    # without clearing metadata here (existing sanitize / next product-scan SSOT clears).
     if series_out is None:
         rem_after = float(allocation.line_remaining) - float(qty)
         series_out = {**series, "line_remaining": max(0.0, rem_after)}
@@ -1001,7 +965,7 @@ def confirm_basket_put(
         session_id=sess.id,
         operator=uid,
         basket=allocation.basket_label,
-        product_id=product_id,
+        product_id=pending_product_id,
         order_item_id=allocation.order_item_id,
     )
     _audit(
@@ -1009,7 +973,7 @@ def confirm_basket_put(
         session_id=sess.id,
         operator=uid,
         order_id=oid,
-        product_id=product_id,
+        product_id=pending_product_id,
         basket=allocation.basket_label,
         quantity=qty,
         via="basket_confirm",
@@ -1023,4 +987,138 @@ def confirm_basket_put(
         expected_basket_label=allocation.basket_label,
         scanned_basket=scanned_label,
         message=f"KOSZYK {allocation.basket_label} POTWIERDZONY. Odłożono {qty:g} szt.",
+    )
+
+
+def _activate_or_switch_series_destination(
+    db: Session,
+    *,
+    sess: WmsOperationSession,
+    cart: Cart,
+    basket_scan: str,
+    uid: int | None,
+    oid_scope: list[int],
+    bind_product_id: int,
+    bind_location_id: int,
+    previous_series: dict[str, Any] | None,
+    phase: Literal["SERIES_ACTIVATED", "SERIES_DESTINATION_SWITCHED"],
+    operator_user_id_override: Any = None,
+) -> BasketPutResult:
+    """Bind / retarget active series to scanned basket. Never increments Pick."""
+    scanned = _find_scanned_basket(db, cart=cart, basket_scan=basket_scan)
+    if scanned is None:
+        _raise_unknown_basket(
+            db,
+            cart=cart,
+            basket_scan=basket_scan,
+            sess=sess,
+            uid=uid,
+            product_id=bind_product_id,
+            pending=None,
+            oid_scope=list(oid_scope or []),
+        )
+    if not _basket_has_assigned_order(db, cart=cart, basket=scanned):
+        raise BasketPutError(
+            ec.BASKET_EMPTY,
+            ec.operator_message(ec.BASKET_EMPTY),
+            http_status=409,
+            extra={"phase": "BASKET_EMPTY", "scanned_basket": primary_basket_label(scanned)},
+        )
+    scanned_label = primary_basket_label(scanned)
+    if previous_series is not None and int(scanned.id) == int(previous_series.get("basket_id") or 0):
+        raise BasketPutError(
+            ec.NO_PENDING_PUT,
+            f"Seria już wskazuje koszyk {scanned_label}. Zeskanuj EAN produktu, aby odłożyć kolejną sztukę.",
+            http_status=409,
+            extra={"phase": "SERIES_ACTIVE", "active_series": previous_series},
+        )
+
+    allocation, err = resolve_allocation_for_basket_scan(
+        db,
+        cart=cart,
+        order_ids=list(oid_scope or []),
+        product_id=int(bind_product_id),
+        basket=scanned,
+    )
+    if err == "BASKET_PRODUCT_MISMATCH" or allocation is None:
+        raise BasketPutError(
+            "BASKET_PRODUCT_MISMATCH",
+            f"Koszyk {scanned_label} nie przyjmuje produktu "
+            f"(product_id={bind_product_id}). "
+            f"Zeskanuj właściwy koszyk dla tego SKU.",
+            http_status=409,
+            extra={
+                "phase": "BASKET_PRODUCT_MISMATCH",
+                "scanned_basket": scanned_label,
+                "series_product_id": bind_product_id,
+                "series_basket_label": (previous_series or {}).get("basket_label"),
+            },
+        )
+    if err == "BASKET_PRODUCT_ALREADY_COMPLETE":
+        raise BasketPutError(
+            "BASKET_PRODUCT_ALREADY_COMPLETE",
+            f"Koszyk {scanned_label} ma już komplet tego produktu.",
+            http_status=409,
+            extra={"phase": "BASKET_PRODUCT_ALREADY_COMPLETE", "scanned_basket": scanned_label},
+        )
+
+    op_uid = operator_user_id_override if operator_user_id_override is not None else uid
+    new_series = {
+        "operator_user_id": op_uid,
+        "product_id": int(bind_product_id),
+        "order_id": int(allocation.order_id),
+        "order_item_id": int(allocation.order_item_id),
+        "basket_id": int(allocation.basket_id),
+        "basket_label": allocation.basket_label,
+        "location_id": int(bind_location_id),
+        "activated_at": put_state.utc_now_iso(),
+    }
+    put_state.set_active_series(db, sess, new_series)
+    series_out = project_active_series_with_live_remaining(
+        db,
+        cart=cart,
+        series=new_series,
+        order_ids=list(oid_scope or []),
+    ) or {**new_series, "line_remaining": float(allocation.line_remaining)}
+
+    if phase == "SERIES_ACTIVATED":
+        _audit(
+            "BASKET_SERIES_ACTIVATED",
+            session_id=sess.id,
+            operator=uid,
+            basket=allocation.basket_label,
+            product_id=bind_product_id,
+            order_item_id=allocation.order_item_id,
+            quantity_put=0,
+            via="product_context_basket",
+        )
+        message = (
+            f"AKTYWNY KOSZYK: {allocation.basket_label}. "
+            f"Zeskanuj EAN produktu, aby dodać sztukę."
+        )
+    else:
+        _audit(
+            "BASKET_SERIES_DESTINATION_SWITCHED",
+            session_id=sess.id,
+            operator=uid,
+            previous_basket=(previous_series or {}).get("basket_label"),
+            next_basket=allocation.basket_label,
+            product_id=bind_product_id,
+            quantity_put=0,
+            line_remaining=series_out.get("line_remaining"),
+        )
+        message = (
+            f"Zmieniono koszyk docelowy serii na {allocation.basket_label}. "
+            f"Qty bez zmian — zeskanuj EAN, aby odłożyć kolejną sztukę."
+        )
+
+    return BasketPutResult(
+        phase=phase,
+        order_id=int(allocation.order_id),
+        order_item_id=int(allocation.order_item_id),
+        quantity_put=0.0,
+        active_series=series_out,
+        expected_basket_label=allocation.basket_label,
+        scanned_basket=scanned_label,
+        message=message,
     )

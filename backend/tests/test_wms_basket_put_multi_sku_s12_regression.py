@@ -272,13 +272,13 @@ def test_case4_foreign_series_hidden_and_does_not_force_s11(db, env):
 
     # Without product filter series still sits in metadata. Confirm S-1-2 must not
     # invent a Pick via foreign series — stale series for product 191 (no open line)
-    # is cleared → NO_PENDING_PUT (was BASKET_PRODUCT_MISMATCH before sanitize).
+    # is cleared → EXPECTED_PRODUCT_SCAN without product context (no invent Pick).
     raw = get_basket_put_ui_state(db, cart=env["cart"], sanitize=False)
     assert raw["active_series"] is not None
     assert int(raw["active_series"]["product_id"]) == 191
     with pytest.raises(BasketPutError) as cm:
         _confirm(db, env, "S-1-2")
-    assert cm.value.code == "NO_PENDING_PUT"
+    assert cm.value.code == "EXPECTED_PRODUCT_SCAN"
     assert env["pick_calls"] == []
 
     # Correct entry: product scan → unbound pending → S-1-2 OK

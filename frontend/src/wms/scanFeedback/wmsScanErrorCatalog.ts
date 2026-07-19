@@ -30,8 +30,8 @@ const CATALOG: Record<
   },
   EXPECTED_PRODUCT_SCAN: {
     severity: "warning",
-    title: "OCZEKIWANY PRODUKT",
-    message: "Najpierw zeskanuj produkt, który chcesz zebrać.",
+    title: "WYBIERZ PRODUKT",
+    message: "Otwórz produkt na liście albo zeskanuj EAN — potem możesz wybrać koszyk.",
   },
   UNKNOWN_SCAN_CODE: {
     severity: "error",

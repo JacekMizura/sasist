@@ -17,7 +17,7 @@ describe("looksLikeCartBasketScan", () => {
 describe("resolveMultiPickingDetailScan — strict states", () => {
   const ean = "5905450181208";
 
-  it("STATE A: product → pick; basket → EXPECTED_PRODUCT_SCAN consumed", () => {
+  it("STATE A: product → pending pick; basket → select_destination (not EXPECTED_PRODUCT_SCAN)", () => {
     expect(
       resolveMultiPickingDetailScan(ean, {
         requiresBasketPut: true,
@@ -34,7 +34,7 @@ describe("resolveMultiPickingDetailScan — strict states", () => {
         hasActiveSeries: false,
         productEan: ean,
       }),
-    ).toEqual({ kind: "reject", code: "EXPECTED_PRODUCT_SCAN", consumed: true });
+    ).toEqual({ kind: "confirm_basket", reason: "select_destination" });
   });
 
   it("valid product EAN never yields UNKNOWN_SCAN_CODE", () => {

@@ -31,13 +31,13 @@ AWAITING_BASKET_CONFIRMATION = "AWAITING_BASKET_CONFIRMATION"
 OPERATOR_MESSAGES: dict[str, str] = {
     PRODUCT_NOT_IN_PICKING: "Ten produkt nie znajduje się na liście do zebrania.",
     PRODUCT_ALREADY_COMPLETE: "Ten produkt został już zebrany w wymaganej ilości.",
-    EXPECTED_PRODUCT_SCAN: "Najpierw zeskanuj produkt, który chcesz zebrać.",
+    EXPECTED_PRODUCT_SCAN: "Otwórz produkt na liście albo zeskanuj EAN — potem możesz wybrać koszyk.",
     UNKNOWN_SCAN_CODE: "Nie rozpoznano zeskanowanego kodu.",
     CART_NOT_ACTIVE: "Ten wózek nie należy do aktywnego zbierania.",
     EXPECTED_BASKET_SCAN: (
         "Oczekiwany jest teraz skan koszyka. Najpierw odłóż zeskanowany produkt do koszyka."
     ),
-    NO_PENDING_PUT: "Najpierw zeskanuj produkt, który chcesz zebrać.",
+    NO_PENDING_PUT: "Zeskanuj EAN produktu, aby dodać sztukę do aktywnego koszyka.",
     PENDING_PUT_EXISTS: "Najpierw odłóż poprzednio zeskanowaną sztukę do koszyka.",
     BASKET_MISMATCH: "Oczekiwany jest skan koszyka. Nie rozpoznano tego kodu jako właściwego koszyka.",
     BASKET_OTHER_CART: "Ten koszyk należy do innego wózka.",

@@ -1672,19 +1672,28 @@ def post_picking_confirm_basket_put(
         sess = assert_cart_ready_for_quick_pick(db, cart)
         pending = get_pending(sess)
         series = get_active_series(sess)
-        if pending is None and series is None:
+        ctx_product_id = (
+            int(body.product_id) if body.product_id is not None and int(body.product_id) > 0 else None
+        )
+        ctx_location_id = (
+            int(body.location_id) if body.location_id is not None and int(body.location_id) > 0 else None
+        )
+        if pending is None and series is None and ctx_product_id is None:
             raise BasketPutError(
-                "NO_PENDING_PUT",
-                "Brak oczekującego odłożenia — najpierw zeskanuj produkt.",
+                "EXPECTED_PRODUCT_SCAN",
+                "Brak kontekstu produktu — otwórz produkt lub zeskanuj EAN, potem koszyk.",
                 http_status=409,
             )
-        # Product/location for Pick path: pending first; series only used for destination switch (qty=0).
+        # Product/location for Pick path: pending first; series / context for destination-only.
         if pending is not None:
             _pending_product_id = int(pending["product_id"])
             _pending_location_id = int(pending["location_id"])
-        else:
+        elif series is not None:
             _pending_product_id = int(series["product_id"])
             _pending_location_id = int(series["location_id"])
+        else:
+            _pending_product_id = int(ctx_product_id)
+            _pending_location_id = int(ctx_location_id) if ctx_location_id is not None else 0
 
         ot = order_type if order_type in ("single", "multi", "all") else "all"
         confirm_order_ids = resolve_wms_picking_order_ids(
@@ -1704,6 +1713,8 @@ def post_picking_confirm_basket_put(
             record_pick_fn=_do_record,
             manual=bool(body.manual),
             order_ids=confirm_order_ids,
+            product_id=ctx_product_id,
+            location_id=ctx_location_id,
         )
         db.commit()
         qty_put = float(put_res.quantity_put or 0)

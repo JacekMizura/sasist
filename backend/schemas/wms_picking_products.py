@@ -353,6 +353,16 @@ class WmsPickingConfirmBasketPutBody(BaseModel):
         description="True gdy potwierdzenie koszyka z ręcznego wpisu (audit MANUAL_BASKET_CONFIRMATION).",
     )
     recovery_order_id: Optional[int] = Field(default=None, ge=1)
+    product_id: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Kontekst produktu z ekranu detail — pozwala wybrać koszyk bez pending (Pick=0).",
+    )
+    location_id: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Lokalizacja źródłowa dla aktywacji serii bez pending (wymagana z product_id).",
+    )
 
 
 class WmsPickingCancelPendingBasketPutBody(BaseModel):
