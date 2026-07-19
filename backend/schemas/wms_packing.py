@@ -255,7 +255,14 @@ class WmsPackingOrderCard(BaseModel):
     wms_cart_id: Optional[int] = Field(default=None, description="order.cart_id (null po domknięciu zbierania)")
     wms_picking_finished_at: Optional[datetime] = Field(default=None)
     wms_packing_started_at: Optional[datetime] = Field(default=None)
-    wms_packing_finished_at: Optional[datetime] = Field(default=None, description="Równoznaczne z orders.packed_at")
+    wms_packing_finished_at: Optional[datetime] = Field(
+        default=None,
+        description="orders.packed_at — fizyczne domknięcie linii pakowania (nie automatyzacje)",
+    )
+    wms_packing_automation_finished_at: Optional[datetime] = Field(
+        default=None,
+        description="orders.wms_packing_automation_finished_at — POST …/finish zakończony",
+    )
     #: Packaging Intelligence — Smart Matching + 3D Matching (wspólny model propozycji).
     packaging_suggestions: list[PackagingSuggestionOut] = Field(
         default_factory=list,

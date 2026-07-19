@@ -1,3 +1,10 @@
+## 2026-07-19 — WMS Packing: first list scan + fake FINALIZED
+
+- ROOT: list EAN → resolve-only navigate (no pack); `isPackingSessionFinished` = `packed_at`; AutoActions hardcoded ✓✓; list qty without `order_item_required_pack_qty`.
+- AFTER: `POST /wms/packing/resolve-ean/scan` (FIFO + +1); FINALIZED = `wms_packing_automation_finished_at` + packed complete; list `pack_qty_from_required`; pipeline real states; lines_packed_complete requires `total_required_qty > 0`.
+- Tests: `test_wms_packing_scan_flow.py`, `packingHelpers.test.ts`.
+- ORDER-ISSUE-TASKS 500: UNRELATED.
+
 ## 2026-07-19 — Baskets put confirmation (PRODUCT→BASKET)
 
 - ROOT: quick-pick incrementował qty bez skanu koszyka; UI tylko „Odłóż do…”.

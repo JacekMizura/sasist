@@ -206,6 +206,8 @@ export type WmsPackingOrderCardApi = {
   wms_picking_finished_at?: string | null;
   wms_packing_started_at?: string | null;
   wms_packing_finished_at?: string | null;
+  /** ``orders.wms_packing_automation_finished_at`` — prawdziwy koniec POST …/finish. */
+  wms_packing_automation_finished_at?: string | null;
   /** Packaging Intelligence — PRIMARY + krótka lista alternatyw (nie „wszystkie kartony”). */
   packaging_suggestions?: PackagingSuggestionApi[];
   primary_packaging_suggestion?: PackagingSuggestionApi | null;
@@ -414,6 +416,28 @@ export async function getWmsPackingResolveEan(
   };
   if (cartId != null) params.cart_id = cartId;
   const res = await api.get<WmsPackingResolveEanApi>("/wms/packing/resolve-ean", { params });
+  return res.data;
+}
+
+/**
+ * Skan EAN z listy: FIFO order + packed +1 w jednym requestcie (bez „nawigacji bez pack”).
+ */
+export async function postWmsPackingResolveEanScan(
+  tenantId: number,
+  warehouseId: number,
+  statusId: number,
+  mode: WmsPackingModeParam,
+  ean: string,
+  cartId?: number | null,
+): Promise<WmsPackingScanOutApi> {
+  const params: Record<string, string | number> = {
+    tenant_id: tenantId,
+    warehouse_id: warehouseId,
+    status: statusId,
+    mode,
+  };
+  if (cartId != null) params.cart_id = cartId;
+  const res = await api.post<WmsPackingScanOutApi>("/wms/packing/resolve-ean/scan", { ean }, { params });
   return res.data;
 }
 

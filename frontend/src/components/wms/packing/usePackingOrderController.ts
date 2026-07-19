@@ -1,7 +1,7 @@
 import axios from "axios";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MutableRefObject } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { patchOrderSelectCarton } from "../../../api/ordersApi";
 import { getWmsPackingSettings } from "../../../api/wmsPackingSettingsApi";
 import {
@@ -13,6 +13,7 @@ import {
   wmsPackingApiErrorCode,
   wmsPackingApiErrorMessage,
   type WmsPackingOrderDetailApi,
+  type WmsPackingPostPackStepApi,
   type WmsPackingScanOutApi,
 } from "../../../api/wmsPackingApi";
 import {
@@ -31,16 +32,23 @@ import { WMS_ROUTES } from "../../../pages/wms/wmsRoutes";
 import {
   firstIncompleteOrderItemId,
   isPackingOrderLinesFullyPacked,
+  isPackingPhysicallyComplete,
+  isPackingSessionFinished,
   lineQuantityRequired,
   scanErrorMessage,
   sortLinesForPacking,
 } from "./packingHelpers";
+
+export type PackingScanBootstrapState = {
+  packingScanBootstrap?: WmsPackingScanOutApi;
+};
 
 export function usePackingOrderController(
   orderId: number,
   finishWithoutCartonRef: MutableRefObject<boolean>,
 ) {
   const navigate = useNavigate();
+  const location = useLocation();
   const { warehouse } = useWarehouse();
   const warehouseId = warehouse?.id ?? null;
   const { showScannerToast, refocusScannerInput, appendScanToHistory } = useWmsScanner();
@@ -54,6 +62,7 @@ export function usePackingOrderController(
   const finishBusyRef = useRef(false);
   /** Zapobiega podwójnemu POST …/finish (Strict Mode / podwójny mount ekranu finalizacji). */
   const finishPromiseRef = useRef<Promise<boolean> | null>(null);
+  const bootstrapConsumedRef = useRef(false);
   const [flashItemId, setFlashItemId] = useState<number | null>(null);
   const flashTimerRef = useRef<ReturnType<typeof window.setTimeout> | undefined>(undefined);
 
@@ -70,6 +79,7 @@ export function usePackingOrderController(
   /** Kolejno wybrane kartony (wielopak); API zamówienia nadal trzyma jedno ``selected_carton_id`` (ostatnie). */
   const [selectedPackagingIds, setSelectedPackagingIds] = useState<string[]>([]);
   const pendingFinishAfterCartonRef = useRef(false);
+  const [postPackPipeline, setPostPackPipeline] = useState<WmsPackingPostPackStepApi[] | null>(null);
 
   const [packingInterfaceDisplay, setPackingInterfaceDisplay] = useState<WmsPackingInterfaceDisplay>(
     DEFAULT_WMS_PACKING_INTERFACE_DISPLAY,
@@ -125,16 +135,26 @@ export function usePackingOrderController(
       navigate(WMS_ROUTES.packingOrders, { replace: true });
       return;
     }
+
+    const navState = location.state as PackingScanBootstrapState | null;
+    const boot = navState?.packingScanBootstrap;
+    if (boot && !bootstrapConsumedRef.current && boot.detail?.order_id === orderId) {
+      // Detail ustawimy w efekcie bootstrap (po applyPackingResult) — unikamy wyścigu z GET detail.
+      return;
+    }
+
     void fetchDetail();
-  }, [navigate, fetchDetail, refreshSession, orderId]);
+  }, [navigate, fetchDetail, refreshSession, orderId, location.state]);
 
   useEffect(() => {
+    bootstrapConsumedRef.current = false;
     setPostPackFinishBusy(false);
     finishWithoutCartonRef.current = false;
     setAwaitingPostPackCarton(false);
     setAwaitingFinalizationRun(false);
     setSelectedPackagingIds([]);
     setBundlePackScan(null);
+    setPostPackPipeline(null);
     pendingFinishAfterCartonRef.current = false;
   }, [orderId, finishWithoutCartonRef]);
 
@@ -148,19 +168,29 @@ export function usePackingOrderController(
     });
   }, [awaitingPostPackCarton, detail?.order_id, detail?.selected_carton_id]);
 
-  /** Po odświeżeniu strony: wznowienie kroku wyboru opakowania gdy linie domknięte, a POST …/finish jeszcze nie był. */
+  /**
+   * Wznów karton/finalizację gdy linie kompletne, a automatyzacje jeszcze nie.
+   * Nie mylić packed_at z FINALIZED (automation_finished_at).
+   */
   useEffect(() => {
     if (!detail) return;
-    const sel = (detail.selected_carton_id ?? "").trim();
-    if (sel) return;
-    if (!isPackingOrderLinesFullyPacked(detail)) return;
+    if (isPackingSessionFinished(detail)) return;
+    if (detail.total_quantity > 0 && detail.packed_quantity < detail.total_quantity) return;
+    if (!isPackingPhysicallyComplete(detail) && !isPackingOrderLinesFullyPacked(detail)) return;
     const phase = (detail.wms_workflow_phase ?? "").toUpperCase();
-    if (phase === "PACKED" || phase === "NEEDS_DECISION") return;
-    if (detail.wms_packing_finished_at) return;
+    if (phase === "NEEDS_DECISION") return;
     if (finishBusyRef.current) return;
-    pendingFinishAfterCartonRef.current = true;
-    setAwaitingPostPackCarton(true);
-  }, [detail]);
+    if (awaitingPostPackCarton || awaitingFinalizationRun) return;
+    const sel = (detail.selected_carton_id ?? "").trim();
+    const allowNoCarton = finishWithoutCartonRef.current;
+    if (!sel && !allowNoCarton) {
+      pendingFinishAfterCartonRef.current = true;
+      setAwaitingPostPackCarton(true);
+      return;
+    }
+    setAwaitingPostPackCarton(false);
+    setAwaitingFinalizationRun(true);
+  }, [detail, awaitingPostPackCarton, awaitingFinalizationRun, finishWithoutCartonRef]);
 
   useEffect(() => {
     if (warehouseId == null) return;
@@ -223,6 +253,9 @@ export function usePackingOrderController(
         }
         setDetail(out.detail);
         setAwaitingFinalizationRun(false);
+        if (out.post_pack_pipeline != null) {
+          setPostPackPipeline(out.post_pack_pipeline);
+        }
         if (import.meta.env.DEV) {
           const docStep = out.post_pack_pipeline?.find((x) => x.step === "create_document" && x.ok && x.skipped !== true);
           if (docStep?.message) {
@@ -267,6 +300,9 @@ export function usePackingOrderController(
   const applyPackingResult = useCallback(
     (out: WmsPackingScanOutApi) => {
       setDetail(out.detail);
+      if (out.post_pack_pipeline != null) {
+        setPostPackPipeline(out.post_pack_pipeline);
+      }
       if (out.fully_packed) {
         if (out.last_packed_order_item_id != null) {
           triggerFlash(out.last_packed_order_item_id);
@@ -290,6 +326,18 @@ export function usePackingOrderController(
     },
     [triggerFlash, advanceActiveAfterPack, finishWithoutCartonRef],
   );
+
+  /** Pierwszy skan z listy: wynik POST resolve-ean/scan — dokładnie raz, bez replay. */
+  useEffect(() => {
+    const navState = location.state as PackingScanBootstrapState | null;
+    const boot = navState?.packingScanBootstrap;
+    if (!boot || bootstrapConsumedRef.current) return;
+    if (boot.detail?.order_id !== orderId) return;
+    bootstrapConsumedRef.current = true;
+    navigate(location.pathname, { replace: true, state: {} });
+    setLoadErr(null);
+    applyPackingResult(boot);
+  }, [location.state, location.pathname, orderId, navigate, applyPackingResult]);
 
   useEffect(() => {
     if (activeProductId == null || detail == null) return;
@@ -525,5 +573,6 @@ export function usePackingOrderController(
     continueWithoutCartonToFinalization,
     runPostPackFinish,
     bundlePackScan,
+    postPackPipeline,
   };
 }

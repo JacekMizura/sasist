@@ -46,6 +46,7 @@ from ..services.wms_packing_service import (
     packing_finish_order,
     packing_mode_distribution,
     packing_pack_all_lines,
+    packing_resolve_and_scan_ean,
     packing_scan_increment,
     resolve_packing_entry_for_order,
 )
@@ -258,6 +259,44 @@ def get_packing_resolve_ean(
     if oid is None:
         raise HTTPException(status_code=404, detail={"code": "PRODUCT_NOT_FOUND"})
     return WmsPackingResolveEanOut(order_id=int(oid))
+
+
+@router.post("/packing/resolve-ean/scan", response_model=WmsPackingScanOut)
+def post_packing_resolve_ean_scan(
+    body: WmsPackingScanBody,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
+    status: int = Query(..., ge=1),
+    mode: str = Query(...),
+    cart_id: int | None = Query(default=None, ge=1),
+    db: Session = Depends(get_db),
+    current_user: Optional[AppUser] = Depends(get_optional_current_user),
+):
+    """
+    Skan EAN z listy pakowania: FIFO wybór zamówienia + jeden increment packed qty w jednej transakcji.
+    Pierwszy skan nie może być zużyty wyłącznie na nawigację.
+    """
+    try:
+        return packing_resolve_and_scan_ean(
+            db,
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+            status_id=status,
+            mode=mode,
+            cart_id=cart_id,
+            ean_raw=body.ean,
+            operator_user_id=int(current_user.id) if current_user is not None else None,
+        )
+    except PackingScanError as e:
+        db.rollback()
+        raise _packing_scan_http_exception(e) from e
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.exception("post_packing_resolve_ean_scan")
+        raise HTTPException(status_code=500, detail="Database error") from e
 
 
 @router.post("/packing/orders/{order_id}/enter", response_model=WmsPackingEntryOut)

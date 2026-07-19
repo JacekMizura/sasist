@@ -99,12 +99,26 @@ export function isPackingOrderCompleted(detail: WmsPackingOrderDetailApi): boole
 }
 
 /**
- * Pakowanie domknięte w WMS (POST …/finish) — używaj **tylko** znacznika czasu;
- * ``is_completed`` z karty oznacza „linie spakowane”, nie finalizację.
+ * Pakowanie domknięte w WMS (POST …/finish + automatyzacje).
+ * ``wms_packing_finished_at`` (packed_at) = linie fizycznie spakowane — NIE ekran FINALIZED.
+ * Ekran „zeskanuj kolejny produkt” / AutoActions tylko po ``wms_packing_automation_finished_at``
+ * oraz gdy progress packed jest kompletny (brak fake FINALIZED przy 0/1).
  */
 export function isPackingSessionFinished(detail: WmsPackingOrderDetailApi): boolean {
+  const autoAt = detail.wms_packing_automation_finished_at;
+  if (autoAt == null || String(autoAt).trim() === "") return false;
+  if (detail.total_quantity > 0 && detail.packed_quantity < detail.total_quantity) return false;
+  if (detail.lines.length > 0 && !isPackingOrderLinesFullyPacked(detail)) return false;
+  return true;
+}
+
+/** Fizyczne linie spakowane (packed_at), ale finish/automatyzacje jeszcze nie. */
+export function isPackingPhysicallyComplete(detail: WmsPackingOrderDetailApi): boolean {
+  if (isPackingSessionFinished(detail)) return true;
+  if (!isPackingOrderLinesFullyPacked(detail)) return false;
+  if (detail.total_quantity > 0 && detail.packed_quantity < detail.total_quantity) return false;
   const at = detail.wms_packing_finished_at;
-  return at != null && String(at).trim() !== "";
+  return (at != null && String(at).trim() !== "") || isPackingOrderCompleted(detail);
 }
 
 /** Nazwa kuriera: ``shipping_method_name`` lub ``shipping_method`` z zamówienia. */

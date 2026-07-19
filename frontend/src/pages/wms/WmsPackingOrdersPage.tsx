@@ -8,8 +8,8 @@ import {
   getWmsBasketPackingOrder,
   getWmsCartPackingOrdersByCode,
   getWmsPackingOrders,
-  getWmsPackingResolveEan,
   getWmsPackingResolveShelf,
+  postWmsPackingResolveEanScan,
   wmsPackingApiErrorCode,
   wmsPackingApiErrorMessage,
 } from "../../api/wmsPackingApi";
@@ -284,7 +284,7 @@ export default function WmsPackingOrdersPage() {
       let tryCart = false;
       try {
         try {
-          const r = await getWmsPackingResolveEan(
+          const out = await postWmsPackingResolveEanScan(
             DAMAGE_TENANT_ID,
             warehouseId,
             s.statusId,
@@ -294,11 +294,14 @@ export default function WmsPackingOrdersPage() {
           );
           playScanBeep();
           appendScanToHistory(scan);
-          if (activePriorityTask && assignedOrderIds.length > 0 && !assignedOrderSet.has(r.order_id)) {
+          const targetOrderId = out.detail.order_id;
+          if (activePriorityTask && assignedOrderIds.length > 0 && !assignedOrderSet.has(targetOrderId)) {
             showScannerToast("To zamówienie jest poza aktywnym zadaniem kierownika.");
             return;
           }
-          navigate(WMS_ROUTES.packingOrder(r.order_id));
+          navigate(WMS_ROUTES.packingOrder(targetOrderId), {
+            state: { packingScanBootstrap: out },
+          });
           return;
         } catch (e) {
           const code = wmsPackingApiErrorCode(e);
@@ -406,6 +409,8 @@ export default function WmsPackingOrdersPage() {
           } else {
             if (axios.isAxiosError(e) && e.response != null && e.response.status >= 500) {
               showScannerToast("Błąd serwera.");
+            } else if (code) {
+              showScannerToast(scanErrorMessage(code));
             } else {
               showScannerToast("Nie znaleziono produktu w kolejce.");
             }

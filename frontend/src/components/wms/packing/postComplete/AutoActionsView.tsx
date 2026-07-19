@@ -1,24 +1,29 @@
 import { MoreVertical } from "lucide-react";
-import type { WmsPackingOrderDetailApi } from "../../../../api/wmsPackingApi";
+import type { WmsPackingOrderDetailApi, WmsPackingPostPackStepApi } from "../../../../api/wmsPackingApi";
 import { ShippingMethodLogo } from "../../../shipping/ShippingMethodLogo";
 import { packingCourierLabelCount, packingCourierName, orderNumberLabel } from "../packingHelpers";
 import { ScannerHandler } from "../ScannerHandler";
 
 export type AutoActionsViewProps = {
   detail: WmsPackingOrderDetailApi;
+  /** Wynik rzeczywistego potoku POST …/finish — bez fake ✓✓ z konfiguracji. */
+  postPackPipeline?: WmsPackingPostPackStepApi[] | null;
   onBackToOrders: () => void;
   onBackToOrder: () => void;
   onEditSellasist: () => void;
-  /** Skan produktu → rozwiązanie zamówienia w kolejce (bez auto-przejścia po domknięciu). */
+  /** Skan produktu → resolve+pack następnego zamówienia w kolejce. */
   onResumeProductScan: (raw: string) => void | Promise<void>;
   resumeScanBusy: boolean;
 };
 
-const DONE_STEPS = [
-  "Wystawiam dokument sprzedaży",
-  "Generuję list przewozowy",
-  "Zmieniam status zamówienia",
-] as const;
+type StepUiState = "PENDING" | "RUNNING" | "SUCCESS" | "ERROR" | "SKIPPED";
+
+type DisplayStep = {
+  key: string;
+  label: string;
+  state: StepUiState;
+  message?: string | null;
+};
 
 const FINAL_SCAN_INSTRUCTION =
   "Zeskanuj kolejny produkt, aby przejść do kolejnego zamówienia";
@@ -35,8 +40,98 @@ function isCashOnDelivery(detail: WmsPackingOrderDetailApi): boolean {
   );
 }
 
+function findStep(
+  pipeline: WmsPackingPostPackStepApi[] | null | undefined,
+  names: string[],
+): WmsPackingPostPackStepApi | undefined {
+  if (!pipeline?.length) return undefined;
+  const set = new Set(names);
+  return pipeline.find((s) => set.has(s.step));
+}
+
+function stepStateFromPipeline(step: WmsPackingPostPackStepApi | undefined, finalized: boolean): StepUiState {
+  if (!step) return finalized ? "PENDING" : "PENDING";
+  if (step.skipped) return "SKIPPED";
+  if (step.ok) return "SUCCESS";
+  return "ERROR";
+}
+
+function buildDisplaySteps(
+  detail: WmsPackingOrderDetailApi,
+  pipeline: WmsPackingPostPackStepApi[] | null | undefined,
+): DisplayStep[] {
+  const finalized = Boolean(detail.wms_packing_automation_finished_at);
+  const doc = findStep(pipeline, ["create_document"]);
+  const ship = findStep(pipeline, ["generate_shipment", "print_label"]);
+  const status = findStep(pipeline, ["change_order_status"]);
+
+  const inferDoc = (): StepUiState => {
+    if (doc) return stepStateFromPipeline(doc, finalized);
+    const label = (detail.sales_document_label ?? "").trim();
+    if (finalized && label) return "SUCCESS";
+    if (finalized) return "SKIPPED";
+    return "PENDING";
+  };
+
+  const inferShip = (): StepUiState => {
+    if (ship) return stepStateFromPipeline(ship, finalized);
+    const n = packingCourierLabelCount(detail);
+    if (finalized && n > 0) return "SUCCESS";
+    if (finalized) return "SKIPPED";
+    return "PENDING";
+  };
+
+  const inferStatus = (): StepUiState => {
+    if (status) return stepStateFromPipeline(status, finalized);
+    if (finalized) return "SUCCESS";
+    return "PENDING";
+  };
+
+  return [
+    { key: "create_document", label: "Wystawiam dokument sprzedaży", state: inferDoc(), message: doc?.message },
+    { key: "generate_shipment", label: "Generuję list przewozowy", state: inferShip(), message: ship?.message },
+    { key: "change_order_status", label: "Zmieniam status zamówienia", state: inferStatus(), message: status?.message },
+  ];
+}
+
+function StepMark({ state }: { state: StepUiState }) {
+  switch (state) {
+    case "SUCCESS":
+      return (
+        <span className="shrink-0 text-2xl font-bold leading-none text-emerald-600 sm:text-3xl" aria-label="Sukces">
+          ✓
+        </span>
+      );
+    case "ERROR":
+      return (
+        <span className="shrink-0 text-lg font-bold leading-none text-red-600 sm:text-xl" aria-label="Błąd">
+          BŁĄD
+        </span>
+      );
+    case "SKIPPED":
+      return (
+        <span className="shrink-0 text-sm font-semibold uppercase tracking-wide text-slate-400" aria-label="Pominięto">
+          pominięto
+        </span>
+      );
+    case "RUNNING":
+      return (
+        <span className="shrink-0 text-sm font-semibold uppercase tracking-wide text-slate-600" aria-label="W trakcie">
+          w trakcie
+        </span>
+      );
+    default:
+      return (
+        <span className="shrink-0 text-sm font-semibold uppercase tracking-wide text-slate-400" aria-label="Oczekuje">
+          oczekuje
+        </span>
+      );
+  }
+}
+
 export function AutoActionsView({
   detail,
+  postPackPipeline,
   onBackToOrders,
   onBackToOrder,
   onEditSellasist,
@@ -61,12 +156,13 @@ export function AutoActionsView({
   const packageImg = carton?.image_url?.trim();
 
   const showBothAlerts = Boolean(customerComment && staffNotes);
+  const steps = buildDisplaySteps(detail, postPackPipeline);
+  const hasError = steps.some((s) => s.state === "ERROR");
 
   return (
     <div className="relative flex h-full min-h-0 w-full flex-col" style={{ background: PAGE_BG }}>
       <ScannerHandler onScan={onResumeProductScan} enabled={!resumeScanBusy} />
 
-      {/* Top actions */}
       <header className="flex shrink-0 flex-wrap items-center justify-end gap-2 px-4 py-3 sm:px-6 lg:px-10">
         <button
           type="button"
@@ -98,7 +194,6 @@ export function AutoActionsView({
         </button>
       </header>
 
-      {/* Alert bars */}
       {(customerComment || staffNotes) && (
         <div
           className={[
@@ -138,9 +233,7 @@ export function AutoActionsView({
         </div>
       )}
 
-      {/* Main terminal */}
       <div className="flex min-h-0 flex-1 flex-col gap-6 px-4 py-5 pb-40 sm:px-6 lg:flex-row lg:gap-8 lg:px-8 lg:py-7 lg:pb-44">
-        {/* LEFT — shipment */}
         <section
           className="flex min-h-0 min-w-0 flex-[1.05] flex-col rounded-2xl border border-slate-200/90 bg-white lg:min-h-[min(68vh,600px)]"
           aria-label="Przesyłka"
@@ -209,7 +302,6 @@ export function AutoActionsView({
           </div>
         </section>
 
-        {/* RIGHT — workflow */}
         <section
           className="flex min-h-0 min-w-0 flex-1 flex-col rounded-2xl border border-slate-200/90 bg-white lg:min-h-[min(68vh,600px)]"
           aria-label="Podsumowanie operacji"
@@ -222,14 +314,12 @@ export function AutoActionsView({
               W
             </div>
             <ul className="min-w-0 flex-1 space-y-5 lg:ml-auto lg:max-w-xl lg:text-right">
-              {DONE_STEPS.map((label) => (
-                <li key={label} className="flex flex-wrap items-start gap-3 sm:gap-4 lg:justify-end">
+              {steps.map((step) => (
+                <li key={step.key} className="flex flex-wrap items-start gap-3 sm:gap-4 lg:justify-end">
                   <span className="min-w-0 flex-1 text-lg font-semibold leading-snug text-slate-800 sm:text-xl lg:flex-none lg:text-right lg:text-2xl">
-                    {label}
+                    {step.label}
                   </span>
-                  <span className="shrink-0 text-2xl font-bold leading-none text-emerald-600 sm:text-3xl" aria-hidden>
-                    ✓✓
-                  </span>
+                  <StepMark state={step.state} />
                 </li>
               ))}
             </ul>
@@ -237,18 +327,26 @@ export function AutoActionsView({
 
           <div className="flex flex-1 flex-col justify-center px-6 pb-12 pt-10 lg:px-10">
             <div className="mx-auto w-full max-w-3xl border-t border-slate-200 pt-10">
-              <p
-                className="text-balance text-center font-black leading-tight text-slate-900"
-                style={{ fontSize: "clamp(1.35rem, 3.2vw, 2.35rem)" }}
-              >
-                {FINAL_SCAN_INSTRUCTION}
-              </p>
+              {hasError ? (
+                <p
+                  className="text-balance text-center font-black leading-tight text-red-700"
+                  style={{ fontSize: "clamp(1.2rem, 2.8vw, 2rem)" }}
+                >
+                  Część automatyzacji zakończyła się błędem — sprawdź status zamówienia.
+                </p>
+              ) : (
+                <p
+                  className="text-balance text-center font-black leading-tight text-slate-900"
+                  style={{ fontSize: "clamp(1.35rem, 3.2vw, 2.35rem)" }}
+                >
+                  {FINAL_SCAN_INSTRUCTION}
+                </p>
+              )}
             </div>
           </div>
         </section>
       </div>
 
-      {/* Webcam / stanowisko — placeholder */}
       <div
         className="pointer-events-none fixed bottom-6 right-6 z-20 flex h-36 w-56 items-end justify-end overflow-hidden rounded-xl border-2 border-slate-300 bg-gradient-to-br from-slate-700 to-slate-900 shadow-lg sm:h-40 sm:w-64"
         aria-hidden

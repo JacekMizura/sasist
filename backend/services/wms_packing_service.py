@@ -163,6 +163,7 @@ def _packing_finish_validation_snapshot(db: Session, order: Order, *, log: bool 
     removed_lines = 0
     shortage_lines = 0
     replacement_lines = 0
+    total_required_qty = 0
     unresolved_lines: list[dict] = []
 
     for it in items:
@@ -198,6 +199,7 @@ def _packing_finish_validation_snapshot(db: Session, order: Order, *, log: bool 
             shortage_lines += 1
         required = order_item_required_pack_qty(db, order, it)
         packed = int(getattr(it, "packing_quantity_packed", 0) or 0)
+        total_required_qty += int(required)
 
         reason = ""
         if missing > 1e-9:
@@ -221,7 +223,12 @@ def _packing_finish_validation_snapshot(db: Session, order: Order, *, log: bool 
 
     rec_state = resolve_order_recovery_state(db, order, log=False)
     u_short, r_pend = rec_state.totals.oms_decision_lines, rec_state.totals.recovery_lines
-    lines_packed_complete = len(unresolved_lines) == 0
+    # Kompletność wymaga realnych sztuk do spakowania — pusta lista unresolved przy required=0 ≠ complete.
+    lines_packed_complete = (
+        active_lines > 0
+        and total_required_qty > 0
+        and len(unresolved_lines) == 0
+    )
     packable = lines_packed_complete and can_order_be_packed(db, order, require_physical_pack=False)
 
     snap = {
@@ -231,6 +238,7 @@ def _packing_finish_validation_snapshot(db: Session, order: Order, *, log: bool 
         "removed_lines": removed_lines,
         "shortage_lines": shortage_lines,
         "replacement_lines": replacement_lines,
+        "total_required_qty": total_required_qty,
         "unresolved_lines": unresolved_lines,
         "unresolved_count": len(unresolved_lines),
         "issue_queue_oms": int(u_short),
@@ -692,6 +700,7 @@ def _packing_line_from_item(
     tenant_id: int,
     warehouse_id: int,
     enrich: bool,
+    pack_qty_from_required: bool = False,
     last_pick_audit_summary: Optional[str] = None,
     last_pack_audit_summary: Optional[str] = None,
 ) -> WmsPackingOrderLine:
@@ -702,7 +711,6 @@ def _packing_line_from_item(
     )
     q_ord = int(it.quantity or 0)
     raw_packed = int(getattr(it, "packing_quantity_packed", 0) or 0)
-    q_packed = min(q_ord, max(0, raw_packed))
     p = it.product
     name = str(p.name) if p is not None else "—"
     ean_v = getattr(p, "ean", None) if p is not None else None
@@ -793,8 +801,9 @@ def _packing_line_from_item(
     ols_u = str(getattr(it, "oms_line_status", None) or "").strip().upper()
 
     qty_required = q_ord
-    if enrich and db is not None and order is not None:
+    if (enrich or pack_qty_from_required) and db is not None and order is not None:
         qty_required = order_item_required_pack_qty(db, order, it)
+    q_packed = min(max(0, int(qty_required)), max(0, raw_packed)) if int(qty_required) > 0 else 0
 
     picked_final = float(picked_qty)
     if order is not None and q_ord > 0:
@@ -894,6 +903,7 @@ def _build_packing_order_card(
     tenant_id: int = 0,
     warehouse_id: int = 0,
     enrich: bool = False,
+    pack_qty_from_required: bool = False,
 ) -> WmsPackingOrderCard:
     lines_out: List[WmsPackingOrderLine] = []
     total_q = 0
@@ -901,6 +911,7 @@ def _build_packing_order_card(
     items = sorted(order.items or [], key=lambda x: int(x.id))
     pick_summaries: dict[int, str] = {}
     pack_summaries: dict[int, str] = {}
+    use_required = bool(enrich or pack_qty_from_required) and db is not None
     if enrich and db is not None:
         oi_ids = [int(it.id) for it in items if _order_item_active_for_packing(it)]
         pick_summaries = last_pick_audit_summaries_for_order_lines(db, int(order.id), oi_ids)
@@ -909,23 +920,20 @@ def _build_packing_order_card(
         if not _order_item_active_for_packing(it):
             continue
         q_ord = int(it.quantity or 0)
-        q_req = (
-            order_item_required_pack_qty(db, order, it)
-            if enrich and db is not None
-            else q_ord
-        )
+        q_req = order_item_required_pack_qty(db, order, it) if use_required else q_ord
         raw_packed = int(getattr(it, "packing_quantity_packed", 0) or 0)
-        q_packed = min(q_req, max(0, raw_packed))
+        q_packed = min(q_req, max(0, raw_packed)) if q_req > 0 else 0
         total_q += q_req
         packed_q += q_packed
         lines_out.append(
             _packing_line_from_item(
-                db if enrich else None,
+                db if enrich or pack_qty_from_required else None,
                 it,
                 order=order,
                 tenant_id=tenant_id if enrich else 0,
                 warehouse_id=warehouse_id if enrich else 0,
                 enrich=enrich,
+                pack_qty_from_required=pack_qty_from_required,
                 last_pick_audit_summary=pick_summaries.get(int(it.id)),
                 last_pack_audit_summary=pack_summaries.get(int(it.id)),
             )
@@ -970,6 +978,7 @@ def _build_packing_order_card(
     pfin = getattr(order, "picking_finished_at", None) or getattr(order, "picked_at", None)
     pks = getattr(order, "packing_started_at", None)
     pkf = getattr(order, "packed_at", None)
+    pka = getattr(order, "wms_packing_automation_finished_at", None)
     packaging_suggestions: List[PackagingSuggestionOut] = []
     primary_packaging_suggestion: PackagingSuggestionOut | None = None
     packaging_alternatives: List[PackagingSuggestionOut] = []
@@ -1066,6 +1075,7 @@ def _build_packing_order_card(
         wms_picking_finished_at=pfin,
         wms_packing_started_at=pks,
         wms_packing_finished_at=pkf,
+        wms_packing_automation_finished_at=pka,
         packaging_suggestions=packaging_suggestions,
         primary_packaging_suggestion=primary_packaging_suggestion,
         packaging_alternatives=packaging_alternatives,
@@ -1079,9 +1089,49 @@ def _build_packing_order_card(
 
 def _first_open_packing_line(card: WmsPackingOrderCard) -> Optional[WmsPackingOrderLine]:
     for line in sorted(card.lines, key=lambda x: int(x.order_item_id)):
-        if int(line.quantity_packed) < int(line.quantity):
+        req = int(getattr(line, "quantity_required", None) or line.quantity or 0)
+        if int(line.quantity_packed) < req:
             return line
     return None
+
+
+def packing_resolve_and_scan_ean(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    status_id: int,
+    mode: str,
+    cart_id: int | None,
+    ean_raw: str,
+    operator_user_id: Optional[int] = None,
+) -> WmsPackingScanOut:
+    """
+    Atomowo: wybór FIFO zamówienia z EAN + jeden increment packed qty.
+    Używane ze skanu na liście pakowania — pierwszy skan nie może być „tylko nawigacją”.
+    """
+    oid = find_first_packing_order_id_for_ean(
+        db,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        status_id=status_id,
+        mode=mode,
+        cart_id=cart_id,
+        ean_raw=ean_raw,
+    )
+    if oid is None:
+        raise PackingScanError("PRODUCT_NOT_FOUND")
+    return packing_scan_increment(
+        db,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        status_id=status_id,
+        mode=mode,
+        cart_id=cart_id,
+        order_id=int(oid),
+        ean_raw=ean_raw,
+        operator_user_id=operator_user_id,
+    )
 
 
 def _carton_row_to_recommended(row: Carton, *, is_best: bool) -> WmsPackingRecommendedCarton:
@@ -2189,7 +2239,17 @@ def list_packing_orders(
         if not order_can_show_ready_pack(db, o):
             continue
         bc = _basket_code_for_order(o) if m == "baskets" else None
-        out.append(_build_packing_order_card(o, basket_code=bc))
+        out.append(
+            _build_packing_order_card(
+                o,
+                basket_code=bc,
+                db=db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+                enrich=False,
+                pack_qty_from_required=True,
+            )
+        )
     return out
 
 
@@ -2739,12 +2799,30 @@ def _run_wms_packing_post_pack_pipeline(
                 message=f"id={created.id};number={created.document_number}",
             )
         )
+    else:
+        out.append(
+            WmsPackingPostPackStepResult(
+                step="create_document",
+                ok=True,
+                skipped=True,
+                message="disabled_in_settings",
+            )
+        )
 
     if actions.generate_shipment:
         try:
             out.append(_packing_step_generate_shipment(db, order))
         except Exception as e:
             out.append(WmsPackingPostPackStepResult(step="generate_shipment", ok=False, message=str(e)[:500]))
+    else:
+        out.append(
+            WmsPackingPostPackStepResult(
+                step="generate_shipment",
+                ok=True,
+                skipped=True,
+                message="disabled_in_settings",
+            )
+        )
 
     if actions.print_document:
         try:

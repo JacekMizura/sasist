@@ -1,7 +1,12 @@
 import axios from "axios";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { getWmsPackingResolveEan, getWmsPackingResolveShelf, wmsPackingApiErrorCode, wmsPackingApiErrorMessage } from "../../api/wmsPackingApi";
+import {
+  getWmsPackingResolveShelf,
+  postWmsPackingResolveEanScan,
+  wmsPackingApiErrorCode,
+  wmsPackingApiErrorMessage,
+} from "../../api/wmsPackingApi";
 import { AutoActionsView } from "../../components/wms/packing/postComplete/AutoActionsView";
 import { PackingCartonGateModal } from "../../components/wms/packing/PackingCartonGateModal";
 import { PackingFinalizationView } from "../../components/wms/packing/PackingFinalizationView";
@@ -66,7 +71,7 @@ export default function WmsPackingOrderPage() {
 
       setResumeScanBusy(true);
       try {
-        const { order_id: targetOrderId } = await getWmsPackingResolveEan(
+        const out = await postWmsPackingResolveEanScan(
           DAMAGE_TENANT_ID,
           ctrl.warehouseId,
           s.statusId,
@@ -76,12 +81,16 @@ export default function WmsPackingOrderPage() {
         );
         playScanBeep();
         appendScanToHistory(ean);
+        const targetOrderId = out.detail.order_id;
         if (activePackingTask && activeOrderIds.length > 0 && !activeOrderIds.includes(targetOrderId)) {
           showScannerToast("To zamówienie jest poza aktywnym zadaniem kierownika.");
           return;
         }
         if (targetOrderId !== orderId) {
-          navigate(WMS_ROUTES.packingOrder(targetOrderId), { replace: true });
+          navigate(WMS_ROUTES.packingOrder(targetOrderId), {
+            replace: true,
+            state: { packingScanBootstrap: out },
+          });
         } else {
           showScannerToast("Brak innego zamówienia w kolejce z tym produktem do spakowania.");
         }
@@ -213,6 +222,7 @@ export default function WmsPackingOrderPage() {
     return (
       <AutoActionsView
         detail={packingDetail}
+        postPackPipeline={ctrl.postPackPipeline}
         onBackToOrders={() => navigate(WMS_ROUTES.packingOrders)}
         onBackToOrder={() => setDismissPostPacking(true)}
         onEditSellasist={() => navigate(`/orders/${packingDetail.order_id}`)}
