@@ -1,3 +1,9 @@
+## 2026-07-19 — Railway boot: wms_order_validation imports
+
+- Broken: `from ..auth_deps` / `from ..warehouse_context` (modules do not exist).
+- Fixed: `from ..auth.deps import get_optional_current_user`, `from ..auth.warehouse_deps import require_operable_warehouse`.
+- Gate: `python -c "import backend.main"` → BACKEND IMPORT OK (exit 0). Commit `f3668ad`.
+
 # Change log
 
 ## 2026-07-19 — Prod bugs: shortage list race + banner + finalize FK
