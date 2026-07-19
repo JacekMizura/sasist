@@ -183,6 +183,13 @@ export type WmsPickingProductDetailApi = {
     product_id?: number;
     order_id?: number;
     idempotency_key?: string;
+    eligible_baskets?: Array<{
+      basket_id: number;
+      basket_label: string;
+      order_id: number;
+      order_item_id?: number;
+      line_remaining: number;
+    }>;
   } | null;
   basket_put_active_series?: {
     basket_label?: string;
@@ -753,6 +760,7 @@ export type WmsPickingQuickPickResultApi = {
   picked?: boolean;
   pending?: WmsPickingProductDetailApi["basket_put_pending"];
   expected_basket_label?: string | null;
+  eligible_baskets?: NonNullable<WmsPickingProductDetailApi["basket_put_pending"]>["eligible_baskets"];
   message?: string | null;
   active_series?: WmsPickingProductDetailApi["basket_put_active_series"];
   quantity_put?: number;

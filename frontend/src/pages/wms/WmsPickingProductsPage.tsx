@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import axios from "axios";
 import { extractApiErrorMessage } from "../../api/authApi";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { updateWarehousePriorityTask } from "../../api/warehouseOperationsApi";
@@ -594,13 +595,18 @@ export default function WmsPickingProductsPage() {
     recoveryOrderId == null && !allowContinueAfterShortage && shortageProductIds.size > 0;
 
   const goDetail = useCallback(
-    (productId: number) => {
+    (productId: number, opts?: { listProductScanToken?: string | null }) => {
       if (!mergedSession) return;
       if (blockOtherProductLines && !shortageProductIds.has(productId)) {
         return;
       }
       navigate(WMS_ROUTES.pickingProduct(productId), {
-        state: { pickingSession: mergedSession } satisfies WmsPickingProductsNavState,
+        state: {
+          pickingSession: mergedSession,
+          ...(opts?.listProductScanToken
+            ? { listProductScanToken: opts.listProductScanToken }
+            : {}),
+        } satisfies WmsPickingProductsNavState,
       });
     },
     [navigate, mergedSession, blockOtherProductLines, shortageProductIds],
@@ -649,45 +655,94 @@ export default function WmsPickingProductsPage() {
         }
 
         const { total } = wmsPickingDisplayProgressParts(hit);
-        
-        if (total === 1) {
+        const locId = hit.primary_location_id ?? hit.locations?.[0]?.location_id ?? null;
+        const canQuickPick =
+          locId != null &&
+          (mergedSession.cartId != null ||
+            (mergedSession.pickingSessionId != null && mergedSession.pickingSessionId > 0));
+
+        if (canQuickPick) {
           try {
-            const locId = hit.primary_location_id ?? hit.locations?.[0]?.location_id ?? null;
-            if (locId == null || (mergedSession.cartId == null && !(mergedSession.pickingSessionId != null && mergedSession.pickingSessionId > 0))) {
+            const result = await postWmsPickingQuickPick(
+              DAMAGE_TENANT_ID,
+              warehouseId,
+              mergedSession.orderUiStatusId,
+              orderType,
+              {
+                product_id: hit.product_id,
+                location_id: locId,
+                quantity: 1,
+                ...(mergedSession.pickingSessionId != null && mergedSession.pickingSessionId > 0
+                  ? { picking_session_id: mergedSession.pickingSessionId }
+                  : { cart_id: mergedSession.cartId! }),
+                ...(recoveryOrderId != null && recoveryOrderId > 0
+                  ? { recovery_order_id: recoveryOrderId }
+                  : {}),
+              },
+            );
+            playScanBeep();
+            appendScanToHistory(scan);
+            if (result.phase === "AWAITING_BASKET_CONFIRMATION" || result.picked === false) {
+              showScannerToast(result.message ?? hit.name);
+              goDetail(hit.product_id, {
+                listProductScanToken: result.pending?.idempotency_key ?? `scan-${Date.now()}`,
+              });
+              return;
+            }
+            showScannerToast(`Zebrano: ${hit.name}`);
+            void load();
+            return;
+          } catch (e: unknown) {
+            const code =
+              axios.isAxiosError(e) &&
+              e.response?.data &&
+              typeof e.response.data === "object" &&
+              (e.response.data as { detail?: { code?: string } }).detail &&
+              typeof (e.response.data as { detail?: { code?: string } }).detail === "object"
+                ? (e.response.data as { detail: { code?: string; pending?: { product_id?: number; idempotency_key?: string } } })
+                    .detail.code
+                : undefined;
+            const pendingProductId =
+              axios.isAxiosError(e) &&
+              e.response?.data &&
+              typeof e.response.data === "object" &&
+              typeof (e.response.data as { detail?: { pending?: { product_id?: number } } }).detail?.pending
+                ?.product_id === "number"
+                ? (e.response.data as { detail: { pending: { product_id: number; idempotency_key?: string } } }).detail
+                    .pending.product_id
+                : null;
+            const pendingKey =
+              axios.isAxiosError(e) &&
+              e.response?.data &&
+              typeof e.response.data === "object"
+                ? (e.response.data as { detail?: { pending?: { idempotency_key?: string } } }).detail?.pending
+                    ?.idempotency_key
+                : undefined;
+            if (code === "AWAITING_BASKET_CONFIRMATION" && pendingProductId != null) {
+              playScanBeep();
+              appendScanToHistory(scan);
+              showScannerToast(extractApiErrorMessage(e, "Najpierw potwierdź koszyk."));
+              goDetail(pendingProductId, { listProductScanToken: pendingKey ?? null });
+              return;
+            }
+            if (total === 1) {
+              showScannerToast(
+                extractApiErrorMessage(e, "Zapis szybkiego pobrania nie powiódł się — otwarcie detalu."),
+              );
+            } else {
               playScanBeep();
               appendScanToHistory(scan);
               showScannerToast(hit.name);
-              goDetail(hit.product_id);
-              return;
             }
-
-            await postWmsPickingQuickPick(DAMAGE_TENANT_ID, warehouseId, mergedSession.orderUiStatusId, orderType, {
-              product_id: hit.product_id,
-              location_id: locId,
-              quantity: 1,
-              ...(mergedSession.pickingSessionId != null && mergedSession.pickingSessionId > 0
-                ? { picking_session_id: mergedSession.pickingSessionId }
-                : { cart_id: mergedSession.cartId! }),
-              ...(recoveryOrderId != null && recoveryOrderId > 0 ? { recovery_order_id: recoveryOrderId } : {}),
-            });
-            
-            playScanBeep();
-            appendScanToHistory(scan);
-            showScannerToast(`Zebrano: ${hit.name}`);
-            void load();
-          } catch (e: unknown) {
-            showScannerToast(
-              extractApiErrorMessage(e, "Zapis szybkiego pobrania nie powiódł się — otwarcie detalu."),
-            );
             goDetail(hit.product_id);
+            return;
           }
-        } 
-        else {
-          playScanBeep();
-          appendScanToHistory(scan);
-          showScannerToast(hit.name);
-          goDetail(hit.product_id);
         }
+
+        playScanBeep();
+        appendScanToHistory(scan);
+        showScannerToast(hit.name);
+        goDetail(hit.product_id);
       } else if (matches.length > 0) {
         showScannerToast("Produkt już zebrany lub oznaczony jako brak");
       } else {

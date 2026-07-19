@@ -65,6 +65,11 @@ export type WmsPickingProductsNavState = {
   pickingSession: WmsPickingSessionState;
   /** Po zgłoszeniu braku — wymuś natychmiastowe ponowne wczytanie listy produktów. */
   pickingListRefreshAt?: number;
+  /**
+   * Jednorazowy token z listowego skanu EAN (pending.idempotency_key).
+   * Detail konsumuje dokładnie raz — refresh nie powtarza PRODUCT_SCAN.
+   */
+  listProductScanToken?: string | null;
 };
 
 /** Router state dla `/wms/product-preview/:productId` (podgląd operacyjny WMS). */

@@ -129,6 +129,8 @@ export default function WmsPickingProductDetailPage() {
   const { registerScanHandler, setScannerInputPlaceholder, appendScanToHistory, refocusScannerInput, showScannerToast } = useWmsScanner();
 
   const pickingSessionRaw = (routerLocation.state as WmsPickingProductsNavState | null)?.pickingSession ?? null;
+  const listProductScanToken =
+    (routerLocation.state as WmsPickingProductsNavState | null)?.listProductScanToken ?? null;
   const pickingSession = useMergedPickingSession(pickingSessionRaw, pickingTenantId, warehouseId);
   const orderType = pickingSession?.orderTypeChoice ?? "all";
   const recoveryOrderId = pickingSession?.recoveryOrderId ?? null;
@@ -160,6 +162,8 @@ export default function WmsPickingProductDetailPage() {
   const [consolidationRackRows, setConsolidationRackRows] = useState<ConsolidationRackBundleRowOut[]>([]);
 
   const detailLoadSeqRef = useRef(0);
+  /** Consume list→detail product scan token exactly once (refresh must not re-fire). */
+  const listScanConsumedRef = useRef<string | null>(null);
 
   const fetchProductDetail = useCallback(async (opts?: { force?: boolean }): Promise<WmsPickingProductDetailApi | null> => {
     if (warehouseId == null || !pickingSession || !Number.isFinite(productId) || productId <= 0) return null;
@@ -234,6 +238,17 @@ export default function WmsPickingProductDetailPage() {
     void load();
   }, [pickingSessionRaw, navigate, load]);
 
+  // Clear one-shot nav token after mount so browser refresh cannot replay list PRODUCT_SCAN.
+  useEffect(() => {
+    if (!listProductScanToken) return;
+    if (listScanConsumedRef.current === listProductScanToken) return;
+    listScanConsumedRef.current = listProductScanToken;
+    navigate(".", {
+      replace: true,
+      state: { pickingSession: pickingSessionRaw } satisfies WmsPickingProductsNavState,
+    });
+  }, [listProductScanToken, navigate, pickingSessionRaw]);
+
   useEffect(() => {
     if (!detail) return;
     setLocationHint(null);
@@ -301,8 +316,8 @@ export default function WmsPickingProductDetailPage() {
 
   useEffect(() => {
     if (!detail) return;
-    if (detail.basket_put_pending?.expected_basket_label) {
-      setScannerInputPlaceholder(`Zeskanuj koszyk ${detail.basket_put_pending.expected_basket_label}`);
+    if (detail.basket_put_pending) {
+      setScannerInputPlaceholder("Zeskanuj koszyk");
     } else if (needsLocationScan && activeLocationId == null) {
       setScannerInputPlaceholder("Zeskanuj lokalizację");
     } else if (detail.basket_put_active_series?.basket_label) {
@@ -335,15 +350,34 @@ export default function WmsPickingProductDetailPage() {
       if (locs.length === 0) return;
 
       // MULTI baskets: awaiting basket confirmation — only accept basket (or reject product)
-      const pendingBasket = detail.basket_put_pending?.expected_basket_label;
-      if (pendingBasket && pickingSession.cartId) {
+      if (detail.basket_put_pending && pickingSession.cartId) {
         if (normalizeScanEan(detail.ean) === scan) {
-          showScannerToast(`Najpierw potwierdź koszyk ${pendingBasket}`);
-          setPickMsg(`NAJPIERW POTWIERDŹ KOSZYK. Odłóż produkt do koszyka ${pendingBasket} i zeskanuj jego kod.`);
+          const labels =
+            detail.basket_put_pending.eligible_baskets
+              ?.map((b) => b.basket_label)
+              .filter(Boolean)
+              .join(", ") || "właściwy koszyk";
+          showScannerToast(`Najpierw potwierdź koszyk (${labels})`);
+          setPickMsg(
+            `NAJPIERW POTWIERDŹ KOSZYK. Odłóż produkt i zeskanuj jeden z koszyków: ${labels}.`,
+          );
           return;
         }
         void confirmBasketScan(raw);
         return;
+      }
+
+      // Series active: EAN continues series; scan of another basket switches destination.
+      if (detail.basket_put_active_series?.basket_label && pickingSession.cartId) {
+        if (normalizeScanEan(detail.ean) === scan && !pickQueueDone && selectedLocation) {
+          void confirm_pick(1, selectedLocation.location_id);
+          return;
+        }
+        // Likely a basket barcode (not product EAN) — try destination switch.
+        if (normalizeScanEan(detail.ean) !== scan) {
+          void confirmBasketScan(raw);
+          return;
+        }
       }
 
       const shelfLabel = (detail.consolidation_shelf_label ?? "").trim();
@@ -453,9 +487,7 @@ export default function WmsPickingProductDetailPage() {
       playScanBeep();
       if (result.phase === "AWAITING_BASKET_CONFIRMATION" || result.picked === false) {
         setPickMsg(result.message ?? "Zeskanuj koszyk, aby potwierdzić odłożenie.");
-        setScannerInputPlaceholder(
-          `Zeskanuj koszyk ${result.expected_basket_label ?? detail.put_to_basket_label ?? ""}`.trim(),
-        );
+        setScannerInputPlaceholder("Zeskanuj koszyk");
         await load();
         setManualOpen(false);
         return;
@@ -486,7 +518,12 @@ export default function WmsPickingProductDetailPage() {
           if (typeof d.detail === "object" && d.detail && "message" in (d.detail as object)) {
             msg = String((d.detail as { message: string }).message);
             const code = (d.detail as { code?: string }).code;
-            if (code === "AWAITING_BASKET_CONFIRMATION" || code === "BASKET_MISMATCH") {
+            if (
+              code === "AWAITING_BASKET_CONFIRMATION" ||
+              code === "BASKET_MISMATCH" ||
+              code === "BASKET_PRODUCT_MISMATCH" ||
+              code === "BASKET_PRODUCT_ALREADY_COMPLETE"
+            ) {
               await load();
             }
           } else {
@@ -787,18 +824,52 @@ export default function WmsPickingProductDetailPage() {
                 <div className="w-fit px-5 py-3 rounded-2xl border-2 border-violet-500 bg-violet-100/95 font-black uppercase tracking-wider text-sm text-violet-950 ring-2 ring-violet-400/50">
                   Odłóż na: {detail.consolidation_shelf_label}
                 </div>
-              ) : detail.basket_put_pending?.expected_basket_label ? (
-                <div className="w-full max-w-xl rounded-3xl border-4 border-amber-500 bg-amber-50 px-6 py-8 text-center shadow-lg ring-4 ring-amber-300/40">
-                  <p className="text-sm font-black uppercase tracking-[0.2em] text-amber-800">Odłóż do koszyka</p>
-                  <p className="mt-3 text-6xl sm:text-7xl font-black tabular-nums tracking-tight text-amber-950">
-                    {detail.basket_put_pending.expected_basket_label}
+              ) : detail.basket_put_pending ? (
+                <div className="w-full max-w-xl rounded-3xl border-4 border-amber-500 bg-amber-50 px-6 py-6 text-center shadow-lg ring-4 ring-amber-300/40">
+                  <p className="text-sm font-black uppercase tracking-[0.2em] text-amber-800">
+                    Zeskanowano produkt
                   </p>
-                  <p className="mt-4 text-base font-bold uppercase tracking-wide text-amber-900">
-                    Zeskanuj koszyk, aby potwierdzić
+                  <p className="mt-2 text-lg font-bold text-amber-950">
+                    {fmtQty(detail.basket_put_pending.quantity ?? 1)} szt. oczekuje na odłożenie
                   </p>
-                  <p className="mt-2 text-sm font-semibold text-amber-800/90">
-                    Odłożenie {fmtQty(detail.basket_put_pending.quantity ?? 1)} szt.
+                  <p className="mt-4 text-base font-black uppercase tracking-wide text-amber-900">
+                    Zeskanuj koszyk
                   </p>
+                  {(detail.basket_put_pending.eligible_baskets?.length ?? 0) > 0 ? (
+                    <ul className="mt-4 space-y-2 text-left">
+                      {detail.basket_put_pending.eligible_baskets!.map((b) => (
+                        <li
+                          key={b.basket_id}
+                          className="flex items-center justify-between rounded-xl border border-amber-300/80 bg-white px-4 py-3"
+                        >
+                          <span className="text-2xl font-black tabular-nums text-amber-950">
+                            {b.basket_label}
+                          </span>
+                          <span className="text-sm font-bold text-amber-800">
+                            pozostało {fmtQty(b.line_remaining)}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : detail.orders?.length ? (
+                    <ul className="mt-4 space-y-2 text-left">
+                      {detail.orders
+                        .filter((o) => (o.quantity_to_pick ?? 0) > 1e-9 && o.basket_slot)
+                        .map((o) => (
+                          <li
+                            key={o.order_item_id}
+                            className="flex items-center justify-between rounded-xl border border-amber-300/80 bg-white px-4 py-3"
+                          >
+                            <span className="text-2xl font-black tabular-nums text-amber-950">
+                              {o.basket_slot}
+                            </span>
+                            <span className="text-sm font-bold text-amber-800">
+                              pozostało {fmtQty(o.quantity_to_pick)}
+                            </span>
+                          </li>
+                        ))}
+                    </ul>
+                  ) : null}
                 </div>
               ) : detail.basket_put_active_series?.basket_label ? (
                 <div className={`w-full max-w-md rounded-2xl border-2 px-5 py-4 ${BASKET_PUT_STYLE_RING[(detail.put_to_basket_color_index ?? 0) % BASKET_PUT_STYLE_RING.length]}`}>
@@ -806,9 +877,24 @@ export default function WmsPickingProductDetailPage() {
                   <p className="mt-1 text-3xl font-black tabular-nums">{detail.basket_put_active_series.basket_label}</p>
                   <p className="mt-1 text-sm font-semibold">Pozostało: {fmtQty(remaining)} szt.</p>
                 </div>
-              ) : detail.put_to_basket_label ? (
-                <div className={`w-fit px-5 py-3 rounded-2xl border-2 font-black uppercase tracking-wider text-sm ${BASKET_PUT_STYLE_RING[(detail.put_to_basket_color_index ?? 0) % BASKET_PUT_STYLE_RING.length]}`}>
-                  Koszyk docelowy: {detail.put_to_basket_label}
+              ) : detail.requires_basket_put_confirm && detail.orders?.some((o) => (o.quantity_to_pick ?? 0) > 1e-9 && o.basket_slot) ? (
+                <div className="w-full max-w-md rounded-2xl border-2 border-slate-300 bg-slate-50 px-5 py-4 text-left">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                    Koszyki wymagające tego SKU
+                  </p>
+                  <ul className="mt-2 space-y-1.5">
+                    {detail.orders
+                      .filter((o) => (o.quantity_to_pick ?? 0) > 1e-9 && o.basket_slot)
+                      .map((o) => (
+                        <li key={o.order_item_id} className="flex justify-between text-sm font-bold text-slate-800">
+                          <span className="tabular-nums">{o.basket_slot}</span>
+                          <span className="text-slate-500">pozostało {fmtQty(o.quantity_to_pick)}</span>
+                        </li>
+                      ))}
+                  </ul>
+                  <p className="mt-3 text-xs font-semibold text-slate-500">
+                    Zeskanuj EAN, potem dowolny z tych koszyków.
+                  </p>
                 </div>
               ) : null}
             </div>

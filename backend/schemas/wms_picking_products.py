@@ -276,7 +276,11 @@ class WmsPickingProductDetailResponse(BaseModel):
     )
     put_to_basket_label: Optional[str] = Field(
         None,
-        description="W MULTI: etykieta koszyka dla aktywnej kolejki (odłóż tutaj)",
+        description=(
+            "W MULTI: etykieta aktywnej serii koszyka (po potwierdzeniu). "
+            "Nie jest to wymuszony FIFO destination przed skanem koszyka — "
+            "użyj basket_put_pending.eligible_baskets / orders[].basket_slot."
+        ),
     )
     put_to_basket_color_index: int = Field(
         0,

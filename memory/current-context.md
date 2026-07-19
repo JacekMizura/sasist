@@ -6,9 +6,9 @@
 
 ## Latest (2026-07-19)
 
-- **POST /orders 500 ROOT:** phantom `offer_id` from GET sales-offers ensure without commit → `offer_not_found`. Fixed commit + FE product_id default path + 400 domain map.
+- **MULTI basket put SSOT:** product scan = unbound pending; basket scan allocates order_item. No FIFO destination before basket. List EAN consumed as PRODUCT_SCAN (pending). Series per confirmed basket.
+- **POST /orders 500 ROOT:** phantom `offer_id` from GET sales-offers ensure without commit → fixed earlier.
 - **Packing BASKET ghost count:** active queue requires live basket custody (`a8c6ee39`).
-- **Orphan PACKING cart / ORDER_CREATE_TRACE:** earlier commits.
 
 ## Notes
 

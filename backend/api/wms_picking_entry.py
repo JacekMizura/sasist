@@ -1355,7 +1355,12 @@ def post_picking_quick_pick(
             else None
         )
 
-        def _do_record(*, quantity: float, fixed_order_id: int | None = None):
+        def _do_record(
+            *,
+            quantity: float,
+            fixed_order_id: int | None = None,
+            scope_order_id: int | None = None,
+        ):
             return record_wms_quick_pick(
                 db,
                 tenant_id=tid,
@@ -1367,6 +1372,7 @@ def post_picking_quick_pick(
                 quantity=float(quantity),
                 cart_id=int(body.cart_id),
                 fixed_order_id=fixed_order_id if fixed_order_id is not None else recovery_fixed,
+                scope_order_id=scope_order_id if recovery_fixed is None else None,
                 operator_user_id=uid,
             )
 
@@ -1410,6 +1416,7 @@ def post_picking_quick_pick(
                     "phase": put_res.phase,
                     "pending": put_res.pending,
                     "expected_basket_label": put_res.expected_basket_label,
+                    "eligible_baskets": put_res.eligible_baskets,
                     "message": put_res.message,
                     "order_id": put_res.order_id,
                     "order_item_id": put_res.order_item_id,
@@ -1540,27 +1547,30 @@ def post_picking_confirm_basket_put(
         else None
     )
 
-    def _do_record(*, quantity: float, fixed_order_id: int | None = None):
+    def _do_record(
+        *,
+        quantity: float,
+        fixed_order_id: int | None = None,
+        scope_order_id: int | None = None,
+    ):
         return record_wms_quick_pick(
             db,
             tenant_id=tid,
             warehouse_id=int(warehouse_id),
             source_status_id=source_status_id,
             order_type=order_type,
-            product_id=int(
-                # product from pending — confirm_basket_put passes fixed_order_id;
-                # record_wms_quick_pick still needs product_id from pending via closure.
-                _pending_product_id
-            ),
+            product_id=int(_pending_product_id),
             location_id=int(_pending_location_id),
             quantity=float(quantity),
             cart_id=int(body.cart_id),
             fixed_order_id=fixed_order_id if fixed_order_id is not None else recovery_fixed,
+            scope_order_id=scope_order_id if recovery_fixed is None else None,
             operator_user_id=uid,
         )
 
     from ..services.wms_basket_put.state import get_pending
     from ..services.cart_picking_lifecycle_service import assert_cart_ready_for_quick_pick
+    from ..services.wms_picking_product_list_service import resolve_wms_picking_order_ids
 
     try:
         sess = assert_cart_ready_for_quick_pick(db, cart)
@@ -1574,6 +1584,16 @@ def post_picking_confirm_basket_put(
         _pending_product_id = int(pending["product_id"])
         _pending_location_id = int(pending["location_id"])
 
+        ot = order_type if order_type in ("single", "multi", "all") else "all"
+        confirm_order_ids = resolve_wms_picking_order_ids(
+            db,
+            tenant_id=tid,
+            warehouse_id=int(warehouse_id),
+            source_status_id=source_status_id,
+            order_type=ot,
+            cart_id=int(body.cart_id),
+        )
+
         put_res = confirm_basket_put(
             db,
             cart=cart,
@@ -1581,6 +1601,7 @@ def post_picking_confirm_basket_put(
             operator_user_id=uid,
             record_pick_fn=_do_record,
             manual=bool(body.manual),
+            order_ids=confirm_order_ids,
         )
         db.commit()
         return {
@@ -1595,10 +1616,20 @@ def post_picking_confirm_basket_put(
             "picked": True,
         }
     except BasketPutError as be:
-        # Keep pending on mismatch — only roll back the failed pick attempt.
-        if be.code == "BASKET_MISMATCH":
-            db.rollback()
-            # Re-assert pending still in DB (rollback undoes nothing if no writes except none)
+        # Keep pending on mismatch / wrong basket / full line — no pick was written.
+        if be.code in (
+            "BASKET_MISMATCH",
+            "BASKET_PRODUCT_MISMATCH",
+            "BASKET_PRODUCT_ALREADY_COMPLETE",
+        ):
+            # ALREADY_COMPLETE may have refreshed eligible_baskets on pending — commit that.
+            if be.code == "BASKET_PRODUCT_ALREADY_COMPLETE":
+                try:
+                    db.commit()
+                except Exception:
+                    db.rollback()
+            else:
+                db.rollback()
             raise HTTPException(status_code=be.http_status, detail=be.as_detail()) from be
         db.rollback()
         raise HTTPException(status_code=be.http_status, detail=be.as_detail()) from be

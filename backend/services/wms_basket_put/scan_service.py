@@ -1,9 +1,10 @@
 """
 Basket put confirmation state machine for MULTI / baskets carts.
 
-PRODUCT_SCAN → AWAITING_BASKET_CONFIRMATION → BASKET_SCAN → PUT_CONFIRMED
+PRODUCT_SCAN → pending put (product-level, NO pick, NO forced order_item)
+BASKET_SCAN → resolve order_item for that basket → Pick +1 → PUT_CONFIRMED
 Series: after basket verified for (product, order_item, basket), further product
-scans increment without re-scanning basket until destination context changes.
+scans increment without re-scanning basket until that line is exhausted / context changes.
 """
 
 from __future__ import annotations
@@ -13,14 +14,20 @@ import uuid
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session
 
 from ...models.cart import Cart
 from ...models.cart_basket import CartBasket
 from ...models.wms_operation_session import WmsOperationSession
 from ..cart_picking_lifecycle_service import assert_cart_ready_for_quick_pick
 from .basket_match import basket_scan_matches, primary_basket_label
-from .resolve import BasketPutAllocation, cart_is_baskets_mode, resolve_next_basket_allocation
+from .resolve import (
+    cart_is_baskets_mode,
+    eligible_baskets_payload,
+    list_eligible_basket_allocations,
+    resolve_allocation_for_basket_scan,
+    resolve_allocation_for_series,
+)
 from . import state as put_state
 
 logger = logging.getLogger(__name__)
@@ -55,6 +62,7 @@ class BasketPutResult:
     pending: dict[str, Any] | None = None
     active_series: dict[str, Any] | None = None
     expected_basket_label: str | None = None
+    eligible_baskets: list[dict[str, Any]] | None = None
     scanned_basket: str | None = None
     message: str | None = None
 
@@ -71,20 +79,17 @@ def _audit(event: str, **fields: Any) -> None:
     )
 
 
-def _series_matches(
+def _series_matches_product(
     series: dict[str, Any],
     *,
     operator_user_id: int | None,
-    allocation: BasketPutAllocation,
+    product_id: int,
     location_id: int,
 ) -> bool:
     if operator_user_id is not None and int(series.get("operator_user_id") or 0) != int(operator_user_id):
         return False
     return (
-        int(series.get("product_id") or 0) == int(allocation.product_id)
-        and int(series.get("order_item_id") or 0) == int(allocation.order_item_id)
-        and int(series.get("order_id") or 0) == int(allocation.order_id)
-        and int(series.get("basket_id") or 0) == int(allocation.basket_id)
+        int(series.get("product_id") or 0) == int(product_id)
         and int(series.get("location_id") or 0) == int(location_id)
     )
 
@@ -134,6 +139,11 @@ def get_basket_put_ui_state(
     }
 
 
+def _eligible_labels(eligible: list[dict[str, Any]]) -> str:
+    labels = [str(r.get("basket_label") or "") for r in eligible if r.get("basket_label")]
+    return ", ".join(labels) if labels else "—"
+
+
 def handle_product_scan_for_baskets(
     db: Session,
     *,
@@ -148,9 +158,11 @@ def handle_product_scan_for_baskets(
     """
     Gate before writing picks for baskets carts.
 
-    ``record_pick_fn`` — callable that performs the actual Pick write
-    (typically wrapping ``record_wms_quick_pick`` for qty=1 or requested qty).
-    Called only when put is authorized (series or after basket confirm path elsewhere).
+    Product scan creates a product-level pending put (no Pick yet).
+    Basket scan (``confirm_basket_put``) allocates to the correct order_item.
+
+    ``record_pick_fn`` is called only when put is authorized (active series match
+    or after basket confirm).
     """
     sess = assert_cart_ready_for_quick_pick(db, cart)
     uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
@@ -165,71 +177,93 @@ def handle_product_scan_for_baskets(
                 http_status=409,
             )
         if uid is not None and pend_uid and pend_uid == uid:
-            exp = str(pending.get("expected_basket_label") or "")
+            eligible = pending.get("eligible_baskets") or []
+            labels = _eligible_labels(eligible if isinstance(eligible, list) else [])
             _audit(
                 "PRODUCT_SCAN_WHILE_PENDING",
                 session_id=sess.id,
                 operator=uid,
                 product_id=product_id,
-                expected_basket=exp,
+                eligible_baskets=labels,
             )
             raise BasketPutError(
                 "AWAITING_BASKET_CONFIRMATION",
-                f"NAJPIERW POTWIERDŹ KOSZYK. Odłóż produkt do koszyka {exp} i zeskanuj jego kod.",
+                f"NAJPIERW POTWIERDŹ KOSZYK. Zeskanuj jeden z koszyków: {labels}.",
                 http_status=409,
                 extra={
                     "phase": "AWAITING_BASKET_CONFIRMATION",
-                    "expected_basket_label": exp,
+                    "eligible_baskets": eligible,
                     "pending": pending,
                 },
             )
 
-    allocation = resolve_next_basket_allocation(
+    eligible_allocs = list_eligible_basket_allocations(
         db, cart=cart, order_ids=order_ids, product_id=int(product_id)
     )
-    if allocation is None:
+    if not eligible_allocs:
         raise BasketPutError(
             "NO_ALLOCATION",
             "Brak linii zamówienia wymagającej kompletacji tego produktu.",
             http_status=400,
         )
 
-    series = put_state.get_active_series(sess)
     qty = max(float(quantity), 0.0)
     if qty <= 0:
         raise BasketPutError("INVALID_QTY", "Ilość musi być > 0.", http_status=400)
 
-    if series and _series_matches(
-        series, operator_user_id=uid, allocation=allocation, location_id=int(location_id)
+    series = put_state.get_active_series(sess)
+    if series and _series_matches_product(
+        series, operator_user_id=uid, product_id=int(product_id), location_id=int(location_id)
     ):
-        take = min(qty, float(allocation.line_remaining))
-        oid, oiid = record_pick_fn(quantity=take, fixed_order_id=int(allocation.order_id))
-        _audit(
-            "PUT_CONFIRMED",
-            session_id=sess.id,
-            operator=uid,
-            order_id=oid,
-            product_id=product_id,
-            basket=allocation.basket_label,
-            quantity=take,
-            via="series",
+        series_alloc = resolve_allocation_for_series(
+            db,
+            cart=cart,
+            order_ids=order_ids,
+            product_id=int(product_id),
+            order_item_id=int(series["order_item_id"]),
+            basket_id=int(series["basket_id"]),
         )
-        # If line exhausted, clear series so next SKU allocation can re-authorize.
-        if float(allocation.line_remaining) - take <= 1e-9:
-            put_state.set_active_series(db, sess, None)
-            _audit("BASKET_SERIES_CLEARED", session_id=sess.id, reason="line_complete")
-            series = None
-        return BasketPutResult(
-            phase="PUT_CONFIRMED",
-            order_id=int(oid),
-            order_item_id=int(oiid),
-            quantity_put=float(take),
-            active_series=put_state.get_active_series(sess),
-            expected_basket_label=allocation.basket_label,
-            message=f"Koszyk {allocation.basket_label} — odłożono {take:g} szt.",
+        if series_alloc is not None:
+            take = min(qty, float(series_alloc.line_remaining))
+            oid, oiid = record_pick_fn(quantity=take, scope_order_id=int(series_alloc.order_id))
+            _audit(
+                "PUT_CONFIRMED",
+                session_id=sess.id,
+                operator=uid,
+                order_id=oid,
+                product_id=product_id,
+                basket=series_alloc.basket_label,
+                quantity=take,
+                via="series",
+            )
+            if float(series_alloc.line_remaining) - take <= 1e-9:
+                put_state.set_active_series(db, sess, None)
+                _audit("BASKET_SERIES_CLEARED", session_id=sess.id, reason="line_complete")
+                series = None
+            return BasketPutResult(
+                phase="PUT_CONFIRMED",
+                order_id=int(oid),
+                order_item_id=int(oiid),
+                quantity_put=float(take),
+                active_series=put_state.get_active_series(sess),
+                expected_basket_label=series_alloc.basket_label,
+                message=f"Koszyk {series_alloc.basket_label} — odłożono {take:g} szt.",
+            )
+        # Series target exhausted / no longer eligible → clear and create fresh pending.
+        put_state.set_active_series(db, sess, None)
+        _audit("BASKET_SERIES_CLEARED", session_id=sess.id, reason="series_target_exhausted")
+        series = None
+        eligible_allocs = list_eligible_basket_allocations(
+            db, cart=cart, order_ids=order_ids, product_id=int(product_id)
         )
+        if not eligible_allocs:
+            raise BasketPutError(
+                "NO_ALLOCATION",
+                "Brak linii zamówienia wymagającej kompletacji tego produktu.",
+                http_status=400,
+            )
 
-    # Destination changed vs previous series → clear
+    # Product changed vs previous series → clear (different SKU / location already handled above)
     if series is not None:
         put_state.set_active_series(db, sess, None)
         _audit(
@@ -237,44 +271,53 @@ def handle_product_scan_for_baskets(
             session_id=sess.id,
             reason="destination_changed",
             previous_basket=series.get("basket_label"),
-            next_basket=allocation.basket_label,
+            product_id=product_id,
         )
 
-    # Create pending put — do not increment picked qty yet.
-    pending_qty = min(float(qty), float(allocation.line_remaining))
+    # Product-level pending — do NOT bind order_item / single expected basket yet.
+    max_rem = max(float(a.line_remaining) for a in eligible_allocs)
+    pending_qty = min(float(qty), max_rem)
+    eligible_payload = eligible_baskets_payload(eligible_allocs)
     pending_row = {
         "idempotency_key": str(uuid.uuid4()),
         "operator_user_id": uid,
         "product_id": int(product_id),
-        "order_id": int(allocation.order_id),
-        "order_item_id": int(allocation.order_item_id),
         "location_id": int(location_id),
-        "expected_basket_id": int(allocation.basket_id),
-        "expected_basket_label": allocation.basket_label,
         "quantity": float(pending_qty),
+        "eligible_baskets": eligible_payload,
         "created_at": put_state.utc_now_iso(),
     }
     put_state.set_pending(db, sess, pending_row)
+    labels = _eligible_labels(eligible_payload)
     _audit(
         "PRODUCT_SCAN_PENDING_PUT",
         session_id=sess.id,
         operator=uid,
-        order_id=allocation.order_id,
         product_id=product_id,
-        expected_basket=allocation.basket_label,
+        eligible_baskets=labels,
         quantity=pending_row["quantity"],
     )
     return BasketPutResult(
         phase="AWAITING_BASKET_CONFIRMATION",
-        order_id=int(allocation.order_id),
-        order_item_id=int(allocation.order_item_id),
         pending=pending_row,
-        expected_basket_label=allocation.basket_label,
+        eligible_baskets=eligible_payload,
         message=(
-            f"ODŁÓŻ PRODUKT DO KOSZYKA {allocation.basket_label}. "
-            f"Zeskanuj koszyk, aby potwierdzić odłożenie {pending_row['quantity']:g} szt."
+            f"Zeskanowano produkt — {pending_row['quantity']:g} szt. oczekuje na odłożenie. "
+            f"Zeskanuj koszyk ({labels})."
         ),
     )
+
+
+def _find_scanned_basket(db: Session, *, cart: Cart, basket_scan: str) -> CartBasket | None:
+    all_b = (
+        db.query(CartBasket)
+        .filter(CartBasket.cart_id == int(cart.id))
+        .all()
+    )
+    for b in all_b:
+        if basket_scan_matches(b, basket_scan):
+            return b
+    return None
 
 
 def confirm_basket_put(
@@ -285,16 +328,53 @@ def confirm_basket_put(
     operator_user_id: int | None,
     record_pick_fn,
     manual: bool = False,
+    order_ids: list[int] | None = None,
 ) -> BasketPutResult:
     sess = assert_cart_ready_for_quick_pick(db, cart)
     uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
     pending = put_state.get_pending(sess)
     if pending is None:
-        raise BasketPutError(
-            "NO_PENDING_PUT",
-            "Brak oczekującego odłożenia — najpierw zeskanuj produkt.",
-            http_status=409,
-        )
+        # Mid-series destination switch: scan another basket without a fresh product scan.
+        series = put_state.get_active_series(sess)
+        if series is not None:
+            ser_uid = int(series.get("operator_user_id") or 0)
+            if uid is None or not ser_uid or ser_uid == uid:
+                scanned_try = _find_scanned_basket(db, cart=cart, basket_scan=basket_scan)
+                if scanned_try is not None and int(scanned_try.id) != int(series.get("basket_id") or 0):
+                    oid_scope = list(order_ids or [])
+                    if not oid_scope and series.get("order_id"):
+                        oid_scope = [int(series["order_id"])]
+                    live = list_eligible_basket_allocations(
+                        db,
+                        cart=cart,
+                        order_ids=oid_scope,
+                        product_id=int(series["product_id"]),
+                    )
+                    pending = {
+                        "idempotency_key": str(uuid.uuid4()),
+                        "operator_user_id": uid,
+                        "product_id": int(series["product_id"]),
+                        "location_id": int(series["location_id"]),
+                        "quantity": 1.0,
+                        "eligible_baskets": eligible_baskets_payload(live),
+                        "created_at": put_state.utc_now_iso(),
+                        "via": "series_basket_switch",
+                    }
+                    put_state.set_active_series(db, sess, None)
+                    put_state.set_pending(db, sess, pending)
+                    _audit(
+                        "BASKET_SERIES_CLEARED",
+                        session_id=sess.id,
+                        reason="operator_chose_other_basket",
+                        previous_basket=series.get("basket_label"),
+                        next_basket=primary_basket_label(scanned_try),
+                    )
+        if pending is None:
+            raise BasketPutError(
+                "NO_PENDING_PUT",
+                "Brak oczekującego odłożenia — najpierw zeskanuj produkt.",
+                http_status=409,
+            )
     pend_uid = int(pending.get("operator_user_id") or 0)
     if uid is not None and pend_uid and pend_uid != uid:
         raise BasketPutError(
@@ -303,54 +383,107 @@ def confirm_basket_put(
             http_status=409,
         )
 
-    expected_id = int(pending["expected_basket_id"])
-    expected_label = str(pending.get("expected_basket_label") or "")
-    basket = (
-        db.query(CartBasket)
-        .filter(CartBasket.id == expected_id, CartBasket.cart_id == int(cart.id))
-        .first()
-    )
-    if basket is None:
-        put_state.set_pending(db, sess, None)
-        raise BasketPutError("BASKET_MISSING", "Oczekiwany koszyk nie istnieje na wózku.", http_status=409)
-
-    if not basket_scan_matches(basket, basket_scan):
-        # Try match against any cart basket to report scanned label
+    product_id = int(pending["product_id"])
+    scanned = _find_scanned_basket(db, cart=cart, basket_scan=basket_scan)
+    if scanned is None:
+        eligible = pending.get("eligible_baskets") or []
+        labels = _eligible_labels(eligible if isinstance(eligible, list) else [])
         scanned_label = (basket_scan or "").strip()
-        all_b = (
-            db.query(CartBasket)
-            .filter(CartBasket.cart_id == int(cart.id))
-            .all()
-        )
-        for b in all_b:
-            if basket_scan_matches(b, basket_scan):
-                scanned_label = primary_basket_label(b)
-                break
         _audit(
             "BASKET_MISMATCH",
             session_id=sess.id,
             operator=uid,
-            expected_basket=expected_label,
             scanned_basket=scanned_label,
-            product_id=pending.get("product_id"),
-            order_id=pending.get("order_id"),
+            product_id=product_id,
+            eligible_baskets=labels,
         )
         raise BasketPutError(
             "BASKET_MISMATCH",
-            f"NIEPRAWIDŁOWY KOSZYK. Oczekiwany: {expected_label}. Zeskanowany: {scanned_label}. Zeskanuj właściwy koszyk.",
+            f"Nieznany koszyk na tym wózku: {scanned_label}. Zeskanuj właściwy koszyk ({labels}).",
             http_status=409,
             extra={
                 "phase": "BASKET_MISMATCH",
-                "expected_basket_label": expected_label,
                 "scanned_basket": scanned_label,
+                "eligible_baskets": eligible,
                 "pending": pending,
             },
         )
 
-    qty = float(pending.get("quantity") or 1)
+    scanned_label = primary_basket_label(scanned)
+    oid_scope = order_ids
+    if not oid_scope:
+        # Fall back to pending eligible order ids + any order on this cart.
+        elig = pending.get("eligible_baskets") or []
+        oid_scope = [int(r["order_id"]) for r in elig if isinstance(r, dict) and r.get("order_id")]
+
+    allocation, err = resolve_allocation_for_basket_scan(
+        db,
+        cart=cart,
+        order_ids=list(oid_scope or []),
+        product_id=product_id,
+        basket=scanned,
+    )
+    if err == "BASKET_PRODUCT_MISMATCH" or (err is None and allocation is None):
+        eligible = pending.get("eligible_baskets") or []
+        labels = _eligible_labels(eligible if isinstance(eligible, list) else [])
+        _audit(
+            "BASKET_PRODUCT_MISMATCH",
+            session_id=sess.id,
+            operator=uid,
+            scanned_basket=scanned_label,
+            product_id=product_id,
+        )
+        raise BasketPutError(
+            "BASKET_PRODUCT_MISMATCH",
+            f"Ten produkt nie należy do zamówienia w koszyku {scanned_label}. "
+            f"Zeskanuj właściwy koszyk ({labels}).",
+            http_status=409,
+            extra={
+                "phase": "BASKET_PRODUCT_MISMATCH",
+                "scanned_basket": scanned_label,
+                "eligible_baskets": eligible,
+                "pending": pending,
+            },
+        )
+    if err == "BASKET_PRODUCT_ALREADY_COMPLETE":
+        eligible = pending.get("eligible_baskets") or []
+        # Refresh eligible from live state when possible
+        if oid_scope:
+            live = eligible_baskets_payload(
+                list_eligible_basket_allocations(
+                    db, cart=cart, order_ids=list(oid_scope), product_id=product_id
+                )
+            )
+            if live:
+                eligible = live
+                pending = {**pending, "eligible_baskets": live}
+                put_state.set_pending(db, sess, pending)
+        labels = _eligible_labels(eligible if isinstance(eligible, list) else [])
+        _audit(
+            "BASKET_PRODUCT_ALREADY_COMPLETE",
+            session_id=sess.id,
+            operator=uid,
+            scanned_basket=scanned_label,
+            product_id=product_id,
+        )
+        raise BasketPutError(
+            "BASKET_PRODUCT_ALREADY_COMPLETE",
+            f"Koszyk {scanned_label} ma już komplet tego produktu. "
+            f"Zeskanuj inny koszyk ({labels}).",
+            http_status=409,
+            extra={
+                "phase": "BASKET_PRODUCT_ALREADY_COMPLETE",
+                "scanned_basket": scanned_label,
+                "eligible_baskets": eligible,
+                "pending": pending,
+            },
+        )
+
+    assert allocation is not None
+    qty = min(float(pending.get("quantity") or 1), float(allocation.line_remaining))
     oid, oiid = record_pick_fn(
         quantity=qty,
-        fixed_order_id=int(pending["order_id"]),
+        scope_order_id=int(allocation.order_id),
     )
     event_confirm = "MANUAL_BASKET_CONFIRMATION" if manual else "BASKET_CONFIRMED"
     _audit(
@@ -358,18 +491,17 @@ def confirm_basket_put(
         session_id=sess.id,
         operator=uid,
         order_id=oid,
-        product_id=pending.get("product_id"),
-        expected_basket=expected_label,
-        scanned_basket=expected_label,
+        product_id=product_id,
+        scanned_basket=scanned_label,
         quantity=qty,
     )
     series = {
         "operator_user_id": uid,
-        "product_id": int(pending["product_id"]),
-        "order_id": int(pending["order_id"]),
-        "order_item_id": int(pending["order_item_id"]),
-        "basket_id": int(expected_id),
-        "basket_label": expected_label,
+        "product_id": int(product_id),
+        "order_id": int(allocation.order_id),
+        "order_item_id": int(allocation.order_item_id),
+        "basket_id": int(allocation.basket_id),
+        "basket_label": allocation.basket_label,
         "location_id": int(pending["location_id"]),
         "activated_at": put_state.utc_now_iso(),
     }
@@ -379,17 +511,17 @@ def confirm_basket_put(
         "BASKET_SERIES_ACTIVATED",
         session_id=sess.id,
         operator=uid,
-        basket=expected_label,
-        product_id=pending.get("product_id"),
-        order_item_id=pending.get("order_item_id"),
+        basket=allocation.basket_label,
+        product_id=product_id,
+        order_item_id=allocation.order_item_id,
     )
     _audit(
         "PUT_CONFIRMED",
         session_id=sess.id,
         operator=uid,
         order_id=oid,
-        product_id=pending.get("product_id"),
-        basket=expected_label,
+        product_id=product_id,
+        basket=allocation.basket_label,
         quantity=qty,
         via="basket_confirm",
     )
@@ -399,6 +531,7 @@ def confirm_basket_put(
         order_item_id=int(oiid),
         quantity_put=float(qty),
         active_series=series,
-        expected_basket_label=expected_label,
-        message=f"KOSZYK {expected_label} POTWIERDZONY. Odłożono {qty:g} szt.",
+        expected_basket_label=allocation.basket_label,
+        scanned_basket=scanned_label,
+        message=f"KOSZYK {allocation.basket_label} POTWIERDZONY. Odłożono {qty:g} szt.",
     )

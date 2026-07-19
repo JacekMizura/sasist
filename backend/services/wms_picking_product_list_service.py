@@ -2306,6 +2306,14 @@ def build_wms_picking_product_detail(
                 detail.requires_basket_put_confirm = bool(ui_put.get("requires_basket_put"))
                 detail.basket_put_pending = ui_put.get("pending")
                 detail.basket_put_active_series = ui_put.get("active_series")
+                # MULTI: never force a single FIFO destination before basket scan.
+                # Series may expose the active basket; pending exposes eligible_baskets.
+                if detail.requires_basket_put_confirm:
+                    series = detail.basket_put_active_series
+                    if isinstance(series, dict) and series.get("basket_label"):
+                        detail.put_to_basket_label = str(series["basket_label"])
+                    else:
+                        detail.put_to_basket_label = None
         except Exception:
             logger.exception("basket_put ui state failed cart_id=%s", cart_id)
     return detail
@@ -2323,6 +2331,7 @@ def record_wms_quick_pick(
     quantity: float,
     cart_id: int,
     fixed_order_id: int | None = None,
+    scope_order_id: int | None = None,
     operator_user_id: int | None = None,
 ) -> tuple[int, int]:
     """
@@ -2331,6 +2340,8 @@ def record_wms_quick_pick(
     Zwraca (order_id, order_item_id).
 
     ``fixed_order_id`` — dogrywka recovery: tylko jedno zamówienie (bez kohorty statusu).
+    ``scope_order_id`` — zawężenie do jednego zamówienia bez bramki recovery
+    (np. alokacja MULTI po skanie koszyka).
     """
     if quantity <= 0:
         raise ValueError("Ilość musi być > 0.")
@@ -2365,6 +2376,20 @@ def record_wms_quick_pick(
             raise ValueError(exc.message) from exc
         if not rec_state.has_recovery_work:
             raise ValueError("Brak linii do dogrywki — braki zostały już rozwiązane.")
+        order_ids = [oid]
+    elif scope_order_id is not None:
+        oid = int(scope_order_id)
+        ochk = (
+            db.query(Order)
+            .filter(
+                Order.id == oid,
+                Order.tenant_id == int(tenant_id),
+                Order.warehouse_id == int(warehouse_id),
+            )
+            .first()
+        )
+        if not ochk:
+            raise ValueError("Zamówienie nie należy do tego magazynu / tenanta.")
         order_ids = [oid]
     else:
         ot = _order_type_filter(order_type)

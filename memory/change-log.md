@@ -1,3 +1,11 @@
+## 2026-07-19 — MULTI basket put: free basket choice + list EAN as PRODUCT_SCAN
+
+- ROOT: `resolve_next_basket_allocation` FIFO bound `order_item_id`/`expected_basket_id` into pending at product scan → forced „KOSZYK DOCELOWY: S-1-1”; list EAN only navigated → detail demanded second EAN.
+- FIX SSOT: product scan → product-level pending + `eligible_baskets` (no Pick); basket scan → `resolve_allocation_for_basket_scan` → Pick + series for that basket/line. Mid-series other-basket scan switches destination.
+- FE: list scan calls quick-pick then detail with one-shot `listProductScanToken`; UI lists all eligible baskets (no single destination).
+- Errors: `BASKET_PRODUCT_MISMATCH`, `BASKET_PRODUCT_ALREADY_COMPLETE`; `scope_order_id` on quick-pick (no recovery gate).
+- Tests: `test_wms_basket_put_confirmation.py` CASE 1–11 (+ extras).
+
 ## 2026-07-19 — POST /orders 500: phantom offer_id (ProductSalesOffer)
 
 - ROOT: `GET /products/{id}/sales-offers` → `ensure_default_offer` + flush, **no commit**; `get_db` closes → rollback. FE stored ephemeral offer.id → POST `offer_not_found` → 500.
