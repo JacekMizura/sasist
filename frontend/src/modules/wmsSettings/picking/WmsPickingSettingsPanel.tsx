@@ -1918,39 +1918,47 @@ export function WmsPickingSettingsSections({
     [warehouseId, globalBulkSingle, globalBulkMulti, inferGlobalBulkLimitsFromRows],
   );
 
-  const handleSaveConfiguration = useCallback(async (): Promise<boolean> => {
+  /**
+   * Validate draft and build the next `savedConfigs` list (no React state writes).
+   * Shared by modal Zapisz (local commit) and a safety path in global saveAll.
+   */
+  const buildCommittedConfigList = useCallback(():
+    | { ok: true; nextList: SavedPickingConfiguration[] }
+    | { ok: false } => {
     setPickingPersistOk(null);
     setSaveFormError(null);
     setPickingConfigsLoadErr(null);
-    if (!draft) return true;
+    if (!draft) {
+      return { ok: true, nextList: savedConfigs };
+    }
 
     const d = draft;
     if (!d.statusToPick.trim()) {
       setSaveFormError("Wybierz status do zbierania.");
       setDraft({ ...d, statusToPickBlurred: true });
-      return false;
+      return { ok: false };
     }
     if (!d.statusAfterPick.trim()) {
       setSaveFormError("Wybierz status po zebraniu.");
       setDraft({ ...d, statusAfterPickBlurred: true });
-      return false;
+      return { ok: false };
     }
     const pickId = Number(d.statusToPick);
     const afterId = Number(d.statusAfterPick);
     if (!Number.isFinite(pickId) || pickId <= 0) {
       setSaveFormError("Nieprawidłowy status do zbierania.");
       setDraft({ ...d, statusToPickBlurred: true });
-      return false;
+      return { ok: false };
     }
     if (!Number.isFinite(afterId) || afterId <= 0) {
       setSaveFormError("Nieprawidłowy status po zebraniu.");
       setDraft({ ...d, statusAfterPickBlurred: true });
-      return false;
+      return { ok: false };
     }
     if (pickId === afterId) {
       setSaveFormError("Status do zbierania i po zebraniu muszą się różnić.");
       setDraft({ ...d, statusToPickBlurred: true, statusAfterPickBlurred: true });
-      return false;
+      return { ok: false };
     }
 
     if (
@@ -1959,14 +1967,14 @@ export function WmsPickingSettingsSections({
       savedConfigs.some((c) => c.statusToPickId === pickId)
     ) {
       setSaveFormError("Ten status ma już zapisaną konfigurację — wybierz inny status do zbierania.");
-      return false;
+      return { ok: false };
     }
 
     if (d.pickingMode === "by_products" && d.blocks.multi_item.containers === "cart_no_scan") {
       setSaveFormError(
         "Przy zbieraniu po produktach (wieloelementowe) wybierz koszyki, skan, wózek mobilny lub regał — wymagane jest rozdzielenie zamówień.",
       );
-      return false;
+      return { ok: false };
     }
 
     const nextUsesBulkSingle =
@@ -1980,7 +1988,7 @@ export function WmsPickingSettingsSections({
       if (!p.ok) {
         setSaveFormError(`Limity zbioru (magazyn) — jednoelementowe: ${p.message}`);
         setGlobalBulkSingleBlurred(true);
-        return false;
+        return { ok: false };
       }
     }
     if (nextUsesBulkMulti) {
@@ -1988,7 +1996,7 @@ export function WmsPickingSettingsSections({
       if (!p.ok) {
         setSaveFormError(`Limity zbioru (magazyn) — wieloelementowe: ${p.message}`);
         setGlobalBulkMultiBlurred(true);
-        return false;
+        return { ok: false };
       }
     }
 
@@ -2020,25 +2028,7 @@ export function WmsPickingSettingsSections({
           : [...savedConfigs, snapshot];
     }
     nextList.sort((a, b) => a.statusToPickName.localeCompare(b.statusToPickName));
-
-    setPickingPersisting(true);
-    const result = await persistPickingConfigList(nextList);
-    setPickingPersisting(false);
-
-    if (!result.ok) {
-      setSaveFormError(result.message);
-      return false;
-    }
-
-    setEditBackup(null);
-    setPickingPersistOk("Konfiguracja zapisana.");
-    window.setTimeout(() => setPickingPersistOk(null), 5000);
-
-    const match = result.saved.find((c) => c.statusToPickId === pickId);
-    if (match) {
-      setDraft(savedConfigurationToDraft(match));
-    }
-    return true;
+    return { ok: true, nextList };
   }, [
     draft,
     savedConfigs,
@@ -2046,11 +2036,18 @@ export function WmsPickingSettingsSections({
     editBackup,
     globalBulkSingle,
     globalBulkMulti,
-    persistPickingConfigList,
-    setDraft,
-    setSaveFormError,
-    setEditBackup,
   ]);
+
+  /** Modal Zapisz: validate + merge into page config list (no API). */
+  const commitDraftLocally = useCallback((): boolean => {
+    const built = buildCommittedConfigList();
+    if (!built.ok) return false;
+    setSavedConfigs(built.nextList);
+    setEditBackup(null);
+    setDraft(null);
+    setSaveFormError(null);
+    return true;
+  }, [buildCommittedConfigList]);
 
   useEffect(() => {
     registerActions?.({
@@ -2060,12 +2057,22 @@ export function WmsPickingSettingsSections({
           const ok = await shortageRef.current.save();
           if (!ok) throw new Error("shortage_save_failed");
         }
-        if (draftDirty) {
-          const ok = await handleSaveConfiguration();
-          if (!ok) throw new Error("draft_save_failed");
+        let configsToPersist = savedConfigs;
+        if (draft != null) {
+          const built = buildCommittedConfigList();
+          if (!built.ok) throw new Error("draft_commit_failed");
+          configsToPersist = built.nextList;
+          setSavedConfigs(built.nextList);
+          setEditBackup(null);
+          setDraft(null);
+          setSaveFormError(null);
         }
-        if (configsBulkDirty) {
-          const result = await persistPickingConfigList(savedConfigs);
+        const configsNeedPersist =
+          baselineConfigsFp == null ||
+          fingerprintPickingConfigsWarehouseState(configsToPersist, globalBulkSingle, globalBulkMulti) !==
+            baselineConfigsFp;
+        if (configsNeedPersist) {
+          const result = await persistPickingConfigList(configsToPersist);
           if (!result.ok) throw new Error(result.message);
         }
         if (extendedDirty) {
@@ -2080,12 +2087,7 @@ export function WmsPickingSettingsSections({
           setBaselineExtended(stableStringifyPicking(e));
         }
         await loadPickingConfigsFromServer();
-        if (editBackup) {
-          setSavedConfigs((prev) =>
-            [...prev, editBackup].sort((a, b) => a.statusToPickName.localeCompare(b.statusToPickName)),
-          );
-          setEditBackup(null);
-        }
+        setEditBackup(null);
         setDraft(null);
         setSaveFormError(null);
       },
@@ -2095,14 +2097,16 @@ export function WmsPickingSettingsSections({
     registerActions,
     warehouseId,
     shortagePanelDirty,
-    draftDirty,
-    configsBulkDirty,
+    draft,
+    savedConfigs,
+    globalBulkSingle,
+    globalBulkMulti,
+    baselineConfigsFp,
     extendedDirty,
-    handleSaveConfiguration,
+    buildCommittedConfigList,
     persistPickingConfigList,
     saveExtendedOnly,
     loadPickingConfigsFromServer,
-    editBackup,
   ]);
 
   const handleDeleteSavedConfig = useCallback(
@@ -2201,7 +2205,7 @@ export function WmsPickingSettingsSections({
             {pickingPersistOk}
           </p>
         ) : null}
-        {saveFormError ? (
+        {saveFormError && draft == null ? (
           <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800">{saveFormError}</p>
         ) : null}
 
@@ -2563,8 +2567,14 @@ export function WmsPickingSettingsSections({
       <PickingSettingsModal
         open={draft != null}
         title={editBackup ? "Edycja trybu zbierania" : "Nowy tryb zbierania"}
-        subtitle="Konfigurator jak w Sellasist WMS — zapis lub anulowanie paskiem na dole strony."
+        subtitle="Zmiany w regule zatwierdzasz tutaj; zapis na serwer — paskiem na dole strony ustawień WMS."
         onClose={closeDraftEditor}
+        onSave={() => {
+          commitDraftLocally();
+        }}
+        dirty={draftDirty}
+        saving={pickingPersisting}
+        saveError={draft != null ? saveFormError : null}
       >
         {draft != null ? (
           <PickingConfiguratorEditor
