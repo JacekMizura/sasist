@@ -19,6 +19,10 @@ import { useWarehouse } from "../../context/WarehouseContext";
 import { BundlePickingOrderTree } from "../../components/wms/picking/BundlePickingOrderTree";
 import { BundlePickingScanCard } from "../../components/wms/bundle/BundlePickingScanCard";
 import { BundleConsolidationRackCard } from "../../components/wms/bundle/BundleConsolidationRackCard";
+import {
+  BasketPutQuantityModal,
+  type BasketPutQuantityDraft,
+} from "../../components/wms/picking/BasketPutQuantityModal";
 import type { BundleScanOut, ConsolidationRackBundleRowOut } from "../../api/bundlesLogisticsApi";
 import { getConsolidationRackBundleView } from "../../api/bundlesLogisticsApi";
 import { tryPickingBundleScan } from "../../services/bundleScannerIntegration";
@@ -178,6 +182,7 @@ export default function WmsPickingProductDetailPage() {
   const [depositBusy, setDepositBusy] = useState(false);
   const [bundlePickScan, setBundlePickScan] = useState<BundleScanOut | null>(null);
   const [consolidationRackRows, setConsolidationRackRows] = useState<ConsolidationRackBundleRowOut[]>([]);
+  const [quantityDraft, setQuantityDraft] = useState<BasketPutQuantityDraft | null>(null);
 
   const detailLoadSeqRef = useRef(0);
   /** Strip one-shot list→detail markers from history (no second PRODUCT_SCAN). */
@@ -690,6 +695,7 @@ export default function WmsPickingProductDetailPage() {
     rawScan: string,
     manual = false,
     routeReason: "pending_confirm" | "series_switch" | "select_destination" = "pending_confirm",
+    quantity?: number,
   ) {
     if (!pickingSession || warehouseId == null || !pickingSession.cartId) {
       scanGateRef.current = false;
@@ -713,6 +719,7 @@ export default function WmsPickingProductDetailPage() {
       pending_before_confirm: Boolean(detail?.basket_put_pending || pendingSeed),
       product_id: productId,
       location_id: locId,
+      quantity: quantity ?? null,
     });
     try {
       const result = await postWmsPickingConfirmBasketPut(
@@ -727,6 +734,7 @@ export default function WmsPickingProductDetailPage() {
           recovery_order_id: recoveryOrderId,
           product_id: Number.isFinite(productId) && productId > 0 ? productId : null,
           location_id: locId,
+          quantity: quantity != null && quantity > 0 ? quantity : null,
         },
       );
       multiScanTrace("BASKET_CONFIRM_OK", {
@@ -736,10 +744,32 @@ export default function WmsPickingProductDetailPage() {
         order_item_id: result.order_item_id ?? null,
         basket_label: result.active_series?.basket_label ?? result.expected_basket_label ?? null,
       });
+
+      if (result.phase === "QUANTITY_REQUIRED") {
+        const row = result.eligible_baskets?.[0];
+        const rem = Number(row?.line_remaining ?? 0);
+        const orderMeta = detail?.orders?.find((o) => o.order_id === result.order_id);
+        setPendingSeed(null);
+        setQuantityDraft({
+          basketScan: rawScan,
+          basketLabel: String(result.expected_basket_label || row?.basket_label || rawScan),
+          orderId: Number(result.order_id || row?.order_id || 0),
+          orderItemId: Number(result.order_item_id || row?.order_item_id || 0),
+          orderNumber: orderMeta?.order_number ?? null,
+          lineRemaining: rem > 0 ? rem : 1,
+          productName: detail?.name ?? `Produkt #${productId}`,
+          productEan: detail?.ean ?? null,
+          productImageUrl: detail?.image_url ?? null,
+        });
+        playScanBeep();
+        setPickMsg(result.message ?? "Podaj ilość do odłożenia");
+        return;
+      }
+
+      setQuantityDraft(null);
       setPendingSeed(null);
       setPickMsg(result.message ?? `Koszyk potwierdzony`);
       await load();
-      // Destination-only (click path / series switch): qty unchanged — await next EAN.
       if (
         result.phase === "SERIES_DESTINATION_SWITCHED" ||
         result.phase === "SERIES_ACTIVATED" ||
@@ -757,7 +787,7 @@ export default function WmsPickingProductDetailPage() {
         } else {
           playScanBeep();
         }
-        setScannerInputPlaceholder("Skanuj EAN produktu");
+        setScannerInputPlaceholder("Zeskanuj koszyk lub EAN");
         return;
       }
       playScanBeep();
@@ -775,7 +805,7 @@ export default function WmsPickingProductDetailPage() {
       if (wmsPickingRemainingQty(after) <= 1e-9 && !after.consolidation_active) {
         goBackToList(true);
       } else {
-        setScannerInputPlaceholder("Skanuj EAN produktu");
+        setScannerInputPlaceholder("Zeskanuj koszyk lub EAN");
       }
     } catch (e: unknown) {
       const extracted = extractWmsScanErrorDetail(e);
@@ -791,6 +821,18 @@ export default function WmsPickingProductDetailPage() {
       });
       showScanFeedback(feedback);
       setPickMsg(feedback.message);
+      if (code === "QUANTITY_EXCEEDS_REMAINING" || code === "QUANTITY_STALE") {
+        // Keep / refresh modal with live remaining if provided
+        const remMatch = extracted.message?.match(/(\d+(?:[.,]\d+)?)\s*szt/i);
+        if (quantityDraft && remMatch) {
+          const rem = Number(String(remMatch[1]).replace(",", "."));
+          if (Number.isFinite(rem) && rem > 0) {
+            setQuantityDraft({ ...quantityDraft, lineRemaining: rem });
+          }
+        }
+      } else {
+        setQuantityDraft(null);
+      }
       await load();
     } finally {
       scanGateRef.current = false;
@@ -1096,7 +1138,7 @@ export default function WmsPickingProductDetailPage() {
                     Wybierz koszyk
                   </p>
                   <p className="mt-1 text-sm font-semibold text-indigo-950">
-                    Zeskanuj koszyk, do którego chcesz odkładać ten produkt.
+                    Zeskanuj koszyk, do którego chcesz odkładać ten produkt — potem podasz ilość.
                   </p>
                   <ul className="mt-3 space-y-1.5">
                     {detail.orders
@@ -1108,9 +1150,6 @@ export default function WmsPickingProductDetailPage() {
                         </li>
                       ))}
                   </ul>
-                  <p className="mt-3 text-xs font-semibold text-slate-500">
-                    Możesz też najpierw zeskanować EAN — wtedy odłożenie +1 nastąpi przy skanie koszyka.
-                  </p>
                 </div>
               ) : null}
             </div>
@@ -1388,6 +1427,20 @@ export default function WmsPickingProductDetailPage() {
         </ModalShell>
       )}
       </WmsOperationalPageBody>
+
+      {quantityDraft ? (
+        <BasketPutQuantityModal
+          draft={quantityDraft}
+          busy={pickBusy}
+          onCancel={() => {
+            setQuantityDraft(null);
+            refocusScannerInput();
+          }}
+          onConfirm={(qty) => {
+            void confirmBasketScan(quantityDraft.basketScan, false, "select_destination", qty);
+          }}
+        />
+      ) : null}
     </WmsOperationalPageShell>
   );
 }

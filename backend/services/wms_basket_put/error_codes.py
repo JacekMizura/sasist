@@ -24,6 +24,9 @@ BASKET_PUT_OWNED_BY_OTHER = "BASKET_PUT_OWNED_BY_OTHER"
 OVERPICK_BLOCKED = "OVERPICK_BLOCKED"
 SERIES_DESTINATION_SWITCHED = "SERIES_DESTINATION_SWITCHED"
 FOREIGN_SKU_ON_SERIES = "FOREIGN_SKU_ON_SERIES"
+QUANTITY_INVALID = "QUANTITY_INVALID"
+QUANTITY_EXCEEDS_REMAINING = "QUANTITY_EXCEEDS_REMAINING"
+QUANTITY_STALE = "QUANTITY_STALE"
 
 # Legacy alias kept in FE mapper
 AWAITING_BASKET_CONFIRMATION = "AWAITING_BASKET_CONFIRMATION"
@@ -47,6 +50,9 @@ OPERATOR_MESSAGES: dict[str, str] = {
     BASKET_PUT_OWNED_BY_OTHER: "To oczekujące odłożenie należy do innego operatora.",
     OVERPICK_BLOCKED: "Zebrano już pełną wymaganą ilość tego produktu.",
     FOREIGN_SKU_ON_SERIES: "Aktywna seria dotyczy innego produktu. Zeskanuj właściwy EAN albo zmień kontekst.",
+    QUANTITY_INVALID: "Ilość musi być większa od zera.",
+    QUANTITY_EXCEEDS_REMAINING: "Nie możesz odłożyć więcej niż pozostało w koszyku dla tego produktu.",
+    QUANTITY_STALE: "Pozostała ilość zmieniła się. Odśwież i podaj ilość ponownie.",
     AWAITING_BASKET_CONFIRMATION: (
         "Oczekiwany jest teraz skan koszyka. Najpierw odłóż zeskanowany produkt do koszyka."
     ),

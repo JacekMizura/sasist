@@ -23,15 +23,19 @@ export type PickingDetailNavigateRequest = {
   basketPutPendingSeed?: BasketPutPendingSeed | null;
 };
 
-/** HARD CONTRACT: physical_scan may navigate only after quick-pick created backend pending. */
+/** HARD CONTRACT (DEFAULT QUANTITY MODE): physical_scan may open detail without pending.
+ * Pending is optional (legacy unit-scan). Pick happens only after quantity confirm.
+ */
 export function assertPhysicalScanNavigateAllowed(req: PickingDetailNavigateRequest): boolean {
   if (req.source !== "physical_scan") return true;
-  return (
-    req.quickPickCalled === true &&
-    req.pendingCreated === true &&
-    req.basketPutPendingSeed != null &&
-    Number(req.basketPutPendingSeed.product_id) === Number(req.productId)
-  );
+  // If caller claims pending was created, seed must match product.
+  if (req.pendingCreated) {
+    return (
+      req.basketPutPendingSeed != null &&
+      Number(req.basketPutPendingSeed.product_id) === Number(req.productId)
+    );
+  }
+  return true;
 }
 
 export function buildPickingProductDetailNavState(

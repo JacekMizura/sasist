@@ -356,12 +356,17 @@ class WmsPickingConfirmBasketPutBody(BaseModel):
     product_id: Optional[int] = Field(
         default=None,
         ge=1,
-        description="Kontekst produktu z ekranu detail — pozwala wybrać koszyk bez pending (Pick=0).",
+        description="Kontekst produktu z ekranu detail (DEFAULT QUANTITY MODE).",
     )
     location_id: Optional[int] = Field(
         default=None,
         ge=1,
-        description="Lokalizacja źródłowa dla aktywacji serii bez pending (wymagana z product_id).",
+        description="Lokalizacja źródłowa wymagana przy commit ilości.",
+    )
+    quantity: Optional[float] = Field(
+        default=None,
+        gt=0,
+        description="Gdy None + product_id → QUANTITY_REQUIRED (bez Pick). Gdy podane → commit Pick.",
     )
 
 

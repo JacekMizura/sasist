@@ -46,27 +46,38 @@ describe("wmsScanDispatch — consumed contract", () => {
   });
 });
 
-describe("PHYSICAL_SCAN hard contract", () => {
-  it("blocks navigate when source=physical_scan without quick-pick pending", () => {
+describe("PHYSICAL_SCAN hard contract (quantity mode)", () => {
+  it("allows physical_scan select-product without pending", () => {
+    expect(
+      assertPhysicalScanNavigateAllowed({
+        productId: 192,
+        source: "physical_scan",
+        caller: "list_ean_select_product",
+        quickPickCalled: false,
+        pendingCreated: false,
+      }),
+    ).toBe(true);
+    const state = preparePickingProductDetailNavigation(session, {
+      productId: 192,
+      source: "physical_scan",
+      caller: "list_ean_select_product",
+      quickPickCalled: false,
+      pendingCreated: false,
+    });
+    expect(state).not.toBeNull();
+    expect(state!.navigationSource).toBe("physical_scan");
+  });
+
+  it("blocks pendingCreated=true without matching seed", () => {
     expect(
       assertPhysicalScanNavigateAllowed({
         productId: 192,
         source: "physical_scan",
         caller: "test",
-        quickPickCalled: false,
-        pendingCreated: false,
+        quickPickCalled: true,
+        pendingCreated: true,
       }),
     ).toBe(false);
-    expect(
-      preparePickingProductDetailNavigation(session, {
-        productId: 192,
-        source: "physical_scan",
-        caller: "test",
-        quickPickCalled: true,
-        pendingCreated: false,
-        basketPutPendingSeed: { product_id: 192, quantity: 1 },
-      }),
-    ).toBeNull();
   });
 
   it("allows click without quick-pick", () => {
@@ -93,7 +104,6 @@ describe("Scanner Helper entry → list PRODUCT_SCAN → navigate", () => {
    * invoked ONLY through performScannerHelperScan (Enter / SKANUJ).
    */
   function buildListWorkflowHandler(deps: {
-    quickPick: ReturnType<typeof vi.fn>;
     navigate: ReturnType<typeof vi.fn>;
   }) {
     return async (raw: string) => {
@@ -106,60 +116,29 @@ describe("Scanner Helper entry → list PRODUCT_SCAN → navigate", () => {
       });
       if (decision.kind === "reject") return SCAN_CONSUMED;
       if (decision.kind !== "product_quick_pick") return SCAN_NOT_CONSUMED;
-
-      const res = await deps.quickPick({ product_id: 192, ean: raw });
-      if (res.phase === "AWAITING_BASKET_CONFIRMATION") {
-        const seed = {
-          product_id: res.pending.product_id,
-          quantity: res.pending.quantity,
-          idempotency_key: res.pending.idempotency_key,
-          eligible_baskets: res.pending.eligible_baskets,
-        };
-        const state = preparePickingProductDetailNavigation(session, {
-          productId: 192,
-          source: "physical_scan",
-          caller: "list_product_scan_awaiting_basket",
-          rawCode: raw,
-          quickPickCalled: true,
-          quickPickResponse: res.phase,
-          pendingCreated: true,
-          listProductScanToken: seed.idempotency_key,
-          basketPutPendingSeed: seed,
-        });
-        if (state) {
-          deps.navigate(`/wms/picking/products/192`, { state });
-        }
+      // Quantity mode: EAN selects product — navigate detail, ZERO Pick / ZERO pending.
+      const state = preparePickingProductDetailNavigation(session, {
+        productId: 192,
+        source: "physical_scan",
+        caller: "list_ean_select_product",
+        rawCode: raw,
+        quickPickCalled: false,
+        pendingCreated: false,
+      });
+      if (state) {
+        deps.navigate(`/wms/picking/products/192`, { state });
       }
       return SCAN_CONSUMED;
     };
   }
 
-  it("Enter EAN: quick-pick EXACTLY ONCE before navigate; catalog blocked", async () => {
-    const callOrder: string[] = [];
-    const quickPick = vi.fn(async () => {
-      callOrder.push("quick_pick");
-      return {
-        phase: "AWAITING_BASKET_CONFIRMATION",
-        picked: false,
-        pending: {
-          product_id: 192,
-          quantity: 1,
-          idempotency_key: "k1",
-          eligible_baskets: [
-            { basket_id: 10, basket_label: "S-1-1", order_id: 1234, line_remaining: 8 },
-            { basket_id: 11, basket_label: "S-1-2", order_id: 1235, line_remaining: 1 },
-          ],
-        },
-      };
-    });
-    const navigate = vi.fn((_path: string, _opts?: { state?: unknown }) => {
-      callOrder.push("navigate");
-    });
+  it("Enter EAN: select product navigate WITHOUT quick-pick; catalog blocked", async () => {
+    const navigate = vi.fn();
     const catalogLookup = vi.fn();
+    const quickPick = vi.fn();
 
-    const handler = buildListWorkflowHandler({ quickPick, navigate });
+    const handler = buildListWorkflowHandler({ navigate });
 
-    // REAL entry: Scanner Helper submit/Enter → global dispatch → list handler
     const result = await performScannerHelperScan({
       rawCode: EAN,
       pathname: LIST_PATH,
@@ -170,28 +149,23 @@ describe("Scanner Helper entry → list PRODUCT_SCAN → navigate", () => {
 
     expect(result.consumed).toBe(true);
     expect(result.allowGenericCatalog).toBe(false);
-    expect(quickPick).toHaveBeenCalledTimes(1);
+    expect(quickPick).toHaveBeenCalledTimes(0);
     expect(navigate).toHaveBeenCalledTimes(1);
-    expect(callOrder).toEqual(["quick_pick", "navigate"]);
     expect(catalogLookup).not.toHaveBeenCalled();
 
     const navState = navigate.mock.calls[0][1].state as {
       navigationSource: string;
-      basketPutPendingSeed: { product_id: number };
+      basketPutPendingSeed?: unknown;
     };
     expect(navState.navigationSource).toBe("physical_scan");
-    expect(navState.basketPutPendingSeed.product_id).toBe(192);
+    expect(navState.basketPutPendingSeed).toBeUndefined();
   });
 
   it("consumed=true blocks independent catalog navigation channel", async () => {
     const navigate = vi.fn();
     const catalogNavigate = vi.fn();
-    const quickPick = vi.fn(async () => ({
-      phase: "AWAITING_BASKET_CONFIRMATION",
-      pending: { product_id: 192, quantity: 1, idempotency_key: "k1", eligible_baskets: [] },
-    }));
 
-    const handler = buildListWorkflowHandler({ quickPick, navigate });
+    const handler = buildListWorkflowHandler({ navigate });
 
     const result = await performScannerHelperScan({
       rawCode: EAN,
@@ -199,7 +173,6 @@ describe("Scanner Helper entry → list PRODUCT_SCAN → navigate", () => {
       handler,
       pickingProductsPath: true,
       onGenericCatalogLookup: (code) => {
-        // Second channel must NOT open picking detail independently
         catalogNavigate(`/wms/picking/products/192`, { via: "catalog", code });
       },
     });
@@ -224,13 +197,9 @@ describe("Scanner Helper entry → list PRODUCT_SCAN → navigate", () => {
     expect(state!.listProductScanToken).toBeUndefined();
   });
 
-  it("physical_scan without awaiting pending cannot navigate", async () => {
+  it("quantity mode: EAN select-product navigates without inventing pending", async () => {
     const navigate = vi.fn();
-    const quickPick = vi.fn(async () => ({
-      phase: "PUT_CONFIRMED",
-      picked: true,
-      pending: null,
-    }));
+    const quickPick = vi.fn();
 
     const handler = async (raw: string) => {
       const decision = resolveMultiPickingListScan(raw, {
@@ -242,15 +211,13 @@ describe("Scanner Helper entry → list PRODUCT_SCAN → navigate", () => {
       });
       if (decision.kind === "reject") return SCAN_CONSUMED;
       if (decision.kind !== "product_quick_pick") return SCAN_NOT_CONSUMED;
-      const res = await quickPick();
-      // Attempt illegal physical_scan navigate without pending
+      // DEFAULT QUANTITY MODE: no quick-pick — select product only
       const state = preparePickingProductDetailNavigation(session, {
         productId: 192,
         source: "physical_scan",
-        caller: "illegal",
+        caller: "list_ean_select_product",
         rawCode: raw,
-        quickPickCalled: true,
-        quickPickResponse: res.phase,
+        quickPickCalled: false,
         pendingCreated: false,
       });
       if (state) navigate(`/wms/picking/products/192`, { state });
@@ -264,8 +231,10 @@ describe("Scanner Helper entry → list PRODUCT_SCAN → navigate", () => {
       pickingProductsPath: true,
     });
 
-    expect(quickPick).toHaveBeenCalledTimes(1);
-    expect(navigate).not.toHaveBeenCalled();
+    expect(quickPick).toHaveBeenCalledTimes(0);
+    expect(navigate).toHaveBeenCalledTimes(1);
+    expect(navigate.mock.calls[0][1].state.navigationSource).toBe("physical_scan");
+    expect(navigate.mock.calls[0][1].state.basketPutPendingSeed).toBeUndefined();
   });
 });
 

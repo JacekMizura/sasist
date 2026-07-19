@@ -59,6 +59,7 @@ PutPhase = Literal[
     "AWAITING_BASKET_STILL",
     "SERIES_DESTINATION_SWITCHED",
     "SERIES_ACTIVATED",
+    "QUANTITY_REQUIRED",
 ]
 
 
@@ -689,6 +690,227 @@ def _raise_unknown_basket(
     )
 
 
+
+def _quantity_mode_basket_put(
+    db: Session,
+    *,
+    sess: WmsOperationSession,
+    cart: Cart,
+    basket_scan: str,
+    uid: int | None,
+    oid_scope: list[int],
+    product_id: int,
+    location_id: int | None,
+    quantity: float | None,
+    record_pick_fn,
+    manual: bool,
+) -> BasketPutResult:
+    """
+    DEFAULT QUANTITY MODE:
+      basket scan → resolve allocation (ZERO Pick)
+      quantity confirm → revalidate remaining → Pick +qty
+    """
+    scanned = _find_scanned_basket(db, cart=cart, basket_scan=basket_scan)
+    if scanned is None:
+        _raise_unknown_basket(
+            db,
+            cart=cart,
+            basket_scan=basket_scan,
+            sess=sess,
+            uid=uid,
+            product_id=product_id,
+            pending=None,
+            oid_scope=list(oid_scope or []),
+        )
+    if not _basket_has_assigned_order(db, cart=cart, basket=scanned):
+        raise BasketPutError(
+            ec.BASKET_EMPTY,
+            ec.operator_message(ec.BASKET_EMPTY),
+            http_status=409,
+            extra={"phase": "BASKET_EMPTY", "scanned_basket": primary_basket_label(scanned)},
+        )
+
+    scanned_label = primary_basket_label(scanned)
+    allocation, err = resolve_allocation_for_basket_scan(
+        db,
+        cart=cart,
+        order_ids=list(oid_scope or []),
+        product_id=int(product_id),
+        basket=scanned,
+    )
+    if err == "BASKET_PRODUCT_MISMATCH" or allocation is None:
+        live = list_eligible_basket_allocations(
+            db, cart=cart, order_ids=list(oid_scope or []), product_id=int(product_id)
+        )
+        labels = _eligible_labels(eligible_baskets_payload(live))
+        raise BasketPutError(
+            ec.BASKET_PRODUCT_MISMATCH,
+            (
+                f"{ec.operator_message(ec.BASKET_PRODUCT_MISMATCH)} "
+                f"Koszyk {scanned_label}. Oczekiwane: {labels}."
+            ),
+            http_status=409,
+            extra={
+                "phase": "BASKET_PRODUCT_MISMATCH",
+                "scanned_basket": scanned_label,
+                "eligible_baskets": eligible_baskets_payload(live),
+            },
+        )
+    if err == "BASKET_PRODUCT_ALREADY_COMPLETE":
+        raise BasketPutError(
+            "BASKET_PRODUCT_ALREADY_COMPLETE",
+            f"Koszyk {scanned_label} ma już komplet tego produktu.",
+            http_status=409,
+            extra={"phase": "BASKET_PRODUCT_ALREADY_COMPLETE", "scanned_basket": scanned_label},
+        )
+
+    assert allocation is not None
+    alloc_payload = [
+        {
+            "basket_id": int(allocation.basket_id),
+            "basket_label": allocation.basket_label,
+            "order_id": int(allocation.order_id),
+            "order_item_id": int(allocation.order_item_id),
+            "line_remaining": float(allocation.line_remaining),
+        }
+    ]
+
+    # Preview only — operator must confirm quantity (ZERO Pick).
+    if quantity is None:
+        _audit(
+            "BASKET_QUANTITY_REQUIRED",
+            session_id=sess.id,
+            operator=uid,
+            product_id=product_id,
+            basket=allocation.basket_label,
+            order_id=allocation.order_id,
+            line_remaining=allocation.line_remaining,
+        )
+        return BasketPutResult(
+            phase="QUANTITY_REQUIRED",
+            order_id=int(allocation.order_id),
+            order_item_id=int(allocation.order_item_id),
+            quantity_put=0.0,
+            expected_basket_label=allocation.basket_label,
+            scanned_basket=scanned_label,
+            eligible_baskets=alloc_payload,
+            message=(
+                f"Koszyk {allocation.basket_label} — podaj ilość do odłożenia "
+                f"(max {allocation.line_remaining:g} szt.)."
+            ),
+        )
+
+    qty = float(quantity)
+    if qty <= 1e-9:
+        raise BasketPutError(
+            ec.QUANTITY_INVALID,
+            "Ilość musi być większa od zera.",
+            http_status=409,
+            extra={"phase": "QUANTITY_INVALID", "line_remaining": float(allocation.line_remaining)},
+        )
+
+    # Live revalidation at commit — never trust modal remaining alone.
+    live_alloc, live_err = resolve_allocation_for_basket_scan(
+        db,
+        cart=cart,
+        order_ids=list(oid_scope or []),
+        product_id=int(product_id),
+        basket=scanned,
+    )
+    if live_err or live_alloc is None:
+        raise BasketPutError(
+            live_err or ec.BASKET_PRODUCT_MISMATCH,
+            "Alokacja koszyka zmieniła się — odśwież i spróbuj ponownie.",
+            http_status=409,
+            extra={"phase": live_err or "BASKET_PRODUCT_MISMATCH"},
+        )
+    if int(live_alloc.order_item_id) != int(allocation.order_item_id) or int(live_alloc.basket_id) != int(
+        allocation.basket_id
+    ):
+        raise BasketPutError(
+            ec.QUANTITY_STALE,
+            (
+                f"Pozostała ilość / alokacja zmieniła się. "
+                f"Maksymalnie możesz odłożyć {live_alloc.line_remaining:g} szt."
+            ),
+            http_status=409,
+            extra={
+                "phase": "QUANTITY_STALE",
+                "line_remaining": float(live_alloc.line_remaining),
+                "eligible_baskets": [
+                    {
+                        "basket_id": int(live_alloc.basket_id),
+                        "basket_label": live_alloc.basket_label,
+                        "order_id": int(live_alloc.order_id),
+                        "order_item_id": int(live_alloc.order_item_id),
+                        "line_remaining": float(live_alloc.line_remaining),
+                    }
+                ],
+            },
+        )
+    if qty > float(live_alloc.line_remaining) + 1e-9:
+        raise BasketPutError(
+            ec.QUANTITY_EXCEEDS_REMAINING,
+            (
+                f"Pozostała ilość zmieniła się. "
+                f"Maksymalnie możesz odłożyć {live_alloc.line_remaining:g} szt."
+            ),
+            http_status=409,
+            extra={
+                "phase": "QUANTITY_EXCEEDS_REMAINING",
+                "line_remaining": float(live_alloc.line_remaining),
+                "requested": float(qty),
+            },
+        )
+
+    if location_id is None or int(location_id) <= 0:
+        raise BasketPutError(
+            ec.UNKNOWN_SCAN_CODE,
+            "Brak lokalizacji produktu — nie można zapisać odłożenia.",
+            http_status=409,
+            extra={"phase": "NO_LOCATION_FOR_PICK"},
+        )
+
+    put_qty = min(float(qty), float(live_alloc.line_remaining))
+    oid, oiid = record_pick_fn(
+        quantity=put_qty,
+        scope_order_id=int(live_alloc.order_id),
+    )
+    # Quantity mode does not keep unit-scan pending / series state.
+    put_state.set_pending(db, sess, None)
+    put_state.set_active_series(db, sess, None)
+    event_confirm = "MANUAL_BASKET_CONFIRMATION" if manual else "BASKET_QUANTITY_COMMITTED"
+    _audit(
+        event_confirm,
+        session_id=sess.id,
+        operator=uid,
+        order_id=oid,
+        product_id=product_id,
+        scanned_basket=scanned_label,
+        quantity=put_qty,
+        order_item_id=live_alloc.order_item_id,
+    )
+    rem_after = max(0.0, float(live_alloc.line_remaining) - float(put_qty))
+    return BasketPutResult(
+        phase="PUT_CONFIRMED",
+        order_id=int(oid),
+        order_item_id=int(oiid),
+        quantity_put=float(put_qty),
+        expected_basket_label=live_alloc.basket_label,
+        scanned_basket=scanned_label,
+        eligible_baskets=[
+            {
+                "basket_id": int(live_alloc.basket_id),
+                "basket_label": live_alloc.basket_label,
+                "order_id": int(live_alloc.order_id),
+                "order_item_id": int(live_alloc.order_item_id),
+                "line_remaining": rem_after,
+            }
+        ],
+        message=f"KOSZYK {live_alloc.basket_label} — odłożono {put_qty:g} szt.",
+    )
+
+
 def confirm_basket_put(
     db: Session,
     *,
@@ -700,6 +922,7 @@ def confirm_basket_put(
     order_ids: list[int] | None = None,
     product_id: int | None = None,
     location_id: int | None = None,
+    quantity: float | None = None,
 ) -> BasketPutResult:
     """
     Basket scan outcomes:
@@ -719,7 +942,43 @@ def confirm_basket_put(
     ctx_product_id = int(product_id) if product_id is not None and int(product_id) > 0 else None
     ctx_location_id = int(location_id) if location_id is not None and int(location_id) > 0 else None
 
-    # --- No pending: series switch OR product-context destination activation ---
+    # --- DEFAULT QUANTITY MODE (detail product context) ---
+    # product_id from picking detail is authoritative. Clear foreign series/pending.
+    # Basket scan without quantity → QUANTITY_REQUIRED (ZERO Pick).
+    # Basket scan with quantity → live revalidate → Pick +qty.
+    if ctx_product_id is not None:
+        series_ctx = put_state.get_active_series(sess)
+        if series_ctx is not None and int(series_ctx.get("product_id") or 0) != ctx_product_id:
+            put_state.set_active_series(db, sess, None)
+            _audit(
+                "BASKET_SERIES_CLEARED",
+                session_id=sess.id,
+                reason="foreign_series_cleared_for_product_context",
+                previous_product_id=series_ctx.get("product_id"),
+                context_product_id=ctx_product_id,
+            )
+        if pending is not None and int(pending.get("product_id") or 0) != ctx_product_id:
+            put_state.set_pending(db, sess, None)
+            pending = None
+        elif pending is not None:
+            # Quantity mode supersedes unit-pending (+1) semantics.
+            put_state.set_pending(db, sess, None)
+            pending = None
+        return _quantity_mode_basket_put(
+            db,
+            sess=sess,
+            cart=cart,
+            basket_scan=basket_scan,
+            uid=uid,
+            oid_scope=oid_scope,
+            product_id=ctx_product_id,
+            location_id=ctx_location_id,
+            quantity=quantity,
+            record_pick_fn=record_pick_fn,
+            manual=manual,
+        )
+
+    # --- Legacy: no product context — pending confirm / series switch ---
     if pending is None:
         series = put_state.get_active_series(sess)
         if series is None:

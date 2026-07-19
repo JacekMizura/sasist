@@ -857,6 +857,7 @@ export async function postWmsPickingConfirmBasketPut(
     recovery_order_id?: number | null;
     product_id?: number | null;
     location_id?: number | null;
+    quantity?: number | null;
   },
 ): Promise<WmsPickingQuickPickResultApi> {
   const params = {
@@ -876,6 +877,7 @@ export async function postWmsPickingConfirmBasketPut(
         : {}),
       ...(body.product_id != null && body.product_id > 0 ? { product_id: body.product_id } : {}),
       ...(body.location_id != null && body.location_id > 0 ? { location_id: body.location_id } : {}),
+      ...(body.quantity != null && Number(body.quantity) > 0 ? { quantity: Number(body.quantity) } : {}),
     },
     { params },
   );

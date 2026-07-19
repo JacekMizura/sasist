@@ -280,7 +280,7 @@ def test_case_ean_then_brck1_b01_pick_only_order_a(db, env):
 
 
 def test_basket_scan_without_pending_does_not_invent_pick(db, env):
-    """Without product context: reject. With context: activate series Pick=0 (no invent)."""
+    """Product context + basket → QUANTITY_REQUIRED (Pick=0) until quantity commit."""
     env["add_orders"]()
     with pytest.raises(BasketPutError) as cm:
         confirm_basket_put(
@@ -293,7 +293,6 @@ def test_basket_scan_without_pending_does_not_invent_pick(db, env):
         )
     assert cm.value.code == "EXPECTED_PRODUCT_SCAN"
     assert env["pick_calls"] == []
-    assert put_state.get_pending(env["sess"]) is None
 
     r = confirm_basket_put(
         db,
@@ -305,7 +304,20 @@ def test_basket_scan_without_pending_does_not_invent_pick(db, env):
         product_id=192,
         location_id=100,
     )
-    assert r.phase == "SERIES_ACTIVATED"
+    assert r.phase == "QUANTITY_REQUIRED"
     assert float(r.quantity_put) == 0
     assert env["pick_calls"] == []
-    assert put_state.get_active_series(env["sess"])["basket_label"] == "S-1-2"
+
+    r2 = confirm_basket_put(
+        db,
+        cart=env["cart"],
+        basket_scan="brck1-B02",
+        operator_user_id=1,
+        record_pick_fn=env["record_pick_fn"],
+        order_ids=[1234, 1235],
+        product_id=192,
+        location_id=100,
+        quantity=1,
+    )
+    assert r2.phase == "PUT_CONFIRMED"
+    assert env["pick_calls"] == [(1.0, 1235)]

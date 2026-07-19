@@ -858,6 +858,28 @@ export default function WmsPickingProductsPage() {
           return SCAN_CONSUMED;
         }
 
+        // DEFAULT QUANTITY MODE (MULTI): EAN = SELECT PRODUCT only (no pending, no Pick).
+        if (requiresBasketPutConfirm) {
+          playScanBeep();
+          appendScanToHistory(scan);
+          showScannerToast(hit.name);
+          multiScanTrace("NAVIGATE_DETAIL", {
+            product_id: hit.product_id,
+            navigation_source: "list_ean_select_product",
+            pending_after: false,
+            quick_pick_called: false,
+          });
+          goDetail(hit.product_id, {
+            source: "physical_scan",
+            caller: "list_ean_select_product",
+            rawCode: scan,
+            quickPickCalled: false,
+            pendingCreated: false,
+            listProductScanToken: `select-${hit.product_id}-${Date.now()}`,
+          });
+          return SCAN_CONSUMED;
+        }
+
         const { total } = wmsPickingDisplayProgressParts(hit);
         const locId = hit.primary_location_id ?? hit.locations?.[0]?.location_id ?? null;
         const canQuickPick =

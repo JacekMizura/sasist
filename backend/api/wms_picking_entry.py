@@ -1715,6 +1715,7 @@ def post_picking_confirm_basket_put(
             order_ids=confirm_order_ids,
             product_id=ctx_product_id,
             location_id=ctx_location_id,
+            quantity=float(body.quantity) if body.quantity is not None else None,
         )
         db.commit()
         qty_put = float(put_res.quantity_put or 0)
@@ -1726,6 +1727,8 @@ def post_picking_confirm_basket_put(
             "quantity_put": put_res.quantity_put,
             "active_series": put_res.active_series,
             "expected_basket_label": put_res.expected_basket_label,
+            "eligible_baskets": put_res.eligible_baskets,
+            "scanned_basket": put_res.scanned_basket,
             "message": put_res.message,
             "picked": qty_put > 1e-9,
         }

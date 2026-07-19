@@ -109,6 +109,26 @@ const CATALOG: Record<
     title: "KOSZYK ZMIENIONY",
     message: "Zmieniono koszyk docelowy. Zeskanuj EAN, aby odłożyć kolejną sztukę.",
   },
+  QUANTITY_REQUIRED: {
+    severity: "info",
+    title: "PODAJ ILOŚĆ",
+    message: "Wybierz ile sztuk odkładasz do koszyka i zatwierdź.",
+  },
+  QUANTITY_INVALID: {
+    severity: "warning",
+    title: "BŁĘDNA ILOŚĆ",
+    message: "Ilość musi być większa od zera.",
+  },
+  QUANTITY_EXCEEDS_REMAINING: {
+    severity: "warning",
+    title: "ZA DUŻO",
+    message: "Nie możesz odłożyć więcej niż pozostało w koszyku dla tego produktu.",
+  },
+  QUANTITY_STALE: {
+    severity: "warning",
+    title: "ILOŚĆ ZMIENIONA",
+    message: "Pozostała ilość zmieniła się. Odśwież i podaj ilość ponownie.",
+  },
 };
 
 export function mapWmsScanErrorCode(

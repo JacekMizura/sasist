@@ -91,14 +91,30 @@ def list_eligible_basket_allocations(
 
     Order of list is stable (Order.id, OrderItem.id) for display only —
     it does NOT imply forced put order.
+
+    SSOT aligned with product detail ``orders[]`` / basket_slot:
+    order must be on this cart (cart_id) OR assigned to a basket of this cart.
     """
     cid = int(cart.id)
     out: list[BasketPutAllocation] = []
     for o in _orders_for_product(db, cart=cart, order_ids=order_ids):
-        if o.cart_id is None or int(o.cart_id) != cid:
+        oc = getattr(o, "cart_id", None)
+        if oc is not None and int(oc) != cid:
             continue
         ensure_order_basket_for_wms_pick(db, cart, o)
         db.refresh(o)
+        if oc is None and (getattr(o, "cart_id", None) is None or int(o.cart_id) != cid):
+            # Still allow if Order.basket_id points at a basket on this cart.
+            bid_probe = getattr(o, "basket_id", None)
+            if bid_probe is None:
+                continue
+            on_cart = (
+                db.query(CartBasket.id)
+                .filter(CartBasket.id == int(bid_probe), CartBasket.cart_id == cid)
+                .first()
+            )
+            if on_cart is None:
+                continue
         bid = getattr(o, "basket_id", None)
         if bid is None:
             continue
@@ -174,12 +190,12 @@ def resolve_allocation_for_basket_scan(
     basket: CartBasket,
 ) -> tuple[BasketPutAllocation | None, str | None]:
     """
-    Map scanned basket → open order_item for product.
+    Authoritative: product_id + scanned basket → open order_item + live remaining.
 
-    Returns (allocation, error_code) where error_code is:
-      None — ok
-      BASKET_PRODUCT_MISMATCH — basket order does not need this SKU
-      BASKET_PRODUCT_ALREADY_COMPLETE — order has the SKU but rem == 0
+    Preference:
+      1) eligible list filtered by basket_id (same SSOT as detail eligible rows)
+      2) Order linked via basket.order_id
+      3) Order with Order.basket_id == basket.id on this cart
     """
     cid = int(cart.id)
     bid = int(basket.id)
@@ -193,24 +209,40 @@ def resolve_allocation_for_basket_scan(
     if eligible:
         return eligible[0], None
 
-    # Basket on cart but no open need — distinguish mismatch vs already complete.
-    q = (
-        db.query(Order)
-        .options(joinedload(Order.items))
-        .filter(Order.cart_id == cid, Order.basket_id == bid)
-    )
-    if order_ids:
-        q = q.filter(Order.id.in_([int(x) for x in order_ids]))
-    order = q.first()
+    order: Order | None = None
+    basket_oid = getattr(basket, "order_id", None)
+    if basket_oid is not None:
+        q = (
+            db.query(Order)
+            .options(joinedload(Order.items))
+            .filter(Order.id == int(basket_oid))
+        )
+        if order_ids:
+            q = q.filter(Order.id.in_([int(x) for x in order_ids]))
+        order = q.first()
+        if order is not None:
+            oc = getattr(order, "cart_id", None)
+            if oc is not None and int(oc) != cid:
+                order = None
+
     if order is None:
-        oid = getattr(basket, "order_id", None)
-        if oid is not None:
-            order = (
-                db.query(Order)
-                .options(joinedload(Order.items))
-                .filter(Order.id == int(oid), Order.cart_id == cid)
-                .first()
-            )
+        q = (
+            db.query(Order)
+            .options(joinedload(Order.items))
+            .filter(Order.basket_id == bid)
+        )
+        if order_ids:
+            q = q.filter(Order.id.in_([int(x) for x in order_ids]))
+        # Prefer order already on this cart; else any in scope with this basket.
+        candidates = q.all()
+        for cand in candidates:
+            oc = getattr(cand, "cart_id", None)
+            if oc is not None and int(oc) == cid:
+                order = cand
+                break
+        if order is None and candidates:
+            order = candidates[0]
+
     if order is None:
         return None, "BASKET_PRODUCT_MISMATCH"
 
@@ -227,8 +259,6 @@ def resolve_allocation_for_basket_scan(
         st_oi = (getattr(oi, "wms_picking_line_status", None) or "").strip().lower()
         if rem <= 1e-9 or st_oi in ("picked", "missing"):
             return None, "BASKET_PRODUCT_ALREADY_COMPLETE"
-        # Rem > 0 but not in eligible list (e.g. missing basket assignment race) —
-        # still allow put to this basket/order.
         label = primary_basket_label(basket)
         return (
             BasketPutAllocation(
