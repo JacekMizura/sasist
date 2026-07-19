@@ -8,7 +8,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from ..auth_deps import get_optional_current_user
+from ..auth.deps import get_optional_current_user
+from ..auth.warehouse_deps import require_operable_warehouse
 from ..database import get_db
 from ..models.app_user import AppUser
 from ..models.order import Order
@@ -17,7 +18,6 @@ from ..services.wms_order_validation import (
     validate_order_for_picking,
 )
 from ..services.wms_order_validation.lifecycle import read_validation_state_from_order
-from ..warehouse_context import require_operable_warehouse
 
 router = APIRouter(prefix="/wms/orders", tags=["wms-order-validation"])
 
