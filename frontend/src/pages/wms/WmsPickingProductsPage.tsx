@@ -62,6 +62,10 @@ import {
 } from "../../utils/multiPickingScanRoute";
 import { extractWmsScanErrorDetail } from "../../wms/scanFeedback/wmsScanErrorCatalog";
 import { SCAN_CONSUMED, SCAN_NOT_CONSUMED } from "../../utils/wmsScanDispatch";
+import {
+  preparePickingProductDetailNavigation,
+  type PickingDetailNavSource,
+} from "../../utils/pickingProductDetailNav";
 
 function fmtQty(n: number): string {
   return new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 2 }).format(n);
@@ -624,7 +628,13 @@ export default function WmsPickingProductsPage() {
   const goDetail = useCallback(
     (
       productId: number,
-      opts?: {
+      opts: {
+        source: PickingDetailNavSource;
+        caller: string;
+        rawCode?: string | null;
+        quickPickCalled: boolean;
+        quickPickResponse?: string | null;
+        pendingCreated: boolean;
         listProductScanToken?: string | null;
         basketPutPendingSeed?: WmsPickingProductsNavState["basketPutPendingSeed"];
       },
@@ -633,17 +643,19 @@ export default function WmsPickingProductsPage() {
       if (blockOtherProductLines && !shortageProductIds.has(productId)) {
         return;
       }
-      navigate(WMS_ROUTES.pickingProduct(productId), {
-        state: {
-          pickingSession: mergedSession,
-          ...(opts?.listProductScanToken
-            ? { listProductScanToken: opts.listProductScanToken }
-            : {}),
-          ...(opts?.basketPutPendingSeed
-            ? { basketPutPendingSeed: opts.basketPutPendingSeed }
-            : {}),
-        } satisfies WmsPickingProductsNavState,
+      const state = preparePickingProductDetailNavigation(mergedSession, {
+        productId,
+        source: opts.source,
+        caller: opts.caller,
+        rawCode: opts.rawCode ?? null,
+        quickPickCalled: opts.quickPickCalled,
+        quickPickResponse: opts.quickPickResponse ?? null,
+        pendingCreated: opts.pendingCreated,
+        listProductScanToken: opts.listProductScanToken,
+        basketPutPendingSeed: opts.basketPutPendingSeed,
       });
+      if (!state) return;
+      navigate(WMS_ROUTES.pickingProduct(productId), { state });
     },
     [navigate, mergedSession, blockOtherProductLines, shortageProductIds],
   );
@@ -712,6 +724,11 @@ export default function WmsPickingProductsPage() {
             pending_after: true,
           });
           goDetail(basketPutPending.product_id, {
+            source: "pending_resume",
+            caller: "list_resume_pending_scan",
+            rawCode: scan,
+            quickPickCalled: false,
+            pendingCreated: true,
             listProductScanToken: basketPutPending.idempotency_key ?? null,
             basketPutPendingSeed: {
               product_id: basketPutPending.product_id,
@@ -760,7 +777,13 @@ export default function WmsPickingProductsPage() {
             setBasketPutPending(null);
             void load();
             if (result.order_id != null && basketPutPending.product_id) {
-              goDetail(basketPutPending.product_id);
+              goDetail(basketPutPending.product_id, {
+                source: "other",
+                caller: "list_after_basket_confirm",
+                rawCode: scan,
+                quickPickCalled: false,
+                pendingCreated: false,
+              });
             }
             return SCAN_CONSUMED;
           } catch (e: unknown) {
@@ -910,6 +933,12 @@ export default function WmsPickingProductsPage() {
                 pending_after: true,
               });
               goDetail(hit.product_id, {
+                source: "physical_scan",
+                caller: "list_product_scan_awaiting_basket",
+                rawCode: scan,
+                quickPickCalled: true,
+                quickPickResponse: result.phase ?? "AWAITING_BASKET_CONFIRMATION",
+                pendingCreated: true,
                 listProductScanToken: seed.idempotency_key ?? `scan-${Date.now()}`,
                 basketPutPendingSeed: seed,
               });
@@ -968,6 +997,12 @@ export default function WmsPickingProductsPage() {
                 pending_after: true,
               });
               goDetail(pendingProductId, {
+                source: "physical_scan",
+                caller: "list_product_scan_already_pending",
+                rawCode: scan,
+                quickPickCalled: true,
+                quickPickResponse: code,
+                pendingCreated: true,
                 listProductScanToken: pendingKey ?? null,
                 basketPutPendingSeed: detailPending
                   ? {
@@ -994,6 +1029,7 @@ export default function WmsPickingProductsPage() {
               appendScanToHistory(scan);
               return SCAN_CONSUMED;
             }
+            // Non-MULTI: open detail without inventing pending (never physical_scan without quick-pick success).
             if (total === 1) {
               showScannerToast(
                 extractApiErrorMessage(e, "Zapis szybkiego pobrania nie powiódł się — otwarcie detalu."),
@@ -1003,7 +1039,14 @@ export default function WmsPickingProductsPage() {
               appendScanToHistory(scan);
               showScannerToast(hit.name);
             }
-            goDetail(hit.product_id);
+            goDetail(hit.product_id, {
+              source: "other",
+              caller: "list_quick_pick_error_fallback_non_multi",
+              rawCode: scan,
+              quickPickCalled: true,
+              quickPickResponse: "ERROR",
+              pendingCreated: false,
+            });
             return SCAN_CONSUMED;
           } finally {
             listScanGateRef.current = false;
@@ -1020,7 +1063,13 @@ export default function WmsPickingProductsPage() {
         playScanBeep();
         appendScanToHistory(scan);
         showScannerToast(hit.name);
-        goDetail(hit.product_id);
+        goDetail(hit.product_id, {
+          source: "other",
+          caller: "list_no_location_non_multi",
+          rawCode: scan,
+          quickPickCalled: false,
+          pendingCreated: false,
+        });
         return SCAN_CONSUMED;
       } else if (matches.length > 0) {
         showScanFeedbackFromCode("PRODUCT_ALREADY_COMPLETE");
@@ -1056,6 +1105,10 @@ export default function WmsPickingProductsPage() {
   const resumePendingPut = useCallback(() => {
     if (!basketPutPending?.product_id) return;
     goDetail(basketPutPending.product_id, {
+      source: "pending_resume",
+      caller: "list_resume_pending_button",
+      quickPickCalled: false,
+      pendingCreated: true,
       listProductScanToken: basketPutPending.idempotency_key ?? null,
       basketPutPendingSeed: {
         product_id: basketPutPending.product_id,
@@ -1607,7 +1660,14 @@ export default function WmsPickingProductsPage() {
               <li key={r.product_id} className="last:border-b-0">
                 <button
                   type="button"
-                  onClick={() => goDetail(r.product_id)}
+                  onClick={() =>
+                    goDetail(r.product_id, {
+                      source: "click",
+                      caller: "list_row_click",
+                      quickPickCalled: false,
+                      pendingCreated: false,
+                    })
+                  }
                   disabled={rowBlocked}
                   className={`group relative flex w-full flex-col sm:flex-row items-center justify-between p-6 gap-6 transition-all duration-150 outline-none ${cardBgStyleClass}`}
                 >

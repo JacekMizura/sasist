@@ -1,4 +1,11 @@
-## 2026-07-19 — ROOT: Scanner Helper catalog ≠ PRODUCT_SCAN; consumed blocks lookups
+## 2026-07-19 — LIVE FAILURE: detail opened as click_or_other without PRODUCT_SCAN
+
+- ROOT: Jedyny URL `/wms/picking/products/:id` idzie przez `goDetail`. Live `DETAIL_MOUNT has_seed=false navigation_source=click_or_other` = navigate **bez** seed/token ⇒ nie lista PRODUCT_SCAN. Brak `PRODUCT_SCAN_REQUEST_START` / `GLOBAL_SCAN` EAN przed mount ⇒ entry był **click** (lub bare goDetail), nie fizyczny skan. Label `click_or_other` mylący — brak seed = „nie physical_scan”.
+- FIX: jawne `navigationSource` (physical_scan|click|pending_resume|other); HARD block physical_scan bez quick-pick+pending; `preparePickingProductDetailNavigation` + Scanner Helper dispatch harness; DETAIL_MOUNT czyta source z routera.
+- Tests: `wmsScanDispatch.integration.test.ts` via `performScannerHelperScan` (nie bezpośredni list handler).
+- No confirm-basket-put / allocation changes. No push until live retest.
+
+
 
 - ROOT: Fizyczny skan EAN w Scanner Helper odpalał `products/search` + `returns/lookup` (catalog query z inputu), a workflow mógł nie mieć `consumed`. Detail po wejściu miał `pending=false` → basket `EXPECTED_PRODUCT_SCAN`.
 - FIX: `handleScan` awaits handler + `{consumed}`; picking path suppresses helper lookups; list returns SCAN_CONSUMED + PRODUCT_SCAN before navigate + traces; detail keeps seed/handler during load.

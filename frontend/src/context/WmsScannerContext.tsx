@@ -25,11 +25,10 @@ import { classifyWmsScanCode } from "../utils/wmsScanClassify";
 import { normalizeScanEan } from "../utils/wmsScanNormalize";
 import {
   isWmsPickingProductsScanPath,
-  normalizeScanHandlerResult,
   type WmsScanHandler,
-  type WmsScanHandlerResult,
 } from "../utils/wmsScanDispatch";
 import { multiScanTrace } from "../utils/multiPickingScanRoute";
+import { dispatchScannerHelperWorkflowScan } from "../utils/scannerHelperDispatch";
 
 export type { DevScanHistoryEntry, DevScannerFavorite } from "../utils/devScannerStorage";
 import { DAMAGE_TENANT_ID } from "../pages/damage/damageShared";
@@ -407,14 +406,14 @@ export function WmsScannerProvider({ children }: { children: ReactNode }) {
       dispatchBusyRef.current = true;
       void (async () => {
         try {
-          const result = await Promise.resolve(fn(ean));
-          const consumed = normalizeScanHandlerResult(result as WmsScanHandlerResult | void | boolean);
-          multiScanTrace("GLOBAL_SCAN_DISPATCHED", {
-            raw_code: ean,
-            consumed,
-            path: location.pathname,
+          const dispatched = await dispatchScannerHelperWorkflowScan({
+            rawCode: ean,
+            pathname: location.pathname,
+            handler: fn,
+            pickingProductsPath: isWmsPickingProductsScanPath(location.pathname),
+            skipReceivedTrace: true,
           });
-          if (consumed) {
+          if (dispatched.consumed) {
             // Workflow owned this code — clear helper input so catalog query cannot re-fire lookup.
             setDevEanInput("");
           }

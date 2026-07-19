@@ -142,7 +142,13 @@ export default function WmsPickingProductDetailPage() {
     (routerLocation.state as WmsPickingProductsNavState | null)?.listProductScanToken ?? null;
   const basketPutPendingSeed =
     (routerLocation.state as WmsPickingProductsNavState | null)?.basketPutPendingSeed ?? null;
+  const navigationSourceFromRouter =
+    (routerLocation.state as WmsPickingProductsNavState | null)?.navigationSource ?? null;
   const enteredViaListProductScan = Boolean(listProductScanToken || basketPutPendingSeed);
+  /** Prefer explicit router source; fall back to seed/token heuristic for older navigations. */
+  const navigationSource =
+    navigationSourceFromRouter ??
+    (enteredViaListProductScan ? "physical_scan" : "click");
   const pickingSession = useMergedPickingSession(pickingSessionRaw, pickingTenantId, warehouseId);
   const orderType = pickingSession?.orderTypeChoice ?? "all";
   const recoveryOrderId = pickingSession?.recoveryOrderId ?? null;
@@ -276,10 +282,11 @@ export default function WmsPickingProductDetailPage() {
       replace: true,
       state: {
         pickingSession: pickingSessionRaw,
+        ...(navigationSourceFromRouter ? { navigationSource: navigationSourceFromRouter } : {}),
         ...(pendingSeed ? { basketPutPendingSeed: pendingSeed } : {}),
       } satisfies WmsPickingProductsNavState,
     });
-  }, [listProductScanToken, pendingSeed, navigate, pickingSessionRaw]);
+  }, [listProductScanToken, pendingSeed, navigate, pickingSessionRaw, navigationSourceFromRouter]);
 
   useEffect(() => {
     if (!detail) return;
@@ -372,7 +379,9 @@ export default function WmsPickingProductDetailPage() {
     multiScanTrace("DETAIL_MOUNT", {
       product_id: productId,
       has_seed: Boolean(pendingSeed),
-      navigation_source: enteredViaListProductScan ? "list_product_scan" : "click_or_other",
+      navigation_source: navigationSource,
+      entered_via_list_product_scan: enteredViaListProductScan,
+      has_token: Boolean(listProductScanToken),
     });
   }, [productId]); // eslint-disable-line react-hooks/exhaustive-deps
 

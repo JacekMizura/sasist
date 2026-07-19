@@ -60,11 +60,20 @@ export type WmsPickingOrderTypeNavState = {
   pickingSession: WmsPickingSessionState;
 };
 
+/** Skąd otwarto detail — jawne, nie zgadywane z obecności seed. */
+export type WmsPickingDetailNavigationSource =
+  | "physical_scan"
+  | "click"
+  | "pending_resume"
+  | "other";
+
 /** Router state dla `/wms/picking/products` i `/wms/picking/products/:id`. */
 export type WmsPickingProductsNavState = {
   pickingSession: WmsPickingSessionState;
   /** Po zgłoszeniu braku — wymuś natychmiastowe ponowne wczytanie listy produktów. */
   pickingListRefreshAt?: number;
+  /** WHO opened detail — DETAIL_MOUNT reads this (SSOT for navigation_source). */
+  navigationSource?: WmsPickingDetailNavigationSource;
   /**
    * Marker: detail otwarty po fizycznym PRODUCT_SCAN na liście (nie po kliknięciu).
    * SSOT pending jest w session metadata — ten token NIE triggeruje drugiego PRODUCT_SCAN.
