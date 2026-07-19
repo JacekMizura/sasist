@@ -2011,12 +2011,32 @@ def build_order_read(db: Session, order: Order) -> OrderRead:
         .limit(500)
         .all()
     )
+    op_ids = {
+        int(r.operator_user_id)
+        for r in act_rows
+        if getattr(r, "operator_user_id", None) is not None and int(r.operator_user_id) > 0
+    }
+    op_names: dict[int, str] = {}
+    if op_ids:
+        from ..models.app_user import AppUser
+        from ..services.document_creator_service import app_user_full_name
+
+        for u in db.query(AppUser).filter(AppUser.id.in_(list(op_ids))).all():
+            label = (app_user_full_name(u) or "").strip() or (getattr(u, "login", None) or "").strip()
+            if label:
+                op_names[int(u.id)] = label
     activity_logs_out = [
         OrderActivityLogRead(
             id=int(r.id),
             event_type=str(r.event_type or ""),
             message=str(r.message or ""),
             created_at=getattr(r, "created_at", None),
+            operator_user_id=int(r.operator_user_id) if getattr(r, "operator_user_id", None) else None,
+            operator_display=(
+                op_names.get(int(r.operator_user_id), "System")
+                if getattr(r, "operator_user_id", None)
+                else "System"
+            ),
         )
         for r in act_rows
     ]

@@ -259,6 +259,8 @@ type OrderDetail = {
     event_type: string;
     message: string;
     created_at?: string | null;
+    operator_user_id?: number | null;
+    operator_display?: string | null;
   }[];
   order_notes?: OrderNoteDto[];
   operational_notes?: OrderOperationalNoteDto[];
@@ -1492,12 +1494,15 @@ export default function OrderDetailPage() {
   type SummaryPanelLogRow = {
     id: string | number;
     at: string;
+    user: string;
     /** Machine-readable code (search / dev only). */
     eventKey: string;
     /** Localized label for UI. */
     eventLabel: string;
     msg: string;
     severity: "info" | "warn" | "error";
+    /** Sort key ms — newest first. */
+    sortAt: number;
   };
 
   const summaryPanelLogs = useMemo((): SummaryPanelLogRow[] => {
@@ -1506,18 +1511,22 @@ export default function OrderDetailPage() {
       {
         id: "sys-created",
         at: formatDetailDate(order.created_at),
+        user: "System",
         eventKey: "SYSTEM",
         eventLabel: getOrderEventLabel("SYSTEM"),
         msg: `Utworzono zamówienie (ID ${order.id})`,
         severity: "info",
+        sortAt: order.created_at ? Date.parse(order.created_at) || 0 : 0,
       },
       {
         id: "sys-source",
         at: "—",
+        user: "System",
         eventKey: "SOURCE",
         eventLabel: getOrderEventLabel("SOURCE"),
         msg: `Źródło: ${(order.source ?? "").trim() || "—"}`,
         severity: "info",
+        sortAt: -1,
       },
     ];
     for (const log of order.order_activity_logs ?? []) {
@@ -1526,15 +1535,23 @@ export default function OrderDetailPage() {
       if (/^(błąd|error)/i.test(msg)) severity = "error";
       else if (/^(ważne|warn)/i.test(msg)) severity = "warn";
       const eventKey = (log.event_type ?? "").trim() || "—";
+      const created = log.created_at ? Date.parse(log.created_at) || 0 : 0;
       rows.push({
         id: log.id,
         at: formatDetailDate(log.created_at ?? null),
+        user: (log.operator_display ?? "").trim() || "System",
         eventKey,
         eventLabel: getOrderEventLabel(eventKey),
         msg,
         severity,
+        sortAt: created,
       });
     }
+    // NEWEST → OLDEST (API already DESC for activity; synthetic rows sorted with them)
+    rows.sort((a, b) => {
+      if (b.sortAt !== a.sortAt) return b.sortAt - a.sortAt;
+      return String(b.id).localeCompare(String(a.id), "pl");
+    });
     const q = summaryLogSearch.trim().toLowerCase();
     if (!q) return rows;
     return rows.filter(
@@ -1542,6 +1559,7 @@ export default function OrderDetailPage() {
         r.msg.toLowerCase().includes(q) ||
         r.eventLabel.toLowerCase().includes(q) ||
         r.eventKey.toLowerCase().includes(q) ||
+        r.user.toLowerCase().includes(q) ||
         r.at.toLowerCase().includes(q),
     );
   }, [order, summaryLogSearch]);
@@ -2326,11 +2344,19 @@ export default function OrderDetailPage() {
                       <input type="text" value={summaryLogSearch} onChange={(e) => setSummaryLogSearch(e.target.value)} placeholder="Szukaj..." className="border border-slate-300 rounded-md px-4 py-2 text-sm w-72 outline-none focus:border-orange-500 transition-colors"/>
                     </div>
                     <table className="w-full text-left text-sm border-t border-slate-100">
-                      <thead className="text-[10px] uppercase font-bold text-slate-400"><tr><th className="py-2">Czas</th><th className="py-2">Zdarzenie</th><th className="py-2">Komunikat</th></tr></thead>
+                      <thead className="text-[10px] uppercase font-bold text-slate-400">
+                        <tr>
+                          <th className="py-2">Czas</th>
+                          <th className="py-2">Użytkownik</th>
+                          <th className="py-2">Zdarzenie</th>
+                          <th className="py-2">Komunikat</th>
+                        </tr>
+                      </thead>
                       <tbody className="divide-y divide-slate-100">
                         {summaryPanelLogs.map((row) => (
                           <tr key={String(row.id)} className={row.severity === "error" ? "bg-red-50 text-red-900" : row.severity === "warn" ? "bg-amber-50 text-amber-900" : ""}>
-                            <td className="py-2 text-slate-500 font-mono text-xs w-48">{row.at}</td>
+                            <td className="py-2 text-slate-500 font-mono text-xs w-40">{row.at}</td>
+                            <td className="py-2 whitespace-nowrap text-xs font-semibold text-slate-700">{row.user}</td>
                             <td className="py-2">
                               <OrderEventTypeLabel eventType={row.eventKey} />
                             </td>

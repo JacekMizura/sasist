@@ -562,8 +562,10 @@ def append_order_activity_for_wms(
     message: str,
     operator_user_id: Optional[int] = None,
     metadata: Optional[Dict[str, Any]] = None,
+    extra_activity_links: Optional[list[Dict[str, Any]]] = None,
 ) -> None:
     """OMS text log + dual-write into shared Activity Log (ready PL description)."""
+    uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
     db.add(
         OrderActivityLog(
             order_id=int(order_id),
@@ -572,24 +574,38 @@ def append_order_activity_for_wms(
             event_type=str(event_type)[:64],
             message=str(message)[:8000],
             created_at=datetime.utcnow(),
+            operator_user_id=uid,
         )
     )
     try:
         from .activity_log import ActivityLinkSpec, record_activity
 
-        uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
+        links = [
+            ActivityLinkSpec(
+                object_type="order",
+                object_id=int(order_id),
+                role="primary",
+                object_label=f"#{int(order_id)}",
+            )
+        ]
+        for raw in extra_activity_links or []:
+            ot = str(raw.get("object_type") or "").strip().lower()
+            oid = int(raw.get("object_id") or 0)
+            if not ot or oid <= 0:
+                continue
+            links.append(
+                ActivityLinkSpec(
+                    object_type=ot,
+                    object_id=oid,
+                    role=str(raw.get("role") or "related"),
+                    object_label=(str(raw.get("object_label") or "")[:64] or None),
+                )
+            )
         record_activity(
             db,
             event_code=str(event_type)[:64],
             description=str(message).strip()[:512] or "Zdarzenie zamówienia.",
-            links=[
-                ActivityLinkSpec(
-                    object_type="order",
-                    object_id=int(order_id),
-                    role="primary",
-                    object_label=f"#{int(order_id)}",
-                )
-            ],
+            links=links,
             severity="INFO",
             category="status",
             tenant_id=int(tenant_id),
@@ -944,6 +960,8 @@ def emit_wms_picking_finished(
         warehouse_id=warehouse_id,
         event_type=EVT_PICKING_FINISHED,
         message=msg,
+        operator_user_id=uid,
+        metadata=meta,
     )
 
 
@@ -1048,28 +1066,19 @@ def emit_line_shortage_reported(
         metadata=meta,
     )
 
-    ean_bit = f" — EAN {ean_s}" if ean_s else ""
+    ean_bit = f" · EAN {ean_s}" if ean_s else ""
     if req_f is not None and req_f > 1e-9:
         order_msg = (
-            f"Zamówienie {order_num}: zgłoszono brak produktu {pname}{ean_bit}"
-            f" — brak {_fmt_qty(miss_f)}/{_fmt_qty(req_f)}"
-            f" — operator: {op_name or 'System'} — {cart_code_eff}"
-        )
-        cart_msg = (
-            f"Zgłoszono brak {_fmt_qty(miss_f)}/{_fmt_qty(req_f)} — zamówienie {order_num}"
-            f" — {pname}{ean_bit} — operator: {op_name or 'System'} — {cart_code_eff}"
+            f"Zamówienie {order_num} · {pname}{ean_bit}"
+            f" · brak {_fmt_qty(miss_f)}/{_fmt_qty(req_f)} · {cart_code_eff}"
         )
     else:
         order_msg = (
-            f"Zamówienie {order_num}: zgłoszono brak produktu {pname}{ean_bit}"
-            f" — brak {_fmt_qty(miss_f)} szt."
-            f" — operator: {op_name or 'System'} — {cart_code_eff}"
-        )
-        cart_msg = (
-            f"Zgłoszono brak {_fmt_qty(miss_f)} szt. — zamówienie {order_num}"
-            f" — {pname}{ean_bit} — operator: {op_name or 'System'} — {cart_code_eff}"
+            f"Zamówienie {order_num} · {pname}{ean_bit}"
+            f" · brak {_fmt_qty(miss_f)} szt. · {cart_code_eff}"
         )
 
+    # Jedno ActivityEvent: order (primary) + cart (related). Bez drugiej kopii na order.
     append_order_activity_for_wms(
         db,
         order_id=int(order_id),
@@ -1079,43 +1088,15 @@ def emit_line_shortage_reported(
         message=order_msg,
         operator_user_id=uid,
         metadata=meta,
+        extra_activity_links=[
+            {
+                "object_type": "cart",
+                "object_id": int(cart_id),
+                "role": "related",
+                "object_label": cart_code_eff[:64],
+            }
+        ],
     )
-    # Log wózka / sesji — czytelny, order-aware (bez „na linii”).
-    try:
-        from .activity_log import ActivityLinkSpec, record_activity
-
-        record_activity(
-            db,
-            event_code=str(event_type)[:64],
-            description=cart_msg.strip()[:512],
-            links=[
-                ActivityLinkSpec(
-                    object_type="cart",
-                    object_id=int(cart_id),
-                    role="primary",
-                    object_label=cart_code_eff[:64],
-                ),
-                ActivityLinkSpec(
-                    object_type="order",
-                    object_id=int(order_id),
-                    role="related",
-                    object_label=order_num[:64],
-                ),
-            ],
-            severity="WARNING",
-            category="status",
-            tenant_id=int(tenant_id),
-            warehouse_id=int(warehouse_id),
-            actor_user_id=uid,
-            source_module="wms_audit",
-            metadata=dict(meta),
-        )
-    except Exception:
-        logger.exception(
-            "cart activity dual-write failed for shortage order_id=%s cart_id=%s",
-            order_id,
-            cart_id,
-        )
 
 
 def emit_wms_shortage_reported(

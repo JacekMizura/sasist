@@ -3,12 +3,16 @@ import { ChevronDown, ChevronRight, Search } from "lucide-react";
 
 import { fetchActivityLog } from "../../api/activityLogApi";
 import type { ActivityEventItem, ActivityObjectType } from "../../types/activityLog";
+import { getOrderEventLabel } from "../../utils/orderEventLabels";
 
 export type ActivityLogTableRow = {
   id: string | number;
   date: string;
   operator: string;
-  action: string;
+  /** Event label / short title (ZDARZENIE). */
+  event: string;
+  /** Full message body (KOMUNIKAT). */
+  message: string;
   entity_type?: string;
   entity_id?: number;
   severity?: string;
@@ -18,30 +22,27 @@ type ActivityLogTableProps = {
   /** Fetch from shared Activity Log API when objectType + objectId set. */
   objectType?: ActivityObjectType | string;
   objectId?: number | null;
-  /** Or pass ready rows (date / operator / action). */
+  /** Or pass ready rows (date / operator / event / message). */
   rows?: ActivityLogTableRow[];
   title?: string;
   defaultCollapsed?: boolean;
   refreshKey?: number;
   className?: string;
-  /** Show search box (filters action + operator client-side). */
+  /** Show search box (filters message + operator + event client-side). */
   searchable?: boolean;
 };
 
 function mapApiItem(item: ActivityEventItem): ActivityLogTableRow {
   const when = item.occurred_at_display || "—";
-  const operator = item.operator_display || item.actor_name || "System";
-  const base = (item.action || item.description || "").trim() || "Zdarzenie.";
-  const nums = Array.isArray(item.order_numbers) ? item.order_numbers : [];
-  const action =
-    nums.length > 0
-      ? `${base.replace(/:\s*$/, "")}: ${nums.join(", ")}`
-      : base.replace(/:\s*$/, "").replace(/\.\s*$/, "") || base;
+  const operator = (item.operator_display || item.actor_name || "System").trim() || "System";
+  const event = getOrderEventLabel(item.event_code) || (item.event_code || "Zdarzenie").trim();
+  const message = (item.action || item.description || "").trim() || "—";
   return {
     id: `${item.source_module || "act"}-${item.id}`,
     date: when,
     operator,
-    action,
+    event,
+    message,
     severity: item.severity,
   };
 }
@@ -62,8 +63,8 @@ function OperatorCell({ name }: { name: string }) {
 }
 
 /**
- * Shared ERP-style Activity Log table for the whole Sasist panel.
- * Displays only: Data | Operator | Akcja.
+ * Shared ERP-style Activity Log table.
+ * Columns: Czas | Użytkownik | Zdarzenie | Komunikat (newest first from API).
  */
 export default function ActivityLogTable({
   objectType,
@@ -114,7 +115,8 @@ export default function ActivityLogTable({
     if (!q) return sourceRows;
     return sourceRows.filter(
       (r) =>
-        r.action.toLowerCase().includes(q) ||
+        r.message.toLowerCase().includes(q) ||
+        r.event.toLowerCase().includes(q) ||
         r.operator.toLowerCase().includes(q) ||
         r.date.toLowerCase().includes(q),
     );
@@ -169,12 +171,13 @@ export default function ActivityLogTable({
             <p className="px-4 py-6 text-sm text-slate-400">Brak zapisanych czynności.</p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[520px] text-left text-sm">
+              <table className="w-full min-w-[640px] text-left text-sm">
                 <thead className="border-b border-slate-100 bg-slate-50/80 text-[11px] font-bold uppercase tracking-wide text-slate-500">
                   <tr>
-                    <th className="whitespace-nowrap px-4 py-2.5 font-bold">Data</th>
-                    <th className="whitespace-nowrap px-4 py-2.5 font-bold">Operator</th>
-                    <th className="px-4 py-2.5 font-bold">Akcja</th>
+                    <th className="whitespace-nowrap px-4 py-2.5 font-bold">Czas</th>
+                    <th className="whitespace-nowrap px-4 py-2.5 font-bold">Użytkownik</th>
+                    <th className="whitespace-nowrap px-4 py-2.5 font-bold">Zdarzenie</th>
+                    <th className="px-4 py-2.5 font-bold">Komunikat</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -186,7 +189,10 @@ export default function ActivityLogTable({
                       <td className="whitespace-nowrap px-4 py-3">
                         <OperatorCell name={row.operator} />
                       </td>
-                      <td className="px-4 py-3 leading-snug text-slate-800">{row.action}</td>
+                      <td className="whitespace-nowrap px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                        {row.event}
+                      </td>
+                      <td className="px-4 py-3 leading-snug text-slate-800">{row.message}</td>
                     </tr>
                   ))}
                 </tbody>

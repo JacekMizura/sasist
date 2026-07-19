@@ -35,6 +35,7 @@ export const ORDER_EVENT_LABELS: Record<string, string> = {
   ORDER_LINE_SHORTAGE_REPORTED: "Zgłoszono brak",
   REPLACEMENT_SHORTAGE_REPORTED: "Zgłoszono brak (zamiennik)",
   RECOVERY_SHORTAGE_REPORTED: "Zgłoszono brak (dogrywka)",
+  ORDER_DETACHED_AFTER_SHORTAGE_FINALIZE: "Odłączono od wózka (braki)",
 
   OMS_DECISION_WAIT: "OMS: oczekuje na decyzję",
   OMS_DECISION_ACCEPTED: "Zaakceptowano decyzję OMS",

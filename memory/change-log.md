@@ -1,3 +1,17 @@
+## 2026-07-19 — Cart lifecycle events: NEWEST→OLDEST
+
+- `list_cart_lifecycle_events` no longer reverses DESC rows to ASC (`GET /wms/carts/{id}/events`).
+
+## 2026-07-19 — Finalize shortage cart detach + activity log UX
+
+- ROOT finalize: `finish_picking` always → READY_FOR_PACKING with ALL orders still on cart (`clear_cart=False`). Shortage never detached.
+- Fix: `finish_picking_after_wms_finalize` — detach shortage via CartLifecycle; all-shortage → release; mixed → packing-bound stay.
+- Logs: OrderActivityLog.operator_user_id; LOGI CZYNNOŚCI + ActivityLogTable columns CZAS|UŻYTKOWNIK|ZDARZENIE|KOMUNIKAT; NEWEST first; shortage single ActivityEvent (order+cart links, no duplicate).
+- Tests: `test_wms_picking_finalize_shortage_cart_detach.py`.
+- Audit: [Audit finalize shortage cart](54d3471c-7c00-4a93-b94a-2f97ad3eba17) confirmed keep-cart + `finish_picking` clobber.
+
+# Change log
+
 ## 2026-07-19 — Railway boot: wms_order_validation imports
 
 - Broken: `from ..auth_deps` / `from ..warehouse_context` (modules do not exist).

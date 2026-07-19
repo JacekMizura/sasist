@@ -3637,12 +3637,20 @@ def finalize_wms_picking_cart(
             warehouse_id=int(warehouse_id),
             cart_id=cid,
         )
-        from .cart_picking_lifecycle_service import finish_picking
+        from .cart_picking_lifecycle_service import finish_picking_after_wms_finalize
 
-        finish_picking(
+        packing_bound_ids = [
+            int(o.id) for o in orders if order_kinds.get(int(o.id), "all_picked") == "all_picked"
+        ]
+        shortage_detach_ids = [
+            int(o.id) for o in orders if order_kinds.get(int(o.id), "all_picked") != "all_picked"
+        ]
+        finish_picking_after_wms_finalize(
             db,
             cart=cart,
             orders=orders,
+            packing_bound_order_ids=packing_bound_ids,
+            shortage_detach_order_ids=shortage_detach_ids,
             operator_user_id=operator_user_id,
         )
         # Telemetria finalize (bez ponownego sterowania lifecycle)
@@ -3659,11 +3667,14 @@ def finalize_wms_picking_cart(
         except Exception:
             logger.exception("[picking.finalize] telemetry record failed cart_id=%s", cid)
         logger.info(
-            "[picking.finalize.finish] cart_id=%s source_status_id=%s orders_updated=%s target_status_id=%s",
+            "[picking.finalize.finish] cart_id=%s source_status_id=%s orders_updated=%s "
+            "target_status_id=%s packing_bound=%s shortage_detached=%s",
             cid,
             sid,
             len(orders),
             tgt,
+            packing_bound_ids,
+            shortage_detach_ids,
         )
     except Exception as exc:
         logger.exception(

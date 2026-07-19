@@ -18,6 +18,8 @@ class OrderActivityLog(Base):
 
     event_type = Column(String(64), nullable=False, index=True)
     message = Column(Text, nullable=False)
+    #: Operator / System actor — not parsed from ``message``.
+    operator_user_id = Column(Integer, ForeignKey("app_users.id", ondelete="SET NULL"), nullable=True, index=True)
 
     created_at = Column(DateTime, nullable=True, default=datetime.utcnow)
 

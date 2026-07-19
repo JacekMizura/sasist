@@ -350,9 +350,9 @@ class EmitShortageOperatorMessageTests(unittest.TestCase):
             )
         app.assert_called_once()
         msg = app.call_args.kwargs["message"]
-        self.assertIn("Super Admin", msg)
         self.assertIn("5905108775698", msg)
         self.assertIn("CART-0001", msg)
+        self.assertNotIn("operator:", msg.lower())
         self.assertNotIn("na linii", msg.lower())
         self.assertEqual(app.call_args.kwargs.get("operator_user_id"), 7)
         meta = ins.call_args.kwargs["metadata"]
@@ -361,6 +361,7 @@ class EmitShortageOperatorMessageTests(unittest.TestCase):
         self.assertEqual(meta["order_item_id"], 9001)
         self.assertEqual(meta["ean"], "5905108775698")
         self.assertEqual(meta["operator_name"], "Super Admin")
+        self.assertIn("1214", msg)
 
 
 if __name__ == "__main__":

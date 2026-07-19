@@ -5691,16 +5691,28 @@ def ensure_order_documents_and_activity_logs_tables(engine: Engine) -> None:
                         warehouse_id INTEGER NOT NULL,
                         event_type VARCHAR(64) NOT NULL,
                         message TEXT NOT NULL,
+                        operator_user_id INTEGER,
                         created_at DATETIME,
                         FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
                         FOREIGN KEY (tenant_id) REFERENCES tenants(id),
-                        FOREIGN KEY (warehouse_id) REFERENCES warehouses(id)
+                        FOREIGN KEY (warehouse_id) REFERENCES warehouses(id),
+                        FOREIGN KEY (operator_user_id) REFERENCES app_users(id) ON DELETE SET NULL
                     )
                     """
                 )
             )
             conn.execute(text("CREATE INDEX ix_order_activity_logs_order_id ON order_activity_logs(order_id)"))
             conn.execute(text("CREATE INDEX ix_order_activity_logs_event_type ON order_activity_logs(event_type)"))
+        else:
+            cols = _table_column_names(conn, "order_activity_logs")
+            if "operator_user_id" not in cols:
+                conn.execute(text("ALTER TABLE order_activity_logs ADD COLUMN operator_user_id INTEGER"))
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_order_activity_logs_operator "
+                    "ON order_activity_logs(operator_user_id)"
+                )
+            )
         ex_ord = _table_exists(conn, "order_refund_drafts")
         if not ex_ord:
             conn.execute(

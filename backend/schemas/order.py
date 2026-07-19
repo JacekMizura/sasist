@@ -371,6 +371,11 @@ class OrderActivityLogRead(BaseModel):
     event_type: str
     message: str
     created_at: Optional[datetime] = None
+    operator_user_id: Optional[int] = None
+    operator_display: Optional[str] = Field(
+        None,
+        description="Wyświetlana nazwa operatora lub „System” — nie parsować z message.",
+    )
 
 
 class OrderNoteRead(BaseModel):
