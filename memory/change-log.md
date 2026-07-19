@@ -1,3 +1,11 @@
+## 2026-07-19 — POST /orders 500: diagnostics-only (no root-cause fix yet)
+
+- Deployed `6b70515e` contains `ORDER_CREATE_ERROR` (from parent `2aa7114b`) but only `logger.error` (no traceback) + commit `6b70515e` itself is pycache-only.
+- Startup `columns_added=0` ⇒ do not assume missing `picking_handoff_mode`.
+- Upgrade: `ORDER_CREATE_TRACE` stages + `logger.exception` + stderr print + `flushed/committed/order_id` + payload fingerprint; wrap unexpected → safe HTTP 500 after rollback.
+- Suspects to verify on next deploy log: `product_sales_offers` (resolve lines), `tenant_fulfillment_configurations` (POST_FLUSH_ASSIGN), item offer FK — not handoff alone.
+- Tests: `test_order_create_diagnostics.py`.
+
 ## 2026-07-19 — Orphan PACKING cart after last pack (cart id=2 pattern)
 
 - ROOT: `finish_packing` cleared custody only when `order.cart_id` set; remaining used session-heal (`list_orders_on_cart`). Path: cart_id already NULL + `picking_session_id`/`current_session_id` → remaining>0 → event `order_packed` → stuck PACKING; UI later 0 orders (cart_id-only).

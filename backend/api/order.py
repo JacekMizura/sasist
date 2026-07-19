@@ -1262,15 +1262,60 @@ def get_office_dashboard_kpis(
 # ==========================================================
 
 
+def _order_create_payload_fingerprint(body: OrderCreateBody) -> dict:
+    """Safe diagnostics — no full addresses/PII dumps."""
+    items = list(body.items or [])
+    line_kinds: list[str] = []
+    for ln in items[:20]:
+        if getattr(ln, "offer_id", None):
+            line_kinds.append("offer")
+        elif getattr(ln, "bundle_id", None):
+            line_kinds.append("bundle")
+        elif getattr(ln, "product_id", None):
+            line_kinds.append("product")
+        else:
+            line_kinds.append("unknown")
+    return {
+        "tenant_id": int(body.tenant_id),
+        "warehouse_id": int(body.warehouse_id),
+        "items_count": len(items),
+        "line_kinds": line_kinds,
+        "has_customer_id": body.customer_id is not None,
+        "has_shipping_method_id": bool(getattr(body, "shipping_method_id", None)),
+        "has_document_type": bool(getattr(body, "document_type", None)),
+        "has_payment_method": bool(getattr(body, "payment_method", None)),
+        "origin": (body.origin or None),
+        "check_bundle_stock": bool(body.check_bundle_stock),
+        "shipping_cost": float(body.shipping_cost or 0),
+    }
+
+
+def _log_order_create_trace(stage: str, **extra) -> None:
+    bits = " ".join(f"{k}={v}" for k, v in extra.items() if v is not None)
+    msg = f"ORDER_CREATE_TRACE stage={stage}" + (f" {bits}" if bits else "")
+    logger.info(msg)
+    print(msg, flush=True)
+
+
 @router.post("/", response_model=OrderCreateResponse, status_code=201)
 def create_order(body: OrderCreateBody, db: Session = Depends(get_db)):
     """Create order with lines from catalog products and/or bundles (bundles exploded to real products)."""
-    stage = "VALIDATION"
+    import sys
+
+    stage = "REQUEST_VALIDATED"
+    order_id_for_diag: int | None = None
+    flushed = False
+    committed = False
+    fingerprint = _order_create_payload_fingerprint(body)
+    _log_order_create_trace("REQUEST_VALIDATED", **fingerprint)
+
     try:
         stage = "SCHEMA_ENSURE"
+        _log_order_create_trace("SCHEMA_ENSURE")
         ensure_orders_create_schema(engine)
 
-        stage = "VALIDATION"
+        stage = "CUSTOMER"
+        _log_order_create_trace("CUSTOMER")
         try:
             resolved_result = resolve_order_create_lines(
                 db,
@@ -1446,7 +1491,8 @@ def create_order(body: OrderCreateBody, db: Session = Depends(get_db)):
             ship_id = str(sm.id)
             ship_label = (sm.name or "").strip() or None
 
-        stage = "ORDER_INSERT"
+        stage = "ORDER_BEFORE_FLUSH"
+        _log_order_create_trace("ORDER_BEFORE_FLUSH", number=number)
         order = Order(
             tenant_id=body.tenant_id,
             warehouse_id=body.warehouse_id,
@@ -1471,15 +1517,21 @@ def create_order(body: OrderCreateBody, db: Session = Depends(get_db)):
             customer_id=int(body.customer_id) if body.customer_id is not None else None,
         )
         db.add(order)
-        stage = "FLUSH"
+        stage = "ORDER_FLUSH"
         db.flush()
+        flushed = True
+        order_id_for_diag = int(order.id) if getattr(order, "id", None) is not None else None
+        _log_order_create_trace("ORDER_FLUSHED", order_id=order_id_for_diag)
+
+        stage = "POST_FLUSH_ASSIGN"
         assign_order_scan_code(order)
         from ..services.order_fulfillment_lifecycle_service import apply_initial_fulfillment_assignment
 
         apply_initial_fulfillment_assignment(db, order)
         assign_default_new_panel_status_to_order(db, order)
 
-        stage = "ITEM_INSERT"
+        stage = "ITEMS"
+        _log_order_create_trace("ITEMS", order_id=order_id_for_diag, lines=len(resolved))
         persist_resolved_bundle_lines(
             db,
             order_id=int(order.id),
@@ -1488,6 +1540,7 @@ def create_order(body: OrderCreateBody, db: Session = Depends(get_db)):
         )
 
         if origin_up == "COMPLAINT" and cot_raw is not None:
+            stage = "COMPLAINT_SHIPMENT"
             pname, paddr, pphone, pemail = _complaint_pickup_from_create_body(body)
             fulfillment_mode = "DELIVERY_AND_PICKUP" if cot_raw == "EXCHANGE" else "DELIVERY_ONLY"
             ensure_complaint_outbound_shipment(
@@ -1502,13 +1555,20 @@ def create_order(body: OrderCreateBody, db: Session = Depends(get_db)):
             )
 
         if complaint_ref is not None:
+            stage = "COMPLAINT_FINALIZE"
             _finalize_complaint_replacement_order(db, complaint_ref, order)
 
-        stage = "COMMIT"
+        stage = "BEFORE_COMMIT"
+        _log_order_create_trace("BEFORE_COMMIT", order_id=order_id_for_diag)
         db.commit()
+        committed = True
+        stage = "COMMITTED"
+        _log_order_create_trace("COMMITTED", order_id=order_id_for_diag)
+
         stage = "REFRESH"
         db.refresh(order)
         stage = "SERIALIZATION"
+        _log_order_create_trace("SERIALIZATION", order_id=int(order.id))
         logger.info("ORDER CREATE id=%s number=%s tenant=%s wh=%s", order.id, order.number, body.tenant_id, body.warehouse_id)
         return OrderCreateResponse(id=order.id, number=order.number)
     except HTTPException:
@@ -1518,15 +1578,23 @@ def create_order(body: OrderCreateBody, db: Session = Depends(get_db)):
         db.rollback()
         orig = getattr(exc, "orig", None)
         stmt = getattr(exc, "statement", None)
-        logger.error(
-            "ORDER_CREATE_ERROR stage=%s type=%s message=%s orig=%s sql=%s",
-            stage,
-            type(exc).__name__,
-            str(exc)[:500],
-            (str(orig)[:500] if orig is not None else None),
-            (str(stmt)[:800] if stmt is not None else None),
+        params = getattr(exc, "params", None)
+        err_msg = (
+            f"ORDER_CREATE_ERROR stage={stage} type={type(exc).__name__} "
+            f"message={str(exc)[:500]!s} orig={str(orig)[:500] if orig is not None else None} "
+            f"sql={str(stmt)[:800] if stmt is not None else None} "
+            f"order_id={order_id_for_diag} flushed={flushed} committed={committed} "
+            f"fingerprint={fingerprint}"
         )
-        raise
+        logger.exception(err_msg)
+        print(err_msg, file=sys.stderr, flush=True)
+        if params is not None:
+            print(f"ORDER_CREATE_ERROR params={str(params)[:400]}", file=sys.stderr, flush=True)
+        # Safe client body; full traceback only in Deploy Logs.
+        raise HTTPException(
+            status_code=500,
+            detail="Internal server error",
+        ) from exc
 
 
 # ==========================================================
