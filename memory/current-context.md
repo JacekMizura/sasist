@@ -6,7 +6,7 @@
 
 ## Latest (2026-07-19)
 
-- **MULTI basket put SSOT:** product scan = unbound pending; basket scan allocates order_item. No FIFO destination before basket. List EAN consumed as PRODUCT_SCAN (pending). Series per confirmed basket.
+- **MULTI basket put:** product context (detail `product_id`) ≠ pending. Basket without pending activates series Pick=0; pending means physical qty awaiting basket. Click: basket→EAN→+1. Scan entry: EAN→pending→basket→+1.
 - **POST /orders 500 ROOT:** phantom `offer_id` from GET sales-offers ensure without commit → fixed earlier.
 - **Packing BASKET ghost count:** active queue requires live basket custody (`a8c6ee39`).
 

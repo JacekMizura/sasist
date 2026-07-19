@@ -1,4 +1,11 @@
-## 2026-07-19 — LIVE FAILURE: detail opened as click_or_other without PRODUCT_SCAN
+## 2026-07-19 — MULTI: product context ≠ pending; basket without pending = series Pick=0
+
+- ROOT: `pending=false+series=false` → EXPECTED_PRODUCT_SCAN blocked eligible basket on detail even though product_id was known from route.
+- NEW MODEL: selected product (click|EAN|route) vs physical pending qty. Basket+context → SERIES_ACTIVATED qty=0; basket+pending → Pick+1; EAN+series → Pick+1.
+- Backend: `confirm_basket_put(product_id, location_id)`; API body fields; FE route `select_destination`; UI „Wybierz koszyk”.
+- Tests: CASE 1–10 in `test_wms_basket_put_product_context_destination.py` (12 pass). No push.
+
+
 
 - ROOT: Jedyny URL `/wms/picking/products/:id` idzie przez `goDetail`. Live `DETAIL_MOUNT has_seed=false navigation_source=click_or_other` = navigate **bez** seed/token ⇒ nie lista PRODUCT_SCAN. Brak `PRODUCT_SCAN_REQUEST_START` / `GLOBAL_SCAN` EAN przed mount ⇒ entry był **click** (lub bare goDetail), nie fizyczny skan. Label `click_or_other` mylący — brak seed = „nie physical_scan”.
 - FIX: jawne `navigationSource` (physical_scan|click|pending_resume|other); HARD block physical_scan bez quick-pick+pending; `preparePickingProductDetailNavigation` + Scanner Helper dispatch harness; DETAIL_MOUNT czyta source z routera.
