@@ -292,6 +292,41 @@ def test_case14_carton_basket_other_order_rejected(db):
     c2 = _cart(db, code="MULTI-2", ctype=CartType.MULTI)
     o200 = _order(db, number="200", handoff="BASKET", cart_id=int(c.id))
     o201 = _order(db, number="201", handoff="BASKET", cart_id=int(c2.id))
+    b200 = CartBasket(
+        warehouse_id=1,
+        cart_id=int(c.id),
+        name="B1",
+        barcode="S-200",
+        scan_code="S-200",
+        row=1,
+        column=1,
+        inner_length=30,
+        inner_width=20,
+        inner_height=15,
+        usable_volume=9.0,
+        used_volume=1.0,
+        order_id=int(o200.id),
+    )
+    b201 = CartBasket(
+        warehouse_id=1,
+        cart_id=int(c2.id),
+        name="B2",
+        barcode="S-201",
+        scan_code="S-201",
+        row=1,
+        column=1,
+        inner_length=30,
+        inner_width=20,
+        inner_height=15,
+        usable_volume=9.0,
+        used_volume=1.0,
+        order_id=int(o201.id),
+    )
+    db.add_all([b200, b201])
+    db.flush()
+    o200.basket_id = int(b200.id)
+    o201.basket_id = int(b201.id)
+    db.add_all([o200, o201])
     db.commit()
     with pytest.raises(ValueError) as ei:
         apply_order_selected_carton(

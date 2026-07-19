@@ -6,11 +6,11 @@
 
 ## Latest (2026-07-19)
 
-- **POST /orders 500 (prod 6b70515e):** diagnostyka only — `ORDER_CREATE_TRACE` + `logger.exception`. Brak potwierdzonego ROOT CAUSE bez nowego loga. Nie zakładaj handoff; sprawdź stage w logach po deploy.
-- **Orphan PACKING cart:** `finish_packing` release bug → `release_empty_orphan_cart` + admin-release CASE C (`ea6a085f`, nie na prod jeśli prod=6b70515e).
-- Packing finish baskets / handoff / cartless — jak wcześniej.
+- **Packing BASKET ghost count:** entry „Zeskanuj koszyk (1)” vs basket 404 EMPTY — handoff provenance ≠ active custody. SSOT queue requires live basket dual-link + not automation_finished.
+- **POST /orders 500:** diagnostyka `ORDER_CREATE_TRACE` (`ec58cd21`); ROOT CAUSE prod nadal UNKNOWN bez nowego loga.
+- **Orphan PACKING cart:** `release_empty_orphan_cart` (`ea6a085f`).
 
 ## Notes
 
-- Po deploy diagnostyki: jeden POST /orders → szukaj `ORDER_CREATE_TRACE` / `ORDER_CREATE_ERROR` w Railway Deploy Logs (stderr + logger.exception).
-- Nie retry create jeśli log ma `committed=True`.
+- `picking_handoff_mode` = immutable provenance; live queue = cart_id / basket custody + packing state − finalized.
+- Magazyn→Wózki orphan: admin-release heal, nie cancel-session.

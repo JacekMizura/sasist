@@ -10,7 +10,7 @@ from collections import defaultdict
 from typing import List, Literal, Optional, Tuple, Type, TypeVar, cast
 
 from pydantic import BaseModel
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, exists, func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from ..models.cart import Cart
@@ -323,6 +323,189 @@ def _packing_queue_status_ids(
     return list(ids)
 
 
+def _active_packing_eligibility_clauses(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    status_ids: List[int],
+) -> list:
+    """
+    SSOT: aktywna kolejka pakowania (nie provenance).
+
+    - deleted_at IS NULL
+    - nie WMS-finalized (``wms_packing_automation_finished_at``)
+    - packing-ready state (fulfillment READY_TO_PACK/PACKING lub legacy NULL+UI status)
+    - eligibility consolidation / fulfillment_mode
+    """
+    from .wms_queue_eligibility import (
+        wms_queue_fulfillment_mode_clauses,
+        wms_queue_consolidation_phase_clauses,
+        wms_queue_consolidation_plan_clauses,
+        wms_queue_consolidation_packing_clauses,
+    )
+
+    return [
+        Order.deleted_at.is_(None),
+        Order.wms_packing_automation_finished_at.is_(None),
+        or_(
+            Order.fulfillment_state.in_(("READY_TO_PACK", "PACKING")),
+            and_(Order.fulfillment_state.is_(None), Order.order_ui_status_id.in_(list(status_ids))),
+        ),
+        *wms_queue_fulfillment_mode_clauses(
+            db=db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            queue_name="packing",
+        ),
+        *wms_queue_consolidation_phase_clauses(),
+        *wms_queue_consolidation_plan_clauses(),
+        *wms_queue_consolidation_packing_clauses(),
+    ]
+
+
+def _active_basket_custody_clause(*, warehouse_id: int):
+    """
+    Live BASKET custody: Order.basket_id set AND CartBasket.order_id == Order.id
+    (dual SSOT). ``picking_handoff_mode`` alone is provenance — not enough.
+    """
+    return and_(
+        Order.basket_id.isnot(None),
+        exists().where(
+            CartBasket.id == Order.basket_id,
+            CartBasket.order_id == Order.id,
+            CartBasket.warehouse_id == int(warehouse_id),
+        ),
+    )
+
+
+def _active_packing_scope_clauses(
+    *,
+    mode: str,
+    cart_id: int | None,
+    warehouse_id: int,
+) -> list:
+    """
+    Handoff provenance + live custody for CART / BASKET / CARTLESS / shelf.
+    """
+    from .picking_handoff_service import HANDOFF_BASKET, HANDOFF_CART, HANDOFF_CARTLESS
+
+    m = (mode or "").strip().lower()
+    if m == "bulk":
+        if cart_id is None or int(cart_id) < 1:
+            raise ValueError("cart_id required for CART packing scope")
+        return [
+            Order.picking_handoff_mode == HANDOFF_CART,
+            Order.cart_id == int(cart_id),
+        ]
+    if m == "baskets":
+        clauses = [
+            Order.picking_handoff_mode == HANDOFF_BASKET,
+            _active_basket_custody_clause(warehouse_id=int(warehouse_id)),
+        ]
+        if cart_id is not None and int(cart_id) > 0:
+            clauses.append(Order.cart_id == int(cart_id))
+        return clauses
+    if m == "shelf":
+        from .order_consolidation.constants import PLAN_STATUS_COMPLETED
+        from ..models.order_consolidation_plan import OrderConsolidationPlan
+
+        completed = select(OrderConsolidationPlan.order_id).where(
+            OrderConsolidationPlan.status == PLAN_STATUS_COMPLETED,
+            OrderConsolidationPlan.target_warehouse_id == int(warehouse_id),
+        )
+        return [
+            Order.cart_id.is_(None),
+            Order.picking_handoff_mode.is_(None),
+            Order.id.in_(completed),
+        ]
+    # CARTLESS
+    return [
+        Order.picking_handoff_mode == HANDOFF_CARTLESS,
+        Order.cart_id.is_(None),
+    ]
+
+
+def _emit_packing_queue_trace(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    status_ids: List[int],
+    eligibility: list,
+) -> None:
+    """
+    Diagnostyka ghost BASKET: handoff=BASKET bez live custody / finalized.
+    Loguje per-order PACKING_QUEUE_TRACE (max 30).
+    """
+    from .picking_handoff_service import HANDOFF_BASKET, normalize_handoff_mode
+
+    try:
+        candidates = (
+            db.query(Order)
+            .filter(
+                Order.tenant_id == int(tenant_id),
+                Order.warehouse_id == int(warehouse_id),
+                Order.deleted_at.is_(None),
+                Order.picking_handoff_mode == HANDOFF_BASKET,
+                or_(
+                    Order.fulfillment_state.in_(("READY_TO_PACK", "PACKING")),
+                    and_(
+                        Order.fulfillment_state.is_(None),
+                        Order.order_ui_status_id.in_(list(status_ids)),
+                    ),
+                ),
+            )
+            .limit(30)
+            .all()
+        )
+    except Exception:
+        logger.exception("PACKING_QUEUE_TRACE query failed")
+        return
+
+    custody = _active_basket_custody_clause(warehouse_id=int(warehouse_id))
+    for o in candidates:
+        oid = int(o.id)
+        auto_fin = getattr(o, "wms_packing_automation_finished_at", None) is not None
+        bid = getattr(o, "basket_id", None)
+        cid = getattr(o, "cart_id", None)
+        has_custody = False
+        rejection = None
+        if auto_fin:
+            rejection = "AUTOMATION_FINISHED"
+        elif bid is None or int(bid or 0) <= 0:
+            rejection = "NO_ACTIVE_BASKET_CUSTODY"
+        else:
+            try:
+                has_custody = (
+                    db.query(Order.id)
+                    .filter(Order.id == oid, custody)
+                    .first()
+                    is not None
+                )
+            except Exception:
+                has_custody = False
+            if not has_custody:
+                # distinguish inconsistency vs empty
+                slot = db.query(CartBasket).filter(CartBasket.id == int(bid)).first()
+                if slot is None:
+                    rejection = "NO_ACTIVE_BASKET_CUSTODY"
+                elif getattr(slot, "order_id", None) is None or int(slot.order_id) != oid:
+                    rejection = "BASKET_CUSTODY_INCONSISTENT"
+                else:
+                    rejection = "NO_ACTIVE_BASKET_CUSTODY"
+        included = (not auto_fin) and has_custody and rejection is None
+        if included:
+            rejection = None
+        msg = (
+            f"PACKING_QUEUE_TRACE ORDER_ID={oid} HANDOFF={normalize_handoff_mode(getattr(o, 'picking_handoff_mode', None))} "
+            f"CART_ID={cid} BASKET_ID={bid} AUTOMATION_FINISHED={int(auto_fin)} "
+            f"QUEUE_INCLUDED={int(included)} REJECTION_REASON={rejection or '-'}"
+        )
+        logger.info(msg)
+        print(msg, flush=True)
+
+
 def _packing_orders_base_query(
     db: Session,
     *,
@@ -337,73 +520,35 @@ def _packing_orders_base_query(
 
     mode (legacy UI labels):
       bulk     → picking_handoff_mode=CART + order.cart_id == cart_id (wymagany)
-      baskets  → picking_handoff_mode=BASKET (+ opcjonalnie cart_id gdy skan wózka)
+      baskets  → picking_handoff_mode=BASKET + aktywne basket custody
       no_cart  → picking_handoff_mode=CARTLESS + cart_id IS NULL
-    """
-    from .picking_handoff_service import HANDOFF_BASKET, HANDOFF_CART, HANDOFF_CARTLESS
 
+    ``picking_handoff_mode`` = provenance; custody = cart_id / basket assignment.
+    Finalized (``wms_packing_automation_finished_at``) nigdy w aktywnej kolejce.
+    """
     m = (mode or "").strip().lower()
     if m not in ("no_cart", "bulk", "baskets", "shelf"):
         raise ValueError("Parametr mode musi być: no_cart, bulk, baskets lub shelf.")
     status_ids = _packing_queue_status_ids(
         db, tenant_id=tenant_id, warehouse_id=warehouse_id, primary_status_id=status_id
     )
-    from .wms_queue_eligibility import (
-        wms_queue_fulfillment_mode_clauses,
-        wms_queue_consolidation_phase_clauses,
-        wms_queue_consolidation_plan_clauses,
-        wms_queue_consolidation_packing_clauses,
+    eligibility = _active_packing_eligibility_clauses(
+        db,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        status_ids=status_ids,
     )
-
-    q = db.query(Order).filter(
+    scope = _active_packing_scope_clauses(
+        mode=m,
+        cart_id=cart_id,
+        warehouse_id=int(warehouse_id),
+    )
+    return db.query(Order).filter(
         Order.tenant_id == int(tenant_id),
         Order.warehouse_id == int(warehouse_id),
-        or_(
-            Order.fulfillment_state.in_(("READY_TO_PACK", "PACKING")),
-            and_(Order.fulfillment_state.is_(None), Order.order_ui_status_id.in_(status_ids)),
-        ),
-        *wms_queue_fulfillment_mode_clauses(
-            db=db,
-            tenant_id=int(tenant_id),
-            warehouse_id=int(warehouse_id),
-            queue_name="packing",
-        ),
-        *wms_queue_consolidation_phase_clauses(),
-        *wms_queue_consolidation_plan_clauses(),
-        *wms_queue_consolidation_packing_clauses(),
+        *eligibility,
+        *scope,
     )
-    if m == "bulk":
-        if cart_id is None or int(cart_id) < 1:
-            raise ValueError("cart_id required for CART packing scope")
-        q = q.filter(
-            Order.picking_handoff_mode == HANDOFF_CART,
-            Order.cart_id == int(cart_id),
-        )
-    elif m == "baskets":
-        q = q.filter(Order.picking_handoff_mode == HANDOFF_BASKET)
-        if cart_id is not None and int(cart_id) > 0:
-            q = q.filter(Order.cart_id == int(cart_id))
-    elif m == "shelf":
-        # Consolidation shelf packing — own entry path (not CARTLESS picking).
-        from .order_consolidation.constants import PLAN_STATUS_COMPLETED
-        from ..models.order_consolidation_plan import OrderConsolidationPlan
-
-        completed = select(OrderConsolidationPlan.order_id).where(
-            OrderConsolidationPlan.status == PLAN_STATUS_COMPLETED,
-            OrderConsolidationPlan.target_warehouse_id == int(warehouse_id),
-        )
-        q = q.filter(
-            Order.cart_id.is_(None),
-            Order.picking_handoff_mode.is_(None),
-            Order.id.in_(completed),
-        )
-    else:
-        # CARTLESS — never bare cart_id IS NULL without handoff marker
-        q = q.filter(
-            Order.picking_handoff_mode == HANDOFF_CARTLESS,
-            Order.cart_id.is_(None),
-        )
-    return q
 
 
 def _packing_customer_name_from_order(order: Order) -> str:
@@ -2539,9 +2684,11 @@ def packing_mode_distribution(
     status_id: int,
 ) -> Tuple[int, int, int]:
     """
-    Rzeczywiste kohorty handoff (nie total,total,total):
+    Rzeczywiste kohorty handoff + live custody (nie total,total,total):
 
     returns (cartless/no_cart, cart/bulk, basket/baskets)
+
+    BASKET count wymaga aktywnego basket custody — nie samego ``picking_handoff_mode=BASKET``.
     """
     # Safe reconcile only when legacy NULL handoff candidates exist
     from .picking_handoff_service import HANDOFF_BASKET, HANDOFF_CART, HANDOFF_CARTLESS, reconcile_picking_handoff_modes
@@ -2568,30 +2715,17 @@ def packing_mode_distribution(
     status_ids = _packing_queue_status_ids(
         db, tenant_id=tenant_id, warehouse_id=warehouse_id, primary_status_id=status_id
     )
-    from .wms_queue_eligibility import (
-        wms_queue_fulfillment_mode_clauses,
-        wms_queue_consolidation_phase_clauses,
-        wms_queue_consolidation_plan_clauses,
-        wms_queue_consolidation_packing_clauses,
+    eligibility = _active_packing_eligibility_clauses(
+        db,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        status_ids=status_ids,
     )
 
     base = [
         Order.tenant_id == int(tenant_id),
         Order.warehouse_id == int(warehouse_id),
-        Order.deleted_at.is_(None),
-        or_(
-            Order.fulfillment_state.in_(("READY_TO_PACK", "PACKING")),
-            and_(Order.fulfillment_state.is_(None), Order.order_ui_status_id.in_(status_ids)),
-        ),
-        *wms_queue_fulfillment_mode_clauses(
-            db=db,
-            tenant_id=int(tenant_id),
-            warehouse_id=int(warehouse_id),
-            queue_name="packing",
-        ),
-        *wms_queue_consolidation_phase_clauses(),
-        *wms_queue_consolidation_plan_clauses(),
-        *wms_queue_consolidation_packing_clauses(),
+        *eligibility,
     ]
 
     def _count(extra) -> int:
@@ -2609,7 +2743,36 @@ def packing_mode_distribution(
             Order.cart_id.isnot(None),
         ]
     )
-    baskets = _count([Order.picking_handoff_mode == HANDOFF_BASKET])
+    baskets = _count(
+        [
+            Order.picking_handoff_mode == HANDOFF_BASKET,
+            _active_basket_custody_clause(warehouse_id=int(warehouse_id)),
+        ]
+    )
+
+    # Ghost detection: handoff=BASKET without custody / finalized still in UI status scope
+    try:
+        handoff_only = _count([Order.picking_handoff_mode == HANDOFF_BASKET])
+        if handoff_only != baskets:
+            logger.info(
+                "PACKING_QUEUE_TRACE GHOST_BASKET handoff_only=%s active_custody=%s "
+                "tenant=%s wh=%s status=%s",
+                handoff_only,
+                baskets,
+                int(tenant_id),
+                int(warehouse_id),
+                int(status_id),
+            )
+            _emit_packing_queue_trace(
+                db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+                status_ids=status_ids,
+                eligibility=eligibility,
+            )
+    except Exception:
+        logger.exception("PACKING_QUEUE_TRACE ghost check failed")
+
     return cartless, cart, baskets
 
 
@@ -2972,17 +3135,22 @@ def resolve_packing_order_for_basket_scan(
     if normalize_handoff_mode(getattr(order, "picking_handoff_mode", None)) != HANDOFF_BASKET:
         raise PackingScanError("BASKET_ORDER_NOT_IN_QUEUE")
 
-    # Dual SSOT consistency: Order.basket_id ↔ CartBasket.order_id
+    # Dual SSOT consistency: Order.basket_id ↔ CartBasket.order_id (required for active queue)
     ob = getattr(order, "basket_id", None)
-    if ob is not None and int(ob) > 0 and int(ob) != int(match.id):
+    if ob is None or int(ob) <= 0 or int(ob) != int(match.id):
         raise PackingScanError(
             "BASKET_ORDER_NOT_IN_QUEUE",
-            message="Niespójne przypisanie koszyka (Order.basket_id ≠ slot).",
+            message="Brak aktywnego custody koszyka (Order.basket_id).",
         )
-    if match.order_id is not None and int(match.order_id) != int(oid):
+    if match.order_id is None or int(match.order_id) != int(oid):
         raise PackingScanError(
             "BASKET_ORDER_NOT_IN_QUEUE",
             message="Niespójne przypisanie koszyka (CartBasket.order_id).",
+        )
+    if getattr(order, "wms_packing_automation_finished_at", None) is not None:
+        raise PackingScanError(
+            "BASKET_ORDER_NOT_IN_QUEUE",
+            message="Zamówienie już finalnie spakowane (automation finished).",
         )
 
     in_queue = get_packing_order_detail_for_queue(

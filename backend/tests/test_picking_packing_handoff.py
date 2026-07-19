@@ -282,7 +282,7 @@ class TestPackingModeDistribution(unittest.TestCase):
 
         db = MagicMock()
         # count queries return different values
-        counts = iter([3, 7, 2])
+        counts = iter([3, 7, 2, 2])  # cartless, cart, baskets, handoff_only (== active → no ghost dump)
 
         def _scalar():
             return next(counts)

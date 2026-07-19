@@ -1,3 +1,10 @@
+## 2026-07-19 — Packing BASKET ghost count (entry 1, scan 404)
+
+- ROOT: `packing_mode_distribution` / `_packing_orders_base_query` liczyły `picking_handoff_mode=BASKET` bez live custody; po finish custody cleared, handoff zostaje (provenance) → COUNT=1, GET basket → EMPTY.
+- FIX: SSOT eligibility + scope — BASKET wymaga `Order.basket_id` + `CartBasket.order_id==Order.id`; exclude `wms_packing_automation_finished_at`; PACKING_QUEUE_TRACE przy ghost.
+- NIE czyszczono `picking_handoff_mode`.
+- Tests: `test_packing_active_queue_ssot.py` CASE 1–7.
+
 ## 2026-07-19 — POST /orders 500: diagnostics-only (no root-cause fix yet)
 
 - Deployed `6b70515e` contains `ORDER_CREATE_ERROR` (from parent `2aa7114b`) but only `logger.error` (no traceback) + commit `6b70515e` itself is pycache-only.
