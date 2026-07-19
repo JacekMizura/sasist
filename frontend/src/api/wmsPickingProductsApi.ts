@@ -637,6 +637,71 @@ export async function postWmsPickingReportShortage(
   return res.data;
 }
 
+export type WmsPickingBulkShortageItemApi = {
+  order_item_id: number;
+  missing_qty: number;
+};
+
+export type WmsPickingBulkReportShortageResponseApi = {
+  ok: boolean;
+  already_resolved?: boolean;
+  orders_updated: number;
+  order_ids: number[];
+  lines: Array<{
+    order_item_id: number;
+    missing_qty: number;
+    already_resolved?: boolean;
+    ok?: boolean;
+  }>;
+  lines_count: number;
+  total_shortage_qty: number;
+  allow_continue_other_lines_after_shortage?: boolean;
+  product_line?: WmsPickingProductLineApi | null;
+};
+
+export async function postWmsPickingReportShortageBulk(
+  tenantId: number,
+  warehouseId: number,
+  sourceStatusId: number,
+  orderType: WmsPickingOrderTypeQuery,
+  body: {
+    product_id: number;
+    cart_id: number;
+    items: WmsPickingBulkShortageItemApi[];
+    location_id?: number | null;
+    order_ids?: number[] | null;
+    recovery_order_id?: number | null;
+  },
+): Promise<WmsPickingBulkReportShortageResponseApi> {
+  const payload: Record<string, unknown> = {
+    product_id: body.product_id,
+    cart_id: body.cart_id,
+    items: body.items.map((i) => ({
+      order_item_id: Math.floor(Number(i.order_item_id)),
+      missing_qty: Number(i.missing_qty),
+    })),
+  };
+  if (body.location_id != null) payload.location_id = body.location_id;
+  if (body.order_ids?.length) payload.order_ids = body.order_ids;
+  const rid = body.recovery_order_id;
+  if (rid != null && Number.isFinite(Number(rid)) && Number(rid) > 0) {
+    payload.recovery_order_id = Math.floor(Number(rid));
+  }
+  const res = await api.post<WmsPickingBulkReportShortageResponseApi>(
+    "/wms/picking/report-shortage-bulk",
+    payload,
+    {
+      params: {
+        tenant_id: tenantId,
+        warehouse_id: warehouseId,
+        source_status_id: sourceStatusId,
+        order_type: orderType,
+      },
+    },
+  );
+  return res.data;
+}
+
 export type WmsPickingUndoPickResponseApi = {
   ok: boolean;
   undone_qty: number;

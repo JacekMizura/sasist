@@ -51,6 +51,8 @@ from ..schemas.wms_picking_products import (
     WmsPickingRecoveryFinalizeResponse,
     WmsPickingReportShortageBody,
     WmsPickingReportShortageResponse,
+    WmsPickingBulkReportShortageBody,
+    WmsPickingBulkReportShortageResponse,
     WmsPickingResolveCartResponse,
     WmsPickingUndoPickBody,
     WmsPickingUndoPickResponse,
@@ -2064,6 +2066,104 @@ def post_picking_report_shortage(
         )
         raise
     return WmsPickingReportShortageResponse(**out)
+
+
+@router.post("/picking/report-shortage-bulk", response_model=WmsPickingBulkReportShortageResponse)
+def post_picking_report_shortage_bulk(
+    body: WmsPickingBulkReportShortageBody,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
+    source_status_id: int = Query(..., ge=1),
+    order_type: WmsPickingOrderTypeFilter = Query(...),
+    db: Session = Depends(get_db),
+    current_user: Optional[AppUser] = Depends(get_optional_current_user),
+):
+    """
+    Zbiorcze shortage per order_item (MULTI) — atomic all-or-nothing.
+    Orchestracja nad ``report_wms_picking_product_shortage`` (ten sam SSOT).
+    """
+    import traceback
+
+    from ..services.wms_picking_shortage import (
+        BulkShortageError,
+        report_wms_picking_bulk_product_shortage,
+    )
+
+    payload_dump = body.model_dump()
+    logger.info(
+        "[report_shortage_bulk] ENTER payload=%s tenant_id=%s warehouse_id=%s user=%s",
+        payload_dump,
+        tenant_id,
+        warehouse_id,
+        getattr(current_user, "id", None),
+    )
+    try:
+        out = report_wms_picking_bulk_product_shortage(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            source_status_id=int(source_status_id),
+            order_type=order_type,
+            product_id=int(body.product_id),
+            cart_id=int(body.cart_id),
+            items=[i.model_dump() for i in body.items],
+            location_id=body.location_id,
+            ui_order_ids=body.order_ids,
+            recovery_order_id=body.recovery_order_id,
+            operator_user_id=int(current_user.id) if current_user is not None else None,
+        )
+        product_line_snapshot = None
+        resp = build_wms_picking_product_lines(
+            db,
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+            source_status_id=source_status_id,
+            order_type=order_type,
+            cart_id=int(body.cart_id),
+        )
+        pid = int(body.product_id)
+        for pl in getattr(resp, "products", None) or []:
+            if int(getattr(pl, "product_id", 0) or 0) == pid:
+                product_line_snapshot = pl
+                break
+        out = {**out, "product_line": product_line_snapshot}
+        if current_user is not None and current_user.id is not None:
+            _safe_touch_picking_session(
+                db=db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+                session_kind="picking_active",
+                operator_user_id=int(current_user.id),
+                cart_id=int(body.cart_id),
+                metadata=_picking_session_progress_metadata(
+                    resp, source_status_id=source_status_id, order_type=order_type
+                ),
+            )
+        db.commit()
+    except BulkShortageError as be:
+        db.rollback()
+        logger.warning(
+            "[report_shortage_bulk] REJECT code=%s detail=%s",
+            be.code,
+            be.as_detail(),
+        )
+        raise HTTPException(status_code=409, detail=be.as_detail()) from be
+    except ValueError as ve:
+        db.rollback()
+        logger.warning("[report_shortage_bulk] REJECT reason=%s", str(ve))
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "BULK_SHORTAGE_REJECTED", "message": str(ve), "error": str(ve)},
+        ) from ve
+    except Exception:
+        db.rollback()
+        logger.error(
+            "[report_shortage_bulk] UNEXPECTED payload=%s traceback=%s",
+            payload_dump,
+            traceback.format_exc(),
+        )
+        raise
+    return WmsPickingBulkReportShortageResponse(**out)
 
 
 @router.post("/picking/recovery/finalize", response_model=WmsPickingRecoveryFinalizeResponse)

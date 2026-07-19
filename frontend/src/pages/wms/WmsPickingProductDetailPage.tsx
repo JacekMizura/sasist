@@ -9,6 +9,7 @@ import {
   postWmsPickingConfirmEmptyLocation,
   postWmsPickingQuickPick,
   postWmsPickingReportShortage,
+  postWmsPickingReportShortageBulk,
   postWmsPickingUndoPick,
   type WmsPickingProductDetailApi,
   type WmsPickingProductLocationRowApi,
@@ -25,6 +26,7 @@ import {
 } from "../../components/wms/picking/BasketPutQuantityModal";
 import { MultiBasketAllocationPanel } from "./picking-detail/MultiBasketAllocationPanel";
 import { MultiAllocationShortageModal } from "./picking-detail/MultiAllocationShortageModal";
+import { MultiBulkShortageModal } from "./picking-detail/MultiBulkShortageModal";
 import type { BundleScanOut, ConsolidationRackBundleRowOut } from "../../api/bundlesLogisticsApi";
 import { getConsolidationRackBundleView } from "../../api/bundlesLogisticsApi";
 import { tryPickingBundleScan } from "../../services/bundleScannerIntegration";
@@ -187,6 +189,7 @@ export default function WmsPickingProductDetailPage() {
   const [quantityDraft, setQuantityDraft] = useState<BasketPutQuantityDraft | null>(null);
   /** MULTI path A/B: shortage scoped to one order_item. */
   const [multiShortageOpen, setMultiShortageOpen] = useState(false);
+  const [bulkShortageOpen, setBulkShortageOpen] = useState(false);
   const [multiShortageOrderItemId, setMultiShortageOrderItemId] = useState<number | null>(null);
   const [multiShortageQty, setMultiShortageQty] = useState<number | null>(null);
   /** After partial put: offer mark-remaining-shortage for that allocation. */
@@ -941,9 +944,7 @@ export default function WmsPickingProductDetailPage() {
     if (!detail || reportShortageBlocked) return;
     setShortageErr(null);
     if (detail.requires_basket_put_confirm) {
-      setMultiShortageOrderItemId(null);
-      setMultiShortageQty(null);
-      window.requestAnimationFrame(() => setMultiShortageOpen(true));
+      setBulkShortageOpen(true);
       return;
     }
     const rem = wmsPickingRemainingQty(detail);
@@ -951,6 +952,13 @@ export default function WmsPickingProductDetailPage() {
     setShortageQtyInput(rem > 1e-9 ? wmsPickingShortageDefaultQty(detail) : Math.max(picked, 1));
     setShortageProblemKind(picked > 1e-9 && rem <= 1e-9 ? "empty_location" : "product_shortage");
     window.requestAnimationFrame(() => setShortageConfirmOpen(true));
+  }, [detail, reportShortageBlocked]);
+
+  const openBulkShortage = useCallback(() => {
+    if (!detail || reportShortageBlocked) return;
+    setShortageErr(null);
+    setPostPutFollowUp(null);
+    window.requestAnimationFrame(() => setBulkShortageOpen(true));
   }, [detail, reportShortageBlocked]);
 
   const openLineShortage = useCallback(
@@ -964,6 +972,60 @@ export default function WmsPickingProductDetailPage() {
     },
     [detail, reportShortageBlocked],
   );
+
+  const submitBulkShortage = async (items: Array<{ order_item_id: number; missing_qty: number }>) => {
+    if (shortageBusy || !pickingSession?.cartId || warehouseId == null || !detail) return;
+    if (!items.length) return;
+    const locId = selectedLocation?.location_id ?? activeLocationId ?? detail.locations[0]?.location_id ?? null;
+    setShortageBusy(true);
+    setShortageErr(null);
+    try {
+      const out = await postWmsPickingReportShortageBulk(
+        pickingTenantId,
+        warehouseId,
+        pickingSession.orderUiStatusId,
+        orderType,
+        {
+          product_id: productId,
+          cart_id: pickingSession.cartId,
+          items,
+          location_id: locId,
+          order_ids: detail.orders.map((o) => o.order_id),
+          ...(recoveryOrderId != null && recoveryOrderId > 0 ? { recovery_order_id: recoveryOrderId } : {}),
+        },
+      );
+      let optimistic = detail;
+      for (const line of items) {
+        optimistic = applyWmsPickingShortageToDetail(optimistic, line.missing_qty, line.order_item_id);
+      }
+      applyDetailToState(optimistic);
+      dispatchWmsShortagesUpdated();
+      playScanBeep();
+      setBulkShortageOpen(false);
+      setPostPutFollowUp(null);
+      showScannerToast(
+        `Zgłoszono brak ${fmtQty(out.total_shortage_qty ?? items.reduce((s, i) => s + i.missing_qty, 0))} szt. ` +
+          `w ${items.length} koszykach`,
+      );
+      await load();
+      refocusScannerInput();
+    } catch (e: unknown) {
+      const ax = e as { response?: { data?: { detail?: unknown } } };
+      const detailRaw = ax.response?.data?.detail;
+      let msg = formatFastApiErrorDetail(ax.response?.data) || "Nie udało się zgłosić braków zbiorczo.";
+      if (detailRaw && typeof detailRaw === "object" && !Array.isArray(detailRaw)) {
+        const d = detailRaw as { message?: string; code?: string; order_item_id?: number; live_unresolved?: number };
+        if (d.message) msg = String(d.message);
+        if (d.code === "SHORTAGE_STALE") {
+          showScanFeedbackFromCode("QUANTITY_STALE", { backendMessage: msg });
+          await load();
+        }
+      }
+      setShortageErr(msg);
+    } finally {
+      setShortageBusy(false);
+    }
+  };
 
   const submitMultiAllocationShortage = async (orderItemId: number, shortageQty: number) => {
     if (shortageBusy || !pickingSession || warehouseId == null || !detail) return;
@@ -1027,9 +1089,9 @@ export default function WmsPickingProductDetailPage() {
   };
 
   useEffect(() => {
-    if (shortageConfirmOpen || multiShortageOpen || manualOpen || quantityDraft) return;
+    if (shortageConfirmOpen || multiShortageOpen || bulkShortageOpen || manualOpen || quantityDraft) return;
     refocusScannerInput();
-  }, [shortageConfirmOpen, multiShortageOpen, manualOpen, quantityDraft, refocusScannerInput]);
+  }, [shortageConfirmOpen, multiShortageOpen, bulkShortageOpen, manualOpen, quantityDraft, refocusScannerInput]);
 
   const submitShortage = async () => {
     if (shortageBusy) return;
@@ -1431,6 +1493,7 @@ export default function WmsPickingProductDetailPage() {
                   ) : null}
                   <MultiBasketAllocationPanel
                     orders={detail.orders}
+                    onOpenBulkShortage={openBulkShortage}
                     onReportLineShortage={openLineShortage}
                     shortageBusy={shortageBusy}
                   />
@@ -1632,6 +1695,22 @@ export default function WmsPickingProductDetailPage() {
           }}
           onConfirm={(orderItemId, shortageQty) => {
             void submitMultiAllocationShortage(orderItemId, shortageQty);
+          }}
+        />
+      ) : null}
+
+      {bulkShortageOpen && detail ? (
+        <MultiBulkShortageModal
+          orders={detail.orders}
+          productName={detail.name}
+          productEan={detail.ean}
+          busy={shortageBusy}
+          error={shortageErr}
+          onClose={() => {
+            if (!shortageBusy) setBulkShortageOpen(false);
+          }}
+          onConfirm={(items) => {
+            void submitBulkShortage(items);
           }}
         />
       ) : null}

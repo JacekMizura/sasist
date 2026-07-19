@@ -3,6 +3,7 @@ import {
   allocationStatusLabel,
   allocationUnresolved,
   aggregateAllocations,
+  unresolvedAllocations,
   type MultiBasketOrderAllocation,
 } from "./multiBasketAllocation";
 
@@ -12,12 +13,19 @@ function fmtQty(n: number): string {
 
 type Props = {
   orders: MultiBasketOrderAllocation[];
+  onOpenBulkShortage: () => void;
   onReportLineShortage: (orderItemId: number, maxQty: number) => void;
   shortageBusy?: boolean;
 };
 
-export function MultiBasketAllocationPanel({ orders, onReportLineShortage, shortageBusy }: Props) {
+export function MultiBasketAllocationPanel({
+  orders,
+  onOpenBulkShortage,
+  onReportLineShortage,
+  shortageBusy,
+}: Props) {
   const totals = aggregateAllocations(orders);
+  const unresolved = unresolvedAllocations(orders);
   if (!orders.length) return null;
 
   return (
@@ -38,6 +46,21 @@ export function MultiBasketAllocationPanel({ orders, onReportLineShortage, short
         ))}
       </div>
 
+      {unresolved.length > 0 ? (
+        <button
+          type="button"
+          disabled={shortageBusy}
+          onClick={onOpenBulkShortage}
+          className="w-full rounded-2xl border-2 border-amber-400 bg-amber-500 px-4 py-4 text-left text-white shadow-md hover:bg-amber-600 disabled:opacity-40"
+        >
+          <p className="text-sm font-black uppercase tracking-widest">Rozlicz braki</p>
+          <p className="mt-1 text-xs font-semibold text-amber-50">
+            {unresolved.length} koszyk{unresolved.length === 1 ? "" : "ów"} · {fmtQty(totals.unresolved)} szt.
+            nierozliczonych
+          </p>
+        </button>
+      ) : null}
+
       <div>
         <h4 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-3">
           Koszyki / zamówienia
@@ -45,7 +68,7 @@ export function MultiBasketAllocationPanel({ orders, onReportLineShortage, short
         <ul className="space-y-2">
           {orders.map((o) => {
             const status = allocationLineStatus(o);
-            const unresolved = allocationUnresolved(o);
+            const lineUnresolved = allocationUnresolved(o);
             const oiid = o.order_item_id != null ? Number(o.order_item_id) : 0;
             return (
               <li
@@ -62,7 +85,7 @@ export function MultiBasketAllocationPanel({ orders, onReportLineShortage, short
                     <p className="mt-1 text-xs font-semibold text-slate-600">
                       Wymagane {fmtQty(o.quantity)} · Zebrano {fmtQty(o.picked_quantity)} · Brak{" "}
                       {fmtQty(o.missing_quantity)}
-                      {unresolved > 1e-9 ? ` · Nierozliczone ${fmtQty(unresolved)}` : ""}
+                      {lineUnresolved > 1e-9 ? ` · Nierozliczone ${fmtQty(lineUnresolved)}` : ""}
                     </p>
                   </div>
                   <span
@@ -77,14 +100,14 @@ export function MultiBasketAllocationPanel({ orders, onReportLineShortage, short
                     {allocationStatusLabel(status)}
                   </span>
                 </div>
-                {unresolved > 1e-9 && oiid > 0 ? (
+                {lineUnresolved > 1e-9 && oiid > 0 ? (
                   <button
                     type="button"
                     disabled={shortageBusy}
-                    onClick={() => onReportLineShortage(oiid, unresolved)}
-                    className="mt-2 w-full rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-amber-900 hover:bg-amber-100 disabled:opacity-40"
+                    onClick={() => onReportLineShortage(oiid, lineUnresolved)}
+                    className="mt-2 text-[11px] font-semibold uppercase tracking-wider text-amber-800 underline decoration-amber-300 underline-offset-2 hover:text-amber-950 disabled:opacity-40"
                   >
-                    Zgłoś brak {fmtQty(unresolved)} szt.
+                    Zgłoś brak tylko dla tego koszyka ({fmtQty(lineUnresolved)} szt.)
                   </button>
                 ) : null}
               </li>

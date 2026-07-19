@@ -526,6 +526,48 @@ class WmsPickingReportShortageResponse(BaseModel):
     )
 
 
+class WmsPickingBulkShortageItem(BaseModel):
+    order_item_id: int = Field(..., ge=1)
+    missing_qty: float = Field(..., gt=0)
+
+
+class WmsPickingBulkReportShortageBody(BaseModel):
+    product_id: int = Field(..., ge=1)
+    location_id: Optional[int] = Field(default=None, ge=1)
+    cart_id: int = Field(..., ge=1, description="Wózek MULTI / koszyki — wymagany")
+    items: list[WmsPickingBulkShortageItem] = Field(
+        ...,
+        min_length=1,
+        description="Shortage per order_item — bez FIFO po produkcie",
+    )
+    order_ids: Optional[list[int]] = Field(default=None)
+    recovery_order_id: Optional[int] = Field(default=None, ge=1)
+    problem_kind: Optional[Literal["product_shortage", "qty_mismatch"]] = Field(
+        default="product_shortage",
+    )
+
+
+class WmsPickingBulkShortageLineResult(BaseModel):
+    order_item_id: int
+    missing_qty: float
+    already_resolved: bool = False
+    ok: bool = True
+
+
+class WmsPickingBulkReportShortageResponse(BaseModel):
+    ok: bool = True
+    already_resolved: bool = False
+    orders_updated: int = Field(..., ge=0)
+    order_ids: list[int] = Field(default_factory=list)
+    lines: list[WmsPickingBulkShortageLineResult] = Field(default_factory=list)
+    lines_count: int = Field(0, ge=0)
+    total_shortage_qty: float = Field(0, ge=0)
+    target_status_id: Optional[int] = None
+    order_issue_task_ids: list[int] = Field(default_factory=list)
+    allow_continue_other_lines_after_shortage: bool = True
+    product_line: Optional[WmsPickingProductLine] = None
+
+
 class WmsPickingUndoPickBody(BaseModel):
     product_id: int = Field(..., ge=1)
     cart_id: int = Field(..., ge=1)
