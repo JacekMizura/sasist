@@ -1,3 +1,10 @@
+## 2026-07-19 — GET /order-issue-tasks 500: missing archived_at on request path
+
+- ROOT (reproduced): request-path `ensure_order_issue_task_lifecycle_schema` added priority_* but **not** `archived_at`/`archived_by_user_id`; ORM SELECT still requires them → `OperationalError`/`UndefinedColumn` after previous priority-only fix.
+- FIX: call `ensure_order_issue_tasks_archive_columns` in request-path ensure; `ORDER_ISSUE_TASKS_ERROR` structured logging (no traceback to FE).
+- Tests: `test_order_issue_tasks_archive_request_path.py` (legacy schema → ensure → list ×3).
+- PROD SCHEMA VERIFIED: NO (no Railway/DB access); PG runtime test: NOT AVAILABLE.
+
 ## 2026-07-19 — CARTLESS PICKING (bulk / cart_no_scan)
 
 - ROOT: `cart_no_scan` był AUTO_SELECT_PHYSICAL_CART via `GET /picking/default-cart` → first BULK cart → claim.

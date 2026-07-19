@@ -84,6 +84,33 @@ router = APIRouter(prefix="/wms", tags=["WMS order issues"])
 _SERIALIZE_ERROR_CODE = "TASK_SERIALIZATION_FAILED"
 
 
+def _log_order_issue_tasks_error(
+    exc: BaseException,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    phase: str,
+) -> None:
+    """Structured server-side diagnostics for GET /order-issue-tasks (never sent to FE)."""
+    orig = getattr(exc, "orig", None)
+    stmt = getattr(exc, "statement", None)
+    if stmt is None and orig is not None:
+        stmt = getattr(orig, "diag", None)
+    logger.exception(
+        "ORDER_ISSUE_TASKS_ERROR phase=%s tenant_id=%s warehouse_id=%s "
+        "exception_type=%s exception_message=%s sqlalchemy_orig_type=%s "
+        "sqlalchemy_orig_message=%s statement=%s",
+        phase,
+        tenant_id,
+        warehouse_id,
+        type(exc).__name__,
+        str(exc),
+        type(orig).__name__ if orig is not None else None,
+        str(orig) if orig is not None else None,
+        str(stmt)[:2000] if stmt is not None else None,
+    )
+
+
 @contextmanager
 def _noop_count():
     yield
@@ -945,10 +972,11 @@ def list_order_issue_tasks(
         )
     except SQLAlchemyError as exc:
         db.rollback()
-        logger.exception(
-            "[wms.order_issue_tasks.fetch] db_failed tenant_id=%s warehouse_id=%s",
-            tenant_id,
-            warehouse_id,
+        _log_order_issue_tasks_error(
+            exc,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            phase="list_sqlalchemy",
         )
         raise HTTPException(
             status_code=500,
@@ -960,10 +988,11 @@ def list_order_issue_tasks(
         ) from exc
     except Exception as exc:
         db.rollback()
-        logger.exception(
-            "[wms.order_issue_tasks.fetch] failed tenant_id=%s warehouse_id=%s",
-            tenant_id,
-            warehouse_id,
+        _log_order_issue_tasks_error(
+            exc,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            phase="list_unexpected",
         )
         raise HTTPException(
             status_code=500,

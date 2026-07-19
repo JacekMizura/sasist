@@ -47,13 +47,19 @@ def _now() -> datetime:
 
 
 def ensure_order_issue_task_lifecycle_schema(db: Session) -> None:
-    """Ensure task_items table + lifecycle columns on order_issue_tasks.
+    """Ensure task_items table + ORM-required columns on order_issue_tasks.
+
+    Request-path must cover every column mapped on ``OrderIssueTask`` that
+    ``list_open_order_issue_tasks_for_warehouse`` SELECTs — including archive
+    columns. Missing ``archived_at`` alone yields HTTP 500 (UndefinedColumn /
+    OperationalError) even when priority_* already exist.
 
     Shortage-settings columns are NOT ensured here — SSOT is startup
     (``ensure_wms_picking_shortage_settings_columns`` on PG allowlist / background upgrade).
     """
     from ..db.schema_introspection import (
         ensure_order_issue_task_items_table,
+        ensure_order_issue_tasks_archive_columns,
         ensure_order_issue_tasks_lifecycle_columns,
         get_engine,
     )
@@ -66,6 +72,7 @@ def ensure_order_issue_task_lifecycle_schema(db: Session) -> None:
     except TypeError:
         return
     ensure_order_issue_task_items_table(engine)
+    ensure_order_issue_tasks_archive_columns(engine)
     ensure_order_issue_tasks_lifecycle_columns(engine)
 
 
