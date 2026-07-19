@@ -1,3 +1,9 @@
+## 2026-07-19 — Modal „Edycja trybu zbierania”: własny sticky footer
+
+- ROOT: modal bez Zapisz/Anuluj; UX kierował na globalny sticky bar (z-40) widoczny pod overlayem.
+- AFTER: modal z-5000, sticky header/footer; Zapisz = commit do `savedConfigs` (bez API); Anuluj/X/ESC = restore `editBackup`; globalny pasek = API.
+- Commit: `ca32f29` (bez push).
+
 ## 2026-07-19 — GET /order-issue-tasks 500: missing archived_at on request path
 
 - ROOT (reproduced): request-path `ensure_order_issue_task_lifecycle_schema` added priority_* but **not** `archived_at`/`archived_by_user_id`; ORM SELECT still requires them → `OperationalError`/`UndefinedColumn` after previous priority-only fix.
