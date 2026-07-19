@@ -156,6 +156,7 @@ from ..services.order_list_financial import batch_order_list_profit_metrics
 from ..database import engine
 from ..services.order_list_service import (
     build_order_list_read_row,
+    ensure_orders_create_schema,
     ensure_orders_list_schema,
     log_orders_list_error,
     sort_built_order_rows,
@@ -1264,240 +1265,268 @@ def get_office_dashboard_kpis(
 @router.post("/", response_model=OrderCreateResponse, status_code=201)
 def create_order(body: OrderCreateBody, db: Session = Depends(get_db)):
     """Create order with lines from catalog products and/or bundles (bundles exploded to real products)."""
+    stage = "VALIDATION"
     try:
-        resolved_result = resolve_order_create_lines(
-            db,
+        stage = "SCHEMA_ENSURE"
+        ensure_orders_create_schema(engine)
+
+        stage = "VALIDATION"
+        try:
+            resolved_result = resolve_order_create_lines(
+                db,
+                tenant_id=body.tenant_id,
+                warehouse_id=body.warehouse_id,
+                raw_lines=body.items,
+                check_bundle_stock=bool(body.check_bundle_stock),
+            )
+        except BundleExplosionError as e:
+            raise HTTPException(status_code=400, detail=e.detail)
+        resolved = resolved_result.lines
+
+        origin_up = (body.origin or "").strip().upper() or None
+        cot_raw = (body.complaint_order_type or "").strip().upper() if body.complaint_order_type else None
+        complaint_ref: Optional[Complaint] = None
+        if origin_up == "COMPLAINT":
+            if body.complaint_id is None:
+                raise HTTPException(status_code=400, detail="complaint_id is required when origin is COMPLAINT")
+            if cot_raw not in ("EXCHANGE", "REPLACEMENT"):
+                raise HTTPException(
+                    status_code=400,
+                    detail="complaint_order_type must be EXCHANGE or REPLACEMENT when origin is COMPLAINT",
+                )
+            complaint_ref = (
+                db.query(Complaint)
+                .filter(
+                    Complaint.id == int(body.complaint_id),
+                    Complaint.tenant_id == body.tenant_id,
+                    Complaint.warehouse_id == body.warehouse_id,
+                    Complaint.deleted_at.is_(None),
+                )
+                .first()
+            )
+            if not complaint_ref:
+                raise HTTPException(status_code=400, detail="Complaint not found for this tenant/warehouse")
+            rt0 = str(getattr(complaint_ref, "resolution_type", "") or "").strip().upper()
+            rs0 = str(getattr(complaint_ref, "resolution_status", "") or "").strip().upper()
+            if rt0 in ("REFUND", "PARTIAL_REFUND", "REJECTION") and rs0 == "COMPLETED":
+                raise HTTPException(
+                    status_code=400,
+                    detail="Reklamacja ma zakończone rozliczenie finansowe — nie można utworzyć zamówienia wymiany.",
+                )
+        if body.customer_id is not None:
+            cu = (
+                db.query(Customer)
+                .filter(Customer.id == int(body.customer_id), Customer.tenant_id == int(body.tenant_id))
+                .first()
+            )
+            if cu is None:
+                raise HTTPException(status_code=400, detail="customer_id not found for this tenant")
+
+        if body.original_order_id is not None:
+            oo = (
+                db.query(Order)
+                .filter(
+                    Order.id == int(body.original_order_id),
+                    Order.tenant_id == body.tenant_id,
+                    Order.warehouse_id == body.warehouse_id,
+                )
+                .first()
+            )
+            if not oo:
+                raise HTTPException(status_code=400, detail="original_order_id not found for this tenant/warehouse")
+
+        goods_total = sum(float(x.total_price) for x in resolved)
+        order_vol = sum(float(x.line_volume) for x in resolved)
+
+        shipping_cost = round(float(body.shipping_cost or 0), 2)
+        order_value = round(goods_total + shipping_cost, 2)
+
+        barcode = next_order_barcode(db, body.tenant_id)
+        number = next_internal_order_number(db, body.tenant_id, body.warehouse_id)
+
+        def _merge_address_lines(
+            target: dict,
+            street: Optional[str],
+            city: Optional[str],
+            postal: Optional[str],
+            country: Optional[str],
+        ) -> None:
+            """Zapis jak w imporcie: polskie klucze + angielskie (czytelne dla _address_line_from_block)."""
+            if street and str(street).strip():
+                s = str(street).strip()
+                target["street"] = s
+                target["Ulica"] = s
+            if city and str(city).strip():
+                c = str(city).strip()
+                target["city"] = c
+                target["Miejscowość"] = c
+            if postal and str(postal).strip():
+                z = str(postal).strip()
+                target["postal_code"] = z
+                target["Kod pocztowy"] = z
+            if country and str(country).strip():
+                co = str(country).strip()
+                target["country"] = co
+                target["Kraj"] = co
+
+        billing: dict = {}
+        if body.first_name and str(body.first_name).strip():
+            billing["first_name"] = str(body.first_name).strip()
+        if body.last_name and str(body.last_name).strip():
+            billing["last_name"] = str(body.last_name).strip()
+        if body.phone and str(body.phone).strip():
+            billing["phone"] = str(body.phone).strip()
+        if body.email and str(body.email).strip():
+            billing["email"] = str(body.email).strip()
+        if body.login and str(body.login).strip():
+            billing["login"] = str(body.login).strip()
+        _merge_address_lines(
+            billing,
+            body.billing_street,
+            body.billing_city,
+            body.billing_postal_code,
+            body.billing_country,
+        )
+        if body.company_name and str(body.company_name).strip():
+            cn = str(body.company_name).strip()
+            billing["company_name"] = cn
+            billing["Firma"] = cn
+        if body.nip and str(body.nip).strip():
+            nip = str(body.nip).strip()
+            billing["nip"] = nip
+            billing["NIP"] = nip
+            billing["tax_id"] = nip
+
+        shipping_addr: dict = {}
+        _merge_address_lines(
+            shipping_addr,
+            body.shipping_street,
+            body.shipping_city,
+            body.shipping_postal_code,
+            body.shipping_country,
+        )
+
+        addresses: dict = {"billing": billing}
+        if shipping_addr:
+            addresses["shipping"] = shipping_addr
+        meta = {
+            "manual_create": True,
+            "note": (body.note or "").strip() or None,
+            "comment": (body.comment or "").strip() or None,
+            "shipping_cost": shipping_cost,
+        }
+        if body.document_type and str(body.document_type).strip():
+            meta["panel_document_type"] = str(body.document_type).strip().upper()
+        if body.payment_method is not None and str(body.payment_method).strip():
+            meta["panel_payment_method"] = str(body.payment_method).strip()[:128]
+        if body.payment_status is not None and str(body.payment_status).strip():
+            meta["panel_payment_status"] = str(body.payment_status).strip()[:128]
+
+        sales_num: Optional[str] = None
+        if body.sales_document_number is not None:
+            sales_num = str(body.sales_document_number).strip() or None
+
+        now = datetime.utcnow()
+        ship_id: Optional[str] = None
+        ship_label: Optional[str] = None
+        raw_sid = getattr(body, "shipping_method_id", None)
+        if raw_sid and str(raw_sid).strip():
+            sid = str(raw_sid).strip()
+            sm = (
+                db.query(ShippingMethod)
+                .filter(
+                    ShippingMethod.id == sid,
+                    ShippingMethod.tenant_id == int(body.tenant_id),
+                    ShippingMethod.warehouse_id == int(body.warehouse_id),
+                )
+                .first()
+            )
+            if not sm:
+                raise HTTPException(status_code=400, detail="Nieprawidłowa metoda dostawy (shipping_method_id).")
+            ship_id = str(sm.id)
+            ship_label = (sm.name or "").strip() or None
+
+        stage = "ORDER_INSERT"
+        order = Order(
             tenant_id=body.tenant_id,
             warehouse_id=body.warehouse_id,
-            raw_lines=body.items,
-            check_bundle_stock=bool(body.check_bundle_stock),
+            number=number,
+            barcode=barcode,
+            status="NEW",
+            order_date=now,
+            created_at=now,
+            source=(body.source or "").strip() or None,
+            value=order_value,
+            currency="PLN",
+            total_volume_dm3=round(order_vol, 4),
+            sales_document_number=sales_num,
+            addresses_json=json.dumps(addresses, ensure_ascii=False),
+            import_metadata_json=json.dumps(meta, ensure_ascii=False),
+            order_origin=origin_up,
+            complaint_id=int(body.complaint_id) if body.complaint_id is not None else None,
+            original_order_id=int(body.original_order_id) if body.original_order_id is not None else None,
+            complaint_order_type=cot_raw if origin_up == "COMPLAINT" else None,
+            shipping_method_id=ship_id,
+            shipping_method=ship_label,
+            customer_id=int(body.customer_id) if body.customer_id is not None else None,
         )
-    except BundleExplosionError as e:
-        raise HTTPException(status_code=400, detail=e.detail)
-    resolved = resolved_result.lines
+        db.add(order)
+        stage = "FLUSH"
+        db.flush()
+        assign_order_scan_code(order)
+        from ..services.order_fulfillment_lifecycle_service import apply_initial_fulfillment_assignment
 
-    origin_up = (body.origin or "").strip().upper() or None
-    cot_raw = (body.complaint_order_type or "").strip().upper() if body.complaint_order_type else None
-    complaint_ref: Optional[Complaint] = None
-    if origin_up == "COMPLAINT":
-        if body.complaint_id is None:
-            raise HTTPException(status_code=400, detail="complaint_id is required when origin is COMPLAINT")
-        if cot_raw not in ("EXCHANGE", "REPLACEMENT"):
-            raise HTTPException(
-                status_code=400,
-                detail="complaint_order_type must be EXCHANGE or REPLACEMENT when origin is COMPLAINT",
-            )
-        complaint_ref = (
-            db.query(Complaint)
-            .filter(
-                Complaint.id == int(body.complaint_id),
-                Complaint.tenant_id == body.tenant_id,
-                Complaint.warehouse_id == body.warehouse_id,
-                Complaint.deleted_at.is_(None),
-            )
-            .first()
-        )
-        if not complaint_ref:
-            raise HTTPException(status_code=400, detail="Complaint not found for this tenant/warehouse")
-        rt0 = str(getattr(complaint_ref, "resolution_type", "") or "").strip().upper()
-        rs0 = str(getattr(complaint_ref, "resolution_status", "") or "").strip().upper()
-        if rt0 in ("REFUND", "PARTIAL_REFUND", "REJECTION") and rs0 == "COMPLETED":
-            raise HTTPException(
-                status_code=400,
-                detail="Reklamacja ma zakończone rozliczenie finansowe — nie można utworzyć zamówienia wymiany.",
-            )
-    if body.customer_id is not None:
-        cu = (
-            db.query(Customer)
-            .filter(Customer.id == int(body.customer_id), Customer.tenant_id == int(body.tenant_id))
-            .first()
-        )
-        if cu is None:
-            raise HTTPException(status_code=400, detail="customer_id not found for this tenant")
+        apply_initial_fulfillment_assignment(db, order)
+        assign_default_new_panel_status_to_order(db, order)
 
-    if body.original_order_id is not None:
-        oo = (
-            db.query(Order)
-            .filter(
-                Order.id == int(body.original_order_id),
-                Order.tenant_id == body.tenant_id,
-                Order.warehouse_id == body.warehouse_id,
-            )
-            .first()
-        )
-        if not oo:
-            raise HTTPException(status_code=400, detail="original_order_id not found for this tenant/warehouse")
-
-    goods_total = sum(float(x.total_price) for x in resolved)
-    order_vol = sum(float(x.line_volume) for x in resolved)
-
-    shipping = round(float(body.shipping_cost or 0), 2)
-    order_value = round(goods_total + shipping, 2)
-
-    barcode = next_order_barcode(db, body.tenant_id)
-    number = next_internal_order_number(db, body.tenant_id, body.warehouse_id)
-
-    def _merge_address_lines(
-        target: dict,
-        street: Optional[str],
-        city: Optional[str],
-        postal: Optional[str],
-        country: Optional[str],
-    ) -> None:
-        """Zapis jak w imporcie: polskie klucze + angielskie (czytelne dla _address_line_from_block)."""
-        if street and str(street).strip():
-            s = str(street).strip()
-            target["street"] = s
-            target["Ulica"] = s
-        if city and str(city).strip():
-            c = str(city).strip()
-            target["city"] = c
-            target["Miejscowość"] = c
-        if postal and str(postal).strip():
-            z = str(postal).strip()
-            target["postal_code"] = z
-            target["Kod pocztowy"] = z
-        if country and str(country).strip():
-            co = str(country).strip()
-            target["country"] = co
-            target["Kraj"] = co
-
-    billing: dict = {}
-    if body.first_name and str(body.first_name).strip():
-        billing["first_name"] = str(body.first_name).strip()
-    if body.last_name and str(body.last_name).strip():
-        billing["last_name"] = str(body.last_name).strip()
-    if body.phone and str(body.phone).strip():
-        billing["phone"] = str(body.phone).strip()
-    if body.email and str(body.email).strip():
-        billing["email"] = str(body.email).strip()
-    if body.login and str(body.login).strip():
-        billing["login"] = str(body.login).strip()
-    _merge_address_lines(
-        billing,
-        body.billing_street,
-        body.billing_city,
-        body.billing_postal_code,
-        body.billing_country,
-    )
-    if body.company_name and str(body.company_name).strip():
-        cn = str(body.company_name).strip()
-        billing["company_name"] = cn
-        billing["Firma"] = cn
-    if body.nip and str(body.nip).strip():
-        nip = str(body.nip).strip()
-        billing["nip"] = nip
-        billing["NIP"] = nip
-        billing["tax_id"] = nip
-
-    shipping: dict = {}
-    _merge_address_lines(
-        shipping,
-        body.shipping_street,
-        body.shipping_city,
-        body.shipping_postal_code,
-        body.shipping_country,
-    )
-
-    addresses: dict = {"billing": billing}
-    if shipping:
-        addresses["shipping"] = shipping
-    meta = {
-        "manual_create": True,
-        "note": (body.note or "").strip() or None,
-        "comment": (body.comment or "").strip() or None,
-        "shipping_cost": shipping,
-    }
-    if body.document_type and str(body.document_type).strip():
-        meta["panel_document_type"] = str(body.document_type).strip().upper()
-    if body.payment_method is not None and str(body.payment_method).strip():
-        meta["panel_payment_method"] = str(body.payment_method).strip()[:128]
-    if body.payment_status is not None and str(body.payment_status).strip():
-        meta["panel_payment_status"] = str(body.payment_status).strip()[:128]
-
-    sales_num: Optional[str] = None
-    if body.sales_document_number is not None:
-        sales_num = str(body.sales_document_number).strip() or None
-
-    now = datetime.utcnow()
-    ship_id: Optional[str] = None
-    ship_label: Optional[str] = None
-    raw_sid = getattr(body, "shipping_method_id", None)
-    if raw_sid and str(raw_sid).strip():
-        sid = str(raw_sid).strip()
-        sm = (
-            db.query(ShippingMethod)
-            .filter(
-                ShippingMethod.id == sid,
-                ShippingMethod.tenant_id == int(body.tenant_id),
-                ShippingMethod.warehouse_id == int(body.warehouse_id),
-            )
-            .first()
-        )
-        if not sm:
-            raise HTTPException(status_code=400, detail="Nieprawidłowa metoda dostawy (shipping_method_id).")
-        ship_id = str(sm.id)
-        ship_label = (sm.name or "").strip() or None
-
-    order = Order(
-        tenant_id=body.tenant_id,
-        warehouse_id=body.warehouse_id,
-        number=number,
-        barcode=barcode,
-        status="NEW",
-        order_date=now,
-        created_at=now,
-        source=(body.source or "").strip() or None,
-        value=order_value,
-        currency="PLN",
-        total_volume_dm3=round(order_vol, 4),
-        sales_document_number=sales_num,
-        addresses_json=json.dumps(addresses, ensure_ascii=False),
-        import_metadata_json=json.dumps(meta, ensure_ascii=False),
-        order_origin=origin_up,
-        complaint_id=int(body.complaint_id) if body.complaint_id is not None else None,
-        original_order_id=int(body.original_order_id) if body.original_order_id is not None else None,
-        complaint_order_type=cot_raw if origin_up == "COMPLAINT" else None,
-        shipping_method_id=ship_id,
-        shipping_method=ship_label,
-        customer_id=int(body.customer_id) if body.customer_id is not None else None,
-    )
-    db.add(order)
-    db.flush()
-    assign_order_scan_code(order)
-    from ..services.order_fulfillment_lifecycle_service import apply_initial_fulfillment_assignment
-
-    apply_initial_fulfillment_assignment(db, order)
-    assign_default_new_panel_status_to_order(db, order)
-
-    persist_resolved_bundle_lines(
-        db,
-        order_id=int(order.id),
-        merged=resolved,
-        snapshots_by_instance=resolved_result.bundle_snapshots_by_instance,
-    )
-
-    if origin_up == "COMPLAINT" and cot_raw is not None:
-        pname, paddr, pphone, pemail = _complaint_pickup_from_create_body(body)
-        fulfillment_mode = "DELIVERY_AND_PICKUP" if cot_raw == "EXCHANGE" else "DELIVERY_ONLY"
-        ensure_complaint_outbound_shipment(
+        stage = "ITEM_INSERT"
+        persist_resolved_bundle_lines(
             db,
-            int(body.complaint_id),
-            pickup_name=pname,
-            pickup_address=paddr,
-            pickup_phone=pphone,
-            pickup_email=pemail,
-            business_type=cot_raw,
-            fulfillment_mode=fulfillment_mode,
+            order_id=int(order.id),
+            merged=resolved,
+            snapshots_by_instance=resolved_result.bundle_snapshots_by_instance,
         )
 
-    if complaint_ref is not None:
-        _finalize_complaint_replacement_order(db, complaint_ref, order)
+        if origin_up == "COMPLAINT" and cot_raw is not None:
+            pname, paddr, pphone, pemail = _complaint_pickup_from_create_body(body)
+            fulfillment_mode = "DELIVERY_AND_PICKUP" if cot_raw == "EXCHANGE" else "DELIVERY_ONLY"
+            ensure_complaint_outbound_shipment(
+                db,
+                int(body.complaint_id),
+                pickup_name=pname,
+                pickup_address=paddr,
+                pickup_phone=pphone,
+                pickup_email=pemail,
+                business_type=cot_raw,
+                fulfillment_mode=fulfillment_mode,
+            )
 
-    db.commit()
-    db.refresh(order)
-    logger.info("ORDER CREATE id=%s number=%s tenant=%s wh=%s", order.id, order.number, body.tenant_id, body.warehouse_id)
-    return OrderCreateResponse(id=order.id, number=order.number)
+        if complaint_ref is not None:
+            _finalize_complaint_replacement_order(db, complaint_ref, order)
+
+        stage = "COMMIT"
+        db.commit()
+        stage = "REFRESH"
+        db.refresh(order)
+        stage = "SERIALIZATION"
+        logger.info("ORDER CREATE id=%s number=%s tenant=%s wh=%s", order.id, order.number, body.tenant_id, body.warehouse_id)
+        return OrderCreateResponse(id=order.id, number=order.number)
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as exc:
+        db.rollback()
+        orig = getattr(exc, "orig", None)
+        stmt = getattr(exc, "statement", None)
+        logger.error(
+            "ORDER_CREATE_ERROR stage=%s type=%s message=%s orig=%s sql=%s",
+            stage,
+            type(exc).__name__,
+            str(exc)[:500],
+            (str(orig)[:500] if orig is not None else None),
+            (str(stmt)[:800] if stmt is not None else None),
+        )
+        raise
 
 
 # ==========================================================

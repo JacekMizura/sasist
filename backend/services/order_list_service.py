@@ -66,12 +66,16 @@ def ensure_orders_list_schema(engine) -> None:
         ensure_order_items_wms_picking_line_missing_qty,
         ensure_order_items_wms_picking_line_status,
         ensure_orders_fulfillment_state_columns,
+        ensure_orders_picking_handoff_mode_column,
+        ensure_orders_wms_packing_automation_finished_at_column,
         ensure_orders_wms_timeline_columns,
     )
 
     for fn in (
         ensure_orders_fulfillment_state_columns,
+        ensure_orders_picking_handoff_mode_column,
         ensure_orders_wms_timeline_columns,
+        ensure_orders_wms_packing_automation_finished_at_column,
         ensure_order_items_wms_picking_line_missing_qty,
         ensure_order_items_wms_picking_line_status,
         ensure_order_items_fulfillment_sync_columns,
@@ -82,6 +86,38 @@ def ensure_orders_list_schema(engine) -> None:
             fn(engine)
         except Exception as exc:
             log_orders_list_error(phase="schema_ensure", exc=exc, field=fn.__name__)
+
+
+def ensure_orders_create_schema(engine) -> None:
+    """
+    Schema repair before POST /orders INSERT.
+
+    ORM INSERT always references all mapped columns (incl. ``picking_handoff_mode``),
+    even when the value is NULL. Missing column → OperationalError / HTTP 500.
+    Must not depend on a prior WMS/packing request having run ensure.
+    """
+    from ..db.order_fulfillment_lifecycle_schema import ensure_order_fulfillment_lifecycle_schema
+    from ..db.schema_upgrade import (
+        ensure_orders_fulfillment_state_columns,
+        ensure_orders_picking_handoff_mode_column,
+        ensure_orders_priority_color_column,
+        ensure_orders_wms_packing_automation_finished_at_column,
+        ensure_orders_wms_timeline_columns,
+    )
+
+    for fn in (
+        ensure_orders_fulfillment_state_columns,
+        ensure_orders_picking_handoff_mode_column,
+        ensure_orders_wms_timeline_columns,
+        ensure_orders_wms_packing_automation_finished_at_column,
+        ensure_orders_priority_color_column,
+        ensure_order_fulfillment_lifecycle_schema,
+    ):
+        try:
+            fn(engine)
+        except Exception as exc:
+            log_orders_list_error(phase="schema_ensure_create", exc=exc, field=fn.__name__)
+            raise
 
 
 def safe_wms_workflow_phase(order: Order, db: "Session") -> str | None:

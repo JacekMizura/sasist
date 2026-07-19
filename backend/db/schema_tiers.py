@@ -228,6 +228,22 @@ def ensure_tier0_schema(engine: Engine) -> Tier0Result:
     added += ensure_tier0_document_warehouse_schema(engine)
     reconcile = reconcile_startup_schema(engine, phase="tier0")
     added += reconcile.columns_added
+    # PostgreSQL skips SQLite-only upgrade helpers below — still run critical Order
+    # ensures explicitly (ORM INSERT references these columns even when NULL).
+    from . import schema_upgrade as su
+
+    for name, fn in (
+        ("orders_fulfillment_state_columns", su.ensure_orders_fulfillment_state_columns),
+        ("orders_picking_handoff_mode_column", su.ensure_orders_picking_handoff_mode_column),
+        ("orders_wms_timeline_columns", su.ensure_orders_wms_timeline_columns),
+        ("orders_wms_packing_automation_finished_at_column", su.ensure_orders_wms_packing_automation_finished_at_column),
+    ):
+        try:
+            fn(engine)
+        except Exception as exc:
+            failures_pg = [(name, exc)]
+            raise Tier0SchemaError(failures_pg) from exc
+
     if engine.dialect.name == "sqlite":
         steps_run, failures = _run_steps(engine, _tier0_ensure_steps(), tier_tag="schema.tier0")
     else:

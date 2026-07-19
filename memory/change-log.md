@@ -1,3 +1,10 @@
+## 2026-07-19 — POST /orders 500: missing picking_handoff_mode
+
+- ROOT: ORM INSERT always includes `picking_handoff_mode`; prod schema without column → OperationalError → HTTP 500.
+- PG tier0 previously skipped dedicated order ensures (sqlite-only steps); sync can fail silently.
+- FIX: `ensure_orders_create_schema` before create; PG tier0 explicit handoff ensure; `ORDER_CREATE_ERROR` log + rollback; list schema includes handoff.
+- Tests: `test_order_create_schema.py`.
+
 ## 2026-07-19 — AUDIT: picking dashboard 0 vs panel 1 (#1233) + cancel 409
 
 - Dashboard 0 = PRELIMINARY eligibility (cart_id NULL + picking_finished_at NULL + open fulfillment) — **correct**, nie bug licznika.
