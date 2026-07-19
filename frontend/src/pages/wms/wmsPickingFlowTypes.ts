@@ -66,10 +66,26 @@ export type WmsPickingProductsNavState = {
   /** Po zgłoszeniu braku — wymuś natychmiastowe ponowne wczytanie listy produktów. */
   pickingListRefreshAt?: number;
   /**
-   * Jednorazowy token z listowego skanu EAN (pending.idempotency_key).
-   * Detail konsumuje dokładnie raz — refresh nie powtarza PRODUCT_SCAN.
+   * Marker: detail otwarty po fizycznym PRODUCT_SCAN na liście (nie po kliknięciu).
+   * SSOT pending jest w session metadata — ten token NIE triggeruje drugiego PRODUCT_SCAN.
    */
   listProductScanToken?: string | null;
+  /**
+   * Projekcja odpowiedzi PRODUCT_SCAN (już zapisanej w SSOT) — detail pokazuje STATE B
+   * natychmiast, zanim GET dociągnie pending. Nie jest drugim PRODUCT_SCAN.
+   */
+  basketPutPendingSeed?: {
+    product_id?: number;
+    quantity?: number;
+    idempotency_key?: string;
+    eligible_baskets?: Array<{
+      basket_id: number;
+      basket_label: string;
+      order_id: number;
+      order_item_id?: number;
+      line_remaining: number;
+    }>;
+  } | null;
 };
 
 /** Router state dla `/wms/product-preview/:productId` (podgląd operacyjny WMS). */

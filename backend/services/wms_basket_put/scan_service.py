@@ -19,7 +19,10 @@ from sqlalchemy.orm import Session
 from ...models.cart import Cart
 from ...models.cart_basket import CartBasket
 from ...models.wms_operation_session import WmsOperationSession
-from ..cart_picking_lifecycle_service import assert_cart_ready_for_quick_pick
+from ..cart_picking_lifecycle_service import (
+    assert_cart_ready_for_quick_pick,
+    find_open_picking_session,
+)
 from .basket_match import basket_scan_matches, primary_basket_label
 from . import error_codes as ec
 from .resolve import (
@@ -165,13 +168,22 @@ def get_basket_put_ui_state(
 
     When ``product_id`` is set (product detail), series/pending for a *different*
     SKU are hidden. Invalid series (allocation gone) is cleared when ``sanitize``.
+
+    Read path uses ``find_open_picking_session`` (not assert) so a transient
+    lifecycle hiccup cannot hide an existing pending and force STATE A on detail.
     """
     if not cart_requires_basket_put_gate(cart):
         return {"requires_basket_put": False, "pending": None, "active_series": None}
-    try:
-        sess = assert_cart_ready_for_quick_pick(db, cart)
-    except Exception:
-        return {"requires_basket_put": True, "pending": None, "active_series": None}
+    sess = find_open_picking_session(db, cart=cart)
+    if sess is None:
+        try:
+            sess = assert_cart_ready_for_quick_pick(db, cart)
+        except Exception:
+            logger.warning(
+                "basket_put ui: no open picking session cart_id=%s",
+                getattr(cart, "id", None),
+            )
+            return {"requires_basket_put": True, "pending": None, "active_series": None}
     pending = put_state.get_pending(sess)
     series = put_state.get_active_series(sess)
     if pending and operator_user_id is not None:

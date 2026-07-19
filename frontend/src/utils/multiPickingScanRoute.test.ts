@@ -37,6 +37,37 @@ describe("resolveMultiPickingDetailScan — strict states", () => {
     ).toEqual({ kind: "reject", code: "EXPECTED_PRODUCT_SCAN", consumed: true });
   });
 
+  it("valid product EAN never yields UNKNOWN_SCAN_CODE", () => {
+    const d = resolveMultiPickingDetailScan(ean, {
+      requiresBasketPut: true,
+      hasPending: false,
+      hasActiveSeries: false,
+      productEan: ean,
+      productRemaining: 8,
+    });
+    expect(d.kind).not.toBe("reject");
+    expect(d).toEqual({ kind: "product_ean_pick" });
+  });
+
+  it("STATE B after list PRODUCT_SCAN: basket confirm — no second EAN", () => {
+    expect(
+      resolveMultiPickingDetailScan("brck1-B02", {
+        requiresBasketPut: true,
+        hasPending: true,
+        hasActiveSeries: false,
+        productEan: ean,
+      }),
+    ).toEqual({ kind: "confirm_basket", reason: "pending_confirm" });
+    expect(
+      resolveMultiPickingDetailScan(ean, {
+        requiresBasketPut: true,
+        hasPending: true,
+        hasActiveSeries: false,
+        productEan: ean,
+      }),
+    ).toEqual({ kind: "reject", code: "PENDING_PUT_EXISTS", consumed: true });
+  });
+
   it("STATE B: product EAN → EXPECTED_BASKET_SCAN; other EAN → EXPECTED_BASKET_SCAN; basket → confirm", () => {
     expect(
       resolveMultiPickingDetailScan(ean, {

@@ -1,3 +1,10 @@
+## 2026-07-19 — REAL MULTI: list EAN = PRODUCT_SCAN → detail STATE B (no second EAN)
+
+- ROOT: List could navigate without pending visible on detail (STATE A → basket EXPECTED_PRODUCT_SCAN). Valid EAN without selectedLocation → UNKNOWN_SCAN_CODE.
+- FIX: list PRODUCT_SCAN before navigate + pending seed; detail effectivePending; UI „PRODUKT ZESKANOWANY — ZESKANUJ KOSZYK”; get_basket_put_ui_state via find_open_picking_session; re-attach pending after detail touch; location fallback for product EAN.
+- Tests: `test_wms_basket_put_list_scan_pending_survives_detail.py`.
+- No push.
+
 ## 2026-07-19 — PRE-PUSH AUDIT ab1f70a8: scan lock + non-MULTI gate + session FOR UPDATE
 
 - BLOCKERS fixed: FE scan gate (detail+list); list `requiresBasketPut` from API not `Boolean(cartId)`; pending before bundle; session `FOR UPDATE` on put mutations.

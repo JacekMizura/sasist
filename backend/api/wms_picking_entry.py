@@ -1151,22 +1151,64 @@ def get_picking_product_detail(
     if row is None:
         raise HTTPException(status_code=404, detail="Produkt nie występuje na liście zbiórki.")
     if current_user is not None and current_user.id is not None:
-        _safe_touch_picking_session(
-            db=db,
-            tenant_id=int(tenant_id),
-            warehouse_id=int(warehouse_id),
-            session_kind="picking_recovery_active" if recovery_order_id is not None else "picking_active",
-            operator_user_id=int(current_user.id),
-            cart_id=cart_id,
-            order_id=int(recovery_order_id) if recovery_order_id is not None else None,
-            metadata={
-                "screen": "picking_product_detail",
-                "source_status_id": int(source_status_id),
-                "order_type": str(order_type),
-                "active_product_id": int(product_id),
-            },
-        )
-        db.commit()
+        try:
+            _safe_touch_picking_session(
+                db=db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+                session_kind="picking_recovery_active" if recovery_order_id is not None else "picking_active",
+                operator_user_id=int(current_user.id),
+                cart_id=cart_id,
+                order_id=int(recovery_order_id) if recovery_order_id is not None else None,
+                metadata={
+                    "screen": "picking_product_detail",
+                    "source_status_id": int(source_status_id),
+                    "order_type": str(order_type),
+                    "active_product_id": int(product_id),
+                },
+            )
+            db.commit()
+        except HTTPException:
+            db.rollback()
+            # SessionNotFound on touch must not hide basket_put pending already loaded on row.
+            logger.warning(
+                "detail touch skipped; returning basket_put projection as built product_id=%s cart_id=%s",
+                product_id,
+                cart_id,
+            )
+        else:
+            # Re-read basket_put AFTER touch/commit so response matches session SSOT
+            # (merge preserves basket_put; re-attach guards against stale in-memory row).
+            if cart_id is not None and int(cart_id) > 0:
+                try:
+                    from ..models.cart import Cart
+                    from ..services.wms_basket_put import get_basket_put_ui_state
+
+                    cart_for_put = (
+                        db.query(Cart)
+                        .filter(Cart.id == int(cart_id), Cart.tenant_id == int(tenant_id))
+                        .first()
+                    )
+                    if cart_for_put is not None:
+                        ui_put = get_basket_put_ui_state(
+                            db,
+                            cart=cart_for_put,
+                            product_id=int(product_id),
+                            sanitize=True,
+                        )
+                        row.requires_basket_put_confirm = bool(ui_put.get("requires_basket_put"))
+                        row.basket_put_pending = ui_put.get("pending")
+                        row.basket_put_active_series = ui_put.get("active_series")
+                        if row.requires_basket_put_confirm:
+                            series = row.basket_put_active_series
+                            if isinstance(series, dict) and series.get("basket_label"):
+                                row.put_to_basket_label = str(series["basket_label"])
+                            else:
+                                row.put_to_basket_label = None
+                        if row.basket_put_pending:
+                            row.put_to_basket_label = None
+                except Exception:
+                    logger.exception("re-attach basket_put after detail touch failed cart_id=%s", cart_id)
     return row
 
 

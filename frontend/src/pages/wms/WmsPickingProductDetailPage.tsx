@@ -139,6 +139,9 @@ export default function WmsPickingProductDetailPage() {
   const pickingSessionRaw = (routerLocation.state as WmsPickingProductsNavState | null)?.pickingSession ?? null;
   const listProductScanToken =
     (routerLocation.state as WmsPickingProductsNavState | null)?.listProductScanToken ?? null;
+  const basketPutPendingSeed =
+    (routerLocation.state as WmsPickingProductsNavState | null)?.basketPutPendingSeed ?? null;
+  const enteredViaListProductScan = Boolean(listProductScanToken || basketPutPendingSeed);
   const pickingSession = useMergedPickingSession(pickingSessionRaw, pickingTenantId, warehouseId);
   const orderType = pickingSession?.orderTypeChoice ?? "all";
   const recoveryOrderId = pickingSession?.recoveryOrderId ?? null;
@@ -170,8 +173,12 @@ export default function WmsPickingProductDetailPage() {
   const [consolidationRackRows, setConsolidationRackRows] = useState<ConsolidationRackBundleRowOut[]>([]);
 
   const detailLoadSeqRef = useRef(0);
-  /** Consume list→detail product scan token exactly once (refresh must not re-fire). */
+  /** Strip one-shot list→detail markers from history (no second PRODUCT_SCAN). */
   const listScanConsumedRef = useRef<string | null>(null);
+  /** Pending projection from list PRODUCT_SCAN response until GET confirms SSOT. */
+  const [pendingSeed, setPendingSeed] = useState<WmsPickingProductsNavState["basketPutPendingSeed"]>(() =>
+    basketPutPendingSeed && basketPutPendingSeed.product_id === productId ? basketPutPendingSeed : null,
+  );
   /** Serialize physical scans — blocks rapid double Enter / parallel Pick. */
   const scanGateRef = useRef(false);
 
@@ -203,7 +210,17 @@ export default function WmsPickingProductDetailPage() {
     const rem = wmsPickingRemainingQty(d);
     setPickQty(rem > 0 ? rem : 0);
     setShortageQtyInput(wmsPickingShortageDefaultQty(d));
+    if (d.basket_put_pending) {
+      setPendingSeed(null);
+    }
   }, []);
+
+  const effectivePending = detail?.basket_put_pending ?? (pendingSeed ? {
+    product_id: pendingSeed.product_id ?? productId,
+    quantity: pendingSeed.quantity ?? 1,
+    idempotency_key: pendingSeed.idempotency_key,
+    eligible_baskets: pendingSeed.eligible_baskets,
+  } : null);
 
   const refreshDetailSilently = useCallback(async () => {
     try {
@@ -221,7 +238,8 @@ export default function WmsPickingProductDetailPage() {
     setLoading(true);
     setErr(null);
     try {
-      const d = await fetchProductDetail();
+      // After list PRODUCT_SCAN, always bypass caches so pending SSOT is visible.
+      const d = await fetchProductDetail({ force: enteredViaListProductScan || Boolean(pendingSeed) });
       if (seq !== detailLoadSeqRef.current) return null;
       if (!d) {
         setErr("Nie udało się wczytać szczegółów produktu.");
@@ -238,7 +256,7 @@ export default function WmsPickingProductDetailPage() {
     } finally {
       if (seq === detailLoadSeqRef.current) setLoading(false);
     }
-  }, [warehouseId, pickingSession, productId, fetchProductDetail, applyDetailToState]);
+  }, [warehouseId, pickingSession, productId, fetchProductDetail, applyDetailToState, enteredViaListProductScan, pendingSeed]);
 
   useEffect(() => {
     if (!pickingSessionRaw) {
@@ -248,16 +266,17 @@ export default function WmsPickingProductDetailPage() {
     void load();
   }, [pickingSessionRaw, navigate, load]);
 
-  // Clear one-shot nav token after mount so browser refresh cannot replay list PRODUCT_SCAN.
+  // Clear one-shot nav markers after mount — do NOT replay PRODUCT_SCAN.
   useEffect(() => {
-    if (!listProductScanToken) return;
-    if (listScanConsumedRef.current === listProductScanToken) return;
-    listScanConsumedRef.current = listProductScanToken;
+    const marker = listProductScanToken || pendingSeed?.idempotency_key || null;
+    if (!marker) return;
+    if (listScanConsumedRef.current === marker) return;
+    listScanConsumedRef.current = marker;
     navigate(".", {
       replace: true,
       state: { pickingSession: pickingSessionRaw } satisfies WmsPickingProductsNavState,
     });
-  }, [listProductScanToken, navigate, pickingSessionRaw]);
+  }, [listProductScanToken, pendingSeed?.idempotency_key, navigate, pickingSessionRaw]);
 
   useEffect(() => {
     if (!detail) return;
@@ -326,14 +345,14 @@ export default function WmsPickingProductDetailPage() {
 
   useEffect(() => {
     if (!detail) return;
-    if (detail.basket_put_pending) {
+    if (effectivePending) {
       setScannerInputPlaceholder("Zeskanuj koszyk");
     } else if (needsLocationScan && activeLocationId == null) {
       setScannerInputPlaceholder("Zeskanuj lokalizację");
     } else if (detail.basket_put_active_series?.basket_label) {
       setScannerInputPlaceholder("Skanuj EAN produktu");
     } else {
-      setScannerInputPlaceholder("Skanuj kod lokalizacji lub EAN");
+      setScannerInputPlaceholder("Skanuj EAN produktu");
     }
     refocusScannerInput();
   }, [
@@ -342,7 +361,7 @@ export default function WmsPickingProductDetailPage() {
     activeLocationId,
     setScannerInputPlaceholder,
     refocusScannerInput,
-    detail?.basket_put_pending,
+    effectivePending,
     detail?.basket_put_active_series,
   ]);
 
@@ -367,15 +386,15 @@ export default function WmsPickingProductDetailPage() {
         detail.requires_basket_put_confirm && pickingSession.cartId,
       );
       const pendingLabels =
-        detail.basket_put_pending?.eligible_baskets
+        effectivePending?.eligible_baskets
           ?.map((b) => b.basket_label)
           .filter(Boolean)
           .join(", ") || undefined;
 
       const multiDecision = resolveMultiPickingDetailScan(scan, {
         requiresBasketPut,
-        hasPending: Boolean(detail.basket_put_pending),
-        hasActiveSeries: Boolean(detail.basket_put_active_series?.basket_label),
+        hasPending: Boolean(effectivePending),
+        hasActiveSeries: Boolean(detail.basket_put_active_series?.basket_label) && !effectivePending,
         productEan: detail.ean,
         productRemaining: remaining,
         pendingEligibleLabels: pendingLabels,
@@ -386,7 +405,7 @@ export default function WmsPickingProductDetailPage() {
         classified_as: multiDecision.kind,
         reason: "reason" in multiDecision ? multiDecision.reason : null,
         code: multiDecision.kind === "reject" ? multiDecision.code : null,
-        pending: Boolean(detail.basket_put_pending),
+        pending: Boolean(effectivePending),
         series: Boolean(detail.basket_put_active_series?.basket_label),
         product_id: productId,
       });
@@ -410,18 +429,21 @@ export default function WmsPickingProductDetailPage() {
         return;
       }
       if (multiDecision.kind === "product_ean_pick") {
-        if (!pickQueueDone && selectedLocation) {
+        const loc = selectedLocation ?? detail.locations[0];
+        if (!pickQueueDone && loc) {
           if (scanGateRef.current || pickBusy) return;
           scanGateRef.current = true;
           multiScanTrace("PRODUCT_SCAN", {
             product_id: productId,
-            location_id: selectedLocation.location_id,
+            location_id: loc.location_id,
             via: "detail",
           });
-          void confirm_pick(1, selectedLocation.location_id);
-        } else if (!selectedLocation) {
-          showScanFeedbackFromCode("UNKNOWN_SCAN_CODE", {
-            backendMessage: "Zeskanuj lokalizację przed EAN.",
+          if (selectedLocation == null) setActiveLocationId(loc.location_id);
+          void confirm_pick(1, loc.location_id);
+        } else if (!loc) {
+          // Matching product EAN must never become UNKNOWN_SCAN_CODE.
+          showScanFeedbackFromCode("PRODUCT_NOT_IN_PICKING", {
+            backendMessage: "Brak lokalizacji magazynowej dla tego produktu na liście zbiórki.",
           });
         }
         return;
@@ -490,7 +512,7 @@ export default function WmsPickingProductDetailPage() {
     };
     registerScanHandler(handler);
     return () => registerScanHandler(null);
-  }, [detail, pickingSession, activeLocationId, registerScanHandler, appendScanToHistory, pickQueueDone, selectedLocation, pickingTenantId, orderType, showScannerToast, showScanFeedbackFromCode, load, productId, remaining, pickBusy]);
+  }, [detail, pickingSession, activeLocationId, registerScanHandler, appendScanToHistory, pickQueueDone, selectedLocation, pickingTenantId, orderType, showScannerToast, showScanFeedbackFromCode, load, productId, remaining, pickBusy, effectivePending]);
 
   const goBackToList = useCallback(
     (refreshList = false) => {
@@ -943,20 +965,20 @@ export default function WmsPickingProductDetailPage() {
                 <div className="w-fit px-5 py-3 rounded-2xl border-2 border-violet-500 bg-violet-100/95 font-black uppercase tracking-wider text-sm text-violet-950 ring-2 ring-violet-400/50">
                   Odłóż na: {detail.consolidation_shelf_label}
                 </div>
-              ) : detail.basket_put_pending ? (
+              ) : effectivePending ? (
                 <div className="w-full max-w-xl rounded-3xl border-4 border-amber-500 bg-amber-50 px-6 py-6 text-center shadow-lg ring-4 ring-amber-300/40">
                   <p className="text-sm font-black uppercase tracking-[0.2em] text-amber-800">
-                    Produkt zeskanowany — odłóż do koszyka
+                    Produkt zeskanowany — zeskanuj koszyk
                   </p>
                   <p className="mt-2 text-lg font-bold text-amber-950">
-                    {fmtQty(detail.basket_put_pending.quantity ?? 1)} szt. oczekuje na odłożenie
+                    {fmtQty(effectivePending.quantity ?? 1)} szt. oczekuje na odłożenie
                   </p>
                   <p className="mt-4 text-base font-black uppercase tracking-wide text-amber-900">
-                    Zeskanuj dowolny z poniższych koszyków
+                    Oczekuje na koszyk
                   </p>
-                  {(detail.basket_put_pending.eligible_baskets?.length ?? 0) > 0 ? (
+                  {(effectivePending.eligible_baskets?.length ?? 0) > 0 ? (
                     <ul className="mt-4 space-y-2 text-left">
-                      {detail.basket_put_pending.eligible_baskets!.map((b) => (
+                      {effectivePending.eligible_baskets!.map((b) => (
                         <li
                           key={b.basket_id}
                           className="flex items-center justify-between rounded-xl border border-amber-300/80 bg-white px-4 py-3"
