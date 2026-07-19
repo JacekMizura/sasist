@@ -1,3 +1,9 @@
+## 2026-07-19 — Packing finish preflight audit (AVAILABLE)
+
+- AVAILABLE + aktywne `order.cart_id` ≠ legalny flow (lifecycle breach; `finish_packing` no-op bez detach).
+- Preflight: tylko PACKING | READY_FOR_PACKING; AVAILABLE+custody → `CART_LIFECYCLE_INCONSISTENT` przed pipeline.
+- Tests: AVAILABLE custody fail + local 4xx before pipeline.
+
 ## 2026-07-19 — Packing finish HTTP 400 (mode=baskets / basket-first)
 
 - ROOT: `packing_finish_order` rzucał `CART_NOT_IN_PACKING` gdy cart = `READY_FOR_PACKING` **po** post-pack pipeline; basket-first nie woła `startPacking`. `finish_packing` już akceptował READY.

@@ -1986,19 +1986,33 @@ def _resolve_cart_row_for_packing_finish(
     )
 
 
-def _preflight_cart_for_packing_finish(cart_row: Cart) -> str:
+def _preflight_cart_for_packing_finish(cart_row: Cart, order: Order) -> str:
     """
     Walidacja statusu wózka **przed** mutacjami pipeline.
 
-    Basket-first / BASKET handoff: cart może być nadal READY_FOR_PACKING
-    (bez skanu MULTI / startPacking) — to jest poprawne; finish_packing to obsługuje.
+    Normalny flow z aktywnym custody (order.cart_id → MULTI):
+      READY_FOR_PACKING (basket-first, bez startPacking) | PACKING.
+
+    AVAILABLE + nadal przypięte order/basket = breach lifecycle (za wczesny release
+    lub orphan) — FAIL przed pipeline. AVAILABLE jest OK tylko na ścieżce
+    idempotent_replay (osobno), gdy custody już zdjęte.
     """
     from .cart_picking_lifecycle_service import get_cart_status
     from ..models.enums import CartStatus as _CartStatus
 
     st = get_cart_status(cart_row)
-    if st in (_CartStatus.PACKING, _CartStatus.READY_FOR_PACKING, _CartStatus.AVAILABLE):
+    if st in (_CartStatus.PACKING, _CartStatus.READY_FOR_PACKING):
         return st.value
+
+    has_custody = getattr(order, "cart_id", None) is not None and int(order.cart_id) == int(cart_row.id)
+    if st == _CartStatus.AVAILABLE and has_custody:
+        raise PackingScanError(
+            "CART_LIFECYCLE_INCONSISTENT",
+            message=(
+                "Wózek jest AVAILABLE mimo aktywnego przypisania zamówienia "
+                "(order.cart_id) — nieprawidłowy stan lifecycle; finalizacja zablokowana."
+            ),
+        )
     raise PackingScanError(
         "CART_NOT_IN_PACKING",
         message=(
@@ -2105,7 +2119,7 @@ def packing_finish_order(
     )
     cart_status_pre = None
     if cart_row is not None and not idempotent_replay:
-        cart_status_pre = _preflight_cart_for_packing_finish(cart_row)
+        cart_status_pre = _preflight_cart_for_packing_finish(cart_row, order)
 
     _packing_finish_trace(
         stage="validated" if not idempotent_replay else "idempotent_replay",

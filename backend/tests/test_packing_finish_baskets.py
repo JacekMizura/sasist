@@ -335,6 +335,105 @@ def test_case1_basket_finish_without_cart_scan(db):
     assert get_cart_status(cart) == CartStatus.AVAILABLE
 
 
+def test_case1b_basket_finish_while_packing(db):
+    """BASKET + PACKING (po startPacking) → finish PASS."""
+    cart, baskets, orders = _ready_multi_with_orders(db, 1, start_pack=True)
+    assert get_cart_status(cart) == CartStatus.PACKING
+    with _patch_packable():
+        out = packing_finish_order(
+            db,
+            tenant_id=1,
+            warehouse_id=1,
+            status_id=8,
+            mode="baskets",
+            cart_id=None,
+            order_id=int(orders[0].id),
+        )
+    assert out.fully_packed is True
+    assert get_cart_status(cart) == CartStatus.AVAILABLE
+    db.refresh(baskets[0])
+    assert baskets[0].order_id is None
+
+
+def test_case3_available_with_active_custody_fails_before_pipeline(db, monkeypatch):
+    """
+    BASKET + AVAILABLE + nadal order.cart_id/basket → lifecycle breach.
+    Nie maskować: FAIL przed pipeline.
+    """
+    cart, baskets, orders = _ready_multi_with_orders(db, 1, start_pack=False)
+    o = orders[0]
+    # Symuluj za wczesny release statusu bez clear custody.
+    cart.status = CartStatus.AVAILABLE.value
+    cart.assigned_user_id = None
+    cart.packing_user_id = None
+    db.add(cart)
+    db.commit()
+    db.refresh(o)
+    assert o.cart_id == cart.id
+    assert baskets[0].order_id == o.id
+    assert get_cart_status(cart) == CartStatus.AVAILABLE
+
+    pipeline_calls: list[int] = []
+
+    def _pipeline_spy(*a, **k):
+        pipeline_calls.append(1)
+        return []
+
+    monkeypatch.setattr(
+        "backend.services.wms_packing_service._run_wms_packing_post_pack_pipeline",
+        _pipeline_spy,
+    )
+
+    with _patch_packable():
+        with pytest.raises(PackingScanError) as ei:
+            packing_finish_order(
+                db,
+                tenant_id=1,
+                warehouse_id=1,
+                status_id=8,
+                mode="baskets",
+                cart_id=None,
+                order_id=int(o.id),
+            )
+    assert ei.value.code == "CART_LIFECYCLE_INCONSISTENT"
+    assert pipeline_calls == []
+    db.refresh(o)
+    db.refresh(baskets[0])
+    assert o.wms_packing_automation_finished_at is None
+    assert baskets[0].order_id == int(o.id)
+    assert o.cart_id == cart.id
+
+
+def test_case8_local_4xx_before_pipeline(db, monkeypatch):
+    """CARTON_REQUIRED i underpack wykrywane przed pipeline."""
+    cart, baskets, orders = _ready_multi_with_orders(db, 1, start_pack=False)
+    o = orders[0]
+    o.selected_carton_id = None
+    db.add(o)
+    db.commit()
+
+    pipeline_calls: list[int] = []
+    monkeypatch.setattr(
+        "backend.services.wms_packing_service._run_wms_packing_post_pack_pipeline",
+        lambda *a, **k: pipeline_calls.append(1) or [],
+    )
+
+    with _patch_packable():
+        with pytest.raises(PackingScanError) as ei:
+            packing_finish_order(
+                db,
+                tenant_id=1,
+                warehouse_id=1,
+                status_id=8,
+                mode="baskets",
+                cart_id=None,
+                order_id=int(o.id),
+            )
+    assert ei.value.code == "CARTON_REQUIRED"
+    assert pipeline_calls == []
+    db.refresh(baskets[0])
+    assert baskets[0].order_id == int(o.id)
+
 def test_case2_partial_then_last_multi_release(db):
     """CASE 2: first finish frees only its basket; second releases cart."""
     cart, baskets, orders = _ready_multi_with_orders(db, 2, start_pack=False)
