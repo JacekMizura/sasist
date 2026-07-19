@@ -102,7 +102,7 @@ export function usePackingOrderController(
         s.statusId,
         s.mode,
         orderId,
-        s.mode === "no_cart" ? undefined : s.cartId,
+        s.mode === "bulk" || s.mode === "baskets" ? s.cartId : undefined,
       );
       setDetail(d);
     } catch (e) {
@@ -239,7 +239,7 @@ export function usePackingOrderController(
           s.statusId,
           s.mode,
           orderId,
-          s.mode === "no_cart" ? undefined : s.cartId,
+          s.mode === "bulk" || s.mode === "baskets" ? s.cartId : undefined,
           { allow_without_carton: finishWithoutCartonRef.current },
         );
         finishWithoutCartonRef.current = false;
@@ -380,7 +380,7 @@ export function usePackingOrderController(
               orderId,
               bundle.packLine.orderItemId,
               bundle.packLine.qty,
-              s.mode === "no_cart" ? undefined : s.cartId,
+              s.mode === "bulk" || s.mode === "baskets" ? s.cartId : undefined,
             );
             applyPackingResult(out);
           }
@@ -395,7 +395,7 @@ export function usePackingOrderController(
           s.mode,
           orderId,
           ean,
-          s.mode === "no_cart" ? undefined : s.cartId,
+          s.mode === "bulk" || s.mode === "baskets" ? s.cartId : undefined,
         );
         playScanBeep();
         appendScanToHistory(ean);
@@ -435,7 +435,7 @@ export function usePackingOrderController(
         orderId,
         line.order_item_id,
         q,
-        s.mode === "no_cart" ? undefined : s.cartId,
+        s.mode === "bulk" || s.mode === "baskets" ? s.cartId : undefined,
       );
       playScanBeep();
       applyPackingResult(out);
@@ -473,7 +473,7 @@ export function usePackingOrderController(
         s.statusId,
         s.mode,
         orderId,
-        s.mode === "no_cart" ? undefined : s.cartId,
+        s.mode === "bulk" || s.mode === "baskets" ? s.cartId : undefined,
       );
       playScanBeep();
       applyPackingResult(out);
@@ -499,11 +499,23 @@ export function usePackingOrderController(
   const selectCarton = useCallback(
     async (cartonId: string) => {
       if (warehouseId == null || !Number.isFinite(orderId) || orderId < 1) return;
+      const s = session;
+      if (!s?.mode) return;
       const cid = cartonId.trim();
       if (!cid) return;
       setSelectCartonBusy(true);
       try {
-        const res = await patchOrderSelectCarton(orderId, DAMAGE_TENANT_ID, { carton_id: cid });
+        const res = await patchOrderSelectCarton(
+          orderId,
+          DAMAGE_TENANT_ID,
+          { carton_id: cid },
+          {
+            warehouseId,
+            statusId: s.statusId,
+            mode: s.mode,
+            cartId: s.mode === "bulk" || s.mode === "baskets" ? s.cartId : undefined,
+          },
+        );
         setDetail((d) =>
           d
             ? {
@@ -520,7 +532,7 @@ export function usePackingOrderController(
         setSelectCartonBusy(false);
       }
     },
-    [warehouseId, orderId, showScannerToast],
+    [warehouseId, orderId, session, showScannerToast],
   );
 
   const proceedToFinalization = useCallback(() => {

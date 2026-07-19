@@ -322,6 +322,10 @@ class WmsPackingShelfOrderOut(BaseModel):
 
     order_id: int = Field(..., ge=1)
     shelf_label: str = Field(..., description="Etykieta półki, np. RK-01/A2")
+    packing_mode: Literal["shelf"] = Field(
+        default="shelf",
+        description="Sesja pakowania po shelf entry — nie CART/BASKET/CARTLESS",
+    )
 
 
 class WmsPackingRecommendedCarton(BaseModel):
@@ -434,7 +438,7 @@ class WmsPackingEntryOut(BaseModel):
     status_name: str = ""
     status_color: str = "#94a3b8"
     main_group: OrderUiMainGroup = "NEW"
-    mode: Literal["no_cart", "bulk", "baskets"]
+    mode: Literal["no_cart", "bulk", "baskets", "shelf"]
     cart_id: Optional[int] = Field(default=None, ge=1)
     cart_code: Optional[str] = None
     cart_type: Optional[str] = None

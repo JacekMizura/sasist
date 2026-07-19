@@ -22,7 +22,7 @@ import { useWmsScanner } from "../../context/WmsScannerContext";
 import { isSuperRole } from "../../auth/isSuperRole";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { loadActivePriorityTask, priorityTaskAppliesTo, priorityTaskOrderIds } from "./activePriorityTask";
-import { loadWmsPackingSession } from "./wmsPackingSession";
+import { loadWmsPackingSession, patchWmsPackingSession } from "./wmsPackingSession";
 import { WMS_ROUTES } from "./wmsRoutes";
 import { normalizeScanEan } from "../../utils/wmsScanNormalize";
 import { playScanBeep } from "../../utils/playScanBeep";
@@ -108,7 +108,7 @@ export default function WmsPackingOrderPage() {
               s.statusId,
               s.mode,
               ean,
-              s.mode === "no_cart" ? undefined : s.cartId,
+              s.mode === "bulk" || s.mode === "baskets" ? s.cartId : undefined,
             );
             playScanBeep();
             appendScanToHistory(ean);
@@ -116,6 +116,12 @@ export default function WmsPackingOrderPage() {
               showScannerToast("To zamówienie jest poza aktywnym zadaniem kierownika.");
               return;
             }
+            patchWmsPackingSession({
+              mode: "shelf",
+              cartId: undefined,
+              cartCode: undefined,
+              cartType: undefined,
+            });
             navigate(WMS_ROUTES.packingOrder(shelf.order_id), { replace: true });
             return;
           } catch (se) {

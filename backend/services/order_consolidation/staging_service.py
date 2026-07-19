@@ -141,6 +141,8 @@ def try_complete_staging(db: Session, plan: OrderConsolidationPlan, order: Order
     plan.status = PLAN_STATUS_COMPLETED
     order.fulfillment_assignment_phase = PHASE_FULFILLMENT_ASSIGNED
     order.warehouse_id = int(plan.target_warehouse_id)
+    # Packing provenance: leave picking_handoff_mode NULL — consolidation uses shelf entry
+    # (mode=shelf), not CARTLESS (which means cartless picking finalize).
     apply_fulfillment_state(
         order,
         FS_READY_TO_PACK,

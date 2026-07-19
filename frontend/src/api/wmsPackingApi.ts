@@ -1,7 +1,7 @@
 import api from "./axios";
 
 /** Zgodnie z ``GET /wms/packing/orders`` i sesją pakowania. */
-export type WmsPackingModeParam = "no_cart" | "bulk" | "baskets";
+export type WmsPackingModeParam = "no_cart" | "bulk" | "baskets" | "shelf";
 
 export type WmsPackingTargetStatusApi = {
   target_status_id: number;

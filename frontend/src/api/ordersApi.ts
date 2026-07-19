@@ -177,14 +177,27 @@ export type OrderSelectCartonResponseApi = {
   selected_carton: WmsPackingRecommendedCartonApi | null;
 };
 
-/** PATCH /orders/{id}/select-carton — wybór kartonu na pakowaniu WMS. */
+/** PATCH /orders/{id}/select-carton — wybór kartonu na pakowaniu WMS (wymaga packing scope). */
 export async function patchOrderSelectCarton(
   orderId: number,
   tenantId: number,
   body: { carton_id: string },
+  scope: {
+    warehouseId: number;
+    statusId: number;
+    mode: WmsPackingModeParam;
+    cartId?: number | null;
+  },
 ): Promise<OrderSelectCartonResponseApi> {
+  const params: Record<string, string | number> = {
+    tenant_id: tenantId,
+    warehouse_id: scope.warehouseId,
+    status: scope.statusId,
+    mode: scope.mode,
+  };
+  if (scope.cartId != null && scope.cartId > 0) params.cart_id = scope.cartId;
   const res = await api.patch<OrderSelectCartonResponseApi>(`/orders/${orderId}/select-carton`, body, {
-    params: { tenant_id: tenantId },
+    params,
   });
   return res.data;
 }

@@ -38,10 +38,18 @@ async function tryPackingShelfEntry(
       DAMAGE_TENANT_ID,
       warehouseId,
       session.statusId,
-      session.mode,
+      session.mode ?? "no_cart",
       scan,
-      session.mode === "no_cart" ? undefined : session.cartId,
+      session.mode === "bulk" || session.mode === "baskets" ? session.cartId : undefined,
     );
+    // Shelf packing is its own scope — switch session so mutations use mode=shelf.
+    patchWmsPackingSession({
+      ...session,
+      mode: "shelf",
+      cartId: undefined,
+      cartCode: undefined,
+      cartType: undefined,
+    });
     return { ok: true, order_id: r.order_id };
   } catch (e) {
     const code = wmsPackingApiErrorCode(e);

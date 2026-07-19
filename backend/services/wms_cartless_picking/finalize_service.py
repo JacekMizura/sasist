@@ -249,9 +249,10 @@ def finalize_cartless_picking_session(
         apply_fulfillment_state(o, fs, clear_cart=False, clear_session=False)
         if fs == FS_PACKING:
             o.status = "PACKING"
-        from ..picking_handoff_service import apply_cartless_picking_handoff
+        if fs in (FS_PACKING, FS_NEEDS_DECISION):
+            from ..picking_handoff_service import apply_cartless_picking_handoff
 
-        apply_cartless_picking_handoff(o)
+            apply_cartless_picking_handoff(o)
         clear_order_picking_session_context(o)
         assert getattr(o, "cart_id", None) is None
         db.add(o)

@@ -3052,14 +3052,22 @@ def patch_order_select_carton(
     order_id: int,
     body: OrderSelectCartonBody,
     tenant_id: int = Query(..., ge=1, description="Tenant zamówienia (jak w WMS)"),
+    warehouse_id: int = Query(..., ge=1, description="Magazyn aktywnej sesji pakowania"),
+    status: int = Query(..., ge=1, description="order_ui_status_id — jak packing mutations"),
+    mode: str = Query(..., description="no_cart | bulk | baskets | shelf"),
+    cart_id: int | None = Query(default=None, ge=1),
     db: Session = Depends(get_db),
     current_user: Optional[AppUser] = Depends(get_optional_current_user),
 ):
-    """Wybór kartonu na pakowaniu — zapis ``selected_carton_id`` bez zmiany logiki pakowania linii."""
+    """Wybór kartonu na pakowaniu — wymaga tego samego scope co scan/finish."""
     try:
         return apply_order_selected_carton(
             db,
             tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            status_id=int(status),
+            mode=mode,
+            cart_id=cart_id,
             order_id=int(order_id),
             carton_id=body.carton_id,
             operator_user_id=int(current_user.id) if current_user is not None else None,
@@ -3068,6 +3076,10 @@ def patch_order_select_carton(
         code = str(e)
         if code == "ORDER_NOT_FOUND":
             raise HTTPException(status_code=404, detail="Order not found") from e
+        if code == "ORDER_NOT_IN_QUEUE":
+            raise HTTPException(status_code=404, detail={"code": "ORDER_NOT_IN_QUEUE"}) from e
+        if code == "PACKING_SCOPE_REQUIRED":
+            raise HTTPException(status_code=400, detail={"code": "PACKING_SCOPE_REQUIRED"}) from e
         if code in ("INVALID_CARTON", "EMPTY_CARTON_ID"):
             raise HTTPException(status_code=400, detail="Invalid carton") from e
         raise HTTPException(status_code=400, detail=str(e)) from e

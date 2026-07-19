@@ -1603,6 +1603,10 @@ def apply_fulfillment_state_from_resolver(
     if state.packing_allowed:
         if cur in (FS_MISSING, FS_NEEDS_DECISION, FS_PICKING, ""):
             order.fulfillment_state = FS_READY_TO_PACK
+        # Preserve/derive handoff from live cart custody — never invent CARTLESS here.
+        from .picking_handoff_service import ensure_handoff_from_live_cart_custody
+
+        ensure_handoff_from_live_cart_custody(db, order)
         _resolve_panel_status_after_shortage_cleared(db, order)
     elif (
         state.totals.oms_decision_lines > 0

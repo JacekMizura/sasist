@@ -10,7 +10,7 @@ from collections import defaultdict
 from typing import List, Literal, Optional, Tuple, Type, TypeVar, cast
 
 from pydantic import BaseModel
-from sqlalchemy import and_, func, or_
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from ..models.cart import Cart
@@ -343,8 +343,8 @@ def _packing_orders_base_query(
     from .picking_handoff_service import HANDOFF_BASKET, HANDOFF_CART, HANDOFF_CARTLESS
 
     m = (mode or "").strip().lower()
-    if m not in ("no_cart", "bulk", "baskets"):
-        raise ValueError("Parametr mode musi być: no_cart, bulk lub baskets.")
+    if m not in ("no_cart", "bulk", "baskets", "shelf"):
+        raise ValueError("Parametr mode musi być: no_cart, bulk, baskets lub shelf.")
     status_ids = _packing_queue_status_ids(
         db, tenant_id=tenant_id, warehouse_id=warehouse_id, primary_status_id=status_id
     )
@@ -383,6 +383,20 @@ def _packing_orders_base_query(
         q = q.filter(Order.picking_handoff_mode == HANDOFF_BASKET)
         if cart_id is not None and int(cart_id) > 0:
             q = q.filter(Order.cart_id == int(cart_id))
+    elif m == "shelf":
+        # Consolidation shelf packing — own entry path (not CARTLESS picking).
+        from .order_consolidation.constants import PLAN_STATUS_COMPLETED
+        from ..models.order_consolidation_plan import OrderConsolidationPlan
+
+        completed = select(OrderConsolidationPlan.order_id).where(
+            OrderConsolidationPlan.status == PLAN_STATUS_COMPLETED,
+            OrderConsolidationPlan.target_warehouse_id == int(warehouse_id),
+        )
+        q = q.filter(
+            Order.cart_id.is_(None),
+            Order.picking_handoff_mode.is_(None),
+            Order.id.in_(completed),
+        )
     else:
         # CARTLESS — never bare cart_id IS NULL without handoff marker
         q = q.filter(
@@ -1341,14 +1355,43 @@ def apply_order_selected_carton(
     order_id: int,
     carton_id: str,
     operator_user_id: Optional[int] = None,
+    warehouse_id: int | None = None,
+    status_id: int | None = None,
+    mode: str | None = None,
+    cart_id: int | None = None,
 ) -> OrderSelectCartonResponse:
-    """Ustawia ``orders.selected_carton_id`` — walidacja tenant + magazyn zamówienia i kartonu."""
+    """
+    Ustawia ``orders.selected_carton_id``.
+
+    WMS packing wymaga pełnego scope (warehouse + status + mode + cart_id) —
+    ten sam kanoniczny filtr co scan/finish.
+    """
     cid = (carton_id or "").strip()
     if not cid:
         raise ValueError("EMPTY_CARTON_ID")
-    order = db.query(Order).filter(Order.id == int(order_id), Order.tenant_id == int(tenant_id)).first()
+
+    if (
+        warehouse_id is None
+        or status_id is None
+        or not (mode or "").strip()
+    ):
+        raise ValueError("PACKING_SCOPE_REQUIRED")
+
+    order = (
+        _packing_orders_base_query(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            status_id=int(status_id),
+            mode=str(mode).strip().lower(),
+            cart_id=int(cart_id) if cart_id is not None and int(cart_id) > 0 else None,
+        )
+        .filter(Order.id == int(order_id))
+        .first()
+    )
     if order is None:
-        raise ValueError("ORDER_NOT_FOUND")
+        raise ValueError("ORDER_NOT_IN_QUEUE")
+
     prev_carton = getattr(order, "selected_carton_id", None)
     prev_s = str(prev_carton).strip() if prev_carton else ""
     row = (
@@ -1376,7 +1419,6 @@ def apply_order_selected_carton(
             new_carton_id=cid,
         )
     db.commit()
-    db.refresh(order)
     summ = _carton_row_to_recommended(row, is_best=False)
     return OrderSelectCartonResponse(selected_carton_id=cid, selected_carton=summ)
 
@@ -2188,17 +2230,25 @@ def packing_mode_distribution(
 
     returns (cartless/no_cart, cart/bulk, basket/baskets)
     """
-    from .picking_handoff_service import (
-        HANDOFF_BASKET,
-        HANDOFF_CART,
-        HANDOFF_CARTLESS,
-        reconcile_picking_handoff_modes,
-    )
+    # Safe reconcile only when legacy NULL handoff candidates exist
+    from .picking_handoff_service import HANDOFF_BASKET, HANDOFF_CART, HANDOFF_CARTLESS, reconcile_picking_handoff_modes
 
-    # Safe reconcile for packing-ready missing markers (never NULL→CARTLESS)
     try:
-        reconcile_picking_handoff_modes(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id))
-        db.flush()
+        null_candidate = (
+            db.query(Order.id)
+            .filter(
+                Order.tenant_id == int(tenant_id),
+                Order.warehouse_id == int(warehouse_id),
+                Order.deleted_at.is_(None),
+                Order.fulfillment_state.in_(("READY_TO_PACK", "PACKING")),
+                Order.picking_handoff_mode.is_(None),
+            )
+            .limit(1)
+            .first()
+        )
+        if null_candidate is not None:
+            reconcile_picking_handoff_modes(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id))
+            db.flush()
     except Exception:
         logger.exception("reconcile_picking_handoff_modes failed")
 
@@ -2465,7 +2515,13 @@ def resolve_packing_order_for_shelf_scan(
     mode: str,
     cart_id: int | None,
 ) -> WmsPackingShelfOrderOut:
-    """P5.5 — wejście do pakowania po skanie półki kompletacyjnej (jak koszyk / EAN)."""
+    """
+    P5.5 — wejście do pakowania po skanie półki kompletacyjnej.
+
+    Osobna ścieżka od kohort CART/BASKET/CARTLESS (handoff pozostaje NULL).
+    ``mode``/``cart_id`` z aktywnej sesji nie filtrują kohorty — walidacja shelf + packing-ready.
+    """
+    del mode, cart_id  # shelf entry is not cart-handoff scoped
     from .order_consolidation.staging_service import lookup_shelf_assignment
 
     assignment = lookup_shelf_assignment(
@@ -2497,14 +2553,27 @@ def resolve_packing_order_for_shelf_scan(
             message="Zamówienie nie jest jeszcze kompletne.",
         )
 
-    m = (mode or "").strip().lower()
+    # Must be on shelf packing path (NULL handoff, not cartless picking marker)
+    from .picking_handoff_service import normalize_handoff_mode
+
+    if normalize_handoff_mode(getattr(order, "picking_handoff_mode", None)) is not None:
+        raise PackingScanError(
+            "SHELF_ORDER_NOT_IN_QUEUE",
+            message="Zamówienie ma handoff cart/basket/cartless — użyj odpowiedniej kohorty.",
+        )
+    if getattr(order, "cart_id", None) is not None:
+        raise PackingScanError(
+            "SHELF_ORDER_NOT_IN_QUEUE",
+            message="Zamówienie ma custody wózka — shelf packing niedostępne.",
+        )
+
     in_queue = get_packing_order_detail_for_queue(
         db,
         tenant_id=tenant_id,
         warehouse_id=warehouse_id,
         status_id=status_id,
-        mode=m,
-        cart_id=int(cart_id) if cart_id is not None else None,
+        mode="shelf",
+        cart_id=None,
         order_id=oid,
     )
     if in_queue is None:
@@ -2513,6 +2582,7 @@ def resolve_packing_order_for_shelf_scan(
     return WmsPackingShelfOrderOut(
         order_id=oid,
         shelf_label=str(assignment["shelf_label"]),
+        packing_mode="shelf",
     )
 
 
@@ -3017,12 +3087,28 @@ def _run_wms_packing_post_pack_pipeline(
     return out
 
 
-def _infer_packing_mode_for_order(order: Order) -> tuple[str, int | None]:
+def _infer_packing_mode_for_order(order: Order) -> tuple[str | None, int | None]:
     """Tryb kolejki pakowania z immutable handoff (nie z aktualnego PickingConfig)."""
     from .picking_handoff_service import packing_ui_mode_for_handoff
 
     cid = int(order.cart_id) if getattr(order, "cart_id", None) is not None and int(order.cart_id) > 0 else None
     return packing_ui_mode_for_handoff(getattr(order, "picking_handoff_mode", None), cid)
+
+
+def _order_has_completed_consolidation_plan(db: Session, order: Order) -> bool:
+    from .order_consolidation.constants import PLAN_STATUS_COMPLETED
+    from ..models.order_consolidation_plan import OrderConsolidationPlan
+
+    return (
+        db.query(OrderConsolidationPlan.id)
+        .filter(
+            OrderConsolidationPlan.order_id == int(order.id),
+            OrderConsolidationPlan.status == PLAN_STATUS_COMPLETED,
+            OrderConsolidationPlan.target_warehouse_id == int(order.warehouse_id),
+        )
+        .first()
+        is not None
+    )
 
 
 def resolve_packing_entry_for_order(
@@ -3062,7 +3148,19 @@ def resolve_packing_entry_for_order(
     if not state.packing_allowed:
         raise ValueError("Zamówienie nie jest gotowe do pakowania.")
 
+    from .picking_handoff_service import ensure_handoff_from_live_cart_custody, normalize_handoff_mode
+
+    ensure_handoff_from_live_cart_custody(db, order)
     mode, cart_id = _infer_packing_mode_for_order(order)
+    if mode is None:
+        # Consolidation shelf path — own entry (not CARTLESS)
+        if _order_has_completed_consolidation_plan(db, order) and getattr(order, "cart_id", None) is None:
+            mode, cart_id = "shelf", None
+        else:
+            raise ValueError(
+                "Brak provenance pakowania (picking_handoff_mode). "
+                "Zamówienie nie należy do kohort CART/BASKET/CARTLESS ani ścieżki półki konsolidacji."
+            )
     status_candidates: list[int] = []
     if getattr(order, "order_ui_status_id", None) is not None and int(order.order_ui_status_id) > 0:
         status_candidates.append(int(order.order_ui_status_id))
@@ -3077,7 +3175,7 @@ def resolve_packing_entry_for_order(
         ordered_status_ids.append(sid)
 
     modes_to_try = [mode]
-    for alt in ("no_cart", "bulk", "baskets"):
+    for alt in ("no_cart", "bulk", "baskets", "shelf"):
         if alt not in modes_to_try:
             modes_to_try.append(alt)
 

@@ -38,7 +38,7 @@ export function loadWmsPackingSession(): WmsPackingSessionState | null {
       mainGroup,
     };
     const m = rec.mode;
-    if (m === "no_cart" || m === "bulk" || m === "baskets") out.mode = m;
+    if (m === "no_cart" || m === "bulk" || m === "baskets" || m === "shelf") out.mode = m;
     const cid = rec.cartId;
     if (cid != null && Number.isFinite(Number(cid))) out.cartId = Number(cid);
     if (typeof rec.cartCode === "string" && rec.cartCode.trim()) out.cartCode = rec.cartCode.trim();
