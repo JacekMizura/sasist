@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from .picking_routing import PickListRow, PickingRoutingAllocationShortfall
 
@@ -318,12 +318,29 @@ class WmsPickingQuickPickBody(BaseModel):
     product_id: int = Field(..., ge=1)
     location_id: int = Field(..., ge=1)
     quantity: float = Field(..., gt=0)
-    cart_id: int = Field(..., ge=1, description="Aktywny wózek z sesji — Pick.cart_id i Order.cart_id")
+    cart_id: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Aktywny wózek — wymagany gdy brak picking_session_id (cart picking).",
+    )
+    picking_session_id: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Sesja cartless (bulk / cart_no_scan) — Pick.cart_id=NULL.",
+    )
     recovery_order_id: Optional[int] = Field(
         default=None,
         ge=1,
         description="Dogrywka recovery: tylko to zamówienie (bez kohorty statusu zbierania).",
     )
+
+    @model_validator(mode="after")
+    def _require_cart_or_session(self) -> "WmsPickingQuickPickBody":
+        if self.picking_session_id is None and self.cart_id is None:
+            raise ValueError("Wymagany cart_id albo picking_session_id.")
+        if self.picking_session_id is not None and self.cart_id is not None:
+            raise ValueError("Nie łącz cart_id z picking_session_id.")
+        return self
 
 
 class WmsPickingRecoveryFinalizeBody(BaseModel):
@@ -375,7 +392,16 @@ class WmsPickingReportShortageBody(BaseModel):
     product_id: int = Field(..., ge=1)
     location_id: Optional[int] = Field(default=None, ge=1)
     missing_qty: float = Field(..., gt=0, description="Zgłoszona brakująca ilość (informacyjnie + audyt)")
-    cart_id: int = Field(..., ge=1, description="Aktywny wózek z sesji zbierania — wymagany do poprawnego liczenia Picków")
+    cart_id: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Aktywny wózek — wymagany gdy brak picking_session_id.",
+    )
+    picking_session_id: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Sesja cartless — bez WarehouseCart.",
+    )
     order_ids: Optional[list[int]] = Field(
         default=None,
         description="Opcjonalnie ID zamówień z widoku szczegółu produktu (przecięcie z kontekstem wózka)",
@@ -394,6 +420,14 @@ class WmsPickingReportShortageBody(BaseModel):
         default="product_shortage",
         description="product_shortage = klasyczny brak; qty_mismatch = rozbieżność bez zerowania lokalizacji",
     )
+
+    @model_validator(mode="after")
+    def _require_cart_or_session(self) -> "WmsPickingReportShortageBody":
+        if self.picking_session_id is None and self.cart_id is None:
+            raise ValueError("Wymagany cart_id albo picking_session_id.")
+        if self.picking_session_id is not None and self.cart_id is not None:
+            raise ValueError("Nie łącz cart_id z picking_session_id.")
+        return self
 
 
 class WmsPickingReportShortageResponse(BaseModel):

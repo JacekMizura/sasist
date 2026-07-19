@@ -2277,10 +2277,21 @@ def auto_release_picking_without_confirmed_picks(
 
 
 def run_cart_lifecycle_maintenance(db: Session) -> dict[str, int]:
-    """Timeout ASSIGNED + auto-release PICKING bez picków."""
+    """Timeout ASSIGNED + auto-release PICKING bez picków + cartless idle."""
     a = release_stale_assigned_carts(db)
     b = auto_release_picking_without_confirmed_picks(db)
-    return {"assigned_timeout_released": a, "picking_no_picks_released": b}
+    c = 0
+    try:
+        from .wms_cartless_picking.cancel_service import release_stale_cartless_sessions
+
+        c = release_stale_cartless_sessions(db)
+    except Exception:
+        logger.exception("cartless stale session release failed")
+    return {
+        "assigned_timeout_released": a,
+        "picking_no_picks_released": b,
+        "cartless_timeout_released": c,
+    }
 
 
 def compute_session_stats_from_product_lines(lines: Sequence[Any]) -> dict[str, int]:

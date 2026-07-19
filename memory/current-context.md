@@ -6,15 +6,12 @@
 
 ## Latest (2026-07-19)
 
+- **CARTLESS PICKING:** DB `bulk` / UI `cart_no_scan` = sesja bez WarehouseCart (`picking_session_id` SSOT). Usunięto default-cart bootstrap dla tego trybu.
 - **Wózki:8 / empty CART:** semantic drift tile(A raw status) vs assign(B eligibility+gate); empty fail → `claim_cart` → false PRZYPISANY. Fix: assignable count SSOT, `PICK_ASSIGN_TRACE`, release empty ASSIGNED on zero assign.
 - AUTO-DETACH CART-0001: PASS on prod after deploy.
-- Follow-up: GET `/order-issue-tasks` 500 — dialect-aware schema + sync rollback + repair savepoint; shortage → 1 OrderIssueTask/order (idempotent).
-- Stale hub „Do zebrania”: cart-scoped refetch after scan; no status-level stats while products loading.
 
 ## Notes
 
-- Empty location requires HYBRID inventory mode (`apply_manual_stock_correction`).
-- Classic picking does not use StockReservation — routing reads on-hand Inventory.
-- Shortage during picking ≠ pre-pick WMS Validation (do not auto-detach on shortage).
-- Finalize shortage ≠ leave on cart — detach via `finish_picking_after_wms_finalize`.
-- `ensure_picking_shortage_support` remains SQLite-gated for report-table CREATE; column ALTERs via `ensure_wms_picking_shortage_settings_columns` (PG allowlist).
+- Cartless: `order.cart_id` i `session.cart_id` pozostają NULL przez cały lifecycle.
+- `cart_scan` / `baskets` nadal CartLifecycle SSOT — bez zmian semantyki.
+- Legacy bulk+CART-xxxx: bez szerokiego auto-heal; tylko kontrolowany repair jeśli potrzeba.

@@ -615,8 +615,9 @@ const PICKING_WHERE_OPTIONS: Array<{
   },
   {
     value: "cart_no_scan",
-    label: "Wózek (bez skanowania)",
-    description: "Bez skanu wózka; limity zbioru biorą się z ustawień magazynu.",
+    label: "Zbieranie bez identyfikacji wózka",
+    description:
+      "Zamówienia są przypisywane do operatora i sesji zbierania bez wskazywania konkretnego wózka. Limity zbioru wynikają z ustawień magazynu.",
   },
   {
     value: "baskets",

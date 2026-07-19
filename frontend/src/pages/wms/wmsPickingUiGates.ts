@@ -202,15 +202,18 @@ export function wmsPickingRowScanEligible(row: {
   return false;
 }
 
-/** Zwraca true, gdy UI nie powinno pozwalać na zgłoszenie braku (brak wózka lub brak ilości do oznaczenia / konwersji pick→shortage). */
+/** Zwraca true, gdy UI nie powinno pozwalać na zgłoszenie braku (brak wózka/sesji lub brak ilości do oznaczenia / konwersji pick→shortage). */
 export function cannotReportPickingShortage(opts: {
   remaining: number;
   cartId: number | null | undefined;
+  pickingSessionId?: number | null;
   /** Efektywne zebranie sesji — pozwala zgłosić brak także po completed (1/1). */
   pickedQuantity?: number;
 }): boolean {
-  const { remaining, cartId } = opts;
-  if (cartId == null || !Number.isFinite(cartId) || cartId < 1) return true;
+  const { remaining, cartId, pickingSessionId } = opts;
+  const hasCart = cartId != null && Number.isFinite(cartId) && cartId >= 1;
+  const hasSession = pickingSessionId != null && Number.isFinite(pickingSessionId) && pickingSessionId >= 1;
+  if (!hasCart && !hasSession) return true;
   const picked = Math.max(0, Number(opts.pickedQuantity) || 0);
   if (remaining > 1e-9) return false;
   // Po pełnym picku: brak nadal możliwy przez cofnięcie draftów (backend).

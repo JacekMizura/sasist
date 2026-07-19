@@ -168,10 +168,18 @@ export default function WmsPickingProductDetailPage() {
       pickingSession.orderUiStatusId,
       orderType,
       productId,
-      pickingSession.cartId,
+      pickingSession.cartless || (pickingSession.pickingSessionId != null && pickingSession.pickingSessionId > 0)
+        ? null
+        : pickingSession.cartId,
       recoveryOrderId,
       undefined,
-      { force: opts?.force === true },
+      {
+        force: opts?.force === true,
+        pickingSessionId:
+          pickingSession.cartless || (pickingSession.pickingSessionId != null && pickingSession.pickingSessionId > 0)
+            ? pickingSession.pickingSessionId ?? null
+            : null,
+      },
     );
   }, [warehouseId, pickingSession, orderType, productId, pickingTenantId, recoveryOrderId]);
 
@@ -278,11 +286,13 @@ export default function WmsPickingProductDetailPage() {
       cannotReportPickingShortage({
         remaining,
         cartId: pickingSession?.cartId,
+        pickingSessionId: pickingSession?.pickingSessionId,
         pickedQuantity: displayPickedDetail,
       }),
-    [remaining, pickingSession?.cartId, displayPickedDetail],
+    [remaining, pickingSession?.cartId, pickingSession?.pickingSessionId, displayPickedDetail],
   );
-  const canUndoPick = Boolean(pickingSession?.cartId) && displayPickedDetail > 1e-9 && missingTotal <= 1e-9;
+  const canUndoPick =
+    Boolean(pickingSession?.cartId) && displayPickedDetail > 1e-9 && missingTotal <= 1e-9;
   const ordersWithShortageCount = useMemo(() => {
     if (!detail?.orders?.length) return 0;
     return detail.orders.filter((o) => (o.missing_quantity ?? 0) > 1e-9).length;
@@ -394,8 +404,15 @@ export default function WmsPickingProductDetailPage() {
   async function confirm_pick(qty: number, locationId: number) {
     if (!pickingSession || warehouseId == null || !detail || qty <= 0 || remaining <= 0) return;
     const cartId = pickingSession.cartId;
-    if (cartId == null || !Number.isFinite(cartId) || cartId < 1) {
+    const pickingSessionId = pickingSession.pickingSessionId;
+    const cartless =
+      pickingSession.cartless || (pickingSessionId != null && pickingSessionId > 0);
+    if (!cartless && (cartId == null || !Number.isFinite(cartId) || cartId < 1)) {
       setPickMsg("Brak aktywnego wózka (cart_id).");
+      return;
+    }
+    if (cartless && (pickingSessionId == null || pickingSessionId < 1)) {
+      setPickMsg("Brak aktywnej sesji zbierania.");
       return;
     }
     setPickBusy(true);
@@ -405,7 +422,7 @@ export default function WmsPickingProductDetailPage() {
         product_id: productId,
         location_id: locationId,
         quantity: Math.min(qty, remaining),
-        cart_id: cartId,
+        ...(cartless ? { picking_session_id: pickingSessionId! } : { cart_id: cartId! }),
         ...(recoveryOrderId != null && recoveryOrderId > 0 ? { recovery_order_id: recoveryOrderId } : {}),
       });
       playScanBeep();
@@ -586,7 +603,9 @@ export default function WmsPickingProductDetailPage() {
         product_id: productId,
         location_id: locId,
         missing_qty: shortageQtyInput,
-        cart_id: pickingSession.cartId!,
+        ...(pickingSession.cartless || (pickingSession.pickingSessionId != null && pickingSession.pickingSessionId > 0)
+          ? { picking_session_id: pickingSession.pickingSessionId! }
+          : { cart_id: pickingSession.cartId! }),
         order_ids: detail.orders.map((o) => o.order_id),
         problem_kind: shortageProblemKind === "qty_mismatch" ? "qty_mismatch" : "product_shortage",
         ...(recoveryOrderId != null && recoveryOrderId > 0 ? { recovery_order_id: recoveryOrderId } : {}),

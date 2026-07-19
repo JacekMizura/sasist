@@ -1,3 +1,12 @@
+## 2026-07-19 — CARTLESS PICKING (bulk / cart_no_scan)
+
+- ROOT: `cart_no_scan` był AUTO_SELECT_PHYSICAL_CART via `GET /picking/default-cart` → first BULK cart → claim.
+- AFTER: `start_cartless_picking` — `WmsOperationSession.cart_id=NULL`, `Order.cart_id=NULL`, scope=`picking_session_id`.
+- API: `/picking/start-cartless`, `finalize-cartless`, `cancel-cartless-session`, `heartbeat-cartless`; product-lines + quick-pick + shortage z `picking_session_id`.
+- FE: brak default-cart dla cart_no_scan; label „Zbieranie bez identyfikacji wózka”; header sesji bez CART-xxxx.
+- Timeout: `release_stale_cartless_sessions` w `run_cart_lifecycle_maintenance`.
+- Tests: `test_wms_cartless_picking_ssot.py` (9). Bez migracji schematu / bez auto-heal legacy.
+
 ## 2026-07-19 — UX PRELIMINARY count + zero-assignment message
 
 - Tile: tooltip + aria „zamówień oczekujących” (bez zmiany nazwy statusu).

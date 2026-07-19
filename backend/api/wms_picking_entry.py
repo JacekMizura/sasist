@@ -552,6 +552,144 @@ def post_picking_heartbeat(
     }
 
 
+@router.post("/picking/start-cartless")
+def post_picking_start_cartless(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
+    source_status_id: int = Query(..., ge=1),
+    order_type: WmsPickingOrderTypeFilter = Query(...),
+    order_ids: list[int] | None = Query(None),
+    db: Session = Depends(get_db),
+    current_user: AppUser = Depends(get_current_user),
+):
+    """
+    Cartless picking (DB bulk / UI cart_no_scan): sesja bez WarehouseCart.
+    order.cart_id pozostaje NULL; scope = picking_session_id.
+    """
+    from ..services.wms_cartless_picking import start_cartless_picking
+    from ..services.wms_cartless_picking.start_service import CartlessPickingError
+
+    try:
+        sess, operator_message = start_cartless_picking(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            source_status_id=int(source_status_id),
+            order_type=str(order_type),
+            operator_user_id=int(current_user.id),
+            fixed_order_ids=[int(x) for x in order_ids] if order_ids else None,
+        )
+        db.commit()
+    except CartlessPickingError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail={"code": e.code, "error": e.message}) from e
+    except Exception:
+        logger.exception("START_CARTLESS FAIL")
+        db.rollback()
+        raise
+
+    return {
+        "session_id": int(sess.id) if sess is not None else None,
+        "cart_id": None,
+        "status": "PICKING" if sess is not None else None,
+        "operator_user_id": int(current_user.id),
+        "operator_message": operator_message,
+        "cartless": True,
+    }
+
+
+@router.post("/picking/finalize-cartless")
+def post_picking_finalize_cartless(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
+    source_status_id: int = Query(..., ge=1),
+    order_type: WmsPickingOrderTypeFilter = Query(...),
+    picking_session_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    current_user: AppUser = Depends(get_current_user),
+):
+    from ..services.wms_cartless_picking import finalize_cartless_picking_session
+    from ..services.wms_picking_product_list_service import PickingFinalizeError
+
+    try:
+        out = finalize_cartless_picking_session(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            source_status_id=int(source_status_id),
+            order_type=order_type,
+            picking_session_id=int(picking_session_id),
+            operator_user_id=int(current_user.id),
+            performed_by=current_user,
+        )
+        db.commit()
+        return out
+    except PickingFinalizeError as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=int(getattr(e, "http_status", 409) or 409),
+            detail={"code": getattr(e, "code", None), "error": str(e)},
+        ) from e
+    except Exception:
+        logger.exception("FINALIZE_CARTLESS FAIL session_id=%s", picking_session_id)
+        db.rollback()
+        raise
+
+
+@router.post("/picking/cancel-cartless-session")
+def post_picking_cancel_cartless_session(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
+    picking_session_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    current_user: AppUser = Depends(get_current_user),
+):
+    from ..services.wms_cartless_picking import cancel_cartless_picking_session
+
+    try:
+        out = cancel_cartless_picking_session(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            session_id=int(picking_session_id),
+            operator_user_id=int(current_user.id),
+        )
+        db.commit()
+        return out
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception:
+        logger.exception("CANCEL_CARTLESS FAIL session_id=%s", picking_session_id)
+        db.rollback()
+        raise
+
+
+@router.post("/picking/heartbeat-cartless")
+def post_picking_heartbeat_cartless(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
+    picking_session_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    current_user: AppUser = Depends(get_current_user),
+):
+    from ..services.wms_cartless_picking.cancel_service import touch_cartless_picking_session
+
+    try:
+        out = touch_cartless_picking_session(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            session_id=int(picking_session_id),
+            operator_user_id=int(current_user.id),
+        )
+        db.commit()
+        return out
+    except (ValueError, PermissionError) as e:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(e)) from e
+
+
 @router.post("/picking/start")
 def post_picking_start(
     tenant_id: int = Query(..., ge=1),
@@ -694,6 +832,11 @@ def get_picking_product_lines(
         ge=1,
         description="Sesja wózka: uwzględnij robocze Pick (picked_at NULL) przypisane do tego wózka w liczbie zebranych.",
     ),
+    picking_session_id: int | None = Query(
+        None,
+        ge=1,
+        description="Sesja cartless (bulk): scope = order.picking_session_id; session.cart_id IS NULL.",
+    ),
     recovery_order_id: int | None = Query(
         None,
         ge=1,
@@ -779,6 +922,36 @@ def get_picking_product_lines(
     ]
     fixed_order_ids = ([int(v) for v in (order_ids or []) if int(v) > 0] + csv_ids) or None
     if (
+        picking_session_id is not None
+        and current_user is not None
+        and current_user.id is not None
+        and not recovery_mode
+    ):
+        from ..services.wms_cartless_picking.cancel_service import touch_cartless_picking_session
+
+        try:
+            touch_cartless_picking_session(
+                db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+                session_id=int(picking_session_id),
+                operator_user_id=int(current_user.id),
+            )
+        except (ValueError, PermissionError) as e:
+            raise HTTPException(status_code=409, detail=str(e)) from e
+        resp = build_wms_picking_product_lines(
+            db,
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+            source_status_id=source_status_id,
+            order_type=order_type,
+            cart_id=None,
+            picking_session_id=int(picking_session_id),
+            fixed_order_ids=fixed_order_ids,
+        )
+        db.commit()
+        return resp
+    if (
         cart_id is not None
         and current_user is not None
         and current_user.id is not None
@@ -814,6 +987,7 @@ def get_picking_product_lines(
         source_status_id=source_status_id,
         order_type=order_type,
         cart_id=cart_id,
+        picking_session_id=picking_session_id,
         fixed_order_ids=fixed_order_ids,
     )
     if current_user is not None and current_user.id is not None and cart_id is not None:
@@ -853,6 +1027,11 @@ def get_picking_product_detail(
         None,
         ge=1,
         description="Sesja WMS: zamówienia przypisane do tego wózka lub bez wózka (FIFO); brak = pusta lista zamówień",
+    ),
+    picking_session_id: int | None = Query(
+        None,
+        ge=1,
+        description="Sesja cartless — scope po picking_session_id.",
     ),
     recovery_order_id: int | None = Query(
         None,
@@ -910,6 +1089,7 @@ def get_picking_product_detail(
         order_type=order_type,
         product_id=product_id,
         cart_id=cart_id,
+        picking_session_id=picking_session_id,
         fixed_order_ids=fixed,
         recovery_mode=recovery_detail_mode and recovery_order_id is not None,
     )
@@ -962,6 +1142,9 @@ def post_picking_quick_pick(
     tid = int(tenant_id)
     uid = int(current_user.id) if current_user is not None else None
     cart_id = int(body.cart_id) if body.cart_id is not None else None
+    picking_session_id = (
+        int(body.picking_session_id) if getattr(body, "picking_session_id", None) is not None else None
+    )
     barcode = None
     session_id = None
     cart_status = None
@@ -1105,6 +1288,47 @@ def post_picking_quick_pick(
                     },
                 )
 
+        if picking_session_id is not None:
+            from ..services.wms_cartless_picking.pick_service import record_cartless_quick_pick
+            from ..services.wms_cartless_picking.cancel_service import touch_cartless_picking_session
+
+            oid, oiid = record_cartless_quick_pick(
+                db,
+                tenant_id=tid,
+                warehouse_id=int(effective_wh),
+                source_status_id=source_status_id,
+                order_type=order_type,
+                product_id=body.product_id,
+                location_id=body.location_id,
+                quantity=body.quantity,
+                picking_session_id=int(picking_session_id),
+                operator_user_id=uid,
+            )
+            resp = build_wms_picking_product_lines(
+                db,
+                tenant_id=tid,
+                warehouse_id=int(effective_wh),
+                source_status_id=source_status_id,
+                order_type=order_type,
+                picking_session_id=int(picking_session_id),
+            )
+            touch_cartless_picking_session(
+                db,
+                tenant_id=tid,
+                warehouse_id=int(effective_wh),
+                session_id=int(picking_session_id),
+                operator_user_id=int(uid),
+            )
+            db.commit()
+            logger.info(
+                "post_picking_quick_pick:ok cartless %s",
+                _log_ctx(order_id=oid, order_item_id=oiid, session_id=picking_session_id),
+            )
+            return {"ok": True, "order_id": oid, "order_item_id": oiid, "picking_session_id": int(picking_session_id)}
+
+        if body.cart_id is None:
+            raise HTTPException(status_code=400, detail="Wymagany cart_id albo picking_session_id.")
+
         oid, oiid = record_wms_quick_pick(
             db,
             tenant_id=tid,
@@ -1114,7 +1338,7 @@ def post_picking_quick_pick(
             product_id=body.product_id,
             location_id=body.location_id,
             quantity=body.quantity,
-            cart_id=body.cart_id,
+            cart_id=int(body.cart_id),
             fixed_order_id=int(body.recovery_order_id)
             if body.recovery_order_id is not None and int(body.recovery_order_id) > 0
             else None,
@@ -1389,6 +1613,52 @@ def post_picking_report_shortage(
         getattr(current_user, "id", None),
     )
     try:
+        if getattr(body, "picking_session_id", None) is not None:
+            from ..services.wms_cartless_picking.shortage_service import (
+                report_cartless_picking_product_shortage,
+            )
+            from ..services.wms_cartless_picking.cancel_service import touch_cartless_picking_session
+
+            out = report_cartless_picking_product_shortage(
+                db,
+                tenant_id=tenant_id,
+                warehouse_id=warehouse_id,
+                source_status_id=source_status_id,
+                order_type=order_type,
+                product_id=body.product_id,
+                location_id=body.location_id,
+                missing_qty=body.missing_qty,
+                picking_session_id=int(body.picking_session_id),
+                ui_order_ids=body.order_ids,
+                order_item_id=body.order_item_id,
+                operator_user_id=int(current_user.id) if current_user is not None else None,
+            )
+            resp = build_wms_picking_product_lines(
+                db,
+                tenant_id=tenant_id,
+                warehouse_id=warehouse_id,
+                source_status_id=source_status_id,
+                order_type=order_type,
+                picking_session_id=int(body.picking_session_id),
+            )
+            pid = int(body.product_id)
+            product_line_snapshot = None
+            for pl in getattr(resp, "products", None) or []:
+                if int(getattr(pl, "product_id", 0) or 0) == pid:
+                    product_line_snapshot = pl
+                    break
+            out = {**out, "product_line": product_line_snapshot}
+            if current_user is not None and current_user.id is not None:
+                touch_cartless_picking_session(
+                    db,
+                    tenant_id=int(tenant_id),
+                    warehouse_id=int(warehouse_id),
+                    session_id=int(body.picking_session_id),
+                    operator_user_id=int(current_user.id),
+                )
+            db.commit()
+            return out
+
         out = report_wms_picking_product_shortage(
             db,
             tenant_id=tenant_id,
@@ -1398,7 +1668,7 @@ def post_picking_report_shortage(
             product_id=body.product_id,
             location_id=body.location_id,
             missing_qty=body.missing_qty,
-            cart_id=body.cart_id,
+            cart_id=int(body.cart_id),
             ui_order_ids=body.order_ids,
             recovery_order_id=body.recovery_order_id,
             order_item_id=body.order_item_id,

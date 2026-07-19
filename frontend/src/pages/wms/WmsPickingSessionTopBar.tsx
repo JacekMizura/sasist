@@ -14,6 +14,9 @@ export type WmsPickingSessionTopBarProps = {
   statusBadgeStyle: CSSProperties;
   cartCode?: string | null;
   cartName?: string | null;
+  /** Cartless: pokaż „Sesja zbierania” zamiast kodu wózka. */
+  cartless?: boolean;
+  pickingSessionId?: number | null;
 };
 
 function IconBack() {
@@ -31,8 +34,11 @@ export function WmsPickingSessionTopBar({
   pickStats,
   cartCode,
   cartName,
+  cartless = false,
+  pickingSessionId = null,
 }: WmsPickingSessionTopBarProps) {
-  const hasCart = cartCode != null && cartCode.trim() !== "";
+  const hasCart = !cartless && cartCode != null && cartCode.trim() !== "";
+  const showSessionPanel = hasCart || cartless;
   const loggedUser = localStorage.getItem("user_username") || "Super Admin";
 
   return (
@@ -72,17 +78,32 @@ export function WmsPickingSessionTopBar({
           </span>
         </div>
 
-        {/* PRAWA STRONA: Dane wózka */}
-        {hasCart && (
+        {/* PRAWA STRONA: Dane wózka LUB sesja cartless */}
+        {showSessionPanel && (
           <div className="shrink-0 flex items-center gap-3 bg-indigo-50 border border-indigo-100/80 rounded-xl px-4 py-2 shadow-inner">
             <div className="flex items-center gap-2">
               <ShoppingCart size={15} className="text-[#5a4fcf]" strokeWidth={2.5} />
-              <span className="text-xs font-black text-slate-900 uppercase tracking-wide">
-                {(cartName ?? "").trim() || "Wózek dwupoziomowy"}
-              </span>
-              <span className="font-mono text-[10px] font-bold bg-white text-slate-600 px-1.5 py-0.5 rounded border border-indigo-100/40">
-                {cartCode?.trim()}
-              </span>
+              {cartless ? (
+                <>
+                  <span className="text-xs font-black text-slate-900 uppercase tracking-wide">
+                    Sesja zbierania
+                  </span>
+                  {pickingSessionId != null && pickingSessionId > 0 ? (
+                    <span className="font-mono text-[10px] font-bold bg-white text-slate-600 px-1.5 py-0.5 rounded border border-indigo-100/40">
+                      #{pickingSessionId}
+                    </span>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  <span className="text-xs font-black text-slate-900 uppercase tracking-wide">
+                    {(cartName ?? "").trim() || "Wózek dwupoziomowy"}
+                  </span>
+                  <span className="font-mono text-[10px] font-bold bg-white text-slate-600 px-1.5 py-0.5 rounded border border-indigo-100/40">
+                    {cartCode?.trim()}
+                  </span>
+                </>
+              )}
             </div>
             
             <div className="w-px h-4 bg-indigo-200 shrink-0" />

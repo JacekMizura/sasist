@@ -39,6 +39,10 @@ export type WmsPickingSessionState = {
   hubPickStats?: { zebrane: number; doZebrania: number; wTrakcie: number; braki?: number };
   /** Po starcie zbierania bez FINAL assignment — komunikat operatora (bez kodów technicznych). */
   assignEmptyMessage?: string | null;
+  /** Cartless (bulk / cart_no_scan): PRIMARY KEY procesu = WmsOperationSession.id. */
+  pickingSessionId?: number | null;
+  /** True gdy zbieranie bez fizycznego WarehouseCart. */
+  cartless?: boolean;
 };
 
 export type WmsPickingLocationNavState = {

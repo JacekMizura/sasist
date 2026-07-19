@@ -184,7 +184,7 @@ export async function getWmsPickingProductLines(
   cartId?: number | null,
   recoveryOrderId?: number | null,
   orderIds?: number[] | null,
-  options?: { force?: boolean },
+  options?: { force?: boolean; pickingSessionId?: number | null },
 ): Promise<WmsPickingProductLinesResponseApi> {
   const params: Record<string, string | number | number[]> = {
     tenant_id: tenantId,
@@ -192,7 +192,10 @@ export async function getWmsPickingProductLines(
     source_status_id: sourceStatusId,
     order_type: orderType,
   };
-  if (cartId != null && cartId > 0) {
+  const sid = options?.pickingSessionId;
+  if (sid != null && sid > 0) {
+    params.picking_session_id = sid;
+  } else if (cartId != null && cartId > 0) {
     params.cart_id = cartId;
   }
   if (recoveryOrderId != null && recoveryOrderId > 0) {
@@ -222,7 +225,7 @@ export async function getWmsPickingProductDetail(
   cartId?: number | null,
   recoveryOrderId?: number | null,
   orderIds?: number[] | null,
-  options?: { force?: boolean },
+  options?: { force?: boolean; pickingSessionId?: number | null },
 ): Promise<WmsPickingProductDetailApi> {
   const params: Record<string, string | number | number[]> = {
     tenant_id: tenantId,
@@ -231,7 +234,10 @@ export async function getWmsPickingProductDetail(
     order_type: orderType,
     product_id: productId,
   };
-  if (cartId != null && cartId > 0) {
+  const sid = options?.pickingSessionId;
+  if (sid != null && sid > 0) {
+    params.picking_session_id = sid;
+  } else if (cartId != null && cartId > 0) {
     params.cart_id = cartId;
   }
   if (recoveryOrderId != null && recoveryOrderId > 0) {
@@ -349,6 +355,87 @@ export async function postWmsPickingStart(
   return res.data;
 }
 
+/** Cartless start (bulk / cart_no_scan) — bez WarehouseCart. */
+export async function postWmsPickingStartCartless(
+  tenantId: number,
+  warehouseId: number,
+  sourceStatusId: number,
+  orderType: string,
+  orderIds?: number[],
+): Promise<{
+  session_id: number | null;
+  cart_id: null;
+  status: string | null;
+  operator_user_id: number | null;
+  operator_message?: string | null;
+  cartless: true;
+}> {
+  const res = await api.post("/wms/picking/start-cartless", null, {
+    params: {
+      tenant_id: tenantId,
+      warehouse_id: warehouseId,
+      source_status_id: sourceStatusId,
+      order_type: orderType,
+      ...(orderIds?.length ? { order_ids: orderIds } : {}),
+    },
+  });
+  return res.data;
+}
+
+export async function postWmsPickingFinalizeCartless(
+  tenantId: number,
+  warehouseId: number,
+  sourceStatusId: number,
+  orderType: WmsPickingOrderTypeQuery,
+  pickingSessionId: number,
+): Promise<WmsPickingFinalizeCartResponseApi & { cart_id: null; picking_session_id?: number }> {
+  const res = await api.post("/wms/picking/finalize-cartless", null, {
+    params: {
+      tenant_id: tenantId,
+      warehouse_id: warehouseId,
+      source_status_id: sourceStatusId,
+      order_type: orderType,
+      picking_session_id: pickingSessionId,
+    },
+  });
+  return res.data;
+}
+
+export async function postWmsPickingCancelCartlessSession(
+  tenantId: number,
+  warehouseId: number,
+  pickingSessionId: number,
+): Promise<{ session_id: number; orders_restored: number; cart_id: null }> {
+  const res = await api.post("/wms/picking/cancel-cartless-session", null, {
+    params: {
+      tenant_id: tenantId,
+      warehouse_id: warehouseId,
+      picking_session_id: pickingSessionId,
+    },
+  });
+  return res.data;
+}
+
+export async function postWmsPickingHeartbeatCartless(
+  tenantId: number,
+  warehouseId: number,
+  pickingSessionId: number,
+): Promise<{
+  session_id: number;
+  cart_id: null;
+  last_activity_at: string | null;
+  status: string;
+}> {
+  const res = await api.post("/wms/picking/heartbeat-cartless", null, {
+    params: {
+      tenant_id: tenantId,
+      warehouse_id: warehouseId,
+      picking_session_id: pickingSessionId,
+    },
+  });
+  return res.data;
+}
+
 /** Pakowacz skanuje wózek: READY_FOR_PACKING → PACKING. */
 export async function postWmsPackingStartCart(
   tenantId: number,
@@ -456,7 +543,8 @@ export async function postWmsPickingReportShortage(
     product_id: number;
     location_id?: number | null;
     missing_qty: number;
-    cart_id: number;
+    cart_id?: number | null;
+    picking_session_id?: number | null;
     /** Zamówienia z widoku szczegółu (opcjonalnie — przecięcie z sesją wózka po stronie API) */
     order_ids?: number[] | null;
     recovery_order_id?: number | null;
@@ -464,7 +552,17 @@ export async function postWmsPickingReportShortage(
     problem_kind?: "product_shortage" | "qty_mismatch" | null;
   },
 ): Promise<WmsPickingReportShortageResponseApi> {
-  const payload = { ...body };
+  const payload: Record<string, unknown> = {
+    product_id: body.product_id,
+    missing_qty: body.missing_qty,
+  };
+  if (body.location_id != null) payload.location_id = body.location_id;
+  if (body.picking_session_id != null && body.picking_session_id > 0) {
+    payload.picking_session_id = body.picking_session_id;
+  } else if (body.cart_id != null && body.cart_id > 0) {
+    payload.cart_id = body.cart_id;
+  }
+  if (body.order_ids?.length) payload.order_ids = body.order_ids;
   const rid = body.recovery_order_id;
   if (rid != null && Number.isFinite(Number(rid)) && Number(rid) > 0) {
     payload.recovery_order_id = Math.floor(Number(rid));
@@ -473,6 +571,7 @@ export async function postWmsPickingReportShortage(
   if (oiid != null && Number.isFinite(Number(oiid)) && Number(oiid) > 0) {
     payload.order_item_id = Math.floor(Number(oiid));
   }
+  if (body.problem_kind) payload.problem_kind = body.problem_kind;
   const res = await api.post<WmsPickingReportShortageResponseApi>("/wms/picking/report-shortage", payload, {
     params: {
       tenant_id: tenantId,
@@ -566,7 +665,8 @@ export type WmsPickingQuickPickBodyApi = {
   product_id: number;
   location_id: number;
   quantity: number;
-  cart_id: number;
+  cart_id?: number | null;
+  picking_session_id?: number | null;
   recovery_order_id?: number | null;
 };
 
@@ -651,14 +751,16 @@ export async function postWmsPickingQuickPick(
   const product_id = assertPositiveInt("product_id", body.product_id);
   const location_id = assertPositiveInt("location_id", body.location_id);
   const quantity = assertPositiveQty("quantity", body.quantity);
-  const cart_id = assertPositiveInt("cart_id", body.cart_id);
-
   const payload: WmsPickingQuickPickBodyApi = {
     product_id,
     location_id,
     quantity,
-    cart_id,
   };
+  if (body.picking_session_id != null && Number(body.picking_session_id) > 0) {
+    payload.picking_session_id = Math.floor(Number(body.picking_session_id));
+  } else {
+    payload.cart_id = assertPositiveInt("cart_id", body.cart_id);
+  }
   const rid = body.recovery_order_id;
   if (rid != null && Number.isFinite(Number(rid)) && Number(rid) > 0) {
     payload.recovery_order_id = Math.floor(Number(rid));

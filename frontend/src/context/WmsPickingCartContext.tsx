@@ -111,7 +111,9 @@ export function useWmsPickingCart(): WmsPickingCartContextValue {
   return ctx;
 }
 
-/** Jedno źródło prawdy: snapshot kontekstu (tenant+magazyn), potem stan routera. */
+/** Jedno źródło prawdy: snapshot kontekstu (tenant+magazyn), potem stan routera.
+ * Cartless: nie nadpisuj cartId z leftover snapshotu fizycznego wózka.
+ */
 export function useMergedPickingSession(
   pickingSession: WmsPickingSessionState | null,
   tenantId: number,
@@ -120,6 +122,15 @@ export function useMergedPickingSession(
   const { snapshot } = useWmsPickingCart();
   return useMemo(() => {
     if (!pickingSession || warehouseId == null) return pickingSession;
+    if (pickingSession.cartless || (pickingSession.pickingSessionId != null && pickingSession.pickingSessionId > 0)) {
+      return {
+        ...pickingSession,
+        cartId: null,
+        cartCode: null,
+        cartName: null,
+        cartless: true,
+      };
+    }
     const ctxMatch =
       snapshot != null &&
       snapshot.tenantId === tenantId &&

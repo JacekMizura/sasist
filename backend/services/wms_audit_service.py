@@ -628,11 +628,11 @@ def emit_wms_picking_started(
     tenant_id: int,
     warehouse_id: int,
     order: Order,
-    cart: Cart,
+    cart: Optional[Cart],
     operator_user_id: Optional[int],
 ) -> None:
-    cart_label = cart_display_name_for_wms(cart)
-    meta: dict[str, Any] = {"target_cart": cart_label}
+    cart_label = cart_display_name_for_wms(cart) if cart is not None else "Bez wózka"
+    meta: dict[str, Any] = {"target_cart": cart_label, "cartless": cart is None}
     bsk = getattr(order, "basket", None)
     if bsk is not None:
         try:
@@ -649,7 +649,7 @@ def emit_wms_picking_started(
         order_id=int(order.id),
         operator_user_id=uid,
         event_type=EVT_PICKING_STARTED,
-        target_cart_id=int(cart.id) if getattr(cart, "id", None) else None,
+        target_cart_id=int(cart.id) if cart is not None and getattr(cart, "id", None) else None,
         metadata=meta,
     )
     append_order_activity_for_wms(
@@ -671,13 +671,13 @@ def emit_wms_picked_item(
     warehouse_id: int,
     order: Order,
     pick,
-    cart: Cart,
+    cart: Optional[Cart],
     product_sku: Optional[str],
     product_id: int,
     location_id: int,
     operator_user_id: Optional[int],
 ) -> None:
-    cart_label = cart_display_name_for_wms(cart)
+    cart_label = cart_display_name_for_wms(cart) if cart is not None else "Bez wózka"
     loc_label = location_display_label(db, int(location_id))
     bsk = getattr(order, "basket", None)
     basket_lbl: Optional[str] = None
@@ -695,6 +695,7 @@ def emit_wms_picked_item(
         "source_location": loc_label,
         "target_cart": cart_label,
         "basket": basket_lbl,
+        "cartless": cart is None,
     }
     uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
     insert_wms_order_event(
@@ -709,7 +710,7 @@ def emit_wms_picked_item(
         if getattr(pick, "order_item_id", None) is not None
         else None,
         source_location_id=int(location_id),
-        target_cart_id=int(cart.id),
+        target_cart_id=int(cart.id) if cart is not None and getattr(cart, "id", None) else None,
         quantity=qty,
         metadata=meta,
     )
@@ -912,7 +913,7 @@ def emit_wms_picking_finished(
     tenant_id: int,
     warehouse_id: int,
     order: Order,
-    cart_id: int,
+    cart_id: Optional[int],
     operator_user_id: Optional[int],
     new_order_ui_status_id: Optional[int],
 ) -> None:
@@ -922,7 +923,8 @@ def emit_wms_picking_finished(
     if ps is not None and pf is not None and pf >= ps:
         dur_sec = int((pf - ps).total_seconds())
     meta: dict[str, Any] = {
-        "cart_id": int(cart_id),
+        "cart_id": int(cart_id) if cart_id is not None else None,
+        "cartless": cart_id is None,
         "picking_seconds": dur_sec,
         "picking_duration_label": _format_duration_pl(dur_sec) if dur_sec is not None else None,
     }
@@ -975,7 +977,7 @@ def emit_line_shortage_reported(
     product_id: int,
     product_name: str,
     location_id: Optional[int],
-    cart_id: int,
+    cart_id: Optional[int],
     shortage_qty: float,
     operator_user_id: Optional[int],
     is_replacement: bool = False,
@@ -1000,8 +1002,12 @@ def emit_line_shortage_reported(
     else:
         event_type = EVT_ORDER_LINE_SHORTAGE_REPORTED
     loc_label = location_display_label(db, int(location_id)) if location_id is not None else None
-    cart_row = db.query(Cart).filter(Cart.id == int(cart_id)).first()
-    cart_label = cart_display_name_for_wms(cart_row) if cart_row is not None else f"#{cart_id}"
+    cart_row = db.query(Cart).filter(Cart.id == int(cart_id)).first() if cart_id is not None else None
+    cart_label = (
+        cart_display_name_for_wms(cart_row)
+        if cart_row is not None
+        else ("Bez wózka" if cart_id is None else f"#{cart_id}")
+    )
     cart_code_eff = (cart_code or "").strip() or (
         (getattr(cart_row, "code", None) or "").strip() if cart_row is not None else ""
     ) or cart_label
@@ -1033,7 +1039,7 @@ def emit_line_shortage_reported(
         "picked_qty": picked_f,
         "remaining_qty": rem_f,
         "quantity": miss_f,
-        "cart_id": int(cart_id),
+        "cart_id": int(cart_id) if cart_id is not None else None,
         "cart_code": cart_code_eff,
         "picking_session_id": int(picking_session_id) if picking_session_id is not None else None,
         "operator_user_id": uid,

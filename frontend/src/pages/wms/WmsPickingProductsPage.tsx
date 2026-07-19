@@ -6,14 +6,19 @@ import {
   getWmsPickingDefaultCart,
   getWmsPickingProductLines,
   getWmsPickingResolveCart,
+  postWmsPickingCancelCartlessSession,
   postWmsPickingCancelSession,
   postWmsPickingFinalizeCart,
+  postWmsPickingFinalizeCartless,
   postWmsPickingRecoveryFinalize,
   postWmsPickingQuickPick,
+  postWmsPickingStartCartless,
   type WmsPickingCohortMissingLineApi,
   type WmsPickingProductLineApi,
   type WmsPickingSessionStatsApi,
 } from "../../api/wmsPickingProductsApi";
+import { modeRequiresCartScan } from "./wmsPickingFlowResolve";
+import type { PickingFlowMode } from "../../api/wmsPickingEntryApi";
 import { useMergedPickingSession, useWmsPickingCart } from "../../context/WmsPickingCartContext";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { WmsOperationalPageBody, WmsOperationalPageShell } from "../../components/wms/execution/WmsOperationalPageShell";
@@ -179,17 +184,48 @@ export default function WmsPickingProductsPage() {
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const activePriorityOrderIds = useMemo(() => priorityTaskOrderIds(activePriorityTask), [activePriorityTask]);
+
+  const isCartlessMode = useMemo(() => {
+    if (!pickingSession) return false;
+    if (pickingSession.cartless || (pickingSession.pickingSessionId != null && pickingSession.pickingSessionId > 0)) {
+      return true;
+    }
+    if (pickingSession.cartId != null && pickingSession.cartId > 0) return false;
+    const choice = pickingSession.orderTypeChoice ?? "all";
+    const single = pickingSession.singleMode as PickingFlowMode | undefined;
+    const multi = pickingSession.multiMode as PickingFlowMode | undefined;
+    if (choice === "single") return single === "cart_no_scan";
+    if (choice === "multi") return multi === "cart_no_scan";
+    const needsScan = modeRequiresCartScan(single ?? "cart_no_scan") || modeRequiresCartScan(multi ?? "cart_no_scan");
+    if (needsScan) return false;
+    return single === "cart_no_scan" || multi === "cart_no_scan";
+  }, [pickingSession]);
+
   const productLinesLoadKey = useMemo(() => {
     if (warehouseId == null || !pickingSession) return "";
+    // Cartless: nie ładuj listy produktów zanim sesja nie wystartuje (unikaj kohorty statusu).
+    if (isCartlessMode && !(mergedSession?.pickingSessionId != null && mergedSession.pickingSessionId > 0)) {
+      return "";
+    }
     return [
       warehouseId,
       pickingSession.orderUiStatusId,
       orderType,
       mergedSession?.cartId ?? "",
+      mergedSession?.pickingSessionId ?? "",
       recoveryOrderId ?? "",
       activePriorityOrderIds.join(","),
     ].join("|");
-  }, [warehouseId, pickingSession, orderType, mergedSession?.cartId, recoveryOrderId, activePriorityOrderIds]);
+  }, [
+    warehouseId,
+    pickingSession,
+    orderType,
+    mergedSession?.cartId,
+    mergedSession?.pickingSessionId,
+    recoveryOrderId,
+    activePriorityOrderIds,
+    isCartlessMode,
+  ]);
 
   useEffect(() => {
     const sync = () => {
@@ -206,6 +242,74 @@ export default function WmsPickingProductsPage() {
 
   useEffect(() => {
     if (!pickingSession || warehouseId == null) return;
+
+    // Cartless: start sesji bez default-cart / WarehouseCart.
+    if (isCartlessMode) {
+      if (mergedSession?.pickingSessionId != null && mergedSession.pickingSessionId > 0) {
+        setCartBootstrapErr(null);
+        setCartBootstrapping(false);
+        clearPickingCart();
+        return;
+      }
+      if (!sessionFingerprint) return;
+      if (bootstrapAttemptedRef.current === sessionFingerprint) return;
+      bootstrapAttemptedRef.current = sessionFingerprint;
+
+      let cancelled = false;
+      setCartBootstrapping(true);
+      setCartBootstrapErr(null);
+      clearPickingCart();
+
+      (async () => {
+        try {
+          const r = await postWmsPickingStartCartless(
+            DAMAGE_TENANT_ID,
+            warehouseId,
+            pickingSession.orderUiStatusId,
+            orderType,
+            activePriorityOrderIds.length ? activePriorityOrderIds : undefined,
+          );
+          if (cancelled) return;
+          if (r.session_id == null || r.session_id < 1) {
+            setCartBootstrapErr(
+              r.operator_message?.trim() ||
+                "Brak zamówień do przypisania do sesji zbierania (walidacja / limity).",
+            );
+            return;
+          }
+          const prevSt = routerLocation.state as WmsPickingProductsNavState | null;
+          const refreshAt = prevSt?.pickingListRefreshAt;
+          navigate(routerLocation.pathname, {
+            replace: true,
+            state: {
+              pickingSession: {
+                ...pickingSession,
+                cartId: null,
+                cartCode: null,
+                cartName: null,
+                cartless: true,
+                pickingSessionId: r.session_id,
+                assignEmptyMessage: r.operator_message ?? null,
+              },
+              ...(refreshAt != null && Number.isFinite(refreshAt) ? { pickingListRefreshAt: refreshAt } : {}),
+            } satisfies WmsPickingProductsNavState,
+          });
+        } catch (e) {
+          if (!cancelled) {
+            setCartBootstrapErr(
+              extractApiErrorMessage(e, "Nie udało się rozpocząć zbierania bez wózka."),
+            );
+          }
+        } finally {
+          if (!cancelled) setCartBootstrapping(false);
+        }
+      })();
+
+      return () => {
+        cancelled = true;
+      };
+    }
+
     if (mergedSession?.cartId != null) {
       setCartBootstrapErr(null);
       setCartBootstrapping(false);
@@ -317,11 +421,16 @@ export default function WmsPickingProductsPage() {
     mergedSession?.cartId,
     mergedSession?.cartCode,
     mergedSession?.cartName,
+    mergedSession?.pickingSessionId,
     sessionFingerprint,
     navigate,
     routerLocation.pathname,
     setPickingCart,
+    clearPickingCart,
     snapshot,
+    isCartlessMode,
+    orderType,
+    activePriorityOrderIds,
   ]);
 
   const load = useCallback(async () => {
@@ -342,10 +451,13 @@ export default function WmsPickingProductsPage() {
         warehouseId,
         pickingSession.orderUiStatusId,
         orderType,
-        mergedSession?.cartId ?? null,
+        isCartlessMode ? null : mergedSession?.cartId ?? null,
         recoveryOrderId,
         activePriorityOrderIds,
-        { force },
+        {
+          force,
+          pickingSessionId: isCartlessMode ? mergedSession?.pickingSessionId ?? null : null,
+        },
       );
       if (seq !== productLinesLoadSeqRef.current) {
         return;
@@ -409,7 +521,16 @@ export default function WmsPickingProductsPage() {
         setLoading(false);
       }
     }
-  }, [warehouseId, pickingSession, orderType, mergedSession?.cartId, recoveryOrderId, activePriorityOrderIds]);
+  }, [
+    warehouseId,
+    pickingSession,
+    orderType,
+    mergedSession?.cartId,
+    mergedSession?.pickingSessionId,
+    recoveryOrderId,
+    activePriorityOrderIds,
+    isCartlessMode,
+  ]);
 
   const loadRef = useRef(load);
   loadRef.current = load;
@@ -532,7 +653,7 @@ export default function WmsPickingProductsPage() {
         if (total === 1) {
           try {
             const locId = hit.primary_location_id ?? hit.locations?.[0]?.location_id ?? null;
-            if (locId == null || mergedSession.cartId == null) {
+            if (locId == null || (mergedSession.cartId == null && !(mergedSession.pickingSessionId != null && mergedSession.pickingSessionId > 0))) {
               playScanBeep();
               appendScanToHistory(scan);
               showScannerToast(hit.name);
@@ -544,7 +665,9 @@ export default function WmsPickingProductsPage() {
               product_id: hit.product_id,
               location_id: locId,
               quantity: 1,
-              cart_id: mergedSession.cartId,
+              ...(mergedSession.pickingSessionId != null && mergedSession.pickingSessionId > 0
+                ? { picking_session_id: mergedSession.pickingSessionId }
+                : { cart_id: mergedSession.cartId! }),
               ...(recoveryOrderId != null && recoveryOrderId > 0 ? { recovery_order_id: recoveryOrderId } : {}),
             });
             
@@ -658,9 +781,13 @@ export default function WmsPickingProductsPage() {
   }, [finalizeShortageModal]);
 
   const activeCartId = mergedSession?.cartId ?? null;
+  const activePickingSessionId = mergedSession?.pickingSessionId ?? null;
+  const canFinalizeSession =
+    (isCartlessMode && activePickingSessionId != null && activePickingSessionId > 0) ||
+    (!isCartlessMode && activeCartId != null);
 
   const onFinalizeCart = useCallback(async () => {
-    if (!pickingSession || !mergedSession || warehouseId == null || !allPicked || activeCartId == null) return;
+    if (!pickingSession || !mergedSession || warehouseId == null || !allPicked || !canFinalizeSession) return;
     setFinalizeBusy(true);
     setFinalizeErr(null);
     try {
@@ -669,9 +796,12 @@ export default function WmsPickingProductsPage() {
         warehouseId,
         pickingSession.orderUiStatusId,
         orderType,
-        mergedSession.cartId ?? null,
+        isCartlessMode ? null : mergedSession.cartId ?? null,
         recoveryOrderId,
         activePriorityOrderIds,
+        {
+          pickingSessionId: isCartlessMode ? activePickingSessionId : null,
+        },
       );
       setRows(
         data.products.map((r) => ({
@@ -690,6 +820,10 @@ export default function WmsPickingProductsPage() {
         return;
       }
       if (recoveryOrderId != null && recoveryOrderId > 0) {
+        if (activeCartId == null) {
+          setFinalizeErr("Dogrywka wymaga wózka.");
+          return;
+        }
         await postWmsPickingRecoveryFinalize(DAMAGE_TENANT_ID, warehouseId, recoveryOrderId, activeCartId);
         playScanBeep();
         clearPickingCart();
@@ -698,13 +832,21 @@ export default function WmsPickingProductsPage() {
         navigate(WMS_ROUTES.braki(), { replace: true });
         return;
       }
-      const fin = await postWmsPickingFinalizeCart(
-        DAMAGE_TENANT_ID,
-        warehouseId,
-        pickingSession.orderUiStatusId,
-        orderType,
-        activeCartId,
-      );
+      const fin = isCartlessMode
+        ? await postWmsPickingFinalizeCartless(
+            DAMAGE_TENANT_ID,
+            warehouseId,
+            pickingSession.orderUiStatusId,
+            orderType,
+            activePickingSessionId!,
+          )
+        : await postWmsPickingFinalizeCart(
+            DAMAGE_TENANT_ID,
+            warehouseId,
+            pickingSession.orderUiStatusId,
+            orderType,
+            activeCartId!,
+          );
       playScanBeep();
       clearPickingCart();
       if (pickingFinalizeHasShortageSignals(fin)) {
@@ -737,8 +879,11 @@ export default function WmsPickingProductsPage() {
     }
   }, [
     activeCartId,
+    activePickingSessionId,
     allPicked,
+    canFinalizeSession,
     clearPickingCart,
+    isCartlessMode,
     load,
     mergedSession,
     navigate,
@@ -908,8 +1053,10 @@ export default function WmsPickingProductsPage() {
         pickStats={pickStatsForBar}
         statusName={statusTitleBar}
         statusBadgeStyle={statusBadgeStyle}
-        cartCode={mergedSession?.cartCode}
-        cartName={mergedSession?.cartName}
+        cartCode={isCartlessMode ? null : mergedSession?.cartCode}
+        cartName={isCartlessMode ? null : mergedSession?.cartName}
+        cartless={isCartlessMode}
+        pickingSessionId={activePickingSessionId}
       />
 
       {activePriorityTask ? (
@@ -984,7 +1131,7 @@ export default function WmsPickingProductsPage() {
         {loading || cartBootstrapping ? (
           <div className="flex flex-col items-center justify-center py-24 text-slate-400">
             <Loader2 size={40} className="animate-spin mb-4 text-[#5a4fcf]" strokeWidth={2.5} />
-            <p className="font-black uppercase tracking-widest text-[11px]">{cartBootstrapping ? "Ustalanie wózka..." : "Wczytywanie pozycji..."}</p>
+            <p className="font-black uppercase tracking-widest text-[11px]">{cartBootstrapping ? (isCartlessMode ? "Uruchamianie sesji zbierania…" : "Ustalanie wózka...") : "Wczytywanie pozycji..."}</p>
           </div>
         ) : null}
 
@@ -1208,7 +1355,7 @@ export default function WmsPickingProductsPage() {
             ) : null}
             <button
               type="button"
-              disabled={finalizeBusy || activeCartId == null}
+              disabled={finalizeBusy || !canFinalizeSession}
               onClick={() => void onFinalizeCart()}
               className="flex min-h-[54px] w-full items-center justify-center gap-2 rounded-2xl bg-[#5a4fcf] hover:bg-[#4a40b2] px-6 text-base font-black uppercase tracking-widest text-white shadow-lg shadow-indigo-500/20 transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
             >
@@ -1340,14 +1487,29 @@ export default function WmsPickingProductsPage() {
               </button>
               <button
                 type="button"
-                disabled={cancelBusy || !(mergedSession?.cartId || snapshot?.cartId) || warehouseId == null}
+                disabled={
+                  cancelBusy ||
+                  warehouseId == null ||
+                  (isCartlessMode
+                    ? !(activePickingSessionId != null && activePickingSessionId > 0)
+                    : !(mergedSession?.cartId || snapshot?.cartId))
+                }
                 onClick={() => {
                   void (async () => {
-                    const cartId = mergedSession?.cartId ?? snapshot?.cartId;
-                    if (cartId == null || warehouseId == null) return;
+                    if (warehouseId == null) return;
                     setCancelBusy(true);
                     try {
-                      await postWmsPickingCancelSession(DAMAGE_TENANT_ID, warehouseId, cartId);
+                      if (isCartlessMode && activePickingSessionId != null) {
+                        await postWmsPickingCancelCartlessSession(
+                          DAMAGE_TENANT_ID,
+                          warehouseId,
+                          activePickingSessionId,
+                        );
+                      } else {
+                        const cartId = mergedSession?.cartId ?? snapshot?.cartId;
+                        if (cartId == null) return;
+                        await postWmsPickingCancelSession(DAMAGE_TENANT_ID, warehouseId, cartId);
+                      }
                       clearPickingCart();
                       setExitModalOpen(false);
                       navigate(WMS_ROUTES.picking, { replace: true });

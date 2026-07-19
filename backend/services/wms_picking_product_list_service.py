@@ -668,6 +668,7 @@ def resolve_wms_picking_order_ids(
     source_status_id: int,
     order_type: OrderTypeFilter,
     cart_id: int | None = None,
+    picking_session_id: int | None = None,
     fixed_order_ids: list[int] | None = None,
     recovery_mode: bool = False,
 ) -> list[int]:
@@ -675,8 +676,9 @@ def resolve_wms_picking_order_ids(
     Jedyna ścieżka rozstrzygania zbioru zamówień dla widoków/akcji zbierania.
 
     - ``fixed_order_ids`` (recovery / scope) — override jawny.
-    - ``cart_id`` ustawione — **SSOT** ``list_orders_on_cart`` (nigdy pełna kohorta statusu).
-    - bez wózka — kohorta statusu (hub / podgląd kolejki).
+    - ``picking_session_id`` — **SSOT cartless** (order.picking_session_id).
+    - ``cart_id`` ustawione — **SSOT** ``list_orders_on_cart``.
+    - bez wózka/sesji — kohorta statusu (hub / podgląd kolejki).
     """
     if fixed_order_ids is not None:
         order_ids = [int(x) for x in fixed_order_ids if int(x) > 0]
@@ -691,6 +693,26 @@ def resolve_wms_picking_order_ids(
                 order_type=order_type,
             )
         return order_ids
+
+    if picking_session_id is not None:
+        from .wms_cartless_picking.scope import get_cartless_session_or_raise, list_order_ids_on_picking_session
+
+        # Walidacja tenant/warehouse (ownership opcjonalna — odczyt listy produktów).
+        get_cartless_session_or_raise(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            session_id=int(picking_session_id),
+            operator_user_id=None,
+            require_open=False,
+            allow_system=True,
+        )
+        return list_order_ids_on_picking_session(
+            db,
+            session_id=int(picking_session_id),
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+        )
 
     if cart_id is not None:
         cart = (
@@ -1584,13 +1606,15 @@ def build_wms_picking_product_lines(
     source_status_id: int,
     order_type: WmsPickingOrderTypeFilter,
     cart_id: int | None = None,
+    picking_session_id: int | None = None,
     fixed_order_ids: list[int] | None = None,
     recovery_mode: bool = False,
 ) -> WmsPickingProductLinesResponse:
     """
     Lista produktów do zbiórki.
+    Z ``picking_session_id`` — cartless SSOT.
     Z ``cart_id`` — wyłącznie zamówienia z ``list_orders_on_cart`` (SSOT).
-    Bez wózka — kohorta statusu (hub).
+    Bez wózka/sesji — kohorta statusu (hub).
     ``fixed_order_ids`` — dogrywka recovery / jawny scope.
     """
     ot = _order_type_filter(order_type)
@@ -1605,6 +1629,7 @@ def build_wms_picking_product_lines(
         source_status_id=source_status_id,
         order_type=ot,
         cart_id=cart_id,
+        picking_session_id=picking_session_id,
         fixed_order_ids=fixed_order_ids,
         recovery_mode=recovery_mode,
     )
@@ -1675,9 +1700,19 @@ def build_wms_picking_product_lines(
     routing = PickingRoutingService(db).build_location_pick_list(order_ids, tenant_id=tenant_id)
     pick_list = list(routing.pick_list)
 
-    picked_map = _picked_by_product(
-        db, tenant_id=tenant_id, warehouse_id=warehouse_id, order_ids=order_ids, cart_id=cart_id
-    )
+    if picking_session_id is not None:
+        from .wms_cartless_picking.scope import picked_by_product_cartless
+
+        picked_map = picked_by_product_cartless(
+            db,
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+            order_ids=order_ids,
+        )
+    else:
+        picked_map = _picked_by_product(
+            db, tenant_id=tenant_id, warehouse_id=warehouse_id, order_ids=order_ids, cart_id=cart_id
+        )
 
     # Z alokacji (routing): pierwsza lokalizacja na trasie per produkt — tylko do sortu i wyświetlenia „głównej” lokalizacji
     by_product_first_loc: dict[int, str] = {}
@@ -1779,7 +1814,11 @@ def build_wms_picking_product_lines(
             picked_quantity=picked_eff,
             missing_quantity=miss_sum,
         )
-        scanner_active = bool(scan_by_pid.get(pid)) if cart_id is not None else (rem_pick > 1e-9)
+        scanner_active = (
+            bool(scan_by_pid.get(pid))
+            if cart_id is not None
+            else (rem_pick > 1e-9)  # hub lub cartless session
+        )
         shelf_label = consolidation_shelves.get(int(pid))
         breakdown = _bundle_breakdown_for_product(
             db, order_ids=order_ids, product_id=int(pid), ux_index=ux_index
@@ -1811,10 +1850,10 @@ def build_wms_picking_product_lines(
 
     all_lines_for_stats = list(lines)
 
-    # Sesja z wózkiem: pełny snapshot demandu (w tym completed). Hub bez cart_id: tylko aktywna kolejka.
-    if cart_id is None:
+    # Sesja z wózkiem LUB cartless: pełny snapshot demandu (w tym completed). Hub: tylko aktywna kolejka.
+    if cart_id is None and picking_session_id is None:
         lines = [ln for ln in lines if _picking_product_line_still_active(ln)]
-    else:
+    elif cart_id is not None:
         need_loc_pids = [
             int(ln.product_id)
             for ln in lines
@@ -1896,6 +1935,7 @@ def build_wms_picking_product_detail(
     order_type: WmsPickingOrderTypeFilter,
     product_id: int,
     cart_id: Optional[int] = None,
+    picking_session_id: int | None = None,
     fixed_order_ids: list[int] | None = None,
     recovery_mode: bool = False,
 ) -> Optional[WmsPickingProductDetailResponse]:
@@ -1906,6 +1946,7 @@ def build_wms_picking_product_detail(
         source_status_id=source_status_id,
         order_type=order_type,
         cart_id=cart_id,
+        picking_session_id=picking_session_id,
         fixed_order_ids=fixed_order_ids,
         recovery_mode=recovery_mode,
     )
@@ -1920,6 +1961,7 @@ def build_wms_picking_product_detail(
         source_status_id=source_status_id,
         order_type=_order_type_filter(order_type),
         cart_id=cart_id,
+        picking_session_id=picking_session_id,
         fixed_order_ids=fixed_order_ids,
         recovery_mode=recovery_mode,
     )
