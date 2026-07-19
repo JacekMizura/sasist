@@ -110,6 +110,8 @@ export type WmsPickingProductLinesResponseApi = {
     basket_id?: number;
     product_id?: number;
     order_item_id?: number;
+    /** LIVE remaining for this series allocation (order_item + basket) — not product aggregate. */
+    line_remaining?: number;
   } | null;
   requires_basket_put_confirm?: boolean;
 };
@@ -223,6 +225,8 @@ export type WmsPickingProductDetailApi = {
     basket_id?: number;
     product_id?: number;
     order_item_id?: number;
+    /** LIVE remaining for this series allocation (order_item + basket) — not product aggregate. */
+    line_remaining?: number;
   } | null;
 };
 

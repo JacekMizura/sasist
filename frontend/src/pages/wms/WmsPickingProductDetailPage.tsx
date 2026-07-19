@@ -505,7 +505,16 @@ export default function WmsPickingProductDetailPage() {
         setManualOpen(false);
         setManualLocId(null);
         if (result.active_series?.basket_label) {
-          setPickMsg(`Koszyk ${result.active_series.basket_label} — skanuj kolejne sztuki. Pozostało: ${Math.max(0, nextRem)} szt.`);
+          const seriesRem = result.active_series.line_remaining;
+          const remTxt =
+            typeof seriesRem === "number" && Number.isFinite(seriesRem)
+              ? fmtQty(Math.max(0, seriesRem))
+              : null;
+          setPickMsg(
+            remTxt != null
+              ? `Koszyk ${result.active_series.basket_label} — skanuj kolejne sztuki. Pozostało: ${remTxt} szt.`
+              : `Koszyk ${result.active_series.basket_label} — skanuj kolejne sztuki.`,
+          );
           setScannerInputPlaceholder("Skanuj EAN produktu");
         }
       }
@@ -880,7 +889,16 @@ export default function WmsPickingProductDetailPage() {
                 <div className={`w-full max-w-md rounded-2xl border-2 px-5 py-4 ${BASKET_PUT_STYLE_RING[(detail.put_to_basket_color_index ?? 0) % BASKET_PUT_STYLE_RING.length]}`}>
                   <p className="text-[10px] font-black uppercase tracking-widest opacity-80">Seria — skanuj kolejne sztuki</p>
                   <p className="mt-1 text-3xl font-black tabular-nums">{detail.basket_put_active_series.basket_label}</p>
-                  <p className="mt-1 text-sm font-semibold">Pozostało: {fmtQty(remaining)} szt.</p>
+                  <p className="mt-1 text-sm font-semibold">
+                    Pozostało:{" "}
+                    {fmtQty(
+                      typeof detail.basket_put_active_series.line_remaining === "number" &&
+                        Number.isFinite(detail.basket_put_active_series.line_remaining)
+                        ? Math.max(0, detail.basket_put_active_series.line_remaining)
+                        : 0,
+                    )}{" "}
+                    szt.
+                  </p>
                 </div>
               ) : detail.requires_basket_put_confirm && detail.orders?.some((o) => (o.quantity_to_pick ?? 0) > 1e-9 && o.basket_slot) ? (
                 <div className="w-full max-w-md rounded-2xl border-2 border-slate-300 bg-slate-50 px-5 py-4 text-left">

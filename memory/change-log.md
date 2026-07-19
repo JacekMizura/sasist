@@ -1,3 +1,16 @@
+## 2026-07-19 — SERIES LINE PROGRESS: live line_remaining ≠ product aggregate
+
+- ROOT: series banner used product aggregate `remaining` (e.g. 17) instead of allocation rem (8).
+- FIX: `project_active_series_with_live_remaining` on UI/API series; FE banner + toast use `active_series.line_remaining` only. Aggregate widget unchanged.
+- Tests: `test_wms_basket_put_series_line_progress.py` CASE 1–5.
+
+## 2026-07-19 — FINAL INTEGRATION AUDIT MULTI basket put (42cfee48…788ebff8)
+
+- HEAD `788ebff8`; all 4 commits present; 38 basket-put tests PASS; no code changes; no push.
+- Hard gates PASS: no FIFO destination before basket scan; no Pick before confirm; no cross-SKU series on detail; no double EAN required.
+- Residual BUG (non hard-gate): series banner „Pozostało” uses aggregate product `remaining`, not series line_remaining (pending path is correct per basket).
+- SAFE TO PUSH: YES (hard gates); fix series-line progress before treating UI as fully SSOT-clean.
+
 ## 2026-07-19 — MULTI 409 on S-1-2: foreign/stale series on product detail
 
 - ROOT: `get_basket_put_ui_state` exposed `active_series` for *any* product_id. Detail SKU X showed SERIA S-1-1 from leftover series of SKU Y; progress 0/N for X; basket scan S-1-2 → series switch with `series.product_id=Y` → `BASKET_PRODUCT_MISMATCH` 409.

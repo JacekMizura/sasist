@@ -161,11 +161,55 @@ def get_basket_put_ui_state(
             order_ids=list(order_ids or []),
         )
 
+    # LIVE line_remaining for UI — never trust a snapshot stored in series metadata.
+    if series is not None:
+        projected = project_active_series_with_live_remaining(
+            db,
+            cart=cart,
+            series=series,
+            order_ids=list(order_ids or []),
+        )
+        if projected is not None:
+            series = projected
+
     return {
         "requires_basket_put": True,
         "pending": pending,
         "active_series": series,
     }
+
+
+def project_active_series_with_live_remaining(
+    db: Session,
+    *,
+    cart: Cart,
+    series: dict[str, Any] | None,
+    order_ids: list[int] | None = None,
+) -> dict[str, Any] | None:
+    """
+    View projection: copy series + LIVE ``line_remaining`` for the bound allocation.
+
+    Does not mutate session metadata. Returns None when allocation is no longer open
+    (caller deciding whether to clear metadata is separate — see sanitize).
+    """
+    if not isinstance(series, dict) or not series.get("product_id"):
+        return None
+    oid_scope = list(order_ids or [])
+    if not oid_scope and series.get("order_id"):
+        oid_scope = [int(series["order_id"])]
+    alloc = resolve_allocation_for_series(
+        db,
+        cart=cart,
+        order_ids=oid_scope,
+        product_id=int(series["product_id"]),
+        order_item_id=int(series.get("order_item_id") or 0),
+        basket_id=int(series.get("basket_id") or 0),
+    )
+    if alloc is None:
+        return None
+    out = dict(series)
+    out["line_remaining"] = float(alloc.line_remaining)
+    return out
 
 
 def _sanitize_series_allocation(
@@ -403,13 +447,20 @@ def handle_product_scan_for_baskets(
             if float(series_alloc.line_remaining) - take <= 1e-9:
                 put_state.set_active_series(db, sess, None)
                 _audit("BASKET_SERIES_CLEARED", session_id=sess.id, reason="line_complete")
-                series = None
+                series_out = None
+            else:
+                series_out = project_active_series_with_live_remaining(
+                    db,
+                    cart=cart,
+                    series=put_state.get_active_series(sess),
+                    order_ids=order_ids,
+                )
             return BasketPutResult(
                 phase="PUT_CONFIRMED",
                 order_id=int(oid),
                 order_item_id=int(oiid),
                 quantity_put=float(take),
-                active_series=put_state.get_active_series(sess),
+                active_series=series_out,
                 expected_basket_label=series_alloc.basket_label,
                 message=f"Koszyk {series_alloc.basket_label} — odłożono {take:g} szt.",
             )
@@ -610,6 +661,12 @@ def confirm_basket_put(
             "activated_at": put_state.utc_now_iso(),
         }
         put_state.set_active_series(db, sess, new_series)
+        series_out = project_active_series_with_live_remaining(
+            db,
+            cart=cart,
+            series=new_series,
+            order_ids=list(oid_scope or []),
+        ) or {**new_series, "line_remaining": float(allocation.line_remaining)}
         _audit(
             "BASKET_SERIES_DESTINATION_SWITCHED",
             session_id=sess.id,
@@ -618,13 +675,14 @@ def confirm_basket_put(
             next_basket=allocation.basket_label,
             product_id=series.get("product_id"),
             quantity_put=0,
+            line_remaining=series_out.get("line_remaining"),
         )
         return BasketPutResult(
             phase="SERIES_DESTINATION_SWITCHED",
             order_id=int(allocation.order_id),
             order_item_id=int(allocation.order_item_id),
             quantity_put=0.0,
-            active_series=new_series,
+            active_series=series_out,
             expected_basket_label=allocation.basket_label,
             scanned_basket=scanned_label,
             message=(
@@ -774,6 +832,17 @@ def confirm_basket_put(
     }
     put_state.set_pending(db, sess, None)
     put_state.set_active_series(db, sess, series)
+    series_out = project_active_series_with_live_remaining(
+        db,
+        cart=cart,
+        series=series,
+        order_ids=list(oid_scope or []),
+    )
+    # If pick exhausted the line, live resolve returns None — still report 0 for this response
+    # without clearing metadata here (existing sanitize / next product-scan SSOT clears).
+    if series_out is None:
+        rem_after = float(allocation.line_remaining) - float(qty)
+        series_out = {**series, "line_remaining": max(0.0, rem_after)}
     _audit(
         "BASKET_SERIES_ACTIVATED",
         session_id=sess.id,
@@ -797,7 +866,7 @@ def confirm_basket_put(
         order_id=int(oid),
         order_item_id=int(oiid),
         quantity_put=float(qty),
-        active_series=series,
+        active_series=series_out,
         expected_basket_label=allocation.basket_label,
         scanned_basket=scanned_label,
         message=f"KOSZYK {allocation.basket_label} POTWIERDZONY. Odłożono {qty:g} szt.",
