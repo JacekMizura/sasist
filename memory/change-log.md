@@ -1,4 +1,12 @@
-## 2026-07-19 — MULTI: product context ≠ pending; basket without pending = series Pick=0
+## 2026-07-19 — DEFAULT QUANTITY MODE + fix BASKET_PRODUCT_MISMATCH
+
+- ROOT MISMATCH: leftover `active_series` for foreign SKU blocked product-context basket resolve (`BASKET_PRODUCT_MISMATCH` on S-1-2 while UI showed eligible).
+- FIX: clear foreign series when detail `product_id` provided; unify `resolve_allocation_for_basket_scan` with detail SSOT.
+- NEW FLOW: EAN/CLICK = select product; basket = QUANTITY_REQUIRED (Pick=0); confirm quantity = Pick +N (live revalidate).
+- FE: `BasketPutQuantityModal` (receiving-style ±); list MULTI EAN navigates without pending.
+- Tests: `test_wms_basket_put_quantity_mode.py` CASE 1–12. No push.
+
+
 
 - ROOT: `pending=false+series=false` → EXPECTED_PRODUCT_SCAN blocked eligible basket on detail even though product_id was known from route.
 - NEW MODEL: selected product (click|EAN|route) vs physical pending qty. Basket+context → SERIES_ACTIVATED qty=0; basket+pending → Pick+1; EAN+series → Pick+1.
