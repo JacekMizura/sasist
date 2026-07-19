@@ -336,6 +336,12 @@ export function buildNavFlyoutCategories(): NavCategoryConfig[] {
             permissionsAny: ["settings.users"],
           },
           {
+            path: "/settings/shipping-methods",
+            label: UI_STRINGS.navigation.shippingMethods,
+            Icon: Truck,
+            permissionsAny: ["settings.users", "settings.company"],
+          },
+          {
             path: "/system",
             label: UI_STRINGS.navigation.system,
             Icon: Cpu,
