@@ -6,6 +6,7 @@
 
 ## Latest (2026-07-19)
 
+- **Packing handoff:** `picking_handoff_mode` SSOT; scoped CART/BASKET/CARTLESS queues; basket-first entry.
 - **Packing flow:** first list EAN scan packs (+1) via `POST /packing/resolve-ean/scan`; AutoActions only after `wms_packing_automation_finished_at`; no fake ✓✓.
 - **GET /order-issue-tasks 500 (prod):** request-path ensure omijało `archived_at` — ORM SELECT → column missing. Fix lokalny (osobny commit); Railway logs niedostępne (Unauthorized) — PROD SCHEMA VERIFIED: NO.
 - **CARTLESS PICKING:** DB `bulk` / UI `cart_no_scan` = sesja bez WarehouseCart (`picking_session_id` SSOT). Usunięto default-cart bootstrap dla tego trybu.

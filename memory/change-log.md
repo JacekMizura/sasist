@@ -1,3 +1,11 @@
+## 2026-07-19 — Pick→pack handoff provenance + scoped packing
+
+- SSOT: `orders.picking_handoff_mode` = CART|BASKET|CARTLESS (immutable execution snapshot).
+- Live `cart_id`/`basket_id` = custody until pack finish (CartLifecycle unchanged).
+- Packing queue/EAN scoped; basket-first warehouse-global; no global FIFO; no NULL→CARTLESS.
+- Entry counts from real cohorts; 24863af pack-once preserved with required scope.
+- Tests: `test_picking_packing_handoff.py`.
+
 ## 2026-07-19 — WMS Packing: first list scan + fake FINALIZED
 
 - ROOT: list EAN → resolve-only navigate (no pack); `isPackingSessionFinished` = `packed_at`; AutoActions hardcoded ✓✓; list qty without `order_item_required_pack_qty`.
