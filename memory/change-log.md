@@ -1,3 +1,9 @@
+## 2026-07-19 — PRE-PUSH AUDIT ab1f70a8: scan lock + non-MULTI gate + session FOR UPDATE
+
+- BLOCKERS fixed: FE scan gate (detail+list); list `requiresBasketPut` from API not `Boolean(cartId)`; pending before bundle; session `FOR UPDATE` on put mutations.
+- Regression: same SKU S-1-2 complete → unbound → S-1-1; FE catalog/popup contract + non-MULTI fallthrough.
+- No push.
+
 ## 2026-07-19 — STRICT MULTI scan state machine + operator error popups
 
 - CLASSIFY → STATE → VALIDATE: invalid scan consumed, ZERO mutation.

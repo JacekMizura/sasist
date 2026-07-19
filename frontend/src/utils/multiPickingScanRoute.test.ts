@@ -108,14 +108,63 @@ describe("resolveMultiPickingListScan", () => {
   });
 });
 
-describe("mapWmsScanErrorCode", () => {
-  it("maps codes to Polish operator copy without parsing free text", () => {
-    const f = mapWmsScanErrorCode("BASKET_PRODUCT_MISMATCH", {
-      contextHint: "Oczekiwane koszyki: S-1-1, S-1-2",
+describe("resolveMultiPickingListScan — non-MULTI", () => {
+  it("requiresBasketPut=false → fallthrough (BULK/CARTLESS/packing must not be captured)", () => {
+    expect(
+      resolveMultiPickingListScan("brck1-B01", {
+        hasPending: false,
+        pendingProductMatchesScan: false,
+        productHitEligible: false,
+        productHitComplete: false,
+        requiresBasketPut: false,
+      }),
+    ).toEqual({ kind: "fallthrough" });
+  });
+});
+
+describe("popup exactly-once contract", () => {
+  const codes = [
+    "PRODUCT_NOT_IN_PICKING",
+    "PRODUCT_ALREADY_COMPLETE",
+    "EXPECTED_PRODUCT_SCAN",
+    "EXPECTED_BASKET_SCAN",
+    "PENDING_PUT_EXISTS",
+    "NO_PENDING_PUT",
+    "BASKET_MISMATCH",
+    "BASKET_OTHER_CART",
+    "BASKET_EMPTY",
+    "BASKET_PRODUCT_MISMATCH",
+    "BASKET_PRODUCT_ALREADY_COMPLETE",
+    "OVERPICK_BLOCKED",
+    "FOREIGN_SKU_ON_SERIES",
+    "BASKET_PUT_OWNED_BY_OTHER",
+    "UNKNOWN_SCAN_CODE",
+    "CART_NOT_ACTIVE",
+  ] as const;
+
+  it("every domain code maps to operator Polish copy (never raw HTTP text)", () => {
+    for (const code of codes) {
+      const f = mapWmsScanErrorCode(code);
+      expect(f.code).toBe(code);
+      expect(f.title.length).toBeGreaterThan(2);
+      expect(f.message.toLowerCase()).not.toContain("request failed");
+      expect(f.message.toLowerCase()).not.toContain("status code");
+    }
+  });
+
+  it("SERIES_DESTINATION_SWITCHED is success/info, not error", () => {
+    const f = mapWmsScanErrorCode("SERIES_DESTINATION_SWITCHED");
+    expect(f.severity).toBe("success");
+  });
+
+  it("STATE B reject is consumed — no fallthrough to product search", () => {
+    const d = resolveMultiPickingDetailScan("5905450181208", {
+      requiresBasketPut: true,
+      hasPending: true,
+      hasActiveSeries: false,
+      productEan: "5905450181208",
     });
-    expect(f.severity).toBe("error");
-    expect(f.title).toContain("KOSZYK");
-    expect(f.message).toContain("nie należy");
-    expect(f.message).toContain("S-1-1");
+    expect(d).toEqual({ kind: "reject", code: "PENDING_PUT_EXISTS", consumed: true });
+    expect(d.kind === "reject" && d.consumed).toBe(true);
   });
 });

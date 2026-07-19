@@ -73,6 +73,28 @@ def cart_requires_basket_put_gate(cart: Cart) -> bool:
     return cart_is_baskets_mode(cart)
 
 
+def _lock_session_for_put(db: Session, sess: WmsOperationSession) -> WmsOperationSession:
+    """
+    Serialize pending/series/Pick mutations on one cart session.
+
+    Without FOR UPDATE, two rapid product scans (or two operators) can both read
+    pending=NULL / same series and double-create pending or double Pick.
+    """
+    locked = (
+        db.query(WmsOperationSession)
+        .filter(WmsOperationSession.id == int(sess.id))
+        .with_for_update()
+        .first()
+    )
+    if locked is None:
+        raise BasketPutError(
+            "CART_NOT_ACTIVE",
+            "Brak aktywnej sesji zbierania dla tego wózka.",
+            http_status=409,
+        )
+    return locked
+
+
 def _audit(event: str, **fields: Any) -> None:
     logger.info(
         "%s %s",
@@ -325,7 +347,7 @@ def cancel_pending_basket_put(
     """
     Clear product-level pending only. Never mutates Pick / stock / order_item / series.
     """
-    sess = assert_cart_ready_for_quick_pick(db, cart)
+    sess = _lock_session_for_put(db, assert_cart_ready_for_quick_pick(db, cart))
     uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
     pending = put_state.get_pending(sess)
     if pending is None:
@@ -384,7 +406,7 @@ def handle_product_scan_for_baskets(
     ``record_pick_fn`` is called only when put is authorized (active series match
     or after basket confirm).
     """
-    sess = assert_cart_ready_for_quick_pick(db, cart)
+    sess = _lock_session_for_put(db, assert_cart_ready_for_quick_pick(db, cart))
     uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
 
     pending = put_state.get_pending(sess)
@@ -669,7 +691,7 @@ def confirm_basket_put(
     Basket scan alone never invents a product unit / never increments picked qty
     without a prior product pending (or series product-scan path).
     """
-    sess = assert_cart_ready_for_quick_pick(db, cart)
+    sess = _lock_session_for_put(db, assert_cart_ready_for_quick_pick(db, cart))
     uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
     pending = put_state.get_pending(sess)
     oid_scope = list(order_ids or [])

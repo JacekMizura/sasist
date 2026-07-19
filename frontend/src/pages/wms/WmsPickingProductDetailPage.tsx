@@ -172,6 +172,8 @@ export default function WmsPickingProductDetailPage() {
   const detailLoadSeqRef = useRef(0);
   /** Consume list→detail product scan token exactly once (refresh must not re-fire). */
   const listScanConsumedRef = useRef<string | null>(null);
+  /** Serialize physical scans — blocks rapid double Enter / parallel Pick. */
+  const scanGateRef = useRef(false);
 
   const fetchProductDetail = useCallback(async (opts?: { force?: boolean }): Promise<WmsPickingProductDetailApi | null> => {
     if (warehouseId == null || !pickingSession || !Number.isFinite(productId) || productId <= 0) return null;
@@ -354,6 +356,10 @@ export default function WmsPickingProductDetailPage() {
       void (async () => {
       const scan = normalizeScanEan(raw);
       if (!scan) return;
+      if (scanGateRef.current || pickBusy) {
+        multiScanTrace("DETAIL_SCAN_BUSY", { raw_code: scan, consumed: true });
+        return;
+      }
       const locs = detail.locations;
       if (locs.length === 0) return;
 
@@ -398,11 +404,15 @@ export default function WmsPickingProductDetailPage() {
         return;
       }
       if (multiDecision.kind === "confirm_basket") {
+        if (scanGateRef.current || pickBusy) return;
+        scanGateRef.current = true;
         void confirmBasketScan(raw, false, multiDecision.reason);
         return;
       }
       if (multiDecision.kind === "product_ean_pick") {
         if (!pickQueueDone && selectedLocation) {
+          if (scanGateRef.current || pickBusy) return;
+          scanGateRef.current = true;
           multiScanTrace("PRODUCT_SCAN", {
             product_id: productId,
             location_id: selectedLocation.location_id,
@@ -480,7 +490,7 @@ export default function WmsPickingProductDetailPage() {
     };
     registerScanHandler(handler);
     return () => registerScanHandler(null);
-  }, [detail, pickingSession, activeLocationId, registerScanHandler, appendScanToHistory, pickQueueDone, selectedLocation, pickingTenantId, orderType, showScannerToast, showScanFeedbackFromCode, load, productId, remaining]);
+  }, [detail, pickingSession, activeLocationId, registerScanHandler, appendScanToHistory, pickQueueDone, selectedLocation, pickingTenantId, orderType, showScannerToast, showScanFeedbackFromCode, load, productId, remaining, pickBusy]);
 
   const goBackToList = useCallback(
     (refreshList = false) => {
@@ -499,19 +509,29 @@ export default function WmsPickingProductDetailPage() {
   );
 
   async function confirm_pick(qty: number, locationId: number) {
-    if (!pickingSession || warehouseId == null || !detail || qty <= 0 || remaining <= 0) return;
+    if (!pickingSession || warehouseId == null || !detail || qty <= 0 || remaining <= 0) {
+      scanGateRef.current = false;
+      return;
+    }
+    if (pickBusy) {
+      scanGateRef.current = false;
+      return;
+    }
     const cartId = pickingSession.cartId;
     const pickingSessionId = pickingSession.pickingSessionId;
     const cartless =
       pickingSession.cartless || (pickingSessionId != null && pickingSessionId > 0);
     if (!cartless && (cartId == null || !Number.isFinite(cartId) || cartId < 1)) {
       setPickMsg("Brak aktywnego wózka (cart_id).");
+      scanGateRef.current = false;
       return;
     }
     if (cartless && (pickingSessionId == null || pickingSessionId < 1)) {
       setPickMsg("Brak aktywnej sesji zbierania.");
+      scanGateRef.current = false;
       return;
     }
+    scanGateRef.current = true;
     setPickBusy(true);
     setPickMsg(null);
     try {
@@ -563,31 +583,30 @@ export default function WmsPickingProductDetailPage() {
         }
       }
     } catch (e: unknown) {
-      let msg = "Zapis nie powiódł się.";
-      if (axios.isAxiosError(e)) {
-        const data = e.response?.data;
-        const d = data as { detail?: unknown; error?: string } | undefined;
-        if (d?.detail != null) {
-          if (typeof d.detail === "object" && d.detail && "message" in (d.detail as object)) {
-            msg = String((d.detail as { message: string }).message);
-            const code = (d.detail as { code?: string }).code;
-            if (
-              code === "AWAITING_BASKET_CONFIRMATION" ||
-              code === "BASKET_MISMATCH" ||
-              code === "BASKET_PRODUCT_MISMATCH" ||
-              code === "BASKET_PRODUCT_ALREADY_COMPLETE"
-            ) {
-              await load();
-            }
-          } else {
+      const extracted = extractWmsScanErrorDetail(e);
+      if (extracted.code) {
+        showScanFeedbackFromCode(extracted.code, {
+          backendMessage: extracted.message,
+          contextHint: extracted.eligibleLabels,
+        });
+        setPickMsg(mapWmsScanErrorCode(extracted.code, { backendMessage: extracted.message }).message);
+        await load();
+      } else {
+        let msg = "Zapis nie powiódł się.";
+        if (axios.isAxiosError(e)) {
+          const data = e.response?.data;
+          const d = data as { detail?: unknown; error?: string } | undefined;
+          if (d?.detail != null) {
             msg = formatFastApiErrorDetail({ detail: d.detail });
-          }
-        } else if (d?.error) msg = String(d.error);
-      } else if (e instanceof Error && e.message) {
-        msg = e.message;
+          } else if (d?.error) msg = String(d.error);
+        } else if (e instanceof Error && e.message) {
+          msg = e.message;
+        }
+        showScanFeedbackFromCode("UNKNOWN_SCAN_CODE", { backendMessage: msg });
+        setPickMsg(msg);
       }
-      setPickMsg(msg);
     } finally {
+      scanGateRef.current = false;
       setPickBusy(false);
     }
   }
@@ -597,7 +616,15 @@ export default function WmsPickingProductDetailPage() {
     manual = false,
     routeReason: "pending_confirm" | "series_switch" | "no_pending_probe" = "pending_confirm",
   ) {
-    if (!pickingSession || warehouseId == null || !pickingSession.cartId) return;
+    if (!pickingSession || warehouseId == null || !pickingSession.cartId) {
+      scanGateRef.current = false;
+      return;
+    }
+    if (pickBusy) {
+      scanGateRef.current = false;
+      return;
+    }
+    scanGateRef.current = true;
     setPickBusy(true);
     setPickMsg(null);
     multiScanTrace("BASKET_SCAN", {
@@ -619,7 +646,6 @@ export default function WmsPickingProductDetailPage() {
           recovery_order_id: recoveryOrderId,
         },
       );
-      playScanBeep();
       multiScanTrace("BASKET_CONFIRM_OK", {
         phase: result.phase ?? null,
         pick_delta: result.quantity_put ?? 0,
@@ -632,6 +658,7 @@ export default function WmsPickingProductDetailPage() {
       // Series destination switch: qty unchanged — stay on detail, await next EAN.
       if (result.phase === "SERIES_DESTINATION_SWITCHED" || result.picked === false) {
         if (result.phase === "SERIES_DESTINATION_SWITCHED") {
+          // Exactly one success beep via showScanFeedback (do not also playScanBeep).
           showScanFeedback(
             mapWmsScanErrorCode("SERIES_DESTINATION_SWITCHED", {
               backendMessage: result.message,
@@ -640,10 +667,13 @@ export default function WmsPickingProductDetailPage() {
                 : null,
             }),
           );
+        } else {
+          playScanBeep();
         }
         setScannerInputPlaceholder("Skanuj EAN produktu");
         return;
       }
+      playScanBeep();
       const after = await getWmsPickingProductDetail(
         pickingTenantId,
         warehouseId,
@@ -678,6 +708,7 @@ export default function WmsPickingProductDetailPage() {
       setPickMsg(feedback.message);
       await load();
     } finally {
+      scanGateRef.current = false;
       setPickBusy(false);
       refocusScannerInput();
     }

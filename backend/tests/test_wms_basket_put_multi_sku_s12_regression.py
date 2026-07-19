@@ -331,6 +331,31 @@ def test_case7_reopen_after_s12_shows_series_s12_not_fifo_s11(db, env):
     assert int(ui["active_series"]["order_id"]) == 1235
 
 
+def test_after_s12_line_complete_next_ean_allows_s11(db, env):
+    """Audit case: rem 8 on S-1-1 + rem 1 on S-1-2 — finish S-1-2 then unbound → S-1-1."""
+    env["add_order"](1234, 10, qty=8)
+    env["add_order"](1235, 11, qty=1)
+    _scan(db, env)
+    r1 = _confirm(db, env, "S-1-2")
+    assert r1.phase == "PUT_CONFIRMED"
+    assert env["pick_calls"] == [(1.0, 1235)]
+    # Exhausted series may linger until next product scan clears it (no auto FIFO to S-1-1).
+    r2 = _scan(db, env)
+    assert r2.phase == "AWAITING_BASKET_CONFIRMATION"
+    assert env["pick_calls"] == [(1.0, 1235)]  # no Pick before basket
+    assert put_state.get_active_series(env["sess"]) is None
+    labels = {b["basket_label"] for b in (r2.eligible_baskets or [])}
+    assert labels == {"S-1-1"}
+    # Complete S-1-2 must not Pick and must not sticky-require S-1-2.
+    with pytest.raises(BasketPutError) as cm:
+        _confirm(db, env, "S-1-2")
+    assert cm.value.code == "BASKET_PRODUCT_ALREADY_COMPLETE"
+    assert env["pick_calls"] == [(1.0, 1235)]
+    r3 = _confirm(db, env, "S-1-1")
+    assert r3.phase == "PUT_CONFIRMED"
+    assert env["pick_calls"] == [(1.0, 1235), (1.0, 1234)]
+
+
 def test_stale_same_product_series_cleared_when_line_gone(db, env):
     env["add_order"](1234, 10, qty=1)
     env["add_order"](1235, 11, qty=5)
