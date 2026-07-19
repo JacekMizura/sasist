@@ -78,6 +78,21 @@ def _audit(event: str, **fields: Any) -> None:
         event,
         " ".join(f"{k}={v!r}" for k, v in fields.items()),
     )
+    # Compact ops trace (no PII) — correlates with FE MULTI_SCAN_TRACE.
+    if event in (
+        "PRODUCT_SCAN_PENDING_PUT",
+        "BASKET_CONFIRMED",
+        "MANUAL_BASKET_CONFIRMATION",
+        "BASKET_SERIES_DESTINATION_SWITCHED",
+        "BASKET_PRODUCT_MISMATCH",
+        "BASKET_MISMATCH",
+        "PUT_CONFIRMED",
+    ):
+        logger.info(
+            "MULTI_SCAN_TRACE event=%s %s",
+            event,
+            " ".join(f"{k}={v}" for k, v in fields.items() if v is not None),
+        )
 
 
 def _series_matches_product(

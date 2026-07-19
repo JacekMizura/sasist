@@ -22,6 +22,10 @@ import { BundleConsolidationRackCard } from "../../components/wms/bundle/BundleC
 import type { BundleScanOut, ConsolidationRackBundleRowOut } from "../../api/bundlesLogisticsApi";
 import { getConsolidationRackBundleView } from "../../api/bundlesLogisticsApi";
 import { tryPickingBundleScan } from "../../services/bundleScannerIntegration";
+import {
+  multiScanTrace,
+  resolveMultiPickingDetailScan,
+} from "../../utils/multiPickingScanRoute";
 import { buildPickingBundleDisplay } from "../../utils/bundleScanFlow";
 import { WmsOperationalPageBody, WmsOperationalPageShell } from "../../components/wms/execution/WmsOperationalPageShell";
 import { useWmsScanner } from "../../context/WmsScannerContext";
@@ -349,35 +353,53 @@ export default function WmsPickingProductDetailPage() {
       const locs = detail.locations;
       if (locs.length === 0) return;
 
-      // MULTI baskets: awaiting basket confirmation — only accept basket (or reject product)
-      if (detail.basket_put_pending && pickingSession.cartId) {
-        if (normalizeScanEan(detail.ean) === scan) {
-          const labels =
-            detail.basket_put_pending.eligible_baskets
-              ?.map((b) => b.basket_label)
-              .filter(Boolean)
-              .join(", ") || "właściwy koszyk";
-          showScannerToast(`Najpierw potwierdź koszyk (${labels})`);
-          setPickMsg(
-            `NAJPIERW POTWIERDŹ KOSZYK. Odłóż produkt i zeskanuj jeden z koszyków: ${labels}.`,
-          );
-          return;
-        }
-        void confirmBasketScan(raw);
+      const requiresBasketPut = Boolean(
+        detail.requires_basket_put_confirm && pickingSession.cartId,
+      );
+      const pendingLabels =
+        detail.basket_put_pending?.eligible_baskets
+          ?.map((b) => b.basket_label)
+          .filter(Boolean)
+          .join(", ") || undefined;
+
+      const multiDecision = resolveMultiPickingDetailScan(scan, {
+        requiresBasketPut,
+        hasPending: Boolean(detail.basket_put_pending),
+        hasActiveSeries: Boolean(detail.basket_put_active_series?.basket_label),
+        productEan: detail.ean,
+        pendingEligibleLabels: pendingLabels,
+      });
+
+      multiScanTrace("DETAIL_SCAN", {
+        raw_code: scan,
+        classified_as: multiDecision.kind,
+        reason: "reason" in multiDecision ? multiDecision.reason : null,
+        pending: Boolean(detail.basket_put_pending),
+        series: Boolean(detail.basket_put_active_series?.basket_label),
+        product_id: productId,
+      });
+
+      if (multiDecision.kind === "reject_ean_while_pending") {
+        showScannerToast(multiDecision.message);
+        setPickMsg(multiDecision.message);
         return;
       }
-
-      // Series active: EAN continues series; scan of another basket switches destination.
-      if (detail.basket_put_active_series?.basket_label && pickingSession.cartId) {
-        if (normalizeScanEan(detail.ean) === scan && !pickQueueDone && selectedLocation) {
+      if (multiDecision.kind === "confirm_basket") {
+        void confirmBasketScan(raw, false, multiDecision.reason);
+        return;
+      }
+      if (multiDecision.kind === "product_ean_pick") {
+        if (!pickQueueDone && selectedLocation) {
+          multiScanTrace("PRODUCT_SCAN", {
+            product_id: productId,
+            location_id: selectedLocation.location_id,
+            via: "detail",
+          });
           void confirm_pick(1, selectedLocation.location_id);
-          return;
+        } else if (!selectedLocation) {
+          showScannerToast("Zeskanuj lokalizację przed EAN.");
         }
-        // Likely a basket barcode (not product EAN) — try destination switch.
-        if (normalizeScanEan(detail.ean) !== scan) {
-          void confirmBasketScan(raw);
-          return;
-        }
+        return;
       }
 
       const shelfLabel = (detail.consolidation_shelf_label ?? "").trim();
@@ -433,7 +455,7 @@ export default function WmsPickingProductDetailPage() {
         }
       }
 
-      // Skan kodu EAN produktu wewnątrz detalu - podbija sztukę
+      // Skan EAN poza MULTI gate (cartless / BULK)
       if (normalizeScanEan(detail.ean) === scan && !pickQueueDone && selectedLocation) {
         void confirm_pick(1, selectedLocation.location_id);
         return;
@@ -442,7 +464,7 @@ export default function WmsPickingProductDetailPage() {
     };
     registerScanHandler(handler);
     return () => registerScanHandler(null);
-  }, [detail, pickingSession, activeLocationId, registerScanHandler, appendScanToHistory, pickQueueDone, selectedLocation, pickingTenantId, orderType, showScannerToast, load]);
+  }, [detail, pickingSession, activeLocationId, registerScanHandler, appendScanToHistory, pickQueueDone, selectedLocation, pickingTenantId, orderType, showScannerToast, load, productId]);
 
   const goBackToList = useCallback(
     (refreshList = false) => {
@@ -486,6 +508,12 @@ export default function WmsPickingProductDetailPage() {
       });
       playScanBeep();
       if (result.phase === "AWAITING_BASKET_CONFIRMATION" || result.picked === false) {
+        multiScanTrace("PRODUCT_SCAN_PENDING", {
+          product_id: productId,
+          pending_created: Boolean(result.pending),
+          phase: result.phase ?? "AWAITING_BASKET_CONFIRMATION",
+          pick_delta: 0,
+        });
         setPickMsg(result.message ?? "Zeskanuj koszyk, aby potwierdzić odłożenie.");
         setScannerInputPlaceholder("Zeskanuj koszyk");
         await load();
@@ -548,10 +576,20 @@ export default function WmsPickingProductDetailPage() {
     }
   }
 
-  async function confirmBasketScan(rawScan: string, manual = false) {
+  async function confirmBasketScan(
+    rawScan: string,
+    manual = false,
+    routeReason: "pending_confirm" | "series_switch" | "no_pending_probe" = "pending_confirm",
+  ) {
     if (!pickingSession || warehouseId == null || !pickingSession.cartId) return;
     setPickBusy(true);
     setPickMsg(null);
+    multiScanTrace("BASKET_SCAN", {
+      raw_code: normalizeScanEan(rawScan),
+      classified_as: routeReason,
+      pending_before_confirm: Boolean(detail?.basket_put_pending),
+      product_id: productId,
+    });
     try {
       const result = await postWmsPickingConfirmBasketPut(
         pickingTenantId,
@@ -566,6 +604,13 @@ export default function WmsPickingProductDetailPage() {
         },
       );
       playScanBeep();
+      multiScanTrace("BASKET_CONFIRM_OK", {
+        phase: result.phase ?? null,
+        pick_delta: result.quantity_put ?? 0,
+        order_id: result.order_id ?? null,
+        order_item_id: result.order_item_id ?? null,
+        basket_label: result.active_series?.basket_label ?? result.expected_basket_label ?? null,
+      });
       setPickMsg(result.message ?? `Koszyk potwierdzony`);
       await load();
       // Series destination switch: qty unchanged — stay on detail, await next EAN.
@@ -591,17 +636,30 @@ export default function WmsPickingProductDetailPage() {
       }
     } catch (e: unknown) {
       let msg = "Potwierdzenie koszyka nie powiodło się.";
+      let code: string | null = null;
       if (axios.isAxiosError(e)) {
         const data = e.response?.data as { detail?: unknown } | undefined;
         if (data?.detail != null) {
           if (typeof data.detail === "object" && data.detail && "message" in (data.detail as object)) {
             msg = String((data.detail as { message: string }).message);
+            code = (data.detail as { code?: string }).code ?? null;
           } else {
             msg = formatFastApiErrorDetail({ detail: data.detail });
           }
         }
       }
+      if (code === "NO_PENDING_PUT" || routeReason === "no_pending_probe") {
+        msg =
+          "Najpierw zeskanuj EAN produktu (pobranie sztuki), dopiero potem koszyk. " +
+          "Sam skan koszyka nie zapisuje Pick.";
+      }
+      multiScanTrace("BASKET_CONFIRM_FAIL", {
+        raw_code: normalizeScanEan(rawScan),
+        code,
+        classified_as: routeReason,
+      });
       setPickMsg(msg);
+      showScannerToast(msg);
       await load();
     } finally {
       setPickBusy(false);
@@ -841,13 +899,13 @@ export default function WmsPickingProductDetailPage() {
               ) : detail.basket_put_pending ? (
                 <div className="w-full max-w-xl rounded-3xl border-4 border-amber-500 bg-amber-50 px-6 py-6 text-center shadow-lg ring-4 ring-amber-300/40">
                   <p className="text-sm font-black uppercase tracking-[0.2em] text-amber-800">
-                    Zeskanowano produkt
+                    Produkt zeskanowany — odłóż do koszyka
                   </p>
                   <p className="mt-2 text-lg font-bold text-amber-950">
                     {fmtQty(detail.basket_put_pending.quantity ?? 1)} szt. oczekuje na odłożenie
                   </p>
                   <p className="mt-4 text-base font-black uppercase tracking-wide text-amber-900">
-                    Zeskanuj koszyk
+                    Zeskanuj dowolny z poniższych koszyków
                   </p>
                   {(detail.basket_put_pending.eligible_baskets?.length ?? 0) > 0 ? (
                     <ul className="mt-4 space-y-2 text-left">
@@ -915,8 +973,11 @@ export default function WmsPickingProductDetailPage() {
                         </li>
                       ))}
                   </ul>
-                  <p className="mt-3 text-xs font-semibold text-slate-500">
-                    Zeskanuj EAN, potem dowolny z tych koszyków.
+                  <p className="mt-3 text-sm font-black uppercase tracking-wide text-slate-700">
+                    Zeskanuj EAN produktu
+                  </p>
+                  <p className="mt-1 text-xs font-semibold text-slate-500">
+                    Dopiero po skanie EAN wybierzesz koszyk. Sam skan koszyka nie zapisuje Pick.
                   </p>
                 </div>
               ) : null}

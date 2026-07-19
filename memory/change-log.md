@@ -1,3 +1,9 @@
+## 2026-07-19 — REAL runtime: state A UI + silent basket scan (brck1-B0x)
+
+- ROOT: Screen „KOSZYKI WYMAGAJĄCE… Zeskanuj EAN, potem koszyk” = pending=NULL (state A). Detail handler ignored brck1-B0x (silent). List with pending blocked basket instead of confirm. classifyWmsScanCode treated brck1-B01 as location_like.
+- FIX: multiPickingScanRoute (A/B/C); detail/list route basket → confirm; clear state A copy; basket_like classify; MULTI_SCAN_TRACE; brck1 runtime tests.
+- SSOT unchanged: EAN→pending→basket→Pick.
+
 ## 2026-07-19 — SERIES LINE PROGRESS: live line_remaining ≠ product aggregate
 
 - ROOT: series banner used product aggregate `remaining` (e.g. 17) instead of allocation rem (8).

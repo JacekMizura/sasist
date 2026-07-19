@@ -14,6 +14,7 @@ import {
   postWmsPickingRecoveryFinalize,
   postWmsPickingQuickPick,
   postWmsPickingCancelPendingBasketPut,
+  postWmsPickingConfirmBasketPut,
   postWmsPickingStartCartless,
   type WmsBasketPutPendingListApi,
   type WmsPickingCohortMissingLineApi,
@@ -55,6 +56,10 @@ import type { BundleScanOut } from "../../api/bundlesLogisticsApi";
 import { BundlePickingScanCard } from "../../components/wms/bundle/BundlePickingScanCard";
 import { tryPickingBundleScan } from "../../services/bundleScannerIntegration";
 import { buildPickingBundleDisplay } from "../../utils/bundleScanFlow";
+import {
+  multiScanTrace,
+  resolveMultiPickingListScan,
+} from "../../utils/multiPickingScanRoute";
 
 function fmtQty(n: number): string {
   return new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 2 }).format(n);
@@ -662,7 +667,7 @@ export default function WmsPickingProductsPage() {
       const matches = rows.filter((r) => productLineMatchesScan(r, scan));
       const hit = matches.find((r) => rowScannerEligible(r));
 
-      // MULTI pending: never create second pending / Pick — resume or block.
+      // MULTI pending: never create second pending / Pick — resume, basket confirm, or block.
       if (basketPutPending && basketPutPending.product_id > 0) {
         const pendingMatches =
           hit?.product_id === basketPutPending.product_id ||
@@ -676,7 +681,16 @@ export default function WmsPickingProductsPage() {
             } as WmsPickingProductLineApi,
             scan,
           );
-        if (pendingMatches || hit?.product_id === basketPutPending.product_id) {
+        const listDecision = resolveMultiPickingListScan(scan, {
+          hasPending: true,
+          pendingProductMatchesScan: Boolean(pendingMatches || hit?.product_id === basketPutPending.product_id),
+        });
+        multiScanTrace("LIST_SCAN", {
+          raw_code: scan,
+          classified_as: listDecision.kind,
+          pending_product_id: basketPutPending.product_id,
+        });
+        if (listDecision.kind === "resume_pending_detail") {
           playScanBeep();
           appendScanToHistory(scan);
           showScannerToast("Odłóż produkt do koszyka");
@@ -684,6 +698,46 @@ export default function WmsPickingProductsPage() {
             listProductScanToken: basketPutPending.idempotency_key ?? null,
           });
           return;
+        }
+        if (listDecision.kind === "confirm_basket" && mergedSession.cartId) {
+          multiScanTrace("BASKET_SCAN", {
+            raw_code: scan,
+            classified_as: "pending_confirm",
+            via: "list",
+            pending_before_confirm: true,
+          });
+          try {
+            const result = await postWmsPickingConfirmBasketPut(
+              DAMAGE_TENANT_ID,
+              warehouseId,
+              mergedSession.orderUiStatusId,
+              orderType,
+              {
+                cart_id: mergedSession.cartId,
+                basket_scan: scan,
+                recovery_order_id: recoveryOrderId,
+              },
+            );
+            playScanBeep();
+            appendScanToHistory(scan);
+            multiScanTrace("BASKET_CONFIRM_OK", {
+              phase: result.phase ?? null,
+              pick_delta: result.quantity_put ?? 0,
+              order_id: result.order_id ?? null,
+              via: "list",
+            });
+            showScannerToast(result.message ?? "Koszyk potwierdzony");
+            setBasketPutPending(null);
+            void load();
+            if (result.order_id != null && basketPutPending.product_id) {
+              goDetail(basketPutPending.product_id);
+            }
+            return;
+          } catch (e: unknown) {
+            showScannerToast(extractApiErrorMessage(e, "Potwierdzenie koszyka nie powiodło się."));
+            void load();
+            return;
+          }
         }
         showScannerToast("Najpierw odłóż poprzednio pobrany produkt do koszyka.");
         return;
@@ -724,6 +778,13 @@ export default function WmsPickingProductsPage() {
             playScanBeep();
             appendScanToHistory(scan);
             if (result.phase === "AWAITING_BASKET_CONFIRMATION" || result.picked === false) {
+              multiScanTrace("PRODUCT_SCAN", {
+                product_id: hit.product_id,
+                pending_created: Boolean(result.pending),
+                phase: result.phase ?? "AWAITING_BASKET_CONFIRMATION",
+                pick_delta: 0,
+                via: "list",
+              });
               showScannerToast(result.message ?? hit.name);
               goDetail(hit.product_id, {
                 listProductScanToken: result.pending?.idempotency_key ?? `scan-${Date.now()}`,

@@ -88,6 +88,7 @@ export function scanKindToHistoryKind(kind: WmsScanKind): DevScanHistoryKind {
   if (kind === "location_like") return "location";
   if (kind === "carrier_barcode") return "carrier";
   if (kind === "cart_like") return "cart";
+  if (kind === "basket_like") return "basket";
   return "other";
 }
 

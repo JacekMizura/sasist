@@ -273,7 +273,7 @@ export function WmsScannerProvider({ children }: { children: ReactNode }) {
 
       if (isWmsProductPreviewPath(location.pathname)) {
         const kind = classifyWmsScanCode(ean);
-        if (kind === "cart_like" || kind === "location_like") {
+        if (kind === "cart_like" || kind === "basket_like" || kind === "location_like") {
           showScannerToast("W podglądzie produktu zeskanuj kod EAN produktu.");
           appendScanToHistory(ean);
           refocusScannerInput();
