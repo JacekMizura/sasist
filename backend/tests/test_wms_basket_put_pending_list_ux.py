@@ -224,7 +224,7 @@ def test_case2_resume_uses_existing_pending_no_second_scan(db, cart_env):
     key = r1.pending["idempotency_key"]
     with pytest.raises(BasketPutError) as cm:
         _scan(db, cart_env, order_ids=[1234])
-    assert cm.value.code == "AWAITING_BASKET_CONFIRMATION"
+    assert cm.value.code == "EXPECTED_BASKET_SCAN"
     assert put_state.get_pending(cart_env["sess"])["idempotency_key"] == key
     assert cart_env["pick_calls"] == []
     proj = _proj(db, cart_env)
@@ -236,7 +236,7 @@ def test_case3_same_product_scan_while_pending_no_pick(db, cart_env):
     _scan(db, cart_env, order_ids=[1234])
     with pytest.raises(BasketPutError) as cm:
         _scan(db, cart_env, order_ids=[1234], product_id=10)
-    assert cm.value.code == "AWAITING_BASKET_CONFIRMATION"
+    assert cm.value.code == "EXPECTED_BASKET_SCAN"
     assert cart_env["pick_calls"] == []
 
 
@@ -246,7 +246,7 @@ def test_case4_other_product_scan_while_pending_blocked(db, cart_env):
     _scan(db, cart_env, order_ids=[1234, 1235], product_id=10)
     with pytest.raises(BasketPutError) as cm:
         _scan(db, cart_env, order_ids=[1234, 1235], product_id=11)
-    assert cm.value.code == "AWAITING_BASKET_CONFIRMATION"
+    assert cm.value.code == "EXPECTED_BASKET_SCAN"
     assert cart_env["pick_calls"] == []
     assert int(put_state.get_pending(cart_env["sess"])["product_id"]) == 10
 

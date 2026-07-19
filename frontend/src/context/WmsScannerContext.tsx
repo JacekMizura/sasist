@@ -9,7 +9,12 @@ import {
   type ReactNode,
 } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { playScanBeep } from "../utils/playScanBeep";
+import { playScanBeep, playScanErrorBeep } from "../utils/playScanBeep";
+import { WmsScanFeedbackOverlay } from "../wms/scanFeedback/WmsScanFeedbackOverlay";
+import {
+  mapWmsScanErrorCode,
+  type WmsScanFeedback,
+} from "../wms/scanFeedback/wmsScanErrorCatalog";
 import {
   type DevScanHistoryEntry,
   loadDevScannerHistory,
@@ -160,7 +165,15 @@ export type WmsScannerContextValue = {
   showScannerToast: (message: string) => void;
   /** Czerwony baner błędu (~2,5 s) — np. zły typ skanu na pakowaniu. */
   showScannerError: (message: string) => void;
+  /** Structured operator feedback (code → catalog). Prefer this for MULTI picking. */
+  showScanFeedback: (feedback: WmsScanFeedback) => void;
+  showScanFeedbackFromCode: (
+    code: string,
+    opts?: { backendMessage?: string | null; contextHint?: string | null },
+  ) => void;
   clearScannerToast: () => void;
+  clearScanFeedback: () => void;
+  scanFeedback: WmsScanFeedback | null;
   devEanInput: string;
   setDevEanInput: (v: string) => void;
   clearDevScannerInput: () => void;
@@ -190,6 +203,7 @@ export function WmsScannerProvider({ children }: { children: ReactNode }) {
   const [devEanInput, setDevEanInput] = useState("");
   const [scannerToast, setScannerToast] = useState<string | null>(null);
   const [scannerError, setScannerError] = useState<string | null>(null);
+  const [scanFeedback, setScanFeedback] = useState<WmsScanFeedback | null>(null);
   const [scannerInputDisabled, setScannerInputDisabled] = useState(false);
   const [scannerInputPlaceholder, setScannerInputPlaceholder] = useState("Wpisz lub wklej EAN (↑↓ historia)");
   const [hasActiveScanHandler, setHasActiveScanHandler] = useState(false);
@@ -220,10 +234,38 @@ export function WmsScannerProvider({ children }: { children: ReactNode }) {
     return () => window.clearTimeout(t);
   }, [scannerError]);
 
+  useEffect(() => {
+    if (!scanFeedback) return;
+    const ms =
+      scanFeedback.severity === "success" || scanFeedback.severity === "info" ? 3500 : 5500;
+    const t = window.setTimeout(() => setScanFeedback(null), ms);
+    return () => window.clearTimeout(t);
+  }, [scanFeedback]);
+
   const registerScanHandler = useCallback((handler: ScanHandler | null) => {
     scanHandlerRef.current = handler;
     setHasActiveScanHandler(handler != null);
   }, []);
+
+  const clearScanFeedback = useCallback(() => setScanFeedback(null), []);
+
+  const showScanFeedback = useCallback((feedback: WmsScanFeedback) => {
+    setScannerToast(null);
+    setScannerError(null);
+    setScanFeedback(feedback);
+    if (feedback.severity === "error" || feedback.severity === "warning") {
+      playScanErrorBeep();
+    } else if (feedback.severity === "success") {
+      playScanBeep();
+    }
+  }, []);
+
+  const showScanFeedbackFromCode = useCallback(
+    (code: string, opts?: { backendMessage?: string | null; contextHint?: string | null }) => {
+      showScanFeedback(mapWmsScanErrorCode(code, opts));
+    },
+    [showScanFeedback],
+  );
 
   const appendScanToHistory = useCallback((ean: string, meta?: DevScanHistoryAppendMeta) => {
     const key = normalizeScanEan(ean);
@@ -243,17 +285,22 @@ export function WmsScannerProvider({ children }: { children: ReactNode }) {
 
   const showScannerToast = useCallback((message: string) => {
     setScannerError(null);
+    setScanFeedback(null);
     setScannerToast(message);
   }, []);
 
   const showScannerError = useCallback((message: string) => {
     setScannerToast(null);
-    setScannerError(message);
+    setScanFeedback(
+      mapWmsScanErrorCode("UNKNOWN_SCAN_CODE", { backendMessage: message }),
+    );
+    playScanErrorBeep();
   }, []);
 
   const clearScannerToast = useCallback(() => {
     setScannerToast(null);
     setScannerError(null);
+    setScanFeedback(null);
   }, []);
 
   const clearDevScannerInput = useCallback(() => setDevEanInput(""), []);
@@ -409,7 +456,11 @@ export function WmsScannerProvider({ children }: { children: ReactNode }) {
       appendScanToHistory,
       showScannerToast,
       showScannerError,
+      showScanFeedback,
+      showScanFeedbackFromCode,
       clearScannerToast,
+      clearScanFeedback,
+      scanFeedback,
       devEanInput,
       setDevEanInput,
       clearDevScannerInput,
@@ -433,7 +484,11 @@ export function WmsScannerProvider({ children }: { children: ReactNode }) {
       appendScanToHistory,
       showScannerToast,
       showScannerError,
+      showScanFeedback,
+      showScanFeedbackFromCode,
       clearScannerToast,
+      clearScanFeedback,
+      scanFeedback,
       devEanInput,
       clearDevScannerInput,
       refocusScannerInput,
@@ -445,7 +500,12 @@ export function WmsScannerProvider({ children }: { children: ReactNode }) {
     ],
   );
 
-  return <WmsScannerContext.Provider value={value}>{children}</WmsScannerContext.Provider>;
+  return (
+    <WmsScannerContext.Provider value={value}>
+      {children}
+      <WmsScanFeedbackOverlay feedback={scanFeedback} onDismiss={clearScanFeedback} />
+    </WmsScannerContext.Provider>
+  );
 }
 
 export function useWmsScanner(): WmsScannerContextValue {

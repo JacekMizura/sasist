@@ -60,6 +60,7 @@ import {
   multiScanTrace,
   resolveMultiPickingListScan,
 } from "../../utils/multiPickingScanRoute";
+import { extractWmsScanErrorDetail } from "../../wms/scanFeedback/wmsScanErrorCatalog";
 
 function fmtQty(n: number): string {
   return new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 2 }).format(n);
@@ -106,6 +107,7 @@ export default function WmsPickingProductsPage() {
     registerScanHandler,
     setActiveDocument,
     showScannerToast,
+    showScanFeedbackFromCode,
     setScannerInputPlaceholder,
     appendScanToHistory,
     refocusScannerInput,
@@ -666,6 +668,7 @@ export default function WmsPickingProductsPage() {
       
       const matches = rows.filter((r) => productLineMatchesScan(r, scan));
       const hit = matches.find((r) => rowScannerEligible(r));
+      const completeHit = matches.find((r) => wmsPickingProductLineComplete(r));
 
       // MULTI pending: never create second pending / Pick — resume, basket confirm, or block.
       if (basketPutPending && basketPutPending.product_id > 0) {
@@ -684,12 +687,21 @@ export default function WmsPickingProductsPage() {
         const listDecision = resolveMultiPickingListScan(scan, {
           hasPending: true,
           pendingProductMatchesScan: Boolean(pendingMatches || hit?.product_id === basketPutPending.product_id),
+          productHitEligible: Boolean(hit),
+          productHitComplete: Boolean(completeHit && !hit),
+          requiresBasketPut: true,
         });
         multiScanTrace("LIST_SCAN", {
           raw_code: scan,
           classified_as: listDecision.kind,
+          code: listDecision.kind === "reject" ? listDecision.code : null,
           pending_product_id: basketPutPending.product_id,
         });
+        if (listDecision.kind === "reject") {
+          showScanFeedbackFromCode(listDecision.code);
+          appendScanToHistory(scan);
+          return;
+        }
         if (listDecision.kind === "resume_pending_detail") {
           playScanBeep();
           appendScanToHistory(scan);
@@ -734,13 +746,40 @@ export default function WmsPickingProductsPage() {
             }
             return;
           } catch (e: unknown) {
-            showScannerToast(extractApiErrorMessage(e, "Potwierdzenie koszyka nie powiodło się."));
+            const extracted = extractWmsScanErrorDetail(e);
+            showScanFeedbackFromCode(extracted.code ?? "UNKNOWN_SCAN_CODE", {
+              backendMessage: extracted.message,
+              contextHint: extracted.eligibleLabels,
+            });
             void load();
             return;
           }
         }
-        showScannerToast("Najpierw odłóż poprzednio pobrany produkt do koszyka.");
+        showScanFeedbackFromCode("EXPECTED_BASKET_SCAN");
+        appendScanToHistory(scan);
         return;
+      }
+
+      // SELECT_PRODUCT: basket / unknown / complete before quick-pick
+      if (!basketPutPending) {
+        const selectDecision = resolveMultiPickingListScan(scan, {
+          hasPending: false,
+          pendingProductMatchesScan: false,
+          productHitEligible: Boolean(hit),
+          productHitComplete: Boolean(completeHit && !hit),
+          requiresBasketPut: Boolean(mergedSession.cartId),
+        });
+        if (selectDecision.kind === "reject") {
+          multiScanTrace("LIST_SCAN", {
+            raw_code: scan,
+            classified_as: "reject",
+            code: selectDecision.code,
+            consumed: true,
+          });
+          showScanFeedbackFromCode(selectDecision.code);
+          appendScanToHistory(scan);
+          return;
+        }
       }
       
       if (hit) {
@@ -820,11 +859,23 @@ export default function WmsPickingProductsPage() {
                 ? (e.response.data as { detail?: { pending?: { idempotency_key?: string } } }).detail?.pending
                     ?.idempotency_key
                 : undefined;
-            if (code === "AWAITING_BASKET_CONFIRMATION" && pendingProductId != null) {
+            if (
+              (code === "AWAITING_BASKET_CONFIRMATION" ||
+                code === "EXPECTED_BASKET_SCAN" ||
+                code === "PENDING_PUT_EXISTS") &&
+              pendingProductId != null
+            ) {
               playScanBeep();
               appendScanToHistory(scan);
-              showScannerToast(extractApiErrorMessage(e, "Najpierw potwierdź koszyk."));
+              showScanFeedbackFromCode(code);
               goDetail(pendingProductId, { listProductScanToken: pendingKey ?? null });
+              return;
+            }
+            if (code) {
+              showScanFeedbackFromCode(code, {
+                backendMessage: extractApiErrorMessage(e, undefined),
+              });
+              appendScanToHistory(scan);
               return;
             }
             if (total === 1) {
@@ -846,9 +897,11 @@ export default function WmsPickingProductsPage() {
         showScannerToast(hit.name);
         goDetail(hit.product_id);
       } else if (matches.length > 0) {
-        showScannerToast("Produkt już zebrany lub oznaczony jako brak");
+        showScanFeedbackFromCode("PRODUCT_ALREADY_COMPLETE");
+        appendScanToHistory(scan);
       } else {
-        showScannerToast("Brak produktu na liście");
+        showScanFeedbackFromCode("PRODUCT_NOT_IN_PICKING");
+        appendScanToHistory(scan);
       }
     };
     registerScanHandler(handler);
@@ -858,6 +911,7 @@ export default function WmsPickingProductsPage() {
     rows,
     appendScanToHistory,
     showScannerToast,
+    showScanFeedbackFromCode,
     goDetail,
     blockOtherProductLines,
     shortageProductIds,

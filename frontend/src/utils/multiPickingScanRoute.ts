@@ -1,6 +1,6 @@
 /**
  * MULTI basket-put scan routing (Scanner Helper → page handler).
- * Pure decisions — unit-tested without React; pages execute the actions.
+ * CLASSIFY → READ STATE → VALIDATE TRANSITION → execute | reject(code).
  */
 
 import { normalizeScanEan } from "./wmsScanNormalize";
@@ -10,21 +10,18 @@ export type MultiPickingScanContext = {
   hasPending: boolean;
   hasActiveSeries: boolean;
   productEan: string | null | undefined;
-  /** Eligible basket labels for toast copy (optional). */
+  /** Aggregate remaining for current product detail (overpick gate). */
+  productRemaining?: number;
   pendingEligibleLabels?: string;
 };
 
 export type MultiPickingScanDecision =
   | { kind: "noop" }
-  | { kind: "reject_ean_while_pending"; message: string }
+  | { kind: "reject"; code: string; consumed: true }
   | { kind: "confirm_basket"; reason: "pending_confirm" | "series_switch" | "no_pending_probe" }
   | { kind: "product_ean_pick" }
   | { kind: "fallthrough" };
 
-/**
- * Physical basket barcodes used on carts (e.g. brck1-B01) and human slot labels (S-1-2).
- * Must NOT treat these as warehouse locations for picking put.
- */
 export function looksLikeCartBasketScan(raw: string): boolean {
   const s = normalizeScanEan(raw);
   if (!s) return false;
@@ -37,6 +34,12 @@ export function looksLikeCartBasketScan(raw: string): boolean {
   return false;
 }
 
+/** Digit barcode typical of product EAN/GTIN (not basket/location). */
+export function looksLikeProductBarcode(raw: string): boolean {
+  const s = normalizeScanEan(raw);
+  return /^\d{8,20}$/.test(s);
+}
+
 export function resolveMultiPickingDetailScan(
   raw: string,
   ctx: MultiPickingScanContext,
@@ -47,52 +50,99 @@ export function resolveMultiPickingDetailScan(
 
   const productEan = normalizeScanEan(ctx.productEan ?? "");
   const isProductEan = Boolean(productEan) && productEan === scan;
-  const labels = ctx.pendingEligibleLabels || "właściwy koszyk";
+  const rem = ctx.productRemaining;
 
+  // --- STATE B: AWAITING_BASKET ---
   if (ctx.hasPending) {
     if (isProductEan) {
-      return {
-        kind: "reject_ean_while_pending",
-        message: `NAJPIERW POTWIERDŹ KOSZYK. Zeskanuj jeden z koszyków: ${labels}.`,
-      };
+      return { kind: "reject", code: "PENDING_PUT_EXISTS", consumed: true };
     }
-    return { kind: "confirm_basket", reason: "pending_confirm" };
+    if (looksLikeProductBarcode(scan)) {
+      return { kind: "reject", code: "EXPECTED_BASKET_SCAN", consumed: true };
+    }
+    if (looksLikeCartBasketScan(scan)) {
+      return { kind: "confirm_basket", reason: "pending_confirm" };
+    }
+    return { kind: "reject", code: "UNKNOWN_SCAN_CODE", consumed: true };
   }
 
+  // --- STATE C: ACTIVE_SERIES ---
   if (ctx.hasActiveSeries) {
-    if (isProductEan) return { kind: "product_ean_pick" };
+    if (isProductEan) {
+      if (typeof rem === "number" && rem <= 1e-9) {
+        return { kind: "reject", code: "OVERPICK_BLOCKED", consumed: true };
+      }
+      return { kind: "product_ean_pick" };
+    }
+    if (looksLikeProductBarcode(scan)) {
+      return { kind: "reject", code: "FOREIGN_SKU_ON_SERIES", consumed: true };
+    }
     if (looksLikeCartBasketScan(scan)) {
       return { kind: "confirm_basket", reason: "series_switch" };
     }
-    return { kind: "fallthrough" };
+    return { kind: "reject", code: "UNKNOWN_SCAN_CODE", consumed: true };
   }
 
-  // State A: no pending, no series — EAN creates pending; basket must not be silent.
-  if (isProductEan) return { kind: "product_ean_pick" };
-  if (looksLikeCartBasketScan(scan)) {
-    return { kind: "confirm_basket", reason: "no_pending_probe" };
+  // --- STATE A: SELECT_PRODUCT ---
+  if (isProductEan) {
+    if (typeof rem === "number" && rem <= 1e-9) {
+      return { kind: "reject", code: "PRODUCT_ALREADY_COMPLETE", consumed: true };
+    }
+    return { kind: "product_ean_pick" };
   }
-  return { kind: "fallthrough" };
+  if (looksLikeCartBasketScan(scan)) {
+    return { kind: "reject", code: "EXPECTED_PRODUCT_SCAN", consumed: true };
+  }
+  if (looksLikeProductBarcode(scan)) {
+    return { kind: "reject", code: "PRODUCT_NOT_IN_PICKING", consumed: true };
+  }
+  return { kind: "reject", code: "UNKNOWN_SCAN_CODE", consumed: true };
 }
 
 export function resolveMultiPickingListScan(
   raw: string,
-  ctx: { hasPending: boolean; pendingProductMatchesScan: boolean },
+  ctx: {
+    hasPending: boolean;
+    pendingProductMatchesScan: boolean;
+    productHitEligible: boolean;
+    productHitComplete: boolean;
+    requiresBasketPut: boolean;
+  },
 ):
   | { kind: "noop" }
+  | { kind: "reject"; code: string; consumed: true }
   | { kind: "resume_pending_detail" }
   | { kind: "confirm_basket" }
-  | { kind: "block_other_product" }
+  | { kind: "product_quick_pick" }
   | { kind: "fallthrough" } {
   const scan = normalizeScanEan(raw);
   if (!scan) return { kind: "noop" };
-  if (!ctx.hasPending) return { kind: "fallthrough" };
-  if (ctx.pendingProductMatchesScan) return { kind: "resume_pending_detail" };
-  if (looksLikeCartBasketScan(scan)) return { kind: "confirm_basket" };
-  return { kind: "block_other_product" };
+
+  if (ctx.hasPending) {
+    if (ctx.pendingProductMatchesScan) return { kind: "resume_pending_detail" };
+    if (looksLikeCartBasketScan(scan)) return { kind: "confirm_basket" };
+    if (looksLikeProductBarcode(scan)) {
+      return { kind: "reject", code: "EXPECTED_BASKET_SCAN", consumed: true };
+    }
+    return { kind: "reject", code: "EXPECTED_BASKET_SCAN", consumed: true };
+  }
+
+  if (!ctx.requiresBasketPut) return { kind: "fallthrough" };
+
+  if (looksLikeCartBasketScan(scan)) {
+    return { kind: "reject", code: "EXPECTED_PRODUCT_SCAN", consumed: true };
+  }
+
+  if (ctx.productHitEligible) return { kind: "product_quick_pick" };
+  if (ctx.productHitComplete) {
+    return { kind: "reject", code: "PRODUCT_ALREADY_COMPLETE", consumed: true };
+  }
+  if (looksLikeProductBarcode(scan)) {
+    return { kind: "reject", code: "PRODUCT_NOT_IN_PICKING", consumed: true };
+  }
+  return { kind: "fallthrough" };
 }
 
-/** Dev / ops trace — no PII. */
 export function multiScanTrace(event: string, fields: Record<string, string | number | boolean | null | undefined>) {
   const parts = Object.entries(fields)
     .filter(([, v]) => v !== undefined)

@@ -1,3 +1,10 @@
+## 2026-07-19 — STRICT MULTI scan state machine + operator error popups
+
+- CLASSIFY → STATE → VALIDATE: invalid scan consumed, ZERO mutation.
+- Codes: EXPECTED_BASKET_SCAN, EXPECTED_PRODUCT_SCAN, BASKET_EMPTY, BASKET_OTHER_CART, OVERPICK_BLOCKED, …
+- FE: `wmsScanErrorCatalog` + fullscreen `WmsScanFeedbackOverlay` + error beep.
+- Tests: `test_wms_basket_put_scan_state_machine.py` + FE route/catalog.
+
 ## 2026-07-19 — REAL runtime: state A UI + silent basket scan (brck1-B0x)
 
 - ROOT: Screen „KOSZYKI WYMAGAJĄCE… Zeskanuj EAN, potem koszyk” = pending=NULL (state A). Detail handler ignored brck1-B0x (silent). List with pending blocked basket instead of confirm. classifyWmsScanCode treated brck1-B01 as location_like.

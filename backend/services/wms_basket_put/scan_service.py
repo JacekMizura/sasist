@@ -21,6 +21,7 @@ from ...models.cart_basket import CartBasket
 from ...models.wms_operation_session import WmsOperationSession
 from ..cart_picking_lifecycle_service import assert_cart_ready_for_quick_pick
 from .basket_match import basket_scan_matches, primary_basket_label
+from . import error_codes as ec
 from .resolve import (
     cart_is_baskets_mode,
     eligible_baskets_payload,
@@ -410,8 +411,8 @@ def handle_product_scan_for_baskets(
             eligible_baskets=labels,
         )
         raise BasketPutError(
-            "AWAITING_BASKET_CONFIRMATION",
-            f"NAJPIERW POTWIERDŹ KOSZYK. Zeskanuj jeden z koszyków: {labels}.",
+            ec.EXPECTED_BASKET_SCAN,
+            ec.operator_message(ec.EXPECTED_BASKET_SCAN),
             http_status=409,
             extra={
                 "phase": "AWAITING_BASKET_CONFIRMATION",
@@ -550,6 +551,106 @@ def _find_scanned_basket(db: Session, *, cart: Cart, basket_scan: str) -> CartBa
     return None
 
 
+def _find_basket_on_other_cart(db: Session, *, cart: Cart, basket_scan: str) -> CartBasket | None:
+    """If barcode matches a basket not on this cart → BASKET_OTHER_CART."""
+    # Bound search: match by exact barcode / scan_code first (production brck1-B0x).
+    s = (basket_scan or "").strip()
+    if not s:
+        return None
+    cid = int(cart.id)
+    candidates = (
+        db.query(CartBasket)
+        .filter(
+            CartBasket.cart_id != cid,
+            (
+                (CartBasket.barcode == s)
+                | (CartBasket.scan_code == s)
+                | (CartBasket.name == s)
+            ),
+        )
+        .limit(20)
+        .all()
+    )
+    for b in candidates:
+        if basket_scan_matches(b, basket_scan):
+            return b
+    # Fallback: small sample of foreign baskets (tests / odd labels)
+    foreign = (
+        db.query(CartBasket)
+        .filter(CartBasket.cart_id != cid)
+        .limit(200)
+        .all()
+    )
+    for b in foreign:
+        if basket_scan_matches(b, basket_scan):
+            return b
+    return None
+
+
+def _basket_has_assigned_order(db: Session, *, cart: Cart, basket: CartBasket) -> bool:
+    from ...models.order import Order
+
+    if getattr(basket, "order_id", None) is not None:
+        return True
+    row = (
+        db.query(Order.id)
+        .filter(Order.cart_id == int(cart.id), Order.basket_id == int(basket.id))
+        .first()
+    )
+    return row is not None
+
+
+def _raise_unknown_basket(
+    db: Session,
+    *,
+    cart: Cart,
+    basket_scan: str,
+    sess: WmsOperationSession,
+    uid: int | None,
+    product_id: int | None,
+    pending: dict[str, Any] | None,
+    oid_scope: list[int],
+) -> None:
+    foreign = _find_basket_on_other_cart(db, cart=cart, basket_scan=basket_scan)
+    if foreign is not None:
+        raise BasketPutError(
+            ec.BASKET_OTHER_CART,
+            ec.operator_message(ec.BASKET_OTHER_CART),
+            http_status=409,
+            extra={
+                "phase": "BASKET_OTHER_CART",
+                "scanned_basket": (basket_scan or "").strip(),
+            },
+        )
+    live = (
+        list_eligible_basket_allocations(db, cart=cart, order_ids=oid_scope, product_id=int(product_id))
+        if product_id and oid_scope
+        else []
+    )
+    eligible = eligible_baskets_payload(live) if live else ((pending or {}).get("eligible_baskets") or [])
+    labels = _eligible_labels(eligible if isinstance(eligible, list) else [])
+    scanned_label = (basket_scan or "").strip()
+    _audit(
+        "BASKET_MISMATCH",
+        session_id=sess.id,
+        operator=uid,
+        scanned_basket=scanned_label,
+        product_id=product_id,
+        eligible_baskets=labels,
+    )
+    raise BasketPutError(
+        ec.BASKET_MISMATCH,
+        ec.operator_message(ec.BASKET_MISMATCH),
+        http_status=409,
+        extra={
+            "phase": "BASKET_MISMATCH",
+            "scanned_basket": scanned_label,
+            "eligible_baskets": eligible,
+            "pending": pending,
+        },
+    )
+
+
 def confirm_basket_put(
     db: Session,
     *,
@@ -619,17 +720,28 @@ def confirm_basket_put(
             )
         scanned = _find_scanned_basket(db, cart=cart, basket_scan=basket_scan)
         if scanned is None:
+            _raise_unknown_basket(
+                db,
+                cart=cart,
+                basket_scan=basket_scan,
+                sess=sess,
+                uid=uid,
+                product_id=int(series["product_id"]) if series.get("product_id") else None,
+                pending=None,
+                oid_scope=list(oid_scope or []),
+            )
+        if not _basket_has_assigned_order(db, cart=cart, basket=scanned):
             raise BasketPutError(
-                "BASKET_MISMATCH",
-                f"Nieznany koszyk na tym wózku: {(basket_scan or '').strip()}.",
+                ec.BASKET_EMPTY,
+                ec.operator_message(ec.BASKET_EMPTY),
                 http_status=409,
-                extra={"phase": "BASKET_MISMATCH", "scanned_basket": (basket_scan or "").strip()},
+                extra={"phase": "BASKET_EMPTY", "scanned_basket": primary_basket_label(scanned)},
             )
         scanned_label = primary_basket_label(scanned)
         if int(scanned.id) == int(series.get("basket_id") or 0):
             # Same basket — no-op for destination; still no Pick without product.
             raise BasketPutError(
-                "NO_PENDING_PUT",
+                ec.NO_PENDING_PUT,
                 f"Seria już wskazuje koszyk {scanned_label}. Zeskanuj EAN produktu, aby odłożyć kolejną sztukę.",
                 http_status=409,
                 extra={"phase": "SERIES_ACTIVE", "active_series": series},
@@ -717,33 +829,23 @@ def confirm_basket_put(
     product_id = int(pending["product_id"])
     scanned = _find_scanned_basket(db, cart=cart, basket_scan=basket_scan)
     if scanned is None:
-        # Live eligible for message (hint); authorization uses resolve below.
-        live = (
-            list_eligible_basket_allocations(db, cart=cart, order_ids=oid_scope, product_id=product_id)
-            if oid_scope
-            else []
-        )
-        eligible = eligible_baskets_payload(live) if live else (pending.get("eligible_baskets") or [])
-        labels = _eligible_labels(eligible if isinstance(eligible, list) else [])
-        scanned_label = (basket_scan or "").strip()
-        _audit(
-            "BASKET_MISMATCH",
-            session_id=sess.id,
-            operator=uid,
-            scanned_basket=scanned_label,
+        _raise_unknown_basket(
+            db,
+            cart=cart,
+            basket_scan=basket_scan,
+            sess=sess,
+            uid=uid,
             product_id=product_id,
-            eligible_baskets=labels,
+            pending=pending,
+            oid_scope=list(oid_scope or []),
         )
+    assert scanned is not None
+    if not _basket_has_assigned_order(db, cart=cart, basket=scanned):
         raise BasketPutError(
-            "BASKET_MISMATCH",
-            f"Nieznany koszyk na tym wózku: {scanned_label}. Zeskanuj właściwy koszyk ({labels}).",
+            ec.BASKET_EMPTY,
+            ec.operator_message(ec.BASKET_EMPTY),
             http_status=409,
-            extra={
-                "phase": "BASKET_MISMATCH",
-                "scanned_basket": scanned_label,
-                "eligible_baskets": eligible,
-                "pending": pending,
-            },
+            extra={"phase": "BASKET_EMPTY", "scanned_basket": primary_basket_label(scanned)},
         )
 
     scanned_label = primary_basket_label(scanned)
@@ -775,9 +877,11 @@ def confirm_basket_put(
             product_id=product_id,
         )
         raise BasketPutError(
-            "BASKET_PRODUCT_MISMATCH",
-            f"Ten produkt nie należy do zamówienia w koszyku {scanned_label}. "
-            f"Zeskanuj właściwy koszyk ({labels}).",
+            ec.BASKET_PRODUCT_MISMATCH,
+            (
+                f"{ec.operator_message(ec.BASKET_PRODUCT_MISMATCH)} "
+                f"Koszyk {scanned_label}. Oczekiwane: {labels}."
+            ),
             http_status=409,
             extra={
                 "phase": "BASKET_PRODUCT_MISMATCH",

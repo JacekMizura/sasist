@@ -26,6 +26,10 @@ import {
   multiScanTrace,
   resolveMultiPickingDetailScan,
 } from "../../utils/multiPickingScanRoute";
+import {
+  extractWmsScanErrorDetail,
+  mapWmsScanErrorCode,
+} from "../../wms/scanFeedback/wmsScanErrorCatalog";
 import { buildPickingBundleDisplay } from "../../utils/bundleScanFlow";
 import { WmsOperationalPageBody, WmsOperationalPageShell } from "../../components/wms/execution/WmsOperationalPageShell";
 import { useWmsScanner } from "../../context/WmsScannerContext";
@@ -130,7 +134,7 @@ export default function WmsPickingProductDetailPage() {
   const warehouseId = warehouse?.id ?? null;
   const { snapshot: pickingCartSnapshot } = useWmsPickingCart();
   const pickingTenantId = useMemo(() => resolveWmsPickingTenantId(warehouseId, pickingCartSnapshot), [warehouseId, pickingCartSnapshot]);
-  const { registerScanHandler, setScannerInputPlaceholder, appendScanToHistory, refocusScannerInput, showScannerToast } = useWmsScanner();
+  const { registerScanHandler, setScannerInputPlaceholder, appendScanToHistory, refocusScannerInput, showScannerToast, showScanFeedbackFromCode, showScanFeedback } = useWmsScanner();
 
   const pickingSessionRaw = (routerLocation.state as WmsPickingProductsNavState | null)?.pickingSession ?? null;
   const listProductScanToken =
@@ -367,6 +371,7 @@ export default function WmsPickingProductDetailPage() {
         hasPending: Boolean(detail.basket_put_pending),
         hasActiveSeries: Boolean(detail.basket_put_active_series?.basket_label),
         productEan: detail.ean,
+        productRemaining: remaining,
         pendingEligibleLabels: pendingLabels,
       });
 
@@ -374,14 +379,22 @@ export default function WmsPickingProductDetailPage() {
         raw_code: scan,
         classified_as: multiDecision.kind,
         reason: "reason" in multiDecision ? multiDecision.reason : null,
+        code: multiDecision.kind === "reject" ? multiDecision.code : null,
         pending: Boolean(detail.basket_put_pending),
         series: Boolean(detail.basket_put_active_series?.basket_label),
         product_id: productId,
       });
 
-      if (multiDecision.kind === "reject_ean_while_pending") {
-        showScannerToast(multiDecision.message);
-        setPickMsg(multiDecision.message);
+      if (multiDecision.kind === "reject") {
+        const hint =
+          multiDecision.code === "EXPECTED_BASKET_SCAN" || multiDecision.code === "PENDING_PUT_EXISTS"
+            ? pendingLabels
+              ? `Oczekiwane koszyki: ${pendingLabels}`
+              : null
+            : null;
+        showScanFeedbackFromCode(multiDecision.code, { contextHint: hint });
+        setPickMsg(mapWmsScanErrorCode(multiDecision.code, { contextHint: hint }).message);
+        appendScanToHistory(scan);
         return;
       }
       if (multiDecision.kind === "confirm_basket") {
@@ -397,11 +410,14 @@ export default function WmsPickingProductDetailPage() {
           });
           void confirm_pick(1, selectedLocation.location_id);
         } else if (!selectedLocation) {
-          showScannerToast("Zeskanuj lokalizację przed EAN.");
+          showScanFeedbackFromCode("UNKNOWN_SCAN_CODE", {
+            backendMessage: "Zeskanuj lokalizację przed EAN.",
+          });
         }
         return;
       }
 
+      // Non-MULTI fallthrough only (requiresBasketPut=false → fallthrough).
       const shelfLabel = (detail.consolidation_shelf_label ?? "").trim();
       if (detail.consolidation_active && shelfLabel && scan.toUpperCase() === normalizeScanEan(shelfLabel).toUpperCase()) {
         const oid = detail.active_fifo_order_id ?? detail.orders?.[0]?.order_id;
@@ -464,7 +480,7 @@ export default function WmsPickingProductDetailPage() {
     };
     registerScanHandler(handler);
     return () => registerScanHandler(null);
-  }, [detail, pickingSession, activeLocationId, registerScanHandler, appendScanToHistory, pickQueueDone, selectedLocation, pickingTenantId, orderType, showScannerToast, load, productId]);
+  }, [detail, pickingSession, activeLocationId, registerScanHandler, appendScanToHistory, pickQueueDone, selectedLocation, pickingTenantId, orderType, showScannerToast, showScanFeedbackFromCode, load, productId, remaining]);
 
   const goBackToList = useCallback(
     (refreshList = false) => {
@@ -615,6 +631,16 @@ export default function WmsPickingProductDetailPage() {
       await load();
       // Series destination switch: qty unchanged — stay on detail, await next EAN.
       if (result.phase === "SERIES_DESTINATION_SWITCHED" || result.picked === false) {
+        if (result.phase === "SERIES_DESTINATION_SWITCHED") {
+          showScanFeedback(
+            mapWmsScanErrorCode("SERIES_DESTINATION_SWITCHED", {
+              backendMessage: result.message,
+              contextHint: result.active_series?.basket_label
+                ? `Koszyk: ${result.active_series.basket_label}`
+                : null,
+            }),
+          );
+        }
         setScannerInputPlaceholder("Skanuj EAN produktu");
         return;
       }
@@ -635,31 +661,21 @@ export default function WmsPickingProductDetailPage() {
         setScannerInputPlaceholder("Skanuj EAN produktu");
       }
     } catch (e: unknown) {
-      let msg = "Potwierdzenie koszyka nie powiodło się.";
-      let code: string | null = null;
-      if (axios.isAxiosError(e)) {
-        const data = e.response?.data as { detail?: unknown } | undefined;
-        if (data?.detail != null) {
-          if (typeof data.detail === "object" && data.detail && "message" in (data.detail as object)) {
-            msg = String((data.detail as { message: string }).message);
-            code = (data.detail as { code?: string }).code ?? null;
-          } else {
-            msg = formatFastApiErrorDetail({ detail: data.detail });
-          }
-        }
-      }
-      if (code === "NO_PENDING_PUT" || routeReason === "no_pending_probe") {
-        msg =
-          "Najpierw zeskanuj EAN produktu (pobranie sztuki), dopiero potem koszyk. " +
-          "Sam skan koszyka nie zapisuje Pick.";
-      }
+      const extracted = extractWmsScanErrorDetail(e);
+      let code = extracted.code;
+      if (!code && (routeReason === "no_pending_probe")) code = "EXPECTED_PRODUCT_SCAN";
+      if (!code) code = "UNKNOWN_SCAN_CODE";
+      const feedback = mapWmsScanErrorCode(code, {
+        backendMessage: extracted.message,
+        contextHint: extracted.eligibleLabels,
+      });
       multiScanTrace("BASKET_CONFIRM_FAIL", {
         raw_code: normalizeScanEan(rawScan),
         code,
         classified_as: routeReason,
       });
-      setPickMsg(msg);
-      showScannerToast(msg);
+      showScanFeedback(feedback);
+      setPickMsg(feedback.message);
       await load();
     } finally {
       setPickBusy(false);

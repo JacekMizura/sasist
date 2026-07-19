@@ -18,3 +18,26 @@ export function playScanBeep() {
     /* ignore */
   }
 }
+
+/** Lower dual-tone for invalid / blocked scans. */
+export function playScanErrorBeep() {
+  try {
+    const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Ctx) return;
+    const ctx = new Ctx();
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = "square";
+    o.connect(g);
+    g.connect(ctx.destination);
+    o.frequency.setValueAtTime(220, ctx.currentTime);
+    o.frequency.setValueAtTime(160, ctx.currentTime + 0.08);
+    g.gain.setValueAtTime(0.07, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.22);
+    o.start();
+    o.stop(ctx.currentTime + 0.22);
+    ctx.resume?.().catch(() => {});
+  } catch {
+    /* ignore */
+  }
+}

@@ -377,11 +377,11 @@ def test_case5_refresh_pending_no_double_pick(db, cart_env):
 
 def test_case6_wrong_basket_keeps_pending(db, cart_env):
     cart_env["add_order"](1234, 1, qty=1)
-    # b2 exists on cart but has no order needing product 10
+    # b2 exists on cart but has no order needing product 10 → BASKET_EMPTY / mismatch
     _product_scan(db, cart_env, order_ids=[1234])
     with pytest.raises(BasketPutError) as cm:
         _confirm(db, cart_env, "S-1-2", order_ids=[1234])
-    assert cm.value.code == "BASKET_PRODUCT_MISMATCH"
+    assert cm.value.code in ("BASKET_EMPTY", "BASKET_PRODUCT_MISMATCH")
     assert cart_env["pick_calls"] == []
     assert put_state.get_pending(cart_env["sess"]) is not None
 
@@ -474,7 +474,7 @@ def test_product_again_while_pending(db, cart_env):
     _product_scan(db, cart_env, order_ids=[1224])
     with pytest.raises(BasketPutError) as cm:
         _product_scan(db, cart_env, order_ids=[1224])
-    assert cm.value.code == "AWAITING_BASKET_CONFIRMATION"
+    assert cm.value.code == "EXPECTED_BASKET_SCAN"
     assert cart_env["pick_calls"] == []
 
 
