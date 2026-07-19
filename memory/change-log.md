@@ -1,4 +1,13 @@
+## 2026-07-19 — GET /order-issue-tasks 500 + stale „Do zebrania”
+
+- ROOT list 500: (1) `ensure_order_issue_task_items_table` used SQLite-only DDL on PG allowlist path; (2) sync failure left session dirty → `db.commit()` → PendingRollback/500; (3) repair without savepoint poisoned PG txn; (4) `ensure_picking_shortage_support` SQLite-gated so `disable_auto_detach` ALTER skipped on Railway.
+- Fix: ORM dialect-aware CREATE; rollback after sync fail; `begin_nested` around repair; PG-safe `ensure_wms_picking_shortage_settings_columns` on allowlist; clamp `ge=0` DTO fields; eager-load fallback.
+- Semantics: shortage YES → 1 active OrderIssueTask per order (upsert idempotent) on report + finalize.
+- Stale „Do zebrania: 2”: cart scan painted status-level `hubPickStats`; now refetch product-lines for scanned cart_id before navigate; products page does not show hub stats while loading.
+- Tests: `test_order_issue_tasks_after_shortage_finalize.py`.
+
 ## 2026-07-19 — Finalize shortage detach: setting + heal READY_FOR_PACKING
+
 
 - ROOT: checkbox `disableAutoDetachMissingOrdersFromCarts` was **localStorage-only** (backend never read it). Stuck carts in `READY_FOR_PACKING` early-returned without detach.
 - Fix: DB field `disable_auto_detach_missing_orders_from_carts` on `wms_picking_shortage_settings`; helper `is_shortage_auto_detach_enabled` (= not disable); finalize reads it.

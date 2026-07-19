@@ -6,9 +6,9 @@
 
 ## Latest (2026-07-19)
 
-- Finalize all-shortage: setting wired to DB (`disable_auto_detach_missing_orders_from_carts`); heal READY_FOR_PACKING; detach via CartLifecycle SSOT.
-- Prod CART-0001 stuck = prior finalize left READY_FOR_PACKING without detach; re-finalize after deploy heals.
-- Deploy + verify: all-shortage → cart AVAILABLE, orders.cart_id NULL (fresh DB).
+- AUTO-DETACH CART-0001: PASS on prod after deploy.
+- Follow-up: GET `/order-issue-tasks` 500 — dialect-aware schema + sync rollback + repair savepoint; shortage → 1 OrderIssueTask/order (idempotent).
+- Stale hub „Do zebrania”: cart-scoped refetch after scan; no status-level stats while products loading.
 
 ## Notes
 
@@ -16,3 +16,4 @@
 - Classic picking does not use StockReservation — routing reads on-hand Inventory.
 - Shortage during picking ≠ pre-pick WMS Validation (do not auto-detach on shortage).
 - Finalize shortage ≠ leave on cart — detach via `finish_picking_after_wms_finalize`.
+- `ensure_picking_shortage_support` remains SQLite-gated for report-table CREATE; column ALTERs via `ensure_wms_picking_shortage_settings_columns` (PG allowlist).

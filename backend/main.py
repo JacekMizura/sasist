@@ -197,6 +197,7 @@ from .db.schema_upgrade import (
     ensure_order_issue_tasks_archive_columns,
     ensure_order_issue_tasks_lifecycle_columns,
     ensure_order_issue_task_items_table,
+    ensure_wms_picking_shortage_settings_columns,
     ensure_wms_operational_tasks_table,
     ensure_orders_fulfillment_state_columns,
     ensure_orders_priority_color_column,
@@ -728,9 +729,11 @@ def _sqlite_only_schema_helper(fn):
 # Legacy schema helpers in backend.db.schema_upgrade use PRAGMA / SQLite ALTER-workarounds.
 # PostgreSQL: explicit allowlist only — never silently disable production schema evolution.
 _POSTGRES_SAFE_SCHEMA_FUNCS = frozenset({
+    "ensure_order_issue_tasks_table",
     "ensure_order_issue_tasks_archive_columns",
     "ensure_order_issue_tasks_lifecycle_columns",
     "ensure_order_issue_task_items_table",
+    "ensure_wms_picking_shortage_settings_columns",
     # Production module — MUST run on PostgreSQL (not SQLite-only legacy helpers).
     "ensure_production_tables",
     "ensure_product_compositions_and_batches",
@@ -1724,6 +1727,7 @@ def _upgrade_schema_background() -> None:
         ensure_esp_scan_code_columns(engine)
         ensure_picking_config_workflow_columns(engine)
         ensure_picking_shortage_support(engine)
+        ensure_wms_picking_shortage_settings_columns(engine)
         ensure_order_items_packing_quantity_packed_column(engine)
         ensure_direct_sales_settings_table(engine)
         ensure_wms_packing_settings_table(engine)
@@ -1837,6 +1841,7 @@ try:
     ensure_order_issue_tasks_archive_columns(engine)
     ensure_order_issue_tasks_lifecycle_columns(engine)
     ensure_order_issue_task_items_table(engine)
+    ensure_wms_picking_shortage_settings_columns(engine)
     ensure_wms_operational_tasks_table(engine)
     ensure_orders_fulfillment_state_columns(engine)
     ensure_orders_priority_color_column(engine)

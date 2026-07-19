@@ -135,41 +135,60 @@ def ensure_order_issue_tasks_lifecycle_columns(engine: Engine) -> None:
 
 
 def ensure_order_issue_task_items_table(engine: Engine) -> None:
-    """Operational line items for Braki tasks."""
+    """Operational line items for Braki tasks — dialect-aware ORM DDL (SQLite + PostgreSQL)."""
     if has_table(engine, "order_issue_task_items"):
         return
+    from ..models.order_issue_task import OrderIssueTask
+    from ..models.order_issue_task_item import OrderIssueTaskItem
+
+    if not has_table(engine, "order_issue_tasks"):
+        ensure_model_table_from_orm(engine, OrderIssueTask, log_prefix="schema.order_issue_tasks")
+    created = ensure_model_table_from_orm(
+        engine, OrderIssueTaskItem, log_prefix="schema.order_issue_task_items"
+    )
+    if created:
+        sync_model_indexes(
+            engine, OrderIssueTaskItem, log_prefix="schema.order_issue_task_items"
+        )
+    logger.info(
+        "[schema] order_issue_task_items table ensured dialect=%s created=%s",
+        engine.dialect.name,
+        bool(created),
+    )
+
+
+def ensure_wms_picking_shortage_settings_columns(engine: Engine) -> None:
+    """
+    Dialect-safe ALTERs on ``wms_picking_shortage_settings`` (PostgreSQL + SQLite).
+
+    Must run on Railway PG — ``ensure_picking_shortage_support`` is SQLite-gated in main.
+    """
+    if not has_table(engine, "wms_picking_shortage_settings"):
+        return
+    cols = get_table_column_names(engine, "wms_picking_shortage_settings")
+    stmts: list[str] = []
+    if "wms_validation_failed_order_ui_status_id" not in cols:
+        stmts.append(
+            "ALTER TABLE wms_picking_shortage_settings "
+            "ADD COLUMN wms_validation_failed_order_ui_status_id INTEGER "
+            "REFERENCES order_ui_statuses(id) ON DELETE SET NULL"
+        )
+    if "disable_auto_detach_missing_orders_from_carts" not in cols:
+        stmts.append(
+            "ALTER TABLE wms_picking_shortage_settings "
+            "ADD COLUMN disable_auto_detach_missing_orders_from_carts BOOLEAN "
+            "NOT NULL DEFAULT FALSE"
+        )
+    if not stmts:
+        return
     with engine.begin() as conn:
-        conn.execute(
-            text(
-                """
-                CREATE TABLE order_issue_task_items (
-                    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-                    task_id INTEGER NOT NULL REFERENCES order_issue_tasks(id) ON DELETE CASCADE,
-                    order_item_id INTEGER NOT NULL REFERENCES order_items(id) ON DELETE CASCADE,
-                    product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
-                    missing_qty REAL NOT NULL DEFAULT 0,
-                    recovered_qty REAL NOT NULL DEFAULT 0,
-                    status VARCHAR(24) NOT NULL DEFAULT 'OPEN',
-                    source_event_id VARCHAR(128),
-                    source_picking_cart_id INTEGER,
-                    source_operator_id INTEGER REFERENCES app_users(id) ON DELETE SET NULL,
-                    created_at TIMESTAMP NOT NULL DEFAULT (datetime('now')),
-                    updated_at TIMESTAMP NOT NULL DEFAULT (datetime('now')),
-                    UNIQUE(task_id, order_item_id)
-                )
-                """
-            )
-        )
-        conn.execute(
-            text("CREATE INDEX ix_order_issue_task_items_task ON order_issue_task_items(task_id)")
-        )
-        conn.execute(
-            text(
-                "CREATE INDEX ix_order_issue_task_items_product "
-                "ON order_issue_task_items(product_id, status)"
-            )
-        )
-    logger.info("[schema] order_issue_task_items table created dialect=%s", engine.dialect.name)
+        for stmt in stmts:
+            conn.execute(text(stmt))
+    logger.info(
+        "[schema] wms_picking_shortage_settings columns ensured dialect=%s added=%s",
+        engine.dialect.name,
+        len(stmts),
+    )
 
 
 def list_user_tables(bind: Engine | Connection) -> list[str]:

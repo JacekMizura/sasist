@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { getWmsPickingResolveCart, postWmsPickingStart } from "../../api/wmsPickingProductsApi";
+import {
+  getWmsPickingProductLines,
+  getWmsPickingResolveCart,
+  postWmsPickingStart,
+} from "../../api/wmsPickingProductsApi";
 import { useWmsMessage } from "../../components/wms/WmsMessageProvider";
 import { useWmsPickingCart } from "../../context/WmsPickingCartContext";
 import { useWarehouse } from "../../context/WarehouseContext";
@@ -11,6 +15,7 @@ import { panelSidebarSubCountBadgeStyle } from "../../utils/panelSidebarHierarch
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import type { WmsPickingCartNavState } from "./wmsPickingFlowTypes";
 import { WmsPickingSessionTopBar } from "./WmsPickingSessionTopBar";
+import { computeWmsPickingProductLineSessionStats, wmsPickingDisplayPickedQuantity } from "./wmsPickingUiGates";
 import { WMS_ROUTES } from "./wmsRoutes";
 import { Loader2, ShoppingCart, ShoppingBasket, ListTodo } from "lucide-react";
 
@@ -32,6 +37,11 @@ export default function WmsPickingCartScanPage() {
   const session = (routerLocation.state as WmsPickingCartNavState | null)?.pickingSession;
 
   const [resolving, setResolving] = useState(false);
+  /** SSOT counters for the scanned cart — never show status-level hub stats as cart truth. */
+  const [cartScopedStats, setCartScopedStats] = useState<{
+    hubOrderCount: number;
+    hubPickStats: { zebrane: number; doZebrania: number; wTrakcie: number; braki?: number };
+  } | null>(null);
 
   useEffect(() => {
     if (!session) {
@@ -55,6 +65,7 @@ export default function WmsPickingCartScanPage() {
       const code = cartCode.trim();
       if (!code) return;
       setResolving(true);
+      setCartScopedStats(null);
       try {
         const r = await getWmsPickingResolveCart(DAMAGE_TENANT_ID, warehouseId, code);
         await postWmsPickingStart(
@@ -64,6 +75,35 @@ export default function WmsPickingCartScanPage() {
           session.orderUiStatusId,
           session.orderTypeChoice ?? "all",
         );
+        // Refetch SSOT for THIS cart — invalidates stale hubPickStats from status selection.
+        const linesResult = await getWmsPickingProductLines(
+          DAMAGE_TENANT_ID,
+          warehouseId,
+          session.orderUiStatusId,
+          session.orderTypeChoice ?? "all",
+          r.cart_id,
+          null,
+          null,
+          { force: true },
+        );
+        const hubOrderCount =
+          typeof linesResult.cohort_order_count === "number" ? linesResult.cohort_order_count : 0;
+        let hubPickStats = { zebrane: 0, doZebrania: 0, wTrakcie: 0, braki: 0 };
+        if (linesResult.session_stats) {
+          hubPickStats = {
+            zebrane: linesResult.session_stats.zebrane ?? 0,
+            doZebrania: linesResult.session_stats.do_zebrania ?? 0,
+            wTrakcie: linesResult.session_stats.w_trakcie ?? 0,
+            braki: linesResult.session_stats.braki ?? 0,
+          };
+        } else {
+          const normalized = (linesResult.products ?? []).map((row) => ({
+            ...row,
+            picked_quantity: wmsPickingDisplayPickedQuantity(row),
+          }));
+          hubPickStats = computeWmsPickingProductLineSessionStats(normalized);
+        }
+        setCartScopedStats({ hubOrderCount, hubPickStats });
         playScanBeep();
         appendScanToHistory(code);
         const cartCodeResolved = (r.code && r.code.trim()) || r.barcode?.trim() || code;
@@ -83,6 +123,8 @@ export default function WmsPickingCartScanPage() {
               cartCode: cartCodeResolved,
               cartName: cartName ?? null,
               cartId: r.cart_id,
+              hubOrderCount,
+              hubPickStats,
             },
           },
         });
@@ -124,8 +166,9 @@ export default function WmsPickingCartScanPage() {
   }
 
   const badgeStyle = panelSidebarSubCountBadgeStyle(session.orderUiStatusColor, session.mainGroup);
-  const hubOrderCount = session.hubOrderCount ?? null;
-  const hubPickStats = session.hubPickStats ?? { zebrane: 0, doZebrania: 0, wTrakcie: 0 };
+  // Before/during cart resolve: do not paint status-level hubPickStats as cart truth.
+  const hubOrderCount = cartScopedStats?.hubOrderCount ?? null;
+  const hubPickStats = cartScopedStats?.hubPickStats ?? null;
 
   const goBackFromCart = () => {
     if (session.preCartBack === "order-type") {
@@ -138,7 +181,6 @@ export default function WmsPickingCartScanPage() {
     }
   };
 
-  // Dobór ikony do animowanego kółka w zależności od typu wybranego wózka/koszyka
   const showBaskets = session.cartType === "BASKETS";
   const showBulk = session.cartType === "BULK" || (!showBaskets && session.requireCart);
 
@@ -146,17 +188,19 @@ export default function WmsPickingCartScanPage() {
     <div className="flex min-h-screen flex-col bg-white select-none">
       <WmsPickingSessionTopBar
         onBack={goBackFromCart}
-        backAriaLabel={session.preCartBack === "order-type" ? "Wróć do wyboru rodzaju zamówień" : "Wróć do wyboru statusu"}
+        backAriaLabel={
+          session.preCartBack === "order-type"
+            ? "Wróć do wyboru rodzaju zamówień"
+            : "Wróć do wyboru statusu"
+        }
         orderCount={hubOrderCount}
         pickStats={hubPickStats}
         statusName={session.orderUiStatusName}
         statusBadgeStyle={badgeStyle}
       />
-      
+
       <div className="flex-1 flex flex-col items-center justify-center p-6 sm:p-10 animate-in fade-in duration-500">
         <div className="w-full max-w-[580px] flex flex-col items-center">
-          
-          {/* Animowany, pulsujący okrąg wokół ikony urządzenia */}
           <div className="relative mb-10 flex items-center justify-center">
             {resolving ? (
               <div className="w-28 h-28 rounded-[2rem] bg-indigo-50 border-2 border-indigo-100 flex items-center justify-center text-[#5a4fcf] shadow-sm">
@@ -179,11 +223,9 @@ export default function WmsPickingCartScanPage() {
             )}
           </div>
 
-          {/* Subtelne, lekkie i eleganckie polecenie skanowania */}
           <h2 className="text-xl sm:text-2xl font-medium text-slate-400 tracking-wider uppercase text-center">
             {resolving ? "Weryfikacja wózka..." : "Zeskanuj wózek"}
           </h2>
-
         </div>
       </div>
     </div>

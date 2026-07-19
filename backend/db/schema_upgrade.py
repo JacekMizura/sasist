@@ -3750,26 +3750,17 @@ def ensure_picking_shortage_support(engine: Engine) -> None:
             conn.execute(text("CREATE INDEX ix_wms_shortage_wh ON wms_picking_shortage_reports(warehouse_id)"))
             conn.execute(text("CREATE INDEX ix_wms_shortage_product ON wms_picking_shortage_reports(product_id)"))
         conn.commit()
-    with engine.connect() as conn:
-        if _table_exists(conn, "wms_picking_shortage_settings"):
-            cols = _table_column_names(conn, "wms_picking_shortage_settings")
-            if "wms_validation_failed_order_ui_status_id" not in cols:
-                conn.execute(
-                    text(
-                        "ALTER TABLE wms_picking_shortage_settings "
-                        "ADD COLUMN wms_validation_failed_order_ui_status_id INTEGER "
-                        "REFERENCES order_ui_statuses(id) ON DELETE SET NULL"
-                    )
-                )
-            if "disable_auto_detach_missing_orders_from_carts" not in cols:
-                conn.execute(
-                    text(
-                        "ALTER TABLE wms_picking_shortage_settings "
-                        "ADD COLUMN disable_auto_detach_missing_orders_from_carts BOOLEAN "
-                        "NOT NULL DEFAULT FALSE"
-                    )
-                )
-        conn.commit()
+    from .schema_introspection import ensure_wms_picking_shortage_settings_columns
+
+    ensure_wms_picking_shortage_settings_columns(engine)
+
+
+def ensure_wms_picking_shortage_settings_columns(engine: Engine) -> None:
+    """PG-safe shortage settings columns (also called from main allowlist)."""
+    from .schema_introspection import ensure_wms_picking_shortage_settings_columns as _impl
+
+    _impl(engine)
+
 
 def ensure_carts_code_column(engine: Engine) -> None:
     """
@@ -4804,35 +4795,15 @@ def ensure_orders_customer_id_column(engine: Engine) -> None:
 
 
 def ensure_order_issue_tasks_table(engine: Engine) -> None:
-    """WMS: zadania operacyjne przy brakach (Order Issues)."""
-    with engine.connect() as conn:
-        ex = _table_exists(conn, "order_issue_tasks")
-        if ex:
-            return
-        conn.execute(
-            text(
-                """
-                CREATE TABLE order_issue_tasks (
-                    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-                    tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-                    warehouse_id INTEGER NOT NULL REFERENCES warehouses(id) ON DELETE CASCADE,
-                    order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
-                    type VARCHAR(32) NOT NULL,
-                    status VARCHAR(16) NOT NULL DEFAULT 'OPEN',
-                    missing_items TEXT NOT NULL DEFAULT '[]',
-                    picked_items TEXT NOT NULL DEFAULT '[]',
-                    baseline_order_lines_json TEXT NOT NULL DEFAULT '{}',
-                    logs_json TEXT NOT NULL DEFAULT '[]',
-                    created_at DATETIME NOT NULL DEFAULT (datetime('now')),
-                    updated_at DATETIME NOT NULL DEFAULT (datetime('now'))
-                )
-                """
-            )
-        )
-        conn.execute(text("CREATE INDEX ix_order_issue_tasks_wh ON order_issue_tasks(warehouse_id)"))
-        conn.execute(text("CREATE INDEX ix_order_issue_tasks_order ON order_issue_tasks(order_id)"))
-        conn.execute(text("CREATE INDEX ix_order_issue_tasks_status ON order_issue_tasks(status)"))
-        conn.commit()
+    """WMS: zadania operacyjne przy brakach (Order Issues) — dialect-aware ORM DDL."""
+    from .schema_introspection import ensure_model_table_from_orm, has_table, sync_model_indexes
+    from ..models.order_issue_task import OrderIssueTask
+
+    if has_table(engine, "order_issue_tasks"):
+        return
+    created = ensure_model_table_from_orm(engine, OrderIssueTask, log_prefix="schema.order_issue_tasks")
+    if created:
+        sync_model_indexes(engine, OrderIssueTask, log_prefix="schema.order_issue_tasks")
 
 
 def ensure_order_issue_tasks_archive_columns(engine: Engine) -> None:

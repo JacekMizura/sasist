@@ -110,17 +110,39 @@ def _fetch_orders_by_id(
     """Jedno zapytanie z eager load — bez N+1 w pętli listy."""
     if not order_ids:
         return {}
-    rows = (
-        db.query(Order)
-        .options(
-            joinedload(Order.order_ui_status),
-            joinedload(Order.customer),
-            selectinload(Order.items).joinedload(OrderItem.product),
+    try:
+        rows = (
+            db.query(Order)
+            .options(
+                joinedload(Order.order_ui_status),
+                joinedload(Order.customer),
+                selectinload(Order.items).joinedload(OrderItem.product),
+            )
+            .filter(Order.id.in_(order_ids), Order.deleted_at.is_(None))
+            .all()
         )
-        .filter(Order.id.in_(order_ids), Order.deleted_at.is_(None))
-        .all()
-    )
+    except SQLAlchemyError:
+        logger.exception(
+            "[wms.order_issue_tasks.fetch] orders_eager_load_failed order_ids=%s — retry minimal",
+            order_ids[:20],
+        )
+        db.rollback()
+        rows = (
+            db.query(Order)
+            .options(selectinload(Order.items))
+            .filter(Order.id.in_(order_ids), Order.deleted_at.is_(None))
+            .all()
+        )
     return {int(o.id): o for o in rows}
+
+
+def _nonneg_int(value: Any, default: int = 0) -> int:
+    """Clamp for Pydantic ``ge=0`` list fields — never fail the queue on bad counters."""
+    try:
+        n = int(value if value is not None else default)
+    except (TypeError, ValueError):
+        return default
+    return n if n >= 0 else 0
 
 
 def _sections_to_order_context(sections: dict[str, list]) -> OrderIssueOrderContext:
@@ -391,11 +413,11 @@ def serialize_order_issue_task_item(
         customer_phone=cust_fields.get("phone") or "—",
         customer_email=cust_fields.get("email") or "—",
         customer_address=cust_fields.get("address") or "—",
-        unresolved_shortage_count=int(op_bundle.get("unresolved_shortage_count") or 0),
-        replacement_pick_pending_count=int(op_bundle.get("replacement_pick_pending_count") or 0),
+        unresolved_shortage_count=_nonneg_int(op_bundle.get("unresolved_shortage_count")),
+        replacement_pick_pending_count=_nonneg_int(op_bundle.get("replacement_pick_pending_count")),
         issue_queue_summary_line=str(op_bundle.get("issue_queue_summary_line") or workflow_label),
         issue_queue_status_label=str(op_bundle.get("issue_queue_status_label") or workflow_label),
-        substitute_product_id=int(sub_pid),
+        substitute_product_id=_nonneg_int(sub_pid),
         substitute_product_name=sub_name,
         order_ui_status_name=ui_name,
         task_type=str(t.type),
@@ -418,8 +440,8 @@ def serialize_order_issue_task_item(
         queue_warnings=list(op_bundle.get("queue_warnings") or []),
         partial_data=bool(op_bundle.get("partial_data")),
         recovery_packing_allowed=bool(op_bundle.get("recovery_packing_allowed")),
-        recovery_active_lines=int(op_bundle.get("recovery_active_lines") or 0),
-        recovery_unresolved_lines=int(op_bundle.get("recovery_unresolved_lines") or 0),
+        recovery_active_lines=_nonneg_int(op_bundle.get("recovery_active_lines")),
+        recovery_unresolved_lines=_nonneg_int(op_bundle.get("recovery_unresolved_lines")),
         recovery_has_relocation_work=bool(op_bundle.get("recovery_has_relocation_work")),
         relocation_task_id=op_bundle.get("relocation_task_id"),
         can_close_shortage=bool(op_bundle.get("can_close_shortage")),
@@ -427,7 +449,7 @@ def serialize_order_issue_task_item(
         shortage_lifecycle_phase=str(op_bundle.get("shortage_lifecycle_phase") or "") or None,
         relocation_mode=op_bundle.get("relocation_mode"),
         braki_workstreams=op_bundle.get("braki_workstreams") or BrakiWorkstreams(),
-        shortage_priority_score=int(op_bundle.get("shortage_priority_score") or 0),
+        shortage_priority_score=_nonneg_int(op_bundle.get("shortage_priority_score")),
         shortage_priority_level=str(op_bundle.get("shortage_priority_level") or "LOW"),
         shortage_priority_label=str(op_bundle.get("shortage_priority_label") or ""),
         shortage_priority_factors=list(op_bundle.get("shortage_priority_factors") or []),
@@ -500,8 +522,8 @@ def serialize_order_issue_task_list_card(
         customer_phone=cust_fields.get("phone") or "—",
         customer_email=cust_fields.get("email") or "—",
         customer_address=cust_fields.get("address") or "—",
-        unresolved_shortage_count=int(op_bundle.get("unresolved_shortage_count") or 0),
-        replacement_pick_pending_count=int(op_bundle.get("replacement_pick_pending_count") or 0),
+        unresolved_shortage_count=_nonneg_int(op_bundle.get("unresolved_shortage_count")),
+        replacement_pick_pending_count=_nonneg_int(op_bundle.get("replacement_pick_pending_count")),
         issue_queue_summary_line=str(op_bundle.get("issue_queue_summary_line") or workflow_label),
         issue_queue_status_label=str(op_bundle.get("issue_queue_status_label") or workflow_label),
         substitute_product_id=0,
@@ -527,8 +549,8 @@ def serialize_order_issue_task_list_card(
         queue_warnings=list(op_bundle.get("queue_warnings") or []),
         partial_data=bool(op_bundle.get("partial_data")),
         recovery_packing_allowed=bool(op_bundle.get("recovery_packing_allowed")),
-        recovery_active_lines=int(op_bundle.get("recovery_active_lines") or 0),
-        recovery_unresolved_lines=int(op_bundle.get("recovery_unresolved_lines") or 0),
+        recovery_active_lines=_nonneg_int(op_bundle.get("recovery_active_lines")),
+        recovery_unresolved_lines=_nonneg_int(op_bundle.get("recovery_unresolved_lines")),
         recovery_has_relocation_work=bool(op_bundle.get("recovery_has_relocation_work")),
         relocation_task_id=op_bundle.get("relocation_task_id"),
         can_close_shortage=bool(op_bundle.get("can_close_shortage")),
@@ -536,7 +558,7 @@ def serialize_order_issue_task_list_card(
         shortage_lifecycle_phase=str(op_bundle.get("shortage_lifecycle_phase") or "") or None,
         relocation_mode=op_bundle.get("relocation_mode"),
         braki_workstreams=op_bundle.get("braki_workstreams") or BrakiWorkstreams(),
-        shortage_priority_score=int(op_bundle.get("shortage_priority_score") or 0),
+        shortage_priority_score=_nonneg_int(op_bundle.get("shortage_priority_score")),
         shortage_priority_level=str(op_bundle.get("shortage_priority_level") or "LOW"),
         shortage_priority_label=str(op_bundle.get("shortage_priority_label") or ""),
         shortage_priority_factors=list(op_bundle.get("shortage_priority_factors") or []),
@@ -556,9 +578,10 @@ def resolve_order_issue_task_scan(
         sync_open_issue_tasks_for_warehouse(
             db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id), full_recalc=True
         )
+        db.commit()
     except Exception:
         logger.exception("sync_open_issue_tasks_for_warehouse failed tenant=%s wh=%s", tenant_id, warehouse_id)
-    db.commit()
+        db.rollback()
     o = find_order_by_scan(
         db,
         tenant_id=int(tenant_id),
@@ -717,13 +740,14 @@ def _build_order_issue_tasks_list(
                 warehouse_id=int(warehouse_id),
                 full_recalc=full_recalc,
             )
+            db.commit()
         except Exception:
             logger.exception(
                 "[wms.order_issue_tasks.fetch] sync_open_failed tenant_id=%s warehouse_id=%s",
                 tenant_id,
                 warehouse_id,
             )
-        db.commit()
+            db.rollback()
 
         t_fetch_start = time.perf_counter()
         rows = list_open_order_issue_tasks_for_warehouse(
@@ -767,13 +791,15 @@ def _build_order_issue_tasks_list(
                 try:
                     from ..services.recovery_workflow_service import repair_order_relocation_consistency
 
-                    repair_order_relocation_consistency(
-                        db,
-                        o,
-                        tenant_id=int(tenant_id),
-                        warehouse_id=int(warehouse_id),
-                        source_event_id=f"braki.api.list:{int(t.id)}",
-                    )
+                    # Savepoint: PG aborts the whole txn on SQL error — isolate self-heal.
+                    with db.begin_nested():
+                        repair_order_relocation_consistency(
+                            db,
+                            o,
+                            tenant_id=int(tenant_id),
+                            warehouse_id=int(warehouse_id),
+                            source_event_id=f"braki.api.list:{int(t.id)}",
+                        )
                 except Exception as wf_exc:
                     logger.warning(
                         "[wms.order_issue_tasks.invalid_state] task_id=%s order_id=%s err=%s",

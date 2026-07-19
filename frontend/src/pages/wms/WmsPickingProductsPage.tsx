@@ -615,18 +615,19 @@ export default function WmsPickingProductsPage() {
         braki: sessionStats.braki ?? shortageSkuCount,
       };
     }
-    if (!loading) {
-      return pickingSession?.hubPickStats ?? { zebrane: 0, doZebrania: 0, wTrakcie: 0, braki: shortageSkuCount };
+    // While loading cart-scoped lines: never paint status-level hubPickStats (stale after detach).
+    if (loading) {
+      return null;
     }
-    return pickingSession?.hubPickStats ?? null;
+    return pickingSession?.hubPickStats ?? { zebrane: 0, doZebrania: 0, wTrakcie: 0, braki: shortageSkuCount };
   }, [sessionStats, loading, pickingSession?.hubPickStats, shortageSkuCount]);
 
   const orderCountForBar = useMemo(() => {
     if (loading && rows.length === 0) {
-      return pickingSession?.hubOrderCount ?? null;
+      return null;
     }
     return cohortOrderCount;
-  }, [loading, rows.length, cohortOrderCount, pickingSession?.hubOrderCount]);
+  }, [loading, rows.length, cohortOrderCount]);
 
   const recoveryRemainSummary = useMemo(() => {
     let lines = 0;

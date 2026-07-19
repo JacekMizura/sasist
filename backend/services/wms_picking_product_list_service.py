@@ -3621,13 +3621,25 @@ def finalize_wms_picking_cart(
         if order_kinds.get(oid, "all_picked") != "all_picked":
             try:
                 ensure_open_issue_task_for_order(db, o)
-            except Exception:
+            except Exception as braki_exc:
+                from sqlalchemy.exc import OperationalError, ProgrammingError
+
                 logger.exception(
                     "[picking.finalize.braki_task] order_id=%s cart_id=%s source_status_id=%s",
                     oid,
                     cid,
                     sid,
                 )
+                # Schema / SQL failures must not be swallowed — otherwise Braki queue 500s later.
+                if isinstance(braki_exc, (OperationalError, ProgrammingError)):
+                    raise PickingFinalizeError(
+                        f"Nie udało się utworzyć zadania Braki dla zamówienia #{o.number or oid}: {braki_exc}",
+                        reason=braki_exc.__class__.__name__,
+                        order_id=oid,
+                        step="braki_task",
+                        http_status=500,
+                        code="braki_task_schema_failed",
+                    ) from braki_exc
 
     try:
         _sync_order_operational_state_after_picking_finalize(

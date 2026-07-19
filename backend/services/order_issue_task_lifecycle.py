@@ -51,6 +51,7 @@ def ensure_order_issue_task_lifecycle_schema(db: Session) -> None:
     from ..db.schema_introspection import (
         ensure_order_issue_task_items_table,
         ensure_order_issue_tasks_lifecycle_columns,
+        ensure_wms_picking_shortage_settings_columns,
         get_engine,
     )
 
@@ -63,6 +64,7 @@ def ensure_order_issue_task_lifecycle_schema(db: Session) -> None:
         return
     ensure_order_issue_task_items_table(engine)
     ensure_order_issue_tasks_lifecycle_columns(engine)
+    ensure_wms_picking_shortage_settings_columns(engine)
 
 
 def _query_active_shortage_task(
