@@ -56,6 +56,8 @@ from ..schemas.wms_picking_products import (
     WmsPickingResolveCartResponse,
     WmsPickingUndoPickBody,
     WmsPickingUndoPickResponse,
+    WmsPickingDraftPickRow,
+    WmsPickingProductPicksResponse,
     WmsRecoveryBatchCreateBody,
     WmsRecoveryBatchSessionRead,
 )
@@ -1828,6 +1830,78 @@ def post_picking_undo_pick(
     except SQLAlchemyError as e:
         db.rollback()
         logger.exception("post_picking_undo_pick:SQLAlchemyError")
+        raise HTTPException(status_code=500, detail="Cofnięcie pobrania nie powiodło się.") from e
+
+
+@router.get("/picking/product-picks", response_model=WmsPickingProductPicksResponse)
+def get_picking_product_picks(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
+    cart_id: int = Query(..., ge=1),
+    product_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    current_user: AppUser = Depends(get_current_user),
+):
+    """Draft Pick rows for one product on the active cart (MULTI recovery / history)."""
+    _ = current_user
+    from ..services.wms_picking_corrections import list_draft_picks_for_product_on_cart
+
+    rows = list_draft_picks_for_product_on_cart(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        cart_id=int(cart_id),
+        product_id=int(product_id),
+    )
+    return WmsPickingProductPicksResponse(
+        ok=True,
+        cart_id=int(cart_id),
+        product_id=int(product_id),
+        picks=[WmsPickingDraftPickRow(**r) for r in rows],
+    )
+
+
+@router.post("/picking/picks/{pick_id}/undo", response_model=WmsPickingUndoPickResponse)
+def post_picking_undo_pick_by_id(
+    pick_id: int,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
+    cart_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    current_user: Optional[AppUser] = Depends(get_optional_current_user),
+):
+    """Undo exactly one draft Pick by id — Inventory and shortage unchanged."""
+    from ..services.wms_picking_corrections import undo_wms_pick_by_id
+    from ..services.wms_picking_corrections.undo_pick_service import UndoPickError
+
+    try:
+        out = undo_wms_pick_by_id(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            pick_id=int(pick_id),
+            cart_id=int(cart_id),
+            operator_user_id=int(current_user.id) if current_user is not None else None,
+            audit_reason="LEGACY_LOCATION_CORRECTION",
+        )
+        db.commit()
+        return WmsPickingUndoPickResponse(
+            ok=True,
+            undone_qty=float(out.get("undone_qty") or 0),
+            inventory_unchanged=True,
+            order_ids=list(out.get("order_ids") or []),
+            location_id=out.get("location_id"),
+            pick_id=out.get("pick_id"),
+            order_item_id=out.get("order_item_id"),
+            product_id=out.get("product_id"),
+            shortage_unchanged=True,
+        )
+    except UndoPickError as e:
+        db.rollback()
+        raise HTTPException(status_code=409 if e.code == "PICK_ALREADY_FINALIZED" else 400, detail={"code": e.code, "message": str(e)}) from e
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.exception("post_picking_undo_pick_by_id:SQLAlchemyError")
         raise HTTPException(status_code=500, detail="Cofnięcie pobrania nie powiodło się.") from e
 
 

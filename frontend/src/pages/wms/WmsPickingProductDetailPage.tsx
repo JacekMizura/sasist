@@ -5,12 +5,15 @@ import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   formatFastApiErrorDetail,
   getWmsPickingProductDetail,
+  getWmsPickingProductPicks,
   postWmsPickingConfirmBasketPut,
   postWmsPickingConfirmEmptyLocation,
   postWmsPickingQuickPick,
   postWmsPickingReportShortage,
   postWmsPickingReportShortageBulk,
   postWmsPickingUndoPick,
+  postWmsPickingUndoPickById,
+  type WmsPickingDraftPickApi,
   type WmsPickingProductDetailApi,
   type WmsPickingProductLocationRowApi,
 } from "../../api/wmsPickingProductsApi";
@@ -152,6 +155,8 @@ export default function WmsPickingProductDetailPage() {
     (routerLocation.state as WmsPickingProductsNavState | null)?.basketPutPendingSeed ?? null;
   const navigationSourceFromRouter =
     (routerLocation.state as WmsPickingProductsNavState | null)?.navigationSource ?? null;
+  const highlightPickIdFromNav =
+    (routerLocation.state as WmsPickingProductsNavState | null)?.highlightPickId ?? null;
   const enteredViaListProductScan = Boolean(listProductScanToken || basketPutPendingSeed);
   /** Prefer explicit router source; fall back to seed/token heuristic for older navigations. */
   const navigationSource =
@@ -183,6 +188,10 @@ export default function WmsPickingProductDetailPage() {
     "product_shortage",
   );
   const [undoBusy, setUndoBusy] = useState(false);
+  const [undoBusyPickId, setUndoBusyPickId] = useState<number | null>(null);
+  const [draftPicks, setDraftPicks] = useState<WmsPickingDraftPickApi[]>([]);
+  const [draftPicksLoading, setDraftPicksLoading] = useState(false);
+  const [highlightPickId, setHighlightPickId] = useState<number | null>(null);
   const [depositBusy, setDepositBusy] = useState(false);
   const [bundlePickScan, setBundlePickScan] = useState<BundleScanOut | null>(null);
   const [consolidationRackRows, setConsolidationRackRows] = useState<ConsolidationRackBundleRowOut[]>([]);
@@ -309,6 +318,43 @@ export default function WmsPickingProductDetailPage() {
       } satisfies WmsPickingProductsNavState,
     });
   }, [listProductScanToken, pendingSeed, navigate, pickingSessionRaw, navigationSourceFromRouter]);
+
+  useEffect(() => {
+    if (highlightPickIdFromNav != null && Number(highlightPickIdFromNav) > 0) {
+      setHighlightPickId(Number(highlightPickIdFromNav));
+    }
+  }, [highlightPickIdFromNav]);
+
+  const reloadDraftPicks = useCallback(async () => {
+    if (
+      warehouseId == null ||
+      !pickingSession?.cartId ||
+      !Number.isFinite(productId) ||
+      productId <= 0 ||
+      !detail?.requires_basket_put_confirm
+    ) {
+      setDraftPicks([]);
+      return;
+    }
+    setDraftPicksLoading(true);
+    try {
+      const res = await getWmsPickingProductPicks(
+        pickingTenantId,
+        warehouseId,
+        pickingSession.cartId,
+        productId,
+      );
+      setDraftPicks(Array.isArray(res.picks) ? res.picks : []);
+    } catch {
+      setDraftPicks([]);
+    } finally {
+      setDraftPicksLoading(false);
+    }
+  }, [warehouseId, pickingSession?.cartId, productId, detail?.requires_basket_put_confirm, pickingTenantId]);
+
+  useEffect(() => {
+    void reloadDraftPicks();
+  }, [reloadDraftPicks, detail]);
 
   useEffect(() => {
     if (!detail) return;
@@ -1122,6 +1168,26 @@ export default function WmsPickingProductDetailPage() {
     }
   };
 
+  const submitUndoPickById = async (pickId: number) => {
+    if (undoBusyPickId != null || !pickingSession?.cartId || warehouseId == null) return;
+    setUndoBusyPickId(pickId);
+    setPickMsg(null);
+    try {
+      await postWmsPickingUndoPickById(pickingTenantId, warehouseId, pickingSession.cartId, pickId);
+      playScanBeep();
+      showScannerToast(`Cofnięto pobranie #${pickId}`);
+      if (highlightPickId === pickId) setHighlightPickId(null);
+      await load();
+      await reloadDraftPicks();
+      refocusScannerInput();
+    } catch (e: unknown) {
+      const ax = e as { response?: { data?: unknown } };
+      showScannerToast(formatFastApiErrorDetail(ax.response?.data) || "Cofnięcie pobrania nie powiodło się.");
+    } finally {
+      setUndoBusyPickId(null);
+    }
+  };
+
   const submitUndoPick = async () => {
     if (undoBusy || !pickingSession?.cartId || warehouseId == null || !detail || !canUndoPick) return;
     setUndoBusy(true);
@@ -1565,8 +1631,15 @@ export default function WmsPickingProductDetailPage() {
                   ) : null}
                   <MultiBasketAllocationPanel
                     orders={detail.orders}
+                    draftPicks={draftPicks}
+                    highlightPickId={highlightPickId}
+                    picksLoading={draftPicksLoading}
+                    undoBusyPickId={undoBusyPickId}
                     onOpenBulkShortage={openBulkShortage}
                     onReportLineShortage={openLineShortage}
+                    onUndoPick={(pickId) => {
+                      void submitUndoPickById(pickId);
+                    }}
                     shortageBusy={shortageBusy}
                   />
                 </>

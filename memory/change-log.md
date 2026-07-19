@@ -1,3 +1,10 @@
+## 2026-07-19 — Legacy draft Pick recovery (per Pick.id)
+
+- `GET /wms/picking/product-picks` + `POST /wms/picking/picks/{id}/undo` (Inventory=0, shortage=0).
+- Finalize 409: code `PICK_LOCATION_STOCK_MISMATCH` + `failing_pick` + operator message; FE CTA „Przejdź do pobrania”.
+- MULTI panel: Historia pobrań per koszyk + cofnij konkretny draft.
+- Tests: `test_wms_undo_pick_by_id.py`. No push / no auto-migrate cart_id=2.
+
 ## 2026-07-19 — LIVE finalize still 409: LEGACY vs WRITE PATH separation
 
 - Classification: **LEGACY BAD PICKS** on cart_id=2 most likely; new write path **hard-gated** (cannot create qty=5 when effective=1).

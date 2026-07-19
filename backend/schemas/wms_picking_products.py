@@ -583,6 +583,32 @@ class WmsPickingUndoPickResponse(BaseModel):
     inventory_unchanged: bool = True
     order_ids: list[int] = Field(default_factory=list)
     location_id: Optional[int] = None
+    pick_id: Optional[int] = None
+    order_item_id: Optional[int] = None
+    product_id: Optional[int] = None
+    shortage_unchanged: Optional[bool] = None
+
+
+class WmsPickingDraftPickRow(BaseModel):
+    pick_id: int
+    order_id: int
+    order_item_id: Optional[int] = None
+    order_number: str = ""
+    basket_id: Optional[int] = None
+    basket_label: Optional[str] = None
+    location_id: int
+    location_code: str
+    quantity: float
+    picked_at: Optional[str] = None
+    created_at: Optional[str] = None
+    product_id: int
+
+
+class WmsPickingProductPicksResponse(BaseModel):
+    ok: bool = True
+    cart_id: int
+    product_id: int
+    picks: list[WmsPickingDraftPickRow] = Field(default_factory=list)
 
 
 class WmsPickingEmptyLocationBody(BaseModel):

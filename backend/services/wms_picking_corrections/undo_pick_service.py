@@ -222,3 +222,104 @@ def undo_wms_session_picks(
         "location_id": location_used,
         "inventory_unchanged": True,
     }
+
+
+def undo_wms_pick_by_id(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    pick_id: int,
+    cart_id: int | None = None,
+    operator_user_id: int | None = None,
+    audit_reason: str = "LEGACY_LOCATION_CORRECTION",
+) -> dict:
+    """
+    Undo exactly one draft Pick by id (MULTI recovery).
+
+    - Inventory unchanged (stock only deducted at finalize).
+    - Shortage untouched.
+    - Other picks / order_items untouched.
+    """
+    pick = (
+        db.query(Pick)
+        .filter(Pick.id == int(pick_id))
+        .with_for_update()
+        .first()
+    )
+    if pick is None:
+        raise UndoPickError("Nie znaleziono pobrania.", code="PICK_NOT_FOUND")
+    if int(pick.tenant_id) != int(tenant_id) or int(pick.warehouse_id or 0) != int(warehouse_id):
+        raise UndoPickError("Pobranie nie należy do tego magazynu.", code="PICK_WRONG_SCOPE")
+    if cart_id is not None and int(pick.cart_id or 0) != int(cart_id):
+        raise UndoPickError("Pobranie nie należy do aktywnego wózka.", code="PICK_WRONG_CART")
+    if pick.picked_at is not None:
+        raise UndoPickError(
+            "Nie można cofnąć sfinalizowanego pobrania — stock został już zdjęty.",
+            code="PICK_ALREADY_FINALIZED",
+        )
+
+    cart = (
+        db.query(Cart)
+        .filter(
+            Cart.id == int(pick.cart_id),
+            Cart.tenant_id == int(tenant_id),
+            Cart.warehouse_id == int(warehouse_id),
+        )
+        .first()
+    )
+    if cart is None:
+        raise UndoPickError("Nie znaleziono wózka sesji.", code="CART_NOT_FOUND")
+
+    undone_qty = float(pick.quantity or 0)
+    oid = int(pick.order_id)
+    oiid = int(pick.order_item_id) if pick.order_item_id is not None else None
+    lid = int(pick.location_id)
+    pid = int(pick.product_id)
+    cid = int(pick.cart_id)
+    deleted_id = int(pick.id)
+
+    # Bulk delete avoids ORM cascade lazy-load of pick_wave_items (optional table).
+    db.query(Pick).filter(Pick.id == deleted_id).delete(synchronize_session="fetch")
+    delete_pick_events_for_pick_ids(db, [deleted_id])
+    recompute_order_fulfillment(db, oid, commit=False, session_cart_id=cid)
+
+    from ..wms_audit_service import emit_wms_pick_undone
+
+    if undone_qty > 1e-9:
+        emit_wms_pick_undone(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            order_id=oid,
+            order_item_id=oiid,
+            product_id=pid,
+            location_id=lid,
+            cart_id=cid,
+            quantity=float(undone_qty),
+            operator_user_id=operator_user_id,
+        )
+
+    logger.info(
+        "[wms.undo_pick_by_id] pick_id=%s cart_id=%s product_id=%s qty=%s reason=%s",
+        deleted_id,
+        cid,
+        pid,
+        undone_qty,
+        audit_reason,
+    )
+    return {
+        "ok": True,
+        "undone_qty": round(undone_qty, 6),
+        "deleted_pick_ids": [deleted_id],
+        "pick_id": deleted_id,
+        "order_id": oid,
+        "order_item_id": oiid,
+        "order_ids": [oid],
+        "product_id": pid,
+        "location_id": lid,
+        "cart_id": cid,
+        "inventory_unchanged": True,
+        "shortage_unchanged": True,
+        "reason": audit_reason,
+    }

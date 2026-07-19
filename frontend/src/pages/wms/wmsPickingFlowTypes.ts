@@ -95,6 +95,8 @@ export type WmsPickingProductsNavState = {
       line_remaining: number;
     }>;
   } | null;
+  /** Highlight draft Pick after finalize PICK_LOCATION_STOCK_MISMATCH recovery CTA. */
+  highlightPickId?: number | null;
 };
 
 /** Router state dla `/wms/product-preview/:productId` (podgląd operacyjny WMS). */

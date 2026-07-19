@@ -735,6 +735,135 @@ export async function postWmsPickingUndoPick(
   return res.data;
 }
 
+export type WmsPickingDraftPickApi = {
+  pick_id: number;
+  order_id: number;
+  order_item_id: number | null;
+  order_number: string;
+  basket_id: number | null;
+  basket_label: string | null;
+  location_id: number;
+  location_code: string;
+  quantity: number;
+  picked_at: string | null;
+  created_at: string | null;
+  product_id: number;
+};
+
+export async function getWmsPickingProductPicks(
+  tenantId: number,
+  warehouseId: number,
+  cartId: number,
+  productId: number,
+): Promise<{ ok: boolean; cart_id: number; product_id: number; picks: WmsPickingDraftPickApi[] }> {
+  const res = await api.get("/wms/picking/product-picks", {
+    params: {
+      tenant_id: tenantId,
+      warehouse_id: warehouseId,
+      cart_id: cartId,
+      product_id: productId,
+    },
+  });
+  return res.data;
+}
+
+export async function postWmsPickingUndoPickById(
+  tenantId: number,
+  warehouseId: number,
+  cartId: number,
+  pickId: number,
+): Promise<{
+  ok: boolean;
+  undone_qty: number;
+  inventory_unchanged: boolean;
+  shortage_unchanged?: boolean;
+  pick_id?: number | null;
+  order_ids: number[];
+  location_id: number | null;
+}> {
+  const res = await api.post(`/wms/picking/picks/${pickId}/undo`, null, {
+    params: {
+      tenant_id: tenantId,
+      warehouse_id: warehouseId,
+      cart_id: cartId,
+    },
+  });
+  return res.data;
+}
+
+export type WmsFinalizeFailingPickApi = {
+  pick_id?: number;
+  product_id?: number;
+  product_name?: string;
+  order_id?: number;
+  order_item_id?: number | null;
+  location_id?: number;
+  location_code?: string;
+  quantity?: number;
+  pick_quantity?: number;
+  inventory_physical_available?: number;
+  created_at?: string | null;
+};
+
+/** Parse finalize-cart 409 detail for PICK_LOCATION_STOCK_MISMATCH recovery CTA. */
+export function extractFinalizeFailingPick(err: unknown): {
+  message: string;
+  code: string | null;
+  failingPick: WmsFinalizeFailingPickApi | null;
+} {
+  const empty = { message: "", code: null as string | null, failingPick: null as WmsFinalizeFailingPickApi | null };
+  if (!err || typeof err !== "object" || !("response" in err)) return empty;
+  const data = (err as { response?: { data?: unknown } }).response?.data;
+  if (!data || typeof data !== "object") return empty;
+  const detail = (data as { detail?: unknown }).detail;
+  const d = (detail && typeof detail === "object" && !Array.isArray(detail) ? detail : data) as {
+    message?: unknown;
+    error?: unknown;
+    code?: unknown;
+    failing_pick?: unknown;
+  };
+  const message =
+    (typeof d.message === "string" && d.message.trim()) ||
+    (typeof d.error === "string" && d.error.trim()) ||
+    "";
+  const code = typeof d.code === "string" ? d.code : null;
+  const fp = d.failing_pick;
+  if (!fp || typeof fp !== "object") {
+    return { message, code, failingPick: null };
+  }
+  const f = fp as Record<string, unknown>;
+  return {
+    message,
+    code,
+    failingPick: {
+      pick_id: typeof f.pick_id === "number" ? f.pick_id : Number(f.pick_id) || undefined,
+      product_id: typeof f.product_id === "number" ? f.product_id : Number(f.product_id) || undefined,
+      product_name: typeof f.product_name === "string" ? f.product_name : undefined,
+      order_id: typeof f.order_id === "number" ? f.order_id : Number(f.order_id) || undefined,
+      order_item_id:
+        f.order_item_id == null
+          ? null
+          : typeof f.order_item_id === "number"
+            ? f.order_item_id
+            : Number(f.order_item_id) || null,
+      location_id: typeof f.location_id === "number" ? f.location_id : Number(f.location_id) || undefined,
+      location_code: typeof f.location_code === "string" ? f.location_code : undefined,
+      quantity:
+        typeof f.quantity === "number"
+          ? f.quantity
+          : typeof f.pick_quantity === "number"
+            ? f.pick_quantity
+            : Number(f.quantity ?? f.pick_quantity) || undefined,
+      pick_quantity: typeof f.pick_quantity === "number" ? f.pick_quantity : undefined,
+      inventory_physical_available:
+        typeof f.inventory_physical_available === "number"
+          ? f.inventory_physical_available
+          : Number(f.inventory_physical_available) || undefined,
+      created_at: typeof f.created_at === "string" ? f.created_at : null,
+    },
+  };
+}
+
 export type WmsPickingEmptyLocationResponseApi = {
   ok: boolean;
   shortage_kind: string;

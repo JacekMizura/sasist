@@ -16,6 +16,7 @@ import {
   postWmsPickingCancelPendingBasketPut,
   postWmsPickingConfirmBasketPut,
   postWmsPickingStartCartless,
+  extractFinalizeFailingPick,
   type WmsBasketPutPendingListApi,
   type WmsPickingCohortMissingLineApi,
   type WmsPickingProductLineApi,
@@ -182,6 +183,13 @@ export default function WmsPickingProductsPage() {
   const [recoveryCompleted, setRecoveryCompleted] = useState(false);
   const [finalizeBusy, setFinalizeBusy] = useState(false);
   const [finalizeErr, setFinalizeErr] = useState<string | null>(null);
+  const [finalizeFailingPick, setFinalizeFailingPick] = useState<{
+    product_id?: number;
+    pick_id?: number;
+    product_name?: string;
+    location_code?: string;
+    quantity?: number;
+  } | null>(null);
   const [finalizeShortageModal, setFinalizeShortageModal] = useState<
     null | {
       products: number;
@@ -1244,6 +1252,7 @@ export default function WmsPickingProductsPage() {
     if (!pickingSession || !mergedSession || warehouseId == null || !allPicked || !canFinalizeSession) return;
     setFinalizeBusy(true);
     setFinalizeErr(null);
+    setFinalizeFailingPick(null);
     try {
       const data = await getWmsPickingProductLines(
         DAMAGE_TENANT_ID,
@@ -1329,11 +1338,31 @@ export default function WmsPickingProductsPage() {
       }
     } catch (e: unknown) {
       console.error("[picking.finalize]", e);
-      const msg = extractApiErrorMessage(
-        e,
-        "Nie udało się zakończyć zbierania z powodu niespójności danych zamówienia. Sesja nie została zakończona.",
-      );
-      setFinalizeErr(msg);
+      const parsed = extractFinalizeFailingPick(e);
+      if (parsed.failingPick && (parsed.code === "PICK_LOCATION_STOCK_MISMATCH" || parsed.failingPick.pick_id)) {
+        const fp = parsed.failingPick;
+        const qty = fp.quantity ?? fp.pick_quantity;
+        const loc = fp.location_code || (fp.location_id != null ? `#${fp.location_id}` : "—");
+        const name = fp.product_name || (fp.product_id != null ? `produkt #${fp.product_id}` : "produkt");
+        setFinalizeErr(
+          parsed.message ||
+            `Nie można zakończyć zbierania.\n\nPobranie ${qty ?? "?"} szt. produktu ${name} zapisano z lokalizacji ${loc}, ale dostępny stan nie pokrywa tego pobrania.\n\nSprawdź zapisane pobranie.`,
+        );
+        setFinalizeFailingPick({
+          product_id: fp.product_id,
+          pick_id: fp.pick_id,
+          product_name: fp.product_name,
+          location_code: fp.location_code,
+          quantity: qty,
+        });
+      } else {
+        const msg = extractApiErrorMessage(
+          e,
+          "Nie udało się zakończyć zbierania z powodu niespójności danych zamówienia. Sesja nie została zakończona.",
+        );
+        setFinalizeErr(msg);
+        setFinalizeFailingPick(null);
+      }
     } finally {
       setFinalizeBusy(false);
     }
@@ -1858,7 +1887,26 @@ export default function WmsPickingProductsPage() {
         {allPicked && rows.length > 0 && (
           <section className="mt-4 space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             {finalizeErr ? (
-              <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-900 text-center shadow-inner">{finalizeErr}</p>
+              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-900 text-center shadow-inner space-y-3">
+                <p className="whitespace-pre-line">{finalizeErr}</p>
+                {finalizeFailingPick?.product_id != null && pickingSession ? (
+                  <button
+                    type="button"
+                    className="w-full rounded-xl border border-red-300 bg-white px-4 py-3 text-xs font-black uppercase tracking-wider text-red-900 hover:bg-red-100"
+                    onClick={() => {
+                      navigate(WMS_ROUTES.pickingProduct(Number(finalizeFailingPick.product_id)), {
+                        state: {
+                          pickingSession,
+                          navigationSource: "other",
+                          highlightPickId: finalizeFailingPick.pick_id ?? null,
+                        } satisfies WmsPickingProductsNavState,
+                      });
+                    }}
+                  >
+                    Przejdź do pobrania
+                  </button>
+                ) : null}
+              </div>
             ) : null}
             <button
               type="button"

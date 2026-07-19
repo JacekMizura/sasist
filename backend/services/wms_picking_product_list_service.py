@@ -3734,13 +3734,48 @@ def finalize_wms_picking_cart(
             cid,
             sid,
         )
+        err_code = "inventory_finalize_failed"
+        err_msg = f"Nie udało się spisać stanu magazynu dla zbierania: {exc}"
+        extra: dict | None = {"failing_pick": failing_pick_diag} if failing_pick_diag else None
+        if failing_pick_diag:
+            err_code = "PICK_LOCATION_STOCK_MISMATCH"
+            fp = failing_pick_diag
+            prod_name = f"produkt #{fp.get('product_id')}"
+            try:
+                from ..models.product import Product as _Product
+
+                prow = db.query(_Product).filter(_Product.id == int(fp.get("product_id") or 0)).first()
+                if prow is not None and (prow.name or "").strip():
+                    prod_name = str(prow.name).strip()
+            except Exception:
+                pass
+            loc_code = fp.get("location_code") or f"#{fp.get('location_id')}"
+            pq = float(fp.get("pick_quantity") or 0)
+            avail = float(fp.get("inventory_physical_available") or 0)
+            err_msg = (
+                "Nie można zakończyć zbierania.\n\n"
+                f"Pobranie {pq:g} szt. produktu {prod_name} "
+                f"zapisano z lokalizacji {loc_code}, "
+                f"ale dostępny stan nie pokrywa tego pobrania "
+                f"(dostępne {avail:g}).\n\n"
+                "Sprawdź zapisane pobranie i cofnij błędny wpis."
+            )
+            # Keep machine fields for FE CTA (normalize quantity alias).
+            fp_out = dict(fp)
+            fp_out["quantity"] = fp.get("pick_quantity")
+            fp_out["product_name"] = prod_name
+            extra = {"failing_pick": fp_out}
         raise PickingFinalizeError(
-            f"Nie udało się spisać stanu magazynu dla zbierania: {exc}",
+            err_msg,
             reason=exc.__class__.__name__,
             step="inventory",
             http_status=409,
-            code="inventory_finalize_failed",
-            extra={"failing_pick": failing_pick_diag} if failing_pick_diag else None,
+            code=err_code,
+            order_id=int(failing_pick_diag["order_id"]) if failing_pick_diag and failing_pick_diag.get("order_id") else None,
+            line_id=int(failing_pick_diag["order_item_id"])
+            if failing_pick_diag and failing_pick_diag.get("order_item_id")
+            else None,
+            extra=extra,
         ) from exc
 
     tgt = int(pc.target_status_id)
