@@ -129,6 +129,17 @@ const CATALOG: Record<
     title: "ILOŚĆ ZMIENIONA",
     message: "Pozostała ilość zmieniła się. Odśwież i podaj ilość ponownie.",
   },
+  PICK_LOCATION_REQUIRED: {
+    severity: "warning",
+    title: "ZESKANUJ LOKALIZACJĘ",
+    message: "Najpierw zeskanuj lokalizację, z której pobierasz produkt.",
+  },
+  QUANTITY_EXCEEDS_LOCATION_STOCK: {
+    severity: "warning",
+    title: "BRAK STANU W LOKALIZACJI",
+    message:
+      "W wybranej lokalizacji nie ma wystarczającego stanu. Zeskanuj inną lokalizację albo zmniejsz ilość.",
+  },
 };
 
 export function mapWmsScanErrorCode(

@@ -765,6 +765,30 @@ def _quantity_mode_basket_put(
         )
 
     assert allocation is not None
+
+    # SOURCE location is independent of DESTINATION basket. Never invent locations[0].
+    if location_id is None or int(location_id) <= 0:
+        raise BasketPutError(
+            ec.PICK_LOCATION_REQUIRED,
+            ec.operator_message(ec.PICK_LOCATION_REQUIRED),
+            http_status=409,
+            extra={"phase": "PICK_LOCATION_REQUIRED"},
+        )
+    source_location_id = int(location_id)
+
+    from .location_stock import effective_pickable_qty_at_location
+
+    loc_avail = effective_pickable_qty_at_location(
+        db,
+        tenant_id=int(cart.tenant_id),
+        warehouse_id=int(cart.warehouse_id),
+        product_id=int(product_id),
+        location_id=source_location_id,
+        for_update=True,
+    )
+    line_cap = float(allocation.line_remaining)
+    qty_cap = min(line_cap, float(loc_avail))
+
     alloc_payload = [
         {
             "basket_id": int(allocation.basket_id),
@@ -772,6 +796,9 @@ def _quantity_mode_basket_put(
             "order_id": int(allocation.order_id),
             "order_item_id": int(allocation.order_item_id),
             "line_remaining": float(allocation.line_remaining),
+            "location_id": source_location_id,
+            "location_available": round(float(loc_avail), 6),
+            "quantity_max": round(float(qty_cap), 6),
         }
     ]
 
@@ -785,6 +812,8 @@ def _quantity_mode_basket_put(
             basket=allocation.basket_label,
             order_id=allocation.order_id,
             line_remaining=allocation.line_remaining,
+            location_id=source_location_id,
+            location_available=loc_avail,
         )
         return BasketPutResult(
             phase="QUANTITY_REQUIRED",
@@ -796,7 +825,7 @@ def _quantity_mode_basket_put(
             eligible_baskets=alloc_payload,
             message=(
                 f"Koszyk {allocation.basket_label} — podaj ilość do odłożenia "
-                f"(max {allocation.line_remaining:g} szt.)."
+                f"(max {qty_cap:g} szt.; lokalizacja: dostępne {loc_avail:g})."
             ),
         )
 
@@ -863,15 +892,33 @@ def _quantity_mode_basket_put(
             },
         )
 
-    if location_id is None or int(location_id) <= 0:
+    # Re-read effective stock under session lock (pending picks may have changed).
+    loc_avail_live = effective_pickable_qty_at_location(
+        db,
+        tenant_id=int(cart.tenant_id),
+        warehouse_id=int(cart.warehouse_id),
+        product_id=int(product_id),
+        location_id=source_location_id,
+        for_update=True,
+    )
+    if qty > float(loc_avail_live) + 1e-9:
         raise BasketPutError(
-            ec.UNKNOWN_SCAN_CODE,
-            "Brak lokalizacji produktu — nie można zapisać odłożenia.",
+            ec.QUANTITY_EXCEEDS_LOCATION_STOCK,
+            (
+                f"W lokalizacji dostępne jest tylko {loc_avail_live:g} szt. "
+                f"(stan magazynu minus nie sfinalizowane zbieranie). Żądano {qty:g}."
+            ),
             http_status=409,
-            extra={"phase": "NO_LOCATION_FOR_PICK"},
+            extra={
+                "phase": "QUANTITY_EXCEEDS_LOCATION_STOCK",
+                "location_id": source_location_id,
+                "location_available": float(loc_avail_live),
+                "requested": float(qty),
+                "line_remaining": float(live_alloc.line_remaining),
+            },
         )
 
-    put_qty = min(float(qty), float(live_alloc.line_remaining))
+    put_qty = min(float(qty), float(live_alloc.line_remaining), float(loc_avail_live))
     oid, oiid = record_pick_fn(
         quantity=put_qty,
         scope_order_id=int(live_alloc.order_id),

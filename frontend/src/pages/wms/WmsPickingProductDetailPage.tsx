@@ -378,7 +378,11 @@ export default function WmsPickingProductDetailPage() {
   useEffect(() => {
     if (!detail) return;
     if (detail.requires_basket_put_confirm) {
-      setScannerInputPlaceholder("Zeskanuj koszyk");
+      if (needsLocationScan && activeLocationId == null) {
+        setScannerInputPlaceholder("Zeskanuj lokalizację źródłową");
+      } else {
+        setScannerInputPlaceholder("Zeskanuj koszyk");
+      }
       setPendingSeed(null);
     } else if (effectivePending) {
       setScannerInputPlaceholder("Zeskanuj koszyk");
@@ -455,6 +459,19 @@ export default function WmsPickingProductDetailPage() {
           .filter(Boolean)
           .join(", ") || undefined;
 
+      // SOURCE location scan before basket destination (MULTI multi-loc).
+      if (detail && locs.length > 1) {
+        const locHit = locs.find((loc) => locationMatchesScan(loc, scan));
+        if (locHit) {
+          playScanBeep();
+          appendScanToHistory(scan);
+          setActiveLocationId(locHit.location_id);
+          setLocationHint(null);
+          showScannerToast(`Lokalizacja ${locHit.location_code}`);
+          return SCAN_CONSUMED;
+        }
+      }
+
       const multiDecision = resolveMultiPickingDetailScan(scan, {
         requiresBasketPut,
         hasPending: Boolean(effectivePending),
@@ -466,6 +483,11 @@ export default function WmsPickingProductDetailPage() {
         productRemaining: remaining,
         pendingEligibleLabels: pendingLabels,
         quantityMode: Boolean(detail?.requires_basket_put_confirm ?? requiresBasketPut),
+        hasSourceLocation: !(
+          Boolean(detail?.requires_basket_put_confirm) &&
+          (detail?.locations.length ?? 0) > 1 &&
+          activeLocationId == null
+        ),
       });
 
       // Seed-only while detail GET in flight: STATE B (await basket).
@@ -728,14 +750,26 @@ export default function WmsPickingProductDetailPage() {
       scanGateRef.current = false;
       return;
     }
+    // SOURCE location: single-loc auto OK; multi-loc requires explicit activeLocationId.
+    // Never invent locations[0] for MULTI Pick provenance.
+    const multiNeedsLoc =
+      Boolean(detail?.requires_basket_put_confirm) && (detail?.locations.length ?? 0) > 1;
+    const locId = multiNeedsLoc
+      ? activeLocationId
+      : (activeLocationId ??
+        selectedLocation?.location_id ??
+        (detail?.locations.length === 1 ? detail.locations[0].location_id : null) ??
+        null);
+    if (detail?.requires_basket_put_confirm && (locId == null || locId <= 0)) {
+      scanGateRef.current = false;
+      setPickBusy(false);
+      showScanFeedbackFromCode("PICK_LOCATION_REQUIRED");
+      setPickMsg(mapWmsScanErrorCode("PICK_LOCATION_REQUIRED").message);
+      return;
+    }
     scanGateRef.current = true;
     setPickBusy(true);
     setPickMsg(null);
-    const locId =
-      activeLocationId ??
-      selectedLocation?.location_id ??
-      detail?.locations?.[0]?.location_id ??
-      null;
     multiScanTrace("BASKET_SCAN", {
       raw_code: normalizeScanEan(rawScan),
       classified_as: routeReason,
@@ -769,11 +803,29 @@ export default function WmsPickingProductDetailPage() {
       });
 
       if (result.phase === "QUANTITY_REQUIRED") {
-        const row = result.eligible_baskets?.[0];
+        const row = result.eligible_baskets?.[0] as
+          | {
+              line_remaining?: number;
+              order_id?: number;
+              order_item_id?: number;
+              basket_label?: string;
+              location_available?: number;
+              quantity_max?: number;
+              location_id?: number;
+            }
+          | undefined;
         const rem = Number(row?.line_remaining ?? 0);
+        const locAvailApi = Number(row?.location_available);
+        const locAvail =
+          Number.isFinite(locAvailApi) && locAvailApi >= 0
+            ? locAvailApi
+            : locStock(selectedLocation ?? detail?.locations.find((l) => l.location_id === locId) ?? { stock_quantity: 0 });
         const orderMeta =
           detail?.orders?.find((o) => Number(o.order_item_id) === Number(result.order_item_id)) ??
           detail?.orders?.find((o) => o.order_id === result.order_id);
+        const locMeta =
+          selectedLocation ??
+          detail?.locations.find((l) => l.location_id === (row?.location_id ?? locId));
         setPendingSeed(null);
         setQuantityDraft({
           basketScan: rawScan,
@@ -782,6 +834,9 @@ export default function WmsPickingProductDetailPage() {
           orderItemId: Number(result.order_item_id || row?.order_item_id || 0),
           orderNumber: orderMeta?.order_number ?? null,
           lineRemaining: rem > 0 ? rem : 1,
+          locationAvailable: locAvail,
+          locationCode: locMeta?.location_code ?? null,
+          locationId: locId,
           requiredQty: Number(orderMeta?.quantity ?? rem),
           pickedQty: Number(orderMeta?.picked_quantity ?? 0),
           shortageQty: Number(orderMeta?.missing_quantity ?? 0),
@@ -868,7 +923,11 @@ export default function WmsPickingProductDetailPage() {
       });
       showScanFeedback(feedback);
       setPickMsg(feedback.message);
-      if (code === "QUANTITY_EXCEEDS_REMAINING" || code === "QUANTITY_STALE") {
+      if (
+        code === "QUANTITY_EXCEEDS_REMAINING" ||
+        code === "QUANTITY_STALE" ||
+        code === "QUANTITY_EXCEEDS_LOCATION_STOCK"
+      ) {
         // Keep / refresh modal with live remaining if provided
         const remMatch = extracted.message?.match(/(\d+(?:[.,]\d+)?)\s*szt/i);
         if (quantityDraft && remMatch) {
@@ -1447,9 +1506,22 @@ export default function WmsPickingProductDetailPage() {
               <h4 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-3">Lokalizacje półek</h4>
               <ul className="space-y-2">
                 {detail.locations.map((loc) => (
-                  <li key={loc.location_id} className={`flex items-center justify-between p-3 rounded-xl border bg-white ${activeLocationId === loc.location_id ? 'border-indigo-400 ring-2 ring-indigo-100' : 'border-slate-200'}`}>
-                    <span className="font-mono font-bold text-slate-900">{loc.location_code}</span>
-                    <span className="text-xs font-bold text-slate-500">Stan: {fmtQty(locStock(loc))} szt.</span>
+                  <li key={loc.location_id}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveLocationId(loc.location_id);
+                        setLocationHint(null);
+                      }}
+                      className={`flex w-full items-center justify-between p-3 rounded-xl border bg-white text-left ${
+                        activeLocationId === loc.location_id
+                          ? "border-indigo-400 ring-2 ring-indigo-100"
+                          : "border-slate-200 hover:border-indigo-200"
+                      }`}
+                    >
+                      <span className="font-mono font-bold text-slate-900">{loc.location_code}</span>
+                      <span className="text-xs font-bold text-slate-500">Stan: {fmtQty(locStock(loc))} szt.</span>
+                    </button>
                   </li>
                 ))}
               </ul>

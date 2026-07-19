@@ -27,6 +27,8 @@ FOREIGN_SKU_ON_SERIES = "FOREIGN_SKU_ON_SERIES"
 QUANTITY_INVALID = "QUANTITY_INVALID"
 QUANTITY_EXCEEDS_REMAINING = "QUANTITY_EXCEEDS_REMAINING"
 QUANTITY_STALE = "QUANTITY_STALE"
+PICK_LOCATION_REQUIRED = "PICK_LOCATION_REQUIRED"
+QUANTITY_EXCEEDS_LOCATION_STOCK = "QUANTITY_EXCEEDS_LOCATION_STOCK"
 
 # Legacy alias kept in FE mapper
 AWAITING_BASKET_CONFIRMATION = "AWAITING_BASKET_CONFIRMATION"
@@ -53,6 +55,11 @@ OPERATOR_MESSAGES: dict[str, str] = {
     QUANTITY_INVALID: "Ilość musi być większa od zera.",
     QUANTITY_EXCEEDS_REMAINING: "Nie możesz odłożyć więcej niż pozostało w koszyku dla tego produktu.",
     QUANTITY_STALE: "Pozostała ilość zmieniła się. Odśwież i podaj ilość ponownie.",
+    PICK_LOCATION_REQUIRED: "Najpierw zeskanuj lokalizację, z której pobierasz produkt.",
+    QUANTITY_EXCEEDS_LOCATION_STOCK: (
+        "W wybranej lokalizacji nie ma wystarczającego stanu (uwzględniając już zebrane, "
+        "ale jeszcze nie sfinalizowane sztuk)."
+    ),
     AWAITING_BASKET_CONFIRMATION: (
         "Oczekiwany jest teraz skan koszyka. Najpierw odłóż zeskanowany produkt do koszyka."
     ),

@@ -26,6 +26,7 @@ describe("resolveMultiPickingDetailScan — strict states", () => {
         productEan: ean,
         productRemaining: 9,
         quantityMode: true,
+        hasSourceLocation: true,
       }),
     ).toEqual({ kind: "reject", code: "EXPECTED_BASKET_SCAN", consumed: true });
     expect(
@@ -35,8 +36,19 @@ describe("resolveMultiPickingDetailScan — strict states", () => {
         hasActiveSeries: false,
         productEan: ean,
         quantityMode: true,
+        hasSourceLocation: true,
       }),
     ).toEqual({ kind: "confirm_basket", reason: "select_destination" });
+    expect(
+      resolveMultiPickingDetailScan("brck1-B02", {
+        requiresBasketPut: true,
+        hasPending: false,
+        hasActiveSeries: false,
+        productEan: ean,
+        quantityMode: true,
+        hasSourceLocation: false,
+      }),
+    ).toEqual({ kind: "reject", code: "PICK_LOCATION_REQUIRED", consumed: true });
   });
 
   it("quantity mode suppresses leftover series EAN+1", () => {

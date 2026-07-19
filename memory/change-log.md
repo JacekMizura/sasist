@@ -1,3 +1,9 @@
+## 2026-07-19 — WRITE PATH location provenance (LIVE finalize 409 class)
+
+- ROOT CONFIRMED: MULTI quantity put used FE `locations[0]` without source scan; modal max = line remaining only; BE did not check location stock / pending picks → Pick qty=5 @ loc with stock 1 → finalize 409.
+- FIX (write path only; finalize untouched): `PICK_LOCATION_REQUIRED`, `QUANTITY_EXCEEDS_LOCATION_STOCK`, `effective_pickable = Inventory − pending Pick`; FE blocks multi-loc basket without `activeLocationId`; location scan before basket; modal max = min(line, loc).
+- Tests: `test_wms_basket_put_location_provenance.py`. No push.
+
 ## 2026-07-19 — LIVE finalize-cart 409 audit (product 192 / cart 2) — NO FIX YET
 
 - ERROR: `wymagane 5.0, dostępne 1.0` from `consume_inventory_fifo_slices` via `_decrement_inventory_for_wms_pick` on pending `Pick` (`picked_at IS NULL`).

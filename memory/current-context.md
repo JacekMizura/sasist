@@ -2,14 +2,13 @@
 
 ## Active
 
-**LIVE finalize-cart 409** (product #192, cart_id=2) — audit done, **no fix / no push**.
-Do not change quantity flow or shortage flow that just worked.
+**WRITE PATH location provenance fix** — MULTI must scan/select SOURCE location before basket quantity put. Finalize remains strict Pick×location (no redistribute). No push.
 
 ## Latest (2026-07-19)
 
-- Finalize deducts only pending `Pick.quantity` at `Pick.location_id`. Error `wymagane 5` = that Pick row’s qty. Shortage not deducted. Stock only at finalize.
-- Blocked on live Pick dump (location_id / per-loc aggregation). Suspected FE multi-loc stamp to `locations[0]`.
-- **MULTI quantity + per-allocation shortage:** still correct; do not regress.
+- LIVE finalize 409 (product 192 qty=5 vs avail=1) → root: FE `locations[0]` + no location stock gate at write.
+- Fix: `wms_basket_put/location_stock.py` effective available; BE codes `PICK_LOCATION_REQUIRED` / `QUANTITY_EXCEEDS_LOCATION_STOCK`; FE multi-loc gate + modal max.
+- Quantity flow (null → QUANTITY_REQUIRED, qty → PUT) unchanged.
 
 ## Notes
 

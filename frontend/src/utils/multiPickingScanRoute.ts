@@ -20,6 +20,11 @@ export type MultiPickingScanContext = {
    * Legacy active_series EAN+1 is suppressed while this is true.
    */
   quantityMode?: boolean;
+  /**
+   * SOURCE location selected (scan / single-loc auto / tap).
+   * When false in quantityMode, basket put is blocked until location is set.
+   */
+  hasSourceLocation?: boolean;
 };
 
 export type MultiPickingScanDecision =
@@ -106,6 +111,9 @@ export function resolveMultiPickingDetailScan(
     return { kind: "product_ean_pick" };
   }
   if (looksLikeCartBasketScan(scan)) {
+    if (ctx.quantityMode && ctx.hasSourceLocation === false) {
+      return { kind: "reject", code: "PICK_LOCATION_REQUIRED", consumed: true };
+    }
     return { kind: "confirm_basket", reason: "select_destination" };
   }
   if (looksLikeProductBarcode(scan)) {

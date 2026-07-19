@@ -12,6 +12,10 @@ export type BasketPutQuantityDraft = {
   orderItemId: number;
   orderNumber?: string | null;
   lineRemaining: number;
+  /** Effective stock at source location (Inventory − unfinalized picks). */
+  locationAvailable?: number;
+  locationCode?: string | null;
+  locationId?: number | null;
   requiredQty?: number;
   pickedQty?: number;
   shortageQty?: number;
@@ -33,7 +37,12 @@ function parseQty(raw: string): number {
 }
 
 export function BasketPutQuantityModal({ draft, busy, onCancel, onConfirm }: Props) {
-  const maxQty = Math.max(0, Math.floor(draft.lineRemaining));
+  const lineMax = Math.max(0, Math.floor(draft.lineRemaining));
+  const locAvail =
+    draft.locationAvailable != null && Number.isFinite(draft.locationAvailable)
+      ? Math.max(0, Math.floor(draft.locationAvailable))
+      : null;
+  const maxQty = locAvail != null ? Math.min(lineMax, locAvail) : lineMax;
   const [inputVal, setInputVal] = useState(String(maxQty > 0 ? maxQty : 1));
   const inputRef = useRef<HTMLInputElement | null>(null);
 
@@ -44,7 +53,7 @@ export function BasketPutQuantityModal({ draft, busy, onCancel, onConfirm }: Pro
       inputRef.current?.select();
     }, 50);
     return () => window.clearTimeout(t);
-  }, [draft.basketLabel, draft.orderItemId, maxQty]);
+  }, [draft.basketLabel, draft.orderItemId, maxQty, draft.locationId]);
 
   const qty = parseQty(inputVal);
   const valid = qty >= 1 && qty <= maxQty + 1e-9;
@@ -91,12 +100,20 @@ export function BasketPutQuantityModal({ draft, busy, onCancel, onConfirm }: Pro
             <div className="rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-3">
               <p className="text-[10px] font-black uppercase tracking-widest text-indigo-600">Koszyk</p>
               <p className="mt-1 text-2xl font-black tabular-nums text-indigo-950">{draft.basketLabel}</p>
-            </div>
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Zamówienie</p>
-              <p className="mt-1 text-xl font-black text-slate-900">
+              <p className="mt-0.5 text-xs font-semibold text-indigo-800/80">
                 {draft.orderNumber?.trim() || `#${draft.orderId}`}
               </p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Lokalizacja</p>
+              <p className="mt-1 text-xl font-black font-mono text-slate-900">
+                {draft.locationCode?.trim() || "—"}
+              </p>
+              {locAvail != null ? (
+                <p className="mt-0.5 text-xs font-semibold text-slate-500">
+                  Dostępne: <span className="tabular-nums font-black text-slate-800">{locAvail}</span> szt.
+                </p>
+              ) : null}
             </div>
           </div>
           <div className="grid grid-cols-4 gap-2 rounded-2xl border border-slate-100 bg-slate-50/80 px-3 py-3 text-center">
@@ -119,13 +136,20 @@ export function BasketPutQuantityModal({ draft, busy, onCancel, onConfirm }: Pro
               </p>
             </div>
             <div>
-              <p className="text-[9px] font-black uppercase tracking-wider text-slate-500">Pozostało</p>
+              <p className="text-[9px] font-black uppercase tracking-wider text-slate-500">Max teraz</p>
               <p className="mt-0.5 text-lg font-black tabular-nums text-indigo-900">{maxQty}</p>
             </div>
           </div>
           <p className="text-sm font-semibold text-slate-600">
             Ilość do odłożenia (max{" "}
-            <span className="font-black tabular-nums text-slate-900">{maxQty}</span> szt.):
+            <span className="font-black tabular-nums text-slate-900">{maxQty}</span>
+            {locAvail != null ? (
+              <>
+                {" "}
+                = min(pozostało {lineMax}, lokalizacja {locAvail})
+              </>
+            ) : null}
+            ):
           </p>
         </div>
 
