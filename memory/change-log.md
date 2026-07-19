@@ -1,3 +1,10 @@
+## 2026-07-19 — POST /orders 500: phantom offer_id (ProductSalesOffer)
+
+- ROOT: `GET /products/{id}/sales-offers` → `ensure_default_offer` + flush, **no commit**; `get_db` closes → rollback. FE stored ephemeral offer.id → POST `offer_not_found` → 500.
+- NOT product.id-as-offer_id (FE used real offer.id from list); IDs were never persisted.
+- FIX: list endpoint `db.commit()` after ensure; FE auto-add uses `product_id` (offer_id only on explicit multi-offer pick); create maps `ProductSalesOfferError` → 400 `OFFER_NOT_FOUND`.
+- Tests: `test_order_create_offer_contract.py`.
+
 ## 2026-07-19 — Packing BASKET ghost count (entry 1, scan 404)
 
 - ROOT: `packing_mode_distribution` / `_packing_orders_base_query` liczyły `picking_handoff_mode=BASKET` bez live custody; po finish custody cleared, handoff zostaje (provenance) → COUNT=1, GET basket → EMPTY.

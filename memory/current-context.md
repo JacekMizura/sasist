@@ -6,11 +6,11 @@
 
 ## Latest (2026-07-19)
 
-- **Packing BASKET ghost count:** entry „Zeskanuj koszyk (1)” vs basket 404 EMPTY — handoff provenance ≠ active custody. SSOT queue requires live basket dual-link + not automation_finished.
-- **POST /orders 500:** diagnostyka `ORDER_CREATE_TRACE` (`ec58cd21`); ROOT CAUSE prod nadal UNKNOWN bez nowego loga.
-- **Orphan PACKING cart:** `release_empty_orphan_cart` (`ea6a085f`).
+- **POST /orders 500 ROOT:** phantom `offer_id` from GET sales-offers ensure without commit → `offer_not_found`. Fixed commit + FE product_id default path + 400 domain map.
+- **Packing BASKET ghost count:** active queue requires live basket custody (`a8c6ee39`).
+- **Orphan PACKING cart / ORDER_CREATE_TRACE:** earlier commits.
 
 ## Notes
 
-- `picking_handoff_mode` = immutable provenance; live queue = cart_id / basket custody + packing state − finalized.
-- Magazyn→Wózki orphan: admin-release heal, nie cancel-session.
+- Create-order lines: `offer_id` only after explicit offer picker; otherwise `product_id` → backend default offer ensure (in create txn).
+- `picking_handoff_mode` = provenance; packing queue = live custody.

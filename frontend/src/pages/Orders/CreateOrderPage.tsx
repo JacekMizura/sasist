@@ -58,6 +58,7 @@ type LineRow =
       lineKey: string;
       kind: "product";
       product: CatalogProduct;
+      /** Only when user explicitly picked an offer (multi-offer). Never product.id. */
       offerId?: number;
       offerLabel?: string;
       quantity: number;
@@ -434,39 +435,52 @@ export default function CreateOrderPage() {
     [customerShippingAddresses],
   );
 
-  const addProductLine = useCallback((p: CatalogProduct, offer?: ProductSalesOfferRead) => {
-    const priceRaw =
-      offer?.effective_sale_price_net != null && Number.isFinite(offer.effective_sale_price_net)
-        ? Number(offer.effective_sale_price_net)
-        : p.sale_price != null && Number.isFinite(p.sale_price)
-          ? Number(p.sale_price)
-          : 0;
-    const key = offer ? `o-${offer.id}` : `p-${p.id}`;
-    const offerLabel = offer
-      ? `${offer.name} (${dispositionOfferLabel(offer.stock_disposition)})`
-      : undefined;
-    setLines((prev) => {
-      const i = prev.findIndex((x) => x.lineKey === key);
-      if (i >= 0) {
-        const next = [...prev];
-        const row = next[i];
-        if (row.kind === "product") next[i] = { ...row, quantity: row.quantity + 1 };
-        return next;
-      }
-      return [
-        ...prev,
-        {
-          lineKey: key,
-          kind: "product",
-          product: p,
-          offerId: offer?.id,
-          offerLabel,
-          quantity: 1,
-          unit_price: priceRaw,
-        },
-      ];
-    });
-  }, []);
+  const addProductLine = useCallback(
+    (
+      p: CatalogProduct,
+      opts?: {
+        /** Explicit multi-offer pick only — omit for default product→offer resolve on backend. */
+        explicitOffer?: ProductSalesOfferRead;
+        /** Price hint only (default/single offer); does not set offer_id in payload. */
+        priceOffer?: ProductSalesOfferRead;
+      },
+    ) => {
+      const offer = opts?.explicitOffer;
+      const priceSrc = offer ?? opts?.priceOffer;
+      const priceRaw =
+        priceSrc?.effective_sale_price_net != null && Number.isFinite(priceSrc.effective_sale_price_net)
+          ? Number(priceSrc.effective_sale_price_net)
+          : p.sale_price != null && Number.isFinite(p.sale_price)
+            ? Number(p.sale_price)
+            : 0;
+      const key = offer ? `o-${offer.id}` : `p-${p.id}`;
+      const offerLabel = offer
+        ? `${offer.name} (${dispositionOfferLabel(offer.stock_disposition)})`
+        : undefined;
+      setLines((prev) => {
+        const i = prev.findIndex((x) => x.lineKey === key);
+        if (i >= 0) {
+          const next = [...prev];
+          const row = next[i];
+          if (row.kind === "product") next[i] = { ...row, quantity: row.quantity + 1 };
+          return next;
+        }
+        return [
+          ...prev,
+          {
+            lineKey: key,
+            kind: "product",
+            product: p,
+            ...(offer != null && Number(offer.id) > 0 ? { offerId: Number(offer.id) } : {}),
+            offerLabel,
+            quantity: 1,
+            unit_price: priceRaw,
+          },
+        ];
+      });
+    },
+    [],
+  );
 
   const addSearchHit = useCallback(
     (hit: SearchHit) => {
@@ -502,7 +516,9 @@ export default function CreateOrderPage() {
             setSearchResults([]);
             return;
           }
-          addProductLine(p, active[0]);
+          // 0 or 1 offer: product_id path (backend ensure/default). Do NOT send offer_id
+          // from list response alone — avoids phantom IDs if list ensure was not committed.
+          addProductLine(p, { priceOffer: active[0] });
           setSearchQ("");
           setSearchResults([]);
         })
@@ -587,13 +603,16 @@ export default function CreateOrderPage() {
         shipping_city: shipCity.trim() || null,
         shipping_postal_code: shipPostal.trim() || null,
         shipping_country: shipCountry.trim() || null,
-        items: lines.map((l) =>
-          l.kind === "product"
-            ? l.offerId
-              ? { offer_id: l.offerId, quantity: l.quantity, unit_price: l.unit_price }
-              : { product_id: l.product.id, quantity: l.quantity, unit_price: l.unit_price }
-            : { bundle_id: l.bundle.id, quantity: l.quantity, unit_price: l.unit_price },
-        ),
+        items: lines.map((l) => {
+          if (l.kind === "bundle") {
+            return { bundle_id: l.bundle.id, quantity: l.quantity, unit_price: l.unit_price };
+          }
+          // Explicit offer pick only. Never send product.id as offer_id.
+          if (l.offerId != null && Number(l.offerId) > 0) {
+            return { offer_id: Number(l.offerId), quantity: l.quantity, unit_price: l.unit_price };
+          }
+          return { product_id: l.product.id, quantity: l.quantity, unit_price: l.unit_price };
+        }),
         shipping_method_id: shippingMethodId.trim() || null,
         document_type:
           documentType === "PARAGON" || documentType === "INVOICE" ? documentType : undefined,
@@ -631,10 +650,18 @@ export default function CreateOrderPage() {
       }
       navigate(`/orders/${res.id}`, { replace: true });
     } catch (err: unknown) {
-      const msg =
+      const detail =
         err && typeof err === "object" && "response" in err
-          ? String((err as { response?: { data?: { detail?: unknown } } }).response?.data?.detail ?? "")
-          : "";
+          ? (err as { response?: { data?: { detail?: unknown } } }).response?.data?.detail
+          : undefined;
+      let msg = "";
+      if (typeof detail === "string") {
+        msg = detail;
+      } else if (detail && typeof detail === "object" && "message" in detail) {
+        msg = String((detail as { message?: unknown }).message ?? "");
+      } else if (detail != null) {
+        msg = String(detail);
+      }
       setError(msg || "Nie udało się utworzyć zamówienia.");
     } finally {
       setSubmitting(false);
@@ -1339,7 +1366,7 @@ export default function CreateOrderPage() {
                     type="button"
                     className="w-full rounded-lg border border-slate-200 px-3 py-2 text-left text-sm hover:border-blue-300 hover:bg-blue-50"
                     onClick={() => {
-                      addProductLine(offerPicker.product, o);
+                      addProductLine(offerPicker.product, { explicitOffer: o });
                       setOfferPicker(null);
                     }}
                   >

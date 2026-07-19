@@ -121,6 +121,7 @@ from ..services.bundle_explosion import (
     resolve_order_create_lines,
     vat_percent_from_product,
 )
+from ..services.product_sales_offers import ProductSalesOfferError
 from ..services.order_bundle_persistence import persist_resolved_bundle_lines
 from ..services.bundle_order_snapshot_service import load_snapshots_for_order_line_ids
 from ..services.bundles import bundle_line_resolver, margin_from_context
@@ -1266,20 +1267,47 @@ def _order_create_payload_fingerprint(body: OrderCreateBody) -> dict:
     """Safe diagnostics — no full addresses/PII dumps."""
     items = list(body.items or [])
     line_kinds: list[str] = []
-    for ln in items[:20]:
+    line_refs: list[dict] = []
+    for idx, ln in enumerate(items[:20]):
         if getattr(ln, "offer_id", None):
             line_kinds.append("offer")
+            line_refs.append(
+                {
+                    "index": idx,
+                    "kind": "offer",
+                    "offer_id": int(ln.offer_id),
+                    "quantity": int(getattr(ln, "quantity", 0) or 0),
+                }
+            )
         elif getattr(ln, "bundle_id", None):
             line_kinds.append("bundle")
+            line_refs.append(
+                {
+                    "index": idx,
+                    "kind": "bundle",
+                    "bundle_id": int(ln.bundle_id),
+                    "quantity": int(getattr(ln, "quantity", 0) or 0),
+                }
+            )
         elif getattr(ln, "product_id", None):
             line_kinds.append("product")
+            line_refs.append(
+                {
+                    "index": idx,
+                    "kind": "product",
+                    "product_id": int(ln.product_id),
+                    "quantity": int(getattr(ln, "quantity", 0) or 0),
+                }
+            )
         else:
             line_kinds.append("unknown")
+            line_refs.append({"index": idx, "kind": "unknown"})
     return {
         "tenant_id": int(body.tenant_id),
         "warehouse_id": int(body.warehouse_id),
         "items_count": len(items),
         "line_kinds": line_kinds,
+        "line_refs": line_refs,
         "has_customer_id": body.customer_id is not None,
         "has_shipping_method_id": bool(getattr(body, "shipping_method_id", None)),
         "has_document_type": bool(getattr(body, "document_type", None)),
@@ -1326,6 +1354,14 @@ def create_order(body: OrderCreateBody, db: Session = Depends(get_db)):
             )
         except BundleExplosionError as e:
             raise HTTPException(status_code=400, detail=e.detail)
+        except ProductSalesOfferError as e:
+            raise HTTPException(
+                status_code=int(getattr(e, "http_status", None) or 400),
+                detail={
+                    "code": str(getattr(e, "code", None) or "OFFER_ERROR").upper(),
+                    "message": str(getattr(e, "detail", None) or e),
+                },
+            ) from e
         resolved = resolved_result.lines
 
         origin_up = (body.origin or "").strip().upper() or None

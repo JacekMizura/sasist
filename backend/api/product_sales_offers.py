@@ -64,6 +64,9 @@ def list_product_sales_offers(
         raise HTTPException(status_code=404, detail="Product not found")
     ensure_default_offer_for_product(db, product=product)
     db.flush()
+    # GET must persist ensure() — get_db() does not auto-commit; otherwise FE receives
+    # offer.id that vanishes on session close/rollback → POST offer_not_found.
+    db.commit()
     rows = list_active_offers_for_product(db, tenant_id=int(tenant_id), product_id=int(product_id))
     out = [
         _read_offer(db, offer=o, warehouse_id=warehouse_id)
