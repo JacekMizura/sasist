@@ -33,3 +33,15 @@ def get_or_create_wms_picking_shortage_settings(db: Session, *, tenant_id: int, 
 
 def touch_wms_picking_shortage_settings_row(row: WmsPickingShortageSettings) -> None:
     row.updated_at = datetime.utcnow()
+
+
+def is_shortage_auto_detach_enabled(settings: WmsPickingShortageSettings | None) -> bool:
+    """
+    Semantyka negatywnej flagi UI „Wyłącz auto-odpinanie zamówień z brakami z wózków”:
+
+    - disable_auto_detach_missing_orders_from_carts = False (unchecked) → auto-detach ON
+    - disable_auto_detach_missing_orders_from_carts = True (checked) → auto-detach OFF
+    """
+    if settings is None:
+        return True
+    return not bool(getattr(settings, "disable_auto_detach_missing_orders_from_carts", False))

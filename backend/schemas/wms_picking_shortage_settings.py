@@ -37,6 +37,13 @@ class WmsPickingShortageSettingsRead(BaseModel):
         default=None,
         description="Status panelu po nieudanej Walidacji WMS (null = gate bez zmiany statusu).",
     )
+    disable_auto_detach_missing_orders_from_carts: bool = Field(
+        default=False,
+        description=(
+            "Negatywna flaga UI „Wyłącz auto-odpinanie…”. "
+            "false = auto-detach shortage ON; true = auto-detach OFF."
+        ),
+    )
 
 
 class WmsPickingShortageSettingsSave(BaseModel):
@@ -49,3 +56,4 @@ class WmsPickingShortageSettingsSave(BaseModel):
     auto_reopen_picking_after_shortage_resolved: bool = True
     recovery_completed_order_ui_status_id: Optional[int] = None
     wms_validation_failed_order_ui_status_id: Optional[int] = None
+    disable_auto_detach_missing_orders_from_carts: bool = False

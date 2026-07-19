@@ -426,6 +426,9 @@ def _shortage_settings_row_to_read(row: WmsPickingShortageSettings) -> WmsPickin
         auto_reopen_picking_after_shortage_resolved=bool(row.auto_reopen_picking_after_shortage_resolved),
         recovery_completed_order_ui_status_id=getattr(row, "recovery_completed_order_ui_status_id", None),
         wms_validation_failed_order_ui_status_id=getattr(row, "wms_validation_failed_order_ui_status_id", None),
+        disable_auto_detach_missing_orders_from_carts=bool(
+            getattr(row, "disable_auto_detach_missing_orders_from_carts", False)
+        ),
     )
 
 
@@ -485,6 +488,9 @@ def save_wms_picking_shortage_settings(
     row.auto_reopen_picking_after_shortage_resolved = bool(body.auto_reopen_picking_after_shortage_resolved)
     row.recovery_completed_order_ui_status_id = body.recovery_completed_order_ui_status_id
     row.wms_validation_failed_order_ui_status_id = body.wms_validation_failed_order_ui_status_id
+    row.disable_auto_detach_missing_orders_from_carts = bool(
+        getattr(body, "disable_auto_detach_missing_orders_from_carts", False)
+    )
     touch_wms_picking_shortage_settings_row(row)
     db.commit()
     db.refresh(row)

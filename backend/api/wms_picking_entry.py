@@ -1703,6 +1703,12 @@ def post_picking_finalize_cart(
             performed_by=current_user,
         )
         db.commit()
+        logger.info(
+            "FINALIZE_TRACE COMMIT cart_id=%s request_id=%s orders_updated=%s",
+            cart_id,
+            request_id,
+            out.get("orders_updated") if isinstance(out, dict) else None,
+        )
     except PickingFinalizeError as e:
         db.rollback()
         logger.warning(

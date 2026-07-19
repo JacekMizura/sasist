@@ -12,6 +12,8 @@ export type WmsPickingShortageSettingsReadApi = {
   auto_reopen_picking_after_shortage_resolved: boolean;
   recovery_completed_order_ui_status_id: number | null;
   wms_validation_failed_order_ui_status_id?: number | null;
+  /** Negatywna flaga: false = auto-detach ON; true = auto-detach OFF. */
+  disable_auto_detach_missing_orders_from_carts?: boolean;
 };
 
 export type WmsPickingShortageSettingsSaveApi = {
@@ -24,6 +26,7 @@ export type WmsPickingShortageSettingsSaveApi = {
   auto_reopen_picking_after_shortage_resolved: boolean;
   recovery_completed_order_ui_status_id: number | null;
   wms_validation_failed_order_ui_status_id?: number | null;
+  disable_auto_detach_missing_orders_from_carts?: boolean;
 };
 
 export async function getWmsPickingShortageSettings(

@@ -1,6 +1,9 @@
-## 2026-07-19 — Cart lifecycle events: NEWEST→OLDEST
+## 2026-07-19 — Finalize shortage detach: setting + heal READY_FOR_PACKING
 
-- `list_cart_lifecycle_events` no longer reverses DESC rows to ASC (`GET /wms/carts/{id}/events`).
+- ROOT: checkbox `disableAutoDetachMissingOrdersFromCarts` was **localStorage-only** (backend never read it). Stuck carts in `READY_FOR_PACKING` early-returned without detach.
+- Fix: DB field `disable_auto_detach_missing_orders_from_carts` on `wms_picking_shortage_settings`; helper `is_shortage_auto_detach_enabled` (= not disable); finalize reads it.
+- Detach via `detach_order_from_cart(..., allow_shortage_finalize=True)`; heal path for READY_FOR_PACKING shortage; `release_cart` clears leftover order.cart_id.
+- Trace logs: `FINALIZE_TRACE *`. Tests: real DB + fresh session + boolean ON/OFF.
 
 ## 2026-07-19 — Finalize shortage cart detach + activity log UX
 

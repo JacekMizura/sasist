@@ -1058,42 +1058,60 @@ def finish_picking_after_wms_finalize(
     """
     Domknięcie sesji zbierania po klasyfikacji finalize:
 
-    - zamówienia shortage/BRAKI → detach (CartLifecycle), nie zostają na wózku packingowym
+    - zamówienia shortage/BRAKI → ``detach_order_from_cart`` (CartLifecycle SSOT)
     - fully picked → pozostają; cart → READY_FOR_PACKING
     - gdy brak packing-bound → release cart (AVAILABLE), nie READY_FOR_PACKING
 
-    Wywoływać wyłącznie gdy cart jest jeszcze w PICKING (przed finish_picking).
-    Idempotentne: brakujące / już odłączone ordery są pomijane.
+    Heal: gdy cart jest już READY_FOR_PACKING z shortage nadal na wózku — detach i release.
     """
     from .cart_capacity.engine import order_volume_dm3
-    from .cart_display import cart_display_name_for_wms
-    from .cart_stats_service import activity_orders_meta, format_orders_operation_description
+    from .cart_stats_service import list_orders_on_cart
 
     cart = _lock_cart(db, cart)
     st = get_cart_status(cart)
     cid = int(cart.id)
+    tid = int(cart.tenant_id)
+    wid = int(cart.warehouse_id)
     packing_ids = {int(x) for x in packing_bound_order_ids if int(x) > 0}
     detach_ids = {int(x) for x in shortage_detach_order_ids if int(x) > 0}
+    uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
 
-    if st == CartStatus.READY_FOR_PACKING:
-        # Idempotent retry: packing path already done; ensure shortage orders are off cart.
-        remaining = _orders_on_cart(db, cid)
-        still_shortage = [o for o in remaining if int(o.id) in detach_ids]
-        if still_shortage:
-            logger.warning(
-                "cart_lifecycle.finish_after_finalize idempotent_heal "
-                "READY_FOR_PACKING still has shortage orders cart_id=%s ids=%s",
-                cid,
-                [int(o.id) for o in still_shortage],
+    logger.info(
+        "FINALIZE_TRACE SHORTAGE_DETACH_CANDIDATES cart_id=%s status=%s order_ids=%s packing_ids=%s",
+        cid,
+        st.value,
+        sorted(detach_ids),
+        sorted(packing_ids),
+    )
+
+    def _detach_shortage_batch(reason: str) -> list[Order]:
+        detached_local: list[Order] = []
+        for oid in sorted(detach_ids):
+            on_cart_now = _orders_on_cart(db, cid)
+            target = next((o for o in on_cart_now if int(o.id) == oid), None)
+            if target is None:
+                logger.info(
+                    "FINALIZE_TRACE DETACH_SKIP order_id=%s reason=not_on_cart cart_id=%s",
+                    oid,
+                    cid,
+                )
+                continue
+            detach_order_from_cart(
+                db,
+                cart_id=cid,
+                order_id=oid,
+                tenant_id=tid,
+                warehouse_id=wid,
+                operator_user_id=uid,
+                reason=reason,
+                allow_shortage_finalize=True,
+                _already_locked_cart=cart,
+                _skip_empty_release=True,
             )
-        return {
-            "cart_id": cid,
-            "cart_status": st.value,
-            "detached_order_ids": [],
-            "packing_order_ids": [int(o.id) for o in remaining],
-            "cart_released": False,
-            "idempotent": True,
-        }
+            detached_local.append(target)
+        db.flush()
+        return detached_local
+
     if st == CartStatus.AVAILABLE and not _orders_on_cart(db, cid):
         return {
             "cart_id": cid,
@@ -1104,87 +1122,73 @@ def finish_picking_after_wms_finalize(
             "idempotent": True,
         }
 
+    if st == CartStatus.READY_FOR_PACKING:
+        # Heal stuck all-shortage carts left by older finalize / empty detach path.
+        remaining_before = _orders_on_cart(db, cid)
+        still_shortage = [o for o in remaining_before if int(o.id) in detach_ids]
+        if still_shortage:
+            logger.warning(
+                "FINALIZE_TRACE HEAL_READY_FOR_PACKING cart_id=%s shortage_ids=%s",
+                cid,
+                [int(o.id) for o in still_shortage],
+            )
+            detached = _detach_shortage_batch("picking_shortage_finalize_heal")
+            remaining = _orders_on_cart(db, cid)
+            packing_orders = [o for o in remaining if int(o.id) in packing_ids]
+            cart.used_volume = round(sum(order_volume_dm3(o) for o in remaining), 2)
+            db.add(cart)
+            released = False
+            if not remaining:
+                release_cart(
+                    db,
+                    cart=cart,
+                    reason="picking_finalize_all_shortage_heal",
+                    _already_locked=True,
+                )
+                released = True
+            logger.info(
+                "FINALIZE_TRACE FINAL_CART_STATE cart_id=%s active_order_ids=%s "
+                "used_volume=%s state=%s released=%s",
+                cid,
+                [int(o.id) for o in remaining],
+                getattr(cart, "used_volume", None),
+                get_cart_status(cart).value,
+                released,
+            )
+            return {
+                "cart_id": cid,
+                "cart_status": get_cart_status(cart).value,
+                "detached_order_ids": [int(o.id) for o in detached],
+                "packing_order_ids": [int(o.id) for o in packing_orders],
+                "cart_released": released,
+                "idempotent": False,
+                "healed_ready_for_packing": True,
+            }
+        return {
+            "cart_id": cid,
+            "cart_status": st.value,
+            "detached_order_ids": [],
+            "packing_order_ids": [int(o.id) for o in remaining_before],
+            "cart_released": False,
+            "idempotent": True,
+        }
+
     _require_status(cart, (CartStatus.PICKING,), action="finishPickingAfterFinalize")
 
-    on_cart = _orders_on_cart(db, cid)
-    by_id = {int(o.id): o for o in on_cart}
-    detached: list[Order] = []
-    uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
-
-    for oid in sorted(detach_ids):
-        target = by_id.get(oid)
-        if target is None:
-            continue
-        clear_order_picking_session_context(target)
-        # Nie resetuj BRAKI / MISSING / NEEDS_DECISION — tylko kontekst pickingowy.
-        target.picking_started_at = None
-        target.total_volume_dm3 = None
-        db.add(target)
-        for basket in list(getattr(cart, "baskets", None) or []):
-            if getattr(basket, "order_id", None) is not None and int(basket.order_id) == oid:
-                basket.order_id = None
-                basket.used_volume = 0.0
-                db.add(basket)
-        detached.append(target)
-
-    remaining = [o for o in _orders_on_cart(db, cid) if int(o.id) not in {int(x.id) for x in detached}]
-    # packing_bound may still list orders that failed detach; keep intersection with remaining
-    packing_orders = [o for o in remaining if int(o.id) in packing_ids or int(o.id) not in detach_ids]
-    # If caller listed packing ids, prefer that set
+    detached = _detach_shortage_batch("picking_shortage_finalize")
+    remaining = [o for o in _orders_on_cart(db, cid)]
+    packing_orders = [o for o in remaining if int(o.id) in packing_ids]
     if packing_ids:
         packing_orders = [o for o in remaining if int(o.id) in packing_ids]
+    else:
+        # No packing-bound listed → only keep orders that were not shortage-detach candidates.
+        packing_orders = [o for o in remaining if int(o.id) not in detach_ids]
 
     cart.used_volume = round(sum(order_volume_dm3(o) for o in remaining), 2)
     db.add(cart)
 
-    if detached:
-        cart_label = cart_display_name_for_wms(cart)
-        meta = {
-            **activity_orders_meta(detached, show_order_numbers=True),
-            "reason": "picking_finalize_shortage",
-            "remaining_orders": len(remaining),
-            "cart_label": cart_label,
-            "actor": "system" if uid is None else "operator",
-        }
-        for o in detached:
-            _record_event(
-                db,
-                cart,
-                "order_detached",
-                operator_user_id=uid,
-                order_id=int(o.id),
-                description=format_orders_operation_description(
-                    "Odłączono po zakończeniu zbierania z brakami",
-                    [o],
-                    for_activity_log=True,
-                    cart_relation="od",
-                ),
-                metadata={**meta, "order_id": int(o.id)},
-            )
-            try:
-                from .wms_audit_service import append_order_activity_for_wms
-
-                append_order_activity_for_wms(
-                    db,
-                    order_id=int(o.id),
-                    tenant_id=int(cart.tenant_id),
-                    warehouse_id=int(cart.warehouse_id),
-                    event_type="ORDER_DETACHED_AFTER_SHORTAGE_FINALIZE",
-                    message=(
-                        f"Odłączono od wózka po zakończeniu zbierania z brakami — {cart_label}"
-                    ),
-                    operator_user_id=uid,
-                    metadata={"cart_id": cid, "reason": "picking_finalize_shortage"},
-                )
-            except Exception:
-                logger.exception(
-                    "detach_after_finalize order activity failed order_id=%s",
-                    int(o.id),
-                )
-
     released = False
     if not remaining:
-        # Close open picking session before release
         sess = find_open_picking_session(db, cart=cart)
         now = datetime.utcnow()
         if sess is not None and sess.completed_at is None:
@@ -1219,8 +1223,6 @@ def finish_picking_after_wms_finalize(
             orders=packing_orders,
             operator_user_id=operator_user_id,
         )
-        # Enrich cart finish event metadata already recorded by finish_picking —
-        # add shortage summary via extra event only when detach happened.
         if detached:
             _record_event(
                 db,
@@ -1239,6 +1241,20 @@ def finish_picking_after_wms_finalize(
             )
         _after_mutation(db, cart)
 
+    occupied = 0
+    for basket in list(getattr(cart, "baskets", None) or []):
+        if getattr(basket, "order_id", None) is not None:
+            occupied += 1
+    final_orders = list_orders_on_cart(db, cart)
+    logger.info(
+        "FINALIZE_TRACE FINAL_CART_STATE cart_id=%s active_order_ids=%s "
+        "occupied_sections=%s used_volume=%s state=%s",
+        cid,
+        [int(o.id) for o in final_orders],
+        occupied,
+        getattr(cart, "used_volume", None),
+        get_cart_status(cart).value,
+    )
     logger.info(
         "cart_lifecycle.finish_after_finalize cart_id=%s detached=%s packing=%s released=%s status=%s",
         cid,
@@ -1255,6 +1271,7 @@ def finish_picking_after_wms_finalize(
         "cart_released": released,
         "idempotent": False,
     }
+
 
 
 def start_packing(
@@ -1405,6 +1422,12 @@ def release_cart(
 
     orders_snapshot = list_orders_on_cart(db, cart)
     detach_meta = activity_orders_meta(orders_snapshot, show_order_numbers=True)
+
+    # SSOT: release without leftover Order.cart_id / picking_session_id (defense).
+    for o in orders_snapshot:
+        clear_order_picking_session_context(o)
+        o.picking_started_at = None
+        db.add(o)
 
     for basket in list(cart.baskets or []):
         basket.order_id = None
@@ -1775,16 +1798,21 @@ def can_detach_order_from_cart(
     *,
     cart: Cart,
     order: Order,
+    allow_shortage_finalize: bool = False,
 ) -> tuple[bool, str | None]:
     """
     Reguły odłączenia pojedynczego zamówienia:
     - READY_FOR_PACKING / PACKING → zablokowane (kompletacja zakończona / trwa pakowanie)
+      (wyjątek: ``allow_shortage_finalize`` — detach BRAKI po finalize / heal)
     - istnieją Pick dla zamówienia na tym wózku → zablokowane
+      (wyjątek: ``allow_shortage_finalize``)
     """
     st = get_cart_status(cart)
-    if st in (CartStatus.READY_FOR_PACKING, CartStatus.PACKING):
+    if st in (CartStatus.READY_FOR_PACKING, CartStatus.PACKING) and not allow_shortage_finalize:
         return False, ORDER_DETACH_BLOCKED_MSG
-    if order_has_picking_progress(db, order_id=int(order.id), cart_id=int(cart.id)):
+    if not allow_shortage_finalize and order_has_picking_progress(
+        db, order_id=int(order.id), cart_id=int(cart.id)
+    ):
         return False, ORDER_DETACH_BLOCKED_MSG
     return True, None
 
@@ -1798,12 +1826,18 @@ def detach_order_from_cart(
     warehouse_id: int,
     operator_user_id: int | None = None,
     reason: str | None = None,
+    allow_shortage_finalize: bool = False,
+    _already_locked_cart: Cart | None = None,
+    _skip_empty_release: bool = False,
 ) -> dict[str, Any]:
     """
     Kanoniczne odłączenie jednego zamówienia od wózka (operator / admin / System).
 
     ``operator_user_id=None`` = actor System (audit bez usera) — ta sama ścieżka lifecycle,
     bez obchodzenia przez bezpośrednie clear pól.
+
+    ``allow_shortage_finalize=True`` — ścieżka finalize BRAKI (może odpinać mimo Pick / READY_FOR_PACKING).
+    ``_skip_empty_release=True`` — batch detach w finalize; release robi caller.
     """
     from .cart_capacity.engine import order_volume_dm3
     from .cart_display import cart_display_name_for_wms
@@ -1811,12 +1845,15 @@ def detach_order_from_cart(
 
     uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
 
-    cart = _lock_cart_by_keys(
-        db,
-        cart_id=int(cart_id),
-        tenant_id=int(tenant_id),
-        warehouse_id=int(warehouse_id),
-    )
+    if _already_locked_cart is not None:
+        cart = _already_locked_cart
+    else:
+        cart = _lock_cart_by_keys(
+            db,
+            cart_id=int(cart_id),
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+        )
     on_cart = _orders_on_cart(db, int(cart_id))
     target = next((o for o in on_cart if int(o.id) == int(order_id)), None)
     if target is None:
@@ -1825,7 +1862,12 @@ def detach_order_from_cart(
             code="OrderNotOnCart",
         )
 
-    allowed, block_reason = can_detach_order_from_cart(db, cart=cart, order=target)
+    allowed, block_reason = can_detach_order_from_cart(
+        db,
+        cart=cart,
+        order=target,
+        allow_shortage_finalize=bool(allow_shortage_finalize),
+    )
     if not allowed:
         raise CartLifecycleError(
             block_reason or ORDER_DETACH_BLOCKED_MSG,
@@ -1835,14 +1877,27 @@ def detach_order_from_cart(
     snapshot = [target]
     remaining = [o for o in on_cart if int(o.id) != int(order_id)]
 
+    logger.info(
+        "FINALIZE_TRACE DETACH_CALL order_id=%s cart_id=%s cart_id_before=%s "
+        "picking_session_id_before=%s basket_before=%s reason=%s",
+        int(order_id),
+        int(cart_id),
+        getattr(target, "cart_id", None),
+        getattr(target, "picking_session_id", None),
+        getattr(target, "basket_id", None),
+        reason,
+    )
+
     clear_order_picking_session_context(target)
-    if (getattr(target, "status", None) or "").upper() in (
-        "PICKING",
-        "PICKING_IN_PROGRESS",
-    ):
-        target.status = "NEW"
-    if (getattr(target, "fulfillment_state", None) or "").upper() == FS_PICKING:
-        target.fulfillment_state = None
+    # Shortage finalize: nie resetuj BRAKI / MISSING / NEEDS_DECISION do NEW.
+    if not allow_shortage_finalize:
+        if (getattr(target, "status", None) or "").upper() in (
+            "PICKING",
+            "PICKING_IN_PROGRESS",
+        ):
+            target.status = "NEW"
+        if (getattr(target, "fulfillment_state", None) or "").upper() == FS_PICKING:
+            target.fulfillment_state = None
     target.picking_started_at = None
     target.total_volume_dm3 = None
     db.add(target)
@@ -1874,11 +1929,11 @@ def detach_order_from_cart(
     db.add(cart)
 
     released = False
-    if not remaining:
+    if not remaining and not _skip_empty_release:
         # Empty cart → release (same as clear_basket last order); not a bulk admin release.
         release_cart(db, cart=cart, reason="order_detached_last", _already_locked=True)
         released = True
-    else:
+    elif remaining and not allow_shortage_finalize:
         st = get_cart_status(cart)
         if st == CartStatus.PICKING:
             apply_cart_transition(
@@ -1897,13 +1952,15 @@ def detach_order_from_cart(
         if uid is None
         else "Ręczne odłączenie zamówienia z panelu administracyjnego."
     )
+    reason_s = (reason or default_reason).strip() or default_reason
     meta = {
         **activity_orders_meta(snapshot, show_order_numbers=True),
-        "reason": (reason or default_reason),
+        "reason": reason_s,
         "remaining_orders": len(remaining),
         "cart_released": released,
         "cart_label": cart_label,
         "actor": "system" if uid is None else "operator",
+        "allow_shortage_finalize": bool(allow_shortage_finalize),
     }
     _record_event(
         db,
@@ -1912,20 +1969,57 @@ def detach_order_from_cart(
         operator_user_id=uid,
         order_id=int(order_id),
         description=format_orders_operation_description(
-            "Odłączono",
+            "Odłączono po zakończeniu zbierania z brakami"
+            if allow_shortage_finalize
+            else "Odłączono",
             snapshot,
             for_activity_log=True,
             cart_relation="od",
         ),
         metadata=meta,
     )
-    _after_mutation(db, cart)
+    if allow_shortage_finalize:
+        try:
+            from .wms_audit_service import append_order_activity_for_wms
+
+            append_order_activity_for_wms(
+                db,
+                order_id=int(order_id),
+                tenant_id=int(cart.tenant_id),
+                warehouse_id=int(cart.warehouse_id),
+                event_type="ORDER_DETACHED_AFTER_SHORTAGE_FINALIZE",
+                message=(
+                    f"Odłączono od wózka po zakończeniu zbierania z brakami — {cart_label}"
+                ),
+                operator_user_id=uid,
+                metadata={"cart_id": int(cart_id), "reason": reason_s},
+            )
+        except Exception:
+            logger.exception(
+                "detach_after_finalize order activity failed order_id=%s",
+                int(order_id),
+            )
+
+    if _already_locked_cart is None:
+        _after_mutation(db, cart)
+
     logger.info(
-        "cart_lifecycle.detach_order cart_id=%s order_id=%s remaining=%s released=%s",
+        "FINALIZE_TRACE DETACH_RESULT order_id=%s cart_id_after=%s "
+        "picking_session_id_after=%s basket_after=%s remaining=%s released=%s",
+        int(order_id),
+        getattr(target, "cart_id", None),
+        getattr(target, "picking_session_id", None),
+        getattr(target, "basket_id", None),
+        len(remaining),
+        released,
+    )
+    logger.info(
+        "cart_lifecycle.detach_order cart_id=%s order_id=%s remaining=%s released=%s reason=%s",
         int(cart_id),
         int(order_id),
         len(remaining),
         released,
+        reason_s,
     )
     return {
         "cart_id": int(cart_id),

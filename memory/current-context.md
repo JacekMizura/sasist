@@ -6,9 +6,9 @@
 
 ## Latest (2026-07-19)
 
-- Finalize all-shortage: CartLifecycle detach + release (nie READY_FOR_PACKING z BRAKI na wózku).
-- Activity logs: operator column SSOT; newest-first; no duplicate shortage ActivityEvent.
-- Deploy: require prod verify — all-shortage finalize cart empty + one shortage log row with Użytkownik.
+- Finalize all-shortage: setting wired to DB (`disable_auto_detach_missing_orders_from_carts`); heal READY_FOR_PACKING; detach via CartLifecycle SSOT.
+- Prod CART-0001 stuck = prior finalize left READY_FOR_PACKING without detach; re-finalize after deploy heals.
+- Deploy + verify: all-shortage → cart AVAILABLE, orders.cart_id NULL (fresh DB).
 
 ## Notes
 

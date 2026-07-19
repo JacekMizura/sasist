@@ -234,6 +234,7 @@ function shortageUiFingerprint(params: {
   allowContinue: boolean;
   priority: WmsShortageResolvePriorityApi;
   autoReopen: boolean;
+  disableAutoDetach: boolean;
 }): string {
   return stableStringifyPicking(params);
 }
@@ -271,6 +272,7 @@ const PickingShortageSettingsPanel = forwardRef<
   const [allowContinue, setAllowContinue] = useState(true);
   const [priority, setPriority] = useState<WmsShortageResolvePriorityApi>("high");
   const [autoReopen, setAutoReopen] = useState(true);
+  const [disableAutoDetach, setDisableAutoDetach] = useState(false);
   const [baselineShortageFp, setBaselineShortageFp] = useState<string | null>(null);
 
   useEffect(() => {
@@ -320,6 +322,7 @@ const PickingShortageSettingsPanel = forwardRef<
       setAllowContinue(r.allow_continue_other_lines_after_shortage);
       setPriority(r.priority_after_shortage_resolved ?? "high");
       setAutoReopen(r.auto_reopen_picking_after_shortage_resolved);
+      setDisableAutoDetach(Boolean(r.disable_auto_detach_missing_orders_from_carts));
       setBaselineShortageFp(
         shortageUiFingerprint({
           reportedStatus: reported,
@@ -329,6 +332,7 @@ const PickingShortageSettingsPanel = forwardRef<
           allowContinue: r.allow_continue_other_lines_after_shortage,
           priority: r.priority_after_shortage_resolved ?? "high",
           autoReopen: r.auto_reopen_picking_after_shortage_resolved,
+          disableAutoDetach: Boolean(r.disable_auto_detach_missing_orders_from_carts),
         }),
       );
     } catch {
@@ -363,6 +367,7 @@ const PickingShortageSettingsPanel = forwardRef<
         auto_reopen_picking_after_shortage_resolved: autoReopen,
         recovery_completed_order_ui_status_id: rc != null && Number.isFinite(rc) && rc > 0 ? rc : null,
         wms_validation_failed_order_ui_status_id: vf != null && Number.isFinite(vf) && vf > 0 ? vf : null,
+        disable_auto_detach_missing_orders_from_carts: disableAutoDetach,
       });
       setBaselineShortageFp(
         shortageUiFingerprint({
@@ -373,6 +378,7 @@ const PickingShortageSettingsPanel = forwardRef<
           allowContinue,
           priority,
           autoReopen,
+          disableAutoDetach,
         }),
       );
       setSaveOk("Zapisano.");
@@ -394,6 +400,7 @@ const PickingShortageSettingsPanel = forwardRef<
     allowContinue,
     priority,
     autoReopen,
+    disableAutoDetach,
   ]);
 
   const shortageCurrentFp = useMemo(
@@ -406,8 +413,18 @@ const PickingShortageSettingsPanel = forwardRef<
         allowContinue,
         priority,
         autoReopen,
+        disableAutoDetach,
       }),
-    [reportedStatus, recoveryStatus, validationFailedStatus, autoBraki, allowContinue, priority, autoReopen],
+    [
+      reportedStatus,
+      recoveryStatus,
+      validationFailedStatus,
+      autoBraki,
+      allowContinue,
+      priority,
+      autoReopen,
+      disableAutoDetach,
+    ],
   );
 
   const shortageDirty =
@@ -486,6 +503,16 @@ const PickingShortageSettingsPanel = forwardRef<
               hint="Po zgłoszeniu braku można dalej zbierać inne pozycje z tego zamówienia."
               checked={allowContinue}
               onChange={setAllowContinue}
+              disabled={saving}
+            />
+          </div>
+
+          <div className="rounded-xl border border-white/50 bg-white/60 p-4 shadow-sm">
+            <CustomCheckbox
+              label="Wyłącz auto-odpinanie zamówień z brakami z wózków"
+              hint="Odznaczone = po zakończeniu zbierania zamówienia z brakami są odpinane z wózka. Zaznaczone = zostają na wózku."
+              checked={disableAutoDetach}
+              onChange={setDisableAutoDetach}
               disabled={saving}
             />
           </div>
@@ -2485,11 +2512,6 @@ export function WmsPickingSettingsSections({
             <CustomCheckbox label="Auto: oznaczaj zebrane linie" checked={extended.autoMarkPickedLines} onChange={(v) => patchExtended("autoMarkPickedLines", v)} />
             <CustomCheckbox label="Auto: przejdź do statusu pakowania" checked={extended.autoMoveToPackingStatus} onChange={(v) => patchExtended("autoMoveToPackingStatus", v)} />
             <CustomCheckbox label="Auto: druk etykiet przesunięć" checked={extended.autoPrintTransferLabels} onChange={(v) => patchExtended("autoPrintTransferLabels", v)} />
-            <CustomCheckbox
-              label="Wyłącz auto-odpinanie zamówień z brakami z wózków"
-              checked={extended.disableAutoDetachMissingOrdersFromCarts}
-              onChange={(v) => patchExtended("disableAutoDetachMissingOrdersFromCarts", v)}
-            />
           </FieldGridPicking>
         </SectionCardPicking>
 

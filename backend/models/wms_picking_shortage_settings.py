@@ -32,5 +32,9 @@ class WmsPickingShortageSettings(Base):
         Integer, ForeignKey("order_ui_statuses.id", ondelete="SET NULL"), nullable=True
     )
 
+    #: UI: „Wyłącz auto-odpinanie zamówień z brakami z wózków”.
+    #: false (unchecked) = auto-detach ON; true (checked) = auto-detach OFF.
+    disable_auto_detach_missing_orders_from_carts = Column(Boolean, nullable=False, default=False)
+
     created_at = Column(DateTime, nullable=True, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=True, default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -3761,6 +3761,14 @@ def ensure_picking_shortage_support(engine: Engine) -> None:
                         "REFERENCES order_ui_statuses(id) ON DELETE SET NULL"
                     )
                 )
+            if "disable_auto_detach_missing_orders_from_carts" not in cols:
+                conn.execute(
+                    text(
+                        "ALTER TABLE wms_picking_shortage_settings "
+                        "ADD COLUMN disable_auto_detach_missing_orders_from_carts BOOLEAN "
+                        "NOT NULL DEFAULT FALSE"
+                    )
+                )
         conn.commit()
 
 def ensure_carts_code_column(engine: Engine) -> None:

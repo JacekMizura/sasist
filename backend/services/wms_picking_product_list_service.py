@@ -3638,20 +3638,56 @@ def finalize_wms_picking_cart(
             cart_id=cid,
         )
         from .cart_picking_lifecycle_service import finish_picking_after_wms_finalize
+        from .wms_picking_shortage_settings_service import is_shortage_auto_detach_enabled
 
         packing_bound_ids = [
             int(o.id) for o in orders if order_kinds.get(int(o.id), "all_picked") == "all_picked"
         ]
-        shortage_detach_ids = [
+        shortage_kind_ids = [
             int(o.id) for o in orders if order_kinds.get(int(o.id), "all_picked") != "all_picked"
         ]
-        finish_picking_after_wms_finalize(
+        auto_detach_raw = bool(getattr(ss, "disable_auto_detach_missing_orders_from_carts", False))
+        auto_detach_on = is_shortage_auto_detach_enabled(ss)
+        shortage_detach_ids = list(shortage_kind_ids) if auto_detach_on else []
+        if not auto_detach_on:
+            # Keep shortage on cart (config OFF) — treat like packing-bound for cart close.
+            packing_bound_ids = [int(o.id) for o in orders]
+
+        for o in orders:
+            logger.info(
+                "FINALIZE_TRACE CLASSIFICATION order_id=%s classification=%s "
+                "fulfillment_state=%s cart_id=%s",
+                int(o.id),
+                order_kinds.get(int(o.id)),
+                getattr(o, "fulfillment_state", None),
+                getattr(o, "cart_id", None),
+            )
+        logger.info(
+            "FINALIZE_TRACE AUTO_DETACH_SETTING raw_value=%s effective_auto_detach=%s "
+            "shortage_kind_ids=%s shortage_detach_candidates=%s",
+            auto_detach_raw,
+            auto_detach_on,
+            shortage_kind_ids,
+            shortage_detach_ids,
+        )
+        logger.info("FINALIZE_TRACE FINALIZE_START cart_id=%s", cid)
+
+        finish_out = finish_picking_after_wms_finalize(
             db,
             cart=cart,
             orders=orders,
             packing_bound_order_ids=packing_bound_ids,
             shortage_detach_order_ids=shortage_detach_ids,
             operator_user_id=operator_user_id,
+        )
+        logger.info(
+            "FINALIZE_TRACE DETACH_CALLED=YES result=%s",
+            {
+                "detached": finish_out.get("detached_order_ids"),
+                "packing": finish_out.get("packing_order_ids"),
+                "released": finish_out.get("cart_released"),
+                "status": finish_out.get("cart_status"),
+            },
         )
         # Telemetria finalize (bez ponownego sterowania lifecycle)
         try:
@@ -3668,14 +3704,16 @@ def finalize_wms_picking_cart(
             logger.exception("[picking.finalize] telemetry record failed cart_id=%s", cid)
         logger.info(
             "[picking.finalize.finish] cart_id=%s source_status_id=%s orders_updated=%s "
-            "target_status_id=%s packing_bound=%s shortage_detached=%s",
+            "target_status_id=%s packing_bound=%s shortage_detached=%s auto_detach=%s",
             cid,
             sid,
             len(orders),
             tgt,
             packing_bound_ids,
             shortage_detach_ids,
+            auto_detach_on,
         )
+        logger.info("FINALIZE_TRACE COMMIT_PENDING cart_id=%s", cid)
     except Exception as exc:
         logger.exception(
             "[picking.finalize.error] cart_id=%s source_status_id=%s step=finish",
