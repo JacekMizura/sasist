@@ -50,6 +50,7 @@ PutPhase = Literal[
     "AWAITING_BASKET_CONFIRMATION",
     "BASKET_MISMATCH",
     "AWAITING_BASKET_STILL",
+    "SERIES_DESTINATION_SWITCHED",
 ]
 
 
@@ -176,26 +177,30 @@ def handle_product_scan_for_baskets(
                 "Inny operator ma nierozliczone odłożenie do koszyka na tej sesji.",
                 http_status=409,
             )
-        if uid is not None and pend_uid and pend_uid == uid:
-            eligible = pending.get("eligible_baskets") or []
-            labels = _eligible_labels(eligible if isinstance(eligible, list) else [])
-            _audit(
-                "PRODUCT_SCAN_WHILE_PENDING",
-                session_id=sess.id,
-                operator=uid,
-                product_id=product_id,
-                eligible_baskets=labels,
-            )
-            raise BasketPutError(
-                "AWAITING_BASKET_CONFIRMATION",
-                f"NAJPIERW POTWIERDŹ KOSZYK. Zeskanuj jeden z koszyków: {labels}.",
-                http_status=409,
-                extra={
-                    "phase": "AWAITING_BASKET_CONFIRMATION",
-                    "eligible_baskets": eligible,
-                    "pending": pending,
-                },
-            )
+        # Any existing pending blocks another product scan — basket must resolve first.
+        # Re-read eligible from live DB (pending.eligible_baskets is UI hint only).
+        live = list_eligible_basket_allocations(
+            db, cart=cart, order_ids=order_ids, product_id=int(pending.get("product_id") or product_id)
+        )
+        eligible = eligible_baskets_payload(live) if live else (pending.get("eligible_baskets") or [])
+        labels = _eligible_labels(eligible if isinstance(eligible, list) else [])
+        _audit(
+            "PRODUCT_SCAN_WHILE_PENDING",
+            session_id=sess.id,
+            operator=uid,
+            product_id=product_id,
+            eligible_baskets=labels,
+        )
+        raise BasketPutError(
+            "AWAITING_BASKET_CONFIRMATION",
+            f"NAJPIERW POTWIERDŹ KOSZYK. Zeskanuj jeden z koszyków: {labels}.",
+            http_status=409,
+            extra={
+                "phase": "AWAITING_BASKET_CONFIRMATION",
+                "eligible_baskets": eligible,
+                "pending": pending,
+            },
+        )
 
     eligible_allocs = list_eligible_basket_allocations(
         db, cart=cart, order_ids=order_ids, product_id=int(product_id)
@@ -330,51 +335,111 @@ def confirm_basket_put(
     manual: bool = False,
     order_ids: list[int] | None = None,
 ) -> BasketPutResult:
+    """
+    Basket scan either:
+    - confirms an existing product pending → Pick + series, or
+    - retargets active series destination → NO Pick (qty unchanged).
+
+    Basket scan alone never invents a product unit / never increments picked qty
+    without a prior product pending (or series product-scan path).
+    """
     sess = assert_cart_ready_for_quick_pick(db, cart)
     uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
     pending = put_state.get_pending(sess)
+    oid_scope = list(order_ids or [])
+
+    # --- Series destination switch (no pending, no Pick) ---
     if pending is None:
-        # Mid-series destination switch: scan another basket without a fresh product scan.
         series = put_state.get_active_series(sess)
-        if series is not None:
-            ser_uid = int(series.get("operator_user_id") or 0)
-            if uid is None or not ser_uid or ser_uid == uid:
-                scanned_try = _find_scanned_basket(db, cart=cart, basket_scan=basket_scan)
-                if scanned_try is not None and int(scanned_try.id) != int(series.get("basket_id") or 0):
-                    oid_scope = list(order_ids or [])
-                    if not oid_scope and series.get("order_id"):
-                        oid_scope = [int(series["order_id"])]
-                    live = list_eligible_basket_allocations(
-                        db,
-                        cart=cart,
-                        order_ids=oid_scope,
-                        product_id=int(series["product_id"]),
-                    )
-                    pending = {
-                        "idempotency_key": str(uuid.uuid4()),
-                        "operator_user_id": uid,
-                        "product_id": int(series["product_id"]),
-                        "location_id": int(series["location_id"]),
-                        "quantity": 1.0,
-                        "eligible_baskets": eligible_baskets_payload(live),
-                        "created_at": put_state.utc_now_iso(),
-                        "via": "series_basket_switch",
-                    }
-                    put_state.set_active_series(db, sess, None)
-                    put_state.set_pending(db, sess, pending)
-                    _audit(
-                        "BASKET_SERIES_CLEARED",
-                        session_id=sess.id,
-                        reason="operator_chose_other_basket",
-                        previous_basket=series.get("basket_label"),
-                        next_basket=primary_basket_label(scanned_try),
-                    )
-        if pending is None:
+        if series is None:
             raise BasketPutError(
                 "NO_PENDING_PUT",
                 "Brak oczekującego odłożenia — najpierw zeskanuj produkt.",
                 http_status=409,
             )
+        ser_uid = int(series.get("operator_user_id") or 0)
+        if uid is not None and ser_uid and ser_uid != uid:
+            raise BasketPutError(
+                "BASKET_PUT_OWNED_BY_OTHER",
+                "Aktywna seria należy do innego operatora.",
+                http_status=409,
+            )
+        scanned = _find_scanned_basket(db, cart=cart, basket_scan=basket_scan)
+        if scanned is None:
+            raise BasketPutError(
+                "BASKET_MISMATCH",
+                f"Nieznany koszyk na tym wózku: {(basket_scan or '').strip()}.",
+                http_status=409,
+                extra={"phase": "BASKET_MISMATCH", "scanned_basket": (basket_scan or "").strip()},
+            )
+        scanned_label = primary_basket_label(scanned)
+        if int(scanned.id) == int(series.get("basket_id") or 0):
+            # Same basket — no-op for destination; still no Pick without product.
+            raise BasketPutError(
+                "NO_PENDING_PUT",
+                f"Seria już wskazuje koszyk {scanned_label}. Zeskanuj EAN produktu, aby odłożyć kolejną sztukę.",
+                http_status=409,
+                extra={"phase": "SERIES_ACTIVE", "active_series": series},
+            )
+        if not oid_scope and series.get("order_id"):
+            # Prefer full cohort from caller; series order alone is insufficient for multi-order SKU.
+            oid_scope = [int(series["order_id"])]
+        allocation, err = resolve_allocation_for_basket_scan(
+            db,
+            cart=cart,
+            order_ids=oid_scope,
+            product_id=int(series["product_id"]),
+            basket=scanned,
+        )
+        if err == "BASKET_PRODUCT_MISMATCH" or allocation is None:
+            raise BasketPutError(
+                "BASKET_PRODUCT_MISMATCH",
+                f"Ten produkt nie należy do zamówienia w koszyku {scanned_label} "
+                f"(lub koszyk nie przyjmuje aktywnej serii).",
+                http_status=409,
+                extra={"phase": "BASKET_PRODUCT_MISMATCH", "scanned_basket": scanned_label},
+            )
+        if err == "BASKET_PRODUCT_ALREADY_COMPLETE":
+            raise BasketPutError(
+                "BASKET_PRODUCT_ALREADY_COMPLETE",
+                f"Koszyk {scanned_label} ma już komplet tego produktu.",
+                http_status=409,
+                extra={"phase": "BASKET_PRODUCT_ALREADY_COMPLETE", "scanned_basket": scanned_label},
+            )
+        new_series = {
+            "operator_user_id": uid if uid is not None else series.get("operator_user_id"),
+            "product_id": int(series["product_id"]),
+            "order_id": int(allocation.order_id),
+            "order_item_id": int(allocation.order_item_id),
+            "basket_id": int(allocation.basket_id),
+            "basket_label": allocation.basket_label,
+            "location_id": int(series["location_id"]),
+            "activated_at": put_state.utc_now_iso(),
+        }
+        put_state.set_active_series(db, sess, new_series)
+        _audit(
+            "BASKET_SERIES_DESTINATION_SWITCHED",
+            session_id=sess.id,
+            operator=uid,
+            previous_basket=series.get("basket_label"),
+            next_basket=allocation.basket_label,
+            product_id=series.get("product_id"),
+            quantity_put=0,
+        )
+        return BasketPutResult(
+            phase="SERIES_DESTINATION_SWITCHED",
+            order_id=int(allocation.order_id),
+            order_item_id=int(allocation.order_item_id),
+            quantity_put=0.0,
+            active_series=new_series,
+            expected_basket_label=allocation.basket_label,
+            scanned_basket=scanned_label,
+            message=(
+                f"Zmieniono koszyk docelowy serii na {allocation.basket_label}. "
+                f"Qty bez zmian — zeskanuj EAN, aby odłożyć kolejną sztukę."
+            ),
+        )
+
     pend_uid = int(pending.get("operator_user_id") or 0)
     if uid is not None and pend_uid and pend_uid != uid:
         raise BasketPutError(
@@ -386,7 +451,13 @@ def confirm_basket_put(
     product_id = int(pending["product_id"])
     scanned = _find_scanned_basket(db, cart=cart, basket_scan=basket_scan)
     if scanned is None:
-        eligible = pending.get("eligible_baskets") or []
+        # Live eligible for message (hint); authorization uses resolve below.
+        live = (
+            list_eligible_basket_allocations(db, cart=cart, order_ids=oid_scope, product_id=product_id)
+            if oid_scope
+            else []
+        )
+        eligible = eligible_baskets_payload(live) if live else (pending.get("eligible_baskets") or [])
         labels = _eligible_labels(eligible if isinstance(eligible, list) else [])
         scanned_label = (basket_scan or "").strip()
         _audit(
@@ -410,9 +481,8 @@ def confirm_basket_put(
         )
 
     scanned_label = primary_basket_label(scanned)
-    oid_scope = order_ids
+    # Authorization SSOT: live DB resolve — never trust pending.eligible_baskets alone.
     if not oid_scope:
-        # Fall back to pending eligible order ids + any order on this cart.
         elig = pending.get("eligible_baskets") or []
         oid_scope = [int(r["order_id"]) for r in elig if isinstance(r, dict) and r.get("order_id")]
 
@@ -424,7 +494,12 @@ def confirm_basket_put(
         basket=scanned,
     )
     if err == "BASKET_PRODUCT_MISMATCH" or (err is None and allocation is None):
-        eligible = pending.get("eligible_baskets") or []
+        live = (
+            list_eligible_basket_allocations(db, cart=cart, order_ids=oid_scope, product_id=product_id)
+            if oid_scope
+            else []
+        )
+        eligible = eligible_baskets_payload(live) if live else (pending.get("eligible_baskets") or [])
         labels = _eligible_labels(eligible if isinstance(eligible, list) else [])
         _audit(
             "BASKET_PRODUCT_MISMATCH",
@@ -447,7 +522,6 @@ def confirm_basket_put(
         )
     if err == "BASKET_PRODUCT_ALREADY_COMPLETE":
         eligible = pending.get("eligible_baskets") or []
-        # Refresh eligible from live state when possible
         if oid_scope:
             live = eligible_baskets_payload(
                 list_eligible_basket_allocations(

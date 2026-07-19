@@ -559,6 +559,11 @@ export default function WmsPickingProductDetailPage() {
       playScanBeep();
       setPickMsg(result.message ?? `Koszyk potwierdzony`);
       await load();
+      // Series destination switch: qty unchanged — stay on detail, await next EAN.
+      if (result.phase === "SERIES_DESTINATION_SWITCHED" || result.picked === false) {
+        setScannerInputPlaceholder("Skanuj EAN produktu");
+        return;
+      }
       const after = await getWmsPickingProductDetail(
         pickingTenantId,
         warehouseId,

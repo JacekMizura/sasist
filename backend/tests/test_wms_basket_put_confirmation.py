@@ -259,15 +259,94 @@ def test_case2_ean_then_s11_allocates_only_s11(db, cart_env):
 
 
 def test_case3_no_forced_basket_order(db, cart_env):
-    """FIFO would force S-1-1 first; operator may start with S-1-2 then switch to S-1-1."""
+    """FIFO would force S-1-1 first; operator may start with S-1-2 then switch series to S-1-1."""
     cart_env["add_order"](1234, 1, qty=4)
     cart_env["add_order"](1235, 2, qty=5)
     _product_scan(db, cart_env, order_ids=[1234, 1235])
     _confirm(db, cart_env, "S-1-2", order_ids=[1234, 1235])
     assert cart_env["pick_calls"][0][1] == 1235
-    # Switch destination mid-series by scanning the other basket (no forced FIFO).
-    _confirm(db, cart_env, "S-1-1", order_ids=[1234, 1235])
+    assert len(cart_env["pick_calls"]) == 1
+    # Switch destination mid-series — NO Pick increment.
+    r_sw = _confirm(db, cart_env, "S-1-1", order_ids=[1234, 1235])
+    assert r_sw.phase == "SERIES_DESTINATION_SWITCHED"
+    assert float(r_sw.quantity_put) == 0
+    assert len(cart_env["pick_calls"]) == 1
+    series = put_state.get_active_series(cart_env["sess"])
+    assert int(series["basket_id"]) == 1
+    assert int(series["order_id"]) == 1234
+    # Next EAN → +1 to S-1-1
+    r_next = _product_scan(db, cart_env, order_ids=[1234, 1235])
+    assert r_next.phase == "PUT_CONFIRMED"
+    assert int(r_next.order_id) == 1234
     assert [c[1] for c in cart_env["pick_calls"]] == [1235, 1234]
+
+
+def test_audit_stale_eligible_baskets_not_authorization(db, cart_env):
+    """pending.eligible_baskets is UI hint — confirm revalidates live remaining."""
+    cart_env["add_order"](1234, 1, qty=1)
+    cart_env["add_order"](1235, 2, qty=1)
+    _product_scan(db, cart_env, order_ids=[1234, 1235])
+    pending = put_state.get_pending(cart_env["sess"])
+    # Poison snapshot: claim S-1-1 still eligible after we complete it via counter.
+    cart_env["picked_by_oi"][12340] = 1.0
+    pending["eligible_baskets"] = [
+        {
+            "basket_id": 1,
+            "basket_label": "S-1-1",
+            "order_id": 1234,
+            "order_item_id": 12340,
+            "line_remaining": 99,
+        },
+        {
+            "basket_id": 2,
+            "basket_label": "S-1-2",
+            "order_id": 1235,
+            "order_item_id": 12350,
+            "line_remaining": 1,
+        },
+    ]
+    put_state.set_pending(db, cart_env["sess"], pending)
+    with pytest.raises(BasketPutError) as cm:
+        _confirm(db, cart_env, "S-1-1", order_ids=[1234, 1235])
+    assert cm.value.code == "BASKET_PRODUCT_ALREADY_COMPLETE"
+    assert cart_env["pick_calls"] == []
+    assert put_state.get_pending(cart_env["sess"]) is not None
+
+
+def test_audit_basket_scan_without_pending_or_series(db, cart_env):
+    cart_env["add_order"](1234, 1, qty=1)
+    with pytest.raises(BasketPutError) as cm:
+        _confirm(db, cart_env, "S-1-1", order_ids=[1234])
+    assert cm.value.code == "NO_PENDING_PUT"
+    assert cart_env["pick_calls"] == []
+
+
+def test_audit_product_change_clears_series(db, cart_env):
+    cart_env["add_order"](1224, 1, product_id=10, qty=5)
+    cart_env["add_order"](1225, 2, product_id=11, qty=5)
+    _product_scan(db, cart_env, order_ids=[1224], product_id=10)
+    _confirm(db, cart_env, "S-1-1", order_ids=[1224])
+    assert put_state.get_active_series(cart_env["sess"]) is not None
+    r = _product_scan(db, cart_env, order_ids=[1225], product_id=11)
+    assert r.phase == "AWAITING_BASKET_CONFIRMATION"
+    assert put_state.get_active_series(cart_env["sess"]) is None
+    assert int(r.pending["product_id"]) == 11
+    assert cart_env["pick_calls"] == [(1.0, 1224)]
+
+
+def test_audit_series_twenty_units_one_basket_scan(db, cart_env):
+    cart_env["add_order"](1224, 1, qty=20)
+    _product_scan(db, cart_env, order_ids=[1224])
+    _confirm(db, cart_env, "S-1-1", order_ids=[1224])
+    assert len(cart_env["pick_calls"]) == 1
+    for _ in range(19):
+        r = _product_scan(db, cart_env, order_ids=[1224])
+        assert r.phase == "PUT_CONFIRMED"
+    assert len(cart_env["pick_calls"]) == 20
+    # Overpick protection: line exhausted → no series, next EAN has no allocation
+    with pytest.raises(BasketPutError) as cm:
+        _product_scan(db, cart_env, order_ids=[1224])
+    assert cm.value.code == "NO_ALLOCATION"
 
 
 def test_case4_product_scan_creates_pending_no_pick(db, cart_env):

@@ -1568,21 +1568,27 @@ def post_picking_confirm_basket_put(
             operator_user_id=uid,
         )
 
-    from ..services.wms_basket_put.state import get_pending
+    from ..services.wms_basket_put.state import get_pending, get_active_series
     from ..services.cart_picking_lifecycle_service import assert_cart_ready_for_quick_pick
     from ..services.wms_picking_product_list_service import resolve_wms_picking_order_ids
 
     try:
         sess = assert_cart_ready_for_quick_pick(db, cart)
         pending = get_pending(sess)
-        if pending is None:
+        series = get_active_series(sess)
+        if pending is None and series is None:
             raise BasketPutError(
                 "NO_PENDING_PUT",
                 "Brak oczekującego odłożenia — najpierw zeskanuj produkt.",
                 http_status=409,
             )
-        _pending_product_id = int(pending["product_id"])
-        _pending_location_id = int(pending["location_id"])
+        # Product/location for Pick path: pending first; series only used for destination switch (qty=0).
+        if pending is not None:
+            _pending_product_id = int(pending["product_id"])
+            _pending_location_id = int(pending["location_id"])
+        else:
+            _pending_product_id = int(series["product_id"])
+            _pending_location_id = int(series["location_id"])
 
         ot = order_type if order_type in ("single", "multi", "all") else "all"
         confirm_order_ids = resolve_wms_picking_order_ids(
@@ -1604,6 +1610,7 @@ def post_picking_confirm_basket_put(
             order_ids=confirm_order_ids,
         )
         db.commit()
+        qty_put = float(put_res.quantity_put or 0)
         return {
             "ok": True,
             "phase": put_res.phase,
@@ -1613,7 +1620,7 @@ def post_picking_confirm_basket_put(
             "active_series": put_res.active_series,
             "expected_basket_label": put_res.expected_basket_label,
             "message": put_res.message,
-            "picked": True,
+            "picked": qty_put > 1e-9,
         }
     except BasketPutError as be:
         # Keep pending on mismatch / wrong basket / full line — no pick was written.

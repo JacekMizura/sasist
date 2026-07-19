@@ -1,3 +1,10 @@
+## 2026-07-19 — PRE-PUSH AUDIT MULTI basket put (42cfee48 → follow-up)
+
+- BLOCKER found: series switch invented pending qty=1 and wrote Pick; API rejected confirm when pending=None (switch dead in prod).
+- FIX: `SERIES_DESTINATION_SWITCHED` retargets series with quantity_put=0; API allows confirm when series active; `picked` = qty>0.
+- eligible_baskets = UI hint; confirm always `resolve_allocation_for_basket_scan` live DB.
+- Tests: +stale eligible, switch no increment, basket without pending, product change, 20-qty overpick.
+
 ## 2026-07-19 — MULTI basket put: free basket choice + list EAN as PRODUCT_SCAN
 
 - ROOT: `resolve_next_basket_allocation` FIFO bound `order_item_id`/`expected_basket_id` into pending at product scan → forced „KOSZYK DOCELOWY: S-1-1”; list EAN only navigated → detail demanded second EAN.
