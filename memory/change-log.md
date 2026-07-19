@@ -1,3 +1,11 @@
+## 2026-07-19 — Baskets put confirmation (PRODUCT→BASKET)
+
+- ROOT: quick-pick incrementował qty bez skanu koszyka; UI tylko „Odłóż do…”.
+- AFTER: SSOT `wms_basket_put` w `WmsOperationSession.metadata_json`; pending put + series per (product, order_item, basket).
+- API: gate w `POST /picking/quick-pick`; `POST /picking/confirm-basket-put`.
+- FE: duży ekran potwierdzenia koszyka; seria bez ponownego skanu.
+- Tests: `test_wms_basket_put_confirmation.py` CASE 1–11.
+
 ## 2026-07-19 — Modal „Edycja trybu zbierania”: własny sticky footer
 
 - ROOT: modal bez Zapisz/Anuluj; UX kierował na globalny sticky bar (z-40) widoczny pod overlayem.

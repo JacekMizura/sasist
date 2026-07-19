@@ -310,6 +310,29 @@ class WmsPickingProductDetailResponse(BaseModel):
         default_factory=list,
         description="Drzewo bundle per zamówienie w kohortcie (P4.15B)",
     )
+    #: MULTI baskets — pending put confirmation (SSOT from session metadata).
+    basket_put_pending: Optional[dict] = Field(
+        default=None,
+        description="Oczekujące potwierdzenie koszyka: expected_basket_label, quantity, product_id, …",
+    )
+    basket_put_active_series: Optional[dict] = Field(
+        default=None,
+        description="Aktywna seria odkładania do zweryfikowanego koszyka.",
+    )
+    requires_basket_put_confirm: bool = Field(
+        default=False,
+        description="True dla wózka MULTI/baskets — skan produktu nie finalizuje sztuki bez koszyka.",
+    )
+
+
+class WmsPickingConfirmBasketPutBody(BaseModel):
+    cart_id: int = Field(..., ge=1)
+    basket_scan: str = Field(..., min_length=1, max_length=128)
+    manual: bool = Field(
+        default=False,
+        description="True gdy potwierdzenie koszyka z ręcznego wpisu (audit MANUAL_BASKET_CONFIRMATION).",
+    )
+    recovery_order_id: Optional[int] = Field(default=None, ge=1)
 
 
 class WmsPickingQuickPickBody(BaseModel):

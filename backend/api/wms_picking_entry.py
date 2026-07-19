@@ -38,6 +38,7 @@ from ..schemas.wms_picking_flow import (
     WmsPickingFlowLimits,
 )
 from ..schemas.wms_picking_products import (
+    WmsPickingConfirmBasketPutBody,
     WmsPickingEmptyLocationBody,
     WmsPickingEmptyLocationResponse,
     WmsPickingFinalizeCartResponse,
@@ -1329,27 +1330,98 @@ def post_picking_quick_pick(
         if body.cart_id is None:
             raise HTTPException(status_code=400, detail="Wymagany cart_id albo picking_session_id.")
 
-        oid, oiid = record_wms_quick_pick(
-            db,
-            tenant_id=tid,
-            warehouse_id=int(effective_wh),
-            source_status_id=source_status_id,
-            order_type=order_type,
-            product_id=body.product_id,
-            location_id=body.location_id,
-            quantity=body.quantity,
-            cart_id=int(body.cart_id),
-            fixed_order_id=int(body.recovery_order_id)
-            if body.recovery_order_id is not None and int(body.recovery_order_id) > 0
-            else None,
-            operator_user_id=uid,
+        from ..services.wms_basket_put import (
+            BasketPutError,
+            cart_requires_basket_put_gate,
+            handle_product_scan_for_baskets,
         )
-        if body.cart_id is not None:
-            recovery_oid = (
-                int(body.recovery_order_id)
-                if body.recovery_order_id is not None and int(body.recovery_order_id) > 0
-                else None
+
+        cart_for_gate = (
+            db.query(Cart)
+            .options(joinedload(Cart.baskets))
+            .filter(
+                Cart.id == int(body.cart_id),
+                Cart.tenant_id == tid,
+                Cart.warehouse_id == int(effective_wh),
             )
+            .first()
+        )
+        if cart_for_gate is None:
+            raise HTTPException(status_code=404, detail="Nie znaleziono wózka.")
+
+        recovery_fixed = (
+            int(body.recovery_order_id)
+            if body.recovery_order_id is not None and int(body.recovery_order_id) > 0
+            else None
+        )
+
+        def _do_record(*, quantity: float, fixed_order_id: int | None = None):
+            return record_wms_quick_pick(
+                db,
+                tenant_id=tid,
+                warehouse_id=int(effective_wh),
+                source_status_id=source_status_id,
+                order_type=order_type,
+                product_id=body.product_id,
+                location_id=body.location_id,
+                quantity=float(quantity),
+                cart_id=int(body.cart_id),
+                fixed_order_id=fixed_order_id if fixed_order_id is not None else recovery_fixed,
+                operator_user_id=uid,
+            )
+
+        if cart_requires_basket_put_gate(cart_for_gate) and recovery_fixed is None:
+            from ..services.wms_picking_product_list_service import resolve_wms_picking_order_ids
+
+            ot = order_type if order_type in ("single", "multi", "all") else "all"
+            order_ids = resolve_wms_picking_order_ids(
+                db,
+                tenant_id=tid,
+                warehouse_id=int(effective_wh),
+                source_status_id=source_status_id,
+                order_type=ot,
+                cart_id=int(body.cart_id),
+            )
+            try:
+                put_res = handle_product_scan_for_baskets(
+                    db,
+                    cart=cart_for_gate,
+                    order_ids=order_ids,
+                    product_id=int(body.product_id),
+                    location_id=int(body.location_id),
+                    quantity=float(body.quantity),
+                    operator_user_id=uid,
+                    record_pick_fn=_do_record,
+                )
+            except BasketPutError as be:
+                db.rollback()
+                # Re-load pending into a fresh session state is lost after rollback —
+                # pending write was rolled back. Re-raise without persisting.
+                # Actually: for AWAITING_BASKET we need pending committed. For mismatch from
+                # product-while-pending, pending already existed — rollback undoes nothing new
+                # if we didn't write. handle_product_scan raises before write for while-pending.
+                # For create pending then we must NOT rollback on success path.
+                raise HTTPException(status_code=be.http_status, detail=be.as_detail()) from be
+
+            if put_res.phase == "AWAITING_BASKET_CONFIRMATION":
+                db.commit()
+                return {
+                    "ok": True,
+                    "phase": put_res.phase,
+                    "pending": put_res.pending,
+                    "expected_basket_label": put_res.expected_basket_label,
+                    "message": put_res.message,
+                    "order_id": put_res.order_id,
+                    "order_item_id": put_res.order_item_id,
+                    "picked": False,
+                }
+
+            oid, oiid = put_res.order_id, put_res.order_item_id
+        else:
+            oid, oiid = _do_record(quantity=float(body.quantity), fixed_order_id=recovery_fixed)
+
+        if body.cart_id is not None:
+            recovery_oid = recovery_fixed
             resp = build_wms_picking_product_lines(
                 db,
                 tenant_id=tid,
@@ -1381,7 +1453,13 @@ def post_picking_quick_pick(
             "post_picking_quick_pick:ok %s",
             _log_ctx(order_id=oid, order_item_id=oiid),
         )
-        return {"ok": True, "order_id": oid, "order_item_id": oiid}
+        return {
+            "ok": True,
+            "order_id": oid,
+            "order_item_id": oiid,
+            "phase": "PUT_CONFIRMED",
+            "picked": True,
+        }
     except SessionNotFoundError as e:
         db.rollback()
         _raise_409("SessionNotFound", e.message)
@@ -1425,6 +1503,108 @@ def post_picking_quick_pick(
             status_code=500,
             detail={"code": "QuickPickInternalError", "message": "Wewnętrzny błąd serwera"},
         ) from e
+
+
+@router.post("/picking/confirm-basket-put")
+def post_picking_confirm_basket_put(
+    body: WmsPickingConfirmBasketPutBody,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
+    source_status_id: int = Query(..., ge=1),
+    order_type: WmsPickingOrderTypeFilter = Query(...),
+    db: Session = Depends(get_db),
+    current_user: AppUser = Depends(get_current_user),
+):
+    """Confirm pending put by scanning the destination basket (MULTI / baskets carts)."""
+    from ..models.cart import Cart
+    from ..services.wms_basket_put import BasketPutError, confirm_basket_put
+
+    tid = int(tenant_id)
+    uid = int(current_user.id) if current_user is not None else None
+    cart = (
+        db.query(Cart)
+        .options(joinedload(Cart.baskets))
+        .filter(
+            Cart.id == int(body.cart_id),
+            Cart.tenant_id == tid,
+            Cart.warehouse_id == int(warehouse_id),
+        )
+        .first()
+    )
+    if cart is None:
+        raise HTTPException(status_code=404, detail="Nie znaleziono wózka.")
+
+    recovery_fixed = (
+        int(body.recovery_order_id)
+        if body.recovery_order_id is not None and int(body.recovery_order_id) > 0
+        else None
+    )
+
+    def _do_record(*, quantity: float, fixed_order_id: int | None = None):
+        return record_wms_quick_pick(
+            db,
+            tenant_id=tid,
+            warehouse_id=int(warehouse_id),
+            source_status_id=source_status_id,
+            order_type=order_type,
+            product_id=int(
+                # product from pending — confirm_basket_put passes fixed_order_id;
+                # record_wms_quick_pick still needs product_id from pending via closure.
+                _pending_product_id
+            ),
+            location_id=int(_pending_location_id),
+            quantity=float(quantity),
+            cart_id=int(body.cart_id),
+            fixed_order_id=fixed_order_id if fixed_order_id is not None else recovery_fixed,
+            operator_user_id=uid,
+        )
+
+    from ..services.wms_basket_put.state import get_pending
+    from ..services.cart_picking_lifecycle_service import assert_cart_ready_for_quick_pick
+
+    try:
+        sess = assert_cart_ready_for_quick_pick(db, cart)
+        pending = get_pending(sess)
+        if pending is None:
+            raise BasketPutError(
+                "NO_PENDING_PUT",
+                "Brak oczekującego odłożenia — najpierw zeskanuj produkt.",
+                http_status=409,
+            )
+        _pending_product_id = int(pending["product_id"])
+        _pending_location_id = int(pending["location_id"])
+
+        put_res = confirm_basket_put(
+            db,
+            cart=cart,
+            basket_scan=str(body.basket_scan),
+            operator_user_id=uid,
+            record_pick_fn=_do_record,
+            manual=bool(body.manual),
+        )
+        db.commit()
+        return {
+            "ok": True,
+            "phase": put_res.phase,
+            "order_id": put_res.order_id,
+            "order_item_id": put_res.order_item_id,
+            "quantity_put": put_res.quantity_put,
+            "active_series": put_res.active_series,
+            "expected_basket_label": put_res.expected_basket_label,
+            "message": put_res.message,
+            "picked": True,
+        }
+    except BasketPutError as be:
+        # Keep pending on mismatch — only roll back the failed pick attempt.
+        if be.code == "BASKET_MISMATCH":
+            db.rollback()
+            # Re-assert pending still in DB (rollback undoes nothing if no writes except none)
+            raise HTTPException(status_code=be.http_status, detail=be.as_detail()) from be
+        db.rollback()
+        raise HTTPException(status_code=be.http_status, detail=be.as_detail()) from be
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.post("/picking/undo-pick", response_model=WmsPickingUndoPickResponse)

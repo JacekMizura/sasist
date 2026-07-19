@@ -5,6 +5,7 @@ import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   formatFastApiErrorDetail,
   getWmsPickingProductDetail,
+  postWmsPickingConfirmBasketPut,
   postWmsPickingConfirmEmptyLocation,
   postWmsPickingQuickPick,
   postWmsPickingReportShortage,
@@ -300,13 +301,25 @@ export default function WmsPickingProductDetailPage() {
 
   useEffect(() => {
     if (!detail) return;
-    if (needsLocationScan && activeLocationId == null) {
+    if (detail.basket_put_pending?.expected_basket_label) {
+      setScannerInputPlaceholder(`Zeskanuj koszyk ${detail.basket_put_pending.expected_basket_label}`);
+    } else if (needsLocationScan && activeLocationId == null) {
       setScannerInputPlaceholder("Zeskanuj lokalizację");
+    } else if (detail.basket_put_active_series?.basket_label) {
+      setScannerInputPlaceholder("Skanuj EAN produktu");
     } else {
       setScannerInputPlaceholder("Skanuj kod lokalizacji lub EAN");
     }
     refocusScannerInput();
-  }, [detail, needsLocationScan, activeLocationId, setScannerInputPlaceholder, refocusScannerInput]);
+  }, [
+    detail,
+    needsLocationScan,
+    activeLocationId,
+    setScannerInputPlaceholder,
+    refocusScannerInput,
+    detail?.basket_put_pending,
+    detail?.basket_put_active_series,
+  ]);
 
   // LOGIKA ODZNACZANIA KOLEJNYCH SZTUK W DETALU POPRZEZ FIZYCZNY SKAN
   useEffect(() => {
@@ -320,6 +333,18 @@ export default function WmsPickingProductDetailPage() {
       if (!scan) return;
       const locs = detail.locations;
       if (locs.length === 0) return;
+
+      // MULTI baskets: awaiting basket confirmation — only accept basket (or reject product)
+      const pendingBasket = detail.basket_put_pending?.expected_basket_label;
+      if (pendingBasket && pickingSession.cartId) {
+        if (normalizeScanEan(detail.ean) === scan) {
+          showScannerToast(`Najpierw potwierdź koszyk ${pendingBasket}`);
+          setPickMsg(`NAJPIERW POTWIERDŹ KOSZYK. Odłóż produkt do koszyka ${pendingBasket} i zeskanuj jego kod.`);
+          return;
+        }
+        void confirmBasketScan(raw);
+        return;
+      }
 
       const shelfLabel = (detail.consolidation_shelf_label ?? "").trim();
       if (detail.consolidation_active && shelfLabel && scan.toUpperCase() === normalizeScanEan(shelfLabel).toUpperCase()) {
@@ -418,7 +443,7 @@ export default function WmsPickingProductDetailPage() {
     setPickBusy(true);
     setPickMsg(null);
     try {
-      await postWmsPickingQuickPick(pickingTenantId, warehouseId, pickingSession.orderUiStatusId, orderType, {
+      const result = await postWmsPickingQuickPick(pickingTenantId, warehouseId, pickingSession.orderUiStatusId, orderType, {
         product_id: productId,
         location_id: locationId,
         quantity: Math.min(qty, remaining),
@@ -426,7 +451,17 @@ export default function WmsPickingProductDetailPage() {
         ...(recoveryOrderId != null && recoveryOrderId > 0 ? { recovery_order_id: recoveryOrderId } : {}),
       });
       playScanBeep();
-      const nextRem = remaining - Math.min(qty, remaining);
+      if (result.phase === "AWAITING_BASKET_CONFIRMATION" || result.picked === false) {
+        setPickMsg(result.message ?? "Zeskanuj koszyk, aby potwierdzić odłożenie.");
+        setScannerInputPlaceholder(
+          `Zeskanuj koszyk ${result.expected_basket_label ?? detail.put_to_basket_label ?? ""}`.trim(),
+        );
+        await load();
+        setManualOpen(false);
+        return;
+      }
+      const putQty = result.quantity_put ?? Math.min(qty, remaining);
+      const nextRem = remaining - putQty;
       if (nextRem <= 1e-9) {
         if (detail?.consolidation_active) {
           await load();
@@ -437,18 +472,89 @@ export default function WmsPickingProductDetailPage() {
         await load();
         setManualOpen(false);
         setManualLocId(null);
+        if (result.active_series?.basket_label) {
+          setPickMsg(`Koszyk ${result.active_series.basket_label} — skanuj kolejne sztuki. Pozostało: ${Math.max(0, nextRem)} szt.`);
+          setScannerInputPlaceholder("Skanuj EAN produktu");
+        }
       }
     } catch (e: unknown) {
       let msg = "Zapis nie powiódł się.";
       if (axios.isAxiosError(e)) {
         const data = e.response?.data;
         const d = data as { detail?: unknown; error?: string } | undefined;
-        if (d?.detail != null) msg = formatFastApiErrorDetail({ detail: d.detail });
-        else if (d?.error) msg = String(d.error);
+        if (d?.detail != null) {
+          if (typeof d.detail === "object" && d.detail && "message" in (d.detail as object)) {
+            msg = String((d.detail as { message: string }).message);
+            const code = (d.detail as { code?: string }).code;
+            if (code === "AWAITING_BASKET_CONFIRMATION" || code === "BASKET_MISMATCH") {
+              await load();
+            }
+          } else {
+            msg = formatFastApiErrorDetail({ detail: d.detail });
+          }
+        } else if (d?.error) msg = String(d.error);
+      } else if (e instanceof Error && e.message) {
+        msg = e.message;
       }
       setPickMsg(msg);
     } finally {
       setPickBusy(false);
+    }
+  }
+
+  async function confirmBasketScan(rawScan: string, manual = false) {
+    if (!pickingSession || warehouseId == null || !pickingSession.cartId) return;
+    setPickBusy(true);
+    setPickMsg(null);
+    try {
+      const result = await postWmsPickingConfirmBasketPut(
+        pickingTenantId,
+        warehouseId,
+        pickingSession.orderUiStatusId,
+        orderType,
+        {
+          cart_id: pickingSession.cartId,
+          basket_scan: rawScan,
+          manual,
+          recovery_order_id: recoveryOrderId,
+        },
+      );
+      playScanBeep();
+      setPickMsg(result.message ?? `Koszyk potwierdzony`);
+      await load();
+      const after = await getWmsPickingProductDetail(
+        pickingTenantId,
+        warehouseId,
+        pickingSession.orderUiStatusId,
+        orderType,
+        productId,
+        pickingSession.cartId,
+        recoveryOrderId,
+        null,
+        { force: true },
+      );
+      if (wmsPickingRemainingQty(after) <= 1e-9 && !after.consolidation_active) {
+        goBackToList(true);
+      } else {
+        setScannerInputPlaceholder("Skanuj EAN produktu");
+      }
+    } catch (e: unknown) {
+      let msg = "Potwierdzenie koszyka nie powiodło się.";
+      if (axios.isAxiosError(e)) {
+        const data = e.response?.data as { detail?: unknown } | undefined;
+        if (data?.detail != null) {
+          if (typeof data.detail === "object" && data.detail && "message" in (data.detail as object)) {
+            msg = String((data.detail as { message: string }).message);
+          } else {
+            msg = formatFastApiErrorDetail({ detail: data.detail });
+          }
+        }
+      }
+      setPickMsg(msg);
+      await load();
+    } finally {
+      setPickBusy(false);
+      refocusScannerInput();
     }
   }
 
@@ -681,9 +787,28 @@ export default function WmsPickingProductDetailPage() {
                 <div className="w-fit px-5 py-3 rounded-2xl border-2 border-violet-500 bg-violet-100/95 font-black uppercase tracking-wider text-sm text-violet-950 ring-2 ring-violet-400/50">
                   Odłóż na: {detail.consolidation_shelf_label}
                 </div>
+              ) : detail.basket_put_pending?.expected_basket_label ? (
+                <div className="w-full max-w-xl rounded-3xl border-4 border-amber-500 bg-amber-50 px-6 py-8 text-center shadow-lg ring-4 ring-amber-300/40">
+                  <p className="text-sm font-black uppercase tracking-[0.2em] text-amber-800">Odłóż do koszyka</p>
+                  <p className="mt-3 text-6xl sm:text-7xl font-black tabular-nums tracking-tight text-amber-950">
+                    {detail.basket_put_pending.expected_basket_label}
+                  </p>
+                  <p className="mt-4 text-base font-bold uppercase tracking-wide text-amber-900">
+                    Zeskanuj koszyk, aby potwierdzić
+                  </p>
+                  <p className="mt-2 text-sm font-semibold text-amber-800/90">
+                    Odłożenie {fmtQty(detail.basket_put_pending.quantity ?? 1)} szt.
+                  </p>
+                </div>
+              ) : detail.basket_put_active_series?.basket_label ? (
+                <div className={`w-full max-w-md rounded-2xl border-2 px-5 py-4 ${BASKET_PUT_STYLE_RING[(detail.put_to_basket_color_index ?? 0) % BASKET_PUT_STYLE_RING.length]}`}>
+                  <p className="text-[10px] font-black uppercase tracking-widest opacity-80">Seria — skanuj kolejne sztuki</p>
+                  <p className="mt-1 text-3xl font-black tabular-nums">{detail.basket_put_active_series.basket_label}</p>
+                  <p className="mt-1 text-sm font-semibold">Pozostało: {fmtQty(remaining)} szt.</p>
+                </div>
               ) : detail.put_to_basket_label ? (
                 <div className={`w-fit px-5 py-3 rounded-2xl border-2 font-black uppercase tracking-wider text-sm ${BASKET_PUT_STYLE_RING[(detail.put_to_basket_color_index ?? 0) % BASKET_PUT_STYLE_RING.length]}`}>
-                  Odłóż do koszyka: {detail.put_to_basket_label}
+                  Koszyk docelowy: {detail.put_to_basket_label}
                 </div>
               ) : null}
             </div>

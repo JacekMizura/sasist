@@ -174,6 +174,22 @@ export type WmsPickingProductDetailApi = {
   pending_shelf_deposit?: boolean;
   /** Drzewo bundle w kohortcie dla bieżącego SKU (P4.15B) */
   order_bundle_trees?: WmsPickingOrderBundleTreeApi[];
+  /** MULTI baskets — SSOT pending put / series from session */
+  requires_basket_put_confirm?: boolean;
+  basket_put_pending?: {
+    expected_basket_label?: string;
+    expected_basket_id?: number;
+    quantity?: number;
+    product_id?: number;
+    order_id?: number;
+    idempotency_key?: string;
+  } | null;
+  basket_put_active_series?: {
+    basket_label?: string;
+    basket_id?: number;
+    product_id?: number;
+    order_item_id?: number;
+  } | null;
 };
 
 export async function getWmsPickingProductLines(
@@ -729,13 +745,26 @@ export function formatFastApiErrorDetail(data: unknown): string {
   return String(detail);
 }
 
+export type WmsPickingQuickPickResultApi = {
+  ok: boolean;
+  order_id?: number | null;
+  order_item_id?: number | null;
+  phase?: string;
+  picked?: boolean;
+  pending?: WmsPickingProductDetailApi["basket_put_pending"];
+  expected_basket_label?: string | null;
+  message?: string | null;
+  active_series?: WmsPickingProductDetailApi["basket_put_active_series"];
+  quantity_put?: number;
+};
+
 export async function postWmsPickingQuickPick(
   tenantId: number,
   warehouseId: number | null | undefined,
   sourceStatusId: number,
   orderType: WmsPickingOrderTypeQuery,
   body: WmsPickingQuickPickBodyApi,
-): Promise<{ ok: boolean; order_id: number; order_item_id: number }> {
+): Promise<WmsPickingQuickPickResultApi> {
   if (!Number.isFinite(tenantId) || tenantId < 1) {
     throw new Error("tenant_id: wymagane ≥ 1");
   }
@@ -765,38 +794,42 @@ export async function postWmsPickingQuickPick(
   if (rid != null && Number.isFinite(Number(rid)) && Number(rid) > 0) {
     payload.recovery_order_id = Math.floor(Number(rid));
   }
-
-  try {
-    const params: Record<string, string | number> = {
-      tenant_id: tenantId,
-      source_status_id: sourceStatusId,
-      order_type: orderType,
-    };
-    if (warehouseId != null && Number.isFinite(warehouseId) && warehouseId >= 1) {
-      params.warehouse_id = warehouseId;
-    }
-    const res = await api.post<{ ok: boolean; order_id: number; order_item_id: number }>(
-      "/wms/picking/quick-pick",
-      payload,
-      {
-        params,
-        headers: {
-          "Content-Type": "application/json",
-        },
-      },
-    );
-    return res.data;
-  } catch (e: unknown) {
-    if (axios.isAxiosError(e)) {
-      if (e.response?.status === 422) {
-        console.error("[WMS quick-pick] 422:", e.response.data?.detail);
-      }
-      if (e.response?.status === 409) {
-        const msg = formatFastApiErrorDetail(e.response.data);
-        console.warn("[WMS quick-pick] 409:", e.response.data);
-        throw new Error(msg || "Operacja zbierania odrzucona (409).");
-      }
-    }
-    throw e;
+  const params: Record<string, number | string> = {
+    tenant_id: tenantId,
+    source_status_id: sourceStatusId,
+    order_type: orderType,
+  };
+  if (warehouseId != null && warehouseId > 0) {
+    params.warehouse_id = warehouseId;
   }
+  const res = await api.post<WmsPickingQuickPickResultApi>("/wms/picking/quick-pick", payload, { params });
+  return res.data;
+}
+
+export async function postWmsPickingConfirmBasketPut(
+  tenantId: number,
+  warehouseId: number,
+  sourceStatusId: number,
+  orderType: WmsPickingOrderTypeQuery,
+  body: { cart_id: number; basket_scan: string; manual?: boolean; recovery_order_id?: number | null },
+): Promise<WmsPickingQuickPickResultApi> {
+  const params = {
+    tenant_id: tenantId,
+    warehouse_id: warehouseId,
+    source_status_id: sourceStatusId,
+    order_type: orderType,
+  };
+  const res = await api.post<WmsPickingQuickPickResultApi>(
+    "/wms/picking/confirm-basket-put",
+    {
+      cart_id: assertPositiveInt("cart_id", body.cart_id),
+      basket_scan: String(body.basket_scan || "").trim(),
+      manual: Boolean(body.manual),
+      ...(body.recovery_order_id != null && body.recovery_order_id > 0
+        ? { recovery_order_id: body.recovery_order_id }
+        : {}),
+    },
+    { params },
+  );
+  return res.data;
 }

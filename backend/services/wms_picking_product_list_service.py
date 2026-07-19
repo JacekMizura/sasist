@@ -2258,7 +2258,7 @@ def build_wms_picking_product_detail(
         for t in raw_trees
     ]
 
-    return WmsPickingProductDetailResponse(
+    detail = WmsPickingProductDetailResponse(
         product_id=int(product_id),
         name=pr.name if pr and pr.name else row.name,
         ean=pr.ean if pr else row.ean,
@@ -2286,7 +2286,29 @@ def build_wms_picking_product_detail(
         consolidation_plan_item_id=consolidation_plan_item_id,
         pending_shelf_deposit=pending_shelf_deposit,
         order_bundle_trees=order_bundle_trees,
+        basket_put_pending=None,
+        basket_put_active_series=None,
+        requires_basket_put_confirm=False,
     )
+
+    # MULTI baskets: expose pending put / series from session (SSOT).
+    if cart_id is not None and int(cart_id) > 0:
+        try:
+            from .wms_basket_put import get_basket_put_ui_state
+
+            cart_for_put = (
+                db.query(Cart)
+                .filter(Cart.id == int(cart_id), Cart.tenant_id == int(tenant_id))
+                .first()
+            )
+            if cart_for_put is not None:
+                ui_put = get_basket_put_ui_state(db, cart=cart_for_put)
+                detail.requires_basket_put_confirm = bool(ui_put.get("requires_basket_put"))
+                detail.basket_put_pending = ui_put.get("pending")
+                detail.basket_put_active_series = ui_put.get("active_series")
+        except Exception:
+            logger.exception("basket_put ui state failed cart_id=%s", cart_id)
+    return detail
 
 
 def record_wms_quick_pick(
@@ -2661,6 +2683,15 @@ def report_wms_picking_product_shortage(
     target_item_id = int(order_item_id) if order_item_id is not None and int(order_item_id) > 0 else None
     is_recovery = recovery_order_id is not None and int(recovery_order_id) > 0
     roid = int(recovery_order_id) if is_recovery else None
+
+    try:
+        from .wms_basket_put import clear_basket_put_state
+
+        cart_clr = db.query(Cart).filter(Cart.id == int(cart_id)).first()
+        if cart_clr is not None:
+            clear_basket_put_state(db, cart=cart_clr, reason="shortage")
+    except Exception:
+        logger.exception("clear_basket_put_state on shortage failed cart_id=%s", cart_id)
 
     from .picking_config_query import resolve_picking_config_for_shortage_report
 
@@ -3344,6 +3375,13 @@ def finalize_wms_picking_cart(
         )
         .first()
     )
+    if cart is not None:
+        try:
+            from .wms_basket_put import clear_basket_put_state
+
+            clear_basket_put_state(db, cart=cart, reason="finalize_cart")
+        except Exception:
+            logger.exception("clear_basket_put_state on finalize failed cart_id=%s", cart_id)
     if not cart:
         raise PickingFinalizeError(
             "Nie znaleziono aktywnego wózka (sesja wygasła lub błędne ID).",
