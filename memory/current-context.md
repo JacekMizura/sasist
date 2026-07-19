@@ -6,6 +6,7 @@
 
 ## Latest (2026-07-19)
 
+- **Wózki:8 / empty CART:** semantic drift tile(A raw status) vs assign(B eligibility+gate); empty fail → `claim_cart` → false PRZYPISANY. Fix: assignable count SSOT, `PICK_ASSIGN_TRACE`, release empty ASSIGNED on zero assign.
 - AUTO-DETACH CART-0001: PASS on prod after deploy.
 - Follow-up: GET `/order-issue-tasks` 500 — dialect-aware schema + sync rollback + repair savepoint; shortage → 1 OrderIssueTask/order (idempotent).
 - Stale hub „Do zebrania”: cart-scoped refetch after scan; no status-level stats while products loading.

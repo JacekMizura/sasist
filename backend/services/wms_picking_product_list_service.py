@@ -368,10 +368,14 @@ def _picking_queue_eligibility_clauses(
         wms_queue_fulfillment_mode_clauses,
     )
 
+    # NULL / blank / PICKING / PARTIAL — zgodnie z touch_picking_in_progress / start_picking.
+    # MISSING / READY_TO_PACK / PACKING / NEEDS_DECISION są poza kolejką zbierania.
     return (
         Order.picking_finished_at.is_(None),
+        Order.deleted_at.is_(None),
         or_(
             Order.fulfillment_state.is_(None),
+            func.trim(Order.fulfillment_state) == "",
             Order.fulfillment_state.in_(_PICKING_QUEUE_OPEN_FULFILLMENT),
         ),
         *wms_queue_fulfillment_mode_clauses(
@@ -384,6 +388,37 @@ def _picking_queue_eligibility_clauses(
         *wms_queue_consolidation_phase_clauses(for_picking=True),
         *wms_queue_consolidation_plan_clauses(),
     )
+
+
+def count_assignable_orders_for_picking_statuses(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    source_status_ids: list[int],
+) -> dict[int, int]:
+    """
+    Licznik kafelka „Wózki” / status — ta sama pula co kandydaci do start_picking
+    (eligibility + wolne cart_id), bez drogiego gate walidacji stock.
+    """
+    ids = [int(x) for x in source_status_ids if int(x) > 0]
+    if not ids:
+        return {}
+    rows = (
+        db.query(Order.order_ui_status_id, func.count(Order.id))
+        .filter(
+            Order.tenant_id == int(tenant_id),
+            Order.warehouse_id == int(warehouse_id),
+            Order.order_ui_status_id.in_(ids),
+            Order.cart_id.is_(None),
+            *_picking_queue_eligibility_clauses(
+                db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id)
+            ),
+        )
+        .group_by(Order.order_ui_status_id)
+        .all()
+    )
+    return {int(sid): int(n) for sid, n in rows}
 
 
 def bootstrap_start_picking_if_needed(
@@ -401,15 +436,17 @@ def bootstrap_start_picking_if_needed(
     Po skanie wózka / wejściu na listę produktów:
     AVAILABLE|ASSIGNED → start_picking (jedyny writer order.cart_id).
     PICKING → no-op (zwraca istniejącą sesję).
+
+    Gdy brak assignable orders: NIE claim → AVAILABLE (pusty wózek nie zostaje PRZYPISANY).
     """
     from .cart_picking_lifecycle_service import (
-        claim_cart,
         find_open_picking_session,
         get_cart_status,
+        release_cart,
         start_picking,
     )
     from ..models.enums import CartStatus
-    from ..models.wms_operation_session import WmsOperationSession
+    from .wms_picking_assign_trace import log_pick_assign_trace
 
     cart = (
         db.query(Cart)
@@ -429,6 +466,26 @@ def bootstrap_start_picking_if_needed(
         return find_open_picking_session(db, cart=cart)
     if st not in (CartStatus.AVAILABLE, CartStatus.ASSIGNED):
         return None
+
+    cart_code = getattr(cart, "code", None) or getattr(cart, "name", None)
+
+    def _heal_empty_assigned(commit_result: str) -> None:
+        """Pusty ASSIGNED bez pracy → AVAILABLE (SSOT badge, nie kosmetyka FE)."""
+        log_pick_assign_trace(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            source_status_id=int(source_status_id),
+            order_type=str(order_type),
+            cart_id=int(cart.id),
+            cart_code=str(cart_code) if cart_code else None,
+            selected_ids=[],
+            assigned_ids=[],
+            commit_result=commit_result,
+            run_validation=True,
+        )
+        if get_cart_status(cart) == CartStatus.ASSIGNED:
+            release_cart(db, cart=cart, reason="no_assignable_orders_on_scan")
 
     if fixed_order_ids is not None:
         order_ids = [int(x) for x in fixed_order_ids if int(x) > 0]
@@ -454,7 +511,7 @@ def bootstrap_start_picking_if_needed(
         )
 
     if not orders:
-        claim_cart(db, cart=cart, operator_user_id=int(operator_user_id))
+        _heal_empty_assigned("no_free_candidates")
         return None
 
     from .wms_order_validation.gate import gate_orders_before_capacity
@@ -467,17 +524,54 @@ def bootstrap_start_picking_if_needed(
         operator_user_id=None,  # automatyczny gate — Activity Log: System
     )
     if not orders:
-        claim_cart(db, cart=cart, operator_user_id=int(operator_user_id))
+        _heal_empty_assigned("gate_rejected_all")
         return None
 
-    return start_picking(
+    try:
+        sess = start_picking(
+            db,
+            cart=cart,
+            orders=orders,
+            operator_user_id=int(operator_user_id),
+            source_status_id=int(source_status_id),
+            on_capacity="truncate",
+        )
+    except Exception as exc:
+        log_pick_assign_trace(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            source_status_id=int(source_status_id),
+            order_type=str(order_type),
+            cart_id=int(cart.id),
+            cart_code=str(cart_code) if cart_code else None,
+            selected_ids=[],
+            assigned_ids=[],
+            commit_result=f"start_picking_error:{type(exc).__name__}",
+            run_validation=True,
+        )
+        raise
+
+    assigned_ids = [
+        int(o.id)
+        for o in db.query(Order)
+        .filter(Order.cart_id == int(cart.id), Order.deleted_at.is_(None))
+        .all()
+    ]
+    log_pick_assign_trace(
         db,
-        cart=cart,
-        orders=orders,
-        operator_user_id=int(operator_user_id),
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
         source_status_id=int(source_status_id),
-        on_capacity="truncate",
+        order_type=str(order_type),
+        cart_id=int(cart.id),
+        cart_code=str(cart_code) if cart_code else None,
+        selected_ids=assigned_ids,
+        assigned_ids=assigned_ids,
+        commit_result="ok" if assigned_ids else "start_picking_zero_assigned",
+        run_validation=True,
     )
+    return sess
 
 
 def _query_order_ids_for_status(

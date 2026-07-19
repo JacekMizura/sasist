@@ -75,7 +75,7 @@ class TestWmsQueueEligibilityFeatureOff(unittest.TestCase):
         clauses = _picking_queue_eligibility_clauses(
             None, tenant_id=1, warehouse_id=1, features=_ctx_off()
         )
-        self.assertEqual(len(clauses), 2)
+        self.assertEqual(len(clauses), 5)
 
 
 class TestWmsQueueEligibilityFeatureOn(unittest.TestCase):
@@ -94,7 +94,7 @@ class TestWmsQueueEligibilityFeatureOn(unittest.TestCase):
         clauses = _picking_queue_eligibility_clauses(
             None, tenant_id=1, warehouse_id=1, features=_ctx_on()
         )
-        self.assertEqual(len(clauses), 3)
+        self.assertEqual(len(clauses), 6)
 
 
 class TestDirectSalesApiGated(unittest.TestCase):

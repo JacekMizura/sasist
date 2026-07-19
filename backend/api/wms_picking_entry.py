@@ -69,6 +69,7 @@ from ..services.wms_picking_product_list_service import (
     bootstrap_start_picking_if_needed,
     build_wms_picking_product_detail,
     build_wms_picking_product_lines,
+    count_assignable_orders_for_picking_statuses,
     finalize_wms_picking_cart,
     finalize_wms_recovery_picking_cart,
     record_wms_quick_pick,
@@ -252,19 +253,17 @@ def get_picking_configured_statuses(
             valid.append((pc, st))
 
         status_ids = [int(st.id) for _, st in valid]
-        counts_map: Dict[int, int] = {}
-        if status_ids:
-            cnt_rows = (
-                db.query(Order.order_ui_status_id, func.count(Order.id))
-                .filter(
-                    Order.tenant_id == int(tenant_id),
-                    Order.warehouse_id == int(warehouse_id),
-                    Order.order_ui_status_id.in_(status_ids),
-                )
-                .group_by(Order.order_ui_status_id)
-                .all()
+        # SSOT z assignment: eligibility + wolne cart_id (nie surowy count statusu).
+        counts_map: Dict[int, int] = (
+            count_assignable_orders_for_picking_statuses(
+                db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+                source_status_ids=status_ids,
             )
-            counts_map = {int(sid): int(n) for sid, n in cnt_rows}
+            if status_ids
+            else {}
+        )
 
         out: List[WmsPickingConfiguredStatusItem] = []
         for pc, st in valid:

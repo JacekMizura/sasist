@@ -70,28 +70,29 @@ def _snapshot(features: OperationalFeaturesContext) -> dict[str, dict[str, objec
 
 
 # Frozen snapshots — update only when eligibility semantics intentionally change.
+# picking_clause_count = finished_at + deleted_at + fulfillment_open + [mode?] + consolidation×2
 SNAPSHOT_EXCLUSION_OFF: dict[str, dict[str, object]] = {
-    "legacy_null": {"eligible": True, "mode_clause_count": 0, "picking_clause_count": 2, "shortages_filtered": False, "recovery_filtered": False},
-    "legacy_empty": {"eligible": True, "mode_clause_count": 0, "picking_clause_count": 2, "shortages_filtered": False, "recovery_filtered": False},
-    "explicit_wms": {"eligible": True, "mode_clause_count": 0, "picking_clause_count": 2, "shortages_filtered": False, "recovery_filtered": False},
-    "immediate": {"eligible": True, "mode_clause_count": 0, "picking_clause_count": 2, "shortages_filtered": False, "recovery_filtered": False},
-    "pickup": {"eligible": True, "mode_clause_count": 0, "picking_clause_count": 2, "shortages_filtered": False, "recovery_filtered": False},
-    "delivery": {"eligible": True, "mode_clause_count": 0, "picking_clause_count": 2, "shortages_filtered": False, "recovery_filtered": False},
-    "reservation": {"eligible": True, "mode_clause_count": 0, "picking_clause_count": 2, "shortages_filtered": False, "recovery_filtered": False},
-    "malformed_mode": {"eligible": True, "mode_clause_count": 0, "picking_clause_count": 2, "shortages_filtered": False, "recovery_filtered": False},
-    "garbage_channel": {"eligible": True, "mode_clause_count": 0, "picking_clause_count": 2, "shortages_filtered": False, "recovery_filtered": False},
+    "legacy_null": {"eligible": True, "mode_clause_count": 0, "picking_clause_count": 5, "shortages_filtered": False, "recovery_filtered": False},
+    "legacy_empty": {"eligible": True, "mode_clause_count": 0, "picking_clause_count": 5, "shortages_filtered": False, "recovery_filtered": False},
+    "explicit_wms": {"eligible": True, "mode_clause_count": 0, "picking_clause_count": 5, "shortages_filtered": False, "recovery_filtered": False},
+    "immediate": {"eligible": True, "mode_clause_count": 0, "picking_clause_count": 5, "shortages_filtered": False, "recovery_filtered": False},
+    "pickup": {"eligible": True, "mode_clause_count": 0, "picking_clause_count": 5, "shortages_filtered": False, "recovery_filtered": False},
+    "delivery": {"eligible": True, "mode_clause_count": 0, "picking_clause_count": 5, "shortages_filtered": False, "recovery_filtered": False},
+    "reservation": {"eligible": True, "mode_clause_count": 0, "picking_clause_count": 5, "shortages_filtered": False, "recovery_filtered": False},
+    "malformed_mode": {"eligible": True, "mode_clause_count": 0, "picking_clause_count": 5, "shortages_filtered": False, "recovery_filtered": False},
+    "garbage_channel": {"eligible": True, "mode_clause_count": 0, "picking_clause_count": 5, "shortages_filtered": False, "recovery_filtered": False},
 }
 
 SNAPSHOT_EXCLUSION_ON: dict[str, dict[str, object]] = {
-    "legacy_null": {"eligible": True, "mode_clause_count": 1, "picking_clause_count": 3, "shortages_filtered": False, "recovery_filtered": False},
-    "legacy_empty": {"eligible": True, "mode_clause_count": 1, "picking_clause_count": 3, "shortages_filtered": False, "recovery_filtered": False},
-    "explicit_wms": {"eligible": True, "mode_clause_count": 1, "picking_clause_count": 3, "shortages_filtered": False, "recovery_filtered": False},
-    "immediate": {"eligible": False, "mode_clause_count": 1, "picking_clause_count": 3, "shortages_filtered": False, "recovery_filtered": False},
-    "pickup": {"eligible": False, "mode_clause_count": 1, "picking_clause_count": 3, "shortages_filtered": False, "recovery_filtered": False},
-    "delivery": {"eligible": False, "mode_clause_count": 1, "picking_clause_count": 3, "shortages_filtered": False, "recovery_filtered": False},
-    "reservation": {"eligible": False, "mode_clause_count": 1, "picking_clause_count": 3, "shortages_filtered": False, "recovery_filtered": False},
-    "malformed_mode": {"eligible": False, "mode_clause_count": 1, "picking_clause_count": 3, "shortages_filtered": False, "recovery_filtered": False},
-    "garbage_channel": {"eligible": True, "mode_clause_count": 1, "picking_clause_count": 3, "shortages_filtered": False, "recovery_filtered": False},
+    "legacy_null": {"eligible": True, "mode_clause_count": 1, "picking_clause_count": 6, "shortages_filtered": False, "recovery_filtered": False},
+    "legacy_empty": {"eligible": True, "mode_clause_count": 1, "picking_clause_count": 6, "shortages_filtered": False, "recovery_filtered": False},
+    "explicit_wms": {"eligible": True, "mode_clause_count": 1, "picking_clause_count": 6, "shortages_filtered": False, "recovery_filtered": False},
+    "immediate": {"eligible": False, "mode_clause_count": 1, "picking_clause_count": 6, "shortages_filtered": False, "recovery_filtered": False},
+    "pickup": {"eligible": False, "mode_clause_count": 1, "picking_clause_count": 6, "shortages_filtered": False, "recovery_filtered": False},
+    "delivery": {"eligible": False, "mode_clause_count": 1, "picking_clause_count": 6, "shortages_filtered": False, "recovery_filtered": False},
+    "reservation": {"eligible": False, "mode_clause_count": 1, "picking_clause_count": 6, "shortages_filtered": False, "recovery_filtered": False},
+    "malformed_mode": {"eligible": False, "mode_clause_count": 1, "picking_clause_count": 6, "shortages_filtered": False, "recovery_filtered": False},
+    "garbage_channel": {"eligible": True, "mode_clause_count": 1, "picking_clause_count": 6, "shortages_filtered": False, "recovery_filtered": False},
 }
 
 

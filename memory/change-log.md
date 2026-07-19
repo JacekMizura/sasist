@@ -1,3 +1,9 @@
+## 2026-07-19 — Wózki:8 vs empty CART assignment (PICK_ASSIGN_TRACE)
+
+- ROOT: (1) kafel `configured-statuses.order_count` = surowy COUNT po `order_ui_status_id` (A); assignment = eligibility (`picking_finished_at`, fulfillment PICKING/PARTIAL/blank, consolidation…) + `cart_id IS NULL` + WMS validation gate (B) → semantic drift; shortage/MISSING + `picking_finished_at` po finalize nadal w A. (2) `bootstrap_start_picking_if_needed` przy 0 candidates wołał `claim_cart` → CART ASSIGNED/PRZYPISANY z orders=0.
+- FIX: `count_assignable_orders_for_picking_statuses` w kafelku; eligibility traktuje blank fulfillment jak open + `deleted_at`; brak claim przy 0 — `release_cart` gdy ASSIGNED; log `PICK_ASSIGN_TRACE` per order z REJECTION_REASON.
+- Tests: `test_wms_picking_assign_cart_empty_ssot.py` CASE 1–4.
+
 ## 2026-07-19 — GET /order-issue-tasks 500 + stale „Do zebrania”
 
 - ROOT list 500: (1) `ensure_order_issue_task_items_table` used SQLite-only DDL on PG allowlist path; (2) sync failure left session dirty → `db.commit()` → PendingRollback/500; (3) repair without savepoint poisoned PG txn; (4) `ensure_picking_shortage_support` SQLite-gated so `disable_auto_detach` ALTER skipped on Railway.
