@@ -200,6 +200,7 @@ from .db.schema_upgrade import (
     ensure_wms_picking_shortage_settings_columns,
     ensure_wms_operational_tasks_table,
     ensure_orders_fulfillment_state_columns,
+    ensure_orders_picking_handoff_mode_column,
     ensure_orders_priority_color_column,
     ensure_orders_discount_columns,
     ensure_orders_wms_timeline_columns,
@@ -751,6 +752,7 @@ _POSTGRES_SAFE_SCHEMA_FUNCS = frozenset({
     "ensure_wms_packing_sessions_automation_finished_at_column",
     "ensure_orders_wms_timeline_columns",
     "ensure_orders_wms_packing_automation_finished_at_column",
+    "ensure_orders_picking_handoff_mode_column",
     "ensure_picks_cart_id_column",
     "ensure_pick_lot_columns",
     "ensure_carts_code_column",
@@ -1844,6 +1846,7 @@ try:
     ensure_wms_picking_shortage_settings_columns(engine)
     ensure_wms_operational_tasks_table(engine)
     ensure_orders_fulfillment_state_columns(engine)
+    ensure_orders_picking_handoff_mode_column(engine)
     ensure_orders_priority_color_column(engine)
     ensure_orders_discount_columns(engine)
     ensure_orders_wms_timeline_columns(engine)

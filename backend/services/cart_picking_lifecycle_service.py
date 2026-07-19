@@ -999,6 +999,9 @@ def finish_picking(
             invoke_packing_lifecycle=False,
         )
         o.status = "PACKING"
+        from .picking_handoff_service import apply_cart_picking_handoff
+
+        apply_cart_picking_handoff(o, cart)
         from .order_fulfillment_lifecycle_service import advance_fulfillment_assignment_phase
         from .fulfillment_assignment.phase_constants import PHASE_PACKING
 

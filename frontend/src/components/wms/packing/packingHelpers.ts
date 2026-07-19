@@ -57,6 +57,16 @@ export function scanErrorMessage(code: string | null): string {
       return "Nieprawidłowa ilość";
     case "ORDER_NOT_IN_QUEUE":
       return "Zamówienie poza kolejką";
+    case "SCOPE_REQUIRED":
+      return "Brak zakresu pakowania (wózek / koszyk / bez wózka)";
+    case "AMBIGUOUS_BASKET_CODE":
+      return "Kod koszyka nie jest jednoznaczny w magazynie";
+    case "BASKET_NOT_FOUND":
+      return "Nie rozpoznano koszyka";
+    case "BASKET_EMPTY":
+      return "Koszyk jest pusty — brak przypisanego zamówienia";
+    case "BASKET_ORDER_NOT_IN_QUEUE":
+      return "Zamówienie z tego koszyka nie jest w kolejce pakowania";
     case "SHELF_ORDER_NOT_READY":
       return "Zamówienie nie jest jeszcze kompletne.";
     case "SHELF_ORDER_NOT_IN_QUEUE":

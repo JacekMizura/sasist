@@ -84,8 +84,10 @@ def get_packing_modes(
         no_cart, bulk, baskets = packing_mode_distribution(
             db, tenant_id=tenant_id, warehouse_id=warehouse_id, status_id=status
         )
+        db.commit()
         return WmsPackingModeDistribution(no_cart=no_cart, bulk=bulk, baskets=baskets)
     except SQLAlchemyError:
+        db.rollback()
         logger.exception("get_packing_modes")
         return WmsPackingModeDistribution(no_cart=0, bulk=0, baskets=0)
 
@@ -183,6 +185,10 @@ def _packing_scan_http_exception(exc: PackingScanError) -> HTTPException:
         return HTTPException(status_code=404, detail=detail)
     if code in ("BASKET_NOT_FOUND", "BASKET_EMPTY", "BASKET_ORDER_NOT_IN_QUEUE", "SHELF_NOT_FOUND", "SHELF_ORDER_NOT_IN_QUEUE"):
         return HTTPException(status_code=404, detail=detail)
+    if code == "AMBIGUOUS_BASKET_CODE":
+        return HTTPException(status_code=409, detail=detail)
+    if code == "SCOPE_REQUIRED":
+        return HTTPException(status_code=400, detail=detail)
     if code == "SHELF_ORDER_NOT_READY":
         return HTTPException(status_code=400, detail=detail)
     if code in (
@@ -269,12 +275,21 @@ def post_packing_resolve_ean_scan(
     status: int = Query(..., ge=1),
     mode: str = Query(...),
     cart_id: int | None = Query(default=None, ge=1),
+    handoff_scope: str | None = Query(
+        default=None,
+        description="CART | BASKET | CARTLESS — obowiązkowy scope (bez global FIFO)",
+    ),
+    order_id: int | None = Query(
+        default=None,
+        ge=1,
+        description="Wymagane dla scope=BASKET (exact order)",
+    ),
     db: Session = Depends(get_db),
     current_user: Optional[AppUser] = Depends(get_optional_current_user),
 ):
     """
-    Skan EAN z listy pakowania: FIFO wybór zamówienia + jeden increment packed qty w jednej transakcji.
-    Pierwszy skan nie może być zużyty wyłącznie na nawigację.
+    Skan EAN: scoped choose + packing increment dokładnie raz.
+    Brak scope → 400 SCOPE_REQUIRED (nie global warehouse FIFO).
     """
     try:
         return packing_resolve_and_scan_ean(
@@ -286,6 +301,8 @@ def post_packing_resolve_ean_scan(
             cart_id=cart_id,
             ean_raw=body.ean,
             operator_user_id=int(current_user.id) if current_user is not None else None,
+            handoff_scope=handoff_scope,
+            order_id=order_id,
         )
     except PackingScanError as e:
         db.rollback()

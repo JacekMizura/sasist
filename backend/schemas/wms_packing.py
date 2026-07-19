@@ -22,11 +22,23 @@ class WmsPackingTargetStatusItem(BaseModel):
 
 
 class WmsPackingModeDistribution(BaseModel):
-    """Rozkład zamówień w statusie po sposobie pakowania (przypisanie do wózka / typ wózka)."""
+    """Kohorty handoff pick→pack (nie fałszywe total,total,total)."""
 
-    no_cart: int = Field(..., ge=0, description="Zamówienia bez przypisanego wózka (cart_id IS NULL)")
-    bulk: int = Field(..., ge=0, description="Na wózkach typu BULK")
-    baskets: int = Field(..., ge=0, description="Na wózkach typu MULTI (koszyki)")
+    no_cart: int = Field(
+        ...,
+        ge=0,
+        description="CARTLESS: picking_handoff_mode=CARTLESS AND cart_id IS NULL",
+    )
+    bulk: int = Field(
+        ...,
+        ge=0,
+        description="CART: picking_handoff_mode=CART (wymaga skanu wózka)",
+    )
+    baskets: int = Field(
+        ...,
+        ge=0,
+        description="BASKET: picking_handoff_mode=BASKET (skan koszyka → exact order)",
+    )
 
 
 class WmsPackingOrderUiStatusBadge(BaseModel):

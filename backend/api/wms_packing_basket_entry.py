@@ -32,12 +32,16 @@ def get_basket_packing_order(
     code: str,
     tenant_id: int = Query(..., ge=1),
     warehouse_id: int = Depends(require_operable_warehouse),
-    cart_id: int = Query(..., ge=1, description="Aktywny wózek MULTI z sesji pakowania"),
+    cart_id: int | None = Query(
+        default=None,
+        ge=1,
+        description="Opcjonalne zawężenie do wózka; bez — resolve warehouse-global",
+    ),
     status: int = Query(..., ge=1, description="order_ui_status_id — jak w GET /wms/packing/orders"),
-    mode: str = Query(..., description="Musi być baskets"),
+    mode: str = Query(default="baskets", description="baskets (handoff BASKET)"),
     db: Session = Depends(get_db),
 ):
-    """Jedno zamówienie przypisane do koszyka (nazwa, S-r-k lub kod kreskowy koszyka) na danym wózku."""
+    """Exact order po skanie koszyka (warehouse-global; bez wymogu wcześniejszego skanu MULTI)."""
     try:
         return resolve_packing_order_for_basket_scan(
             db,

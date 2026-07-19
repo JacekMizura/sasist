@@ -3,7 +3,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Barcode } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { getWmsPickingResolveCart } from "../../../api/wmsPickingProductsApi";
+import { getWmsBasketPackingOrder } from "../../../api/wmsPackingApi";
+import { getWmsPickingResolveCart, postWmsPackingStartCart } from "../../../api/wmsPickingProductsApi";
+import { scanErrorMessage } from "./packingHelpers";
 import { useWmsScanner } from "../../../context/WmsScannerContext";
 import type { OrderUiMainGroup } from "../../../types/orderUiStatus";
 import { panelSidebarSubCountBadgeStyle } from "../../../utils/panelSidebarHierarchy";
@@ -18,6 +20,7 @@ import {
   type WmsPackingMode,
 } from "../../../pages/wms/wmsPackingSession";
 import { WMS_ROUTES } from "../../../pages/wms/wmsRoutes";
+import { wmsPackingApiErrorCode, wmsPackingApiErrorMessage } from "../../../api/wmsPackingApi";
 
 export type PackingModeSelectionViewProps = {
   statusName: string;
@@ -63,9 +66,27 @@ export function PackingModeSelectionView({
     navigate(WMS_ROUTES.packingOrders, { replace: true });
   }, [navigate]);
 
+  const goToBasketsEntry = useCallback(() => {
+    const cur = loadWmsPackingSession();
+    if (!cur) return;
+    saveWmsPackingSession({
+      ...cur,
+      mode: "baskets",
+      cartId: undefined,
+      cartCode: undefined,
+      cartType: undefined,
+    });
+    setScanTarget("baskets");
+  }, []);
+
   const finishCartScan = useCallback(
-    (mode: WmsPackingMode, r: Awaited<ReturnType<typeof getWmsPickingResolveCart>>) => {
+    async (mode: WmsPackingMode, r: Awaited<ReturnType<typeof getWmsPickingResolveCart>>) => {
       const code = (r.code && r.code.trim()) || r.barcode?.trim() || "";
+      try {
+        await postWmsPackingStartCart(DAMAGE_TENANT_ID, warehouseId, r.cart_id);
+      } catch {
+        /* start_packing may already be PACKING — continue */
+      }
       patchWmsPackingSession({
         mode,
         cartId: r.cart_id,
@@ -77,11 +98,11 @@ export function PackingModeSelectionView({
       setScanTarget(null);
       navigate(WMS_ROUTES.packingOrders, { replace: true });
     },
-    [navigate, appendScanToHistory],
+    [navigate, appendScanToHistory, warehouseId],
   );
 
   const modalTitle =
-    scanTarget === "baskets" ? "Zeskanuj wózek z koszykami" : scanTarget === "bulk" ? "Zeskanuj wózek" : "";
+    scanTarget === "baskets" ? "Zeskanuj koszyk" : scanTarget === "bulk" ? "Zeskanuj wózek" : "";
 
   const handleModalScan = useCallback(
     async (raw: string) => {
@@ -90,6 +111,28 @@ export function PackingModeSelectionView({
       if (!scan) return;
       scanBusyRef.current = true;
       try {
+        if (scanTarget === "baskets") {
+          const s = loadWmsPackingSession();
+          if (!s) return;
+          try {
+            const br = await getWmsBasketPackingOrder(
+              DAMAGE_TENANT_ID,
+              warehouseId,
+              s.statusId,
+              scan,
+            );
+            playScanBeep();
+            appendScanToHistory(scan);
+            patchWmsPackingSession({ mode: "baskets" });
+            setScanTarget(null);
+            navigate(WMS_ROUTES.packingOrder(br.order_id), { replace: true });
+          } catch (e) {
+            const code = wmsPackingApiErrorCode(e);
+            showScannerToast(wmsPackingApiErrorMessage(e) || scanErrorMessage(code));
+          }
+          return;
+        }
+
         let r: Awaited<ReturnType<typeof getWmsPickingResolveCart>> | null = null;
         try {
           r = await getWmsPickingResolveCart(DAMAGE_TENANT_ID, warehouseId, scan);
@@ -102,22 +145,26 @@ export function PackingModeSelectionView({
           return;
         }
         if (r == null) return;
-        const mode: WmsPackingMode = scanTarget === "baskets" ? "baskets" : "bulk";
+        const mode: WmsPackingMode = "bulk";
         if (!cartTypeMatchesPackingMode(mode, r.cart_type)) {
-          showScannerToast(
-            mode === "baskets"
-              ? "Ten wózek nie jest wózkiem z koszykami (MULTI)."
-              : "Ten wózek nie jest wózkiem BULK.",
-          );
+          showScannerToast("Ten wózek nie jest wózkiem BULK.");
           return;
         }
-        finishCartScan(mode, r);
+        await finishCartScan(mode, r);
       } finally {
         scanBusyRef.current = false;
         refocusScannerInput();
       }
     },
-    [scanTarget, warehouseId, showScannerToast, refocusScannerInput, finishCartScan],
+    [
+      scanTarget,
+      warehouseId,
+      showScannerToast,
+      refocusScannerInput,
+      finishCartScan,
+      appendScanToHistory,
+      navigate,
+    ],
   );
 
   useEffect(() => {
@@ -128,7 +175,7 @@ export function PackingModeSelectionView({
       return;
     }
     setScannerInputPlaceholder(
-      scanTarget === "baskets" ? "Zeskanuj kod wózka z koszykami" : "Zeskanuj kod wózka BULK",
+      scanTarget === "baskets" ? "Zeskanuj kod koszyka (np. S-1-1)" : "Zeskanuj kod wózka BULK",
     );
     refocusScannerInput();
     registerScanHandler((x) => {
@@ -180,7 +227,7 @@ export function PackingModeSelectionView({
           <div className="mt-10 flex flex-col items-center">
             <Barcode className="h-28 w-28 text-slate-900 sm:h-36 sm:w-36" strokeWidth={1.15} aria-hidden />
             <p className="mt-8 text-center text-lg font-semibold text-slate-900 sm:text-xl">
-              Zeskanuj kod wózka
+              {scanTarget === "baskets" ? "Zeskanuj kod koszyka" : "Zeskanuj kod wózka"}
             </p>
           </div>
         </div>
@@ -198,18 +245,7 @@ export function PackingModeSelectionView({
         </p>
       </div>
 
-      <ul className="mt-10 grid list-none grid-cols-1 gap-4 p-0 sm:mt-12 sm:gap-5" aria-label="Opcje pakowania">
-        {modes.no_cart > 0 ? (
-          <li>
-            <button
-              type="button"
-              className="flex w-full min-h-[5.5rem] items-center justify-center rounded-xl border border-slate-200/95 bg-white px-6 py-5 text-center text-xl font-bold text-slate-900 shadow-sm transition-[box-shadow,background-color] hover:bg-slate-50 hover:shadow-md sm:min-h-[6rem] sm:text-2xl"
-              onClick={goToOrdersNoCart}
-            >
-              Przejdź do listy zamówień
-            </button>
-          </li>
-        ) : null}
+      <ul className="mt-10 grid list-none grid-cols-1 gap-4 p-0 sm:mt-12 sm:gap-5" aria-label="Wejścia pakowania według handoff">
         {showBulkScan ? (
           <li>
             <button
@@ -218,6 +254,7 @@ export function PackingModeSelectionView({
               onClick={() => setScanTarget("bulk")}
             >
               Zeskanuj wózek
+              <span className="ml-3 text-base font-semibold text-slate-500">({modes.bulk})</span>
             </button>
           </li>
         ) : null}
@@ -226,9 +263,21 @@ export function PackingModeSelectionView({
             <button
               type="button"
               className="flex w-full min-h-[5.5rem] items-center justify-center rounded-xl border border-slate-200/95 bg-white px-6 py-5 text-center text-xl font-bold text-slate-900 shadow-sm transition-[box-shadow,background-color] hover:bg-slate-50 hover:shadow-md sm:min-h-[6rem] sm:text-2xl"
-              onClick={() => setScanTarget("baskets")}
+              onClick={goToBasketsEntry}
             >
-              Zeskanuj wózek z koszykami
+              Zeskanuj koszyk
+              <span className="ml-3 text-base font-semibold text-slate-500">({modes.baskets})</span>
+            </button>
+          </li>
+        ) : null}
+        {modes.no_cart > 0 ? (
+          <li>
+            <button
+              type="button"
+              className="flex w-full min-h-[5.5rem] items-center justify-center rounded-xl border border-slate-200/95 bg-white px-6 py-5 text-center text-xl font-bold text-slate-900 shadow-sm transition-[box-shadow,background-color] hover:bg-slate-50 hover:shadow-md sm:min-h-[6rem] sm:text-2xl"
+              onClick={goToOrdersNoCart}
+            >
+              Bez wózka — {modes.no_cart} zamówień
             </button>
           </li>
         ) : null}

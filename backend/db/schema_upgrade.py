@@ -4973,6 +4973,16 @@ def ensure_orders_fulfillment_state_columns(engine: Engine) -> None:
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_orders_picking_session_id ON orders(picking_session_id)"))
 
 
+def ensure_orders_picking_handoff_mode_column(engine: Engine) -> None:
+    """Immutable pick→pack provenance: ``picking_handoff_mode`` (CART|BASKET|CARTLESS)."""
+    cols = _cols(engine, "orders")
+    if not cols or "picking_handoff_mode" in cols:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE orders ADD COLUMN picking_handoff_mode VARCHAR(16)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_orders_picking_handoff_mode ON orders(picking_handoff_mode)"))
+
+
 def ensure_orders_priority_color_column(engine: Engine) -> None:
     """Panel OMS: wizualna flaga priorytetu zamówienia (flame)."""
     cols = _cols(engine, "orders")

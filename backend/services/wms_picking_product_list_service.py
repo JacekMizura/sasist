@@ -3697,6 +3697,10 @@ def finalize_wms_picking_cart(
             apply_fulfillment_state(o, fs, clear_cart=False, clear_session=False)
             if fs == FS_PACKING:
                 o.status = "PACKING"
+            if fs in (FS_PACKING, FS_NEEDS_DECISION):
+                from .picking_handoff_service import apply_cart_picking_handoff
+
+                apply_cart_picking_handoff(o, cart)
             emit_wms_picking_finished(
                 db,
                 tenant_id=int(tenant_id),
@@ -4109,6 +4113,11 @@ def finalize_wms_recovery_picking_cart(
     apply_fulfillment_state(o, fs, clear_cart=False, clear_session=False)
     if fs == FS_PACKING:
         o.status = "PACKING"
+    if fs in (FS_PACKING, FS_NEEDS_DECISION):
+        from .picking_handoff_service import apply_cart_picking_handoff
+
+        cart_row = db.query(Cart).filter(Cart.id == int(cid)).first() if cid else None
+        apply_cart_picking_handoff(o, cart_row)
 
     mark_recovery_task_done(db, rt)
     recompute_order_fulfillment(db, int(order_id), commit=False, session_cart_id=cid)

@@ -67,7 +67,7 @@ export default function WmsPackingOrderPage() {
       if (!ean || ctrl.warehouseId == null || resumeScanBusy) return;
       const s = loadWmsPackingSession();
       if (!s?.mode || !Number.isFinite(orderId) || orderId < 1) return;
-      if ((s.mode === "bulk" || s.mode === "baskets") && (s.cartId == null || !Number.isFinite(s.cartId))) return;
+      if ((s.mode === "bulk" && (s.cartId == null || !Number.isFinite(s.cartId)))) return;
 
       setResumeScanBusy(true);
       try {
@@ -77,7 +77,11 @@ export default function WmsPackingOrderPage() {
           s.statusId,
           s.mode,
           ean,
-          s.mode === "no_cart" ? undefined : s.cartId,
+          {
+            cartId: s.mode === "bulk" ? s.cartId : s.mode === "baskets" ? s.cartId : undefined,
+            handoffScope: s.mode === "bulk" ? "CART" : s.mode === "baskets" ? "BASKET" : "CARTLESS",
+            orderId: s.mode === "baskets" ? orderId : undefined,
+          },
         );
         playScanBeep();
         appendScanToHistory(ean);

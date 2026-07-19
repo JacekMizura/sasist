@@ -93,7 +93,7 @@ export function usePackingOrderController(
   const fetchDetail = useCallback(async () => {
     const s = loadWmsPackingSession();
     if (!s?.mode || warehouseId == null || !Number.isFinite(orderId) || orderId < 1) return;
-    if ((s.mode === "bulk" || s.mode === "baskets") && (s.cartId == null || !Number.isFinite(s.cartId))) return;
+    if ((s.mode === "bulk" && (s.cartId == null || !Number.isFinite(s.cartId)))) return;
     setLoadErr(null);
     try {
       const d = await getWmsPackingOrderDetail(
@@ -127,7 +127,7 @@ export function usePackingOrderController(
       navigate(WMS_ROUTES.packingMode, { replace: true });
       return;
     }
-    if ((s.mode === "bulk" || s.mode === "baskets") && (s.cartId == null || !Number.isFinite(s.cartId))) {
+    if ((s.mode === "bulk" && (s.cartId == null || !Number.isFinite(s.cartId)))) {
       navigate(WMS_ROUTES.packingMode, { replace: true });
       return;
     }
@@ -226,7 +226,7 @@ export function usePackingOrderController(
     if (finishBusyRef.current || warehouseId == null || !Number.isFinite(orderId) || orderId < 1) return false;
     const s = loadWmsPackingSession();
     if (!s?.mode) return false;
-    if ((s.mode === "bulk" || s.mode === "baskets") && (s.cartId == null || !Number.isFinite(s.cartId))) return false;
+    if ((s.mode === "bulk" && (s.cartId == null || !Number.isFinite(s.cartId)))) return false;
 
     const run = (async (): Promise<boolean> => {
       finishBusyRef.current = true;
@@ -361,7 +361,7 @@ export function usePackingOrderController(
       if (!ean || warehouseId == null || scanBusyRef.current) return;
       const s = loadWmsPackingSession();
       if (!s?.mode || !Number.isFinite(orderId) || orderId < 1) return;
-      if ((s.mode === "bulk" || s.mode === "baskets") && (s.cartId == null || !Number.isFinite(s.cartId))) return;
+      if ((s.mode === "bulk" && (s.cartId == null || !Number.isFinite(s.cartId)))) return;
 
       scanBusyRef.current = true;
       setScanBusy(true);

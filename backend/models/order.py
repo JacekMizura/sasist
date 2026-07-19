@@ -66,6 +66,8 @@ class Order(Base):
     fulfillment_assignment_phase = Column(String(32), nullable=False, default="FULFILLMENT_ASSIGNED", index=True)
     #: Opcjonalna sesja klienta zbierania (czyszczona przy zmianie statusu).
     picking_session_id = Column(Integer, nullable=True, index=True)
+    #: Immutable handoff: CART | BASKET | CARTLESS — jak order trafił do pakowania (nie PickingConfig).
+    picking_handoff_mode = Column(String(16), nullable=True, index=True)
 
     #: WMS — znaczniki czasu osi realizacji (nie nadpisywać gdy już ustawione).
     picking_started_at = Column(DateTime, nullable=True)

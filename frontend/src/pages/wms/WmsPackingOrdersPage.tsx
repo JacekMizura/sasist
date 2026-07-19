@@ -134,7 +134,7 @@ export default function WmsPackingOrdersPage() {
   const fetchOrders = useCallback(async () => {
     const s = loadWmsPackingSession();
     if (!s || warehouseId == null || !s.mode) return;
-    if ((s.mode === "bulk" || s.mode === "baskets") && (s.cartId == null || !Number.isFinite(s.cartId))) return;
+    if ((s.mode === "bulk" && (s.cartId == null || !Number.isFinite(s.cartId)))) return;
     setLoading(true);
     setErr(null);
     try {
@@ -212,7 +212,7 @@ export default function WmsPackingOrdersPage() {
       navigate(WMS_ROUTES.packingMode, { replace: true });
       return;
     }
-    if ((s.mode === "bulk" || s.mode === "baskets") && (s.cartId == null || !Number.isFinite(s.cartId))) {
+    if ((s.mode === "bulk" && (s.cartId == null || !Number.isFinite(s.cartId)))) {
       navigate(WMS_ROUTES.packingMode, { replace: true });
       return;
     }
@@ -283,14 +283,63 @@ export default function WmsPackingOrdersPage() {
       listScanBusyRef.current = true;
       let tryCart = false;
       try {
+        // CASE B: baskets — najpierw warehouse-global skan koszyka → exact order
+        if (s.mode === "baskets") {
+          try {
+            const br = await getWmsBasketPackingOrder(
+              DAMAGE_TENANT_ID,
+              warehouseId,
+              s.statusId,
+              scan,
+              s.cartId ?? undefined,
+            );
+            playScanBeep();
+            appendScanToHistory(scan);
+            if (activePriorityTask && assignedOrderIds.length > 0 && !assignedOrderSet.has(br.order_id)) {
+              showScannerToast("Ten koszyk jest poza aktywnym zadaniem kierownika.");
+              return;
+            }
+            navigate(WMS_ROUTES.packingOrder(br.order_id));
+            return;
+          } catch (be) {
+            const bcode = wmsPackingApiErrorCode(be);
+            if (bcode === "AMBIGUOUS_BASKET_CODE") {
+              showScannerToast(scanErrorMessage(bcode));
+              return;
+            }
+            if (bcode === "BASKET_EMPTY") {
+              showScannerToast("Koszyk jest pusty — brak przypisanego zamówienia.");
+              return;
+            }
+            if (bcode === "BASKET_ORDER_NOT_IN_QUEUE") {
+              showScannerToast("Zamówienie z tego koszyka nie jest w kolejce pakowania.");
+              return;
+            }
+            if (bcode === "BASKET_NOT_FOUND") {
+              showScannerToast("Zeskanuj koszyk (np. S-1-1) — pakowanie koszykowe nie używa globalnego EAN.");
+              return;
+            }
+            showScannerToast(wmsPackingApiErrorMessage(be) || scanErrorMessage(bcode));
+            return;
+          }
+        }
+
         try {
+          const handoffScope = s.mode === "bulk" ? "CART" : "CARTLESS";
+          if (s.mode === "bulk" && (s.cartId == null || !Number.isFinite(s.cartId))) {
+            showScannerToast("Najpierw zeskanuj wózek.");
+            return;
+          }
           const out = await postWmsPackingResolveEanScan(
             DAMAGE_TENANT_ID,
             warehouseId,
             s.statusId,
             s.mode,
             scan,
-            s.mode === "no_cart" ? undefined : s.cartId,
+            {
+              cartId: s.mode === "bulk" ? s.cartId : undefined,
+              handoffScope,
+            },
           );
           playScanBeep();
           appendScanToHistory(scan);
@@ -307,85 +356,6 @@ export default function WmsPackingOrdersPage() {
           const code = wmsPackingApiErrorCode(e);
           const is404 = axios.isAxiosError(e) && e.response?.status === 404;
           if (is404 && code === "PRODUCT_NOT_FOUND") {
-            if (s.mode === "baskets" && s.cartId != null && Number.isFinite(s.cartId)) {
-              try {
-                const br = await getWmsBasketPackingOrder(
-                  DAMAGE_TENANT_ID,
-                  warehouseId,
-                  s.statusId,
-                  s.cartId,
-                  scan,
-                );
-                playScanBeep();
-                appendScanToHistory(scan);
-                if (activePriorityTask && assignedOrderIds.length > 0 && !assignedOrderSet.has(br.order_id)) {
-                  showScannerToast("Ten koszyk jest poza aktywnym zadaniem kierownika.");
-                  return;
-                }
-                navigate(WMS_ROUTES.packingOrder(br.order_id));
-                return;
-              } catch (be) {
-                const bcode = wmsPackingApiErrorCode(be);
-                if (bcode === "BASKET_EMPTY") {
-                  showScannerToast("Koszyk jest pusty — brak przypisanego zamówienia.");
-                  return;
-                }
-                if (bcode === "BASKET_ORDER_NOT_IN_QUEUE") {
-                  showScannerToast("Zamówienie z tego koszyka nie jest w tej kolejce pakowania.");
-                  return;
-                }
-                if (bcode != null && bcode !== "BASKET_NOT_FOUND" && bcode !== "PRODUCT_NOT_FOUND") {
-                  showScannerToast("Nie udało się odczytać koszyka.");
-                  return;
-                }
-                if (axios.isAxiosError(be) && be.response != null) {
-                  const apiMsg = extractApiErrorMessage(be, "");
-                  if (apiMsg) {
-                    showScannerToast(apiMsg);
-                    return;
-                  }
-                  if (be.response.status >= 500) {
-                    showScannerToast("Błąd serwera.");
-                    return;
-                  }
-                } else if (!axios.isAxiosError(be)) {
-                  showScannerToast("Błąd sieci — spróbuj ponownie.");
-                  return;
-                }
-                try {
-                  const cr = await getWmsCartPackingOrdersByCode(
-                    DAMAGE_TENANT_ID,
-                    warehouseId,
-                    s.statusId,
-                    "baskets",
-                    scan,
-                  );
-                  if (!cartTypeMatchesPackingMode("baskets", cr.cart_type)) {
-                    showScannerToast("Wybierz wózek MULTI (koszyki).");
-                    return;
-                  }
-                  playScanBeep();
-                  appendScanToHistory(scan);
-                  const resolvedCode = (cr.cart_code && cr.cart_code.trim()) || scan;
-                  patchWmsPackingSession({
-                    cartId: cr.cart_id,
-                    cartCode: resolvedCode,
-                    cartType: cr.cart_type?.trim() || undefined,
-                  });
-                  refreshSession();
-                  setOrders(cr.orders);
-                  return;
-                } catch (ce) {
-                  const cartMsg = extractApiErrorMessage(ce, "");
-                  if (cartMsg) {
-                    showScannerToast(cartMsg);
-                    return;
-                  }
-                  showScannerToast("Nie rozpoznano kodu (ani koszyka, ani wózka).");
-                  return;
-                }
-              }
-            }
             const shelfHit = await tryPackingShelfEntry(scan, warehouseId, s);
             if (shelfHit.ok) {
               playScanBeep();
@@ -401,7 +371,7 @@ export default function WmsPackingOrdersPage() {
               showScannerToast(shelfHit.message);
               return;
             }
-            tryCart = s.mode === "bulk" || s.mode === "baskets";
+            tryCart = s.mode === "bulk";
             if (!tryCart) {
               showScannerToast("Nie znaleziono produktu w kolejce.");
               return;

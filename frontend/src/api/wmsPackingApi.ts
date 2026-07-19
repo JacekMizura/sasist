@@ -363,20 +363,19 @@ export async function getWmsBasketPackingOrder(
   tenantId: number,
   warehouseId: number,
   statusId: number,
-  cartId: number,
   basketCode: string,
+  cartId?: number | null,
 ): Promise<WmsPackingBasketOrderOutApi> {
+  const params: Record<string, string | number> = {
+    tenant_id: tenantId,
+    warehouse_id: warehouseId,
+    status: statusId,
+    mode: "baskets",
+  };
+  if (cartId != null) params.cart_id = cartId;
   const res = await api.get<WmsPackingBasketOrderOutApi>(
     `/baskets/${encodeURIComponent(basketCode.trim())}/order`,
-    {
-      params: {
-        tenant_id: tenantId,
-        warehouse_id: warehouseId,
-        cart_id: cartId,
-        status: statusId,
-        mode: "baskets",
-      },
-    },
+    { params },
   );
   return res.data;
 }
@@ -420,7 +419,7 @@ export async function getWmsPackingResolveEan(
 }
 
 /**
- * Skan EAN z listy: FIFO order + packed +1 w jednym requestcie (bez „nawigacji bez pack”).
+ * Skan EAN: scoped choose + packed +1. Wymaga handoff_scope (CART|BASKET|CARTLESS).
  */
 export async function postWmsPackingResolveEanScan(
   tenantId: number,
@@ -428,7 +427,11 @@ export async function postWmsPackingResolveEanScan(
   statusId: number,
   mode: WmsPackingModeParam,
   ean: string,
-  cartId?: number | null,
+  opts?: {
+    cartId?: number | null;
+    handoffScope?: "CART" | "BASKET" | "CARTLESS";
+    orderId?: number | null;
+  },
 ): Promise<WmsPackingScanOutApi> {
   const params: Record<string, string | number> = {
     tenant_id: tenantId,
@@ -436,7 +439,9 @@ export async function postWmsPackingResolveEanScan(
     status: statusId,
     mode,
   };
-  if (cartId != null) params.cart_id = cartId;
+  if (opts?.cartId != null) params.cart_id = opts.cartId;
+  if (opts?.handoffScope) params.handoff_scope = opts.handoffScope;
+  if (opts?.orderId != null) params.order_id = opts.orderId;
   const res = await api.post<WmsPackingScanOutApi>("/wms/packing/resolve-ean/scan", { ean }, { params });
   return res.data;
 }

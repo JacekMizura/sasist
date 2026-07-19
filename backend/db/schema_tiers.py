@@ -199,6 +199,7 @@ def _tier0_ensure_steps() -> list[tuple[str, Callable[[Engine], Any]]]:
         ("inventory_location_uuid_columns", su.ensure_inventory_location_uuid_columns),
         ("orders_customer_id_column", su.ensure_orders_customer_id_column),
         ("orders_fulfillment_state_columns", su.ensure_orders_fulfillment_state_columns),
+        ("orders_picking_handoff_mode_column", su.ensure_orders_picking_handoff_mode_column),
         ("orders_priority_color_column", su.ensure_orders_priority_color_column),
         ("orders_discount_columns", su.ensure_orders_discount_columns),
         ("orders_wms_timeline_columns", su.ensure_orders_wms_timeline_columns),
