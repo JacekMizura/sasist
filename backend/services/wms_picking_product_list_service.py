@@ -133,6 +133,7 @@ class PickingFinalizeError(Exception):
         step: str | None = None,
         http_status: int = 400,
         code: str = "picking_finalize_invalid",
+        extra: dict | None = None,
     ) -> None:
         super().__init__(message)
         self.reason = reason
@@ -141,6 +142,7 @@ class PickingFinalizeError(Exception):
         self.step = step
         self.http_status = int(http_status)
         self.code = code
+        self.extra = dict(extra or {})
 
     def as_detail(self) -> dict:
         out: dict = {
@@ -155,6 +157,8 @@ class PickingFinalizeError(Exception):
             out["line_id"] = int(self.line_id)
         if self.step:
             out["step"] = self.step
+        if self.extra:
+            out.update(self.extra)
         return out
 
 
@@ -165,6 +169,73 @@ def _location_label_for_pick(db: Session, location_id: int) -> str:
     if loc is None:
         return f"#{location_id}"
     return (loc.name or "").strip() or f"#{location_id}"
+
+
+def _finalize_pick_trace_payload(
+    db: Session,
+    pick: Pick,
+    *,
+    cart_id: int,
+    prior_consumed_pick_ids: list[int],
+) -> dict:
+    """
+    Diagnostic snapshot before inventory consume — does not mutate state.
+    ``inventory_physical_available`` reflects in-transaction stock (after prior picks
+    in this finalize loop already consumed).
+    """
+    from .wms_basket_put.location_stock import (
+        on_hand_qty_at_location,
+        pending_pick_qty_at_location,
+    )
+
+    tid = int(pick.tenant_id)
+    wid = int(pick.warehouse_id or 0)
+    pid = int(pick.product_id)
+    lid = int(pick.location_id)
+    pq = float(pick.quantity or 0)
+    physical = on_hand_qty_at_location(
+        db,
+        tenant_id=tid,
+        warehouse_id=wid,
+        product_id=pid,
+        location_id=lid,
+        for_update=False,
+    )
+    pending_all = pending_pick_qty_at_location(
+        db,
+        tenant_id=tid,
+        warehouse_id=wid,
+        product_id=pid,
+        location_id=lid,
+    )
+    # Effective for *this* pick = physical − other unfinalized (exclude self).
+    pending_others = max(0.0, float(pending_all) - pq)
+    effective = max(0.0, float(physical) - float(pending_others))
+    shortage = 0.0
+    oiid = getattr(pick, "order_item_id", None)
+    if oiid is not None:
+        oi = db.query(OrderItem).filter(OrderItem.id == int(oiid)).first()
+        if oi is not None:
+            shortage = float(getattr(oi, "wms_picking_line_missing_qty", None) or 0.0)
+    created = getattr(pick, "created_at", None)
+    return {
+        "cart_id": int(cart_id),
+        "pick_id": int(pick.id),
+        "product_id": pid,
+        "order_id": int(pick.order_id),
+        "order_item_id": int(oiid) if oiid is not None else None,
+        "location_id": lid,
+        "location_code": _location_label_for_pick(db, lid),
+        "pick_quantity": pq,
+        "picked_at": pick.picked_at.isoformat() if getattr(pick, "picked_at", None) else None,
+        "created_at": created.isoformat() if created is not None else None,
+        "inventory_physical_available": round(float(physical), 6),
+        "pending_unfinalized_pick_qty_for_same_product_location": round(float(pending_all), 6),
+        "pending_other_unfinalized_excl_self": round(float(pending_others), 6),
+        "effective_available": round(float(effective), 6),
+        "shortage_for_order_item": round(float(shortage), 6),
+        "prior_consumed_pick_ids_this_txn": list(prior_consumed_pick_ids),
+    }
 
 
 def _sync_fulfillment_qty_for_pick(db: Session, pick: Pick) -> None:
@@ -3609,6 +3680,7 @@ def finalize_wms_picking_cart(
         start_snap,
     )
 
+    failing_pick_diag: dict | None = None
     try:
         pending_picks = (
             db.query(Pick)
@@ -3626,7 +3698,22 @@ def finalize_wms_picking_cart(
         now = datetime.utcnow()
         finalized_ids: list[int] = []
         for p in pending_picks:
-            finalized_rows = _decrement_inventory_for_wms_pick(db, p, performed_by=performed_by, picked_at=now)
+            trace = _finalize_pick_trace_payload(
+                db, p, cart_id=cid, prior_consumed_pick_ids=list(finalized_ids)
+            )
+            logger.info("FINALIZE_PICK_TRACE %s", trace)
+            try:
+                finalized_rows = _decrement_inventory_for_wms_pick(
+                    db, p, performed_by=performed_by, picked_at=now
+                )
+            except Exception as pick_exc:
+                failing_pick_diag = {
+                    **trace,
+                    "error": str(pick_exc),
+                    "error_type": type(pick_exc).__name__,
+                }
+                logger.error("FINALIZE_PICK_FAILED %s", failing_pick_diag)
+                raise
             for row in finalized_rows:
                 row.picked_at = now
                 row.status = "done"
@@ -3653,6 +3740,7 @@ def finalize_wms_picking_cart(
             step="inventory",
             http_status=409,
             code="inventory_finalize_failed",
+            extra={"failing_pick": failing_pick_diag} if failing_pick_diag else None,
         ) from exc
 
     tgt = int(pc.target_status_id)
@@ -4160,7 +4248,20 @@ def finalize_wms_recovery_picking_cart(
     now = datetime.utcnow()
     finalized_ids: list[int] = []
     for p in pending_picks:
-        finalized_rows = _decrement_inventory_for_wms_pick(db, p, performed_by=performed_by, picked_at=now)
+        trace = _finalize_pick_trace_payload(
+            db, p, cart_id=cid, prior_consumed_pick_ids=list(finalized_ids)
+        )
+        logger.info("FINALIZE_PICK_TRACE %s", trace)
+        try:
+            finalized_rows = _decrement_inventory_for_wms_pick(
+                db, p, performed_by=performed_by, picked_at=now
+            )
+        except Exception as pick_exc:
+            logger.error(
+                "FINALIZE_PICK_FAILED %s",
+                {**trace, "error": str(pick_exc), "error_type": type(pick_exc).__name__},
+            )
+            raise
         for row in finalized_rows:
             row.picked_at = now
             row.status = "done"

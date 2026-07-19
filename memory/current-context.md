@@ -2,13 +2,13 @@
 
 ## Active
 
-**WRITE PATH location provenance fix** — MULTI must scan/select SOURCE location before basket quantity put. Finalize remains strict Pick×location (no redistribute). No push.
+**cart_id=2 LIVE finalize 409** = almost certainly **legacy bad Pick rows** (same location over-allocated), not a new write-path regression. Redeploy does not rewrite old drafts. Use `FINALIZE_PICK_FAILED.failing_pick` after next finalize click. No push.
 
 ## Latest (2026-07-19)
 
-- LIVE finalize 409 (product 192 qty=5 vs avail=1) → root: FE `locations[0]` + no location stock gate at write.
-- Fix: `wms_basket_put/location_stock.py` effective available; BE codes `PICK_LOCATION_REQUIRED` / `QUANTITY_EXCEEDS_LOCATION_STOCK`; FE multi-loc gate + modal max.
-- Quantity flow (null → QUANTITY_REQUIRED, qty → PUT) unchanged.
+- Hard gate: pending Pick=3 @ LOC-A stock=4 → qty=5 rejected `QUANTITY_EXCEEDS_LOCATION_STOCK`.
+- Diagnostics on finalize inventory loop; tests `test_wms_finalize_legacy_location_mismatch.py`.
+- Recovery: undo LIFO / explicit admin split — not auto during finalize.
 
 ## Notes
 

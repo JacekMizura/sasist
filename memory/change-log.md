@@ -1,3 +1,10 @@
+## 2026-07-19 — LIVE finalize still 409: LEGACY vs WRITE PATH separation
+
+- Classification: **LEGACY BAD PICKS** on cart_id=2 most likely; new write path **hard-gated** (cannot create qty=5 when effective=1).
+- LIVE `wymagane 5 / dostępne 1` reproduced: Pick1 LOC-A=3 then Pick2 LOC-A=5 on stock=4; in-txn after Pick1 available=1; rollback restores stock + `picked_at=NULL`.
+- Diagnostics only (no finalize logic change): `FINALIZE_PICK_TRACE` / `FINALIZE_PICK_FAILED` + `failing_pick` in 409 detail.
+- Undo = LIFO draft Picks per product (optional location); does not take MULTI `order_item_id` from FE — recovery possible but not precise split. No auto FIFO reassign. No push.
+
 ## 2026-07-19 — WRITE PATH location provenance (LIVE finalize 409 class)
 
 - ROOT CONFIRMED: MULTI quantity put used FE `locations[0]` without source scan; modal max = line remaining only; BE did not check location stock / pending picks → Pick qty=5 @ loc with stock 1 → finalize 409.
