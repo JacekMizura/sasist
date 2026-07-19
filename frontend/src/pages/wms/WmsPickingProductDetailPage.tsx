@@ -26,6 +26,7 @@ import {
   multiScanTrace,
   resolveMultiPickingDetailScan,
 } from "../../utils/multiPickingScanRoute";
+import { SCAN_CONSUMED } from "../../utils/wmsScanDispatch";
 import {
   extractWmsScanErrorDetail,
   mapWmsScanErrorCode,
@@ -266,17 +267,19 @@ export default function WmsPickingProductDetailPage() {
     void load();
   }, [pickingSessionRaw, navigate, load]);
 
-  // Clear one-shot nav markers after mount — do NOT replay PRODUCT_SCAN.
+  // Clear one-shot list token from history. Keep pending seed until GET confirms SSOT.
   useEffect(() => {
-    const marker = listProductScanToken || pendingSeed?.idempotency_key || null;
-    if (!marker) return;
-    if (listScanConsumedRef.current === marker) return;
-    listScanConsumedRef.current = marker;
+    if (!listProductScanToken) return;
+    if (listScanConsumedRef.current === listProductScanToken) return;
+    listScanConsumedRef.current = listProductScanToken;
     navigate(".", {
       replace: true,
-      state: { pickingSession: pickingSessionRaw } satisfies WmsPickingProductsNavState,
+      state: {
+        pickingSession: pickingSessionRaw,
+        ...(pendingSeed ? { basketPutPendingSeed: pendingSeed } : {}),
+      } satisfies WmsPickingProductsNavState,
     });
-  }, [listProductScanToken, pendingSeed?.idempotency_key, navigate, pickingSessionRaw]);
+  }, [listProductScanToken, pendingSeed, navigate, pickingSessionRaw]);
 
   useEffect(() => {
     if (!detail) return;
@@ -365,25 +368,51 @@ export default function WmsPickingProductDetailPage() {
     detail?.basket_put_active_series,
   ]);
 
+  useEffect(() => {
+    multiScanTrace("DETAIL_MOUNT", {
+      product_id: productId,
+      has_seed: Boolean(pendingSeed),
+      navigation_source: enteredViaListProductScan ? "list_product_scan" : "click_or_other",
+    });
+  }, [productId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!detail) return;
+    multiScanTrace("DETAIL_STATE_LOADED", {
+      product_id: productId,
+      pending_after: Boolean(detail.basket_put_pending || pendingSeed),
+      get_pending: Boolean(detail.basket_put_pending),
+      seed_pending: Boolean(pendingSeed),
+      requires_basket_put: Boolean(detail.requires_basket_put_confirm),
+      cart_id: pickingSession?.cartId ?? null,
+    });
+  }, [detail, pendingSeed, productId, pickingSession?.cartId]);
+
   // LOGIKA ODZNACZANIA KOLEJNYCH SZTUK W DETALU POPRZEZ FIZYCZNY SKAN
   useEffect(() => {
-    if (!detail || !pickingSession) {
+    // Keep handler alive during load when seed says STATE B (list PRODUCT_SCAN already done).
+    if (!pickingSession) {
       registerScanHandler(null);
       return;
     }
-    const handler = (raw: string) => {
-      void (async () => {
+    if (!detail && !pendingSeed) {
+      registerScanHandler(null);
+      return;
+    }
+    const handler = async (raw: string) => {
       const scan = normalizeScanEan(raw);
-      if (!scan) return;
+      if (!scan) return SCAN_CONSUMED;
       if (scanGateRef.current || pickBusy) {
         multiScanTrace("DETAIL_SCAN_BUSY", { raw_code: scan, consumed: true });
-        return;
+        return SCAN_CONSUMED;
       }
-      const locs = detail.locations;
-      if (locs.length === 0) return;
+
+      // Seed-only (detail still loading): allow basket confirm path via route STATE B.
+      const locs = detail?.locations ?? [];
+      if (detail && locs.length === 0) return SCAN_CONSUMED;
 
       const requiresBasketPut = Boolean(
-        detail.requires_basket_put_confirm && pickingSession.cartId,
+        (detail?.requires_basket_put_confirm ?? enteredViaListProductScan) && pickingSession.cartId,
       );
       const pendingLabels =
         effectivePending?.eligible_baskets
@@ -394,60 +423,75 @@ export default function WmsPickingProductDetailPage() {
       const multiDecision = resolveMultiPickingDetailScan(scan, {
         requiresBasketPut,
         hasPending: Boolean(effectivePending),
-        hasActiveSeries: Boolean(detail.basket_put_active_series?.basket_label) && !effectivePending,
-        productEan: detail.ean,
+        hasActiveSeries: Boolean(detail?.basket_put_active_series?.basket_label) && !effectivePending,
+        productEan: detail?.ean ?? null,
         productRemaining: remaining,
         pendingEligibleLabels: pendingLabels,
       });
 
+      // Seed-only while detail GET in flight: STATE B (await basket).
+      const decision =
+        !detail && effectivePending
+          ? resolveMultiPickingDetailScan(scan, {
+              requiresBasketPut: true,
+              hasPending: true,
+              hasActiveSeries: false,
+              productEan: null,
+              pendingEligibleLabels: pendingLabels,
+            })
+          : multiDecision;
+
       multiScanTrace("DETAIL_SCAN", {
         raw_code: scan,
-        classified_as: multiDecision.kind,
-        reason: "reason" in multiDecision ? multiDecision.reason : null,
-        code: multiDecision.kind === "reject" ? multiDecision.code : null,
+        classified_as: decision.kind,
+        reason: "reason" in decision ? decision.reason : null,
+        code: decision.kind === "reject" ? decision.code : null,
         pending: Boolean(effectivePending),
-        series: Boolean(detail.basket_put_active_series?.basket_label),
+        series: Boolean(detail?.basket_put_active_series?.basket_label),
         product_id: productId,
       });
 
-      if (multiDecision.kind === "reject") {
+      if (decision.kind === "reject") {
         const hint =
-          multiDecision.code === "EXPECTED_BASKET_SCAN" || multiDecision.code === "PENDING_PUT_EXISTS"
+          decision.code === "EXPECTED_BASKET_SCAN" || decision.code === "PENDING_PUT_EXISTS"
             ? pendingLabels
               ? `Oczekiwane koszyki: ${pendingLabels}`
               : null
             : null;
-        showScanFeedbackFromCode(multiDecision.code, { contextHint: hint });
-        setPickMsg(mapWmsScanErrorCode(multiDecision.code, { contextHint: hint }).message);
+        showScanFeedbackFromCode(decision.code, { contextHint: hint });
+        setPickMsg(mapWmsScanErrorCode(decision.code, { contextHint: hint }).message);
         appendScanToHistory(scan);
-        return;
+        return SCAN_CONSUMED;
       }
-      if (multiDecision.kind === "confirm_basket") {
-        if (scanGateRef.current || pickBusy) return;
+      if (decision.kind === "confirm_basket") {
+        if (scanGateRef.current || pickBusy) return SCAN_CONSUMED;
         scanGateRef.current = true;
-        void confirmBasketScan(raw, false, multiDecision.reason);
-        return;
+        void confirmBasketScan(raw, false, decision.reason);
+        return SCAN_CONSUMED;
       }
-      if (multiDecision.kind === "product_ean_pick") {
+      if (decision.kind === "product_ean_pick") {
+        if (!detail) return SCAN_CONSUMED;
         const loc = selectedLocation ?? detail.locations[0];
         if (!pickQueueDone && loc) {
-          if (scanGateRef.current || pickBusy) return;
+          if (scanGateRef.current || pickBusy) return SCAN_CONSUMED;
           scanGateRef.current = true;
-          multiScanTrace("PRODUCT_SCAN", {
+          multiScanTrace("PRODUCT_SCAN_REQUEST_START", {
             product_id: productId,
             location_id: loc.location_id,
             via: "detail",
+            pending_before: Boolean(effectivePending),
           });
           if (selectedLocation == null) setActiveLocationId(loc.location_id);
           void confirm_pick(1, loc.location_id);
         } else if (!loc) {
-          // Matching product EAN must never become UNKNOWN_SCAN_CODE.
           showScanFeedbackFromCode("PRODUCT_NOT_IN_PICKING", {
             backendMessage: "Brak lokalizacji magazynowej dla tego produktu na liście zbiórki.",
           });
         }
-        return;
+        return SCAN_CONSUMED;
       }
+
+      if (!detail) return SCAN_CONSUMED;
 
       // Non-MULTI fallthrough only (requiresBasketPut=false → fallthrough).
       const shelfLabel = (detail.consolidation_shelf_label ?? "").trim();
@@ -464,7 +508,7 @@ export default function WmsPickingProductDetailPage() {
             showScannerToast("Nie udało się wczytać widoku RK.");
           }
         }
-        return;
+        return SCAN_CONSUMED;
       }
 
       if (pickingSession.cartId != null && pickingSession.cartId > 0) {
@@ -484,14 +528,13 @@ export default function WmsPickingProductDetailPage() {
             if (bundle.scan) setBundlePickScan(bundle.scan);
             if (bundle.toast) showScannerToast(bundle.toast);
             if (bundle.refresh) await load();
-            return;
+            return SCAN_CONSUMED;
           }
         } catch {
           /* product scan fallback */
         }
       }
 
-      // Obsługa skanowania lokalizacji
       if (locs.length > 1) {
         const hit = locs.find((loc) => locationMatchesScan(loc, scan));
         if (hit) {
@@ -499,20 +542,19 @@ export default function WmsPickingProductDetailPage() {
           appendScanToHistory(scan);
           setActiveLocationId(hit.location_id);
           setLocationHint(null);
-          return;
+          return SCAN_CONSUMED;
         }
       }
 
-      // Skan EAN poza MULTI gate (cartless / BULK)
       if (normalizeScanEan(detail.ean) === scan && !pickQueueDone && selectedLocation) {
         void confirm_pick(1, selectedLocation.location_id);
-        return;
+        return SCAN_CONSUMED;
       }
-      })();
+      return SCAN_CONSUMED;
     };
     registerScanHandler(handler);
     return () => registerScanHandler(null);
-  }, [detail, pickingSession, activeLocationId, registerScanHandler, appendScanToHistory, pickQueueDone, selectedLocation, pickingTenantId, orderType, showScannerToast, showScanFeedbackFromCode, load, productId, remaining, pickBusy, effectivePending]);
+  }, [detail, pickingSession, activeLocationId, registerScanHandler, appendScanToHistory, pickQueueDone, selectedLocation, pickingTenantId, orderType, showScannerToast, showScanFeedbackFromCode, load, productId, remaining, pickBusy, effectivePending, pendingSeed, enteredViaListProductScan]);
 
   const goBackToList = useCallback(
     (refreshList = false) => {

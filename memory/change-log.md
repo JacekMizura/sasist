@@ -1,3 +1,10 @@
+## 2026-07-19 — ROOT: Scanner Helper catalog ≠ PRODUCT_SCAN; consumed blocks lookups
+
+- ROOT: Fizyczny skan EAN w Scanner Helper odpalał `products/search` + `returns/lookup` (catalog query z inputu), a workflow mógł nie mieć `consumed`. Detail po wejściu miał `pending=false` → basket `EXPECTED_PRODUCT_SCAN`.
+- FIX: `handleScan` awaits handler + `{consumed}`; picking path suppresses helper lookups; list returns SCAN_CONSUMED + PRODUCT_SCAN before navigate + traces; detail keeps seed/handler during load.
+- Tests: `wmsScanDispatch.integration.test.ts` (dispatcher entry, not backend helper alone).
+- No push.
+
 ## 2026-07-19 — REAL MULTI: list EAN = PRODUCT_SCAN → detail STATE B (no second EAN)
 
 - ROOT: List could navigate without pending visible on detail (STATE A → basket EXPECTED_PRODUCT_SCAN). Valid EAN without selectedLocation → UNKNOWN_SCAN_CODE.

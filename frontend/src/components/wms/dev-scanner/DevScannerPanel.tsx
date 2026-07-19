@@ -126,6 +126,7 @@ export default function DevScannerPanel() {
     activeDocument,
     activeScanReceiverLabel,
     hasActiveScanHandler,
+    suppressScannerHelperLookups,
     devEanInput,
     setDevEanInput,
     clearDevScannerInput,
@@ -152,7 +153,11 @@ export default function DevScannerPanel() {
   const [searchQuery, setSearchQuery] = useState("");
 
   const scannerInputActive = inputFocused || devEanInput.trim().length > 0;
-  const catalogQuery = searchQuery.trim() || devEanInput.trim();
+  // During active picking workflow, scan input must NOT drive products/search or returns lookup.
+  // Only the dedicated search box may query the catalog.
+  const catalogQuery = suppressScannerHelperLookups
+    ? searchQuery.trim()
+    : searchQuery.trim() || devEanInput.trim();
 
   const setDrawerExpanded = useCallback((next: boolean) => {
     setExpanded(next);

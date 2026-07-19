@@ -23,6 +23,13 @@ import {
 } from "../utils/devScannerStorage";
 import { classifyWmsScanCode } from "../utils/wmsScanClassify";
 import { normalizeScanEan } from "../utils/wmsScanNormalize";
+import {
+  isWmsPickingProductsScanPath,
+  normalizeScanHandlerResult,
+  type WmsScanHandler,
+  type WmsScanHandlerResult,
+} from "../utils/wmsScanDispatch";
+import { multiScanTrace } from "../utils/multiPickingScanRoute";
 
 export type { DevScanHistoryEntry, DevScannerFavorite } from "../utils/devScannerStorage";
 import { DAMAGE_TENANT_ID } from "../pages/damage/damageShared";
@@ -148,7 +155,7 @@ export function deriveActiveScanReceiverLabel(
   return "Brak aktywnego odbiorcy";
 }
 
-type ScanHandler = (ean: string) => void;
+type ScanHandler = WmsScanHandler;
 
 export type WmsScannerContextValue = {
   /** Dispatches to the scan handler registered by the active WMS page. */
@@ -158,6 +165,11 @@ export type WmsScannerContextValue = {
   activeScanReceiverLabel: string;
   /** True when a page registered ``registerScanHandler``. */
   hasActiveScanHandler: boolean;
+  /**
+   * When true, Scanner Helper must not fire products/search / returns lookup
+   * from the scan input (picking workflow owns the code).
+   */
+  suppressScannerHelperLookups: boolean;
   activeDocument: WmsActiveDocument | null;
   setActiveDocument: (doc: WmsActiveDocument | null) => void;
   registerScanHandler: (handler: ScanHandler | null) => void;
@@ -211,6 +223,12 @@ export function WmsScannerProvider({ children }: { children: ReactNode }) {
   const scanHandlerRef = useRef<ScanHandler | null>(null);
   const scannerInputRef = useRef<HTMLInputElement | null>(null);
   const previewScanBusyRef = useRef(false);
+  const dispatchBusyRef = useRef(false);
+
+  const suppressScannerHelperLookups = useMemo(
+    () => hasActiveScanHandler && isWmsPickingProductsScanPath(location.pathname),
+    [hasActiveScanHandler, location.pathname],
+  );
 
   const activeScanReceiverLabel = useMemo(
     () => deriveActiveScanReceiverLabel(location.pathname, hasActiveScanHandler, mode),
@@ -318,8 +336,20 @@ export function WmsScannerProvider({ children }: { children: ReactNode }) {
       const ean = normalizeScanEan(raw);
       if (!ean) return;
 
+      multiScanTrace("GLOBAL_SCAN_RECEIVED", {
+        raw_code: ean,
+        path: location.pathname,
+        has_handler: Boolean(scanHandlerRef.current),
+        picking_products_path: isWmsPickingProductsScanPath(location.pathname),
+      });
+
       if (isWmsProductPreviewPath(location.pathname)) {
         const kind = classifyWmsScanCode(ean);
+        multiScanTrace("PRODUCT_CLASSIFIED", {
+          raw_code: ean,
+          kind,
+          via: "product_preview",
+        });
         if (kind === "cart_like" || kind === "basket_like" || kind === "location_like") {
           showScannerToast("W podglądzie produktu zeskanuj kod EAN produktu.");
           appendScanToHistory(ean);
@@ -366,10 +396,38 @@ export function WmsScannerProvider({ children }: { children: ReactNode }) {
 
       const fn = scanHandlerRef.current;
       if (!fn) {
+        multiScanTrace("GLOBAL_SCAN_NO_HANDLER", { raw_code: ean, path: location.pathname });
         showScannerToast("Ta strona nie obsługuje jeszcze skanera.");
         return;
       }
-      fn(ean);
+      if (dispatchBusyRef.current) {
+        multiScanTrace("GLOBAL_SCAN_BUSY", { raw_code: ean, consumed: true });
+        return;
+      }
+      dispatchBusyRef.current = true;
+      void (async () => {
+        try {
+          const result = await Promise.resolve(fn(ean));
+          const consumed = normalizeScanHandlerResult(result as WmsScanHandlerResult | void | boolean);
+          multiScanTrace("GLOBAL_SCAN_DISPATCHED", {
+            raw_code: ean,
+            consumed,
+            path: location.pathname,
+          });
+          if (consumed) {
+            // Workflow owned this code — clear helper input so catalog query cannot re-fire lookup.
+            setDevEanInput("");
+          }
+        } catch (err) {
+          multiScanTrace("GLOBAL_SCAN_HANDLER_ERROR", {
+            raw_code: ean,
+            error: err instanceof Error ? err.message : "unknown",
+          });
+        } finally {
+          dispatchBusyRef.current = false;
+          refocusScannerInput();
+        }
+      })();
     },
     [
       location.pathname,
@@ -450,6 +508,7 @@ export function WmsScannerProvider({ children }: { children: ReactNode }) {
       mode,
       activeScanReceiverLabel,
       hasActiveScanHandler,
+      suppressScannerHelperLookups,
       activeDocument,
       setActiveDocument: setActiveDocumentState,
       registerScanHandler,
@@ -479,6 +538,7 @@ export function WmsScannerProvider({ children }: { children: ReactNode }) {
       mode,
       activeScanReceiverLabel,
       hasActiveScanHandler,
+      suppressScannerHelperLookups,
       activeDocument,
       registerScanHandler,
       appendScanToHistory,
