@@ -13,7 +13,9 @@ import {
   postWmsPickingFinalizeCartless,
   postWmsPickingRecoveryFinalize,
   postWmsPickingQuickPick,
+  postWmsPickingCancelPendingBasketPut,
   postWmsPickingStartCartless,
+  type WmsBasketPutPendingListApi,
   type WmsPickingCohortMissingLineApi,
   type WmsPickingProductLineApi,
   type WmsPickingSessionStatsApi,
@@ -178,6 +180,8 @@ export default function WmsPickingProductsPage() {
   >(null);
   const [cartBootstrapErr, setCartBootstrapErr] = useState<string | null>(null);
   const [cartBootstrapping, setCartBootstrapping] = useState(false);
+  const [basketPutPending, setBasketPutPending] = useState<WmsBasketPutPendingListApi | null>(null);
+  const [cancelPendingBusy, setCancelPendingBusy] = useState(false);
   const [activePriorityTask, setActivePriorityTask] = useState<ActivePriorityTask | null>(() => {
     const task = loadActivePriorityTask();
     return priorityTaskAppliesTo(task, "picking") ? task : null;
@@ -482,6 +486,11 @@ export default function WmsPickingProductsPage() {
       setCohortMissingLines(data.cohort_missing_lines ?? []);
       setAllowContinueAfterShortage(data.allow_continue_other_lines_after_shortage !== false);
       setWarnings(data.warnings ?? []);
+      setBasketPutPending(
+        data.basket_put_pending && data.basket_put_pending.product_id
+          ? data.basket_put_pending
+          : null,
+      );
       if (completed) {
         setErr(null);
       }
@@ -517,6 +526,7 @@ export default function WmsPickingProductsPage() {
       setRows([]);
       setCohortOrderCount(0);
       setWarnings([]);
+      setBasketPutPending(null);
     } finally {
       if (seq === productLinesLoadSeqRef.current) {
         setLoading(false);
@@ -583,9 +593,13 @@ export default function WmsPickingProductsPage() {
   }, [setActiveDocument, recoveryOrderId]);
 
   useEffect(() => {
-    setScannerInputPlaceholder("Skanuj EAN lub id produktu");
+    if (basketPutPending?.product_id) {
+      setScannerInputPlaceholder("Najpierw odłóż produkt do koszyka");
+    } else {
+      setScannerInputPlaceholder("Skanuj EAN lub id produktu");
+    }
     refocusScannerInput();
-  }, [setScannerInputPlaceholder, refocusScannerInput, rows.length]);
+  }, [setScannerInputPlaceholder, refocusScannerInput, rows.length, basketPutPending]);
 
   const shortageProductIds = useMemo(
     () => new Set((cohortMissingLines ?? []).map((l) => l.product_id)),
@@ -647,6 +661,33 @@ export default function WmsPickingProductsPage() {
       
       const matches = rows.filter((r) => productLineMatchesScan(r, scan));
       const hit = matches.find((r) => rowScannerEligible(r));
+
+      // MULTI pending: never create second pending / Pick — resume or block.
+      if (basketPutPending && basketPutPending.product_id > 0) {
+        const pendingMatches =
+          hit?.product_id === basketPutPending.product_id ||
+          productLineMatchesScan(
+            {
+              product_id: basketPutPending.product_id,
+              ean: basketPutPending.ean ?? null,
+              name: basketPutPending.product_name ?? "",
+              total_quantity: 1,
+              picked_quantity: 0,
+            } as WmsPickingProductLineApi,
+            scan,
+          );
+        if (pendingMatches || hit?.product_id === basketPutPending.product_id) {
+          playScanBeep();
+          appendScanToHistory(scan);
+          showScannerToast("Odłóż produkt do koszyka");
+          goDetail(basketPutPending.product_id, {
+            listProductScanToken: basketPutPending.idempotency_key ?? null,
+          });
+          return;
+        }
+        showScannerToast("Najpierw odłóż poprzednio pobrany produkt do koszyka.");
+        return;
+      }
       
       if (hit) {
         if (blockOtherProductLines && !shortageProductIds.has(hit.product_id)) {
@@ -763,8 +804,40 @@ export default function WmsPickingProductsPage() {
     warehouseId,
     orderType,
     recoveryOrderId,
-    load
+    load,
+    basketPutPending,
   ]);
+
+  const resumePendingPut = useCallback(() => {
+    if (!basketPutPending?.product_id) return;
+    goDetail(basketPutPending.product_id, {
+      listProductScanToken: basketPutPending.idempotency_key ?? null,
+    });
+  }, [basketPutPending, goDetail]);
+
+  const cancelPendingPut = useCallback(async () => {
+    if (!basketPutPending || !mergedSession?.cartId || warehouseId == null) return;
+    if (
+      !window.confirm(
+        "Anulować pobranie? Sztuka nie została jeszcze odłożona do koszyka — nie cofnie to żadnego zapisanego PICK.",
+      )
+    ) {
+      return;
+    }
+    setCancelPendingBusy(true);
+    try {
+      await postWmsPickingCancelPendingBasketPut(DAMAGE_TENANT_ID, warehouseId, {
+        cart_id: mergedSession.cartId,
+      });
+      setBasketPutPending(null);
+      showScannerToast("Pobranie anulowane — możesz zbierać dalej.");
+      void load();
+    } catch (e: unknown) {
+      showScannerToast(extractApiErrorMessage(e, "Nie udało się anulować pobrania."));
+    } finally {
+      setCancelPendingBusy(false);
+    }
+  }, [basketPutPending, mergedSession?.cartId, warehouseId, showScannerToast, load]);
 
   const orderTypeLine = useMemo(() => {
     if (!pickingSession) return null;
@@ -868,6 +941,11 @@ export default function WmsPickingProductsPage() {
       setCohortMissingLines(data.cohort_missing_lines ?? []);
       setAllowContinueAfterShortage(data.allow_continue_other_lines_after_shortage !== false);
       setWarnings(data.warnings ?? []);
+      setBasketPutPending(
+        data.basket_put_pending && data.basket_put_pending.product_id
+          ? data.basket_put_pending
+          : null,
+      );
       const freshAllDone =
         data.products.length > 0 && data.products.every((r) => wmsPickingProductLineComplete(r as WmsPickingProductLineApi));
       if (!freshAllDone) {
@@ -1113,6 +1191,46 @@ export default function WmsPickingProductsPage() {
         cartless={isCartlessMode}
         pickingSessionId={activePickingSessionId}
       />
+
+      {basketPutPending && basketPutPending.product_id > 0 ? (
+        <div className="sticky top-14 z-20 border-b border-amber-200 bg-amber-50 px-4 py-3 shadow-sm">
+          <div className="mx-auto flex max-w-5xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-[11px] font-black uppercase tracking-widest text-amber-800">
+                Masz {fmtQty(basketPutPending.quantity ?? 1)} szt. oczekującą na odłożenie do koszyka
+              </p>
+              <p className="mt-1 truncate text-sm font-black text-slate-900">
+                {basketPutPending.product_name || `Produkt #${basketPutPending.product_id}`}
+              </p>
+              <p className="mt-0.5 text-xs font-semibold text-slate-600">
+                {basketPutPending.ean ? `EAN: ${basketPutPending.ean}` : null}
+                {basketPutPending.ean && basketPutPending.sku ? " · " : null}
+                {basketPutPending.sku ? `SKU: ${basketPutPending.sku}` : null}
+                {!basketPutPending.ean && !basketPutPending.sku
+                  ? `ID: ${basketPutPending.product_id}`
+                  : null}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={resumePendingPut}
+                className="rounded-xl border-2 border-amber-600 bg-amber-600 px-4 py-2.5 text-xs font-black uppercase tracking-wider text-white shadow-sm hover:bg-amber-700 active:scale-95"
+              >
+                Odłóż do koszyka
+              </button>
+              <button
+                type="button"
+                disabled={cancelPendingBusy}
+                onClick={() => void cancelPendingPut()}
+                className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-xs font-black uppercase tracking-wider text-slate-700 hover:bg-slate-50 disabled:opacity-50 active:scale-95"
+              >
+                {cancelPendingBusy ? "Anulowanie…" : "Anuluj pobranie"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {activePriorityTask ? (
         <div className="sticky top-14 z-20 border-b border-orange-100 bg-orange-50/70 px-4 py-3">

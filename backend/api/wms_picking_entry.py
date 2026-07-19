@@ -38,6 +38,7 @@ from ..schemas.wms_picking_flow import (
     WmsPickingFlowLimits,
 )
 from ..schemas.wms_picking_products import (
+    WmsPickingCancelPendingBasketPutBody,
     WmsPickingConfirmBasketPutBody,
     WmsPickingEmptyLocationBody,
     WmsPickingEmptyLocationResponse,
@@ -108,6 +109,45 @@ def _picking_session_progress_metadata(resp: WmsPickingProductLinesResponse, *, 
         "missing_quantity": missing,
         "progress_percent": int(round((picked / total) * 100)) if total > 0 else 0,
     }
+
+
+def _attach_basket_put_list_projection(
+    db: Session,
+    resp: WmsPickingProductLinesResponse,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    cart_id: int | None,
+    operator_user_id: int | None,
+) -> WmsPickingProductLinesResponse:
+    """MULTI pending banner on product list — pending ≠ series."""
+    if cart_id is None or int(cart_id) <= 0:
+        return resp
+    try:
+        from ..models.cart import Cart
+        from ..services.wms_basket_put import project_basket_put_for_product_lines
+
+        cart = (
+            db.query(Cart)
+            .filter(
+                Cart.id == int(cart_id),
+                Cart.tenant_id == int(tenant_id),
+                Cart.warehouse_id == int(warehouse_id),
+            )
+            .first()
+        )
+        proj = project_basket_put_for_product_lines(
+            db,
+            cart=cart,
+            tenant_id=int(tenant_id),
+            operator_user_id=operator_user_id,
+        )
+        resp.requires_basket_put_confirm = bool(proj.get("requires_basket_put_confirm"))
+        resp.basket_put_pending = proj.get("basket_put_pending")
+        resp.basket_put_active_series = proj.get("basket_put_active_series")
+    except Exception:
+        logger.exception("attach basket_put list projection failed cart_id=%s", cart_id)
+    return resp
 
 
 def _norm_group(raw: object) -> str:
@@ -915,7 +955,14 @@ def get_picking_product_lines(
                 metadata=_picking_session_progress_metadata(resp, source_status_id=source_status_id, order_type=order_type),
             )
             db.commit()
-        return resp
+        return _attach_basket_put_list_projection(
+            db,
+            resp,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            cart_id=cart_id,
+            operator_user_id=int(current_user.id) if current_user is not None and current_user.id else None,
+        )
     csv_ids = [
         int(v)
         for v in (order_ids_csv or "").replace(";", ",").split(",")
@@ -1014,7 +1061,14 @@ def get_picking_product_lines(
                 ),
             )
         db.commit()
-    return resp
+    return _attach_basket_put_list_projection(
+        db,
+        resp,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        cart_id=cart_id,
+        operator_user_id=int(current_user.id) if current_user is not None and current_user.id else None,
+    )
 
 
 @router.get("/picking/product-lines/detail", response_model=WmsPickingProductDetailResponse)
@@ -1643,6 +1697,42 @@ def post_picking_confirm_basket_put(
     except ValueError as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.post("/picking/cancel-pending-basket-put")
+def post_picking_cancel_pending_basket_put(
+    body: WmsPickingCancelPendingBasketPutBody,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
+    db: Session = Depends(get_db),
+    current_user: AppUser = Depends(get_current_user),
+):
+    """
+    Anuluj wyłącznie pending put (brak PICK). Nie cofa zatwierdzonych picków / serii.
+    """
+    from ..models.cart import Cart
+    from ..services.wms_basket_put import BasketPutError, cancel_pending_basket_put
+
+    tid = int(tenant_id)
+    uid = int(current_user.id) if current_user is not None else None
+    cart = (
+        db.query(Cart)
+        .filter(
+            Cart.id == int(body.cart_id),
+            Cart.tenant_id == tid,
+            Cart.warehouse_id == int(warehouse_id),
+        )
+        .first()
+    )
+    if cart is None:
+        raise HTTPException(status_code=404, detail="Nie znaleziono wózka.")
+    try:
+        out = cancel_pending_basket_put(db, cart=cart, operator_user_id=uid)
+        db.commit()
+        return out
+    except BasketPutError as be:
+        db.rollback()
+        raise HTTPException(status_code=be.http_status, detail=be.as_detail()) from be
 
 
 @router.post("/picking/undo-pick", response_model=WmsPickingUndoPickResponse)

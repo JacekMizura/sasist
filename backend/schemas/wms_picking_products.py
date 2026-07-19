@@ -249,6 +249,22 @@ class WmsPickingProductLinesResponse(BaseModel):
         default_factory=WmsPickingSessionStats,
         description="Do zebrania / W trakcie / Zebrane — z aktywnej sesji i przypisanych zamówień.",
     )
+    #: MULTI baskets — product-level pending put (no Pick yet). Never confuse with active_series.
+    basket_put_pending: Optional[dict] = Field(
+        default=None,
+        description=(
+            "Oczekujące odłożenie (pending qty, bez PICK): product_id, name, ean, sku, quantity, … "
+            "None gdy brak pending — nawet jeśli aktywna jest series."
+        ),
+    )
+    basket_put_active_series: Optional[dict] = Field(
+        default=None,
+        description="Aktywna seria odkładania (po basket confirm) — nie jest „oczekującą sztuką”.",
+    )
+    requires_basket_put_confirm: bool = Field(
+        default=False,
+        description="True dla wózka MULTI/baskets.",
+    )
 
 
 class WmsPickingProductDetailResponse(BaseModel):
@@ -337,6 +353,12 @@ class WmsPickingConfirmBasketPutBody(BaseModel):
         description="True gdy potwierdzenie koszyka z ręcznego wpisu (audit MANUAL_BASKET_CONFIRMATION).",
     )
     recovery_order_id: Optional[int] = Field(default=None, ge=1)
+
+
+class WmsPickingCancelPendingBasketPutBody(BaseModel):
+    """Anuluj wyłącznie pending put (bez PICK) — fizycznie pobrana sztuka wraca „do półki” w UX."""
+
+    cart_id: int = Field(..., ge=1)
 
 
 class WmsPickingQuickPickBody(BaseModel):

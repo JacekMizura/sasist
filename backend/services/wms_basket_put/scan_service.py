@@ -140,6 +140,103 @@ def get_basket_put_ui_state(
     }
 
 
+def enrich_pending_for_list_ui(
+    db: Session,
+    *,
+    tenant_id: int,
+    pending: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Attach product name/ean/sku for list banner. Pending without enrichment stays None."""
+    if not isinstance(pending, dict) or not pending.get("product_id"):
+        return None
+    from ...models.product import Product
+
+    pid = int(pending["product_id"])
+    pr = (
+        db.query(Product)
+        .filter(Product.id == pid, Product.tenant_id == int(tenant_id))
+        .first()
+    )
+    return {
+        "product_id": pid,
+        "product_name": (pr.name if pr and pr.name else f"Produkt #{pid}"),
+        "ean": (pr.ean if pr else None),
+        "sku": (pr.sku if pr else None),
+        "quantity": float(pending.get("quantity") or 1),
+        "idempotency_key": pending.get("idempotency_key"),
+        "location_id": pending.get("location_id"),
+        "eligible_baskets": pending.get("eligible_baskets") or [],
+        "operator_user_id": pending.get("operator_user_id"),
+    }
+
+
+def project_basket_put_for_product_lines(
+    db: Session,
+    *,
+    cart: Cart | None,
+    tenant_id: int,
+    operator_user_id: int | None = None,
+) -> dict[str, Any]:
+    """List projection: pending ≠ series. Series alone never fills basket_put_pending."""
+    if cart is None or not cart_requires_basket_put_gate(cart):
+        return {
+            "requires_basket_put_confirm": False,
+            "basket_put_pending": None,
+            "basket_put_active_series": None,
+        }
+    ui = get_basket_put_ui_state(db, cart=cart, operator_user_id=operator_user_id)
+    return {
+        "requires_basket_put_confirm": bool(ui.get("requires_basket_put")),
+        "basket_put_pending": enrich_pending_for_list_ui(
+            db, tenant_id=int(tenant_id), pending=ui.get("pending")
+        ),
+        "basket_put_active_series": ui.get("active_series"),
+    }
+
+
+def cancel_pending_basket_put(
+    db: Session,
+    *,
+    cart: Cart,
+    operator_user_id: int | None,
+) -> dict[str, Any]:
+    """
+    Clear product-level pending only. Never mutates Pick / stock / order_item / series.
+    """
+    sess = assert_cart_ready_for_quick_pick(db, cart)
+    uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
+    pending = put_state.get_pending(sess)
+    if pending is None:
+        raise BasketPutError(
+            "NO_PENDING_PUT",
+            "Brak oczekującego odłożenia do anulowania.",
+            http_status=409,
+        )
+    pend_uid = int(pending.get("operator_user_id") or 0)
+    if uid is not None and pend_uid and pend_uid != uid:
+        raise BasketPutError(
+            "BASKET_PUT_OWNED_BY_OTHER",
+            "To oczekujące odłożenie należy do innego operatora.",
+            http_status=409,
+        )
+    put_state.set_pending(db, sess, None)
+    _audit(
+        "PENDING_PUT_CANCELLED",
+        session_id=sess.id,
+        operator=uid,
+        product_id=pending.get("product_id"),
+        quantity=pending.get("quantity"),
+        series_untouched=bool(put_state.get_active_series(sess)),
+    )
+    return {
+        "ok": True,
+        "cleared": True,
+        "product_id": int(pending["product_id"]) if pending.get("product_id") else None,
+        "quantity": float(pending.get("quantity") or 0),
+        "active_series": put_state.get_active_series(sess),
+    }
+
+
 def _eligible_labels(eligible: list[dict[str, Any]]) -> str:
     labels = [str(r.get("basket_label") or "") for r in eligible if r.get("basket_label")]
     return ", ".join(labels) if labels else "—"

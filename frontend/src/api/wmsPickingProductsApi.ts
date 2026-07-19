@@ -72,6 +72,24 @@ export type WmsPickingSessionStatsApi = {
   braki?: number;
 };
 
+export type WmsBasketPutPendingListApi = {
+  product_id: number;
+  product_name?: string;
+  ean?: string | null;
+  sku?: string | null;
+  quantity?: number;
+  idempotency_key?: string;
+  location_id?: number;
+  eligible_baskets?: Array<{
+    basket_id: number;
+    basket_label: string;
+    order_id: number;
+    order_item_id?: number;
+    line_remaining: number;
+  }>;
+  operator_user_id?: number | null;
+};
+
 export type WmsPickingProductLinesResponseApi = {
   products: WmsPickingProductLineApi[];
   cohort_order_count?: number;
@@ -85,6 +103,15 @@ export type WmsPickingProductLinesResponseApi = {
   recovery_completed?: boolean;
   /** SSOT z backendu — nie licz lokalnie z wierszy React. */
   session_stats?: WmsPickingSessionStatsApi | null;
+  /** MULTI: pending put (bez PICK) — banner na liście. Nie mylić z series. */
+  basket_put_pending?: WmsBasketPutPendingListApi | null;
+  basket_put_active_series?: {
+    basket_label?: string;
+    basket_id?: number;
+    product_id?: number;
+    order_item_id?: number;
+  } | null;
+  requires_basket_put_confirm?: boolean;
 };
 
 export type WmsPickingProductLocationRowApi = {
@@ -837,6 +864,23 @@ export async function postWmsPickingConfirmBasketPut(
         ? { recovery_order_id: body.recovery_order_id }
         : {}),
     },
+    { params },
+  );
+  return res.data;
+}
+
+export async function postWmsPickingCancelPendingBasketPut(
+  tenantId: number,
+  warehouseId: number,
+  body: { cart_id: number },
+): Promise<{ ok: boolean; cleared?: boolean; product_id?: number | null; quantity?: number }> {
+  const params = {
+    tenant_id: tenantId,
+    warehouse_id: warehouseId,
+  };
+  const res = await api.post(
+    "/wms/picking/cancel-pending-basket-put",
+    { cart_id: assertPositiveInt("cart_id", body.cart_id) },
     { params },
   );
   return res.data;

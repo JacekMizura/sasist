@@ -1,3 +1,10 @@
+## 2026-07-19 — Pending basket-put list UX + cancel
+
+- List shows banner for `basket_put_pending` only (series ≠ pending).
+- Resume detail / same-SKU scan opens existing pending; other SKU blocked.
+- `POST /picking/cancel-pending-basket-put` clears pending only (no Pick/stock/series).
+- Tests: `test_wms_basket_put_pending_list_ux.py` CASE 1–9.
+
 ## 2026-07-19 — PRE-PUSH AUDIT MULTI basket put (42cfee48 → follow-up)
 
 - BLOCKER found: series switch invented pending qty=1 and wrote Pick; API rejected confirm when pending=None (switch dead in prod).
