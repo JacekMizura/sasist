@@ -142,17 +142,22 @@ def order_item_required_pack_qty(db: Session, order: Order, it: OrderItem) -> in
     removed = float(getattr(it, "oms_removed_qty", None) or 0.0)
     replaced = float(getattr(it, "oms_replaced_qty", None) or 0.0)
     picked = float(line_picked_sum_for_order(db, int(it.id), order))
+    missing = float(_order_item_operational_missing_qty(db, order, it))
     fulfillable = max(0.0, float(ordered) - removed - replaced)
 
     rep_oid = getattr(it, "replaced_from_order_item_id", None)
     ols_u = str(getattr(it, "oms_line_status", None) or "").strip().upper()
     substitute = (rep_oid is not None and int(rep_oid) > 0) or ols_u == OMS_LINE_STATUS_TO_PICK
 
+    # Physical packing expectancy: never ask for units already declared as shortage.
+    # 4 picked + 4 shortage → pack 4; 0 picked + 8 shortage → pack 0 (not 8).
+    after_shortage = max(0.0, fulfillable - missing)
+
     if substitute:
-        return max(0, int(round(min(fulfillable, picked))))
+        return max(0, int(round(min(after_shortage, picked if picked > 1e-9 else after_shortage))))
     if picked > 1e-9:
-        return max(0, int(round(min(fulfillable, picked))))
-    return max(0, int(round(fulfillable)))
+        return max(0, int(round(min(after_shortage, picked))))
+    return max(0, int(round(after_shortage)))
 
 
 def _packing_finish_validation_snapshot(db: Session, order: Order, *, log: bool = False) -> dict:

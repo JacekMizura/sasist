@@ -432,6 +432,77 @@ def test_case4_and_5_partial_and_full_shortage_scoped(multi_env):
     assert float(oi4.wms_picking_line_missing_qty) == 4.0
 
 
+def test_case6b_partial_shortage_leaves_unresolved(multi_env):
+    """required=8, picked=2, shortage=3 → unresolved=3; line not auto-closed."""
+    multi_env["confirm"]("brck1-B04", quantity=2)
+    oi4 = SimpleNamespace(
+        id=10040,
+        order_id=1004,
+        product_id=50,
+        quantity=8.0,
+        wms_picking_line_missing_qty=0.0,
+        wms_shortage_declared_qty=0.0,
+        wms_picking_line_status=None,
+        replaced_from_order_item_id=None,
+        oms_line_status=None,
+        product=SimpleNamespace(name="A", sku=None, symbol=None, ean=None),
+    )
+    o4 = SimpleNamespace(id=1004, items=[oi4], cart_id=9, warehouse_id=1, tenant_id=1)
+    cart = SimpleNamespace(id=9, tenant_id=1, warehouse_id=1, type=CartType.MULTI)
+    _shortage_report_for_line(
+        oi=oi4, order=o4, cart=cart, missing_qty=3.0, picked_by_line=multi_env["picked"]
+    )
+    assert float(oi4.wms_picking_line_missing_qty) == 3.0
+    unresolved = 8.0 - 2.0 - 3.0
+    assert unresolved == 3.0
+    # Further shortage of remaining 3 still allowed
+    out2, ev2 = _shortage_report_for_line(
+        oi=oi4, order=o4, cart=cart, missing_qty=3.0, picked_by_line=multi_env["picked"]
+    )
+    assert out2["ok"]
+    assert ev2 == [(10040, 3.0)]
+    assert float(oi4.wms_picking_line_missing_qty) == 6.0
+
+
+def test_packing_expects_picked_not_required_after_shortage():
+    from backend.services.wms_packing_service import order_item_required_pack_qty
+
+    order = SimpleNamespace(id=1, items=[])
+    it = SimpleNamespace(
+        id=10,
+        quantity=8,
+        oms_removed_qty=0,
+        oms_replaced_qty=0,
+        replaced_from_order_item_id=None,
+        oms_line_status=None,
+        parent_bundle_order_item_id=None,
+    )
+
+    with patch(
+        "backend.services.wms_packing_service._order_item_active_for_packing",
+        return_value=True,
+    ), patch(
+        "backend.services.fulfillment_event_service.line_picked_sum_for_order",
+        return_value=4.0,
+    ), patch(
+        "backend.services.wms_packing_service._order_item_operational_missing_qty",
+        return_value=4.0,
+    ):
+        assert order_item_required_pack_qty(MagicMock(), order, it) == 4
+
+    with patch(
+        "backend.services.wms_packing_service._order_item_active_for_packing",
+        return_value=True,
+    ), patch(
+        "backend.services.fulfillment_event_service.line_picked_sum_for_order",
+        return_value=0.0,
+    ), patch(
+        "backend.services.wms_packing_service._order_item_operational_missing_qty",
+        return_value=8.0,
+    ):
+        assert order_item_required_pack_qty(MagicMock(), order, it) == 0
+
+
 def test_case6_full_20_qty_scenario(multi_env):
     # #1 #2 #3 full pick
     multi_env["confirm"]("brck1-B01", quantity=1)

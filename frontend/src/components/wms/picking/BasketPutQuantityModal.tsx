@@ -12,6 +12,9 @@ export type BasketPutQuantityDraft = {
   orderItemId: number;
   orderNumber?: string | null;
   lineRemaining: number;
+  requiredQty?: number;
+  pickedQty?: number;
+  shortageQty?: number;
   productName: string;
   productEan: string | null;
   productImageUrl?: string | null;
@@ -96,9 +99,33 @@ export function BasketPutQuantityModal({ draft, busy, onCancel, onConfirm }: Pro
               </p>
             </div>
           </div>
+          <div className="grid grid-cols-4 gap-2 rounded-2xl border border-slate-100 bg-slate-50/80 px-3 py-3 text-center">
+            <div>
+              <p className="text-[9px] font-black uppercase tracking-wider text-slate-500">Wymagane</p>
+              <p className="mt-0.5 text-lg font-black tabular-nums text-slate-900">
+                {Math.floor(draft.requiredQty ?? draft.lineRemaining)}
+              </p>
+            </div>
+            <div>
+              <p className="text-[9px] font-black uppercase tracking-wider text-slate-500">Zebrano</p>
+              <p className="mt-0.5 text-lg font-black tabular-nums text-emerald-800">
+                {Math.floor(draft.pickedQty ?? 0)}
+              </p>
+            </div>
+            <div>
+              <p className="text-[9px] font-black uppercase tracking-wider text-slate-500">Brak</p>
+              <p className="mt-0.5 text-lg font-black tabular-nums text-amber-900">
+                {Math.floor(draft.shortageQty ?? 0)}
+              </p>
+            </div>
+            <div>
+              <p className="text-[9px] font-black uppercase tracking-wider text-slate-500">Pozostało</p>
+              <p className="mt-0.5 text-lg font-black tabular-nums text-indigo-900">{maxQty}</p>
+            </div>
+          </div>
           <p className="text-sm font-semibold text-slate-600">
-            Do odłożenia maksymalnie:{" "}
-            <span className="font-black tabular-nums text-slate-900">{maxQty}</span> szt.
+            Ilość do odłożenia (max{" "}
+            <span className="font-black tabular-nums text-slate-900">{maxQty}</span> szt.):
           </p>
         </div>
 

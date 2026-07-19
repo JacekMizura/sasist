@@ -239,7 +239,9 @@ export default function WmsPickingProductDetailPage() {
     }
   }, []);
 
-  const effectivePending = detail?.basket_put_pending ?? (pendingSeed ? {
+  const effectivePending = detail?.requires_basket_put_confirm
+    ? null
+    : detail?.basket_put_pending ?? (pendingSeed ? {
     product_id: pendingSeed.product_id ?? productId,
     quantity: pendingSeed.quantity ?? 1,
     idempotency_key: pendingSeed.idempotency_key,
@@ -372,14 +374,15 @@ export default function WmsPickingProductDetailPage() {
 
   useEffect(() => {
     if (!detail) return;
-    if (effectivePending) {
+    if (detail.requires_basket_put_confirm) {
+      setScannerInputPlaceholder("Zeskanuj koszyk");
+      setPendingSeed(null);
+    } else if (effectivePending) {
       setScannerInputPlaceholder("Zeskanuj koszyk");
     } else if (needsLocationScan && activeLocationId == null) {
       setScannerInputPlaceholder("Zeskanuj lokalizację");
     } else if (detail.basket_put_active_series?.basket_label) {
       setScannerInputPlaceholder("Skanuj EAN produktu");
-    } else if (detail.requires_basket_put_confirm) {
-      setScannerInputPlaceholder("Zeskanuj koszyk lub EAN");
     } else {
       setScannerInputPlaceholder("Skanuj EAN produktu");
     }
@@ -392,6 +395,7 @@ export default function WmsPickingProductDetailPage() {
     refocusScannerInput,
     effectivePending,
     detail?.basket_put_active_series,
+    detail?.requires_basket_put_confirm,
   ]);
 
   useEffect(() => {
@@ -451,7 +455,10 @@ export default function WmsPickingProductDetailPage() {
       const multiDecision = resolveMultiPickingDetailScan(scan, {
         requiresBasketPut,
         hasPending: Boolean(effectivePending),
-        hasActiveSeries: Boolean(detail?.basket_put_active_series?.basket_label) && !effectivePending,
+        hasActiveSeries:
+          Boolean(detail?.basket_put_active_series?.basket_label) &&
+          !effectivePending &&
+          !Boolean(detail?.requires_basket_put_confirm),
         productEan: detail?.ean ?? null,
         productRemaining: remaining,
         pendingEligibleLabels: pendingLabels,
@@ -761,7 +768,9 @@ export default function WmsPickingProductDetailPage() {
       if (result.phase === "QUANTITY_REQUIRED") {
         const row = result.eligible_baskets?.[0];
         const rem = Number(row?.line_remaining ?? 0);
-        const orderMeta = detail?.orders?.find((o) => o.order_id === result.order_id);
+        const orderMeta =
+          detail?.orders?.find((o) => Number(o.order_item_id) === Number(result.order_item_id)) ??
+          detail?.orders?.find((o) => o.order_id === result.order_id);
         setPendingSeed(null);
         setQuantityDraft({
           basketScan: rawScan,
@@ -770,6 +779,9 @@ export default function WmsPickingProductDetailPage() {
           orderItemId: Number(result.order_item_id || row?.order_item_id || 0),
           orderNumber: orderMeta?.order_number ?? null,
           lineRemaining: rem > 0 ? rem : 1,
+          requiredQty: Number(orderMeta?.quantity ?? rem),
+          pickedQty: Number(orderMeta?.picked_quantity ?? 0),
+          shortageQty: Number(orderMeta?.missing_quantity ?? 0),
           productName: detail?.name ?? `Produkt #${productId}`,
           productEan: detail?.ean ?? null,
           productImageUrl: detail?.image_url ?? null,
@@ -915,6 +927,10 @@ export default function WmsPickingProductDetailPage() {
 
   const openManual = () => {
     if (!detail || detail.locations.length === 0) return;
+    if (detail.requires_basket_put_confirm) {
+      showScannerToast("Zeskanuj koszyk i podaj ilość — ręczny wpis nie tworzy Pick na MULTI.");
+      return;
+    }
     setManualLocId(detail.locations.length === 1 ? detail.locations[0].location_id : activeLocationId);
     const rem = wmsPickingRemainingQty(detail);
     setManualQty(rem > 0 ? Math.min(rem, 1) : 0);
@@ -1199,7 +1215,7 @@ export default function WmsPickingProductDetailPage() {
                     </ul>
                   ) : null}
                 </div>
-              ) : detail.basket_put_active_series?.basket_label ? (
+              ) : detail.basket_put_active_series?.basket_label && !detail.requires_basket_put_confirm ? (
                 <div className={`w-full max-w-md rounded-2xl border-2 px-5 py-4 ${BASKET_PUT_STYLE_RING[(detail.put_to_basket_color_index ?? 0) % BASKET_PUT_STYLE_RING.length]}`}>
                   <p className="text-[10px] font-black uppercase tracking-widest opacity-80">Aktywny koszyk</p>
                   <p className="mt-1 text-3xl font-black tabular-nums">{detail.basket_put_active_series.basket_label}</p>
@@ -1278,12 +1294,33 @@ export default function WmsPickingProductDetailPage() {
               </div>
             ) : (
               <>
-                <div className="flex items-baseline gap-2 mb-4">
-                  <span className="text-6xl sm:text-7xl font-black text-[#5a4fcf] tabular-nums">{displayPickedDetail}</span>
-                  <span className="text-2xl font-bold text-slate-300">/</span>
-                  <span className="text-3xl font-black text-slate-500 tabular-nums">{fmtQty(detail.total_quantity)}</span>
-                  <span className="text-sm font-bold text-slate-400 ml-1">szt.</span>
-                </div>
+                {detail.requires_basket_put_confirm ? (
+                  <div className="mb-4 w-full max-w-md grid grid-cols-2 gap-2 text-left">
+                    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+                      <p className="text-[10px] font-bold uppercase text-slate-500">Potrzeba</p>
+                      <p className="text-2xl font-black tabular-nums">{fmtQty(detail.total_quantity)}</p>
+                    </div>
+                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2">
+                      <p className="text-[10px] font-bold uppercase text-emerald-700">Zebrano</p>
+                      <p className="text-2xl font-black tabular-nums text-emerald-900">{fmtQty(displayPickedDetail)}</p>
+                    </div>
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+                      <p className="text-[10px] font-bold uppercase text-amber-800">Brak</p>
+                      <p className="text-2xl font-black tabular-nums text-amber-950">{fmtQty(missingTotal)}</p>
+                    </div>
+                    <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2">
+                      <p className="text-[10px] font-bold uppercase text-indigo-700">Nierozliczone</p>
+                      <p className="text-2xl font-black tabular-nums text-indigo-950">{fmtQty(remaining)}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-baseline gap-2 mb-4">
+                    <span className="text-6xl sm:text-7xl font-black text-[#5a4fcf] tabular-nums">{displayPickedDetail}</span>
+                    <span className="text-2xl font-bold text-slate-300">/</span>
+                    <span className="text-3xl font-black text-slate-500 tabular-nums">{fmtQty(detail.total_quantity)}</span>
+                    <span className="text-sm font-bold text-slate-400 ml-1">szt.</span>
+                  </div>
+                )}
 
                 {pickQueueDone ? (
                   detail.pending_shelf_deposit ? (
@@ -1299,8 +1336,16 @@ export default function WmsPickingProductDetailPage() {
                   ) : (
                     <div className="flex flex-col items-center gap-3 w-full max-w-md">
                       <div className="flex items-center gap-2 px-6 py-3 bg-emerald-500 text-white rounded-2xl font-black uppercase tracking-wider text-xs shadow-lg shadow-emerald-500/10">
-                        <Check size={14} strokeWidth={3} /> Skompletowano pozycję
+                        <Check size={14} strokeWidth={3} />{" "}
+                        {missingTotal > 1e-9
+                          ? `Rozliczono ${fmtQty(detail.total_quantity)}/${fmtQty(detail.total_quantity)}`
+                          : `Skompletowano ${fmtQty(displayPickedDetail)}/${fmtQty(detail.total_quantity)}`}
                       </div>
+                      {missingTotal > 1e-9 ? (
+                        <p className="text-sm font-semibold text-slate-600">
+                          Zebrano {fmtQty(displayPickedDetail)} · Brak {fmtQty(missingTotal)}
+                        </p>
+                      ) : null}
                       <div className="flex flex-wrap items-center justify-center gap-2">
                         <button
                           type="button"
@@ -1439,7 +1484,7 @@ export default function WmsPickingProductDetailPage() {
       <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-slate-200 bg-white/95 p-4 backdrop-blur-sm shadow-md">
         <div className="max-w-4xl mx-auto flex items-center justify-between gap-3">
           <div className="flex gap-2">
-            <button type="button" onClick={openManual} disabled={pickQueueDone || isShortageResolved} className="px-4 py-3 bg-white border border-slate-200 hover:bg-slate-50 text-slate-800 font-bold rounded-xl text-xs uppercase tracking-wider transition-colors active:scale-95 disabled:opacity-40">Ręczny wpis</button>
+            <button type="button" onClick={openManual} disabled={pickQueueDone || isShortageResolved || Boolean(detail?.requires_basket_put_confirm)} className="px-4 py-3 bg-white border border-slate-200 hover:bg-slate-50 text-slate-800 font-bold rounded-xl text-xs uppercase tracking-wider transition-colors active:scale-95 disabled:opacity-40">Ręczny wpis</button>
             {canUndoPick ? (
               <button
                 type="button"

@@ -2310,11 +2310,21 @@ def build_wms_picking_product_detail(
                     sanitize=True,
                 )
                 detail.requires_basket_put_confirm = bool(ui_put.get("requires_basket_put"))
-                detail.basket_put_pending = ui_put.get("pending")
-                detail.basket_put_active_series = ui_put.get("active_series")
-                # MULTI: never force a single FIFO destination before basket scan.
-                # Series may expose the active basket; pending exposes eligible_baskets.
+                # QUANTITY MODE: pending/series are legacy unit-scan state — clear so they
+                # cannot compete with SELECT_BASKET → ENTER_QUANTITY on detail.
                 if detail.requires_basket_put_confirm:
+                    from .wms_basket_put import clear_basket_put_state
+
+                    if ui_put.get("pending") or ui_put.get("active_series"):
+                        clear_basket_put_state(
+                            db, cart=cart_for_put, reason="quantity_mode_detail_ssot"
+                        )
+                    detail.basket_put_pending = None
+                    detail.basket_put_active_series = None
+                    detail.put_to_basket_label = None
+                else:
+                    detail.basket_put_pending = ui_put.get("pending")
+                    detail.basket_put_active_series = ui_put.get("active_series")
                     series = detail.basket_put_active_series
                     if isinstance(series, dict) and series.get("basket_label"):
                         detail.put_to_basket_label = str(series["basket_label"])

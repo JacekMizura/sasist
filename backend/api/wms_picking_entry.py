@@ -1197,16 +1197,22 @@ def get_picking_product_detail(
                             sanitize=True,
                         )
                         row.requires_basket_put_confirm = bool(ui_put.get("requires_basket_put"))
-                        row.basket_put_pending = ui_put.get("pending")
-                        row.basket_put_active_series = ui_put.get("active_series")
                         if row.requires_basket_put_confirm:
-                            series = row.basket_put_active_series
-                            if isinstance(series, dict) and series.get("basket_label"):
-                                row.put_to_basket_label = str(series["basket_label"])
-                            else:
-                                row.put_to_basket_label = None
-                        if row.basket_put_pending:
+                            # Quantity mode: do not re-attach legacy pending/series onto detail.
+                            row.basket_put_pending = None
+                            row.basket_put_active_series = None
                             row.put_to_basket_label = None
+                        else:
+                            row.basket_put_pending = ui_put.get("pending")
+                            row.basket_put_active_series = ui_put.get("active_series")
+                            if row.requires_basket_put_confirm:
+                                series = row.basket_put_active_series
+                                if isinstance(series, dict) and series.get("basket_label"):
+                                    row.put_to_basket_label = str(series["basket_label"])
+                                else:
+                                    row.put_to_basket_label = None
+                            if row.basket_put_pending:
+                                row.put_to_basket_label = None
                 except Exception:
                     logger.exception("re-attach basket_put after detail touch failed cart_id=%s", cart_id)
     return row
@@ -1427,9 +1433,7 @@ def post_picking_quick_pick(
             raise HTTPException(status_code=400, detail="Wymagany cart_id albo picking_session_id.")
 
         from ..services.wms_basket_put import (
-            BasketPutError,
             cart_requires_basket_put_gate,
-            handle_product_scan_for_baskets,
         )
 
         cart_for_gate = (
@@ -1473,55 +1477,22 @@ def post_picking_quick_pick(
             )
 
         if cart_requires_basket_put_gate(cart_for_gate) and recovery_fixed is None:
-            from ..services.wms_picking_product_list_service import resolve_wms_picking_order_ids
-
-            ot = order_type if order_type in ("single", "multi", "all") else "all"
-            order_ids = resolve_wms_picking_order_ids(
-                db,
-                tenant_id=tid,
-                warehouse_id=int(effective_wh),
-                source_status_id=source_status_id,
-                order_type=ot,
-                cart_id=int(body.cart_id),
+            # QUANTITY MODE SSOT (MULTI / baskets):
+            # Product scan must NOT create pending qty=1 or Pick via series.
+            # Operator path: SELECT_PRODUCT → confirm-basket-put (qty modal) → Pick.
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "EXPECTED_BASKET_SCAN",
+                    "message": (
+                        "Dla wózka z koszykami zeskanuj koszyk i potwierdź ilość "
+                        "(confirm-basket-put). Quick-pick nie tworzy Pick ani pending."
+                    ),
+                    "error": "EXPECTED_BASKET_SCAN",
+                },
             )
-            try:
-                put_res = handle_product_scan_for_baskets(
-                    db,
-                    cart=cart_for_gate,
-                    order_ids=order_ids,
-                    product_id=int(body.product_id),
-                    location_id=int(body.location_id),
-                    quantity=float(body.quantity),
-                    operator_user_id=uid,
-                    record_pick_fn=_do_record,
-                )
-            except BasketPutError as be:
-                db.rollback()
-                # Re-load pending into a fresh session state is lost after rollback —
-                # pending write was rolled back. Re-raise without persisting.
-                # Actually: for AWAITING_BASKET we need pending committed. For mismatch from
-                # product-while-pending, pending already existed — rollback undoes nothing new
-                # if we didn't write. handle_product_scan raises before write for while-pending.
-                # For create pending then we must NOT rollback on success path.
-                raise HTTPException(status_code=be.http_status, detail=be.as_detail()) from be
 
-            if put_res.phase == "AWAITING_BASKET_CONFIRMATION":
-                db.commit()
-                return {
-                    "ok": True,
-                    "phase": put_res.phase,
-                    "pending": put_res.pending,
-                    "expected_basket_label": put_res.expected_basket_label,
-                    "eligible_baskets": put_res.eligible_baskets,
-                    "message": put_res.message,
-                    "order_id": put_res.order_id,
-                    "order_item_id": put_res.order_item_id,
-                    "picked": False,
-                }
-
-            oid, oiid = put_res.order_id, put_res.order_item_id
-        else:
-            oid, oiid = _do_record(quantity=float(body.quantity), fixed_order_id=recovery_fixed)
+        oid, oiid = _do_record(quantity=float(body.quantity), fixed_order_id=recovery_fixed)
 
         if body.cart_id is not None:
             recovery_oid = recovery_fixed

@@ -51,9 +51,15 @@ class TestPackingFinishShortageOrder(unittest.TestCase):
     def test_required_pack_qty_after_oms_partial_removal(self):
         order = _order(items=[_line(oms_removed_qty=1.0)])
         db = MagicMock()
-        with patch(
-            "backend.services.fulfillment_event_service.line_picked_sum_for_order",
-            return_value=2.0,
+        with (
+            patch(
+                "backend.services.fulfillment_event_service.line_picked_sum_for_order",
+                return_value=2.0,
+            ),
+            patch(
+                "backend.services.wms_packing_service._order_item_operational_missing_qty",
+                return_value=0.0,
+            ),
         ):
             self.assertEqual(order_item_required_pack_qty(db, order, order.items[0]), 2)
 
