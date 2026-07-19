@@ -37,6 +37,8 @@ export type WmsPickingSessionState = {
   /** Snapshot z kafelka statusu — belka liczników przed wczytaniem listy produktów. */
   hubOrderCount?: number;
   hubPickStats?: { zebrane: number; doZebrania: number; wTrakcie: number; braki?: number };
+  /** Po starcie zbierania bez FINAL assignment — komunikat operatora (bez kodów technicznych). */
+  assignEmptyMessage?: string | null;
 };
 
 export type WmsPickingLocationNavState = {

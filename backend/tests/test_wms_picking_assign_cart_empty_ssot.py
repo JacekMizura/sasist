@@ -170,7 +170,7 @@ def test_case1_pickable_orders_assign_to_empty_cart(db):
         db, tenant_id=1, warehouse_id=1, source_status_ids=[6]
     ).get(6, 0) == 8
 
-    sess = bootstrap_start_picking_if_needed(
+    sess, _op_msg = bootstrap_start_picking_if_needed(
         db,
         tenant_id=1,
         warehouse_id=1,
@@ -205,7 +205,7 @@ def test_case2_non_eligible_dashboard_count_zero(db):
         db, tenant_id=1, warehouse_id=1, source_status_ids=[6]
     ).get(6, 0) == 0
 
-    sess = bootstrap_start_picking_if_needed(
+    sess, op_msg = bootstrap_start_picking_if_needed(
         db,
         tenant_id=1,
         warehouse_id=1,
@@ -216,6 +216,7 @@ def test_case2_non_eligible_dashboard_count_zero(db):
     )
     db.commit()
     assert sess is None
+    assert op_msg is None  # brak preliminary — nie komunikat o walidacji
     db.refresh(cart)
     assert get_cart_status(cart) == CartStatus.AVAILABLE
     assert db.query(Order).filter(Order.cart_id == int(cart.id)).count() == 0
@@ -271,7 +272,7 @@ def test_case4_empty_cart_stays_available_not_assigned(db):
     db.commit()
     assert get_cart_status(cart) == CartStatus.ASSIGNED
 
-    sess = bootstrap_start_picking_if_needed(
+    sess, _op_msg = bootstrap_start_picking_if_needed(
         db,
         tenant_id=1,
         warehouse_id=1,
@@ -297,3 +298,56 @@ def test_release_empty_assigned_cart_ssot(db):
     db.refresh(cart)
     assert get_cart_status(cart) == CartStatus.AVAILABLE
     assert cart.assigned_user_id is None
+
+
+def test_case5_preliminary_ok_gate_rejects_all_cart_available(db, monkeypatch):
+    """
+    CASE 5: PRELIMINARY_ELIGIBLE > 0, gate odrzuca 8/8 → assigned=0, cart AVAILABLE.
+    (Nie claim / nie zostawiać ASSIGNED z orders=0.)
+    """
+    cart = _cart(db)
+    for i in range(8):
+        _order(db, number=f"G-{i}", fulfillment_state=None)
+    db.commit()
+
+    assert count_assignable_orders_for_picking_statuses(
+        db, tenant_id=1, warehouse_id=1, source_status_ids=[6]
+    ).get(6, 0) == 8
+
+    claim_cart(db, cart=cart, operator_user_id=7)
+    db.commit()
+    assert get_cart_status(cart) == CartStatus.ASSIGNED
+
+    monkeypatch.setattr(
+        "backend.services.wms_order_validation.gate.gate_orders_before_capacity",
+        lambda *a, **k: [],
+    )
+
+    sess, op_msg = bootstrap_start_picking_if_needed(
+        db,
+        tenant_id=1,
+        warehouse_id=1,
+        cart_id=int(cart.id),
+        source_status_id=6,
+        order_type="all",
+        operator_user_id=7,
+    )
+    db.commit()
+    assert sess is None
+    db.refresh(cart)
+    assert get_cart_status(cart) == CartStatus.AVAILABLE
+    assert cart.assigned_user_id is None
+    assert db.query(Order).filter(Order.cart_id == int(cart.id)).count() == 0
+    assert db.query(WmsOperationSession).filter(
+        WmsOperationSession.cart_id == int(cart.id),
+        WmsOperationSession.completed_at.is_(None),
+    ).count() == 0
+
+    from backend.services.wms_picking_product_list_service import (
+        OPERATOR_MSG_NO_ASSIGNABLE_AFTER_VALIDATION,
+    )
+
+    assert op_msg == OPERATOR_MSG_NO_ASSIGNABLE_AFTER_VALIDATION
+    assert "walidacji" in (op_msg or "").lower()
+    assert "REJECTION" not in (op_msg or "")
+    assert "NO_STOCK" not in (op_msg or "")

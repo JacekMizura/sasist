@@ -398,8 +398,11 @@ def count_assignable_orders_for_picking_statuses(
     source_status_ids: list[int],
 ) -> dict[int, int]:
     """
-    Licznik kafelka „Wózki” / status — ta sama pula co kandydaci do start_picking
-    (eligibility + wolne cart_id), bez drogiego gate walidacji stock.
+    Licznik kafelka statusu (ikona wózka) — **PRELIMINARY** SSOT z kohortą
+    ``_query_order_ids_for_status`` + ``cart_id IS NULL``.
+
+    Świadomie BEZ ``gate_orders_before_capacity`` (stock/location) — pełny gate
+    jest tylko przy skanie wózka. Dashboard może więc być > 0 przy final assignment = 0.
     """
     ids = [int(x) for x in source_status_ids if int(x) > 0]
     if not ids:
@@ -421,6 +424,33 @@ def count_assignable_orders_for_picking_statuses(
     return {int(sid): int(n) for sid, n in rows}
 
 
+# Komunikat operatora gdy preliminary > 0, ale gate/start nie przypisał nic do wózka.
+# Bez kodów REJECTION_REASON — szczegóły w PICK_ASSIGN_TRACE.
+OPERATOR_MSG_NO_ASSIGNABLE_AFTER_VALIDATION = (
+    "Brak zamówień możliwych do przypisania. "
+    "Zamówienia oczekujące nie przeszły walidacji dostępności lub lokalizacji."
+)
+
+
+def operator_message_when_cart_unassigned(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    source_status_id: int,
+) -> str | None:
+    """Gdy wózek pusty po starcie: jeśli nadal są oczekujące w statusie → walidacja; inaczej None."""
+    n = count_assignable_orders_for_picking_statuses(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        source_status_ids=[int(source_status_id)],
+    ).get(int(source_status_id), 0)
+    if n > 0:
+        return OPERATOR_MSG_NO_ASSIGNABLE_AFTER_VALIDATION
+    return None
+
+
 def bootstrap_start_picking_if_needed(
     db: Session,
     *,
@@ -431,13 +461,16 @@ def bootstrap_start_picking_if_needed(
     order_type: OrderTypeFilter,
     operator_user_id: int,
     fixed_order_ids: list[int] | None = None,
-) -> WmsOperationSession | None:
+) -> tuple[WmsOperationSession | None, str | None]:
     """
     Po skanie wózka / wejściu na listę produktów:
     AVAILABLE|ASSIGNED → start_picking (jedyny writer order.cart_id).
     PICKING → no-op (zwraca istniejącą sesję).
 
     Gdy brak assignable orders: NIE claim → AVAILABLE (pusty wózek nie zostaje PRZYPISANY).
+
+    Returns:
+        (session | None, operator_message | None) — message bez kodów technicznych.
     """
     from .cart_picking_lifecycle_service import (
         find_open_picking_session,
@@ -463,9 +496,9 @@ def bootstrap_start_picking_if_needed(
 
     st = get_cart_status(cart)
     if st == CartStatus.PICKING:
-        return find_open_picking_session(db, cart=cart)
+        return find_open_picking_session(db, cart=cart), None
     if st not in (CartStatus.AVAILABLE, CartStatus.ASSIGNED):
-        return None
+        return None, None
 
     cart_code = getattr(cart, "code", None) or getattr(cart, "name", None)
 
@@ -512,10 +545,17 @@ def bootstrap_start_picking_if_needed(
 
     if not orders:
         _heal_empty_assigned("no_free_candidates")
-        return None
+        # Brak free candidates — nie twierdź o walidacji; opcjonalnie jeśli nadal preliminary.
+        return None, operator_message_when_cart_unassigned(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            source_status_id=int(source_status_id),
+        )
 
     from .wms_order_validation.gate import gate_orders_before_capacity
 
+    had_preliminary_free = len(orders)
     orders = gate_orders_before_capacity(
         db,
         orders=orders,
@@ -525,7 +565,11 @@ def bootstrap_start_picking_if_needed(
     )
     if not orders:
         _heal_empty_assigned("gate_rejected_all")
-        return None
+        # Gate odrzucił kandydatów — komunikat niezależnie od tego, czy FAIL status
+        # przeniósł zamówienia poza kohortę (count po gate mógłby być 0).
+        return None, (
+            OPERATOR_MSG_NO_ASSIGNABLE_AFTER_VALIDATION if had_preliminary_free > 0 else None
+        )
 
     try:
         sess = start_picking(
@@ -571,7 +615,7 @@ def bootstrap_start_picking_if_needed(
         commit_result="ok" if assigned_ids else "start_picking_zero_assigned",
         run_validation=True,
     )
-    return sess
+    return sess, None
 
 
 def _query_order_ids_for_status(
@@ -1603,6 +1647,15 @@ def build_wms_picking_product_lines(
             if cart_id is not None and fixed_order_ids is None
             else f"Brak zamówień w statusie (filtr: {ot})."
         )
+        if cart_id is not None and fixed_order_ids is None:
+            better = operator_message_when_cart_unassigned(
+                db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+                source_status_id=int(source_status_id),
+            )
+            if better:
+                empty_msg = better
         return WmsPickingProductLinesResponse(
             products=[],
             cohort_order_count=0,

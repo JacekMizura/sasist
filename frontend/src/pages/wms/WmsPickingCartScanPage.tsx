@@ -25,7 +25,7 @@ export default function WmsPickingCartScanPage() {
   const { warehouse } = useWarehouse();
   const warehouseId = warehouse?.id ?? null;
   const { setPickingCart } = useWmsPickingCart();
-  const { showWmsError } = useWmsMessage();
+  const { showWmsError, showWmsMessage } = useWmsMessage();
   const {
     registerScanHandler,
     setActiveDocument,
@@ -68,13 +68,23 @@ export default function WmsPickingCartScanPage() {
       setCartScopedStats(null);
       try {
         const r = await getWmsPickingResolveCart(DAMAGE_TENANT_ID, warehouseId, code);
-        await postWmsPickingStart(
+        const startResult = await postWmsPickingStart(
           DAMAGE_TENANT_ID,
           warehouseId,
           r.cart_id,
           session.orderUiStatusId,
           session.orderTypeChoice ?? "all",
         );
+        if (startResult.operator_message) {
+          showWmsMessage({
+            code: "PICK_NO_ASSIGNABLE_AFTER_VALIDATION",
+            severity: "WARNING",
+            title: "Zbieranie",
+            message: startResult.operator_message,
+            details: null,
+            suggested_action: null,
+          });
+        }
         // Refetch SSOT for THIS cart — invalidates stale hubPickStats from status selection.
         const linesResult = await getWmsPickingProductLines(
           DAMAGE_TENANT_ID,
@@ -125,6 +135,7 @@ export default function WmsPickingCartScanPage() {
               cartId: r.cart_id,
               hubOrderCount,
               hubPickStats,
+              assignEmptyMessage: startResult.operator_message ?? null,
             },
           },
         });
@@ -134,7 +145,7 @@ export default function WmsPickingCartScanPage() {
         setResolving(false);
       }
     },
-    [session, warehouseId, navigate, appendScanToHistory, setPickingCart, showWmsError],
+    [session, warehouseId, navigate, appendScanToHistory, setPickingCart, showWmsError, showWmsMessage],
   );
 
   useEffect(() => {

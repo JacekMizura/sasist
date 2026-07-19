@@ -961,7 +961,7 @@ export default function WmsPickingProductsPage() {
           const bundleDisplay = bundlePickScan ? buildPickingBundleDisplay(bundlePickScan) : null;
           return bundleDisplay ? <BundlePickingScanCard display={bundleDisplay} /> : null;
         })()}
-        {warnings.length > 0 && (
+        {warnings.length > 0 && rows.length > 0 && (
           <ul className="list-disc space-y-1 pl-5 text-xs text-amber-900 bg-amber-50/60 p-4 rounded-xl border border-amber-200/50">
             {warnings.map((w) => <li key={w} className="font-semibold">{w}</li>)}
           </ul>
@@ -989,8 +989,10 @@ export default function WmsPickingProductsPage() {
         ) : null}
 
         {!loading && !err && rows.length === 0 ? (
-          <p className="rounded-2xl border border-slate-200 bg-white px-5 py-12 text-center text-sm font-bold text-slate-500 shadow-sm">
-            Brak pozycji do zbiórki dla tego statusu i filtra.
+          <p className="rounded-2xl border border-slate-200 bg-white px-5 py-12 text-center text-sm font-bold text-slate-600 shadow-sm">
+            {pickingSession?.assignEmptyMessage ||
+              warnings[0] ||
+              "Brak pozycji do zbiórki dla tego statusu i filtra."}
           </p>
         ) : null}
 

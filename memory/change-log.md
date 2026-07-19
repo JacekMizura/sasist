@@ -1,3 +1,16 @@
+## 2026-07-19 — UX PRELIMINARY count + zero-assignment message
+
+- Tile: tooltip + aria „zamówień oczekujących” (bez zmiany nazwy statusu).
+- Gate 8/8 → `operator_message` z bootstrap (nie zależny od count po FAIL status); FE modal + empty state products.
+- Bez gate na configured-statuses; bez claim; CART AVAILABLE.
+
+## 2026-07-19 — FINAL AUDIT: Wózki tile vs assignment (PRELIMINARY SSOT)
+
+- Dashboard ≠ FULL assignment SSOT: count = eligibility + free `cart_id` only; scan still runs `gate_orders_before_capacity` → real scenario tile>0 / assign=0 (stock/location FAIL).
+- Intentional: no heavy validation on every configured-statuses GET.
+- Zero-after-gate cart: already `_heal_empty_assigned("gate_rejected_all")` → AVAILABLE (no claim). CASE 5 regression added.
+- Docstrings corrected: PRELIMINARY SSOT, not „SSOT z assignment”.
+
 ## 2026-07-19 — Wózki:8 vs empty CART assignment (PICK_ASSIGN_TRACE)
 
 - ROOT: (1) kafel `configured-statuses.order_count` = surowy COUNT po `order_ui_status_id` (A); assignment = eligibility (`picking_finished_at`, fulfillment PICKING/PARTIAL/blank, consolidation…) + `cart_id IS NULL` + WMS validation gate (B) → semantic drift; shortage/MISSING + `picking_finished_at` po finalize nadal w A. (2) `bootstrap_start_picking_if_needed` przy 0 candidates wołał `claim_cart` → CART ASSIGNED/PRZYPISANY z orders=0.

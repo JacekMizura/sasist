@@ -46,7 +46,9 @@ export function WmsFlowStatusTileButton({
   const showBulk = effectiveType === "BULK";
   const showBaskets = effectiveType === "BASKETS";
   const modeHint = showBaskets ? " — koszyki" : showBulk ? " — wózek" : "";
-  const ariaLabel = `${statusName}, ${orderCount} zamówień${modeHint}`;
+  const countTooltip =
+    "Liczba zamówień wstępnie oczekujących w tym statusie. Ostateczna kwalifikacja następuje podczas rozpoczęcia zbierania.";
+  const ariaLabel = `${statusName}, ${orderCount} zamówień oczekujących${modeHint}. ${countTooltip}`;
 
   // ============================================================================
   // WARIANT OPERACYJNY ZBIERANIA ("work")
@@ -58,6 +60,7 @@ export function WmsFlowStatusTileButton({
         type="button"
         disabled={disabled || loading}
         aria-label={ariaLabel}
+        title={countTooltip}
         style={accent}
         onClick={onClick}
         className={[
@@ -85,11 +88,14 @@ export function WmsFlowStatusTileButton({
         </div>
 
         {/* Prawa strona: Duża, czytelna cyfra */}
-        <div className="shrink-0 pl-4">
+        <div className="shrink-0 pl-4" title={countTooltip}>
           {loading ? (
             <Loader2 size={32} className="animate-spin text-slate-400" strokeWidth={2.5} />
           ) : (
-            <span className="text-4xl sm:text-5xl font-bold tabular-nums text-slate-900 tracking-tight">
+            <span
+              className="text-4xl sm:text-5xl font-bold tabular-nums text-slate-900 tracking-tight"
+              title={countTooltip}
+            >
               {orderCount}
             </span>
           )}
@@ -106,6 +112,7 @@ export function WmsFlowStatusTileButton({
       type="button"
       disabled={disabled || loading}
       aria-label={ariaLabel}
+      title={countTooltip}
       style={accent}
       onClick={onClick}
       className={[
@@ -123,7 +130,7 @@ export function WmsFlowStatusTileButton({
       <span className="min-w-0 flex-1 truncate text-sm font-semibold leading-snug text-slate-800">
         {statusName}
       </span>
-      <span className="font-semibold tabular-nums text-slate-500">
+      <span className="font-semibold tabular-nums text-slate-500" title={countTooltip}>
         ({orderCount})
       </span>
     </button>

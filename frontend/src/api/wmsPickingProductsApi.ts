@@ -333,6 +333,8 @@ export async function postWmsPickingStart(
   session_id: number | null;
   current_session_id: number | null;
   assigned_user_id: number | null;
+  /** Komunikat operatora gdy brak FINAL assignment (np. gate) — bez kodów technicznych. */
+  operator_message?: string | null;
 }> {
   const res = await api.post("/wms/picking/start", null, {
     params: {

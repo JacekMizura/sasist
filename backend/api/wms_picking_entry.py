@@ -253,7 +253,7 @@ def get_picking_configured_statuses(
             valid.append((pc, st))
 
         status_ids = [int(st.id) for _, st in valid]
-        # SSOT z assignment: eligibility + wolne cart_id (nie surowy count statusu).
+        # PRELIMINARY SSOT: eligibility + wolne cart_id (nie raw status; nie WMS validation gate).
         counts_map: Dict[int, int] = (
             count_assignable_orders_for_picking_statuses(
                 db,
@@ -575,7 +575,7 @@ def post_picking_start(
     from ..models.cart import Cart
 
     try:
-        sess = bootstrap_start_picking_if_needed(
+        sess, operator_message = bootstrap_start_picking_if_needed(
             db,
             tenant_id=int(tenant_id),
             warehouse_id=int(warehouse_id),
@@ -621,6 +621,7 @@ def post_picking_start(
         "session_id": int(sess.id) if sess is not None else None,
         "current_session_id": getattr(cart, "current_session_id", None) if cart else None,
         "assigned_user_id": getattr(cart, "assigned_user_id", None) if cart else None,
+        "operator_message": operator_message,
     }
 
 
