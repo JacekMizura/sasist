@@ -18,6 +18,32 @@ class CapacityCalculationRead(BaseModel):
     weight_utilization_percent: float = 0
     failure_reason: Optional[str] = None
     limiting_factor: Optional[str] = None
+    method: Optional[str] = None
+    confidence: Optional[str] = None
+    explanation: Optional[str] = None
+
+
+class ProductLocationCapacityRead(BaseModel):
+    """SSOT capacity card for one product at one location (fit_engine projection)."""
+
+    product_id: int
+    location_id: int
+    location_code: str = ""
+    current_quantity: float = 0
+    total_capacity: float = 0
+    additional_capacity: float = 0
+    utilization_percent: float = 0
+    method: str = "UNKNOWN"
+    confidence: str = "UNKNOWN"
+    limiting_factor: Optional[str] = None
+    limiting_factor_label: Optional[str] = None
+    selected_orientation: int = 0
+    stacks: int = 0
+    units_per_stack: int = 0
+    warnings: List[str] = Field(default_factory=list)
+    explanation: str = ""
+    additional_capacity_label: str = ""
+    capacity_ratio_label: str = ""
 
 
 class LocationCapacityDetailRead(BaseModel):
@@ -30,6 +56,20 @@ class LocationCapacityDetailRead(BaseModel):
     occupied_weight_kg: float = 0
     capacity_utilization_percent: float = 0
     fit: Optional[CapacityCalculationRead] = None
+    #: Geometric / occupancy capacity for product_id (when provided)
+    product_capacity: Optional[ProductLocationCapacityRead] = None
+
+
+class BatchProductLocationCapacitiesBody(BaseModel):
+    tenant_id: int = Field(..., ge=1)
+    product_id: int = Field(..., ge=1)
+    location_ids: List[int] = Field(..., min_length=1, max_length=80)
+    packaging_mode: str = Field(default="UNIT")
+
+
+class BatchProductLocationCapacitiesOut(BaseModel):
+    product_id: int
+    items: List[ProductLocationCapacityRead] = Field(default_factory=list)
 
 
 class CalculateFitBody(BaseModel):
@@ -60,6 +100,42 @@ class PutawaySuggestionRead(BaseModel):
     same_sku_present: bool
     reason_tags: List[str] = Field(default_factory=list)
     capacity: Optional[CapacityCalculationRead] = None
+    product_capacity: Optional[ProductLocationCapacityRead] = None
+
+
+class PutawayDistributionPlanBody(BaseModel):
+    tenant_id: int = Field(..., ge=1)
+    warehouse_id: int = Field(..., ge=1)
+    product_id: int = Field(..., ge=1)
+    quantity: float = Field(..., gt=0)
+    packaging_mode: str = Field(default="UNIT")
+    exclude_location_ids: List[int] = Field(default_factory=list)
+
+
+class PutawayDistributionAllocationRead(BaseModel):
+    location_id: int
+    location_code: str = ""
+    current_quantity: float = 0
+    total_capacity: float = 0
+    additional_capacity: float = 0
+    allocated_quantity: float = 0
+    confidence: str = "UNKNOWN"
+    reason: str = ""
+    limiting_factor: Optional[str] = None
+    limiting_factor_label: Optional[str] = None
+    same_sku_present: bool = False
+
+
+class PutawayDistributionPlanRead(BaseModel):
+    product_id: int
+    warehouse_id: int
+    requested_quantity: float
+    allocated_quantity: float
+    remaining_quantity: float
+    method: str = "HEURISTIC_DISTRIBUTION"
+    note: str = ""
+    warnings: List[str] = Field(default_factory=list)
+    allocations: List[PutawayDistributionAllocationRead] = Field(default_factory=list)
 
 
 class RecalculateOccupancyBody(BaseModel):

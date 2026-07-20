@@ -3204,6 +3204,7 @@ def patch_order_select_carton(
             order_id=int(order_id),
             carton_id=body.carton_id,
             operator_user_id=int(current_user.id) if current_user is not None else None,
+            confirm_override=bool(getattr(body, "confirm_override", False)),
         )
     except ValueError as e:
         code = str(e)

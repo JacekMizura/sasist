@@ -60,12 +60,24 @@ class WmsPutawayLocationSuggestionRow(BaseModel):
     reason_tags: List[str] = Field(default_factory=list)
     capacity_fits: bool = True
     capacity_warnings: List[str] = Field(default_factory=list)
+    #: SSOT product×location capacity card (fit_engine)
+    total_capacity: Optional[float] = None
+    additional_capacity: Optional[float] = None
+    utilization_percent: Optional[float] = None
+    confidence: Optional[str] = None
+    method: Optional[str] = None
+    limiting_factor: Optional[str] = None
+    limiting_factor_label: Optional[str] = None
+    additional_capacity_label: Optional[str] = None
+    capacity_ratio_label: Optional[str] = None
 
 
 class WmsPutawayLocationSuggestionsOut(BaseModel):
     suggested_primary_locations: List[WmsPutawayLocationSuggestionRow] = Field(default_factory=list)
     suggested_overflow_locations: List[WmsPutawayLocationSuggestionRow] = Field(default_factory=list)
     existing_stock_locations: List[WmsPutawayLocationSuggestionRow] = Field(default_factory=list)
+    #: PLAN only — never mutates stock
+    distribution_plan: Optional[dict] = None
 
 
 class WmsTenantContextOut(BaseModel):

@@ -38,6 +38,12 @@ class Carton(Base):
     length_cm = Column(Float, nullable=False)
     width_cm = Column(Float, nullable=False)
     height_cm = Column(Float, nullable=False)
+    #: Usable / internal content dimensions (fit SSOT). NULL → fallback to external + warning.
+    internal_length_cm = Column(Float, nullable=True)
+    internal_width_cm = Column(Float, nullable=True)
+    internal_height_cm = Column(Float, nullable=True)
+    #: Max payload weight for packing (content). Separate from tare weight_kg.
+    max_payload_kg = Column(Float, nullable=True)
     weight_kg = Column(Float, nullable=False, default=0.0)
     #: e.g. corrugated, cardboard — display / filtering
     material_type = Column(String(128), nullable=True)

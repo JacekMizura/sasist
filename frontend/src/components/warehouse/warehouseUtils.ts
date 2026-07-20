@@ -1507,7 +1507,16 @@ export interface PackingLayoutResult {
 }
 
 /**
+ * Designer visualization helper for packing layout in Magazyn UI.
+ * Operational capacity / putaway / packaging SSOT is backend `services/fit_engine`
+ * — do not use this for WMS putaway, replenishment, or cartonization decisions.
+ *
  * Compute best packing layout (rotation and counts) for product in slot.
+/**
+ * DESIGNER / WAREHOUSE LAYOUT PREVIEW ONLY.
+ * Do NOT use for operational putaway, replenishment, packing, or location capacity.
+ * Operational SSOT = backend fit_engine / slotting capacity APIs.
+ *
  * allowedRotations: rotation indices 0..5 to consider (default all).
  * maxCountZ: cap countZ (e.g. 1 for no_stack). Omitted = no cap.
  * Returns null if any dimension is missing.

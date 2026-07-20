@@ -6,6 +6,7 @@ import {
   type WmsPutawayLocationSuggestions,
 } from "../../api/wmsPutawayApi";
 import { getWarehouseLocations, type WarehouseLocationItem } from "../../api/warehouseGraphApi";
+import PutawayLocationSuggestionCard from "../../components/wms/putaway/PutawayLocationSuggestionCard";
 import PutawayTraceabilityStrip from "../../components/wms/putaway/PutawayTraceabilityStrip";
 import { useWmsScanner } from "../../context/WmsScannerContext";
 import { wmsReceiptLineImageUrl } from "../../utils/wmsReceiptLineMedia";
@@ -348,18 +349,15 @@ export default function WmsPutawayItemDetailPage() {
                   <AlertTriangle className="w-4 h-4" strokeWidth={2.5} /> Produkt na lokalizacjach
                 </span>
                 <div className="space-y-3">
-                  {existing.map((row) => (
-                    <button
+                  {existing.map((row, idx) => (
+                    <PutawayLocationSuggestionCard
                       key={row.location_id}
+                      row={row}
+                      variant="existing"
+                      recommended={idx === 0}
                       disabled={putawayDone(line)}
-                      onClick={() => goExecute(rowToSelected(row))}
-                      className="w-full bg-white border border-[#fef08a] hover:bg-[#fef9c3] disabled:opacity-50 disabled:pointer-events-none rounded-2xl p-4 text-left transition active:scale-95 flex items-center justify-between group"
-                    >
-                      <span className="text-sm font-black text-slate-900 tracking-wider">{row.code}</span>
-                      <span className="bg-[#fef9c3] text-[#f97316] text-[11px] font-black px-3 py-1.5 rounded-lg group-hover:bg-[#fef08a] transition">
-                        {fmtQty(Number(row.current_quantity) || 0)} szt.
-                      </span>
-                    </button>
+                      onSelect={() => goExecute(rowToSelected(row))}
+                    />
                   ))}
                 </div>
               </div>
@@ -371,33 +369,77 @@ export default function WmsPutawayItemDetailPage() {
           <section className="lg:col-span-8">
             <div className="bg-white border border-slate-100 rounded-3xl p-8 shadow-sm h-full">
               
-              <h3 className="text-xl font-black text-slate-900 tracking-tight mb-8">Sugerowane lokalizacje</h3>
+              <h3 className="text-xl font-black text-slate-900 tracking-tight mb-4">Sugerowane lokalizacje</h3>
+
+              {suggestions?.distribution_plan && suggestions.distribution_plan.allocations?.length > 0 ? (
+                <div className="mb-8 rounded-2xl border border-indigo-100 bg-indigo-50/40 p-5">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-indigo-700 mb-3">
+                    Plan rozlokowania (rekomendacja)
+                  </p>
+                  <p className="text-xs text-slate-600 mb-3">
+                    {fmtQty(suggestions.distribution_plan.allocated_quantity)} /{" "}
+                    {fmtQty(suggestions.distribution_plan.requested_quantity)} szt. · plan ≠ wykonanie — każda pozycja
+                    wymaga skanu
+                  </p>
+                  <ul className="space-y-2">
+                    {suggestions.distribution_plan.allocations.map((a) => (
+                      <li
+                        key={`${a.location_id}-${a.allocated_quantity}`}
+                        className="flex items-center justify-between rounded-xl bg-white border border-indigo-100 px-4 py-3"
+                      >
+                        <button
+                          type="button"
+                          disabled={putawayDone(line)}
+                          onClick={() =>
+                            goExecute({
+                              locationId: a.location_id,
+                              code: a.location_code,
+                              locationType: "PICK",
+                              storageType: "unknown",
+                            })
+                          }
+                          className="text-left disabled:opacity-50"
+                        >
+                          <span className="text-sm font-black text-slate-900">{a.location_code}</span>
+                          <span className="ml-2 text-xs font-bold text-indigo-700">
+                            {a.same_sku_present ? "Dołóż" : "Odłóż"} {fmtQty(a.allocated_quantity)} szt.
+                          </span>
+                        </button>
+                        <span className="text-[10px] font-bold uppercase text-slate-400">
+                          {String(a.confidence).toUpperCase() === "ESTIMATED" ? "~szacunek" : "OK"}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  {(suggestions.distribution_plan.remaining_quantity || 0) > 0 ? (
+                    <p className="mt-3 text-xs font-bold text-amber-800">
+                      Pozostało bez lokalizacji: {fmtQty(suggestions.distribution_plan.remaining_quantity)} szt.
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
 
               <div className="space-y-8">
                 
                 {/* STREFA 1: PODSTAWOWE */}
                 <div>
                   <span className="text-[10px] font-black text-[#3b82f6] block uppercase tracking-widest mb-4">
-                    Najbliższe Podstawowe
+                    Rekomendowane lokalizacje
                   </span>
                   {primary.length === 0 ? (
                     <p className="rounded-2xl border border-dashed border-slate-200 px-4 py-6 text-center text-xs font-bold text-slate-400 uppercase tracking-wider">
                       Brak propozycji
                     </p>
                   ) : (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                      {primary.map((row) => (
-                        <button
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {primary.map((row, idx) => (
+                        <PutawayLocationSuggestionCard
                           key={row.location_id}
+                          row={row}
+                          recommended={idx === 0}
                           disabled={putawayDone(line)}
-                          onClick={() => goExecute(rowToSelected(row))}
-                          className="bg-white border border-[#bfdbfe] hover:border-[#3b82f6] hover:bg-blue-50/30 disabled:opacity-50 disabled:pointer-events-none rounded-2xl p-4 text-left transition active:scale-95 group"
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm font-black text-slate-900 tracking-wider">{row.code}</span>
-                            <MapPin className="w-4 h-4 text-[#93c5fd] group-hover:text-[#3b82f6] transition" strokeWidth={2.5} />
-                          </div>
-                        </button>
+                          onSelect={() => goExecute(rowToSelected(row))}
+                        />
                       ))}
                     </div>
                   )}
@@ -406,26 +448,22 @@ export default function WmsPutawayItemDetailPage() {
                 {/* STREFA 2: ZAPASOWE */}
                 <div>
                   <span className="text-[10px] font-black text-[#f97316] block uppercase tracking-widest mb-4">
-                    Najbliższe Zapasowe
+                    Zapasowe / overflow
                   </span>
                   {overflow.length === 0 ? (
                     <p className="rounded-2xl border border-dashed border-slate-200 px-4 py-6 text-center text-xs font-bold text-slate-400 uppercase tracking-wider">
                       Brak propozycji
                     </p>
                   ) : (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                       {overflow.map((row) => (
-                        <button
+                        <PutawayLocationSuggestionCard
                           key={row.location_id}
+                          row={row}
+                          variant="overflow"
                           disabled={putawayDone(line)}
-                          onClick={() => goExecute(rowToSelected(row))}
-                          className="bg-white border border-[#fed7aa] hover:border-[#f97316] hover:bg-orange-50/30 disabled:opacity-50 disabled:pointer-events-none rounded-2xl p-4 text-left transition active:scale-95 group"
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm font-black text-slate-900 tracking-wider">{row.code}</span>
-                            <MapPin className="w-4 h-4 text-[#fdba74] group-hover:text-[#f97316] transition" strokeWidth={2.5} />
-                          </div>
-                        </button>
+                          onSelect={() => goExecute(rowToSelected(row))}
+                        />
                       ))}
                     </div>
                   )}

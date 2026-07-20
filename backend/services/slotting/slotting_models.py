@@ -55,6 +55,8 @@ class ProductFootprint:
     compressible: bool = False
     max_stack_weight_kg: float | None = None
     units_per_carton: float = 1.0
+    max_stack_count: int | None = None
+    compressed_height_cm: float | None = None
 
 
 @dataclass
@@ -71,6 +73,9 @@ class LocationCapacityProfile:
     picking_priority: int = 100
     pick_sequence: int | None = None
     location_type: str = "pick"
+    length_cm: float = 0.0
+    width_cm: float = 0.0
+    height_cm: float = 0.0
 
 
 @dataclass
@@ -85,9 +90,12 @@ class CapacityCalculationResult:
     weight_utilization_percent: float
     failure_reason: str | None = None
     limiting_factor: str | None = None
+    method: str | None = None
+    confidence: str | None = None
+    explanation: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        out: dict[str, Any] = {
             "fits": self.fits,
             "max_units": round(self.max_units, 4),
             "max_cartons": round(self.max_cartons, 4),
@@ -99,6 +107,13 @@ class CapacityCalculationResult:
             "failure_reason": self.failure_reason,
             "limiting_factor": self.limiting_factor,
         }
+        if self.method is not None:
+            out["method"] = self.method
+        if self.confidence is not None:
+            out["confidence"] = self.confidence
+        if self.explanation is not None:
+            out["explanation"] = self.explanation
+        return out
 
 
 @dataclass

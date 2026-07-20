@@ -175,13 +175,19 @@ export async function patchOrderPriority(
 export type OrderSelectCartonResponseApi = {
   selected_carton_id: string | null;
   selected_carton: WmsPackingRecommendedCartonApi | null;
+  recommended_carton_id?: string | null;
+  was_overridden?: boolean;
+  physical_fit_ok?: boolean;
+  physical_fit_warning?: string | null;
+  override_reason_code?: string | null;
+  requires_override_confirmation?: boolean;
 };
 
 /** PATCH /orders/{id}/select-carton — wybór kartonu na pakowaniu WMS (wymaga packing scope). */
 export async function patchOrderSelectCarton(
   orderId: number,
   tenantId: number,
-  body: { carton_id: string },
+  body: { carton_id: string; confirm_override?: boolean },
   scope: {
     warehouseId: number;
     statusId: number;

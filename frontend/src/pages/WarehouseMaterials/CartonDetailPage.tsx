@@ -65,6 +65,10 @@ export default function CartonDetailPage() {
   const [l, setL] = useState("");
   const [w, setW] = useState("");
   const [h, setH] = useState("");
+  const [il, setIl] = useState("");
+  const [iw, setIw] = useState("");
+  const [ih, setIh] = useState("");
+  const [maxPayload, setMaxPayload] = useState("");
   const [weight, setWeight] = useState("");
   const [isActive, setIsActive] = useState(true);
   const [supplierId, setSupplierId] = useState<string>("");
@@ -107,6 +111,10 @@ export default function CartonDetailPage() {
     setL(String(r.length_cm));
     setW(String(r.width_cm));
     setH(String(r.height_cm));
+    setIl(r.internal_length_cm != null ? String(r.internal_length_cm) : "");
+    setIw(r.internal_width_cm != null ? String(r.internal_width_cm) : "");
+    setIh(r.internal_height_cm != null ? String(r.internal_height_cm) : "");
+    setMaxPayload(r.max_payload_kg != null ? String(r.max_payload_kg) : "");
     setWeight(String(r.weight_kg));
     setIsActive(r.is_active);
     setSupplierId(r.supplier_id != null ? String(r.supplier_id) : "");
@@ -283,6 +291,22 @@ export default function CartonDetailPage() {
       length_cm: Number(ln),
       width_cm: Number(wn),
       height_cm: Number(hn),
+      internal_length_cm: (() => {
+        const v = parseFloat(il.replace(",", "."));
+        return Number.isFinite(v) && v > 0 ? v : null;
+      })(),
+      internal_width_cm: (() => {
+        const v = parseFloat(iw.replace(",", "."));
+        return Number.isFinite(v) && v > 0 ? v : null;
+      })(),
+      internal_height_cm: (() => {
+        const v = parseFloat(ih.replace(",", "."));
+        return Number.isFinite(v) && v > 0 ? v : null;
+      })(),
+      max_payload_kg: (() => {
+        const v = parseFloat(maxPayload.replace(",", "."));
+        return Number.isFinite(v) && v > 0 ? v : null;
+      })(),
       weight_kg: Number(weight_kg),
       is_active: isActive,
       supplier_id,
@@ -601,7 +625,8 @@ export default function CartonDetailPage() {
                 </label>
               </div>
             </WmFormSectionCard>
-            <WmFormSectionCard title="Parametry logistyczne" description="Wymiary i waga używane przy pakowaniu.">
+            <WmFormSectionCard title="Parametry logistyczne" description="Wymiary zewnętrzne i użytkowe (fit engine używa wewnętrznych).">
+              <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Wymiary zewnętrzne</p>
               <div className="grid gap-4 sm:grid-cols-3">
                 <label className="block">
                   <span className={fieldLabel}>Długość (cm)</span>
@@ -616,10 +641,36 @@ export default function CartonDetailPage() {
                   <input className={inputClass} value={h} onChange={(e) => setH(e.target.value)} inputMode="decimal" />
                 </label>
               </div>
-              <label className="mt-4 block max-w-xs">
-                <span className={fieldLabel}>Waga (kg)</span>
-                <input className={inputClass} value={weight} onChange={(e) => setWeight(e.target.value)} inputMode="decimal" />
-              </label>
+              <p className="mb-3 mt-5 text-xs font-semibold uppercase tracking-wide text-slate-500">Wymiary użytkowe / wewnętrzne</p>
+              {!il.trim() || !iw.trim() || !ih.trim() ? (
+                <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+                  Brak wymiarów wewnętrznych — dopasowanie będzie szacunkowe (fallback do zewnętrznych).
+                </div>
+              ) : null}
+              <div className="grid gap-4 sm:grid-cols-3">
+                <label className="block">
+                  <span className={fieldLabel}>Wewn. długość (cm)</span>
+                  <input className={inputClass} value={il} onChange={(e) => setIl(e.target.value)} inputMode="decimal" />
+                </label>
+                <label className="block">
+                  <span className={fieldLabel}>Wewn. szerokość (cm)</span>
+                  <input className={inputClass} value={iw} onChange={(e) => setIw(e.target.value)} inputMode="decimal" />
+                </label>
+                <label className="block">
+                  <span className={fieldLabel}>Wewn. wysokość (cm)</span>
+                  <input className={inputClass} value={ih} onChange={(e) => setIh(e.target.value)} inputMode="decimal" />
+                </label>
+              </div>
+              <div className="mt-4 grid max-w-xl gap-4 sm:grid-cols-2">
+                <label className="block">
+                  <span className={fieldLabel}>Waga własna / tara (kg)</span>
+                  <input className={inputClass} value={weight} onChange={(e) => setWeight(e.target.value)} inputMode="decimal" />
+                </label>
+                <label className="block">
+                  <span className={fieldLabel}>Maks. waga ładunku (kg)</span>
+                  <input className={inputClass} value={maxPayload} onChange={(e) => setMaxPayload(e.target.value)} inputMode="decimal" placeholder="payload" />
+                </label>
+              </div>
             </WmFormSectionCard>
           </div>
         ) : null}

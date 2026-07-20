@@ -71,6 +71,10 @@ class CartonRead(BaseModel):
     length_cm: float
     width_cm: float
     height_cm: float
+    internal_length_cm: Optional[float] = None
+    internal_width_cm: Optional[float] = None
+    internal_height_cm: Optional[float] = None
+    max_payload_kg: Optional[float] = None
     weight_kg: float
     is_active: bool
     supplier_id: Optional[int] = None
@@ -123,6 +127,10 @@ class CartonCreate(BaseModel):
     length_cm: float = Field(..., gt=0)
     width_cm: float = Field(..., gt=0)
     height_cm: float = Field(..., gt=0)
+    internal_length_cm: Optional[float] = Field(None, gt=0)
+    internal_width_cm: Optional[float] = Field(None, gt=0)
+    internal_height_cm: Optional[float] = Field(None, gt=0)
+    max_payload_kg: Optional[float] = Field(None, gt=0)
     weight_kg: float = Field(default=0, ge=0)
     is_active: bool = True
     supplier_id: Optional[int] = None
@@ -170,6 +178,10 @@ class CartonUpdate(BaseModel):
     length_cm: Optional[float] = Field(None, gt=0)
     width_cm: Optional[float] = Field(None, gt=0)
     height_cm: Optional[float] = Field(None, gt=0)
+    internal_length_cm: Optional[float] = Field(None, gt=0)
+    internal_width_cm: Optional[float] = Field(None, gt=0)
+    internal_height_cm: Optional[float] = Field(None, gt=0)
+    max_payload_kg: Optional[float] = Field(None, gt=0)
     weight_kg: Optional[float] = Field(None, ge=0)
     is_active: Optional[bool] = None
     supplier_id: Optional[int] = None

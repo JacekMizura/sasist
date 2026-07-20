@@ -42,5 +42,6 @@ export function normalizePutawaySuggestions(
     existing_stock_locations: Array.isArray(raw.existing_stock_locations)
       ? raw.existing_stock_locations
       : [],
+    distribution_plan: raw.distribution_plan ?? null,
   };
 }

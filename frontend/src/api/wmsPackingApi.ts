@@ -29,6 +29,14 @@ export type WmsPackingRecommendedCartonApi = {
   dimensions: string;
   image_url?: string | null;
   is_best: boolean;
+  usable_dimensions?: string | null;
+  fill_percentage?: number | null;
+  total_weight_kg?: number | null;
+  max_payload_kg?: number | null;
+  fit_status?: string | null;
+  fit_confidence?: string | null;
+  reject_reason_label?: string | null;
+  warnings?: string[];
 };
 
 /** Eksport z ./packagingIntelligenceApi — duplikat typu unikamy importu cyklicznego. */
@@ -48,6 +56,37 @@ export type PackagingSuggestionApi = {
   overridden_by_user: boolean;
   assigned_by?: string | null;
   assigned_at?: string | null;
+  fit_status?: string | null;
+  fit_confidence?: string | null;
+  usable_dimensions?: string | null;
+  total_weight_kg?: number | null;
+  max_payload_kg?: number | null;
+  reject_reason_code?: string | null;
+  reject_reason_label?: string | null;
+  why_selected?: string | null;
+  is_recommended?: boolean;
+};
+
+export type PackagingFitPlanApi = {
+  fits: boolean;
+  recommended_packaging?: string | null;
+  carton_count: number;
+  method: string;
+  confidence: string;
+  explanation: string;
+  warnings: string[];
+  multi_carton_required?: boolean;
+  multi_carton_persistence?: string;
+  plan: Array<{
+    carton_id: string;
+    carton_name: string;
+    usable_dimensions?: Record<string, number> | null;
+    items: Array<{ product_id: number; quantity: number; label?: string }>;
+    weight?: number | null;
+    volume_utilization?: number | null;
+    confidence?: string | null;
+    warnings?: string[];
+  }>;
 };
 
 export type WmsPackingOrderLineApi = {
@@ -212,6 +251,8 @@ export type WmsPackingOrderCardApi = {
   packaging_suggestions?: PackagingSuggestionApi[];
   primary_packaging_suggestion?: PackagingSuggestionApi | null;
   packaging_alternatives?: PackagingSuggestionApi[];
+  packaging_fit_plan?: PackagingFitPlanApi | null;
+  recommended_carton_id?: string | null;
   selected_carton_id?: string | null;
   selected_carton?: WmsPackingRecommendedCartonApi | null;
   operational_notes_packing?: WmsOperationalNoteBriefApi[];

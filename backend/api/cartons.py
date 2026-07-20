@@ -114,6 +114,10 @@ def _carton_to_read(row: Carton) -> CartonRead:
         length_cm=float(row.length_cm or 0),
         width_cm=float(row.width_cm or 0),
         height_cm=float(row.height_cm or 0),
+        internal_length_cm=_fopt_row(row, "internal_length_cm"),
+        internal_width_cm=_fopt_row(row, "internal_width_cm"),
+        internal_height_cm=_fopt_row(row, "internal_height_cm"),
+        max_payload_kg=_fopt_row(row, "max_payload_kg"),
         weight_kg=float(row.weight_kg or 0),
         is_active=bool(getattr(row, "is_active", True)),
         supplier_id=int(row.supplier_id) if getattr(row, "supplier_id", None) is not None else None,
@@ -439,6 +443,10 @@ def create_carton(body: CartonCreate, db: Session = Depends(get_db)):
         length_cm=float(body.length_cm),
         width_cm=float(body.width_cm),
         height_cm=float(body.height_cm),
+        internal_length_cm=float(body.internal_length_cm) if body.internal_length_cm is not None else None,
+        internal_width_cm=float(body.internal_width_cm) if body.internal_width_cm is not None else None,
+        internal_height_cm=float(body.internal_height_cm) if body.internal_height_cm is not None else None,
+        max_payload_kg=float(body.max_payload_kg) if body.max_payload_kg is not None else None,
         weight_kg=float(body.weight_kg),
         is_active=bool(body.is_active),
         supplier_id=int(body.supplier_id) if body.supplier_id is not None else None,
@@ -582,6 +590,18 @@ def update_carton(
         row.width_cm = float(patch["width_cm"])
     if "height_cm" in patch and patch["height_cm"] is not None:
         row.height_cm = float(patch["height_cm"])
+    if "internal_length_cm" in patch:
+        v = patch.get("internal_length_cm")
+        row.internal_length_cm = float(v) if v is not None else None
+    if "internal_width_cm" in patch:
+        v = patch.get("internal_width_cm")
+        row.internal_width_cm = float(v) if v is not None else None
+    if "internal_height_cm" in patch:
+        v = patch.get("internal_height_cm")
+        row.internal_height_cm = float(v) if v is not None else None
+    if "max_payload_kg" in patch:
+        v = patch.get("max_payload_kg")
+        row.max_payload_kg = float(v) if v is not None else None
     if "weight_kg" in patch and patch["weight_kg"] is not None:
         row.weight_kg = float(patch["weight_kg"])
         if "paper_kg_per_unit" not in patch:

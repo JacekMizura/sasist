@@ -1,3 +1,39 @@
+## 2026-07-20 — PRODUCT INTEGRATION Phase 1 + core Phase 2
+
+- Capacity contract: `ProductLocationCapacityRead` + GET product/location + POST batch (≤80).
+- Putaway: capacity fields on suggestions; UI cards; distribution plan PLAN-only + revalidate rebuild.
+- Product edit: batch capacity list for inventory locations.
+- Packing: fit recommendation panel, alts/reject labels, override confirm, plan[] read-only.
+- Multi-carton persistence still SINGLE selected_carton_id (explicit GAP).
+- Tests: `test_fit_engine_product_integration.py` + existing fit suites green.
+- No push.
+
+## 2026-07-20 — FIT ENGINE production gaps closed (post deep audit)
+
+
+- Internal/usable carton dims: `internal_*_cm`, `max_payload_kg`; fit uses internal; fallback + `USABLE_DIMENSIONS_NOT_DEFINED`.
+- Product logistic validator SSOT + `Product.fragile` (≠ NO_STACK); FE ProductEdit + CartonDetail settings.
+- AABB placement hard gate; free-space prune; Smart cannot primary when eligible empty.
+- Packaging ranking WHY_SELECTED; multi-carton HEURISTIC/ESTIMATED + bounded improve; packing plan contract.
+- Invariants A–O + O2. Tests: 54 fit + 8 slotting OK. No commit/push.
+
+## 2026-07-20 — FIT ENGINE deep audit + critical fixes
+
+- BUG: Smart Matching + finalize_primary mogło wybrać karton z `Odrzucony:` (volume cost) mimo fail geometrycznego → FIXED (merge + primary_pool).
+- BUG: compression stosowana po rotacji na niewłaściwej osi → FIXED (tylko gdy vertical == product.height).
+- SEMANTIC: same-SKU occupancy bez placement map → confidence ESTIMATED w location_capacity_solver.
+- Regressions: `test_fit_engine_audit_regressions.py`. No commit/push. SAFE TO PUSH: NO (pozostałe GAPY).
+
+## 2026-07-20 — Shared FIT / CAPACITY ENGINE (SSOT)
+
+- NEW: `backend/services/fit_engine/` — geometry XYZ, orientations, stacking, compression, weight, placement.
+- Location: `capacity_service` + `location_capacity_solver` → shared core (nie volume-only).
+- Packaging: `cartonization_solver` + `three_d_matching` → prawdziwy geometric fit (nie SUM volume).
+- Product: `max_stack_count` / `carton_max_stack_count` (limit jednego stosu).
+- Tests: CORE 1–14, LOCATION 1–6, PACK 1–15 (`test_fit_engine_matrix.py`).
+- FE Magazyn `calculatePackingLayout` = tylko wizualizacja designera; operational SSOT = backend.
+- No commit / no push.
+
 ## 2026-07-20 — Pakowanie: skan EAN z listy nie pomija widoku zamówienia
 
 - ROOT: `packingScanBootstrap` → `applyPackingResult` przy `fully_packed` (np. 1×1) od razu `awaitingPostPackCarton` → modal „Wybierz opakowanie”.

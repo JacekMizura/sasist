@@ -1,10 +1,8 @@
 """
-Strategia 3D Matching — heurystyka „najmniejszy sensowny karton” (v2).
+Strategia 3D Matching — prawdziwy geometric fit via shared fit_engine + cartonization_solver.
 
-Sumuje objętość jednostek × ilość, porównuje z objętością kartonów:
-- rozważa kartony od **najmniejszych** do większych,
-- odrzuca kartony z absurdalnym nadmiarem pustej objętości,
-- docelowo: prawdziwy bin packing; tu minimum operacyjne.
+NIE jest to samo SUM(volume) — każdy produkt musi fizycznie mieścić się wymiarami
+i przejść heurystykę placement (multi-SKU) lub identical-unit capacity (single SKU).
 """
 
 from __future__ import annotations
@@ -13,110 +11,87 @@ from typing import TYPE_CHECKING
 
 from ...models.carton import Carton
 from ...models.order import Order
+from .cartonization_solver import items_from_order, solve_cartonization
 from .scoring import confidence_from_fill
 from .suggestions import PackagingSuggestionDraft
 
 if TYPE_CHECKING:
-    from ...models.order_item import OrderItem
-
-PACKING_SLACK = 0.92
-MAX_EMPTY_VOLUME_RATIO = 22.0
-MIN_FILL_ABSURD = 4.5
-HUGE_FACTOR = 14.0
-
-
-def _carton_volume_cm3(c: Carton) -> float:
-    if c.length_cm is None or c.width_cm is None or c.height_cm is None:
-        return float("inf")
-    try:
-        lv, wv, hv = float(c.length_cm), float(c.width_cm), float(c.height_cm)
-    except (TypeError, ValueError):
-        return float("inf")
-    if lv <= 0 or wv <= 0 or hv <= 0:
-        return float("inf")
-    return lv * wv * hv
-
-
-def _item_unit_volume_cm3(it: OrderItem) -> tuple[float, bool]:
-    p = getattr(it, "product", None)
-    if p is None:
-        return 0.0, False
-    L = getattr(p, "length", None)
-    W = getattr(p, "width", None)
-    H = getattr(p, "height", None)
-    if L is None or W is None or H is None:
-        return 0.0, False
-    try:
-        lv, wv, hv = float(L), float(W), float(H)
-    except (TypeError, ValueError):
-        return 0.0, False
-    if lv <= 0 or wv <= 0 or hv <= 0:
-        return 0.0, False
-    return lv * wv * hv, True
+    pass
 
 
 def suggest_three_d_matching(order: Order, cartons: list[Carton]) -> list[PackagingSuggestionDraft]:
     if not cartons:
         return []
 
-    demand_vol = 0.0
-    any_dims = False
-    for it in order.items or []:
-        q = int(getattr(it, "quantity", 0) or 0)
-        if q <= 0:
-            continue
-        uv, ok = _item_unit_volume_cm3(it)
-        if ok:
-            any_dims = True
-        demand_vol += max(0.0, uv) * q
-
+    items = items_from_order(order)
     oid = int(order.id)
-    sorted_cartons = sorted(cartons, key=_carton_volume_cm3)
-    drafts: list[PackagingSuggestionDraft] = []
+    result = solve_cartonization(items_with_qty=items, cartons=cartons, allow_multi_carton=True)
 
-    for c in sorted_cartons:
+    drafts: list[PackagingSuggestionDraft] = []
+    rejected_by_id = {r.carton_id: r for r in result.rejected_cartons}
+    recommended = result.recommended_carton_id
+
+    # Build suggestion per carton that was considered / recommended
+    seen: set[str] = set()
+    for plan in result.cartons:
+        cid = plan.carton_id
+        seen.add(cid)
+        fill = plan.fill_percent
+        conf = confidence_from_fill((fill or 0) / 100.0, fits=True) if fill is not None else 0.55
+        if result.confidence == "UNKNOWN":
+            conf = min(conf, 0.4)
+        elif result.confidence == "ESTIMATED":
+            conf = min(conf, 0.7)
+        is_primary = cid == recommended and not result.multi_carton_required
+        bonus = 0.12 if is_primary else (0.04 if cid == recommended else 0.0)
+        reason = result.explanation
+        if plan.fill_percent is not None:
+            reason = (
+                f"Fit geometryczny: ~{plan.fill_percent:.0f}% wykorzystania. "
+                f"{result.explanation}"
+            )[:2000]
+        if result.multi_carton_required:
+            reason = (f"Wymagane wiele kartonów. {reason}")[:2000]
+        dims = ""
+        for c in cartons:
+            if str(c.id) == cid:
+                dims = f"{float(c.length_cm):g}×{float(c.width_cm):g}×{float(c.height_cm):g} cm"
+                name = str(c.name or "").strip() or "—"
+                img = getattr(c, "image_url", None)
+                img_s = str(img).strip() if img else None
+                break
+        else:
+            name = plan.carton_name or "—"
+            img_s = None
+
+        drafts.append(
+            PackagingSuggestionDraft(
+                order_id=oid,
+                source_engine="THREE_D_MATCHING",
+                suggested_package_id=cid,
+                package_name=name,
+                package_dimensions=dims,
+                image_url=img_s,
+                confidence_score=conf + bonus,
+                fill_percentage=fill,
+                reason=reason,
+                sort_key=conf + bonus + (0.2 if is_primary else 0.0),
+            )
+        )
+
+    # Also surface rejected cartons as low-confidence "does not fit" for UI transparency
+    for c in sorted(cartons, key=lambda x: (float(x.length_cm or 0) * float(x.width_cm or 0) * float(x.height_cm or 0), str(x.id))):
         cid = str(c.id)
-        cv = _carton_volume_cm3(c)
-        if cv <= 0 or cv == float("inf"):
+        if cid in seen:
+            continue
+        rej = rejected_by_id.get(cid)
+        if rej is None and result.fits and recommended:
+            # Larger cartons not needed when smaller fits — skip noise
+            continue
+        if rej is None:
             continue
         dims = f"{float(c.length_cm):g}×{float(c.width_cm):g}×{float(c.height_cm):g} cm"
         img = getattr(c, "image_url", None)
-        img_s = str(img).strip() if img else None
-
-        if not any_dims or demand_vol <= 0:
-            fill_pct = None
-            fits = True
-            conf = 0.35
-            reason = (
-                "3D Matching: brak kompletnych wymiarów produktów; zweryfikuj ręcznie."
-            )
-            sk = conf
-        else:
-            ratio = demand_vol / cv if cv > 0 else 0.0
-            fill_pct = min(100.0, ratio * 100.0)
-
-            if demand_vol > cv * 1.02:
-                fits = False
-                conf = confidence_from_fill(min(ratio, 2.0), fits=False)
-                reason = (
-                    f"3D Matching: objętość towaru przekracza ten karton (~{fill_pct:.0f}% nominalnie); "
-                    "wybierz większy karton."
-                )
-                sk = conf - 0.12
-            elif cv > demand_vol * MAX_EMPTY_VOLUME_RATIO:
-                continue
-            elif fill_pct < MIN_FILL_ABSURD and cv > demand_vol * HUGE_FACTOR:
-                continue
-            else:
-                fits = ratio <= PACKING_SLACK + 1e-9
-                conf = confidence_from_fill(ratio, fits=fits)
-                bonus_small = max(0.0, 0.18 - min(0.18, cv / max(demand_vol, 1.0) * 0.02))
-                sk = conf + bonus_small + (0.05 if fits and fill_pct is not None and 18 <= fill_pct <= 90 else 0.0)
-                reason = (
-                    f"3D Matching: szacowane wypełnienie ~{fill_pct:.0f}% objętości kartonu "
-                    f"({'OK z zapasem pakowania' if fits else 'wysokie — sprawdź pakowanie'}). "                    
-                )
-
         drafts.append(
             PackagingSuggestionDraft(
                 order_id=oid,
@@ -124,20 +99,37 @@ def suggest_three_d_matching(order: Order, cartons: list[Carton]) -> list[Packag
                 suggested_package_id=cid,
                 package_name=str(c.name or "").strip() or "—",
                 package_dimensions=dims,
-                image_url=img_s,
-                confidence_score=conf,
-                fill_percentage=fill_pct,
-                reason=reason,
-                sort_key=sk,
+                image_url=str(img).strip() if img else None,
+                confidence_score=0.15,
+                fill_percentage=None,
+                reason=f"Odrzucony: {rej.reason}",
+                sort_key=0.05,
             )
         )
 
-    vol_by_id = {str(c.id): _carton_volume_cm3(c) for c in sorted_cartons}
-    drafts.sort(
-        key=lambda x: (
-            -x.sort_key,
-            vol_by_id.get(str(x.suggested_package_id), float("inf")),
-            x.package_name.lower(),
+    if not drafts and result.explanation:
+        # Fallback: at least one draft from smallest carton with warning
+        c = min(
+            cartons,
+            key=lambda x: (
+                float(x.length_cm or 0) * float(x.width_cm or 0) * float(x.height_cm or 0),
+                str(x.id),
+            ),
         )
-    )
+        drafts.append(
+            PackagingSuggestionDraft(
+                order_id=oid,
+                source_engine="THREE_D_MATCHING",
+                suggested_package_id=str(c.id),
+                package_name=str(c.name or "").strip() or "—",
+                package_dimensions=f"{float(c.length_cm):g}×{float(c.width_cm):g}×{float(c.height_cm):g} cm",
+                image_url=str(c.image_url).strip() if getattr(c, "image_url", None) else None,
+                confidence_score=0.25,
+                fill_percentage=None,
+                reason=result.explanation[:2000],
+                sort_key=0.1,
+            )
+        )
+
+    drafts.sort(key=lambda x: (-x.sort_key, x.package_name.lower()))
     return drafts

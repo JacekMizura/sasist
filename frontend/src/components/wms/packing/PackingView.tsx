@@ -26,6 +26,7 @@ import { DefaultCard } from "./DefaultCard";
 import { DoneCard } from "./DoneCard";
 import { ScannerHandler } from "./ScannerHandler";
 import { PackingMainCartonLeft, PackingRecommendedCartonsPanel } from "./PackingRecommendedCartons";
+import PackingFitRecommendationPanel from "./PackingFitRecommendationPanel";
 
 const NOTES_RED = "#d32f2f";
 const PRIMARY_GREEN = "#4caf50";
@@ -96,7 +97,7 @@ type PackingViewProps = {
   onInterrupt: () => void;
   recommendedCartons: WmsPackingRecommendedCartonApi[];
   selectedCartonId: string | null | undefined;
-  onSelectCarton: (cartonId: string) => void;
+  onSelectCarton: (cartonId: string, opts?: { confirmOverride?: boolean }) => void;
   selectCartonBusy: boolean;
   interfaceDisplay: WmsPackingInterfaceDisplay;
   /** Z sesji JWT (`/auth/me`) — bez cache localStorage. */
@@ -275,34 +276,13 @@ export function PackingView({
           <div className="min-w-0 border-t border-slate-200/90 pt-3">
             <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Karton</p>
             <PackingMainCartonLeft carton={detail.selected_carton} />
-            {(() => {
-              const top = detail.packaging_suggestions?.[0];
-              if (!top) return null;
-              const confPct = `${Math.round(Math.min(1, Math.max(0, top.confidence_score)) * 100)}%`;
-              const img = top.image_url?.trim();
-              return (
-                <div className="mt-1.5 flex gap-2 rounded-md border border-slate-200/90 bg-white p-1.5 shadow-sm">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden">
-                    {img ? (
-                      <img src={img} alt="" className="max-h-full max-w-full object-contain" loading="lazy" />
-                    ) : (
-                      <span className="text-xl text-slate-300" aria-hidden>
-                        📦
-                      </span>
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1 leading-tight">
-                    <p className="truncate text-xs font-bold text-slate-900">{top.package_name}</p>
-                    <p className="mt-0.5 text-[11px] font-semibold tabular-nums text-slate-600">
-                      {top.package_dimensions?.trim() || "—"}
-                    </p>
-                    <p className="mt-0.5 text-[10px] font-semibold text-slate-500">
-                      {packagingEngineOperatorLabel(top.source_engine)} {confPct}
-                    </p>
-                  </div>
-                </div>
-              );
-            })()}
+            <div className="mt-3">
+              <PackingFitRecommendationPanel
+                detail={detail}
+                busy={selectCartonBusy || packingActionsLocked}
+                onUseCarton={(id, opts) => void onSelectCarton(id, opts)}
+              />
+            </div>
           </div>
 
           <div className="border-t border-slate-200/90 pt-3">

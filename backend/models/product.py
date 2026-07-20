@@ -104,8 +104,12 @@ class Product(Base):
     stack_compressible = Column(Boolean, nullable=True)
     compressed_height_cm = Column(Float, nullable=True)
     max_stack_weight = Column(Float, nullable=True)
+    # Max sztuk W JEDNYM STOSIE (nie w całej lokalizacji/kartonie)
+    max_stack_count = Column(Integer, nullable=True)
     # Układanie w stos: stackable (domyślnie) | no_stack
     stack_behavior = Column(String(20), nullable=True)
+    # Delikatny — niezależne od NO_STACK (nie wolno kłaść innych produktów bezpośrednio na nim)
+    fragile = Column(Boolean, nullable=True)
 
     # Poziomy uzupełnienia lokacji pick-face (WMS replenishment — ilości szt.).
     min_pick_quantity = Column(Float, nullable=True)
@@ -163,6 +167,7 @@ class Product(Base):
     carton_stack_compressible = Column(Boolean, nullable=True)
     carton_compressed_height_cm = Column(Float, nullable=True)
     carton_max_stack_weight = Column(Float, nullable=True)
+    carton_max_stack_count = Column(Integer, nullable=True)
 
     # Szablon etykiety produktu (jeśli ustawiony, używany przy generowaniu etykiet)
     label_template_id = Column(

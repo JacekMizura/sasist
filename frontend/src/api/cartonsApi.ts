@@ -31,6 +31,10 @@ export type CartonDto = {
   length_cm: number;
   width_cm: number;
   height_cm: number;
+  internal_length_cm?: number | null;
+  internal_width_cm?: number | null;
+  internal_height_cm?: number | null;
+  max_payload_kg?: number | null;
   weight_kg: number;
   is_active: boolean;
   supplier_id?: number | null;
@@ -117,6 +121,10 @@ export type CartonWritePayload = {
   length_cm: number;
   width_cm: number;
   height_cm: number;
+  internal_length_cm?: number | null;
+  internal_width_cm?: number | null;
+  internal_height_cm?: number | null;
+  max_payload_kg?: number | null;
   weight_kg: number;
   is_active?: boolean;
   supplier_id?: number | null;

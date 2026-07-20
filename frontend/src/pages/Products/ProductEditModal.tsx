@@ -41,6 +41,7 @@ import { WarehouseFormCard as Card } from "../../components/products/WarehouseFo
 import { ProductWarehouseStockPanel } from "../../components/products/ProductWarehouseStockPanel";
 import ProductMultiWarehouseStockSection from "../../components/products/ProductMultiWarehouseStockSection";
 import ProductMultiWarehouseSlottingSection from "../../components/products/ProductMultiWarehouseSlottingSection";
+import ProductLocationCapacityList from "../../components/products/ProductLocationCapacityList";
 import { ProductStockCorrectionModal } from "../../components/products/ProductStockCorrectionModal";
 import { getInventoryManagementSettings } from "../../api/inventoryManagementPolicyApi";
 import { ProductManufacturingPanel } from "../Production/ProductManufacturingPanel";
@@ -142,18 +143,23 @@ export type ProductForm = {
   stack_compressible?: boolean;
   compressed_height_cm?: number | null;
   max_stack_weight?: number | null;
+  max_stack_count?: number | null;
   stack_behavior?: "stackable" | "no_stack";
+  fragile?: boolean | null;
+  product_fragile?: boolean | null;
   product_orientation_type?: "any" | "upright" | "no_stack";
   product_shape_type?: "box" | "cylinder";
   product_stack_compressible?: boolean;
   product_compressed_height_cm?: number | null;
   product_max_stack_weight?: number | null;
+  product_max_stack_count?: number | null;
   product_stack_behavior?: "stackable" | "no_stack";
   carton_orientation_type?: "any" | "upright" | "no_stack" | null;
   carton_shape_type?: "box" | "cylinder" | null;
   carton_stack_compressible?: boolean | null;
   carton_compressed_height_cm?: number | null;
   carton_max_stack_weight?: number | null;
+  carton_max_stack_count?: number | null;
   carton_stack_behavior?: "stackable" | "no_stack" | null;
   min_pick_quantity?: number | null;
   max_pick_quantity?: number | null;
@@ -515,6 +521,13 @@ export function ProductEditModal({
     const mw = product?.product_max_stack_weight ?? product?.max_stack_weight;
     return mw != null && mw > 0 ? mw : "";
   });
+  const [maxStackCount, setMaxStackCount] = useState<number | "">(() => {
+    const mc = product?.product_max_stack_count ?? product?.max_stack_count;
+    return mc != null && mc > 0 ? mc : "";
+  });
+  const [fragile, setFragile] = useState<boolean>(
+    Boolean(product?.product_fragile ?? product?.fragile ?? false),
+  );
   const [cartonOrientationType, setCartonOrientationType] = useState<"any" | "upright" | "no_stack">(() =>
     parseOrient(product?.carton_orientation_type),
   );
@@ -530,6 +543,10 @@ export function ProductEditModal({
   const [cartonMaxStackWeight, setCartonMaxStackWeight] = useState<number | "">(() => {
     const mw = product?.carton_max_stack_weight;
     return mw != null && mw > 0 ? mw : "";
+  });
+  const [cartonMaxStackCount, setCartonMaxStackCount] = useState<number | "">(() => {
+    const mc = product?.carton_max_stack_count;
+    return mc != null && mc > 0 ? mc : "";
   });
   const [minPickQuantity, setMinPickQuantity] = useState<number | "">(
     product?.min_pick_quantity != null && !Number.isNaN(Number(product.min_pick_quantity)) ? Number(product.min_pick_quantity) : "",
@@ -837,6 +854,13 @@ export function ProductEditModal({
           return mw != null && mw > 0 ? mw : "";
         })(),
       );
+      setMaxStackCount(
+        (() => {
+          const mc = product.product_max_stack_count ?? product.max_stack_count;
+          return mc != null && mc > 0 ? mc : "";
+        })(),
+      );
+      setFragile(Boolean(product.product_fragile ?? product.fragile ?? false));
       setCartonOrientationType(parseOrient(product.carton_orientation_type));
       setCartonShapeType(parseShape(product.carton_shape_type));
       setCartonStackBehavior(parseStackBehavior(product.carton_stack_behavior));
@@ -846,6 +870,9 @@ export function ProductEditModal({
       );
       setCartonMaxStackWeight(
         product.carton_max_stack_weight != null && product.carton_max_stack_weight > 0 ? product.carton_max_stack_weight : "",
+      );
+      setCartonMaxStackCount(
+        product.carton_max_stack_count != null && product.carton_max_stack_count > 0 ? product.carton_max_stack_count : "",
       );
       setMinPickQuantity(
         product.min_pick_quantity != null && !Number.isNaN(Number(product.min_pick_quantity)) ? Number(product.min_pick_quantity) : "",
@@ -1239,7 +1266,10 @@ export function ProductEditModal({
           compressedHeightCm === "" ? undefined : typeof compressedHeightCm === "number" ? compressedHeightCm : parseDecimal(String(compressedHeightCm)) ?? undefined,
         product_max_stack_weight:
           maxStackWeight === "" ? undefined : typeof maxStackWeight === "number" ? maxStackWeight : parseDecimal(String(maxStackWeight)) ?? undefined,
+        product_max_stack_count: maxStackCount === "" ? undefined : typeof maxStackCount === "number" ? maxStackCount : parseInt(String(maxStackCount), 10) || undefined,
         product_stack_behavior: stackBehavior,
+        product_fragile: fragile,
+        fragile: fragile,
         orientation_type: orientationType,
         shape_type: shapeType,
         stack_compressible: stackCompressible,
@@ -1247,6 +1277,7 @@ export function ProductEditModal({
           compressedHeightCm === "" ? undefined : typeof compressedHeightCm === "number" ? compressedHeightCm : parseDecimal(String(compressedHeightCm)) ?? undefined,
         max_stack_weight:
           maxStackWeight === "" ? undefined : typeof maxStackWeight === "number" ? maxStackWeight : parseDecimal(String(maxStackWeight)) ?? undefined,
+        max_stack_count: maxStackCount === "" ? undefined : typeof maxStackCount === "number" ? maxStackCount : parseInt(String(maxStackCount), 10) || undefined,
         stack_behavior: stackBehavior,
         carton_orientation_type: cartonOrientationType,
         carton_shape_type: cartonShapeType,
@@ -1263,6 +1294,12 @@ export function ProductEditModal({
             : typeof cartonMaxStackWeight === "number"
               ? cartonMaxStackWeight
               : parseDecimal(String(cartonMaxStackWeight)) ?? undefined,
+        carton_max_stack_count:
+          cartonMaxStackCount === ""
+            ? undefined
+            : typeof cartonMaxStackCount === "number"
+              ? cartonMaxStackCount
+              : parseInt(String(cartonMaxStackCount), 10) || undefined,
         carton_stack_behavior: cartonStackBehavior,
         min_pick_quantity: minPickVal ?? undefined,
         max_pick_quantity: maxPickVal ?? undefined,
@@ -1306,12 +1343,16 @@ export function ProductEditModal({
         product_stack_compressible: stackCompressible,
         product_compressed_height_cm: compressedHeightCm === "" ? undefined : parseNumber(compressedHeightCm) ?? undefined,
         product_max_stack_weight: maxStackWeight === "" ? undefined : parseNumber(maxStackWeight) ?? undefined,
+        product_max_stack_count: maxStackCount === "" ? undefined : parseNumber(maxStackCount) ?? undefined,
         product_stack_behavior: stackBehavior,
+        product_fragile: fragile,
+        fragile: fragile,
         carton_orientation_type: cartonOrientationType,
         carton_shape_type: cartonShapeType,
         carton_stack_compressible: cartonStackCompressible,
         carton_compressed_height_cm: cartonCompressedHeightCm === "" ? undefined : parseNumber(cartonCompressedHeightCm) ?? undefined,
         carton_max_stack_weight: cartonMaxStackWeight === "" ? undefined : parseNumber(cartonMaxStackWeight) ?? undefined,
+        carton_max_stack_count: cartonMaxStackCount === "" ? undefined : parseNumber(cartonMaxStackCount) ?? undefined,
         carton_stack_behavior: cartonStackBehavior,
         min_pick_quantity: minPickVal ?? undefined,
         max_pick_quantity: maxPickVal ?? undefined,
@@ -1386,6 +1427,8 @@ export function ProductEditModal({
           product_max_stack_weight:
             d?.product_max_stack_weight != null ? Number(d.product_max_stack_weight) : payload.product_max_stack_weight,
           product_stack_behavior: parseStackBehavior(d?.product_stack_behavior ?? d?.stack_behavior),
+          product_fragile: Boolean(d?.product_fragile ?? d?.fragile ?? fragile),
+          fragile: Boolean(d?.product_fragile ?? d?.fragile ?? fragile),
           orientation_type: parseOrient(d?.product_orientation_type ?? d?.orientation_type),
           shape_type: parseShape(d?.product_shape_type ?? d?.shape_type),
           stack_compressible: Boolean(d?.product_stack_compressible ?? d?.stack_compressible),
@@ -1464,6 +1507,8 @@ export function ProductEditModal({
           product_max_stack_weight:
             d?.product_max_stack_weight != null ? Number(d.product_max_stack_weight) : payload.product_max_stack_weight,
           product_stack_behavior: parseStackBehavior(d?.product_stack_behavior ?? d?.stack_behavior),
+          product_fragile: Boolean(d?.product_fragile ?? d?.fragile ?? fragile),
+          fragile: Boolean(d?.product_fragile ?? d?.fragile ?? fragile),
           orientation_type: parseOrient(d?.product_orientation_type ?? d?.orientation_type),
           shape_type: parseShape(d?.product_shape_type ?? d?.shape_type),
           stack_compressible: Boolean(d?.product_stack_compressible ?? d?.stack_compressible),
@@ -2477,15 +2522,18 @@ export function ProductEditModal({
                     <div className="space-y-6">
                       <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
                         <div className="border-b border-slate-100 px-5 py-4">
-                          <h3 className="font-semibold text-slate-800">Magazynowanie: Produkt (Sztuka)</h3>
+                          <h3 className="font-semibold text-slate-800">Logistyka i pakowanie: Produkt (Sztuka)</h3>
+                          <p className="mt-1 text-xs text-slate-500">
+                            Wymiary, orientacja i układanie — wspólny silnik fit (magazyn + pakowanie).
+                          </p>
                         </div>
                         <div className="space-y-5 p-5">
                           <div>
                             <label className={fieldLabel}>Wymagana orientacja</label>
                             <select value={orientationType} onChange={(e) => setOrientationType(e.target.value as "any" | "upright" | "no_stack")} className={inputClass}>
-                              <option value="any">Dowolna orientacja</option>
-                              <option value="upright">Tylko w pionie (strzałki do góry)</option>
-                              <option value="no_stack">Nie obracać</option>
+                              <option value="any">Dowolna</option>
+                              <option value="upright">Pionowo (strzałki do góry)</option>
+                              <option value="no_stack">Bez obracania</option>
                             </select>
                           </div>
                           <div>
@@ -2496,12 +2544,29 @@ export function ProductEditModal({
                             </select>
                           </div>
                           <div>
-                            <label className={fieldLabel}>Czy można układać w stos?</label>
+                            <label className={fieldLabel}>Układanie</label>
                             <select value={stackBehavior} onChange={(e) => setStackBehavior(e.target.value as "stackable" | "no_stack")} className={inputClass}>
-                              <option value="stackable">Tak, sztuka na sztuce</option>
-                              <option value="no_stack">Nie układać w stos!</option>
+                              <option value="stackable">Można układać w stos</option>
+                              <option value="no_stack">Nie układać w stos (NO_STACK)</option>
                             </select>
+                            <p className="mt-1 text-xs text-slate-500">
+                              NO_STACK ≠ Fragile: tu chodzi o to, że nie wolno kłaść innych sztuk nad tym produktem.
+                            </p>
                           </div>
+
+                          <label className="flex cursor-pointer items-center gap-3">
+                            <input
+                              type="checkbox"
+                              checked={fragile}
+                              onChange={(e) => setFragile(e.target.checked)}
+                              className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            <span className="text-sm font-medium text-slate-700">Delikatny / Fragile</span>
+                          </label>
+                          <p className="-mt-3 text-xs text-slate-500">
+                            Fragile: nie wolno umieszczać innego produktu bezpośrednio nad tą sztuką (reguła konserwatywna).
+                            To nie to samo co NO_STACK — możesz mieć stosowalny, ale kruchy towar.
+                          </p>
                           
                           {stackBehavior === "stackable" && (
                             <div className="space-y-4 pt-2 border-t border-slate-200">
@@ -2512,13 +2577,13 @@ export function ProductEditModal({
                                   onChange={(e) => setStackCompressible(e.target.checked)}
                                   className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                                 />
-                                <span className="text-sm font-medium text-slate-700">Podlega kompresji przy nacisku</span>
+                                <span className="text-sm font-medium text-slate-700">Produkt kompresowalny</span>
                               </label>
                               
                               <div className="grid grid-cols-1 gap-4">
                                 {stackCompressible ? (
                                   <div>
-                                    <label className={fieldLabel}>Wys. po kompresji (cm)</label>
+                                    <label className={fieldLabel}>Wysokość kolejnej sztuki po ściśnięciu (cm)</label>
                                     <input
                                       type="number" min={0.01} step={0.1}
                                       value={compressedHeightCm === "" ? "" : compressedHeightCm}
@@ -2529,10 +2594,11 @@ export function ProductEditModal({
                                       }}
                                       className={inputClass}
                                     />
+                                    <p className="mt-1 text-xs text-slate-500">Musi być &gt; 0 i ≤ wysokości produktu.</p>
                                   </div>
                                 ) : null}
                                 <div>
-                                  <label className={fieldLabel}>Maks. ciężar stosu (kg)</label>
+                                  <label className={fieldLabel}>Maks. waga stosu (kg)</label>
                                   <input
                                     type="number" min={0} step={0.1}
                                     value={maxStackWeight === "" ? "" : maxStackWeight}
@@ -2541,13 +2607,35 @@ export function ProductEditModal({
                                       if (s === "") setMaxStackWeight("");
                                       else { const n = parseFloat(s); if (Number.isFinite(n) && n >= 0) setMaxStackWeight(n); }
                                     }}
-                                    placeholder="Opcjonalny limit"
+                                    placeholder="Opcjonalny limit (pusty = bez limitu)"
                                     className={inputClass}
                                   />
+                                </div>
+                                <div>
+                                  <label className={fieldLabel}>Maks. sztuk w jednym stosie</label>
+                                  <input
+                                    type="number" min={1} step={1}
+                                    value={maxStackCount === "" ? "" : maxStackCount}
+                                    onChange={(e) => {
+                                      const s = String(e.target.value).trim();
+                                      if (s === "") setMaxStackCount("");
+                                      else { const n = parseInt(s, 10); if (Number.isFinite(n) && n >= 1) setMaxStackCount(n); }
+                                    }}
+                                    placeholder="Puste = bez limitu sztuk (tylko geometria)"
+                                    className={inputClass}
+                                  />
+                                  <p className="mt-1 text-xs text-slate-500">
+                                    Dotyczy jednego pionowego stosu. Jeżeli na półce mieszczą się 4 stosy po 5 szt., łączna pojemność wynosi 20 szt.
+                                  </p>
                                 </div>
                               </div>
                             </div>
                           )}
+                          {stackBehavior === "no_stack" ? (
+                            <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                              Przy NO_STACK limit „maks. sztuk w stosie” jest ignorowany przez solver (efektywnie 1).
+                            </p>
+                          ) : null}
                         </div>
                       </section>
 
@@ -2621,6 +2709,20 @@ export function ProductEditModal({
                                     className={inputClass}
                                   />
                                 </div>
+                                <div>
+                                  <label className={fieldLabel}>Maks. kartonów w jednym stosie</label>
+                                  <input
+                                    type="number" min={1} step={1}
+                                    value={cartonMaxStackCount === "" ? "" : cartonMaxStackCount}
+                                    onChange={(e) => {
+                                      const s = String(e.target.value).trim();
+                                      if (s === "") setCartonMaxStackCount("");
+                                      else { const n = parseInt(s, 10); if (Number.isFinite(n) && n >= 1) setCartonMaxStackCount(n); }
+                                    }}
+                                    placeholder="Limit jednego stosu master carton"
+                                    className={inputClass}
+                                  />
+                                </div>
                               </div>
                             </div>
                           )}
@@ -2648,6 +2750,17 @@ export function ProductEditModal({
                   {!isNew && product?.id && tenantId != null ? (
                     <div className="mt-8 w-full max-w-7xl space-y-8">
                       <ProductMultiWarehouseStockSection productId={product.id} tenantId={tenantId} />
+                      {!isNew && product?.id ? (
+                        <ProductLocationCapacityList
+                          productId={product.id}
+                          tenantId={tenantId}
+                          locations={(magazynInventoryRows as MagazynInvRowDisplay[]).map((r) => ({
+                            location_id: r.location_id,
+                            location_code: r.location_code,
+                            quantity: r.quantity,
+                          }))}
+                        />
+                      ) : null}
                       <ProductMultiWarehouseSlottingSection productId={product.id} tenantId={tenantId} />
                     </div>
                   ) : null}

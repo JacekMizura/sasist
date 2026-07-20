@@ -533,7 +533,7 @@ export function usePackingOrderController(
   }, []);
 
   const selectCarton = useCallback(
-    async (cartonId: string) => {
+    async (cartonId: string, opts?: { confirmOverride?: boolean }) => {
       if (warehouseId == null || !Number.isFinite(orderId) || orderId < 1) return;
       const s = session;
       if (!s?.mode) return;
@@ -544,7 +544,7 @@ export function usePackingOrderController(
         const res = await patchOrderSelectCarton(
           orderId,
           DAMAGE_TENANT_ID,
-          { carton_id: cid },
+          { carton_id: cid, confirm_override: Boolean(opts?.confirmOverride) },
           {
             warehouseId,
             statusId: s.statusId,
@@ -552,6 +552,10 @@ export function usePackingOrderController(
             cartId: s.mode === "bulk" || s.mode === "baskets" ? s.cartId : undefined,
           },
         );
+        if (res.requires_override_confirmation) {
+          showScannerToast(res.physical_fit_warning || "Opakowanie może być za małe — potwierdź override.");
+          return res;
+        }
         setDetail((d) =>
           d
             ? {
@@ -562,6 +566,7 @@ export function usePackingOrderController(
             : null,
         );
         setSelectedPackagingIds((prev) => (prev.includes(cid) ? prev : [...prev, cid]));
+        return res;
       } catch {
         showScannerToast("Nie udało się zapisać wyboru kartonu.");
       } finally {

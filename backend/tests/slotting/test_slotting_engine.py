@@ -64,6 +64,7 @@ def _product(**kw):
         orientation_type="any",
         stack_behavior="stackable",
         stack_compressible=False,
+        compressed_height_cm=None,
         max_stack_weight=None,
         units_per_carton=12,
         carton_length_cm=40.0,
@@ -137,10 +138,13 @@ class TestCapacityFit(unittest.TestCase):
         self.assertIn("Pallet-only", reason or "")
 
     def test_max_stack_weight_caps_units(self):
-        loc = _loc(max_weight_kg=1000.0)
-        prod = _product(weight=2.0, volume=0.2, max_stack_weight=4.0)
+        # max_stack_weight = limit PER STACK (shared fit_engine), not whole location
+        loc = _loc(max_weight_kg=1000.0, width=20, depth=20, height=100)
+        prod = _product(length=10, width=10, height=10, weight=2.0, volume=1.0, max_stack_weight=4.0)
         fit = calculate_location_capacity(loc, prod, 10)
+        # footprint 2×2 = 4 stacks × 2 units/stack (weight) = 8 max → qty 10 does not fit
         self.assertFalse(fit.fits)
+        self.assertLess(fit.max_units, 10)
 
     def test_carton_packaging_mode(self):
         loc = _loc()

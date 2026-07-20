@@ -171,7 +171,7 @@ def ensure_products_physical_columns(engine: Engine) -> None:
 
 
 def ensure_products_stack_columns(engine: Engine) -> None:
-    """Add stack_compressible, compressed_height_cm, max_stack_weight to products table if missing (nullable)."""
+    """Add stack_compressible, compressed_height_cm, max_stack_weight, max_stack_count to products if missing."""
     with engine.connect() as conn:
         columns = _table_column_names(conn, "products")
         if "stack_compressible" not in columns:
@@ -180,15 +180,38 @@ def ensure_products_stack_columns(engine: Engine) -> None:
             conn.execute(text("ALTER TABLE products ADD COLUMN compressed_height_cm REAL"))
         if "max_stack_weight" not in columns:
             conn.execute(text("ALTER TABLE products ADD COLUMN max_stack_weight REAL"))
+        if "max_stack_count" not in columns:
+            conn.execute(text("ALTER TABLE products ADD COLUMN max_stack_count INTEGER"))
         conn.commit()
 
 
 def ensure_products_stack_behavior_column(engine: Engine) -> None:
-    """Add stack_behavior to products table if missing (nullable). Default at read time: stackable."""
+    """Add stack_behavior / fragile to products table if missing (nullable)."""
     with engine.connect() as conn:
         columns = _table_column_names(conn, "products")
         if "stack_behavior" not in columns:
             conn.execute(text("ALTER TABLE products ADD COLUMN stack_behavior VARCHAR(20)"))
+        if "fragile" not in columns:
+            conn.execute(text("ALTER TABLE products ADD COLUMN fragile INTEGER"))
+        conn.commit()
+
+
+def ensure_cartons_usable_dimensions_columns(engine: Engine) -> None:
+    """Internal/usable carton dims + max payload for fit_engine packaging SSOT."""
+    with engine.connect() as conn:
+        if not _table_exists(conn, "cartons"):
+            conn.commit()
+            return
+        columns = _table_column_names(conn, "cartons")
+        specs = [
+            ("internal_length_cm", "REAL"),
+            ("internal_width_cm", "REAL"),
+            ("internal_height_cm", "REAL"),
+            ("max_payload_kg", "REAL"),
+        ]
+        for col_name, col_type in specs:
+            if col_name not in columns:
+                conn.execute(text(f"ALTER TABLE cartons ADD COLUMN {col_name} {col_type}"))
         conn.commit()
 
 
@@ -256,6 +279,7 @@ def ensure_products_carton_stacking_columns(engine: Engine) -> None:
             ("carton_stack_compressible", "INTEGER"),
             ("carton_compressed_height_cm", "REAL"),
             ("carton_max_stack_weight", "REAL"),
+            ("carton_max_stack_count", "INTEGER"),
         ]
         for col_name, col_type in specs:
             if col_name not in columns:

@@ -482,6 +482,7 @@ class ProductBody(BaseModel):
     stack_compressible: Optional[bool] = None
     compressed_height_cm: Optional[float] = None
     max_stack_weight: Optional[float] = None
+    max_stack_count: Optional[int] = None
     stack_behavior: Optional[str] = None  # deprecated: use product_stack_behavior
     # Explicit single-unit (product) stacking — preferred; maps to orientation_type / shape_type / … columns
     product_orientation_type: Optional[str] = None
@@ -489,7 +490,10 @@ class ProductBody(BaseModel):
     product_stack_compressible: Optional[bool] = None
     product_compressed_height_cm: Optional[float] = None
     product_max_stack_weight: Optional[float] = None
+    product_max_stack_count: Optional[int] = None
     product_stack_behavior: Optional[str] = None
+    fragile: Optional[bool] = None
+    product_fragile: Optional[bool] = None
     # When True on update with assigned_locations: persist JSON without Inventory sync/delete.
     skip_inventory_sync: Optional[bool] = None
     # Optional JSON string (e.g. merged client extensions under product_ui).
@@ -516,6 +520,7 @@ class ProductBody(BaseModel):
     carton_stack_compressible: Optional[bool] = None
     carton_compressed_height_cm: Optional[float] = None
     carton_max_stack_weight: Optional[float] = None
+    carton_max_stack_count: Optional[int] = None
     carton_stack_behavior: Optional[str] = None
     # WMS: śledzenie partii / daty ważności przy przyjęciu i w inventory
     track_batch: Optional[bool] = None
@@ -1345,6 +1350,7 @@ def _resolved_product_stack_from_body(body: ProductBody) -> dict:
     sc = pick("product_stack_compressible", "stack_compressible")
     ch = pick("product_compressed_height_cm", "compressed_height_cm")
     mw = pick("product_max_stack_weight", "max_stack_weight")
+    mc = pick("product_max_stack_count", "max_stack_count")
     sb = pick("product_stack_behavior", "stack_behavior")
     return {
         "orientation_type": (o or "").strip() or None if isinstance(o, str) else o,
@@ -1352,7 +1358,9 @@ def _resolved_product_stack_from_body(body: ProductBody) -> dict:
         "stack_compressible": sc,
         "compressed_height_cm": ch,
         "max_stack_weight": mw,
+        "max_stack_count": int(mc) if mc is not None else None,
         "stack_behavior": (sb or "").strip() or None if isinstance(sb, str) else sb,
+        "fragile": pick("product_fragile", "fragile"),
     }
 
 
@@ -1425,13 +1433,17 @@ def _product_to_dict(p: Product) -> dict:
         "product_stack_compressible": getattr(p, "stack_compressible", None),
         "product_compressed_height_cm": getattr(p, "compressed_height_cm", None),
         "product_max_stack_weight": getattr(p, "max_stack_weight", None),
+        "product_max_stack_count": getattr(p, "max_stack_count", None),
         "product_stack_behavior": getattr(p, "stack_behavior", None),
+        "product_fragile": getattr(p, "fragile", None),
+        "fragile": getattr(p, "fragile", None),
         # Deprecated aliases — same columns as product_* (backward compatible clients)
         "orientation_type": getattr(p, "orientation_type", None),
         "shape_type": getattr(p, "shape_type", None),
         "stack_compressible": getattr(p, "stack_compressible", None),
         "compressed_height_cm": getattr(p, "compressed_height_cm", None),
         "max_stack_weight": getattr(p, "max_stack_weight", None),
+        "max_stack_count": getattr(p, "max_stack_count", None),
         "stack_behavior": getattr(p, "stack_behavior", None),
         # Carton stacking
         "carton_orientation_type": getattr(p, "carton_orientation_type", None),
@@ -1439,6 +1451,7 @@ def _product_to_dict(p: Product) -> dict:
         "carton_stack_compressible": getattr(p, "carton_stack_compressible", None),
         "carton_compressed_height_cm": getattr(p, "carton_compressed_height_cm", None),
         "carton_max_stack_weight": getattr(p, "carton_max_stack_weight", None),
+        "carton_max_stack_count": getattr(p, "carton_max_stack_count", None),
         "carton_stack_behavior": getattr(p, "carton_stack_behavior", None),
         "min_pick_quantity": _round_float(float(mn_pick), 2) if mn_pick is not None else None,
         "max_pick_quantity": _round_float(float(mx_pick), 2) if mx_pick is not None else None,
@@ -2651,6 +2664,7 @@ def create_product(
         stack_compressible=pst["stack_compressible"],
         compressed_height_cm=pst["compressed_height_cm"],
         max_stack_weight=pst["max_stack_weight"],
+        max_stack_count=pst.get("max_stack_count"),
         stack_behavior=pst["stack_behavior"],
         metadata_json=(body.metadata_json or "").strip() or None,
         min_pick_quantity=_round_float(body.min_pick_quantity, 2) if body.min_pick_quantity is not None else None,
@@ -2672,6 +2686,7 @@ def create_product(
         carton_stack_compressible=body.carton_stack_compressible,
         carton_compressed_height_cm=body.carton_compressed_height_cm,
         carton_max_stack_weight=body.carton_max_stack_weight,
+        carton_max_stack_count=body.carton_max_stack_count,
         track_batch=bool(body.track_batch) if body.track_batch is not None else False,
         track_expiry=bool(body.track_expiry) if body.track_expiry is not None else False,
         track_serial=bool(body.track_serial) if body.track_serial is not None else False,
@@ -3540,9 +3555,41 @@ def update_product(
         product.max_stack_weight = (
             body.product_max_stack_weight if "product_max_stack_weight" in fields_set else body.max_stack_weight
         )
+    if "product_max_stack_count" in fields_set or "max_stack_count" in fields_set:
+        product.max_stack_count = (
+            body.product_max_stack_count if "product_max_stack_count" in fields_set else body.max_stack_count
+        )
+    if "product_fragile" in fields_set or "fragile" in fields_set:
+        product.fragile = body.product_fragile if "product_fragile" in fields_set else body.fragile
     if "product_stack_behavior" in fields_set or "stack_behavior" in fields_set:
         v = body.product_stack_behavior if "product_stack_behavior" in fields_set else body.stack_behavior
         product.stack_behavior = (v or "").strip() or None if isinstance(v, str) else v
+
+    # Domain logistic validation (SSOT) — after applying product-level fields
+    from ..services.product_logistic_validator import validate_product_logistics
+
+    _log_val = validate_product_logistics(
+        length=getattr(product, "length", None),
+        width=getattr(product, "width", None),
+        height=getattr(product, "height", None),
+        weight=getattr(product, "weight", None),
+        orientation_type=getattr(product, "orientation_type", None),
+        stack_behavior=getattr(product, "stack_behavior", None),
+        max_stack_count=getattr(product, "max_stack_count", None),
+        stack_compressible=getattr(product, "stack_compressible", None),
+        compressed_height_cm=getattr(product, "compressed_height_cm", None),
+        max_stack_weight=getattr(product, "max_stack_weight", None),
+        fragile=getattr(product, "fragile", None),
+    )
+    if not _log_val.ok:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "PRODUCT_LOGISTICS_INVALID",
+                "errors": [{"code": e.code, "field": e.field, "message": e.message} for e in _log_val.errors],
+                "warnings": [{"code": w.code, "field": w.field, "message": w.message} for w in _log_val.warnings],
+            },
+        )
 
     if "carton_orientation_type" in fields_set:
         v = body.carton_orientation_type
@@ -3556,6 +3603,8 @@ def update_product(
         product.carton_compressed_height_cm = body.carton_compressed_height_cm
     if "carton_max_stack_weight" in fields_set:
         product.carton_max_stack_weight = body.carton_max_stack_weight
+    if "carton_max_stack_count" in fields_set:
+        product.carton_max_stack_count = body.carton_max_stack_count
     if "carton_stack_behavior" in fields_set:
         v = body.carton_stack_behavior
         product.carton_stack_behavior = (v or "").strip() or None if isinstance(v, str) else v

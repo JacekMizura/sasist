@@ -61,8 +61,22 @@ from .document_creator_service import batch_load_app_users
 from .wms_receiving_service import build_wms_pz_list_row
 from .purchase_order_warehouse_sync_service import sync_purchase_order_status_for_stock_document_id
 from .slotting import recalculate_location_occupancy, suggest_putaway_locations as slotting_suggest_putaway_locations, validate_putaway_assignment
+from .slotting.capacity_presentation import product_location_capacity_dict
 from .slotting.capacity_service import calculate_location_capacity, location_volume_capacity_dm3
+from .slotting.location_capacity_solver import solve_location_capacity
+from .slotting.putaway_distribution_service import build_putaway_distribution_plan
 from .slotting.slotting_models import STRATEGY_CONSOLIDATE_SKU
+
+
+def _product_capacity_card(db: Session, loc: Location, product: Product | None) -> dict | None:
+    if product is None:
+        return None
+    try:
+        return product_location_capacity_dict(
+            solve_location_capacity(db, location=loc, product=product, packaging_mode="UNIT")
+        )
+    except Exception:
+        return None
 
 
 def _stamp_putaway_line_last_audit(
@@ -786,12 +800,16 @@ def _suggestion_row_from_location(
     reason_tags: list[str] | None = None,
     capacity_fits: bool = True,
     capacity_warnings: list[str] | None = None,
+    product_capacity: dict | None = None,
 ) -> WmsPutawayLocationSuggestionRow:
     code = (loc.name or "").strip() or f"#{loc.id}"
     zone = (getattr(loc, "rack_name", None) or "").strip() or None
     total_vol = location_volume_capacity_dm3(loc)
     occ_vol = float(getattr(loc, "occupied_volume_dm3", 0) or 0)
     free_cap = max(0.0, total_vol - occ_vol) if total_vol > 0 else None
+    pc = product_capacity or {}
+    add = pc.get("additional_capacity")
+    total_cap = pc.get("total_capacity")
     return WmsPutawayLocationSuggestionRow(
         location_id=int(loc.id),
         code=code,
@@ -801,12 +819,21 @@ def _suggestion_row_from_location(
         priority_score=float(priority_score),
         location_type=wms_location_badge_kind(loc),
         storage_type=storage_type,
-        max_fit_quantity=max_fit_quantity,
+        max_fit_quantity=max_fit_quantity if max_fit_quantity is not None else (float(add) if add is not None else None),
         remaining_capacity_percent=remaining_capacity_percent,
         same_sku_present=same_sku_present,
         reason_tags=list(reason_tags or []),
         capacity_fits=capacity_fits,
         capacity_warnings=list(capacity_warnings or []),
+        total_capacity=float(total_cap) if total_cap is not None else None,
+        additional_capacity=float(add) if add is not None else None,
+        utilization_percent=float(pc["utilization_percent"]) if pc.get("utilization_percent") is not None else None,
+        confidence=str(pc["confidence"]) if pc.get("confidence") else None,
+        method=str(pc["method"]) if pc.get("method") else None,
+        limiting_factor=pc.get("limiting_factor"),
+        limiting_factor_label=pc.get("limiting_factor_label"),
+        additional_capacity_label=pc.get("additional_capacity_label"),
+        capacity_ratio_label=pc.get("capacity_ratio_label"),
     )
 
 
@@ -936,8 +963,10 @@ def suggest_putaway_locations(db: Session, tenant_id: int, item_id: int) -> WmsP
             continue
         slot = slotting_by_lid.get(lid)
         fit = None
+        pc = None
         if product is not None:
             fit = calculate_location_capacity(loc, product, remaining_qty)
+            pc = _product_capacity_card(db, loc, product)
         existing_stock.append(
             _suggestion_row_from_location(
                 loc,
@@ -950,6 +979,7 @@ def suggest_putaway_locations(db: Session, tenant_id: int, item_id: int) -> WmsP
                 reason_tags=list(slot.reason_tags) if slot else (["same_sku_present"] if qty > 0 else []),
                 capacity_fits=bool(fit.fits) if fit else True,
                 capacity_warnings=_capacity_warnings_for_fit(fit) if fit and not fit.fits else [],
+                product_capacity=pc,
             )
         )
 
@@ -964,6 +994,7 @@ def suggest_putaway_locations(db: Session, tenant_id: int, item_id: int) -> WmsP
             if dock_id is not None and int(loc.id) == int(dock_id):
                 continue
             fit = slot.capacity_result
+            pc = _product_capacity_card(db, loc, product)
             sug = _suggestion_row_from_location(
                 loc,
                 current_quantity=float(qty_by_lid.get(int(loc.id), 0)),
@@ -975,6 +1006,7 @@ def suggest_putaway_locations(db: Session, tenant_id: int, item_id: int) -> WmsP
                 reason_tags=list(slot.reason_tags),
                 capacity_fits=bool(fit.fits) if fit else True,
                 capacity_warnings=_capacity_warnings_for_fit(fit) if fit and not fit.fits else [],
+                product_capacity=pc,
             )
             if _location_is_overflow_storage(loc):
                 overflow_candidates.append(sug)
@@ -994,11 +1026,13 @@ def suggest_putaway_locations(db: Session, tenant_id: int, item_id: int) -> WmsP
             seq_score = float(ps) if ps is not None else 1_000_000.0
             priority = max(0.0, 10_000.0 - seq_score)
             st = st_by_lid.get(lid, "unknown")
+            pc = _product_capacity_card(db, loc, product)
             sug = _suggestion_row_from_location(
                 loc,
                 current_quantity=0.0,
                 priority_score=priority,
                 storage_type=st,
+                product_capacity=pc,
             )
             if _location_is_overflow_storage(loc):
                 overflow_candidates.append(sug)
@@ -1008,10 +1042,28 @@ def suggest_putaway_locations(db: Session, tenant_id: int, item_id: int) -> WmsP
     primary_candidates.sort(key=lambda r: (-r.priority_score, r.code))
     overflow_candidates.sort(key=lambda r: (-r.priority_score, r.code))
 
+    distribution_plan = None
+    if remaining_qty > 1e-9 and product is not None:
+        try:
+            plan = build_putaway_distribution_plan(
+                db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(wh_id),
+                product_id=int(product_id),
+                quantity=float(remaining_qty),
+                exclude_location_ids=mm_skip_source,
+            )
+            distribution_plan = plan.to_dict()
+        except Exception:
+            import logging
+
+            logging.getLogger(__name__).exception("putaway distribution plan failed item_id=%s", item_id)
+
     return WmsPutawayLocationSuggestionsOut(
         suggested_primary_locations=primary_candidates[:8],
         suggested_overflow_locations=overflow_candidates[:8],
         existing_stock_locations=existing_stock[:12],
+        distribution_plan=distribution_plan,
     )
 
 

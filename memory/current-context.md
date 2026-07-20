@@ -2,14 +2,18 @@
 
 ## Active
 
-**Pakowanie lista → skan EAN** — bootstrap nie otwiera od razu „Wybierz opakowanie”; najpierw widok zamówienia (+ CTA gdy 1/1).
+**PRODUCT INTEGRATION Phase 1 + core Phase 2** — implemented (local commit pending/done). No push.
 
-## Architecture (confirmed)
+## Delivered
 
-- List scan: `POST /wms/packing/resolve-ean/scan` (zalicza 1 szt.) → navigate z `packingScanBootstrap`.
-- Order page: `applyPackingResult(..., { fromListBootstrap: true })` defer carton; CTA „Wybierz opakowanie”.
-- In-order scans: nadal auto-bramka kartonu po `fully_packed`.
+- Capacity SSOT API: product×location + batch (max 80)
+- Putaway UI: capacity cards + distribution plan (PLAN ≠ execution)
+- Product locations capacity list (batch)
+- Packing: recommendation panel, alts, override warning, multi-carton plan read-only
+- Multi-carton persistence: GAP (single `selected_carton_id`)
 
-## Notes
+## Hard gates
 
-- No push until asked.
+- FE operational UI does not compute fit
+- Smart cannot promote NO FIT
+- Distribution plan does not mutate Inventory

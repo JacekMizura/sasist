@@ -1170,9 +1170,11 @@ def _build_packing_order_card(
     packaging_suggestions: List[PackagingSuggestionOut] = []
     primary_packaging_suggestion: PackagingSuggestionOut | None = None
     packaging_alternatives: List[PackagingSuggestionOut] = []
+    packaging_fit_plan = None
+    recommended_carton_id: Optional[str] = None
     if enrich and db is not None and int(tenant_id) > 0 and int(warehouse_id) > 0:
         try:
-            packaging_suggestions, primary_packaging_suggestion, packaging_alternatives = (
+            packaging_suggestions, primary_packaging_suggestion, packaging_alternatives, packaging_fit_plan = (
                 build_packaging_suggestions_for_order(
                     db,
                     order,
@@ -1180,11 +1182,18 @@ def _build_packing_order_card(
                     warehouse_id=int(warehouse_id),
                 )
             )
+            recommended_carton_id = (
+                packaging_fit_plan.recommended_packaging
+                if packaging_fit_plan is not None
+                else (primary_packaging_suggestion.suggested_package_id if primary_packaging_suggestion else None)
+            )
         except Exception:
             logger.exception("build_packaging_suggestions_for_order order_id=%s", getattr(order, "id", None))
             packaging_suggestions = []
             primary_packaging_suggestion = None
             packaging_alternatives = []
+            packaging_fit_plan = None
+            recommended_carton_id = None
     selected_carton_id: Optional[str] = None
     selected_carton: Optional[WmsPackingRecommendedCarton] = None
     operational_notes_brief: List[WmsOperationalNoteBrief] = []
@@ -1267,6 +1276,8 @@ def _build_packing_order_card(
         packaging_suggestions=packaging_suggestions,
         primary_packaging_suggestion=primary_packaging_suggestion,
         packaging_alternatives=packaging_alternatives,
+        packaging_fit_plan=packaging_fit_plan,
+        recommended_carton_id=recommended_carton_id,
         selected_carton_id=selected_carton_id,
         selected_carton=selected_carton,
         operational_notes_packing=operational_notes_brief,
@@ -1397,17 +1408,30 @@ def suggestions_to_recommended_cartons(
     *,
     limit: int = 3,
 ) -> List[WmsPackingRecommendedCarton]:
-    """UI pakowania (kompatybilność): pierwsze propozycje silnika jako lista kartonów."""
+    """UI pakowania: pierwsze propozycje silnika jako lista kartonów (z fit enrichment)."""
     lim = max(2, min(int(limit), 6))
     out: List[WmsPackingRecommendedCarton] = []
     for i, s in enumerate(suggestions[:lim]):
+        warns: list[str] = []
+        if s.fit_confidence == "ESTIMATED":
+            warns.append("Dopasowanie szacunkowe.")
+        if s.reject_reason_label:
+            warns.append(s.reject_reason_label)
         out.append(
             WmsPackingRecommendedCarton(
                 id=str(s.suggested_package_id),
                 name=str(s.package_name or "").strip(),
                 dimensions=str(s.package_dimensions or "").strip(),
                 image_url=s.image_url,
-                is_best=(i == 0),
+                is_best=bool(s.is_recommended) or (i == 0 and s.fit_status != "REJECTED"),
+                usable_dimensions=s.usable_dimensions,
+                fill_percentage=s.fill_percentage,
+                total_weight_kg=s.total_weight_kg,
+                max_payload_kg=s.max_payload_kg,
+                fit_status=s.fit_status,
+                fit_confidence=s.fit_confidence,
+                reject_reason_label=s.reject_reason_label,
+                warnings=warns,
             )
         )
     return out
@@ -1509,12 +1533,15 @@ def apply_order_selected_carton(
     status_id: int | None = None,
     mode: str | None = None,
     cart_id: int | None = None,
+    confirm_override: bool = False,
+    recommended_carton_id: str | None = None,
 ) -> OrderSelectCartonResponse:
     """
     Ustawia ``orders.selected_carton_id``.
 
     WMS packing wymaga pełnego scope (warehouse + status + mode + cart_id) —
     ten sam kanoniczny filtr co scan/finish.
+    Physical NO FIT → warning; block until confirm_override unless eligible.
     """
     cid = (carton_id or "").strip()
     if not cid:
@@ -1556,6 +1583,39 @@ def apply_order_selected_carton(
     )
     if row is None:
         raise ValueError("INVALID_CARTON")
+
+    # Physical fit check (gate warning — does not mutate until confirmed if rejected)
+    physical_ok = True
+    warning = None
+    override_code = None
+    rec_id = (recommended_carton_id or "").strip() or None
+    try:
+        from .packaging_engine.cartonization_solver import items_from_order, try_fit_order_in_carton
+        from .fit_engine.adapters import fit_container_from_carton
+        from .packaging_engine.presentation import map_reject_reason_to_operator
+
+        items = items_from_order(order)
+        container = fit_container_from_carton(row)
+        ok, reason, _ = try_fit_order_in_carton(container, items) if items else (True, None, None)
+        if items and not ok:
+            physical_ok = False
+            override_code = str(reason or "GEOMETRIC_PACKING_FAILED")
+            warning = map_reject_reason_to_operator(override_code)
+            if not confirm_override:
+                summ = _carton_row_to_recommended(row, is_best=False)
+                return OrderSelectCartonResponse(
+                    selected_carton_id=prev_s or None,
+                    selected_carton=_selected_carton_summary_for_order(db, order),
+                    recommended_carton_id=rec_id,
+                    was_overridden=False,
+                    physical_fit_ok=False,
+                    physical_fit_warning=warning,
+                    override_reason_code=override_code,
+                    requires_override_confirmation=True,
+                )
+    except Exception:
+        logger.exception("physical fit check on select-carton order_id=%s", order_id)
+
     order.selected_carton_id = cid
     db.add(order)
     if prev_s != cid:
@@ -1570,7 +1630,16 @@ def apply_order_selected_carton(
         )
     db.commit()
     summ = _carton_row_to_recommended(row, is_best=False)
-    return OrderSelectCartonResponse(selected_carton_id=cid, selected_carton=summ)
+    return OrderSelectCartonResponse(
+        selected_carton_id=cid,
+        selected_carton=summ,
+        recommended_carton_id=rec_id,
+        was_overridden=bool(not physical_ok and confirm_override),
+        physical_fit_ok=physical_ok,
+        physical_fit_warning=warning if not physical_ok else None,
+        override_reason_code=override_code if not physical_ok else None,
+        requires_override_confirmation=False,
+    )
 
 
 def _packing_queue_index_for_order(

@@ -8,7 +8,7 @@ from typing import List, Literal, Optional
 from pydantic import BaseModel, Field, computed_field
 
 from .order import OrderUiMainGroup
-from .packaging_intelligence import PackagingSuggestionOut
+from .packaging_intelligence import PackagingFitPlanOut, PackagingSuggestionOut
 
 
 class WmsPackingTargetStatusItem(BaseModel):
@@ -293,6 +293,10 @@ class WmsPackingOrderCard(BaseModel):
     #: Wybrany karton (OMS / pakowanie) — gdy ustawiony.
     selected_carton_id: Optional[str] = Field(default=None, description="cartons.id")
     selected_carton: Optional["WmsPackingRecommendedCarton"] = Field(default=None)
+    #: Read-only fit plan (multi-carton recommendation UX; persistence remains single selected_carton_id)
+    packaging_fit_plan: Optional[PackagingFitPlanOut] = Field(default=None)
+    #: Ephemeral recommended id from last fit (not a DB column)
+    recommended_carton_id: Optional[str] = Field(default=None)
     #: Notatki operacyjne przypięte do modułu pakowania (widoczność ``show_in_packing``).
     operational_notes_packing: list[WmsOperationalNoteBrief] = Field(default_factory=list)
     #: Krótki nagłówek ostrzeżenia (np. baner na stanowisku pakowania).
@@ -333,18 +337,36 @@ class WmsPackingRecommendedCarton(BaseModel):
 
     id: str = Field(..., description="UUID kartonu (cartons.id)")
     name: str = Field("", description="Nazwa kartonu")
-    dimensions: str = Field("", description="Np. 30×20×15 cm")
+    dimensions: str = Field("", description="Np. 30×20×15 cm (zewnętrzne lub legacy)")
     image_url: Optional[str] = Field(default=None, description="Miniatura z panelu materiałów")
-    is_best: bool = Field(default=False, description="Domyślna propozycja (mock: pierwszy z listy)")
+    is_best: bool = Field(default=False, description="Domyślna propozycja silnika")
+    usable_dimensions: Optional[str] = None
+    fill_percentage: Optional[float] = None
+    total_weight_kg: Optional[float] = None
+    max_payload_kg: Optional[float] = None
+    fit_status: Optional[str] = None
+    fit_confidence: Optional[str] = None
+    reject_reason_label: Optional[str] = None
+    warnings: list[str] = Field(default_factory=list)
 
 
 class OrderSelectCartonBody(BaseModel):
     carton_id: str = Field(..., min_length=1, max_length=64, description="cartons.id")
+    confirm_override: bool = Field(
+        default=False,
+        description="Operator potwierdził użycie mimo physical NO FIT",
+    )
 
 
 class OrderSelectCartonResponse(BaseModel):
     selected_carton_id: Optional[str] = None
     selected_carton: Optional[WmsPackingRecommendedCarton] = None
+    recommended_carton_id: Optional[str] = None
+    was_overridden: bool = False
+    physical_fit_ok: bool = True
+    physical_fit_warning: Optional[str] = None
+    override_reason_code: Optional[str] = None
+    requires_override_confirmation: bool = False
 
 
 class WmsPackingFinishBody(BaseModel):

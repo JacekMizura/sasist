@@ -51,12 +51,47 @@ export type WmsPutawayLocationSuggestionRow = {
   reason_tags?: string[];
   capacity_fits?: boolean;
   capacity_warnings?: string[];
+  total_capacity?: number | null;
+  additional_capacity?: number | null;
+  utilization_percent?: number | null;
+  confidence?: string | null;
+  method?: string | null;
+  limiting_factor?: string | null;
+  limiting_factor_label?: string | null;
+  additional_capacity_label?: string | null;
+  capacity_ratio_label?: string | null;
+};
+
+export type PutawayDistributionAllocation = {
+  location_id: number;
+  location_code: string;
+  current_quantity: number;
+  total_capacity: number;
+  additional_capacity: number;
+  allocated_quantity: number;
+  confidence: string;
+  reason: string;
+  limiting_factor_label?: string | null;
+  same_sku_present?: boolean;
+};
+
+export type PutawayDistributionPlan = {
+  product_id: number;
+  warehouse_id: number;
+  requested_quantity: number;
+  allocated_quantity: number;
+  remaining_quantity: number;
+  method?: string;
+  note?: string;
+  warnings?: string[];
+  allocations: PutawayDistributionAllocation[];
 };
 
 export type WmsPutawayLocationSuggestions = {
   suggested_primary_locations: WmsPutawayLocationSuggestionRow[];
   suggested_overflow_locations: WmsPutawayLocationSuggestionRow[];
   existing_stock_locations: WmsPutawayLocationSuggestionRow[];
+  distribution_plan?: PutawayDistributionPlan | null;
 };
 
 /** GET /wms/putaway/pz/{documentId} — same shape as GET /stock-documents/{id} (rich putaway_allocations). */
