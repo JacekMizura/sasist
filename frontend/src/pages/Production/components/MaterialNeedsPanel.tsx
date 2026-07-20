@@ -62,9 +62,12 @@ function NeedRow({ row }: { row: ProductionMaterialNeed }) {
                   <Clock className="mt-0.5 h-3.5 w-3.5 text-slate-400" aria-hidden />
                 )}
                 <div>
-                  <p className="font-semibold text-slate-800">{EVENT_LABEL[ev.event] ?? ev.event}</p>
+                  <p className="font-semibold text-slate-800">
+                    {EVENT_LABEL[ev.event] ?? "Zdarzenie systemowe"}
+                  </p>
                   <p className="text-slate-500">
-                    {new Date(ev.at).toLocaleString("pl-PL")} · status: {ev.status}
+                    {new Date(ev.at).toLocaleString("pl-PL")} · status:{" "}
+                    {(STATUS_LABEL[ev.status] ?? STATUS_LABEL.open).label}
                     {ev.covered_qty > 0 ? ` · pokryto ${ev.covered_qty}` : ""}
                   </p>
                 </div>

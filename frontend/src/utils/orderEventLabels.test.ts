@@ -4,6 +4,7 @@ import {
   getOrderEventDisplay,
   getOrderEventLabel,
 } from "./orderEventLabels";
+import { UNKNOWN_EVENT_LABEL } from "./eventDisplayLabels";
 
 describe("orderEventLabels", () => {
   it("maps known WMS codes to Polish", () => {
@@ -12,9 +13,9 @@ describe("orderEventLabels", () => {
     expect(getOrderEventLabel("OMS_DECISION_ACCEPTED")).toBe("Zaakceptowano decyzję OMS");
   });
 
-  it("fallback formats unknown keys as title case", () => {
-    expect(formatOrderEventKeyFallback("ORDER_LINE_SHORTAGE_REPORTED")).toBe("Order Line Shortage Reported");
-    expect(getOrderEventLabel("CUSTOM_FUTURE_EVENT")).toBe("Custom Future Event");
+  it("fallback never uses English title-case", () => {
+    expect(formatOrderEventKeyFallback("ORDER_LINE_SHORTAGE_REPORTED")).toBe(UNKNOWN_EVENT_LABEL);
+    expect(getOrderEventLabel("CUSTOM_FUTURE_EVENT")).toBe(UNKNOWN_EVENT_LABEL);
   });
 
   it("display includes icon and category", () => {

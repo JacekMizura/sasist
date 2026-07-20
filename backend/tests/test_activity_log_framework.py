@@ -61,7 +61,10 @@ class TestPresentation(unittest.TestCase):
         )
         self.assertEqual(item["occurred_at_display"], "18.07.2026 15:45")
         self.assertEqual(item["operator_display"], "Jacek Mizura")
-        self.assertEqual(item["action"], "Przypisano zamówienia:")
+        self.assertEqual(item["event_display_label"], "Przypisano zamówienia")
+        self.assertIn("#1", item["action"])
+        self.assertIn("#2", item["action"])
+        self.assertIn("CART-1", item["action"])
         self.assertEqual(item["details"], [])
         self.assertEqual(item["order_numbers"], ["#1", "#2"])
 

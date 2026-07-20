@@ -301,7 +301,7 @@ def _submode_for_wms_event(event_type: str, metadata: dict[str, Any]) -> tuple[s
         return MODE_SHORTAGES, "Brak produktu", "zgłosił brak produktu"
     if et in PICKING_EVENTS:
         if "recovery" in meta_text or "dogryw" in meta_text:
-            sub = "Recovery picking"
+            sub = "Dogrywka"
         else:
             sub = "Kompletacja"
         labels = {
@@ -320,7 +320,7 @@ def _submode_for_wms_event(event_type: str, metadata: dict[str, Any]) -> tuple[s
             EVT_PACKING_AUTOMATION_FINISHED: "zakończył automatykę pakowania",
         }
         return MODE_PACKING, "Pakowanie", labels.get(et, "pakowanie")
-    return MODE_OPERATIONS, "Operacja magazynowa", et.replace("_", " ").title()
+    return MODE_OPERATIONS, "Operacja magazynowa", "zdarzenie magazynowe"
 
 
 def _submode_for_activity(module: str, action_type: str, metadata: dict[str, Any]) -> tuple[str, str, str]:

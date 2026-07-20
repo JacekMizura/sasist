@@ -181,6 +181,11 @@ def build_detail_rows(
 
 def enrich_activity_item(item: dict[str, Any]) -> dict[str, Any]:
     """Attach ready-to-display fields onto a list_activity item dict."""
+    from backend.services.cart_lifecycle_event_catalog import (
+        compose_informative_message,
+        title_pl,
+    )
+
     meta = item.get("metadata") if isinstance(item.get("metadata"), dict) else {}
     occurred_raw = item.get("occurred_at")
     occurred_display = format_occurred_at_display(occurred_raw)
@@ -189,7 +194,14 @@ def enrich_activity_item(item: dict[str, Any]) -> dict[str, Any]:
         actor_user_id=item.get("actor_user_id"),
         metadata=meta,
     )
-    action = str(item.get("description") or "").strip() or "Zdarzenie."
+    event_code = str(item.get("event_code") or "").strip()
+    stored_desc = str(item.get("description") or "").strip()
+    action = compose_informative_message(
+        event_code,
+        stored_description=stored_desc,
+        metadata=meta,
+    )
+    event_display_label = title_pl(event_code)
     # Order # list only when writer opted in (assign / detach) — never for start/stop session noise.
     show_nums = bool(meta.get("show_order_numbers"))
     order_nums = order_numbers_from_meta(meta) if show_nums else []
@@ -197,6 +209,7 @@ def enrich_activity_item(item: dict[str, Any]) -> dict[str, Any]:
     out["occurred_at_display"] = occurred_display
     out["operator_display"] = operator
     out["action"] = action
+    out["event_display_label"] = event_display_label
     out["details"] = []  # UI standard: no expandable metadata
     out["order_numbers"] = order_nums
     return out

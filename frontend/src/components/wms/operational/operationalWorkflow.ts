@@ -7,7 +7,7 @@ import {
   type RelocationTargetTypeUi,
 } from "../../../pages/wms/wmsTerminology";
 import { formatOperationalDuration } from "../../../utils/formatOperationalDuration";
-import { formatOrderEventKeyFallback } from "../../../utils/orderEventLabels";
+import { getEventDisplayLabel } from "../../../utils/eventDisplayLabels";
 
 export type WorkflowStepState = "done" | "current" | "upcoming" | "skipped";
 
@@ -32,7 +32,7 @@ const QUEUE_ROUTE_LABEL: Record<string, string> = {
 };
 
 export function queueRouteLabel(queue: string): string {
-  return QUEUE_ROUTE_LABEL[queue] ?? queue;
+  return QUEUE_ROUTE_LABEL[queue] ?? "Kolejka operacyjna";
 }
 
 export function taskTypeLabel(taskType: string): string {
@@ -46,7 +46,7 @@ export function taskTypeLabel(taskType: string): string {
     case "SHORTAGE_DECISION":
       return "Decyzja braku";
     default:
-      return taskType;
+      return "Zadanie operacyjne";
   }
 }
 
@@ -76,7 +76,7 @@ function eventLabel(action: string): string {
     session_release: "Zwolnienie sesji",
     session_resume: "Wznowienie pracy",
   };
-  return map[action] ?? formatOrderEventKeyFallback(action);
+  return map[action] ?? getEventDisplayLabel(action);
 }
 
 function isCrossdockInbound(detail: WmsOperationalTaskDetailApi): boolean {

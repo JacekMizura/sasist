@@ -1051,7 +1051,7 @@ def cancel_picking(
             cart,
             "picking_cancelled",
             operator_user_id=operator_user_id,
-            description="ANULOWANO ZBIERANIE",
+            description=None,
             metadata=cancel_meta,
         )
         try:

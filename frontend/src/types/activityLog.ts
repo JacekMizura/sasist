@@ -31,6 +31,8 @@ export type ActivityDetailRow = {
 export type ActivityEventItem = {
   id: number;
   event_code: string;
+  /** Polish short title for Zdarzenie column — never a raw English code. */
+  event_display_label?: string;
   description: string;
   /** Full action sentence (same as description when provided by API). */
   action?: string;

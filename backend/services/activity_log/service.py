@@ -75,7 +75,9 @@ def record_activity(
     cat = (category or CART_EVENT_CATEGORY.get(code) or "system")
     cat = str(cat).strip().lower()[:32]
     sev = str(severity or "INFO").strip().upper()[:16]
-    desc = (description or code).strip()[:512]
+    from backend.services.cart_lifecycle_event_catalog import description_pl
+
+    desc = description_pl(code, override=description)[:512]
 
     ev = ActivityEvent(
         tenant_id=int(tenant_id) if tenant_id is not None else None,

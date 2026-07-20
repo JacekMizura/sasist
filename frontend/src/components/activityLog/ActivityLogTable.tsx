@@ -3,7 +3,7 @@ import { ChevronDown, ChevronRight, Search } from "lucide-react";
 
 import { fetchActivityLog } from "../../api/activityLogApi";
 import type { ActivityEventItem, ActivityObjectType } from "../../types/activityLog";
-import { getOrderEventLabel } from "../../utils/orderEventLabels";
+import { resolveEventDisplayLabel } from "../../utils/eventDisplayLabels";
 
 export type ActivityLogTableRow = {
   id: string | number;
@@ -35,7 +35,11 @@ type ActivityLogTableProps = {
 function mapApiItem(item: ActivityEventItem): ActivityLogTableRow {
   const when = item.occurred_at_display || "—";
   const operator = (item.operator_display || item.actor_name || "System").trim() || "System";
-  const event = getOrderEventLabel(item.event_code) || (item.event_code || "Zdarzenie").trim();
+  const event = resolveEventDisplayLabel({
+    eventCode: item.event_code,
+    eventDisplayLabel: item.event_display_label,
+    fallbackDescription: item.action || item.description,
+  });
   const message = (item.action || item.description || "").trim() || "—";
   return {
     id: `${item.source_module || "act"}-${item.id}`,
@@ -189,8 +193,8 @@ export default function ActivityLogTable({
                       <td className="whitespace-nowrap px-4 py-3">
                         <OperatorCell name={row.operator} />
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-600">
-                        {row.event}
+                      <td className="whitespace-nowrap px-4 py-3 text-xs font-semibold tracking-wide text-slate-600">
+                        <span className="uppercase">{row.event}</span>
                       </td>
                       <td className="px-4 py-3 leading-snug text-slate-800">{row.message}</td>
                     </tr>

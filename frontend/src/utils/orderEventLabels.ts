@@ -1,7 +1,16 @@
 /**
  * Polish UI labels for machine-readable order / WMS event codes.
  * Raw keys stay in API, logs, and dev tooltips only.
+ *
+ * Display labels SSOT: ``eventDisplayLabels.ts`` → getEventDisplayLabel.
  */
+
+import {
+  EVENT_DISPLAY_LABELS,
+  UNKNOWN_EVENT_LABEL,
+  getEventDisplayLabel,
+  normalizeEventCode,
+} from "./eventDisplayLabels";
 
 export type OrderEventCategory =
   | "system"
@@ -22,62 +31,51 @@ export const ORDER_EVENT_CATEGORY_LABELS: Record<OrderEventCategory, string> = {
   packing: "Pakowanie",
 };
 
-/** Canonical Polish labels — keys are normalized UPPER_SNAKE. */
+/** @deprecated Prefer EVENT_DISPLAY_LABELS / getEventDisplayLabel — kept for category lookups. */
 export const ORDER_EVENT_LABELS: Record<string, string> = {
-  SYSTEM: "System",
-  SOURCE: "Źródło",
-
-  PICKING_STARTED: "Rozpoczęto zbieranie",
-  PICKING_FINISHED: "Zakończono zbieranie",
-  PICKED_ITEM: "Zebrano produkt",
-
-  SHORTAGE_REPORTED: "Zgłoszono brak",
-  ORDER_LINE_SHORTAGE_REPORTED: "Zgłoszono brak",
-  REPLACEMENT_SHORTAGE_REPORTED: "Zgłoszono brak (zamiennik)",
-  RECOVERY_SHORTAGE_REPORTED: "Zgłoszono brak (dogrywka)",
-  ORDER_DETACHED_AFTER_SHORTAGE_FINALIZE: "Odłączono od wózka (braki)",
-
-  OMS_DECISION_WAIT: "OMS: oczekuje na decyzję",
-  OMS_DECISION_ACCEPTED: "Zaakceptowano decyzję OMS",
-
-  ORDER_LINE_REPLACED: "Zamieniono produkt",
-  ORDER_ITEM_REMOVED: "Usunięto pozycję",
-  ORDER_LINE_REMOVED: "Usunięto linię zamówienia",
-  REPLACEMENT_ITEM_REMOVED: "Usunięto zamiennik",
-
-  RECOVERY_STARTED: "Rozpoczęto dogrywkę",
-  RECOVERY_FINISHED: "Zakończono dogrywkę",
-
-  RELOCATION_CREATED: "Utworzono rozlokowanie produktów",
-  RELOCATION_FINISHED: "Zakończono rozlokowanie produktów",
-  RELOCATION_STARTED: "Rozpoczęto rozlokowanie produktów",
-
-  PACKING_STARTED: "Rozpoczęto pakowanie",
-  PACKING_FINISHED: "Zakończono pakowanie",
-  PACKING_PAUSED: "Wstrzymano pakowanie",
-  PACKING_RESUMED: "Wznowiono pakowanie",
-  PACKING_AUTOMATION_FINISHED: "Zakończono automatykę pakowania",
-  PACKED_ITEM: "Spakowano produkt",
-  PACKED: "Spakowano produkt",
-
-  CARTON_SELECTED: "Wybrano karton",
-  CARTON_CHANGED: "Zmieniono karton",
-  LABEL_GENERATED: "Wygenerowano etykietę",
-  LABEL_REPRINTED: "Ponownie wydrukowano etykietę",
-  PACKAGE_WEIGHT_CONFIRMED: "Potwierdzono wagę przesyłki",
-
-  LOCATION_CHANGED: "Zmieniono lokalizację",
-  RESERVATION_CREATED: "Utworzono rezerwację",
-  RESERVATION_RELEASED: "Zwolniono rezerwację",
-
-  NOTE: "Notatka",
-  NOTE_ADDED: "Dodano notatkę",
-
-  FE_PICK: "Zebrano produkt",
-  FE_MISSING: "Zgłoszono brak",
-  FE_REMOVED: "Usunięto pozycję",
-  FE_REPLACED: "Zamieniono produkt",
-  FE_WAITING: "Oczekuje na towar",
+  SYSTEM: EVENT_DISPLAY_LABELS.SYSTEM,
+  SOURCE: EVENT_DISPLAY_LABELS.SOURCE,
+  PICKING_STARTED: EVENT_DISPLAY_LABELS.PICKING_STARTED,
+  PICKING_FINISHED: EVENT_DISPLAY_LABELS.PICKING_FINISHED,
+  PICKED_ITEM: EVENT_DISPLAY_LABELS.PICKED_ITEM,
+  SHORTAGE_REPORTED: EVENT_DISPLAY_LABELS.SHORTAGE_REPORTED,
+  ORDER_LINE_SHORTAGE_REPORTED: EVENT_DISPLAY_LABELS.ORDER_LINE_SHORTAGE_REPORTED,
+  REPLACEMENT_SHORTAGE_REPORTED: EVENT_DISPLAY_LABELS.REPLACEMENT_SHORTAGE_REPORTED,
+  RECOVERY_SHORTAGE_REPORTED: EVENT_DISPLAY_LABELS.RECOVERY_SHORTAGE_REPORTED,
+  ORDER_DETACHED_AFTER_SHORTAGE_FINALIZE: EVENT_DISPLAY_LABELS.ORDER_DETACHED_AFTER_SHORTAGE_FINALIZE,
+  OMS_DECISION_WAIT: EVENT_DISPLAY_LABELS.OMS_DECISION_WAIT,
+  OMS_DECISION_ACCEPTED: EVENT_DISPLAY_LABELS.OMS_DECISION_ACCEPTED,
+  ORDER_LINE_REPLACED: EVENT_DISPLAY_LABELS.ORDER_LINE_REPLACED,
+  ORDER_ITEM_REMOVED: EVENT_DISPLAY_LABELS.ORDER_ITEM_REMOVED,
+  ORDER_LINE_REMOVED: EVENT_DISPLAY_LABELS.ORDER_LINE_REMOVED,
+  REPLACEMENT_ITEM_REMOVED: EVENT_DISPLAY_LABELS.REPLACEMENT_ITEM_REMOVED,
+  RECOVERY_STARTED: EVENT_DISPLAY_LABELS.RECOVERY_STARTED,
+  RECOVERY_FINISHED: EVENT_DISPLAY_LABELS.RECOVERY_FINISHED,
+  RELOCATION_CREATED: EVENT_DISPLAY_LABELS.RELOCATION_CREATED,
+  RELOCATION_FINISHED: EVENT_DISPLAY_LABELS.RELOCATION_FINISHED,
+  RELOCATION_STARTED: EVENT_DISPLAY_LABELS.RELOCATION_STARTED,
+  PACKING_STARTED: EVENT_DISPLAY_LABELS.PACKING_STARTED,
+  PACKING_FINISHED: EVENT_DISPLAY_LABELS.PACKING_FINISHED,
+  PACKING_PAUSED: EVENT_DISPLAY_LABELS.PACKING_PAUSED,
+  PACKING_RESUMED: EVENT_DISPLAY_LABELS.PACKING_RESUMED,
+  PACKING_AUTOMATION_FINISHED: EVENT_DISPLAY_LABELS.PACKING_AUTOMATION_FINISHED,
+  PACKED_ITEM: EVENT_DISPLAY_LABELS.PACKED_ITEM,
+  PACKED: EVENT_DISPLAY_LABELS.PACKED,
+  CARTON_SELECTED: EVENT_DISPLAY_LABELS.CARTON_SELECTED,
+  CARTON_CHANGED: EVENT_DISPLAY_LABELS.CARTON_CHANGED,
+  LABEL_GENERATED: EVENT_DISPLAY_LABELS.LABEL_GENERATED,
+  LABEL_REPRINTED: EVENT_DISPLAY_LABELS.LABEL_REPRINTED,
+  PACKAGE_WEIGHT_CONFIRMED: EVENT_DISPLAY_LABELS.PACKAGE_WEIGHT_CONFIRMED,
+  LOCATION_CHANGED: EVENT_DISPLAY_LABELS.LOCATION_CHANGED,
+  RESERVATION_CREATED: EVENT_DISPLAY_LABELS.RESERVATION_CREATED,
+  RESERVATION_RELEASED: EVENT_DISPLAY_LABELS.RESERVATION_RELEASED,
+  NOTE: EVENT_DISPLAY_LABELS.NOTE,
+  NOTE_ADDED: EVENT_DISPLAY_LABELS.NOTE_ADDED,
+  FE_PICK: EVENT_DISPLAY_LABELS.FE_PICK,
+  FE_MISSING: EVENT_DISPLAY_LABELS.FE_MISSING,
+  FE_REMOVED: EVENT_DISPLAY_LABELS.FE_REMOVED,
+  FE_REPLACED: EVENT_DISPLAY_LABELS.FE_REPLACED,
+  FE_WAITING: EVENT_DISPLAY_LABELS.FE_WAITING,
 };
 
 const ORDER_EVENT_CATEGORIES: Record<string, OrderEventCategory> = {
@@ -202,25 +200,16 @@ function iconForTone(tone: OrderEventVisualTone): string {
 }
 
 export function normalizeOrderEventKey(code: string | null | undefined): string {
-  return (code ?? "").trim().toUpperCase();
+  return normalizeEventCode(code);
 }
 
-/** Title-case words — never show raw SCREAMING_SNAKE in UI. */
-export function formatOrderEventKeyFallback(key: string): string {
-  const k = normalizeOrderEventKey(key);
-  if (!k) return "Zdarzenie";
-  return k
-    .toLowerCase()
-    .split("_")
-    .filter(Boolean)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
+/** @deprecated Unknown codes must never become English title-case — use UNKNOWN_EVENT_LABEL. */
+export function formatOrderEventKeyFallback(_key: string): string {
+  return UNKNOWN_EVENT_LABEL;
 }
 
 export function getOrderEventLabel(code: string | null | undefined): string {
-  const k = normalizeOrderEventKey(code);
-  if (!k) return "Zdarzenie";
-  return ORDER_EVENT_LABELS[k] ?? formatOrderEventKeyFallback(k);
+  return getEventDisplayLabel(code);
 }
 
 export function getOrderEventCategory(code: string | null | undefined): OrderEventCategory {
