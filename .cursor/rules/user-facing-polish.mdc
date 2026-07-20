@@ -1,0 +1,24 @@
+---
+description: User-facing UI text must always be Polish; internal codes may stay English.
+globs: frontend/src/**/*.{ts,tsx},backend/services/**/*.py
+alwaysApply: false
+---
+
+# User-facing Polish (Sasist)
+
+## Rule
+
+- **INTERNAL CODE** = English machine-readable IDs (`cart_released`, `ORDER_PACKED`) — OK in DB, APIs, logs, telemetry.
+- **USER-FACING UI** = always Polish — events, statuses, errors, warnings, audits, history, tooltips, badges, reasons, success/validation messages.
+
+## Do
+
+- Map codes via SSOT: FE `getEventDisplayLabel` (`frontend/src/utils/eventDisplayLabels.ts`), BE `title_pl` / `description_pl` / `compose_informative_message` (`cart_lifecycle_event_catalog.py`).
+- Prefer presentation-time mapping for historical rows (no unnecessary DB migrations).
+- Unknown user-visible events → „Zdarzenie systemowe” (never raw `SOME_NEW_INTERNAL_EVENT`).
+
+## Don't
+
+- Render `event_code` / `event_type` / `action_type` directly in JSX.
+- „Humanize” with `.replace(/_/g, " ").title()` into English words for operators.
+- Scatter per-screen switch/case maps when the central catalog should own the label.
