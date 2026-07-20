@@ -2,25 +2,27 @@
 
 ## Active
 
-**PRODUCT INTEGRATION — missing logistics policy** — local commit pending. No push.
+**FIT product integration + missing-data audit** — local commits only. No push.
 
-## Policy (HARD)
+## Validation SSOT (confirmed)
 
-- Runtime technical defaults: 1×1×1 cm, weight 0 kg via `normalize_product_logistics` SSOT.
-- Technical default ≠ real data (provenance = master field presence, never numeric 1×1×1 equality).
-- Receiving validation SSOT unchanged in role; defaults NEVER satisfy required fields.
-- Fit confidence: defaults → ESTIMATED (never false EXACT).
-- Runtime normalization does not write defaults into master data.
+`Ustawienia WMS → Przyjęcia → Walidacja produktów`
+→ `wms_settings.validation_require_*`
+→ `resolve_effective_receiving_requirements`
+→ `validate_required_product_data`
+→ receiving soft gate
 
-## Delivered (prior + this)
+**No parallel** fit_engine_required / tenant logistic required settings.
 
-- Capacity SSOT + batch + putaway cards + distribution plan (PLAN ≠ execution)
-- Packing recommendation / alts / override / multi-carton plan read-only
-- Logistics normalizer + receiving gate + FE estimated labels
+## Runtime fallback
 
-## Explicit GAPs
+`normalize_product_logistics` → 1×1×1 / 0 kg, non-persisted; ESTIMATED when used.
 
-- Multi-carton persistence (single `orders.selected_carton_id`)
-- DB `recommended_carton_id` vs selected (if not already mirrored in packing session)
-- Replenishment / consolidation capacity wiring
-- SAFE TO PUSH: NO until smoke + multi-carton persist decision
+## Commits (local, ahead of origin)
+
+- `54c959e9` — normalizer + provenance
+- `34cc8b30` — audit correction (FE weight sync, WHY_SELECTED, matrix tests)
+
+## SAFE TO PUSH
+
+NO — multi-carton persist GAP + smoke receiving E2E still open.
