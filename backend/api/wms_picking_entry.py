@@ -40,6 +40,8 @@ from ..schemas.wms_picking_flow import (
 from ..schemas.wms_picking_products import (
     WmsPickingCancelPendingBasketPutBody,
     WmsPickingConfirmBasketPutBody,
+    WmsPickingConfirmRemainingBody,
+    WmsPickingConfirmRemainingResponse,
     WmsPickingEmptyLocationBody,
     WmsPickingEmptyLocationResponse,
     WmsPickingFinalizeCartResponse,
@@ -1580,6 +1582,95 @@ def post_picking_quick_pick(
         raise HTTPException(
             status_code=500,
             detail={"code": "QuickPickInternalError", "message": "Wewnętrzny błąd serwera"},
+        ) from e
+
+
+@router.post(
+    "/picking/confirm-remaining",
+    response_model=WmsPickingConfirmRemainingResponse,
+)
+def post_picking_confirm_remaining(
+    body: WmsPickingConfirmRemainingBody,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: Optional[int] = Query(
+        default=None,
+        description="Opcjonalne; gdy brak — wybór z tenant_warehouses.",
+    ),
+    source_status_id: int = Query(..., ge=1),
+    order_type: WmsPickingOrderTypeFilter = Query(...),
+    db: Session = Depends(get_db),
+    current_user: AppUser = Depends(get_current_user),
+):
+    """
+    Zatwierdź i wróć: pozostała ilość produktu z lokalizacji w kolejności routingu.
+    Atomowo — przy braku stanu cała operacja jest wycofywana.
+    """
+    from ..services.tenant_default_warehouse import resolve_quick_pick_warehouse_for_tenant
+    from ..services.warehouse_service import WarehouseService
+    from ..services.wms_picking_confirm_remaining_service import (
+        ConfirmRemainingError,
+        confirm_remaining_product_picks,
+    )
+
+    tid = int(tenant_id)
+    uid = int(current_user.id) if current_user is not None else None
+    ws = WarehouseService(db)
+    req_wh: int | None = int(warehouse_id) if warehouse_id is not None else None
+    if req_wh is not None and req_wh < 1:
+        req_wh = None
+    if req_wh is not None and ws.can_tenant_access_warehouse(tid, req_wh):
+        effective_wh = req_wh
+    else:
+        try:
+            effective_wh = resolve_quick_pick_warehouse_for_tenant(db, tid)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+
+    try:
+        result = confirm_remaining_product_picks(
+            db,
+            tenant_id=tid,
+            warehouse_id=int(effective_wh),
+            source_status_id=int(source_status_id),
+            order_type=order_type,
+            product_id=int(body.product_id),
+            cart_id=int(body.cart_id) if body.cart_id is not None else None,
+            picking_session_id=(
+                int(body.picking_session_id) if body.picking_session_id is not None else None
+            ),
+            recovery_order_id=(
+                int(body.recovery_order_id) if body.recovery_order_id is not None else None
+            ),
+            operator_user_id=uid,
+        )
+        db.commit()
+        return WmsPickingConfirmRemainingResponse(
+            ok=True,
+            product_id=int(result["product_id"]),
+            quantity_requested=float(result.get("quantity_requested") or 0),
+            quantity_put=float(result.get("quantity_put") or 0),
+            locations=list(result.get("locations") or []),
+            already_complete=bool(result.get("already_complete")),
+            message=result.get("message"),
+        )
+    except ConfirmRemainingError as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=int(e.http_status),
+            detail={"code": e.code, "message": e.message, "error": e.code},
+        ) from e
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.exception("post_picking_confirm_remaining:SQLAlchemyError %s", e)
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "code": "ConfirmRemainingDatabaseError",
+                "message": "Zatwierdzenie pozostałej ilości nie powiodło się.",
+            },
         ) from e
 
 

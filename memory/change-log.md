@@ -1,3 +1,10 @@
+## 2026-07-20 — Zatwierdź i wróć: confirm remaining across locations
+
+- Was: button only navigated back (no picks).
+- Now: `POST /wms/picking/confirm-remaining` plans remaining qty on routing location priority (pick-type → name → id), writes draft Picks via `record_wms_quick_pick` / cartless; atomic on insufficient stock; no global Inventory mutation until finalize.
+- FE: detail footer calls API then returns to list.
+- Tests: `test_wms_confirm_remaining_picks.py`. No push.
+
 ## 2026-07-20 — ANULUJ ZBIERANIE: full MULTI session rollback
 
 - SSOT: `Inventory` = location stock; global = SUM(Inventory). Cancel never creates PZ/PW/WZ / global stock mutation.

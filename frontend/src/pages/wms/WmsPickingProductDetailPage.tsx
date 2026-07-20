@@ -8,6 +8,7 @@ import {
   getWmsPickingProductPicks,
   postWmsPickingConfirmBasketPut,
   postWmsPickingConfirmEmptyLocation,
+  postWmsPickingConfirmRemaining,
   postWmsPickingQuickPick,
   postWmsPickingReportShortage,
   postWmsPickingReportShortageBulk,
@@ -678,6 +679,79 @@ export default function WmsPickingProductDetailPage() {
     },
     [navigate, pickingSession],
   );
+
+  async function confirmRemainingAndReturn() {
+    if (!pickingSession || warehouseId == null || !detail) return;
+    if (pickBusy) return;
+    if (pickQueueDone || remaining <= 1e-9) {
+      goBackToList(true);
+      return;
+    }
+    if (isShortageResolved) {
+      goBackToList(true);
+      return;
+    }
+    const cartId = pickingSession.cartId;
+    const pickingSessionId = pickingSession.pickingSessionId;
+    const cartless =
+      pickingSession.cartless || (pickingSessionId != null && pickingSessionId > 0);
+    if (!cartless && (cartId == null || !Number.isFinite(cartId) || cartId < 1)) {
+      setPickMsg("Brak aktywnego wózka (cart_id).");
+      return;
+    }
+    if (cartless && (pickingSessionId == null || pickingSessionId < 1)) {
+      setPickMsg("Brak aktywnej sesji zbierania.");
+      return;
+    }
+    setPickBusy(true);
+    setPickMsg(null);
+    try {
+      const result = await postWmsPickingConfirmRemaining(
+        pickingTenantId,
+        warehouseId,
+        pickingSession.orderUiStatusId,
+        orderType,
+        {
+          product_id: productId,
+          ...(cartless ? { picking_session_id: pickingSessionId! } : { cart_id: cartId! }),
+          ...(recoveryOrderId != null && recoveryOrderId > 0
+            ? { recovery_order_id: recoveryOrderId }
+            : {}),
+        },
+      );
+      playScanBeep();
+      const putQty = Number(result.quantity_put ?? 0);
+      setPickMsg(result.message ?? (putQty > 0 ? `Zatwierdzono ${putQty} szt.` : null));
+      goBackToList(true);
+    } catch (e: unknown) {
+      const extracted = extractWmsScanErrorDetail(e);
+      if (extracted.code) {
+        showScanFeedbackFromCode(extracted.code, {
+          backendMessage: extracted.message,
+          contextHint: extracted.eligibleLabels,
+        });
+        setPickMsg(
+          mapWmsScanErrorCode(extracted.code, { backendMessage: extracted.message }).message,
+        );
+      } else {
+        let msg = "Zatwierdzenie nie powiodło się.";
+        if (axios.isAxiosError(e)) {
+          const data = e.response?.data;
+          const d = data as { detail?: unknown; error?: string } | undefined;
+          if (d?.detail != null) {
+            msg = formatFastApiErrorDetail({ detail: d.detail });
+          } else if (d?.error) msg = String(d.error);
+        } else if (e instanceof Error && e.message) {
+          msg = e.message;
+        }
+        showScanFeedbackFromCode("UNKNOWN_SCAN_CODE", { backendMessage: msg });
+        setPickMsg(msg);
+      }
+    } finally {
+      setPickBusy(false);
+      scanGateRef.current = false;
+    }
+  }
 
   async function confirm_pick(qty: number, locationId: number) {
     if (!pickingSession || warehouseId == null || !detail || qty <= 0 || remaining <= 0) {
@@ -1738,8 +1812,13 @@ export default function WmsPickingProductDetailPage() {
             <button type="button" onClick={openShortageModal} disabled={reportShortageBlocked || isShortageResolved} className="px-4 py-3 bg-amber-50 border border-amber-200 text-amber-800 font-bold rounded-xl text-xs uppercase tracking-wider transition-colors active:scale-95 disabled:opacity-40">Zgłoś brak</button>
           </div>
           
-          <button type="button" onClick={() => goBackToList(true)} className="px-6 py-3.5 bg-[#5a4fcf] hover:bg-[#4a40b2] text-white font-black rounded-xl text-xs uppercase tracking-widest transition-all active:scale-95">
-            Zatwierdź i wróć
+          <button
+            type="button"
+            disabled={pickBusy}
+            onClick={() => void confirmRemainingAndReturn()}
+            className="px-6 py-3.5 bg-[#5a4fcf] hover:bg-[#4a40b2] text-white font-black rounded-xl text-xs uppercase tracking-widest transition-all active:scale-95 disabled:opacity-40"
+          >
+            {pickBusy ? "Zatwierdzanie…" : "Zatwierdź i wróć"}
           </button>
         </div>
       </div>

@@ -448,6 +448,50 @@ class WmsPickingQuickPickBody(BaseModel):
         return self
 
 
+class WmsPickingConfirmRemainingBody(BaseModel):
+    """Zatwierdź i wróć — pozostała ilość produktu z lokalizacji w kolejności routingu."""
+
+    product_id: int = Field(..., ge=1)
+    cart_id: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Aktywny wózek (cart picking).",
+    )
+    picking_session_id: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Sesja cartless — Pick.cart_id=NULL.",
+    )
+    recovery_order_id: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Dogrywka recovery: tylko to zamówienie.",
+    )
+
+    @model_validator(mode="after")
+    def _require_cart_or_session(self) -> "WmsPickingConfirmRemainingBody":
+        if self.picking_session_id is None and self.cart_id is None:
+            raise ValueError("Wymagany cart_id albo picking_session_id.")
+        if self.picking_session_id is not None and self.cart_id is not None:
+            raise ValueError("Nie łącz cart_id z picking_session_id.")
+        return self
+
+
+class WmsPickingConfirmRemainingLocationRow(BaseModel):
+    location_id: int
+    quantity: float
+
+
+class WmsPickingConfirmRemainingResponse(BaseModel):
+    ok: bool = True
+    product_id: int
+    quantity_requested: float = 0.0
+    quantity_put: float = 0.0
+    locations: list[WmsPickingConfirmRemainingLocationRow] = Field(default_factory=list)
+    already_complete: bool = False
+    message: Optional[str] = None
+
+
 class WmsPickingRecoveryFinalizeBody(BaseModel):
     order_id: int = Field(..., ge=1)
     cart_id: int = Field(..., ge=1)

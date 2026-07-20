@@ -1057,6 +1057,69 @@ export async function postWmsPickingQuickPick(
   return res.data;
 }
 
+export type WmsPickingConfirmRemainingBodyApi = {
+  product_id: number;
+  cart_id?: number;
+  picking_session_id?: number;
+  recovery_order_id?: number | null;
+};
+
+export type WmsPickingConfirmRemainingResultApi = {
+  ok: boolean;
+  product_id: number;
+  quantity_requested: number;
+  quantity_put: number;
+  locations: Array<{ location_id: number; quantity: number }>;
+  already_complete: boolean;
+  message?: string | null;
+};
+
+export async function postWmsPickingConfirmRemaining(
+  tenantId: number,
+  warehouseId: number | null | undefined,
+  sourceStatusId: number,
+  orderType: WmsPickingOrderTypeQuery,
+  body: WmsPickingConfirmRemainingBodyApi,
+): Promise<WmsPickingConfirmRemainingResultApi> {
+  if (!Number.isFinite(tenantId) || tenantId < 1) {
+    throw new Error("tenant_id: wymagane ≥ 1");
+  }
+  if (
+    warehouseId != null &&
+    (!Number.isFinite(warehouseId) || warehouseId < 1 || !Number.isInteger(warehouseId))
+  ) {
+    throw new Error("warehouse_id: wymagana liczba całkowita ≥ 1 lub pominięte (auto)");
+  }
+  if (!Number.isFinite(sourceStatusId) || sourceStatusId < 1) {
+    throw new Error("source_status_id: wymagane ≥ 1");
+  }
+  const product_id = assertPositiveInt("product_id", body.product_id);
+  const payload: WmsPickingConfirmRemainingBodyApi = { product_id };
+  if (body.picking_session_id != null && Number(body.picking_session_id) > 0) {
+    payload.picking_session_id = Math.floor(Number(body.picking_session_id));
+  } else {
+    payload.cart_id = assertPositiveInt("cart_id", body.cart_id);
+  }
+  const rid = body.recovery_order_id;
+  if (rid != null && Number.isFinite(Number(rid)) && Number(rid) > 0) {
+    payload.recovery_order_id = Math.floor(Number(rid));
+  }
+  const params: Record<string, number | string> = {
+    tenant_id: tenantId,
+    source_status_id: sourceStatusId,
+    order_type: orderType,
+  };
+  if (warehouseId != null && warehouseId > 0) {
+    params.warehouse_id = warehouseId;
+  }
+  const res = await api.post<WmsPickingConfirmRemainingResultApi>(
+    "/wms/picking/confirm-remaining",
+    payload,
+    { params },
+  );
+  return res.data;
+}
+
 export async function postWmsPickingConfirmBasketPut(
   tenantId: number,
   warehouseId: number,
