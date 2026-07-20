@@ -121,7 +121,7 @@ class PutawaySuggestion:
     location_id: int
     location_code: str
     score: float
-    max_fit_quantity: float
+    max_fit_quantity: float | None
     remaining_capacity_percent: float
     same_sku_present: bool
     reason_tags: list[str] = field(default_factory=list)
@@ -132,7 +132,7 @@ class PutawaySuggestion:
             "location_id": self.location_id,
             "location_code": self.location_code,
             "score": round(self.score, 2),
-            "max_fit_quantity": round(self.max_fit_quantity, 4),
+            "max_fit_quantity": round(self.max_fit_quantity, 4) if self.max_fit_quantity is not None else None,
             "remaining_capacity_percent": round(self.remaining_capacity_percent, 2),
             "same_sku_present": self.same_sku_present,
             "reason_tags": list(self.reason_tags),

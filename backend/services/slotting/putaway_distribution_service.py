@@ -147,6 +147,7 @@ def build_putaway_distribution_plan(
     loc_by_id = {int(l.id): l for l in locs}
 
     candidates: list[tuple[dict[str, Any], float, bool, float]] = []
+    unknown_probe: list[tuple[dict[str, Any], float, bool]] = []
     warnings: list[str] = []
     for lid in loc_ids:
         loc = loc_by_id.get(lid)
@@ -154,9 +155,21 @@ def build_putaway_distribution_plan(
             continue
         solved = solve_location_capacity(db, location=loc, product=product, packaging_mode=packaging_mode)
         card = product_location_capacity_dict(solved, fit_item=fit_item)
-        conf = str(card["confidence"]).upper()
-        add = float(card["additional_capacity"] or 0)
-        if conf == "UNKNOWN":
+        conf = str(card.get("capacity_confidence") or card.get("confidence") or "UNKNOWN").upper()
+        trusted_raw = card.get("capacity_numeric_trusted")
+        if trusted_raw is None:
+            trusted = conf != "UNKNOWN" and str(card.get("geometry_source") or "REAL_DATA").upper() != "FALLBACK"
+        else:
+            trusted = bool(trusted_raw)
+        plan_add = card.get("planning_additional_capacity")
+        if plan_add is None:
+            plan_add = card.get("additional_capacity")
+        add = float(plan_add or 0)
+
+        if not trusted and conf == "UNKNOWN":
+            unknown_probe.append((card, soft_by_id.get(lid, 0.0), same_by_id.get(lid, False)))
+            continue
+        if conf == "UNKNOWN" and add <= 1e-9:
             warnings.append(f"UNKNOWN_CAPACITY:{card['location_code']}")
             continue
         if add <= 1e-9:
@@ -165,7 +178,6 @@ def build_putaway_distribution_plan(
 
     if fit_item.used_defaults:
         warnings.append("TECHNICAL_LOGISTICS_DEFAULTS")
-        warnings.append("Plan szacunkowy — produkt ma niepełne dane logistyczne.")
 
     # Phase 1: fill same-SKU first (descending soft score)
     same_sku = sorted(
@@ -180,21 +192,29 @@ def build_putaway_distribution_plan(
     remaining = qty
     allocations: list[DistributionAllocation] = []
     used: set[int] = set()
+    unknown_allocated = False
 
     def _alloc(card: dict[str, Any], take: float, reason: str, same: bool) -> None:
         nonlocal remaining
-        take = min(float(take), remaining, float(card["additional_capacity"]))
+        plan_cap = card.get("planning_additional_capacity")
+        if plan_cap is None:
+            plan_cap = card.get("additional_capacity")
+        if plan_cap is None:
+            plan_cap = take
+        take = min(float(take), remaining, float(plan_cap))
         if take <= 1e-9:
             return
+        add_pub = card.get("additional_capacity")
+        tot_pub = card.get("total_capacity")
         allocations.append(
             DistributionAllocation(
                 location_id=int(card["location_id"]),
                 location_code=str(card["location_code"]),
                 current_quantity=float(card["current_quantity"]),
-                total_capacity=float(card["total_capacity"]),
-                additional_capacity=float(card["additional_capacity"]),
+                total_capacity=float(tot_pub) if tot_pub is not None else 0.0,
+                additional_capacity=float(add_pub) if add_pub is not None else float(plan_cap),
                 allocated_quantity=float(take),
-                confidence=str(card["confidence"]),
+                confidence=str(card.get("capacity_confidence") or card.get("confidence")),
                 reason=reason,
                 limiting_factor=card.get("limiting_factor"),
                 limiting_factor_label=card.get("limiting_factor_label"),
@@ -223,9 +243,20 @@ def build_putaway_distribution_plan(
         _alloc(card, min(add, remaining), reason, same)
         pool = [c for c in pool if int(c[0]["location_id"]) not in used]
 
+    # Unknown geometry: at most one probe unit to best location (never dump 500 via fake capacity).
+    if remaining > 1e-9 and unknown_probe and not unknown_allocated:
+        unknown_probe.sort(key=lambda t: (-t[1], -1 if t[2] else 0, str(t[0].get("location_code") or "")))
+        card, soft, same = unknown_probe[0]
+        if int(card["location_id"]) not in used:
+            _alloc(card, 1.0, "UNKNOWN_CAPACITY_PROBE", same)
+            unknown_allocated = True
+            warnings.append("UNKNOWN_CAPACITY_PROBE_ONLY")
+
     allocated = qty - remaining
     if remaining > 1e-9:
         warnings.append("INSUFFICIENT_CAPACITY")
+        if any(not bool(c[0].get("capacity_numeric_trusted")) for c in candidates) or unknown_probe:
+            warnings.append("UNKNOWN_GEOMETRY_CANNOT_FULLY_PLAN")
 
     return PutawayDistributionPlan(
         product_id=int(product_id),

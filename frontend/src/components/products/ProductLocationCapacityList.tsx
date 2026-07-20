@@ -77,7 +77,8 @@ export default function ProductLocationCapacityList({ productId, tenantId, locat
       {err ? <p className="text-sm text-rose-700">{err}</p> : null}
       <ul className="space-y-2">
         {items.map((c) => {
-          const full = c.additional_capacity <= 0 && c.confidence !== "UNKNOWN";
+          const trusted = c.capacity_numeric_trusted !== false && String(c.confidence).toUpperCase() !== "UNKNOWN";
+          const full = trusted && (c.additional_capacity ?? 0) <= 0;
           const estimated = String(c.confidence).toUpperCase() === "ESTIMATED";
           return (
             <li
@@ -87,24 +88,23 @@ export default function ProductLocationCapacityList({ productId, tenantId, locat
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="font-black text-slate-900">{c.location_code || `#${c.location_id}`}</p>
-                  <p className="mt-0.5 tabular-nums text-slate-700">
-                    {c.capacity_ratio_label} szt.
+                  <p className="mt-0.5 tabular-nums text-slate-700">{c.capacity_ratio_label}</p>
+                  <p
+                    className={`mt-1 text-xs font-semibold ${
+                      !trusted ? "text-slate-600" : estimated ? "text-amber-800" : "text-emerald-700"
+                    }`}
+                  >
+                    {!trusted ? "POJEMNOŚĆ: NIEOKREŚLONA" : full ? "PEŁNA" : c.additional_capacity_label}
                   </p>
-                  <p className={`mt-1 text-xs font-semibold ${estimated ? "text-amber-800" : "text-emerald-700"}`}>
-                    {full ? "PEŁNA" : c.additional_capacity_label}
-                  </p>
-                  {c.used_defaults ? (
-                    <p className="mt-1 text-[11px] text-amber-800">
-                      Szacunek — niepełne dane logistyczne
-                      {c.defaulted_fields?.length ? ` (${c.defaulted_fields.join(", ")})` : ""}.
-                    </p>
-                  ) : null}
                 </div>
                 <div className="text-right text-[10px] font-black uppercase tracking-wide text-slate-400">
-                  {estimated ? "Szacunkowe" : String(c.confidence).toUpperCase() === "EXACT" ? "Dokładne" : "—"}
-                  {c.limiting_factor_label ? (
-                    <p className="mt-1 font-bold text-slate-500">{c.limiting_factor_label}</p>
-                  ) : null}
+                  {!trusted
+                    ? "Nieokreślona"
+                    : estimated
+                      ? "Szacunkowe"
+                      : String(c.confidence).toUpperCase() === "EXACT"
+                        ? "Dokładne"
+                        : "—"}
                 </div>
               </div>
             </li>

@@ -9,10 +9,16 @@ type PutawayLocationSuggestionCardProps = {
   disabled?: boolean;
   variant?: "default" | "existing" | "overflow";
   recommended?: boolean;
+  /** Recommended put qty for this step (from distribution plan), not synthetic capacity. */
+  putQty?: number | null;
 };
 
-function confidenceIsEstimated(c?: string | null): boolean {
-  return String(c || "").toUpperCase() === "ESTIMATED";
+function isTrusted(row: WmsPutawayLocationSuggestionRow): boolean {
+  if (row.capacity_numeric_trusted === false) return false;
+  if (String(row.capacity_confidence || row.confidence || "").toUpperCase() === "UNKNOWN") return false;
+  if (String(row.geometry_source || "").toUpperCase() === "FALLBACK" && row.capacity_numeric_trusted !== true)
+    return false;
+  return true;
 }
 
 export default function PutawayLocationSuggestionCard({
@@ -21,32 +27,36 @@ export default function PutawayLocationSuggestionCard({
   disabled,
   variant = "default",
   recommended,
+  putQty,
 }: PutawayLocationSuggestionCardProps) {
   const isExisting = variant === "existing";
   const isRecommended = recommended ?? row.reason_tags?.includes("recommended");
+  const trusted = isTrusted(row);
   const occupiedPct =
-    row.utilization_percent != null
+    trusted && row.utilization_percent != null
       ? row.utilization_percent
-      : row.remaining_capacity_percent != null
+      : trusted && row.remaining_capacity_percent != null
         ? Math.max(0, 100 - row.remaining_capacity_percent)
         : null;
-  const estimated = confidenceIsEstimated(row.confidence);
+
+  const instructQty =
+    putQty != null && putQty > 0
+      ? putQty
+      : trusted && row.additional_capacity != null && row.additional_capacity > 0
+        ? row.additional_capacity
+        : putQty === 0
+          ? 0
+          : null;
+
   const ratio =
     row.capacity_ratio_label ||
-    (row.total_capacity != null
-      ? estimated
-        ? `${fmtQty(row.current_quantity)} / ~${fmtQty(row.total_capacity)}`
-        : `${fmtQty(row.current_quantity)} / ${fmtQty(row.total_capacity)}`
-      : `${fmtQty(row.current_quantity)} szt.`);
-  const addLabel =
-    row.additional_capacity_label ||
-    (row.additional_capacity != null && row.additional_capacity > 0
-      ? estimated
-        ? `Szacunkowo można dołożyć do ${fmtQty(row.additional_capacity)} szt.`
-        : `Można dołożyć ${fmtQty(row.additional_capacity)} szt.`
-      : row.additional_capacity === 0
-        ? "PEŁNA"
-        : null);
+    (!trusted
+      ? row.current_quantity <= 0
+        ? "PUSTA · pojemność nieokreślona"
+        : `${fmtQty(row.current_quantity)} szt. · pojemność nieokreślona`
+      : row.total_capacity != null
+        ? `${fmtQty(row.current_quantity)} / ${fmtQty(row.total_capacity)}`
+        : `${fmtQty(row.current_quantity)} szt.`);
 
   return (
     <button
@@ -72,19 +82,24 @@ export default function PutawayLocationSuggestionCard({
       </div>
 
       <div className="flex w-full flex-col gap-1 text-xs font-bold text-slate-600 bg-transparent">
-        {row.additional_capacity != null && row.additional_capacity > 0 ? (
-          <span className={`text-base font-black ${estimated ? "text-amber-800" : "text-emerald-800"}`}>
-            ODŁÓŻ: {estimated ? "~" : ""}
-            {fmtQty(row.additional_capacity)} szt.
-          </span>
-        ) : row.additional_capacity === 0 ? (
+        {instructQty != null && instructQty > 0 ? (
+          <span className="text-base font-black text-emerald-800">ODŁÓŻ: {fmtQty(instructQty)} szt.</span>
+        ) : trusted && row.additional_capacity === 0 ? (
           <span className="inline-flex items-center gap-1 text-slate-500">
             <Check className="h-3.5 w-3.5" strokeWidth={3} />
             PEŁNA
           </span>
+        ) : !trusted ? (
+          <span className="text-sm font-black text-slate-700">POJEMNOŚĆ: NIEOKREŚLONA</span>
         ) : null}
         <span className="tabular-nums text-slate-700">
-          Stan: <span className="font-black text-slate-900">{ratio}</span> szt.
+          {row.current_quantity <= 0 && !trusted ? (
+            <span className="font-black text-slate-900">PUSTA</span>
+          ) : (
+            <>
+              Stan: <span className="font-black text-slate-900">{ratio}</span>
+            </>
+          )}
         </span>
         {row.same_sku_present ? (
           <span className="inline-flex items-center gap-1 text-indigo-700">
@@ -96,11 +111,6 @@ export default function PutawayLocationSuggestionCard({
           <span className="inline-flex items-center gap-1 text-[#5a4fcf]">
             <Check className="h-3.5 w-3.5" strokeWidth={3} />
             Rekomendowane
-          </span>
-        ) : null}
-        {estimated || row.used_defaults ? (
-          <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-amber-900">
-            Pojemność szacunkowa
           </span>
         ) : null}
       </div>

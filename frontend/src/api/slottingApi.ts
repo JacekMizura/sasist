@@ -22,8 +22,8 @@ export type ProductLocationCapacity = {
   location_id: number;
   location_code: string;
   current_quantity: number;
-  total_capacity: number;
-  additional_capacity: number;
+  total_capacity: number | null;
+  additional_capacity: number | null;
   utilization_percent: number;
   method: string;
   confidence: string;
@@ -38,6 +38,9 @@ export type ProductLocationCapacity = {
   capacity_ratio_label: string;
   used_defaults?: boolean;
   defaulted_fields?: string[];
+  geometry_source?: string;
+  capacity_numeric_trusted?: boolean;
+  capacity_confidence?: string;
 };
 
 export type LocationCapacityDetail = {

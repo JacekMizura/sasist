@@ -33,6 +33,7 @@ def _score_location(
     picking_priority: int,
     strategy: str,
     zone_match: bool,
+    capacity_numeric_trusted: bool = True,
 ) -> tuple[float, list[str]]:
     tags: list[str] = []
     if not capacity_fits:
@@ -42,14 +43,24 @@ def _score_location(
     if same_sku:
         score += 40.0
         tags.append("same_sku_present")
-    if capacity_fits and max_fit > 0:
+    # Never let synthetic fallback geometry (e.g. 160000) dominate ranking.
+    if capacity_fits and max_fit > 0 and capacity_numeric_trusted:
         tags.append("fits")
         score += min(25.0, max_fit * 0.5)
+    elif capacity_fits and not capacity_numeric_trusted:
+        tags.append("fits_unknown_capacity")
+        score += 5.0
 
     remaining = max(0.0, 100.0 - remaining_pct)
-    score += remaining * 0.15
-    if remaining_pct < 40:
-        tags.append("low_utilization")
+    if capacity_numeric_trusted:
+        score += remaining * 0.15
+        if remaining_pct < 40:
+            tags.append("low_utilization")
+    else:
+        # Prefer empty locations without using fake utilization from fallback fill.
+        if remaining_pct <= 1e-9:
+            score += 8.0
+            tags.append("empty_location")
 
     if zone_match:
         score += 10.0
@@ -58,7 +69,7 @@ def _score_location(
     strat = str(strategy or STRATEGY_CONSOLIDATE_SKU).upper()
     if strat == STRATEGY_CONSOLIDATE_SKU and same_sku:
         score += 20.0
-    elif strat == STRATEGY_MAX_FREE_SPACE:
+    elif strat == STRATEGY_MAX_FREE_SPACE and capacity_numeric_trusted:
         score += remaining * 0.35
         tags.append("max_free_space")
     elif strat == STRATEGY_PICKING_PRIORITY:
@@ -68,7 +79,7 @@ def _score_location(
         if pick_sequence is not None:
             score += max(0.0, 500.0 - float(pick_sequence))
         tags.append("nearest")
-    elif strat == STRATEGY_BALANCED_UTILIZATION:
+    elif strat == STRATEGY_BALANCED_UTILIZATION and capacity_numeric_trusted:
         ideal = abs(remaining_pct - 50.0)
         score += max(0.0, 30.0 - ideal * 0.5)
         tags.append("balanced")
@@ -95,6 +106,11 @@ def suggest_putaway_locations(
     if product is None:
         raise ProductNotFoundError(f"Product {product_id} not found")
 
+    from ..fit_engine.adapters import fit_item_from_product
+    from .capacity_trust import resolve_trusted_capacity
+    from .structural_weight import resolve_structural_weight_budget
+
+    fit_item = fit_item_from_product(product, packaging_mode=packaging_mode)
     footprint = product_footprint_from_orm(product, packaging_mode=packaging_mode)
     exclude = exclude_location_ids or set()
 
@@ -130,19 +146,41 @@ def suggest_putaway_locations(
             and str(getattr(loc, "operational_zone_type", "") or "").upper() == str(preferred_zone).upper()
         )
         fit = calculate_location_capacity(loc, footprint, quantity, packaging_mode)
+        budget = resolve_structural_weight_budget(db, loc)
+        trust = resolve_trusted_capacity(
+            geometric_additional=float(fit.max_units or 0),
+            geometric_total=float(fit.max_units or 0),
+            current_qty=0.0,
+            defaulted_fields=list(fit_item.defaulted_fields or []),
+            unit_weight_kg=float(fit_item.weight_kg or 0),
+            weight_remaining_kg=budget.effective_remaining_kg,
+        )
+        numeric_trusted = bool(trust["capacity_numeric_trusted"])
         remaining_pct = float(getattr(loc, "capacity_utilization_percent", 0) or 0)
-        if fit.fits:
+        if fit.fits and numeric_trusted and trust["geometry_source"] == "REAL_DATA":
             remaining_pct = max(0.0, 100.0 - fit.volume_utilization_percent)
 
+        trusted_add = trust["additional_capacity"]
+        # Never score on synthetic fallback geometry (e.g. 160000); weight-only bounds OK.
+        max_fit_for_score = float(trusted_add) if numeric_trusted and trusted_add is not None else 0.0
+        capacity_fits = bool(fit.fits) if trust["geometry_source"] == "REAL_DATA" else True
+        if numeric_trusted and trusted_add is not None:
+            req = float(quantity or 0)
+            if req > 0 and req > float(trusted_add) + 1e-6:
+                capacity_fits = False
+        elif not numeric_trusted:
+            capacity_fits = True
+
         score, tags = _score_location(
-            capacity_fits=fit.fits,
-            max_fit=fit.max_units,
-            remaining_pct=remaining_pct,
+            capacity_fits=capacity_fits,
+            max_fit=max_fit_for_score,
+            remaining_pct=remaining_pct if numeric_trusted else float(getattr(loc, "capacity_utilization_percent", 0) or 0),
             same_sku=same_sku,
             pick_sequence=getattr(loc, "pick_sequence", None),
             picking_priority=int(getattr(loc, "picking_priority", 100) or 100),
             strategy=strategy,
             zone_match=zone_match,
+            capacity_numeric_trusted=numeric_trusted,
         )
         if score <= 0:
             continue
@@ -151,7 +189,7 @@ def suggest_putaway_locations(
                 location_id=lid,
                 location_code=str(loc.name or ""),
                 score=score,
-                max_fit_quantity=fit.max_units,
+                max_fit_quantity=max_fit_for_score if numeric_trusted else None,
                 remaining_capacity_percent=remaining_pct,
                 same_sku_present=same_sku,
                 reason_tags=tags,

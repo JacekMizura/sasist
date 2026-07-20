@@ -24,6 +24,7 @@ from .structural_weight import (
     apply_weight_budget_to_additional,
     resolve_structural_weight_budget,
 )
+from .capacity_trust import resolve_trusted_capacity
 
 
 @dataclass
@@ -32,8 +33,8 @@ class LocationCapacityResult:
     location_code: str
     product_id: int
     current_quantity: float
-    total_capacity: float
-    additional_capacity: float
+    total_capacity: Optional[float]
+    additional_capacity: Optional[float]
     selected_orientation: int
     count_x: int
     count_y: int
@@ -50,6 +51,11 @@ class LocationCapacityResult:
     used_defaults: bool = False
     defaulted_fields: list[str] | None = None
     weight_budget: Optional[dict[str, Any]] = None
+    geometry_source: str = "REAL_DATA"
+    capacity_numeric_trusted: bool = True
+    computational_additional_capacity: Optional[float] = None
+    computational_total_capacity: Optional[float] = None
+    planning_additional_capacity: Optional[float] = None
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
@@ -153,34 +159,66 @@ def solve_location_capacity(
             )
 
     budget = weight_budget if weight_budget is not None else resolve_structural_weight_budget(db, location)
-    additional, limiting, w_warns = apply_weight_budget_to_additional(
+    # First apply structural weight to geometric additional (computational path).
+    geo_additional, limiting, w_warns = apply_weight_budget_to_additional(
         additional=additional,
         unit_weight_kg=float(item.weight_kg or 0),
         budget=budget,
         limiting_factor=limiting,
     )
     warnings.extend(w_warns)
-    if additional + 1e-9 < (total_eff - current) and not mixed:
-        total_eff = current + additional
+    geo_total = total_eff
+    if geo_additional + 1e-9 < (total_eff - current) and not mixed:
+        geo_total = current + geo_additional
 
-    util = min(100.0, (current / total_eff) * 100.0) if total_eff > 0 else 0.0
+    trust = resolve_trusted_capacity(
+        geometric_additional=geo_additional,
+        geometric_total=geo_total,
+        current_qty=current,
+        defaulted_fields=list(item.defaulted_fields or []),
+        unit_weight_kg=float(item.weight_kg or 0),
+        weight_remaining_kg=budget.effective_remaining_kg,
+        mixed_sku=mixed,
+    )
+    conf_str = str(trust["capacity_confidence"])
+    if (
+        not mixed
+        and trust["geometry_source"] == "REAL_DATA"
+        and conf_str == "EXACT"
+        and current > 1e-9
+        and method == FitMethod.GEOMETRIC
+    ):
+        conf_str = FitConfidence.ESTIMATED.value
+        warnings.append(
+            "SAME_SKU_OCCUPANCY_ESTIMATED: existing qty known, physical placement map unknown."
+        )
+    if trust.get("limiting_factor_hint") and trust["capacity_numeric_trusted"]:
+        limiting = str(trust["limiting_factor_hint"])
 
-    if item.used_defaults:
-        if confidence == FitConfidence.EXACT:
-            confidence = FitConfidence.ESTIMATED
-        if "TECHNICAL_LOGISTICS_DEFAULTS" not in warnings:
-            warnings.append("TECHNICAL_LOGISTICS_DEFAULTS")
-            warnings.append(
-                "Szacunkowa pojemność — produkt ma niepełne dane logistyczne."
-            )
+    add_out = trust["additional_capacity"]
+    total_out = trust["total_capacity"]
+    if add_out is not None and total_out is not None and total_out > 0:
+        util = min(100.0, (current / float(total_out)) * 100.0)
+    else:
+        util = 0.0
+
+    if item.used_defaults and "TECHNICAL_LOGISTICS_DEFAULTS" not in warnings:
+        warnings.append("TECHNICAL_LOGISTICS_DEFAULTS")
+
+    if trust["geometry_source"] == "FALLBACK":
+        explanation = (
+            "Pojemność geometryczna nieokreślona (brak wymiarów produktu)."
+            if not trust["capacity_numeric_trusted"]
+            else f"Pojemność ograniczona wagą (~{int(add_out or 0)} szt.); geometria nieokreślona."
+        )
 
     return LocationCapacityResult(
         location_id=int(location.id),
         location_code=str(location.name or ""),
         product_id=int(product.id),
         current_quantity=current,
-        total_capacity=float(total_eff),
-        additional_capacity=float(additional),
+        total_capacity=float(total_out) if total_out is not None else None,
+        additional_capacity=float(add_out) if add_out is not None else None,
         selected_orientation=int(layout_orient),
         count_x=int(cx),
         count_y=int(cy),
@@ -191,12 +229,19 @@ def solve_location_capacity(
         utilization_percent=round(util, 2),
         limiting_factor=limiting,
         method=method.value if hasattr(method, "value") else str(method),
-        confidence=confidence.value if hasattr(confidence, "value") else str(confidence),
+        confidence=conf_str,
         explanation=explanation,
         warnings=warnings,
         used_defaults=bool(item.used_defaults),
         defaulted_fields=list(item.defaulted_fields or []),
         weight_budget=budget.to_dict(),
+        geometry_source=str(trust["geometry_source"]),
+        capacity_numeric_trusted=bool(trust["capacity_numeric_trusted"]),
+        computational_additional_capacity=float(trust["computational_additional_capacity"] or 0),
+        computational_total_capacity=float(trust["computational_total_capacity"] or 0),
+        planning_additional_capacity=float(trust["planning_additional_capacity"] or 0)
+        if trust["planning_additional_capacity"] is not None
+        else None,
     )
 
 

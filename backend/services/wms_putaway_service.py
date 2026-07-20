@@ -837,6 +837,14 @@ def _suggestion_row_from_location(
         capacity_ratio_label=pc.get("capacity_ratio_label"),
         used_defaults=bool(pc.get("used_defaults")) if pc else None,
         defaulted_fields=list(pc.get("defaulted_fields") or []),
+        geometry_source=pc.get("geometry_source"),
+        capacity_numeric_trusted=bool(pc["capacity_numeric_trusted"])
+        if pc.get("capacity_numeric_trusted") is not None
+        else None,
+        capacity_confidence=str(pc["capacity_confidence"]) if pc.get("capacity_confidence") else None,
+        planning_additional_capacity=float(pc["planning_additional_capacity"])
+        if pc.get("planning_additional_capacity") is not None
+        else None,
     )
 
 

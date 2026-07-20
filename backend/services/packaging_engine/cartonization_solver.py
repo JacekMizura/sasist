@@ -292,9 +292,16 @@ def solve_cartonization(
     capability = {"multi_carton": True, "geometric_placement": True}
 
     defaults_used = any(bool(getattr(it, "used_defaults", False)) for it, q in items_with_qty if q > 0)
+    geometry_fallback = any(
+        bool(set(getattr(it, "defaulted_fields", ()) or ()) & {"length", "width", "height"})
+        for it, q in items_with_qty
+        if q > 0
+    )
     if defaults_used:
         warnings.append("TECHNICAL_LOGISTICS_DEFAULTS")
         warnings.append("Część produktów ma niepełne dane logistyczne — rekomendacja szacunkowa.")
+    if geometry_fallback:
+        warnings.append("GEOMETRY_SOURCE_FALLBACK")
 
     if shipping_constraints and shipping_constraints.max_package_weight_kg is not None:
         warnings.append("SHIPPING_METHOD_WEIGHT_LIMIT_APPLIED")
@@ -467,6 +474,8 @@ def solve_cartonization(
             conf = FitConfidence.ESTIMATED
             out_warnings.append("USABLE_DIMENSIONS_NOT_DEFINED")
         if defaults_used:
+            conf = FitConfidence.ESTIMATED
+        if geometry_fallback and conf == FitConfidence.EXACT:
             conf = FitConfidence.ESTIMATED
         return PackagingFitResult(
             fits=True,

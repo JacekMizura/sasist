@@ -62,6 +62,10 @@ export type WmsPutawayLocationSuggestionRow = {
   capacity_ratio_label?: string | null;
   used_defaults?: boolean | null;
   defaulted_fields?: string[];
+  geometry_source?: string | null;
+  capacity_numeric_trusted?: boolean | null;
+  capacity_confidence?: string | null;
+  planning_additional_capacity?: number | null;
 };
 
 export type PutawayDistributionAllocation = {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { ArrowLeft, MapPin, Package, Plus, X, Search, AlertTriangle } from "lucide-react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
@@ -228,6 +228,15 @@ export default function WmsPutawayItemDetailPage() {
   const primary = suggestions.suggested_primary_locations;
   const overflow = suggestions.suggested_overflow_locations;
   const existing = suggestions.existing_stock_locations;
+  const putQtyByLoc = useMemo(() => {
+    const m = new Map<number, number>();
+    for (const a of suggestions.distribution_plan?.allocations ?? []) {
+      const id = Number(a.location_id);
+      if (!Number.isFinite(id)) continue;
+      m.set(id, (m.get(id) || 0) + Number(a.allocated_quantity || 0));
+    }
+    return m;
+  }, [suggestions.distribution_plan]);
 
   const backToList = () =>
     navigate(wmsRelocationHubRoute(isMmFlow ? "MM" : docType, pzId), { state: { tenantId } });
@@ -356,6 +365,7 @@ export default function WmsPutawayItemDetailPage() {
                       variant="existing"
                       recommended={idx === 0}
                       disabled={putawayDone(line)}
+                      putQty={putQtyByLoc.get(row.location_id) ?? (remaining <= 1 ? remaining : null)}
                       onSelect={() => goExecute(rowToSelected(row))}
                     />
                   ))}
@@ -371,6 +381,17 @@ export default function WmsPutawayItemDetailPage() {
               
               <h3 className="text-xl font-black text-slate-900 tracking-tight mb-4">Sugerowane lokalizacje</h3>
 
+              {(suggestions?.suggested_primary_locations ?? []).some(
+                (r) =>
+                  r.capacity_numeric_trusted === false ||
+                  String(r.capacity_confidence || r.confidence || "").toUpperCase() === "UNKNOWN" ||
+                  r.used_defaults,
+              ) ? (
+                <p className="mb-4 rounded-xl border border-amber-100 bg-amber-50/80 px-4 py-2 text-xs font-semibold text-amber-900">
+                  Pojemność lokalizacji nie może być dokładnie wyliczona — produkt ma niepełne dane logistyczne.
+                </p>
+              ) : null}
+
               {suggestions?.distribution_plan && suggestions.distribution_plan.allocations?.length > 0 ? (
                 <div className="mb-8 rounded-2xl border border-indigo-100 bg-indigo-50/40 p-5">
                   <p className="text-[10px] font-black uppercase tracking-widest text-indigo-700 mb-3">
@@ -382,10 +403,10 @@ export default function WmsPutawayItemDetailPage() {
                     wymaga skanu
                   </p>
                   {suggestions.distribution_plan.warnings?.some((w) =>
-                    String(w).includes("TECHNICAL_LOGISTICS_DEFAULTS"),
+                    String(w).includes("UNKNOWN_GEOMETRY") || String(w).includes("UNKNOWN_CAPACITY_PROBE"),
                   ) ? (
                     <p className="mb-3 text-xs font-semibold text-amber-800">
-                      Plan szacunkowy — produkt ma niepełne dane logistyczne.
+                      Część ilości nie została zaplanowana — brak wiarygodnej pojemności geometrycznej.
                     </p>
                   ) : null}
                   <ul className="space-y-2">
@@ -413,7 +434,11 @@ export default function WmsPutawayItemDetailPage() {
                           </span>
                         </button>
                         <span className="text-[10px] font-bold uppercase text-slate-400">
-                          {String(a.confidence).toUpperCase() === "ESTIMATED" ? "~szacunek" : "OK"}
+                          {String(a.confidence).toUpperCase() === "UNKNOWN"
+                            ? "poj. nieokr."
+                            : String(a.confidence).toUpperCase() === "ESTIMATED"
+                              ? "~szacunek"
+                              : "OK"}
                         </span>
                       </li>
                     ))}
@@ -445,6 +470,7 @@ export default function WmsPutawayItemDetailPage() {
                           row={row}
                           recommended={idx === 0}
                           disabled={putawayDone(line)}
+                          putQty={putQtyByLoc.get(row.location_id) ?? (idx === 0 && remaining > 0 ? Math.min(1, remaining) : null)}
                           onSelect={() => goExecute(rowToSelected(row))}
                         />
                       ))}
@@ -469,6 +495,7 @@ export default function WmsPutawayItemDetailPage() {
                           row={row}
                           variant="overflow"
                           disabled={putawayDone(line)}
+                          putQty={putQtyByLoc.get(row.location_id) ?? null}
                           onSelect={() => goExecute(rowToSelected(row))}
                         />
                       ))}

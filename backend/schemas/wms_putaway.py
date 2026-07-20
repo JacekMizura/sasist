@@ -72,6 +72,10 @@ class WmsPutawayLocationSuggestionRow(BaseModel):
     capacity_ratio_label: Optional[str] = None
     used_defaults: Optional[bool] = None
     defaulted_fields: List[str] = Field(default_factory=list)
+    geometry_source: Optional[str] = None
+    capacity_numeric_trusted: Optional[bool] = None
+    capacity_confidence: Optional[str] = None
+    planning_additional_capacity: Optional[float] = None
 
 
 class WmsPutawayLocationSuggestionsOut(BaseModel):

@@ -63,8 +63,8 @@ class TestCapacityContract(unittest.TestCase):
         self.assertIn("pełna", d["additional_capacity_label"].lower())
 
     def test_case10_unknown(self):
-        msg = additional_capacity_copy(additional=0, confidence="UNKNOWN")
-        self.assertIn("Brak danych", msg)
+        msg = additional_capacity_copy(additional=0, confidence="UNKNOWN", capacity_numeric_trusted=False)
+        self.assertIn("NIEOKREŚLONA", msg.upper())
 
 
 class TestDistributionPlanner(unittest.TestCase):

@@ -217,8 +217,10 @@ class TestFallbackMatrix(unittest.TestCase):
         )
         card = product_location_capacity_dict(solved, fit_item=item)
         self.assertTrue(card["used_defaults"])
-        self.assertEqual(str(card["confidence"]).upper(), "ESTIMATED")
-        self.assertTrue(any("TECHNICAL_LOGISTICS_DEFAULTS" in w for w in card["warnings"]))
+        self.assertEqual(str(card["confidence"]).upper(), "UNKNOWN")
+        self.assertFalse(card["capacity_numeric_trusted"])
+        self.assertIsNone(card["additional_capacity"])
+        self.assertIn("NIEOKREŚLONA", card["additional_capacity_label"].upper())
 
     def test_10_cartonization_with_fallback(self):
         missing = fit_item_from_product(_prod(id=2))

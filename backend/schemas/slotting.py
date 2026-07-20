@@ -30,8 +30,8 @@ class ProductLocationCapacityRead(BaseModel):
     location_id: int
     location_code: str = ""
     current_quantity: float = 0
-    total_capacity: float = 0
-    additional_capacity: float = 0
+    total_capacity: Optional[float] = None
+    additional_capacity: Optional[float] = None
     utilization_percent: float = 0
     method: str = "UNKNOWN"
     confidence: str = "UNKNOWN"
@@ -46,6 +46,12 @@ class ProductLocationCapacityRead(BaseModel):
     capacity_ratio_label: str = ""
     used_defaults: bool = False
     defaulted_fields: List[str] = Field(default_factory=list)
+    geometry_source: str = "REAL_DATA"
+    capacity_numeric_trusted: bool = True
+    capacity_confidence: Optional[str] = None
+    computational_additional_capacity: Optional[float] = None
+    computational_total_capacity: Optional[float] = None
+    planning_additional_capacity: Optional[float] = None
 
 
 class LocationCapacityDetailRead(BaseModel):

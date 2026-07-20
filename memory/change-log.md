@@ -1,3 +1,13 @@
+## 2026-07-20 — Trusted capacity vs computational fallback (putaway UX)
+
+- Split: runtime 1×1×1/0 kg stays computational; operator numbers require trusted inputs.
+- `capacity_trust.py`: geometry_source REAL_DATA|FALLBACK, capacity_numeric_trusted, planning probe=1.
+- Presentation: POJEMNOŚĆ: NIEOKREŚLONA (no ~63000); one discreet banner on putaway.
+- Ranking ignores synthetic max_fit; weight-only bounds still score/limit.
+- Distribution: unknown geometry → probe 1, never allocate 500 from fake capacity.
+- Packing: GEOMETRY_SOURCE_FALLBACK; never EXACT on synthetic dims.
+- Tests: `test_capacity_trust_ux.py` A–G + suites green (88). No push.
+
 ## 2026-07-20 — Missing logistics: technical defaults + provenance
 
 - SSOT: `normalize_product_logistics` — runtime 1×1×1 / 0 kg; never auto-write master.
