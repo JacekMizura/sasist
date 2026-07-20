@@ -2090,9 +2090,20 @@ export default function WmsPickingProductsPage() {
       {exitModalOpen ? (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/40 px-4">
           <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-xl">
-            <div className="text-base font-black text-slate-900">Opuścić zbieranie?</div>
+            <div className="text-base font-black text-slate-900">Anulować zbieranie?</div>
             <p className="mt-2 text-sm text-slate-600">
-              Kontynuuj — wróć do zbierania. Anuluj zbieranie — przywróć status zamówień i zwolnij wózek.
+              Zbieranie tych zamówień zostanie anulowane.
+              <br />
+              <br />
+              Zapisane pobrania i braki z tej sesji zostaną wycofane, zamówienia wrócą do poprzedniego
+              etapu, a koszyki i wózek zostaną zwolnione.
+              <br />
+              <br />
+              Produkty, które zostały już fizycznie pobrane z lokalizacji, mogą wymagać odłożenia na
+              wskazane miejsca.
+              <br />
+              <br />
+              Operacja zostanie zapisana w historii.
             </p>
             <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
               <button
@@ -2101,7 +2112,7 @@ export default function WmsPickingProductsPage() {
                 onClick={() => setExitModalOpen(false)}
                 className="rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-40"
               >
-                Kontynuuj
+                WRÓĆ DO ZBIERANIA
               </button>
               <button
                 type="button"
@@ -2140,7 +2151,7 @@ export default function WmsPickingProductsPage() {
                 }}
                 className="rounded-xl bg-red-600 px-4 py-3 text-sm font-bold text-white hover:bg-red-700 disabled:opacity-40"
               >
-                {cancelBusy ? "Anulowanie…" : "Anuluj zbieranie"}
+                {cancelBusy ? "Anulowanie…" : "ANULUJ ZBIERANIE"}
               </button>
             </div>
           </div>

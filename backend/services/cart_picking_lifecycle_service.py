@@ -937,6 +937,44 @@ def cancel_picking(
     }
 
     orders = _orders_on_cart(db, int(cart_id))
+
+    # Snapshot basket assignments BEFORE clear (for audit).
+    basket_assignments_audit: list[dict[str, Any]] = []
+    for o in orders:
+        code = None
+        for b in list(getattr(cart, "baskets", None) or []):
+            if getattr(b, "order_id", None) is not None and int(b.order_id) == int(o.id):
+                name = str(getattr(b, "name", None) or "").strip()
+                if name:
+                    code = name
+                else:
+                    row, col = getattr(b, "row", None), getattr(b, "column", None)
+                    code = f"S-{int(row)}-{int(col)}" if row is not None and col is not None else str(getattr(b, "barcode", None) or f"#{b.id}")
+                break
+        basket_assignments_audit.append(
+            {
+                "order_id": int(o.id),
+                "order_number": str(getattr(o, "number", None) or f"#{o.id}"),
+                "basket": code,
+            }
+        )
+
+    from .wms_picking_corrections.cancel_session_rollback_service import (
+        rollback_wms_picking_session_mutations,
+    )
+
+    rollback = rollback_wms_picking_session_mutations(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        cart_id=int(cart_id),
+        picking_session_id=int(sess.id) if sess is not None else None,
+        orders=orders,
+        operator_user_id=operator_user_id,
+        cart=cart,
+        sess=sess,
+    )
+
     # Explicit detach history before context clear (release_cart may see empty SSOT).
     if orders and not str(reason).startswith("admin_"):
         from .cart_stats_service import activity_orders_meta
@@ -986,20 +1024,67 @@ def cancel_picking(
     elif str(reason).startswith("admin_"):
         pass  # eventy emituje admin_release_cart
     else:
+        cancel_meta: dict[str, Any] = {
+            "orders_restored": restored,
+            "reason": reason,
+            "show_order_numbers": True,
+            "event_title": "ANULOWANO ZBIERANIE",
+            "cart_code": str(getattr(cart, "code", None) or cart_id),
+            "basket_assignments": basket_assignments_audit,
+            "orders": [a["order_number"] for a in basket_assignments_audit],
+            "undone_picks": rollback.get("undone_picks") or [],
+            "shortages_rolled_back": rollback.get("shortages_rolled_back") or [],
+            "put_back_required": rollback.get("put_back_required") or [],
+            "draft_picks_deleted": int(rollback.get("draft_picks_deleted") or 0),
+            "location_qty_restored": float(rollback.get("location_qty_restored") or 0),
+            "location_stock_restored": bool(rollback.get("location_stock_restored")),
+            "global_stock_mutated": False,
+            "physical_return_model": rollback.get("physical_return_model"),
+            "distinctions": {
+                "pick_record_cleared": "Cofnięto zapis pobrania (draft — Inventory bez zmian)",
+                "location_restored": "Przywrócono stan lokalizacji (tylko finalized Pick)",
+                "awaiting_physical_put_back": "Oczekuje na fizyczne odłożenie (lista informacyjna)",
+            },
+        }
         _record_event(
             db,
             cart,
             "picking_cancelled",
             operator_user_id=operator_user_id,
-            description="Anulowano kompletację.",
-            metadata={"orders_restored": restored, "reason": reason, "show_order_numbers": False},
+            description="ANULOWANO ZBIERANIE",
+            metadata=cancel_meta,
         )
+        try:
+            from .wms_audit_service import emit_wms_picking_cancelled
+
+            # SAVEPOINT: optional audit tables (order_activity_logs / activity_events)
+            # may be absent in lean test DBs — must not poison the cancel transaction.
+            nested = db.begin_nested()
+            try:
+                emit_wms_picking_cancelled(
+                    db,
+                    tenant_id=int(tenant_id),
+                    warehouse_id=int(warehouse_id),
+                    cart_id=int(cart_id),
+                    cart_code=str(getattr(cart, "code", None) or cart_id),
+                    operator_user_id=operator_user_id,
+                    order_ids=[int(o.id) for o in orders],
+                    basket_assignments=basket_assignments_audit,
+                    rollback=rollback,
+                )
+                nested.commit()
+            except Exception:
+                nested.rollback()
+                raise
+        except Exception:
+            logger.exception("emit_wms_picking_cancelled failed cart_id=%s", cart_id)
     _after_mutation(db, cart)
     logger.info("cart_lifecycle.cancel cart_id=%s restored=%s reason=%s", int(cart_id), restored, reason)
     return {
         "cart_id": int(cart_id),
         "orders_restored": restored,
         "cart_status": CartStatus.AVAILABLE.value,
+        "rollback": rollback,
     }
 
 

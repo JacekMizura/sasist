@@ -1,3 +1,13 @@
+## 2026-07-20 — ANULUJ ZBIERANIE: full MULTI session rollback
+
+- SSOT: `Inventory` = location stock; global = SUM(Inventory). Cancel never creates PZ/PW/WZ / global stock mutation.
+- Draft Pick (`picked_at IS NULL`): delete record only; location qty unchanged; informational `put_back_required`.
+- Finalized Pick (defensive): restore qty at exact `Pick.location_id` (no FIFO).
+- Shortage: delete only `FE_MISSING` with `metadata.cart_id` / `picking_session_id`.
+- Cart/baskets/operator/session cleared; order status from session snapshot; rich `PICKING_CANCELLED` audit.
+- SAVEPOINT around optional tables so lean DBs cannot poison cancel txn.
+- Tests: `test_wms_cancel_picking_rollback.py` (+ lifecycle SSOT green). Commit, no push.
+
 ## 2026-07-20 — FIX 500 report-shortage-bulk (Postgres FOR UPDATE + joinedload)
 
 - ROOT: bulk locked OrderItem with `joinedload(product)+with_for_update` → Postgres ProgrammingError → uncaught 500.

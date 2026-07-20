@@ -36,6 +36,7 @@ from ..models.wms_order_event import (
     EVT_PICKED_ITEM,
     EVT_PICK_UNDONE,
     EVT_PICKING_FINISHED,
+    EVT_PICKING_CANCELLED,
     EVT_PICKING_STARTED,
     EVT_SHORTAGE_REPORTED,
     EVT_ORDER_LINE_SHORTAGE_REPORTED,
@@ -566,17 +567,32 @@ def append_order_activity_for_wms(
 ) -> None:
     """OMS text log + dual-write into shared Activity Log (ready PL description)."""
     uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
-    db.add(
-        OrderActivityLog(
-            order_id=int(order_id),
-            tenant_id=int(tenant_id),
-            warehouse_id=int(warehouse_id),
-            event_type=str(event_type)[:64],
-            message=str(message)[:8000],
-            created_at=datetime.utcnow(),
-            operator_user_id=uid,
+    # SAVEPOINT: lean test DBs may lack order_activity_logs — never poison outer txn.
+    try:
+        nested = db.begin_nested()
+        try:
+            db.add(
+                OrderActivityLog(
+                    order_id=int(order_id),
+                    tenant_id=int(tenant_id),
+                    warehouse_id=int(warehouse_id),
+                    event_type=str(event_type)[:64],
+                    message=str(message)[:8000],
+                    created_at=datetime.utcnow(),
+                    operator_user_id=uid,
+                )
+            )
+            db.flush()
+            nested.commit()
+        except Exception:
+            nested.rollback()
+            raise
+    except Exception:
+        logger.exception(
+            "order_activity_log write failed for order_id=%s event=%s",
+            order_id,
+            event_type,
         )
-    )
     try:
         from .activity_log import ActivityLinkSpec, record_activity
 
@@ -601,19 +617,25 @@ def append_order_activity_for_wms(
                     object_label=(str(raw.get("object_label") or "")[:64] or None),
                 )
             )
-        record_activity(
-            db,
-            event_code=str(event_type)[:64],
-            description=str(message).strip()[:512] or "Zdarzenie zamówienia.",
-            links=links,
-            severity="INFO",
-            category="status",
-            tenant_id=int(tenant_id),
-            warehouse_id=int(warehouse_id),
-            actor_user_id=uid,
-            source_module="wms_audit",
-            metadata=dict(metadata or {}),
-        )
+        nested = db.begin_nested()
+        try:
+            record_activity(
+                db,
+                event_code=str(event_type)[:64],
+                description=str(message).strip()[:512] or "Zdarzenie zamówienia.",
+                links=links,
+                severity="INFO",
+                category="status",
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+                actor_user_id=uid,
+                source_module="wms_audit",
+                metadata=dict(metadata or {}),
+            )
+            nested.commit()
+        except Exception:
+            nested.rollback()
+            raise
     except Exception:
         logger.exception(
             "activity_log dual-write failed for order_id=%s event=%s",
@@ -905,6 +927,104 @@ def emit_wms_location_emptied(
             )
         except Exception:
             logger.exception("emit_wms_location_emptied activity_log failed")
+
+
+def emit_wms_picking_cancelled(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    cart_id: int,
+    cart_code: str,
+    operator_user_id: Optional[int],
+    order_ids: list[int],
+    basket_assignments: list[dict[str, Any]],
+    rollback: dict[str, Any],
+) -> None:
+    """Pełny audit trail anulowania zbierania MULTI."""
+    uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
+    op_name = operator_display_name(db, uid)
+    undone = list(rollback.get("undone_picks") or [])
+    shortages = list(rollback.get("shortages_rolled_back") or [])
+    put_back = list(rollback.get("put_back_required") or [])
+    meta: dict[str, Any] = {
+        "event_code": EVT_PICKING_CANCELLED,
+        "event_title": "ANULOWANO ZBIERANIE",
+        "cart_id": int(cart_id),
+        "cart_code": cart_code,
+        "operator": op_name,
+        "order_ids": [int(x) for x in order_ids],
+        "basket_assignments": basket_assignments,
+        "undone_picks": undone,
+        "shortages_rolled_back": shortages,
+        "put_back_required": put_back,
+        "draft_picks_deleted": int(rollback.get("draft_picks_deleted") or 0),
+        "location_qty_restored": float(rollback.get("location_qty_restored") or 0),
+        "location_stock_restored": bool(rollback.get("location_stock_restored")),
+        "global_stock_mutated": False,
+        "physical_return_model": rollback.get("physical_return_model"),
+        "distinctions": {
+            "pick_record_cleared": "Cofnięto zapis pobrania",
+            "location_restored": "Przywrócono stan lokalizacji",
+            "awaiting_physical_put_back": "Oczekuje na fizyczne odłożenie",
+        },
+    }
+    # One order-scoped event per affected order (timeline), plus shared metadata.
+    for oid in order_ids:
+        insert_wms_order_event(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            order_id=int(oid),
+            operator_user_id=uid,
+            event_type=EVT_PICKING_CANCELLED,
+            target_cart_id=int(cart_id),
+            metadata=meta,
+        )
+        lines = [
+            "ANULOWANO ZBIERANIE",
+            f"Wózek: {cart_code}",
+        ]
+        if op_name:
+            lines.append(f"Operator: {op_name}")
+        if basket_assignments:
+            lines.append("Koszyki: " + ", ".join(
+                f"{a.get('basket') or '?'} → {a.get('order_number') or a.get('order_id')}"
+                for a in basket_assignments
+            ))
+        if undone:
+            lines.append("COFNIĘTE POBRANIA:")
+            for u in undone:
+                loc = u.get("source_location") or "?"
+                ean = u.get("ean") or ""
+                kind = u.get("kind") or ""
+                lines.append(
+                    f"  {u.get('product_name')} EAN:{ean} {u.get('quantity')} szt. "
+                    f"← {loc} [{kind}]"
+                )
+        if shortages:
+            lines.append("COFNIĘTE BRAKI:")
+            for s in shortages:
+                lines.append(
+                    f"  {s.get('order_number')} {s.get('basket') or ''} "
+                    f"{s.get('product_name')} {s.get('quantity')} szt."
+                )
+        if put_back:
+            lines.append("DO ODŁOŻENIA:")
+            for p in put_back:
+                lines.append(
+                    f"  {p.get('source_location')}: {p.get('product_name')} — {p.get('quantity')} szt."
+                )
+        append_order_activity_for_wms(
+            db,
+            order_id=int(oid),
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            event_type=EVT_PICKING_CANCELLED,
+            message="\n".join(lines),
+            operator_user_id=uid,
+            metadata=meta,
+        )
 
 
 def emit_wms_picking_finished(

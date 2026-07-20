@@ -2,15 +2,16 @@
 
 ## Active
 
-**MULTI shortage presentation fixed** — product-lines `allocations[]` per order_item; UI shows which order/basket has shortage. Shortage write SSOT unchanged.
+**ANULUJ ZBIERANIE** — full MULTI session operational rollback implemented.
 
-## Latest (2026-07-20)
+## Architecture (confirmed)
 
-- List no longer shows only `BRAK 1/9` without order/basket.
-- Counter: `Braki: N szt.` (units). Cart fleet: NIEKOMPLETNE on affected order/basket.
-- Prior: legacy Pick undo / location provenance still relevant for cart_id=2 recovery.
+- `Inventory` = **location stock** (product+warehouse+location[+lot]). Global product stock = SUM(Inventory); no document PZ/PW/WZ on cancel.
+- Active picking writes **draft** Pick (`picked_at IS NULL`); location stock decremented only at **finalize-cart**.
+- Cancel of ASSIGNED/PICKING: delete drafts (Inventory unchanged) + session FE_MISSING by `metadata.cart_id` + cart/basket/status restore.
+- Informational `put_back_required` list for physical goods still on trolley (no RETURN_TO_LOCATION subsystem).
 
 ## Notes
 
-- Do not FIFO-attribute shortage across order_items.
+- Never `inspect(session.bind).has_table()` mid-transaction on SQLite — rolls back connection.
 - No push until asked.

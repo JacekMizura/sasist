@@ -63,6 +63,23 @@ def cancel_cartless_picking_session(
     }
 
     orders = list_orders_on_picking_session(db, session_id=int(session_id))
+
+    from ..wms_picking_corrections.cancel_session_rollback_service import (
+        rollback_wms_picking_session_mutations,
+    )
+
+    rollback = rollback_wms_picking_session_mutations(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        cart_id=None,
+        picking_session_id=int(session_id),
+        orders=orders,
+        operator_user_id=operator_user_id,
+        cart=None,
+        sess=sess,
+    )
+
     restored = 0
     for o in orders:
         snap = snap_by_id.get(int(o.id))
@@ -94,11 +111,15 @@ def cancel_cartless_picking_session(
     db.add(sess)
 
     logger.info(
-        "cartless.cancel session_id=%s operator=%s restored=%s reason=%s",
+        "cartless.cancel session_id=%s operator=%s restored=%s reason=%s rollback=%s",
         int(session_id),
         int(operator_user_id),
         restored,
         reason,
+        {
+            "drafts": rollback.get("draft_picks_deleted"),
+            "shortages": len(rollback.get("shortages_rolled_back") or []),
+        },
     )
     return {
         "session_id": int(session_id),
@@ -106,6 +127,7 @@ def cancel_cartless_picking_session(
         "cart_id": None,
         "cart_status": None,
         "idempotent": False,
+        "rollback": rollback,
     }
 
 
