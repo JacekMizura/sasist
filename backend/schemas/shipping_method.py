@@ -30,6 +30,10 @@ class ShippingMethodRead(BaseModel):
     aliases: List[str] = Field(default_factory=list)
     logo_url: Optional[str] = None
     is_active: bool = True
+    max_package_weight_kg: Optional[float] = None
+    max_length_cm: Optional[float] = None
+    max_width_cm: Optional[float] = None
+    max_height_cm: Optional[float] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -42,6 +46,10 @@ class ShippingMethodCreate(BaseModel):
     aliases: List[str] = Field(default_factory=list)
     logo_url: Optional[str] = Field(None, max_length=512)
     is_active: bool = True
+    max_package_weight_kg: Optional[float] = Field(None, gt=0)
+    max_length_cm: Optional[float] = Field(None, gt=0)
+    max_width_cm: Optional[float] = Field(None, gt=0)
+    max_height_cm: Optional[float] = Field(None, gt=0)
 
     @field_validator("code")
     @classmethod
@@ -55,6 +63,10 @@ class ShippingMethodUpdate(BaseModel):
     aliases: Optional[List[str]] = None
     logo_url: Optional[str] = Field(None, max_length=512)
     is_active: Optional[bool] = None
+    max_package_weight_kg: Optional[float] = Field(None, gt=0)
+    max_length_cm: Optional[float] = Field(None, gt=0)
+    max_width_cm: Optional[float] = Field(None, gt=0)
+    max_height_cm: Optional[float] = Field(None, gt=0)
 
     @field_validator("code")
     @classmethod
@@ -79,6 +91,10 @@ def shipping_method_row_to_read(row: "ShippingMethod") -> ShippingMethodRead:
         aliases=parse_aliases_json(getattr(row, "aliases_json", None)),
         logo_url=logo_url,
         is_active=bool(getattr(row, "is_active", True)),
+        max_package_weight_kg=getattr(row, "max_package_weight_kg", None),
+        max_length_cm=getattr(row, "max_length_cm", None),
+        max_width_cm=getattr(row, "max_width_cm", None),
+        max_height_cm=getattr(row, "max_height_cm", None),
         created_at=getattr(row, "created_at", None),
         updated_at=getattr(row, "updated_at", None),
     )
