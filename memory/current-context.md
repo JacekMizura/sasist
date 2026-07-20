@@ -2,27 +2,21 @@
 
 ## Active
 
-**FIT product integration + missing-data audit** — local commits only. No push.
+**FIT ENGINE productization** — local commits only. **No push.**
 
-## Validation SSOT (confirmed)
+## SSOT (unchanged core)
 
-`Ustawienia WMS → Przyjęcia → Walidacja produktów`
-→ `wms_settings.validation_require_*`
-→ `resolve_effective_receiving_requirements`
-→ `validate_required_product_data`
-→ receiving soft gate
+`backend/services/fit_engine/` + `product_logistics_normalizer`
+→ warehouse capacity / putaway / packing cartonization
 
-**No parallel** fit_engine_required / tenant logistic required settings.
+## New in productization commit
 
-## Runtime fallback
-
-`normalize_product_logistics` → 1×1×1 / 0 kg, non-persisted; ESTIMATED when used.
-
-## Commits (local, ahead of origin)
-
-- `54c959e9` — normalizer + provenance
-- `34cc8b30` — audit correction (FE weight sync, WHY_SELECTED, matrix tests)
+- Shared shelf/rack weight: `warehouse_structural_weight_limits` + Rack.max_weight_kg + internal_structure levels
+- ShippingMethod: max_package_weight_kg + max_*_cm → effective carton payload
+- Replenishment capped by `solve_location_capacity.additional_capacity`
+- Operator UX: ODŁÓŻ / WEŹ+ZAPAKUJ; settings tab „Dopasowanie przestrzenne”
+- Product validation: still only WMS Walidacja produktu (no parallel)
 
 ## SAFE TO PUSH
 
-NO — multi-carton persist GAP + smoke receiving E2E still open.
+NO — multi-carton persist GAP; admin UI for structural weight limits still thin (table + rack JSON); shipping fields need admin form wiring; smoke E2E.
