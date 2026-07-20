@@ -11,6 +11,7 @@ from ..models.cart_basket import CartBasket
 from ..models.cart_group import CartGroup
 from ..models.order import Order
 from ..models.order_item import OrderItem
+from ..models.order_item import order_item_is_replaced_line
 from ..models.pick import Pick
 from ..models.pick_task import PickTask
 from ..models.product import Product
@@ -217,6 +218,35 @@ def _order_ids_with_picks(db: Session, order_ids: list[int], *, cart_id: int | N
     return {int(r[0]) for r in q.distinct().all() if r[0] is not None}
 
 
+def _order_picking_shortage_projection(order) -> dict:
+    """
+    Read-only projection of operational shortage on cart UI.
+    Does not mutate order lifecycle / fulfillment_state.
+    Only flags INCOMPLETE when declared shortage exists on any line.
+    """
+    shortage_units = 0.0
+    for oi in getattr(order, "items", None) or []:
+        if order_item_is_replaced_line(oi):
+            continue
+        q = float(getattr(oi, "quantity", 0) or 0)
+        if q <= 1e-12:
+            continue
+        raw = float(getattr(oi, "wms_picking_line_missing_qty", 0) or 0)
+        shortage_units += min(max(0.0, raw), q)
+    shortage_units = round(shortage_units, 6)
+    if shortage_units > 1e-9:
+        return {
+            "picking_shortage_qty": shortage_units,
+            "picking_status": "INCOMPLETE",
+            "picking_status_label": "NIEKOMPLETNE",
+        }
+    return {
+        "picking_shortage_qty": 0.0,
+        "picking_status": "READY",
+        "picking_status_label": "GOTOWE",
+    }
+
+
 def _serialize_assigned_order_row(
     order,
     *,
@@ -233,6 +263,7 @@ def _serialize_assigned_order_row(
     if vol is None or float(vol or 0) <= 0:
         vol = _order_used_volume_dm3_from_items(order)
     weight = _order_total_weight_kg(order)
+    shortage_proj = _order_picking_shortage_projection(order)
     return {
         "order_id": int(order.id),
         "number": str(number) if number not in (None, "") else str(order.id),
@@ -244,6 +275,7 @@ def _serialize_assigned_order_row(
         "products": products,
         "can_detach": bool(can_detach),
         "detach_block_reason": detach_block_reason,
+        **shortage_proj,
     }
 
 
@@ -846,6 +878,15 @@ class CartService:
                 "order_customer_name": _order_customer_name(o) if o else None,
                 "used_volume_dm3": used_dm3,
                 "total_weight_kg": w,
+                **(
+                    _order_picking_shortage_projection(o)
+                    if o is not None
+                    else {
+                        "picking_shortage_qty": 0.0,
+                        "picking_status": "EMPTY",
+                        "picking_status_label": None,
+                    }
+                ),
             })
 
         return {

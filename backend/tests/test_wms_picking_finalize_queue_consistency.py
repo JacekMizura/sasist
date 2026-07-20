@@ -129,12 +129,14 @@ class TestBuildLinesAfterFinalize(unittest.TestCase):
     @patch("backend.services.wms_picking_product_list_service.PickingRoutingService")
     @patch("backend.services.wms_picking_product_list_service._demand_by_product_from_orders", return_value={197: 2.0})
     @patch("backend.services.wms_picking_product_list_service._missing_qty_by_product_from_orders", return_value={})
+    @patch("backend.services.wms_picking_product_list_service._allocations_by_product_from_orders", return_value={})
     @patch("backend.services.wms_picking_product_list_service.resolve_wms_picking_order_ids", return_value=[501])
     @patch("backend.services.wms_picking_product_list_service.get_or_create_wms_picking_shortage_settings")
     def test_case_a_full_pick_keeps_completed_product_in_session(
         self,
         mock_ss,
         _mock_orders,
+        _mock_alloc,
         _mock_missing,
         _mock_demand,
         mock_routing_cls,
@@ -174,12 +176,14 @@ class TestBuildLinesAfterFinalize(unittest.TestCase):
     @patch("backend.services.wms_picking_product_list_service.PickingRoutingService")
     @patch("backend.services.wms_picking_product_list_service._demand_by_product_from_orders", return_value={197: 2.0})
     @patch("backend.services.wms_picking_product_list_service._missing_qty_by_product_from_orders", return_value={})
+    @patch("backend.services.wms_picking_product_list_service._allocations_by_product_from_orders", return_value={})
     @patch("backend.services.wms_picking_product_list_service.resolve_wms_picking_order_ids", return_value=[501])
     @patch("backend.services.wms_picking_product_list_service.get_or_create_wms_picking_shortage_settings")
     def test_case_b_partial_pick_still_visible(
         self,
         mock_ss,
         _mock_orders,
+        _mock_alloc,
         _mock_missing,
         _mock_demand,
         mock_routing_cls,

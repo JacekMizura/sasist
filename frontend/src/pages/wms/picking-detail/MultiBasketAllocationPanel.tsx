@@ -96,7 +96,7 @@ export function MultiBasketAllocationPanel({
 
       <div>
         <h4 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-3">
-          Koszyki / zamówienia
+          Rozliczenie per koszyk
         </h4>
         <ul className="space-y-2">
           {orders.map((o) => {
@@ -118,10 +118,9 @@ export function MultiBasketAllocationPanel({
                       <span className="mx-2 text-slate-300">|</span>
                       <span>#{o.order_number}</span>
                     </p>
-                    <p className="mt-1 text-xs font-semibold text-slate-600">
-                      Wymagane {fmtQty(o.quantity)} · Zebrano {fmtQty(o.picked_quantity)} · Brak{" "}
-                      {fmtQty(o.missing_quantity)}
-                      {lineUnresolved > 1e-9 ? ` · Nierozliczone ${fmtQty(lineUnresolved)}` : ""}
+                    <p className="mt-1 text-xs font-semibold text-slate-600 tabular-nums">
+                      Potrzeba {fmtQty(o.quantity)} · Zebrano {fmtQty(o.picked_quantity)} · Brak{" "}
+                      {fmtQty(o.missing_quantity)} · Nierozliczone {fmtQty(lineUnresolved)}
                     </p>
                   </div>
                   <span

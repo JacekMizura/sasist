@@ -242,12 +242,21 @@ export function computeWmsPickingProductLineSessionStats(rows: WmsPickingProduct
   doZebrania: number;
   wTrakcie: number;
   braki: number;
+  brakiSzt: number;
+  zamowieniaZBrakami: number;
 } {
   let zebrane = 0;
   let doZebrania = 0;
   let wTrakcie = 0;
   let braki = 0;
+  let brakiSzt = 0;
+  const orderIds = new Set<number>();
   for (const r of rows) {
+    const miss = wmsPickingLineMissingQty(r);
+    brakiSzt += miss;
+    for (const a of r.allocations ?? []) {
+      if (Number(a.shortage_qty) > 1e-9) orderIds.add(Number(a.order_id));
+    }
     const status = wmsPickingLineResolutionStatus(r);
     if (status === "SHORTAGE") {
       braki++;
@@ -260,7 +269,14 @@ export function computeWmsPickingProductLineSessionStats(rows: WmsPickingProduct
     if (status === "PARTIAL") wTrakcie++;
     else doZebrania++;
   }
-  return { zebrane, doZebrania, wTrakcie, braki };
+  return {
+    zebrane,
+    doZebrania,
+    wTrakcie,
+    braki,
+    brakiSzt,
+    zamowieniaZBrakami: orderIds.size,
+  };
 }
 
 export function pickingFinalizeHasShortageSignals(resp: {

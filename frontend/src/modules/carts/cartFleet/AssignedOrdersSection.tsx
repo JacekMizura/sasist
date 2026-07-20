@@ -23,6 +23,10 @@ export type AssignedOrderRow = {
   products?: AssignedOrderProduct[] | null;
   can_detach?: boolean;
   detach_block_reason?: string | null;
+  /** Projection only — sum of declared line shortages */
+  picking_shortage_qty?: number | null;
+  picking_status?: "INCOMPLETE" | "READY" | string | null;
+  picking_status_label?: string | null;
 };
 
 type AssignedOrdersSectionProps = {
@@ -88,8 +92,29 @@ function ProductsTooltip({ o }: { o: AssignedOrderRow }): ReactNode {
   );
 }
 
-function statusBadge(status: string | null | undefined) {
-  const raw = (status || "—").trim();
+function statusBadge(o: AssignedOrderRow) {
+  const shortage = Number(o.picking_shortage_qty ?? 0);
+  if (shortage > 1e-9 || o.picking_status === "INCOMPLETE") {
+    const qtyLabel = Number.isFinite(shortage) && shortage > 0 ? `BRAK ${shortage} SZT.` : "BRAK";
+    return (
+      <span className="inline-flex flex-col gap-0.5">
+        <span className="inline-flex rounded-md bg-rose-50 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-rose-800">
+          {qtyLabel}
+        </span>
+        <span className="inline-flex rounded-md bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-900">
+          {o.picking_status_label || "NIEKOMPLETNE"}
+        </span>
+      </span>
+    );
+  }
+  if (o.picking_status === "READY") {
+    return (
+      <span className="inline-flex rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-emerald-700">
+        {o.picking_status_label || "GOTOWE"}
+      </span>
+    );
+  }
+  const raw = (o.status || "—").trim();
   const upper = raw.toUpperCase();
   if (upper.includes("WMS") || upper.includes("PICK") || upper === "NEW") {
     return (
@@ -190,7 +215,7 @@ export function AssignedOrdersSection({
                     <td className="max-w-[12rem] truncate px-4 py-3 text-slate-700">
                       {o.customer_name?.trim() || "—"}
                     </td>
-                    <td className="px-4 py-3">{statusBadge(o.status)}</td>
+                    <td className="px-4 py-3">{statusBadge(o)}</td>
                     <td className="px-4 py-3 text-right tabular-nums text-slate-700">
                       <HoverPopover content={<ProductsTooltip o={o} />}>
                         <span className="cursor-help border-b border-dotted border-slate-300">

@@ -52,9 +52,9 @@ export function allocationStatusLabel(status: MultiBasketLineStatus): string {
     case "READY":
       return "GOTOWE";
     case "PARTIAL_SHORTAGE":
-      return "ROZLICZONE Z BRAKIEM";
+      return "NIEKOMPLETNE";
     case "FULL_SHORTAGE":
-      return "BRAK CAŁKOWITY";
+      return "BRAK";
     case "PARTIAL_PICK":
       return "CZĘŚCIOWO";
     default:

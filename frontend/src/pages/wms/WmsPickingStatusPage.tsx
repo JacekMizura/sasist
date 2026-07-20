@@ -62,12 +62,13 @@ export default function WmsPickingStatusPage() {
         getWmsPickingProductLines(DAMAGE_TENANT_ID, warehouseId, r.source_status_id, "all", null).catch(() => null),
       ]);
       let hubOrderCount = Number(r.order_count) || 0;
-      let hubPickStats = { zebrane: 0, doZebrania: 0, wTrakcie: 0 };
+      let hubPickStats = { zebrane: 0, doZebrania: 0, wTrakcie: 0, braki: 0 };
       if (linesResult?.session_stats) {
         hubPickStats = {
           zebrane: linesResult.session_stats.zebrane ?? 0,
           doZebrania: linesResult.session_stats.do_zebrania ?? 0,
           wTrakcie: linesResult.session_stats.w_trakcie ?? 0,
+          braki: linesResult.session_stats.braki_szt ?? linesResult.session_stats.braki ?? 0,
         };
         if (typeof linesResult.cohort_order_count === "number") {
           hubOrderCount = linesResult.cohort_order_count;
@@ -77,7 +78,13 @@ export default function WmsPickingStatusPage() {
           ...row,
           picked_quantity: wmsPickingDisplayPickedQuantity(row),
         }));
-        hubPickStats = computeWmsPickingProductLineSessionStats(normalized);
+        const computed = computeWmsPickingProductLineSessionStats(normalized);
+        hubPickStats = {
+          zebrane: computed.zebrane,
+          doZebrania: computed.doZebrania,
+          wTrakcie: computed.wTrakcie,
+          braki: computed.brakiSzt,
+        };
         if (typeof linesResult.cohort_order_count === "number") {
           hubOrderCount = linesResult.cohort_order_count;
         }

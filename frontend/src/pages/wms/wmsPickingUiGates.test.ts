@@ -186,6 +186,8 @@ describe("sortWmsPickingProductLinesPickFlow", () => {
       doZebrania: 1,
       wTrakcie: 1,
       braki: 0,
+      brakiSzt: 0,
+      zamowieniaZBrakami: 0,
     });
   });
 
@@ -267,6 +269,8 @@ describe("computeWmsPickingProductLineSessionStats", () => {
       doZebrania: 1,
       wTrakcie: 1,
       braki: 0,
+      brakiSzt: 0,
+      zamowieniaZBrakami: 0,
     });
   });
 
@@ -289,6 +293,8 @@ describe("computeWmsPickingProductLineSessionStats", () => {
       doZebrania: 3,
       wTrakcie: 0,
       braki: 1,
+      brakiSzt: 1,
+      zamowieniaZBrakami: 0,
     });
   });
 });

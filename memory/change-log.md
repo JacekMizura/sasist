@@ -1,3 +1,10 @@
+## 2026-07-20 — MULTI shortage UI: per order_item / basket (not SKU-only)
+
+- ROOT: BE had order_item shortage SSOT; product-lines list exposed only product aggregate; FE showed `BRAK 1/9` + „Zamówienie niekompletne” on whole SKU.
+- FIX projection: `allocations[]` on product-lines (required/picked/shortage/unresolved per order_item + basket); session `braki_szt` / `zamowienia_z_brakami`; cart assigned orders + basket cells show NIEKOMPLETNE / GOTOWE from line missing qty.
+- FE: list card + detail header name order/basket; counter „Braki: N szt.”; Rozliczenie per koszyk labels BRAK/NIEKOMPLETNE/GOTOWE.
+- Shortage write SSOT unchanged (`order_item_id`). No push.
+
 ## 2026-07-19 — Legacy draft Pick recovery (per Pick.id)
 
 - `GET /wms/picking/product-picks` + `POST /wms/picking/picks/{id}/undo` (Inventory=0, shortage=0).

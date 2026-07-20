@@ -2463,22 +2463,37 @@ def run_cart_lifecycle_maintenance(db: Session) -> dict[str, int]:
     }
 
 
-def compute_session_stats_from_product_lines(lines: Sequence[Any]) -> dict[str, int]:
+def compute_session_stats_from_product_lines(lines: Sequence[Any]) -> dict[str, int | float]:
     """
-    Liczniki SKU w sesji.
+    Liczniki SKU w sesji + sumy sztuk braku.
 
-    SHORTAGE (remaining≈0, missing>0) → ``braki``, NIGDY ``zebrane``.
+    SHORTAGE (remaining≈0, missing>0) → ``braki`` (SKU), NIGDY ``zebrane``.
     COMPLETED_PICK (remaining≈0, missing≈0) → ``zebrane``.
+    ``braki_szt`` = Σ missing_quantity (sztuki, nie SKU).
+    ``zamowienia_z_brakami`` = unikalne order_id z allocations.shortage_qty>0.
     """
     zebrane = 0
     do_zebrania = 0
     w_trakcie = 0
     braki = 0
+    braki_szt = 0.0
+    orders_with_shortage: set[int] = set()
     for ln in lines:
         total = float(getattr(ln, "total_quantity", 0) or 0)
         picked = float(getattr(ln, "picked_quantity", 0) or 0)
         missing = float(getattr(ln, "missing_quantity", 0) or 0)
         remaining = float(getattr(ln, "remaining_to_pick", None) or 0)
+        braki_szt = round(braki_szt + max(0.0, missing), 6)
+        allocs = getattr(ln, "allocations", None) or []
+        for a in allocs:
+            if isinstance(a, dict):
+                sq = float(a.get("shortage_qty") or 0)
+                oid = a.get("order_id")
+            else:
+                sq = float(getattr(a, "shortage_qty", 0) or 0)
+                oid = getattr(a, "order_id", None)
+            if sq > 1e-9 and oid is not None:
+                orders_with_shortage.add(int(oid))
         status = getattr(ln, "resolution_status", None)
         if status is None:
             if remaining > 1e-9:
@@ -2495,7 +2510,14 @@ def compute_session_stats_from_product_lines(lines: Sequence[Any]) -> dict[str, 
             do_zebrania += 1
         else:
             w_trakcie += 1
-    return {"zebrane": zebrane, "do_zebrania": do_zebrania, "w_trakcie": w_trakcie, "braki": braki}
+    return {
+        "zebrane": zebrane,
+        "do_zebrania": do_zebrania,
+        "w_trakcie": w_trakcie,
+        "braki": braki,
+        "braki_szt": braki_szt,
+        "zamowienia_z_brakami": len(orders_with_shortage),
+    }
 
 
 # Public re-exports for screens (read-only)

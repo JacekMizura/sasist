@@ -223,12 +223,16 @@ export function CartFleetDetailPanel({
     const displayPct = hasOrders && cap > 0 && occupancyPct === 0 ? 1 : occupancyPct;
     const displayUsed = hasOrders && usedDm3 === 0 && cap > 0 ? 0.05 : usedDm3;
     const orderLabel = hasOrders ? (b.order_number ? `#${b.order_number}` : `#${b.order_id}`) : null;
-    const isReady = hasOrders && occupancyPct >= 95;
+    const shortageQty = Number(b.picking_shortage_qty ?? 0);
+    const hasShortage = hasOrders && (shortageQty > 1e-9 || b.picking_status === "INCOMPLETE");
+    const isReady = hasOrders && !hasShortage && (b.picking_status === "READY" || occupancyPct >= 95);
     const basketTone = !hasOrders
       ? "bg-slate-50 border-slate-300 border-dashed"
-      : isReady
-        ? "bg-emerald-50 border-emerald-300"
-        : "bg-blue-50 border-blue-300";
+      : hasShortage
+        ? "bg-rose-50 border-rose-300"
+        : isReady
+          ? "bg-emerald-50 border-emerald-300"
+          : "bg-blue-50 border-blue-300";
 
     return (
       <div key={b.id} className={`relative flex min-h-[4.5rem] flex-col gap-1 rounded-lg border p-2.5 ${basketTone}`}>
@@ -254,11 +258,28 @@ export function CartFleetDetailPanel({
             >
               {orderLabel}
             </button>
+            {hasShortage ? (
+              <span className="inline-flex w-fit rounded-md border border-rose-200 bg-rose-100 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-rose-900">
+                BRAK {shortageQty > 0 ? `${shortageQty} szt.` : ""} · NIEKOMPLETNE
+              </span>
+            ) : isReady ? (
+              <span className="inline-flex w-fit rounded-md border border-emerald-200 bg-emerald-100 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-emerald-800">
+                GOTOWE
+              </span>
+            ) : null}
             <div className="mt-1 space-y-0.5">
               <div className="flex items-center gap-1.5">
                 <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-slate-200">
                   <div
-                    className={`h-full rounded-full ${displayPct > 100 ? "bg-red-500" : isReady ? "bg-emerald-500" : "bg-blue-500"}`}
+                    className={`h-full rounded-full ${
+                      displayPct > 100
+                        ? "bg-red-500"
+                        : hasShortage
+                          ? "bg-rose-500"
+                          : isReady
+                            ? "bg-emerald-500"
+                            : "bg-blue-500"
+                    }`}
                     style={{ width: `${Math.min(100, displayPct)}%` }}
                   />
                 </div>

@@ -291,6 +291,92 @@ def sum_pick_events_for_line_cart(db: Session, order_item_id: int, cart_id: int)
     return float(s)
 
 
+def picked_by_order_item_from_events(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    order_ids: list[int],
+    cart_id: int | None,
+) -> dict[int, float]:
+    """
+    ``order_item_id`` → suma PICK (jak ``sum_pick_events_for_line_cart`` przy ``cart_id``).
+
+    Przy ``cart_id``: meta.cart_id / Pick.cart_id / Order.cart_id.
+    Bez ``cart_id``: tylko zfinalizowane zdarzenia.
+    """
+    if not order_ids:
+        return {}
+    oid_set = set(int(x) for x in order_ids)
+    oi_rows = (
+        db.query(OrderItem.id)
+        .filter(OrderItem.order_id.in_(list(order_ids)))
+        .all()
+    )
+    oi_ids = [int(r[0]) for r in oi_rows]
+    if not oi_ids:
+        return {}
+    evs = (
+        db.query(FulfillmentEvent)
+        .filter(
+            FulfillmentEvent.order_item_id.in_(oi_ids),
+            FulfillmentEvent.type == FE_PICK,
+        )
+        .all()
+    )
+    pick_ids = [int(_meta(ev).get("pick_id") or 0) for ev in evs if int(_meta(ev).get("pick_id") or 0) > 0]
+    pick_map: dict[int, Pick] = {}
+    if pick_ids:
+        prs = (
+            db.query(Pick)
+            .filter(
+                Pick.id.in_(list(dict.fromkeys(pick_ids))),
+                Pick.tenant_id == int(tenant_id),
+                Pick.warehouse_id == int(warehouse_id),
+                Pick.order_id.in_(list(order_ids)),
+            )
+            .all()
+        )
+        pick_map = {int(p.id): p for p in prs}
+
+    order_cart_cache: dict[int, int | None] = {}
+
+    def _order_cart_for_pick(oid: int) -> int | None:
+        if oid not in order_cart_cache:
+            ow = db.query(Order).filter(Order.id == int(oid)).first()
+            order_cart_cache[oid] = int(ow.cart_id) if ow is not None and ow.cart_id else None
+        return order_cart_cache[oid]
+
+    out: dict[int, float] = {}
+    cid = int(cart_id) if cart_id is not None else None
+    for ev in evs:
+        oi_id = int(ev.order_item_id)
+        m = _meta(ev)
+        pk_id = int(m.get("pick_id") or 0)
+        p_row: Pick | None = pick_map.get(pk_id) if pk_id else None
+        if pk_id and p_row is None:
+            continue
+        if p_row is not None and int(p_row.order_id) not in oid_set:
+            continue
+        qty = float(ev.quantity or 0.0)
+        if cid is None:
+            if not m.get("finalized"):
+                continue
+            out[oi_id] = out.get(oi_id, 0.0) + qty
+            continue
+        if int(m.get("cart_id") or 0) == cid:
+            out[oi_id] = out.get(oi_id, 0.0) + qty
+            continue
+        if p_row is not None and p_row.cart_id is not None and int(p_row.cart_id) == cid:
+            out[oi_id] = out.get(oi_id, 0.0) + qty
+            continue
+        if p_row is not None and p_row.order_id:
+            oc = _order_cart_for_pick(int(p_row.order_id))
+            if oc is not None and int(oc) == cid:
+                out[oi_id] = out.get(oi_id, 0.0) + qty
+    return out
+
+
 def picked_by_product_from_events(
     db: Session,
     *,

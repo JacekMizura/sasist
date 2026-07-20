@@ -104,14 +104,20 @@ export default function WmsPickingCartScanPage() {
             zebrane: linesResult.session_stats.zebrane ?? 0,
             doZebrania: linesResult.session_stats.do_zebrania ?? 0,
             wTrakcie: linesResult.session_stats.w_trakcie ?? 0,
-            braki: linesResult.session_stats.braki ?? 0,
+            braki: linesResult.session_stats.braki_szt ?? linesResult.session_stats.braki ?? 0,
           };
         } else {
           const normalized = (linesResult.products ?? []).map((row) => ({
             ...row,
             picked_quantity: wmsPickingDisplayPickedQuantity(row),
           }));
-          hubPickStats = computeWmsPickingProductLineSessionStats(normalized);
+          const computed = computeWmsPickingProductLineSessionStats(normalized);
+          hubPickStats = {
+            zebrane: computed.zebrane,
+            doZebrania: computed.doZebrania,
+            wTrakcie: computed.wTrakcie,
+            braki: computed.brakiSzt,
+          };
         }
         setCartScopedStats({ hubOrderCount, hubPickStats });
         playScanBeep();

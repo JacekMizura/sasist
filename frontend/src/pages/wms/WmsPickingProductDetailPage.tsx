@@ -1458,26 +1458,58 @@ export default function WmsPickingProductDetailPage() {
               <div className="w-full max-w-md space-y-4">
                 <div className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl border border-red-300 bg-red-100 text-red-950 text-xs font-black uppercase tracking-wider">
                   <AlertTriangle size={16} strokeWidth={2.5} className="text-red-700" />
-                  BRAK {fmtQty(missingTotal)}/{fmtQty(detail.total_quantity)}
+                  BRAK {fmtQty(missingTotal)} SZT.
+                  {ordersWithShortageCount === 1
+                    ? " · 1 ZAMÓWIENIE Z BRAKIEM"
+                    : ordersWithShortageCount > 1
+                      ? ` · ${ordersWithShortageCount} ${
+                          ordersWithShortageCount <= 4 ? "ZAMÓWIENIA" : "ZAMÓWIEŃ"
+                        } Z BRAKIEM`
+                      : ""}
                 </div>
-                <dl className="grid grid-cols-3 gap-3 text-left">
-                  <div className="rounded-xl border border-red-200/80 bg-white px-3 py-3">
-                    <dt className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Zapotrzebowanie</dt>
-                    <dd className="mt-1 text-2xl font-black tabular-nums text-slate-900">{fmtQty(detail.total_quantity)}</dd>
-                  </div>
-                  <div className="rounded-xl border border-red-200/80 bg-white px-3 py-3">
-                    <dt className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Zebrano</dt>
-                    <dd className="mt-1 text-2xl font-black tabular-nums text-slate-900">{fmtQty(displayPickedDetail)}</dd>
-                  </div>
-                  <div className="rounded-xl border border-red-300 bg-red-50 px-3 py-3">
-                    <dt className="text-[10px] font-bold uppercase tracking-wider text-red-800">Brak</dt>
-                    <dd className="mt-1 text-2xl font-black tabular-nums text-red-900">{fmtQty(missingTotal)}</dd>
-                  </div>
-                </dl>
-                <p className="text-sm font-semibold text-red-900/80">
-                  Zamówienie niekompletne
-                  {detail.locations.length > 0 ? ` — lokalizacja: ${shortageLocationLabel}` : ""}.
-                </p>
+                <ul className="space-y-2 text-left">
+                  {detail.orders.map((o) => {
+                    const missLn = Number(o.missing_quantity ?? 0);
+                    const unresolved = Math.max(
+                      0,
+                      Number(o.quantity_to_pick ?? Math.max(0, Number(o.quantity) - Number(o.picked_quantity ?? 0) - missLn)),
+                    );
+                    const incomplete = missLn > 1e-9;
+                    const ready = !incomplete && unresolved <= 1e-9;
+                    return (
+                      <li
+                        key={o.order_item_id ?? `${o.order_id}-${o.basket_slot ?? ""}`}
+                        className={`rounded-xl border px-3 py-2 ${
+                          incomplete ? "border-red-200 bg-white" : "border-slate-200 bg-white"
+                        }`}
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-sm font-black text-slate-900">
+                            #{o.order_number}
+                            {o.basket_slot ? (
+                              <span className="ml-2 font-semibold text-[#5a4fcf]">· Koszyk {o.basket_slot}</span>
+                            ) : null}
+                          </p>
+                          <span
+                            className={`rounded-md px-2 py-0.5 text-[10px] font-black uppercase tracking-wider ${
+                              incomplete
+                                ? "bg-amber-50 text-amber-900 border border-amber-200"
+                                : ready
+                                  ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                                  : "bg-indigo-50 text-indigo-900 border border-indigo-200"
+                            }`}
+                          >
+                            {incomplete ? (Number(o.picked_quantity) > 1e-9 ? "NIEKOMPLETNE" : "BRAK") : ready ? "GOTOWE" : "DO ZBIERANIA"}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-xs font-semibold text-slate-600 tabular-nums">
+                          Wymagane: {fmtQty(o.quantity)} · Zebrano: {fmtQty(o.picked_quantity)} · Brak:{" "}
+                          {fmtQty(missLn)}
+                        </p>
+                      </li>
+                    );
+                  })}
+                </ul>
               </div>
             ) : (
               <>

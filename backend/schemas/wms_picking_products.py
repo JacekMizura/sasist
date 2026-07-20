@@ -47,6 +47,27 @@ class WmsPickingCohortMissingLineRow(BaseModel):
     )
 
 
+class WmsPickingProductAllocation(BaseModel):
+    """
+    Alokacja SKU na konkretne zamówienie / koszyk (order_item SSOT).
+
+    ``shortage_qty`` pochodzi z ``OrderItem.wms_picking_line_missing_qty`` — bez FIFO.
+    """
+
+    order_id: int
+    order_number: str
+    order_item_id: int = Field(..., ge=1)
+    basket_label: Optional[str] = Field(None, description="Etykieta koszyka MULTI (np. S-1-1)")
+    required_qty: float = Field(..., ge=0)
+    picked_qty: float = Field(0, ge=0)
+    shortage_qty: float = Field(0, ge=0, description="Zgłoszony brak na order_item")
+    unresolved_qty: float = Field(
+        0,
+        ge=0,
+        description="max(0, required − picked − shortage) — jeszcze do rozliczenia",
+    )
+
+
 class WmsPickingProductLine(BaseModel):
     product_id: int
     name: str
@@ -106,6 +127,13 @@ class WmsPickingProductLine(BaseModel):
     bundle_breakdown: list[WmsPickingProductBundleBreakdownRow] = Field(
         default_factory=list,
         description="Rozbicie ilości per zamówienie/bundle gdy SKU występuje w wielu kontekstach",
+    )
+    allocations: list[WmsPickingProductAllocation] = Field(
+        default_factory=list,
+        description=(
+            "SSOT projekcji operacyjnej: breakdown per order_item (nie FIFO). "
+            "shortage_qty z ``OrderItem.wms_picking_line_missing_qty``."
+        ),
     )
 
 
@@ -205,11 +233,24 @@ class WmsPickingOrderBundleTree(BaseModel):
 class WmsPickingSessionStats(BaseModel):
     """Liczniki sesji zbierania — SSOT z backendu (nie lokalny React)."""
 
-    zebrane: int = Field(0, ge=0)
-    do_zebrania: int = Field(0, ge=0)
-    w_trakcie: int = Field(0, ge=0)
-    braki: int = Field(0, ge=0, description="SKU z resolution_status=SHORTAGE — nie liczone jako zebrane")
-
+    zebrane: int = Field(0, ge=0, description="Liczba SKU w statusie COMPLETED_PICK")
+    do_zebrania: int = Field(0, ge=0, description="Liczba SKU jeszcze nietkniętych")
+    w_trakcie: int = Field(0, ge=0, description="Liczba SKU częściowo zebranych")
+    braki: int = Field(
+        0,
+        ge=0,
+        description="Liczba SKU z resolution_status=SHORTAGE (nie mylić ze sztukami)",
+    )
+    braki_szt: float = Field(
+        0,
+        ge=0,
+        description="Suma sztuk braku (Σ missing_quantity) — do etykiety „Braki: N szt.”",
+    )
+    zamowienia_z_brakami: int = Field(
+        0,
+        ge=0,
+        description="Liczba unikalnych order_id z shortage_qty>0 w allocations",
+    )
 
 class WmsPickingProductLinesResponse(BaseModel):
     products: list[WmsPickingProductLine]

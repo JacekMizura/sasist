@@ -32,6 +32,17 @@ export type WmsPickingCohortMissingLineApi = {
   missing_quantity: number;
 };
 
+export type WmsPickingProductAllocationApi = {
+  order_id: number;
+  order_number: string;
+  order_item_id: number;
+  basket_label?: string | null;
+  required_qty: number;
+  picked_qty: number;
+  shortage_qty: number;
+  unresolved_qty: number;
+};
+
 export type WmsPickingProductLineApi = {
   product_id: number;
   name: string;
@@ -63,13 +74,20 @@ export type WmsPickingProductLineApi = {
   consolidation_shelf_label?: string | null;
   /** Rozbicie multi-order / multi-bundle dla tego SKU (P4.15B) */
   bundle_breakdown?: WmsPickingProductBundleBreakdownRowApi[];
+  /** Per order_item / koszyk — operacyjna projekcja braku (nie FIFO) */
+  allocations?: WmsPickingProductAllocationApi[];
 };
 
 export type WmsPickingSessionStatsApi = {
   zebrane: number;
   do_zebrania: number;
   w_trakcie: number;
+  /** Liczba SKU w SHORTAGE — nie mylić ze sztukami */
   braki?: number;
+  /** Suma sztuk braku — etykieta „Braki: N szt.” */
+  braki_szt?: number;
+  /** Unikalne zamówienia z shortage_qty>0 */
+  zamowienia_z_brakami?: number;
 };
 
 export type WmsBasketPutPendingListApi = {

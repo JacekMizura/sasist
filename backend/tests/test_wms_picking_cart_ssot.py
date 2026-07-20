@@ -86,6 +86,10 @@ class TestProductLinesIgnoreStatusCohortWhenCartBound(unittest.TestCase):
         return_value={},
     )
     @patch(
+        "backend.services.wms_picking_product_list_service._allocations_by_product_from_orders",
+        return_value={},
+    )
+    @patch(
         "backend.services.wms_picking_product_list_service.resolve_wms_picking_order_ids",
         return_value=[1, 2, 3, 4, 5],
     )
@@ -94,6 +98,7 @@ class TestProductLinesIgnoreStatusCohortWhenCartBound(unittest.TestCase):
         self,
         mock_ss,
         mock_resolve,
+        _mock_alloc,
         _mock_missing,
         mock_demand,
         mock_routing_cls,

@@ -58,6 +58,7 @@ from .fulfillment_event_service import (
     FE_MISSING,
     FE_PICK,
     mark_pick_events_finalized_for_pick_ids,
+    picked_by_order_item_from_events,
     picked_by_product_from_events,
     record_pick_event_for_wms_pick,
     sum_line_events,
@@ -92,6 +93,7 @@ from ..schemas.wms_picking_products import (
     WmsPickingLineResolutionStatus,
     WmsPickingOrderBundleTree,
     WmsPickingOrderTypeFilter,
+    WmsPickingProductAllocation,
     WmsPickingProductBundleBreakdownRow,
     WmsPickingProductDetailResponse,
     WmsPickingProductLine,
@@ -1098,6 +1100,79 @@ def _missing_qty_by_product_from_orders(
     return out
 
 
+def _allocations_by_product_from_orders(
+    db: Session,
+    order_ids: Sequence[int],
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    cart_id: int | None,
+    picking_session_id: int | None = None,
+) -> dict[int, list[WmsPickingProductAllocation]]:
+    """
+    Breakdown per ``order_item_id`` (nie FIFO): required / picked / shortage / unresolved.
+
+    ``shortage_qty`` = ``OrderItem.wms_picking_line_missing_qty`` (SSOT deklaracji braku).
+    """
+    if not order_ids:
+        return {}
+    orders = (
+        db.query(Order)
+        .options(joinedload(Order.items), joinedload(Order.basket))
+        .filter(Order.id.in_(list(order_ids)), Order.tenant_id == int(tenant_id))
+        .order_by(Order.id.asc())
+        .all()
+    )
+    picked_by_oi: dict[int, float] = {}
+    if picking_session_id is not None and cart_id is None:
+        from .wms_cartless_picking.scope import sum_picks_for_order_item_cartless
+
+        for o in orders:
+            for oi in o.items or []:
+                picked_by_oi[int(oi.id)] = float(
+                    sum_picks_for_order_item_cartless(db, order_item_id=int(oi.id))
+                )
+    else:
+        picked_by_oi = picked_by_order_item_from_events(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            order_ids=list(order_ids),
+            cart_id=int(cart_id) if cart_id is not None else None,
+        )
+
+    out: dict[int, list[WmsPickingProductAllocation]] = defaultdict(list)
+    for o in orders:
+        basket = o.basket if o.basket_id is not None else None
+        basket_label = _basket_slot_label(basket)
+        for oi in sorted(o.items or [], key=lambda x: int(x.id)):
+            if order_item_is_replaced_line(oi):
+                continue
+            if order_item_skip_bundle_commercial_header_for_ops(oi):
+                continue
+            pid = int(oi.product_id)
+            qty = float(oi.quantity or 0)
+            if qty <= 1e-12:
+                continue
+            miss_raw = float(oi.wms_picking_line_missing_qty or 0)
+            pq_raw = float(picked_by_oi.get(int(oi.id), 0.0) or 0.0)
+            miss = min(max(0.0, miss_raw), qty)
+            picked = min(max(0.0, pq_raw), max(0.0, qty - miss))
+            unresolved = max(0.0, qty - picked - miss)
+            out[pid].append(
+                WmsPickingProductAllocation(
+                    order_id=int(o.id),
+                    order_number=str(o.number or f"#{o.id}"),
+                    order_item_id=int(oi.id),
+                    basket_label=basket_label,
+                    required_qty=round(qty, 6),
+                    picked_qty=round(picked, 6),
+                    shortage_qty=round(miss, 6),
+                    unresolved_qty=round(unresolved, 6),
+                )
+            )
+    return dict(out)
+
 def _recovery_line_remaining_pick_qty(db: Session, order: Order, oi: OrderItem) -> float:
     """Ilość do dogrywki na linii — ``get_unresolved_recovery_lines`` (jedno źródło prawdy)."""
     from .wms_recovery_pick_service import get_unresolved_recovery_lines
@@ -1767,6 +1842,14 @@ def build_wms_picking_product_lines(
     else:
         demand_by_product = _demand_by_product_from_orders(db, order_ids, tenant_id=tenant_id)
     missing_by_product = _missing_qty_by_product_from_orders(db, order_ids, tenant_id=tenant_id)
+    allocations_by_product = _allocations_by_product_from_orders(
+        db,
+        order_ids,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        cart_id=cart_id,
+        picking_session_id=picking_session_id,
+    )
 
     routing = PickingRoutingService(db).build_location_pick_list(order_ids, tenant_id=tenant_id)
     pick_list = list(routing.pick_list)
@@ -1914,6 +1997,7 @@ def build_wms_picking_product_lines(
                 consolidation_pick=shelf_label is not None,
                 consolidation_shelf_label=shelf_label,
                 bundle_breakdown=breakdown,
+                allocations=list(allocations_by_product.get(int(pid), [])),
             )
         )
 

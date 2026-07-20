@@ -12,6 +12,9 @@ export type BasketDetail = {
   order_customer_name?: string | null;
   used_volume_dm3: number;
   total_weight_kg?: number;
+  picking_shortage_qty?: number | null;
+  picking_status?: string | null;
+  picking_status_label?: string | null;
 };
 
 export function basketSlotCode(b: BasketDetail): string {

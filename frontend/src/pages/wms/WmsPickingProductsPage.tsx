@@ -48,6 +48,12 @@ import {
   wmsPickingProductLineComplete,
   wmsPickingRowScanEligible,
 } from "./wmsPickingUiGates";
+import {
+  formatShortageQty,
+  shortageCompactOrderBasketLine,
+  shortageProductCardHeadline,
+  summarizeProductShortageAllocations,
+} from "./pickingShortagePresentation";
 import { WmsPickingSessionTopBar } from "./WmsPickingSessionTopBar";
 import { useWmsShortagesRefresh } from "../../hooks/useWmsShortagesRefresh";
 import { WMS_ROUTES } from "./wmsRoutes";
@@ -504,6 +510,8 @@ export default function WmsPickingProductsPage() {
           do_zebrania: data.session_stats.do_zebrania ?? 0,
           w_trakcie: data.session_stats.w_trakcie ?? 0,
           braki: data.session_stats.braki ?? 0,
+          braki_szt: data.session_stats.braki_szt ?? 0,
+          zamowienia_z_brakami: data.session_stats.zamowienia_z_brakami ?? 0,
         });
       }
       setCohortMissingLines(data.cohort_missing_lines ?? []);
@@ -1189,23 +1197,37 @@ export default function WmsPickingProductsPage() {
     [rows],
   );
 
-  const shortageSkuCount = useMemo(() => rows.filter((r) => wmsPickingLineMissingQty(r) > 1e-9).length, [rows]);
+  const shortageUnitsTotal = useMemo(
+    () =>
+      rows.reduce((s, r) => {
+        const fromAlloc = (r.allocations ?? []).reduce((a, x) => a + Math.max(0, Number(x.shortage_qty) || 0), 0);
+        return s + (fromAlloc > 1e-9 ? fromAlloc : wmsPickingLineMissingQty(r));
+      }, 0),
+    [rows],
+  );
 
   const pickStatsForBar = useMemo(() => {
     if (sessionStats != null) {
+      const units =
+        typeof sessionStats.braki_szt === "number" && Number.isFinite(sessionStats.braki_szt)
+          ? sessionStats.braki_szt
+          : shortageUnitsTotal;
       return {
         zebrane: sessionStats.zebrane,
         doZebrania: sessionStats.do_zebrania,
         wTrakcie: sessionStats.w_trakcie,
-        braki: sessionStats.braki ?? shortageSkuCount,
+        braki: units,
       };
     }
     // While loading cart-scoped lines: never paint status-level hubPickStats (stale after detach).
     if (loading) {
       return null;
     }
-    return pickingSession?.hubPickStats ?? { zebrane: 0, doZebrania: 0, wTrakcie: 0, braki: shortageSkuCount };
-  }, [sessionStats, loading, pickingSession?.hubPickStats, shortageSkuCount]);
+    const hub = pickingSession?.hubPickStats;
+    return hub
+      ? { ...hub, braki: shortageUnitsTotal || hub.braki || 0 }
+      : { zebrane: 0, doZebrania: 0, wTrakcie: 0, braki: shortageUnitsTotal };
+  }, [sessionStats, loading, pickingSession?.hubPickStats, shortageUnitsTotal]);
 
   const orderCountForBar = useMemo(() => {
     if (loading && rows.length === 0) {
@@ -1652,7 +1674,9 @@ export default function WmsPickingProductsPage() {
             </span>
             <span className="text-xs font-bold text-slate-500 bg-white border border-slate-200 px-3 py-1.5 rounded-xl shadow-sm">
               Postęp: <strong className="text-slate-800 font-bold">{totalPickedCount}/{totalToPickCount} szt.</strong>
-              {shortageSkuCount > 0 && <span className="text-rose-600 ml-1.5 font-bold">• Braki: {shortageSkuCount}</span>}
+              {shortageUnitsTotal > 1e-9 && (
+                <span className="text-rose-600 ml-1.5 font-bold">• Braki: {fmtQty(shortageUnitsTotal)} szt.</span>
+              )}
             </span>
           </div>
         )}
@@ -1777,23 +1801,68 @@ export default function WmsPickingProductsPage() {
                   </div>
 
                   <div className="shrink-0 flex items-center justify-center w-full sm:w-[18rem]">
-                    {isShortageResolved ? (
-                      <div className="flex flex-col items-stretch gap-1 w-full max-w-[240px] px-5 py-3 bg-red-50 border border-red-200 rounded-2xl text-red-900">
-                        <div className="flex items-center gap-2 text-sm font-black uppercase tracking-wider">
-                          <AlertTriangle size={16} strokeWidth={2.5} className="text-red-600 shrink-0" />
-                          BRAK {fmtQty(miss)}/{fmtQty(total)}
-                        </div>
-                        <div className="flex items-center justify-between gap-2 border-t border-red-200/80 pt-1">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-red-800/80">
-                            Zamówienie niekompletne
-                          </span>
-                        </div>
-                        {pickedShown > 1e-9 ? (
-                          <p className="text-[10px] font-semibold text-red-800/70 tabular-nums">
-                            Zebrano wcześniej: {fmtQty(pickedShown)} szt.
-                          </p>
-                        ) : null}
-                      </div>
+                    {isShortageResolved || hasShortage ? (
+                      (() => {
+                        const summary = summarizeProductShortageAllocations(r.allocations, miss);
+                        const head = shortageProductCardHeadline(summary);
+                        const primary = summary.affected[0];
+                        const multi = summary.ordersWithShortage > 1;
+                        return (
+                          <div className="flex flex-col items-stretch gap-1 w-full max-w-[260px] px-4 py-3 bg-red-50 border border-red-200 rounded-2xl text-red-900">
+                            <div className="flex items-center gap-2 text-sm font-black uppercase tracking-wider">
+                              <AlertTriangle size={16} strokeWidth={2.5} className="text-red-600 shrink-0" />
+                              {head.title}
+                            </div>
+                            {head.subtitle ? (
+                              <p className="text-[10px] font-bold uppercase tracking-wider text-red-800/90">
+                                {head.subtitle}
+                              </p>
+                            ) : null}
+                            {isShortageResolved && primary ? (
+                              <div className="border-t border-red-200/80 pt-1 space-y-0.5">
+                                <p className="text-[10px] font-bold text-red-900">
+                                  Zamówienie {primary.order_number?.startsWith("#") ? primary.order_number : `#${primary.order_number}`} niekompletne
+                                </p>
+                                {primary.basket_label ? (
+                                  <p className="text-[10px] font-semibold text-red-800/80">
+                                    Koszyk {primary.basket_label}
+                                  </p>
+                                ) : null}
+                              </div>
+                            ) : null}
+                            {multi ? (
+                              <ul className="mt-1 space-y-1 border-t border-red-200/80 pt-1">
+                                {summary.affected.map((a) => (
+                                  <li key={a.order_item_id} className="text-[10px] font-semibold text-red-900/90 leading-snug">
+                                    <span className="font-black">
+                                      {a.order_number?.startsWith("#") ? a.order_number : `#${a.order_number}`}
+                                      {a.basket_label ? ` · ${a.basket_label}` : ""}
+                                    </span>
+                                    <span className="tabular-nums">
+                                      {" "}
+                                      · brak {formatShortageQty(a.shortage_qty)}/{formatShortageQty(a.required_qty)}
+                                    </span>
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : primary && !isShortageResolved ? (
+                              <p className="text-[10px] font-semibold text-red-800/80">
+                                {shortageCompactOrderBasketLine(primary)}
+                              </p>
+                            ) : null}
+                            {!isShortageResolved && remainingToPick > 1e-9 ? (
+                              <div className="flex items-center justify-between gap-2 border-t border-red-200/60 pt-1">
+                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                                  Do pobrania
+                                </span>
+                                <span className="text-sm font-black text-[#5a4fcf] tabular-nums">
+                                  {fmtQty(remainingToPick)}
+                                </span>
+                              </div>
+                            ) : null}
+                          </div>
+                        );
+                      })()
                     ) : isCompletedPick ? (
                       <div className="flex items-center gap-2.5 px-5 py-3.5 bg-emerald-500/10 text-emerald-700 rounded-2xl border border-emerald-500/20 text-sm font-black uppercase tracking-wider">
                         <Check size={16} strokeWidth={3} />
@@ -1809,12 +1878,6 @@ export default function WmsPickingProductsPage() {
                             {fmtQty(pickedShown)}/{fmtQty(total)}
                           </span>
                         </div>
-                        {hasShortage ? (
-                          <div className="flex items-center justify-between gap-2 border-t border-indigo-100/80 pt-1">
-                            <span className="text-[10px] font-bold text-rose-600 uppercase tracking-wider">Brak</span>
-                            <span className="text-sm font-black text-rose-700 tabular-nums">{fmtQty(miss)}</span>
-                          </div>
-                        ) : null}
                         <div className="flex items-center justify-between gap-2 border-t border-indigo-100/80 pt-1">
                           <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
                             Do pobrania
