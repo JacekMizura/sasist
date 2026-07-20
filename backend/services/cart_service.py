@@ -218,13 +218,23 @@ def _order_ids_with_picks(db: Session, order_ids: list[int], *, cart_id: int | N
     return {int(r[0]) for r in q.distinct().all() if r[0] is not None}
 
 
-def _order_picking_shortage_projection(order) -> dict:
+def _order_picking_shortage_projection(
+    order,
+    *,
+    cart_id: int | None = None,
+    db: Session | None = None,
+) -> dict:
     """
-    Read-only projection of operational shortage on cart UI.
+    Read-only projection of operational shortage / pick completeness on cart UI.
     Does not mutate order lifecycle / fulfillment_state.
-    Only flags INCOMPLETE when declared shortage exists on any line.
+
+    Status:
+    - INCOMPLETE: any declared shortage (``wms_picking_line_missing_qty`` > 0)
+    - IN_PROGRESS: unresolved > 0 (needs cart_id + db for pick sums)
+    - READY: unresolved≈0 and shortage≈0
     """
     shortage_units = 0.0
+    required_units = 0.0
     for oi in getattr(order, "items", None) or []:
         if order_item_is_replaced_line(oi):
             continue
@@ -232,14 +242,40 @@ def _order_picking_shortage_projection(order) -> dict:
         if q <= 1e-12:
             continue
         raw = float(getattr(oi, "wms_picking_line_missing_qty", 0) or 0)
-        shortage_units += min(max(0.0, raw), q)
+        miss = min(max(0.0, raw), q)
+        shortage_units += miss
+        required_units += q
     shortage_units = round(shortage_units, 6)
+
     if shortage_units > 1e-9:
         return {
             "picking_shortage_qty": shortage_units,
             "picking_status": "INCOMPLETE",
             "picking_status_label": "NIEKOMPLETNE",
         }
+
+    unresolved = 0.0
+    if db is not None and cart_id is not None and required_units > 1e-9:
+        from .fulfillment_event_service import sum_pick_events_for_line_cart
+
+        for oi in getattr(order, "items", None) or []:
+            if order_item_is_replaced_line(oi):
+                continue
+            q = float(getattr(oi, "quantity", 0) or 0)
+            if q <= 1e-12:
+                continue
+            miss = min(max(0.0, float(getattr(oi, "wms_picking_line_missing_qty", 0) or 0)), q)
+            picked = float(sum_pick_events_for_line_cart(db, int(oi.id), int(cart_id)))
+            picked = min(max(0.0, picked), max(0.0, q - miss))
+            unresolved += max(0.0, q - picked - miss)
+
+    if unresolved > 1e-9:
+        return {
+            "picking_shortage_qty": 0.0,
+            "picking_status": "IN_PROGRESS",
+            "picking_status_label": "NIEROZLICZONE",
+        }
+
     return {
         "picking_shortage_qty": 0.0,
         "picking_status": "READY",
@@ -252,6 +288,8 @@ def _serialize_assigned_order_row(
     *,
     can_detach: bool = False,
     detach_block_reason: str | None = None,
+    cart_id: int | None = None,
+    db: Session | None = None,
 ) -> dict:
     """Rich row for admin „Przypisane zamówienia” section."""
     number = getattr(order, "number", None)
@@ -263,7 +301,7 @@ def _serialize_assigned_order_row(
     if vol is None or float(vol or 0) <= 0:
         vol = _order_used_volume_dm3_from_items(order)
     weight = _order_total_weight_kg(order)
-    shortage_proj = _order_picking_shortage_projection(order)
+    shortage_proj = _order_picking_shortage_projection(order, cart_id=cart_id, db=db)
     return {
         "order_id": int(order.id),
         "number": str(number) if number not in (None, "") else str(order.id),
@@ -288,10 +326,11 @@ def _assigned_orders_payload(db: Session, cart, orders: list) -> list[dict]:
 
     st = get_cart_status(cart)
     packing_like = st in (CartStatus.READY_FOR_PACKING, CartStatus.PACKING)
+    cid = int(cart.id)
     with_picks = _order_ids_with_picks(
         db,
         [int(o.id) for o in orders],
-        cart_id=int(cart.id),
+        cart_id=cid,
     )
     out: list[dict] = []
     for o in orders:
@@ -301,6 +340,8 @@ def _assigned_orders_payload(db: Session, cart, orders: list) -> list[dict]:
                 o,
                 can_detach=not blocked,
                 detach_block_reason=ORDER_DETACH_BLOCKED_MSG if blocked else None,
+                cart_id=cid,
+                db=db,
             )
         )
     return out
@@ -879,7 +920,7 @@ class CartService:
                 "used_volume_dm3": used_dm3,
                 "total_weight_kg": w,
                 **(
-                    _order_picking_shortage_projection(o)
+                    _order_picking_shortage_projection(o, cart_id=int(cart.id), db=self.db)
                     if o is not None
                     else {
                         "picking_shortage_qty": 0.0,

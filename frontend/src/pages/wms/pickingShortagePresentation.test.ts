@@ -3,6 +3,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  allocationPresentationStatus,
   shortageProductCardHeadline,
   summarizeProductShortageAllocations,
   type PickingShortageAllocation,
@@ -62,5 +63,36 @@ describe("pickingShortagePresentation", () => {
     expect(head.title).toMatch(/12/);
     expect(head.subtitle).toMatch(/2/);
     expect(head.subtitle).toMatch(/Z BRAKIEM/i);
+  });
+
+  it("PARTIAL UNRESOLVED: never READY", () => {
+    const a: PickingShortageAllocation = {
+      order_id: 4,
+      order_number: "4",
+      order_item_id: 14,
+      basket_label: "S-1-4",
+      required_qty: 8,
+      picked_qty: 4,
+      shortage_qty: 2,
+      unresolved_qty: 2,
+    };
+    expect(allocationPresentationStatus(a)).toEqual({ key: "ACTIVE", label: "NIEROZLICZONE" });
+  });
+
+  it("FULL SHORTAGE: points at order/basket with BRAK", () => {
+    const a: PickingShortageAllocation = {
+      order_id: 5,
+      order_number: "5",
+      order_item_id: 15,
+      basket_label: "S-1-5",
+      required_qty: 8,
+      picked_qty: 0,
+      shortage_qty: 8,
+      unresolved_qty: 0,
+    };
+    expect(allocationPresentationStatus(a)).toEqual({ key: "SHORTAGE", label: "BRAK" });
+    const s = summarizeProductShortageAllocations([a], 8);
+    expect(shortageProductCardHeadline(s).subtitle).toContain("5");
+    expect(shortageProductCardHeadline(s).subtitle).toContain("S-1-5");
   });
 });

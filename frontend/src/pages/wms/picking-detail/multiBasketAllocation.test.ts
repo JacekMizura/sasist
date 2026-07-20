@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   aggregateAllocations,
   allocationLineStatus,
+  allocationStatusLabel,
   allocationUnresolved,
   unresolvedAllocations,
 } from "./multiBasketAllocation";
@@ -46,6 +47,7 @@ describe("multiBasketAllocation", () => {
     };
     expect(allocationUnresolved(row)).toBe(4);
     expect(allocationLineStatus(row)).toBe("PARTIAL_PICK");
+    expect(allocationStatusLabel("PARTIAL_PICK")).toBe("NIEROZLICZONE");
     expect(unresolvedAllocations([row])).toHaveLength(1);
   });
 });

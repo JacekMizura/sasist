@@ -1,3 +1,10 @@
+## 2026-07-20 — MULTI shortage UI audit/regression PASS
+
+- allocations[] = order_item.wms_picking_line_missing_qty + Order.basket (no FIFO, no product_id→basket).
+- Cart READY only when unresolved=0 & shortage=0; else NIEROZLICZONE / NIEKOMPLETNE.
+- Counter always `Braki: N szt.` (braki_szt). Write paths untouched.
+- Tests: allocation regression + FE presentation. Commit, no push.
+
 ## 2026-07-20 — MULTI shortage UI: per order_item / basket (not SKU-only)
 
 - ROOT: BE had order_item shortage SSOT; product-lines list exposed only product aggregate; FE showed `BRAK 1/9` + „Zamówienie niekompletne” on whole SKU.

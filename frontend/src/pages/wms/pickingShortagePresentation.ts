@@ -85,7 +85,7 @@ export function allocationPresentationStatus(a: PickingShortageAllocation): {
   const unresolved = Number(a.unresolved_qty) || 0;
   const picked = Number(a.picked_qty) || 0;
   if (unresolved > 1e-9) {
-    return { key: "ACTIVE", label: "DO ZBIERANIA" };
+    return { key: "ACTIVE", label: "NIEROZLICZONE" };
   }
   if (miss > 1e-9 && picked <= 1e-9) {
     return { key: "SHORTAGE", label: "BRAK" };

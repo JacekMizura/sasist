@@ -225,7 +225,8 @@ export function CartFleetDetailPanel({
     const orderLabel = hasOrders ? (b.order_number ? `#${b.order_number}` : `#${b.order_id}`) : null;
     const shortageQty = Number(b.picking_shortage_qty ?? 0);
     const hasShortage = hasOrders && (shortageQty > 1e-9 || b.picking_status === "INCOMPLETE");
-    const isReady = hasOrders && !hasShortage && (b.picking_status === "READY" || occupancyPct >= 95);
+    const inProgress = hasOrders && !hasShortage && b.picking_status === "IN_PROGRESS";
+    const isReady = hasOrders && !hasShortage && !inProgress && b.picking_status === "READY";
     const basketTone = !hasOrders
       ? "bg-slate-50 border-slate-300 border-dashed"
       : hasShortage
@@ -265,6 +266,10 @@ export function CartFleetDetailPanel({
             ) : isReady ? (
               <span className="inline-flex w-fit rounded-md border border-emerald-200 bg-emerald-100 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-emerald-800">
                 GOTOWE
+              </span>
+            ) : inProgress ? (
+              <span className="inline-flex w-fit rounded-md border border-indigo-200 bg-indigo-100 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-indigo-900">
+                NIEROZLICZONE
               </span>
             ) : null}
             <div className="mt-1 space-y-0.5">

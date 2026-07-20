@@ -25,7 +25,7 @@ export type AssignedOrderRow = {
   detach_block_reason?: string | null;
   /** Projection only — sum of declared line shortages */
   picking_shortage_qty?: number | null;
-  picking_status?: "INCOMPLETE" | "READY" | string | null;
+  picking_status?: "INCOMPLETE" | "READY" | "IN_PROGRESS" | string | null;
   picking_status_label?: string | null;
 };
 
@@ -107,14 +107,20 @@ function statusBadge(o: AssignedOrderRow) {
       </span>
     );
   }
+  if (o.picking_status === "IN_PROGRESS") {
+    return (
+      <span className="inline-flex rounded-md bg-indigo-50 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-indigo-800">
+        {o.picking_status_label || "NIEROZLICZONE"}
+      </span>
+    );
+  }
   if (o.picking_status === "READY") {
     return (
       <span className="inline-flex rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-emerald-700">
         {o.picking_status_label || "GOTOWE"}
       </span>
     );
-  }
-  const raw = (o.status || "—").trim();
+  }  const raw = (o.status || "—").trim();
   const upper = raw.toUpperCase();
   if (upper.includes("WMS") || upper.includes("PICK") || upper === "NEW") {
     return (

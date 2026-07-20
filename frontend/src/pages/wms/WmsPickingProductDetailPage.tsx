@@ -1499,7 +1499,7 @@ export default function WmsPickingProductDetailPage() {
                                   : "bg-indigo-50 text-indigo-900 border border-indigo-200"
                             }`}
                           >
-                            {incomplete ? (Number(o.picked_quantity) > 1e-9 ? "NIEKOMPLETNE" : "BRAK") : ready ? "GOTOWE" : "DO ZBIERANIA"}
+                            {incomplete ? (Number(o.picked_quantity) > 1e-9 ? "NIEKOMPLETNE" : "BRAK") : ready ? "GOTOWE" : "NIEROZLICZONE"}
                           </span>
                         </div>
                         <p className="mt-1 text-xs font-semibold text-slate-600 tabular-nums">

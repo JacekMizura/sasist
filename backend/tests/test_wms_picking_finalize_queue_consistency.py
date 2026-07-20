@@ -244,6 +244,7 @@ class TestSyncAfterFinalize(unittest.TestCase):
 
 
 class TestRecoveryQueueFilter(unittest.TestCase):
+    @patch("backend.services.wms_picking_product_list_service._allocations_by_product_from_orders", return_value={})
     @patch("backend.services.wms_picking_product_list_service._picked_location_code_by_product", return_value={})
     @patch("backend.services.wms_picking_product_list_service._build_cohort_missing_line_rows", return_value=[])
     @patch("backend.services.wms_picking_product_list_service._scanner_active_by_product_id", return_value={})

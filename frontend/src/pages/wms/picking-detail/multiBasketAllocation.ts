@@ -56,9 +56,9 @@ export function allocationStatusLabel(status: MultiBasketLineStatus): string {
     case "FULL_SHORTAGE":
       return "BRAK";
     case "PARTIAL_PICK":
-      return "CZĘŚCIOWO";
+      return "NIEROZLICZONE";
     default:
-      return "DO ZBIERANIA";
+      return "W TRAKCIE";
   }
 }
 
