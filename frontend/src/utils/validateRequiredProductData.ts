@@ -48,6 +48,12 @@ function positive(v: unknown): boolean {
   return Number.isFinite(n) && n > 1e-9;
 }
 
+/** Master has an explicit weight including verified 0 kg (null/undefined = not provided). Sync with BE weight_provided. */
+function weightProvided(v: unknown): boolean {
+  if (v === null || v === undefined || v === "") return false;
+  return Number.isFinite(Number(v));
+}
+
 function nonEmpty(v: unknown): boolean {
   return Boolean(String(v ?? "").trim());
 }
@@ -103,7 +109,8 @@ export function validateRequiredProductData(
     missing.push({ key: "width", label: "Szerokość", group: "basic" });
   if (req.require_recv_length && !positive(product.length))
     missing.push({ key: "length", label: "Długość", group: "basic" });
-  if (req.require_recv_weight && !positive(product.weight))
+  // Explicit 0 kg counts as provided (same as backend master_weight_complete_for_receiving).
+  if (req.require_recv_weight && !weightProvided(product.weight))
     missing.push({ key: "weight", label: "Waga", group: "basic" });
 
   const hasCarton = nonEmpty(product.bulk_ean) || positive(product.units_per_carton);

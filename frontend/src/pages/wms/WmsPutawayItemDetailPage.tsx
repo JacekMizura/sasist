@@ -381,6 +381,13 @@ export default function WmsPutawayItemDetailPage() {
                     {fmtQty(suggestions.distribution_plan.requested_quantity)} szt. · plan ≠ wykonanie — każda pozycja
                     wymaga skanu
                   </p>
+                  {suggestions.distribution_plan.warnings?.some((w) =>
+                    String(w).includes("TECHNICAL_LOGISTICS_DEFAULTS"),
+                  ) ? (
+                    <p className="mb-3 text-xs font-semibold text-amber-800">
+                      Plan szacunkowy — produkt ma niepełne dane logistyczne.
+                    </p>
+                  ) : null}
                   <ul className="space-y-2">
                     {suggestions.distribution_plan.allocations.map((a) => (
                       <li

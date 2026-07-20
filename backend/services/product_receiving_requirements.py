@@ -10,7 +10,6 @@ from ..models.product import Product
 from ..models.wms_settings import WmsSettings
 from .product_logistics_normalizer import (
     dimension_provided,
-    master_dimensions_complete_for_receiving,
     master_weight_complete_for_receiving,
 )
 from .product_validation_policy import (
@@ -110,8 +109,6 @@ def validate_required_product_data(
     # Weight: must be explicitly set on master. Runtime technical default 0 kg does NOT count.
     if eff.require_recv_weight and not master_weight_complete_for_receiving(product):
         missing.append(MissingReceivingField("weight", "Waga", "basic"))
-    # Sanity: require_dimensions bundle still uses per-axis flags above.
-    _ = master_dimensions_complete_for_receiving  # available for callers / tests
 
     has_carton = _non_empty_str(getattr(product, "bulk_ean", None)) or _positive_float(
         getattr(product, "units_per_carton", None)

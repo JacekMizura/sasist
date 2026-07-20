@@ -166,6 +166,12 @@ function PackingFitRecommendationPanel({ detail, busy, onUseCarton }: Props) {
               <dd className="font-semibold">{confLabel(bestCarton.fit_confidence || primary?.fit_confidence)}</dd>
             </div>
           </dl>
+          {(primary?.why_selected || primary?.reason) ? (
+            <p className="mt-3 text-xs text-slate-600">
+              <span className="font-bold text-slate-400">Dlaczego: </span>
+              {primary.why_selected || primary.reason}
+            </p>
+          ) : null}
           <div className="mt-4 flex flex-wrap gap-2">
             <button
               type="button"

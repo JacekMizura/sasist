@@ -162,7 +162,7 @@ def _resolve_order_date_column(column_names: list, column_map: dict) -> str | No
 # Domyślna objętość gdy brak wymiarów (dm³) – 1 cm × 1 cm × 1 cm = 0.001 dm³
 FALLBACK_VOLUME_DM3 = 0.001
 # Domyślna wartość pojedynczego wymiaru gdy brak lub 0 (cm) – 1 cm dla obliczenia objętości
-FALLBACK_DIMENSION_CM = 1.0
+FALLBACK_DIMENSION_CM = 1.0  # volume estimate only — never written to Product.length/width/height
 
 def _parse_price(value) -> float | None:
     """Parse price from CSV; handles Polish comma decimal (e.g. 1,21 or 4,9)."""
