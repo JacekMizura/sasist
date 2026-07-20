@@ -1,3 +1,11 @@
+## 2026-07-20 — User-facing events always Polish (Historia czynności)
+
+- Root cause: ActivityLogTable mapped cart `event_code` via `getOrderEventLabel` → English title-case + CSS uppercase → „CART RELEASED”.
+- SSOT FE: `getEventDisplayLabel` (`eventDisplayLabels.ts`); unknown → „Zdarzenie systemowe”.
+- SSOT BE: `title_pl` / `compose_informative_message` on presentation (no history migration).
+- Fallback: no English `.title()` humanize for unknown WMS ops / material needs / workflow.
+- Rule: `.cursor/rules/user-facing-polish.mdc`. Tests: FE vitest + `test_event_display_polish.py`. No push.
+
 ## 2026-07-20 — Trusted capacity vs computational fallback (putaway UX)
 
 - Split: runtime 1×1×1/0 kg stays computational; operator numbers require trusted inputs.
