@@ -30,6 +30,7 @@ import type { BundleScanOut } from "../../../api/bundlesLogisticsApi";
 import { loadWmsPackingSession, type WmsPackingSessionState } from "../../../pages/wms/wmsPackingSession";
 import { WMS_ROUTES } from "../../../pages/wms/wmsRoutes";
 import {
+  decideListScanBootstrapUi,
   firstIncompleteOrderItemId,
   isPackingOrderLinesFullyPacked,
   isPackingPhysicallyComplete,
@@ -63,6 +64,9 @@ export function usePackingOrderController(
   /** Zapobiega podwójnemu POST …/finish (Strict Mode / podwójny mount ekranu finalizacji). */
   const finishPromiseRef = useRef<Promise<boolean> | null>(null);
   const bootstrapConsumedRef = useRef(false);
+  /** Po skanie z listy: nie otwieraj kartonu automatycznie — najpierw widok zamówienia. */
+  const deferCartonFromListBootstrapRef = useRef(false);
+  const [showProceedAfterLinesCompleteCta, setShowProceedAfterLinesCompleteCta] = useState(false);
   const [flashItemId, setFlashItemId] = useState<number | null>(null);
   const flashTimerRef = useRef<ReturnType<typeof window.setTimeout> | undefined>(undefined);
 
@@ -148,6 +152,8 @@ export function usePackingOrderController(
 
   useEffect(() => {
     bootstrapConsumedRef.current = false;
+    deferCartonFromListBootstrapRef.current = false;
+    setShowProceedAfterLinesCompleteCta(false);
     setPostPackFinishBusy(false);
     finishWithoutCartonRef.current = false;
     setAwaitingPostPackCarton(false);
@@ -171,6 +177,7 @@ export function usePackingOrderController(
   /**
    * Wznów karton/finalizację gdy linie kompletne, a automatyzacje jeszcze nie.
    * Nie mylić packed_at z FINALIZED (automation_finished_at).
+   * Po bootstrapie ze skanu listy — nie otwieraj od razu (deferCartonFromListBootstrapRef).
    */
   useEffect(() => {
     if (!detail) return;
@@ -181,6 +188,7 @@ export function usePackingOrderController(
     if (phase === "NEEDS_DECISION") return;
     if (finishBusyRef.current) return;
     if (awaitingPostPackCarton || awaitingFinalizationRun) return;
+    if (deferCartonFromListBootstrapRef.current) return;
     const sel = (detail.selected_carton_id ?? "").trim();
     const allowNoCarton = finishWithoutCartonRef.current;
     if (!sel && !allowNoCarton) {
@@ -298,7 +306,7 @@ export function usePackingOrderController(
   }, []);
 
   const applyPackingResult = useCallback(
-    (out: WmsPackingScanOutApi) => {
+    (out: WmsPackingScanOutApi, opts?: { fromListBootstrap?: boolean }) => {
       setDetail(out.detail);
       if (out.post_pack_pipeline != null) {
         setPostPackPipeline(out.post_pack_pipeline);
@@ -308,6 +316,17 @@ export function usePackingOrderController(
           triggerFlash(out.last_packed_order_item_id);
         }
         setActiveProductId(null);
+
+        if (opts?.fromListBootstrap) {
+          const decision = decideListScanBootstrapUi({ fullyPacked: true });
+          deferCartonFromListBootstrapRef.current = decision.showProceedAfterLinesCompleteCta;
+          setShowProceedAfterLinesCompleteCta(decision.showProceedAfterLinesCompleteCta);
+          // Never open carton/finalization immediately after list scan.
+          return;
+        }
+
+        deferCartonFromListBootstrapRef.current = false;
+        setShowProceedAfterLinesCompleteCta(false);
         const sel = (out.detail.selected_carton_id ?? "").trim();
         const allowNoCarton = finishWithoutCartonRef.current;
         if (!sel && !allowNoCarton) {
@@ -319,6 +338,8 @@ export function usePackingOrderController(
         setAwaitingFinalizationRun(true);
         return;
       }
+      deferCartonFromListBootstrapRef.current = false;
+      setShowProceedAfterLinesCompleteCta(false);
       advanceActiveAfterPack(out.detail, out.last_packed_order_item_id ?? null);
       if (out.last_packed_order_item_id != null) {
         triggerFlash(out.last_packed_order_item_id);
@@ -327,7 +348,7 @@ export function usePackingOrderController(
     [triggerFlash, advanceActiveAfterPack, finishWithoutCartonRef],
   );
 
-  /** Pierwszy skan z listy: wynik POST resolve-ean/scan — dokładnie raz, bez replay. */
+  /** Pierwszy skan z listy: wynik POST resolve-ean/scan — dokładnie raz, bez replay; bez auto-kartonu. */
   useEffect(() => {
     const navState = location.state as PackingScanBootstrapState | null;
     const boot = navState?.packingScanBootstrap;
@@ -336,8 +357,23 @@ export function usePackingOrderController(
     bootstrapConsumedRef.current = true;
     navigate(location.pathname, { replace: true, state: {} });
     setLoadErr(null);
-    applyPackingResult(boot);
+    applyPackingResult(boot, { fromListBootstrap: true });
   }, [location.state, location.pathname, orderId, navigate, applyPackingResult]);
+
+  const proceedAfterLinesComplete = useCallback(() => {
+    deferCartonFromListBootstrapRef.current = false;
+    setShowProceedAfterLinesCompleteCta(false);
+    if (!detail) return;
+    const sel = (detail.selected_carton_id ?? "").trim();
+    const allowNoCarton = finishWithoutCartonRef.current;
+    if (!sel && !allowNoCarton) {
+      pendingFinishAfterCartonRef.current = true;
+      setAwaitingPostPackCarton(true);
+      return;
+    }
+    setAwaitingPostPackCarton(false);
+    setAwaitingFinalizationRun(true);
+  }, [detail, finishWithoutCartonRef]);
 
   useEffect(() => {
     if (activeProductId == null || detail == null) return;
@@ -583,6 +619,8 @@ export function usePackingOrderController(
     selectedPackagingIds,
     proceedToFinalization,
     continueWithoutCartonToFinalization,
+    proceedAfterLinesComplete,
+    showProceedAfterLinesCompleteCta,
     runPostPackFinish,
     bundlePackScan,
     postPackPipeline,

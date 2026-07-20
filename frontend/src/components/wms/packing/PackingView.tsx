@@ -106,6 +106,11 @@ type PackingViewProps = {
   /** Lista kartonów w nagłówku — domyślnie wyłączona (propozycja tylko w sidebarze). */
   showHeaderCartonPicker?: boolean;
   bundlePackScan?: BundleScanOut | null;
+  /**
+   * Po skanie z listy, gdy linie już kompletne — CTA zamiast auto-modala kartonu.
+   */
+  showProceedAfterLinesCompleteCta?: boolean;
+  onProceedAfterLinesComplete?: () => void;
 };
 
 export function PackingView({
@@ -133,6 +138,8 @@ export function PackingView({
   packingActionsLocked = false,
   showHeaderCartonPicker = false,
   bundlePackScan = null,
+  showProceedAfterLinesCompleteCta = false,
+  onProceedAfterLinesComplete,
 }: PackingViewProps) {
   const { setScannerInputPlaceholder } = useWmsScanner();
   const wedgeRef = useRef<HTMLInputElement>(null);
@@ -427,7 +434,18 @@ export function PackingView({
             <BundleTraceabilityStrip links={bundlePackScan.traceability_links} className="mb-4" />
           ) : null}
           {wszystkoSpakowane ? (
-            <p className="mb-3 text-center text-base font-semibold text-emerald-800">Zamówienie spakowane.</p>
+            <div className="mb-3 space-y-3 text-center">
+              <p className="text-base font-semibold text-emerald-800">Zamówienie spakowane.</p>
+              {showProceedAfterLinesCompleteCta && onProceedAfterLinesComplete ? (
+                <button
+                  type="button"
+                  onClick={onProceedAfterLinesComplete}
+                  className="rounded-xl bg-[#5a4fcf] px-5 py-3 text-xs font-black uppercase tracking-widest text-white shadow-sm transition hover:bg-[#4a40b2] active:scale-95"
+                >
+                  Wybierz opakowanie
+                </button>
+              ) : null}
+            </div>
           ) : null}
           <ul className="grid list-none gap-3 [grid-template-columns:repeat(1,minmax(0,1fr))] p-0 lg:grid-cols-2 xl:grid-cols-3 lg:items-stretch">
             {sortedLines.map((line) => {

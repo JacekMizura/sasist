@@ -299,6 +299,8 @@ export default function WmsPackingOrderPage() {
         packingActionsLocked={ctrl.awaitingPostPackCarton}
         bundlePackScan={ctrl.bundlePackScan}
         showHeaderCartonPicker={false}
+        showProceedAfterLinesCompleteCta={ctrl.showProceedAfterLinesCompleteCta}
+        onProceedAfterLinesComplete={ctrl.proceedAfterLinesComplete}
       />
     </>
   );

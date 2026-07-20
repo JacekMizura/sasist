@@ -131,6 +131,38 @@ export function isPackingPhysicallyComplete(detail: WmsPackingOrderDetailApi): b
   return (at != null && String(at).trim() !== "") || isPackingOrderCompleted(detail);
 }
 
+/**
+ * Decyzja UI po skanie EAN na LIŚCIE pakowania (bootstrap → widok zamówienia).
+ *
+ * Preferencja B: skan już zaliczony w API (resolve-ean/scan), ale NIE otwieramy
+ * od razu bramki kartonu / finalizacji — najpierw widok szczegółów zamówienia.
+ */
+export type ListScanBootstrapUiDecision = {
+  /** Natychmiast otwórz modal „Wybierz opakowanie” (dla bootstrapu z listy: zawsze false). */
+  openCartonGateImmediately: boolean;
+  /** Natychmiast pełnoekranowa finalizacja (dla bootstrapu z listy: zawsze false). */
+  openFinalizationImmediately: boolean;
+  /** Pokaż CTA na widoku zamówienia, by kontrolowanie przejść do kartonu/finalizacji. */
+  showProceedAfterLinesCompleteCta: boolean;
+};
+
+export function decideListScanBootstrapUi(opts: {
+  fullyPacked: boolean;
+}): ListScanBootstrapUiDecision {
+  if (!opts.fullyPacked) {
+    return {
+      openCartonGateImmediately: false,
+      openFinalizationImmediately: false,
+      showProceedAfterLinesCompleteCta: false,
+    };
+  }
+  return {
+    openCartonGateImmediately: false,
+    openFinalizationImmediately: false,
+    showProceedAfterLinesCompleteCta: true,
+  };
+}
+
 /** Nazwa kuriera: ``shipping_method_name`` lub ``shipping_method`` z zamówienia. */
 export function packingCourierName(detail: WmsPackingOrderDetailApi): string | null {
   return (detail.shipping_method_name ?? detail.shipping_method ?? "").trim() || null;

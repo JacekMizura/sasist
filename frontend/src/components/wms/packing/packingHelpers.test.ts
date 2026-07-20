@@ -4,6 +4,7 @@
 import { describe, expect, it } from "vitest";
 import type { WmsPackingOrderDetailApi } from "../../../api/wmsPackingApi";
 import {
+  decideListScanBootstrapUi,
   isPackingOrderLinesFullyPacked,
   isPackingPhysicallyComplete,
   isPackingSessionFinished,
@@ -76,6 +77,22 @@ describe("packingHelpers session finished gate", () => {
       ],
     });
     expect(isPackingSessionFinished(d)).toBe(true);
+  });
+
+  it("list scan bootstrap 1/1: defer carton gate — show order CTA", () => {
+    expect(decideListScanBootstrapUi({ fullyPacked: true })).toEqual({
+      openCartonGateImmediately: false,
+      openFinalizationImmediately: false,
+      showProceedAfterLinesCompleteCta: true,
+    });
+  });
+
+  it("list scan bootstrap partial: no carton, no CTA", () => {
+    expect(decideListScanBootstrapUi({ fullyPacked: false })).toEqual({
+      openCartonGateImmediately: false,
+      openFinalizationImmediately: false,
+      showProceedAfterLinesCompleteCta: false,
+    });
   });
 
   it("CASE 6: list/detail use same required vs packed semantics", () => {

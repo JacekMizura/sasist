@@ -1,3 +1,9 @@
+## 2026-07-20 — Pakowanie: skan EAN z listy nie pomija widoku zamówienia
+
+- ROOT: `packingScanBootstrap` → `applyPackingResult` przy `fully_packed` (np. 1×1) od razu `awaitingPostPackCarton` → modal „Wybierz opakowanie”.
+- FIX: bootstrap z listy deferuje karton/finalizację; pokazuje PackingView + CTA „Wybierz opakowanie”. Skan nadal zaliczony raz (API resolve-ean/scan).
+- Helper `decideListScanBootstrapUi` + testy. No push.
+
 ## 2026-07-20 — Zatwierdź i wróć: confirm remaining across locations
 
 - Was: button only navigated back (no picks).
