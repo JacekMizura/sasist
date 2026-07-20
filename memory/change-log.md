@@ -1,3 +1,9 @@
+## 2026-07-20 — FIX 500 report-shortage-bulk (Postgres FOR UPDATE + joinedload)
+
+- ROOT: bulk locked OrderItem with `joinedload(product)+with_for_update` → Postgres ProgrammingError → uncaught 500.
+- FIX: lock without joinedload; validate cart/tenant/product; map domain errors to 409 codes; SQLAlchemy → 409 PL.
+- Orchestrates same `report_wms_picking_product_shortage`. Tests CASE 1–9 + lock regression. No push.
+
 ## 2026-07-20 — MULTI shortage UI audit/regression PASS
 
 - allocations[] = order_item.wms_picking_line_missing_qty + Order.basket (no FIFO, no product_id→basket).
