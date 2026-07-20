@@ -2216,19 +2216,43 @@ def post_picking_report_shortage_bulk(
         db.commit()
     except BulkShortageError as be:
         db.rollback()
+        # Alias for FE that already handles SHORTAGE_STALE
+        detail = be.as_detail()
+        if be.code == "SHORTAGE_EXCEEDS_UNRESOLVED":
+            detail["code"] = "SHORTAGE_EXCEEDS_UNRESOLVED"
+            detail["error"] = "SHORTAGE_STALE"
         logger.warning(
             "[report_shortage_bulk] REJECT code=%s detail=%s",
             be.code,
-            be.as_detail(),
+            detail,
         )
-        raise HTTPException(status_code=409, detail=be.as_detail()) from be
+        raise HTTPException(status_code=409, detail=detail) from be
     except ValueError as ve:
         db.rollback()
         logger.warning("[report_shortage_bulk] REJECT reason=%s", str(ve))
         raise HTTPException(
             status_code=409,
-            detail={"code": "BULK_SHORTAGE_REJECTED", "message": str(ve), "error": str(ve)},
+            detail={
+                "code": "SHORTAGE_BULK_INVALID_ALLOCATION",
+                "message": str(ve),
+                "error": str(ve),
+            },
         ) from ve
+    except SQLAlchemyError as se:
+        db.rollback()
+        logger.error(
+            "[report_shortage_bulk] DB_ERROR payload=%s traceback=%s",
+            payload_dump,
+            traceback.format_exc(),
+        )
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "SHORTAGE_BULK_INVALID_ALLOCATION",
+                "message": "Nie udało się zapisać braków zbiorczo. Odśwież ekran i spróbuj ponownie.",
+                "error": "SHORTAGE_BULK_DB_ERROR",
+            },
+        ) from se
     except Exception:
         db.rollback()
         logger.error(
@@ -2236,8 +2260,31 @@ def post_picking_report_shortage_bulk(
             payload_dump,
             traceback.format_exc(),
         )
-        raise
-    return WmsPickingBulkReportShortageResponse(**out)
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "code": "SHORTAGE_BULK_UNEXPECTED",
+                "message": "Nieoczekiwany błąd zgłoszenia braków. Spróbuj ponownie.",
+                "error": "SHORTAGE_BULK_UNEXPECTED",
+            },
+        ) from None
+    try:
+        return WmsPickingBulkReportShortageResponse(**out)
+    except Exception as ve:
+        logger.error(
+            "[report_shortage_bulk] RESPONSE_VALIDATE payload=%s out_keys=%s traceback=%s",
+            payload_dump,
+            list(out.keys()) if isinstance(out, dict) else type(out),
+            traceback.format_exc(),
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "code": "SHORTAGE_BULK_UNEXPECTED",
+                "message": "Zapisano braki, ale odpowiedź API jest niepoprawna. Odśwież listę produktów.",
+                "error": "SHORTAGE_BULK_RESPONSE_INVALID",
+            },
+        ) from ve
 
 
 @router.post("/picking/recovery/finalize", response_model=WmsPickingRecoveryFinalizeResponse)

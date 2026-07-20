@@ -4,6 +4,10 @@ Bulk shortage orchestration for MULTI baskets — same SSOT as single report.
 Atomic all-or-nothing: pre-validate live remaining for every line, then apply
 ``report_wms_picking_product_shortage`` per ``order_item_id`` in one DB transaction
 (caller commits). Never product-level FIFO budget.
+
+IMPORTANT: never combine ``joinedload`` with ``with_for_update()`` — on PostgreSQL
+that raises ProgrammingError (FOR UPDATE cannot be applied to the nullable side of
+an outer join) and surfaces as HTTP 500.
 """
 
 from __future__ import annotations
@@ -11,10 +15,12 @@ from __future__ import annotations
 import logging
 from typing import Any, Optional, Sequence
 
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session
 
 from ...models.cart import Cart
-from ...models.order_item import OrderItem
+from ...models.order import Order
+from ...models.order_item import OrderItem, order_item_is_replaced_line
+from ..bundle_order_item_ops import order_item_skip_bundle_commercial_header_for_ops
 from ..wms_basket_put.resolve import cart_is_baskets_mode
 from ..wms_picking_product_list_service import (
     _line_shortage_report_quantities,
@@ -31,7 +37,7 @@ class BulkShortageError(ValueError):
         self,
         message: str,
         *,
-        code: str = "BULK_SHORTAGE_REJECTED",
+        code: str = "SHORTAGE_BULK_INVALID_ALLOCATION",
         order_item_id: int | None = None,
         live_unresolved: float | None = None,
         requested_qty: float | None = None,
@@ -80,7 +86,10 @@ def report_wms_picking_bulk_product_shortage(
     pid = int(product_id)
     cid = int(cart_id)
     if not items:
-        raise BulkShortageError("Brak pozycji do zgłoszenia braku.", code="BULK_EMPTY")
+        raise BulkShortageError(
+            "Brak pozycji do zgłoszenia braku.",
+            code="SHORTAGE_BULK_INVALID_ALLOCATION",
+        )
 
     normalized: list[tuple[int, float]] = []
     seen: set[int] = set()
@@ -88,18 +97,21 @@ def report_wms_picking_bulk_product_shortage(
         oiid = int(raw.get("order_item_id") or 0)
         qty = float(raw.get("missing_qty") or 0)
         if oiid <= 0:
-            raise BulkShortageError("Każda pozycja wymaga order_item_id.", code="BULK_INVALID_ITEM")
+            raise BulkShortageError(
+                "Każda pozycja wymaga order_item_id.",
+                code="SHORTAGE_BULK_INVALID_ALLOCATION",
+            )
         if qty <= 1e-9:
             raise BulkShortageError(
                 f"Ilość braku musi być > 0 (order_item_id={oiid}).",
-                code="BULK_INVALID_QTY",
+                code="SHORTAGE_BULK_INVALID_ALLOCATION",
                 order_item_id=oiid,
                 requested_qty=qty,
             )
         if oiid in seen:
             raise BulkShortageError(
                 f"Duplikat order_item_id={oiid} w żądaniu zbiorczym.",
-                code="BULK_DUPLICATE_ITEM",
+                code="SHORTAGE_DUPLICATE_ALLOCATION",
                 order_item_id=oiid,
             )
         seen.add(oiid)
@@ -115,7 +127,10 @@ def report_wms_picking_bulk_product_shortage(
         .first()
     )
     if cart_row is None:
-        raise BulkShortageError("Nie znaleziono wózka sesji (cart_id).", code="CART_NOT_FOUND")
+        raise BulkShortageError(
+            "Nie znaleziono wózka sesji (cart_id).",
+            code="SHORTAGE_ALLOCATION_NOT_IN_CART",
+        )
 
     baskets_mode = False
     try:
@@ -125,13 +140,13 @@ def report_wms_picking_bulk_product_shortage(
     if not baskets_mode:
         raise BulkShortageError(
             "Zbiorcze rozliczenie braków jest dostępne tylko dla wózków z koszykami.",
-            code="BULK_NOT_BASKETS_CART",
+            code="SHORTAGE_BULK_INVALID_ALLOCATION",
         )
 
     oi_ids = [oiid for oiid, _ in normalized]
+    # Lock rows WITHOUT joinedload — Postgres rejects FOR UPDATE with outer joins.
     locked = (
         db.query(OrderItem)
-        .options(joinedload(OrderItem.product))
         .filter(OrderItem.id.in_(oi_ids))
         .with_for_update()
         .all()
@@ -141,22 +156,61 @@ def report_wms_picking_bulk_product_shortage(
         missing = [i for i in oi_ids if i not in by_id]
         raise BulkShortageError(
             f"Nie znaleziono linii zamówienia: {missing[0]}.",
-            code="ORDER_ITEM_NOT_FOUND",
+            code="SHORTAGE_BULK_INVALID_ALLOCATION",
             order_item_id=int(missing[0]),
         )
 
+    order_ids_needed = list(dict.fromkeys(int(oi.order_id) for oi in locked))
+    orders = (
+        db.query(Order)
+        .filter(Order.id.in_(order_ids_needed), Order.tenant_id == int(tenant_id))
+        .all()
+    )
+    orders_by_id = {int(o.id): o for o in orders}
+    if len(orders_by_id) != len(order_ids_needed):
+        raise BulkShortageError(
+            "Linia zamówienia poza tenantem / niedostępna.",
+            code="SHORTAGE_BULK_INVALID_ALLOCATION",
+        )
+
     # Pass 1: live revalidate — fail before any shortage write.
-    # remaining=0 → idempotent skip (already settled); remaining>0 but < requested → STALE.
     skip_already: set[int] = set()
     for oiid, req_qty in normalized:
         oi = by_id[oiid]
+        order = orders_by_id[int(oi.order_id)]
+
         if int(oi.product_id) != pid:
             raise BulkShortageError(
                 f"product_id nie odpowiada linii order_item_id={oiid}.",
-                code="PRODUCT_MISMATCH",
+                code="SHORTAGE_BULK_INVALID_ALLOCATION",
                 order_item_id=oiid,
                 requested_qty=req_qty,
             )
+        if order_item_is_replaced_line(oi) or order_item_skip_bundle_commercial_header_for_ops(oi):
+            raise BulkShortageError(
+                f"Linia order_item_id={oiid} nie kwalifikuje się do zgłoszenia braku.",
+                code="SHORTAGE_BULK_INVALID_ALLOCATION",
+                order_item_id=oiid,
+                requested_qty=req_qty,
+            )
+
+        ocid = getattr(order, "cart_id", None)
+        if ocid is not None and int(ocid) != cid:
+            raise BulkShortageError(
+                f"Zamówienie #{order.number or order.id} nie jest na tym wózku (order_item_id={oiid}).",
+                code="SHORTAGE_ALLOCATION_NOT_IN_CART",
+                order_item_id=oiid,
+                requested_qty=req_qty,
+            )
+        owh = getattr(order, "warehouse_id", None)
+        if owh is not None and int(owh) != int(warehouse_id):
+            raise BulkShortageError(
+                f"Zamówienie poza magazynem sesji (order_item_id={oiid}).",
+                code="SHORTAGE_ALLOCATION_NOT_IN_CART",
+                order_item_id=oiid,
+                requested_qty=req_qty,
+            )
+
         q = _line_shortage_report_quantities(db, oi, cid)
         live_unresolved = float(q["remaining_qty"])
         if live_unresolved <= 1e-9:
@@ -166,7 +220,7 @@ def report_wms_picking_bulk_product_shortage(
             raise BulkShortageError(
                 f"Nie można zgłosić {req_qty:g} szt. braku dla koszyka/linii "
                 f"(order_item_id={oiid}) — live nierozliczone: {live_unresolved:g} szt.",
-                code="SHORTAGE_STALE",
+                code="SHORTAGE_EXCEEDS_UNRESOLVED",
                 order_item_id=oiid,
                 live_unresolved=live_unresolved,
                 requested_qty=req_qty,
@@ -181,7 +235,6 @@ def report_wms_picking_bulk_product_shortage(
 
     for oiid, req_qty in normalized:
         if oiid in skip_already:
-            all_already = all_already and True
             line_results.append(
                 {
                     "order_item_id": int(oiid),
@@ -211,7 +264,7 @@ def report_wms_picking_bulk_product_shortage(
         except ValueError as e:
             raise BulkShortageError(
                 str(e),
-                code="SHORTAGE_LINE_REJECTED",
+                code="SHORTAGE_BULK_INVALID_ALLOCATION",
                 order_item_id=oiid,
                 requested_qty=req_qty,
             ) from e
@@ -221,8 +274,6 @@ def report_wms_picking_bulk_product_shortage(
             any_applied = True
             all_already = False
             total_shortage += float(req_qty)
-        else:
-            all_already = all_already and True
         for oid in out.get("order_ids") or []:
             order_ids.append(int(oid))
         line_results.append(
@@ -240,13 +291,8 @@ def report_wms_picking_bulk_product_shortage(
         cid,
         len(normalized),
         total_shortage,
-        all_already,
+        all_already and not any_applied,
     )
-
-    allow = True
-    if line_results:
-        # Last single-report returns allow_continue; default True for MULTI.
-        allow = True
 
     return {
         "ok": True,
@@ -258,5 +304,5 @@ def report_wms_picking_bulk_product_shortage(
         "total_shortage_qty": round(total_shortage, 6),
         "target_status_id": None,
         "order_issue_task_ids": [],
-        "allow_continue_other_lines_after_shortage": allow,
+        "allow_continue_other_lines_after_shortage": True,
     }

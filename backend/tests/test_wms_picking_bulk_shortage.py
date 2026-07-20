@@ -33,8 +33,30 @@ def _oi(*, oid: int, order_id: int, product_id: int, qty: float, missing: float 
     )
 
 
-def _mock_db_for_lines(ois: list, cart):
+def _order(*, oid: int, cart_id: int = 9, warehouse_id: int = 1, tenant_id: int = 1, number: str | None = None):
+    return SimpleNamespace(
+        id=oid,
+        cart_id=cart_id,
+        warehouse_id=warehouse_id,
+        tenant_id=tenant_id,
+        number=number or str(oid),
+        basket_id=oid,
+    )
+
+
+def _mock_db_for_lines(ois: list, cart, orders: list | None = None):
     by_id = {int(o.id): o for o in ois}
+    if orders is None:
+        orders = [
+            _order(oid=int(oi.order_id), cart_id=int(cart.id), warehouse_id=int(cart.warehouse_id))
+            for oi in ois
+        ]
+        # unique by id
+        seen = {}
+        for o in orders:
+            seen[int(o.id)] = o
+        orders = list(seen.values())
+    orders_by_id = {int(o.id): o for o in orders}
     db = MagicMock()
 
     def query_side(model):
@@ -52,15 +74,13 @@ def _mock_db_for_lines(ois: list, cart):
             q.first.side_effect = lambda: None
 
             def _filter(*args, **kwargs):
-                # After .filter(OrderItem.id.in_(...)).with_for_update().all()
                 return q
 
             q.filter.side_effect = _filter
-            # Direct first() for single-line SSOT path uses separate query — handled by patches
         elif model is Cart:
             q.first.return_value = cart
         elif model is Order:
-            q.all.return_value = []
+            q.all.return_value = list(orders)
             q.first.return_value = None
         else:
             q.first.return_value = None
@@ -68,15 +88,86 @@ def _mock_db_for_lines(ois: list, cart):
         return q
 
     db.query.side_effect = query_side
-    return db, by_id
+    return db, by_id, orders_by_id
 
 
-def test_case1_select_all_assigns_per_order_item():
-    """10 unresolved → each shortage on correct order_item."""
+def _qty_side(rem_map: dict[int, float]):
+    def _fn(db, oi, cid):
+        rem = float(rem_map[int(oi.id)])
+        return {
+            "remaining_qty": rem,
+            "required_qty": float(oi.quantity),
+            "picked_qty": max(0.0, float(oi.quantity) - rem - float(oi.wms_picking_line_missing_qty or 0)),
+            "declarable_qty": rem,
+            "missing_qty_line": float(oi.wms_picking_line_missing_qty or 0),
+        }
+
+    return _fn
+
+
+def test_case1_live_repro_one_allocation_1235():
+    """LIVE: #1234 ready, #1235 unresolved 1 → bulk only #1235 shortage +1."""
+    pid = 192
+    oi1234 = _oi(oid=501, order_id=1234, product_id=pid, qty=4.0)
+    oi1235 = _oi(oid=502, order_id=1235, product_id=pid, qty=1.0)
+    cart = SimpleNamespace(id=2, tenant_id=1, warehouse_id=1, type=CartType.MULTI)
+    db, _, _ = _mock_db_for_lines(
+        [oi1235],
+        cart,
+        orders=[_order(oid=1235, cart_id=2)],
+    )
+    applied: list[tuple[int, float]] = []
+
+    def fake_report(db, **kw):
+        applied.append((int(kw["order_item_id"]), float(kw["missing_qty"])))
+        assert int(kw["order_item_id"]) == 502
+        return {
+            "ok": True,
+            "already_resolved": False,
+            "orders_updated": 1,
+            "order_ids": [1235],
+            "order_issue_task_ids": [],
+            "allow_continue_other_lines_after_shortage": True,
+        }
+
+    with patch(
+        "backend.services.wms_picking_shortage.bulk_report_service._line_shortage_report_quantities",
+        side_effect=_qty_side({502: 1.0}),
+    ), patch(
+        "backend.services.wms_picking_shortage.bulk_report_service.report_wms_picking_product_shortage",
+        side_effect=fake_report,
+    ), patch(
+        "backend.services.wms_picking_shortage.bulk_report_service.cart_is_baskets_mode",
+        return_value=True,
+    ), patch(
+        "backend.services.wms_picking_shortage.bulk_report_service.order_item_is_replaced_line",
+        return_value=False,
+    ), patch(
+        "backend.services.wms_picking_shortage.bulk_report_service.order_item_skip_bundle_commercial_header_for_ops",
+        return_value=False,
+    ):
+        out = report_wms_picking_bulk_product_shortage(
+            db,
+            tenant_id=1,
+            warehouse_id=1,
+            source_status_id=7,
+            order_type="all",
+            product_id=pid,
+            cart_id=2,
+            items=[{"order_item_id": 502, "missing_qty": 1.0}],
+        )
+
+    assert applied == [(502, 1.0)]
+    assert out["total_shortage_qty"] == 1.0
+    assert 1234 not in out["order_ids"]
+    _ = oi1234
+
+
+def test_case2_ten_valid_atomic():
     pid = 50
     ois = [_oi(oid=100 + i, order_id=1000 + i, product_id=pid, qty=float(i + 1)) for i in range(10)]
     cart = SimpleNamespace(id=9, tenant_id=1, warehouse_id=1, type=CartType.MULTI)
-    db, _ = _mock_db_for_lines(ois, cart)
+    db, _, _ = _mock_db_for_lines(ois, cart)
     items = [{"order_item_id": oi.id, "missing_qty": float(oi.quantity)} for oi in ois]
     applied: list[tuple[int, float]] = []
 
@@ -88,26 +179,27 @@ def test_case1_select_all_assigns_per_order_item():
             "ok": True,
             "already_resolved": False,
             "orders_updated": 1,
-            "order_ids": [oiid // 1],  # noop
+            "order_ids": [1000 + (oiid - 100)],
             "order_issue_task_ids": [],
             "allow_continue_other_lines_after_shortage": True,
         }
 
+    rem = {oi.id: float(oi.quantity) for oi in ois}
     with patch(
         "backend.services.wms_picking_shortage.bulk_report_service._line_shortage_report_quantities",
-        side_effect=lambda db, oi, cid: {
-            "remaining_qty": float(oi.quantity) - float(oi.wms_picking_line_missing_qty or 0),
-            "required_qty": float(oi.quantity),
-            "picked_qty": 0.0,
-            "declarable_qty": float(oi.quantity),
-            "missing_qty_line": 0.0,
-        },
+        side_effect=_qty_side(rem),
     ), patch(
         "backend.services.wms_picking_shortage.bulk_report_service.report_wms_picking_product_shortage",
         side_effect=fake_report,
     ), patch(
         "backend.services.wms_picking_shortage.bulk_report_service.cart_is_baskets_mode",
         return_value=True,
+    ), patch(
+        "backend.services.wms_picking_shortage.bulk_report_service.order_item_is_replaced_line",
+        return_value=False,
+    ), patch(
+        "backend.services.wms_picking_shortage.bulk_report_service.order_item_skip_bundle_commercial_header_for_ops",
+        return_value=False,
     ):
         out = report_wms_picking_bulk_product_shortage(
             db,
@@ -126,142 +218,30 @@ def test_case1_select_all_assigns_per_order_item():
     assert applied == [(100 + i, float(i + 1)) for i in range(10)]
 
 
-def test_case2_mix_full_partial_unselected():
+def test_case3_middle_invalid_full_rollback_no_writes():
     pid = 50
-    oi_a = _oi(oid=11, order_id=1, product_id=pid, qty=1.0)
-    oi_b = _oi(oid=12, order_id=2, product_id=pid, qty=8.0)
-    oi_c = _oi(oid=13, order_id=3, product_id=pid, qty=5.0)
+    ois = [_oi(oid=100 + i, order_id=1000 + i, product_id=pid, qty=2.0) for i in range(5)]
     cart = SimpleNamespace(id=9, tenant_id=1, warehouse_id=1, type=CartType.MULTI)
-    db, _ = _mock_db_for_lines([oi_a, oi_b], cart)  # only selected locked
-    applied: list[tuple[int, float]] = []
-
-    def fake_report(db, **kw):
-        applied.append((int(kw["order_item_id"]), float(kw["missing_qty"])))
-        return {
-            "ok": True,
-            "already_resolved": False,
-            "orders_updated": 1,
-            "order_ids": [int(kw["order_item_id"])],
-            "order_issue_task_ids": [],
-            "allow_continue_other_lines_after_shortage": True,
-        }
-
-    rem = {11: 1.0, 12: 8.0, 13: 5.0}
-
-    with patch(
-        "backend.services.wms_picking_shortage.bulk_report_service._line_shortage_report_quantities",
-        side_effect=lambda db, oi, cid: {
-            "remaining_qty": rem[int(oi.id)],
-            "required_qty": float(oi.quantity),
-            "picked_qty": 0.0,
-            "declarable_qty": rem[int(oi.id)],
-            "missing_qty_line": 0.0,
-        },
-    ), patch(
-        "backend.services.wms_picking_shortage.bulk_report_service.report_wms_picking_product_shortage",
-        side_effect=fake_report,
-    ), patch(
-        "backend.services.wms_picking_shortage.bulk_report_service.cart_is_baskets_mode",
-        return_value=True,
-    ):
-        out = report_wms_picking_bulk_product_shortage(
-            db,
-            tenant_id=1,
-            warehouse_id=1,
-            source_status_id=1,
-            order_type="all",
-            product_id=pid,
-            cart_id=9,
-            items=[
-                {"order_item_id": 11, "missing_qty": 1.0},
-                {"order_item_id": 12, "missing_qty": 4.0},
-            ],
-        )
-
-    assert applied == [(11, 1.0), (12, 4.0)]
-    assert 13 not in [a[0] for a in applied]
-    assert out["total_shortage_qty"] == 5.0
-    _ = oi_c
-
-
-def test_case3_20_qty_scenario_bulk():
-    pid = 50
-    oi4 = _oi(oid=10040, order_id=1004, product_id=pid, qty=8.0)
-    oi5 = _oi(oid=10050, order_id=1005, product_id=pid, qty=8.0)
-    cart = SimpleNamespace(id=9, tenant_id=1, warehouse_id=1, type=CartType.MULTI)
-    db, _ = _mock_db_for_lines([oi4, oi5], cart)
-    rem = {10040: 4.0, 10050: 8.0}
-    applied: list[tuple[int, float]] = []
-
-    def fake_report(db, **kw):
-        applied.append((int(kw["order_item_id"]), float(kw["missing_qty"])))
-        return {
-            "ok": True,
-            "already_resolved": False,
-            "orders_updated": 1,
-            "order_ids": [int(kw.get("order_item_id"))],
-            "order_issue_task_ids": [],
-            "allow_continue_other_lines_after_shortage": True,
-        }
-
-    with patch(
-        "backend.services.wms_picking_shortage.bulk_report_service._line_shortage_report_quantities",
-        side_effect=lambda db, oi, cid: {
-            "remaining_qty": rem[int(oi.id)],
-            "required_qty": float(oi.quantity),
-            "picked_qty": 8.0 - rem[int(oi.id)],
-            "declarable_qty": rem[int(oi.id)],
-            "missing_qty_line": 0.0,
-        },
-    ), patch(
-        "backend.services.wms_picking_shortage.bulk_report_service.report_wms_picking_product_shortage",
-        side_effect=fake_report,
-    ), patch(
-        "backend.services.wms_picking_shortage.bulk_report_service.cart_is_baskets_mode",
-        return_value=True,
-    ):
-        out = report_wms_picking_bulk_product_shortage(
-            db,
-            tenant_id=1,
-            warehouse_id=1,
-            source_status_id=1,
-            order_type="all",
-            product_id=pid,
-            cart_id=9,
-            items=[
-                {"order_item_id": 10040, "missing_qty": 4.0},
-                {"order_item_id": 10050, "missing_qty": 8.0},
-            ],
-        )
-
-    assert applied == [(10040, 4.0), (10050, 8.0)]
-    assert out["total_shortage_qty"] == 12.0
-
-
-def test_case4_stale_rolls_back_before_any_write():
-    pid = 50
-    oi4 = _oi(oid=10040, order_id=1004, product_id=pid, qty=8.0)
-    oi5 = _oi(oid=10050, order_id=1005, product_id=pid, qty=8.0)
-    cart = SimpleNamespace(id=9, tenant_id=1, warehouse_id=1, type=CartType.MULTI)
-    db, _ = _mock_db_for_lines([oi4, oi5], cart)
-    rem = {10040: 4.0, 10050: 4.0}  # live #5 only 4 left
+    db, _, _ = _mock_db_for_lines(ois, cart)
+    # item index 2 exceeds unresolved
+    rem = {100: 2.0, 101: 2.0, 102: 1.0, 103: 2.0, 104: 2.0}
     calls = []
 
     with patch(
         "backend.services.wms_picking_shortage.bulk_report_service._line_shortage_report_quantities",
-        side_effect=lambda db, oi, cid: {
-            "remaining_qty": rem[int(oi.id)],
-            "required_qty": 8.0,
-            "picked_qty": 0.0,
-            "declarable_qty": rem[int(oi.id)],
-            "missing_qty_line": 0.0,
-        },
+        side_effect=_qty_side(rem),
     ), patch(
         "backend.services.wms_picking_shortage.bulk_report_service.report_wms_picking_product_shortage",
         side_effect=lambda *a, **k: calls.append(k) or {"ok": True, "order_ids": [], "already_resolved": False},
     ), patch(
         "backend.services.wms_picking_shortage.bulk_report_service.cart_is_baskets_mode",
         return_value=True,
+    ), patch(
+        "backend.services.wms_picking_shortage.bulk_report_service.order_item_is_replaced_line",
+        return_value=False,
+    ), patch(
+        "backend.services.wms_picking_shortage.bulk_report_service.order_item_skip_bundle_commercial_header_for_ops",
+        return_value=False,
     ):
         with pytest.raises(BulkShortageError) as ctx:
             report_wms_picking_bulk_product_shortage(
@@ -272,21 +252,81 @@ def test_case4_stale_rolls_back_before_any_write():
                 order_type="all",
                 product_id=pid,
                 cart_id=9,
+                items=[{"order_item_id": oi.id, "missing_qty": 2.0} for oi in ois],
+            )
+    assert ctx.value.code == "SHORTAGE_EXCEEDS_UNRESOLVED"
+    assert ctx.value.order_item_id == 102
+    assert calls == []
+
+
+def test_case4_duplicate_order_item_reject():
+    cart = SimpleNamespace(id=9, tenant_id=1, warehouse_id=1, type=CartType.MULTI)
+    db = MagicMock()
+    with patch(
+        "backend.services.wms_picking_shortage.bulk_report_service.cart_is_baskets_mode",
+        return_value=True,
+    ):
+        # fails before cart query if we raise on duplicate first — actually duplicate check is before cart
+        with pytest.raises(BulkShortageError) as ctx:
+            report_wms_picking_bulk_product_shortage(
+                db,
+                tenant_id=1,
+                warehouse_id=1,
+                source_status_id=1,
+                order_type="all",
+                product_id=50,
+                cart_id=9,
                 items=[
-                    {"order_item_id": 10040, "missing_qty": 4.0},
-                    {"order_item_id": 10050, "missing_qty": 8.0},
+                    {"order_item_id": 11, "missing_qty": 1.0},
+                    {"order_item_id": 11, "missing_qty": 1.0},
                 ],
             )
-    assert ctx.value.code == "SHORTAGE_STALE"
-    assert ctx.value.order_item_id == 10050
-    assert calls == []  # nothing written
+    assert ctx.value.code == "SHORTAGE_DUPLICATE_ALLOCATION"
+    assert ctx.value.order_item_id == 11
 
 
-def test_case5_retry_already_resolved_noop():
+def test_case5_exceeds_unresolved_409_semantics():
+    pid = 50
+    oi = _oi(oid=502, order_id=1235, product_id=pid, qty=1.0)
+    cart = SimpleNamespace(id=2, tenant_id=1, warehouse_id=1, type=CartType.MULTI)
+    db, _, _ = _mock_db_for_lines([oi], cart)
+    calls = []
+    with patch(
+        "backend.services.wms_picking_shortage.bulk_report_service._line_shortage_report_quantities",
+        side_effect=_qty_side({502: 1.0}),
+    ), patch(
+        "backend.services.wms_picking_shortage.bulk_report_service.report_wms_picking_product_shortage",
+        side_effect=lambda *a, **k: calls.append(1),
+    ), patch(
+        "backend.services.wms_picking_shortage.bulk_report_service.cart_is_baskets_mode",
+        return_value=True,
+    ), patch(
+        "backend.services.wms_picking_shortage.bulk_report_service.order_item_is_replaced_line",
+        return_value=False,
+    ), patch(
+        "backend.services.wms_picking_shortage.bulk_report_service.order_item_skip_bundle_commercial_header_for_ops",
+        return_value=False,
+    ):
+        with pytest.raises(BulkShortageError) as ctx:
+            report_wms_picking_bulk_product_shortage(
+                db,
+                tenant_id=1,
+                warehouse_id=1,
+                source_status_id=7,
+                order_type="all",
+                product_id=pid,
+                cart_id=2,
+                items=[{"order_item_id": 502, "missing_qty": 5.0}],
+            )
+    assert ctx.value.code == "SHORTAGE_EXCEEDS_UNRESOLVED"
+    assert calls == []
+
+
+def test_case6_already_resolved_controlled_noop():
     pid = 50
     oi = _oi(oid=10050, order_id=1005, product_id=pid, qty=8.0, missing=8.0)
     cart = SimpleNamespace(id=9, tenant_id=1, warehouse_id=1, type=CartType.MULTI)
-    db, _ = _mock_db_for_lines([oi], cart)
+    db, _, _ = _mock_db_for_lines([oi], cart)
     writes = []
 
     with patch(
@@ -300,17 +340,16 @@ def test_case5_retry_already_resolved_noop():
         },
     ), patch(
         "backend.services.wms_picking_shortage.bulk_report_service.report_wms_picking_product_shortage",
-        side_effect=lambda *a, **k: writes.append(k) or {
-            "ok": True,
-            "already_resolved": True,
-            "orders_updated": 0,
-            "order_ids": [1005],
-            "order_issue_task_ids": [],
-            "allow_continue_other_lines_after_shortage": True,
-        },
+        side_effect=lambda *a, **k: writes.append(k),
     ), patch(
         "backend.services.wms_picking_shortage.bulk_report_service.cart_is_baskets_mode",
         return_value=True,
+    ), patch(
+        "backend.services.wms_picking_shortage.bulk_report_service.order_item_is_replaced_line",
+        return_value=False,
+    ), patch(
+        "backend.services.wms_picking_shortage.bulk_report_service.order_item_skip_bundle_commercial_header_for_ops",
+        return_value=False,
     ):
         out = report_wms_picking_bulk_product_shortage(
             db,
@@ -324,44 +363,156 @@ def test_case5_retry_already_resolved_noop():
         )
     assert out["already_resolved"] is True
     assert out["lines"][0]["already_resolved"] is True
-    assert writes == []  # no second FE_MISSING
+    assert writes == []
 
 
-def test_case7_no_cross_allocation():
-    """Bulk of one line never mentions another order_item."""
-    pid = 50
-    oi4 = _oi(oid=10040, order_id=1004, product_id=pid, qty=8.0)
+def test_case7_cross_product_reject():
+    oi = _oi(oid=11, order_id=1, product_id=99, qty=1.0)
     cart = SimpleNamespace(id=9, tenant_id=1, warehouse_id=1, type=CartType.MULTI)
-    db, _ = _mock_db_for_lines([oi4], cart)
-    seen = []
+    db, _, _ = _mock_db_for_lines([oi], cart)
+    with patch(
+        "backend.services.wms_picking_shortage.bulk_report_service.cart_is_baskets_mode",
+        return_value=True,
+    ), patch(
+        "backend.services.wms_picking_shortage.bulk_report_service.order_item_is_replaced_line",
+        return_value=False,
+    ), patch(
+        "backend.services.wms_picking_shortage.bulk_report_service.order_item_skip_bundle_commercial_header_for_ops",
+        return_value=False,
+    ):
+        with pytest.raises(BulkShortageError) as ctx:
+            report_wms_picking_bulk_product_shortage(
+                db,
+                tenant_id=1,
+                warehouse_id=1,
+                source_status_id=1,
+                order_type="all",
+                product_id=50,
+                cart_id=9,
+                items=[{"order_item_id": 11, "missing_qty": 1.0}],
+            )
+    assert ctx.value.code == "SHORTAGE_BULK_INVALID_ALLOCATION"
 
-    def fake_report(db, **kw):
-        seen.append(int(kw["order_item_id"]))
-        assert int(kw["order_item_id"]) == 10040
-        return {
-            "ok": True,
-            "already_resolved": False,
-            "orders_updated": 1,
-            "order_ids": [1004],
-            "order_issue_task_ids": [],
-            "allow_continue_other_lines_after_shortage": True,
-        }
 
+def test_case8_cross_cart_reject():
+    oi = _oi(oid=11, order_id=1, product_id=50, qty=1.0)
+    cart = SimpleNamespace(id=9, tenant_id=1, warehouse_id=1, type=CartType.MULTI)
+    db, _, _ = _mock_db_for_lines(
+        [oi],
+        cart,
+        orders=[_order(oid=1, cart_id=99)],  # other cart
+    )
+    with patch(
+        "backend.services.wms_picking_shortage.bulk_report_service.cart_is_baskets_mode",
+        return_value=True,
+    ), patch(
+        "backend.services.wms_picking_shortage.bulk_report_service.order_item_is_replaced_line",
+        return_value=False,
+    ), patch(
+        "backend.services.wms_picking_shortage.bulk_report_service.order_item_skip_bundle_commercial_header_for_ops",
+        return_value=False,
+    ):
+        with pytest.raises(BulkShortageError) as ctx:
+            report_wms_picking_bulk_product_shortage(
+                db,
+                tenant_id=1,
+                warehouse_id=1,
+                source_status_id=1,
+                order_type="all",
+                product_id=50,
+                cart_id=9,
+                items=[{"order_item_id": 11, "missing_qty": 1.0}],
+            )
+    assert ctx.value.code == "SHORTAGE_ALLOCATION_NOT_IN_CART"
+
+
+def test_case9_retry_no_double_shortage():
+    pid = 50
+    oi = _oi(oid=502, order_id=1235, product_id=pid, qty=1.0, missing=1.0)
+    cart = SimpleNamespace(id=2, tenant_id=1, warehouse_id=1, type=CartType.MULTI)
+    db, _, _ = _mock_db_for_lines([oi], cart)
+    writes = []
     with patch(
         "backend.services.wms_picking_shortage.bulk_report_service._line_shortage_report_quantities",
         return_value={
-            "remaining_qty": 4.0,
-            "required_qty": 8.0,
-            "picked_qty": 4.0,
-            "declarable_qty": 4.0,
-            "missing_qty_line": 0.0,
+            "remaining_qty": 0.0,
+            "required_qty": 1.0,
+            "picked_qty": 0.0,
+            "declarable_qty": 0.0,
+            "missing_qty_line": 1.0,
         },
     ), patch(
         "backend.services.wms_picking_shortage.bulk_report_service.report_wms_picking_product_shortage",
-        side_effect=fake_report,
+        side_effect=lambda *a, **k: writes.append(k),
     ), patch(
         "backend.services.wms_picking_shortage.bulk_report_service.cart_is_baskets_mode",
         return_value=True,
+    ), patch(
+        "backend.services.wms_picking_shortage.bulk_report_service.order_item_is_replaced_line",
+        return_value=False,
+    ), patch(
+        "backend.services.wms_picking_shortage.bulk_report_service.order_item_skip_bundle_commercial_header_for_ops",
+        return_value=False,
+    ):
+        out = report_wms_picking_bulk_product_shortage(
+            db,
+            tenant_id=1,
+            warehouse_id=1,
+            source_status_id=7,
+            order_type="all",
+            product_id=pid,
+            cart_id=2,
+            items=[{"order_item_id": 502, "missing_qty": 1.0}],
+        )
+    assert out["already_resolved"] is True
+    assert writes == []
+
+
+def test_lock_query_never_uses_joinedload_with_for_update():
+    """Regression: joinedload+with_for_update → Postgres ProgrammingError → HTTP 500."""
+    pid = 50
+    oi = _oi(oid=11, order_id=1, product_id=pid, qty=1.0)
+    cart = SimpleNamespace(id=9, tenant_id=1, warehouse_id=1, type=CartType.MULTI)
+    db, _, _ = _mock_db_for_lines([oi], cart)
+    options_calls = []
+
+    real_query = db.query.side_effect
+
+    def tracking_query(model):
+        q = real_query(model)
+        orig_options = q.options
+
+        def opts(*a, **k):
+            options_calls.append(a)
+            return orig_options(*a, **k)
+
+        q.options.side_effect = opts
+        return q
+
+    db.query.side_effect = tracking_query
+
+    with patch(
+        "backend.services.wms_picking_shortage.bulk_report_service._line_shortage_report_quantities",
+        side_effect=_qty_side({11: 1.0}),
+    ), patch(
+        "backend.services.wms_picking_shortage.bulk_report_service.report_wms_picking_product_shortage",
+        return_value={
+            "ok": True,
+            "already_resolved": False,
+            "orders_updated": 1,
+            "order_ids": [1],
+            "order_issue_task_ids": [],
+            "allow_continue_other_lines_after_shortage": True,
+        },
+    ), patch(
+        "backend.services.wms_picking_shortage.bulk_report_service.cart_is_baskets_mode",
+        return_value=True,
+    ), patch(
+        "backend.services.wms_picking_shortage.bulk_report_service.order_item_is_replaced_line",
+        return_value=False,
+    ), patch(
+        "backend.services.wms_picking_shortage.bulk_report_service.order_item_skip_bundle_commercial_header_for_ops",
+        return_value=False,
     ):
         report_wms_picking_bulk_product_shortage(
             db,
@@ -371,9 +522,10 @@ def test_case7_no_cross_allocation():
             order_type="all",
             product_id=pid,
             cart_id=9,
-            items=[{"order_item_id": 10040, "missing_qty": 4.0}],
+            items=[{"order_item_id": 11, "missing_qty": 1.0}],
         )
-    assert seen == [10040]
+    # Lock path must not call .options(joinedload(...))
+    assert options_calls == []
 
 
 def test_rejects_non_baskets_cart():
@@ -398,53 +550,4 @@ def test_rejects_non_baskets_cart():
                 cart_id=9,
                 items=[{"order_item_id": 1, "missing_qty": 1}],
             )
-    assert ctx.value.code == "BULK_NOT_BASKETS_CART"
-
-
-def test_no_global_sku_fifo_path():
-    """Items always carry order_item_id — bulk never calls report without it."""
-    pid = 50
-    oi = _oi(oid=11, order_id=1, product_id=pid, qty=2.0)
-    cart = SimpleNamespace(id=9, tenant_id=1, warehouse_id=1, type=CartType.MULTI)
-    db, _ = _mock_db_for_lines([oi], cart)
-    kwargs_seen = []
-
-    def fake_report(db, **kw):
-        kwargs_seen.append(kw)
-        assert kw.get("order_item_id") == 11
-        return {
-            "ok": True,
-            "already_resolved": False,
-            "orders_updated": 1,
-            "order_ids": [1],
-            "order_issue_task_ids": [],
-            "allow_continue_other_lines_after_shortage": True,
-        }
-
-    with patch(
-        "backend.services.wms_picking_shortage.bulk_report_service._line_shortage_report_quantities",
-        return_value={
-            "remaining_qty": 2.0,
-            "required_qty": 2.0,
-            "picked_qty": 0.0,
-            "declarable_qty": 2.0,
-            "missing_qty_line": 0.0,
-        },
-    ), patch(
-        "backend.services.wms_picking_shortage.bulk_report_service.report_wms_picking_product_shortage",
-        side_effect=fake_report,
-    ), patch(
-        "backend.services.wms_picking_shortage.bulk_report_service.cart_is_baskets_mode",
-        return_value=True,
-    ):
-        report_wms_picking_bulk_product_shortage(
-            db,
-            tenant_id=1,
-            warehouse_id=1,
-            source_status_id=1,
-            order_type="all",
-            product_id=pid,
-            cart_id=9,
-            items=[{"order_item_id": 11, "missing_qty": 2.0}],
-        )
-    assert all(k.get("order_item_id") for k in kwargs_seen)
+    assert ctx.value.code == "SHORTAGE_BULK_INVALID_ALLOCATION"

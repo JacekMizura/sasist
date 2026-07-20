@@ -1121,7 +1121,7 @@ export default function WmsPickingProductDetailPage() {
       if (detailRaw && typeof detailRaw === "object" && !Array.isArray(detailRaw)) {
         const d = detailRaw as { message?: string; code?: string; order_item_id?: number; live_unresolved?: number };
         if (d.message) msg = String(d.message);
-        if (d.code === "SHORTAGE_STALE") {
+        if (d.code === "SHORTAGE_STALE" || d.code === "SHORTAGE_EXCEEDS_UNRESOLVED" || d.error === "SHORTAGE_STALE") {
           showScanFeedbackFromCode("QUANTITY_STALE", { backendMessage: msg });
           await load();
         }
