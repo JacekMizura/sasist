@@ -115,6 +115,9 @@ def best_identical_unit_layout(
             max_stack_weight_kg=item.max_stack_weight_kg,
             shape_type=item.shape_type,
             fragile=item.fragile,
+            used_defaults=item.used_defaults,
+            defaulted_fields=item.defaulted_fields,
+            data_quality=item.data_quality,
         )
         cx = int(math.floor(cl / L)) if L > 0 else 0
         cy = int(math.floor(cw / W)) if W > 0 else 0
@@ -128,6 +131,16 @@ def best_identical_unit_layout(
         limiting = None
         if item.max_stack_count is not None and ups == int(item.max_stack_count):
             limiting = "max_stack_count"
+        conf = FitConfidence.ESTIMATED if item.used_defaults else FitConfidence.EXACT
+        expl = (
+            f"Maksymalnie {cap} szt. — {stacks} stosów × {ups} szt./stos "
+            f"(siatka {cx}×{cy}, orientacja #{idx})."
+        )
+        if item.used_defaults:
+            expl = (
+                f"Szacunkowa pojemność ~{cap} szt. (niepełne dane produktu: "
+                f"{', '.join(item.defaulted_fields) or 'defaults'})."
+            )
         cand = IdenticalUnitLayout(
             capacity=cap,
             orientation_index=idx,
@@ -141,16 +154,14 @@ def best_identical_unit_layout(
             units_per_stack=ups,
             limiting_factor=limiting,
             method=FitMethod.GEOMETRIC,
-            confidence=FitConfidence.EXACT,
-            explanation=(
-                f"Maksymalnie {cap} szt. — {stacks} stosów × {ups} szt./stos "
-                f"(siatka {cx}×{cy}, orientacja #{idx})."
-            ),
+            confidence=conf,
+            explanation=expl,
         )
         if best is None or cand.capacity > best.capacity:
             best = cand
 
     if best is None:
+        conf0 = FitConfidence.ESTIMATED if item.used_defaults else FitConfidence.EXACT
         return IdenticalUnitLayout(
             capacity=0,
             orientation_index=0,
@@ -164,7 +175,7 @@ def best_identical_unit_layout(
             units_per_stack=0,
             limiting_factor="geometry",
             method=FitMethod.GEOMETRIC,
-            confidence=FitConfidence.EXACT,
+            confidence=conf0,
             explanation="Produkt nie mieści się geometrycznie w żadnej dozwolonej orientacji.",
         )
 
@@ -176,6 +187,7 @@ def best_identical_unit_layout(
         if rem_w != float("inf") and rem_w >= 0:
             by_w = int(math.floor(rem_w / item.weight_kg))
             if by_w < best.capacity:
+                conf_w = FitConfidence.ESTIMATED if item.used_defaults else best.confidence
                 best = IdenticalUnitLayout(
                     capacity=max(0, by_w),
                     orientation_index=best.orientation_index,
@@ -189,12 +201,32 @@ def best_identical_unit_layout(
                     units_per_stack=best.units_per_stack,
                     limiting_factor="weight",
                     method=best.method,
-                    confidence=best.confidence,
+                    confidence=conf_w,
                     explanation=(
                         f"Geometria: {best.capacity} szt., limit wagi przestrzeni: {by_w} szt. "
                         f"— wynik {by_w}."
                     ),
                 )
+
+    if item.used_defaults and best.confidence == FitConfidence.EXACT:
+        best = IdenticalUnitLayout(
+            capacity=best.capacity,
+            orientation_index=best.orientation_index,
+            box_l_cm=best.box_l_cm,
+            box_w_cm=best.box_w_cm,
+            box_h_cm=best.box_h_cm,
+            count_x=best.count_x,
+            count_y=best.count_y,
+            count_z=best.count_z,
+            stacks_count=best.stacks_count,
+            units_per_stack=best.units_per_stack,
+            limiting_factor=best.limiting_factor,
+            method=best.method,
+            confidence=FitConfidence.ESTIMATED,
+            explanation=(
+                f"Szacunkowa pojemność ~{best.capacity} szt. — niepełne dane logistyczne produktu."
+            ),
+        )
 
     return best
 

@@ -88,6 +88,10 @@ class FitItem:
     shape_type: str = "box"  # box | cylinder
     fragile: bool = False  # no weight on top (treated like no_stack for loaders)
     label: str = ""
+    #: Runtime technical defaults were applied (not persisted master provenance)
+    used_defaults: bool = False
+    defaulted_fields: tuple[str, ...] = ()
+    data_quality: str = "REAL"  # REAL | PARTIAL_DEFAULTS | ALL_DEFAULTS
 
     @property
     def unit_volume_dm3(self) -> float:

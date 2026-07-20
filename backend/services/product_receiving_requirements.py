@@ -8,6 +8,11 @@ from typing import Any, List, Optional
 
 from ..models.product import Product
 from ..models.wms_settings import WmsSettings
+from .product_logistics_normalizer import (
+    dimension_provided,
+    master_dimensions_complete_for_receiving,
+    master_weight_complete_for_receiving,
+)
 from .product_validation_policy import (
     EffectiveReceivingRequirements,
     resolve_effective_receiving_requirements,
@@ -96,14 +101,17 @@ def validate_required_product_data(
     missing: List[MissingReceivingField] = []
     force_wms = product_created_in_wms(product)
 
-    if eff.require_recv_height and not _positive_float(getattr(product, "height", None)):
+    if eff.require_recv_height and not dimension_provided(getattr(product, "height", None)):
         missing.append(MissingReceivingField("height", "Wysokość", "basic"))
-    if eff.require_recv_width and not _positive_float(getattr(product, "width", None)):
+    if eff.require_recv_width and not dimension_provided(getattr(product, "width", None)):
         missing.append(MissingReceivingField("width", "Szerokość", "basic"))
-    if eff.require_recv_length and not _positive_float(getattr(product, "length", None)):
+    if eff.require_recv_length and not dimension_provided(getattr(product, "length", None)):
         missing.append(MissingReceivingField("length", "Długość", "basic"))
-    if eff.require_recv_weight and not _positive_float(getattr(product, "weight", None)):
+    # Weight: must be explicitly set on master. Runtime technical default 0 kg does NOT count.
+    if eff.require_recv_weight and not master_weight_complete_for_receiving(product):
         missing.append(MissingReceivingField("weight", "Waga", "basic"))
+    # Sanity: require_dimensions bundle still uses per-axis flags above.
+    _ = master_dimensions_complete_for_receiving  # available for callers / tests
 
     has_carton = _non_empty_str(getattr(product, "bulk_ean", None)) or _positive_float(
         getattr(product, "units_per_carton", None)

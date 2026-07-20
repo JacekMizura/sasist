@@ -198,7 +198,7 @@ class TestDistributionPlanner(unittest.TestCase):
         pds.solve_location_capacity = lambda db, location, product, packaging_mode="UNIT": SimpleNamespace(
             **card_by[int(location.id)]
         )
-        pds.product_location_capacity_dict = lambda solved: dict(card_by[int(getattr(solved, "location_id"))])
+        pds.product_location_capacity_dict = lambda solved, **_kw: dict(card_by[int(getattr(solved, "location_id"))])
 
         try:
             plan = build_putaway_distribution_plan(
@@ -254,7 +254,7 @@ class TestDistributionPlanner(unittest.TestCase):
         orig_d = pds.product_location_capacity_dict
         pds.suggest_putaway_locations = lambda *a, **k: [FakeSug()]
         pds.solve_location_capacity = lambda *a, **k: SimpleNamespace(**card)
-        pds.product_location_capacity_dict = lambda s: dict(card)
+        pds.product_location_capacity_dict = lambda s, **_kw: dict(card)
         try:
             plan = build_putaway_distribution_plan(db, tenant_id=1, warehouse_id=1, product_id=1, quantity=50)
         finally:

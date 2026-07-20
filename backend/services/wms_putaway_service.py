@@ -72,9 +72,10 @@ def _product_capacity_card(db: Session, loc: Location, product: Product | None) 
     if product is None:
         return None
     try:
-        return product_location_capacity_dict(
-            solve_location_capacity(db, location=loc, product=product, packaging_mode="UNIT")
-        )
+        from .fit_engine.adapters import fit_item_from_product
+
+        solved = solve_location_capacity(db, location=loc, product=product, packaging_mode="UNIT")
+        return product_location_capacity_dict(solved, fit_item=fit_item_from_product(product))
     except Exception:
         return None
 
@@ -834,6 +835,8 @@ def _suggestion_row_from_location(
         limiting_factor_label=pc.get("limiting_factor_label"),
         additional_capacity_label=pc.get("additional_capacity_label"),
         capacity_ratio_label=pc.get("capacity_ratio_label"),
+        used_defaults=bool(pc.get("used_defaults")) if pc else None,
+        defaulted_fields=list(pc.get("defaulted_fields") or []),
     )
 
 

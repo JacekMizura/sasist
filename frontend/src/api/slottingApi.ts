@@ -36,6 +36,8 @@ export type ProductLocationCapacity = {
   explanation?: string;
   additional_capacity_label: string;
   capacity_ratio_label: string;
+  used_defaults?: boolean;
+  defaulted_fields?: string[];
 };
 
 export type LocationCapacityDetail = {

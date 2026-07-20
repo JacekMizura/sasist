@@ -60,6 +60,8 @@ export type WmsPutawayLocationSuggestionRow = {
   limiting_factor_label?: string | null;
   additional_capacity_label?: string | null;
   capacity_ratio_label?: string | null;
+  used_defaults?: boolean | null;
+  defaulted_fields?: string[];
 };
 
 export type PutawayDistributionAllocation = {

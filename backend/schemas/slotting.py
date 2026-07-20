@@ -44,6 +44,8 @@ class ProductLocationCapacityRead(BaseModel):
     explanation: str = ""
     additional_capacity_label: str = ""
     capacity_ratio_label: str = ""
+    used_defaults: bool = False
+    defaulted_fields: List[str] = Field(default_factory=list)
 
 
 class LocationCapacityDetailRead(BaseModel):
@@ -124,6 +126,8 @@ class PutawayDistributionAllocationRead(BaseModel):
     limiting_factor: Optional[str] = None
     limiting_factor_label: Optional[str] = None
     same_sku_present: bool = False
+    used_defaults: bool = False
+    defaulted_fields: List[str] = Field(default_factory=list)
 
 
 class PutawayDistributionPlanRead(BaseModel):

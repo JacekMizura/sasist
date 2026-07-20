@@ -2550,7 +2550,8 @@ export function ProductEditModal({
                               <option value="no_stack">Nie układać w stos (NO_STACK)</option>
                             </select>
                             <p className="mt-1 text-xs text-slate-500">
-                              NO_STACK ≠ Fragile: tu chodzi o to, że nie wolno kłaść innych sztuk nad tym produktem.
+                              NO_STACK: produktów nie można układać jeden na drugim. Nadal można układać je obok siebie.
+                              To nie to samo co Fragile.
                             </p>
                           </div>
 
@@ -2625,7 +2626,9 @@ export function ProductEditModal({
                                     className={inputClass}
                                   />
                                   <p className="mt-1 text-xs text-slate-500">
-                                    Dotyczy jednego pionowego stosu. Jeżeli na półce mieszczą się 4 stosy po 5 szt., łączna pojemność wynosi 20 szt.
+                                    Limit liczby sztuk ułożonych pionowo w jednym stosie. Np. dla miękkich produktów
+                                    (poduszki, kołdry). Jeżeli na półce mieszczą się 4 stosy po 5 szt., łączna pojemność
+                                    wynosi 20 szt.
                                   </p>
                                 </div>
                               </div>

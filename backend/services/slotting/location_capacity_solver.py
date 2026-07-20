@@ -42,10 +42,13 @@ class LocationCapacityResult:
     confidence: str
     explanation: str
     warnings: list[str]
+    used_defaults: bool = False
+    defaulted_fields: list[str] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
         d["stacks"] = self.stacks_count
+        d["defaulted_fields"] = list(self.defaulted_fields or [])
         return d
 
 
@@ -144,6 +147,15 @@ def solve_location_capacity(
 
     util = min(100.0, (current / total_eff) * 100.0) if total_eff > 0 else 0.0
 
+    if item.used_defaults:
+        if confidence == FitConfidence.EXACT:
+            confidence = FitConfidence.ESTIMATED
+        if "TECHNICAL_LOGISTICS_DEFAULTS" not in warnings:
+            warnings.append("TECHNICAL_LOGISTICS_DEFAULTS")
+            warnings.append(
+                "Szacunkowa pojemność — produkt ma niepełne dane logistyczne."
+            )
+
     return LocationCapacityResult(
         location_id=int(location.id),
         location_code=str(location.name or ""),
@@ -160,10 +172,12 @@ def solve_location_capacity(
         units_per_stack=int(ups),
         utilization_percent=round(util, 2),
         limiting_factor=limiting,
-        method=method.value,
-        confidence=confidence.value,
+        method=method.value if hasattr(method, "value") else str(method),
+        confidence=confidence.value if hasattr(confidence, "value") else str(confidence),
         explanation=explanation,
         warnings=warnings,
+        used_defaults=bool(item.used_defaults),
+        defaulted_fields=list(item.defaulted_fields or []),
     )
 
 

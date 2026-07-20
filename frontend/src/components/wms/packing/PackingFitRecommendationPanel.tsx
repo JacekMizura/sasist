@@ -57,7 +57,19 @@ function PackingFitRecommendationPanel({ detail, busy, onUseCarton }: Props) {
         }
       : null);
 
+  const estimated =
+    String(bestCarton?.fit_confidence || primary?.fit_confidence || plan?.confidence || "")
+      .toUpperCase() === "ESTIMATED" ||
+    Boolean(plan?.warnings?.some((w) => w.includes("TECHNICAL_LOGISTICS_DEFAULTS")));
+
   const warnings: string[] = [];
+  if (
+    plan?.warnings?.some((w) => w.includes("TECHNICAL_LOGISTICS_DEFAULTS")) ||
+    primary?.reason?.includes("niepełne dane") ||
+    primary?.reason?.includes("szacunkowa")
+  ) {
+    warnings.push("Rekomendacja szacunkowa — część produktów ma niepełne dane logistyczne.");
+  }
   if (primary?.reason?.includes("Brak kompletnych wymiarów")) {
     warnings.push("Brak kompletnych wymiarów produktu — dobór opakowania jest szacunkowy.");
   }
@@ -122,7 +134,9 @@ function PackingFitRecommendationPanel({ detail, busy, onUseCarton }: Props) {
 
       {bestCarton ? (
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Rekomendowane opakowanie</p>
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+            {estimated ? "Rekomendacja szacunkowa" : "Rekomendowane opakowanie"}
+          </p>
           <p className="mt-1 text-lg font-black text-slate-900">{bestCarton.name || "—"}</p>
           <dl className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-700">
             <div>

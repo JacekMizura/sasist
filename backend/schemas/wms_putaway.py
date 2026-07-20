@@ -70,6 +70,8 @@ class WmsPutawayLocationSuggestionRow(BaseModel):
     limiting_factor_label: Optional[str] = None
     additional_capacity_label: Optional[str] = None
     capacity_ratio_label: Optional[str] = None
+    used_defaults: Optional[bool] = None
+    defaulted_fields: List[str] = Field(default_factory=list)
 
 
 class WmsPutawayLocationSuggestionsOut(BaseModel):

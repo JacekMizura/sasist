@@ -37,6 +37,8 @@ class DistributionAllocation:
     limiting_factor: Optional[str] = None
     limiting_factor_label: Optional[str] = None
     same_sku_present: bool = False
+    used_defaults: bool = False
+    defaulted_fields: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -117,6 +119,10 @@ def build_putaway_distribution_plan(
     if product is None:
         raise ProductNotFoundError(f"Product {product_id} not found")
 
+    from ..fit_engine.adapters import fit_item_from_product
+
+    fit_item = fit_item_from_product(product, packaging_mode=packaging_mode)
+
     exclude = exclude_location_ids or set()
     ranked = suggest_putaway_locations(
         db,
@@ -147,7 +153,7 @@ def build_putaway_distribution_plan(
         if loc is None:
             continue
         solved = solve_location_capacity(db, location=loc, product=product, packaging_mode=packaging_mode)
-        card = product_location_capacity_dict(solved)
+        card = product_location_capacity_dict(solved, fit_item=fit_item)
         conf = str(card["confidence"]).upper()
         add = float(card["additional_capacity"] or 0)
         if conf == "UNKNOWN":
@@ -156,6 +162,10 @@ def build_putaway_distribution_plan(
         if add <= 1e-9:
             continue
         candidates.append((card, soft_by_id.get(lid, 0.0), same_by_id.get(lid, False), add))
+
+    if fit_item.used_defaults:
+        warnings.append("TECHNICAL_LOGISTICS_DEFAULTS")
+        warnings.append("Plan szacunkowy — produkt ma niepełne dane logistyczne.")
 
     # Phase 1: fill same-SKU first (descending soft score)
     same_sku = sorted(
@@ -189,6 +199,8 @@ def build_putaway_distribution_plan(
                 limiting_factor=card.get("limiting_factor"),
                 limiting_factor_label=card.get("limiting_factor_label"),
                 same_sku_present=same,
+                used_defaults=bool(card.get("used_defaults")),
+                defaulted_fields=list(card.get("defaulted_fields") or []),
             )
         )
         used.add(int(card["location_id"]))

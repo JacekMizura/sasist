@@ -390,7 +390,7 @@ def get_location_capacity_detail(
             from .location_capacity_solver import solve_location_capacity
 
             solved = solve_location_capacity(db, location=loc, product=product, packaging_mode=packaging_mode)
-            card = product_location_capacity_dict(solved)
+            card = product_location_capacity_dict(solved, fit_item=fit_item_from_product(product, packaging_mode=packaging_mode))
             out["capacity"] = card
             out["product_capacity"] = card
         except Exception:
@@ -424,5 +424,5 @@ def batch_product_location_capacities(
         if loc is None:
             continue
         solved = solve_location_capacity(db, location=loc, product=product, packaging_mode=packaging_mode)
-        out.append(product_location_capacity_dict(solved))
+        out.append(product_location_capacity_dict(solved, fit_item=fit_item_from_product(product, packaging_mode=packaging_mode)))
     return out

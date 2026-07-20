@@ -50,7 +50,7 @@ def capacity_ratio_label(*, current: float, total: float, confidence: str) -> st
     return f"{c} / {t}"
 
 
-def product_location_capacity_dict(solved: Any) -> dict[str, Any]:
+def product_location_capacity_dict(solved: Any, *, fit_item: Any = None) -> dict[str, Any]:
     """Normalize LocationCapacityResult (or dict) to public SSOT card."""
     if hasattr(solved, "to_dict"):
         d = solved.to_dict()
@@ -62,6 +62,20 @@ def product_location_capacity_dict(solved: Any) -> dict[str, Any]:
     total = float(d.get("total_capacity") or 0)
     additional = float(d.get("additional_capacity") or 0)
     limiting = d.get("limiting_factor")
+    warnings = list(d.get("warnings") or [])
+    used_defaults = bool(d.get("used_defaults"))
+    defaulted_fields = list(d.get("defaulted_fields") or [])
+    if fit_item is not None:
+        used_defaults = used_defaults or bool(getattr(fit_item, "used_defaults", False))
+        if getattr(fit_item, "defaulted_fields", None):
+            defaulted_fields = list(getattr(fit_item, "defaulted_fields") or [])
+        if used_defaults and conf == "EXACT":
+            conf = "ESTIMATED"
+        if used_defaults and "TECHNICAL_LOGISTICS_DEFAULTS" not in warnings:
+            warnings.append("TECHNICAL_LOGISTICS_DEFAULTS")
+            warnings.append(
+                "Szacunkowa pojemność — produkt ma niepełne dane logistyczne (runtime defaults)."
+            )
     return {
         "product_id": int(d.get("product_id") or 0),
         "location_id": int(d.get("location_id") or 0),
@@ -77,8 +91,10 @@ def product_location_capacity_dict(solved: Any) -> dict[str, Any]:
         "selected_orientation": int(d.get("selected_orientation") or 0),
         "stacks": int(d.get("stacks") or d.get("stacks_count") or 0),
         "units_per_stack": int(d.get("units_per_stack") or 0),
-        "warnings": list(d.get("warnings") or []),
+        "warnings": warnings,
         "explanation": str(d.get("explanation") or ""),
         "additional_capacity_label": additional_capacity_copy(additional=additional, confidence=conf),
         "capacity_ratio_label": capacity_ratio_label(current=current, total=total, confidence=conf),
+        "used_defaults": used_defaults,
+        "defaulted_fields": defaulted_fields,
     }

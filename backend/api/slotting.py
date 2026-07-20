@@ -114,7 +114,11 @@ def get_product_location_capacity(
     if product is None:
         raise _slotting_http(ProductNotFoundError(f"Product {product_id} not found"))
     solved = solve_location_capacity(db, location=loc, product=product, packaging_mode=packaging_mode)
-    return ProductLocationCapacityRead(**product_location_capacity_dict(solved))
+    from ..services.fit_engine.adapters import fit_item_from_product
+
+    return ProductLocationCapacityRead(
+        **product_location_capacity_dict(solved, fit_item=fit_item_from_product(product, packaging_mode=packaging_mode))
+    )
 
 
 @router.post("/product-location-capacities", response_model=BatchProductLocationCapacitiesOut)

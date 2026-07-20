@@ -1,3 +1,12 @@
+## 2026-07-20 — Missing logistics: technical defaults + provenance
+
+- SSOT: `normalize_product_logistics` — runtime 1×1×1 / 0 kg; never auto-write master.
+- Provenance: provided = master field presence (real 1×1×1 ≠ default).
+- Receiving validation: NULL/missing fails when required; technical defaults do NOT pass.
+- Capacity/packing/putaway: `used_defaults` + ESTIMATED confidence; FE szacunkowe labels.
+- Tests: `test_product_logistics_defaults.py` (M1–M10 / receiving / P12–P13) + 75 fit suite green.
+- No push. SAFE TO PUSH: NO (multi-carton persist GAP + smoke).
+
 ## 2026-07-20 — PRODUCT INTEGRATION Phase 1 + core Phase 2
 
 - Capacity contract: `ProductLocationCapacityRead` + GET product/location + POST batch (≤80).

@@ -4,73 +4,37 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from .models import FitContainer, FitItem, OrientationMode, StackingMode
-from .orientations import normalize_orientation_mode
-from .stacking import normalize_stacking_mode
+from ..product_logistics_normalizer import normalize_product_logistics
+from .models import FitContainer, FitItem, StackingMode
 
 
 def fit_item_from_product(product: Any, *, packaging_mode: str = "UNIT") -> FitItem:
-    use_carton = str(packaging_mode or "UNIT").upper() == "CARTON"
-    if use_carton and float(getattr(product, "units_per_carton", 0) or 0) > 0:
-        length = float(getattr(product, "carton_length_cm", None) or getattr(product, "length", 0) or 0)
-        width = float(getattr(product, "carton_width_cm", None) or getattr(product, "width", 0) or 0)
-        height = float(getattr(product, "carton_height_cm", None) or getattr(product, "height", 0) or 0)
-        weight = float(getattr(product, "carton_weight_kg", None) or getattr(product, "weight", 0) or 0)
-        vol = float(getattr(product, "carton_volume_dm3", None) or 0)
-        orient = normalize_orientation_mode(
-            getattr(product, "carton_orientation_type", None) or getattr(product, "orientation_type", None)
-        )
-        stack = normalize_stacking_mode(
-            getattr(product, "carton_stack_behavior", None) or getattr(product, "stack_behavior", None)
-        )
-        compressible = bool(
-            getattr(product, "carton_stack_compressible", None) or getattr(product, "stack_compressible", False)
-        )
-        comp_h = getattr(product, "carton_compressed_height_cm", None) or getattr(product, "compressed_height_cm", None)
-        max_sw = getattr(product, "carton_max_stack_weight", None) or getattr(product, "max_stack_weight", None)
-        max_sc = getattr(product, "carton_max_stack_count", None) or getattr(product, "max_stack_count", None)
-        shape = str(getattr(product, "carton_shape_type", None) or getattr(product, "shape_type", None) or "box")
-    else:
-        length = float(getattr(product, "length", 0) or 0)
-        width = float(getattr(product, "width", 0) or 0)
-        height = float(getattr(product, "height", 0) or 0)
-        weight = float(getattr(product, "weight", 0) or 0)
-        vol = float(getattr(product, "volume", 0) or 0)
-        orient = normalize_orientation_mode(getattr(product, "orientation_type", None))
-        stack = normalize_stacking_mode(getattr(product, "stack_behavior", None))
-        compressible = bool(getattr(product, "stack_compressible", False))
-        comp_h = getattr(product, "compressed_height_cm", None)
-        max_sw = getattr(product, "max_stack_weight", None)
-        max_sc = getattr(product, "max_stack_count", None)
-        shape = str(getattr(product, "shape_type", None) or "box")
-
-    if vol <= 0 and length > 0 and width > 0 and height > 0:
-        vol = (length * width * height) / 1000.0
-
-    # Fragile is independent of NO_STACK (stacking mode already enforces no load on top).
-    fragile = bool(getattr(product, "fragile", False) or getattr(product, "is_fragile", False))
-
-    # NO_STACK: max_stack_count > 1 ignored by stacking physics (units_per_stack=1)
-    eff_max_sc = int(max_sc) if max_sc is not None else None
+    """Build FitItem via shared logistics normalizer (technical defaults + provenance)."""
+    n = normalize_product_logistics(product, packaging_mode=packaging_mode)
+    stack = n.stack_behavior
+    eff_max_sc = n.max_stack_count
     if stack == StackingMode.NO_STACK:
-        eff_max_sc = 1 if eff_max_sc is None else min(1, eff_max_sc)
+        eff_max_sc = 1 if eff_max_sc is None else min(1, int(eff_max_sc))
 
     return FitItem(
         product_id=int(getattr(product, "id", 0) or 0),
-        length_cm=length,
-        width_cm=width,
-        height_cm=height,
-        weight_kg=weight,
-        volume_dm3=vol,
-        orientation=orient,
+        length_cm=n.length_cm,
+        width_cm=n.width_cm,
+        height_cm=n.height_cm,
+        weight_kg=n.weight_kg,
+        volume_dm3=n.volume_dm3,
+        orientation=n.orientation,
         stacking=stack,
-        compressible=compressible,
-        compressed_height_cm=float(comp_h) if comp_h is not None else None,
+        compressible=n.compressible,
+        compressed_height_cm=n.compressed_height_cm,
         max_stack_count=eff_max_sc,
-        max_stack_weight_kg=float(max_sw) if max_sw is not None else None,
-        shape_type=shape.lower().strip() or "box",
-        fragile=fragile,
+        max_stack_weight_kg=n.max_stack_weight,
+        shape_type=n.shape_type,
+        fragile=n.fragile,
         label=str(getattr(product, "name", None) or getattr(product, "sku", None) or ""),
+        used_defaults=n.used_defaults,
+        defaulted_fields=tuple(n.defaulted_fields),
+        data_quality=n.data_quality,
     )
 
 

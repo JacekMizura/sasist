@@ -117,10 +117,13 @@ def _usable_dims(container: FitContainer) -> dict[str, float]:
     }
 
 
-def _plan_confidence(container: FitContainer, *, multi: bool = False) -> str:
-    if multi:
-        return FitConfidence.ESTIMATED.value
-    if not container.dimensions_are_usable:
+def _plan_confidence(
+    container: FitContainer,
+    *,
+    multi: bool = False,
+    defaults_used: bool = False,
+) -> str:
+    if multi or defaults_used or not container.dimensions_are_usable:
         return FitConfidence.ESTIMATED.value
     return FitConfidence.EXACT.value
 
@@ -203,7 +206,13 @@ def solve_cartonization(
     rejected: list[RejectedCarton] = []
     capability = {"multi_carton": True, "geometric_placement": True}
 
+    defaults_used = any(bool(getattr(it, "used_defaults", False)) for it, q in items_with_qty if q > 0)
+    if defaults_used:
+        warnings.append("TECHNICAL_LOGISTICS_DEFAULTS")
+        warnings.append("Część produktów ma niepełne dane logistyczne — rekomendacja szacunkowa.")
+
     # Missing dims → UNKNOWN / VOLUME_ESTIMATE, do not fake EXACT
+    # (After logistics normalizer, dims are usually technical 1×1×1; used_defaults marks that.)
     no_xyz = any(
         (float(it.length_cm or 0) <= 0 or float(it.width_cm or 0) <= 0 or float(it.height_cm or 0) <= 0)
         for it, q in items_with_qty
@@ -337,7 +346,7 @@ def solve_cartonization(
             unused_volume_cm3=max(0.0, container.volume_cm3 - fill / 100.0 * container.volume_cm3),
             warnings=list(container.warnings),
             usable_dimensions=_usable_dims(container),
-            confidence=_plan_confidence(container),
+            confidence=_plan_confidence(container, defaults_used=defaults_used),
             volume_utilization=fill,
         )
         conf = FitConfidence.EXACT
@@ -346,6 +355,8 @@ def solve_cartonization(
         if not container.dimensions_are_usable:
             conf = FitConfidence.ESTIMATED
             out_warnings.append("USABLE_DIMENSIONS_NOT_DEFINED")
+        if defaults_used:
+            conf = FitConfidence.ESTIMATED
         return PackagingFitResult(
             fits=True,
             recommended_carton_id=str(c.id),
@@ -356,6 +367,7 @@ def solve_cartonization(
             explanation=(
                 f"Wybrano {c.name or c.id}. Wypełnienie geometryczne ~{fill:.0f}%. "
                 f"Waga: {weight:.2f} kg."
+                + (" Rekomendacja szacunkowa (niepełne dane produktu)." if defaults_used else "")
             ),
             warnings=out_warnings,
             rejected_cartons=rejected,
@@ -369,7 +381,9 @@ def solve_cartonization(
             cartons=[],
             multi_carton_required=True,
             method=FitMethod.GEOMETRIC.value,
-            confidence=FitConfidence.EXACT.value,
+            confidence=(
+                FitConfidence.ESTIMATED.value if defaults_used else FitConfidence.EXACT.value
+            ),
             explanation="Żaden pojedynczy karton nie mieści zamówienia (MULTI_CARTON_REQUIRED).",
             warnings=warnings + ["MULTI_CARTON_REQUIRED"],
             rejected_cartons=rejected,
@@ -537,6 +551,7 @@ def solve_cartonization(
         explanation=(
             f"MULTI_CARTON_REQUIRED (heuristic): {len(plans)} opakowań. "
             + "; ".join(f"{p.carton_name or p.carton_id}" for p in plans)
+            + (" Rekomendacja szacunkowa (niepełne dane produktu)." if defaults_used else "")
         ),
         warnings=warnings + (["MULTI_CARTON_REQUIRED", "HEURISTIC_MULTI_CARTON"] if len(plans) > 1 else []),
         rejected_cartons=rejected,

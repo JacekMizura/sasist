@@ -117,6 +117,11 @@ export default function PutawayLocationSuggestionCard({
             Szacunkowe
           </span>
         ) : null}
+        {row.used_defaults ? (
+          <span className="text-[11px] font-semibold text-amber-800">
+            Wynik szacunkowy — produkt ma niepełne dane logistyczne.
+          </span>
+        ) : null}
         {row.capacity_warnings?.map((w) => (
           <span key={w} className="text-red-700">
             {w}

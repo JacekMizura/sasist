@@ -93,6 +93,12 @@ export default function ProductLocationCapacityList({ productId, tenantId, locat
                   <p className={`mt-1 text-xs font-semibold ${estimated ? "text-amber-800" : "text-emerald-700"}`}>
                     {full ? "PEŁNA" : c.additional_capacity_label}
                   </p>
+                  {c.used_defaults ? (
+                    <p className="mt-1 text-[11px] text-amber-800">
+                      Szacunek — niepełne dane logistyczne
+                      {c.defaulted_fields?.length ? ` (${c.defaulted_fields.join(", ")})` : ""}.
+                    </p>
+                  ) : null}
                 </div>
                 <div className="text-right text-[10px] font-black uppercase tracking-wide text-slate-400">
                   {estimated ? "Szacunkowe" : String(c.confidence).toUpperCase() === "EXACT" ? "Dokładne" : "—"}
