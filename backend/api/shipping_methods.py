@@ -140,6 +140,9 @@ def update_shipping_method(
         row.logo_url = (body.logo_url or "").strip() or None
     if body.is_active is not None:
         row.is_active = bool(body.is_active)
+    for attr in ("max_package_weight_kg", "max_length_cm", "max_width_cm", "max_height_cm"):
+        if getattr(body, attr, None) is not None:
+            setattr(row, attr, float(getattr(body, attr)))
     row.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(row)
