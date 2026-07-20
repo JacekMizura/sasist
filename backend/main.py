@@ -54,6 +54,7 @@ from .db.schema_upgrade import (
     ensure_products_carton_columns,
     ensure_products_carton_stacking_columns,
     ensure_cartons_usable_dimensions_columns,
+    ensure_structural_weight_and_shipping_constraints,
     ensure_products_receiving_requirements_columns,
     ensure_products_deleted_at_column,
     ensure_orders_deleted_at_column,
@@ -1740,6 +1741,7 @@ def _upgrade_schema_background() -> None:
         ensure_warehouse_materials_master_data(engine)
         ensure_warehouse_materials_purchasing_columns(engine)
         ensure_cartons_usable_dimensions_columns(engine)
+        ensure_structural_weight_and_shipping_constraints(engine)
         ensure_wm_last_purchase_extension_columns(engine)
         ensure_delivery_items_warehouse_material_lines(engine)
         ensure_supplier_product_tiers_and_delivery_price_manual_columns(engine)

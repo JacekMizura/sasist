@@ -8,8 +8,12 @@ from typing import Optional
 def map_reject_reason_to_operator(reason: Optional[str]) -> str:
     r = str(reason or "").strip()
     u = r.upper()
+    if "WEIGHT" in u and "SHIPPING" in u:
+        return "Maksymalna waga paczki dla tej metody wysyłki zostanie przekroczona."
     if "WEIGHT" in u:
         return "Przekroczona dopuszczalna waga opakowania."
+    if "SHIPPING_DIMENSIONS" in u:
+        return "Gabaryt paczki przekracza limit wybranej metody wysyłki."
     if "DIMENSION" in u or "TOO_LONG" in u or "EXCEEDS" in u:
         return "Produkt jest za duży względem wymiarów użytkowych opakowania."
     if "PLACEMENT" in u or "GEOMETRIC" in u or "PACKING_FAILED" in u:

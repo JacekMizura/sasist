@@ -336,6 +336,22 @@ def _iter_replenishment_line_tuples(
             continue
 
         required_qty = max(0.0, min_level - float(p_stock))
+        pick_loc = loc_by_id.get(pick_lid)
+        # Cap by pick-face geometric/weight capacity (fit_engine SSOT)
+        if pick_loc is not None:
+            try:
+                from .slotting.location_capacity_solver import solve_location_capacity
+
+                cap = solve_location_capacity(db, location=pick_loc, product=p)
+                capacity_cap = float(cap.additional_capacity)
+                if capacity_cap + _EPS < required_qty:
+                    required_qty = max(0.0, capacity_cap)
+            except Exception:
+                pass
+
+        if required_qty <= _EPS:
+            continue
+
         source_chain = _build_source_chain(required_qty, eff_rows)
         if not source_chain:
             continue
@@ -343,7 +359,6 @@ def _iter_replenishment_line_tuples(
         buf_lid = int(source_chain[0]["location_id"])
         buf_gross = _gross_for_buffer_loc(eff_rows, buf_lid)
 
-        pick_loc = loc_by_id.get(pick_lid)
         buf_loc = loc_by_id.get(buf_lid)
 
         buffer_sources = [

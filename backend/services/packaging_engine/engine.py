@@ -209,7 +209,20 @@ def build_packaging_suggestions_for_order(
     cartons = _load_active_cartons(db, tenant_id=tenant_id, warehouse_id=warehouse_id)
     by_id = {str(c.id): c for c in cartons}
     items = items_from_order(order)
-    fit = solve_cartonization(items_with_qty=items, cartons=cartons, allow_multi_carton=True)
+    shipping_constraints = None
+    sm_id = getattr(order, "shipping_method_id", None)
+    if sm_id:
+        from ...models.shipping_method import ShippingMethod
+        from .cartonization_solver import ShippingPackageConstraints
+
+        sm = db.query(ShippingMethod).filter(ShippingMethod.id == str(sm_id)).first()
+        shipping_constraints = ShippingPackageConstraints.from_shipping_method(sm)
+    fit = solve_cartonization(
+        items_with_qty=items,
+        cartons=cartons,
+        allow_multi_carton=True,
+        shipping_constraints=shipping_constraints,
+    )
     fit_plan = _fit_plan_out(fit)
 
     rejected_reasons = {str(r.carton_id): str(r.reason) for r in fit.rejected_cartons}
@@ -220,7 +233,7 @@ def build_packaging_suggestions_for_order(
             eligible.add(str(plan.carton_id))
         if fit.recommended_carton_id:
             eligible.add(str(fit.recommended_carton_id))
-    td = suggest_three_d_matching(order, cartons=cartons)
+    td = suggest_three_d_matching(order, cartons=cartons, shipping_constraints=shipping_constraints)
     for d in td:
         if "Odrzucony:" not in (d.reason or ""):
             eligible.add(str(d.suggested_package_id))

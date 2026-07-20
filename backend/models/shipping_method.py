@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, text
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, text
 
 from ..database import Base
 
@@ -29,6 +29,12 @@ class ShippingMethod(Base):
     aliases_json = Column(Text, nullable=True)
     logo_url = Column(String(512), nullable=True)
     is_active = Column(Boolean, nullable=False, server_default=text("true"), default=True)
+
+    #: Optional physical parcel constraints (NULL = unbounded / unknown).
+    max_package_weight_kg = Column(Float, nullable=True)
+    max_length_cm = Column(Float, nullable=True)
+    max_width_cm = Column(Float, nullable=True)
+    max_height_cm = Column(Float, nullable=True)
 
     created_at = Column(DateTime, nullable=True, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=True, default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -215,6 +215,51 @@ def ensure_cartons_usable_dimensions_columns(engine: Engine) -> None:
         conn.commit()
 
 
+def ensure_structural_weight_and_shipping_constraints(engine: Engine) -> None:
+    """Shelf/rack shared weight limits + shipping method parcel constraints (nullable)."""
+    with engine.connect() as conn:
+        rack_cols = _table_column_names(conn, "warehouse_layout_racks")
+        if rack_cols and "max_weight_kg" not in rack_cols:
+            conn.execute(text("ALTER TABLE warehouse_layout_racks ADD COLUMN max_weight_kg REAL"))
+
+        if not _table_exists(conn, "warehouse_structural_weight_limits"):
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE warehouse_structural_weight_limits (
+                        id INTEGER NOT NULL PRIMARY KEY,
+                        created_at DATETIME,
+                        updated_at DATETIME,
+                        warehouse_id INTEGER NOT NULL REFERENCES warehouses(id) ON DELETE CASCADE,
+                        rack_name VARCHAR(50) NOT NULL,
+                        level INTEGER,
+                        max_weight_kg REAL NOT NULL,
+                        CONSTRAINT uq_structural_weight_wh_rack_level
+                            UNIQUE (warehouse_id, rack_name, level)
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_structural_weight_wh_rack "
+                    "ON warehouse_structural_weight_limits(warehouse_id, rack_name)"
+                )
+            )
+
+        sm_cols = _table_column_names(conn, "shipping_methods")
+        if sm_cols:
+            for col_name, col_type in [
+                ("max_package_weight_kg", "REAL"),
+                ("max_length_cm", "REAL"),
+                ("max_width_cm", "REAL"),
+                ("max_height_cm", "REAL"),
+            ]:
+                if col_name not in sm_cols:
+                    conn.execute(text(f"ALTER TABLE shipping_methods ADD COLUMN {col_name} {col_type}"))
+        conn.commit()
+
+
 def ensure_products_import_metadata_columns(engine: Engine) -> None:
     """Add catalog_number and metadata_json for full CSV product import (nullable)."""
     with engine.connect() as conn:

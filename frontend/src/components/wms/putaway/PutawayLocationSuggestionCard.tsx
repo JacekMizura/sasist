@@ -72,61 +72,37 @@ export default function PutawayLocationSuggestionCard({
       </div>
 
       <div className="flex w-full flex-col gap-1 text-xs font-bold text-slate-600 bg-transparent">
-        <span className="tabular-nums text-slate-900">
-          Aktualnie / pojemność: <span className="font-black">{ratio}</span> szt.
-        </span>
-        {addLabel ? (
-          <span className={estimated ? "text-amber-800" : "text-emerald-700"}>
-            {row.additional_capacity === 0 && !estimated ? (
-              <span className="inline-flex items-center gap-1">
-                <Check className="h-3.5 w-3.5" strokeWidth={3} />
-                PEŁNA
-              </span>
-            ) : (
-              addLabel
-            )}
+        {row.additional_capacity != null && row.additional_capacity > 0 ? (
+          <span className={`text-base font-black ${estimated ? "text-amber-800" : "text-emerald-800"}`}>
+            ODŁÓŻ: {estimated ? "~" : ""}
+            {fmtQty(row.additional_capacity)} szt.
           </span>
-        ) : row.max_fit_quantity != null && row.max_fit_quantity > 0 ? (
-          <span className="inline-flex items-center gap-1 text-emerald-700">
+        ) : row.additional_capacity === 0 ? (
+          <span className="inline-flex items-center gap-1 text-slate-500">
             <Check className="h-3.5 w-3.5" strokeWidth={3} />
-            Mieści {fmtQty(row.max_fit_quantity)} szt.
+            PEŁNA
           </span>
         ) : null}
-        {occupiedPct != null ? (
-          <span>Wykorzystanie: {Math.round(occupiedPct)}%</span>
-        ) : null}
-        {row.limiting_factor_label ? (
-          <span className="text-[10px] uppercase tracking-wider text-slate-500">
-            Ograniczenie: {row.limiting_factor_label}
-          </span>
-        ) : null}
+        <span className="tabular-nums text-slate-700">
+          Stan: <span className="font-black text-slate-900">{ratio}</span> szt.
+        </span>
         {row.same_sku_present ? (
           <span className="inline-flex items-center gap-1 text-indigo-700">
             <Check className="h-3.5 w-3.5" strokeWidth={3} />
-            Ten sam SKU już na lokacji
+            Ten sam produkt już tu leży
           </span>
         ) : null}
         {isRecommended ? (
           <span className="inline-flex items-center gap-1 text-[#5a4fcf]">
             <Check className="h-3.5 w-3.5" strokeWidth={3} />
-            Najlepsze dopasowanie
+            Rekomendowane
           </span>
         ) : null}
-        {estimated ? (
+        {estimated || row.used_defaults ? (
           <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-amber-900">
-            Szacunkowe
+            Pojemność szacunkowa
           </span>
         ) : null}
-        {row.used_defaults ? (
-          <span className="text-[11px] font-semibold text-amber-800">
-            Wynik szacunkowy — produkt ma niepełne dane logistyczne.
-          </span>
-        ) : null}
-        {row.capacity_warnings?.map((w) => (
-          <span key={w} className="text-red-700">
-            {w}
-          </span>
-        ))}
       </div>
     </button>
   );

@@ -19,6 +19,11 @@ from ..fit_engine.geometry import (
     item_fits_in_container_any_orientation,
 )
 from ..fit_engine.models import FitConfidence, FitContainer, FitMethod
+from .structural_weight import (
+    StructuralWeightBudget,
+    apply_weight_budget_to_additional,
+    resolve_structural_weight_budget,
+)
 
 
 @dataclass
@@ -44,6 +49,7 @@ class LocationCapacityResult:
     warnings: list[str]
     used_defaults: bool = False
     defaulted_fields: list[str] | None = None
+    weight_budget: Optional[dict[str, Any]] = None
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
@@ -80,6 +86,7 @@ def solve_location_capacity(
     location: Location,
     product: Product,
     packaging_mode: str = "UNIT",
+    weight_budget: Optional[StructuralWeightBudget] = None,
 ) -> LocationCapacityResult:
     """Current / total / additional capacity for one SKU at a location."""
     item = fit_item_from_product(product, packaging_mode=packaging_mode)
@@ -145,6 +152,17 @@ def solve_location_capacity(
                 "SAME_SKU_OCCUPANCY_ESTIMATED: existing qty known, physical placement map unknown."
             )
 
+    budget = weight_budget if weight_budget is not None else resolve_structural_weight_budget(db, location)
+    additional, limiting, w_warns = apply_weight_budget_to_additional(
+        additional=additional,
+        unit_weight_kg=float(item.weight_kg or 0),
+        budget=budget,
+        limiting_factor=limiting,
+    )
+    warnings.extend(w_warns)
+    if additional + 1e-9 < (total_eff - current) and not mixed:
+        total_eff = current + additional
+
     util = min(100.0, (current / total_eff) * 100.0) if total_eff > 0 else 0.0
 
     if item.used_defaults:
@@ -178,6 +196,7 @@ def solve_location_capacity(
         warnings=warnings,
         used_defaults=bool(item.used_defaults),
         defaulted_fields=list(item.defaulted_fields or []),
+        weight_budget=budget.to_dict(),
     )
 
 

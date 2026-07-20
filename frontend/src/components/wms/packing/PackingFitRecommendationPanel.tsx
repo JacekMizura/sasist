@@ -7,13 +7,6 @@ type Props = {
   onUseCarton: (cartonId: string, opts?: { confirmOverride?: boolean }) => void | Promise<void>;
 };
 
-function confLabel(c?: string | null): string {
-  const u = String(c || "").toUpperCase();
-  if (u === "EXACT") return "DOKŁADNE";
-  if (u === "ESTIMATED") return "SZACUNKOWE";
-  return "NIEZNANE";
-}
-
 function PackingFitRecommendationPanel({ detail, busy, onUseCarton }: Props) {
   const [showAlts, setShowAlts] = useState(false);
   const [overrideFor, setOverrideFor] = useState<{ id: string; warning: string } | null>(null);
@@ -135,42 +128,20 @@ function PackingFitRecommendationPanel({ detail, busy, onUseCarton }: Props) {
       {bestCarton ? (
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
-            {estimated ? "Rekomendacja szacunkowa" : "Rekomendowane opakowanie"}
+            {estimated ? "Rekomendacja szacunkowa" : "Rekomendowane"}
           </p>
-          <p className="mt-1 text-lg font-black text-slate-900">{bestCarton.name || "—"}</p>
-          <dl className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-700">
-            <div>
-              <dt className="font-bold text-slate-400">Wymiary użytkowe</dt>
-              <dd className="font-semibold tabular-nums">
-                {bestCarton.usable_dimensions || bestCarton.dimensions || "—"}
-              </dd>
-            </div>
-            <div>
-              <dt className="font-bold text-slate-400">Wypełnienie</dt>
-              <dd className="font-semibold">
-                {bestCarton.fill_percentage != null ? `${Math.round(bestCarton.fill_percentage)}%` : "—"}
-              </dd>
-            </div>
-            <div>
-              <dt className="font-bold text-slate-400">Waga</dt>
-              <dd className="font-semibold tabular-nums">
-                {bestCarton.total_weight_kg != null
-                  ? `${bestCarton.total_weight_kg.toFixed(1)}${
-                      bestCarton.max_payload_kg != null ? ` / ${bestCarton.max_payload_kg} kg` : " kg"
-                    }`
-                  : "—"}
-              </dd>
-            </div>
-            <div>
-              <dt className="font-bold text-slate-400">Confidence</dt>
-              <dd className="font-semibold">{confLabel(bestCarton.fit_confidence || primary?.fit_confidence)}</dd>
-            </div>
-          </dl>
-          {(primary?.why_selected || primary?.reason) ? (
-            <p className="mt-3 text-xs text-slate-600">
-              <span className="font-bold text-slate-400">Dlaczego: </span>
-              {primary.why_selected || primary.reason}
-            </p>
+          <p className="mt-1 text-lg font-black text-slate-900">WEŹ: {bestCarton.name || "—"}</p>
+          {plan && !multi && plan.plan?.[0]?.items?.length ? (
+            <ul className="mt-3 space-y-1 text-sm text-slate-700">
+              {plan.plan[0].items.map((it) => (
+                <li key={`${it.product_id}-${it.quantity}`} className="font-semibold">
+                  ZAPAKUJ: {it.label || `Produkt #${it.product_id}`} ×{it.quantity}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {estimated ? (
+            <p className="mt-2 text-[11px] font-semibold text-amber-800">Pojemność / dopasowanie szacunkowe</p>
           ) : null}
           <div className="mt-4 flex flex-wrap gap-2">
             <button

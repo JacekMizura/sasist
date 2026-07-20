@@ -12,6 +12,89 @@ from ..fit_engine.models import FitConfidence, FitContainer, FitItem, FitMethod
 from ..fit_engine.placement import identical_qty_fits_via_capacity, try_pack_items_into_container
 
 
+@dataclass(frozen=True)
+class ShippingPackageConstraints:
+    """Physical limits of a shipping method/service. NULL fields = unbounded."""
+
+    max_package_weight_kg: Optional[float] = None
+    max_length_cm: Optional[float] = None
+    max_width_cm: Optional[float] = None
+    max_height_cm: Optional[float] = None
+
+    @classmethod
+    def from_shipping_method(cls, sm: Any | None) -> "ShippingPackageConstraints":
+        if sm is None:
+            return cls()
+
+        def _f(name: str) -> Optional[float]:
+            v = getattr(sm, name, None)
+            if v is None or v == "":
+                return None
+            try:
+                f = float(v)
+            except (TypeError, ValueError):
+                return None
+            return f if f > 0 else None
+
+        return cls(
+            max_package_weight_kg=_f("max_package_weight_kg"),
+            max_length_cm=_f("max_length_cm"),
+            max_width_cm=_f("max_width_cm"),
+            max_height_cm=_f("max_height_cm"),
+        )
+
+
+def effective_carton_payload_kg(
+    carton: Any,
+    shipping: Optional[ShippingPackageConstraints] = None,
+    *,
+    override: Optional[float] = None,
+) -> Optional[float]:
+    """MIN(carton physical payload, shipping max package weight) for limits that exist."""
+    carton_lim = override
+    if carton_lim is None:
+        mp = getattr(carton, "max_payload_kg", None)
+        if mp is not None:
+            try:
+                carton_lim = float(mp)
+            except (TypeError, ValueError):
+                carton_lim = None
+            if carton_lim is not None and carton_lim <= 0:
+                carton_lim = None
+    ship_lim = shipping.max_package_weight_kg if shipping else None
+    present = [x for x in (carton_lim, ship_lim) if x is not None]
+    if not present:
+        return None
+    return min(present)
+
+
+def shipping_dims_reject_reason(
+    container: FitContainer,
+    shipping: Optional[ShippingPackageConstraints],
+) -> Optional[str]:
+    if shipping is None:
+        return None
+    limits = [
+        shipping.max_length_cm,
+        shipping.max_width_cm,
+        shipping.max_height_cm,
+    ]
+    if all(x is None for x in limits):
+        return None
+    pkg = sorted(
+        [float(container.length_cm), float(container.width_cm), float(container.height_cm)],
+        reverse=True,
+    )
+    lim_sorted = sorted([float(x) for x in limits if x is not None], reverse=True)
+    # Compare longest-to-longest among defined limits
+    for i, lim in enumerate(lim_sorted):
+        if i >= len(pkg):
+            break
+        if pkg[i] > lim + 1e-6:
+            return "SHIPPING_DIMENSIONS_EXCEEDED"
+    return None
+
+
 @dataclass
 class RejectedCarton:
     carton_id: str
@@ -197,10 +280,12 @@ def solve_cartonization(
     cartons: list[Carton],
     allow_multi_carton: bool = True,
     max_payload_kg_by_carton_id: Optional[dict[str, float]] = None,
+    shipping_constraints: Optional[ShippingPackageConstraints] = None,
 ) -> PackagingFitResult:
     """
     Pick smallest carton that geometrically fits; else multi-carton plan if allowed.
     Deterministic: sort by volume asc, then id.
+    Shipping method constraints (when set) tighten effective carton payload / dims.
     """
     warnings: list[str] = []
     rejected: list[RejectedCarton] = []
@@ -210,6 +295,18 @@ def solve_cartonization(
     if defaults_used:
         warnings.append("TECHNICAL_LOGISTICS_DEFAULTS")
         warnings.append("Część produktów ma niepełne dane logistyczne — rekomendacja szacunkowa.")
+
+    if shipping_constraints and shipping_constraints.max_package_weight_kg is not None:
+        warnings.append("SHIPPING_METHOD_WEIGHT_LIMIT_APPLIED")
+    if shipping_constraints and any(
+        x is not None
+        for x in (
+            shipping_constraints.max_length_cm,
+            shipping_constraints.max_width_cm,
+            shipping_constraints.max_height_cm,
+        )
+    ):
+        warnings.append("SHIPPING_METHOD_DIMENSION_LIMIT_APPLIED")
 
     # Missing dims → UNKNOWN / VOLUME_ESTIMATE, do not fake EXACT
     # (After logistics normalizer, dims are usually technical 1×1×1; used_defaults marks that.)
@@ -243,6 +340,13 @@ def solve_cartonization(
             capability_flags=capability,
         )
 
+    def _container_for(c: Carton) -> FitContainer:
+        override = None
+        if max_payload_kg_by_carton_id and str(c.id) in max_payload_kg_by_carton_id:
+            override = max_payload_kg_by_carton_id[str(c.id)]
+        payload = effective_carton_payload_kg(c, shipping_constraints, override=override)
+        return fit_container_from_carton(c, max_payload_kg=payload)
+
     if no_xyz:
         # Soft carton suggestion by volume ratio only — never EXACT
         demand = sum(max(0.0, it.unit_volume_dm3) * q * 1000 for it, q in items_with_qty)
@@ -261,7 +365,7 @@ def solve_cartonization(
                             items=[CartonPlanItem(it.product_id, q, it.label) for it, q in items_with_qty if q > 0],
                             fill_percent=0.0 if demand <= 0 else _score_fill(demand, cv),
                             warnings=["MISSING_PRODUCT_DIMENSIONS"],
-                            usable_dimensions=_usable_dims(fit_container_from_carton(c)),
+                            usable_dimensions=_usable_dims(_container_for(c)),
                             confidence=conf.value,
                             volume_utilization=0.0 if demand <= 0 else _score_fill(demand, cv),
                         )
@@ -290,10 +394,17 @@ def solve_cartonization(
     # Single-carton search: smallest that fits
     best: Optional[tuple[Carton, Any, float, float]] = None  # carton, pack, fill, weight
     for c in sorted_cartons:
-        payload = None
-        if max_payload_kg_by_carton_id and str(c.id) in max_payload_kg_by_carton_id:
-            payload = max_payload_kg_by_carton_id[str(c.id)]
-        container = fit_container_from_carton(c, max_payload_kg=payload)
+        container = _container_for(c)
+        dim_rej = shipping_dims_reject_reason(container, shipping_constraints)
+        if dim_rej:
+            rejected.append(
+                RejectedCarton(
+                    carton_id=str(c.id),
+                    carton_name=str(c.name or ""),
+                    reason=dim_rej,
+                )
+            )
+            continue
         ok, reason, pack = try_fit_order_in_carton(container, items_with_qty)
         if not ok:
             rejected.append(
@@ -316,7 +427,7 @@ def solve_cartonization(
 
     if best is not None:
         c, pack, fill, weight = best
-        container = fit_container_from_carton(c)
+        container = _container_for(c)
         placements: list[dict[str, Any]] = []
         if hasattr(pack, "placements"):
             placements = [
@@ -407,7 +518,9 @@ def solve_cartonization(
             safety += 1
             placed_any = False
             for c in sorted_cartons:
-                container = fit_container_from_carton(c)
+                container = _container_for(c)
+                if shipping_dims_reject_reason(container, shipping_constraints):
+                    continue
                 current_items = [(it, q) for it, q in rem.values()]
                 ok, _reason, _pack = try_fit_order_in_carton(container, current_items)
                 if ok:
@@ -501,7 +614,7 @@ def solve_cartonization(
                 merged_items[ci.product_id] = (it, (prev[1] if prev else 0) + ci.quantity)
         merged_list = list(merged_items.values())
         for c in reversed(sorted_cartons):
-            container = fit_container_from_carton(c)
+            container = _container_for(c)
             ok, _, _ = try_fit_order_in_carton(container, merged_list)
             if ok:
                 weight = sum(float(it.weight_kg or 0) * q for it, q in merged_list)

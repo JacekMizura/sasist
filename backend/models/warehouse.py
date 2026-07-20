@@ -143,7 +143,9 @@ class Rack(Base, BaseModelMixin):
     height_cm = Column(Float, nullable=False, default=200.0)
     aisle_letter = Column(String, nullable=False, default="A")
     rack_index = Column(Integer, nullable=False, default=1)
-    internal_structure = Column(Text, nullable=True)  # JSON: { "levels": [ { "height_cm": 50, "locations": [ { "width_cm": 40 } ] } ] }
+    internal_structure = Column(Text, nullable=True)  # JSON: levels[].max_weight_kg, max_weight_kg
+    #: Optional whole-rack payload limit (kg). NULL = unbounded.
+    max_weight_kg = Column(Float, nullable=True)
     color = Column(String(32), nullable=True)  # e.g. "#3b82f6" for editor display
     template_id = Column(String(64), nullable=True)  # custom template UUID from frontend
 

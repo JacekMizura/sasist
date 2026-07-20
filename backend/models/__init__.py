@@ -92,6 +92,7 @@ from .order_line_bundle_component_lot import OrderLineBundleComponentLot  # noqa
 from .bundle_logistic_unit import BundleLogisticUnit  # noqa: F401
 from .return_line_bundle_component import ReturnLineBundleComponent  # noqa: F401
 from .shipping_method import ShippingMethod  # noqa: F401
+from .warehouse_structural_weight_limit import WarehouseStructuralWeightLimit  # noqa: F401
 from .carton import Carton, carton_shipping_method_links  # noqa: F401
 from .packaging_material import PackagingMaterial  # noqa: F401
 from .wm_price_tier import WmPriceTier  # noqa: F401

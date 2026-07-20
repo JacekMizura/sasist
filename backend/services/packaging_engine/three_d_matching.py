@@ -19,13 +19,23 @@ if TYPE_CHECKING:
     pass
 
 
-def suggest_three_d_matching(order: Order, cartons: list[Carton]) -> list[PackagingSuggestionDraft]:
+def suggest_three_d_matching(
+    order: Order,
+    cartons: list[Carton],
+    *,
+    shipping_constraints=None,
+) -> list[PackagingSuggestionDraft]:
     if not cartons:
         return []
 
     items = items_from_order(order)
     oid = int(order.id)
-    result = solve_cartonization(items_with_qty=items, cartons=cartons, allow_multi_carton=True)
+    result = solve_cartonization(
+        items_with_qty=items,
+        cartons=cartons,
+        allow_multi_carton=True,
+        shipping_constraints=shipping_constraints,
+    )
 
     drafts: list[PackagingSuggestionDraft] = []
     rejected_by_id = {r.carton_id: r for r in result.rejected_cartons}
