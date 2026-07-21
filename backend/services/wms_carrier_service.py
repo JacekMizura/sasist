@@ -418,19 +418,41 @@ def get_carrier(db: Session, tenant_id: int, carrier_id: int) -> WarehouseCarrie
     return WarehouseCarrierDetailRead(**base, items=items)
 
 
-def scan_carrier_by_barcode(db: Session, tenant_id: int, barcode: str) -> WarehouseCarrierScanOut:
+def find_carrier_by_scan_code(
+    db: Session,
+    tenant_id: int,
+    barcode: str,
+) -> Optional[WarehouseCarrier]:
+    """
+    Canonical WMS carrier scan resolver (SSOT).
+
+    Matches ``barcode`` OR ``code`` (case-insensitive, trimmed).
+    Used by ``/wms/carriers/scan`` and all operational flows that activate a carrier.
+    """
     raw = (barcode or "").strip()
     if not raw:
-        return WarehouseCarrierScanOut(found=False)
-    c = (
+        return None
+    normalized = raw.upper()
+    low = normalized.lower()
+    return (
         db.query(WarehouseCarrier)
         .filter(
             WarehouseCarrier.tenant_id == int(tenant_id),
-            or_(WarehouseCarrier.barcode == raw, WarehouseCarrier.barcode == raw.upper()),
             WarehouseCarrier.deleted_at.is_(None),
+            or_(
+                func.lower(WarehouseCarrier.barcode) == low,
+                func.lower(WarehouseCarrier.code) == low,
+                WarehouseCarrier.barcode == raw,
+                WarehouseCarrier.barcode == normalized,
+            ),
         )
+        .order_by(WarehouseCarrier.id.asc())
         .first()
     )
+
+
+def scan_carrier_by_barcode(db: Session, tenant_id: int, barcode: str) -> WarehouseCarrierScanOut:
+    c = find_carrier_by_scan_code(db, tenant_id, barcode)
     if not c:
         return WarehouseCarrierScanOut(found=False)
     return WarehouseCarrierScanOut(found=True, carrier=carrier_to_read(db, c))

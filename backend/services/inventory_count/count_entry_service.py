@@ -28,8 +28,6 @@ from ...models.inventory_count.document import InventoryDocument
 from ...models.inventory_count.document_line import InventoryDocumentLine
 from ...models.inventory_count.task import InventoryTask
 from ...models.product import Product
-from ...models.warehouse_carrier import WarehouseCarrier
-from ...utils.carrier_barcode import infer_prefix_from_barcode
 from .audit_service import log_inventory_audit
 from .errors import (
     InventoryBarcodeAmbiguousError,
@@ -66,25 +64,17 @@ def resolve_carrier_by_code(
     tenant_id: int,
     code: str,
 ) -> dict[str, Any]:
-    """Resolve warehouse carrier barcode/code for WMS counting context."""
+    """Resolve warehouse carrier barcode/code for WMS counting context.
+
+    Delegates to ``find_carrier_by_scan_code`` (same SSOT as ``/wms/carriers/scan``).
+    """
+    from ..wms_carrier_service import find_carrier_by_scan_code
+
     raw = str(code or "").strip()
     if not raw:
         raise InventoryBarcodeNotFoundError("Empty carrier code", barcode=raw)
 
-    normalized = raw.upper()
-    clauses = [
-        func.lower(WarehouseCarrier.code) == normalized.lower(),
-        func.lower(WarehouseCarrier.barcode) == normalized.lower(),
-    ]
-    if infer_prefix_from_barcode(normalized):
-        clauses.append(WarehouseCarrier.barcode.ilike(normalized))
-
-    row = (
-        db.query(WarehouseCarrier)
-        .filter(WarehouseCarrier.tenant_id == int(tenant_id), or_(*clauses))
-        .order_by(WarehouseCarrier.id.asc())
-        .first()
-    )
+    row = find_carrier_by_scan_code(db, int(tenant_id), raw)
     if row is None:
         raise InventoryBarcodeNotFoundError(f"Carrier not found: {raw}", barcode=raw)
 

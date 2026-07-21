@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import api from "../api/axios";
 import { searchWmsProducts, type WmsProductSearchHit } from "../api/wmsProductApi";
+import { listWmsCarriers } from "../api/wmsCarrierApi";
 import { lookupOrdersForWms } from "../api/wmsReturnsApi";
 import { getWarehouseLocations, type WarehouseLocationItem } from "../api/warehouseGraphApi";
-import { CARRIER_PREFIXES } from "../components/warehouse/carriers/carrierConstants";
 import type { DevScannerCatalogItem } from "../components/wms/dev-scanner/types";
 import { basketSlotCode, type BasketDetail } from "../modules/carts/cartFleet/cartFleetTypes";
 import type { DevScannerFavorite } from "../utils/devScannerStorage";
-import { looksLikeCarrierBarcode, WMS_CARRIER_BARCODE_PREFIXES } from "../utils/carrierBarcode";
-import { normalizeScanEan } from "../utils/wmsScanNormalize";
+import { WMS_CARRIER_BARCODE_PREFIXES } from "../utils/carrierBarcode";
 
 const TENANT_ID = 1;
 
@@ -105,7 +104,11 @@ function basketToItem(
   };
 }
 
-function carrierSuggestions(q: string, favorites: DevScannerFavorite[]): DevScannerCatalogItem[] {
+function carrierSuggestions(
+  q: string,
+  favorites: DevScannerFavorite[],
+  dbCarriers: { id: number; code: string; barcode: string; name?: string | null }[],
+): DevScannerCatalogItem[] {
   const raw = q.trim();
   if (!raw) {
     return favorites
@@ -137,52 +140,46 @@ function carrierSuggestions(q: string, favorites: DevScannerFavorite[]): DevScan
     });
   }
 
+  // Real carriers from DB (same identity space as /wms/carriers/scan — code OR barcode).
+  for (const c of dbCarriers) {
+    const code = (c.code || "").trim();
+    const barcode = (c.barcode || "").trim();
+    const name = (c.name || "").trim();
+    if (
+      !needleIncludes(code, n) &&
+      !needleIncludes(barcode, n) &&
+      !needleIncludes(name, n)
+    ) {
+      continue;
+    }
+    const scanCode = barcode || code;
+    const key = scanCode.toUpperCase();
+    if (!scanCode || seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      id: `carrier-db-${c.id}`,
+      kind: "carrier",
+      code: scanCode,
+      name: code || scanCode,
+      subtitle: barcode && code && barcode !== code ? `${code} · ${barcode}` : "Nośnik / SSCC",
+    });
+  }
+
+  // Prefix hints only (not claimed as found) — never invent a concrete PAL-N as existing.
   for (const prefix of WMS_CARRIER_BARCODE_PREFIXES) {
     const p = prefix.toUpperCase();
-    if (n.startsWith(p) || p.startsWith(n) || n.includes(p.replace("-", ""))) {
-      const code = n.startsWith(p) ? n : `${p}${n.replace(/^PAL-?|^BOX-?|^BIN-?|^CRT-?|^MIX-?/i, "")}`;
-      const key = code.toUpperCase();
+    if (n === p.replace("-", "") || n === p || (n.length < 4 && p.startsWith(n))) {
+      const key = `hint-${p}`;
       if (!seen.has(key)) {
         seen.add(key);
         out.push({
-          id: `carrier-${key}`,
+          id: `carrier-hint-${p}`,
           kind: "carrier",
-          code,
-          name: code,
-          subtitle: `Nośnik (${prefix.replace("-", "")})`,
+          code: p,
+          name: `Prefiks ${p}`,
+          subtitle: "Wpisz pełny kod nośnika",
         });
       }
-    }
-  }
-
-  for (const p of CARRIER_PREFIXES) {
-    const sample = `${p}-`;
-    if (needleIncludes(sample, n) || needleIncludes(p, n)) {
-      const code = n.includes("-") ? n : `${p}-`;
-      const key = code.toUpperCase();
-      if (!seen.has(key)) {
-        seen.add(key);
-        out.push({
-          id: `carrier-pfx-${p}`,
-          kind: "carrier",
-          code,
-          name: code,
-          subtitle: "Prefiks nośnika",
-        });
-      }
-    }
-  }
-
-  if (looksLikeCarrierBarcode(n)) {
-    const key = normalizeScanEan(n).toUpperCase();
-    if (!seen.has(key)) {
-      out.push({
-        id: `carrier-scan-${key}`,
-        kind: "carrier",
-        code: normalizeScanEan(n),
-        name: normalizeScanEan(n),
-        subtitle: "Nośnik / SSCC",
-      });
     }
   }
 
@@ -222,6 +219,9 @@ export function useDevScannerCatalog(opts: {
   const { query, tenantId, warehouseId, favorites, enabled } = opts;
   const [locations, setLocations] = useState<WarehouseLocationItem[]>([]);
   const [carts, setCarts] = useState<CartListItem[]>([]);
+  const [dbCarriers, setDbCarriers] = useState<
+    { id: number; code: string; barcode: string; name?: string | null }[]
+  >([]);
   const [cartDetails, setCartDetails] = useState<Record<number, CartDetailCache>>({});
   const [productHits, setProductHits] = useState<WmsProductSearchHit[]>([]);
   const [orderHits, setOrderHits] = useState<DevScannerCatalogItem[]>([]);
@@ -229,6 +229,32 @@ export function useDevScannerCatalog(opts: {
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [basketsReady, setBasketsReady] = useState(false);
   const detailsLoadingRef = useRef<Set<number>>(new Set());
+
+  useEffect(() => {
+    if (!enabled) {
+      setDbCarriers([]);
+      return;
+    }
+    let cancelled = false;
+    void listWmsCarriers(tenantId, false)
+      .then((rows) => {
+        if (cancelled) return;
+        setDbCarriers(
+          rows.map((r) => ({
+            id: r.id,
+            code: r.code,
+            barcode: r.barcode,
+            name: r.name,
+          })),
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setDbCarriers([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [enabled, tenantId]);
 
   useEffect(() => {
     if (!enabled || !warehouseId) {
@@ -443,7 +469,7 @@ export function useDevScannerCatalog(opts: {
       items.push(productToItem(hit));
     }
 
-    items.push(...carrierSuggestions(query, favorites));
+    items.push(...carrierSuggestions(query, favorites, dbCarriers));
     items.push(...orderHits);
 
     for (const f of favorites) {
@@ -463,7 +489,7 @@ export function useDevScannerCatalog(opts: {
     }
 
     return items;
-  }, [carts, cartDetails, locations, favorites, productHits, orderHits, query]);
+  }, [carts, cartDetails, locations, favorites, productHits, orderHits, query, dbCarriers]);
 
   const filtered = useMemo(() => catalog.filter((i) => matchText(i, query)), [catalog, query]);
 

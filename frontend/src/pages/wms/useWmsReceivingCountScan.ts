@@ -15,6 +15,8 @@ import { looksLikeCarrierBarcode, normalizeCarrierBarcode } from "../../utils/ca
 import { playScanBeep } from "../../utils/playScanBeep";
 import { classifyWmsScanCode } from "../../utils/wmsScanClassify";
 import { normalizeScanEan } from "../../utils/wmsScanNormalize";
+import { multiScanTrace } from "../../utils/multiPickingScanRoute";
+import { SCAN_CONSUMED } from "../../utils/wmsScanDispatch";
 import { scanIsCarton } from "./putawayLineUtils";
 import {
   isGhostReceivingLine,
@@ -304,8 +306,24 @@ export function useWmsReceivingCountScan({
   const resolveCarrierForActive = useCallback(
     async (raw: string): Promise<{ id: number; code: string } | null> => {
       const bc = normalizeCarrierBarcode(raw);
-      if (!bc) return null;
+      multiScanTrace("RECEIVING_CARRIER_LOOKUP", {
+        raw_code: raw,
+        normalized_code: bc,
+        via: "resolveCarrierForActive",
+      });
+      if (!bc) {
+        multiScanTrace("RECEIVING_CARRIER_LOOKUP_EMPTY", { raw_code: raw });
+        return null;
+      }
       const sc = await scanWmsCarrierByBarcode(tenantId, bc);
+      multiScanTrace("RECEIVING_CARRIER_LOOKUP_RESULT", {
+        raw_code: raw,
+        normalized_code: bc,
+        found: sc.found,
+        carrier_id: sc.carrier?.id ?? null,
+        carrier_code: sc.carrier?.code ?? null,
+        carrier_barcode: sc.carrier?.barcode ?? null,
+      });
       if (!sc.found || !sc.carrier) {
         showScannerToast("Nie znaleziono nośnika");
         return null;
@@ -349,51 +367,78 @@ export function useWmsReceivingCountScan({
   const handleGlobalScan = useCallback(
     async (raw: string) => {
       const key = normalizeScanEan(raw);
-      if (!key) return;
+      if (!key) return SCAN_CONSUMED;
       const d = detailRef.current;
-      if (!d || !canEdit || busyRef.current || modalOpenRef.current || assignOpenRef.current) return;
+      if (!d || !canEdit || busyRef.current || modalOpenRef.current || assignOpenRef.current) {
+        return SCAN_CONSUMED;
+      }
 
       const kind = classifyWmsScanCode(key);
       const carrierLike = kind === "carrier_barcode" || looksLikeCarrierBarcode(key);
+      multiScanTrace("RECEIVING_SCAN_CLASSIFIED", {
+        raw_code: raw,
+        normalized_code: key,
+        scanner_classification: kind,
+        carrier_like: carrierLike,
+        branch: carrierLike ? "carrier_activate" : kind,
+      });
 
       if (carrierLike) {
         const hit = await resolveCarrierForActive(key);
         if (!hit) {
+          multiScanTrace("RECEIVING_CARRIER_BRANCH", {
+            raw_code: key,
+            final_branch: "carrier_not_found",
+            reason: "scan_api_found_false",
+          });
           clearDevScannerInput();
           refocusScannerInput();
-          return;
+          return SCAN_CONSUMED;
         }
         setActiveCarrier(hit.id, hit.code);
         onExecutionCarrierPicked?.(hit.id);
         appendScanToHistory(key);
         showScannerToast(`Aktywny nośnik: ${hit.code}`);
+        multiScanTrace("RECEIVING_CARRIER_BRANCH", {
+          raw_code: key,
+          final_branch: "carrier_activated",
+          carrier_id: hit.id,
+          carrier_code: hit.code,
+        });
         clearDevScannerInput();
         refocusScannerInput();
-        return;
+        return SCAN_CONSUMED;
       }
 
       if (kind === "location_like" || key.startsWith("LOC")) {
         showScannerToast("Lokalizację ustawisz w rozlokowaniu (putaway), nie podczas liczenia PZ");
         clearDevScannerInput();
         refocusScannerInput();
-        return;
+        return SCAN_CONSUMED;
       }
 
       if (kind === "cart_like") {
         showScannerToast("Na przyjęciu PZ skanuj EAN produktu lub kod nośnika (PAL-, BOX-…).");
         clearDevScannerInput();
         refocusScannerInput();
-        return;
+        return SCAN_CONSUMED;
       }
 
       let res: ReceivingScanResolve;
       try {
+        multiScanTrace("RECEIVING_RESOLVE_SCAN", { raw_code: key, via: "product_path" });
         res = await resolveWmsReceivingScan(tenantId, key);
+        multiScanTrace("RECEIVING_RESOLVE_SCAN_RESULT", {
+          raw_code: key,
+          found: res.found,
+          product_id: res.product_id ?? null,
+          match_kind: res.match_kind ?? null,
+        });
       } catch {
         showScannerToast("Nie udało się rozpoznać kodu");
         clearDevScannerInput();
         refocusScannerInput();
-        return;
+        return SCAN_CONSUMED;
       }
 
       if (!res.found || res.product_id == null) {
@@ -401,7 +446,7 @@ export function useWmsReceivingCountScan({
         onRequestNewProduct(key);
         clearDevScannerInput();
         refocusScannerInput();
-        return;
+        return SCAN_CONSUMED;
       }
 
       // Drop stale serial gate when pending SKU no longer requires serial (effective policy).
@@ -423,7 +468,7 @@ export function useWmsReceivingCountScan({
           );
           clearDevScannerInput();
           refocusScannerInput();
-          return;
+          return SCAN_CONSUMED;
         } else if (
           res.product_id === pending.product_id &&
           isProductIdentityScan(res) &&
@@ -432,7 +477,7 @@ export function useWmsReceivingCountScan({
           showScannerToast("Zeskanuj numer seryjny (nie EAN produktu)");
           clearDevScannerInput();
           refocusScannerInput();
-          return;
+          return SCAN_CONSUMED;
         } else {
           const sn =
             res.match_kind === "serial" || res.parsed_serial
@@ -440,7 +485,7 @@ export function useWmsReceivingCountScan({
               : key;
           appendScanToHistory(key);
           await receiveSerialUnit(pending, sn);
-          return;
+          return SCAN_CONSUMED;
         }
       }
 
@@ -450,7 +495,7 @@ export function useWmsReceivingCountScan({
         if (sn) {
           appendScanToHistory(key);
           await receiveSerialUnit(res, sn);
-          return;
+          return SCAN_CONSUMED;
         }
         // No SN yet: open product modal first; keep awaiting for the next serial scan.
         serialAwaitingRef.current = res;
@@ -491,7 +536,7 @@ export function useWmsReceivingCountScan({
           showScannerToast("Nie udało się dodać produktu do PZ");
           clearDevScannerInput();
           refocusScannerInput();
-          return;
+          return SCAN_CONSUMED;
         } finally {
           setBusy(false);
         }
@@ -500,7 +545,7 @@ export function useWmsReceivingCountScan({
         showScannerToast("Nie udało się dodać produktu do PZ");
         clearDevScannerInput();
         refocusScannerInput();
-        return;
+        return SCAN_CONSUMED;
       }
 
       const isCarton = scanIsCarton(res);
@@ -524,7 +569,7 @@ export function useWmsReceivingCountScan({
         if (!proceed) {
           clearDevScannerInput();
           refocusScannerInput();
-          return;
+          return SCAN_CONSUMED;
         }
       }
 
@@ -534,7 +579,7 @@ export function useWmsReceivingCountScan({
         showScannerToast("Uzupełnij partię / datę ważności / serial");
         clearDevScannerInput();
         refocusScannerInput();
-        return;
+        return SCAN_CONSUMED;
       }
 
       if (inExecution && execLine && res.product_id === execLine.product_id) {
@@ -548,7 +593,7 @@ export function useWmsReceivingCountScan({
         );
         clearDevScannerInput();
         refocusScannerInput();
-        return;
+        return SCAN_CONSUMED;
       }
 
       appendScanToHistory(key);
@@ -565,6 +610,7 @@ export function useWmsReceivingCountScan({
       }
       clearDevScannerInput();
       refocusScannerInput();
+      return SCAN_CONSUMED;
     },
     [
       canEdit,
@@ -594,7 +640,7 @@ export function useWmsReceivingCountScan({
       registerScanHandler(null);
       return;
     }
-    registerScanHandler((r) => void handleGlobalScan(r));
+    registerScanHandler((r) => handleGlobalScan(r));
     return () => registerScanHandler(null);
   }, [canEdit, detail, registerScanHandler, handleGlobalScan]);
 
