@@ -222,9 +222,13 @@ export function useWmsReceivingCountScan({
       const d = detailRef.current;
       if (!d || busyRef.current) return false;
       const { line, addQty, cartonsDelta, looseDelta, warehouseCarrierId } = opts;
-      if (addQty <= 0) return false;
+      if (!Number.isFinite(addQty) || addQty === 0) return false;
       const trackSerial = Boolean(line.track_serial);
       const sn = (opts.serialNumber ?? "").trim();
+      if (addQty < 0 && trackSerial) {
+        showScannerToast("Korekta numeru seryjnego — użyj osobnego procesu");
+        return false;
+      }
       if (trackSerial) {
         if (!sn) {
           showScannerToast("Numer seryjny wymagany");

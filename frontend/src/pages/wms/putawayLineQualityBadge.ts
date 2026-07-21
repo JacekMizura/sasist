@@ -6,12 +6,12 @@ export type PutawayLineQualityBadge = {
   className: string;
 };
 
-/** Operator badge for Z-PZ / PZ line quality (A / uszkodzony / reklamacja). */
+/** Operator badge for Z-PZ / PZ line quality (A / uszkodzony / reklamacja / wada). */
 export function putawayLineQualityBadge(it: StockDocumentItemRead): PutawayLineQualityBadge | null {
   const rd = (it.return_decision_label ?? "").trim().toUpperCase();
   if (rd === "A") {
     return {
-      label: "PRZYJĘTY (A)",
+      label: "Pełnowartościowy",
       className: "bg-emerald-100 text-emerald-900 ring-1 ring-emerald-200/80",
     };
   }
@@ -31,7 +31,7 @@ export function putawayLineQualityBadge(it: StockDocumentItemRead): PutawayLineQ
   const disp = (it.stock_disposition ?? "SALEABLE").trim().toUpperCase() || "SALEABLE";
   if (disp === "SALEABLE") {
     return {
-      label: "PRZYJĘTY (A)",
+      label: "Pełnowartościowy",
       className: "bg-emerald-100 text-emerald-900 ring-1 ring-emerald-200/80",
     };
   }
@@ -49,7 +49,7 @@ export function putawayLineQualityBadge(it: StockDocumentItemRead): PutawayLineQ
       };
     }
     return {
-      label: "USZKODZONE",
+      label: "WADA / USZKODZONE",
       className: "bg-rose-100 text-rose-900 ring-1 ring-rose-200/80",
     };
   }

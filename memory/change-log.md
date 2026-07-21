@@ -1,4 +1,12 @@
+## 2026-07-21 — Przyjęcia: korekta ilości + WADA + usuwanie pozycji
+
+- Korekta: tryb „Korekta ilości” (−X); floor `received >= putaway`; DOCK upsert obsługuje delta −.
+- WADA: podpięty `ReceivingDamageModal` (wcześniej brak renderu); mark-damaged tylko z DOCK-IN; putaway badge Pełnowartościowy / WADA.
+- Delete EXTRA: A received=0; B withdraw DOCK+audit+delete; C putaway>0 → PL reject.
+- Tests A–I: `test_wms_receiving_correction_defect_delete.py`. **No push.**
+
 ## 2026-07-21 — WMS Przyjęcia: blind floor UX + status receiving
+
 
 - Lista: pełny numer bez ellipsis; badge tylko Otwarte/W trakcie/Zakończone (bez Dostawa/WMS/FV/Rozlokowane).
 - Ekran + modal: zawsze blind (brak qty dokumentu / różnicy / cen); delta „Przyjmujesz teraz”; Zatwierdź zamyka modal + focus skanera.

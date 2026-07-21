@@ -18,6 +18,7 @@ import {
 import { useWmsScanner } from "../../../context/WmsScannerContext";
 
 type QtyMode = "units" | "cartons";
+type QtyActionMode = "receive" | "correct";
 
 const CARTON_PACK_WARNING = "Produkt nie ma skonfigurowanej ilości sztuk w kartonie";
 
@@ -90,6 +91,7 @@ export function ReceivingExecutionModal({
   const scanSinkRef = useRef<HTMLInputElement>(null);
 
   const [qtyMode, setQtyMode] = useState<QtyMode>("units");
+  const [qtyActionMode, setQtyActionMode] = useState<QtyActionMode>("receive");
   const [inputVal, setInputVal] = useState("1");
   const [modalSerial, setModalSerial] = useState("");
   const [modalExpiry, setModalExpiry] = useState("");
@@ -134,6 +136,20 @@ export function ReceivingExecutionModal({
 
   const qtyBlocked = qtyMode === "cartons" && !cartonsConfigured;
   const parsedQty = parseQtyInput(inputVal);
+  const isCorrectMode = qtyActionMode === "correct";
+  const maxCorrectable = useMemo(() => {
+    return Math.max(
+      0,
+      Math.floor(
+        siblings.reduce((sum, s) => {
+          const rec = Math.max(0, Number(s.received_quantity) || 0);
+          const put = Math.max(0, Number(s.quantity_putaway) || 0);
+          return sum + Math.max(0, rec - put);
+        }, 0),
+      ),
+    );
+  }, [siblings]);
+  const canCorrect = !needsSerial && maxCorrectable > 0;
 
   const focusQtyInput = useCallback(() => {
     const el = qtyInputRef.current;
@@ -154,6 +170,7 @@ export function ReceivingExecutionModal({
     const seed = Math.max(1, Math.floor(Number(seedReceiveNowQty) || 1));
     setInputVal(String(seed));
     setQtyMode("units");
+    setQtyActionMode("receive");
     setModalErrors({});
     const t = window.setTimeout(() => {
       if (!needsSerial) {
@@ -177,7 +194,7 @@ export function ReceivingExecutionModal({
   ]);
 
   useEffect(() => {
-    if (!receiveNowBump || needsSerial) return;
+    if (!receiveNowBump || needsSerial || isCorrectMode) return;
     if (receiveNowBump.asCartons) {
       setQtyMode("cartons");
       if (!cartonsConfigured) {
@@ -191,7 +208,7 @@ export function ReceivingExecutionModal({
     }
     setModalErrors((p) => (p.qty === CARTON_PACK_WARNING ? p : { ...p, qty: undefined }));
     window.setTimeout(() => focusQtyInput(), 0);
-  }, [receiveNowBump, needsSerial, cartonsConfigured, focusQtyInput]);
+  }, [receiveNowBump, needsSerial, isCorrectMode, cartonsConfigured, focusQtyInput]);
 
   const carrierLabel = activeCarrierCode?.trim()
     ? activeCarrierCode
@@ -270,6 +287,26 @@ export function ReceivingExecutionModal({
       setModalErrors({ qty: "Wpisz ilość > 0" });
       return;
     }
+    if (isCorrectMode) {
+      if (n > maxCorrectable) {
+        setModalErrors({
+          qty: `Można odjąć maksymalnie ${maxCorrectable} szt. (tylko towar jeszcze na DOCK-IN)`,
+        });
+        return;
+      }
+      const payload = buildPayload(-n, 0, 0);
+      if (!payload) return;
+      const ok = await onReceive(payload);
+      if (ok) {
+        setInputVal("1");
+        setQtyActionMode("receive");
+        window.setTimeout(() => {
+          focusQtyInput();
+          refocusScannerInput();
+        }, 0);
+      }
+      return;
+    }
     let addQty: number;
     let cartonsDelta: number;
     let looseDelta: number;
@@ -298,6 +335,8 @@ export function ReceivingExecutionModal({
     qtyMode,
     pack,
     qtyBlocked,
+    isCorrectMode,
+    maxCorrectable,
     buildPayload,
     onReceive,
     focusQtyInput,
@@ -628,9 +667,43 @@ export function ReceivingExecutionModal({
             
             {!needsSerial && (
               <>
+                {canCorrect ? (
+                  <div className="flex bg-slate-50/80 p-1.5 rounded-2xl w-full max-w-[440px] mb-4 border border-slate-100 shadow-inner">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setQtyActionMode("receive");
+                        setModalErrors((p) => ({ ...p, qty: undefined }));
+                      }}
+                      className={`flex-1 py-2.5 text-[11px] font-black uppercase tracking-widest rounded-xl transition-all ${
+                        !isCorrectMode
+                          ? "bg-white text-slate-900 shadow-sm border border-slate-200"
+                          : "text-slate-400 hover:text-slate-700"
+                      }`}
+                    >
+                      Przyjęcie
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setQtyActionMode("correct");
+                        setQtyMode("units");
+                        setModalErrors((p) => ({ ...p, qty: undefined }));
+                      }}
+                      className={`flex-1 py-2.5 text-[11px] font-black uppercase tracking-widest rounded-xl transition-all ${
+                        isCorrectMode
+                          ? "bg-white text-amber-800 shadow-sm border border-amber-200"
+                          : "text-slate-400 hover:text-slate-700"
+                      }`}
+                    >
+                      Korekta ilości
+                    </button>
+                  </div>
+                ) : null}
                 <span className="text-[10px] font-black text-slate-400 block uppercase tracking-widest mb-4">
-                  Przyjmujesz teraz
+                  {isCorrectMode ? "Odejmujesz teraz" : "Przyjmujesz teraz"}
                 </span>
+                {!isCorrectMode ? (
                 <div className="flex bg-slate-50/80 p-1.5 rounded-2xl w-full max-w-[440px] mb-8 border border-slate-100 shadow-inner">
                   <button
                     type="button"
@@ -651,6 +724,14 @@ export function ReceivingExecutionModal({
                     Kartony
                   </button>
                 </div>
+                ) : (
+                  <p className="mb-6 text-center text-xs text-slate-500 max-w-[440px]">
+                    Dotychczas przyjęto: {accepted.totalAllReceived} szt.
+                    {maxCorrectable < accepted.totalAllReceived
+                      ? ` · Do korekty na DOCK-IN: ${maxCorrectable} szt.`
+                      : null}
+                  </p>
+                )}
 
                 <div className="flex items-center justify-between w-full max-w-[440px]">
                   <button
@@ -662,9 +743,18 @@ export function ReceivingExecutionModal({
                     <Minus className="w-8 h-8" strokeWidth={2.5} />
                   </button>
                   
-                  <div className="flex-1 flex items-baseline justify-center mx-4 text-[#5a4fcf]">
-                    <span className="text-3xl sm:text-4xl font-black text-[#5a4fcf]/70 mr-1 select-none" aria-hidden>
-                      +
+                  <div
+                    className={`flex-1 flex items-baseline justify-center mx-4 ${
+                      isCorrectMode ? "text-amber-700" : "text-[#5a4fcf]"
+                    }`}
+                  >
+                    <span
+                      className={`text-3xl sm:text-4xl font-black mr-1 select-none ${
+                        isCorrectMode ? "text-amber-700/70" : "text-[#5a4fcf]/70"
+                      }`}
+                      aria-hidden
+                    >
+                      {isCorrectMode ? "−" : "+"}
                     </span>
                     <input
                       ref={qtyInputRef}
@@ -673,7 +763,7 @@ export function ReceivingExecutionModal({
                       enterKeyHint="done"
                       value={inputVal}
                       disabled={busy}
-                      aria-label="Przyjmujesz teraz"
+                      aria-label={isCorrectMode ? "Odejmujesz teraz" : "Przyjmujesz teraz"}
                       onChange={(e) => {
                         setInputVal(e.target.value.replace(/[^\d.,]/g, ""));
                         setModalErrors((p) => (p.qty === CARTON_PACK_WARNING ? p : { ...p, qty: undefined }));
@@ -691,7 +781,7 @@ export function ReceivingExecutionModal({
                       className="w-full max-w-[140px] sm:max-w-[180px] text-center text-[5rem] sm:text-[6rem] font-medium leading-none tracking-tighter bg-transparent border-none focus:ring-0 p-0 outline-none font-sans tabular-nums"
                     />
                     <span className="text-xl sm:text-2xl font-bold text-slate-400 ml-1 font-sans tracking-wide">
-                      {qtyMode === "cartons" ? "kart." : "szt."}
+                      {qtyMode === "cartons" && !isCorrectMode ? "kart." : "szt."}
                     </span>
                   </div>
 
@@ -711,7 +801,7 @@ export function ReceivingExecutionModal({
               <p className="mt-5 text-center text-sm font-semibold text-rose-600">{modalErrors.qty}</p>
             )}
             
-            {qtyMode === "cartons" && cartonsConfigured && parsedQty > 0 && (
+            {qtyMode === "cartons" && !isCorrectMode && cartonsConfigured && parsedQty > 0 && (
               <p className="mt-5 text-center text-sm font-semibold text-[#5a4fcf]">
                 1 kart. = {pack} szt. <span className="text-slate-400 mx-2">·</span> Przyjmujesz teraz {parsedQty * pack} szt.
               </p>
@@ -720,7 +810,9 @@ export function ReceivingExecutionModal({
             <div className="mt-8 text-center">
               <span className="text-[10px] sm:text-[11px] font-black text-slate-400 tracking-widest uppercase">
                 <span className="bg-slate-100 border border-slate-200 text-slate-500 px-2.5 py-1 rounded-md mr-2 font-black uppercase tracking-widest text-[10px]">Enter</span>
-                zatwierdź • Skan EAN dodaje +1 do „Przyjmujesz teraz”
+                {isCorrectMode
+                  ? "zatwierdź korektę (− szt.)"
+                  : "zatwierdź • Skan EAN dodaje +1 do „Przyjmujesz teraz”"}
               </span>
             </div>
           </div>
@@ -886,9 +978,13 @@ export function ReceivingExecutionModal({
               type="button"
               disabled={submitDisabled}
               onClick={() => void submitInput()}
-              className="flex-[1.5] bg-[#5a4fcf] hover:bg-[#4a40b2] text-white font-black py-6 rounded-2xl text-[13px] tracking-widest uppercase transition-all active:scale-95 shadow-lg shadow-indigo-500/20 disabled:bg-[#c7d2fe] disabled:shadow-none"
+              className={`flex-[1.5] font-black py-6 rounded-2xl text-[13px] tracking-widest uppercase transition-all active:scale-95 shadow-lg disabled:shadow-none ${
+                isCorrectMode
+                  ? "bg-amber-600 hover:bg-amber-700 text-white shadow-amber-500/20 disabled:bg-amber-200"
+                  : "bg-[#5a4fcf] hover:bg-[#4a40b2] text-white shadow-indigo-500/20 disabled:bg-[#c7d2fe]"
+              }`}
             >
-              Zatwierdź
+              {isCorrectMode ? "Skoryguj" : "Zatwierdź"}
             </button>
           )}
           

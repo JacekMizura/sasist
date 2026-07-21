@@ -229,35 +229,116 @@ def remove_wms_receiving_extra_line(
     *,
     performed_by: AppUser,
 ) -> StockDocumentRead:
-    """Remove an EXTRA / unreceived WMS line from draft PZ."""
+    """
+    Remove EXTRA/ghost PZ line from draft receiving.
+
+    A) received=0, putaway=0 → delete
+    B) received>0, putaway=0 → withdraw DOCK stock, audit, then delete
+    C) putaway>0 → reject (no stock mutation)
+    Source delivery lines (delivery_item_id set) are never deleted.
+    """
+    # Local import avoids circular dependency with wms_receiving_service.
+    from .stock_document_service import (
+        ensure_default_pz_receiving_location_if_missing,
+        ensure_pz_document_warehouse_resolved,
+        purge_wms_ghost_stock_document_lines,
+    )
+    from .wms_receiving_service import (
+        _append_receiving_scan_log,
+        _apply_dock_inventory_for_receipt,
+        _assert_receiving_session_open,
+        _record_receive_delta_activity,
+    )
+
     doc = _assert_draft_pz(
         db.query(StockDocument)
         .filter(StockDocument.id == int(pz_id), StockDocument.tenant_id == int(tenant_id))
         .first()
     )
+    ensure_pz_document_warehouse_resolved(db, doc)
+    ensure_default_pz_receiving_location_if_missing(db, doc)
+    _assert_receiving_session_open(doc)
+
     line = (
         db.query(StockDocumentItem)
         .filter(StockDocumentItem.id == int(item_id), StockDocumentItem.document_id == int(pz_id))
+        .with_for_update()
         .first()
     )
     if line is None:
         raise ValueError("PZ line not found")
-    if float(line.received_quantity or 0) > 1e-9:
-        raise ValueError("Nie można usunąć pozycji z przyjętą ilością — najpierw cofnij przyjęcie.")
+
+    put_qty = float(getattr(line, "quantity_putaway", 0) or 0)
+    if put_qty > 1e-9:
+        raise ValueError(
+            "Nie można usunąć pozycji, ponieważ część towaru została już rozlokowana. "
+            "Najpierw wykonaj korektę stanu lub odpowiednią operację magazynową."
+        )
+
     if line.delivery_item_id is not None:
         raise ValueError("Nie można usunąć pozycji z dokumentu źródłowego dostawy.")
+
     name, ean, sku = _product_snap(db, getattr(line, "product_id", None))
     label = product_label(name=name, ean=ean, sku=sku, product_id=getattr(line, "product_id", None))
+    rec = float(line.received_quantity or 0)
+
+    if rec > 1e-9:
+        wc_id = getattr(line, "warehouse_carrier_id", None)
+        _apply_dock_inventory_for_receipt(
+            db,
+            tenant_id=int(tenant_id),
+            doc=doc,
+            line=line,
+            add_qty=-rec,
+            warehouse_carrier_id=int(wc_id) if wc_id is not None else None,
+            performed_by=performed_by,
+        )
+        _append_receiving_scan_log(
+            db,
+            document_id=int(pz_id),
+            item_id=int(line.id),
+            admin_id=int(performed_by.id),
+            quantity_added=-rec,
+            packaging_type="quantity",
+            cartons_added=None,
+            loose_units_added=None,
+        )
+        _record_receive_delta_activity(
+            db,
+            tenant_id=int(tenant_id),
+            doc=doc,
+            line=line,
+            add_q=-rec,
+            performed_by=performed_by,
+        )
+        line.received_quantity = 0.0
+        line.quantity = 0.0
+        line.cartons_count = 0
+        line.loose_units_count = 0
+        db.flush()
+
+    pid = getattr(line, "product_id", None)
     db.delete(line)
+    purge_wms_ghost_stock_document_lines(db, int(pz_id))
     record_pz_activity(
         db,
         tenant_id=tenant_id,
         document_id=int(pz_id),
         warehouse_id=getattr(doc, "warehouse_id", None),
         event_code=EVENT_PZ_PRODUCT_REMOVED,
-        description=f"Usunięto produkt {label}.",
+        description=(
+            f"Wycofano przyjęcie i usunięto produkt {label}."
+            if rec > 1e-9
+            else f"Usunięto produkt {label}."
+        ),
         performed_by=performed_by,
-        metadata={"product_id": getattr(line, "product_id", None), "product_name": name, "product_ean": ean, "item_id": int(item_id)},
+        metadata={
+            "product_id": pid,
+            "product_name": name,
+            "product_ean": ean,
+            "item_id": int(item_id),
+            "withdrawn_quantity": float(rec),
+        },
     )
     doc.updated_at = datetime.utcnow()
     db.commit()

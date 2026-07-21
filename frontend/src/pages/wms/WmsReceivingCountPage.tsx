@@ -407,7 +407,12 @@ export default function WmsReceivingCountPage() {
         batchNumber: payload.batchNumber,
       });
       if (ok) {
-        showScannerToast(`+${fmtQty(payload.addQty)} szt. przyjęto`);
+        const abs = Math.abs(payload.addQty);
+        showScannerToast(
+          payload.addQty < 0
+            ? `−${fmtQty(abs)} szt. skorygowano`
+            : `+${fmtQty(abs)} szt. przyjęto`,
+        );
         closeReceivingModal();
       }
       return ok;
@@ -594,7 +599,20 @@ export default function WmsReceivingCountPage() {
                 if (!Number.isFinite(pid) || pid <= 0) return;
                 setLabelPrintProduct({ id: pid, tenant_id: tenantId });
               }}
-              onMarkDamage={() => setDamageLine(g.primary)}
+              onMarkDamage={() => {
+                const dockAvail = Math.max(
+                  0,
+                  Math.floor(
+                    toCountValue(g.primary.received_quantity) -
+                      toCountValue(g.primary.quantity_putaway),
+                  ),
+                );
+                if (dockAvail < 1) {
+                  showScannerToast("Brak ilości na DOCK-IN do oznaczenia jako wada");
+                  return;
+                }
+                setDamageLine(g.primary);
+              }}
               onEditReceivingAdmin={() => openModal(g.primary)}
               onMoveToCarrier={() => openModal(g.primary)}
               onRemoveFromDocument={() => {
@@ -604,17 +622,43 @@ export default function WmsReceivingCountPage() {
                   showScannerToast("Nie można usunąć pozycji z dokumentu źródłowego");
                   return;
                 }
-                if (toCountValue(line.received_quantity) > 0) {
-                  showScannerToast("Najpierw cofnij przyjęcie, potem usuń pozycję");
+                const put = toCountValue(line.quantity_putaway);
+                if (put > 0) {
+                  showScannerToast(
+                    "Nie można usunąć pozycji, ponieważ część towaru została już rozlokowana. Najpierw wykonaj korektę stanu lub odpowiednią operację magazynową.",
+                  );
                   return;
+                }
+                const received = toCountValue(line.received_quantity);
+                if (received > 0) {
+                  const ok = window.confirm(
+                    `Wycofaj przyjęcie (${fmtQty(received)} szt. z DOCK-IN) i usuń pozycję z dokumentu?`,
+                  );
+                  if (!ok) return;
                 }
                 setBusy(true);
                 void deleteWmsReceivingPzItem(tenantId, pzId, line.id)
                   .then((doc) => {
                     setDetail(doc);
-                    showScannerToast("Usunięto produkt z dokumentu");
+                    const init: Record<number, number> = {};
+                    for (const it of doc.items ?? []) init[it.id] = toCountValue(it.received_quantity);
+                    setCountedByLineId(init);
+                    showScannerToast(
+                      received > 0
+                        ? "Wycofano przyjęcie i usunięto pozycję"
+                        : "Usunięto produkt z dokumentu",
+                    );
                   })
-                  .catch(() => showScannerToast("Nie udało się usunąć pozycji"))
+                  .catch((e) => {
+                    const msg =
+                      e && typeof e === "object" && "response" in e
+                        ? String(
+                            (e as { response?: { data?: { detail?: string } } }).response?.data
+                              ?.detail ?? "",
+                          )
+                        : "";
+                    showScannerToast(msg.trim() || "Nie udało się usunąć pozycji");
+                  })
                   .finally(() => setBusy(false));
               }}
               onShowHistory={() => {
@@ -682,6 +726,17 @@ export default function WmsReceivingCountPage() {
           onClose={closeReceivingModal}
           onReceive={handleExecutionReceive}
           onMarkDamage={() => {
+            const dockAvail = Math.max(
+              0,
+              Math.floor(
+                toCountValue(executionLine.received_quantity) -
+                  toCountValue(executionLine.quantity_putaway),
+              ),
+            );
+            if (dockAvail < 1) {
+              showScannerToast("Brak ilości na DOCK-IN do oznaczenia jako wada");
+              return;
+            }
             setDamageLine(executionLine);
             closeReceivingModal();
           }}
@@ -691,6 +746,25 @@ export default function WmsReceivingCountPage() {
           showDocumentControl={false}
           seedReceiveNowQty={seedReceiveNowQty}
           receiveNowBump={receiveNowBump}
+        />
+      ) : null}
+
+      {damageLine != null && warehouseId != null ? (
+        <ReceivingDamageModal
+          tenantId={tenantId}
+          pzId={pzId}
+          line={damageLine}
+          warehouseId={warehouseId}
+          maxQty={Math.max(
+            0,
+            toCountValue(damageLine.received_quantity) - toCountValue(damageLine.quantity_putaway),
+          )}
+          onClose={() => setDamageLine(null)}
+          onSaved={() => {
+            setDamageLine(null);
+            void load();
+          }}
+          showToast={showScannerToast}
         />
       ) : null}
 

@@ -1426,6 +1426,12 @@ def patch_wms_receiving_pz_item_quantity(
             raise ValueError("Nie można cofnąć więcej niż przyjęto")
         if new_rec > MAX_RECEIVED_QUANTITY:
             raise ValueError("received_quantity would exceed maximum allowed")
+        put_wm = float(getattr(locked, "quantity_putaway", 0) or 0)
+        if new_rec + 1e-9 < put_wm:
+            raise ValueError(
+                "Nie można skorygować poniżej ilości już rozlokowanej "
+                f"({put_wm:g} szt.). Część towaru jest poza DOCK-IN."
+            )
         locked.received_quantity = max(0.0, new_rec)
         locked.quantity = locked.received_quantity
         db.flush()
@@ -1498,6 +1504,12 @@ def patch_wms_receiving_pz_item_quantity(
         new_rec = float(match.received_quantity or 0) + add_q
         if new_rec < -1e-9:
             raise ValueError("Nie można cofnąć więcej niż przyjęto")
+        put_qty = float(getattr(match, "quantity_putaway", 0) or 0)
+        if new_rec + 1e-9 < put_qty:
+            raise ValueError(
+                "Nie można skorygować poniżej ilości już rozlokowanej "
+                f"({put_qty:g} szt.). Część towaru jest poza DOCK-IN."
+            )
         if new_rec > MAX_RECEIVED_QUANTITY:
             raise ValueError("received_quantity would exceed maximum allowed")
         match.received_quantity = max(0.0, new_rec)
@@ -1506,7 +1518,9 @@ def patch_wms_receiving_pz_item_quantity(
         prev_lu = int(getattr(match, "loose_units_count", 0) or 0)
         match.cartons_count = max(0, prev_cc + cartons_delta)
         match.loose_units_count = max(0, prev_lu + loose_delta)
-        if add_q > 1e-12:
+        if abs(add_q) > 1e-12:
+            # Positive: RECEIPT op; negative: dock/inventory + scan log/activity only
+            # (append_receipt_operation ignores non-positive qty by design).
             append_receipt_operation(
                 db,
                 doc,
@@ -2058,16 +2072,22 @@ def mark_wms_receiving_pz_item_damaged(
         db.query(StockDocumentItem)
         .filter(StockDocumentItem.document_id == pz_id, StockDocumentItem.product_id == anchor.product_id)
         .order_by(StockDocumentItem.id.desc())
+        .with_for_update()
         .all()
     )
 
-    saleable_avail = sum(
-        float(r.received_quantity or 0)
+    saleable_dock = sum(
+        max(
+            0.0,
+            float(r.received_quantity or 0) - float(getattr(r, "quantity_putaway", 0) or 0),
+        )
         for r in rows
-        if _is_saleable_line(r) and float(r.received_quantity or 0) > 1e-12
+        if _is_saleable_line(r)
     )
-    if qty > saleable_avail + 1e-9:
-        raise ValueError("Niewystarczająca ilość przyjęta (sprzedażowa) do oznaczenia jako wada")
+    if qty > saleable_dock + 1e-9:
+        raise ValueError(
+            "Niewystarczająca ilość na DOCK-IN (sprzedażowa) do oznaczenia jako wada"
+        )
 
     remaining = qty
     for line in rows:
@@ -2075,11 +2095,15 @@ def mark_wms_receiving_pz_item_damaged(
             break
         if not _is_saleable_line(line):
             continue
-        avail = float(line.received_quantity or 0)
+        # Only qty still on DOCK-IN (not yet put away) can become REJECTED_STOCK.
+        avail = max(
+            0.0,
+            float(line.received_quantity or 0) - float(getattr(line, "quantity_putaway", 0) or 0),
+        )
         if avail <= 1e-12:
             continue
         take = min(avail, remaining)
-        line.received_quantity = avail - take
+        line.received_quantity = float(line.received_quantity or 0) - take
         line.quantity = line.received_quantity
         wc_id = getattr(line, "warehouse_carrier_id", None)
         _apply_dock_inventory_for_receipt(
@@ -2092,6 +2116,12 @@ def mark_wms_receiving_pz_item_damaged(
             performed_by=performed_by,
         )
         remaining -= take
+
+    if remaining > 1e-9:
+        raise ValueError(
+            "Niewystarczająca ilość na DOCK-IN do oznaczenia jako wada "
+            "(część towaru mogła zostać już rozlokowana)."
+        )
 
     damaged = (
         _lot_row_query(

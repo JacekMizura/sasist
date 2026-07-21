@@ -38,9 +38,9 @@ export function ReceivingDamageModal({
 }: Props) {
   const { user } = useAuth();
   const productId = Number(line.product_id);
-  const cap = Math.max(1, Math.floor(maxQty) || 1);
+  const cap = Math.max(0, Math.floor(maxQty) || 0);
 
-  const [qty, setQty] = useState(1);
+  const [qty, setQty] = useState(() => Math.min(1, Math.max(0, Math.floor(maxQty) || 0)));
   const [damageType, setDamageType] = useState<DamageType>("mechanical");
   const [note, setNote] = useState("");
   const [photoUrls, setPhotoUrls] = useState<string[]>([]);
@@ -78,6 +78,10 @@ export function ReceivingDamageModal({
       showToast("Brak produktu na pozycji");
       return;
     }
+    if (cap < 1) {
+      showToast("Brak ilości na DOCK-IN do oznaczenia jako wada");
+      return;
+    }
     const q = Math.min(cap, Math.max(1, Math.floor(qty) || 1));
     setBusy(true);
     try {
@@ -102,11 +106,15 @@ export function ReceivingDamageModal({
           /* evidence optional — stock bucket already created */
         }
       }
-      showToast(`Uszkodzone · ${q} szt. (bucket na PZ)`);
+      showToast(`Wada · ${q} szt. (REJECTED_STOCK)`);
       onSaved();
       onClose();
-    } catch {
-      showToast("Nie udało się zapisać wady");
+    } catch (e) {
+      const msg =
+        e && typeof e === "object" && "response" in e
+          ? String((e as { response?: { data?: { detail?: string } } }).response?.data?.detail ?? "")
+          : "";
+      showToast(msg.trim() || "Nie udało się zapisać wady");
     } finally {
       setBusy(false);
     }

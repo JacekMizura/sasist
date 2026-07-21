@@ -2,7 +2,7 @@
 
 ## Active
 
-**WMS Przyjęcia UX** — pełny numer PZ, status tylko receiving (Otwarte/W trakcie/Zakończone), zawsze blind, auto-close modala po Zatwierdź, bez historii w WMS. Commit lokalny, **bez push**.
+**WMS Przyjęcia — korekta ilości / wada / usuwanie** — naprawione end-to-end na istniejącym SSOT (signed delta, REJECTED_STOCK, DOCK upsert ±). Commit lokalny, **bez push**.
 
 ## Preferencja commitów (user)
 

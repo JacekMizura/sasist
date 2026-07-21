@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Optional
 
 from sqlalchemy.orm import Session
 
@@ -21,6 +22,22 @@ def _normalize_location_uuid(db: Session, lid: int) -> Optional[str]:
     return u or None
 
 
+def _apply_signed_dock_qty(
+    *,
+    inv: Inventory | None,
+    add_qty: float,
+) -> float:
+    """Return new quantity; raise if correction would go below zero without inventory row."""
+    if inv is None:
+        if add_qty < -1e-12:
+            raise ValueError("Niewystarczający stan na DOCK-IN do korekty")
+        return float(add_qty)
+    new_q = float(inv.quantity or 0) + float(add_qty)
+    if new_q < -1e-9:
+        raise ValueError("Niewystarczający stan na DOCK-IN do korekty")
+    return max(0.0, new_q)
+
+
 def upsert_dock_inventory_for_carrier_receipt(
     db: Session,
     *,
@@ -34,8 +51,8 @@ def upsert_dock_inventory_for_carrier_receipt(
     expiry_date,
     stock_disposition: str,
 ) -> None:
-    """Zwiększa stan na lokacji przyjęcia PZ z przypisanym ``carrier_id`` (partia jak na linii dokumentu)."""
-    if add_qty <= 1e-12:
+    """Zmienia stan na lokacji przyjęcia PZ z ``carrier_id`` (delta +/−; partia jak na linii dokumentu)."""
+    if abs(float(add_qty)) <= 1e-12:
         return
     c = (
         db.query(WarehouseCarrier)
@@ -66,8 +83,9 @@ def upsert_dock_inventory_for_carrier_receipt(
         )
         .first()
     )
+    new_q = _apply_signed_dock_qty(inv=inv, add_qty=float(add_qty))
     if inv:
-        inv.quantity = float(inv.quantity or 0) + float(add_qty)
+        inv.quantity = new_q
         if loc_uuid:
             inv.location_uuid = loc_uuid
         db.add(inv)
@@ -80,7 +98,7 @@ def upsert_dock_inventory_for_carrier_receipt(
                 location_id=int(location_id),
                 carrier_id=int(carrier_id),
                 location_uuid=loc_uuid,
-                quantity=float(add_qty),
+                quantity=new_q,
                 batch_number=bn,
                 expiry_date=ed,
                 stock_disposition=sd,
@@ -103,8 +121,8 @@ def upsert_dock_inventory_for_loose_receipt(
     expiry_date,
     stock_disposition: str,
 ) -> None:
-    """Zwiększa stan luzem na lokacji przyjęcia PZ (``carrier_id IS NULL``)."""
-    if add_qty <= 1e-12:
+    """Zmienia stan luzem na lokacji przyjęcia PZ (``carrier_id IS NULL``; delta +/−)."""
+    if abs(float(add_qty)) <= 1e-12:
         return
     bn = normalize_batch_number(batch_number)
     ed = expiry_date if expiry_date is not None else NO_EXPIRY_SENTINEL
@@ -124,8 +142,9 @@ def upsert_dock_inventory_for_loose_receipt(
         )
         .first()
     )
+    new_q = _apply_signed_dock_qty(inv=inv, add_qty=float(add_qty))
     if inv:
-        inv.quantity = float(inv.quantity or 0) + float(add_qty)
+        inv.quantity = new_q
         if loc_uuid:
             inv.location_uuid = loc_uuid
         db.add(inv)
@@ -138,7 +157,7 @@ def upsert_dock_inventory_for_loose_receipt(
                 location_id=int(location_id),
                 carrier_id=None,
                 location_uuid=loc_uuid,
-                quantity=float(add_qty),
+                quantity=new_q,
                 batch_number=bn,
                 expiry_date=ed,
                 stock_disposition=sd,

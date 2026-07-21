@@ -85,9 +85,9 @@ export function ReceivingLineCard({
   const batchLabel = formatReceivingBatchLabel(it);
   const expiryLabel = formatReceivingExpiryLabel(it);
   const serialLabel = formatReceivingSerialLabel(it);
-  const canRemoveGhost =
-    isGhostReceivingLine(it) ||
-    (isWmsExtraReceivingLine(it) && Math.abs(Number(it.received_quantity) || 0) <= 1e-9);
+  const canRemoveLine =
+    (isGhostReceivingLine(it) || isWmsExtraReceivingLine(it)) &&
+    Math.abs(Number(it.quantity_putaway) || 0) <= 1e-9;
   const accepted = useMemo(
     () => buildReceivingAcceptedSummary(siblings, cartonSize),
     [siblings, cartonSize],
@@ -109,7 +109,7 @@ export function ReceivingLineCard({
         label: "Usuń z dokumentu",
         onClick: onRemoveFromDocument,
         danger: true,
-        disabled: !canEdit || !canRemoveGhost,
+        disabled: !canEdit || !canRemoveLine,
       },
     ];
     if (showDocumentControl) {
@@ -124,7 +124,7 @@ export function ReceivingLineCard({
     return items;
   }, [
     canEdit,
-    canRemoveGhost,
+    canRemoveLine,
     showDocumentControl,
     onEditReceivingAdmin,
     onMarkDamage,

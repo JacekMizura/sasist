@@ -460,7 +460,7 @@ def delete_wms_receiving_pz_item(
     db: Session = Depends(get_db),
     user: AppUser = Depends(get_current_user),
 ):
-    """Usuń pozycję EXTRA bez przyjętej ilości."""
+    """Usuń pozycję EXTRA: received=0 od razu; received>0 i putaway=0 — wycofaj DOCK + usuń."""
     _load_pz_for_user(db, tenant_id, pz_id, user, active_warehouse_id=warehouse_id)
     try:
         return remove_wms_receiving_extra_line(db, tenant_id, pz_id, item_id, performed_by=user)
