@@ -67,6 +67,8 @@ class StockDocument(Base):
     receiving_status = Column(String(32), nullable=False, default="NEW", index=True)
     # WMS rozlokowanie: NOT_STARTED | IN_PROGRESS | DONE — derived from line putaway vs received.
     putaway_status = Column(String(32), nullable=False, default="NOT_STARTED", index=True)
+    #: Default for new lines: True = standard warehouse putaway; False = bez rozlokowania (crossdock).
+    default_requires_putaway = Column(Boolean, nullable=False, default=True, server_default=text("1"))
     # WMS „zamknięcie” rozlokowania (lista / proces) — OPEN | DONE; nie modyfikuje stanów magazynowych.
     relocation_status = Column(String(32), nullable=False, default="OPEN", index=True)
     #: P2.5A — magazynowy workflow: NEW → COUNTING → COUNTED → PUTAWAY_* → CLOSED (niezależny od zakupu).
@@ -142,6 +144,9 @@ class StockDocumentItem(Base):
     putaway_last_location_type = Column(String(20), nullable=True)
     putaway_last_admin_id = Column(Integer, ForeignKey("app_users.id", ondelete="SET NULL"), nullable=True, index=True)
     putaway_last_quantity = Column(Float, nullable=True)
+    #: False = crossdock / bez rozlokowania magazynowego (nie generuje putaway, nie zostawia stocku w DOCK).
+    #: Default True. Complaint SERVICE_* modes also exclude via ``stock_document_item_requires_putaway``.
+    requires_putaway = Column(Boolean, nullable=False, default=True, server_default=text("1"), index=True)
     # Legacy: kept in sync with received_quantity for older queries / migrations.
     quantity = Column(Float, nullable=False, default=0)
     purchase_price_net = Column(Float, nullable=True)

@@ -77,6 +77,20 @@ def stock_document_item_requires_putaway(
     complaint_modes: Optional[Dict[int, str]] = None,
     db: Optional[Session] = None,
 ) -> bool:
+    """
+    Whether this line must enter WMS putaway / DOCK staging.
+
+    SSOT gate used by putaway queue, remaining qty, and completion.
+    Explicit ``requires_putaway=False`` (purchase PZ crossdock) wins first;
+    then complaint physical_receipt_mode for Z-PZ lines.
+    """
+    if getattr(row, "requires_putaway", True) is False:
+        return False
+    # SQLite / legacy may store 0/1
+    raw_flag = getattr(row, "requires_putaway", None)
+    if raw_flag is not None and not bool(raw_flag):
+        return False
+
     cid = getattr(row, "source_complaint_id", None)
     if cid is None:
         return True

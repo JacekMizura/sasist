@@ -3300,6 +3300,30 @@ def ensure_stock_document_item_lot_columns(engine: Engine) -> None:
         conn.commit()
 
 
+def ensure_stock_document_item_requires_putaway_column(engine: Engine) -> None:
+    """Line + document default: requires_putaway (crossdock / bez rozlokowania)."""
+    with engine.connect() as conn:
+        if _table_exists(conn, "stock_document_items"):
+            cols = _table_column_names(conn, "stock_document_items")
+            if "requires_putaway" not in cols:
+                conn.execute(
+                    text(
+                        "ALTER TABLE stock_document_items ADD COLUMN requires_putaway "
+                        "BOOLEAN NOT NULL DEFAULT 1"
+                    )
+                )
+        if _table_exists(conn, "stock_documents"):
+            cols = _table_column_names(conn, "stock_documents")
+            if "default_requires_putaway" not in cols:
+                conn.execute(
+                    text(
+                        "ALTER TABLE stock_documents ADD COLUMN default_requires_putaway "
+                        "BOOLEAN NOT NULL DEFAULT 1"
+                    )
+                )
+        conn.commit()
+
+
 def ensure_stock_document_item_quantity_putaway_column(engine: Engine) -> None:
     with engine.connect() as conn:
         r = _table_exists(conn, "stock_document_items")

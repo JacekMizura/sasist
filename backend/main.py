@@ -140,6 +140,7 @@ from .db.schema_upgrade import (
     ensure_inventory_serials_table,
     ensure_stock_document_item_lot_columns,
     ensure_stock_document_item_quantity_putaway_column,
+    ensure_stock_document_item_requires_putaway_column,
     ensure_stock_document_item_putaway_meta_columns,
     ensure_stock_document_item_mm_line_from_location_column,
     ensure_stock_document_item_wms_line_source_column,
@@ -1131,6 +1132,7 @@ except Exception:
 try:
     ensure_stock_document_item_ordered_received_columns(engine)
     ensure_stock_document_item_quantity_putaway_column(engine)
+    ensure_stock_document_item_requires_putaway_column(engine)
     ensure_stock_document_item_putaway_meta_columns(engine)
     ensure_stock_document_item_mm_line_from_location_column(engine)
     ensure_stock_document_item_wms_line_source_column(engine)
@@ -1555,6 +1557,7 @@ def _upgrade_schema_background() -> None:
     try:
         ensure_stock_document_item_ordered_received_columns(engine)
         ensure_stock_document_item_quantity_putaway_column(engine)
+    ensure_stock_document_item_requires_putaway_column(engine)
         ensure_stock_document_item_putaway_meta_columns(engine)
         ensure_stock_document_item_mm_line_from_location_column(engine)
         ensure_stock_document_item_wms_line_source_column(engine)

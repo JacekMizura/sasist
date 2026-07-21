@@ -105,6 +105,10 @@ class StockDocumentItemRead(BaseModel):
     track_expiry: bool = False
     track_serial: bool = False
     quantity_putaway: float = 0.0
+    requires_putaway: bool = Field(
+        default=True,
+        description="False = bez rozlokowania (crossdock); linia nie wchodzi do kolejki putaway / DOCK.",
+    )
     putaway_updated_at: Optional[datetime] = None
     putaway_last_location_name: Optional[str] = None
     putaway_last_location_type: Optional[str] = None
@@ -215,11 +219,15 @@ class StockDocumentItemRead(BaseModel):
     @computed_field
     @property
     def putaway_remaining(self) -> float:
+        if not bool(getattr(self, "requires_putaway", True)):
+            return 0.0
         return max(0.0, float(self.received_quantity) - float(self.quantity_putaway))
 
     @computed_field
     @property
     def putaway_completed(self) -> bool:
+        if not bool(getattr(self, "requires_putaway", True)):
+            return True
         return float(self.received_quantity) <= 1e-5 or float(self.quantity_putaway) + 1e-5 >= float(self.received_quantity)
 
     @computed_field
@@ -378,6 +386,10 @@ class StockDocumentRead(BaseModel):
     receiving_status: str = "NEW"
     """WMS rozlokowanie: NOT_STARTED | IN_PROGRESS | DONE."""
     putaway_status: str = "NOT_STARTED"
+    default_requires_putaway: bool = Field(
+        default=True,
+        description="Domyślny tryb nowych linii: True=standardowe rozlokowanie, False=bez rozlokowania.",
+    )
     """WMS zamknięcie listy rozlokowania: OPEN | DONE."""
     relocation_status: str = "OPEN"
     warehouse_workflow_status: str = Field(

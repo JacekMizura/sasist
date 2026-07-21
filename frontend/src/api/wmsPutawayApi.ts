@@ -163,3 +163,31 @@ export async function finalizeWmsRelocationPz(tenantId: number, documentId: numb
   });
   return res.data;
 }
+
+/** STANDARD vs BEZ ROZLOKOWANIA (crossdock) — SSOT na liniach + default dokumentu. */
+export async function patchWmsPutawayHandling(
+  tenantId: number,
+  documentId: number,
+  body: { requires_putaway: boolean; item_ids?: number[] | null },
+) {
+  const res = await api.patch<StockDocumentRead>(
+    `/wms/relocation/pz/${documentId}/putaway-handling`,
+    body,
+    { params: { tenant_id: tenantId } },
+  );
+  return res.data;
+}
+
+/** Anuluj obowiązek rozlokowania gdy 0/X (oznacz BEZ ROZLOKOWANIA). */
+export async function cancelWmsPutawayObligation(
+  tenantId: number,
+  documentId: number,
+  body?: { mark_no_putaway?: boolean },
+) {
+  const res = await api.post<StockDocumentRead>(
+    `/wms/relocation/pz/${documentId}/cancel-obligation`,
+    body ?? { mark_no_putaway: true },
+    { params: { tenant_id: tenantId } },
+  );
+  return res.data;
+}

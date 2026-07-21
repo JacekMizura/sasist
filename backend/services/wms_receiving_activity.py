@@ -29,6 +29,8 @@ EVENT_PZ_SUPPLIER_CHANGED = "pz_supplier_changed"
 EVENT_PZ_PRODUCT_REMOVED = "pz_product_removed"
 EVENT_PZ_RECEIVING_FINISHED = "pz_receiving_finished"
 EVENT_PZ_PUTAWAY = "pz_putaway"
+EVENT_PZ_PUTAWAY_HANDLING_CHANGED = "pz_putaway_handling_changed"
+EVENT_PZ_PUTAWAY_CANCELLED = "pz_putaway_cancelled"
 
 RECEIVING_EVENT_TITLES_PL: dict[str, str] = {
     EVENT_PZ_DOCUMENT_CREATED: "Utworzono dokument",
@@ -43,6 +45,8 @@ RECEIVING_EVENT_TITLES_PL: dict[str, str] = {
     EVENT_PZ_PRODUCT_REMOVED: "Usunięto produkt",
     EVENT_PZ_RECEIVING_FINISHED: "Zakończono przyjęcie",
     EVENT_PZ_PUTAWAY: "Rozlokowano towar",
+    EVENT_PZ_PUTAWAY_HANDLING_CHANGED: "Zmieniono sposób obsługi rozlokowania",
+    EVENT_PZ_PUTAWAY_CANCELLED: "Anulowano rozlokowanie",
 }
 
 RECEIVING_EVENT_DESCRIPTIONS_PL: dict[str, str] = {
@@ -58,6 +62,8 @@ RECEIVING_EVENT_DESCRIPTIONS_PL: dict[str, str] = {
     EVENT_PZ_PRODUCT_REMOVED: "Usunięto produkt z dokumentu.",
     EVENT_PZ_RECEIVING_FINISHED: "Zakończono przyjęcie dokumentu PZ.",
     EVENT_PZ_PUTAWAY: "Rozlokowano towar.",
+    EVENT_PZ_PUTAWAY_HANDLING_CHANGED: "Zmieniono sposób obsługi po przyjęciu (rozlokowanie / bez rozlokowania).",
+    EVENT_PZ_PUTAWAY_CANCELLED: "Anulowano obowiązek rozlokowania.",
 }
 
 

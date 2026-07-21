@@ -10,7 +10,10 @@ import {
   resolveWmsReceivingScan,
 } from "../../api/wmsReceivingApi";
 import { ReceivingActiveCarrierBar } from "../../components/wms/receiving/ReceivingActiveCarrierBar";
+import { ReceivingPutawayHandlingBar } from "../../components/wms/receiving/ReceivingPutawayHandlingBar";
 import { ReceivingCarrierAssignModal } from "../../components/wms/receiving/carriers/ReceivingCarrierAssignModal";
+import { patchWmsPutawayHandling } from "../../api/wmsPutawayApi";
+import axios from "axios";
 import { WmsManualProductModal } from "../../components/wms/WmsManualProductModal";
 import { ReceivingCarrierBadge } from "../../components/wms/receiving/carriers/ReceivingCarrierBadge";
 import { useWarehouse } from "../../context/WarehouseContext";
@@ -576,6 +579,58 @@ export default function WmsReceivingCountPage() {
 
         </div>
       </header>
+
+      {canEditLines ? (
+        <ReceivingPutawayHandlingBar
+          requiresPutaway={doc.default_requires_putaway !== false}
+          disabled={!canEditLines}
+          busy={busy}
+          onChange={(requiresPutaway) => {
+            const anyPutaway = (doc.items ?? []).some(
+              (it) => Number(it.quantity_putaway ?? 0) > 0 && !requiresPutaway,
+            );
+            if (anyPutaway) {
+              showScannerToast(
+                "Nie można ustawić „Bez rozlokowania” — część towaru została już rozlokowana.",
+              );
+              return;
+            }
+            const label = requiresPutaway
+              ? "Standardowe — rozlokuj w magazynie"
+              : "Bez rozlokowania";
+            if (
+              !window.confirm(
+                `Zmienić sposób obsługi dostawy na: ${label}? Dotyczy całego dokumentu i kolejnych przyjęć.`,
+              )
+            ) {
+              return;
+            }
+            setBusy(true);
+            void patchWmsPutawayHandling(tenantId, pzId, { requires_putaway: requiresPutaway })
+              .then((d) => {
+                setDetail(d);
+                showScannerToast(
+                  requiresPutaway
+                    ? "Tryb: standardowe rozlokowanie"
+                    : "Tryb: bez rozlokowania",
+                );
+              })
+              .catch((ex: unknown) => {
+                let msg = "Nie udało się zmienić trybu rozlokowania";
+                if (axios.isAxiosError(ex) && ex.response?.data && typeof ex.response.data === "object") {
+                  const d0 = (ex.response.data as { detail?: unknown }).detail;
+                  if (typeof d0 === "string" && d0.trim()) msg = d0;
+                  else if (d0 && typeof d0 === "object" && "message" in d0) {
+                    const m = String((d0 as { message?: unknown }).message ?? "").trim();
+                    if (m) msg = m;
+                  }
+                }
+                showScannerToast(msg);
+              })
+              .finally(() => setBusy(false));
+          }}
+        />
+      ) : null}
 
       {/* GŁÓWNA ZAWARTOŚĆ W PEŁNEJ SZEROKOŚCI */}
       <main className="w-full px-4 py-6">

@@ -2,7 +2,7 @@
 
 ## Active
 
-**WMS Przyjęcia — korekta ilości / wada / usuwanie** — naprawione end-to-end na istniejącym SSOT (signed delta, REJECTED_STOCK, DOCK upsert ±). Commit lokalny, **bez push**.
+**Bez rozlokowania + anulowanie putaway** — SSOT: `StockDocumentItem.requires_putaway` + `StockDocument.default_requires_putaway`; gate `stock_document_item_requires_putaway`. Commit lokalny, bez push.
 
 ## Preferencja commitów (user)
 

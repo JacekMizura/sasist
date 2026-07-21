@@ -220,6 +220,10 @@ def _effective_putaway_quantity(db: Session, row: StockDocumentItem) -> float:
 
 def _document_line_putaway_remaining(db: Session, row: StockDocumentItem) -> float:
     """Remaining qty to put away — document line is SSOT for PZ / Z-PZ / PZ_RT."""
+    from .complaints.complaint_physical_receipt import stock_document_item_requires_putaway
+
+    if not stock_document_item_requires_putaway(row, db=db):
+        return 0.0
     rec = float(row.received_quantity or 0)
     if rec <= 1e-9:
         return 0.0

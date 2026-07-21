@@ -117,6 +117,8 @@ export type StockDocumentItemRead = {
   track_expiry?: boolean;
   track_serial?: boolean;
   quantity_putaway?: number;
+  /** False = bez rozlokowania (crossdock) — linia nie wchodzi do putaway / DOCK. */
+  requires_putaway?: boolean;
   putaway_updated_at?: string | null;
   putaway_last_location_name?: string | null;
   putaway_last_location_type?: string | null;
@@ -204,6 +206,8 @@ export type StockDocumentRead = {
   receiving_status?: string;
   putaway_status?: string;
   relocation_status?: string;
+  /** True = standardowe rozlokowanie; False = bez rozlokowania (default nowych linii). */
+  default_requires_putaway?: boolean;
   warehouse_workflow_status?: string;
   purchase_workflow_status?: string;
   is_fully_received?: boolean;

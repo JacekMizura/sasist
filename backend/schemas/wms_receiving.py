@@ -355,3 +355,23 @@ class WmsReceivingMarkDamagedBody(BaseModel):
 
 class WmsReceivingSplitBody(BaseModel):
     segments: List[WmsReceivingSplitSegmentBody] = Field(..., min_length=1)
+
+
+class WmsPutawayHandlingBody(BaseModel):
+    """STANDARD putaway vs BEZ ROZLOKOWANIA (crossdock) — line and/or document default."""
+
+    requires_putaway: bool = Field(
+        ...,
+        description="True = standardowe rozlokowanie w magazynie; False = bez rozlokowania.",
+    )
+    item_ids: Optional[List[int]] = Field(
+        default=None,
+        description="Opcjonalnie konkretne linie; None = wszystkie linie produktowe + default dokumentu.",
+    )
+
+
+class WmsCancelPutawayObligationBody(BaseModel):
+    mark_no_putaway: bool = Field(
+        default=True,
+        description="True = anuluj obowiązek putaway i oznacz BEZ ROZLOKOWANIA (tylko gdy quantity_putaway=0).",
+    )

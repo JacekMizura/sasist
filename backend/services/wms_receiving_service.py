@@ -182,6 +182,11 @@ def _apply_dock_inventory_for_receipt(
     warehouse_carrier_id: Optional[int],
     performed_by: AppUser,
 ) -> None:
+    from .complaints.complaint_physical_receipt import stock_document_item_requires_putaway
+
+    # Bez rozlokowania / crossdock: dokumentowe przyjęcie bez stocku DOCK (nie ATP / nie putaway).
+    if abs(float(add_qty)) > 1e-12 and float(add_qty) > 0 and not stock_document_item_requires_putaway(line, db=db):
+        return
     dock_id = getattr(doc, "location_id", None)
     wh_id = int(getattr(doc, "warehouse_id", 0) or 0)
     if not dock_id or wh_id <= 0 or getattr(line, "product_id", None) is None:
@@ -679,6 +684,7 @@ def ensure_wms_pz_product_anchor_line(
             batch_number="",
             expiry_date=NO_EXPIRY_SENTINEL,
             wms_line_source=src,
+            requires_putaway=bool(getattr(doc, "default_requires_putaway", True)),
         )
         db.add(row)
         db.flush()

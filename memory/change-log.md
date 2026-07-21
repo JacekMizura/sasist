@@ -1,4 +1,13 @@
+## 2026-07-21 — Bez rozlokowania (crossdock) + anulowanie obowiązku putaway
+
+- SSOT: `requires_putaway` na linii + `default_requires_putaway` na dokumencie; rozszerzony `stock_document_item_requires_putaway`.
+- NO_PUTAWAY: brak DOCK inventory / brak karty w kolejce; qty doc==actual NIE wyłącza putaway.
+- Anuluj 0/X → mark NO_PUTAWAY + withdraw DOCK; partial → `PUTAWAY_ALREADY_STARTED`.
+- UI: pasek trybu w przyjęciu; kebab Anuluj na liście Rozlokowanie PZ.
+- Tests P–X: `test_wms_putaway_no_putaway_handling.py`. **No push.**
+
 ## 2026-07-21 — Przyjęcia: korekta ilości + WADA + usuwanie pozycji
+
 
 - Korekta: tryb „Korekta ilości” (−X); floor `received >= putaway`; DOCK upsert obsługuje delta −.
 - WADA: podpięty `ReceivingDamageModal` (wcześniej brak renderu); mark-damaged tylko z DOCK-IN; putaway badge Pełnowartościowy / WADA.

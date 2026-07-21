@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useState, useMemo } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Clock, MapPin, Package, User, ScanLine } from "lucide-react";
+import axios from "axios";
 import { fetchTenantsList } from "../../api/tenantsApi";
 import { useWmsScanner } from "../../context/WmsScannerContext";
 import { useWmsPageScanHandler } from "../../components/wms/execution/useWmsPageScanHandler";
 import { useScanFeedback } from "../../components/wms/execution/useScanFeedback";
 import { listWmsPutawayPz, type WmsReceivingPzListRow } from "../../api/wmsReceivingApi";
+import { cancelWmsPutawayObligation } from "../../api/wmsPutawayApi";
+import { WmsCardKebabMenu } from "../../components/wms/WmsCardKebabMenu";
 import { WMS_RECEIVING_UPDATED_EVENT, WMS_RELOCATION_FINALIZED_EVENT, WMS_ROUTES } from "./wmsRoutes";
 import { displayWarehouseDocumentNumber } from "../../utils/warehouseDocumentNumberDisplay";
 import { documentCreatedByLabel } from "../../utils/documentCreatedBy";
@@ -22,7 +25,16 @@ function fmtQty(n: number) {
   return new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 2 }).format(n);
 }
 
-function PutawayPzCard({ row, tenantId }: { row: WmsReceivingPzListRow; tenantId: number }) {
+function PutawayPzCard({
+  row,
+  tenantId,
+  onCancelled,
+}: {
+  row: WmsReceivingPzListRow;
+  tenantId: number;
+  onCancelled: () => void;
+}) {
+  const navigate = useNavigate();
   const docType = String(row.document_type ?? "PZ").trim().toUpperCase();
   const isPw = docType === "PW";
   const isReturnReceipt = row.is_return_receipt === true || isReturnReceiptDocumentType(row.document_type);
@@ -52,13 +64,64 @@ function PutawayPzCard({ row, tenantId }: { row: WmsReceivingPzListRow; tenantId
     (String(row.receiving_status ?? "").toUpperCase() !== "DONE" ? row.total_received : row.total_ordered);
   const progressPct =
     putTarget > 0 ? Math.min(100, Math.round((totalPut / putTarget) * 100)) : 0;
+  const canCancelObligation = totalPut <= 1e-9 && putTarget > 1e-9;
+
+  const onCancel = () => {
+    if (!canCancelObligation) {
+      window.alert(
+        "Nie można anulować rozlokowania, ponieważ część towaru została już rozlokowana.",
+      );
+      return;
+    }
+    const ok = window.confirm(
+      "Anulować rozlokowanie i oznaczyć dostawę jako „Bez rozlokowania”? Towar nie będzie wymagał putaway i nie pozostanie w DOCK-IN.",
+    );
+    if (!ok) return;
+    void cancelWmsPutawayObligation(tenantId, row.id)
+      .then(() => {
+        window.dispatchEvent(new CustomEvent(WMS_RELOCATION_FINALIZED_EVENT, { detail: { tenantId } }));
+        onCancelled();
+      })
+      .catch((ex: unknown) => {
+        let msg = "Nie udało się anulować rozlokowania.";
+        if (axios.isAxiosError(ex) && ex.response?.data && typeof ex.response.data === "object") {
+          const d0 = (ex.response.data as { detail?: unknown }).detail;
+          if (typeof d0 === "string" && d0.trim()) msg = d0;
+          else if (d0 && typeof d0 === "object" && "message" in d0) {
+            const m = String((d0 as { message?: unknown }).message ?? "").trim();
+            if (m) msg = m;
+          }
+        }
+        window.alert(msg);
+      });
+  };
 
   return (
-    <Link
-      to={WMS_ROUTES.putawayPz(row.id)}
-      state={{ tenantId }}
-      className="text-left bg-white border border-slate-200 rounded-[24px] p-5 shadow-sm hover:shadow-md hover:border-[#5a4fcf]/40 transition-all flex flex-col group h-full"
-    >
+    <div className="relative text-left bg-white border border-slate-200 rounded-[24px] p-5 shadow-sm hover:shadow-md hover:border-[#5a4fcf]/40 transition-all flex flex-col group h-full">
+      <div className="absolute top-4 right-4 z-10" data-wms-product-card-menu="">
+        <WmsCardKebabMenu
+          ariaLabel="Menu rozlokowania"
+          items={[
+            {
+              id: "open",
+              label: "Otwórz",
+              onClick: () => navigate(WMS_ROUTES.putawayPz(row.id), { state: { tenantId } }),
+            },
+            {
+              id: "cancel",
+              label: "Anuluj rozlokowanie",
+              danger: true,
+              disabled: !canCancelObligation,
+              onClick: onCancel,
+            },
+          ]}
+        />
+      </div>
+      <Link
+        to={WMS_ROUTES.putawayPz(row.id)}
+        state={{ tenantId }}
+        className="flex flex-col flex-1 min-h-0"
+      >
       {/* Top: Icon & Title & Badges */}
       <div className="flex items-start gap-4 mb-5">
         <div
@@ -156,6 +219,7 @@ function PutawayPzCard({ row, tenantId }: { row: WmsReceivingPzListRow; tenantId
         </div>
       </div>
     </Link>
+    </div>
   );
 }
 
@@ -306,7 +370,7 @@ export default function WmsPutawayPage() {
           <ul className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-5 pb-12">
             {filteredRows.map((r) => (
               <li key={r.id}>
-                <PutawayPzCard row={r} tenantId={tenantId} />
+                <PutawayPzCard row={r} tenantId={tenantId} onCancelled={() => void load()} />
               </li>
             ))}
           </ul>

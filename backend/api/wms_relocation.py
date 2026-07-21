@@ -12,16 +12,15 @@ from ..services.document_number_service import DocumentSeriesOperationalError
 from ..services.relocation_document_series_service import RELOCATION_DOCUMENT_SERIES_MISSING_MSG
 
 from ..auth.deps import get_current_user
-from fastapi import Depends
 from ..auth.warehouse_deps import (
     require_operable_warehouse,
     require_active_operable_warehouse,
-    require_active_or_query_operable_warehouse,
     assert_stock_document_warehouse,
     enforce_warehouse_access,
 )
 from ..database import get_db
 from ..models.app_user import AppUser
+from ..models.stock_document import StockDocument
 from ..schemas.stock_document import StockDocumentRead
 from ..schemas.wms_relocation_batch import (
     WmsRelocationAddItemsBody,
@@ -30,7 +29,13 @@ from ..schemas.wms_relocation_batch import (
     WmsRelocationStartSessionBody,
     WmsRelocationStartSessionOut,
 )
+from ..schemas.wms_receiving import WmsCancelPutawayObligationBody, WmsPutawayHandlingBody
 from ..services.wms_putaway_service import PutawayFinalizeError, finalize_wms_relocation_pz
+from ..services.wms_putaway_handling_service import (
+    PutawayHandlingError,
+    cancel_putaway_obligation,
+    set_putaway_handling,
+)
 from ..services.wms_relocation_batch_service import (
     add_relocation_items_to_document,
     get_relocation_batch_context,
@@ -46,6 +51,8 @@ def _relocation_error_detail(exc: Exception) -> dict[str, str]:
     if isinstance(exc, DocumentSeriesOperationalError):
         return exc.to_detail()
     if isinstance(exc, PutawayFinalizeError):
+        return exc.to_detail()
+    if isinstance(exc, PutawayHandlingError):
         return exc.to_detail()
     if isinstance(exc, ValueError):
         msg = str(exc).strip()
@@ -196,3 +203,91 @@ def patch_finalize_wms_relocation_pz(
         return doc
     except ValueError as e:
         raise HTTPException(status_code=400, detail=_relocation_error_detail(e))
+
+
+@router.patch("/relocation/pz/{document_id}/putaway-handling", response_model=StockDocumentRead)
+def patch_wms_putaway_handling(
+    document_id: int,
+    body: WmsPutawayHandlingBody,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_operable_warehouse),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    """Ustaw STANDARD vs BEZ ROZLOKOWANIA (linie i/lub default dokumentu)."""
+    doc0 = (
+        db.query(StockDocument)
+        .filter(StockDocument.id == int(document_id), StockDocument.tenant_id == int(tenant_id))
+        .first()
+    )
+    if doc0 is None:
+        raise HTTPException(status_code=404, detail="Dokument nie znaleziony")
+    assert_stock_document_warehouse(doc0, warehouse_id)
+    try:
+        doc = set_putaway_handling(
+            db,
+            tenant_id,
+            document_id,
+            requires_putaway=bool(body.requires_putaway),
+            item_ids=body.item_ids,
+            performed_by=user,
+            apply_document_default=body.item_ids is None,
+        )
+        log_wms_workforce_activity(
+            db,
+            user=user,
+            tenant_id=tenant_id,
+            module=MODULE_PUTAWAY,
+            action_type="putaway_handling",
+            entity_type="StockDocument",
+            entity_id=document_id,
+            metadata={"requires_putaway": body.requires_putaway, "item_ids": body.item_ids},
+        )
+        db.commit()
+        return doc
+    except (PutawayHandlingError, ValueError) as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=_relocation_error_detail(e)) from e
+
+
+@router.post("/relocation/pz/{document_id}/cancel-obligation", response_model=StockDocumentRead)
+def post_cancel_putaway_obligation(
+    document_id: int,
+    body: WmsCancelPutawayObligationBody | None = None,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_operable_warehouse),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    """Anuluj obowiązek rozlokowania gdy 0/X (oznacz BEZ ROZLOKOWANIA + wycofaj DOCK)."""
+    doc0 = (
+        db.query(StockDocument)
+        .filter(StockDocument.id == int(document_id), StockDocument.tenant_id == int(tenant_id))
+        .first()
+    )
+    if doc0 is None:
+        raise HTTPException(status_code=404, detail="Dokument nie znaleziony")
+    assert_stock_document_warehouse(doc0, warehouse_id)
+    payload = body or WmsCancelPutawayObligationBody()
+    try:
+        doc = cancel_putaway_obligation(
+            db,
+            tenant_id,
+            document_id,
+            performed_by=user,
+            mark_no_putaway=bool(payload.mark_no_putaway),
+        )
+        log_wms_workforce_activity(
+            db,
+            user=user,
+            tenant_id=tenant_id,
+            module=MODULE_PUTAWAY,
+            action_type="putaway_cancel",
+            entity_type="StockDocument",
+            entity_id=document_id,
+        )
+        db.commit()
+        return doc
+    except (PutawayHandlingError, ValueError) as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=_relocation_error_detail(e)) from e
