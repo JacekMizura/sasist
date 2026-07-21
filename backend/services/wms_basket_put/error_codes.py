@@ -29,6 +29,11 @@ QUANTITY_EXCEEDS_REMAINING = "QUANTITY_EXCEEDS_REMAINING"
 QUANTITY_STALE = "QUANTITY_STALE"
 PICK_LOCATION_REQUIRED = "PICK_LOCATION_REQUIRED"
 QUANTITY_EXCEEDS_LOCATION_STOCK = "QUANTITY_EXCEEDS_LOCATION_STOCK"
+SOURCE_LOCATION_NOT_ON_ROUTE = "SOURCE_LOCATION_NOT_ON_ROUTE"
+SOURCE_LOCATION_STALE = "SOURCE_LOCATION_STALE"
+SOURCE_LOCATION_INVALID = "SOURCE_LOCATION_INVALID"
+NO_PENDING_PICK = "NO_PENDING_PICK"
+PENDING_PICK_STATE_CONFLICT = "PENDING_PICK_STATE_CONFLICT"
 
 # Legacy alias kept in FE mapper
 AWAITING_BASKET_CONFIRMATION = "AWAITING_BASKET_CONFIRMATION"
@@ -60,6 +65,15 @@ OPERATOR_MESSAGES: dict[str, str] = {
         "W wybranej lokalizacji nie ma wystarczającego stanu (uwzględniając już zebrane, "
         "ale jeszcze nie sfinalizowane sztuk)."
     ),
+    SOURCE_LOCATION_NOT_ON_ROUTE: (
+        "Wybrana lokalizacja źródłowa nie jest dostępna dla tego produktu w bieżącej zbiórce."
+    ),
+    SOURCE_LOCATION_STALE: (
+        "Lokalizacja źródłowa zmieniła się lub stała się niedostępna. Zeskanuj lokalizację ponownie."
+    ),
+    SOURCE_LOCATION_INVALID: "Nieprawidłowa lokalizacja źródłowa dla tego pobrania.",
+    NO_PENDING_PICK: "Brak oczekującego pobrania do odłożenia do koszyka.",
+    PENDING_PICK_STATE_CONFLICT: "Stan oczekującego pobrania jest niespójny — odśwież produkt i spróbuj ponownie.",
     AWAITING_BASKET_CONFIRMATION: (
         "Oczekiwany jest teraz skan koszyka. Najpierw odłóż zeskanowany produkt do koszyka."
     ),

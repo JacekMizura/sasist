@@ -947,10 +947,39 @@ def _quantity_mode_basket_put(
         )
 
     put_qty = min(float(qty), float(live_alloc.line_remaining), float(loc_avail_live))
-    oid, oiid = record_pick_fn(
-        quantity=put_qty,
-        scope_order_id=int(live_alloc.order_id),
-    )
+    try:
+        oid, oiid = record_pick_fn(
+            quantity=put_qty,
+            scope_order_id=int(live_alloc.order_id),
+            location_id=source_location_id,
+        )
+    except TypeError:
+        # Older test doubles without location_id kwarg
+        oid, oiid = record_pick_fn(
+            quantity=put_qty,
+            scope_order_id=int(live_alloc.order_id),
+        )
+    except ValueError as e:
+        msg = str(e)
+        code = ec.SOURCE_LOCATION_INVALID
+        if "nie należy do trasy" in msg.lower():
+            code = ec.SOURCE_LOCATION_NOT_ON_ROUTE
+        elif "dostępne jest tylko" in msg.lower() or "stan magazynu" in msg.lower():
+            code = ec.QUANTITY_EXCEEDS_LOCATION_STOCK
+        raise BasketPutError(
+            code,
+            msg,
+            http_status=409,
+            extra={
+                "phase": code,
+                "source_location_id": source_location_id,
+                "scanned_basket_id": int(scanned.id),
+                "scanned_barcode": (str(scanned.barcode).strip() if scanned.barcode else None),
+                "product_id": int(product_id),
+                "order_id": int(live_alloc.order_id),
+                "order_item_id": int(live_alloc.order_item_id),
+            },
+        ) from e
     # Quantity mode does not keep unit-scan pending / series state.
     put_state.set_pending(db, sess, None)
     put_state.set_active_series(db, sess, None)
@@ -1267,10 +1296,34 @@ def confirm_basket_put(
 
     assert allocation is not None
     qty = min(float(pending.get("quantity") or 1), float(allocation.line_remaining))
-    oid, oiid = record_pick_fn(
-        quantity=qty,
-        scope_order_id=int(allocation.order_id),
-    )
+    pending_loc = int(pending.get("location_id") or 0)
+    try:
+        oid, oiid = record_pick_fn(
+            quantity=qty,
+            scope_order_id=int(allocation.order_id),
+            location_id=pending_loc if pending_loc > 0 else None,
+        )
+    except TypeError:
+        oid, oiid = record_pick_fn(
+            quantity=qty,
+            scope_order_id=int(allocation.order_id),
+        )
+    except ValueError as e:
+        msg = str(e)
+        code = ec.SOURCE_LOCATION_INVALID
+        if "nie należy do trasy" in msg.lower():
+            code = ec.SOURCE_LOCATION_NOT_ON_ROUTE
+        raise BasketPutError(
+            code,
+            msg,
+            http_status=409,
+            extra={
+                "phase": code,
+                "source_location_id": pending_loc or None,
+                "scanned_basket_id": int(scanned.id),
+                "product_id": int(pending_product_id),
+            },
+        ) from e
     event_confirm = "MANUAL_BASKET_CONFIRMATION" if manual else "BASKET_CONFIRMED"
     _audit(
         event_confirm,

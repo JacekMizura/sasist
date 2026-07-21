@@ -1,3 +1,10 @@
+## 2026-07-21 — MULTI basket put: source provenance vs greedy route
+
+- LIVE: brck1-B02 recognized but record_wms_quick_pick rejected A23 (“nie należy do trasy”); FE → UNKNOWN_SCAN_CODE.
+- Cause: greedy route on physical Inventory (draft picks ignored) + stale series location in _do_record.
+- Fix: skip_route on basket-bound pick; request location_id SSOT; structured SOURCE_LOCATION_* errors.
+- Tests: `test_wms_multi_basket_source_provenance.py`. No push.
+
 ## 2026-07-21 — WMS receiving: effective validation + scan gate (ST-003)
 
 - ROOT overrides: PZ `track_*` / receive-serial used legacy `Product.track_*`, ignored `validation_skip_*`.

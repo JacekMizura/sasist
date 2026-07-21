@@ -1714,7 +1714,17 @@ def post_picking_confirm_basket_put(
         quantity: float,
         fixed_order_id: int | None = None,
         scope_order_id: int | None = None,
+        location_id: int | None = None,
     ):
+        # Operator-selected / pending-put source wins over stale series location.
+        loc = (
+            int(location_id)
+            if location_id is not None and int(location_id) > 0
+            else int(_pending_location_id)
+        )
+        # Basket-bound pick (scope_order_id): source already validated via effective stock.
+        # Never re-run greedy route (physical Inventory ignores draft Picks).
+        trust_source = scope_order_id is not None
         return record_wms_quick_pick(
             db,
             tenant_id=tid,
@@ -1722,12 +1732,13 @@ def post_picking_confirm_basket_put(
             source_status_id=source_status_id,
             order_type=order_type,
             product_id=int(_pending_product_id),
-            location_id=int(_pending_location_id),
+            location_id=int(loc),
             quantity=float(quantity),
             cart_id=int(body.cart_id),
             fixed_order_id=fixed_order_id if fixed_order_id is not None else recovery_fixed,
             scope_order_id=scope_order_id if recovery_fixed is None else None,
             operator_user_id=uid,
+            skip_route_location_check=bool(trust_source),
         )
 
     from ..services.wms_basket_put.state import get_pending, get_active_series
@@ -1750,16 +1761,25 @@ def post_picking_confirm_basket_put(
                 "Brak kontekstu produktu — otwórz produkt lub zeskanuj EAN, potem koszyk.",
                 http_status=409,
             )
-        # Product/location for Pick path: pending first; series / context for destination-only.
-        if pending is not None:
+        # Product/location for Pick path: request location (operator source) first,
+        # then pending, then series — never let stale series override active source.
+        if ctx_product_id is not None:
+            _pending_product_id = int(ctx_product_id)
+        elif pending is not None:
             _pending_product_id = int(pending["product_id"])
-            _pending_location_id = int(pending["location_id"])
         elif series is not None:
             _pending_product_id = int(series["product_id"])
+        else:
+            _pending_product_id = 0
+
+        if ctx_location_id is not None:
+            _pending_location_id = int(ctx_location_id)
+        elif pending is not None:
+            _pending_location_id = int(pending["location_id"])
+        elif series is not None:
             _pending_location_id = int(series["location_id"])
         else:
-            _pending_product_id = int(ctx_product_id)
-            _pending_location_id = int(ctx_location_id) if ctx_location_id is not None else 0
+            _pending_location_id = 0
 
         ot = order_type if order_type in ("single", "multi", "all") else "all"
         confirm_order_ids = resolve_wms_picking_order_ids(
@@ -1797,6 +1817,7 @@ def post_picking_confirm_basket_put(
             "scanned_basket": put_res.scanned_basket,
             "message": put_res.message,
             "picked": qty_put > 1e-9,
+            "source_location_id": int(_pending_location_id) if _pending_location_id else None,
         }
     except BasketPutError as be:
         # Keep pending on mismatch / wrong basket / full line — no pick was written.
@@ -1818,7 +1839,16 @@ def post_picking_confirm_basket_put(
         raise HTTPException(status_code=be.http_status, detail=be.as_detail()) from be
     except ValueError as e:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        msg = str(e)
+        code = "SOURCE_LOCATION_INVALID"
+        if "nie należy do trasy" in msg.lower():
+            code = "SOURCE_LOCATION_NOT_ON_ROUTE"
+        elif "dostępne jest tylko" in msg.lower() or "stan magazynu" in msg.lower():
+            code = "QUANTITY_EXCEEDS_LOCATION_STOCK"
+        raise HTTPException(
+            status_code=409,
+            detail={"code": code, "message": msg},
+        ) from e
 
 
 @router.post("/picking/cancel-pending-basket-put")

@@ -140,6 +140,31 @@ const CATALOG: Record<
     message:
       "W wybranej lokalizacji nie ma wystarczającego stanu. Zeskanuj inną lokalizację albo zmniejsz ilość.",
   },
+  SOURCE_LOCATION_NOT_ON_ROUTE: {
+    severity: "error",
+    title: "LOKALIZACJA ŹRÓDŁOWA",
+    message: "Wybrana lokalizacja źródłowa nie jest dostępna dla tego produktu w bieżącej zbiórce.",
+  },
+  SOURCE_LOCATION_STALE: {
+    severity: "warning",
+    title: "LOKALIZACJA NIEAKTUALNA",
+    message: "Lokalizacja źródłowa zmieniła się lub stała się niedostępna. Zeskanuj lokalizację ponownie.",
+  },
+  SOURCE_LOCATION_INVALID: {
+    severity: "error",
+    title: "BŁĘDNA LOKALIZACJA",
+    message: "Nieprawidłowa lokalizacja źródłowa dla tego pobrania.",
+  },
+  NO_PENDING_PICK: {
+    severity: "warning",
+    title: "BRAK POBRANIA",
+    message: "Brak oczekującego pobrania do odłożenia do koszyka.",
+  },
+  PENDING_PICK_STATE_CONFLICT: {
+    severity: "error",
+    title: "STAN NIESPÓJNY",
+    message: "Stan oczekującego pobrania jest niespójny — odśwież produkt i spróbuj ponownie.",
+  },
 };
 
 export function mapWmsScanErrorCode(
@@ -150,14 +175,16 @@ export function mapWmsScanErrorCode(
   const entry = CATALOG[key] ?? {
     severity: "error" as const,
     title: "BŁĘDNY SKAN",
-    message: opts?.backendMessage?.trim() || "Nie można wykonać tego skanu w aktualnym stanie.",
+    message: "Nie można wykonać tego skanu w aktualnym stanie.",
   };
+  const backend = opts?.backendMessage?.trim();
   const hint = opts?.contextHint?.trim();
+  const body = backend || entry.message;
   return {
     code: key,
     severity: entry.severity,
     title: entry.title,
-    message: hint ? `${entry.message}\n\n${hint}` : entry.message,
+    message: hint ? `${body}\n\n${hint}` : body,
   };
 }
 
@@ -172,7 +199,13 @@ export function extractWmsScanErrorDetail(err: unknown): {
   const ax = err as { response?: { data?: { detail?: unknown } } };
   const detail = ax.response?.data?.detail;
   if (detail == null) return empty;
-  if (typeof detail === "string") return { code: null, message: detail, eligibleLabels: null };
+  if (typeof detail === "string") {
+    const msg = detail.trim();
+    if (/nie należy do trasy/i.test(msg)) {
+      return { code: "SOURCE_LOCATION_NOT_ON_ROUTE", message: msg, eligibleLabels: null };
+    }
+    return { code: null, message: msg || null, eligibleLabels: null };
+  }
   if (typeof detail !== "object") return empty;
   const d = detail as {
     code?: string;

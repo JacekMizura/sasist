@@ -2530,6 +2530,7 @@ def record_wms_quick_pick(
     fixed_order_id: int | None = None,
     scope_order_id: int | None = None,
     operator_user_id: int | None = None,
+    skip_route_location_check: bool = False,
 ) -> tuple[int, int]:
     """
     Zapis roboczy: rekord Pick z ``cart_id`` (sesja), ``picked_at`` = NULL do czasu finalizacji wózka.
@@ -2539,6 +2540,11 @@ def record_wms_quick_pick(
     ``fixed_order_id`` — dogrywka recovery: tylko jedno zamówienie (bez kohorty statusu).
     ``scope_order_id`` — zawężenie do jednego zamówienia bez bramki recovery
     (np. alokacja MULTI po skanie koszyka).
+
+    ``skip_route_location_check`` — destination basket-put already validated source location
+    via effective stock. Do NOT re-check greedy routing here: routing uses physical Inventory
+    and ignores draft Picks, so it can exclude the operator's real source (e.g. A23) while
+    still listing a drained A10 as the only candidate.
     """
     if quantity <= 0:
         raise ValueError("Ilość musi być > 0.")
@@ -2601,13 +2607,16 @@ def record_wms_quick_pick(
         if not order_ids:
             raise ValueError("Brak zamówień przypisanych do tego wózka.")
 
-    allowed = _allowed_pick_location_ids_for_product(
-        db, tenant_id=tenant_id, order_ids=order_ids, product_id=product_id
-    )
-    if not allowed:
-        raise ValueError("Brak lokalizacji do pobrania tego produktu (routing / alokacja).")
-    if int(location_id) not in allowed:
-        raise ValueError("Lokalizacja nie należy do trasy zbiórki tego produktu.")
+    # Basket-put / trusted source provenance: stock already checked by confirm path.
+    # Classic quick-pick still gates on routing candidates.
+    if not skip_route_location_check:
+        allowed = _allowed_pick_location_ids_for_product(
+            db, tenant_id=tenant_id, order_ids=order_ids, product_id=product_id
+        )
+        if not allowed:
+            raise ValueError("Brak lokalizacji do pobrania tego produktu (routing / alokacja).")
+        if int(location_id) not in allowed:
+            raise ValueError("Lokalizacja nie należy do trasy zbiórki tego produktu.")
 
     from .wms_basket_put.location_stock import effective_pickable_qty_at_location
 
