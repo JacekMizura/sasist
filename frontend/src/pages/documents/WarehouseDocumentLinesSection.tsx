@@ -216,6 +216,7 @@ export function WarehouseDocumentLinesSection({
                     deliveryDiffAccepted={acceptedDiffLineIds.has(it.id)}
                     onLineAction={(kind, received) => openLineAction(index, it, kind, received)}
                     tdCls={tdCls}
+                    dockLocationCode={(detail.location_name || "").trim() || "DOCK-IN"}
                   />
                 ))}
               </tbody>
@@ -288,6 +289,7 @@ function LineRow({
   onLineAction,
   tdCls,
   rowCls,
+  dockLocationCode,
 }: {
   index: number;
   it: StockDocumentItemRead;
@@ -306,6 +308,8 @@ function LineRow({
   onLineAction: (kind: LineActionKind, received: number) => void;
   tdCls: string;
   rowCls: string;
+  /** Receiving dock code from parent StockDocumentRead.location_name (DOCK-IN remainder). */
+  dockLocationCode: string;
 }) {
   const parseQty = (s: string | undefined): number | null => {
     const t = (s ?? "").trim().replace(",", ".");
@@ -389,7 +393,7 @@ function LineRow({
         <WarehouseLineLocationCell
           it={it}
           isWz={isWzDetail}
-          dockLocationCode={(detail.location_name || "").trim() || "DOCK-IN"}
+          dockLocationCode={dockLocationCode}
         />
       </td>
       <td className={tdCls}>
