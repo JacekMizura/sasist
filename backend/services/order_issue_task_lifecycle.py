@@ -54,6 +54,12 @@ def ensure_order_issue_task_lifecycle_schema(db: Session) -> None:
     columns. Missing ``archived_at`` alone yields HTTP 500 (UndefinedColumn /
     OperationalError) even when priority_* already exist.
 
+    Also ensure ``orders.picking_handoff_mode``: Braki list/detail/sync load
+    full ``Order`` ORM rows (``_fetch_orders_by_id``, lifecycle sync). Missing
+    handoff column → OperationalError/UndefinedColumn → HTTP 500 on GET
+    ``/order-issue-tasks`` even when ``order_issue_tasks`` schema is current.
+    SSOT ALTER: ``ensure_orders_picking_handoff_mode_column`` (schema_upgrade).
+
     Shortage-settings columns are NOT ensured here — SSOT is startup
     (``ensure_wms_picking_shortage_settings_columns`` on PG allowlist / background upgrade).
     """
@@ -63,6 +69,7 @@ def ensure_order_issue_task_lifecycle_schema(db: Session) -> None:
         ensure_order_issue_tasks_lifecycle_columns,
         get_engine,
     )
+    from ..db.schema_upgrade import ensure_orders_picking_handoff_mode_column
 
     bind = db.get_bind()
     if bind is None:
@@ -74,6 +81,7 @@ def ensure_order_issue_task_lifecycle_schema(db: Session) -> None:
     ensure_order_issue_task_items_table(engine)
     ensure_order_issue_tasks_archive_columns(engine)
     ensure_order_issue_tasks_lifecycle_columns(engine)
+    ensure_orders_picking_handoff_mode_column(engine)
 
 
 def _query_active_shortage_task(

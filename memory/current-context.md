@@ -2,14 +2,16 @@
 
 ## Active
 
-**MULTI quantity-mode server-side `source_lock`** — local commit pending/ready; **do not push** (incl. prior `2de7345a`).
+**Fix GET `/api/wms/order-issue-tasks` 500** — missing `orders.picking_handoff_mode` on request-path ensure. Commit local; **do not push**.
 
-## Invariant
+## Exact failure
 
-After source accept → `basket_put.source_lock` in session metadata → confirm-basket-put uses lock for `Pick.location_id` → live effective stock revalidation → clear lock on success only.
+`sqlalchemy.exc.OperationalError` — `no such column: orders.picking_handoff_mode` in `_fetch_orders_by_id`.
 
-`body.location_id` = compatibility check only (`SOURCE_LOCATION_MISMATCH` on mismatch). Not Inventory reservation.
+## Not a regression from
 
-## Storage
+MULTI basket `2de7345a` / `f5e881be` / `dc35db74`.
 
-`WmsOperationSession.metadata_json.basket_put.source_lock` (existing basket_put block).
+## Related
+
+Packing handoff ORM column from `afc6843a`; startup ensure can be skipped if earlier mega-try fails — request-path now mirrors order-list pattern.

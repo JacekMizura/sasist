@@ -1,3 +1,12 @@
+## 2026-07-21 — Fix GET /order-issue-tasks 500 (orders.picking_handoff_mode)
+
+- EXACT: `OperationalError` / `UndefinedColumn` — `no such column: orders.picking_handoff_mode`
+- Failing SQL: ORM SELECT Order in `_fetch_orders_by_id` (after OPEN tasks exist)
+- Cause: ORM maps handoff (afc6843a); Braki request-path ensured only `order_issue_tasks.*`
+- Fix: `ensure_order_issue_task_lifecycle_schema` → `ensure_orders_picking_handoff_mode_column` (SSOT)
+- NOT from picking commits 2de7345a / f5e881be
+- Tests A–I: `test_order_issue_tasks_handoff_column_500.py`. No push.
+
 ## 2026-07-21 — MULTI quantity-mode server-side source_lock
 
 - Gap after route-skip: client could still send any WH `location_id` with stock.
