@@ -6,22 +6,18 @@ import { getStockDocument, type StockDocumentItemRead, type StockDocumentRead } 
 import {
   deleteWmsReceivingPzItem,
   finishWmsReceivingPz,
-  patchWmsReceivingPzItemCommercial,
   postWmsReceivingPzItemMoveCarrier,
   resolveWmsReceivingScan,
 } from "../../api/wmsReceivingApi";
-import ActivityLogPanel from "../../components/activityLog/ActivityLogPanel";
-import { useAuth } from "../../context/AuthContext";
-import { useWarehouse } from "../../context/WarehouseContext";
 import { ReceivingActiveCarrierBar } from "../../components/wms/receiving/ReceivingActiveCarrierBar";
 import { ReceivingCarrierAssignModal } from "../../components/wms/receiving/carriers/ReceivingCarrierAssignModal";
 import { WmsManualProductModal } from "../../components/wms/WmsManualProductModal";
 import { ReceivingCarrierBadge } from "../../components/wms/receiving/carriers/ReceivingCarrierBadge";
+import { useWarehouse } from "../../context/WarehouseContext";
 import { useWmsScanner } from "../../context/WmsScannerContext";
 import { wmsReceiptLineImageUrl } from "../../utils/wmsReceiptLineMedia";
 import { documentCreatedByLabel } from "../../utils/documentCreatedBy";
 import { WMS_ROUTES } from "./wmsRoutes";
-import { canViewReceivingDocumentControl } from "./receivingDocumentControlAccess";
 import {
   buildReceivingLineGroups,
   isGhostReceivingLine,
@@ -34,10 +30,8 @@ import {
 import { formatWmsListDate } from "./wmsListFormatters";
 import { ProductDataCompletionModal } from "../../components/wms/receiving/ProductDataCompletionModal";
 import { ReceivingLineCard } from "../../components/wms/receiving/ReceivingLineCard";
-import { ReceivingLineHistoryModal } from "../../components/wms/receiving/ReceivingLineHistoryModal";
 import {
   ReceivingExecutionModal,
-  type ReceivingExecutionCommercialPayload,
   type ReceivingExecutionReceivePayload,
 } from "../../components/wms/receiving/ReceivingExecutionModal";
 import { ReceivingDamageModal } from "../../components/wms/receiving/ReceivingDamageModal";
@@ -110,7 +104,8 @@ export default function WmsReceivingCountPage() {
   const tenantIdFromState = (location.state as { tenantId?: number } | null)?.tenantId;
 
   const [tenantId] = useState(() => tenantIdFromState || Number(localStorage.getItem(TENANT_STORAGE_KEY)) || 1);
-  const { showScannerToast, setActiveDocument, setScannerInputDisabled } = useWmsScanner();
+  const { showScannerToast, setActiveDocument, setScannerInputDisabled, refocusScannerInput } =
+    useWmsScanner();
 
   const [detail, setDetail] = useState<StockDocumentRead | null>(null);
   const [loading, setLoading] = useState(true);
@@ -119,7 +114,6 @@ export default function WmsReceivingCountPage() {
   const [lastTouchedAtByLineId, setLastTouchedAtByLineId] = useState<Record<number, number>>({});
 
   const [receivingModal, setReceivingModal] = useState<StockDocumentItemRead | null>(null);
-  const [executionAdminMode, setExecutionAdminMode] = useState(false);
   const [seedReceiveNowQty, setSeedReceiveNowQty] = useState(1);
   const [receiveNowBump, setReceiveNowBump] = useState<{
     amount: number;
@@ -134,8 +128,6 @@ export default function WmsReceivingCountPage() {
   const [adminNameById, setAdminNameById] = useState<Map<number, string>>(() => new Map());
   const scanFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { warehouse } = useWarehouse();
-  const { user, hasPermission } = useAuth();
-  const showDocumentControl = canViewReceivingDocumentControl(hasPermission, user?.role);
   const [assignCarrierOpen, setAssignCarrierOpen] = useState(false);
   const [newProductScan, setNewProductScan] = useState<string | null>(null);
   const [manualProductOpen, setManualProductOpen] = useState(false);
@@ -143,8 +135,6 @@ export default function WmsReceivingCountPage() {
   const productDataGateQueueRef = useRef<ProductDataGateItem[]>([]);
   const [productDataGate, setProductDataGate] = useState<ProductDataGateItem | null>(null);
   const [labelPrintProduct, setLabelPrintProduct] = useState<ProductForLabel | null>(null);
-  const [historyLine, setHistoryLine] = useState<StockDocumentItemRead | null>(null);
-  const [activityRefreshKey, setActivityRefreshKey] = useState(0);
 
   const onProductDataGate = useCallback((ctx: ProductDataGateContext) => {
     return new Promise<boolean>((resolve) => {
@@ -223,7 +213,6 @@ export default function WmsReceivingCountPage() {
         manualProductOpen ||
         productDataGate != null ||
         labelPrintProduct != null ||
-        historyLine != null ||
         damageLine != null,
     );
   }, [
@@ -234,13 +223,12 @@ export default function WmsReceivingCountPage() {
     manualProductOpen,
     productDataGate,
     labelPrintProduct,
-    historyLine,
     damageLine,
     setScannerInputDisabled,
   ]);
 
   const openModalRef = useRef<
-    (it: StockDocumentItemRead, opts?: { initialQty?: number; freshLot?: boolean; adminMode?: boolean }) => void
+    (it: StockDocumentItemRead, opts?: { initialQty?: number; freshLot?: boolean }) => void
   >(() => {});
 
   const bumpReceiveNow = useCallback((opts: { amount: number; asCartons: boolean }) => {
@@ -282,12 +270,12 @@ export default function WmsReceivingCountPage() {
 
   const closeReceivingModal = useCallback(() => {
     setReceivingModal(null);
-    setExecutionAdminMode(false);
     setSeedReceiveNowQty(1);
     setReceiveNowBump(null);
     setLineCarrierChoice(null);
     setCartonSize(1);
-  }, []);
+    window.setTimeout(() => refocusScannerInput(), 0);
+  }, [refocusScannerInput]);
 
   const flashLineGroup = useCallback((it: StockDocumentItemRead) => {
     const key = receivingLineGroupKey(it);
@@ -309,10 +297,9 @@ export default function WmsReceivingCountPage() {
   );
 
   const openModal = useCallback(
-    (it: StockDocumentItemRead, opts?: { initialQty?: number; freshLot?: boolean; adminMode?: boolean }) => {
+    (it: StockDocumentItemRead, opts?: { initialQty?: number; freshLot?: boolean }) => {
       flashLineGroup(it);
       setReceivingModal(it);
-      setExecutionAdminMode(opts?.adminMode === true && showDocumentControl);
       setSeedReceiveNowQty(Math.max(1, Math.floor(Number(opts?.initialQty) || 1)));
       setReceiveNowBump(null);
       setLastTouchedAtByLineId((p) => ({ ...p, [it.id]: Date.now() }));
@@ -346,7 +333,7 @@ export default function WmsReceivingCountPage() {
       }
       void opts?.freshLot;
     },
-    [detail?.receiving_carriers, activeCarrierId, flashLineGroup, tenantId, showDocumentControl],
+    [detail?.receiving_carriers, activeCarrierId, flashLineGroup, tenantId],
   );
 
   openModalRef.current = openModal;
@@ -421,34 +408,11 @@ export default function WmsReceivingCountPage() {
       });
       if (ok) {
         showScannerToast(`+${fmtQty(payload.addQty)} szt. przyjęto`);
-        setActivityRefreshKey((k) => k + 1);
+        closeReceivingModal();
       }
       return ok;
     },
-    [executionLine, busy, pzIdValid, applyReceive, showScannerToast],
-  );
-
-  const handleSaveCommercial = useCallback(
-    async (payload: ReceivingExecutionCommercialPayload) => {
-      const line = executionLine;
-      if (line == null || busy || !pzIdValid) return false;
-      setBusy(true);
-      try {
-        const doc = await patchWmsReceivingPzItemCommercial(tenantId, pzId, line.id, payload);
-        setDetail(doc);
-        const next = (doc.items ?? []).find((it) => it.id === line.id);
-        if (next) setReceivingModal(next);
-        setActivityRefreshKey((k) => k + 1);
-        showScannerToast("Zapisano cenę / VAT");
-        return true;
-      } catch {
-        showScannerToast("Nie udało się zapisać ceny / VAT");
-        return false;
-      } finally {
-        setBusy(false);
-      }
-    },
-    [executionLine, busy, pzIdValid, tenantId, pzId, showScannerToast],
+    [executionLine, busy, pzIdValid, applyReceive, showScannerToast, closeReceivingModal],
   );
 
   const extraLineCount = useMemo(() => {
@@ -547,6 +511,10 @@ export default function WmsReceivingCountPage() {
   const headerSubtitle = pzReceivingHeaderSubtitle(doc);
   const docStatus = (doc.status ?? "").trim();
   const canEditLines = docStatus === "draft";
+  const docNumberLabel =
+    (doc.document_number || "").trim() ||
+    String((doc as { number?: string | null }).number || "").trim() ||
+    `PZ #${pzId}`;
 
   return (
     <div className="flex min-h-screen flex-col bg-white font-sans text-slate-800 pb-24">
@@ -555,7 +523,7 @@ export default function WmsReceivingCountPage() {
       <header className="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm w-full">
         <div className="w-full px-4 h-16 flex items-center justify-between gap-4">
           
-          <div className="flex items-center gap-3 min-w-0">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
             <button
               type="button"
               onClick={backToList}
@@ -564,18 +532,15 @@ export default function WmsReceivingCountPage() {
               <ArrowLeft size={22} />
             </button>
             <div className="hidden sm:block min-w-0">
-              <div className="flex flex-col">
-                <h1 className="text-lg font-bold text-slate-900 leading-tight truncate">
-                  PRZYJĘCIE PZ #{pzId}
+              <div className="flex flex-col min-w-0">
+                <h1 className="text-lg font-bold text-slate-900 leading-tight break-words [overflow-wrap:anywhere]">
+                  {docNumberLabel}
                   {(doc as { external_document_number?: string | null }).external_document_number?.trim()
                     ? ` · ${String((doc as { external_document_number?: string | null }).external_document_number).trim()}`
                     : null}
                 </h1>
-                <span className="text-xs text-slate-500 truncate">
+                <span className="text-xs text-slate-500 break-words">
                   {headerSubtitle} • Utworzył: {documentCreatedByLabel(doc.created_by)}
-                  {(doc.creation_source || "").toUpperCase() === "WMS" ? (
-                    <span className="ml-2 inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 uppercase">WMS</span>
-                  ) : null}
                 </span>
               </div>
             </div>
@@ -630,11 +595,7 @@ export default function WmsReceivingCountPage() {
                 setLabelPrintProduct({ id: pid, tenant_id: tenantId });
               }}
               onMarkDamage={() => setDamageLine(g.primary)}
-              onEditReceivingAdmin={() => {
-                if (!showDocumentControl) return;
-                openModal(g.primary, { adminMode: true });
-              }}
-              showDocumentControl={showDocumentControl}
+              onEditReceivingAdmin={() => openModal(g.primary)}
               onMoveToCarrier={() => openModal(g.primary)}
               onRemoveFromDocument={() => {
                 if (!canEditLines || busy || !pzIdValid) return;
@@ -651,25 +612,16 @@ export default function WmsReceivingCountPage() {
                 void deleteWmsReceivingPzItem(tenantId, pzId, line.id)
                   .then((doc) => {
                     setDetail(doc);
-                    setActivityRefreshKey((k) => k + 1);
                     showScannerToast("Usunięto produkt z dokumentu");
                   })
                   .catch(() => showScannerToast("Nie udało się usunąć pozycji"))
                   .finally(() => setBusy(false));
               }}
-              onShowHistory={() => setHistoryLine(g.primary)}
+              onShowHistory={() => {
+                /* Historia dostępna w pełnym dokumencie PZ — nie w WMS operacyjnym. */
+              }}
             />
           ))}
-        </div>
-
-        <div className="mt-8 px-1">
-          <ActivityLogPanel
-            objectType="document"
-            objectId={pzId}
-            title="Historia czynności"
-            defaultCollapsed
-            refreshKey={activityRefreshKey}
-          />
         </div>
       </main>
 
@@ -729,20 +681,14 @@ export default function WmsReceivingCountPage() {
           busy={busy}
           onClose={closeReceivingModal}
           onReceive={handleExecutionReceive}
-          onSaveCommercial={handleSaveCommercial}
           onMarkDamage={() => {
             setDamageLine(executionLine);
             closeReceivingModal();
           }}
-          adminMode={executionAdminMode && showDocumentControl}
-          onToggleAdminMode={() => {
-            if (!showDocumentControl) return;
-            setExecutionAdminMode((v) => !v);
-          }}
-          onRequireAdminMode={() => {
-            if (showDocumentControl) setExecutionAdminMode(true);
-          }}
-          showDocumentControl={showDocumentControl}
+          adminMode={false}
+          onToggleAdminMode={() => {}}
+          onRequireAdminMode={() => {}}
+          showDocumentControl={false}
           seedReceiveNowQty={seedReceiveNowQty}
           receiveNowBump={receiveNowBump}
         />
@@ -782,7 +728,6 @@ export default function WmsReceivingCountPage() {
       />
 
       <ProductLabelPrintModal product={labelPrintProduct} onClose={() => setLabelPrintProduct(null)} />
-      {historyLine ? <ReceivingLineHistoryModal line={historyLine} onClose={() => setHistoryLine(null)} /> : null}
 
       <ReceivingCarrierAssignModal
         tenantId={tenantId}

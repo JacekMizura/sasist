@@ -1,3 +1,10 @@
+## 2026-07-21 — WMS Przyjęcia: blind floor UX + status receiving
+
+- Lista: pełny numer bez ellipsis; badge tylko Otwarte/W trakcie/Zakończone (bez Dostawa/WMS/FV/Rozlokowane).
+- Ekran + modal: zawsze blind (brak qty dokumentu / różnicy / cen); delta „Przyjmujesz teraz”; Zatwierdź zamyka modal + focus skanera.
+- Historia czynności ukryta w WMS (audit SSOT bez zmian). Backoffice PZ bez zmian.
+- Tests: `wmsReceivingListStatus`, blind receiving. **No push.**
+
 ## 2026-07-21 — PZ: ukryj OCZEKUJE FV + lokalizacje putaway 1:N
 
 - FV: `purchase_workflow_status=PENDING_INVOICE` to martwy default bez encji/UI faktury — `showPurchaseWorkflowStatus` → false (kolumna DB zostaje).

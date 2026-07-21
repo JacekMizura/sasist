@@ -44,7 +44,7 @@ export type ReceivingLineCardProps = {
   onMoveToCarrier: () => void;
   onRemoveFromDocument: () => void;
   onShowHistory: () => void;
-  /** Blind receiving: hide ordered qty / difference on the card. */
+  /** Blind receiving: hide ordered qty / difference on the card. WMS always passes false. */
   showDocumentControl?: boolean;
 };
 
@@ -99,16 +99,10 @@ export function ReceivingLineCard({
   const qtyDiff = receivingQuantityDifference(documentQty, displayCount);
 
   const menuItems = useMemo((): WmsCardKebabMenuItem[] => {
-    return [
+    const items: WmsCardKebabMenuItem[] = [
       { id: "print", label: "Drukuj etykietę", onClick: onPrintLabel },
       { id: "preview", label: "Podgląd produktu", onClick: onOpenProductPreview },
       { id: "damage", label: "Oznacz wadę / uszkodzenie", onClick: onMarkDamage },
-      {
-        id: "edit",
-        label: "Edytuj dane przyjęcia",
-        onClick: onEditReceivingAdmin,
-        disabled: !canEdit || !showDocumentControl,
-      },
       { id: "carrier", label: "Przenieś na nośnik", onClick: onMoveToCarrier, disabled: !canEdit },
       {
         id: "remove",
@@ -117,8 +111,17 @@ export function ReceivingLineCard({
         danger: true,
         disabled: !canEdit || !canRemoveGhost,
       },
-      { id: "history", label: "Historia przyjęcia", onClick: onShowHistory },
     ];
+    if (showDocumentControl) {
+      items.splice(3, 0, {
+        id: "edit",
+        label: "Edytuj dane przyjęcia",
+        onClick: onEditReceivingAdmin,
+        disabled: !canEdit,
+      });
+      items.push({ id: "history", label: "Historia przyjęcia", onClick: onShowHistory });
+    }
+    return items;
   }, [
     canEdit,
     canRemoveGhost,

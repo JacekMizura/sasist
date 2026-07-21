@@ -3,7 +3,6 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useActiveWarehouseContext } from "../../hooks/useActiveWarehouseContext";
 import { ActiveWarehouseRequiredBanner } from "../../components/layout/ActiveWarehouseRequiredBanner";
 import { Clock, Plus, RotateCcw, Truck, CheckCircle2, ScanLine, User } from "lucide-react";
-import PzWorkflowStatusBadges from "../../components/wms/PzWorkflowStatusBadges";
 import { WmsNewDeliveryModal } from "../../components/wms/receiving/WmsNewDeliveryModal";
 import { fetchTenantsList } from "../../api/tenantsApi";
 import { useWmsScanner } from "../../context/WmsScannerContext";
@@ -13,8 +12,11 @@ import { listWmsReceivingPz, type WmsReceivingPzListRow } from "../../api/wmsRec
 import { WMS_ROUTES } from "./wmsRoutes";
 import { documentCreatedByLabel } from "../../utils/documentCreatedBy";
 import { formatRelativeUpdatePl, formatWmsListDate } from "./wmsListFormatters";
-
-type Tenant = { id: number; name: string };
+import {
+  resolveWmsReceivingListStatus,
+  wmsReceivingListStatusBadgeClass,
+  wmsReceivingListStatusLabelPl,
+} from "./wmsReceivingListStatus";
 
 const TENANT_STORAGE_KEY = "wms.receiving.tenantId";
 
@@ -25,9 +27,9 @@ function fmtQty(n: number) {
 function ReceivingPzCard({ row, tenantId }: { row: WmsReceivingPzListRow; tenantId: number }) {
   const idLine = row.number?.trim() || `PZ #${row.id}`;
   const activityIso = row.updated_at?.trim() ? row.updated_at : row.created_at;
-
-  const isReturn = idLine.toUpperCase().includes("Z-PZ");
-  const fromWms = (row.creation_source || "").toUpperCase() === "WMS";
+  const isReturn =
+    idLine.toUpperCase().includes("Z-PZ") || (row.document_type || "").toUpperCase() === "Z_PZ";
+  const receivingStatus = resolveWmsReceivingListStatus(row);
 
   return (
     <Link
@@ -36,59 +38,49 @@ function ReceivingPzCard({ row, tenantId }: { row: WmsReceivingPzListRow; tenant
       className="group flex flex-col justify-between h-full p-5 bg-white border border-slate-200 rounded-2xl shadow-sm hover:shadow-md hover:border-[#5a4fcf]/40 transition-all text-left"
     >
       <div>
-        <div className="flex justify-between items-start mb-4 gap-2">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border transition-colors ${
-              isReturn 
-                ? 'bg-rose-50 border-rose-100 text-rose-500 group-hover:bg-rose-100' 
-                : 'bg-indigo-50/50 border-indigo-100 text-[#5a4fcf] group-hover:bg-indigo-100'
-            }`}>
+        <div className="flex justify-between items-start mb-4 gap-3">
+          <div className="flex items-start gap-3 min-w-0 flex-1">
+            <div
+              className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border transition-colors ${
+                isReturn
+                  ? "bg-rose-50 border-rose-100 text-rose-500 group-hover:bg-rose-100"
+                  : "bg-indigo-50/50 border-indigo-100 text-[#5a4fcf] group-hover:bg-indigo-100"
+              }`}
+            >
               {isReturn ? <RotateCcw size={22} strokeWidth={2.5} /> : <Truck size={22} strokeWidth={2.5} />}
             </div>
-            
-            <div className="min-w-0">
-              <h3 className="text-base font-black text-slate-900 truncate tracking-tight" title={idLine}>
+
+            <div className="min-w-0 flex-1">
+              <h3 className="text-base font-black text-slate-900 tracking-tight break-words [overflow-wrap:anywhere] leading-snug">
                 {idLine}
               </h3>
-              <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                <span className={`inline-flex px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest border ${
-                  isReturn ? "bg-rose-50 border-rose-200 text-rose-600" : "bg-slate-50 border-slate-200 text-slate-500"
-                }`}>
-                  {isReturn ? "Zwrot" : "Dostawa"}
-                </span>
-                {fromWms && (
-                  <span className="inline-flex px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest bg-amber-50 border border-amber-200 text-amber-600">
-                    WMS
-                  </span>
-                )}
-              </div>
             </div>
           </div>
 
-          <PzWorkflowStatusBadges
-            compact
-            className="shrink-0 justify-end"
-            documentType={row.document_type}
-            warehouseWorkflowStatus={row.warehouse_workflow_status}
-            purchaseWorkflowStatus={row.purchase_workflow_status}
-            receiving_status={row.receiving_status}
-            putaway_status={row.putaway_status}
-            relocation_status={row.relocation_status}
-            status={row.status}
-          />
+          <span
+            className={`shrink-0 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md border ring-1 ${wmsReceivingListStatusBadgeClass(receivingStatus)}`}
+            title="Status przyjęcia"
+          >
+            {wmsReceivingListStatusLabelPl(receivingStatus)}
+          </span>
         </div>
-        
-        {/* Sekcja informacyjna */}
+
         <div className="space-y-1.5 mb-4 pl-[3.5rem]">
           <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
             <User size={14} className="shrink-0 text-slate-400" strokeWidth={2.5} />
-            <span className="truncate">Utworzył: <span className="font-bold text-slate-700">{documentCreatedByLabel(row.created_by)}</span></span>
+            <span className="min-w-0 break-words">
+              Utworzył:{" "}
+              <span className="font-bold text-slate-700">{documentCreatedByLabel(row.created_by)}</span>
+            </span>
           </div>
           <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
             <Clock size={14} className="shrink-0 text-slate-400" strokeWidth={2.5} />
-            <span className="truncate">Utworzono: <span className="font-bold text-slate-700">{formatWmsListDate(row.created_at)}</span></span>
+            <span className="min-w-0">
+              Utworzono:{" "}
+              <span className="font-bold text-slate-700">{formatWmsListDate(row.created_at)}</span>
+            </span>
           </div>
-          <div className="text-[10px] font-semibold text-slate-400 pl-5 truncate mt-0.5">
+          <div className="text-[10px] font-semibold text-slate-400 pl-5 mt-0.5">
             Aktualizacja: {formatRelativeUpdatePl(activityIso)}
           </div>
         </div>
@@ -96,10 +88,12 @@ function ReceivingPzCard({ row, tenantId }: { row: WmsReceivingPzListRow; tenant
 
       <div className="pt-4 border-t border-slate-100 mt-2 flex justify-between items-end">
         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-          {isReturn ? 'Zwrócono' : 'Przyjęto'}
+          {isReturn ? "Zwrócono" : "Przyjęto"}
         </span>
         <div className="flex items-baseline gap-1">
-          <span className="text-xl font-black text-slate-900 tracking-tight leading-none">{fmtQty(row.total_received)}</span>
+          <span className="text-xl font-black text-slate-900 tracking-tight leading-none">
+            {fmtQty(row.total_received)}
+          </span>
           <span className="text-xs font-bold text-slate-500">szt.</span>
         </div>
       </div>
