@@ -42,6 +42,34 @@ class WmsReceiveBody(BaseModel):
     lines: List[WmsReceiveLineBody] = Field(..., min_length=1)
 
 
+class ReceivingValidationFieldRequirement(BaseModel):
+    required: bool = False
+    satisfied: bool = True
+
+
+class ReceivingValidationRequirements(BaseModel):
+    """Effective receiving policy for one SKU (global ∧ ¬product_skip). Frontend presents only."""
+
+    dimensions: ReceivingValidationFieldRequirement = Field(
+        default_factory=ReceivingValidationFieldRequirement
+    )
+    weight: ReceivingValidationFieldRequirement = Field(
+        default_factory=ReceivingValidationFieldRequirement
+    )
+    master_carton: ReceivingValidationFieldRequirement = Field(
+        default_factory=ReceivingValidationFieldRequirement
+    )
+    batch: ReceivingValidationFieldRequirement = Field(
+        default_factory=ReceivingValidationFieldRequirement
+    )
+    expiry_date: ReceivingValidationFieldRequirement = Field(
+        default_factory=ReceivingValidationFieldRequirement
+    )
+    serial_number: ReceivingValidationFieldRequirement = Field(
+        default_factory=ReceivingValidationFieldRequirement
+    )
+
+
 class ReceivingScanResolveOut(BaseModel):
     """Result of resolving a scanned code for WMS receiving (PZ line pick by product_id on client)."""
 
@@ -62,6 +90,7 @@ class ReceivingScanResolveOut(BaseModel):
     requires_data_completion: bool = False
     receiving_data_complete: bool = True
     missing_data_labels: List[str] = Field(default_factory=list)
+    validation_requirements: Optional[ReceivingValidationRequirements] = None
 
 
 class WmsReceiveSerialBody(BaseModel):

@@ -33,6 +33,14 @@ function packageSizeFromScan(res: ReceivingScanResolve): number {
   return 1;
 }
 
+/** Product identity scan (EAN / barcode / carton) — never treat as a serial number. */
+function isProductIdentityScan(res: ReceivingScanResolve): boolean {
+  const kind = (res.match_kind || "").trim();
+  if (kind === "product_ean" || kind === "product_barcode" || kind === "bulk_ean") return true;
+  if (kind === "gs1" && !(res.parsed_serial || "").trim()) return true;
+  return false;
+}
+
 function needsReceivingDecision(_line: StockDocumentItemRead, scan: ReceivingScanResolve): boolean {
   if (scan.track_serial) return true;
   if (scan.track_batch) return true;
@@ -389,29 +397,47 @@ export function useWmsReceivingCountScan({
         return;
       }
 
+      // Drop stale serial gate when pending SKU no longer requires serial (effective policy).
+      if (serialAwaitingRef.current && !serialAwaitingRef.current.track_serial) {
+        serialAwaitingRef.current = null;
+        setScannerInputPlaceholder("EAN / serial / nośnik (↑↓ historia)");
+      }
+
       if (serialAwaitingRef.current?.product_id != null) {
         const pending = serialAwaitingRef.current;
-        if (res.product_id === pending.product_id && res.match_kind !== "serial" && !res.parsed_serial) {
+        if (!pending.track_serial) {
+          serialAwaitingRef.current = null;
+        } else if (
+          res.product_id !== pending.product_id &&
+          isProductIdentityScan(res)
+        ) {
+          showScannerToast(
+            "Poprzedni produkt wymaga jeszcze numeru seryjnego. Dokończ jego przyjęcie albo anuluj i przejdź do zeskanowanego produktu.",
+          );
+          clearDevScannerInput();
+          refocusScannerInput();
+          return;
+        } else if (
+          res.product_id === pending.product_id &&
+          isProductIdentityScan(res) &&
+          !(res.parsed_serial || "").trim()
+        ) {
           showScannerToast("Zeskanuj numer seryjny (nie EAN produktu)");
           clearDevScannerInput();
           refocusScannerInput();
           return;
-        }
-        const sn =
-          res.match_kind === "serial" || res.parsed_serial
-            ? (res.parsed_serial || key).trim()
-            : key;
-        if (res.product_id != null && res.product_id !== pending.product_id) {
-          showScannerToast("Inny produkt — dokończ serial poprzedniego");
-          clearDevScannerInput();
-          refocusScannerInput();
+        } else {
+          const sn =
+            res.match_kind === "serial" || res.parsed_serial
+              ? (res.parsed_serial || key).trim()
+              : key;
+          appendScanToHistory(key);
+          await receiveSerialUnit(pending, sn);
           return;
         }
-        appendScanToHistory(key);
-        await receiveSerialUnit(pending, sn);
-        return;
       }
 
+      // Serial with parsed SN / existing inventory serial → receive immediately.
       if (res.track_serial) {
         const sn = (res.parsed_serial || (res.match_kind === "serial" ? key : "")).trim();
         if (sn) {
@@ -419,13 +445,12 @@ export function useWmsReceivingCountScan({
           await receiveSerialUnit(res, sn);
           return;
         }
+        // No SN yet: open product modal first; keep awaiting for the next serial scan.
         serialAwaitingRef.current = res;
         setScannerInputPlaceholder("Zeskanuj numer seryjny");
-        appendScanToHistory(key);
-        showScannerToast(`Produkt: ${(res.product_name || "").trim() || res.product_id} — zeskanuj serial`);
-        clearDevScannerInput();
-        refocusScannerInput();
-        return;
+      } else {
+        serialAwaitingRef.current = null;
+        setScannerInputPlaceholder("EAN / serial / nośnik (↑↓ historia)");
       }
 
       let workingDetail = d;

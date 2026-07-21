@@ -18,6 +18,9 @@ def _enrich_product_scan(
     product: Product,
     wms_settings=None,
 ) -> ReceivingScanResolveOut:
+    from ..schemas.wms_receiving import ReceivingValidationRequirements
+    from .product_validation_policy import build_receiving_validation_requirements_payload
+
     v = validate_required_product_data(product, wms_settings)
     eff = resolve_effective_receiving_requirements(product, wms_settings)
     out.requires_data_completion = bool(v.show_completion_modal)
@@ -26,6 +29,9 @@ def _enrich_product_scan(
     out.track_batch = eff.track_batch
     out.track_expiry = eff.track_expiry
     out.track_serial = eff.track_serial
+    out.validation_requirements = ReceivingValidationRequirements.model_validate(
+        build_receiving_validation_requirements_payload(product, wms_settings)
+    )
     return out
 
 

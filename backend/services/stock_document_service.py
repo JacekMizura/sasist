@@ -1026,6 +1026,7 @@ def _item_row_to_read(
     visuals: ReceiptLineVisuals,
     db: Session,
     *,
+    wms_settings=None,
     putaway_allocations: Optional[List[PutawayAllocationRead]] = None,
     quantity_putaway_override: Optional[float] = None,
     mm_line_from_location_id: Optional[int] = None,
@@ -1063,9 +1064,9 @@ def _item_row_to_read(
     line_unit = (visuals.unit or "").strip() or None
     tb = te = ts = False
     if p and row.product_id is not None:
-        tb = bool(getattr(p, "track_batch", False))
-        te = bool(getattr(p, "track_expiry", False))
-        ts = bool(getattr(p, "track_serial", False))
+        from .product_validation_policy import effective_trace_flags
+
+        tb, te, ts = effective_trace_flags(p, wms_settings)
     rtype_lit: Optional[ReceiptLineTypeLit] = visuals.item_type  # type: ignore[assignment]
     bn = normalize_batch_number(getattr(row, "batch_number", None))
     ed_raw = getattr(row, "expiry_date", None)
@@ -1345,6 +1346,13 @@ def build_stock_document_read(
         )
 
     item_reads: List[StockDocumentItemRead] = []
+    from .product_validation_policy import load_wms_settings_for_product
+
+    wms_settings = load_wms_settings_for_product(
+        db,
+        tenant_id=int(doc.tenant_id),
+        warehouse_id=getattr(doc, "warehouse_id", None),
+    )
     for row in visible_rows:
         p = prod_by_id.get(row.product_id) if row.product_id is not None else None
         di = di_by_id.get(int(row.delivery_item_id)) if row.delivery_item_id is not None else None
@@ -1387,6 +1395,7 @@ def build_stock_document_read(
                     p,
                     visuals,
                     db,
+                    wms_settings=wms_settings,
                     putaway_allocations=ta,
                     quantity_putaway_override=q_put,
                     mm_line_from_location_id=mm_lid_i,
@@ -1413,6 +1422,7 @@ def build_stock_document_read(
                     p,
                     visuals,
                     db,
+                    wms_settings=wms_settings,
                     putaway_allocations=putaway_allocations,
                     quantity_putaway_override=visuals.putaway_quantity_read_override,
                     mm_line_from_location_id=mm_lid_i,

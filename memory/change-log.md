@@ -1,3 +1,10 @@
+## 2026-07-21 — WMS receiving: effective validation + scan gate (ST-003)
+
+- ROOT overrides: PZ `track_*` / receive-serial used legacy `Product.track_*`, ignored `validation_skip_*`.
+- ROOT scan: serial awaiting could treat next product EAN as serial / block without opening product; now resolve→modal, EAN≠serial, Polish conflict copy.
+- SSOT: `resolve_effective_receiving_requirements`; scan `validation_requirements`; lot_keys + document lines use effective.
+- Tests: `test_receiving_validation_effective_policy.py`. No push.
+
 ## 2026-07-21 — LIVE BASKET_PRODUCT_MISMATCH empty eligible (stale picked status)
 
 - ROOT: `_line_eligible` skipped `wms_picking_line_status in (picked, missing)` while detail rem ignored status → UI unresolved=1, write eligible=[], „Oczekiwane: —”.

@@ -14,6 +14,7 @@ from .product_logistics_normalizer import (
 )
 from .product_validation_policy import (
     EffectiveReceivingRequirements,
+    build_receiving_validation_requirements_payload,
     resolve_effective_receiving_requirements,
 )
 
@@ -187,6 +188,9 @@ def product_to_receiving_data_dict(
             "carton_weight_kg": getattr(product, "carton_weight_kg", None),
         },
         "requirements": eff.as_dict(),
+        "validation_requirements": build_receiving_validation_requirements_payload(
+            product, wms_settings
+        ),
         "validation_skips": {
             "validation_skip_dimensions": bool(getattr(product, "validation_skip_dimensions", False)),
             "validation_skip_weight": bool(getattr(product, "validation_skip_weight", False)),

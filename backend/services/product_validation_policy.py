@@ -114,6 +114,62 @@ def effective_track_serial(product: Product, wms_settings: WmsSettings | None = 
     return resolve_effective_receiving_requirements(product, wms_settings).track_serial
 
 
+def effective_trace_flags(
+    product: Product,
+    wms_settings: WmsSettings | None = None,
+) -> tuple[bool, bool, bool]:
+    """Return (track_batch, track_expiry, track_serial) from effective receiving policy."""
+    eff = resolve_effective_receiving_requirements(product, wms_settings)
+    return eff.track_batch, eff.track_expiry, eff.track_serial
+
+
+def build_receiving_validation_requirements_payload(
+    product: Product,
+    wms_settings: WmsSettings | None = None,
+) -> dict[str, Any]:
+    """
+    Backend SSOT payload for receiving UI / scan resolve.
+
+    Master-data fields include ``satisfied`` (real product data, not fit_engine fallback).
+    Traceability fields are requirement flags only (values come from the receipt lot/unit).
+    """
+    from .product_receiving_requirements import validate_required_product_data
+
+    eff = resolve_effective_receiving_requirements(product, wms_settings)
+    v = validate_required_product_data(product, wms_settings)
+    missing = {m.key for m in v.missing}
+    dims_required = bool(eff.require_recv_height or eff.require_recv_width or eff.require_recv_length)
+    dims_missing = bool(missing & {"height", "width", "length"})
+    carton_required = bool(
+        eff.require_recv_master_carton
+        or eff.require_recv_master_carton_ean
+        or eff.require_recv_master_carton_qty
+        or eff.require_recv_master_carton_dims
+        or eff.require_recv_master_carton_weight
+    )
+    carton_missing = bool(
+        missing
+        & {
+            "master_carton",
+            "bulk_ean",
+            "units_per_carton",
+            "carton_dimensions",
+            "carton_weight_kg",
+        }
+    )
+    return {
+        "dimensions": {"required": dims_required, "satisfied": not dims_missing},
+        "weight": {
+            "required": bool(eff.require_recv_weight),
+            "satisfied": "weight" not in missing,
+        },
+        "master_carton": {"required": carton_required, "satisfied": not carton_missing},
+        "batch": {"required": bool(eff.track_batch), "satisfied": True},
+        "expiry_date": {"required": bool(eff.track_expiry), "satisfied": True},
+        "serial_number": {"required": bool(eff.track_serial), "satisfied": True},
+    }
+
+
 def load_wms_settings_for_product(
     db,
     *,

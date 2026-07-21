@@ -48,6 +48,23 @@ from .inventory_serial_service import (
     register_serial_on_hand,
     serial_exists,
 )
+from .product_validation_policy import (
+    effective_trace_flags,
+    load_wms_settings_for_product,
+    resolve_effective_receiving_requirements,
+)
+
+
+def _wms_settings_for_doc(db: Session, doc: StockDocument):
+    return load_wms_settings_for_product(
+        db,
+        tenant_id=int(doc.tenant_id),
+        warehouse_id=getattr(doc, "warehouse_id", None),
+    )
+
+
+def _eff_trace_for_product(db: Session, doc: StockDocument, prod: Product) -> tuple[bool, bool, bool]:
+    return effective_trace_flags(prod, _wms_settings_for_doc(db, doc))
 from .inventory_lot_keys import (
     NO_EXPIRY_SENTINEL,
     dock_lot_keys_for_pz_line,
@@ -121,9 +138,10 @@ def _find_matching_lot_row(
     batch_number: str,
     expiry_date,
     warehouse_carrier_id: Optional[int],
+    wms_settings=None,
 ) -> Optional[StockDocumentItem]:
     prod = db.query(Product).filter(Product.id == int(anchor.product_id)).first()
-    if prod and bool(getattr(prod, "track_serial", False)):
+    if prod and resolve_effective_receiving_requirements(prod, wms_settings).track_serial:
         return None
     return (
         _lot_row_query(
@@ -461,8 +479,6 @@ def _pick_pz_line_for_product(rows: List[StockDocumentItem], eps: float = 1e-9) 
 def _product_needs_receiving_lot_decision(prod: Optional[Product], wms_settings=None) -> bool:
     if not prod:
         return False
-    from .product_validation_policy import resolve_effective_receiving_requirements
-
     eff = resolve_effective_receiving_requirements(prod, wms_settings)
     return bool(eff.track_batch or eff.track_expiry)
 
@@ -501,8 +517,11 @@ def ensure_wms_pz_product_anchor_line(
         .order_by(StockDocumentItem.id.asc())
         .all()
     )
-    needs_lot = _product_needs_receiving_lot_decision(prod)
-    track_serial = bool(getattr(prod, "track_serial", False))
+    wms_settings = load_wms_settings_for_product(
+        db, tenant_id=tenant_id, warehouse_id=getattr(doc, "warehouse_id", None)
+    )
+    needs_lot = _product_needs_receiving_lot_decision(prod, wms_settings)
+    track_serial = resolve_effective_receiving_requirements(prod, wms_settings).track_serial
     if needs_lot or track_serial:
         ghosts = [r for r in rows if is_wms_ghost_stock_document_item(r)]
         row = ghosts[0] if ghosts else None
@@ -958,6 +977,7 @@ def apply_wms_receive_deltas(db: Session, tenant_id: int, body: WmsReceiveBody, 
                 batch_number=bn,
                 expiry_date=ed,
                 warehouse_carrier_id=wc_line,
+                wms_settings=_wms_settings_for_doc(db, doc),
             )
             if not target:
                 target = StockDocumentItem(
@@ -1152,8 +1172,10 @@ def patch_wms_receiving_pz_item_quantity(
 
     if anchor.product_id is not None:
         prod_chk = db.query(Product).filter(Product.id == int(anchor.product_id)).first()
-        if prod_chk and bool(getattr(prod_chk, "track_serial", False)) and add_q > 1 + 1e-9:
-            raise ValueError("Produkt wymaga numeru seryjnego — użyj skanu serialu (1 szt. = 1 numer)")
+        if prod_chk:
+            _tb, _te, ts_chk = _eff_trace_for_product(db, doc, prod_chk)
+            if ts_chk and add_q > 1 + 1e-9:
+                raise ValueError("Produkt wymaga numeru seryjnego — użyj skanu serialu (1 szt. = 1 numer)")
 
     if is_stock_document_item_wm_material(anchor):
         if wc_assign is not None:
@@ -1210,6 +1232,7 @@ def patch_wms_receiving_pz_item_quantity(
         batch_number=bn,
         expiry_date=ed,
         warehouse_carrier_id=wc_assign,
+        wms_settings=wms_settings,
     )
 
     log_item_id: Optional[int] = None
@@ -1260,6 +1283,7 @@ def patch_wms_receiving_pz_item_quantity(
             batch_number=bn,
             expiry_date=ed,
             warehouse_carrier_id=wc_assign,
+            wms_settings=wms_settings,
         )
         if new_line:
             append_receipt_operation(
@@ -1382,8 +1406,8 @@ def split_wms_receiving_pz_item_lines(
     prod = db.query(Product).filter(Product.id == anchor.product_id).first()
     if not prod:
         raise ValueError("Product not found")
-    tb = bool(getattr(prod, "track_batch", False))
-    te = bool(getattr(prod, "track_expiry", False))
+    wms_settings = _wms_settings_for_doc(db, doc)
+    tb, te, _ts = effective_trace_flags(prod, wms_settings)
 
     group_key = anchor.delivery_item_id
     siblings: List[StockDocumentItem] = (
@@ -1598,14 +1622,19 @@ def receive_wms_pz_serial(
     prod = db.query(Product).filter(Product.id == pid, Product.tenant_id == int(tenant_id)).first()
     if not prod:
         raise ValueError("Product not found")
-    if not bool(getattr(prod, "track_serial", False)):
+    if not resolve_effective_receiving_requirements(prod, _wms_settings_for_doc(db, doc)).track_serial:
         raise ValueError("Produkt nie wymaga numerów seryjnych")
 
     sn = normalize_serial_number(body.serial_number)
     if serial_exists(db, tenant_id, pid, sn):
         raise ValueError("Numer seryjny już istnieje w magazynie.")
 
-    bn, ed = lot_keys_from_product(prod, batch_number=body.batch_number, expiry_date=body.expiry_date)
+    bn, ed = lot_keys_from_product(
+        prod,
+        batch_number=body.batch_number,
+        expiry_date=body.expiry_date,
+        wms_settings=_wms_settings_for_doc(db, doc),
+    )
     wc_assign = body.warehouse_carrier_id
     if wc_assign is not None:
         _assert_carrier_linked_to_pz(db, pz_id, int(wc_assign))
@@ -1936,7 +1965,7 @@ def move_wms_receiving_pz_item_carrier(
     if not prod:
         raise ValueError("Product not found")
 
-    track_serial = bool(getattr(prod, "track_serial", False))
+    track_serial = _eff_trace_for_product(db, doc, prod)[2]
     bn = str(getattr(anchor, "batch_number", None) or "")
     ed = getattr(anchor, "expiry_date", None)
     src_cartons = int(getattr(anchor, "cartons_count", 0) or 0)
@@ -1971,6 +2000,7 @@ def move_wms_receiving_pz_item_carrier(
             batch_number=bn,
             expiry_date=ed,
             warehouse_carrier_id=target_wc,
+            wms_settings=_wms_settings_for_doc(db, doc),
         )
         if not target_line:
             target_line = StockDocumentItem(
@@ -2097,7 +2127,7 @@ def move_wms_receiving_pz_item_carrier(
     if not prod:
         raise ValueError("Product not found")
 
-    track_serial = bool(getattr(prod, "track_serial", False))
+    track_serial = _eff_trace_for_product(db, doc, prod)[2]
     bn = str(getattr(anchor, "batch_number", None) or "")
     ed = getattr(anchor, "expiry_date", None)
     src_cartons = int(getattr(anchor, "cartons_count", 0) or 0)
@@ -2132,6 +2162,7 @@ def move_wms_receiving_pz_item_carrier(
             batch_number=bn,
             expiry_date=ed,
             warehouse_carrier_id=target_wc,
+            wms_settings=_wms_settings_for_doc(db, doc),
         )
         if not target_line:
             target_line = StockDocumentItem(

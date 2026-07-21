@@ -2,22 +2,15 @@
 
 ## Active
 
-**LIVE BASKET_PRODUCT_MISMATCH / empty eligible** — local commit pending; **do not push** until user asks.
+**WMS Przyjęcie — effective validation policy + scan gate** — local commit; **do not push**.
 
-## Root cause (code-proven)
+## Root causes
 
-`list_eligible_basket_allocations` previously skipped lines with `wms_picking_line_status='picked'` even when
-`rem = qty − pick_events − missing > 0`. Detail `orders[].quantity_to_pick` used rem only → UI showed
-`S-1-2 unresolved=1` while write eligible=`[]` → toast „Oczekiwane: —”.
+1. **Scan gate:** FE `serialAwaitingRef` could block / mislabel product EAN before opening the product modal; stale awaiting when effective `track_serial=false`.
+2. **Overrides:** PZ line `track_*` and several write paths used legacy `Product.track_*`, ignoring `validation_skip_*` (global ∧ ¬skip SSOT in `resolve_effective_receiving_requirements`).
 
-Draft-Pick-before-put was **not** the LIVE formula bug in quantity mode (Pick+event written at basket confirm).
+## SSOT
 
-## Fix SSOT
-
-- Eligibility = rem > 0 **and** `Order.basket` on active cart (heal stale `picked` when rem>0).
-- `resolve_allocation_for_basket_scan` accepts **only** eligible rows (no `CartBasket.order_id` fallback).
-- 409 `BASKET_PRODUCT_MISMATCH` extras: `mismatch_diagnostics_payload` (eligible + rejected_allocations + scanned_*).
-
-## Invariant
-
-IF cohort line rem>0 AND basket on active cart → basket ∈ eligible_basket_destinations **and** confirm accepts it.
+`effective = global_required AND NOT product.validation_skip_*` (`product_validation_policy.py`).
+Document lines + scan resolve + receive-serial / lot keys use effective flags.
+Scan returns `validation_requirements` for FE presentation.

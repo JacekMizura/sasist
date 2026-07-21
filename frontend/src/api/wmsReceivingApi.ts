@@ -131,6 +131,20 @@ export async function postWmsReceive(
   return res.data;
 }
 
+export type ReceivingValidationFieldRequirement = {
+  required: boolean;
+  satisfied: boolean;
+};
+
+export type ReceivingValidationRequirements = {
+  dimensions?: ReceivingValidationFieldRequirement;
+  weight?: ReceivingValidationFieldRequirement;
+  master_carton?: ReceivingValidationFieldRequirement;
+  batch?: ReceivingValidationFieldRequirement;
+  expiry_date?: ReceivingValidationFieldRequirement;
+  serial_number?: ReceivingValidationFieldRequirement;
+};
+
 export type ReceivingScanResolve = {
   found: boolean;
   product_id?: number | null;
@@ -149,6 +163,8 @@ export type ReceivingScanResolve = {
   requires_data_completion?: boolean;
   receiving_data_complete?: boolean;
   missing_data_labels?: string[];
+  /** Backend SSOT — do not recompute global+skip on FE. */
+  validation_requirements?: ReceivingValidationRequirements | null;
 };
 
 export type WmsReceiveSerialBody = {

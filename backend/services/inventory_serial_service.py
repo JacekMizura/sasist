@@ -206,9 +206,13 @@ def lot_keys_from_product(
     *,
     batch_number: Optional[str],
     expiry_date: Optional[date],
+    wms_settings=None,
 ) -> tuple[str, date]:
-    tb = bool(getattr(product, "track_batch", False))
-    te = bool(getattr(product, "track_expiry", False))
+    from .product_validation_policy import resolve_effective_receiving_requirements
+
+    eff = resolve_effective_receiving_requirements(product, wms_settings)
+    tb = bool(eff.track_batch)
+    te = bool(eff.track_expiry)
     bn = "" if not tb else normalize_batch_number(batch_number)
     if tb and not bn:
         raise ValueError("Numer partii wymagany")
