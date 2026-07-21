@@ -18,12 +18,16 @@ from sqlalchemy.orm import sessionmaker
 from backend.models.cart import Cart
 from backend.models.cart_basket import CartBasket
 from backend.models.enums import CartType
+from backend.models.inventory import Inventory
+from backend.models.location import Location
 from backend.models.order import Order
 from backend.models.order_item import OrderItem
+from backend.models.pick import Pick
 from backend.models.product import Product
 from backend.models.tenant import Tenant
 from backend.models.warehouse import Warehouse
 from backend.models.wms_operation_session import WmsOperationSession
+from backend.services.stock_disposition import STOCK_DISPOSITION_SALEABLE
 from backend.services.wms_basket_put.basket_match import basket_scan_matches, primary_basket_label
 from backend.services.wms_basket_put.scan_service import (
     BasketPutError,
@@ -45,10 +49,13 @@ def db():
         Tenant,
         Warehouse,
         Product,
+        Location,
+        Inventory,
         Cart,
         CartBasket,
         Order,
         OrderItem,
+        Pick,
         WmsOperationSession,
     ):
         model.__table__.create(engine, checkfirst=True)
@@ -58,6 +65,19 @@ def db():
     session.add(Warehouse(id=1, tenant_id=1, name="WH"))
     session.add(
         Product(id=PRODUCT_ID, tenant_id=1, name="Sznurowadla CAT", sku="CAT150", ean=EAN)
+    )
+    session.add(Location(id=100, warehouse_id=1, name="A10-A-1", is_active=True))
+    session.add(
+        Inventory(
+            tenant_id=1,
+            warehouse_id=1,
+            product_id=PRODUCT_ID,
+            location_id=100,
+            quantity=100.0,
+            batch_number="",
+            expiry_date=__import__("datetime").date(9999, 12, 31),
+            stock_disposition=STOCK_DISPOSITION_SALEABLE,
+        )
     )
     session.commit()
     try:

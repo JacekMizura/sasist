@@ -1324,16 +1324,12 @@ def resolve_wms_picking_cart_row(
 
 
 def _basket_slot_label(basket: Optional[CartBasket]) -> Optional[str]:
+    """Same SSOT as basket scan resolve (primary_basket_label → S-1-2)."""
     if basket is None:
         return None
-    name = (getattr(basket, "name", None) or "").strip()
-    if name:
-        return name
-    row = int(getattr(basket, "row", 0) or 0)
-    col = int(getattr(basket, "column", 0) or 0)
-    if row or col:
-        return f"Koszyk {row}/{col}"
-    return f"B{int(basket.id)}"
+    from .wms_basket_put.basket_match import primary_basket_label
+
+    return primary_basket_label(basket)
 
 
 def _allowed_pick_location_ids_for_product(
@@ -2135,34 +2131,32 @@ def build_wms_picking_product_detail(
             hint_merge[lid][label] += float(b.quantity)
 
     lids_sorted = sorted(loc_qty.keys(), key=lambda x: (loc_code.get(x, ""), x))
-    stock_by_lid: dict[int, float] = {}
-    if lids_sorted:
-        inv_rows = (
-            db.query(Inventory.location_id, func.coalesce(func.sum(Inventory.quantity), 0.0))
-            .filter(
-                Inventory.tenant_id == int(tenant_id),
-                Inventory.warehouse_id == int(warehouse_id),
-                Inventory.product_id == int(product_id),
-                Inventory.location_id.in_(lids_sorted),
-            )
-            .group_by(Inventory.location_id)
-            .all()
-        )
-        stock_by_lid = {int(r[0]): round(float(r[1] or 0.0), 6) for r in inv_rows}
+    from .wms_basket_put.location_stock import location_pick_stock_projection_map
 
-    locations = [
-        WmsPickingProductLocationRow(
+    stock_proj = location_pick_stock_projection_map(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        product_id=int(product_id),
+        location_ids=lids_sorted,
+    )
+
+    def _location_row(lid: int) -> WmsPickingProductLocationRow:
+        proj = stock_proj.get(int(lid)) or {"physical": 0.0, "pending": 0.0, "effective": 0.0}
+        return WmsPickingProductLocationRow(
             location_id=lid,
             location_code=loc_code.get(lid, ""),
             quantity=round(loc_qty[lid], 6),
-            stock_quantity=float(stock_by_lid.get(lid, 0.0)),
+            stock_quantity=float(proj["effective"]),
+            physical_stock_quantity=float(proj["physical"]),
+            pending_picked_quantity=float(proj["pending"]),
             put_hints=[
                 WmsPickingProductPutHint(label=k, quantity=round(v, 6))
                 for k, v in sorted(hint_merge[lid].items())
             ],
         )
-        for lid in lids_sorted
-    ]
+
+    locations = [_location_row(lid) for lid in lids_sorted]
 
     # Zamówienia z tym produktem — tylko bieżący wózek (sesja): cart_id zgadza się lub zamówienie jeszcze bez wózka
     orders_q = (
@@ -2365,7 +2359,9 @@ def build_wms_picking_product_detail(
                         location_id=lid,
                         location_code=loc_code.get(lid, ""),
                         quantity=round(loc_qty[lid], 6),
-                        stock_quantity=float(stock_by_lid.get(lid, 0.0)),
+                        stock_quantity=float((stock_proj.get(lid) or {}).get("effective", 0.0)),
+                        physical_stock_quantity=float((stock_proj.get(lid) or {}).get("physical", 0.0)),
+                        pending_picked_quantity=float((stock_proj.get(lid) or {}).get("pending", 0.0)),
                         put_hints=[
                             WmsPickingProductPutHint(
                                 label=str(consolidation_shelf_label),
@@ -2585,6 +2581,22 @@ def record_wms_quick_pick(
         raise ValueError("Brak lokalizacji do pobrania tego produktu (routing / alokacja).")
     if int(location_id) not in allowed:
         raise ValueError("Lokalizacja nie należy do trasy zbiórki tego produktu.")
+
+    from .wms_basket_put.location_stock import effective_pickable_qty_at_location
+
+    loc_avail = effective_pickable_qty_at_location(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        product_id=int(product_id),
+        location_id=int(location_id),
+        for_update=True,
+    )
+    if float(quantity) > float(loc_avail) + 1e-9:
+        raise ValueError(
+            f"W lokalizacji dostępne jest tylko {loc_avail:g} szt. "
+            f"(stan magazynu minus nie sfinalizowane zbieranie). Żądano {float(quantity):g}."
+        )
 
     cart_row = (
         db.query(Cart)

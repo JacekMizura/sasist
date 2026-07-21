@@ -138,7 +138,12 @@ export type WmsPickingProductLocationRowApi = {
   location_id: number;
   location_code: string;
   quantity: number;
+  /** EFFECTIVE available (Inventory − draft picks). Operator „Stan”. */
   stock_quantity?: number;
+  /** RAW Inventory.quantity */
+  physical_stock_quantity?: number;
+  /** Draft Pick qty (picked_at IS NULL) */
+  pending_picked_quantity?: number;
   put_hints: WmsPickingProductPutHintApi[];
 };
 

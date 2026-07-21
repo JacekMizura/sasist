@@ -92,15 +92,10 @@ class _BasketRuntime:
 
 
 def format_cart_basket_label(b: CartBasket) -> str:
-    """Etykieta koszyka na UI (WMS)."""
-    name = (getattr(b, "name", None) or "").strip()
-    if name:
-        return name
-    row = int(getattr(b, "row", 0) or 0)
-    col = int(getattr(b, "column", 0) or 0)
-    if row or col:
-        return f"Koszyk {row}/{col}"
-    return f"B{int(b.id)}"
+    """Etykieta koszyka na UI (WMS) — SSOT z ``primary_basket_label`` (skan / resolve)."""
+    from .wms_basket_put.basket_match import primary_basket_label
+
+    return primary_basket_label(b)
 
 
 def refresh_cart_used_volume_wms(db: Session, cart: Cart) -> None:

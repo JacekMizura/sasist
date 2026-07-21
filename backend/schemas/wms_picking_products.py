@@ -148,7 +148,20 @@ class WmsPickingProductLocationRow(BaseModel):
     stock_quantity: float = Field(
         0,
         ge=0,
-        description="Stan fizyczny w lokalizacji (suma Inventory.quantity)",
+        description=(
+            "EFFECTIVE available for picking: Inventory − draft Pick (picked_at IS NULL). "
+            "Operator UI „Stan” — nie surowy Inventory."
+        ),
+    )
+    physical_stock_quantity: float = Field(
+        0,
+        ge=0,
+        description="RAW Inventory.quantity (physical on-hand; not yet reduced by draft picks)",
+    )
+    pending_picked_quantity: float = Field(
+        0,
+        ge=0,
+        description="SUM draft Pick.quantity (picked_at IS NULL) for this product+location",
     )
     put_hints: list[WmsPickingProductPutHint] = Field(default_factory=list)
 

@@ -38,6 +38,7 @@ import {
   multiScanTrace,
   resolveMultiPickingDetailScan,
 } from "../../utils/multiPickingScanRoute";
+import { nextActiveLocationIdAfterDetail } from "../../utils/multiPickingActiveLocation";
 import { SCAN_CONSUMED } from "../../utils/wmsScanDispatch";
 import {
   extractWmsScanErrorDetail,
@@ -360,12 +361,20 @@ export default function WmsPickingProductDetailPage() {
   useEffect(() => {
     if (!detail) return;
     setLocationHint(null);
-    if (detail.locations.length === 1) {
-      setActiveLocationId(detail.locations[0].location_id);
-    } else {
-      setActiveLocationId(null);
-    }
+    setActiveLocationId((prev) =>
+      nextActiveLocationIdAfterDetail({
+        previousId: prev,
+        locations: detail.locations,
+        productChanged: false,
+      }),
+    );
   }, [detail]);
+
+  // New product → clear source location (never carry A23 into another SKU).
+  useEffect(() => {
+    setActiveLocationId(null);
+    setLocationHint(null);
+  }, [productId]);
 
   const needsLocationScan = (detail?.locations.length ?? 0) > 1;
   const selectedLocation = useMemo(() => {
@@ -1682,6 +1691,12 @@ export default function WmsPickingProductDetailPage() {
                     <button
                       type="button"
                       onClick={() => {
+                        const avail = locStock(loc);
+                        if (avail <= 1e-9) {
+                          setActiveLocationId(null);
+                          setLocationHint("Brak dostępnego stanu w tej lokalizacji (już pobrane w tej kompletacji).");
+                          return;
+                        }
                         setActiveLocationId(loc.location_id);
                         setLocationHint(null);
                       }}
@@ -1692,7 +1707,9 @@ export default function WmsPickingProductDetailPage() {
                       }`}
                     >
                       <span className="font-mono font-bold text-slate-900">{loc.location_code}</span>
-                      <span className="text-xs font-bold text-slate-500">Stan: {fmtQty(locStock(loc))} szt.</span>
+                      <span className="text-xs font-bold text-slate-500">
+                        Dostępne: {fmtQty(locStock(loc))} szt.
+                      </span>
                     </button>
                   </li>
                 ))}
