@@ -337,15 +337,18 @@ def _iter_replenishment_line_tuples(
 
         required_qty = max(0.0, min_level - float(p_stock))
         pick_loc = loc_by_id.get(pick_lid)
-        # Cap by pick-face geometric/weight capacity (fit_engine SSOT)
+        # Cap by trusted pick-face capacity only (fit_engine SSOT).
+        # Synthetic 1×1×1 fallback must NOT drive move qty (capacity_numeric_trusted=False).
+        original_need = float(required_qty)
         if pick_loc is not None:
             try:
                 from .slotting.location_capacity_solver import solve_location_capacity
 
                 cap = solve_location_capacity(db, location=pick_loc, product=p)
-                capacity_cap = float(cap.additional_capacity)
-                if capacity_cap + _EPS < required_qty:
-                    required_qty = max(0.0, capacity_cap)
+                if bool(getattr(cap, "capacity_numeric_trusted", False)) and cap.additional_capacity is not None:
+                    capacity_cap = float(cap.additional_capacity)
+                    if capacity_cap + _EPS < required_qty:
+                        required_qty = max(0.0, capacity_cap)
             except Exception:
                 pass
 
@@ -355,6 +358,12 @@ def _iter_replenishment_line_tuples(
         source_chain = _build_source_chain(required_qty, eff_rows)
         if not source_chain:
             continue
+
+        allocatable = sum(float(s["quantity_planned"]) for s in source_chain)
+        if allocatable <= _EPS:
+            continue
+        # Never suggest more than physically allocatable from sources.
+        required_qty = float(allocatable)
 
         buf_lid = int(source_chain[0]["location_id"])
         buf_gross = _gross_for_buffer_loc(eff_rows, buf_lid)
@@ -391,7 +400,7 @@ def _iter_replenishment_line_tuples(
             pick_location_name=_loc_name(pick_loc),
             pick_stock=p_stock,
             min_level=min_level,
-            missing_qty=float(required_qty),
+            missing_qty=float(original_need),
             buffer_location_id=buf_lid,
             buffer_location_name=_loc_name(buf_loc),
             buffer_stock_at_source=buf_gross,

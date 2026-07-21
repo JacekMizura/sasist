@@ -457,6 +457,13 @@ def create_replenishment_relocation_task(
     db: Session = Depends(get_db),
     current_user: AppUser = Depends(get_current_user),
 ) -> WarehouseReplenishmentRelocationCreateOut:
+    if float(body.quantity_required or 0) <= 1e-9:
+        raise HTTPException(status_code=400, detail="Brak ilości do przesunięcia — uzupełnienie niewykonalne.")
+    if not (body.source_location or "").strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Brak lokalizacji źródłowej — nie można utworzyć pustego przesunięcia.",
+        )
     target = (body.target_location or "").strip()
     group_key = f"warehouse-operations:replenishment:{int(warehouse_id)}:{int(body.product_id)}:{target or 'pick-face'}"
     existing = (

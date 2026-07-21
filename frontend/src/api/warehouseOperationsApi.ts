@@ -164,9 +164,14 @@ export type WarehouseReplenishmentAlert = {
   source_location: string | null;
   target_location: string | null;
   missing_quantity: number;
+  move_quantity?: number;
+  unresolved_shortage_qty?: number;
   current_picking_stock: number;
+  /** Available BUFFER/source stock (not order reservation). */
   reserve_stock: number;
+  source_available_qty?: number;
   blocked_orders: number;
+  classification?: "ACTIONABLE" | "NO_SOURCE_STOCK" | "IN_PROGRESS";
   priority: "red" | "orange" | "blue";
   priority_label: string;
   minutes_since_detected: number;
@@ -174,6 +179,7 @@ export type WarehouseReplenishmentAlert = {
   assigned_operator: string | null;
   category: string | null;
   action_label: string;
+  instruction_label?: string | null;
 };
 
 export type WarehouseInboundDelivery = {

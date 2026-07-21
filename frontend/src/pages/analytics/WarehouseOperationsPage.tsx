@@ -873,6 +873,11 @@ export default function WarehouseOperationsPage() {
 
   const handleCreateRelocation = async (row: WarehouseOperationsSnapshot["replenishments"][number]) => {
     if (warehouseId == null) return;
+    const moveQty = Number(row.move_quantity ?? row.missing_quantity) || 0;
+    if (moveQty <= 0 || !row.source_location) {
+      setError("Brak stocku źródłowego — nie można utworzyć przesunięcia.");
+      return;
+    }
     setCreatingRelocationFor(row.product_id);
     setError(null);
     try {
@@ -885,7 +890,7 @@ export default function WarehouseOperationsPage() {
         },
         {
           productId: row.product_id,
-          quantityRequired: row.missing_quantity,
+          quantityRequired: moveQty,
           sourceLocation: row.source_location,
           targetLocation: row.target_location,
           priority: row.priority,
@@ -1279,6 +1284,9 @@ export default function WarehouseOperationsPage() {
               : row.priority === "blue"
                 ? "border-blue-200 bg-blue-50"
                 : "border-amber-200 bg-amber-50";
+          const moveQty = Number(row.move_quantity ?? row.missing_quantity) || 0;
+          const sourceAvail = Number(row.source_available_qty ?? row.reserve_stock) || 0;
+          const canCreate = moveQty > 0 && Boolean(row.source_location) && row.classification !== "NO_SOURCE_STOCK";
           return (
             <article key={row.id} className={`rounded-2xl border p-3 ${tone}`}>
               <div className="flex gap-3">
@@ -1293,25 +1301,50 @@ export default function WarehouseOperationsPage() {
                     </div>
                     <span className="rounded-full bg-white/80 px-2 py-0.5 text-[11px] font-black text-slate-700 ring-1 ring-slate-200">{row.priority_label}</span>
                   </div>
-                  <div className="mt-3 grid gap-2 text-xs sm:grid-cols-4">
-                    <div><span className="block text-slate-500">Źródło</span><b>{row.source_location || "—"}</b></div>
-                    <div><span className="block text-slate-500">Pick-face</span><b>{row.target_location || "—"}</b></div>
-                    <div><span className="block text-slate-500">Brakuje</span><b>{row.missing_quantity}</b></div>
-                    <div><span className="block text-slate-500">Blokuje</span><b>{row.blocked_orders}</b></div>
+                  <div className="mt-3 rounded-xl bg-white/70 px-3 py-2 text-sm font-black text-slate-900 ring-1 ring-slate-200/80">
+                    {row.instruction_label ||
+                      (row.source_location && row.target_location
+                        ? `${row.source_location} → ${row.target_location}`
+                        : "Uzupełnienie pick-face")}
+                    {moveQty > 0 ? (
+                      <div className="mt-1 text-xs font-bold uppercase tracking-wide text-indigo-700">
+                        Przenieś {quantityLabel(moveQty)} szt.
+                      </div>
+                    ) : null}
                   </div>
                   <div className="mt-3 grid gap-2 text-xs sm:grid-cols-3">
-                    <div>Pick stock: <b>{row.current_picking_stock}</b></div>
-                    <div>Rezerwa: <b>{row.reserve_stock}</b></div>
-                    <div>Od wykrycia: <b>{formatOperationalDuration(row.minutes_since_detected)}</b></div>
+                    <div>
+                      Pick-face: <b>{quantityLabel(row.current_picking_stock)}</b>
+                    </div>
+                    <div>
+                      Stock źródłowy: <b>{quantityLabel(sourceAvail)}</b>
+                    </div>
+                    {row.unresolved_shortage_qty && row.unresolved_shortage_qty > 0 ? (
+                      <div>
+                        Nadal brakuje: <b>{quantityLabel(row.unresolved_shortage_qty)}</b>
+                      </div>
+                    ) : row.blocked_orders > 0 ? (
+                      <div>
+                        Blokuje: <b>{row.blocked_orders}</b> zam.
+                      </div>
+                    ) : (
+                      <div>
+                        Od wykrycia: <b>{formatOperationalDuration(row.minutes_since_detected)}</b>
+                      </div>
+                    )}
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => void handleCreateRelocation(row)}
-                    disabled={creatingRelocationFor === row.product_id}
-                    className="mt-3 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-bold text-white hover:bg-slate-700 disabled:opacity-50"
-                  >
-                    {creatingRelocationFor === row.product_id ? "Tworzenie…" : row.action_label}
-                  </button>
+                  {canCreate ? (
+                    <button
+                      type="button"
+                      onClick={() => void handleCreateRelocation(row)}
+                      disabled={creatingRelocationFor === row.product_id}
+                      className="mt-3 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-bold text-white hover:bg-slate-700 disabled:opacity-50"
+                    >
+                      {creatingRelocationFor === row.product_id ? "Tworzenie…" : row.action_label || "Utwórz przesunięcie"}
+                    </button>
+                  ) : (
+                    <p className="mt-3 text-xs font-semibold text-slate-600">{row.action_label || "W toku"}</p>
+                  )}
                 </div>
               </div>
             </article>

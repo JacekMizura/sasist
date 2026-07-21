@@ -188,9 +188,18 @@ class WarehouseReplenishmentAlertOut(BaseModel):
     source_location: str | None = None
     target_location: str | None = None
     missing_quantity: float = 0
+    """Original replenishment need (min_pick − pick stock), before source/capacity caps."""
+    move_quantity: float = 0
+    """Executable qty to move now (≤ need, source, trusted destination capacity)."""
+    unresolved_shortage_qty: float = 0
+    """Need that cannot be covered by available source stock (after caps)."""
     current_picking_stock: float = 0
     reserve_stock: float = 0
+    """Available source stock (BUFFER / moveable) — not order reservations."""
+    source_available_qty: float = 0
+    """Alias of reserve_stock for clear semantics (available_to_move across sources)."""
     blocked_orders: int = 0
+    classification: Literal["ACTIONABLE", "NO_SOURCE_STOCK", "IN_PROGRESS"] = "ACTIONABLE"
     priority: Literal["red", "orange", "blue"] = "orange"
     priority_label: str = "Niski stan"
     minutes_since_detected: int = 0
@@ -198,6 +207,8 @@ class WarehouseReplenishmentAlertOut(BaseModel):
     assigned_operator: str | None = None
     category: str | None = None
     action_label: str = "Utwórz przesunięcie"
+    instruction_label: str | None = None
+    """Operator-facing one-liner, e.g. „Przenieś 8 szt. B1 → A9”."""
 
 
 class WarehouseInboundDeliveryOut(BaseModel):

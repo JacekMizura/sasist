@@ -160,129 +160,10 @@ def build_replenishment_alerts(
     warehouse_id: int,
     now: datetime,
 ) -> list[WarehouseReplenishmentAlertOut]:
-    inv_rows = (
-        db.query(
-            Inventory.product_id,
-            Location.type,
-            func.coalesce(func.sum(Inventory.quantity), 0),
-            func.min(Location.id),
-        )
-        .join(Location, Location.id == Inventory.location_id)
-        .join(Product, Product.id == Inventory.product_id)
-        .filter(
-            Inventory.tenant_id == int(tenant_id),
-            Inventory.warehouse_id == int(warehouse_id),
-            Inventory.quantity > 0,
-        )
-        .group_by(Inventory.product_id, Location.type)
-        .all()
-    )
-    pick_stock: dict[int, float] = defaultdict(float)
-    reserve_stock: dict[int, float] = defaultdict(float)
-    first_pick_loc: dict[int, int] = {}
-    first_reserve_loc: dict[int, int] = {}
-    product_ids: set[int] = set()
-    for pid, loc_type, qty, loc_id in inv_rows:
-        product_ids.add(int(pid))
-        lt = str(loc_type or "").lower()
-        if lt == "pick":
-            pick_stock[int(pid)] += float(qty or 0)
-            if loc_id is not None:
-                first_pick_loc.setdefault(int(pid), int(loc_id))
-        else:
-            reserve_stock[int(pid)] += float(qty or 0)
-            if loc_id is not None:
-                first_reserve_loc.setdefault(int(pid), int(loc_id))
+    """Delegate to SSOT actionable replenishment builder (see warehouse_operations_replenishment)."""
+    from .warehouse_operations_replenishment import build_replenishment_alerts as _build
 
-    blocked_by_product: dict[int, set[int]] = defaultdict(set)
-    first_shortage_at: dict[int, datetime] = {}
-    tasks = (
-        db.query(OrderIssueTask)
-        .filter(
-            OrderIssueTask.tenant_id == int(tenant_id),
-            OrderIssueTask.warehouse_id == int(warehouse_id),
-            OrderIssueTask.status == "OPEN",
-        )
-        .limit(2000)
-        .all()
-    )
-    for task in tasks:
-        try:
-            missing = json.loads(task.missing_items or "[]")
-        except (json.JSONDecodeError, TypeError, ValueError):
-            missing = []
-        if not isinstance(missing, list):
-            continue
-        for item in missing:
-            if not isinstance(item, dict):
-                continue
-            try:
-                pid = int(item.get("product_id"))
-            except (TypeError, ValueError):
-                continue
-            product_ids.add(pid)
-            blocked_by_product[pid].add(int(task.order_id))
-            ts = getattr(task, "updated_at", None) or getattr(task, "created_at", None)
-            if ts is not None and (pid not in first_shortage_at or ts < first_shortage_at[pid]):
-                first_shortage_at[pid] = ts
-
-    active_relocations = {
-        int(pid)
-        for (pid,) in db.query(WmsOperationalTask.product_id)
-        .filter(
-            WmsOperationalTask.tenant_id == int(tenant_id),
-            WmsOperationalTask.warehouse_id == int(warehouse_id),
-            WmsOperationalTask.status.in_(ACTIVE_STATUSES),
-            WmsOperationalTask.task_type == "RELOCATION",
-            WmsOperationalTask.product_id.isnot(None),
-        )
-        .distinct()
-        .all()
-    }
-    product_ids.update(active_relocations)
-
-    products = (
-        {int(p.id): p for p in db.query(Product).filter(Product.tenant_id == int(tenant_id), Product.id.in_(list(product_ids))).all()}
-        if product_ids
-        else {}
-    )
-    loc_ids = set(first_pick_loc.values()) | set(first_reserve_loc.values())
-    locs = {int(l.id): l for l in db.query(Location).filter(Location.id.in_(list(loc_ids))).all()} if loc_ids else {}
-
-    out: list[WarehouseReplenishmentAlertOut] = []
-    for pid, product in products.items():
-        min_pick = float(getattr(product, "min_pick_quantity", None) or 0)
-        current_pick = round(float(pick_stock.get(pid, 0)), 6)
-        reserve = round(float(reserve_stock.get(pid, 0)), 6)
-        blocked = len(blocked_by_product.get(pid, set()))
-        missing = max(0.0, min_pick - current_pick)
-        if blocked <= 0 and missing <= 1e-9 and pid not in active_relocations:
-            continue
-        priority = "blue" if pid in active_relocations else ("red" if blocked > 0 else "orange")
-        target = locs.get(first_pick_loc.get(pid, 0))
-        source = locs.get(first_reserve_loc.get(pid, 0))
-        out.append(
-            WarehouseReplenishmentAlertOut(
-                id=f"repl-{pid}",
-                product_id=pid,
-                product_name=str(product.name or f"Produkt #{pid}"),
-                sku=(str(product.sku).strip() if product.sku else None),
-                ean=(str(product.ean).strip() if product.ean else None),
-                image_url=(str(product.image_url).strip() if product.image_url else None),
-                source_location=_location_label(source, first_reserve_loc.get(pid)),
-                target_location=_location_label(target, first_pick_loc.get(pid)),
-                missing_quantity=round(missing, 6),
-                current_picking_stock=current_pick,
-                reserve_stock=reserve,
-                blocked_orders=blocked,
-                priority=priority,
-                priority_label="Przesunięcie w toku" if priority == "blue" else ("Blokuje zamówienia" if priority == "red" else "Niski stan pick-face"),
-                minutes_since_detected=_minutes_between(first_shortage_at.get(pid), now),
-                zone=_zone_for_location(target),
-                category=(str(product.manufacturer or "").strip() or None),
-            )
-        )
-    return sorted(out, key=lambda r: ({"red": 0, "orange": 1, "blue": 2}[r.priority], -r.blocked_orders, -r.missing_quantity))[:40]
+    return _build(db, tenant_id=tenant_id, warehouse_id=warehouse_id, now=now)
 
 
 def build_inbound_overview(
@@ -686,6 +567,7 @@ def extend_alerts(
     queues: list[WarehouseOperationsQueueOut],
     operators: list[WarehouseOperatorCardOut],
     now: datetime,
+    no_source_shortages: list[dict[str, Any]] | None = None,
 ) -> list[WarehouseOperationsAlertOut]:
     alerts: list[WarehouseOperationsAlertOut] = []
     active_packers = sum(1 for op in operators if op.main_mode == MODE_PACKING and op.minutes_since_activity <= 10)
@@ -693,27 +575,31 @@ def extend_alerts(
     packing_queue = _queue_value(queues, "packing")
     picking_queue = _queue_value(queues, "picking")
 
-    for row in [r for r in replenishments if r.priority == "red"][:6]:
+    for row in [r for r in replenishments if r.priority == "red" and r.classification == "ACTIONABLE"][:6]:
         alerts.append(
             _alert(
                 alert_id=f"critical-shortage-{row.product_id}",
                 level="critical",
-                title="Krytyczny brak produktu",
+                title="Krytyczny brak na pick-face",
                 category="Braki",
                 priority_group="critical_now",
-                description="Ten SKU blokuje aktywne zamówienia i wymaga natychmiastowej decyzji operacyjnej.",
+                description="Pick-face jest pusty, ale w rezerwie (BUFFER) jest stock — utwórz uzupełnienie.",
                 responsible_area="Kompletacja / uzupełnienia",
-                recommended_action="Utwórz przesunięcie z rezerwy albo wskaż zamiennik dla zablokowanych zamówień.",
+                recommended_action="Utwórz przesunięcie z lokalizacji źródłowej na pick-face.",
                 now=now,
                 impact=[
                     {"label": "Blokuje", "value": f"{row.blocked_orders} zamówień", "tone": "red"},
                     {"label": "Najstarsze oczekuje", "value": _minutes_label(row.minutes_since_detected), "tone": "amber"},
-                    {"label": "Brakuje", "value": str(row.missing_quantity), "detail": "szt. na pick-face", "tone": "red"},
+                    {"label": "Do przeniesienia", "value": str(row.move_quantity), "detail": "szt.", "tone": "red"},
                 ],
                 context=[
                     {"label": "SKU", "value": row.sku or row.ean or f"ID {row.product_id}", "tone": "neutral"},
                     {"label": "Strefa", "value": row.zone or row.target_location or "Nieprzypisana", "tone": "neutral"},
-                    {"label": "Rezerwa", "value": str(row.reserve_stock), "tone": "blue" if row.reserve_stock > 0 else "red"},
+                    {
+                        "label": "Stock źródłowy",
+                        "value": str(row.source_available_qty or row.reserve_stock),
+                        "tone": "blue" if (row.source_available_qty or row.reserve_stock) > 0 else "red",
+                    },
                 ],
                 actions=[
                     {
@@ -724,10 +610,11 @@ def extend_alerts(
                         "payload": {
                             "task_type": "replenishment",
                             "title": f"Uzupełnij {row.target_location or 'pick-face'}",
-                            "description": f"Przenieś z rezerwy do {row.target_location or 'lokalizacji pickingowej'}: {row.product_name}",
+                            "description": row.instruction_label
+                            or f"Przenieś z rezerwy do {row.target_location or 'lokalizacji pickingowej'}: {row.product_name}",
                             "product_id": row.product_id,
                             "sku": row.sku,
-                            "quantity": row.missing_quantity,
+                            "quantity": row.move_quantity or row.missing_quantity,
                             "source_location": row.source_location,
                             "target_location": row.target_location,
                             "blocked_orders": row.blocked_orders,
@@ -738,15 +625,57 @@ def extend_alerts(
                     {"label": "Znajdź zamiennik", "action_type": "navigate", "target_path": f"/products/{row.product_id}/edit", "tone": "secondary"},
                 ],
                 related_entities=[
-                    {"kind": "sku", "label": row.sku or row.ean or f"Produkt #{row.product_id}", "id": str(row.product_id)},
-                    {"kind": "zone", "label": row.zone or row.target_location or "Nieprzypisana"},
+                    {"kind": "product", "label": row.product_name, "id": str(row.product_id)},
+                    {"kind": "sku", "label": row.sku or row.ean or str(row.product_id), "id": str(row.product_id)},
                 ],
-                prediction_label=(
-                    f"Ryzyko SLA rośnie od {_minutes_label(row.minutes_since_detected)}"
-                    if row.minutes_since_detected >= 15
-                    else None
-                ),
                 manager_focus=True,
+                affected_orders=[],
+            )
+        )
+
+    for row in (no_source_shortages or [])[:8]:
+        blocked = int(row.get("blocked_orders") or 0)
+        if blocked <= 0 and float(row.get("need_qty") or 0) <= 1e-9:
+            continue
+        pid = int(row["product_id"])
+        alerts.append(
+            _alert(
+                alert_id=f"no-source-stock-{pid}",
+                level="critical" if blocked > 0 else "warning",
+                title="Brak stocku źródłowego",
+                category="Braki",
+                priority_group="critical_now" if blocked > 0 else "requires_action",
+                description=(
+                    "Jest zapotrzebowanie na pick-face, ale w magazynie nie ma stocku BUFFER możliwego do przesunięcia. "
+                    "To nie jest zadanie uzupełnienia — wymaga przyjęcia, dogrywki lub decyzji OMS."
+                ),
+                responsible_area="Braki / przyjęcia",
+                recommended_action="Sprawdź dostawy, braki zamówień lub zamienniki — nie twórz pustego przesunięcia.",
+                now=now,
+                impact=[
+                    {"label": "Blokuje", "value": f"{blocked} zamówień", "tone": "red" if blocked else "neutral"},
+                    {"label": "Potrzeba", "value": str(row.get("need_qty") or 0), "detail": "szt.", "tone": "amber"},
+                    {"label": "Stock źródłowy", "value": "0", "tone": "red"},
+                ],
+                context=[
+                    {"label": "SKU", "value": row.get("sku") or f"ID {pid}", "tone": "neutral"},
+                    {"label": "Pick-face", "value": row.get("target_location") or "—", "tone": "neutral"},
+                    {"label": "Pick stock", "value": str(row.get("pick_stock") or 0), "tone": "red"},
+                ],
+                actions=[
+                    {"label": "Otwórz braki", "action_type": "navigate", "target_path": "/wms/braki", "tone": "primary"},
+                    {
+                        "label": "Karta produktu",
+                        "action_type": "navigate",
+                        "target_path": f"/products/{pid}/edit",
+                        "tone": "secondary",
+                    },
+                ],
+                related_entities=[
+                    {"kind": "product", "label": str(row.get("product_name") or pid), "id": str(pid)},
+                ],
+                manager_focus=blocked > 0,
+                affected_orders=[],
             )
         )
 

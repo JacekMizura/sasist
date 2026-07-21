@@ -1580,6 +1580,18 @@ def build_warehouse_operations_snapshot(
         default=[],
         fn=lambda: build_replenishment_alerts(db, tenant_id=tid, warehouse_id=wid, now=now),
     )
+    from .warehouse_operations_replenishment import (
+        count_distinct_blocked_orders,
+        iter_no_source_shortage_products,
+    )
+
+    no_source_shortages = _snapshot_section(
+        "no_source_shortages",
+        tenant_id=tid,
+        warehouse_id=wid,
+        default=[],
+        fn=lambda: iter_no_source_shortage_products(db, tenant_id=tid, warehouse_id=wid, now=now),
+    )
     inbound_summary, inbound_deliveries = _snapshot_section(
         "inbound",
         tenant_id=tid,
@@ -1659,6 +1671,7 @@ def build_warehouse_operations_snapshot(
             queues=queues,
             operators=operators,
             now=now,
+            no_source_shortages=no_source_shortages,
         ),
     )
     completed_today = sum(
@@ -1670,7 +1683,13 @@ def build_warehouse_operations_snapshot(
     )
     avg_pick_minutes = _average_gap_minutes(events, EVT_PICKING_STARTED, EVT_PICKING_FINISHED)
     avg_pack_minutes = _average_gap_minutes(events, EVT_PACKING_STARTED, EVT_PACKING_FINISHED)
-    blocked_orders = sum(r.blocked_orders for r in replenishments)
+    blocked_orders = _snapshot_section(
+        "blocked_orders_count",
+        tenant_id=tid,
+        warehouse_id=wid,
+        default=0,
+        fn=lambda: count_distinct_blocked_orders(db, tenant_id=tid, warehouse_id=wid),
+    )
     delayed_operations = len([b for b in bottlenecks if b.level in {"warning", "critical"}]) + inbound_summary.delayed_deliveries
     sla_risk = max([b.sla_risk_percent for b in bottlenecks], default=0)
     top_scores = [r.efficiency_score for r in employee_rankings[:10]]
