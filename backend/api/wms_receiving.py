@@ -1,4 +1,4 @@
-"""WMS: list draft PZ for counting; POST receive applies += deltas only (no inventory)."""
+"""WMS: list draft PZ for counting; receive applies signed qty deltas (+ DOCK inventory by disposition)."""
 
 from __future__ import annotations
 
@@ -387,7 +387,7 @@ def patch_wms_receiving_pz_item(
     db: Session = Depends(get_db),
     user: AppUser = Depends(get_current_user),
 ):
-    """Add qty to a lot row matching batch/expiry or create a new row (draft PZ only; no inventory)."""
+    """Signed qty delta on a lot row (or new row); updates DOCK inventory; rejects below putaway floor."""
     _load_pz_for_user(db, tenant_id, pz_id, user, active_warehouse_id=warehouse_id)
     try:
         doc = patch_wms_receiving_pz_item_quantity(db, tenant_id, pz_id, item_id, body, performed_by=user)
