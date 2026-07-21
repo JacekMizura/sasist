@@ -107,6 +107,8 @@ class TestActionableAlerts(unittest.TestCase):
         self.assertEqual(out[0].classification, "ACTIONABLE")
         self.assertEqual(out[0].move_quantity, 5.0)
         self.assertIn("Przenieś", out[0].instruction_label or "")
+        self.assertIn("Z:", out[0].instruction_label or "")
+        self.assertIn("DO:", out[0].instruction_label or "")
         self.assertEqual(out[0].action_label, "Utwórz przesunięcie")
 
     def test_C_unresolved_when_source_short(self):
@@ -137,9 +139,141 @@ class TestActionableAlerts(unittest.TestCase):
             out = build_replenishment_alerts(db, tenant_id=1, warehouse_id=1, now=datetime(2026, 7, 21))
         self.assertEqual(out[0].move_quantity, 5.0)
         self.assertEqual(out[0].unresolved_shortage_qty, 3.0)
+        self.assertIn("Nie można uzupełnić pełnej wymaganej ilości", out[0].instruction_label or "")
 
 
-class TestCapacityCapTrusted(unittest.TestCase):
+class TestFillToMinPolicySsot(unittest.TestCase):
+    """Existing WMS policy: trigger pick < min; fill qty = min − pick (not demand/max)."""
+
+    def test_case1_fill_to_min_not_max(self):
+        from backend.services import wms_replenishment_service as svc
+
+        pick_loc = SimpleNamespace(id=10, name="A9")
+        product = SimpleNamespace(
+            id=1,
+            name="P",
+            sku="S",
+            ean=None,
+            image_url=None,
+            min_pick_quantity=5,
+            max_pick_quantity=20,
+            min_reserve_quantity=None,
+        )
+        with (
+            patch.object(
+                svc,
+                "_agg_pick_buffer",
+                return_value=({(1, 10): 0.0}, {1: [(20, 50.0)]}, {10: pick_loc, 20: SimpleNamespace(id=20, name="B1")}),
+            ),
+            patch.object(svc, "_open_order_demand_units", return_value=0.0),
+            patch.object(svc, "_today_pick_velocity_units", return_value=0.0),
+            patch(
+                "backend.services.slotting.location_capacity_solver.solve_location_capacity",
+                return_value=SimpleNamespace(additional_capacity=100.0, capacity_numeric_trusted=True),
+            ),
+        ):
+            db = MagicMock()
+            db.query.return_value.filter.return_value.all.return_value = [product]
+            rows = svc._iter_replenishment_line_tuples(db, 1, 1)
+        self.assertEqual(rows[0][0].suggested_qty, 5.0)
+        self.assertEqual(rows[0][0].missing_qty, 5.0)
+
+    def test_case2_demand_does_not_raise_fill_qty(self):
+        from backend.services import wms_replenishment_service as svc
+
+        pick_loc = SimpleNamespace(id=10, name="A9")
+        product = SimpleNamespace(
+            id=1,
+            name="P",
+            sku="S",
+            ean=None,
+            image_url=None,
+            min_pick_quantity=5,
+            max_pick_quantity=20,
+            min_reserve_quantity=None,
+        )
+        with (
+            patch.object(
+                svc,
+                "_agg_pick_buffer",
+                return_value=({(1, 10): 2.0}, {1: [(20, 50.0)]}, {10: pick_loc, 20: SimpleNamespace(id=20, name="B1")}),
+            ),
+            patch.object(svc, "_open_order_demand_units", return_value=15.0),
+            patch.object(svc, "_today_pick_velocity_units", return_value=0.0),
+            patch(
+                "backend.services.slotting.location_capacity_solver.solve_location_capacity",
+                return_value=SimpleNamespace(additional_capacity=100.0, capacity_numeric_trusted=True),
+            ),
+        ):
+            db = MagicMock()
+            db.query.return_value.filter.return_value.all.return_value = [product]
+            rows = svc._iter_replenishment_line_tuples(db, 1, 1)
+        # Existing SSOT: fill to min only → 5−2=3 (demand affects priority score, not qty)
+        self.assertEqual(rows[0][0].suggested_qty, 3.0)
+        self.assertGreater(rows[0][0].priority_score, 0.0)
+
+    def test_case3_above_min_no_trigger_despite_demand(self):
+        from backend.services import wms_replenishment_service as svc
+
+        pick_loc = SimpleNamespace(id=10, name="A9")
+        product = SimpleNamespace(
+            id=1,
+            name="P",
+            sku="S",
+            ean=None,
+            image_url=None,
+            min_pick_quantity=5,
+            max_pick_quantity=20,
+            min_reserve_quantity=None,
+        )
+        with (
+            patch.object(
+                svc,
+                "_agg_pick_buffer",
+                return_value=({(1, 10): 10.0}, {1: [(20, 50.0)]}, {10: pick_loc, 20: SimpleNamespace(id=20, name="B1")}),
+            ),
+            patch.object(svc, "_open_order_demand_units", return_value=20.0),
+            patch.object(svc, "_today_pick_velocity_units", return_value=0.0),
+        ):
+            db = MagicMock()
+            db.query.return_value.filter.return_value.all.return_value = [product]
+            rows = svc._iter_replenishment_line_tuples(db, 1, 1)
+        self.assertEqual(rows, [])
+
+    def test_case6_capacity_above_need_does_not_raise_qty(self):
+        """need=5, trusted capacity=8, BUFFER=50 → move 5 (need binds)."""
+        from backend.services import wms_replenishment_service as svc
+
+        pick_loc = SimpleNamespace(id=10, name="A9")
+        product = SimpleNamespace(
+            id=1,
+            name="P",
+            sku="S",
+            ean=None,
+            image_url=None,
+            min_pick_quantity=5,
+            max_pick_quantity=20,
+            min_reserve_quantity=None,
+        )
+        with (
+            patch.object(
+                svc,
+                "_agg_pick_buffer",
+                return_value=({(1, 10): 0.0}, {1: [(20, 50.0)]}, {10: pick_loc, 20: SimpleNamespace(id=20, name="B1")}),
+            ),
+            patch.object(svc, "_open_order_demand_units", return_value=15.0),
+            patch.object(svc, "_today_pick_velocity_units", return_value=0.0),
+            patch(
+                "backend.services.slotting.location_capacity_solver.solve_location_capacity",
+                return_value=SimpleNamespace(additional_capacity=8.0, capacity_numeric_trusted=True),
+            ),
+        ):
+            db = MagicMock()
+            db.query.return_value.filter.return_value.all.return_value = [product]
+            rows = svc._iter_replenishment_line_tuples(db, 1, 1)
+        self.assertEqual(rows[0][0].suggested_qty, 5.0)
+        self.assertEqual(rows[0][0].missing_qty, 5.0)
+
     def test_E_trusted_capacity_caps_qty(self):
         from backend.services import wms_replenishment_service as svc
 

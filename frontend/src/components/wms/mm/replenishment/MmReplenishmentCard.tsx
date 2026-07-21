@@ -1,6 +1,7 @@
 import type { WmsReplenishmentTaskRead } from "../../../../api/wmsReplenishmentApi";
 import { LocationBadge } from "../../../warehouse/LocationBadge";
 import { formatWarehouseLocationTypeLabel } from "../../../../utils/warehouseLocationTypeLabels";
+import { replenishmentPriorityBandLabel } from "../../../../utils/replenishmentUiLabels";
 
 function fmtQty(n: number) {
   return new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 4 }).format(n);
@@ -64,7 +65,7 @@ export function MmReplenishmentCard({ task, onOpen }: Props) {
             <span
               className={`shrink-0 rounded-lg border px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ${priorityTone(task.priority_band)}`}
             >
-              {task.priority_band}
+              {replenishmentPriorityBandLabel(task.priority_band)}
             </span>
           </div>
           <p className="mt-1 truncate font-mono text-xs text-slate-600">

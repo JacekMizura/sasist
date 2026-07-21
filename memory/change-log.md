@@ -1,3 +1,11 @@
+## 2026-07-21 — Replenishment need audit + Polish UI (no push)
+
+- SSOT confirmed fill-to-min: need = min_pick − pick; demand/max only in priority.
+- Operator UX: Przenieś N / Z / DO; partial fill note; no raw enums in Centrum operacyjne.
+- Labels: `replenishmentUiLabels.ts` (+ severity/alert level); BUFFER removed from alert copy.
+- Tests: CASE 1–3/6 policy + FE label maps. Formula unchanged (CORRECT for SSOT).
+- SAFE TO PUSH: NO (user hold; demand-fill is product GAP if desired).
+
 ## 2026-07-20 — User-facing events always Polish (Historia czynności)
 
 - Root cause: ActivityLogTable mapped cart `event_code` via `getOrderEventLabel` → English title-case + CSS uppercase → „CART RELEASED”.

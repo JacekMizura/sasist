@@ -5,6 +5,13 @@ Separates:
   NO_SOURCE_STOCK — need/shortage without moveable buffer → alerts / braki only
 
 SSOT for source allocation + capacity: ``wms_replenishment_service``.
+
+Existing replenishment policy (do not invent a parallel one):
+  TRIGGER: pick_stock < min_pick_quantity
+  TARGET QTY: min_pick_quantity − pick_stock  (fill-to-min, not fill-to-max)
+  max_pick_quantity: priority scoring only (gap to max), not fill target
+  open order demand: priority scoring only, not fill qty
+  SOURCE: locations with WMS badge kind BUFFER (zapas/rezerwa)
 """
 
 from __future__ import annotations
@@ -149,9 +156,13 @@ def build_replenishment_alerts(
         tgt = (line.pick_location_name or "").strip() or None
         instruction = None
         if src and tgt and move_qty > _EPS:
-            instruction = f"Przenieś {_qty_label(move_qty)} szt. {src} → {tgt}"
+            instruction = f"Przenieś {_qty_label(move_qty)} szt.\nZ: {src}\nDO: {tgt}"
+            if unresolved > _EPS:
+                instruction += "\nNie można uzupełnić pełnej wymaganej ilości."
         elif move_qty > _EPS:
             instruction = f"Przenieś {_qty_label(move_qty)} szt."
+            if unresolved > _EPS:
+                instruction += "\nNie można uzupełnić pełnej wymaganej ilości."
 
         out.append(
             WarehouseReplenishmentAlertOut(

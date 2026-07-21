@@ -583,7 +583,7 @@ def extend_alerts(
                 title="Krytyczny brak na pick-face",
                 category="Braki",
                 priority_group="critical_now",
-                description="Pick-face jest pusty, ale w rezerwie (BUFFER) jest stock — utwórz uzupełnienie.",
+                description="Pick-face jest pusty, ale w lokalizacji zapasu (rezerwie) jest stock — utwórz uzupełnienie.",
                 responsible_area="Kompletacja / uzupełnienia",
                 recommended_action="Utwórz przesunięcie z lokalizacji źródłowej na pick-face.",
                 now=now,
@@ -646,7 +646,7 @@ def extend_alerts(
                 category="Braki",
                 priority_group="critical_now" if blocked > 0 else "requires_action",
                 description=(
-                    "Jest zapotrzebowanie na pick-face, ale w magazynie nie ma stocku BUFFER możliwego do przesunięcia. "
+                    "Jest zapotrzebowanie na pick-face, ale w magazynie nie ma stocku w lokalizacji zapasu możliwego do przesunięcia. "
                     "To nie jest zadanie uzupełnienia — wymaga przyjęcia, dogrywki lub decyzji OMS."
                 ),
                 responsible_area="Braki / przyjęcia",

@@ -23,6 +23,11 @@ import {
   formatOperationalDurationSince,
   formatOperationalDurationText,
 } from "../../utils/formatOperationalDuration";
+import {
+  opsAlertLevelLabel,
+  opsResolutionStatusLabel,
+  opsSeverityLabel,
+} from "../../utils/replenishmentUiLabels";
 
 const DEFAULT_TENANT_ID = 1;
 const CONFIG_STORAGE_KEY = "analytics.warehouseOperations.thresholds";
@@ -59,7 +64,7 @@ type OperationsTabId =
   | "history";
 
 const OPERATIONS_TABS: Array<{ id: OperationsTabId; label: string }> = [
-  { id: "live", label: "Live" },
+  { id: "live", label: "Na żywo" },
   { id: "operators", label: "Operatorzy" },
   { id: "queues", label: "Kolejki" },
   { id: "picking", label: "Kompletacja" },
@@ -317,11 +322,11 @@ function AlertCard({
                 {formatOperationalDurationText(alert.title || alert.message)}
               </div>
               <div className="mt-1 text-xs font-semibold opacity-75">
-                {alert.severity_label || alert.level} · {alert.category}
+                {alert.severity_label || opsAlertLevelLabel(alert.level)} · {alert.category}
               </div>
             </div>
             <span className="rounded-full bg-white/80 px-2 py-0.5 text-[11px] font-black ring-1 ring-slate-200">
-              {alert.resolution_status === "open" ? "Otwarte" : alert.resolution_status}
+              {opsResolutionStatusLabel(alert.resolution_status)}
             </span>
           </div>
 
@@ -993,7 +998,7 @@ export default function WarehouseOperationsPage() {
   const operatorGroups = (
     <section className="min-w-0 space-y-3">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-black uppercase tracking-wide text-slate-700">Live operatorzy</h2>
+        <h2 className="text-sm font-black uppercase tracking-wide text-slate-700">Operatorzy na żywo</h2>
         <span className="text-xs font-semibold text-slate-500">polling 30 s</span>
       </div>
       {(["KOMPLETACJA", "PAKOWANIE", "OPERACJE MAGAZYNOWE", "BRAKI"] as WarehouseOperationsMainMode[]).map((mode) => (
@@ -1287,11 +1292,15 @@ export default function WarehouseOperationsPage() {
           const moveQty = Number(row.move_quantity ?? row.missing_quantity) || 0;
           const sourceAvail = Number(row.source_available_qty ?? row.reserve_stock) || 0;
           const canCreate = moveQty > 0 && Boolean(row.source_location) && row.classification !== "NO_SOURCE_STOCK";
+          const instructionLines = String(row.instruction_label || "")
+            .split("\n")
+            .map((s) => s.trim())
+            .filter(Boolean);
           return (
             <article key={row.id} className={`rounded-2xl border p-3 ${tone}`}>
               <div className="flex gap-3">
                 <div className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-xl bg-white text-xs font-black text-slate-400 ring-1 ring-slate-200">
-                  {row.image_url ? <img src={row.image_url} alt="" className="h-full w-full object-cover" /> : "IMG"}
+                  {row.image_url ? <img src={row.image_url} alt="" className="h-full w-full object-cover" /> : "—"}
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-start justify-between gap-2">
@@ -1301,16 +1310,33 @@ export default function WarehouseOperationsPage() {
                     </div>
                     <span className="rounded-full bg-white/80 px-2 py-0.5 text-[11px] font-black text-slate-700 ring-1 ring-slate-200">{row.priority_label}</span>
                   </div>
-                  <div className="mt-3 rounded-xl bg-white/70 px-3 py-2 text-sm font-black text-slate-900 ring-1 ring-slate-200/80">
-                    {row.instruction_label ||
-                      (row.source_location && row.target_location
-                        ? `${row.source_location} → ${row.target_location}`
-                        : "Uzupełnienie pick-face")}
-                    {moveQty > 0 ? (
-                      <div className="mt-1 text-xs font-bold uppercase tracking-wide text-indigo-700">
-                        Przenieś {quantityLabel(moveQty)} szt.
-                      </div>
-                    ) : null}
+                  <div className="mt-3 space-y-1 rounded-xl bg-white/70 px-3 py-2 text-sm font-black text-slate-900 ring-1 ring-slate-200/80">
+                    {instructionLines.length > 0 ? (
+                      instructionLines.map((line) => (
+                        <div
+                          key={line}
+                          className={
+                            line.startsWith("Przenieś")
+                              ? "text-xs font-bold uppercase tracking-wide text-indigo-700"
+                              : line.startsWith("Nie można")
+                                ? "text-xs font-semibold text-amber-800"
+                                : "text-sm font-black text-slate-900"
+                          }
+                        >
+                          {line}
+                        </div>
+                      ))
+                    ) : row.source_location && row.target_location ? (
+                      <>
+                        <div className="text-xs font-bold uppercase tracking-wide text-indigo-700">
+                          Przenieś {quantityLabel(moveQty)} szt.
+                        </div>
+                        <div>Z: {row.source_location}</div>
+                        <div>DO: {row.target_location}</div>
+                      </>
+                    ) : (
+                      <div>Uzupełnienie pick-face</div>
+                    )}
                   </div>
                   <div className="mt-3 grid gap-2 text-xs sm:grid-cols-3">
                     <div>
@@ -1421,7 +1447,7 @@ export default function WarehouseOperationsPage() {
               <div className="text-sm font-black text-slate-900">{issue.error_message}</div>
               <div className="text-xs text-slate-500">Zamówienie: {issue.order_id || "—"} · przewoźnik: {issue.carrier || "—"} · próby: {issue.retry_count}</div>
             </div>
-            <span className={`rounded-full px-2 py-0.5 text-[11px] font-black ${issue.severity === "blocked" ? "bg-red-100 text-red-800" : issue.severity === "critical" ? "bg-orange-100 text-orange-800" : "bg-amber-100 text-amber-800"}`}>{issue.severity}</span>
+            <span className={`rounded-full px-2 py-0.5 text-[11px] font-black ${issue.severity === "blocked" ? "bg-red-100 text-red-800" : issue.severity === "critical" ? "bg-orange-100 text-orange-800" : "bg-amber-100 text-amber-800"}`}>{opsSeverityLabel(issue.severity)}</span>
           </div>
         </article>
       ))}
@@ -1488,7 +1514,7 @@ export default function WarehouseOperationsPage() {
       <PageContainer cardClassName="space-y-4">
         <PageHeader
           title="Centrum operacyjne"
-          subtitle="Live WMS — operatorzy, kolejki i alerty"
+          subtitle="WMS na żywo — operatorzy, kolejki i alerty"
           breadcrumbs={[{ label: "Analiza", to: "/analytics/dashboard" }, { label: "Centrum operacyjne" }]}
         />
         <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">Ładowanie danych operacyjnych…</div>
@@ -1500,7 +1526,7 @@ export default function WarehouseOperationsPage() {
     <PageContainer cardClassName="space-y-4">
       <PageHeader
         title="Centrum operacyjne"
-        subtitle="Live WMS — kontrola pracy magazynu, operatorów i kolejek"
+        subtitle="WMS na żywo — kontrola pracy magazynu, operatorów i kolejek"
         breadcrumbs={[{ label: "Analiza", to: "/analytics/dashboard" }, { label: "Centrum operacyjne" }]}
         actions={
           <div className="flex flex-wrap items-center gap-2">

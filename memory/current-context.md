@@ -2,21 +2,27 @@
 
 ## Active
 
-**FIT ENGINE productization** — local commits only. **No push.**
+**Replenishment SSOT audit + Polish UI** — local commit; **no push.**
 
-## SSOT (unchanged core)
+## Replenishment SSOT (`wms_replenishment_service`)
 
-`backend/services/fit_engine/` + `product_logistics_normalizer`
-→ warehouse capacity / putaway / packing cartonization
+- TRIGGER: `pick_stock < min_pick_quantity`
+- TARGET/need: `min_pick − pick_stock` (fill-to-min; **not** fill-to-max / not demand)
+- `max_pick_quantity` + open-order demand: **priority score only**
+- `move_qty = min(need, Σ moveable BUFFER, trusted destination capacity)`
+- Source locations: badge kind **BUFFER** only
+- Operator queue: ACTIONABLE only; NO_SOURCE_STOCK → Alerty/Braki
 
-## New in productization commit
+## Polish UI (Centrum operacyjne / MM replenishment)
 
-- Shared shelf/rack weight: `warehouse_structural_weight_limits` + Rack.max_weight_kg + internal_structure levels
-- ShippingMethod: max_package_weight_kg + max_*_cm → effective carton payload
-- Replenishment capped by `solve_location_capacity.additional_capacity`
-- Operator UX: ODŁÓŻ / WEŹ+ZAPAKUJ; settings tab „Dopasowanie przestrzenne”
-- Product validation: still only WMS Walidacja produktu (no parallel)
+- FE map: `frontend/src/utils/replenishmentUiLabels.ts`
+- Operator instruction: `Przenieś N szt. / Z: / DO:` (+ partial-fill note)
+- Never render raw ACTIONABLE / NO_SOURCE_STOCK / HIGH / blocked / critical
+
+## Product GAP (not a bug under current SSOT)
+
+Demand-driven fill (CASE 2/3) would require an **explicit** policy change — do not invent.
 
 ## SAFE TO PUSH
 
-NO — multi-carton persist GAP; admin UI for structural weight limits still thin (table + rack JSON); shipping fields need admin form wiring; smoke E2E.
+NO — user hold; confirm demand fill-to-min vs demand-fill product intent before push.
