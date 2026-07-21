@@ -1,3 +1,12 @@
+## 2026-07-21 — WMS Dashboard/Topbar SSOT + order-issue-tasks heal
+
+- Registry: `wmsTabConfig.ts` (accent, category, canPin, operationalMode) → dashboard + topbar.
+- Topbar pins: `user_wms_profiles.wms_topbar_pins_json` + `PUT /auth/me/wms-topbar-pins`; default receiving/putaway/picking/packing/issues.
+- RBAC: rozszerzony `wms_operational_modes`; gate `WmsOperationalModeGate`; brak bypass „mandatory production”.
+- Launcher: usunięte numery 1–9 i teksty Skróty/Wskazówka; KPI Braki = liczba aktywnych tasks (błąd ≠ 0).
+- order-issue-tasks: ensure Order ORM columns + heal/retry w `_fetch_orders_by_id`.
+- Tests: `wmsNavTabs.test.ts`, `test_wms_topbar_pins.py`, handoff 500. **No push.**
+
 ## 2026-07-21 — Ręczne PZ: ostatnia cena zakupu + VAT snapshot + audyt PL
 
 - Cena: `resolve_suggested_purchase_price_net_for_pz` (supplier PZ → global PZ → supplier_products → product.purchase_price); brak historii = `None` (nie 0).

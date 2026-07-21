@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { isAxiosError } from "axios";
 
 import { fetchWmsActiveInventoryDocuments } from "@/api/inventoryCountApi";
 import { fetchWmsConsolidationSummary } from "@/api/wmsConsolidationApi";
@@ -29,6 +30,16 @@ export type WmsHomeKpiCounts = Record<WmsHomeKpiKey, number> & {
   inventory_count: number;
 };
 
+/**
+ * KPI „Braki” semantics (SSOT: GET /wms/order-issue-tasks):
+ * liczba aktywnych zadań OrderIssueTask w kolejce Braki dla magazynu
+ * (po deduplikacji po order_id) — nie sztuki i nie linie produktowe.
+ */
+export type WmsHomeKpiMeta = {
+  issuesError: string | null;
+  issuesLoading: boolean;
+};
+
 const EMPTY_KPI: WmsHomeKpiCounts = {
   picking: 0,
   packing: 0,
@@ -40,37 +51,64 @@ const EMPTY_KPI: WmsHomeKpiCounts = {
   inventory_count: 0,
 };
 
+function issuesErrorMessage(err: unknown): string {
+  if (isAxiosError(err)) {
+    const detail = err.response?.data?.detail;
+    if (detail && typeof detail === "object" && "message" in detail) {
+      const msg = (detail as { message?: unknown }).message;
+      if (typeof msg === "string" && msg.trim()) return msg.trim();
+    }
+    if (err.response?.status === 500) {
+      return "Nie udało się wczytać kolejki Braki.";
+    }
+  }
+  return "Nie udało się pobrać liczby braków.";
+}
+
 export function useWmsLauncherBadges(warehouseId: number | null) {
   const [metrics, setMetricsState] = useState<WmsLauncherMetricsMap>({});
   const [kpi, setKpi] = useState<WmsHomeKpiCounts>(EMPTY_KPI);
+  const [kpiMeta, setKpiMeta] = useState<WmsHomeKpiMeta>({ issuesError: null, issuesLoading: false });
   const [loading, setLoading] = useState(false);
 
   const refresh = useCallback(async () => {
     if (warehouseId == null || warehouseId <= 0) {
       setMetricsState({});
       setKpi(EMPTY_KPI);
+      setKpiMeta({ issuesError: null, issuesLoading: false });
       return;
     }
     setLoading(true);
+    setKpiMeta((m) => ({ ...m, issuesLoading: true }));
     try {
       const next: WmsLauncherMetricsMap = {};
       const nextKpi: WmsHomeKpiCounts = { ...EMPTY_KPI };
-      const [issues, snapshot, inventoryDocs, consolidationSummary] = await Promise.all([
-        listWmsOrderIssueTasks(DAMAGE_TENANT_ID, warehouseId).catch(() => ({ tasks: [] as unknown[] })),
-        getWarehouseOperationsSnapshot({ tenantId: DAMAGE_TENANT_ID, warehouseId }),
+
+      const issuesResult = await listWmsOrderIssueTasks(DAMAGE_TENANT_ID, warehouseId)
+        .then((data) => ({ ok: true as const, data }))
+        .catch((err: unknown) => ({ ok: false as const, err }));
+
+      const [snapshot, inventoryDocs, consolidationSummary] = await Promise.all([
+        getWarehouseOperationsSnapshot({ tenantId: DAMAGE_TENANT_ID, warehouseId }).catch(() => null),
         fetchWmsActiveInventoryDocuments(DAMAGE_TENANT_ID, warehouseId).catch(() => []),
         fetchWmsConsolidationSummary(DAMAGE_TENANT_ID, warehouseId).catch(() => null),
       ]);
 
-      const issueCount = issues.tasks?.length ?? 0;
-      nextKpi.issues = issueCount;
-      if (issueCount > 0) {
-        setMetrics(
-          next,
-          "issues",
-          [stat(`${issueCount} ${issueCount === 1 ? "zadanie" : "zadań"}`, "critical")],
-          issueCount,
-        );
+      if (issuesResult.ok) {
+        const issueCount = issuesResult.data.tasks?.length ?? 0;
+        nextKpi.issues = issueCount;
+        setKpiMeta({ issuesError: null, issuesLoading: false });
+        if (issueCount > 0) {
+          setMetrics(
+            next,
+            "issues",
+            [stat(`${issueCount} ${issueCount === 1 ? "zadanie" : "zadań"}`, "critical")],
+            issueCount,
+          );
+        }
+      } else {
+        // Do NOT present failure as a successful 0.
+        setKpiMeta({ issuesError: issuesErrorMessage(issuesResult.err), issuesLoading: false });
       }
 
       const summary = snapshot?.summary;
@@ -143,6 +181,7 @@ export function useWmsLauncherBadges(warehouseId: number | null) {
       setKpi(nextKpi);
     } finally {
       setLoading(false);
+      setKpiMeta((m) => ({ ...m, issuesLoading: false }));
     }
   }, [warehouseId]);
 
@@ -152,7 +191,7 @@ export function useWmsLauncherBadges(warehouseId: number | null) {
     return () => window.clearInterval(timer);
   }, [refresh]);
 
-  return { metrics, kpi, loading, refresh };
+  return { metrics, kpi, kpiMeta, loading, refresh };
 }
 
 export type { WmsTabId, WmsModuleTileMetrics };

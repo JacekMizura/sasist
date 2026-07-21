@@ -1,18 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { Search } from "lucide-react";
 
-import { getWmsModule, type WmsTabConfigItem, type WmsTabId } from "../wmsTabConfig";
-import type { WmsHomeKpiCounts } from "./useWmsLauncherBadges";
+import { getWmsModule, type WmsModuleDefinition, type WmsTabConfigItem, type WmsTabId } from "../wmsTabConfig";
+import type { WmsHomeKpiCounts, WmsHomeKpiMeta } from "./useWmsLauncherBadges";
 import type { WmsLauncherMetricsMap } from "./wmsLauncherTypes";
 import {
   WMS_HOME_BG,
   WMS_HOME_BORDER,
   WMS_HOME_DESKTOP_SECTIONS,
   WMS_HOME_DISPLAY_LABEL,
-  WMS_HOME_PRIMARY,
 } from "./wmsHomeSections";
 import { WmsHomeDesktopTile } from "./WmsHomeDesktopTile";
 import { WmsHomeKpiStrip } from "./WmsHomeKpiStrip";
+import { WmsTopbarPinSettings } from "./WmsTopbarPinSettings";
 
 const DEFAULT_DESCRIPTION = "Moduł operacyjny";
 
@@ -29,10 +29,27 @@ export type WmsDesktopHomeProps = {
   tiles: WmsTabConfigItem[];
   metrics: WmsLauncherMetricsMap;
   kpi: WmsHomeKpiCounts;
+  kpiMeta?: WmsHomeKpiMeta;
   onOpenModule: (path: string) => void;
+  pinnableModules?: WmsModuleDefinition[];
+  isPinned?: (id: string) => boolean;
+  onTogglePin?: (id: string) => void;
+  onMovePinned?: (id: string, delta: -1 | 1) => void;
+  pinnedCount?: number;
 };
 
-export function WmsDesktopHome({ tiles, metrics, kpi, onOpenModule }: WmsDesktopHomeProps) {
+export function WmsDesktopHome({
+  tiles,
+  metrics,
+  kpi,
+  kpiMeta,
+  onOpenModule,
+  pinnableModules = [],
+  isPinned = () => false,
+  onTogglePin = () => undefined,
+  onMovePinned = () => undefined,
+  pinnedCount = 0,
+}: WmsDesktopHomeProps) {
   const searchRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
   const [focusedIndex, setFocusedIndex] = useState(0);
@@ -135,8 +152,6 @@ export function WmsDesktopHome({ tiles, metrics, kpi, onOpenModule }: WmsDesktop
     [tilesById, onOpenModule],
   );
 
-  let shortcutCounter = 0;
-
   return (
     <div className="min-h-full" style={{ backgroundColor: WMS_HOME_BG }}>
       <div
@@ -154,11 +169,11 @@ export function WmsDesktopHome({ tiles, metrics, kpi, onOpenModule }: WmsDesktop
         </header>
 
         <div className="mb-5">
-          <WmsHomeKpiStrip kpi={kpi} onOpenModule={openByModuleId} />
+          <WmsHomeKpiStrip kpi={kpi} kpiMeta={kpiMeta} onOpenModule={openByModuleId} />
         </div>
 
-        <div className="mb-6 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
-          <div className="relative min-w-0 max-w-xl flex-1">
+        <div className="mb-4">
+          <div className="relative min-w-0 max-w-xl">
             <Search
               size={18}
               strokeWidth={2}
@@ -176,7 +191,19 @@ export function WmsDesktopHome({ tiles, metrics, kpi, onOpenModule }: WmsDesktop
               style={{ borderColor: WMS_HOME_BORDER }}
             />
           </div>
-          <p className="shrink-0 text-xs text-slate-400">Skróty: 1-9 • Enter — wybierz</p>
+        </div>
+
+        <div className="mb-6">
+          {pinnableModules.length > 0 ? (
+            <WmsTopbarPinSettings
+              modules={pinnableModules}
+              isPinned={isPinned}
+              onTogglePin={onTogglePin}
+              onMoveUp={(id) => onMovePinned(id, -1)}
+              onMoveDown={(id) => onMovePinned(id, 1)}
+              pinnedCount={pinnedCount}
+            />
+          ) : null}
         </div>
 
         {flatItems.length === 0 ? (
@@ -203,8 +230,6 @@ export function WmsDesktopHome({ tiles, metrics, kpi, onOpenModule }: WmsDesktop
                 </div>
                 <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-3.5">
                   {section.items.map((tab) => {
-                    shortcutCounter += 1;
-                    const shortcut = shortcutCounter <= 9 ? shortcutCounter : undefined;
                     const moduleDef = getWmsModule(tab.id);
                     const description = moduleDef?.shortDescription?.trim() || DEFAULT_DESCRIPTION;
                     const flatIdx = flatItems.findIndex((t) => t.id === tab.id);
@@ -216,7 +241,6 @@ export function WmsDesktopHome({ tiles, metrics, kpi, onOpenModule }: WmsDesktop
                         description={description}
                         icon={tab.icon}
                         count={metrics[tab.id]?.count ?? 0}
-                        shortcut={shortcut}
                         focused={flatIdx === focusedIndex}
                         onActivate={() => onOpenModule(tab.path)}
                       />
@@ -227,19 +251,6 @@ export function WmsDesktopHome({ tiles, metrics, kpi, onOpenModule }: WmsDesktop
             ))}
           </div>
         )}
-
-        <footer
-          className="mt-6 flex flex-col gap-1 border-t pt-3 text-xs text-slate-400 sm:flex-row sm:items-center sm:justify-between"
-          style={{ borderColor: WMS_HOME_BORDER }}
-        >
-          <p>
-            <span className="font-semibold text-slate-500">Wskazówka: </span>
-            Naciśnij 1–9, aby wybrać moduł, lub / aby wyszukać.
-          </p>
-          <p style={{ color: WMS_HOME_PRIMARY }} className="font-medium opacity-70">
-            Sasist WMS
-          </p>
-        </footer>
       </div>
     </div>
   );

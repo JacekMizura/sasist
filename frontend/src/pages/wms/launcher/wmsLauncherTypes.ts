@@ -1,4 +1,9 @@
 import type { WmsTabId } from "../wmsTabConfig";
+import {
+  resolveWmsModuleAccent,
+  WMS_MODULE_ACCENT_DEFAULT,
+  type WmsModuleAccent,
+} from "../wmsTabConfig";
 
 export type WmsModuleBadgeTone = "neutral" | "active" | "warning" | "critical";
 
@@ -25,126 +30,27 @@ export type WmsModuleTileMetrics = {
 
 export type WmsLauncherMetricsMap = Partial<Record<WmsTabId, WmsModuleTileMetrics>>;
 
-export type WmsModuleAccent = {
-  iconBg: string;
-  iconRing: string;
-  iconText: string;
-  hoverBorder: string;
-  hoverShadow: string;
-};
+export type { WmsModuleAccent };
 
-/** Safe fallback when a new WmsTabId lacks an explicit accent entry. */
-export const WMS_MODULE_ACCENT_DEFAULT: WmsModuleAccent = {
-  iconBg: "bg-indigo-50",
-  iconRing: "ring-indigo-100",
-  iconText: "text-indigo-600",
-  hoverBorder: "hover:border-indigo-200",
-  hoverShadow: "hover:shadow-indigo-100/80",
-};
+/** Accents live in ``wmsTabConfig`` (module registry SSOT). */
+export { resolveWmsModuleAccent, WMS_MODULE_ACCENT_DEFAULT };
 
-export function resolveWmsModuleAccent(moduleId: WmsTabId): WmsModuleAccent {
-  return WMS_MODULE_ACCENTS[moduleId] ?? WMS_MODULE_ACCENT_DEFAULT;
-}
-
+/** @deprecated — use resolveWmsModuleAccent / module.accent from registry. */
 export const WMS_MODULE_ACCENTS: Record<WmsTabId, WmsModuleAccent> = {
-  returns: {
-    iconBg: "bg-violet-50",
-    iconRing: "ring-violet-100",
-    iconText: "text-violet-600",
-    hoverBorder: "hover:border-violet-200",
-    hoverShadow: "hover:shadow-violet-100/80",
-  },
-  receiving: {
-    iconBg: "bg-emerald-50",
-    iconRing: "ring-emerald-100",
-    iconText: "text-emerald-600",
-    hoverBorder: "hover:border-emerald-200",
-    hoverShadow: "hover:shadow-emerald-100/80",
-  },
-  putaway: {
-    iconBg: "bg-orange-50",
-    iconRing: "ring-orange-100",
-    iconText: "text-orange-600",
-    hoverBorder: "hover:border-orange-200",
-    hoverShadow: "hover:shadow-orange-100/80",
-  },
-  mm: {
-    iconBg: "bg-sky-50",
-    iconRing: "ring-sky-100",
-    iconText: "text-sky-600",
-    hoverBorder: "hover:border-sky-200",
-    hoverShadow: "hover:shadow-sky-100/80",
-  },
-  consolidations: {
-    iconBg: "bg-violet-50",
-    iconRing: "ring-violet-100",
-    iconText: "text-violet-600",
-    hoverBorder: "hover:border-violet-200",
-    hoverShadow: "hover:shadow-violet-100/80",
-  },
-  consolidation_racks: {
-    iconBg: "bg-purple-50",
-    iconRing: "ring-purple-100",
-    iconText: "text-purple-600",
-    hoverBorder: "hover:border-purple-200",
-    hoverShadow: "hover:shadow-purple-100/80",
-  },
-  picking: {
-    iconBg: "bg-blue-50",
-    iconRing: "ring-blue-100",
-    iconText: "text-blue-600",
-    hoverBorder: "hover:border-blue-200",
-    hoverShadow: "hover:shadow-blue-100/80",
-  },
-  production: {
-    iconBg: "bg-orange-50",
-    iconRing: "ring-orange-100",
-    iconText: "text-orange-600",
-    hoverBorder: "hover:border-orange-200",
-    hoverShadow: "hover:shadow-orange-100/80",
-  },
-  inventory_count: {
-    iconBg: "bg-blue-50",
-    iconRing: "ring-blue-100",
-    iconText: "text-blue-600",
-    hoverBorder: "hover:border-blue-200",
-    hoverShadow: "hover:shadow-blue-100/80",
-  },
-  packing: {
-    iconBg: "bg-violet-50",
-    iconRing: "ring-violet-100",
-    iconText: "text-violet-600",
-    hoverBorder: "hover:border-violet-200",
-    hoverShadow: "hover:shadow-violet-100/80",
-  },
-  issues: {
-    iconBg: "bg-red-50",
-    iconRing: "ring-red-100",
-    iconText: "text-red-600",
-    hoverBorder: "hover:border-red-200",
-    hoverShadow: "hover:shadow-red-100/80",
-  },
-  product_preview: {
-    iconBg: "bg-teal-50",
-    iconRing: "ring-teal-100",
-    iconText: "text-teal-600",
-    hoverBorder: "hover:border-teal-200",
-    hoverShadow: "hover:shadow-teal-100/80",
-  },
-  operations: {
-    iconBg: "bg-sky-50",
-    iconRing: "ring-sky-100",
-    iconText: "text-sky-600",
-    hoverBorder: "hover:border-sky-200",
-    hoverShadow: "hover:shadow-sky-100/80",
-  },
-  direct_sales: {
-    iconBg: "bg-rose-50",
-    iconRing: "ring-rose-100",
-    iconText: "text-rose-600",
-    hoverBorder: "hover:border-rose-200",
-    hoverShadow: "hover:shadow-rose-100/80",
-  },
+  returns: resolveWmsModuleAccent("returns"),
+  receiving: resolveWmsModuleAccent("receiving"),
+  putaway: resolveWmsModuleAccent("putaway"),
+  mm: resolveWmsModuleAccent("mm"),
+  consolidations: resolveWmsModuleAccent("consolidations"),
+  consolidation_racks: resolveWmsModuleAccent("consolidation_racks"),
+  picking: resolveWmsModuleAccent("picking"),
+  production: resolveWmsModuleAccent("production"),
+  inventory_count: resolveWmsModuleAccent("inventory_count"),
+  packing: resolveWmsModuleAccent("packing"),
+  issues: resolveWmsModuleAccent("issues"),
+  product_preview: resolveWmsModuleAccent("product_preview"),
+  operations: resolveWmsModuleAccent("operations"),
+  direct_sales: resolveWmsModuleAccent("direct_sales"),
 };
 
 export const STAT_CHIP_CLASS: Record<WmsModuleStatTone, string> = {

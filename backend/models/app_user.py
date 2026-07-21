@@ -78,6 +78,8 @@ class UserWmsProfile(Base, BaseModelMixin):
     timezone = Column(String(64), nullable=False, default="Europe/Warsaw")
 
     wms_operational_modes_json = Column(Text, nullable=True)
+    #: Preferencje topbara WMS: JSON lista ``[{key, pinned, order}, ...]`` (null = brak zapisu → FE default).
+    wms_topbar_pins_json = Column(Text, nullable=True)
     workforce_supervisor_user_id = Column(Integer, ForeignKey("app_users.id", ondelete="SET NULL"), nullable=True, index=True)
     workforce_employment_type = Column(String(32), nullable=True)
     workforce_shift_type = Column(String(32), nullable=True)

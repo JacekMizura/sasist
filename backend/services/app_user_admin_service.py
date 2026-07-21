@@ -435,6 +435,51 @@ def parse_json_int_list(raw: str | None) -> list[int]:
     return []
 
 
+def parse_wms_topbar_pins(raw: str | None) -> list[dict] | None:
+    """Zwraca listę pinów albo ``None`` gdy brak zapisanego JSON (→ FE default)."""
+    if raw is None or not str(raw).strip():
+        return None
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(data, list):
+        return None
+    out: list[dict] = []
+    for row in data:
+        if not isinstance(row, dict):
+            continue
+        key = row.get("key")
+        if not isinstance(key, str) or not key.strip():
+            continue
+        order_raw = row.get("order", 0)
+        try:
+            order = int(order_raw) if order_raw is not None else 0
+        except (TypeError, ValueError):
+            order = 0
+        out.append(
+            {
+                "key": key.strip(),
+                "pinned": bool(row.get("pinned")),
+                "order": order,
+            }
+        )
+    return out
+
+
+def save_wms_topbar_pins(db: Session, user_id: int, pins: list[dict]) -> list[dict]:
+    """Trwały zapis preferencji topbara użytkownika (server-side SSOT)."""
+    from ..db.schema_upgrade import ensure_user_wms_profiles_topbar_pins_column
+    from ..database import engine
+
+    ensure_user_wms_profiles_topbar_pins_column(engine)
+    p = ensure_wms_profile(db, user_id)
+    normalized = parse_wms_topbar_pins(json.dumps(pins, ensure_ascii=False)) or []
+    p.wms_topbar_pins_json = json.dumps(normalized, ensure_ascii=False)
+    db.flush()
+    return normalized
+
+
 def _warehouse_ids(db: Session, user_id: int) -> list[int]:
     rows = (
         db.query(UserWarehouseAssignment.warehouse_id)
@@ -480,6 +525,7 @@ def wms_profile_response(db: Session, user_id: int) -> dict[str, Any]:
             "default_printer_id": None,
             "timezone": "Europe/Warsaw",
             "wms_operational_modes": [],
+            "wms_topbar_pins": None,
             "workforce_supervisor_user_id": None,
             "workforce_employment_type": None,
             "workforce_shift_type": None,
@@ -489,6 +535,7 @@ def wms_profile_response(db: Session, user_id: int) -> dict[str, Any]:
         }
     modes_raw = parse_json_list(getattr(p, "wms_operational_modes_json", None) or None) or []
     modes = [m for m in modes_raw if is_valid_wms_mode(str(m))]
+    pins = parse_wms_topbar_pins(getattr(p, "wms_topbar_pins_json", None))
     active_id = p.active_warehouse_id if p is not None else None
     return {
         "barcode_login_code": p.barcode_login_code,
@@ -505,6 +552,7 @@ def wms_profile_response(db: Session, user_id: int) -> dict[str, Any]:
         "default_printer_id": p.default_printer_id,
         "timezone": p.timezone or "Europe/Warsaw",
         "wms_operational_modes": modes,
+        "wms_topbar_pins": pins,
         "workforce_supervisor_user_id": getattr(p, "workforce_supervisor_user_id", None),
         "workforce_employment_type": getattr(p, "workforce_employment_type", None),
         "workforce_shift_type": getattr(p, "workforce_shift_type", None),

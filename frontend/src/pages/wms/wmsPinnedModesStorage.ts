@@ -1,4 +1,4 @@
-import { WMS_TAB_ITEMS } from "./wmsTabConfig";
+import { DEFAULT_WMS_TOPBAR_PIN_IDS, WMS_TAB_ITEMS, type WmsTabId } from "./wmsTabConfig";
 
 export type WmsPinnedMode = {
   key: string;
@@ -6,7 +6,7 @@ export type WmsPinnedMode = {
   order: number;
 };
 
-const STORAGE_VERSION = "v2";
+const STORAGE_VERSION = "v3";
 const STORAGE_PREFIX = "wmsPinnedModes";
 
 export function wmsPinnedModesStorageKey(userId: number | null): string {
@@ -14,8 +14,21 @@ export function wmsPinnedModesStorageKey(userId: number | null): string {
   return `${STORAGE_PREFIX}:${STORAGE_VERSION}:user:${id}`;
 }
 
+/** Legacy v2 key — used to migrate empty-all-unpinned → defaults once. */
+function legacyV2StorageKey(userId: number | null): string {
+  const id = userId != null && Number.isFinite(userId) ? String(userId) : "anon";
+  return `${STORAGE_PREFIX}:v2:user:${id}`;
+}
+
 function defaultModes(catalogKeys: readonly string[]): WmsPinnedMode[] {
-  return catalogKeys.map((key, i) => ({ key, pinned: false, order: i }));
+  return catalogKeys.map((key) => {
+    const pinIdx = DEFAULT_WMS_TOPBAR_PIN_IDS.indexOf(key as WmsTabId);
+    return {
+      key,
+      pinned: pinIdx >= 0,
+      order: pinIdx >= 0 ? pinIdx : 0,
+    };
+  });
 }
 
 function compactPinnedOrders(modes: WmsPinnedMode[]): WmsPinnedMode[] {
@@ -43,6 +56,8 @@ export function normalizeWmsPinnedModes(stored: unknown, catalogKeys: readonly s
     });
   }
 
+  if (fromStore.size === 0) return base;
+
   const merged = base.map((d) => fromStore.get(d.key) ?? d);
   return compactPinnedOrders(merged);
 }
@@ -52,9 +67,19 @@ export function readWmsPinnedModesFromStorage(userId: number | null): WmsPinnedM
   if (typeof window === "undefined") return defaultModes(keys);
   try {
     const raw = localStorage.getItem(wmsPinnedModesStorageKey(userId));
-    if (!raw) return defaultModes(keys);
-    const parsed = JSON.parse(raw) as unknown;
-    return normalizeWmsPinnedModes(parsed, keys);
+    if (raw) {
+      return normalizeWmsPinnedModes(JSON.parse(raw) as unknown, keys);
+    }
+    // Migrate v2: if user had explicit pins keep them; all-unpinned → defaults.
+    const legacyRaw = localStorage.getItem(legacyV2StorageKey(userId));
+    if (legacyRaw) {
+      const legacy = normalizeWmsPinnedModes(JSON.parse(legacyRaw) as unknown, keys);
+      const hadPins = legacy.some((m) => m.pinned);
+      const migrated = hadPins ? legacy : defaultModes(keys);
+      writeWmsPinnedModesToStorage(userId, migrated);
+      return migrated;
+    }
+    return defaultModes(keys);
   } catch {
     return defaultModes(keys);
   }
@@ -69,4 +94,8 @@ export function writeWmsPinnedModesToStorage(userId: number | null, modes: WmsPi
   } catch {
     /* ignore quota / private mode */
   }
+}
+
+export function defaultWmsPinnedModes(): WmsPinnedMode[] {
+  return defaultModes(WMS_TAB_ITEMS.map((t) => t.id));
 }

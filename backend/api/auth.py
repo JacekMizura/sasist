@@ -38,6 +38,9 @@ from ..schemas.app_user import (
     RefreshRequest,
     TokenResponse,
     WmsProfileResponse,
+    WmsTopbarPinItem,
+    WmsTopbarPinsBody,
+    WmsTopbarPinsResponse,
 )
 from ..schemas.permission_preset import (
     AvatarUploadResponse,
@@ -50,6 +53,7 @@ from ..services.app_user_admin_service import (
     app_user_to_list_item,
     create_user_transaction,
     primary_workforce_group_badge,
+    save_wms_topbar_pins,
     sort_app_users_list_items,
     update_user_transaction,
     wms_profile_response,
@@ -79,6 +83,9 @@ def _ensure_auth_schema() -> None:
         from ..db.schema_upgrade import ensure_app_users_protection_columns
 
         ensure_app_users_protection_columns(engine)
+        from ..db.schema_upgrade import ensure_user_wms_profiles_topbar_pins_column
+
+        ensure_user_wms_profiles_topbar_pins_column(engine)
         _protection_columns_ready = True
     except Exception:
         logger.exception("auth schema self-heal (protection columns) failed")
@@ -149,6 +156,8 @@ def _me_response(db: Session, user: AppUser) -> MeResponse:
         active_warehouse_id=wp.get("active_warehouse_id"),
         primary_workforce_group_id=gid,
         primary_workforce_group=grp,
+        wms_operational_modes=list(wp.get("wms_operational_modes") or []),
+        wms_topbar_pins=wp.get("wms_topbar_pins"),
     )
 
 
@@ -249,6 +258,40 @@ def me(current: AppUser = Depends(get_current_user), db: Session = Depends(get_d
     except Exception as exc:
         db.rollback()
         _reraise_auth_error(exc, action="me", login_hint=getattr(current, "login", None))
+
+
+@router.put("/me/wms-topbar-pins", response_model=WmsTopbarPinsResponse)
+def me_put_wms_topbar_pins(
+    body: WmsTopbarPinsBody,
+    current: AppUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Zapis preferencji przypięć topbara WMS (kolejność + pin) — per użytkownik."""
+    try:
+        _ensure_auth_schema()
+        from ..database import engine
+        from ..db.schema_upgrade import ensure_user_wms_profiles_topbar_pins_column
+
+        ensure_user_wms_profiles_topbar_pins_column(engine)
+        pins_payload = [p.model_dump() for p in body.pins]
+        saved = save_wms_topbar_pins(db, int(current.id), pins_payload)
+        log_audit_entry(
+            db,
+            user_id=current.id,
+            action="auth.wms_topbar_pins",
+            detail={"count": len(saved)},
+        )
+        db.commit()
+        return WmsTopbarPinsResponse(
+            pins=[WmsTopbarPinItem(**row) for row in saved],
+            saved=True,
+        )
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as exc:
+        db.rollback()
+        _reraise_auth_error(exc, action="me_wms_topbar_pins", login_hint=getattr(current, "login", None))
 
 
 @router.get("/me/warehouse-context", response_model=WarehouseContextResponse)

@@ -9,6 +9,7 @@ import { WarehouseExecutionProvider } from "../context/WarehouseExecutionContext
 import { WmsScannerProvider } from "../context/WmsScannerContext";
 import WmsTopBar from "./WmsTopBar";
 import WmsWarehouseAccessGate from "./WmsWarehouseAccessGate";
+import { WmsOperationalModeGate } from "../pages/wms/WmsOperationalModeGate";
 
 /**
  * Unified WMS shell — one top navigation for every mode (picking, recovery, braki, packing, …).
@@ -24,7 +25,9 @@ function WmsLayoutChrome() {
       <ScanFeedbackOverlay />
       <main className="min-h-0 w-full max-w-none flex-1 overflow-y-auto bg-white">
         <WmsWarehouseAccessGate>
-          <Outlet />
+          <WmsOperationalModeGate>
+            <Outlet />
+          </WmsOperationalModeGate>
         </WmsWarehouseAccessGate>
       </main>
     </div>

@@ -82,6 +82,28 @@ def ensure_order_issue_task_lifecycle_schema(db: Session) -> None:
     ensure_order_issue_tasks_archive_columns(engine)
     ensure_order_issue_tasks_lifecycle_columns(engine)
     ensure_orders_picking_handoff_mode_column(engine)
+    # Order ORM columns required when Braki list loads full ``Order`` rows.
+    try:
+        from ..db.order_fulfillment_lifecycle_schema import ensure_order_fulfillment_lifecycle_schema
+        from ..db.schema_upgrade import (
+            ensure_orders_discount_columns,
+            ensure_orders_fulfillment_state_columns,
+            ensure_orders_priority_color_column,
+            ensure_orders_wms_packing_automation_finished_at_column,
+            ensure_orders_wms_timeline_columns,
+        )
+
+        ensure_order_fulfillment_lifecycle_schema(engine)
+        ensure_orders_fulfillment_state_columns(engine)
+        ensure_orders_wms_timeline_columns(engine)
+        ensure_orders_wms_packing_automation_finished_at_column(engine)
+        ensure_orders_priority_color_column(engine)
+        ensure_orders_discount_columns(engine)
+    except Exception:
+        logger.exception(
+            "[order_issue_task_lifecycle] ensure_orders_orm_columns_failed — "
+            "GET /order-issue-tasks may still fail until schema is healed"
+        )
 
 
 def _query_active_shortage_task(

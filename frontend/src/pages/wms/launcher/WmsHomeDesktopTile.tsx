@@ -10,7 +10,6 @@ type Props = {
   description: string;
   icon: LucideIcon;
   count?: number;
-  shortcut?: number | string;
   focused?: boolean;
   onActivate: () => void;
 };
@@ -28,7 +27,7 @@ const BADGE_TONE: Partial<Record<WmsTabId, string>> = {
 
 /**
  * Desktop module card — fully clickable.
- * Content only: icon, name, description, optional badge. No CTA labels.
+ * Content only: icon, name, description, optional badge. No CTA labels / shortcut digits.
  */
 export const WmsHomeDesktopTile = memo(function WmsHomeDesktopTile({
   moduleId,
@@ -36,7 +35,6 @@ export const WmsHomeDesktopTile = memo(function WmsHomeDesktopTile({
   description,
   icon: Icon,
   count = 0,
-  shortcut,
   focused,
   onActivate,
 }: Props) {
@@ -93,14 +91,7 @@ export const WmsHomeDesktopTile = memo(function WmsHomeDesktopTile({
           </p>
         </div>
       </div>
-
-      {shortcut != null ? (
-        <div className="mt-auto pt-3">
-          <span className="text-[11px] font-medium tabular-nums text-slate-400">{String(shortcut)}</span>
-        </div>
-      ) : (
-        <div className="mt-auto" />
-      )}
+      <div className="mt-auto" />
     </button>
   );
 });

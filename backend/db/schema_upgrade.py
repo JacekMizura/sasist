@@ -6030,6 +6030,15 @@ def ensure_system_labels_table(engine: Engine) -> None:
     SystemLabel.__table__.create(bind=engine, checkfirst=True)
 
 
+def ensure_user_wms_profiles_topbar_pins_column(engine: Engine) -> None:
+    """Preferencje przypięć topbara WMS — ``user_wms_profiles.wms_topbar_pins_json``."""
+    cols = _cols(engine, "user_wms_profiles")
+    if not cols or "wms_topbar_pins_json" in cols:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE user_wms_profiles ADD COLUMN wms_topbar_pins_json TEXT"))
+
+
 def _sqlite_ensure_user_wms_profiles_operational_columns(conn) -> None:
     """
     SQLite: add NOT NULL operational columns with defaults when missing.
@@ -6059,6 +6068,8 @@ def _sqlite_ensure_user_wms_profiles_operational_columns(conn) -> None:
                 "ALTER TABLE user_wms_profiles ADD COLUMN timezone VARCHAR(64) NOT NULL DEFAULT 'Europe/Warsaw'"
             )
         )
+    if "wms_topbar_pins_json" not in cols:
+        conn.execute(text("ALTER TABLE user_wms_profiles ADD COLUMN wms_topbar_pins_json TEXT"))
 
 
 def ensure_user_wms_profiles_table(engine: Engine) -> None:
@@ -6097,6 +6108,11 @@ def ensure_user_wms_profiles_table(engine: Engine) -> None:
             conn.execute(text("CREATE INDEX ix_user_wms_profiles_user_id ON user_wms_profiles(user_id)"))
         else:
             _sqlite_ensure_user_wms_profiles_operational_columns(conn)
+
+        # Dialect-agnostic: preferencje topbara (TEXT JSON).
+        cols_after = _table_column_names(conn, "user_wms_profiles")
+        if "wms_topbar_pins_json" not in cols_after:
+            conn.execute(text("ALTER TABLE user_wms_profiles ADD COLUMN wms_topbar_pins_json TEXT"))
 
         cols = _table_column_names(conn, "app_users")
         has_wm = "wms_language" in cols

@@ -2,6 +2,12 @@ import api from "./axios";
 
 import type { CatModTreeNode } from "../components/admin/PermissionTreePanel";
 
+export type WmsTopbarPinItem = {
+  key: string;
+  pinned: boolean;
+  order: number;
+};
+
 export type WmsProfilePayload = {
   barcode_login_code?: string | null;
   language?: string;
@@ -39,6 +45,8 @@ export type WmsProfileResponse = {
   default_printer_id?: number | null;
   timezone: string;
   wms_operational_modes?: string[];
+  /** null = brak zapisu (FE stosuje default). */
+  wms_topbar_pins?: WmsTopbarPinItem[] | null;
   workforce_supervisor_user_id?: number | null;
   workforce_employment_type?: string | null;
   workforce_shift_type?: string | null;
@@ -86,6 +94,10 @@ export type MeResponse = {
   warehouse_ids?: number[];
   primary_workforce_group_id?: number | null;
   primary_workforce_group?: PrimaryWorkforceGroupBadge | null;
+  /** Flat mirror of wms_profile.wms_operational_modes */
+  wms_operational_modes?: string[];
+  /** Flat mirror — null = brak zapisu (default FE). */
+  wms_topbar_pins?: WmsTopbarPinItem[] | null;
 };
 
 export type AppUserListItem = {
@@ -154,6 +166,14 @@ export async function logoutRequest(refresh_token: string) {
 export async function fetchMe(): Promise<MeResponse> {
   const res = await api.get<MeResponse>("/auth/me");
   return res.data;
+}
+
+export async function putWmsTopbarPins(pins: WmsTopbarPinItem[]): Promise<WmsTopbarPinItem[]> {
+  const res = await api.put<{ pins: WmsTopbarPinItem[] | null; saved: boolean }>(
+    "/auth/me/wms-topbar-pins",
+    { pins },
+  );
+  return res.data.pins ?? pins;
 }
 
 export type WarehouseBrief = {

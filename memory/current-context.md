@@ -2,7 +2,7 @@
 
 ## Active
 
-**Ręczne PZ WMS: cena zakupu + VAT + Historia czynności** — autofill z istniejącego SSOT (`product_cost_service` / `product_vat_rate_percent`), audyt przez `activity_log` + `ReceivingScanLog`. Commit lokalny, **bez push**.
+**WMS Dashboard / Topbar / order-issue-tasks** — wspólny registry trybów, konfigurowalny topbar (server-side pins), RBAC `wms_operational_modes`, cleanup launcher, heal GET `/order-issue-tasks`. Commit lokalny, **bez push**.
 
 ## Preferencja commitów (user)
 

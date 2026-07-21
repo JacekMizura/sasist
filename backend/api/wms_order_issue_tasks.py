@@ -134,32 +134,46 @@ def _fetch_orders_by_id(
     db: Session,
     order_ids: list[int],
 ) -> dict[int, Order]:
-    """Jedno zapytanie z eager load — bez N+1 w pętli listy."""
+    """Jedno zapytanie z eager load — bez N+1 w pętli listy.
+
+    Schema drift on ``orders`` (np. brak ``picking_handoff_mode``) historically
+    caused HTTP 500 for the whole Braki queue. Heal + retry once before failing.
+    """
     if not order_ids:
         return {}
-    try:
-        rows = (
-            db.query(Order)
-            .options(
+
+    def _run(*, eager: bool) -> list[Order]:
+        q = db.query(Order).filter(Order.id.in_(order_ids), Order.deleted_at.is_(None))
+        if eager:
+            q = q.options(
                 joinedload(Order.order_ui_status),
                 joinedload(Order.customer),
                 selectinload(Order.items).joinedload(OrderItem.product),
             )
-            .filter(Order.id.in_(order_ids), Order.deleted_at.is_(None))
-            .all()
-        )
+        else:
+            q = q.options(selectinload(Order.items))
+        return q.all()
+
+    try:
+        rows = _run(eager=True)
     except SQLAlchemyError:
         logger.exception(
-            "[wms.order_issue_tasks.fetch] orders_eager_load_failed order_ids=%s — retry minimal",
+            "[wms.order_issue_tasks.fetch] orders_eager_load_failed order_ids=%s — heal schema + retry",
             order_ids[:20],
         )
         db.rollback()
-        rows = (
-            db.query(Order)
-            .options(selectinload(Order.items))
-            .filter(Order.id.in_(order_ids), Order.deleted_at.is_(None))
-            .all()
-        )
+        try:
+            ensure_order_issue_task_table_schema(db)
+        except Exception:
+            logger.exception("[wms.order_issue_tasks.fetch] schema_heal_failed")
+        try:
+            rows = _run(eager=True)
+        except SQLAlchemyError:
+            logger.exception(
+                "[wms.order_issue_tasks.fetch] orders_eager_load_retry_failed — minimal load",
+            )
+            db.rollback()
+            rows = _run(eager=False)
     return {int(o.id): o for o in rows}
 
 

@@ -18,8 +18,15 @@ export default function WmsHomePage() {
   const { user } = useAuth();
   const { warehouse } = useWarehouse();
   const isHandheld = useIsHandheldDevice();
-  const { dashboardTiles } = useWmsPinnedModes(user?.id ?? null);
-  const { metrics, kpi } = useWmsLauncherBadges(warehouse?.id ?? null);
+  const {
+    dashboardTiles,
+    pinnedTabsInOrder,
+    pinnableModules,
+    isPinned,
+    togglePin,
+    movePinned,
+  } = useWmsPinnedModes(user?.id ?? null);
+  const { metrics, kpi, kpiMeta } = useWmsLauncherBadges(warehouse?.id ?? null);
 
   const onOpenModule = useCallback(
     (path: string) => {
@@ -39,7 +46,13 @@ export default function WmsHomePage() {
       tiles={dashboardTiles}
       metrics={metrics}
       kpi={kpi}
+      kpiMeta={kpiMeta}
       onOpenModule={onOpenModule}
+      pinnableModules={pinnableModules}
+      isPinned={isPinned}
+      onTogglePin={togglePin}
+      onMovePinned={movePinned}
+      pinnedCount={pinnedTabsInOrder.length}
     />
   );
 }

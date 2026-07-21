@@ -83,6 +83,8 @@ class WmsProfileResponse(BaseModel):
     default_printer_id: int | None = None
     timezone: str = "Europe/Warsaw"
     wms_operational_modes: list[str] = Field(default_factory=list)
+    #: Preferencje topbara — null gdy brak zapisu (FE stosuje default).
+    wms_topbar_pins: list[dict] | None = None
     workforce_supervisor_user_id: int | None = None
     workforce_employment_type: str | None = None
     workforce_shift_type: str | None = None
@@ -96,6 +98,21 @@ class PrimaryWorkforceGroupBadge(BaseModel):
     name: str
     color: str = "#64748b"
     icon_key: str = "Users"
+
+
+class WmsTopbarPinItem(BaseModel):
+    key: str = Field(..., min_length=1, max_length=64)
+    pinned: bool = False
+    order: int = 0
+
+
+class WmsTopbarPinsBody(BaseModel):
+    pins: list[WmsTopbarPinItem] = Field(default_factory=list)
+
+
+class WmsTopbarPinsResponse(BaseModel):
+    pins: list[WmsTopbarPinItem] | None = None
+    saved: bool = False
 
 
 class MeResponse(BaseModel):
@@ -129,6 +146,10 @@ class MeResponse(BaseModel):
     warehouse_ids: list[int] = Field(default_factory=list)
     primary_workforce_group_id: int | None = None
     primary_workforce_group: PrimaryWorkforceGroupBadge | None = None
+    #: Flat mirror of ``wms_profile.wms_operational_modes`` for launcher/topbar.
+    wms_operational_modes: list[str] = Field(default_factory=list)
+    #: Flat mirror — null = brak zapisu (default FE).
+    wms_topbar_pins: list[WmsTopbarPinItem] | None = None
 
 
 class ChangePasswordRequest(BaseModel):

@@ -1,10 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { putWmsTopbarPins } from "../api/authApi";
 import { useAuth } from "../context/AuthContext";
 import { useWarehouse } from "../context/WarehouseContext";
 import { WMS_TAB_ITEMS, type WmsTabConfigItem } from "../pages/wms/wmsTabConfig";
 import { resolveWmsNavTabs } from "../pages/wms/wmsNavTabs";
 import {
+  defaultWmsPinnedModes,
+  normalizeWmsPinnedModes,
   readWmsPinnedModesFromStorage,
   writeWmsPinnedModesToStorage,
   type WmsPinnedMode,
@@ -12,22 +15,59 @@ import {
 
 export type { WmsPinnedMode };
 
+function modesFromServerOrLocal(
+  userId: number | null,
+  serverPins: WmsPinnedMode[] | null | undefined,
+): WmsPinnedMode[] {
+  const keys = WMS_TAB_ITEMS.map((t) => t.id);
+  if (serverPins != null) {
+    return normalizeWmsPinnedModes(serverPins, keys);
+  }
+  return readWmsPinnedModesFromStorage(userId);
+}
+
 export function useWmsPinnedModes(userId: number | null) {
   const { user } = useAuth();
   const { activeWarehouseRequiresPutaway } = useWarehouse();
-  const [modes, setModes] = useState<WmsPinnedMode[]>(() => readWmsPinnedModesFromStorage(userId));
+  const serverPins = user?.wms_topbar_pins ?? user?.wms_profile?.wms_topbar_pins ?? null;
+  const serverPinsKey = serverPins == null ? "null" : JSON.stringify(serverPins);
+  const operationalModes =
+    user?.wms_operational_modes ?? user?.wms_profile?.wms_operational_modes ?? [];
+
+  const [modes, setModes] = useState<WmsPinnedMode[]>(() =>
+    modesFromServerOrLocal(userId, serverPins as WmsPinnedMode[] | null),
+  );
+  const saveTimer = useRef<number | null>(null);
+  const skipNextPersist = useRef(false);
 
   useEffect(() => {
-    setModes(readWmsPinnedModesFromStorage(userId));
-  }, [userId]);
+    skipNextPersist.current = true;
+    const parsed =
+      serverPinsKey === "null" ? null : (JSON.parse(serverPinsKey) as WmsPinnedMode[]);
+    setModes(modesFromServerOrLocal(userId, parsed));
+  }, [userId, serverPinsKey]);
 
   useEffect(() => {
+    if (skipNextPersist.current) {
+      skipNextPersist.current = false;
+      return;
+    }
     writeWmsPinnedModesToStorage(userId, modes);
+    if (userId == null) return;
+    if (saveTimer.current != null) window.clearTimeout(saveTimer.current);
+    saveTimer.current = window.setTimeout(() => {
+      void putWmsTopbarPins(modes).catch(() => {
+        /* local cache already written; next login may re-sync from server */
+      });
+    }, 400);
+    return () => {
+      if (saveTimer.current != null) window.clearTimeout(saveTimer.current);
+    };
   }, [userId, modes]);
 
   const navResolution = useMemo(
-    () => resolveWmsNavTabs(modes, user?.wms_operational_modes, activeWarehouseRequiresPutaway),
-    [modes, user?.wms_operational_modes, activeWarehouseRequiresPutaway],
+    () => resolveWmsNavTabs(modes, operationalModes, activeWarehouseRequiresPutaway),
+    [modes, operationalModes, activeWarehouseRequiresPutaway],
   );
 
   const pinnedTabsInOrder: WmsTabConfigItem[] = navResolution.pinnedTabs;
@@ -42,7 +82,16 @@ export function useWmsPinnedModes(userId: number | null) {
   const togglePin = useCallback((key: string) => {
     setModes((prev) => {
       const idx = prev.findIndex((x) => x.key === key);
-      if (idx === -1) return prev;
+      if (idx === -1) {
+        const keys = WMS_TAB_ITEMS.map((t) => t.id);
+        const base = normalizeWmsPinnedModes(prev.length ? prev : defaultWmsPinnedModes(), keys);
+        const i = base.findIndex((x) => x.key === key);
+        if (i === -1) return prev;
+        const next = [...base];
+        const maxOrder = Math.max(-1, ...next.filter((m) => m.pinned).map((m) => m.order));
+        next[i] = { ...next[i], pinned: true, order: maxOrder + 1 };
+        return next;
+      }
       const cur = prev[idx];
       if (cur.pinned) {
         const next = [...prev];
@@ -104,5 +153,6 @@ export function useWmsPinnedModes(userId: number | null) {
     movePinned,
     reorderPinned,
     catalogTabs: WMS_TAB_ITEMS,
+    pinnableModules: navResolution.pinnableModules,
   };
 }
