@@ -44,6 +44,8 @@ export type ReceivingLineCardProps = {
   onMoveToCarrier: () => void;
   onRemoveFromDocument: () => void;
   onShowHistory: () => void;
+  /** Blind receiving: hide ordered qty / difference on the card. */
+  showDocumentControl?: boolean;
 };
 
 function WadaBadge({ units }: { units: number }) {
@@ -76,6 +78,7 @@ export function ReceivingLineCard({
   onMoveToCarrier,
   onRemoveFromDocument,
   onShowHistory,
+  showDocumentControl = false,
 }: ReceivingLineCardProps) {
   const img = wmsReceiptLineImageUrl(it);
   const ean = (it.product_ean || "").trim() || "—";
@@ -104,7 +107,7 @@ export function ReceivingLineCard({
         id: "edit",
         label: "Edytuj dane przyjęcia",
         onClick: onEditReceivingAdmin,
-        disabled: !canEdit,
+        disabled: !canEdit || !showDocumentControl,
       },
       { id: "carrier", label: "Przenieś na nośnik", onClick: onMoveToCarrier, disabled: !canEdit },
       {
@@ -119,6 +122,7 @@ export function ReceivingLineCard({
   }, [
     canEdit,
     canRemoveGhost,
+    showDocumentControl,
     onEditReceivingAdmin,
     onMarkDamage,
     onMoveToCarrier,
@@ -217,30 +221,53 @@ export function ReceivingLineCard({
           </div>
         </div>
 
-        {/* Ilość z dokumentu | rzeczywista | różnica | wady */}
-        <div className="mt-auto mb-2 grid grid-cols-2 gap-x-3 gap-y-2" data-wms-card-no-nav="">
-          <div>
-            <p className="text-[9px] font-medium uppercase tracking-wider text-slate-400">Ilość z dokumentu</p>
-            <p className="text-sm font-bold tabular-nums text-slate-800">
-              {documentQty != null ? fmtQty(documentQty) : "—"}
-            </p>
-          </div>
-          <div>
-            <p className="text-[9px] font-medium uppercase tracking-wider text-slate-400">Ilość rzeczywista</p>
-            <p className="text-sm font-bold tabular-nums text-slate-900">{fmtQty(displayCount)}</p>
-          </div>
-          <div>
-            <p className="text-[9px] font-medium uppercase tracking-wider text-slate-400">Różnica</p>
-            <p className={`text-sm font-bold tabular-nums ${receivingDifferenceToneClass(qtyDiff)}`}>
-              {formatReceivingSignedDiff(qtyDiff, fmtQty)}
-            </p>
-          </div>
-          <div>
-            <p className="text-[9px] font-medium uppercase tracking-wider text-slate-400">Wady</p>
-            <p className={`text-sm font-bold tabular-nums ${accepted.totalDamaged > 0 ? "text-rose-700" : "text-slate-800"}`}>
-              {fmtQty(accepted.totalDamaged)}
-            </p>
-          </div>
+        {/* Ilość: operator = dotychczas + wady; kontrola = dokument / rzeczywista / różnica / wady */}
+        <div
+          className={[
+            "mt-auto mb-2 grid gap-x-3 gap-y-2",
+            showDocumentControl ? "grid-cols-2" : "grid-cols-2",
+          ].join(" ")}
+          data-wms-card-no-nav=""
+        >
+          {showDocumentControl ? (
+            <>
+              <div>
+                <p className="text-[9px] font-medium uppercase tracking-wider text-slate-400">Ilość z dokumentu</p>
+                <p className="text-sm font-bold tabular-nums text-slate-800">
+                  {documentQty != null ? fmtQty(documentQty) : "—"}
+                </p>
+              </div>
+              <div>
+                <p className="text-[9px] font-medium uppercase tracking-wider text-slate-400">Ilość rzeczywista</p>
+                <p className="text-sm font-bold tabular-nums text-slate-900">{fmtQty(displayCount)}</p>
+              </div>
+              <div>
+                <p className="text-[9px] font-medium uppercase tracking-wider text-slate-400">Różnica</p>
+                <p className={`text-sm font-bold tabular-nums ${receivingDifferenceToneClass(qtyDiff)}`}>
+                  {formatReceivingSignedDiff(qtyDiff, fmtQty)}
+                </p>
+              </div>
+              <div>
+                <p className="text-[9px] font-medium uppercase tracking-wider text-slate-400">Wady</p>
+                <p className={`text-sm font-bold tabular-nums ${accepted.totalDamaged > 0 ? "text-rose-700" : "text-slate-800"}`}>
+                  {fmtQty(accepted.totalDamaged)}
+                </p>
+              </div>
+            </>
+          ) : (
+            <>
+              <div>
+                <p className="text-[9px] font-medium uppercase tracking-wider text-slate-400">Dotychczas przyjęto</p>
+                <p className="text-sm font-bold tabular-nums text-slate-900">{fmtQty(displayCount)}</p>
+              </div>
+              <div>
+                <p className="text-[9px] font-medium uppercase tracking-wider text-slate-400">Wady</p>
+                <p className={`text-sm font-bold tabular-nums ${accepted.totalDamaged > 0 ? "text-rose-700" : "text-slate-800"}`}>
+                  {fmtQty(accepted.totalDamaged)}
+                </p>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Sposób przyjęcia — tylko gdy więcej niż same sztuki (kartony / nośniki / wada) */}

@@ -57,6 +57,12 @@ export type ReceivingExecutionModalProps = {
   adminMode: boolean;
   onToggleAdminMode: () => void;
   onRequireAdminMode: () => void;
+  /** Blind receiving: hide ordered qty / difference unless true. */
+  showDocumentControl: boolean;
+  /** Seed „Przyjmujesz teraz” when opening (e.g. from scan). */
+  seedReceiveNowQty?: number;
+  /** External EAN/carton scan while modal open → bump „Przyjmujesz teraz”. */
+  receiveNowBump?: { amount: number; asCartons: boolean; token: number } | null;
 };
 
 export function ReceivingExecutionModal({
@@ -75,6 +81,9 @@ export function ReceivingExecutionModal({
   adminMode,
   onToggleAdminMode,
   onRequireAdminMode,
+  showDocumentControl,
+  seedReceiveNowQty = 1,
+  receiveNowBump = null,
 }: ReceivingExecutionModalProps) {
   const { refocusScannerInput } = useWmsScanner();
   const qtyInputRef = useRef<HTMLInputElement>(null);
@@ -125,14 +134,6 @@ export function ReceivingExecutionModal({
 
   const qtyBlocked = qtyMode === "cartons" && !cartonsConfigured;
   const parsedQty = parseQtyInput(inputVal);
-  const addPreview =
-    !needsSerial && parsedQty > 0
-      ? qtyMode === "cartons" && cartonsConfigured
-        ? parsedQty * pack
-        : parsedQty
-      : 0;
-  const afterConfirm = accepted.totalAllReceived + addPreview;
-  const qtyDiffAfter = receivingQuantityDifference(documentQty, afterConfirm);
 
   const focusQtyInput = useCallback(() => {
     const el = qtyInputRef.current;
@@ -150,7 +151,8 @@ export function ReceivingExecutionModal({
     setModalSerial(receivingSerialKey(line));
     setModalExpiry(formatExpiryDatePl(line.expiry_date) ?? "");
     setModalBatch((line.batch_number ?? "").toString().trim());
-    setInputVal("1");
+    const seed = Math.max(1, Math.floor(Number(seedReceiveNowQty) || 1));
+    setInputVal(String(seed));
     setQtyMode("units");
     setModalErrors({});
     const t = window.setTimeout(() => {
@@ -168,10 +170,28 @@ export function ReceivingExecutionModal({
     line.expiry_date,
     line.batch_number,
     line.serial_numbers,
+    seedReceiveNowQty,
     refocusScannerInput,
     needsSerial,
     focusQtyInput,
   ]);
+
+  useEffect(() => {
+    if (!receiveNowBump || needsSerial) return;
+    if (receiveNowBump.asCartons) {
+      setQtyMode("cartons");
+      if (!cartonsConfigured) {
+        setModalErrors((p) => ({ ...p, qty: CARTON_PACK_WARNING }));
+        return;
+      }
+      setInputVal((prev) => String(Math.max(1, parseQtyInput(prev) + Math.max(1, receiveNowBump.amount))));
+    } else {
+      setQtyMode("units");
+      setInputVal((prev) => String(Math.max(1, parseQtyInput(prev) + Math.max(1, receiveNowBump.amount))));
+    }
+    setModalErrors((p) => (p.qty === CARTON_PACK_WARNING ? p : { ...p, qty: undefined }));
+    window.setTimeout(() => focusQtyInput(), 0);
+  }, [receiveNowBump, needsSerial, cartonsConfigured, focusQtyInput]);
 
   const carrierLabel = activeCarrierCode?.trim()
     ? activeCarrierCode
@@ -400,21 +420,28 @@ export function ReceivingExecutionModal({
         <div className="space-y-5">
           
           {/* =========================================================
-              2. BLOK: ILOŚĆ Z DOKUMENTU / DOTYCHCZAS / RÓŻNICA
+              2. DOTYCHCZAS / WADY (+ kontrola dokumentu tylko z permission)
               ========================================================= */}
           <div className="bg-white border border-slate-100 rounded-[1.5rem] p-5 sm:p-6 shadow-sm space-y-5">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <div>
-                <span className="text-[10px] font-black text-slate-400 block uppercase tracking-widest mb-1">
-                  Ilość z dokumentu
-                </span>
-                <p className="text-xl font-black tabular-nums text-slate-800">
-                  {documentQty != null ? documentQty : "—"}
-                  {documentQty != null ? (
-                    <span className="ml-1 text-xs font-bold text-slate-400">szt.</span>
-                  ) : null}
-                </p>
-              </div>
+            <div
+              className={[
+                "grid gap-4",
+                showDocumentControl ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-2",
+              ].join(" ")}
+            >
+              {showDocumentControl ? (
+                <div>
+                  <span className="text-[10px] font-black text-slate-400 block uppercase tracking-widest mb-1">
+                    Ilość z dokumentu
+                  </span>
+                  <p className="text-xl font-black tabular-nums text-slate-800">
+                    {documentQty != null ? documentQty : "—"}
+                    {documentQty != null ? (
+                      <span className="ml-1 text-xs font-bold text-slate-400">szt.</span>
+                    ) : null}
+                  </p>
+                </div>
+              ) : null}
               <div>
                 <span className="text-[10px] font-black text-slate-400 block uppercase tracking-widest mb-1">
                   Dotychczas przyjęto
@@ -424,14 +451,16 @@ export function ReceivingExecutionModal({
                   <span className="ml-1 text-xs font-bold text-slate-400">szt.</span>
                 </p>
               </div>
-              <div>
-                <span className="text-[10px] font-black text-slate-400 block uppercase tracking-widest mb-1">
-                  Różnica
-                </span>
-                <p className={`text-xl font-black tabular-nums ${receivingDifferenceToneClass(qtyDiffNow)}`}>
-                  {formatReceivingSignedDiff(qtyDiffNow, (n) => String(n))}
-                </p>
-              </div>
+              {showDocumentControl ? (
+                <div>
+                  <span className="text-[10px] font-black text-slate-400 block uppercase tracking-widest mb-1">
+                    Różnica
+                  </span>
+                  <p className={`text-xl font-black tabular-nums ${receivingDifferenceToneClass(qtyDiffNow)}`}>
+                    {formatReceivingSignedDiff(qtyDiffNow, (n) => String(n))}
+                  </p>
+                </div>
+              ) : null}
               <div>
                 <span className="text-[10px] font-black text-slate-400 block uppercase tracking-widest mb-1">
                   Wady
@@ -443,7 +472,7 @@ export function ReceivingExecutionModal({
               </div>
             </div>
 
-            {adminMode && onSaveCommercial ? (
+            {showDocumentControl && adminMode && onSaveCommercial ? (
               <div className="border-t border-slate-100 pt-4 space-y-3">
                 <span className="text-[10px] font-black text-slate-400 block uppercase tracking-widest">
                   Cena / VAT / ilość z dokumentu
@@ -536,7 +565,7 @@ export function ReceivingExecutionModal({
                   })()}
                 </p>
               </div>
-            ) : (
+            ) : showDocumentControl ? (
               <div className="border-t border-slate-100 pt-4 grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
                 <div>
                   <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Cena netto</span>
@@ -563,14 +592,13 @@ export function ReceivingExecutionModal({
                   </p>
                 </div>
               </div>
-            )}
+            ) : null}
 
-            <div className="border-t border-slate-100 pt-4 flex flex-col sm:flex-row gap-6 sm:gap-0">
-            <div className="flex-1 sm:pr-6">
+            <div className="border-t border-slate-100 pt-4">
               <span className="text-[10px] font-black text-slate-400 block uppercase tracking-widest mb-4">
                 Szczegóły przyjęcia
               </span>
-              <div className="space-y-2.5">
+              <div className="space-y-2.5 max-w-sm">
                 <div className="flex justify-between items-end">
                   <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Sztuki</span>
                   <div className="flex-1 border-b-2 border-dotted border-slate-200 mx-3 relative top-[-4px]"></div>
@@ -591,23 +619,10 @@ export function ReceivingExecutionModal({
                 ))}
               </div>
             </div>
-            
-            <div className="hidden sm:block w-px bg-slate-100 mx-3 shrink-0"></div>
-            
-            <div className="sm:w-32 flex flex-col justify-center sm:text-right text-center border-t sm:border-t-0 border-slate-100 pt-5 sm:pt-0">
-              <span className="text-[10px] font-black text-slate-400 block uppercase tracking-widest mb-1.5">
-                Ilość rzeczywista
-              </span>
-              <div className="flex items-baseline justify-center sm:justify-end gap-1.5 font-sans tabular-nums">
-                <span className="text-[2.5rem] leading-none font-black text-[#5a4fcf]">{accepted.totalAllReceived}</span>
-                <span className="text-sm font-bold text-[#5a4fcf]">szt.</span>
-              </div>
-            </div>
-            </div>
           </div>
 
           {/* =========================================================
-              3. GŁÓWNY KONTROLER ILOŚCI
+              3. GŁÓWNY KONTROLER — PRZYJMUJESZ TERAZ (delta)
               ========================================================= */}
           <div className="bg-white border border-slate-100 rounded-[2rem] p-6 sm:p-8 flex flex-col items-center shadow-sm">
             
@@ -648,6 +663,9 @@ export function ReceivingExecutionModal({
                   </button>
                   
                   <div className="flex-1 flex items-baseline justify-center mx-4 text-[#5a4fcf]">
+                    <span className="text-3xl sm:text-4xl font-black text-[#5a4fcf]/70 mr-1 select-none" aria-hidden>
+                      +
+                    </span>
                     <input
                       ref={qtyInputRef}
                       type="text"
@@ -655,6 +673,7 @@ export function ReceivingExecutionModal({
                       enterKeyHint="done"
                       value={inputVal}
                       disabled={busy}
+                      aria-label="Przyjmujesz teraz"
                       onChange={(e) => {
                         setInputVal(e.target.value.replace(/[^\d.,]/g, ""));
                         setModalErrors((p) => (p.qty === CARTON_PACK_WARNING ? p : { ...p, qty: undefined }));
@@ -694,28 +713,14 @@ export function ReceivingExecutionModal({
             
             {qtyMode === "cartons" && cartonsConfigured && parsedQty > 0 && (
               <p className="mt-5 text-center text-sm font-semibold text-[#5a4fcf]">
-                1 kart. = {pack} szt. <span className="text-slate-400 mx-2">·</span> Łącznie {parsedQty * pack} szt.
+                1 kart. = {pack} szt. <span className="text-slate-400 mx-2">·</span> Przyjmujesz teraz {parsedQty * pack} szt.
               </p>
             )}
-
-            {!needsSerial && parsedQty > 0 ? (
-              <div className="mt-5 text-center space-y-1">
-                <p className="text-sm font-semibold text-slate-600">
-                  Po zatwierdzeniu:{" "}
-                  <span className="font-black text-slate-900">{afterConfirm} szt.</span>
-                </p>
-                {qtyDiffAfter != null ? (
-                  <p className={`text-sm font-semibold ${receivingDifferenceToneClass(qtyDiffAfter)}`}>
-                    Różnica po zatwierdzeniu: {formatReceivingSignedDiff(qtyDiffAfter, (n) => String(n))}
-                  </p>
-                ) : null}
-              </div>
-            ) : null}
 
             <div className="mt-8 text-center">
               <span className="text-[10px] sm:text-[11px] font-black text-slate-400 tracking-widest uppercase">
                 <span className="bg-slate-100 border border-slate-200 text-slate-500 px-2.5 py-1 rounded-md mr-2 font-black uppercase tracking-widest text-[10px]">Enter</span>
-                zatwierdza • Skan EAN dodaje +1{qtyMode === "cartons" && cartonsConfigured ? " kart." : " szt."}
+                zatwierdź • Skan EAN dodaje +1 do „Przyjmujesz teraz”
               </span>
             </div>
           </div>
@@ -727,16 +732,18 @@ export function ReceivingExecutionModal({
             <div className="bg-slate-50 p-6 rounded-3xl border border-slate-200 space-y-5 shadow-inner">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-black uppercase tracking-widest text-slate-500">Szczegóły partii</span>
-                <button
-                  type="button"
-                  onClick={onToggleAdminMode}
-                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition-colors ${
-                    adminMode ? "border-indigo-300 bg-indigo-50 text-indigo-700" : "border-slate-200 bg-white text-slate-500 hover:bg-slate-100"
-                  }`}
-                  aria-label="Dane partii"
-                >
-                  <Settings2 size={18} strokeWidth={2.5} />
-                </button>
+                {showDocumentControl ? (
+                  <button
+                    type="button"
+                    onClick={onToggleAdminMode}
+                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition-colors ${
+                      adminMode ? "border-indigo-300 bg-indigo-50 text-indigo-700" : "border-slate-200 bg-white text-slate-500 hover:bg-slate-100"
+                    }`}
+                    aria-label="Dane partii"
+                  >
+                    <Settings2 size={18} strokeWidth={2.5} />
+                  </button>
+                ) : null}
               </div>
               
               {needsExpiry && (

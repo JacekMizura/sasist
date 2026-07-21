@@ -11,6 +11,7 @@ import {
   resolveWmsReceivingScan,
 } from "../../api/wmsReceivingApi";
 import ActivityLogPanel from "../../components/activityLog/ActivityLogPanel";
+import { useAuth } from "../../context/AuthContext";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { ReceivingActiveCarrierBar } from "../../components/wms/receiving/ReceivingActiveCarrierBar";
 import { ReceivingCarrierAssignModal } from "../../components/wms/receiving/carriers/ReceivingCarrierAssignModal";
@@ -20,6 +21,7 @@ import { useWmsScanner } from "../../context/WmsScannerContext";
 import { wmsReceiptLineImageUrl } from "../../utils/wmsReceiptLineMedia";
 import { documentCreatedByLabel } from "../../utils/documentCreatedBy";
 import { WMS_ROUTES } from "./wmsRoutes";
+import { canViewReceivingDocumentControl } from "./receivingDocumentControlAccess";
 import {
   buildReceivingLineGroups,
   isGhostReceivingLine,
@@ -118,6 +120,12 @@ export default function WmsReceivingCountPage() {
 
   const [receivingModal, setReceivingModal] = useState<StockDocumentItemRead | null>(null);
   const [executionAdminMode, setExecutionAdminMode] = useState(false);
+  const [seedReceiveNowQty, setSeedReceiveNowQty] = useState(1);
+  const [receiveNowBump, setReceiveNowBump] = useState<{
+    amount: number;
+    asCartons: boolean;
+    token: number;
+  } | null>(null);
   const [cartonSize, setCartonSize] = useState(1);
   const [cartonSizeByGroupKey, setCartonSizeByGroupKey] = useState<Record<string, number>>({});
   const [lineCarrierChoice, setLineCarrierChoice] = useState<number | null>(null);
@@ -126,6 +134,8 @@ export default function WmsReceivingCountPage() {
   const [adminNameById, setAdminNameById] = useState<Map<number, string>>(() => new Map());
   const scanFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { warehouse } = useWarehouse();
+  const { user, hasPermission } = useAuth();
+  const showDocumentControl = canViewReceivingDocumentControl(hasPermission, user?.role);
   const [assignCarrierOpen, setAssignCarrierOpen] = useState(false);
   const [newProductScan, setNewProductScan] = useState<string | null>(null);
   const [manualProductOpen, setManualProductOpen] = useState(false);
@@ -229,7 +239,17 @@ export default function WmsReceivingCountPage() {
     setScannerInputDisabled,
   ]);
 
-  const openModalRef = useRef<(it: StockDocumentItemRead, opts?: { initialQty?: number }) => void>(() => {});
+  const openModalRef = useRef<
+    (it: StockDocumentItemRead, opts?: { initialQty?: number; freshLot?: boolean; adminMode?: boolean }) => void
+  >(() => {});
+
+  const bumpReceiveNow = useCallback((opts: { amount: number; asCartons: boolean }) => {
+    setReceiveNowBump({
+      amount: Math.max(1, Math.floor(opts.amount) || 1),
+      asCartons: Boolean(opts.asCartons),
+      token: Date.now(),
+    });
+  }, []);
 
   const {
     activeCarrierId,
@@ -255,6 +275,7 @@ export default function WmsReceivingCountPage() {
     productDataModalOpen: productDataGate != null,
     onExecutionCarrierPicked: (carrierId) => setLineCarrierChoice(carrierId),
     onOpenLineModal: (it, opts) => openModalRef.current(it, opts),
+    onBumpReceiveNow: bumpReceiveNow,
     onRequestNewProduct: (ean) => setNewProductScan(ean),
     onProductDataGate,
   });
@@ -262,6 +283,8 @@ export default function WmsReceivingCountPage() {
   const closeReceivingModal = useCallback(() => {
     setReceivingModal(null);
     setExecutionAdminMode(false);
+    setSeedReceiveNowQty(1);
+    setReceiveNowBump(null);
     setLineCarrierChoice(null);
     setCartonSize(1);
   }, []);
@@ -289,7 +312,9 @@ export default function WmsReceivingCountPage() {
     (it: StockDocumentItemRead, opts?: { initialQty?: number; freshLot?: boolean; adminMode?: boolean }) => {
       flashLineGroup(it);
       setReceivingModal(it);
-      setExecutionAdminMode(opts?.adminMode === true);
+      setExecutionAdminMode(opts?.adminMode === true && showDocumentControl);
+      setSeedReceiveNowQty(Math.max(1, Math.floor(Number(opts?.initialQty) || 1)));
+      setReceiveNowBump(null);
       setLastTouchedAtByLineId((p) => ({ ...p, [it.id]: Date.now() }));
       const rc = detail?.receiving_carriers ?? [];
       if (activeCarrierId != null && rc.some((c) => c.carrier_id === activeCarrierId)) {
@@ -319,10 +344,9 @@ export default function WmsReceivingCountPage() {
         setCartonSize(1);
         setCartonSizeByGroupKey((p) => ({ ...p, [gKey]: 1 }));
       }
-      void opts?.initialQty;
       void opts?.freshLot;
     },
-    [detail?.receiving_carriers, activeCarrierId, flashLineGroup, tenantId],
+    [detail?.receiving_carriers, activeCarrierId, flashLineGroup, tenantId, showDocumentControl],
   );
 
   openModalRef.current = openModal;
@@ -606,7 +630,11 @@ export default function WmsReceivingCountPage() {
                 setLabelPrintProduct({ id: pid, tenant_id: tenantId });
               }}
               onMarkDamage={() => setDamageLine(g.primary)}
-              onEditReceivingAdmin={() => openModal(g.primary, { adminMode: true })}
+              onEditReceivingAdmin={() => {
+                if (!showDocumentControl) return;
+                openModal(g.primary, { adminMode: true });
+              }}
+              showDocumentControl={showDocumentControl}
               onMoveToCarrier={() => openModal(g.primary)}
               onRemoveFromDocument={() => {
                 if (!canEditLines || busy || !pzIdValid) return;
@@ -706,9 +734,17 @@ export default function WmsReceivingCountPage() {
             setDamageLine(executionLine);
             closeReceivingModal();
           }}
-          adminMode={executionAdminMode}
-          onToggleAdminMode={() => setExecutionAdminMode((v) => !v)}
-          onRequireAdminMode={() => setExecutionAdminMode(true)}
+          adminMode={executionAdminMode && showDocumentControl}
+          onToggleAdminMode={() => {
+            if (!showDocumentControl) return;
+            setExecutionAdminMode((v) => !v);
+          }}
+          onRequireAdminMode={() => {
+            if (showDocumentControl) setExecutionAdminMode(true);
+          }}
+          showDocumentControl={showDocumentControl}
+          seedReceiveNowQty={seedReceiveNowQty}
+          receiveNowBump={receiveNowBump}
         />
       ) : null}
 

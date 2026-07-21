@@ -95,6 +95,8 @@ type UseOpts = {
   productDataModalOpen: boolean;
   onExecutionCarrierPicked?: (carrierId: number) => void;
   onOpenLineModal: (line: StockDocumentItemRead, opts?: { initialQty?: number; freshLot?: boolean }) => void;
+  /** Same-product EAN while execution modal open → bump „Przyjmujesz teraz” (no auto PATCH). */
+  onBumpReceiveNow: (opts: { amount: number; asCartons: boolean }) => void;
   onRequestNewProduct: (ean: string) => void;
   onProductDataGate?: (ctx: ProductDataGateContext) => Promise<boolean>;
 };
@@ -117,6 +119,7 @@ export function useWmsReceivingCountScan({
   productDataModalOpen,
   onExecutionCarrierPicked,
   onOpenLineModal,
+  onBumpReceiveNow,
   onRequestNewProduct,
   onProductDataGate,
 }: UseOpts) {
@@ -531,16 +534,14 @@ export function useWmsReceivingCountScan({
       }
 
       if (inExecution && execLine && res.product_id === execLine.product_id) {
-        const wcId = (d.receiving_carriers ?? []).length > 0 ? activeCarrierIdRef.current : null;
         appendScanToHistory(key);
-        const ok = await applyReceive({
-          line: (detailRef.current?.items ?? []).find((it) => it.id === execLine.id) ?? execLine,
-          addQty,
-          cartonsDelta,
-          looseDelta,
-          warehouseCarrierId: wcId,
+        onBumpReceiveNow({
+          amount: isCarton ? 1 : addQty,
+          asCartons: isCarton,
         });
-        if (ok) showScannerToast(`+${addQty} szt. przyjęto`);
+        showScannerToast(
+          isCarton ? `+1 kart. do „Przyjmujesz teraz”` : `+${addQty} szt. do „Przyjmujesz teraz”`,
+        );
         clearDevScannerInput();
         refocusScannerInput();
         return;
@@ -577,6 +578,7 @@ export function useWmsReceivingCountScan({
       syncCountsFromDoc,
       applyReceive,
       onOpenLineModal,
+      onBumpReceiveNow,
       onRequestNewProduct,
       onProductDataGate,
       receiveSerialUnit,

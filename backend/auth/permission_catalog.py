@@ -121,6 +121,10 @@ PERMISSION_TREE: list[dict[str, Any]] = [
                     _leaf("warehouse.relocations", "Przesunięcia"),
                     _leaf("warehouse.inventory", "Inwentaryzacje"),
                     _leaf("warehouse.receipts", "Przyjęcia"),
+                    _leaf(
+                        "warehouse.receipts.control",
+                        "Przyjęcia — podgląd ilości z dokumentu i różnic",
+                    ),
                     _leaf("warehouse.issues", "Wydania"),
                     _leaf("warehouse.reservations", "Rezerwacje"),
                     _leaf("warehouse.stock", "Stany"),
@@ -344,6 +348,7 @@ ROLE_PERMISSION_PRESETS: dict[str, tuple[str, ...]] = {
                     "warehouse.relocations",
                     "warehouse.inventory",
                     "warehouse.receipts",
+                    "warehouse.receipts.control",
                     "warehouse.issues",
                     "warehouse.reservations",
                     "warehouse.stock",
