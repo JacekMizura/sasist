@@ -654,12 +654,24 @@ def compute_can_cancel_document(db: Session, doc: StockDocument) -> bool:
     return not stock_document_blocking_activity_details(db, doc.id)["has_operations"]
 
 
+def receiving_is_closed_for_putaway_completion(doc: StockDocument) -> bool:
+    """
+    Putaway may run while receiving is open, but putaway/relocation completion
+    requires an explicit receiving close (receiving_status=DONE).
+    """
+    return str(getattr(doc, "receiving_status", "") or "").strip().upper() == "DONE"
+
+
 def recompute_putaway_status_for_document(
     doc: StockDocument,
     item_rows: List[StockDocumentItem],
     db: Session | None = None,
 ) -> None:
-    """PZ / Z-PZ / MM: NOT_STARTED | IN_PROGRESS | DONE from lines (received > 0)."""
+    """PZ / Z-PZ / MM: NOT_STARTED | IN_PROGRESS | DONE from lines (received > 0).
+
+    Transient remaining=0 while receiving is still open must NOT become DONE —
+    more receipts may arrive; putaway stays IN_PROGRESS until receiving is closed.
+    """
     if not doc_allows_putaway_status_recompute(doc):
         return
     from .complaints.complaint_physical_receipt import filter_putaway_eligible_lines
@@ -686,7 +698,7 @@ def recompute_putaway_status_for_document(
             any_put = True
         if put + eps < rec:
             all_done = False
-    if all_done:
+    if all_done and receiving_is_closed_for_putaway_completion(doc):
         doc.putaway_status = "DONE"
     elif any_put:
         doc.putaway_status = "IN_PROGRESS"

@@ -49,15 +49,38 @@ from .wms_mm_transfer_service import _allocate_fifo_from_source
 from .stock_document_service import (
     MAX_RECEIVED_QUANTITY,
     build_stock_document_read,
+    compute_is_fully_putaway_for_items,
     doc_allows_wms_putaway,
     ensure_pz_document_warehouse_resolved,
     is_stock_document_item_wm_material,
+    receiving_is_closed_for_putaway_completion,
     recompute_putaway_status_for_document,
     recalculate_wms_document_completion,
     wms_putaway_queue_statuses,
     _putaway_allocations_by_line_id,
 )
 from .document_creator_service import batch_load_app_users
+
+RECEIVING_NOT_COMPLETED_CODE = "RECEIVING_NOT_COMPLETED"
+RECEIVING_NOT_COMPLETED_MSG = (
+    "Nie można zakończyć rozlokowania, ponieważ przyjęcie tej dostawy nadal trwa."
+)
+PUTAWAY_REMAINING_CODE = "PUTAWAY_REMAINING"
+PUTAWAY_REMAINING_MSG = (
+    "Nie można zakończyć rozlokowania — pozostały ilości oczekujące na rozlokowanie."
+)
+
+
+class PutawayFinalizeError(ValueError):
+    """Finalize putaway/relocation blocked — structured code for API detail."""
+
+    def __init__(self, message: str, *, code: str):
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
+    def to_detail(self) -> dict[str, str]:
+        return {"message": self.message, "code": self.code}
 from .wms_receiving_service import build_wms_pz_list_row
 from .purchase_order_warehouse_sync_service import sync_purchase_order_status_for_stock_document_id
 from .slotting import recalculate_location_occupancy, suggest_putaway_locations as slotting_suggest_putaway_locations, validate_putaway_assignment
@@ -1699,6 +1722,9 @@ def finalize_wms_relocation_pz(db: Session, tenant_id: int, document_id: int) ->
     """
     Zamknięcie procesu rozlokowania w WMS: ustawia relocation_status=DONE; opcjonalnie status=zakonczone.
     Nie modyfikuje inventory ani stock_operations.
+
+    Invariant: receiving_status == DONE AND remaining putaway qty == 0.
+    Putaway execution while receiving is open remains allowed — only definitive completion is gated.
     """
     doc = (
         db.query(StockDocument)
@@ -1718,6 +1744,9 @@ def finalize_wms_relocation_pz(db: Session, tenant_id: int, document_id: int) ->
         raise ValueError("Rozlokowanie już zakończone")
     if not _doc_allows_putaway(doc):
         raise ValueError("Nie można zakończyć rozlokowania dla tego statusu dokumentu")
+
+    if not receiving_is_closed_for_putaway_completion(doc):
+        raise PutawayFinalizeError(RECEIVING_NOT_COMPLETED_MSG, code=RECEIVING_NOT_COMPLETED_CODE)
 
     rows: List[StockDocumentItem] = (
         db.query(StockDocumentItem)
@@ -1744,8 +1773,12 @@ def finalize_wms_relocation_pz(db: Session, tenant_id: int, document_id: int) ->
     if not any(_effective_putaway_quantity(db, x) > eps for x in candidates):
         raise ValueError("Nie zapisano żadnego rozlokowania — brak przeniesionej ilości")
 
+    if not compute_is_fully_putaway_for_items(db, rows):
+        raise PutawayFinalizeError(PUTAWAY_REMAINING_MSG, code=PUTAWAY_REMAINING_CODE)
+
     recalculate_wms_document_completion(db, tenant_id, document_id)
     doc.relocation_status = "DONE"
+    doc.putaway_status = "DONE"
     doc.updated_at = datetime.utcnow()
     rs = str(getattr(doc, "receiving_status", "") or "").strip().upper()
     st = str(getattr(doc, "status", "") or "").strip().upper()

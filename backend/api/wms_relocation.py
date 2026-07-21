@@ -30,7 +30,7 @@ from ..schemas.wms_relocation_batch import (
     WmsRelocationStartSessionBody,
     WmsRelocationStartSessionOut,
 )
-from ..services.wms_putaway_service import finalize_wms_relocation_pz
+from ..services.wms_putaway_service import PutawayFinalizeError, finalize_wms_relocation_pz
 from ..services.wms_relocation_batch_service import (
     add_relocation_items_to_document,
     get_relocation_batch_context,
@@ -44,6 +44,8 @@ logger = logging.getLogger(__name__)
 
 def _relocation_error_detail(exc: Exception) -> dict[str, str]:
     if isinstance(exc, DocumentSeriesOperationalError):
+        return exc.to_detail()
+    if isinstance(exc, PutawayFinalizeError):
         return exc.to_detail()
     if isinstance(exc, ValueError):
         msg = str(exc).strip()

@@ -471,19 +471,13 @@ export default function WmsPutawayPzPage() {
   const canShowFinalizeButton = useMemo(() => {
     if (!doc || !putawayCardsEnabled || !relocationOpen) return false;
     if (!sortedPutawayLines.length) return false;
+    if (String(doc.receiving_status ?? "").toUpperCase() !== "DONE") return false;
+    if (doc.is_fully_putaway !== true) return false;
     return sortedPutawayLines.some((it) => (Number(it.quantity_putaway) || 0) > PUTAWAY_FLOAT_EPS);
   }, [doc, putawayCardsEnabled, relocationOpen, sortedPutawayLines]);
 
   const handleFinalizeRelocation = useCallback(async () => {
     if (!doc || !canShowFinalizeButton || finalizeBusy) return;
-    if (doc.is_fully_putaway !== true) {
-      const ok = window.confirm(
-        isMmFlow
-          ? "Nie wszystkie pozycje zostały przeniesione. Czy chcesz zakończyć przesunięcie?"
-          : "Nie wszystkie produkty zostały rozlokowane. Czy chcesz zakończyć?",
-      );
-      if (!ok) return;
-    }
     setFinalizeBusy(true);
     try {
       await finalizeWmsRelocationPz(tenantId, pzId);
@@ -494,6 +488,10 @@ export default function WmsPutawayPzPage() {
       if (axios.isAxiosError(ex) && ex.response?.data && typeof ex.response.data === "object") {
         const d0 = (ex.response.data as { detail?: unknown }).detail;
         if (typeof d0 === "string" && d0.trim()) msg = d0;
+        else if (d0 && typeof d0 === "object" && "message" in d0) {
+          const m = String((d0 as { message?: unknown }).message ?? "").trim();
+          if (m) msg = m;
+        }
       }
       window.alert(msg);
     } finally {
