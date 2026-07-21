@@ -2507,12 +2507,27 @@ def build_wms_picking_product_detail(
                     sl = put_state.get_source_lock(sess_put) if sess_put is not None else None
                     if sl is not None and int(sl.get("product_id") or 0) == int(product_id):
                         detail.source_lock = sl
+                        detail.source_accepted = True
+                        detail.source_location_id = int(sl.get("location_id") or 0) or None
+                        detail.source_product_id = int(sl.get("product_id") or 0) or None
                     else:
                         detail.source_lock = None
+                        detail.source_accepted = False
+                        detail.source_location_id = None
+                        detail.source_product_id = None
                 else:
                     detail.basket_put_pending = ui_put.get("pending")
                     detail.basket_put_active_series = ui_put.get("active_series")
                     detail.source_lock = ui_put.get("source_lock")
+                    sl2 = detail.source_lock if isinstance(detail.source_lock, dict) else None
+                    if sl2 is not None and int(sl2.get("product_id") or 0) == int(product_id):
+                        detail.source_accepted = True
+                        detail.source_location_id = int(sl2.get("location_id") or 0) or None
+                        detail.source_product_id = int(sl2.get("product_id") or 0) or None
+                    else:
+                        detail.source_accepted = False
+                        detail.source_location_id = None
+                        detail.source_product_id = None
                     series = detail.basket_put_active_series
                     if isinstance(series, dict) and series.get("basket_label"):
                         detail.put_to_basket_label = str(series["basket_label"])

@@ -646,3 +646,114 @@ def test_body_omitted_uses_lock_location(db, env):
     )
     assert r.phase == "PUT_CONFIRMED"
     assert env["pick_locs"][-1][2] == LOC_A23
+
+
+def test_live_same_location_second_basket_requires_reaccept(db, env):
+    """
+    LIVE regression: put clears source_lock; FE keeps activeLocationId; next basket
+    without re-accept → NO_PENDING_SOURCE_LOCATION. Controlled re-accept → PASS.
+
+    Product 192, location A23, stock >= 2, two baskets S-1-1 then S-1-2.
+    """
+    inv = (
+        db.query(Inventory)
+        .filter(Inventory.product_id == PRODUCT_ID, Inventory.location_id == LOC_A23)
+        .first()
+    )
+    inv.quantity = 5.0
+    db.flush()
+
+    # Order 1235 (basket B02) needs more remaining — bump qty so second put uses B02 again
+    # after first put to B02; also allow first put to B01 (order 1234).
+    env["picked"][12340] = 0.0
+    env["picked"][12350] = 0.0
+
+    env["lock_a23"]()
+    r1 = confirm_basket_put(
+        db,
+        cart=env["cart"],
+        basket_scan="brck1-B01",
+        operator_user_id=1,
+        record_pick_fn=env["record_pick_fn"],
+        order_ids=env["order_ids"],
+        product_id=PRODUCT_ID,
+        location_id=LOC_A23,
+        quantity=1.0,
+    )
+    assert r1.phase == "PUT_CONFIRMED"
+    assert put_state.get_source_lock(env["sess"]) is None
+    assert env["pick_locs"][-1][2] == LOC_A23
+
+    # Simulate FE mistake: body still has location_id but no server lock.
+    with pytest.raises(BasketPutError) as ei:
+        confirm_basket_put(
+            db,
+            cart=env["cart"],
+            basket_scan="brck1-B02",
+            operator_user_id=1,
+            record_pick_fn=env["record_pick_fn"],
+            order_ids=env["order_ids"],
+            product_id=PRODUCT_ID,
+            location_id=LOC_A23,
+            quantity=None,
+        )
+    assert ei.value.code == ec.NO_PENDING_SOURCE_LOCATION
+
+    # Controlled re-accept (same location, continuous flow) — no physical re-scan required.
+    accept_source_location(
+        db,
+        cart=env["cart"],
+        sess=env["sess"],
+        product_id=PRODUCT_ID,
+        location_id=LOC_A23,
+        operator_user_id=1,
+    )
+    assert put_state.get_source_lock(env["sess"]) is not None
+
+    preview = confirm_basket_put(
+        db,
+        cart=env["cart"],
+        basket_scan="brck1-B02",
+        operator_user_id=1,
+        record_pick_fn=env["record_pick_fn"],
+        order_ids=env["order_ids"],
+        product_id=PRODUCT_ID,
+        location_id=LOC_A23,
+        quantity=None,
+    )
+    assert preview.phase == "QUANTITY_REQUIRED"
+    assert put_state.get_source_lock(env["sess"]) is not None
+
+    r2 = confirm_basket_put(
+        db,
+        cart=env["cart"],
+        basket_scan="brck1-B02",
+        operator_user_id=1,
+        record_pick_fn=env["record_pick_fn"],
+        order_ids=env["order_ids"],
+        product_id=PRODUCT_ID,
+        location_id=LOC_A23,
+        quantity=1.0,
+    )
+    assert r2.phase == "PUT_CONFIRMED"
+    assert env["pick_locs"][-1][2] == LOC_A23
+    assert put_state.get_source_lock(env["sess"]) is None
+
+
+def test_P_manipulated_body_location_without_lock_still_409(db, env):
+    """Manipulated body.location_id without lock → NO_PENDING_SOURCE_LOCATION (no fallback)."""
+    env["picked"][12340] = 8.0
+    with pytest.raises(BasketPutError) as ei:
+        confirm_basket_put(
+            db,
+            cart=env["cart"],
+            basket_scan="brck1-B02",
+            operator_user_id=1,
+            record_pick_fn=env["record_pick_fn"],
+            order_ids=env["order_ids"],
+            product_id=PRODUCT_ID,
+            location_id=LOC_A23,
+            quantity=1.0,
+        )
+    assert ei.value.code == ec.NO_PENDING_SOURCE_LOCATION
+    assert env["pick_locs"] == []

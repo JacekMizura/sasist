@@ -21,7 +21,8 @@ export type MultiPickingScanContext = {
    */
   quantityMode?: boolean;
   /**
-   * SOURCE location selected (scan / single-loc auto / tap).
+   * UI has a source location selection (scan / single-loc auto / tap).
+   * Confirm path must still await server accept/re-accept before POST.
    * When false in quantityMode, basket put is blocked until location is set.
    */
   hasSourceLocation?: boolean;

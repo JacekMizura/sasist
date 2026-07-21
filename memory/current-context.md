@@ -2,16 +2,8 @@
 
 ## Active
 
-**Fix GET `/api/wms/order-issue-tasks` 500** — missing `orders.picking_handoff_mode` on request-path ensure. Commit local; **do not push**.
+**LIVE: NO_PENDING_SOURCE_LOCATION after source_lock** — FE `activeLocationId` ≠ server lock; controlled re-accept. Commit local; **do not push**.
 
-## Exact failure
+## Exact root cause
 
-`sqlalchemy.exc.OperationalError` — `no such column: orders.picking_handoff_mode` in `_fetch_orders_by_id`.
-
-## Not a regression from
-
-MULTI basket `2de7345a` / `f5e881be` / `dc35db74`.
-
-## Related
-
-Packing handoff ORM column from `afc6843a`; startup ensure can be skipped if earlier mega-try fails — request-path now mirrors order-list pattern.
+After PUT clears `source_lock`, `nextActiveLocationIdAfterDetail` keeps UI location 276. Basket gated on `activeLocationId`, not server accept → 409. Fix: `ensureServerSourceForBasket` awaits accept/re-accept before confirm.

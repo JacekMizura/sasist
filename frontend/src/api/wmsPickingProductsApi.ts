@@ -272,6 +272,10 @@ export type WmsPickingProductDetailApi = {
     session_id?: number;
     locked_at?: string;
   } | null;
+  /** Kontrakt FE: czy serwer ma zatwierdzoną lokalizację źródłową dla tego SKU. */
+  source_accepted?: boolean;
+  source_location_id?: number | null;
+  source_product_id?: number | null;
 };
 
 export async function getWmsPickingProductLines(

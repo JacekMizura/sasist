@@ -416,6 +416,18 @@ class WmsPickingProductDetailResponse(BaseModel):
             "SSOT dla confirm-basket-put — nie mylić z FE activeLocationId."
         ),
     )
+    source_accepted: bool = Field(
+        default=False,
+        description="True gdy source_lock aktywny dla tego product_id (kontrakt FE state machine).",
+    )
+    source_location_id: Optional[int] = Field(
+        default=None,
+        description="location_id z source_lock gdy source_accepted — bez ujawniania nazwy 'lock' operatorowi.",
+    )
+    source_product_id: Optional[int] = Field(
+        default=None,
+        description="product_id z source_lock gdy source_accepted.",
+    )
     eligible_basket_destinations: list[WmsPickingEligibleBasketDestination] = Field(
         default_factory=list,
         description=(

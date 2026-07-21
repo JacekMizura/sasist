@@ -40,6 +40,11 @@ import {
   resolveMultiPickingDetailScan,
 } from "../../utils/multiPickingScanRoute";
 import { nextActiveLocationIdAfterDetail } from "../../utils/multiPickingActiveLocation";
+import {
+  isServerSourceAccepted,
+  mayAcceptOrReacceptSource,
+  serverSourceLocationId,
+} from "../../utils/multiPickingSourceAcceptance";
 import { SCAN_CONSUMED } from "../../utils/wmsScanDispatch";
 import {
   extractWmsScanErrorDetail,
@@ -177,6 +182,11 @@ export default function WmsPickingProductDetailPage() {
   const [pickBusy, setPickBusy] = useState(false);
   const [pickMsg, setPickMsg] = useState<string | null>(null);
   const [activeLocationId, setActiveLocationId] = useState<number | null>(null);
+  /** Locations the operator accepted this product visit (continuous re-accept after put). */
+  const lastOperatorAcceptedLocationRef = useRef<number | null>(null);
+  /** Explicit scan/tap this visit — not bare preserved activeLocationId after reload. */
+  const explicitSourceSelectionRef = useRef<number | null>(null);
+  const sourceAcceptInFlightRef = useRef(false);
   const [locationHint, setLocationHint] = useState<string | null>(null);
   const [manualOpen, setManualOpen] = useState(false);
   const [manualLocId, setManualLocId] = useState<number | null>(null);
@@ -362,40 +372,76 @@ export default function WmsPickingProductDetailPage() {
   useEffect(() => {
     if (!detail) return;
     setLocationHint(null);
-    setActiveLocationId((prev) =>
-      nextActiveLocationIdAfterDetail({
+    const serverLid = serverSourceLocationId(detail.source_lock, productId);
+    setActiveLocationId((prev) => {
+      const next = nextActiveLocationIdAfterDetail({
         previousId: prev,
         locations: detail.locations,
         productChanged: false,
-        serverSourceLocationId: detail.source_lock?.location_id ?? null,
-      }),
-    );
-  }, [detail]);
+        serverSourceLocationId: serverLid,
+      });
+      // Single-shelf auto: treat as explicit so accept may run without physical re-scan.
+      if (next != null && detail.locations.length === 1) {
+        explicitSourceSelectionRef.current = next;
+      }
+      return next;
+    });
+    if (serverLid != null) {
+      lastOperatorAcceptedLocationRef.current = serverLid;
+      multiScanTrace("SOURCE_LOCK_STATE_FROM_DETAIL", {
+        product_id: productId,
+        location_id: serverLid,
+        message: "Serwer ma zatwierdzoną lokalizację źródłową",
+      });
+    }
+  }, [detail, productId]);
 
   // New product → clear source location (never carry A23 into another SKU).
   useEffect(() => {
     setActiveLocationId(null);
     setLocationHint(null);
+    lastOperatorAcceptedLocationRef.current = null;
+    explicitSourceSelectionRef.current = null;
   }, [productId]);
 
   const acceptSourceLocation = useCallback(
-    async (locationId: number): Promise<boolean> => {
+    async (
+      locationId: number,
+      mode: "accept" | "reaccept" = "accept",
+    ): Promise<boolean> => {
       if (!detail?.requires_basket_put_confirm || !pickingSession?.cartId) {
         return true;
       }
       if (!Number.isFinite(locationId) || locationId <= 0) return false;
+      const eventReq = mode === "reaccept" ? "SOURCE_REACCEPT_REQUEST" : "SOURCE_ACCEPT_REQUEST";
+      const eventOk = mode === "reaccept" ? "SOURCE_REACCEPT_OK" : "SOURCE_ACCEPT_OK";
+      const eventFail = mode === "reaccept" ? "SOURCE_REACCEPT_FAIL" : "SOURCE_ACCEPT_FAIL";
+      multiScanTrace(eventReq, {
+        product_id: productId,
+        location_id: locationId,
+        cart_id: pickingSession.cartId,
+        message:
+          mode === "reaccept"
+            ? "Ponowne zatwierdzenie tej samej lokalizacji (ciągły flow)"
+            : "Zatwierdzanie lokalizacji źródłowej",
+      });
+      sourceAcceptInFlightRef.current = true;
       try {
-        await postWmsPickingAcceptSourceLocation(pickingTenantId, warehouseId, {
+        const res = await postWmsPickingAcceptSourceLocation(pickingTenantId, warehouseId, {
           cart_id: pickingSession.cartId,
           product_id: productId,
           location_id: locationId,
         });
+        lastOperatorAcceptedLocationRef.current = locationId;
         setDetail((prev) =>
           prev
             ? {
                 ...prev,
                 source_lock: {
                   ...(prev.source_lock ?? {}),
+                  ...(typeof res.source_lock === "object" && res.source_lock
+                    ? (res.source_lock as Record<string, unknown>)
+                    : {}),
                   product_id: productId,
                   location_id: locationId,
                   cart_id: pickingSession.cartId,
@@ -403,14 +449,28 @@ export default function WmsPickingProductDetailPage() {
               }
             : prev,
         );
+        multiScanTrace(eventOk, {
+          product_id: productId,
+          location_id: locationId,
+          message: "Lokalizacja źródłowa zatwierdzona na serwerze",
+        });
         return true;
       } catch (e) {
         const mapped = extractWmsScanErrorDetail(e);
         const fb = mapWmsScanErrorCode(mapped.code, { backendMessage: mapped.message });
+        multiScanTrace(eventFail, {
+          product_id: productId,
+          location_id: locationId,
+          code: mapped.code,
+          message: mapped.message ?? fb.message,
+        });
         showScanFeedbackFromCode(mapped.code, { contextHint: mapped.message });
         setPickMsg(fb.message);
         setActiveLocationId(null);
+        explicitSourceSelectionRef.current = null;
         return false;
+      } finally {
+        sourceAcceptInFlightRef.current = false;
       }
     },
     [
@@ -423,16 +483,49 @@ export default function WmsPickingProductDetailPage() {
     ],
   );
 
-  // Persist server source_lock when operator selects / auto-selects a location.
+  const ensureServerSourceForBasket = useCallback(
+    async (locationId: number): Promise<boolean> => {
+      if (!detail?.requires_basket_put_confirm) return true;
+      if (isServerSourceAccepted(detail.source_lock, productId, locationId)) {
+        return true;
+      }
+      const singleId =
+        detail.locations.length === 1 ? detail.locations[0]?.location_id ?? null : null;
+      const allowed = mayAcceptOrReacceptSource({
+        locationId,
+        lastOperatorAcceptedLocationId: lastOperatorAcceptedLocationRef.current,
+        explicitSelectionLocationId: explicitSourceSelectionRef.current,
+        locationCount: detail.locations.length,
+        singleLocationId: singleId,
+      });
+      if (!allowed) {
+        multiScanTrace("SOURCE_LOCK_BLOCKED", {
+          product_id: productId,
+          location_id: locationId,
+          message:
+            "Brak ciągłego flow ani jawnego wyboru lokalizacji — nie tworzę source_lock z samego activeLocationId",
+        });
+        return false;
+      }
+      const continuous = lastOperatorAcceptedLocationRef.current === locationId;
+      return acceptSourceLocation(locationId, continuous ? "reaccept" : "accept");
+    },
+    [detail, productId, acceptSourceLocation],
+  );
+
+  // Continuous re-accept after successful put: UI kept location, server cleared lock.
   useEffect(() => {
     if (!detail?.requires_basket_put_confirm) return;
     if (activeLocationId == null) return;
-    if (detail.source_lock?.location_id === activeLocationId) return;
-    void acceptSourceLocation(activeLocationId);
+    if (isServerSourceAccepted(detail.source_lock, productId, activeLocationId)) return;
+    if (sourceAcceptInFlightRef.current) return;
+    if (lastOperatorAcceptedLocationRef.current !== activeLocationId) return;
+    void acceptSourceLocation(activeLocationId, "reaccept");
   }, [
     activeLocationId,
     detail?.requires_basket_put_confirm,
-    detail?.source_lock?.location_id,
+    detail?.source_lock,
+    productId,
     acceptSourceLocation,
   ]);
 
@@ -581,9 +674,13 @@ export default function WmsPickingProductDetailPage() {
         if (locHit) {
           playScanBeep();
           appendScanToHistory(scan);
+          explicitSourceSelectionRef.current = locHit.location_id;
           setActiveLocationId(locHit.location_id);
           setLocationHint(null);
           showScannerToast(`Lokalizacja ${locHit.location_code}`);
+          if (requiresBasketPut) {
+            void acceptSourceLocation(locHit.location_id, "accept");
+          }
           return SCAN_CONSUMED;
         }
       }
@@ -604,6 +701,7 @@ export default function WmsPickingProductDetailPage() {
           (detail?.locations.length ?? 0) > 1 &&
           activeLocationId == null
         ),
+        // Basket may be offered when UI has a location; confirmBasketScan awaits server accept/re-accept.
       });
 
       // Seed-only while detail GET in flight: STATE B (await basket).
@@ -717,8 +815,12 @@ export default function WmsPickingProductDetailPage() {
         if (hit) {
           playScanBeep();
           appendScanToHistory(scan);
+          explicitSourceSelectionRef.current = hit.location_id;
           setActiveLocationId(hit.location_id);
           setLocationHint(null);
+          if (requiresBasketPut) {
+            void acceptSourceLocation(hit.location_id, "accept");
+          }
           return SCAN_CONSUMED;
         }
       }
@@ -731,7 +833,7 @@ export default function WmsPickingProductDetailPage() {
     };
     registerScanHandler(handler);
     return () => registerScanHandler(null);
-  }, [detail, pickingSession, activeLocationId, registerScanHandler, appendScanToHistory, pickQueueDone, selectedLocation, pickingTenantId, orderType, showScannerToast, showScanFeedbackFromCode, load, productId, remaining, pickBusy, effectivePending, pendingSeed, enteredViaListProductScan]);
+  }, [detail, pickingSession, activeLocationId, registerScanHandler, appendScanToHistory, pickQueueDone, selectedLocation, pickingTenantId, orderType, showScannerToast, showScanFeedbackFromCode, load, productId, remaining, pickBusy, effectivePending, pendingSeed, enteredViaListProductScan, acceptSourceLocation]);
 
   const goBackToList = useCallback(
     (refreshList = false) => {
@@ -959,6 +1061,23 @@ export default function WmsPickingProductDetailPage() {
     scanGateRef.current = true;
     setPickBusy(true);
     setPickMsg(null);
+
+    // Gate: server source_lock must exist before quantity=null basket call.
+    if (detail?.requires_basket_put_confirm && locId != null) {
+      const ensured = await ensureServerSourceForBasket(locId);
+      if (!ensured) {
+        scanGateRef.current = false;
+        setPickBusy(false);
+        showScanFeedbackFromCode("PICK_LOCATION_REQUIRED");
+        setPickMsg(
+          mapWmsScanErrorCode("PICK_LOCATION_REQUIRED", {
+            backendMessage: "Zatwierdź lokalizację źródłową przed skanem koszyka.",
+          }).message,
+        );
+        return;
+      }
+    }
+
     multiScanTrace("BASKET_SCAN", {
       raw_code: normalizeScanEan(rawScan),
       classified_as: routeReason,
@@ -966,6 +1085,7 @@ export default function WmsPickingProductDetailPage() {
       product_id: productId,
       location_id: locId,
       quantity: quantity ?? null,
+      server_source_accepted: isServerSourceAccepted(detail?.source_lock, productId, locId),
     });
     try {
       const result = await postWmsPickingConfirmBasketPut(
@@ -1760,11 +1880,16 @@ export default function WmsPickingProductDetailPage() {
                         const avail = locStock(loc);
                         if (avail <= 1e-9) {
                           setActiveLocationId(null);
+                          explicitSourceSelectionRef.current = null;
                           setLocationHint("Brak dostępnego stanu w tej lokalizacji (już pobrane w tej kompletacji).");
                           return;
                         }
+                        explicitSourceSelectionRef.current = loc.location_id;
                         setActiveLocationId(loc.location_id);
                         setLocationHint(null);
+                        if (detail.requires_basket_put_confirm) {
+                          void acceptSourceLocation(loc.location_id, "accept");
+                        }
                       }}
                       className={`flex w-full items-center justify-between p-3 rounded-xl border bg-white text-left ${
                         activeLocationId === loc.location_id

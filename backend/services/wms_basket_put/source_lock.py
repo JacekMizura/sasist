@@ -99,7 +99,8 @@ def accept_source_location(
     }
     put_state.set_source_lock(db, sess, lock)
     logger.info(
-        "SOURCE_LOCATION_LOCKED session_id=%s cart_id=%s product_id=%s location_id=%s operator=%s",
+        "LOKALIZACJA_ZRODLOWA_ZATWIERDZONA session_id=%s cart_id=%s product_id=%s "
+        "location_id=%s operator=%s",
         sess.id,
         cid,
         pid,

@@ -1,3 +1,9 @@
+## 2026-07-21 — LIVE NO_PENDING_SOURCE_LOCATION: UI location vs source_lock
+
+- ROOT: FE treated `activeLocationId=276` as ready-for-basket; after PUT lock cleared, preserve kept UI id without server re-accept.
+- FIX: `ensureServerSourceForBasket` before confirm; continuous re-accept via `lastOperatorAcceptedLocationRef`; never bare activeLocationId; detail `source_accepted` contract; MULTI_SCAN_TRACE SOURCE_* events.
+- Tests: live same-location second basket + FE `multiPickingSourceAcceptance`. No push.
+
 ## 2026-07-21 — Fix GET /order-issue-tasks 500 (orders.picking_handoff_mode)
 
 - EXACT: `OperationalError` / `UndefinedColumn` — `no such column: orders.picking_handoff_mode`
