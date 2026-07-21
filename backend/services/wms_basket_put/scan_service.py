@@ -759,10 +759,16 @@ def _quantity_mode_basket_put(
         basket=scanned,
     )
     if err == "BASKET_PRODUCT_MISMATCH" or allocation is None:
-        live = list_eligible_basket_allocations(
-            db, cart=cart, order_ids=list(oid_scope or []), product_id=int(product_id)
+        from .resolve import mismatch_diagnostics_payload
+
+        diag = mismatch_diagnostics_payload(
+            db,
+            cart=cart,
+            order_ids=list(oid_scope or []),
+            product_id=int(product_id),
+            scanned=scanned,
         )
-        labels = _eligible_labels(eligible_baskets_payload(live, db=db))
+        labels = _eligible_labels(diag.get("eligible_baskets") or [])
         raise BasketPutError(
             ec.BASKET_PRODUCT_MISMATCH,
             (
@@ -775,13 +781,7 @@ def _quantity_mode_basket_put(
             extra={
                 "phase": "BASKET_PRODUCT_MISMATCH",
                 "scanned_basket": scanned_label,
-                "scanned_basket_id": int(scanned.id),
-                "scanned_barcode": (str(scanned.barcode).strip() if scanned.barcode else None),
-                "scanned_scan_code": (
-                    str(scanned.scan_code).strip() if getattr(scanned, "scan_code", None) else None
-                ),
-                "product_id": int(product_id),
-                "eligible_baskets": eligible_baskets_payload(live, db=db),
+                **diag,
             },
         )
     if err == "BASKET_PRODUCT_ALREADY_COMPLETE":
@@ -1196,13 +1196,16 @@ def confirm_basket_put(
         basket=scanned,
     )
     if err == "BASKET_PRODUCT_MISMATCH" or (err is None and allocation is None):
-        live = (
-            list_eligible_basket_allocations(db, cart=cart, order_ids=oid_scope, product_id=pending_product_id)
-            if oid_scope
-            else []
+        from .resolve import mismatch_diagnostics_payload
+
+        diag = mismatch_diagnostics_payload(
+            db,
+            cart=cart,
+            order_ids=list(oid_scope or []),
+            product_id=int(pending_product_id),
+            scanned=scanned,
         )
-        eligible = eligible_baskets_payload(live, db=db) if live else (pending.get("eligible_baskets") or [])
-        labels = _eligible_labels(eligible if isinstance(eligible, list) else [])
+        labels = _eligible_labels(diag.get("eligible_baskets") or [])
         _audit(
             "BASKET_PRODUCT_MISMATCH",
             session_id=sess.id,
@@ -1210,6 +1213,8 @@ def confirm_basket_put(
             scanned_basket=scanned_label,
             scanned_basket_id=int(scanned.id),
             product_id=pending_product_id,
+            eligible_count=len(diag.get("eligible_baskets") or []),
+            rejected_count=len(diag.get("rejected_allocations") or []),
         )
         raise BasketPutError(
             ec.BASKET_PRODUCT_MISMATCH,
@@ -1223,11 +1228,8 @@ def confirm_basket_put(
             extra={
                 "phase": "BASKET_PRODUCT_MISMATCH",
                 "scanned_basket": scanned_label,
-                "scanned_basket_id": int(scanned.id),
-                "scanned_barcode": (str(scanned.barcode).strip() if scanned.barcode else None),
-                "product_id": int(pending_product_id),
-                "eligible_baskets": eligible,
                 "pending": pending,
+                **diag,
             },
         )
     if err == "BASKET_PRODUCT_ALREADY_COMPLETE":

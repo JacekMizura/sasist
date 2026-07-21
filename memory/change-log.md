@@ -1,3 +1,25 @@
+## 2026-07-21 — LIVE BASKET_PRODUCT_MISMATCH empty eligible (stale picked status)
+
+- ROOT: `_line_eligible` skipped `wms_picking_line_status in (picked, missing)` while detail rem ignored status → UI unresolved=1, write eligible=[], „Oczekiwane: —”.
+- FIX: eligibility = rem>0 + basket on active cart; heal stale `picked`; resolve accepts only eligible; rich 409 diagnostics.
+- Tests: `test_wms_multi_basket_live_mismatch.py` (exact flow A–H). No push.
+
+## 2026-07-21 — MULTI final audit: basket destination SSOT
+
+- Proven mismatch: UI `orders[].basket_slot` could show S-1-2 from foreign-cart basket; confirm of local brck1-B02 → BASKET_PRODUCT_MISMATCH.
+- Fix: `eligible_basket_destinations` on detail = list_eligible (+ barcode); FE destination list uses only that; postPutFollowUp from live eligible; scan resolve prefers barcode then primary label.
+- 409 extra: scanned_basket_id/barcode + eligible rows for next LIVE repro.
+- Tests: `test_wms_multi_picking_final_audit.py` (stock flow, parallel, foreign label, local OK, alias). No push.
+
+## 2026-07-21 — MULTI picking effective stock + active location
+
+- ROOT: detail showed raw Inventory; `useEffect([detail])` cleared activeLocationId after confirm refetch.
+- SSOT: `location_pick_stock_projection_map` → detail `stock_quantity`=effective; write path unchanged.
+- Active loc preserved when effective>0; cleared on product change / zero stock; no FIFO fallback.
+- Basket UI labels unified to `primary_basket_label` (S-1-2 ↔ brck1-B02).
+- Tests: `test_wms_picking_location_effective_stock.py` + FE `multiPickingActiveLocation.test.ts`.
+- No push.
+
 ## 2026-07-21 — Replenishment need audit + Polish UI (no push)
 
 - SSOT confirmed fill-to-min: need = min_pick − pick; demand/max only in priority.

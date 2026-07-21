@@ -2,27 +2,22 @@
 
 ## Active
 
-**Replenishment SSOT audit + Polish UI** — local commit; **no push.**
+**LIVE BASKET_PRODUCT_MISMATCH / empty eligible** — local commit pending; **do not push** until user asks.
 
-## Replenishment SSOT (`wms_replenishment_service`)
+## Root cause (code-proven)
 
-- TRIGGER: `pick_stock < min_pick_quantity`
-- TARGET/need: `min_pick − pick_stock` (fill-to-min; **not** fill-to-max / not demand)
-- `max_pick_quantity` + open-order demand: **priority score only**
-- `move_qty = min(need, Σ moveable BUFFER, trusted destination capacity)`
-- Source locations: badge kind **BUFFER** only
-- Operator queue: ACTIONABLE only; NO_SOURCE_STOCK → Alerty/Braki
+`list_eligible_basket_allocations` previously skipped lines with `wms_picking_line_status='picked'` even when
+`rem = qty − pick_events − missing > 0`. Detail `orders[].quantity_to_pick` used rem only → UI showed
+`S-1-2 unresolved=1` while write eligible=`[]` → toast „Oczekiwane: —”.
 
-## Polish UI (Centrum operacyjne / MM replenishment)
+Draft-Pick-before-put was **not** the LIVE formula bug in quantity mode (Pick+event written at basket confirm).
 
-- FE map: `frontend/src/utils/replenishmentUiLabels.ts`
-- Operator instruction: `Przenieś N szt. / Z: / DO:` (+ partial-fill note)
-- Never render raw ACTIONABLE / NO_SOURCE_STOCK / HIGH / blocked / critical
+## Fix SSOT
 
-## Product GAP (not a bug under current SSOT)
+- Eligibility = rem > 0 **and** `Order.basket` on active cart (heal stale `picked` when rem>0).
+- `resolve_allocation_for_basket_scan` accepts **only** eligible rows (no `CartBasket.order_id` fallback).
+- 409 `BASKET_PRODUCT_MISMATCH` extras: `mismatch_diagnostics_payload` (eligible + rejected_allocations + scanned_*).
 
-Demand-driven fill (CASE 2/3) would require an **explicit** policy change — do not invent.
+## Invariant
 
-## SAFE TO PUSH
-
-NO — user hold; confirm demand fill-to-min vs demand-fill product intent before push.
+IF cohort line rem>0 AND basket on active cart → basket ∈ eligible_basket_destinations **and** confirm accepts it.

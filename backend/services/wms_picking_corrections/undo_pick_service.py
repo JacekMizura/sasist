@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from ...models.cart import Cart
 from ...models.order import Order
+from ...models.order_item import OrderItem
 from ...models.pick import Pick
 from ...models.product import Product
 from ..fulfillment_event_service import delete_pick_events_for_pick_ids
@@ -283,6 +284,14 @@ def undo_wms_pick_by_id(
     db.query(Pick).filter(Pick.id == deleted_id).delete(synchronize_session="fetch")
     delete_pick_events_for_pick_ids(db, [deleted_id])
     recompute_order_fulfillment(db, oid, commit=False, session_cart_id=cid)
+    if oiid is not None:
+        oi = db.query(OrderItem).filter(OrderItem.id == int(oiid)).first()
+        if oi is not None:
+            from ..wms_basket_put.resolve import _heal_stale_picked_status, _line_remaining
+
+            rem = _line_remaining(db, oi=oi, cart_id=cid)
+            _heal_stale_picked_status(oi, rem)
+            db.add(oi)
 
     from ..wms_audit_service import emit_wms_pick_undone
 
