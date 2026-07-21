@@ -32,6 +32,8 @@ QUANTITY_EXCEEDS_LOCATION_STOCK = "QUANTITY_EXCEEDS_LOCATION_STOCK"
 SOURCE_LOCATION_NOT_ON_ROUTE = "SOURCE_LOCATION_NOT_ON_ROUTE"
 SOURCE_LOCATION_STALE = "SOURCE_LOCATION_STALE"
 SOURCE_LOCATION_INVALID = "SOURCE_LOCATION_INVALID"
+SOURCE_LOCATION_MISMATCH = "SOURCE_LOCATION_MISMATCH"
+NO_PENDING_SOURCE_LOCATION = "NO_PENDING_SOURCE_LOCATION"
 NO_PENDING_PICK = "NO_PENDING_PICK"
 PENDING_PICK_STATE_CONFLICT = "PENDING_PICK_STATE_CONFLICT"
 
@@ -72,6 +74,13 @@ OPERATOR_MESSAGES: dict[str, str] = {
         "Lokalizacja źródłowa zmieniła się lub stała się niedostępna. Zeskanuj lokalizację ponownie."
     ),
     SOURCE_LOCATION_INVALID: "Nieprawidłowa lokalizacja źródłowa dla tego pobrania.",
+    SOURCE_LOCATION_MISMATCH: (
+        "Lokalizacja źródłowa nie zgadza się z wcześniej zeskanowaną lokalizacją. "
+        "Zeskanuj produkt ponownie."
+    ),
+    NO_PENDING_SOURCE_LOCATION: (
+        "Brak zatwierdzonej lokalizacji pobrania. Zeskanuj lokalizację produktu ponownie."
+    ),
     NO_PENDING_PICK: "Brak oczekującego pobrania do odłożenia do koszyka.",
     PENDING_PICK_STATE_CONFLICT: "Stan oczekującego pobrania jest niespójny — odśwież produkt i spróbuj ponownie.",
     AWAITING_BASKET_CONFIRMATION: (

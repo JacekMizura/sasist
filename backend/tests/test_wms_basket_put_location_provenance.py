@@ -32,6 +32,7 @@ from backend.services.stock_disposition import STOCK_DISPOSITION_SALEABLE
 from backend.services.wms_basket_put import error_codes as ec
 from backend.services.wms_basket_put.location_stock import effective_pickable_qty_at_location
 from backend.services.wms_basket_put.scan_service import BasketPutError, confirm_basket_put
+from backend.services.wms_basket_put.source_lock import accept_source_location
 
 
 LOC_A = 100
@@ -217,7 +218,16 @@ def env(db, monkeypatch):
         db.commit()
 
     def confirm(basket: str, *, quantity=None, location_id=None, product_id=192):
-        """Simulate FE: pass location_id explicitly (or omit = no location)."""
+        """Simulate FE: accept source_lock then confirm (location_id optional compatibility)."""
+        if location_id is not None and int(location_id) > 0:
+            accept_source_location(
+                db,
+                cart=cart,
+                sess=sess,
+                product_id=int(product_id),
+                location_id=int(location_id),
+                operator_user_id=1,
+            )
         return confirm_basket_put(
             db,
             cart=cart,
@@ -280,7 +290,7 @@ def test_no_location_rejected_even_for_quantity_preview(db, env):
     env["seed_stock"]()
     with pytest.raises(BasketPutError) as ei:
         env["confirm"]("brck1-B01", quantity=None, location_id=None)
-    assert ei.value.code == ec.PICK_LOCATION_REQUIRED
+    assert ei.value.code == ec.NO_PENDING_SOURCE_LOCATION
 
 
 def test_quantity_max_uses_location_stock(db, env):

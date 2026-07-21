@@ -35,6 +35,7 @@ from backend.services.wms_basket_put.location_stock import (
 )
 from backend.services.wms_basket_put.resolve import resolve_allocation_for_basket_scan
 from backend.services.wms_basket_put.scan_service import BasketPutError, confirm_basket_put
+from backend.services.wms_basket_put.source_lock import accept_source_location
 from backend.services.wms_basket_put import error_codes as ec
 
 
@@ -335,10 +336,18 @@ def test_confirm_brck1_b02_ok_when_order_on_s12(db, monkeypatch):
 
     calls: list[float] = []
 
-    def record_pick_fn(*, quantity: float, fixed_order_id=None, scope_order_id=None):
+    def record_pick_fn(*, quantity: float, fixed_order_id=None, scope_order_id=None, location_id=None):
         calls.append(float(quantity))
         return 1235, 12350
 
+    accept_source_location(
+        db,
+        cart=cart,
+        sess=sess,
+        product_id=PRODUCT_ID,
+        location_id=LOC_A23,
+        operator_user_id=1,
+    )
     r = confirm_basket_put(
         db,
         cart=cart,
@@ -463,6 +472,14 @@ def test_confirm_wrong_basket_mismatch(db, monkeypatch):
         lambda _db, _oi, _cid: 0.0,
     )
 
+    accept_source_location(
+        db,
+        cart=cart,
+        sess=sess,
+        product_id=PRODUCT_ID,
+        location_id=LOC_A23,
+        operator_user_id=1,
+    )
     with pytest.raises(BasketPutError) as ei:
         confirm_basket_put(
             db,

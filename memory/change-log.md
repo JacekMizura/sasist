@@ -1,3 +1,12 @@
+## 2026-07-21 — MULTI quantity-mode server-side source_lock
+
+- Gap after route-skip: client could still send any WH `location_id` with stock.
+- SSOT: `basket_put.source_lock` in session metadata (accept → confirm → clear on success).
+- API: `POST /wms/picking/accept-source-location`; confirm resolves lock first; body location mismatch → SOURCE_LOCATION_MISMATCH.
+- Detail refetch keeps lock (no longer `clear_basket_put_state` on quantity detail).
+- FE: accept on location select; restore from `detail.source_lock`.
+- Tests A–O + exact LIVE in `test_wms_multi_basket_source_provenance.py`. No push.
+
 ## 2026-07-21 — MULTI basket put: source provenance vs greedy route
 
 - LIVE: brck1-B02 recognized but record_wms_quick_pick rejected A23 (“nie należy do trasy”); FE → UNKNOWN_SCAN_CODE.

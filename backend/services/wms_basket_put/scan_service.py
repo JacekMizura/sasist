@@ -153,7 +153,7 @@ def clear_basket_put_state(
         try:
             sess = assert_cart_ready_for_quick_pick(db, cart)
         except Exception:
-            return
+            sess = find_open_picking_session(db, cart=cart)
     if sess is None:
         return
     put_state.clear_all(db, sess, reason=reason)
@@ -178,7 +178,12 @@ def get_basket_put_ui_state(
     lifecycle hiccup cannot hide an existing pending and force STATE A on detail.
     """
     if not cart_requires_basket_put_gate(cart):
-        return {"requires_basket_put": False, "pending": None, "active_series": None}
+        return {
+            "requires_basket_put": False,
+            "pending": None,
+            "active_series": None,
+            "source_lock": None,
+        }
     sess = find_open_picking_session(db, cart=cart)
     if sess is None:
         try:
@@ -188,23 +193,37 @@ def get_basket_put_ui_state(
                 "basket_put ui: no open picking session cart_id=%s",
                 getattr(cart, "id", None),
             )
-            return {"requires_basket_put": True, "pending": None, "active_series": None}
+            return {
+                "requires_basket_put": True,
+                "pending": None,
+                "active_series": None,
+                "source_lock": None,
+            }
     pending = put_state.get_pending(sess)
     series = put_state.get_active_series(sess)
+    source_lock = put_state.get_source_lock(sess)
     if pending and operator_user_id is not None:
         if int(pending.get("operator_user_id") or 0) != int(operator_user_id):
             pending = None
     if series and operator_user_id is not None:
         if int(series.get("operator_user_id") or 0) != int(operator_user_id):
             series = None
+    if source_lock and operator_user_id is not None:
+        if source_lock.get("operator_user_id") is not None and int(
+            source_lock.get("operator_user_id") or 0
+        ) != int(operator_user_id):
+            source_lock = None
 
-    # Product-scoped view: never show another SKU's series/pending on this detail.
+    # Product-scoped view: never show another SKU's series/pending/lock on this detail.
     if product_id is not None and pending is not None:
         if int(pending.get("product_id") or 0) != int(product_id):
             pending = None
     if product_id is not None and series is not None:
         if int(series.get("product_id") or 0) != int(product_id):
             series = None
+    if product_id is not None and source_lock is not None:
+        if int(source_lock.get("product_id") or 0) != int(product_id):
+            source_lock = None
 
     if sanitize and series is not None and product_id is not None:
         series = _sanitize_series_allocation(
@@ -231,6 +250,7 @@ def get_basket_put_ui_state(
         "requires_basket_put": True,
         "pending": pending,
         "active_series": series,
+        "source_lock": source_lock,
     }
 
 
@@ -727,9 +747,21 @@ def _quantity_mode_basket_put(
 ) -> BasketPutResult:
     """
     DEFAULT QUANTITY MODE:
-      basket scan → resolve allocation (ZERO Pick)
-      quantity confirm → revalidate remaining → Pick +qty
+      resolve source_lock → basket allocation → live stock → Pick +qty → clear lock
     """
+    from .location_stock import effective_pickable_qty_at_location
+    from .source_lock import resolve_locked_source_for_confirm
+
+    # SOURCE provenance first — body.location_id is compatibility check only (never SSOT).
+    lock = resolve_locked_source_for_confirm(
+        sess,
+        cart=cart,
+        product_id=int(product_id),
+        body_location_id=int(location_id) if location_id is not None and int(location_id) > 0 else None,
+        operator_user_id=uid,
+    )
+    source_location_id = int(lock["location_id"])
+
     scanned = _find_scanned_basket(db, cart=cart, basket_scan=basket_scan)
     if scanned is None:
         _raise_unknown_basket(
@@ -794,18 +826,6 @@ def _quantity_mode_basket_put(
 
     assert allocation is not None
 
-    # SOURCE location is independent of DESTINATION basket. Never invent locations[0].
-    if location_id is None or int(location_id) <= 0:
-        raise BasketPutError(
-            ec.PICK_LOCATION_REQUIRED,
-            ec.operator_message(ec.PICK_LOCATION_REQUIRED),
-            http_status=409,
-            extra={"phase": "PICK_LOCATION_REQUIRED"},
-        )
-    source_location_id = int(location_id)
-
-    from .location_stock import effective_pickable_qty_at_location
-
     loc_avail = effective_pickable_qty_at_location(
         db,
         tenant_id=int(cart.tenant_id),
@@ -830,7 +850,7 @@ def _quantity_mode_basket_put(
         }
     ]
 
-    # Preview only — operator must confirm quantity (ZERO Pick).
+    # Preview only — operator must confirm quantity (ZERO Pick). Keep source_lock.
     if quantity is None:
         _audit(
             "BASKET_QUANTITY_REQUIRED",
@@ -980,9 +1000,10 @@ def _quantity_mode_basket_put(
                 "order_item_id": int(live_alloc.order_item_id),
             },
         ) from e
-    # Quantity mode does not keep unit-scan pending / series state.
+    # Quantity mode: clear pending/series after success; also clear source_lock.
     put_state.set_pending(db, sess, None)
     put_state.set_active_series(db, sess, None)
+    put_state.set_source_lock(db, sess, None)
     event_confirm = "MANUAL_BASKET_CONFIRMATION" if manual else "BASKET_QUANTITY_COMMITTED"
     _audit(
         event_confirm,
@@ -1009,6 +1030,7 @@ def _quantity_mode_basket_put(
                 "order_id": int(live_alloc.order_id),
                 "order_item_id": int(live_alloc.order_item_id),
                 "line_remaining": rem_after,
+                "location_id": source_location_id,
             }
         ],
         message=f"KOSZYK {live_alloc.basket_label} — odłożono {put_qty:g} szt.",
@@ -1061,6 +1083,9 @@ def confirm_basket_put(
                 previous_product_id=series_ctx.get("product_id"),
                 context_product_id=ctx_product_id,
             )
+        lock_ctx = put_state.get_source_lock(sess)
+        if lock_ctx is not None and int(lock_ctx.get("product_id") or 0) != ctx_product_id:
+            put_state.set_source_lock(db, sess, None)
         if pending is not None and int(pending.get("product_id") or 0) != ctx_product_id:
             put_state.set_pending(db, sess, None)
             pending = None

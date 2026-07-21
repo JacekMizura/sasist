@@ -30,6 +30,7 @@ from backend.models.wms_operation_session import WmsOperationSession
 from backend.services.stock_disposition import STOCK_DISPOSITION_SALEABLE
 from backend.services.wms_basket_put import error_codes as ec
 from backend.services.wms_basket_put.scan_service import BasketPutError, confirm_basket_put
+from backend.services.wms_basket_put.source_lock import accept_source_location
 from backend.services.wms_basket_put import state as put_state
 
 
@@ -230,6 +231,15 @@ def env(db, monkeypatch):
 
 
 def _confirm(db, env, basket: str, *, quantity=None, product_id=192, location_id=100):
+    if location_id is not None and int(location_id) > 0:
+        accept_source_location(
+            db,
+            cart=env["cart"],
+            sess=env["sess"],
+            product_id=int(product_id),
+            location_id=int(location_id),
+            operator_user_id=1,
+        )
     return confirm_basket_put(
         db,
         cart=env["cart"],

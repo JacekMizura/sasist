@@ -2445,6 +2445,7 @@ def build_wms_picking_product_detail(
         basket_put_active_series=None,
         requires_basket_put_confirm=False,
         eligible_basket_destinations=[],
+        source_lock=None,
     )
 
     # MULTI baskets: expose pending put / series from session (SSOT).
@@ -2490,19 +2491,28 @@ def build_wms_picking_product_detail(
                 detail.requires_basket_put_confirm = bool(ui_put.get("requires_basket_put"))
                 # QUANTITY MODE: pending/series are legacy unit-scan state — clear so they
                 # cannot compete with SELECT_BASKET → ENTER_QUANTITY on detail.
+                # Never wipe source_lock (server provenance for source location).
                 if detail.requires_basket_put_confirm:
-                    from .wms_basket_put import clear_basket_put_state
+                    from .cart_picking_lifecycle_service import find_open_picking_session
+                    from .wms_basket_put import state as put_state
 
-                    if ui_put.get("pending") or ui_put.get("active_series"):
-                        clear_basket_put_state(
-                            db, cart=cart_for_put, reason="quantity_mode_detail_ssot"
-                        )
+                    sess_put = find_open_picking_session(db, cart=cart_for_put)
+                    if sess_put is not None and (ui_put.get("pending") or ui_put.get("active_series")):
+                        put_state.set_pending(db, sess_put, None)
+                        put_state.set_active_series(db, sess_put, None)
                     detail.basket_put_pending = None
                     detail.basket_put_active_series = None
                     detail.put_to_basket_label = None
+                    # Product-scoped source_lock for FE restore after refetch.
+                    sl = put_state.get_source_lock(sess_put) if sess_put is not None else None
+                    if sl is not None and int(sl.get("product_id") or 0) == int(product_id):
+                        detail.source_lock = sl
+                    else:
+                        detail.source_lock = None
                 else:
                     detail.basket_put_pending = ui_put.get("pending")
                     detail.basket_put_active_series = ui_put.get("active_series")
+                    detail.source_lock = ui_put.get("source_lock")
                     series = detail.basket_put_active_series
                     if isinstance(series, dict) and series.get("basket_label"):
                         detail.put_to_basket_label = str(series["basket_label"])

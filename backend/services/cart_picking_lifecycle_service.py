@@ -1637,6 +1637,14 @@ def release_cart(
         # Już czysty AVAILABLE — no-op (bez historii)
         return
 
+    # Clear MULTI source_lock / pending put before session detach (idle release included).
+    try:
+        from .wms_basket_put import clear_basket_put_state
+
+        clear_basket_put_state(db, cart=cart, reason=f"release_cart:{reason}")
+    except Exception:
+        logger.exception("clear_basket_put_state on release failed cart_id=%s", getattr(cart, "id", None))
+
     from .cart_stats_service import activity_orders_meta, list_orders_on_cart
 
     orders_snapshot = list_orders_on_cart(db, cart)

@@ -58,15 +58,16 @@ describe("nextActiveLocationIdAfterDetail", () => {
     ).toBeNull();
   });
 
-  it("keeps A23 after partial pick when effective remains > 0", () => {
+  it("server source_lock wins over previousId and greedy first location", () => {
     expect(
       nextActiveLocationIdAfterDetail({
-        previousId: 23,
+        previousId: 10,
         locations: [
-          { location_id: 10, stock_quantity: 0 },
-          { location_id: 23, stock_quantity: 2 },
+          { location_id: 10, stock_quantity: 8 },
+          { location_id: 23, stock_quantity: 1 },
         ],
         productChanged: false,
+        serverSourceLocationId: 23,
       }),
     ).toBe(23);
   });

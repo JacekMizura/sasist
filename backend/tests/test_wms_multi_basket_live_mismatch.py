@@ -35,6 +35,7 @@ from backend.services.wms_basket_put.resolve import (
     resolve_allocation_for_basket_scan,
 )
 from backend.services.wms_basket_put.scan_service import BasketPutError, confirm_basket_put
+from backend.tests.wms_source_lock_helpers import accept_and_confirm_basket_put
 
 
 PRODUCT_ID = 192
@@ -213,22 +214,23 @@ def env(db, monkeypatch):
         "pick_calls": pick_calls,
         "record_pick_fn": record_pick_fn,
         "order_ids": [1234, 1235],
+        "confirm": lambda basket, *, quantity=None, product_id=PRODUCT_ID, location_id=LOC: accept_and_confirm_basket_put(
+            db,
+            cart=cart,
+            sess=sess,
+            basket_scan=basket,
+            record_pick_fn=record_pick_fn,
+            order_ids=[1234, 1235],
+            product_id=product_id,
+            location_id=location_id,
+            quantity=quantity,
+        ),
     }
 
 
 def test_exact_flow_s11_complete_then_s12_brck_ok(db, env):
     # Put 8 → S-1-1
-    r1 = confirm_basket_put(
-        db,
-        cart=env["cart"],
-        basket_scan="brck1-B01",
-        operator_user_id=1,
-        record_pick_fn=env["record_pick_fn"],
-        order_ids=env["order_ids"],
-        product_id=PRODUCT_ID,
-        location_id=LOC,
-        quantity=8.0,
-    )
+    r1 = env["confirm"]("brck1-B01", quantity=8.0,)
     assert r1.phase == "PUT_CONFIRMED"
     assert env["pick_calls"] == [(8.0, 1234)]
     assert env["picked"].get(12340) == pytest.approx(8.0)
@@ -242,17 +244,7 @@ def test_exact_flow_s11_complete_then_s12_brck_ok(db, env):
     assert int(live[0].order_id) == 1235
     assert float(live[0].line_remaining) == pytest.approx(1.0)
 
-    r2 = confirm_basket_put(
-        db,
-        cart=env["cart"],
-        basket_scan="brck1-B02",
-        operator_user_id=1,
-        record_pick_fn=env["record_pick_fn"],
-        order_ids=env["order_ids"],
-        product_id=PRODUCT_ID,
-        location_id=LOC,
-        quantity=1.0,
-    )
+    r2 = env["confirm"]("brck1-B02", quantity=1.0,)
     assert r2.phase == "PUT_CONFIRMED"
     assert env["pick_calls"][-1] == (1.0, 1235)
     assert env["picked"].get(12350) == pytest.approx(1.0)
@@ -275,17 +267,7 @@ def test_A_correct_s12_ok(db, env):
 def test_B_completed_s11_mismatch(db, env):
     env["picked"][12340] = 8.0
     with pytest.raises(BasketPutError) as ei:
-        confirm_basket_put(
-            db,
-            cart=env["cart"],
-            basket_scan="brck1-B01",
-            operator_user_id=1,
-            record_pick_fn=env["record_pick_fn"],
-            order_ids=env["order_ids"],
-            product_id=PRODUCT_ID,
-            location_id=LOC,
-            quantity=1.0,
-        )
+        env["confirm"]("brck1-B01", quantity=1.0,)
     # Completed line → ALREADY_COMPLETE or MISMATCH depending on path; both 409
     assert ei.value.code in (ec.BASKET_PRODUCT_MISMATCH, "BASKET_PRODUCT_ALREADY_COMPLETE", ec.BASKET_PRODUCT_ALREADY_COMPLETE if hasattr(ec, "BASKET_PRODUCT_ALREADY_COMPLETE") else "BASKET_PRODUCT_ALREADY_COMPLETE")
 
@@ -321,17 +303,7 @@ def test_C_foreign_cart_same_label_mismatch(db, env):
     db.commit()
 
     with pytest.raises(BasketPutError) as ei:
-        confirm_basket_put(
-            db,
-            cart=env["cart"],
-            basket_scan="other-B02",
-            operator_user_id=1,
-            record_pick_fn=env["record_pick_fn"],
-            order_ids=env["order_ids"],
-            product_id=PRODUCT_ID,
-            location_id=LOC,
-            quantity=1.0,
-        )
+        env["confirm"]("other-B02", quantity=1.0,)
     # Foreign physical barcode must not resolve onto active cart (OTHER_CART or MISMATCH).
     assert ei.value.code in (ec.BASKET_OTHER_CART, ec.BASKET_MISMATCH, ec.BASKET_PRODUCT_MISMATCH)
     assert ei.value.http_status == 409
@@ -375,17 +347,7 @@ def test_C2_order_basket_off_cart_local_b02_mismatch(db, env):
     assert any(int(r["order_id"]) == 1235 for r in rejected)
 
     with pytest.raises(BasketPutError) as ei:
-        confirm_basket_put(
-            db,
-            cart=env["cart"],
-            basket_scan="brck1-B02",
-            operator_user_id=1,
-            record_pick_fn=env["record_pick_fn"],
-            order_ids=env["order_ids"],
-            product_id=PRODUCT_ID,
-            location_id=LOC,
-            quantity=1.0,
-        )
+        env["confirm"]("brck1-B02", quantity=1.0,)
     assert ei.value.code == ec.BASKET_PRODUCT_MISMATCH
     assert "rejected_allocations" in ei.value.extra
     assert "eligible_baskets" in ei.value.extra
@@ -403,17 +365,7 @@ def test_D_stale_picked_status_still_eligible(db, env):
     )
     assert any(int(a.order_id) == 1235 and int(a.basket_id) == 11 for a in live)
 
-    r = confirm_basket_put(
-        db,
-        cart=env["cart"],
-        basket_scan="brck1-B02",
-        operator_user_id=1,
-        record_pick_fn=env["record_pick_fn"],
-        order_ids=env["order_ids"],
-        product_id=PRODUCT_ID,
-        location_id=LOC,
-        quantity=1.0,
-    )
+    r = env["confirm"]("brck1-B02", quantity=1.0,)
     assert r.phase == "PUT_CONFIRMED"
     db.refresh(oi2)
     # After heal+put, status may be re-set by record path; quantity committed
@@ -433,33 +385,13 @@ def test_F_shortage_not_eligible_no_pending_put(db, env):
     assert not any(int(a.order_id) == 1235 for a in live)
 
     with pytest.raises(BasketPutError) as ei:
-        confirm_basket_put(
-            db,
-            cart=env["cart"],
-            basket_scan="brck1-B02",
-            operator_user_id=1,
-            record_pick_fn=env["record_pick_fn"],
-            order_ids=env["order_ids"],
-            product_id=PRODUCT_ID,
-            location_id=LOC,
-            quantity=1.0,
-        )
+        env["confirm"]("brck1-B02", quantity=1.0,)
     assert ei.value.code in (ec.BASKET_PRODUCT_MISMATCH, "BASKET_PRODUCT_ALREADY_COMPLETE")
     assert env["picked"].get(12350, 0.0) == 0.0
 
 
 def test_E_after_confirm_s12_no_longer_eligible(db, env):
-    confirm_basket_put(
-        db,
-        cart=env["cart"],
-        basket_scan="brck1-B02",
-        operator_user_id=1,
-        record_pick_fn=env["record_pick_fn"],
-        order_ids=env["order_ids"],
-        product_id=PRODUCT_ID,
-        location_id=LOC,
-        quantity=1.0,
-    )
+    env["confirm"]("brck1-B02", quantity=1.0,)
     live = list_eligible_basket_allocations(
         db, cart=env["cart"], order_ids=env["order_ids"], product_id=PRODUCT_ID
     )

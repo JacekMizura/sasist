@@ -155,6 +155,17 @@ const CATALOG: Record<
     title: "BŁĘDNA LOKALIZACJA",
     message: "Nieprawidłowa lokalizacja źródłowa dla tego pobrania.",
   },
+  SOURCE_LOCATION_MISMATCH: {
+    severity: "error",
+    title: "LOKALIZACJA NIEZGODNA",
+    message:
+      "Lokalizacja źródłowa nie zgadza się z wcześniej zeskanowaną lokalizacją. Zeskanuj produkt ponownie.",
+  },
+  NO_PENDING_SOURCE_LOCATION: {
+    severity: "warning",
+    title: "ZESKANUJ LOKALIZACJĘ",
+    message: "Brak zatwierdzonej lokalizacji pobrania. Zeskanuj lokalizację produktu ponownie.",
+  },
   NO_PENDING_PICK: {
     severity: "warning",
     title: "BRAK POBRANIA",

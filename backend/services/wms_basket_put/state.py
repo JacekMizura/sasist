@@ -1,4 +1,4 @@
-"""Session metadata helpers for pending basket put + active series."""
+"""Session metadata helpers for pending basket put + active series + source_lock."""
 
 from __future__ import annotations
 
@@ -30,6 +30,14 @@ def _dump_meta(data: dict[str, Any]) -> str:
     return json.dumps(data, ensure_ascii=False)
 
 
+def _block_is_empty(block: dict[str, Any]) -> bool:
+    return not (
+        block.get("pending")
+        or block.get("active_series")
+        or block.get("source_lock")
+    )
+
+
 def read_basket_put_block(sess: WmsOperationSession) -> dict[str, Any]:
     meta = _load_meta(getattr(sess, "metadata_json", None))
     block = meta.get(META_KEY)
@@ -38,7 +46,7 @@ def read_basket_put_block(sess: WmsOperationSession) -> dict[str, Any]:
 
 def write_basket_put_block(db: Session, sess: WmsOperationSession, block: dict[str, Any] | None) -> None:
     meta = _load_meta(getattr(sess, "metadata_json", None))
-    if block is None or (not block.get("pending") and not block.get("active_series")):
+    if block is None or _block_is_empty(block):
         meta.pop(META_KEY, None)
     else:
         meta[META_KEY] = block
@@ -60,6 +68,12 @@ def get_active_series(sess: WmsOperationSession) -> dict[str, Any] | None:
     return series if isinstance(series, dict) else None
 
 
+def get_source_lock(sess: WmsOperationSession) -> dict[str, Any] | None:
+    block = read_basket_put_block(sess)
+    lock = block.get("source_lock")
+    return lock if isinstance(lock, dict) else None
+
+
 def set_pending(db: Session, sess: WmsOperationSession, pending: dict[str, Any] | None) -> None:
     block = read_basket_put_block(sess)
     if pending is None:
@@ -75,6 +89,15 @@ def set_active_series(db: Session, sess: WmsOperationSession, series: dict[str, 
         block.pop("active_series", None)
     else:
         block["active_series"] = series
+    write_basket_put_block(db, sess, block if block else None)
+
+
+def set_source_lock(db: Session, sess: WmsOperationSession, lock: dict[str, Any] | None) -> None:
+    block = read_basket_put_block(sess)
+    if lock is None:
+        block.pop("source_lock", None)
+    else:
+        block["source_lock"] = lock
     write_basket_put_block(db, sess, block if block else None)
 
 

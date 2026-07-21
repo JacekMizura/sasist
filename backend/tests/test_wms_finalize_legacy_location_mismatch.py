@@ -40,6 +40,7 @@ from backend.services.wms_basket_put.location_stock import (
     on_hand_qty_at_location,
 )
 from backend.services.wms_basket_put.scan_service import BasketPutError, confirm_basket_put
+from backend.tests.wms_source_lock_helpers import accept_and_confirm_basket_put
 from backend.services.wms_picking_product_list_service import (
     PickingFinalizeError,
     _finalize_pick_trace_payload,
@@ -336,11 +337,11 @@ def test_case2_write_path_blocks_second_pick_when_effective_1(db, monkeypatch):
     assert avail == 1.0
 
     with pytest.raises(BasketPutError) as ei:
-        confirm_basket_put(
+        accept_and_confirm_basket_put(
             db,
             cart=cart,
+            sess=sess,
             basket_scan="brck1-B01",
-            operator_user_id=1,
             record_pick_fn=record_pick_fn,
             order_ids=[1234, 1235],
             product_id=192,
@@ -392,11 +393,11 @@ def test_case4_exact_capacity(db, monkeypatch):
         picked[oid * 10] = float(picked.get(oid * 10, 0.0)) + float(quantity)
         return oid, oid * 10
 
-    ok = confirm_basket_put(
+    ok = accept_and_confirm_basket_put(
         db,
         cart=cart,
+        sess=sess,
         basket_scan="brck1-B01",
-        operator_user_id=1,
         record_pick_fn=record_pick_fn,
         order_ids=[1234, 1235],
         product_id=192,
@@ -405,11 +406,11 @@ def test_case4_exact_capacity(db, monkeypatch):
     )
     assert float(ok.quantity_put) == 1.0
     with pytest.raises(BasketPutError) as ei:
-        confirm_basket_put(
+        accept_and_confirm_basket_put(
             db,
             cart=cart,
+            sess=sess,
             basket_scan="brck1-B01",
-            operator_user_id=1,
             record_pick_fn=record_pick_fn,
             order_ids=[1234, 1235],
             product_id=192,

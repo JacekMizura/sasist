@@ -263,6 +263,15 @@ export type WmsPickingProductDetailApi = {
     /** LIVE remaining for this series allocation (order_item + basket) — not product aggregate. */
     line_remaining?: number;
   } | null;
+  /** Server-side source provenance (MULTI quantity) — restore after refetch. */
+  source_lock?: {
+    product_id?: number;
+    location_id?: number;
+    location_code?: string | null;
+    cart_id?: number;
+    session_id?: number;
+    locked_at?: string;
+  } | null;
 };
 
 export async function getWmsPickingProductLines(
@@ -1132,6 +1141,31 @@ export async function postWmsPickingConfirmRemaining(
   const res = await api.post<WmsPickingConfirmRemainingResultApi>(
     "/wms/picking/confirm-remaining",
     payload,
+    { params },
+  );
+  return res.data;
+}
+
+export async function postWmsPickingAcceptSourceLocation(
+  tenantId: number,
+  warehouseId: number,
+  body: {
+    cart_id: number;
+    product_id: number;
+    location_id: number;
+  },
+): Promise<{ ok: boolean; source_lock?: Record<string, unknown> }> {
+  const params = {
+    tenant_id: tenantId,
+    warehouse_id: warehouseId,
+  };
+  const res = await api.post(
+    "/wms/picking/accept-source-location",
+    {
+      cart_id: assertPositiveInt("cart_id", body.cart_id),
+      product_id: assertPositiveInt("product_id", body.product_id),
+      location_id: assertPositiveInt("location_id", body.location_id),
+    },
     { params },
   );
   return res.data;

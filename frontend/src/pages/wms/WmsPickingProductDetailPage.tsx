@@ -6,6 +6,7 @@ import {
   formatFastApiErrorDetail,
   getWmsPickingProductDetail,
   getWmsPickingProductPicks,
+  postWmsPickingAcceptSourceLocation,
   postWmsPickingConfirmBasketPut,
   postWmsPickingConfirmEmptyLocation,
   postWmsPickingConfirmRemaining,
@@ -366,6 +367,7 @@ export default function WmsPickingProductDetailPage() {
         previousId: prev,
         locations: detail.locations,
         productChanged: false,
+        serverSourceLocationId: detail.source_lock?.location_id ?? null,
       }),
     );
   }, [detail]);
@@ -375,6 +377,64 @@ export default function WmsPickingProductDetailPage() {
     setActiveLocationId(null);
     setLocationHint(null);
   }, [productId]);
+
+  const acceptSourceLocation = useCallback(
+    async (locationId: number): Promise<boolean> => {
+      if (!detail?.requires_basket_put_confirm || !pickingSession?.cartId) {
+        return true;
+      }
+      if (!Number.isFinite(locationId) || locationId <= 0) return false;
+      try {
+        await postWmsPickingAcceptSourceLocation(pickingTenantId, warehouseId, {
+          cart_id: pickingSession.cartId,
+          product_id: productId,
+          location_id: locationId,
+        });
+        setDetail((prev) =>
+          prev
+            ? {
+                ...prev,
+                source_lock: {
+                  ...(prev.source_lock ?? {}),
+                  product_id: productId,
+                  location_id: locationId,
+                  cart_id: pickingSession.cartId,
+                },
+              }
+            : prev,
+        );
+        return true;
+      } catch (e) {
+        const mapped = extractWmsScanErrorDetail(e);
+        const fb = mapWmsScanErrorCode(mapped.code, { backendMessage: mapped.message });
+        showScanFeedbackFromCode(mapped.code, { contextHint: mapped.message });
+        setPickMsg(fb.message);
+        setActiveLocationId(null);
+        return false;
+      }
+    },
+    [
+      detail?.requires_basket_put_confirm,
+      pickingSession?.cartId,
+      pickingTenantId,
+      warehouseId,
+      productId,
+      showScanFeedbackFromCode,
+    ],
+  );
+
+  // Persist server source_lock when operator selects / auto-selects a location.
+  useEffect(() => {
+    if (!detail?.requires_basket_put_confirm) return;
+    if (activeLocationId == null) return;
+    if (detail.source_lock?.location_id === activeLocationId) return;
+    void acceptSourceLocation(activeLocationId);
+  }, [
+    activeLocationId,
+    detail?.requires_basket_put_confirm,
+    detail?.source_lock?.location_id,
+    acceptSourceLocation,
+  ]);
 
   const needsLocationScan = (detail?.locations.length ?? 0) > 1;
   const selectedLocation = useMemo(() => {

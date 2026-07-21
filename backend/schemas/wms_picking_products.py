@@ -409,6 +409,13 @@ class WmsPickingProductDetailResponse(BaseModel):
         default=False,
         description="True dla wózka MULTI/baskets — skan produktu nie finalizuje sztuki bez koszyka.",
     )
+    source_lock: Optional[dict] = Field(
+        default=None,
+        description=(
+            "Server-side provenance lokalizacji źródłowej (session basket_put.source_lock). "
+            "SSOT dla confirm-basket-put — nie mylić z FE activeLocationId."
+        ),
+    )
     eligible_basket_destinations: list[WmsPickingEligibleBasketDestination] = Field(
         default_factory=list,
         description=(
@@ -417,6 +424,14 @@ class WmsPickingProductDetailResponse(BaseModel):
             "UI must show these rows (not raw orders[].basket_slot alone)."
         ),
     )
+
+
+class WmsPickingAcceptSourceLocationBody(BaseModel):
+    """Zatwierdź lokalizację źródłową (server-side source_lock) przed skanem koszyka."""
+
+    cart_id: int = Field(..., ge=1)
+    product_id: int = Field(..., ge=1)
+    location_id: int = Field(..., ge=1)
 
 
 class WmsPickingConfirmBasketPutBody(BaseModel):
@@ -435,7 +450,10 @@ class WmsPickingConfirmBasketPutBody(BaseModel):
     location_id: Optional[int] = Field(
         default=None,
         ge=1,
-        description="Lokalizacja źródłowa wymagana przy commit ilości.",
+        description=(
+            "Opcjonalna zgodność z source_lock (nie SSOT). "
+            "Mismatch → SOURCE_LOCATION_MISMATCH. Pick.location_id zawsze z locka."
+        ),
     )
     quantity: Optional[float] = Field(
         default=None,

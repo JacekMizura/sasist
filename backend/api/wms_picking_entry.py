@@ -38,6 +38,7 @@ from ..schemas.wms_picking_flow import (
     WmsPickingFlowLimits,
 )
 from ..schemas.wms_picking_products import (
+    WmsPickingAcceptSourceLocationBody,
     WmsPickingCancelPendingBasketPutBody,
     WmsPickingConfirmBasketPutBody,
     WmsPickingConfirmRemainingBody,
@@ -1674,6 +1675,53 @@ def post_picking_confirm_remaining(
         ) from e
 
 
+@router.post("/picking/accept-source-location")
+def post_picking_accept_source_location(
+    body: WmsPickingAcceptSourceLocationBody,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
+    db: Session = Depends(get_db),
+    current_user: AppUser = Depends(get_current_user),
+):
+    """Zatwierdź lokalizację źródłową (server-side source_lock) przed skanem koszyka."""
+    from ..models.cart import Cart
+    from ..services.cart_picking_lifecycle_service import assert_cart_ready_for_quick_pick
+    from ..services.wms_basket_put import BasketPutError, accept_source_location
+
+    tid = int(tenant_id)
+    uid = int(current_user.id) if current_user is not None else None
+    cart = (
+        db.query(Cart)
+        .filter(
+            Cart.id == int(body.cart_id),
+            Cart.tenant_id == tid,
+            Cart.warehouse_id == int(warehouse_id),
+        )
+        .first()
+    )
+    if cart is None:
+        raise HTTPException(status_code=404, detail="Nie znaleziono wózka.")
+
+    try:
+        sess = assert_cart_ready_for_quick_pick(db, cart)
+        lock = accept_source_location(
+            db,
+            cart=cart,
+            sess=sess,
+            product_id=int(body.product_id),
+            location_id=int(body.location_id),
+            operator_user_id=uid,
+        )
+        db.commit()
+        return {"ok": True, "source_lock": lock}
+    except BasketPutError as be:
+        db.rollback()
+        raise HTTPException(status_code=be.http_status, detail=be.as_detail()) from be
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
 @router.post("/picking/confirm-basket-put")
 def post_picking_confirm_basket_put(
     body: WmsPickingConfirmBasketPutBody,
@@ -1817,7 +1865,13 @@ def post_picking_confirm_basket_put(
             "scanned_basket": put_res.scanned_basket,
             "message": put_res.message,
             "picked": qty_put > 1e-9,
-            "source_location_id": int(_pending_location_id) if _pending_location_id else None,
+            "source_location_id": (
+                int(put_res.eligible_baskets[0]["location_id"])
+                if put_res.eligible_baskets
+                and isinstance(put_res.eligible_baskets[0], dict)
+                and put_res.eligible_baskets[0].get("location_id")
+                else (int(_pending_location_id) if _pending_location_id else None)
+            ),
         }
     except BasketPutError as be:
         # Keep pending on mismatch / wrong basket / full line — no pick was written.
@@ -1825,8 +1879,16 @@ def post_picking_confirm_basket_put(
             "BASKET_MISMATCH",
             "BASKET_PRODUCT_MISMATCH",
             "BASKET_PRODUCT_ALREADY_COMPLETE",
+            "SOURCE_LOCATION_MISMATCH",
+            "NO_PENDING_SOURCE_LOCATION",
+            "QUANTITY_EXCEEDS_LOCATION_STOCK",
+            "QUANTITY_EXCEEDS_REMAINING",
+            "QUANTITY_STALE",
+            "QUANTITY_INVALID",
+            "PENDING_PICK_STATE_CONFLICT",
         ):
-            # ALREADY_COMPLETE may have refreshed eligible_baskets on pending — commit that.
+            # Keep committed source_lock from prior accept; only ALREADY_COMPLETE may
+            # have refreshed pending eligibility worth committing.
             if be.code == "BASKET_PRODUCT_ALREADY_COMPLETE":
                 try:
                     db.commit()

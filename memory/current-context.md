@@ -2,16 +2,14 @@
 
 ## Active
 
-**MULTI basket put — source location provenance** — local commit; **do not push**.
+**MULTI quantity-mode server-side `source_lock`** — local commit pending/ready; **do not push** (incl. prior `2de7345a`).
 
-## Root cause (LIVE brck1-B02 → 400 route)
+## Invariant
 
-1. `confirm-basket-put` quantity mode validates stock at FE `location_id`, but `record_wms_quick_pick` re-checked greedy `PickingRoutingService` (physical Inventory, ignores draft Picks) → A10 still preferred, A23 rejected.
-2. API `_do_record` preferred stale series `location_id` over request body.
-3. ValueError → HTTP 400 plain string → FE `UNKNOWN_SCAN_CODE`.
+After source accept → `basket_put.source_lock` in session metadata → confirm-basket-put uses lock for `Pick.location_id` → live effective stock revalidation → clear lock on success only.
 
-## Fix
+`body.location_id` = compatibility check only (`SOURCE_LOCATION_MISMATCH` on mismatch). Not Inventory reservation.
 
-- `skip_route_location_check` when basket-bound (`scope_order_id`)
-- Pass/trust request `location_id` into Pick write
-- Structured `{code,message}` for location errors; FE catalog for SOURCE_LOCATION_*
+## Storage
+
+`WmsOperationSession.metadata_json.basket_put.source_lock` (existing basket_put block).

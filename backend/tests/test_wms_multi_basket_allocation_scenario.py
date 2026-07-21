@@ -10,7 +10,7 @@ CASE coverage maps to operator brief:
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -21,12 +21,16 @@ from sqlalchemy.orm import sessionmaker
 from backend.models.cart import Cart
 from backend.models.cart_basket import CartBasket
 from backend.models.enums import CartType
+from backend.models.inventory import Inventory
+from backend.models.location import Location
 from backend.models.order import Order
 from backend.models.order_item import OrderItem
+from backend.models.pick import Pick
 from backend.models.product import Product
 from backend.models.tenant import Tenant
 from backend.models.warehouse import Warehouse
 from backend.models.wms_operation_session import WmsOperationSession
+from backend.services.stock_disposition import STOCK_DISPOSITION_SALEABLE
 from backend.services.wms_basket_put import error_codes as ec
 from backend.services.wms_basket_put.scan_service import BasketPutError, confirm_basket_put
 from backend.services.wms_picking_product_list_service import report_wms_picking_product_shortage
@@ -39,10 +43,13 @@ def db():
         Tenant,
         Warehouse,
         Product,
+        Location,
+        Inventory,
         Cart,
         CartBasket,
         Order,
         OrderItem,
+        Pick,
         WmsOperationSession,
     ):
         model.__table__.create(engine, checkfirst=True)
@@ -51,6 +58,19 @@ def db():
     session.add(Tenant(id=1, name="T", default_warehouse_id=1))
     session.add(Warehouse(id=1, tenant_id=1, name="WH"))
     session.add(Product(id=50, tenant_id=1, name="A", sku="A", ean="5900000000050"))
+    session.add(Location(id=100, warehouse_id=1, name="A10", is_active=True))
+    session.add(
+        Inventory(
+            tenant_id=1,
+            warehouse_id=1,
+            product_id=50,
+            location_id=100,
+            quantity=100.0,
+            batch_number="",
+            expiry_date=date(9999, 12, 31),
+            stock_disposition=STOCK_DISPOSITION_SALEABLE,
+        )
+    )
     session.commit()
     try:
         yield session
@@ -184,11 +204,13 @@ def multi_env(db, monkeypatch):
     order_ids = [1001, 1002, 1003, 1004, 1005]
 
     def confirm(basket: str, *, quantity=None):
-        return confirm_basket_put(
+        from backend.tests.wms_source_lock_helpers import accept_and_confirm_basket_put
+
+        return accept_and_confirm_basket_put(
             db,
             cart=cart,
+            sess=sess,
             basket_scan=basket,
-            operator_user_id=1,
             record_pick_fn=record_pick_fn,
             order_ids=order_ids,
             product_id=50,
