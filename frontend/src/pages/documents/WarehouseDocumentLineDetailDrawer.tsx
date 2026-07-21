@@ -23,6 +23,7 @@ type Props = {
   line: StockDocumentItemRead | null;
   lineIndex: number;
   deliveryDiffAccepted?: boolean;
+  dockLocationCode?: string | null;
   onClose: () => void;
 };
 
@@ -36,6 +37,7 @@ export function WarehouseDocumentLineDetailDrawer({
   line,
   lineIndex,
   deliveryDiffAccepted = false,
+  dockLocationCode,
   onClose,
 }: Props) {
   useEffect(() => {
@@ -113,7 +115,11 @@ export function WarehouseDocumentLineDetailDrawer({
                 </div>
               </DetailRow>
               <DetailRow label="Lokalizacja">
-                <WarehouseLineLocationCell it={line} isWz={false} />
+                <WarehouseLineLocationCell
+                  it={line}
+                  isWz={false}
+                  dockLocationCode={dockLocationCode}
+                />
               </DetailRow>
               <DetailRow label="Cena netto">
                 {line.purchase_price_net != null ? formatMoneyPl(line.purchase_price_net) : "—"}
@@ -144,9 +150,12 @@ export function WarehouseDocumentLineDetailDrawer({
               ) : (
                 <p className="text-sm text-slate-600">Brak zapisanej blokady sprzedaży dla tej pozycji.</p>
               )}
-              {receiptLineLocationCode(line) ? (
+              {receiptLineLocationCode(line, dockLocationCode) ? (
                 <p className="text-xs text-slate-500">
-                  Lokalizacja: <span className="font-medium text-slate-700">{receiptLineLocationCode(line)}</span>
+                  Lokalizacja:{" "}
+                  <span className="font-medium text-slate-700">
+                    {receiptLineLocationCode(line, dockLocationCode)}
+                  </span>
                 </p>
               ) : null}
             </div>

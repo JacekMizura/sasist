@@ -1,3 +1,10 @@
+## 2026-07-21 — PZ: ukryj OCZEKUJE FV + lokalizacje putaway 1:N
+
+- FV: `purchase_workflow_status=PENDING_INVOICE` to martwy default bez encji/UI faktury — `showPurchaseWorkflowStatus` → false (kolumna DB zostaje).
+- Lokalizacja linii: SSOT = `StockOperation` type PUTAWAY (`document_line_id` × `location_id`); usunięty fallback Inventory lot (bleed pre-stock).
+- UI: `receiptLinePlacementRows` + qty + compact `+N lokalizacje` / HoverPopover ROZLOKOWANIE; DOCK-IN remaining.
+- Tests: `test_pz_putaway_provenance_display.py`, FE placement + badge. **No push.**
+
 ## 2026-07-21 — WMS Dashboard/Topbar SSOT + order-issue-tasks heal
 
 - Registry: `wmsTabConfig.ts` (accent, category, canPin, operationalMode) → dashboard + topbar.

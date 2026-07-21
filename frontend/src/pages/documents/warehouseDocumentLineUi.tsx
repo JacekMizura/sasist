@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { StockDocumentItemRead } from "../../api/stockDocumentsApi";
+import { HoverPopover } from "../../components/ui/HoverPopover";
 import { LocationBadge } from "../../components/warehouse/LocationBadge";
 
 const lineTypePill =
@@ -65,18 +66,92 @@ export function receiptLineDisplayName(it: StockDocumentItemRead): string {
   return "Pozycja";
 }
 
-export function receiptLineLocationCode(it: StockDocumentItemRead): string | null {
-  const last = (it.putaway_last_location_name || "").trim();
-  if (last) return last;
-  const a = it.putaway_allocations ?? [];
-  const first = (a[0]?.location_code || a[0]?.location_name || "").trim();
-  return first || null;
+export type ReceiptLinePlacementRow = {
+  locationCode: string;
+  locationType: string;
+  quantity: number;
+  /** True when qty is still on receiving dock (not yet put away). */
+  isDockRemaining?: boolean;
+};
+
+const PLACEMENT_EPS = 1e-6;
+
+function fmtPlacementQty(n: number): string {
+  return new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 6 }).format(n);
+}
+
+/** Putaway remaining on line — prefer API computed field, else received − putaway. */
+export function receiptLinePutawayRemaining(it: StockDocumentItemRead): number {
+  const fromApi = it.putaway_remaining;
+  if (fromApi != null && Number.isFinite(Number(fromApi))) {
+    return Math.max(0, Number(fromApi));
+  }
+  return Math.max(0, (Number(it.received_quantity) || 0) - (Number(it.quantity_putaway) || 0));
+}
+
+/**
+ * PZ line placement for document table: destination PUTAWAY allocations (provenance)
+ * plus remaining DOCK-IN qty. Never invents locations from live Inventory.
+ */
+export function receiptLinePlacementRows(
+  it: StockDocumentItemRead,
+  dockLocationCode?: string | null,
+): ReceiptLinePlacementRow[] {
+  const rows: ReceiptLinePlacementRow[] = [];
+  for (const a of it.putaway_allocations ?? []) {
+    const code = (a.location_code || a.location_name || "").trim();
+    const qty = Number(a.quantity) || 0;
+    if (!code || qty <= PLACEMENT_EPS) continue;
+    rows.push({
+      locationCode: code,
+      locationType: (a.location_type || "PICK").trim() || "PICK",
+      quantity: qty,
+    });
+  }
+  rows.sort((a, b) => b.quantity - a.quantity || a.locationCode.localeCompare(b.locationCode, "pl"));
+
+  const rem = receiptLinePutawayRemaining(it);
+  if (rem > PLACEMENT_EPS) {
+    const dock = (dockLocationCode || "DOCK-IN").trim() || "DOCK-IN";
+    const dockKey = dock.toLowerCase();
+    const already = rows.find((r) => r.locationCode.toLowerCase() === dockKey);
+    if (already) {
+      already.quantity += rem;
+      already.isDockRemaining = true;
+      already.locationType = "INBOUND";
+    } else {
+      rows.push({
+        locationCode: dock,
+        locationType: "INBOUND",
+        quantity: rem,
+        isDockRemaining: true,
+      });
+    }
+  }
+  return rows;
+}
+
+/** Compact label for legacy single-string callers (prefer placement rows in UI). */
+export function receiptLineLocationCode(
+  it: StockDocumentItemRead,
+  dockLocationCode?: string | null,
+): string | null {
+  const rows = receiptLinePlacementRows(it, dockLocationCode);
+  if (!rows.length) return null;
+  if (rows.length === 1) {
+    return `${rows[0]!.locationCode} · ${fmtPlacementQty(rows[0]!.quantity)} szt.`;
+  }
+  return `${rows[0]!.locationCode} · ${fmtPlacementQty(rows[0]!.quantity)} szt.  +${rows.length - 1} lokalizacje`;
 }
 
 export function wzLineLocationCode(it: StockDocumentItemRead): string | null {
   const mm = (it.mm_line_from_location_name || "").trim();
   if (mm) return mm;
-  return receiptLineLocationCode(it);
+  const last = (it.putaway_last_location_name || "").trim();
+  if (last) return last;
+  const a = it.putaway_allocations ?? [];
+  const first = (a[0]?.location_code || a[0]?.location_name || "").trim();
+  return first || null;
 }
 
 export function receiptLineStatusKey(it: StockDocumentItemRead): "delivered" | "in_progress" | "pending" | "none" {
@@ -158,14 +233,78 @@ export function WarehouseLineStatusBadge({ label }: { label: string }) {
 export function WarehouseLineLocationCell({
   it,
   isWz,
+  dockLocationCode,
 }: {
   it: StockDocumentItemRead;
   isWz: boolean;
+  /** Document receiving location (usually DOCK-IN) for remainder qty. */
+  dockLocationCode?: string | null;
 }) {
-  const code = isWz ? wzLineLocationCode(it) : receiptLineLocationCode(it);
-  if (!code) return <span className="text-xs text-slate-400">—</span>;
-  const locType = (it.putaway_last_location_type || "PICK").trim() || "PICK";
-  return <LocationBadge code={code} type={locType} className="max-w-[10rem]" />;
+  if (isWz) {
+    const code = wzLineLocationCode(it);
+    if (!code) return <span className="text-xs text-slate-400">—</span>;
+    const locType = (it.putaway_last_location_type || "PICK").trim() || "PICK";
+    return <LocationBadge code={code} type={locType} className="max-w-[10rem]" />;
+  }
+
+  const rows = receiptLinePlacementRows(it, dockLocationCode);
+  if (!rows.length) return <span className="text-xs text-slate-400">—</span>;
+
+  if (rows.length === 1) {
+    const r = rows[0]!;
+    return (
+      <LocationBadge
+        code={r.locationCode}
+        type={r.locationType}
+        quantity={r.quantity}
+        className="max-w-[12rem]"
+      />
+    );
+  }
+
+  const first = rows[0]!;
+  const extra = rows.length - 1;
+  const total = rows.reduce((s, r) => s + r.quantity, 0);
+  const popover = (
+    <div className="space-y-2">
+      <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Rozlokowanie</p>
+      <ul className="space-y-1.5">
+        {rows.map((r) => (
+          <li
+            key={`${r.locationCode}-${r.isDockRemaining ? "dock" : "put"}`}
+            className="flex items-baseline justify-between gap-6"
+          >
+            <span className="font-mono text-[12px] font-medium text-slate-800">{r.locationCode}</span>
+            <span className="shrink-0 tabular-nums text-[12px] font-semibold text-slate-900">
+              {fmtPlacementQty(r.quantity)} szt.
+            </span>
+          </li>
+        ))}
+      </ul>
+      <div className="flex items-baseline justify-between gap-6 border-t border-slate-100 pt-1.5">
+        <span className="text-[11px] font-semibold text-slate-600">Razem</span>
+        <span className="tabular-nums text-[12px] font-bold text-slate-900">
+          {fmtPlacementQty(total)} szt.
+        </span>
+      </div>
+    </div>
+  );
+
+  return (
+    <HoverPopover content={popover}>
+      <span className="inline-flex max-w-[14rem] cursor-default flex-col items-start gap-0.5 outline-none">
+        <LocationBadge
+          code={first.locationCode}
+          type={first.locationType}
+          quantity={first.quantity}
+          className="max-w-full"
+        />
+        <span className="pl-0.5 text-[10px] font-semibold text-slate-500">
+          +{extra} lokalizacje
+        </span>
+      </span>
+    </HoverPopover>
+  );
 }
 
 export function WarehouseLineProductThumb({ url, compact }: { url?: string | null; compact?: boolean }) {

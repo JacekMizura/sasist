@@ -244,6 +244,7 @@ export function WarehouseDocumentLinesSection({
             deliveryDiffAccepted={
               drawer?.kind === "line_detail" ? acceptedDiffLineIds.has(drawer.line.id) : false
             }
+            dockLocationCode={(detail.location_name || "").trim() || "DOCK-IN"}
             onClose={() => setDrawer(null)}
           />
 
@@ -385,7 +386,11 @@ function LineRow({
         </td>
       ) : null}
       <td className={tdCls}>
-        <WarehouseLineLocationCell it={it} isWz={isWzDetail} />
+        <WarehouseLineLocationCell
+          it={it}
+          isWz={isWzDetail}
+          dockLocationCode={(detail.location_name || "").trim() || "DOCK-IN"}
+        />
       </td>
       <td className={tdCls}>
         <div className="flex flex-wrap items-center gap-1.5">

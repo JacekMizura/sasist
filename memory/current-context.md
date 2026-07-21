@@ -2,7 +2,7 @@
 
 ## Active
 
-**WMS Dashboard / Topbar / order-issue-tasks** — wspólny registry trybów, konfigurowalny topbar (server-side pins), RBAC `wms_operational_modes`, cleanup launcher, heal GET `/order-issue-tasks`. Commit lokalny, **bez push**.
+**PZ dokumenty: OCZEKUJE FV + lokalizacje 1:N** — ukryty martwy badge FV; lokalizacja linii = PUTAWAY ops provenance + DOCK-IN remaining. Commit lokalny, **bez push**.
 
 ## Preferencja commitów (user)
 

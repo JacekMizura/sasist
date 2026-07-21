@@ -811,7 +811,12 @@ def _putaway_allocations_by_line_id(
     item_rows: List[StockDocumentItem],
     prod_by_id: Dict[int, Product],
 ) -> Dict[int, List[PutawayAllocationRead]]:
-    """Aggregate inventory by storage location for each PZ line lot (draft putaway postings)."""
+    """Legacy helper: aggregate current Inventory by lot for a PZ line.
+
+    Do NOT use for document putaway display — mixes pre-existing stock into the line.
+    Prefer ``_putaway_allocations_from_operations`` (document_line_id provenance).
+    Still used by putaway backfill paths that seed missing PUTAWAY operations.
+    """
     empty: Dict[int, List[PutawayAllocationRead]] = {r.id: [] for r in item_rows}
     if warehouse_id is None or not item_rows:
         return empty
@@ -946,7 +951,12 @@ def _putaway_allocations_from_operations(
                 capacity_type=ct,
             )
         )
-    return {i: list(by_item.get(i, [])) for i in item_ids}
+    out: Dict[int, List[PutawayAllocationRead]] = {}
+    for i in item_ids:
+        rows_i = list(by_item.get(i, []))
+        rows_i.sort(key=lambda a: (-float(a.quantity or 0), int(a.location_id)))
+        out[i] = rows_i
+    return out
 
 
 def _putaway_allocations_from_table(
@@ -1274,7 +1284,8 @@ def build_stock_document_read(
     audit_users_by_id = batch_load_app_users(db, audit_admin_ids)
     audit_display_by_id = {uid: app_user_full_name(u) for uid, u in audit_users_by_id.items()}
 
-    alloc_by_id = _putaway_allocations_by_line_id(db, doc.tenant_id, doc.warehouse_id, visible_rows, prod_by_id)
+    # Provenance for PZ putaway display: StockOperation PUTAWAY (document_line_id × location)
+    # → legacy stock_item_locations. Never current Inventory lots (pre-existing stock bleed).
     item_id_list = [r.id for r in visible_rows]
     op_alloc_by_id = _putaway_allocations_from_operations(db, item_id_list, doc.warehouse_id)
     sil_alloc_by_id = _putaway_allocations_from_table(db, item_id_list, doc.warehouse_id)
@@ -1433,8 +1444,6 @@ def build_stock_document_read(
                 )
             )
         else:
-            put = float(getattr(row, "quantity_putaway", 0) or 0)
-            putaway_allocations = alloc_by_id.get(row.id, []) if put > 1e-9 else []
             item_reads.append(
                 _item_row_to_read(
                     row,
@@ -1442,7 +1451,7 @@ def build_stock_document_read(
                     visuals,
                     db,
                     wms_settings=wms_settings,
-                    putaway_allocations=putaway_allocations,
+                    putaway_allocations=[],
                     quantity_putaway_override=visuals.putaway_quantity_read_override,
                     mm_line_from_location_id=mm_lid_i,
                     mm_line_from_location_name=mm_nm,

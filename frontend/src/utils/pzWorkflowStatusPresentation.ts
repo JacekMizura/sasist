@@ -129,7 +129,13 @@ export function purchaseWorkflowStatusBadgeClass(status: string | undefined): st
   }
 }
 
+/**
+ * Purchase / invoice axis (`PENDING_INVOICE` → „Oczekuje FV”, COST_*, VERIFIED) is stored on
+ * `StockDocument.purchase_workflow_status` and defaults to PENDING_INVOICE, but Sasist has no
+ * purchase-invoice entity, assignment UI, or warehouse/finance gating on this field.
+ * Hide the badge so operators do not see a dead process. Keep API/DB for historical values.
+ */
 export function showPurchaseWorkflowStatus(documentType: string | undefined): boolean {
-  const dt = norm(documentType);
-  return dt === "PZ";
+  void documentType;
+  return false;
 }

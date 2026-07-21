@@ -33,7 +33,9 @@ WAREHOUSE_WORKFLOW_STATUSES = frozenset(
     }
 )
 
-# Purchase / cost workflow (financial — does not gate receiving or putaway)
+# Purchase / cost workflow (financial — does not gate receiving or putaway).
+# Persisted default PENDING_INVOICE; no purchase-invoice entity / assignment UI yet —
+# operator UI must not surface „Oczekuje FV” until a real FV workflow exists.
 PU_PENDING_INVOICE = "PENDING_INVOICE"
 PU_COST_REVIEW = "COST_REVIEW"
 PU_COST_DISPUTE = "COST_DISPUTE"

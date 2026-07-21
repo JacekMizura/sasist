@@ -4,6 +4,7 @@ import {
   legacyReceivingToWarehouseStatus,
   purchaseWorkflowStatusLabelPl,
   resolveWarehouseWorkflowStatus,
+  showPurchaseWorkflowStatus,
   warehouseWorkflowStatusLabelPl,
 } from "./pzWorkflowStatusPresentation";
 
@@ -36,8 +37,16 @@ describe("status labels PL", () => {
     expect(warehouseWorkflowStatusLabelPl("PUTAWAY_COMPLETED")).toBe("Rozlokowane");
   });
 
-  it("purchase labels", () => {
+  it("purchase labels still map for API/history (badge hidden)", () => {
     expect(purchaseWorkflowStatusLabelPl("PENDING_INVOICE")).toBe("Oczekuje FV");
     expect(purchaseWorkflowStatusLabelPl("VERIFIED")).toBe("Zweryfikowane");
+  });
+});
+
+describe("showPurchaseWorkflowStatus", () => {
+  it("hides purchase badge — no real purchase-invoice workflow in product", () => {
+    expect(showPurchaseWorkflowStatus("PZ")).toBe(false);
+    expect(showPurchaseWorkflowStatus("Z_PZ")).toBe(false);
+    expect(showPurchaseWorkflowStatus(undefined)).toBe(false);
   });
 });
