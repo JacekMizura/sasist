@@ -86,8 +86,10 @@ def derive_warehouse_workflow_status(
         return WH_CLOSED
 
     rows = list(item_rows)
+    # full_recv kept in signature for callers; receiving close is rs=DONE only.
     if full_recv is None:
         full_recv = compute_is_fully_received_for_items(rows)
+    _ = full_recv
     if full_put is None:
         full_put = compute_is_fully_putaway_for_items(db, rows) if db is not None else False
 
@@ -102,7 +104,7 @@ def derive_warehouse_workflow_status(
     if st in ("posted", "zakonczone", "closed", "completed"):
         return WH_CLOSED
 
-    if rls == "DONE" or (full_recv and full_put):
+    if rls == "DONE" or (rs == "DONE" and full_put):
         if st in ("zakonczone", "posted", "closed"):
             return WH_CLOSED
         return WH_PUTAWAY_COMPLETED
@@ -110,7 +112,8 @@ def derive_warehouse_workflow_status(
     if ps == "IN_PROGRESS" or (any_put and not full_put):
         return WH_PUTAWAY_IN_PROGRESS
 
-    if rs == "DONE" or full_recv:
+    # COUNTED only after explicit receiving finish — not when actual >= expected.
+    if rs == "DONE":
         return WH_COUNTED
 
     if rs in ("IN_PROGRESS", "COUNTING") or any_rec:

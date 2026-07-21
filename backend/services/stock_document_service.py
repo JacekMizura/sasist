@@ -427,12 +427,11 @@ def compute_line_receiving_progress(items: List[StockDocumentItem]) -> str:
     """WMS: group by delivery_item_id (split lot lines share one delivery line).
 
     Open-ended / manual WMS lines (``ordered_quantity == 0``, no delivery expectation)
-    must NEVER auto-complete receiving. Only lines with a positive expected quantity
-    can become fully received when ``received >= ordered``.
+    never become ``received`` for auto-completion purposes — but receiving_status itself
+    is never auto-DONE from this flag alone (see ``recalculate_wms_document_completion``).
 
-    Otherwise the first +1 on a hand-built PZ marks the document ``received`` /
-    ``receiving_status=DONE`` via ``recalculate_wms_document_completion`` and the
-    active receiving list (``receiving_status != DONE``) hides it — LIVE bug.
+    ``received`` here means: every group that has a positive expected quantity has
+    ``received >= ordered``. Surplus (received > ordered) is allowed and still ``received``.
     """
     eps = 1e-5
     if not items:
@@ -739,11 +738,10 @@ def recalculate_wms_document_completion(db: Session, tenant_id: int, document_id
     if any_rec and rs_before in ("", "NEW", "PENDING"):
         doc.receiving_status = "IN_PROGRESS"
         changed = True
-    # Auto-DONE only when there is a real expected quantity that was fully met.
-    # Manual WMS PZ (ordered=0) stays IN_PROGRESS until explicit finish_wms_receiving.
-    if full_recv and any_rec and rs_before != "DONE":
-        doc.receiving_status = "DONE"
-        changed = True
+    # Receiving closes ONLY via explicit finish_wms_receiving_pz (or equivalent).
+    # Never auto-DONE when actual >= ordered — operator may still find surplus.
+    rs_now = str(getattr(doc, "receiving_status", "") or "").strip().upper()
+    receiving_closed = rs_now == "DONE"
 
     ps_before = str(getattr(doc, "putaway_status", "") or "").strip().upper()
     recompute_putaway_status_for_document(doc, rows, db)
@@ -751,12 +749,17 @@ def recalculate_wms_document_completion(db: Session, tenant_id: int, document_id
         changed = True
 
     rls_before = str(getattr(doc, "relocation_status", "") or "").strip().upper()
-    if full_recv and full_put and rls_before != "DONE" and not is_z_pz_collective_open(doc):
+    if (
+        receiving_closed
+        and full_put
+        and rls_before != "DONE"
+        and not is_z_pz_collective_open(doc)
+    ):
         doc.relocation_status = "DONE"
         changed = True
 
     st_before = _doc_status_lower(doc)
-    if full_recv and full_put and st_before in ("draft", "closed"):
+    if receiving_closed and full_put and st_before in ("draft", "closed"):
         doc.status = "zakonczone"
         changed = True
 

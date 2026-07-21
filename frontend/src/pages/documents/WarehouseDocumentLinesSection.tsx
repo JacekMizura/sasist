@@ -176,8 +176,8 @@ export function WarehouseDocumentLinesSection({
                 <tr className="border-b border-slate-100">
                   <th className={`${thCls} w-10 text-center`}>#</th>
                   <th className={`${thCls} pl-2`}>Nazwa</th>
-                  <th className={thRightCls}>{isWzDetail ? "Ilość" : "Zamówiono"}</th>
-                  {!isWzDetail ? <th className={thRightCls}>Przyjęto</th> : null}
+                  <th className={thRightCls}>{isWzDetail ? "Ilość" : "Ilość z dokumentu"}</th>
+                  {!isWzDetail ? <th className={thRightCls}>Ilość rzeczywista</th> : null}
                   {lineEditEnabled ? (
                     <th className={thCls}>
                       Nośnik <span className="font-normal normal-case text-slate-400">(sugestia)</span>
@@ -539,9 +539,9 @@ function DeliveryDiffConfirmDialog({
         </h2>
         <p className="mt-1 text-xs text-slate-500">{lineLabel}</p>
         <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-3 text-sm">
-          <dt className="text-slate-500">Zamówiono</dt>
+          <dt className="text-slate-500">Ilość z dokumentu</dt>
           <dd className="text-right font-medium tabular-nums text-slate-900">{fmtQty(ordered)}</dd>
-          <dt className="text-slate-500">Przyjęto</dt>
+          <dt className="text-slate-500">Ilość rzeczywista</dt>
           <dd className="text-right font-medium tabular-nums text-slate-900">{fmtQty(received)}</dd>
           <dt className="text-slate-500">Brak</dt>
           <dd className="text-right font-semibold tabular-nums text-red-600">{fmtQty(shortage)}</dd>
@@ -592,9 +592,9 @@ function WarehouseDocumentSummaryPanel({
     <>
       <WarehouseDocSummaryItem label="Pozycji" value={String(lineSummary.lineCount)} />
       <WarehouseDocSummarySeparator />
-      <WarehouseDocSummaryItem label="Zamówiono" value={fmtQty(lineSummary.sumOrdered)} />
+      <WarehouseDocSummaryItem label="Ilość z dokumentu" value={fmtQty(lineSummary.sumOrdered)} />
       <WarehouseDocSummarySeparator />
-      <WarehouseDocSummaryItem label="Przyjęto" value={fmtQty(lineSummary.sumReceived)} />
+      <WarehouseDocSummaryItem label="Ilość rzeczywista" value={fmtQty(lineSummary.sumReceived)} />
       <WarehouseDocSummarySeparator />
       <WarehouseDocSummaryItem
         label="Różnica"

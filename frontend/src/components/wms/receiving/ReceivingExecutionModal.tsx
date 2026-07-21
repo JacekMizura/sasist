@@ -9,6 +9,12 @@ import {
   parseExpiryInputPlToIso,
 } from "../../../pages/wms/putawayFormat";
 import { buildReceivingAcceptedSummary } from "../../../utils/receivingAcceptedBreakdown";
+import {
+  documentQuantityFromLines,
+  formatReceivingSignedDiff,
+  receivingDifferenceToneClass,
+  receivingQuantityDifference,
+} from "../../../utils/receivingDocumentQtyPresentation";
 import { useWmsScanner } from "../../../context/WmsScannerContext";
 
 type QtyMode = "units" | "cartons";
@@ -92,9 +98,19 @@ export function ReceivingExecutionModal({
     () => buildReceivingAcceptedSummary(siblings, cartonSize),
     [siblings, cartonSize],
   );
+  const documentQty = useMemo(() => documentQuantityFromLines(siblings), [siblings]);
+  const qtyDiffNow = receivingQuantityDifference(documentQty, accepted.totalAllReceived);
 
   const qtyBlocked = qtyMode === "cartons" && !cartonsConfigured;
   const parsedQty = parseQtyInput(inputVal);
+  const addPreview =
+    !needsSerial && parsedQty > 0
+      ? qtyMode === "cartons" && cartonsConfigured
+        ? parsedQty * pack
+        : parsedQty
+      : 0;
+  const afterConfirm = accepted.totalAllReceived + addPreview;
+  const qtyDiffAfter = receivingQuantityDifference(documentQty, afterConfirm);
 
   const focusQtyInput = useCallback(() => {
     const el = qtyInputRef.current;
@@ -362,13 +378,53 @@ export function ReceivingExecutionModal({
         <div className="space-y-5">
           
           {/* =========================================================
-              2. BLOK: DOTYCHCZAS PRZYJĘTO ORAZ SUMA (PARAGON)
+              2. BLOK: ILOŚĆ Z DOKUMENTU / DOTYCHCZAS / RÓŻNICA
               ========================================================= */}
-          <div className="bg-white border border-slate-100 rounded-[1.5rem] p-5 sm:p-6 flex flex-col sm:flex-row shadow-sm gap-6 sm:gap-0">
-            
+          <div className="bg-white border border-slate-100 rounded-[1.5rem] p-5 sm:p-6 shadow-sm space-y-5">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div>
+                <span className="text-[10px] font-black text-slate-400 block uppercase tracking-widest mb-1">
+                  Ilość z dokumentu
+                </span>
+                <p className="text-xl font-black tabular-nums text-slate-800">
+                  {documentQty != null ? documentQty : "—"}
+                  {documentQty != null ? (
+                    <span className="ml-1 text-xs font-bold text-slate-400">szt.</span>
+                  ) : null}
+                </p>
+              </div>
+              <div>
+                <span className="text-[10px] font-black text-slate-400 block uppercase tracking-widest mb-1">
+                  Dotychczas przyjęto
+                </span>
+                <p className="text-xl font-black tabular-nums text-slate-900">
+                  {accepted.totalAllReceived}
+                  <span className="ml-1 text-xs font-bold text-slate-400">szt.</span>
+                </p>
+              </div>
+              <div>
+                <span className="text-[10px] font-black text-slate-400 block uppercase tracking-widest mb-1">
+                  Różnica
+                </span>
+                <p className={`text-xl font-black tabular-nums ${receivingDifferenceToneClass(qtyDiffNow)}`}>
+                  {formatReceivingSignedDiff(qtyDiffNow, (n) => String(n))}
+                </p>
+              </div>
+              <div>
+                <span className="text-[10px] font-black text-slate-400 block uppercase tracking-widest mb-1">
+                  Wady
+                </span>
+                <p className={`text-xl font-black tabular-nums ${accepted.totalDamaged > 0 ? "text-rose-700" : "text-slate-800"}`}>
+                  {accepted.totalDamaged}
+                  <span className="ml-1 text-xs font-bold text-slate-400">szt.</span>
+                </p>
+              </div>
+            </div>
+
+            <div className="border-t border-slate-100 pt-4 flex flex-col sm:flex-row gap-6 sm:gap-0">
             <div className="flex-1 sm:pr-6">
               <span className="text-[10px] font-black text-slate-400 block uppercase tracking-widest mb-4">
-                Dotychczas przyjęto
+                Szczegóły przyjęcia
               </span>
               <div className="space-y-2.5">
                 <div className="flex justify-between items-end">
@@ -396,12 +452,13 @@ export function ReceivingExecutionModal({
             
             <div className="sm:w-32 flex flex-col justify-center sm:text-right text-center border-t sm:border-t-0 border-slate-100 pt-5 sm:pt-0">
               <span className="text-[10px] font-black text-slate-400 block uppercase tracking-widest mb-1.5">
-                Suma
+                Ilość rzeczywista
               </span>
               <div className="flex items-baseline justify-center sm:justify-end gap-1.5 font-sans tabular-nums">
                 <span className="text-[2.5rem] leading-none font-black text-[#5a4fcf]">{accepted.totalAllReceived}</span>
                 <span className="text-sm font-bold text-[#5a4fcf]">szt.</span>
               </div>
+            </div>
             </div>
           </div>
 
@@ -498,14 +555,17 @@ export function ReceivingExecutionModal({
             )}
 
             {!needsSerial && parsedQty > 0 ? (
-              <p className="mt-5 text-center text-sm font-semibold text-slate-600">
-                Po zatwierdzeniu:{" "}
-                <span className="font-black text-slate-900">
-                  {accepted.totalAllReceived +
-                    (qtyMode === "cartons" && cartonsConfigured ? parsedQty * pack : parsedQty)}{" "}
-                  szt.
-                </span>
-              </p>
+              <div className="mt-5 text-center space-y-1">
+                <p className="text-sm font-semibold text-slate-600">
+                  Po zatwierdzeniu:{" "}
+                  <span className="font-black text-slate-900">{afterConfirm} szt.</span>
+                </p>
+                {qtyDiffAfter != null ? (
+                  <p className={`text-sm font-semibold ${receivingDifferenceToneClass(qtyDiffAfter)}`}>
+                    Różnica po zatwierdzeniu: {formatReceivingSignedDiff(qtyDiffAfter, (n) => String(n))}
+                  </p>
+                ) : null}
+              </div>
             ) : null}
 
             <div className="mt-8 text-center">

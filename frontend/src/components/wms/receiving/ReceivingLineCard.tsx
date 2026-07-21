@@ -13,6 +13,12 @@ import {
   isWmsExtraReceivingLine,
 } from "../../../pages/wms/wmsReceivingLineGroups";
 import { buildReceivingAcceptedSummary } from "../../../utils/receivingAcceptedBreakdown";
+import {
+  documentQuantityFromLines,
+  formatReceivingSignedDiff,
+  receivingDifferenceToneClass,
+  receivingQuantityDifference,
+} from "../../../utils/receivingDocumentQtyPresentation";
 
 function fmtQty(n: number) {
   return new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 4 }).format(n);
@@ -84,6 +90,8 @@ export function ReceivingLineCard({
   const hasDamaged = accepted.totalDamaged > 0;
   const showDefectRing = ringDefect || hasDamaged;
   const displayCount = accepted.totalAllReceived > 0 ? accepted.totalAllReceived : count;
+  const documentQty = useMemo(() => documentQuantityFromLines(siblings), [siblings]);
+  const qtyDiff = receivingQuantityDifference(documentQty, displayCount);
 
   const menuItems = useMemo((): WmsCardKebabMenuItem[] => {
     return [
@@ -182,7 +190,7 @@ export function ReceivingLineCard({
                   data-wms-card-no-nav=""
                   className="shrink-0 rounded bg-violet-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-violet-800"
                 >
-                  Extra
+                  Poza dokumentem
                 </span>
               ) : null}
               {hasDamaged ? <WadaBadge units={accepted.totalDamaged} /> : null}
@@ -207,8 +215,34 @@ export function ReceivingLineCard({
           </div>
         </div>
 
+        {/* Ilość z dokumentu | rzeczywista | różnica | wady */}
+        <div className="mt-auto mb-2 grid grid-cols-2 gap-x-3 gap-y-2" data-wms-card-no-nav="">
+          <div>
+            <p className="text-[9px] font-medium uppercase tracking-wider text-slate-400">Ilość z dokumentu</p>
+            <p className="text-sm font-bold tabular-nums text-slate-800">
+              {documentQty != null ? fmtQty(documentQty) : "—"}
+            </p>
+          </div>
+          <div>
+            <p className="text-[9px] font-medium uppercase tracking-wider text-slate-400">Ilość rzeczywista</p>
+            <p className="text-sm font-bold tabular-nums text-slate-900">{fmtQty(displayCount)}</p>
+          </div>
+          <div>
+            <p className="text-[9px] font-medium uppercase tracking-wider text-slate-400">Różnica</p>
+            <p className={`text-sm font-bold tabular-nums ${receivingDifferenceToneClass(qtyDiff)}`}>
+              {formatReceivingSignedDiff(qtyDiff, fmtQty)}
+            </p>
+          </div>
+          <div>
+            <p className="text-[9px] font-medium uppercase tracking-wider text-slate-400">Wady</p>
+            <p className={`text-sm font-bold tabular-nums ${accepted.totalDamaged > 0 ? "text-rose-700" : "text-slate-800"}`}>
+              {fmtQty(accepted.totalDamaged)}
+            </p>
+          </div>
+        </div>
+
         {/* Sposób przyjęcia — tylko gdy więcej niż same sztuki (kartony / nośniki / wada) */}
-        <div className="mt-auto mb-2" data-wms-card-no-nav="">
+        <div className="mb-2" data-wms-card-no-nav="">
           {accepted.displayRows.length > 0 &&
           !(accepted.displayRows.length === 1 && accepted.displayRows[0]?.key === "loose") ? (
             <>
@@ -237,13 +271,11 @@ export function ReceivingLineCard({
                 })}
               </ul>
             </>
-          ) : (
-            displayCount > 0 ? null : <div className="text-[11px] text-slate-400 italic">Brak przyjęć</div>
-          )}
+          ) : null}
         </div>
       </div>
 
-      {/* 3. BOTTOM (Stopka): ZAWSZE NA SAMYM DOLE (mt-auto w kontenerze wyżej gwarantuje przyklejenie) */}
+      {/* 3. BOTTOM (Stopka): ZAWSZE NA SAMYM DOLE */}
       <div 
         className={`px-4 py-3 flex justify-between items-end border-t rounded-b-xl shrink-0
           ${scanFlash ? 'border-indigo-100 bg-indigo-50/50' : 'border-slate-100 bg-slate-50/30'}
@@ -264,13 +296,13 @@ export function ReceivingLineCard({
               </p>
             </div>
           ) : (
-            <div className="h-5"></div> // Wypełniacz zapobiegający skakaniu, gdy brak autora
+            <div className="h-5"></div>
           )}
         </div>
 
-        {/* Prawa strona stopki (Ilość Przyjęto) */}
+        {/* Prawa strona stopki — rzeczywista jako główna liczba */}
         <div className="text-right shrink-0 ml-3">
-          <p className="text-[10px] font-medium uppercase text-slate-400 mb-0.5 leading-none">Przyjęto</p>
+          <p className="text-[10px] font-medium uppercase text-slate-400 mb-0.5 leading-none">Ilość rzeczywista</p>
           <p
             className={`text-3xl font-bold tabular-nums leading-none tracking-tight ${
               displayCount > 0 ? (scanFlash ? "text-indigo-600" : "text-indigo-700") : "text-slate-800"

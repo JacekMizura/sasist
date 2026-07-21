@@ -96,8 +96,8 @@ export function WarehouseDocumentLineDetailDrawer({
               </DetailRow>
               <DetailRow label="EAN">{ean || "—"}</DetailRow>
               <DetailRow label="SKU">{sku || "—"}</DetailRow>
-              <DetailRow label="Zamówiono">{fmtQty(ordered)}</DetailRow>
-              <DetailRow label="Przyjęto">{fmtQty(received)}</DetailRow>
+              <DetailRow label="Ilość z dokumentu">{fmtQty(ordered)}</DetailRow>
+              <DetailRow label="Ilość rzeczywista">{fmtQty(received)}</DetailRow>
               {showShortage ? (
                 <DetailRow label="Brak">
                   <span className="font-semibold tabular-nums text-red-600">{fmtQty(shortage)}</span>

@@ -52,6 +52,12 @@ class TestDeriveWarehouseWorkflowStatus:
         doc = _doc(receiving_status="IN_PROGRESS")
         assert derive_warehouse_workflow_status(doc, [_line(recv=2.0)]) == WH_COUNTING
 
+    def test_counting_when_full_recv_but_session_open(self):
+        """Surplus / met expected must not imply COUNTED until receiving_status=DONE."""
+        doc = _doc(receiving_status="IN_PROGRESS")
+        lines = [_line(recv=10.0)]
+        assert derive_warehouse_workflow_status(doc, lines, full_recv=True, full_put=False) == WH_COUNTING
+
     def test_counted_receiving_done(self):
         doc = _doc(receiving_status="DONE")
         lines = [_line(recv=10.0)]

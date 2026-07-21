@@ -72,6 +72,68 @@ def test_expected_full_marks_received():
     assert compute_is_fully_received_for_items(items) is True
 
 
+def test_c_expected_surplus_allowed_progress_received():
+    items = [
+        SimpleNamespace(id=1, delivery_item_id=99, ordered_quantity=10.0, received_quantity=12.0),
+    ]
+    assert compute_line_receiving_progress(items) == "received"
+    assert float(items[0].received_quantity) - float(items[0].ordered_quantity) == 2.0
+
+
+def test_g_expected_full_does_not_auto_done_receiving(recv_db):
+    """actual >= expected must NOT flip receiving_status to DONE."""
+    db, admin = recv_db
+    pz_id = _create_manual_pz(db, admin)
+    db.add(
+        StockDocumentItem(
+            document_id=pz_id,
+            product_id=50,
+            delivery_item_id=501,
+            ordered_quantity=10.0,
+            received_quantity=10.0,
+            quantity=10.0,
+        )
+    )
+    db.commit()
+    recalculate_wms_document_completion(db, 1, pz_id)
+    raw = db.query(StockDocument).filter(StockDocument.id == pz_id).one()
+    assert str(raw.receiving_status).upper() == "IN_PROGRESS"
+    assert any(int(r.id) == pz_id for r in list_wms_receiving_pz_documents(db, 1, warehouse_id=1))
+
+
+def test_c_patch_surplus_over_ordered(recv_db):
+    db, admin = recv_db
+    pz_id = _create_manual_pz(db, admin)
+    db.add(
+        StockDocumentItem(
+            document_id=pz_id,
+            product_id=50,
+            delivery_item_id=502,
+            ordered_quantity=10.0,
+            received_quantity=0.0,
+            quantity=0.0,
+        )
+    )
+    db.commit()
+    item = (
+        db.query(StockDocumentItem)
+        .filter(StockDocumentItem.document_id == pz_id, StockDocumentItem.product_id == 50)
+        .one()
+    )
+    patch_wms_receiving_pz_item_quantity(
+        db,
+        1,
+        pz_id,
+        int(item.id),
+        WmsReceivingItemQuantityBody(quantity_received=12, loose_units_count=12, cartons_count=0),
+        performed_by=admin,
+    )
+    item = db.query(StockDocumentItem).filter(StockDocumentItem.id == int(item.id)).one()
+    assert float(item.received_quantity or 0) == 12.0
+    raw = db.query(StockDocument).filter(StockDocument.id == pz_id).one()
+    assert str(raw.receiving_status).upper() != "DONE"
+
+
 def test_manual_after_eleven_still_in_progress():
     items = [
         SimpleNamespace(id=114, delivery_item_id=None, ordered_quantity=0.0, received_quantity=11.0),
