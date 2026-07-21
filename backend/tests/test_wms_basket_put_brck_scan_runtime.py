@@ -300,7 +300,10 @@ def test_case_ean_then_brck1_b01_pick_only_order_a(db, env):
 
 
 def test_basket_scan_without_pending_does_not_invent_pick(db, env):
-    """Product context + basket → QUANTITY_REQUIRED (Pick=0) until quantity commit."""
+    """Product context + basket requires source_lock; Pick only after quantity commit."""
+    from backend.services.wms_basket_put import error_codes as ec
+    from backend.tests.wms_source_lock_helpers import accept_and_confirm_basket_put
+
     env["add_orders"]()
     with pytest.raises(BasketPutError) as cm:
         confirm_basket_put(
@@ -314,25 +317,41 @@ def test_basket_scan_without_pending_does_not_invent_pick(db, env):
     assert cm.value.code == "EXPECTED_PRODUCT_SCAN"
     assert env["pick_calls"] == []
 
-    r = confirm_basket_put(
+    # Product context without accepted source → no Pick invented.
+    with pytest.raises(BasketPutError) as cm2:
+        confirm_basket_put(
+            db,
+            cart=env["cart"],
+            basket_scan="brck1-B02",
+            operator_user_id=1,
+            record_pick_fn=env["record_pick_fn"],
+            order_ids=[1234, 1235],
+            product_id=192,
+            location_id=100,
+        )
+    assert cm2.value.code == ec.NO_PENDING_SOURCE_LOCATION
+    assert env["pick_calls"] == []
+
+    r = accept_and_confirm_basket_put(
         db,
         cart=env["cart"],
+        sess=env["sess"],
         basket_scan="brck1-B02",
-        operator_user_id=1,
         record_pick_fn=env["record_pick_fn"],
         order_ids=[1234, 1235],
         product_id=192,
         location_id=100,
+        quantity=None,
     )
     assert r.phase == "QUANTITY_REQUIRED"
     assert float(r.quantity_put) == 0
     assert env["pick_calls"] == []
 
-    r2 = confirm_basket_put(
+    r2 = accept_and_confirm_basket_put(
         db,
         cart=env["cart"],
+        sess=env["sess"],
         basket_scan="brck1-B02",
-        operator_user_id=1,
         record_pick_fn=env["record_pick_fn"],
         order_ids=[1234, 1235],
         product_id=192,
