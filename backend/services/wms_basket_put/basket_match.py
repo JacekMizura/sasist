@@ -5,8 +5,12 @@ from __future__ import annotations
 from ...models.cart_basket import CartBasket
 
 
-def _norm(scan: str | None) -> str:
+def norm_basket_scan(scan: str | None) -> str:
     return (scan or "").strip().upper().replace(" ", "")
+
+
+def _norm(scan: str | None) -> str:
+    return norm_basket_scan(scan)
 
 
 def format_basket_slot_labels(basket: CartBasket) -> list[str]:

@@ -226,6 +226,16 @@ export type WmsPickingProductDetailApi = {
   pending_shelf_deposit?: boolean;
   /** Drzewo bundle w kohortcie dla bieżącego SKU (P4.15B) */
   order_bundle_trees?: WmsPickingOrderBundleTreeApi[];
+  /** MULTI: confirm-compatible destinations (same SSOT as confirm-basket-put). */
+  eligible_basket_destinations?: Array<{
+    basket_id: number;
+    basket_label: string;
+    barcode?: string | null;
+    scan_code?: string | null;
+    order_id: number;
+    order_item_id: number;
+    line_remaining: number;
+  }>;
   /** MULTI baskets — SSOT pending put / series from session */
   requires_basket_put_confirm?: boolean;
   basket_put_pending?: {
@@ -238,6 +248,8 @@ export type WmsPickingProductDetailApi = {
     eligible_baskets?: Array<{
       basket_id: number;
       basket_label: string;
+      barcode?: string | null;
+      scan_code?: string | null;
       order_id: number;
       order_item_id?: number;
       line_remaining: number;

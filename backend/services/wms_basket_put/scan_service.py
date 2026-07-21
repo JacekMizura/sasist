@@ -547,7 +547,7 @@ def handle_product_scan_for_baskets(
     # Product-level pending — do NOT bind order_item / single expected basket yet.
     max_rem = max(float(a.line_remaining) for a in eligible_allocs)
     pending_qty = min(float(qty), max_rem)
-    eligible_payload = eligible_baskets_payload(eligible_allocs)
+    eligible_payload = eligible_baskets_payload(eligible_allocs, db=db)
     pending_row = {
         "idempotency_key": str(uuid.uuid4()),
         "operator_user_id": uid,
@@ -579,11 +579,31 @@ def handle_product_scan_for_baskets(
 
 
 def _find_scanned_basket(db: Session, *, cart: Cart, basket_scan: str) -> CartBasket | None:
+    """Resolve scan → basket. Prefer barcode/scan_code over ambiguous S-row-col aliases."""
+    from .basket_match import norm_basket_scan, primary_basket_label
+
     all_b = (
         db.query(CartBasket)
         .filter(CartBasket.cart_id == int(cart.id))
+        .order_by(CartBasket.id.asc())
         .all()
     )
+    s = norm_basket_scan(basket_scan)
+    if not s:
+        return None
+    # Pass 1: exact physical barcode / scan_code (production: brck1-B02)
+    for b in all_b:
+        if b.barcode and norm_basket_scan(str(b.barcode)) == s:
+            return b
+        if getattr(b, "scan_code", None) and norm_basket_scan(str(b.scan_code)) == s:
+            return b
+    # Pass 2: primary label / name (S-1-2), not 0-based aliases
+    for b in all_b:
+        if b.name and norm_basket_scan(str(b.name)) == s:
+            return b
+        if norm_basket_scan(primary_basket_label(b)) == s:
+            return b
+    # Pass 3: remaining aliases (Koszyk r/c, B{id}, 0-based S)
     for b in all_b:
         if basket_scan_matches(b, basket_scan):
             return b
@@ -742,18 +762,26 @@ def _quantity_mode_basket_put(
         live = list_eligible_basket_allocations(
             db, cart=cart, order_ids=list(oid_scope or []), product_id=int(product_id)
         )
-        labels = _eligible_labels(eligible_baskets_payload(live))
+        labels = _eligible_labels(eligible_baskets_payload(live, db=db))
         raise BasketPutError(
             ec.BASKET_PRODUCT_MISMATCH,
             (
                 f"{ec.operator_message(ec.BASKET_PRODUCT_MISMATCH)} "
-                f"Koszyk {scanned_label}. Oczekiwane: {labels}."
+                f"Zeskanowano: {scanned_label}"
+                + (f" ({scanned.barcode})" if getattr(scanned, "barcode", None) else "")
+                + f". Oczekiwane: {labels}."
             ),
             http_status=409,
             extra={
                 "phase": "BASKET_PRODUCT_MISMATCH",
                 "scanned_basket": scanned_label,
-                "eligible_baskets": eligible_baskets_payload(live),
+                "scanned_basket_id": int(scanned.id),
+                "scanned_barcode": (str(scanned.barcode).strip() if scanned.barcode else None),
+                "scanned_scan_code": (
+                    str(scanned.scan_code).strip() if getattr(scanned, "scan_code", None) else None
+                ),
+                "product_id": int(product_id),
+                "eligible_baskets": eligible_baskets_payload(live, db=db),
             },
         )
     if err == "BASKET_PRODUCT_ALREADY_COMPLETE":
@@ -1173,25 +1201,31 @@ def confirm_basket_put(
             if oid_scope
             else []
         )
-        eligible = eligible_baskets_payload(live) if live else (pending.get("eligible_baskets") or [])
+        eligible = eligible_baskets_payload(live, db=db) if live else (pending.get("eligible_baskets") or [])
         labels = _eligible_labels(eligible if isinstance(eligible, list) else [])
         _audit(
             "BASKET_PRODUCT_MISMATCH",
             session_id=sess.id,
             operator=uid,
             scanned_basket=scanned_label,
+            scanned_basket_id=int(scanned.id),
             product_id=pending_product_id,
         )
         raise BasketPutError(
             ec.BASKET_PRODUCT_MISMATCH,
             (
                 f"{ec.operator_message(ec.BASKET_PRODUCT_MISMATCH)} "
-                f"Koszyk {scanned_label}. Oczekiwane: {labels}."
+                f"Zeskanowano: {scanned_label}"
+                + (f" ({scanned.barcode})" if getattr(scanned, "barcode", None) else "")
+                + f". Oczekiwane: {labels}."
             ),
             http_status=409,
             extra={
                 "phase": "BASKET_PRODUCT_MISMATCH",
                 "scanned_basket": scanned_label,
+                "scanned_basket_id": int(scanned.id),
+                "scanned_barcode": (str(scanned.barcode).strip() if scanned.barcode else None),
+                "product_id": int(pending_product_id),
                 "eligible_baskets": eligible,
                 "pending": pending,
             },

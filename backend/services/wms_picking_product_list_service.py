@@ -90,6 +90,7 @@ from ..schemas.picking_routing import PickListRow
 from ..schemas.wms_picking_products import (
     WmsPickingBundleComponentStatus,
     WmsPickingCohortMissingLineRow,
+    WmsPickingEligibleBasketDestination,
     WmsPickingLineResolutionStatus,
     WmsPickingOrderBundleTree,
     WmsPickingOrderTypeFilter,
@@ -2282,6 +2283,9 @@ def build_wms_picking_product_detail(
                         .first()
                     )
                     bask = odb.basket if odb and odb.basket_id and odb.basket else None
+                    # Never show a basket label from another cart (confirm SSOT requires cart match).
+                    if bask is not None and int(getattr(bask, "cart_id", 0) or 0) != int(cid):
+                        bask = None
                     refreshed_rows.append(
                         WmsPickingProductOrderRow(
                             order_id=orow.order_id,
@@ -2440,12 +2444,17 @@ def build_wms_picking_product_detail(
         basket_put_pending=None,
         basket_put_active_series=None,
         requires_basket_put_confirm=False,
+        eligible_basket_destinations=[],
     )
 
     # MULTI baskets: expose pending put / series from session (SSOT).
     if cart_id is not None and int(cart_id) > 0:
         try:
             from .wms_basket_put import get_basket_put_ui_state
+            from .wms_basket_put.resolve import (
+                eligible_baskets_payload,
+                list_eligible_basket_allocations,
+            )
 
             cart_for_put = (
                 db.query(Cart)
@@ -2453,6 +2462,24 @@ def build_wms_picking_product_detail(
                 .first()
             )
             if cart_for_put is not None:
+                live_allocs = list_eligible_basket_allocations(
+                    db,
+                    cart=cart_for_put,
+                    order_ids=list(order_ids or []),
+                    product_id=int(product_id),
+                )
+                detail.eligible_basket_destinations = [
+                    WmsPickingEligibleBasketDestination(
+                        basket_id=int(r["basket_id"]),
+                        basket_label=str(r["basket_label"]),
+                        barcode=r.get("barcode"),
+                        scan_code=r.get("scan_code"),
+                        order_id=int(r["order_id"]),
+                        order_item_id=int(r["order_item_id"]),
+                        line_remaining=float(r["line_remaining"]),
+                    )
+                    for r in eligible_baskets_payload(live_allocs, db=db)
+                ]
                 ui_put = get_basket_put_ui_state(
                     db,
                     cart=cart_for_put,

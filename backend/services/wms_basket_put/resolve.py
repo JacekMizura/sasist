@@ -277,18 +277,35 @@ def resolve_allocation_for_basket_scan(
     return None, "BASKET_PRODUCT_MISMATCH"
 
 
-def eligible_baskets_payload(allocations: list[BasketPutAllocation]) -> list[dict]:
-    """Compact list for pending metadata + UI (one row per basket/order)."""
+def eligible_baskets_payload(
+    allocations: list[BasketPutAllocation],
+    db: Session | None = None,
+) -> list[dict]:
+    """Compact list for pending metadata + UI (one row per basket/order).
+
+    Includes barcode/scan_code when ``db`` is provided — same baskets confirm accepts.
+    """
     seen: set[int] = set()
     rows: list[dict] = []
+    barcode_by_id: dict[int, str | None] = {}
+    scan_by_id: dict[int, str | None] = {}
+    if db is not None and allocations:
+        ids = [int(a.basket_id) for a in allocations]
+        for b in db.query(CartBasket).filter(CartBasket.id.in_(ids)).all():
+            barcode_by_id[int(b.id)] = (str(b.barcode).strip() if b.barcode else None) or None
+            sc = getattr(b, "scan_code", None)
+            scan_by_id[int(b.id)] = (str(sc).strip() if sc else None) or None
     for a in allocations:
         if a.basket_id in seen:
             continue
         seen.add(a.basket_id)
+        bid = int(a.basket_id)
         rows.append(
             {
-                "basket_id": int(a.basket_id),
+                "basket_id": bid,
                 "basket_label": a.basket_label,
+                "barcode": barcode_by_id.get(bid),
+                "scan_code": scan_by_id.get(bid),
                 "order_id": int(a.order_id),
                 "order_item_id": int(a.order_item_id),
                 "line_remaining": float(a.line_remaining),

@@ -978,28 +978,29 @@ export default function WmsPickingProductDetailPage() {
         return;
       }
 
-      const draftSnap = quantityDraft;
       setQuantityDraft(null);
       setPendingSeed(null);
       setPickMsg(result.message ?? `Koszyk potwierdzony`);
       const putQty = Number(result.quantity_put ?? 0);
       const oiid = Number(result.order_item_id || 0);
       const basketLabel = String(result.active_series?.basket_label || result.expected_basket_label || "");
-      await load();
-      if (detail?.requires_basket_put_confirm && putQty > 1e-9 && oiid > 0) {
-        const afterRemGuess =
-          draftSnap && draftSnap.orderItemId === oiid
-            ? Math.max(0, draftSnap.lineRemaining - putQty)
-            : null;
-        if (afterRemGuess != null && afterRemGuess > 1e-9) {
+      const refreshed = await fetchProductDetail({ force: true });
+      if (refreshed) applyDetailToState(refreshed);
+      if (refreshed?.requires_basket_put_confirm && putQty > 1e-9 && oiid > 0) {
+        const dest = (refreshed.eligible_basket_destinations ?? []).find(
+          (b) => Number(b.order_item_id) === oiid && Number(b.line_remaining) > 1e-9,
+        );
+        if (dest) {
           setPostPutFollowUp({
             orderItemId: oiid,
-            basketLabel: basketLabel || draftSnap?.basketLabel || "koszyk",
-            remaining: afterRemGuess,
+            basketLabel: String(dest.basket_label || basketLabel || "koszyk"),
+            remaining: Number(dest.line_remaining),
           });
         } else {
           setPostPutFollowUp(null);
         }
+      } else {
+        setPostPutFollowUp(null);
       }
       if (
         result.phase === "SERIES_DESTINATION_SWITCHED" ||
@@ -1465,23 +1466,24 @@ export default function WmsPickingProductDetailPage() {
                         </li>
                       ))}
                     </ul>
-                  ) : detail.orders?.length ? (
+                  ) : (detail.eligible_basket_destinations?.length ?? 0) > 0 ? (
                     <ul className="mt-4 space-y-2 text-left">
-                      {detail.orders
-                        .filter((o) => (o.quantity_to_pick ?? 0) > 1e-9 && o.basket_slot)
-                        .map((o) => (
-                          <li
-                            key={o.order_item_id}
-                            className="flex items-center justify-between rounded-xl border border-amber-300/80 bg-white px-4 py-3"
-                          >
-                            <span className="text-2xl font-black tabular-nums text-amber-950">
-                              {o.basket_slot}
-                            </span>
-                            <span className="text-sm font-bold text-amber-800">
-                              pozostało {fmtQty(o.quantity_to_pick)}
-                            </span>
-                          </li>
-                        ))}
+                      {detail.eligible_basket_destinations!.map((b) => (
+                        <li
+                          key={`${b.basket_id}-${b.order_item_id}`}
+                          className="flex items-center justify-between rounded-xl border border-amber-300/80 bg-white px-4 py-3"
+                        >
+                          <span className="min-w-0">
+                            <span className="text-2xl font-black tabular-nums text-amber-950">{b.basket_label}</span>
+                            {b.barcode ? (
+                              <span className="ml-2 text-xs font-semibold text-amber-800/80">{b.barcode}</span>
+                            ) : null}
+                          </span>
+                          <span className="text-sm font-bold text-amber-800">
+                            pozostało {fmtQty(b.line_remaining)}
+                          </span>
+                        </li>
+                      ))}
                     </ul>
                   ) : null}
                 </div>
@@ -1503,23 +1505,27 @@ export default function WmsPickingProductDetailPage() {
                     szt.
                   </p>
                 </div>
-              ) : detail.requires_basket_put_confirm && detail.orders?.some((o) => (o.quantity_to_pick ?? 0) > 1e-9 && o.basket_slot) ? (
+              ) : detail.requires_basket_put_confirm &&
+                (detail.eligible_basket_destinations?.length ?? 0) > 0 ? (
                 <div className="w-full max-w-md rounded-2xl border-2 border-indigo-300 bg-indigo-50 px-5 py-4 text-left">
                   <p className="text-[10px] font-black uppercase tracking-widest text-indigo-700">
                     Produkt zeskanowany — wybierz koszyk
                   </p>
                   <p className="mt-1 text-sm font-semibold text-indigo-950">
-                    Zeskanuj dowolny koszyk wymagający tego SKU, potem podaj ilość do odłożenia.
+                    Zeskanuj koszyk z listy (kod kreskowy lub etykieta), potem podaj ilość do odłożenia.
                   </p>
                   <ul className="mt-3 space-y-1.5">
-                    {detail.orders
-                      .filter((o) => (o.quantity_to_pick ?? 0) > 1e-9 && o.basket_slot)
-                      .map((o) => (
-                        <li key={o.order_item_id} className="flex justify-between text-sm font-bold text-slate-800">
-                          <span className="tabular-nums">{o.basket_slot}</span>
-                          <span className="text-slate-500">pozostało {fmtQty(o.quantity_to_pick)}</span>
-                        </li>
-                      ))}
+                    {detail.eligible_basket_destinations!.map((b) => (
+                      <li key={`${b.basket_id}-${b.order_item_id}`} className="flex justify-between gap-2 text-sm font-bold text-slate-800">
+                        <span className="min-w-0">
+                          <span className="tabular-nums">{b.basket_label}</span>
+                          {b.barcode ? (
+                            <span className="ml-2 text-[11px] font-semibold text-slate-500">{b.barcode}</span>
+                          ) : null}
+                        </span>
+                        <span className="shrink-0 text-slate-500">pozostało {fmtQty(b.line_remaining)}</span>
+                      </li>
+                    ))}
                   </ul>
                 </div>
               ) : null}

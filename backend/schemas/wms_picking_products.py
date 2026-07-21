@@ -321,6 +321,18 @@ class WmsPickingProductLinesResponse(BaseModel):
     )
 
 
+class WmsPickingEligibleBasketDestination(BaseModel):
+    """Confirm-compatible MULTI destination (order_item → order → basket on active cart)."""
+
+    basket_id: int
+    basket_label: str
+    barcode: Optional[str] = None
+    scan_code: Optional[str] = None
+    order_id: int
+    order_item_id: int
+    line_remaining: float = Field(..., ge=0)
+
+
 class WmsPickingProductDetailResponse(BaseModel):
     product_id: int
     name: str
@@ -349,7 +361,7 @@ class WmsPickingProductDetailResponse(BaseModel):
         description=(
             "W MULTI: etykieta aktywnej serii koszyka (po potwierdzeniu). "
             "Nie jest to wymuszony FIFO destination przed skanem koszyka — "
-            "użyj basket_put_pending.eligible_baskets / orders[].basket_slot."
+            "użyj eligible_basket_destinations (SSOT confirm-basket-put)."
         ),
     )
     put_to_basket_color_index: int = Field(
@@ -396,6 +408,14 @@ class WmsPickingProductDetailResponse(BaseModel):
     requires_basket_put_confirm: bool = Field(
         default=False,
         description="True dla wózka MULTI/baskets — skan produktu nie finalizuje sztuki bez koszyka.",
+    )
+    eligible_basket_destinations: list[WmsPickingEligibleBasketDestination] = Field(
+        default_factory=list,
+        description=(
+            "SSOT destination list for MULTI quantity mode — same "
+            "list_eligible_basket_allocations as confirm-basket-put. "
+            "UI must show these rows (not raw orders[].basket_slot alone)."
+        ),
     )
 
 
