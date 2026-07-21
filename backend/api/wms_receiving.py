@@ -28,14 +28,26 @@ from ..schemas.wms_receiving import (
     WmsEnsureProductLineResponse,
     WmsReceiveBody,
     WmsReceivingItemQuantityBody,
+    WmsReceivingLineCommercialBody,
     WmsReceivingMarkDamagedBody,
     WmsReceivingMoveCarrierBody,
     WmsReceivingPzListRow,
+    WmsReceivingPzSupplierBody,
     WmsReceivingSplitBody,
     WmsReceiveSerialBody,
 )
 from ..services.receiving_scan_service import resolve_receiving_scan
 from ..services.document_creator_service import app_user_full_name
+from ..services.wms_receiving_activity import (
+    EVENT_PZ_DOCUMENT_CREATED,
+    EVENT_PZ_RECEIVING_FINISHED,
+    record_pz_activity,
+)
+from ..services.wms_receiving_line_commercial import (
+    patch_wms_receiving_line_commercial,
+    patch_wms_receiving_pz_supplier,
+    remove_wms_receiving_extra_line,
+)
 from ..services.wms_receiving_service import (
     apply_wms_receive_deltas,
     create_product_from_wms_receiving,
@@ -109,6 +121,20 @@ def post_wms_receiving_pz_create(
         wh = int(body.warehouse_id) if body.warehouse_id is not None else int(warehouse_id)
         enforce_warehouse_access(db, user, wh)
         doc = create_wms_empty_pz(db, tenant_id, body, created_by=user, warehouse_id=wh)
+        supplier_label = (body.supplier_name or "").strip() or (f"#{doc.supplier_id}" if doc.supplier_id else "—")
+        record_pz_activity(
+            db,
+            tenant_id=tenant_id,
+            document_id=int(doc.id),
+            warehouse_id=getattr(doc, "warehouse_id", None),
+            event_code=EVENT_PZ_DOCUMENT_CREATED,
+            description=f"Utworzono dokument PZ #{int(doc.id)}. Dostawca: {supplier_label}.",
+            performed_by=user,
+            metadata={
+                "supplier_name": supplier_label,
+                "supplier_id": doc.supplier_id,
+            },
+        )
         log_wms_workforce_activity(
             db,
             user=user,
@@ -223,6 +249,16 @@ def post_wms_receiving_pz_finish(
     )
     try:
         doc = finish_wms_receiving_pz(db, tenant_id, pz_id, body)
+        record_pz_activity(
+            db,
+            tenant_id=tenant_id,
+            document_id=int(pz_id),
+            warehouse_id=getattr(doc, "warehouse_id", None),
+            event_code=EVENT_PZ_RECEIVING_FINISHED,
+            description=f"Zakończono przyjęcie dokumentu PZ #{int(pz_id)}.",
+            performed_by=user,
+            metadata={"pz_id": int(pz_id)},
+        )
         log_wms_workforce_activity(
             db,
             user=user,
@@ -373,6 +409,64 @@ def patch_wms_receiving_pz_item(
         return doc
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.patch("/receiving/pz/{pz_id}/items/{item_id}/commercial", response_model=StockDocumentRead)
+def patch_wms_receiving_pz_item_commercial(
+    pz_id: int,
+    item_id: int,
+    body: WmsReceivingLineCommercialBody,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_operable_warehouse),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    """Ręczna zmiana ilości z dokumentu / ceny netto / VAT (snapshot na linii)."""
+    _load_pz_for_user(db, tenant_id, pz_id, user, active_warehouse_id=warehouse_id)
+    try:
+        return patch_wms_receiving_line_commercial(
+            db, tenant_id, pz_id, item_id, body, performed_by=user
+        )
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.patch("/receiving/pz/{pz_id}/supplier", response_model=StockDocumentRead)
+def patch_wms_receiving_pz_supplier_route(
+    pz_id: int,
+    body: WmsReceivingPzSupplierBody,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_operable_warehouse),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    _load_pz_for_user(db, tenant_id, pz_id, user, active_warehouse_id=warehouse_id)
+    try:
+        return patch_wms_receiving_pz_supplier(
+            db, tenant_id, pz_id, supplier_id=body.supplier_id, performed_by=user
+        )
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.delete("/receiving/pz/{pz_id}/items/{item_id}", response_model=StockDocumentRead)
+def delete_wms_receiving_pz_item(
+    pz_id: int,
+    item_id: int,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_operable_warehouse),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    """Usuń pozycję EXTRA bez przyjętej ilości."""
+    _load_pz_for_user(db, tenant_id, pz_id, user, active_warehouse_id=warehouse_id)
+    try:
+        return remove_wms_receiving_extra_line(db, tenant_id, pz_id, item_id, performed_by=user)
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.post("/receiving/pz/{pz_id}/items/{item_id}/mark-damaged", response_model=StockDocumentRead)

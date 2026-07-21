@@ -4,10 +4,13 @@ import { ArrowLeft, Box, CheckCircle2, Plus } from "lucide-react";
 import { fetchUsers } from "../../api/authApi";
 import { getStockDocument, type StockDocumentItemRead, type StockDocumentRead } from "../../api/stockDocumentsApi";
 import {
+  deleteWmsReceivingPzItem,
   finishWmsReceivingPz,
+  patchWmsReceivingPzItemCommercial,
   postWmsReceivingPzItemMoveCarrier,
   resolveWmsReceivingScan,
 } from "../../api/wmsReceivingApi";
+import ActivityLogPanel from "../../components/activityLog/ActivityLogPanel";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { ReceivingActiveCarrierBar } from "../../components/wms/receiving/ReceivingActiveCarrierBar";
 import { ReceivingCarrierAssignModal } from "../../components/wms/receiving/carriers/ReceivingCarrierAssignModal";
@@ -32,6 +35,7 @@ import { ReceivingLineCard } from "../../components/wms/receiving/ReceivingLineC
 import { ReceivingLineHistoryModal } from "../../components/wms/receiving/ReceivingLineHistoryModal";
 import {
   ReceivingExecutionModal,
+  type ReceivingExecutionCommercialPayload,
   type ReceivingExecutionReceivePayload,
 } from "../../components/wms/receiving/ReceivingExecutionModal";
 import { ReceivingDamageModal } from "../../components/wms/receiving/ReceivingDamageModal";
@@ -130,6 +134,7 @@ export default function WmsReceivingCountPage() {
   const [productDataGate, setProductDataGate] = useState<ProductDataGateItem | null>(null);
   const [labelPrintProduct, setLabelPrintProduct] = useState<ProductForLabel | null>(null);
   const [historyLine, setHistoryLine] = useState<StockDocumentItemRead | null>(null);
+  const [activityRefreshKey, setActivityRefreshKey] = useState(0);
 
   const onProductDataGate = useCallback((ctx: ProductDataGateContext) => {
     return new Promise<boolean>((resolve) => {
@@ -392,10 +397,34 @@ export default function WmsReceivingCountPage() {
       });
       if (ok) {
         showScannerToast(`+${fmtQty(payload.addQty)} szt. przyjęto`);
+        setActivityRefreshKey((k) => k + 1);
       }
       return ok;
     },
     [executionLine, busy, pzIdValid, applyReceive, showScannerToast],
+  );
+
+  const handleSaveCommercial = useCallback(
+    async (payload: ReceivingExecutionCommercialPayload) => {
+      const line = executionLine;
+      if (line == null || busy || !pzIdValid) return false;
+      setBusy(true);
+      try {
+        const doc = await patchWmsReceivingPzItemCommercial(tenantId, pzId, line.id, payload);
+        setDetail(doc);
+        const next = (doc.items ?? []).find((it) => it.id === line.id);
+        if (next) setReceivingModal(next);
+        setActivityRefreshKey((k) => k + 1);
+        showScannerToast("Zapisano cenę / VAT");
+        return true;
+      } catch {
+        showScannerToast("Nie udało się zapisać ceny / VAT");
+        return false;
+      } finally {
+        setBusy(false);
+      }
+    },
+    [executionLine, busy, pzIdValid, tenantId, pzId, showScannerToast],
   );
 
   const extraLineCount = useMemo(() => {
@@ -580,11 +609,39 @@ export default function WmsReceivingCountPage() {
               onEditReceivingAdmin={() => openModal(g.primary, { adminMode: true })}
               onMoveToCarrier={() => openModal(g.primary)}
               onRemoveFromDocument={() => {
-                showScannerToast("Pozycja bez przyjęcia zostanie usunięta po zakończeniu przyjęcia PZ");
+                if (!canEditLines || busy || !pzIdValid) return;
+                const line = g.primary;
+                if (!isWmsExtraReceivingLine(line) && !isGhostReceivingLine(line)) {
+                  showScannerToast("Nie można usunąć pozycji z dokumentu źródłowego");
+                  return;
+                }
+                if (toCountValue(line.received_quantity) > 0) {
+                  showScannerToast("Najpierw cofnij przyjęcie, potem usuń pozycję");
+                  return;
+                }
+                setBusy(true);
+                void deleteWmsReceivingPzItem(tenantId, pzId, line.id)
+                  .then((doc) => {
+                    setDetail(doc);
+                    setActivityRefreshKey((k) => k + 1);
+                    showScannerToast("Usunięto produkt z dokumentu");
+                  })
+                  .catch(() => showScannerToast("Nie udało się usunąć pozycji"))
+                  .finally(() => setBusy(false));
               }}
               onShowHistory={() => setHistoryLine(g.primary)}
             />
           ))}
+        </div>
+
+        <div className="mt-8 px-1">
+          <ActivityLogPanel
+            objectType="document"
+            objectId={pzId}
+            title="Historia czynności"
+            defaultCollapsed
+            refreshKey={activityRefreshKey}
+          />
         </div>
       </main>
 
@@ -644,6 +701,7 @@ export default function WmsReceivingCountPage() {
           busy={busy}
           onClose={closeReceivingModal}
           onReceive={handleExecutionReceive}
+          onSaveCommercial={handleSaveCommercial}
           onMarkDamage={() => {
             setDamageLine(executionLine);
             closeReceivingModal();

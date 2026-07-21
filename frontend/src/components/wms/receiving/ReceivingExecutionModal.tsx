@@ -35,6 +35,12 @@ export type ReceivingExecutionReceivePayload = {
   batchNumber?: string | null;
 };
 
+export type ReceivingExecutionCommercialPayload = {
+  ordered_quantity?: number | null;
+  purchase_price_net?: number | null;
+  vat_rate?: number | null;
+};
+
 export type ReceivingExecutionModalProps = {
   line: StockDocumentItemRead;
   siblings: StockDocumentItemRead[];
@@ -46,6 +52,7 @@ export type ReceivingExecutionModalProps = {
   busy: boolean;
   onClose: () => void;
   onReceive: (payload: ReceivingExecutionReceivePayload) => Promise<boolean>;
+  onSaveCommercial?: (payload: ReceivingExecutionCommercialPayload) => Promise<boolean>;
   onMarkDamage: () => void;
   adminMode: boolean;
   onToggleAdminMode: () => void;
@@ -63,6 +70,7 @@ export function ReceivingExecutionModal({
   busy,
   onClose,
   onReceive,
+  onSaveCommercial,
   onMarkDamage,
   adminMode,
   onToggleAdminMode,
@@ -77,12 +85,26 @@ export function ReceivingExecutionModal({
   const [modalSerial, setModalSerial] = useState("");
   const [modalExpiry, setModalExpiry] = useState("");
   const [modalBatch, setModalBatch] = useState("");
+  const [priceNetDraft, setPriceNetDraft] = useState(
+    line.purchase_price_net != null ? String(line.purchase_price_net) : "",
+  );
+  const [vatDraft, setVatDraft] = useState(String(line.vat_rate ?? ""));
+  const [orderedDraft, setOrderedDraft] = useState(
+    Number(line.ordered_quantity) > 0 ? String(line.ordered_quantity) : "",
+  );
   const [modalErrors, setModalErrors] = useState<{
     expiry?: string;
     batch?: string;
     serial?: string;
     qty?: string;
+    commercial?: string;
   }>({});
+
+  useEffect(() => {
+    setPriceNetDraft(line.purchase_price_net != null ? String(line.purchase_price_net) : "");
+    setVatDraft(String(line.vat_rate ?? ""));
+    setOrderedDraft(Number(line.ordered_quantity) > 0 ? String(line.ordered_quantity) : "");
+  }, [line.id, line.purchase_price_net, line.vat_rate, line.ordered_quantity]);
 
   const needsSerial = Boolean(line.track_serial);
   const needsExpiry = Boolean(line.track_expiry);
@@ -420,6 +442,128 @@ export function ReceivingExecutionModal({
                 </p>
               </div>
             </div>
+
+            {adminMode && onSaveCommercial ? (
+              <div className="border-t border-slate-100 pt-4 space-y-3">
+                <span className="text-[10px] font-black text-slate-400 block uppercase tracking-widest">
+                  Cena / VAT / ilość z dokumentu
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <label className="block text-xs font-semibold text-slate-600">
+                    Cena netto
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={priceNetDraft}
+                      onChange={(e) => setPriceNetDraft(e.target.value)}
+                      placeholder="—"
+                      className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-mono"
+                    />
+                  </label>
+                  <label className="block text-xs font-semibold text-slate-600">
+                    VAT %
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={vatDraft}
+                      onChange={(e) => setVatDraft(e.target.value)}
+                      className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-mono"
+                    />
+                  </label>
+                  <label className="block text-xs font-semibold text-slate-600">
+                    Ilość z dokumentu
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={orderedDraft}
+                      onChange={(e) => setOrderedDraft(e.target.value)}
+                      placeholder="—"
+                      className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-mono"
+                    />
+                  </label>
+                </div>
+                {modalErrors.commercial ? (
+                  <p className="text-xs font-semibold text-rose-600">{modalErrors.commercial}</p>
+                ) : null}
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={async () => {
+                    const priceRaw = priceNetDraft.trim().replace(",", ".");
+                    const vatRaw = vatDraft.trim().replace(",", ".");
+                    const ordRaw = orderedDraft.trim().replace(",", ".");
+                    const payload: ReceivingExecutionCommercialPayload = {};
+                    if (priceRaw === "") payload.purchase_price_net = null;
+                    else {
+                      const n = Number(priceRaw);
+                      if (!Number.isFinite(n) || n < 0) {
+                        setModalErrors((e) => ({ ...e, commercial: "Niepoprawna cena netto." }));
+                        return;
+                      }
+                      payload.purchase_price_net = n;
+                    }
+                    const vatN = Number(vatRaw);
+                    if (!Number.isFinite(vatN) || vatN < 0) {
+                      setModalErrors((e) => ({ ...e, commercial: "Niepoprawna stawka VAT." }));
+                      return;
+                    }
+                    payload.vat_rate = vatN;
+                    if (ordRaw === "") payload.ordered_quantity = 0;
+                    else {
+                      const o = Number(ordRaw);
+                      if (!Number.isFinite(o) || o < 0) {
+                        setModalErrors((e) => ({ ...e, commercial: "Niepoprawna ilość z dokumentu." }));
+                        return;
+                      }
+                      payload.ordered_quantity = o;
+                    }
+                    setModalErrors((e) => ({ ...e, commercial: undefined }));
+                    await onSaveCommercial(payload);
+                  }}
+                  className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-black uppercase text-white hover:bg-slate-800 disabled:opacity-50"
+                >
+                  Zapisz cenę / VAT
+                </button>
+                <p className="text-[11px] text-slate-500">
+                  Cena brutto:{" "}
+                  {(() => {
+                    const n = Number(String(priceNetDraft).replace(",", "."));
+                    const v = Number(String(vatDraft).replace(",", "."));
+                    if (!Number.isFinite(n) || !Number.isFinite(v)) return "—";
+                    return new Intl.NumberFormat("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(
+                      n * (1 + v / 100),
+                    );
+                  })()}
+                </p>
+              </div>
+            ) : (
+              <div className="border-t border-slate-100 pt-4 grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
+                <div>
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Cena netto</span>
+                  <p className="font-mono font-bold text-slate-800">
+                    {line.purchase_price_net != null
+                      ? new Intl.NumberFormat("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(
+                          line.purchase_price_net,
+                        )
+                      : "—"}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">VAT</span>
+                  <p className="font-mono font-bold text-slate-800">{line.vat_rate != null ? `${line.vat_rate}%` : "—"}</p>
+                </div>
+                <div>
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Cena brutto</span>
+                  <p className="font-mono font-bold text-slate-800">
+                    {line.unit_price_gross != null
+                      ? new Intl.NumberFormat("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(
+                          line.unit_price_gross,
+                        )
+                      : "—"}
+                  </p>
+                </div>
+              </div>
+            )}
 
             <div className="border-t border-slate-100 pt-4 flex flex-col sm:flex-row gap-6 sm:gap-0">
             <div className="flex-1 sm:pr-6">

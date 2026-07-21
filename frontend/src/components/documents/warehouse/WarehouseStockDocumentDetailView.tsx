@@ -2,6 +2,7 @@ import type { RefObject } from "react";
 
 import type { StockDocumentListRow, StockDocumentRead } from "../../../api/stockDocumentsApi";
 import type { WarehouseCarrierRead } from "../../../api/wmsCarrierApi";
+import ActivityLogPanel from "../../activityLog/ActivityLogPanel";
 import DocumentPrintHistory from "../../printing/DocumentPrintHistory";
 import { CarrierAssignProductsModal } from "../../warehouse/carriers/CarrierAssignProductsModal";
 import { CarrierCreateModal } from "../../warehouse/carriers/CarrierCreateModal";
@@ -211,7 +212,10 @@ export function WarehouseStockDocumentDetailView({
         </div>
 
         {detail && detailId != null ? (
-          <div className="shrink-0 border-t border-slate-200 p-4">
+          <div className="shrink-0 space-y-3 border-t border-slate-200 p-4">
+            {isPzDetail ? (
+              <ActivityLogPanel objectType="document" objectId={detailId} title="Historia czynności" />
+            ) : null}
             <DocumentPrintHistory
               tenantId={tenantId}
               documentType="stock_document"

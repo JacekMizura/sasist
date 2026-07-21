@@ -42,6 +42,20 @@ from .barcode_generation import next_product_barcode
 from .tenant_default_warehouse import list_tenant_warehouse_ids
 from ..utils.product_vat import product_vat_rate_percent
 from ..schemas.wms_receiving import WmsCreateReceivingProductBody, WmsReceiveSerialBody
+from .product_cost_service import resolve_suggested_purchase_price_net_for_pz
+from .wms_receiving_activity import (
+    EVENT_PZ_DEFECT_REPORTED,
+    EVENT_PZ_DOCUMENT_CREATED,
+    EVENT_PZ_PRODUCT_ADDED,
+    EVENT_PZ_PRODUCT_RECEIVED,
+    EVENT_PZ_RECEIVE_REVERTED,
+    EVENT_PZ_RECEIVING_FINISHED,
+    fmt_money_pl,
+    fmt_qty_pl,
+    fmt_vat_pl,
+    product_label,
+    record_pz_activity,
+)
 from .inventory_serial_service import (
     lot_keys_from_product,
     normalize_serial_number,
@@ -510,6 +524,73 @@ def _product_needs_receiving_lot_decision(prod: Optional[Product], wms_settings=
     return bool(eff.track_batch or eff.track_expiry)
 
 
+def _line_vat_rate_snapshot(raw: object, *, fallback_product: Optional[Product] = None) -> float:
+    """Preserve 0% / special rates; never coerce falsy 0 → 23 via ``or``."""
+    if raw is not None:
+        try:
+            v = float(raw)
+        except (TypeError, ValueError):
+            v = None
+        else:
+            if math.isfinite(v) and v >= 0:
+                return v
+    if fallback_product is not None:
+        return float(product_vat_rate_percent(getattr(fallback_product, "metadata_json", None)))
+    return 23.0
+
+
+def _record_receive_delta_activity(
+    db: Session,
+    *,
+    tenant_id: int,
+    doc: StockDocument,
+    line: StockDocumentItem,
+    add_q: float,
+    performed_by: AppUser,
+) -> None:
+    prod = None
+    if getattr(line, "product_id", None) is not None:
+        prod = db.query(Product).filter(Product.id == int(line.product_id)).first()
+    label = product_label(
+        name=getattr(prod, "name", None) if prod else None,
+        ean=getattr(prod, "ean", None) if prod else None,
+        sku=getattr(prod, "sku", None) if prod else None,
+        product_id=getattr(line, "product_id", None),
+    )
+    abs_q = abs(float(add_q))
+    if add_q < 0:
+        code = EVENT_PZ_RECEIVE_REVERTED
+        desc = f"Cofnięto przyjęcie {fmt_qty_pl(abs_q)} szt. produktu {label}."
+    else:
+        code = EVENT_PZ_PRODUCT_RECEIVED
+        desc = f"Przyjęto {fmt_qty_pl(abs_q)} szt. produktu {label}."
+    record_pz_activity(
+        db,
+        tenant_id=tenant_id,
+        document_id=int(doc.id),
+        warehouse_id=getattr(doc, "warehouse_id", None),
+        event_code=code,
+        description=desc,
+        performed_by=performed_by,
+        metadata={
+            "product_id": getattr(line, "product_id", None),
+            "product_name": getattr(prod, "name", None) if prod else None,
+            "product_ean": getattr(prod, "ean", None) if prod else None,
+            "quantity_delta": float(add_q),
+            "item_id": int(line.id),
+        },
+    )
+
+
+def _suggested_purchase_price_for_doc(db: Session, doc: StockDocument, product_id: int) -> Optional[float]:
+    return resolve_suggested_purchase_price_net_for_pz(
+        db,
+        int(doc.tenant_id),
+        int(product_id),
+        supplier_id=int(doc.supplier_id) if getattr(doc, "supplier_id", None) is not None else None,
+    )
+
+
 def ensure_wms_pz_product_anchor_line(
     db: Session,
     tenant_id: int,
@@ -580,8 +661,10 @@ def ensure_wms_pz_product_anchor_line(
                         loose_units_added=int(auto_qty),
                     )
         line_id = int(row.id)
+        created_new = False
     else:
         vat = product_vat_rate_percent(getattr(prod, "metadata_json", None))
+        price_hint = _suggested_purchase_price_for_doc(db, doc, pid)
         rec = auto_qty
         row = StockDocumentItem(
             document_id=int(pz_id),
@@ -591,7 +674,7 @@ def ensure_wms_pz_product_anchor_line(
             received_quantity=rec,
             quantity=rec,
             loose_units_count=int(rec) if rec > 0 else 0,
-            purchase_price_net=None,
+            purchase_price_net=price_hint,
             vat_rate=float(vat),
             batch_number="",
             expiry_date=NO_EXPIRY_SENTINEL,
@@ -600,6 +683,7 @@ def ensure_wms_pz_product_anchor_line(
         db.add(row)
         db.flush()
         line_id = int(row.id)
+        created_new = True
         if rec > 0:
             auto_received = True
             if performed_by is not None:
@@ -613,6 +697,77 @@ def ensure_wms_pz_product_anchor_line(
                     cartons_added=None,
                     loose_units_added=int(rec),
                 )
+
+    if created_new and performed_by is not None:
+        label = product_label(
+            name=getattr(prod, "name", None),
+            ean=getattr(prod, "ean", None),
+            sku=getattr(prod, "sku", None),
+            product_id=pid,
+        )
+        price_txt = (
+            fmt_money_pl(float(row.purchase_price_net))
+            if row.purchase_price_net is not None
+            else "nieustalona"
+        )
+        bits = [
+            f"Dodano produkt {label}.",
+            f"Cena netto: {price_txt}.",
+            f"VAT: {fmt_vat_pl(float(row.vat_rate))}.",
+            "Ilość z dokumentu: —.",
+        ]
+        if auto_received and auto_qty > 0:
+            bits.append(f"Przyjęto: {fmt_qty_pl(auto_qty)} szt.")
+        record_pz_activity(
+            db,
+            tenant_id=tenant_id,
+            document_id=int(pz_id),
+            warehouse_id=getattr(doc, "warehouse_id", None),
+            event_code=EVENT_PZ_PRODUCT_ADDED,
+            description=" ".join(bits),
+            performed_by=performed_by,
+            metadata={
+                "product_id": pid,
+                "product_name": getattr(prod, "name", None),
+                "product_ean": getattr(prod, "ean", None),
+                "purchase_price_net": float(row.purchase_price_net)
+                if row.purchase_price_net is not None
+                else None,
+                "vat_rate": float(row.vat_rate),
+                "ordered_quantity": 0.0,
+                "quantity_received": float(auto_qty) if auto_received else 0.0,
+                "item_id": line_id,
+                "init_autofill": True,
+            },
+        )
+    elif (
+        not created_new
+        and auto_received
+        and auto_qty > 0
+        and performed_by is not None
+    ):
+        label = product_label(
+            name=getattr(prod, "name", None),
+            ean=getattr(prod, "ean", None),
+            sku=getattr(prod, "sku", None),
+            product_id=pid,
+        )
+        record_pz_activity(
+            db,
+            tenant_id=tenant_id,
+            document_id=int(pz_id),
+            warehouse_id=getattr(doc, "warehouse_id", None),
+            event_code=EVENT_PZ_PRODUCT_RECEIVED,
+            description=f"Przyjęto {fmt_qty_pl(auto_qty)} szt. produktu {label}.",
+            performed_by=performed_by,
+            metadata={
+                "product_id": pid,
+                "product_name": getattr(prod, "name", None),
+                "product_ean": getattr(prod, "ean", None),
+                "quantity_delta": float(auto_qty),
+                "item_id": line_id,
+            },
+        )
 
     # Keep DOCK-IN / receipt ops aligned with received_quantity (same SSOT as PATCH).
     if auto_received and performed_by is not None and auto_qty > 0:
@@ -1064,7 +1219,7 @@ def apply_wms_receive_deltas(db: Session, tenant_id: int, body: WmsReceiveBody, 
                     cartons_count=0,
                     loose_units_count=0,
                     purchase_price_net=anchor.purchase_price_net,
-                    vat_rate=float(anchor.vat_rate or 23.0),
+                    vat_rate=_line_vat_rate_snapshot(anchor.vat_rate),
                     batch_number=bn,
                     expiry_date=ed,
                     warehouse_carrier_id=wc_line,
@@ -1209,15 +1364,19 @@ def patch_wms_receiving_pz_item_quantity(
 ) -> StockDocumentRead:
     """Draft PZ: add qty to row matching (delivery line, product, batch, expiry) or insert a new lot row."""
     add_q = float(body.quantity_received)
-    if not math.isfinite(add_q) or add_q <= 0:
-        raise ValueError("quantity_received must be a positive finite number")
-    if add_q > MAX_RECEIVED_QUANTITY:
+    if not math.isfinite(add_q) or abs(add_q) <= 1e-12:
+        raise ValueError("quantity_received must be a non-zero finite number")
+    if abs(add_q) > MAX_RECEIVED_QUANTITY:
         raise ValueError("quantity_received exceeds maximum allowed")
 
     cartons_delta = int(body.cartons_count or 0)
     loose_delta = int(body.loose_units_count or 0)
     if cartons_delta < 0 or loose_delta < 0:
         raise ValueError("Invalid split counters")
+    if add_q < 0:
+        # Cofnięcie: packaging deltas not applied (qty only).
+        cartons_delta = 0
+        loose_delta = 0
 
     doc = (
         db.query(StockDocument)
@@ -1254,21 +1413,39 @@ def patch_wms_receiving_pz_item_quantity(
     if is_stock_document_item_wm_material(anchor):
         if wc_assign is not None:
             raise ValueError("Materiały magazynowe — przyjęcie tylko luzem (bez nośnika).")
-        new_rec = float(anchor.received_quantity or 0) + add_q
+        locked = (
+            db.query(StockDocumentItem)
+            .filter(StockDocumentItem.id == int(anchor.id), StockDocumentItem.document_id == pz_id)
+            .with_for_update()
+            .first()
+        )
+        if locked is None:
+            raise ValueError("PZ line not found")
+        new_rec = float(locked.received_quantity or 0) + add_q
+        if new_rec < -1e-9:
+            raise ValueError("Nie można cofnąć więcej niż przyjęto")
         if new_rec > MAX_RECEIVED_QUANTITY:
             raise ValueError("received_quantity would exceed maximum allowed")
-        anchor.received_quantity = new_rec
-        anchor.quantity = new_rec
+        locked.received_quantity = max(0.0, new_rec)
+        locked.quantity = locked.received_quantity
         db.flush()
         _append_receiving_scan_log(
             db,
             document_id=pz_id,
-            item_id=int(anchor.id),
+            item_id=int(locked.id),
             admin_id=int(performed_by.id),
             quantity_added=add_q,
             packaging_type="quantity",
             cartons_added=None,
             loose_units_added=None,
+        )
+        _record_receive_delta_activity(
+            db,
+            tenant_id=tenant_id,
+            doc=doc,
+            line=locked,
+            add_q=add_q,
+            performed_by=performed_by,
         )
         purge_wms_ghost_stock_document_lines(db, pz_id)
         db.flush()
@@ -1308,28 +1485,40 @@ def patch_wms_receiving_pz_item_quantity(
         warehouse_carrier_id=wc_assign,
         wms_settings=wms_settings,
     )
+    if match is not None:
+        match = (
+            db.query(StockDocumentItem)
+            .filter(StockDocumentItem.id == int(match.id), StockDocumentItem.document_id == pz_id)
+            .with_for_update()
+            .first()
+        )
 
     log_item_id: Optional[int] = None
     if match:
         new_rec = float(match.received_quantity or 0) + add_q
+        if new_rec < -1e-9:
+            raise ValueError("Nie można cofnąć więcej niż przyjęto")
         if new_rec > MAX_RECEIVED_QUANTITY:
             raise ValueError("received_quantity would exceed maximum allowed")
-        match.received_quantity = new_rec
-        match.quantity = new_rec
+        match.received_quantity = max(0.0, new_rec)
+        match.quantity = match.received_quantity
         prev_cc = int(getattr(match, "cartons_count", 0) or 0)
         prev_lu = int(getattr(match, "loose_units_count", 0) or 0)
-        match.cartons_count = prev_cc + cartons_delta
-        match.loose_units_count = prev_lu + loose_delta
-        append_receipt_operation(
-            db,
-            doc,
-            match,
-            add_q,
-            performed_by=performed_by,
-            skip_inventory_movement=True,
-        )
+        match.cartons_count = max(0, prev_cc + cartons_delta)
+        match.loose_units_count = max(0, prev_lu + loose_delta)
+        if add_q > 1e-12:
+            append_receipt_operation(
+                db,
+                doc,
+                match,
+                add_q,
+                performed_by=performed_by,
+                skip_inventory_movement=True,
+            )
         log_item_id = int(match.id)
     else:
+        if add_q < 0:
+            raise ValueError("Brak linii do cofnięcia przyjęcia")
         db.add(
             StockDocumentItem(
                 document_id=pz_id,
@@ -1341,7 +1530,7 @@ def patch_wms_receiving_pz_item_quantity(
                 cartons_count=cartons_delta,
                 loose_units_count=loose_delta,
                 purchase_price_net=anchor.purchase_price_net,
-                vat_rate=float(anchor.vat_rate or 23.0),
+                vat_rate=_line_vat_rate_snapshot(anchor.vat_rate, fallback_product=prod),
                 batch_number=bn,
                 expiry_date=ed,
                 warehouse_carrier_id=wc_assign,
@@ -1384,6 +1573,20 @@ def patch_wms_receiving_pz_item_quantity(
             cartons_added=ca,
             loose_units_added=la,
         )
+        hit_for_act = (
+            db.query(StockDocumentItem)
+            .filter(StockDocumentItem.id == int(log_item_id), StockDocumentItem.document_id == pz_id)
+            .first()
+        )
+        if hit_for_act is not None:
+            _record_receive_delta_activity(
+                db,
+                tenant_id=tenant_id,
+                doc=doc,
+                line=hit_for_act,
+                add_q=add_q,
+                performed_by=performed_by,
+            )
         wh_id = int(getattr(doc, "warehouse_id", 0) or 0)
         if anchor.product_id is not None and wh_id > 0:
             ap_type, ap_qty = _receiving_audit_packaging(
@@ -1714,6 +1917,7 @@ def receive_wms_pz_serial(
         _assert_carrier_linked_to_pz(db, pz_id, int(wc_assign))
 
     vat = product_vat_rate_percent(getattr(prod, "metadata_json", None))
+    price_hint = _suggested_purchase_price_for_doc(db, doc, pid)
     line = StockDocumentItem(
         document_id=int(pz_id),
         delivery_item_id=None,
@@ -1722,7 +1926,7 @@ def receive_wms_pz_serial(
         received_quantity=1.0,
         quantity=1.0,
         loose_units_count=1,
-        purchase_price_net=None,
+        purchase_price_net=price_hint,
         vat_rate=float(vat),
         batch_number=bn,
         expiry_date=ed,
@@ -1921,7 +2125,7 @@ def mark_wms_receiving_pz_item_damaged(
             cartons_count=0,
             loose_units_count=int(qty),
             purchase_price_net=anchor.purchase_price_net,
-            vat_rate=float(anchor.vat_rate or 23.0),
+            vat_rate=_line_vat_rate_snapshot(anchor.vat_rate),
             batch_number=bn,
             expiry_date=ed,
             warehouse_carrier_id=None,
@@ -1964,6 +2168,34 @@ def mark_wms_receiving_pz_item_damaged(
         packaging_type="damaged",
         cartons_added=None,
         loose_units_added=int(qty),
+    )
+    reason = (getattr(body, "description", None) or getattr(body, "damage_type", None) or "").strip()
+    label = product_label(
+        name=getattr(prod, "name", None),
+        ean=getattr(prod, "ean", None),
+        sku=getattr(prod, "sku", None),
+        product_id=int(anchor.product_id),
+    )
+    desc = f"Oznaczono {fmt_qty_pl(qty)} szt. produktu {label} jako wadliwe."
+    if reason:
+        desc = f"{desc} Powód: {reason}."
+    record_pz_activity(
+        db,
+        tenant_id=tenant_id,
+        document_id=int(pz_id),
+        warehouse_id=getattr(doc, "warehouse_id", None),
+        event_code=EVENT_PZ_DEFECT_REPORTED,
+        description=desc,
+        performed_by=performed_by,
+        metadata={
+            "product_id": int(anchor.product_id),
+            "product_name": getattr(prod, "name", None),
+            "product_ean": getattr(prod, "ean", None),
+            "quantity_delta": float(qty),
+            "reason": reason or None,
+            "item_id": log_item_id,
+        },
+        severity="WARNING",
     )
 
     purge_wms_ghost_stock_document_lines(db, pz_id)
@@ -2087,7 +2319,7 @@ def move_wms_receiving_pz_item_carrier(
                 cartons_count=0,
                 loose_units_count=0,
                 purchase_price_net=anchor.purchase_price_net,
-                vat_rate=float(anchor.vat_rate or 23.0),
+                vat_rate=_line_vat_rate_snapshot(anchor.vat_rate),
                 batch_number=bn,
                 expiry_date=ed,
                 warehouse_carrier_id=target_wc,
@@ -2249,7 +2481,7 @@ def move_wms_receiving_pz_item_carrier(
                 cartons_count=0,
                 loose_units_count=0,
                 purchase_price_net=anchor.purchase_price_net,
-                vat_rate=float(anchor.vat_rate or 23.0),
+                vat_rate=_line_vat_rate_snapshot(anchor.vat_rate),
                 batch_number=bn,
                 expiry_date=ed,
                 warehouse_carrier_id=target_wc,

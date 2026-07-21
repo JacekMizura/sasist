@@ -129,14 +129,21 @@ def _latest_posted_pz_unit_for_product(
     return (net_sum / qty_sum), doc.updated_at, (getattr(doc, "currency", None) or "PLN"), int(doc.id)
 
 
-def _latest_supplier_price_for_product(db: Session, tenant_id: int, p: Product) -> Optional[float]:
-    if getattr(p, "default_supplier_id", None) is not None:
+def _latest_supplier_price_for_product(
+    db: Session,
+    tenant_id: int,
+    p: Product,
+    *,
+    prefer_supplier_id: Optional[int] = None,
+) -> Optional[float]:
+    sid = prefer_supplier_id if prefer_supplier_id is not None else getattr(p, "default_supplier_id", None)
+    if sid is not None:
         row = (
             db.query(SupplierProduct.purchase_price)
             .filter(
                 SupplierProduct.tenant_id == int(tenant_id),
                 SupplierProduct.product_id == int(p.id),
-                SupplierProduct.supplier_id == int(p.default_supplier_id),
+                SupplierProduct.supplier_id == int(sid),
                 SupplierProduct.purchase_price.isnot(None),
             )
             .order_by(SupplierProduct.id.desc())
@@ -144,7 +151,7 @@ def _latest_supplier_price_for_product(db: Session, tenant_id: int, p: Product) 
         )
         if row is not None:
             v = _safe_float(row[0])
-            if v is not None:
+            if v is not None and v >= 0:
                 return v
     row2 = (
         db.query(SupplierProduct.purchase_price)
@@ -158,7 +165,117 @@ def _latest_supplier_price_for_product(db: Session, tenant_id: int, p: Product) 
     )
     if row2 is None:
         return None
-    return _safe_float(row2[0])
+    v2 = _safe_float(row2[0])
+    return v2 if v2 is not None and v2 >= 0 else None
+
+
+def _latest_posted_pz_unit_for_product_supplier(
+    db: Session,
+    tenant_id: int,
+    product_id: int,
+    supplier_id: int,
+) -> Optional[float]:
+    """Last reliable purchase unit net for product from posted PZ of this supplier (tenant-scoped)."""
+    doc = (
+        db.query(StockDocument)
+        .join(StockDocumentItem, StockDocumentItem.document_id == StockDocument.id)
+        .filter(
+            StockDocument.tenant_id == int(tenant_id),
+            StockDocument.document_type == "PZ",
+            StockDocument.status == "posted",
+            StockDocument.supplier_id == int(supplier_id),
+            StockDocumentItem.product_id == int(product_id),
+            StockDocumentItem.received_quantity > 1e-9,
+        )
+        .order_by(StockDocument.updated_at.desc(), StockDocument.id.desc())
+        .first()
+    )
+    if doc is None:
+        return None
+    lines = (
+        db.query(StockDocumentItem)
+        .filter(
+            StockDocumentItem.document_id == int(doc.id),
+            StockDocumentItem.product_id == int(product_id),
+            StockDocumentItem.received_quantity > 1e-9,
+        )
+        .all()
+    )
+    net_sum = 0.0
+    qty_sum = 0.0
+    for ln in lines:
+        qty = _safe_float(getattr(ln, "received_quantity", None))
+        if qty is None or qty <= 1e-12:
+            continue
+        unit = _resolve_line_unit_net(db, ln)
+        if unit is None:
+            continue
+        net_sum += qty * unit
+        qty_sum += qty
+    if qty_sum <= 1e-12:
+        return None
+    return net_sum / qty_sum
+
+
+def resolve_suggested_purchase_price_net_for_pz(
+    db: Session,
+    tenant_id: int,
+    product_id: int,
+    *,
+    supplier_id: Optional[int] = None,
+) -> Optional[float]:
+    """
+    Hint for new WMS/manual PZ line — last reliable purchase net (never sale price, never fake 0).
+
+    Priority:
+      1) last posted PZ line for this product + current supplier,
+      2) last posted PZ line for this product (tenant-global),
+      3) supplier_products.purchase_price (prefer current supplier),
+      4) product.purchase_price master snapshot.
+    """
+    if supplier_id is not None:
+        from_sup = _latest_posted_pz_unit_for_product_supplier(
+            db, int(tenant_id), int(product_id), int(supplier_id)
+        )
+        if from_sup is not None and from_sup >= 0:
+            return round(float(from_sup), 4)
+
+    pz_cost, _pz_dt, _pz_ccy, _pz_doc = _latest_posted_pz_unit_for_product(
+        db, int(tenant_id), int(product_id)
+    )
+    if pz_cost is not None and pz_cost >= 0:
+        return round(float(pz_cost), 4)
+
+    p = (
+        db.query(Product)
+        .filter(Product.id == int(product_id), Product.tenant_id == int(tenant_id), Product.deleted_at.is_(None))
+        .first()
+    )
+    if p is None:
+        return None
+
+    try:
+        from sqlalchemy.exc import OperationalError, ProgrammingError
+
+        nested = db.begin_nested()
+        try:
+            sup_price = _latest_supplier_price_for_product(
+                db, int(tenant_id), p, prefer_supplier_id=supplier_id
+            )
+            nested.commit()
+        except (OperationalError, ProgrammingError):
+            nested.rollback()
+            sup_price = None
+    except Exception:
+        # begin_nested unavailable — skip supplier fallback without poisoning outer txn
+        sup_price = None
+    if sup_price is not None and sup_price >= 0:
+        return round(float(sup_price), 4)
+
+    manual = _safe_float(getattr(p, "purchase_price", None))
+    if manual is not None and manual >= 0:
+        return round(float(manual), 4)
+    return None
 
 
 def get_product_current_cost(db: Session, tenant_id: int, product_id: int) -> Dict[str, Any]:

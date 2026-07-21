@@ -1,3 +1,24 @@
+## 2026-07-21 — Ręczne PZ: ostatnia cena zakupu + VAT snapshot + audyt PL
+
+- Cena: `resolve_suggested_purchase_price_net_for_pz` (supplier PZ → global PZ → supplier_products → product.purchase_price); brak historii = `None` (nie 0).
+- VAT: snapshot z `product_vat_rate_percent` na linii; rescan nie nadpisuje ręcznych zmian.
+- Audyt: `activity_log` (object_type=document) + istniejący `ReceivingScanLog`; UI „Historia czynności”; delty qty / OLD→NEW cena/VAT / wady / cofnięcie.
+- Endpointy: `PATCH …/commercial`, `PATCH …/supplier`, `DELETE …/items/{id}`; qty signed delta.
+- Tests: `test_wms_pz_price_vat_audit.py`. **No push.**
+
+## 2026-07-21 — Nowa dostawa: wybór istniejącego dostawcy (bez auto-create)
+
+- Modal searchable combobox → `GET /suppliers/` (name/NIP); jawne „+ Utwórz nowego dostawcę”.
+- Backend: `create_supplier` flag; bez `supplier_id` i bez flagi → 400 (nie tworzy rekordu).
+- Duplicate: exact name → reuse. **No push.**
+
+## 2026-07-21 — Przyjęcia: document/actual/różnica + bez auto-DONE na expected
+
+- EXISTING SSOT restored in WMS UI: `ordered_quantity` / `received_quantity` / `difference` / wady (`REJECTED_STOCK`).
+- Auto-DONE removed: only explicit „Zakończ przyjęcie”; surplus over ordered allowed.
+- Manual ordered=0 → UI shows „—” for document/różnica (not fake +N).
+- Tests: lifecycle + presentation + workflow. **No push.**
+
 ## 2026-07-21 — Przyjęcia PZ: nie zamykaj ręcznego PZ po 1 szt.
 
 - ROOT 400 + zniknięcie z listy: `compute_line_receiving_progress` traktował `ordered=0` + received>0 jako `received` → `recalculate` → `DONE` → lista `receiving_status != DONE` + PATCH `_assert_receiving_session_open`.

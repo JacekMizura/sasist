@@ -82,7 +82,9 @@ export function ReceivingLineCard({
   const batchLabel = formatReceivingBatchLabel(it);
   const expiryLabel = formatReceivingExpiryLabel(it);
   const serialLabel = formatReceivingSerialLabel(it);
-  const canRemoveGhost = isGhostReceivingLine(it);
+  const canRemoveGhost =
+    isGhostReceivingLine(it) ||
+    (isWmsExtraReceivingLine(it) && Math.abs(Number(it.received_quantity) || 0) <= 1e-9);
   const accepted = useMemo(
     () => buildReceivingAcceptedSummary(siblings, cartonSize),
     [siblings, cartonSize],

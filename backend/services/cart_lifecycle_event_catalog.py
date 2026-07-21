@@ -140,10 +140,35 @@ def normalize_event_code(event_code: str | None) -> str:
     return "_".join(raw.replace("-", "_").split()).lower()
 
 
+def _receiving_titles() -> dict[str, str]:
+    try:
+        from backend.services.wms_receiving_activity import RECEIVING_EVENT_TITLES_PL
+
+        return RECEIVING_EVENT_TITLES_PL
+    except Exception:
+        return {}
+
+
+def _receiving_descriptions() -> dict[str, str]:
+    try:
+        from backend.services.wms_receiving_activity import RECEIVING_EVENT_DESCRIPTIONS_PL
+
+        return RECEIVING_EVENT_DESCRIPTIONS_PL
+    except Exception:
+        return {}
+
+
 def title_pl(event_code: str) -> str:
     """Krótka nazwa zdarzenia dla UI. Nigdy nie zwraca surowego kodu angielskiego."""
     code = normalize_event_code(event_code)
-    return EVENT_TITLES_PL.get(code, UNKNOWN_EVENT_TITLE_PL)
+    if code in EVENT_TITLES_PL:
+        return EVENT_TITLES_PL[code]
+    recv = _receiving_titles()
+    # receiving catalog keys are snake_case; normalize maps to underscore lower already
+    for k, label in recv.items():
+        if normalize_event_code(k) == code:
+            return label
+    return UNKNOWN_EVENT_TITLE_PL
 
 
 def description_pl(event_code: str, *, override: str | None = None) -> str:
@@ -154,10 +179,20 @@ def description_pl(event_code: str, *, override: str | None = None) -> str:
         # Machine code passed as override → ignore
         if norm == normalize_event_code(event_code) and "_" in norm and " " not in text:
             code = normalize_event_code(event_code)
-            return EVENT_DESCRIPTIONS_PL.get(code, UNKNOWN_EVENT_DESCRIPTION_PL)[:512]
+            if code in EVENT_DESCRIPTIONS_PL:
+                return EVENT_DESCRIPTIONS_PL[code][:512]
+            for k, label in _receiving_descriptions().items():
+                if normalize_event_code(k) == code:
+                    return label[:512]
+            return UNKNOWN_EVENT_DESCRIPTION_PL[:512]
         return text[:512]
     code = normalize_event_code(event_code)
-    return EVENT_DESCRIPTIONS_PL.get(code, UNKNOWN_EVENT_DESCRIPTION_PL)[:512]
+    if code in EVENT_DESCRIPTIONS_PL:
+        return EVENT_DESCRIPTIONS_PL[code][:512]
+    for k, label in _receiving_descriptions().items():
+        if normalize_event_code(k) == code:
+            return label[:512]
+    return UNKNOWN_EVENT_DESCRIPTION_PL[:512]
 
 
 def severity_for(event_code: str, *, override: str | None = None) -> Severity:

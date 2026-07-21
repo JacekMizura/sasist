@@ -97,6 +97,20 @@ export const EVENT_DISPLAY_LABELS: Record<string, string> = {
   CLOSED: "Zamknięte",
   CANCELLED: "Anulowane",
   RECEIPT_SYNC: "Przyjęcie magazynowe",
+
+  // --- WMS receiving / PZ ---
+  PZ_DOCUMENT_CREATED: "Utworzono dokument",
+  PZ_PRODUCT_ADDED: "Dodano produkt",
+  PZ_PRODUCT_RECEIVED: "Przyjęto produkt",
+  PZ_RECEIVE_REVERTED: "Cofnięto przyjęcie",
+  PZ_DEFECT_REPORTED: "Zgłoszono wadę",
+  PZ_DOCUMENT_QTY_CHANGED: "Zmieniono ilość z dokumentu",
+  PZ_PRICE_CHANGED: "Zmieniono cenę",
+  PZ_VAT_CHANGED: "Zmieniono VAT",
+  PZ_SUPPLIER_CHANGED: "Zmieniono dostawcę",
+  PZ_PRODUCT_REMOVED: "Usunięto produkt",
+  PZ_RECEIVING_FINISHED: "Zakończono przyjęcie",
+  PZ_PUTAWAY: "Rozlokowano towar",
 };
 
 /** Normalize any stored form: cart_released | CART_RELEASED | "cart released" → CART_RELEASED */

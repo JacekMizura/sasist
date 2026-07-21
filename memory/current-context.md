@@ -2,7 +2,7 @@
 
 ## Active
 
-**Przyjęcia PZ (manual WMS)** — root-cause fix: premature `receiving_status=DONE` po pierwszej sztuce (`ordered_quantity=0`). Commit lokalny, **bez push**.
+**Ręczne PZ WMS: cena zakupu + VAT + Historia czynności** — autofill z istniejącego SSOT (`product_cost_service` / `product_vat_rate_percent`), audyt przez `activity_log` + `ReceivingScanLog`. Commit lokalny, **bez push**.
 
 ## Preferencja commitów (user)
 

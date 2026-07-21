@@ -262,6 +262,37 @@ export async function patchWmsReceivingPzItemQuantity(
   return res.data;
 }
 
+export type WmsReceivingLineCommercialBody = {
+  ordered_quantity?: number | null;
+  purchase_price_net?: number | null;
+  vat_rate?: number | null;
+};
+
+export async function patchWmsReceivingPzItemCommercial(
+  tenantId: number,
+  pzId: number,
+  itemId: number,
+  body: WmsReceivingLineCommercialBody,
+): Promise<StockDocumentRead> {
+  const res = await api.patch<StockDocumentRead>(
+    `/wms/receiving/pz/${pzId}/items/${itemId}/commercial`,
+    body,
+    { params: { tenant_id: tenantId } },
+  );
+  return res.data;
+}
+
+export async function deleteWmsReceivingPzItem(
+  tenantId: number,
+  pzId: number,
+  itemId: number,
+): Promise<StockDocumentRead> {
+  const res = await api.delete<StockDocumentRead>(`/wms/receiving/pz/${pzId}/items/${itemId}`, {
+    params: { tenant_id: tenantId },
+  });
+  return res.data;
+}
+
 export type PostReceivingPzCarriersBody =
   | { warehouse_carrier_id: number }
   | {

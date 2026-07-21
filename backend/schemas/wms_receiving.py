@@ -232,14 +232,39 @@ class WmsReceivingPzListRow(BaseModel):
     purchase_workflow_status: str = "PENDING_INVOICE"
 
 
+class WmsReceivingLineCommercialBody(BaseModel):
+    """Manual overrides for document qty / purchase net / VAT (draft PZ line snapshot)."""
+
+    ordered_quantity: Optional[float] = Field(default=None, ge=0)
+    purchase_price_net: Optional[float] = Field(default=None, ge=0)
+    vat_rate: Optional[float] = Field(default=None, ge=0)
+
+    @field_validator("ordered_quantity", "purchase_price_net", "vat_rate")
+    @classmethod
+    def finite_optional(cls, v: Optional[float]) -> Optional[float]:
+        if v is None:
+            return None
+        if not math.isfinite(float(v)):
+            raise ValueError("value must be finite")
+        return float(v)
+
+
+class WmsReceivingPzSupplierBody(BaseModel):
+    supplier_id: int = Field(..., ge=1)
+
+
 class WmsReceivingItemQuantityBody(BaseModel):
     """Add received qty to an existing lot row or create a new lot row (same delivery line group).
 
     `quantity_received` is the amount to add on this save (not the line's running total).
+    Negative delta = cofnięcie przyjęcia (append-only audit; original receive remains).
     Send `batch_number` / `expiry_date` as null when the product does not track them.
     """
 
-    quantity_received: float = Field(..., gt=0, description="Pieces to add for this batch/expiry on this save")
+    quantity_received: float = Field(
+        ...,
+        description="Pieces to add (positive) or reverse (negative) for this batch/expiry on this save",
+    )
     batch_number: Optional[str] = None
     expiry_date: Optional[date] = None
     cartons_count: int = Field(default=0, ge=0, description="Full cartons counted on this save (delta).")
@@ -249,6 +274,17 @@ class WmsReceivingItemQuantityBody(BaseModel):
         description="Jeśli ustawione — przyjęcie na nośnik (stan na lokacji przyjęcia PZ + carrier_id).",
     )
 
+    @field_validator("quantity_received")
+    @classmethod
+    def qty_nonzero_finite(cls, v: float) -> float:
+        if not math.isfinite(float(v)):
+            raise ValueError("quantity_received must be finite")
+        if abs(float(v)) <= 1e-12:
+            raise ValueError("quantity_received must be non-zero")
+        if abs(float(v)) > 1e9:
+            raise ValueError("quantity_received exceeds maximum allowed")
+        return float(v)
+
     @field_validator("warehouse_carrier_id")
     @classmethod
     def warehouse_carrier_id_ok(cls, v: Optional[int]) -> Optional[int]:
@@ -257,15 +293,6 @@ class WmsReceivingItemQuantityBody(BaseModel):
         if int(v) < 1:
             raise ValueError("warehouse_carrier_id must be >= 1")
         return int(v)
-
-    @field_validator("quantity_received")
-    @classmethod
-    def finite_qty(cls, v: float) -> float:
-        if not math.isfinite(v):
-            raise ValueError("quantity_received must be finite")
-        if v > 1e9:
-            raise ValueError("quantity_received exceeds maximum allowed")
-        return v
 
     @field_validator("cartons_count", "loose_units_count")
     @classmethod
