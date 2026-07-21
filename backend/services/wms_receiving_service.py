@@ -350,8 +350,22 @@ def is_wms_created_pz(doc: StockDocument) -> bool:
     return _creation_source_label(doc) == "WMS"
 
 
-def get_or_create_wms_supplier(db: Session, tenant_id: int, supplier_name: str, supplier_id: Optional[int] = None) -> Supplier:
-    """Match existing supplier by id or case-insensitive name; otherwise minimal row with is_incomplete."""
+def get_or_create_wms_supplier(
+    db: Session,
+    tenant_id: int,
+    supplier_name: str,
+    supplier_id: Optional[int] = None,
+    *,
+    allow_create: bool = True,
+) -> Supplier:
+    """
+    Resolve supplier for WMS ad-hoc PZ.
+
+    - ``supplier_id`` → existing row (required to exist).
+    - else exact case-insensitive name match → reuse (duplicate protection).
+    - else if ``allow_create`` → create minimal incomplete supplier.
+    - else → raise (operator must pick from list or explicitly create).
+    """
     if supplier_id is not None:
         row = (
             db.query(Supplier)
@@ -359,11 +373,11 @@ def get_or_create_wms_supplier(db: Session, tenant_id: int, supplier_name: str, 
             .first()
         )
         if not row:
-            raise ValueError("Supplier not found")
+            raise ValueError("Nie znaleziono dostawcy")
         return row
     name = (supplier_name or "").strip()
     if not name:
-        raise ValueError("supplier_name is required")
+        raise ValueError("Nazwa dostawcy jest wymagana")
     existing = (
         db.query(Supplier)
         .filter(Supplier.tenant_id == int(tenant_id), func.lower(Supplier.name) == name.lower())
@@ -372,6 +386,10 @@ def get_or_create_wms_supplier(db: Session, tenant_id: int, supplier_name: str, 
     )
     if existing:
         return existing
+    if not allow_create:
+        raise ValueError(
+            "Wybierz dostawcę z listy albo użyj opcji „Utwórz nowego dostawcę”."
+        )
     row = Supplier(tenant_id=int(tenant_id), name=name, active=True, is_incomplete=True)
     db.add(row)
     db.flush()
@@ -387,7 +405,16 @@ def create_wms_empty_pz(
     warehouse_id: int | None = None,
 ) -> StockDocumentRead:
     """Ad-hoc PZ from WMS: supplier only, no delivery lines, receiving already IN_PROGRESS."""
-    sup = get_or_create_wms_supplier(db, tenant_id, body.supplier_name, body.supplier_id)
+    # Existing id never creates. Name-only creates only with explicit create_supplier=True.
+    # Exact name match still reuses an existing row (duplicate protection).
+    allow_create = body.supplier_id is None and bool(getattr(body, "create_supplier", False))
+    sup = get_or_create_wms_supplier(
+        db,
+        tenant_id,
+        body.supplier_name,
+        body.supplier_id,
+        allow_create=allow_create,
+    )
     now = datetime.utcnow()
     wh_from_body = getattr(body, "warehouse_id", None)
     initial_wh = int(warehouse_id) if warehouse_id is not None else (

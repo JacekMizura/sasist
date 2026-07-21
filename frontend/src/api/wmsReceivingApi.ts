@@ -35,6 +35,8 @@ export type WmsReceivingPzListRow = {
 export type WmsCreateReceivingPzBody = {
   supplier_name: string;
   supplier_id?: number;
+  /** Explicit „Utwórz nowego dostawcę” — never set from typing alone. */
+  create_supplier?: boolean;
 };
 
 export async function createWmsReceivingPz(

@@ -128,10 +128,14 @@ class ReceivingPzCarriersAttachBody(BaseModel):
 
 
 class WmsCreateReceivingPzBody(BaseModel):
-    """WMS „Nowa dostawa” — pusta PZ z dostawcą (istniejącym lub nowym po nazwie)."""
+    """WMS „Nowa dostawa” — pusta PZ z dostawcą (istniejącym id lub jawne utworzenie)."""
 
     supplier_name: str = Field(..., min_length=1, max_length=256)
     supplier_id: Optional[int] = Field(default=None, ge=1)
+    create_supplier: bool = Field(
+        default=False,
+        description="True tylko po jawnej akcji „Utwórz nowego dostawcę” — bez auto-create z samego tekstu.",
+    )
     warehouse_id: Optional[int] = Field(
         default=None,
         ge=1,
