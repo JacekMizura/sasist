@@ -424,7 +424,16 @@ def compute_receiving_status_for_items(items: List[StockDocumentItem]) -> str:
 
 
 def compute_line_receiving_progress(items: List[StockDocumentItem]) -> str:
-    """WMS: group by delivery_item_id (split lot lines share one delivery line)."""
+    """WMS: group by delivery_item_id (split lot lines share one delivery line).
+
+    Open-ended / manual WMS lines (``ordered_quantity == 0``, no delivery expectation)
+    must NEVER auto-complete receiving. Only lines with a positive expected quantity
+    can become fully received when ``received >= ordered``.
+
+    Otherwise the first +1 on a hand-built PZ marks the document ``received`` /
+    ``receiving_status=DONE`` via ``recalculate_wms_document_completion`` and the
+    active receiving list (``receiving_status != DONE``) hides it — LIVE bug.
+    """
     eps = 1e-5
     if not items:
         return "pending"
@@ -437,17 +446,22 @@ def compute_line_receiving_progress(items: List[StockDocumentItem]) -> str:
         groups[key].append(i)
 
     any_received = False
-    all_fully_received = True
+    has_ordered_expectation = False
+    all_expected_fully_received = True
     for group in groups.values():
         ordered = max(float(x.ordered_quantity or 0) for x in group)
         received = sum(float(x.received_quantity or 0) for x in group)
         if received > eps:
             any_received = True
-        if ordered > eps and received + eps < ordered:
-            all_fully_received = False
+        if ordered > eps:
+            has_ordered_expectation = True
+            if received + eps < ordered:
+                all_expected_fully_received = False
     if not any_received:
         return "pending"
-    if all_fully_received:
+    if not has_ordered_expectation:
+        return "in_progress"
+    if all_expected_fully_received:
         return "received"
     return "in_progress"
 
@@ -725,6 +739,8 @@ def recalculate_wms_document_completion(db: Session, tenant_id: int, document_id
     if any_rec and rs_before in ("", "NEW", "PENDING"):
         doc.receiving_status = "IN_PROGRESS"
         changed = True
+    # Auto-DONE only when there is a real expected quantity that was fully met.
+    # Manual WMS PZ (ordered=0) stays IN_PROGRESS until explicit finish_wms_receiving.
     if full_recv and any_rec and rs_before != "DONE":
         doc.receiving_status = "DONE"
         changed = True

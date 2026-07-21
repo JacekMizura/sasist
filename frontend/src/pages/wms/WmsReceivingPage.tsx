@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useActiveWarehouseContext } from "../../hooks/useActiveWarehouseContext";
 import { ActiveWarehouseRequiredBanner } from "../../components/layout/ActiveWarehouseRequiredBanner";
-import { WmsDockPutawayBanner } from "../../components/wms/WmsPutawayProfileGate";
 import { Clock, Plus, RotateCcw, Truck, CheckCircle2, ScanLine, User } from "lucide-react";
 import PzWorkflowStatusBadges from "../../components/wms/PzWorkflowStatusBadges";
 import { WmsNewDeliveryModal } from "../../components/wms/receiving/WmsNewDeliveryModal";
@@ -97,7 +96,7 @@ function ReceivingPzCard({ row, tenantId }: { row: WmsReceivingPzListRow; tenant
 
       <div className="pt-4 border-t border-slate-100 mt-2 flex justify-between items-end">
         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-          {isReturn ? 'Zwrócono' : 'Przeliczono'}
+          {isReturn ? 'Zwrócono' : 'Przyjęto'}
         </span>
         <div className="flex items-baseline gap-1">
           <span className="text-xl font-black text-slate-900 tracking-tight leading-none">{fmtQty(row.total_received)}</span>
@@ -196,9 +195,7 @@ export default function WmsReceivingPage() {
 
         {!hasActiveWarehouse ? (
           <ActiveWarehouseRequiredBanner className="mb-6" hint="Nowe PZ i lista przyjęć dotyczą aktywnego magazynu." />
-        ) : (
-          <WmsDockPutawayBanner />
-        )}
+        ) : null}
 
         {err && (
           <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 p-5 text-sm font-bold text-red-800 shadow-sm w-full">

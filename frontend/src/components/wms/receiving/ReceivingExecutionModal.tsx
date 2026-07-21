@@ -412,6 +412,9 @@ export function ReceivingExecutionModal({
             
             {!needsSerial && (
               <>
+                <span className="text-[10px] font-black text-slate-400 block uppercase tracking-widest mb-4">
+                  Przyjmujesz teraz
+                </span>
                 <div className="flex bg-slate-50/80 p-1.5 rounded-2xl w-full max-w-[440px] mb-8 border border-slate-100 shadow-inner">
                   <button
                     type="button"
@@ -493,6 +496,17 @@ export function ReceivingExecutionModal({
                 1 kart. = {pack} szt. <span className="text-slate-400 mx-2">·</span> Łącznie {parsedQty * pack} szt.
               </p>
             )}
+
+            {!needsSerial && parsedQty > 0 ? (
+              <p className="mt-5 text-center text-sm font-semibold text-slate-600">
+                Po zatwierdzeniu:{" "}
+                <span className="font-black text-slate-900">
+                  {accepted.totalAllReceived +
+                    (qtyMode === "cartons" && cartonsConfigured ? parsedQty * pack : parsedQty)}{" "}
+                  szt.
+                </span>
+              </p>
+            ) : null}
 
             <div className="mt-8 text-center">
               <span className="text-[10px] sm:text-[11px] font-black text-slate-400 tracking-widest uppercase">

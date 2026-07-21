@@ -63,9 +63,9 @@ export function warehouseWorkflowStatusLabelPl(status: string | undefined): stri
     case "NEW":
       return "Nowe";
     case "COUNTING":
-      return "Liczenie";
+      return "W trakcie przyjęcia";
     case "COUNTED":
-      return "Policzone";
+      return "Oczekuje na rozlokowanie";
     case "PUTAWAY_IN_PROGRESS":
       return "Rozlokowanie";
     case "PUTAWAY_COMPLETED":

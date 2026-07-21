@@ -2,8 +2,8 @@
 
 ## Active
 
-**LIVE: NO_PENDING_SOURCE_LOCATION after source_lock** — FE `activeLocationId` ≠ server lock; controlled re-accept. Commit local; **do not push**.
+**Przyjęcia PZ (manual WMS)** — root-cause fix: premature `receiving_status=DONE` po pierwszej sztuce (`ordered_quantity=0`). Commit lokalny, **bez push**.
 
-## Exact root cause
+## Preferencja commitów (user)
 
-After PUT clears `source_lock`, `nextActiveLocationIdAfterDetail` keeps UI location 276. Basket gated on `activeLocationId`, not server accept → 409. Fix: `ensureServerSourceForBasket` awaits accept/re-accept before confirm.
+Komunikaty commitów po polsku, krótkie, opisujące co zrobiono.

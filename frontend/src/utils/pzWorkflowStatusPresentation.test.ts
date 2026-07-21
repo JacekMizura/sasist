@@ -31,7 +31,8 @@ describe("resolveWarehouseWorkflowStatus", () => {
 
 describe("status labels PL", () => {
   it("warehouse labels", () => {
-    expect(warehouseWorkflowStatusLabelPl("COUNTING")).toBe("Liczenie");
+    expect(warehouseWorkflowStatusLabelPl("COUNTING")).toBe("W trakcie przyjęcia");
+    expect(warehouseWorkflowStatusLabelPl("COUNTED")).toBe("Oczekuje na rozlokowanie");
     expect(warehouseWorkflowStatusLabelPl("PUTAWAY_COMPLETED")).toBe("Rozlokowane");
   });
 

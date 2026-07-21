@@ -14,8 +14,8 @@ function normalizeReceivingStatusKey(status: string | undefined): string {
 export function pzReceivingStatusLabelPl(status: string | undefined): string {
   const s = normalizeReceivingStatusKey(status);
   if (s === "pending" || s === "new") return "Nowe";
-  if (s === "in_progress") return "W trakcie";
-  if (s === "received" || s === "completed" || s === "done") return "Zakończone";
+  if (s === "in_progress") return "W trakcie przyjęcia";
+  if (s === "received" || s === "completed" || s === "done") return "Przyjęcie zakończone";
   return (status || "").trim() || "—";
 }
 

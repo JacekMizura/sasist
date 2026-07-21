@@ -156,7 +156,7 @@ export function ReceivingLineCard({
         <WmsCardKebabMenu items={menuItems} disabled={busy} />
       </div>
 
-      {/* 2. MIDDLE (Główna treść): Zdjęcie, Tytuł, EAN, Rozbicie -> Wypycha stopkę w dół dzięki flex-grow */}
+      {/* 2. MIDDLE: zdjęcie, tytuł, EAN, sposób przyjęcia */}
       <div className="p-4 pt-9 flex-grow flex flex-col">
         {/* Kontener: Zdjęcie + Tytuł */}
         <div className="flex gap-3 mb-4 items-start">
@@ -207,15 +207,19 @@ export function ReceivingLineCard({
           </div>
         </div>
 
-        {/* Sekcja rozbicia nośników - umieszczona w połowie drogi do stopki */}
+        {/* Sposób przyjęcia — tylko gdy więcej niż same sztuki (kartony / nośniki / wada) */}
         <div className="mt-auto mb-2" data-wms-card-no-nav="">
-          {accepted.displayRows.length > 0 ? (
+          {accepted.displayRows.length > 0 &&
+          !(accepted.displayRows.length === 1 && accepted.displayRows[0]?.key === "loose") ? (
             <>
-              <div className="text-[10px] font-medium text-slate-400 mb-1.5 uppercase tracking-wider">Rozbicie</div>
+              <div className="text-[10px] font-medium text-slate-400 mb-1.5 uppercase tracking-wider">
+                Sposób przyjęcia
+              </div>
               <ul className="space-y-1">
                 {accepted.displayRows.map((row) => {
-                  // Prosta heurystyka, by ładnie sformatować dane (Zakładając format typu "Luzem - 5 szt." lub podobny)
-                  const parts = row.display.split(" - ");
+                  const parts = row.display.includes(" — ")
+                    ? row.display.split(" — ")
+                    : row.display.split(" - ");
                   if (parts.length === 2) {
                     return (
                       <li key={row.key} className="flex items-center text-xs">
@@ -225,7 +229,6 @@ export function ReceivingLineCard({
                       </li>
                     );
                   }
-                  // Fallback dla innych tekstów
                   return (
                     <li key={row.key} className="text-xs font-medium text-slate-700">
                       {row.display}

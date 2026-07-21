@@ -1,3 +1,10 @@
+## 2026-07-21 — Przyjęcia PZ: nie zamykaj ręcznego PZ po 1 szt.
+
+- ROOT 400 + zniknięcie z listy: `compute_line_receiving_progress` traktował `ordered=0` + received>0 jako `received` → `recalculate` → `DONE` → lista `receiving_status != DONE` + PATCH `_assert_receiving_session_open`.
+- FIX: open-ended / manual lines → zawsze `in_progress` do jawnego „Zakończ przyjęcie”; ensure auto+1 też pisze DOCK-IN.
+- UI: usunięty banner DOCK-IN z listy Przyjęć; „Rozbicie”→„Sposób przyjęcia”/ukryte przy samych sztukach; Przyjmujesz teraz / Po zatwierdzeniu; statusy PL.
+- Tests: `test_manual_pz_receiving_lifecycle.py`. **No push.**
+
 ## 2026-07-21 — LIVE NO_PENDING_SOURCE_LOCATION: UI location vs source_lock
 
 - ROOT: FE treated `activeLocationId=276` as ready-for-basket; after PUT lock cleared, preserve kept UI id without server re-accept.

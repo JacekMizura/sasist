@@ -587,6 +587,53 @@ def ensure_wms_pz_product_anchor_line(
                     loose_units_added=int(rec),
                 )
 
+    # Keep DOCK-IN / receipt ops aligned with received_quantity (same SSOT as PATCH).
+    if auto_received and performed_by is not None and auto_qty > 0:
+        ensure_pz_document_warehouse_resolved(db, doc)
+        ensure_default_pz_receiving_location_if_missing(db, doc)
+        hit = (
+            db.query(StockDocumentItem)
+            .filter(StockDocumentItem.id == int(line_id), StockDocumentItem.document_id == int(pz_id))
+            .first()
+        )
+        if hit is not None:
+            append_receipt_operation(
+                db,
+                doc,
+                hit,
+                float(auto_qty),
+                performed_by=performed_by,
+                skip_inventory_movement=True,
+            )
+            wh_id = int(getattr(doc, "warehouse_id", 0) or 0)
+            if hit.product_id is not None and wh_id > 0:
+                dt_up = (getattr(doc, "document_type", None) or "PZ").strip().upper()
+                record_warehouse_product_operation(
+                    db,
+                    tenant_id=int(tenant_id),
+                    warehouse_id=wh_id,
+                    product_id=int(hit.product_id),
+                    movement_type="RECEIVING",
+                    source_location_id=None,
+                    target_location_id=getattr(doc, "location_id", None),
+                    quantity=float(auto_qty),
+                    performed_by=performed_by,
+                    reference_document=f"{dt_up}-{int(doc.id)}",
+                    stock_document_id=int(doc.id),
+                    packaging_type="UNIT",
+                    packaging_quantity=float(auto_qty),
+                    wms_mode=None,
+                )
+                _apply_dock_inventory_for_receipt(
+                    db,
+                    tenant_id=int(tenant_id),
+                    doc=doc,
+                    line=hit,
+                    add_qty=float(auto_qty),
+                    warehouse_carrier_id=None,
+                    performed_by=performed_by,
+                )
+
     bump_receiving_in_progress_if_new(doc)
     all_rows = (
         db.query(StockDocumentItem)
