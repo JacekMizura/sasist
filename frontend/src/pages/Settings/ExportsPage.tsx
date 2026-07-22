@@ -38,6 +38,10 @@ export default function ExportsPage() {
     <PageLayout>
         <PageHeader
           title="Eksport"
+          breadcrumbs={[
+            { label: "Ustawienia", to: "/settings/company" },
+            { label: "Eksport" },
+          ]}
           actions={
             <Link
               to="/settings/exports/new"

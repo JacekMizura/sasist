@@ -26,6 +26,8 @@ import {
   Users,
   Key,
   Building2,
+  Plug,
+  Download,
 } from "lucide-react";
 
 import { UI_STRINGS } from "../constants/uiStrings";
@@ -330,9 +332,21 @@ export function buildNavFlyoutCategories(): NavCategoryConfig[] {
             permissionsAny: ["settings.users"],
           },
           {
-            path: "/settings/integrations/api-keys",
+            path: "/settings/integrations",
             label: "Integracje",
+            Icon: Plug,
+            permissionsAny: ["settings.users"],
+          },
+          {
+            path: "/settings/api-keys",
+            label: "Klucze API",
             Icon: Key,
+            permissionsAny: ["settings.users"],
+          },
+          {
+            path: "/settings/exports",
+            label: "Eksport",
+            Icon: Download,
             permissionsAny: ["settings.users"],
           },
           {

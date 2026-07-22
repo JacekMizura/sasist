@@ -235,10 +235,13 @@ export default function ApiKeysSettingsPage() {
         title="Klucze API"
         description="Klucze do agentów drukowania, integracji, webhooków i przyszłego Public API Sasist."
         icon={Key}
+        breadcrumbs={[
+          { label: "Ustawienia", to: "/settings/company" },
+          { label: "Klucze API" },
+        ]}
       />
 
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-slate-600">Ustawienia → Integracje → Klucze API</p>
+      <div className="mb-4 flex flex-wrap items-center justify-end gap-3">
         <button
           type="button"
           className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"

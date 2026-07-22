@@ -119,8 +119,19 @@ export function isNavPathActive(pathname: string, path: string): boolean {
   if (path === "/settings/printers") {
     return pathname === "/settings/printers" || pathname.startsWith("/settings/printers/");
   }
-  if (path === "/settings/integrations/api-keys") {
-    return pathname === path || pathname.startsWith("/settings/integrations/");
+  if (path === "/settings/api-keys") {
+    return (
+      pathname === "/settings/api-keys" ||
+      pathname.startsWith("/settings/api-keys/") ||
+      pathname === "/settings/integrations/api-keys"
+    );
+  }
+  if (path === "/settings/integrations") {
+    // Hub only — do not highlight when on Klucze API (even legacy URL).
+    if (pathname === "/settings/integrations/api-keys" || pathname.startsWith("/settings/api-keys")) {
+      return false;
+    }
+    return pathname === "/settings/integrations" || pathname.startsWith("/settings/integrations/");
   }
   if (path === "/settings/exports") {
     return pathname === "/settings/exports" || pathname.startsWith("/settings/exports/");
