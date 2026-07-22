@@ -10,6 +10,7 @@ from ...models.commerce_operational import DirectSaleSession, DirectSaleSessionL
 from ...models.location import Location
 from ...models.product import Product
 from ..location_stock_service import build_location_stock
+from ..product_sales_offers.stock_service import offer_available_qty
 
 
 def _margin_percent(sale: float | None, purchase: float | None) -> float | None:
@@ -20,6 +21,55 @@ def _margin_percent(sale: float | None, purchase: float | None) -> float | None:
     if s <= 0 or p < 0:
         return None
     return round((s - p) / s * 100.0, 1)
+
+
+def _line_available_qty(
+    db: Session,
+    sess: DirectSaleSession,
+    ln: DirectSaleSessionLine,
+    *,
+    offer_cache: dict[int, float],
+    location_cache: dict[int, float],
+) -> float:
+    """
+    Cart „Dostępne” must match add/scan validation SSOT.
+
+    Prefer ``offer_available_qty`` (commercial + disposition); fallback to pick-eligible
+    location stock when the line has no offer id.
+    """
+    oid = getattr(ln, "product_sales_offer_id", None)
+    if oid is not None and int(oid) > 0:
+        key = int(oid)
+        if key not in offer_cache:
+            try:
+                offer_cache[key] = float(
+                    offer_available_qty(
+                        db,
+                        offer=key,
+                        tenant_id=int(sess.tenant_id),
+                        warehouse_id=int(sess.warehouse_id),
+                    )
+                )
+            except Exception:
+                offer_cache[key] = 0.0
+        return offer_cache[key]
+
+    pid = int(ln.product_id)
+    if pid not in location_cache:
+        try:
+            snap = build_location_stock(
+                db,
+                tenant_id=int(sess.tenant_id),
+                warehouse_id=int(sess.warehouse_id),
+                product_id=pid,
+                available_only=False,
+                pick_eligible_only=True,
+            )
+            summary = snap.get("summary") if isinstance(snap.get("summary"), dict) else {}
+            location_cache[pid] = float(summary.get("available") or snap.get("total_available") or 0)
+        except Exception:
+            location_cache[pid] = 0.0
+    return location_cache[pid]
 
 
 def enrich_session_lines(db: Session, sess: DirectSaleSession) -> list[dict]:
@@ -44,25 +94,16 @@ def enrich_session_lines(db: Session, sess: DirectSaleSession) -> list[dict]:
         for loc in db.query(Location).filter(Location.id.in_(loc_ids)).all()
     } if loc_ids else {}
 
-    stock_cache: dict[int, float] = {}
+    offer_cache: dict[int, float] = {}
+    location_cache: dict[int, float] = {}
     out: list[dict] = []
     for ln in lines:
         pid = int(ln.product_id)
         pr = products.get(pid)
         src = locations.get(int(ln.source_location_id)) if ln.source_location_id else None
-        if pid not in stock_cache:
-            try:
-                snap = build_location_stock(
-                    db,
-                    tenant_id=int(sess.tenant_id),
-                    warehouse_id=int(sess.warehouse_id),
-                    product_id=pid,
-                    available_only=False,
-                )
-                summary = snap.get("summary") if isinstance(snap.get("summary"), dict) else {}
-                stock_cache[pid] = float(summary.get("available") or snap.get("total_available") or 0)
-            except Exception:
-                stock_cache[pid] = 0.0
+        available = _line_available_qty(
+            db, sess, ln, offer_cache=offer_cache, location_cache=location_cache
+        )
         has_hold = bool(ln.stock_reservation_id)
         if not has_hold and ln.metadata_json:
             try:
@@ -85,7 +126,7 @@ def enrich_session_lines(db: Session, sess: DirectSaleSession) -> list[dict]:
                 "operational_zone_type": (
                     str(getattr(src, "operational_zone_type", None) or "") or None if src else None
                 ),
-                "available_qty_hint": stock_cache.get(pid, 0.0),
+                "available_qty_hint": available,
                 "has_reservation": has_hold,
             }
         )
