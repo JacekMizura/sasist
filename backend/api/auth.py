@@ -603,6 +603,11 @@ def create_user(
                 status_code=400,
                 detail="Domyślny magazyn musi być wśród przypisanych magazynów.",
             ) from e
+        if msg == "BARCODE_LOGIN_CODE_EXISTS":
+            raise HTTPException(
+                status_code=400,
+                detail="Kod logowania jest już używany przez innego użytkownika.",
+            ) from e
         raise HTTPException(status_code=400, detail=msg) from e
     except HTTPException:
         raise
@@ -664,6 +669,11 @@ def update_user(
             raise HTTPException(
                 status_code=400,
                 detail="Domyślny magazyn musi być wśród przypisanych magazynów.",
+            ) from e
+        if msg == "BARCODE_LOGIN_CODE_EXISTS":
+            raise HTTPException(
+                status_code=400,
+                detail="Kod logowania jest już używany przez innego użytkownika.",
             ) from e
         raise HTTPException(status_code=400, detail=msg) from e
     except IntegrityError as e:

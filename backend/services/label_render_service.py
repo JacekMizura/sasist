@@ -70,7 +70,7 @@ def _resolve(record: dict[str, Any], key: str) -> str:
 
 
 def _get_barcode_value(record: dict[str, Any], data_binding: str) -> str:
-    """Resolve barcode data; try binding first, then fallback: barcode_data, location_barcode, cart_barcode, basket_barcode."""
+    """Resolve barcode data; try binding first, then fallback keys including barcode_login_code."""
     data_binding = str(data_binding or "").strip() or "barcode_data"
     v = _resolve(record, data_binding)
     if v:
@@ -79,11 +79,20 @@ def _get_barcode_value(record: dict[str, Any], data_binding: str) -> str:
         v = _resolve(record, data_binding[1:-1].strip())
         if v:
             return v
-    for key in ("barcode_data", "location_barcode", "cart_barcode", "basket_barcode"):
+    for key in (
+        "barcode_data",
+        "location_barcode",
+        "loc_barcode",
+        "cart_barcode",
+        "basket_barcode",
+        "barcode_login_code",
+        "{barcode_login_code}",
+        "location_code",
+    ):
         v = _resolve(record, key)
         if v:
             return v
-    return _resolve(record, "location_code") or ""
+    return ""
 
 
 def _get_text_value(record: dict[str, Any], binding: str) -> str:

@@ -1,27 +1,26 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, useNavigate, useParams, useLocation, useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
-import { 
-  UserPlus, 
-  ShieldCheck, 
-  ArrowLeft, 
-  Mail, 
-  Phone, 
-  Lock, 
-  AlertCircle,
+import {
+  Activity,
+  ArrowLeft,
+  Briefcase,
+  Package,
+  Shield,
   ShieldAlert,
   Save,
   Trash2,
-  Settings2,
-  Fingerprint,
+  Mail,
+  Phone,
+  Lock,
+  AlertCircle,
   History,
-  Briefcase,
-  Layers
 } from "lucide-react";
 
 import PermissionTreePanel from "../../components/admin/PermissionTreePanel";
 import AvatarUploadField from "../../components/admin/AvatarUploadField";
 import { builtinPresetLabel } from "../../components/admin/permissionPresetLabels";
+import LoginCodeLabelControls from "./administrators/LoginCodeLabelControls";
 import {
   createCustomPermissionPreset,
   createUser,
@@ -60,7 +59,7 @@ import {
 } from "../../utils/workforceUiLabels";
 import { computeOperationalEmployerCosts, OPERATIONAL_COST_DISCLAIMER_PL } from "../../utils/operationalEmployerCosts";
 
-type TabId = "permissions" | "wms" | "panel_statuses" | "activity" | "workforce" | "presets";
+type TabId = "permissions" | "wms" | "panel_statuses" | "activity" | "workforce";
 
 // --- HELPERS ---
 function rosterName(u: AppUserListItem): string {
@@ -82,8 +81,9 @@ function roleLabel(role: string) {
 function parseTab(s: string | null): TabId {
   if (s === "warehouses" || s === "wms") return "wms";
   if (s === "panel_statuses" || s === "statuses" || s === "statusy" || s === "panel-statuses") return "panel_statuses";
-  if (s === "workforce" || s === "org") return "workforce";
-  if (s === "permissions" || s === "activity" || s === "presets") return s;
+  if (s === "workforce" || s === "org" || s === "praca") return "workforce";
+  if (s === "permissions" || s === "presets") return "permissions";
+  if (s === "activity") return "activity";
   return "permissions";
 }
 
@@ -99,11 +99,10 @@ function employmentToContractType(employmentLabel: string): string {
   return "uop";
 }
 
-// --- STYLES ---
-const cardCls = "rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-500";
-const sidebarInputCls = "block w-full rounded-xl border-slate-200 bg-slate-50/50 px-4 py-2.5 text-sm transition-all focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10";
-const labelCls = "block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 ml-1";
-const tabBtnCls = "px-4 py-2 text-sm font-semibold transition-all rounded-lg whitespace-nowrap flex items-center gap-2";
+const cardCls = "rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden";
+const sidebarInputCls =
+  "block w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 transition focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-300";
+const labelCls = "block text-xs font-medium text-slate-500 mb-1";
 
 export default function AdministratorEditPage() {
   const params = useParams<{ id?: string }>();
@@ -143,6 +142,7 @@ export default function AdministratorEditPage() {
   const [permSearch, setPermSearch] = useState("");
 
   const [barcodeLoginCode, setBarcodeLoginCode] = useState("");
+  const [loginCodeTemplateId, setLoginCodeTemplateId] = useState<number | "">("");
   const [wmsLanguage, setWmsLanguage] = useState("pl");
   const [timezone, setTimezone] = useState("Europe/Warsaw");
   const [requireScan, setRequireScan] = useState(false);
@@ -189,7 +189,7 @@ export default function AdministratorEditPage() {
     return JSON.stringify({
       login, email, password, firstName, lastName, phone, avatarUrl,
       role, isActive, language, permissions,
-      barcodeLoginCode, wmsLanguage, timezone, requireScan, canEditPreview,
+      barcodeLoginCode, loginCodeTemplateId, wmsLanguage, timezone, requireScan, canEditPreview,
       pickerColor, warehouseIds, defaultWarehouseId,
       primaryWorkforceGroupId, wmsOperationalModes, supervisorUserId,
       employmentType, shiftType, jobPosition,
@@ -198,7 +198,7 @@ export default function AdministratorEditPage() {
     });
   }, [
     login, email, password, firstName, lastName, phone, avatarUrl, role, isActive, language, permissions,
-    barcodeLoginCode, wmsLanguage, timezone, requireScan, canEditPreview, pickerColor, warehouseIds, defaultWarehouseId,
+    barcodeLoginCode, loginCodeTemplateId, wmsLanguage, timezone, requireScan, canEditPreview, pickerColor, warehouseIds, defaultWarehouseId,
     primaryWorkforceGroupId, wmsOperationalModes, supervisorUserId, employmentType, shiftType, jobPosition,
     warehouseZonesText, workforceColorTag, costNet, costGross, costEmployerTotal, costHoursMonth, costPpk, costNotes,
     costEmployerRateOverride,
@@ -246,6 +246,7 @@ export default function AdministratorEditPage() {
     if (u.wms_profile) {
       const wp = u.wms_profile;
       setBarcodeLoginCode(wp.barcode_login_code ?? "");
+      setLoginCodeTemplateId(wp.login_code_label_template_id ?? "");
       setWmsLanguage(wp.language ?? "pl");
       setTimezone(wp.timezone ?? "Europe/Warsaw");
       setRequireScan(wp.require_scan_every_product ?? false);
@@ -288,6 +289,7 @@ export default function AdministratorEditPage() {
       .filter((n) => Number.isFinite(n));
     return {
       barcode_login_code: barcodeLoginCode.trim() || null,
+      login_code_label_template_id: loginCodeTemplateId === "" ? null : Number(loginCodeTemplateId),
       language: wmsLanguage || "pl",
       timezone: timezone || "Europe/Warsaw",
       default_warehouse_id: defaultWarehouseId === "" ? null : Number(defaultWarehouseId),
@@ -305,6 +307,7 @@ export default function AdministratorEditPage() {
     };
   }, [
     barcodeLoginCode,
+    loginCodeTemplateId,
     wmsLanguage,
     timezone,
     defaultWarehouseId,
@@ -411,7 +414,7 @@ export default function AdministratorEditPage() {
   }, [tab, isNew, numericId, canManageUsers]);
 
   useEffect(() => {
-    if (tab !== "presets" || !canManageUsers) return;
+    if (tab !== "permissions" || !canManageUsers) return;
     let cancelled = false;
     setPresetsLoading(true);
     void fetchCustomPermissionPresets()
@@ -497,72 +500,41 @@ export default function AdministratorEditPage() {
       }
 
       const base = identityPayload();
-      let toastLabel = "Zapisano zmiany.";
-
-      if (tab === "permissions" || tab === "presets") {
-        await updateUser(numericId, {
-          ...base,
-          permissions: isSuperRole(role) ? [] : [...permissions],
-        });
-        toastLabel = "Uprawnienia zapisane.";
-      } else if (tab === "wms") {
-        await updateUser(numericId, {
-          ...base,
-          wms_profile: buildWmsPayload(),
-        });
-        toastLabel = "Ustawienia WMS zapisane.";
-      } else if (tab === "workforce") {
-        await updateUser(numericId, {
-          ...base,
-          primary_workforce_group_id: primaryWorkforceGroupId === "" ? null : Number(primaryWorkforceGroupId),
-          wms_profile: {
-            workforce_employment_type: employmentType.trim() || null,
-            workforce_shift_type: shiftType.trim() || null,
-            workforce_default_workstation: jobPosition.trim() || null,
-            workforce_color_tag: workforceColorTag.trim() || null,
-          },
-        });
-        if (canManageUsers) {
-          try {
-            await putEmployeeCostProfile(numericId, {
-              contract_type: employmentToContractType(employmentType),
-              net_monthly_pln: costNet.trim() === "" ? null : Number(costNet),
-              gross_monthly_pln: costGross.trim() === "" ? null : Number(costGross),
-              employer_total_monthly_pln: costEmployerTotal.trim() === "" ? null : Number(costEmployerTotal),
-              default_hours_per_month: costHoursMonth.trim() === "" ? 168 : Number(costHoursMonth),
-              ppk_enabled: costPpk,
-              employer_side_rate_override: costEmployerRateOverride.trim() === "" ? null : Number(costEmployerRateOverride),
-              notes: costNotes.trim() || null,
-              is_active: true,
-            });
-          } catch (costErr: unknown) {
-            console.error("[AdministratorEdit] putEmployeeCostProfile", costErr);
-            toast.error(extractApiErrorMessage(costErr, "Profil kosztu nie został zapisany."));
-          }
+      await updateUser(numericId, {
+        ...base,
+        permissions: isSuperRole(role) ? [] : [...permissions],
+        wms_profile: buildWmsPayload(),
+        primary_workforce_group_id: primaryWorkforceGroupId === "" ? null : Number(primaryWorkforceGroupId),
+      });
+      if (canManageUsers) {
+        try {
+          await putEmployeeCostProfile(numericId, {
+            contract_type: employmentToContractType(employmentType),
+            net_monthly_pln: costNet.trim() === "" ? null : Number(costNet),
+            gross_monthly_pln: costGross.trim() === "" ? null : Number(costGross),
+            employer_total_monthly_pln: costEmployerTotal.trim() === "" ? null : Number(costEmployerTotal),
+            default_hours_per_month: costHoursMonth.trim() === "" ? 168 : Number(costHoursMonth),
+            ppk_enabled: costPpk,
+            employer_side_rate_override: costEmployerRateOverride.trim() === "" ? null : Number(costEmployerRateOverride),
+            notes: costNotes.trim() || null,
+            is_active: true,
+          });
+        } catch (costErr: unknown) {
+          console.error("[AdministratorEdit] putEmployeeCostProfile", costErr);
+          toast.error(extractApiErrorMessage(costErr, "Profil kosztu nie został zapisany."));
         }
-        toastLabel = "Ustawienia pracy zapisane.";
-      } else if (tab === "panel_statuses") {
-        toast.success("Statusy zapisuj osobnym przyciskiem „Zapisz” w macierzy poniżej.");
-        setSaving(false);
-        return;
-      } else {
-        await updateUser(numericId, {
-          ...base,
-          permissions: isSuperRole(role) ? [] : [...permissions],
-          wms_profile: buildWmsPayload(),
-          primary_workforce_group_id: primaryWorkforceGroupId === "" ? null : Number(primaryWorkforceGroupId),
-        });
       }
 
       const refreshed = await fetchUser(numericId);
       applyUserToForm(refreshed);
-      snapshotRef.current = buildSnapshot();
-      if (tab === "wms" || tab === "identity") {
-        if (user?.id === numericId) {
-          await refreshWarehouses();
-        }
+      setPassword("");
+      setTimeout(() => {
+        snapshotRef.current = buildSnapshotRef.current();
+      }, 0);
+      if (user?.id === numericId) {
+        await refreshWarehouses();
       }
-      toast.success(toastLabel);
+      toast.success("Zapisano zmiany.");
     } catch (err: unknown) {
       console.error("[AdministratorEdit] onSave", err);
       toast.error(extractApiErrorMessage(err, "Błąd zapisu."));
@@ -572,8 +544,36 @@ export default function AdministratorEditPage() {
   };
 
   const onCancelEdit = useCallback(() => {
-    if (!isDirty || window.confirm("Porzucić zmiany?")) navigate("/settings/administrators");
-  }, [isDirty, navigate]);
+    if (!isDirty) return;
+    if (!window.confirm("Porzucić niezapisane zmiany i przywrócić ostatni zapisany stan?")) return;
+    void (async () => {
+      if (isNew) {
+        navigate("/settings/administrators");
+        return;
+      }
+      try {
+        const u = await fetchUser(numericId);
+        applyUserToForm(u);
+        setPassword("");
+        setAvatarFile(null);
+        setTimeout(() => {
+          snapshotRef.current = buildSnapshotRef.current();
+        }, 0);
+      } catch {
+        toast.error("Nie udało się przywrócić stanu.");
+      }
+    })();
+  }, [isDirty, isNew, numericId, navigate, applyUserToForm]);
+
+  useEffect(() => {
+    if (!isDirty) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [isDirty]);
 
   if (!authLoading && !user) return <Navigate to="/login" replace />;
 
@@ -608,55 +608,59 @@ export default function AdministratorEditPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-[440px_1fr]">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[320px_1fr] xl:grid-cols-[360px_1fr]">
           
           {/* SIDEBAR */}
-          <aside className="space-y-8">
+          <aside className="space-y-4">
             <div className={cardCls}>
-              <div className="h-28 bg-gradient-to-br from-indigo-500/10 to-indigo-600/5" />
-              <div className="px-8 pb-8">
-                <div className="-mt-14 mb-6">
-                   <AvatarUploadField
-                      initials={initialsFromForm(login, firstName, lastName)}
-                      storedUrl={avatarUrl || undefined}
-                      pendingFile={avatarFile}
-                      onPickFile={setAvatarFile}
-                      onClearStored={() => setAvatarUrl("")}
-                      disabled={loading}
-                      className="ring-8 ring-white shadow-xl"
-                    />
-                </div>
-                
-                <div className="space-y-6">
-                  <div className="flex items-center justify-between">
-                    <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-wider ${isActive ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
-                      {isActive ? "Aktywny" : "Nieaktywny"}
-                      {activeLocked ? " · zablokowane" : ""}
-                    </span>
-                    <span className="rounded-full bg-indigo-50 px-3 py-1 text-[11px] font-black uppercase tracking-wider text-indigo-700 ring-1 ring-indigo-200">
-                      {roleLabel(role)}
-                      {roleLocked ? " · zablokowane" : ""}
-                    </span>
-                  </div>
+              <div className="space-y-4 p-5">
+                <AvatarUploadField
+                  initials={initialsFromForm(login, firstName, lastName)}
+                  storedUrl={avatarUrl || undefined}
+                  pendingFile={avatarFile}
+                  onPickFile={setAvatarFile}
+                  onClearStored={() => setAvatarUrl("")}
+                  disabled={loading}
+                />
 
-                  <div className="space-y-4 pt-2">
-                    <div>
-                      <label className={labelCls}>Login</label>
-                      <input className={sidebarInputCls} value={login} onChange={(e) => setLogin(e.target.value)} readOnly={!isNew} />
+                <div className="flex flex-wrap gap-2">
+                  <span
+                    className={`inline-flex items-center rounded-md px-2.5 py-1 text-xs font-semibold ${
+                      isActive ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600"
+                    }`}
+                  >
+                    {isActive ? "Aktywny" : "Nieaktywny"}
+                  </span>
+                  <span className="inline-flex items-center rounded-md bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
+                    {roleLabel(role)}
+                    {roleLocked ? " · zablokowane" : ""}
+                  </span>
+                </div>
+
+                <div className="space-y-3">
+                  <div>
+                    <label className={labelCls}>Login</label>
+                    <input className={sidebarInputCls} value={login} onChange={(e) => setLogin(e.target.value)} readOnly={!isNew} />
+                  </div>
+                  <div>
+                    <label className={labelCls}>E-mail</label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+                      <input className={`${sidebarInputCls} pl-9`} value={email} onChange={(e) => setEmail(e.target.value)} />
                     </div>
-                    <div>
-                      <label className={labelCls}>E-mail</label>
-                      <div className="relative">
-                        <Mail className="absolute left-4 top-3 h-4 w-4 text-slate-400" />
-                        <input className={`${sidebarInputCls} pl-11`} value={email} onChange={(e) => setEmail(e.target.value)} />
-                      </div>
-                    </div>
-                    <div>
-                      <label className={labelCls}>{isNew ? "Hasło" : "Nowe hasło"}</label>
-                      <div className="relative">
-                        <Lock className="absolute left-4 top-3 h-4 w-4 text-slate-400" />
-                        <input type="password" className={`${sidebarInputCls} pl-11`} value={password} onChange={(e) => setPassword(e.target.value)} />
-                      </div>
+                  </div>
+                  <div>
+                    <label className={labelCls}>{isNew ? "Hasło" : "Nowe hasło"}</label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+                      <input
+                        type="password"
+                        className={`${sidebarInputCls} pl-9`}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder={isNew ? "Min. 6 znaków" : "Pozostaw puste, aby nie zmieniać"}
+                        autoComplete="new-password"
+                      />
                     </div>
                   </div>
                 </div>
@@ -664,61 +668,66 @@ export default function AdministratorEditPage() {
             </div>
 
             <div className={cardCls}>
-               <div className="border-b border-slate-100 bg-slate-50 px-8 py-4">
-                  <h3 className="text-xs font-black uppercase tracking-widest text-slate-500">Profil</h3>
-               </div>
-               <div className="p-8 space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className={labelCls}>Imię</label>
-                      <input className={sidebarInputCls} value={firstName} onChange={(e) => setFirstName(e.target.value)} />
-                    </div>
-                    <div>
-                      <label className={labelCls}>Nazwisko</label>
-                      <input className={sidebarInputCls} value={lastName} onChange={(e) => setLastName(e.target.value)} />
-                    </div>
+              <div className="border-b border-slate-100 px-5 py-3">
+                <h3 className="text-sm font-semibold text-slate-900">Profil użytkownika</h3>
+              </div>
+              <div className="space-y-3 p-5">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className={labelCls}>Imię</label>
+                    <input className={sidebarInputCls} value={firstName} onChange={(e) => setFirstName(e.target.value)} />
                   </div>
                   <div>
-                    <label className={labelCls}>Telefon</label>
-                    <div className="relative">
-                      <Phone className="absolute left-4 top-3 h-4 w-4 text-slate-400" />
-                      <input className={`${sidebarInputCls} pl-11`} value={phone} onChange={(e) => setPhone(e.target.value)} />
-                    </div>
+                    <label className={labelCls}>Nazwisko</label>
+                    <input className={sidebarInputCls} value={lastName} onChange={(e) => setLastName(e.target.value)} />
                   </div>
-               </div>
+                </div>
+                <div>
+                  <label className={labelCls}>Telefon</label>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-3 h-4 w-4 text-rose-400" />
+                    <input className={`${sidebarInputCls} pl-9`} value={phone} onChange={(e) => setPhone(e.target.value)} />
+                  </div>
+                </div>
+              </div>
             </div>
           </aside>
 
           {/* MAIN CONTENT */}
           <main className="min-w-0">
-            <div className={`${cardCls} flex flex-col min-h-[700px] bg-white`}>
-              <div className="bg-slate-50 p-4 border-b border-slate-200">
-                <nav className="flex flex-wrap gap-2">
-                  {[
-                    { id: "permissions", label: "Uprawnienia", icon: ShieldCheck },
-                    { id: "wms", label: "WMS i magazyny", icon: Fingerprint },
-                    { id: "panel_statuses", label: "Statusy", icon: Settings2 },
-                    { id: "workforce", label: "Praca", icon: Briefcase },
-                    { id: "activity", label: "Aktywność", icon: History },
-                    { id: "presets", label: "Presety", icon: Layers },
-                  ].map((item) => (
-                    <button
-                      key={item.id}
-                      onClick={() => goTab(item.id as TabId)}
-                      className={`
-                        ${tabBtnCls} 
-                        ${tab === item.id 
-                          ? "bg-white text-indigo-600 shadow-sm ring-1 ring-slate-200" 
-                          : "text-slate-500 hover:text-slate-800 hover:bg-white/50"}
-                      `}
-                    >
-                      <item.icon className="h-4 w-4" /> {item.label}
-                    </button>
-                  ))}
+            <div className={`${cardCls} flex min-h-[640px] flex-col bg-white`}>
+              <div className="border-b border-slate-200 px-4 pt-2">
+                <nav className="flex gap-6 overflow-x-auto" aria-label="Zakładki użytkownika">
+                  {(
+                    [
+                      { id: "permissions" as const, label: "Uprawnienia", icon: Shield },
+                      { id: "wms" as const, label: "WMS i magazyny", icon: Package },
+                      { id: "panel_statuses" as const, label: "Statusy", icon: Activity },
+                      { id: "workforce" as const, label: "Praca", icon: Briefcase },
+                      { id: "activity" as const, label: "Aktywność", icon: History },
+                    ] as const
+                  ).map((item) => {
+                    const active = tab === item.id;
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => goTab(item.id)}
+                        className={`inline-flex items-center gap-2 border-b-2 pb-2.5 text-sm font-medium transition-colors ${
+                          active
+                            ? "border-orange-500 text-orange-600"
+                            : "border-transparent text-slate-500 hover:text-slate-800"
+                        }`}
+                      >
+                        <item.icon className={`h-4 w-4 ${active ? "text-orange-500" : ""}`} aria-hidden />
+                        {item.label}
+                      </button>
+                    );
+                  })}
                 </nav>
               </div>
 
-              <div className="p-10 flex-1">
+              <div className="flex-1 p-6 md:p-8">
                 {loading ? (
                   <div className="flex flex-col items-center justify-center h-full py-20">
                     <div className="h-10 w-10 animate-spin border-4 border-indigo-600 border-t-transparent rounded-full mb-4" />
@@ -744,23 +753,52 @@ export default function AdministratorEditPage() {
                             </div>
                           </div>
                         )}
-                        <div className="rounded-3xl border border-slate-100 bg-slate-50/30 p-6">
+                        <div className="rounded-xl border border-slate-100 bg-slate-50/30 p-4">
                            <PermissionTreePanel tree={tree} value={permissions} onChange={setPermissions} disabled={isSuperRole(role)} search={permSearch} onSearchChange={setPermSearch} />
                         </div>
+                        {catalog?.presets && !isSuperRole(role) ? (
+                          <div className="space-y-2">
+                            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Szybkie szablony roli</h3>
+                            <div className="flex flex-wrap gap-2">
+                              {Object.entries(catalog.presets).map(([key, keys]) => (
+                                <button
+                                  key={key}
+                                  type="button"
+                                  onClick={() => {
+                                    setPermissions([...keys]);
+                                    toast.success(`Załadowano: ${builtinPresetLabel(key)}`);
+                                  }}
+                                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-orange-300"
+                                >
+                                  {builtinPresetLabel(key)}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
                       </div>
                     )}
 
                     {tab === "wms" && (
-                      <div className="space-y-8">
+                      <div className="space-y-6">
                         <div className="space-y-1">
-                          <h2 className="text-2xl font-black text-slate-900">WMS i magazyny</h2>
+                          <h2 className="text-xl font-bold text-slate-900">WMS i magazyny</h2>
+                          <p className="text-sm text-slate-500">Konfiguracja środowiska mobilnego dla pracownika.</p>
                         </div>
+                        <LoginCodeLabelControls
+                          userId={Number.isFinite(numericId) ? numericId : null}
+                          loginHint={login}
+                          firstName={firstName}
+                          lastName={lastName}
+                          code={barcodeLoginCode}
+                          onCodeChange={setBarcodeLoginCode}
+                          templateId={loginCodeTemplateId}
+                          onTemplateIdChange={setLoginCodeTemplateId}
+                          inputClassName={sidebarInputCls}
+                          labelClassName={labelCls}
+                        />
                         <div className="grid gap-6 lg:grid-cols-2">
                           <div className="space-y-4">
-                            <div>
-                              <label className={labelCls}>Kod logowania</label>
-                              <input className={sidebarInputCls} value={barcodeLoginCode} onChange={(e) => setBarcodeLoginCode(e.target.value)} />
-                            </div>
                             <div>
                               <label className={labelCls}>Język WMS</label>
                               <input className={sidebarInputCls} value={wmsLanguage} onChange={(e) => setWmsLanguage(e.target.value)} />
@@ -787,11 +825,11 @@ export default function AdministratorEditPage() {
                           </div>
                           <div className="space-y-4">
                             <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                              <input type="checkbox" className="h-5 w-5 accent-indigo-600" checked={requireScan} onChange={(e) => setRequireScan(e.target.checked)} />
+                              <input type="checkbox" className="h-5 w-5 accent-orange-500" checked={requireScan} onChange={(e) => setRequireScan(e.target.checked)} />
                               <span className="text-sm font-bold text-slate-700">Wymagaj skanowania każdego produktu</span>
                             </div>
                             <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                              <input type="checkbox" className="h-5 w-5 accent-indigo-600" checked={canEditPreview} onChange={(e) => setCanEditPreview(e.target.checked)} />
+                              <input type="checkbox" className="h-5 w-5 accent-orange-500" checked={canEditPreview} onChange={(e) => setCanEditPreview(e.target.checked)} />
                               <span className="text-sm font-bold text-slate-700">Może edytować podgląd produktów</span>
                             </div>
                             <div>
@@ -827,8 +865,8 @@ export default function AdministratorEditPage() {
                                       return next;
                                     })
                                   }
-                                  className={`rounded-xl border px-4 py-2 text-sm font-bold transition-all ${
-                                    on ? "border-indigo-600 bg-indigo-50 text-indigo-800" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                                  className={`rounded-full border px-3 py-1.5 text-sm font-medium transition-all ${
+                                    on ? "border-orange-400 bg-orange-50 text-orange-700" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
                                   }`}
                                 >
                                   {w.name}
@@ -850,8 +888,8 @@ export default function AdministratorEditPage() {
                                   onClick={() =>
                                     setWmsOperationalModes((prev) => (on ? prev.filter((k) => k !== key) : [...prev, key]))
                                   }
-                                  className={`rounded-xl border px-3 py-2 text-xs font-bold transition-all ${
-                                    on ? "border-indigo-600 bg-indigo-50 text-indigo-800" : "border-slate-200 bg-white text-slate-600"
+                                  className={`rounded-full border px-3 py-1.5 text-sm font-medium transition-all ${
+                                    on ? "border-orange-400 bg-orange-50 text-orange-800" : "border-slate-200 bg-white text-slate-600"
                                   }`}
                                 >
                                   {WMS_OPERATIONAL_MODE_LABELS_PL[key] ?? key}
@@ -1093,7 +1131,7 @@ export default function AdministratorEditPage() {
                       </div>
                     )}
 
-                    {tab === "presets" && (
+                    {false && tab === "presets" && (
                       <div className="space-y-8">
                         <div className="space-y-1">
                           <h2 className="text-2xl font-black text-slate-900">Presety uprawnień</h2>
@@ -1103,7 +1141,7 @@ export default function AdministratorEditPage() {
                           <p className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">Brak uprawnień do zarządzania presetami.</p>
                         ) : presetsLoading ? (
                           <div className="flex items-center gap-3 text-slate-500">
-                            <div className="h-6 w-6 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent" />
+                            <div className="h-6 w-6 animate-spin rounded-full border-2 border-orange-500 border-t-transparent" />
                             <span className="text-sm font-medium">Ładowanie presetów…</span>
                           </div>
                         ) : (
@@ -1152,10 +1190,9 @@ export default function AdministratorEditPage() {
                                         }
                                       })();
                                     }}
-                                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-black text-white shadow-sm hover:bg-indigo-500 disabled:opacity-40"
+                                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 py-3 text-sm font-black text-white shadow-sm hover:bg-orange-600 disabled:opacity-40"
                                   >
-                                    <UserPlus className="h-4 w-4" />
-                                    Utwórz
+                                    + Utwórz
                                   </button>
                                 </div>
                               </div>
@@ -1248,25 +1285,35 @@ export default function AdministratorEditPage() {
       </div>
 
       {/* FLOATING ACTION BAR */}
-      <div className={`fixed bottom-10 left-1/2 z-[100] -translate-x-1/2 transition-all duration-700 ease-in-out ${isDirty ? "translate-y-0 opacity-100 scale-100" : "translate-y-24 opacity-0 scale-95 pointer-events-none"}`}>
-         <div className="flex items-center gap-8 rounded-3xl bg-slate-900/95 px-8 py-5 shadow-2xl backdrop-blur-xl ring-1 ring-white/20">
-            <div className="flex flex-col">
-               <span className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-400">Edycja administratora</span>
-               <span className="text-sm font-bold text-white whitespace-nowrap">Masz niezapisane zmiany</span>
-            </div>
-            <div className="h-10 w-px bg-white/10" />
-            <div className="flex items-center gap-4">
-               <button onClick={onCancelEdit} className="text-sm font-bold text-slate-400 hover:text-white transition-colors px-2">Anuluj</button>
-               <button 
-                onClick={() => void onSave()} 
-                disabled={saving}
-                className="flex items-center gap-2.5 rounded-2xl bg-indigo-600 px-7 py-3 text-sm font-black text-white shadow-lg shadow-indigo-600/30 transition-all hover:bg-indigo-500 active:scale-95 disabled:opacity-50"
-               >
-                 {saving ? <div className="h-4 w-4 animate-spin border-2 border-white border-t-transparent rounded-full" /> : <Save className="h-4 w-4" />}
-                 Zapisz zmiany
-               </button>
-            </div>
-         </div>
+      <div
+        className={`fixed bottom-8 left-1/2 z-[100] -translate-x-1/2 transition-all duration-300 ${
+          isDirty ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-16 opacity-0"
+        }`}
+      >
+        <div className="flex items-center gap-6 rounded-2xl border border-slate-200 bg-white px-6 py-4 shadow-xl ring-1 ring-slate-900/5">
+          <div className="flex flex-col">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-orange-600">Edycja administratora</span>
+            <span className="text-sm font-semibold text-slate-900 whitespace-nowrap">Masz niezapisane zmiany</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <button type="button" onClick={onCancelEdit} className="rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">
+              Anuluj
+            </button>
+            <button
+              type="button"
+              onClick={() => void onSave()}
+              disabled={saving}
+              className="inline-flex items-center gap-2 rounded-lg bg-orange-500 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-600 disabled:opacity-50"
+            >
+              {saving ? (
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+              ) : (
+                <Save className="h-4 w-4" aria-hidden />
+              )}
+              Zapisz zmiany
+            </button>
+          </div>
+        </div>
       </div>
     </PageContainer>
   );

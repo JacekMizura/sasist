@@ -28,6 +28,7 @@ export type WmsProfilePayload = {
   workforce_active_warehouse_zone_ids?: number[];
   workforce_default_workstation?: string | null;
   workforce_color_tag?: string | null;
+  login_code_label_template_id?: number | null;
 };
 
 export type WmsProfileResponse = {
@@ -53,6 +54,7 @@ export type WmsProfileResponse = {
   workforce_active_warehouse_zone_ids?: number[];
   workforce_default_workstation?: string | null;
   workforce_color_tag?: string | null;
+  login_code_label_template_id?: number | null;
 };
 
 export type PrimaryWorkforceGroupBadge = {

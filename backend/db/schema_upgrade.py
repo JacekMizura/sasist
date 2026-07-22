@@ -6064,12 +6064,15 @@ def ensure_system_labels_table(engine: Engine) -> None:
 
 
 def ensure_user_wms_profiles_topbar_pins_column(engine: Engine) -> None:
-    """Preferencje przypięć topbara WMS — ``user_wms_profiles.wms_topbar_pins_json``."""
+    """Preferencje topbara WMS + szablon etykiety kodu logowania."""
     cols = _cols(engine, "user_wms_profiles")
-    if not cols or "wms_topbar_pins_json" in cols:
+    if not cols:
         return
     with engine.begin() as conn:
-        conn.execute(text("ALTER TABLE user_wms_profiles ADD COLUMN wms_topbar_pins_json TEXT"))
+        if "wms_topbar_pins_json" not in cols:
+            conn.execute(text("ALTER TABLE user_wms_profiles ADD COLUMN wms_topbar_pins_json TEXT"))
+        if "login_code_label_template_id" not in cols:
+            conn.execute(text("ALTER TABLE user_wms_profiles ADD COLUMN login_code_label_template_id INTEGER"))
 
 
 def _sqlite_ensure_user_wms_profiles_operational_columns(conn) -> None:
@@ -6103,6 +6106,8 @@ def _sqlite_ensure_user_wms_profiles_operational_columns(conn) -> None:
         )
     if "wms_topbar_pins_json" not in cols:
         conn.execute(text("ALTER TABLE user_wms_profiles ADD COLUMN wms_topbar_pins_json TEXT"))
+    if "login_code_label_template_id" not in cols:
+        conn.execute(text("ALTER TABLE user_wms_profiles ADD COLUMN login_code_label_template_id INTEGER"))
 
 
 def ensure_user_wms_profiles_table(engine: Engine) -> None:

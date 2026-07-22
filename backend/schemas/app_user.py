@@ -42,6 +42,7 @@ class WmsProfileInput(BaseModel):
     workforce_active_warehouse_zone_ids: list[int] = Field(default_factory=list)
     workforce_default_workstation: str | None = None
     workforce_color_tag: str | None = None
+    login_code_label_template_id: int | None = None
 
 
 class WmsProfileUpdate(BaseModel):
@@ -66,6 +67,7 @@ class WmsProfileUpdate(BaseModel):
     workforce_active_warehouse_zone_ids: list[int] | None = None
     workforce_default_workstation: str | None = None
     workforce_color_tag: str | None = None
+    login_code_label_template_id: int | None = None
 
 
 class WmsProfileResponse(BaseModel):
@@ -91,6 +93,7 @@ class WmsProfileResponse(BaseModel):
     workforce_active_warehouse_zone_ids: list[int] = Field(default_factory=list)
     workforce_default_workstation: str | None = None
     workforce_color_tag: str | None = None
+    login_code_label_template_id: int | None = None
 
 
 class PrimaryWorkforceGroupBadge(BaseModel):

@@ -86,6 +86,8 @@ class UserWmsProfile(Base, BaseModelMixin):
     workforce_active_zone_ids_json = Column(Text, nullable=True)
     workforce_default_workstation = Column(String(128), nullable=True)
     workforce_color_tag = Column(String(32), nullable=True)
+    #: SavedLabelTemplate.id used when printing operator login-code labels.
+    login_code_label_template_id = Column(Integer, nullable=True, index=True)
 
 
 class AppUserWarehouse(Base):

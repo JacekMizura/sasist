@@ -30,6 +30,7 @@ export type TemplateType =
   | "cart"
   | "basket"
   | "order"
+  | "user_login"
   | "document_receipt"
   | "document_invoice"
   | "document_wz"
@@ -41,6 +42,7 @@ export const TEMPLATE_TYPE_OPTIONS: { value: TemplateType; label: string }[] = [
   { value: "cart", label: "Wózek" },
   { value: "basket", label: "Koszyk" },
   { value: "order", label: "Zamówienie" },
+  { value: "user_login", label: "Kod logowania użytkownika" },
   { value: "document_receipt", label: "Paragon" },
   { value: "document_invoice", label: "Faktura VAT" },
   { value: "document_wz", label: "WZ" },
@@ -52,6 +54,7 @@ export type VariableCategoryId =
   | "fleet"
   | "cart"
   | "basket"
+  | "user"
   | "product_basic"
   | "product_pricing"
   | "product_logistics"
@@ -68,6 +71,17 @@ export const LABEL_VARIABLE_CATEGORIES: Array<{
   label: string;
   items: LabelVariable[];
 }> = [
+  {
+    id: "user",
+    label: "Użytkownik / operator",
+    items: [
+      { id: "barcode_login_code", label: "Kod logowania", token: "{barcode_login_code}" },
+      { id: "user_login", label: "Login", token: "{user_login}" },
+      { id: "user_full_name", label: "Imię i nazwisko", token: "{user_full_name}" },
+      { id: "user_first_name", label: "Imię", token: "{user_first_name}" },
+      { id: "user_last_name", label: "Nazwisko", token: "{user_last_name}" },
+    ],
+  },
   {
     id: "warehouse",
     label: "Magazyn",
@@ -228,6 +242,7 @@ export const TEMPLATE_TYPE_CATEGORIES: Record<TemplateType, VariableCategoryId[]
   cart: ["cart", "fleet"],
   basket: ["basket", "cart"],
   order: ["orders"],
+  user_login: ["user"],
   document_receipt: ["documents"],
   document_invoice: ["documents"],
   document_wz: ["documents"],
@@ -235,10 +250,23 @@ export const TEMPLATE_TYPE_CATEGORIES: Record<TemplateType, VariableCategoryId[]
 };
 
 /** Preview data type for template editor. */
-export type PreviewDataType = "location" | "cart" | "basket" | "product" | "order";
+export type PreviewDataType = "location" | "cart" | "basket" | "product" | "order" | "user_login";
 
 /** Sample records per preview type for realistic barcode/text preview in the template editor. */
 export const PREVIEW_SAMPLES: Record<PreviewDataType, Record<string, unknown>> = {
+  user_login: {
+    barcode_login_code: "MAG123",
+    user_login: "jmizura",
+    user_full_name: "Jacek Mizura",
+    user_first_name: "Jacek",
+    user_last_name: "Mizura",
+    barcode_data: "MAG123",
+    "{barcode_login_code}": "MAG123",
+    "{user_login}": "jmizura",
+    "{user_full_name}": "Jacek Mizura",
+    "{user_first_name}": "Jacek",
+    "{user_last_name}": "Mizura",
+  },
   location: {
     location_name: "A1-C-6",
     loc_name: "A1-C-6",

@@ -8,6 +8,7 @@ import {
   MoreHorizontal,
   Pencil,
   Plus,
+  Printer,
   Shield,
   Trash2,
   Users,
@@ -27,6 +28,7 @@ import { isSuperRole } from "../../auth/isSuperRole";
 import { useAuth } from "../../context/AuthContext";
 import { WMS_OPERATIONAL_MODE_LABELS_PL } from "../../constants/wmsOperationalModes";
 import { PLATFORM_ROLE_OPTIONS } from "../../settings/platformRoles";
+import { printOrDownloadUserLoginCode } from "../../utils/userLoginCodeLabel";
 
 function initials(row: AppUserListItem) {
   const a = (row.first_name?.[0] ?? "").toUpperCase();
@@ -289,6 +291,34 @@ export default function AdministratorsPage() {
               <Shield className="h-4 w-4 shrink-0 text-slate-500" strokeWidth={2} aria-hidden />
               Uprawnienia
             </Link>
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-800 hover:bg-slate-50"
+              role="menuitem"
+              onClick={() => {
+                const row = rows.find((x) => x.id === menu.userId);
+                setMenu(null);
+                if (!row) return;
+                void (async () => {
+                  try {
+                    await printOrDownloadUserLoginCode({ userId: row.id, login: row.login });
+                    toast.success("Wygenerowano PDF etykiety kodu logowania.");
+                  } catch (e) {
+                    const msg = e instanceof Error ? e.message : "";
+                    if (msg === "NO_LOGIN_CODE") {
+                      toast.error("Brak kodu logowania — uzupełnij go w karcie użytkownika (WMS i magazyny).");
+                    } else if (msg === "NO_LOGIN_CODE_TEMPLATE") {
+                      toast.error("Brak szablonu etykiety typu „Kod logowania użytkownika”.");
+                    } else {
+                      toast.error("Nie udało się wydrukować kodu logowania.");
+                    }
+                  }
+                })();
+              }}
+            >
+              <Printer className="h-4 w-4 shrink-0 text-slate-500" strokeWidth={2} aria-hidden />
+              Drukuj kod logowania
+            </button>
             <button
               type="button"
               className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-800 hover:bg-slate-50"

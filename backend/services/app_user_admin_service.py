@@ -150,9 +150,23 @@ def sync_warehouse_assignments(db: Session, user_id: int, warehouse_ids: list[in
         db.add(AppUserWarehouse(user_id=user_id, warehouse_id=wid))
 
 
+def assert_barcode_login_code_unique(db: Session, code: str | None, *, exclude_user_id: int | None = None) -> None:
+    """Operator login code is a public identifier — must be unique across WMS profiles."""
+    normalized = (code or "").strip()
+    if not normalized:
+        return
+    q = db.query(UserWmsProfile).filter(UserWmsProfile.barcode_login_code == normalized)
+    if exclude_user_id is not None:
+        q = q.filter(UserWmsProfile.user_id != int(exclude_user_id))
+    if q.first() is not None:
+        raise ValueError("BARCODE_LOGIN_CODE_EXISTS")
+
+
 def apply_wms_profile_create(db: Session, user_id: int, wms: WmsProfileInput, *, role: str = "user") -> None:
     p = ensure_wms_profile(db, user_id)
-    p.barcode_login_code = (wms.barcode_login_code or "").strip() or None
+    code = (wms.barcode_login_code or "").strip() or None
+    assert_barcode_login_code_unique(db, code, exclude_user_id=user_id)
+    p.barcode_login_code = code
     p.language = wms.language or "pl"
     p.require_scan_every_product = bool(wms.require_scan_every_product)
     p.can_edit_products_preview = bool(wms.can_edit_products_preview)
@@ -175,6 +189,7 @@ def apply_wms_profile_create(db: Session, user_id: int, wms: WmsProfileInput, *,
     p.workforce_active_zone_ids_json = json.dumps(zids, ensure_ascii=False) if zids else None
     p.workforce_default_workstation = (wms.workforce_default_workstation or "").strip() or None
     p.workforce_color_tag = (wms.workforce_color_tag or "").strip() or None
+    p.login_code_label_template_id = wms.login_code_label_template_id
     ids, dw = validate_wms_warehouse_profile(
         db,
         role=role,
@@ -190,7 +205,9 @@ def apply_wms_profile_update(db: Session, user_id: int, wms: WmsProfileUpdate) -
     p = ensure_wms_profile(db, user_id)
     data = wms.model_dump(exclude_unset=True)
     if "barcode_login_code" in data:
-        p.barcode_login_code = (data["barcode_login_code"] or "").strip() or None
+        code = (data["barcode_login_code"] or "").strip() or None
+        assert_barcode_login_code_unique(db, code, exclude_user_id=user_id)
+        p.barcode_login_code = code
     if "language" in data and data["language"] is not None:
         p.language = data["language"]
     if "default_warehouse_id" in data:
@@ -238,6 +255,9 @@ def apply_wms_profile_update(db: Session, user_id: int, wms: WmsProfileUpdate) -
     if "workforce_color_tag" in data:
         v = data["workforce_color_tag"]
         p.workforce_color_tag = None if v is None else ((str(v).strip()) or None)
+    if "login_code_label_template_id" in data:
+        tid = data["login_code_label_template_id"]
+        p.login_code_label_template_id = int(tid) if tid is not None else None
 
     _sync_wms_warehouse_assignments_from_profile(db, user_id, p, data)
 
@@ -532,6 +552,7 @@ def wms_profile_response(db: Session, user_id: int) -> dict[str, Any]:
             "workforce_active_warehouse_zone_ids": [],
             "workforce_default_workstation": None,
             "workforce_color_tag": None,
+            "login_code_label_template_id": None,
         }
     modes_raw = parse_json_list(getattr(p, "wms_operational_modes_json", None) or None) or []
     modes = [m for m in modes_raw if is_valid_wms_mode(str(m))]
@@ -559,6 +580,7 @@ def wms_profile_response(db: Session, user_id: int) -> dict[str, Any]:
         "workforce_active_warehouse_zone_ids": parse_json_int_list(getattr(p, "workforce_active_zone_ids_json", None)),
         "workforce_default_workstation": getattr(p, "workforce_default_workstation", None),
         "workforce_color_tag": getattr(p, "workforce_color_tag", None),
+        "login_code_label_template_id": getattr(p, "login_code_label_template_id", None),
     }
 
 
