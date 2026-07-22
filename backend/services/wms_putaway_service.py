@@ -69,18 +69,25 @@ PUTAWAY_REMAINING_CODE = "PUTAWAY_REMAINING"
 PUTAWAY_REMAINING_MSG = (
     "Nie można zakończyć rozlokowania — pozostały ilości oczekujące na rozlokowanie."
 )
+PUTAWAY_REMAINING_MSG_FMT = (
+    "Nie można zakończyć rozlokowania — pozostało {remaining} szt. do rozlokowania."
+)
 
 
 class PutawayFinalizeError(ValueError):
     """Finalize putaway/relocation blocked — structured code for API detail."""
 
-    def __init__(self, message: str, *, code: str):
+    def __init__(self, message: str, *, code: str, remaining: float | None = None):
         super().__init__(message)
         self.code = code
         self.message = message
+        self.remaining = remaining
 
     def to_detail(self) -> dict[str, str]:
-        return {"message": self.message, "code": self.code}
+        out = {"message": self.message, "code": self.code}
+        if self.remaining is not None:
+            out["remaining"] = str(self.remaining)
+        return out
 from .wms_receiving_service import build_wms_pz_list_row
 from .purchase_order_warehouse_sync_service import sync_purchase_order_status_for_stock_document_id
 from .slotting import recalculate_location_occupancy, suggest_putaway_locations as slotting_suggest_putaway_locations, validate_putaway_assignment
@@ -1778,9 +1785,27 @@ def finalize_wms_relocation_pz(db: Session, tenant_id: int, document_id: int) ->
         raise ValueError("Nie zapisano żadnego rozlokowania — brak przeniesionej ilości")
 
     if not compute_is_fully_putaway_for_items(db, rows):
-        raise PutawayFinalizeError(PUTAWAY_REMAINING_MSG, code=PUTAWAY_REMAINING_CODE)
+        remaining = sum(_document_line_putaway_remaining(db, x) for x in rows)
+        rem_disp = int(remaining) if abs(remaining - round(remaining)) < 1e-9 else round(remaining, 2)
+        raise PutawayFinalizeError(
+            PUTAWAY_REMAINING_MSG_FMT.format(remaining=rem_disp),
+            code=PUTAWAY_REMAINING_CODE,
+            remaining=float(remaining),
+        )
 
+    # Re-validate under current line truth, then explicit close only.
     recalculate_wms_document_completion(db, tenant_id, document_id)
+    if not receiving_is_closed_for_putaway_completion(doc):
+        raise PutawayFinalizeError(RECEIVING_NOT_COMPLETED_MSG, code=RECEIVING_NOT_COMPLETED_CODE)
+    if not compute_is_fully_putaway_for_items(db, rows):
+        remaining = sum(_document_line_putaway_remaining(db, x) for x in rows)
+        rem_disp = int(remaining) if abs(remaining - round(remaining)) < 1e-9 else round(remaining, 2)
+        raise PutawayFinalizeError(
+            PUTAWAY_REMAINING_MSG_FMT.format(remaining=rem_disp),
+            code=PUTAWAY_REMAINING_CODE,
+            remaining=float(remaining),
+        )
+
     doc.relocation_status = "DONE"
     doc.putaway_status = "DONE"
     doc.updated_at = datetime.utcnow()

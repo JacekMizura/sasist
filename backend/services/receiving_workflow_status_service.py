@@ -106,12 +106,13 @@ def derive_warehouse_workflow_status(
     if st in ("posted", "zakonczone", "closed", "completed"):
         return WH_CLOSED
 
-    if rls == "DONE" or (rs == "DONE" and full_put):
+    if rls == "DONE":
         if st in ("zakonczone", "posted", "closed"):
             return WH_CLOSED
         return WH_PUTAWAY_COMPLETED
 
-    if ps == "IN_PROGRESS" or (any_put and not full_put):
+    if ps == "IN_PROGRESS" or any_put or (rs == "DONE" and full_put):
+        # Catch-up 100% before explicit finalize stays putaway-in-progress (not closed).
         return WH_PUTAWAY_IN_PROGRESS
 
     # COUNTED only after explicit receiving finish — not when actual >= expected.

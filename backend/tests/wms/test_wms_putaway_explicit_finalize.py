@@ -1,7 +1,7 @@
 """
-Receiving vs putaway completion invariant (parallel putaway OK; finalize gated).
+Putaway lifecycle: catch-up 100% ≠ COMPLETED; explicit finalize only (tests A–J).
 
-  python -m pytest backend/tests/wms/test_wms_receiving_putaway_completion_invariant.py -q
+  python -m pytest backend/tests/wms/test_wms_putaway_explicit_finalize.py -q
 """
 
 from __future__ import annotations
@@ -27,7 +27,6 @@ from backend.models.supplier import Supplier
 from backend.models.tenant_warehouse import TenantWarehouse
 from backend.models.warehouse import Warehouse
 from backend.models.wms_settings import WmsSettings
-from backend.schemas.stock_document import PatchStockDocumentItemsBody
 from backend.schemas.wms_receiving import WmsReceivingItemQuantityBody
 from backend.services.stock_document_service import (
     recalculate_wms_document_completion,
@@ -37,12 +36,17 @@ from backend.services.wms_putaway_service import (
     PUTAWAY_REMAINING_CODE,
     RECEIVING_NOT_COMPLETED_CODE,
     PutawayFinalizeError,
+    _load_putaway_pz_docs_with_lines,
     finalize_wms_relocation_pz,
 )
 from backend.services.wms_receiving_service import (
     ensure_wms_pz_product_anchor_line,
-    finish_wms_receiving_pz,
     patch_wms_receiving_pz_item_quantity,
+)
+from backend.services.receiving_workflow_status_service import (
+    WH_PUTAWAY_COMPLETED,
+    WH_PUTAWAY_IN_PROGRESS,
+    derive_warehouse_workflow_status,
 )
 
 
@@ -138,6 +142,7 @@ def inv_db(monkeypatch):
             receiving_status=getattr(doc, "receiving_status", None),
             putaway_status=getattr(doc, "putaway_status", None),
             relocation_status=getattr(doc, "relocation_status", None),
+            status=getattr(doc, "status", None),
         )
 
     monkeypatch.setattr("backend.services.wms_receiving_service.build_stock_document_read", _fake_read)
@@ -150,13 +155,13 @@ def inv_db(monkeypatch):
         db.close()
 
 
-def _pz(db, admin, *, receiving="IN_PROGRESS") -> int:
+def _pz(db, admin, *, receiving="IN_PROGRESS", doc_type="PZ") -> int:
     now = datetime.utcnow()
     doc = StockDocument(
         tenant_id=1,
-        document_type="PZ",
+        document_type=doc_type,
         supplier_id=1,
-        creation_source="WMS",
+        creation_source="WMS" if doc_type == "PZ" else "PRODUCTION",
         warehouse_id=1,
         location_id=10,
         status="draft",
@@ -173,11 +178,154 @@ def _pz(db, admin, *, receiving="IN_PROGRESS") -> int:
     return int(doc.id)
 
 
-def test_j_remaining_zero_while_receiving_open_not_putaway_done():
+def _seed_received_putaway(db, admin, *, receiving, received, putaway, doc_type="PZ"):
+    pz_id = _pz(db, admin, receiving=receiving, doc_type=doc_type)
+    _, item_id, _ = ensure_wms_pz_product_anchor_line(
+        db, 1, pz_id, 50, performed_by=admin, initial_received=0.0
+    )
+    db.commit()
+    if receiving != "DONE":
+        patch_wms_receiving_pz_item_quantity(
+            db,
+            1,
+            pz_id,
+            item_id,
+            WmsReceivingItemQuantityBody(quantity_received=float(received)),
+            performed_by=admin,
+        )
+    else:
+        line = db.query(StockDocumentItem).filter(StockDocumentItem.id == item_id).one()
+        line.received_quantity = float(received)
+        line.quantity = float(received)
+        db.commit()
+    line = db.query(StockDocumentItem).filter(StockDocumentItem.id == item_id).one()
+    line.quantity_putaway = float(putaway)
+    db.commit()
+    recalculate_wms_document_completion(db, 1, pz_id)
+    db.commit()
+    return pz_id, item_id
+
+
+def test_a_catchup_100_not_completed(inv_db):
+    db, admin = inv_db
+    pz_id, _ = _seed_received_putaway(db, admin, receiving="IN_PROGRESS", received=14, putaway=14)
+    doc = db.query(StockDocument).filter(StockDocument.id == pz_id).one()
+    assert doc.putaway_status == "IN_PROGRESS"
+    assert str(doc.relocation_status or "").upper() != "DONE"
+    assert doc.status == "draft"
+
+
+def test_b_new_receive_after_catchup_reopens_remaining(inv_db):
+    db, admin = inv_db
+    pz_id, item_id = _seed_received_putaway(
+        db, admin, receiving="IN_PROGRESS", received=14, putaway=14
+    )
+    patch_wms_receiving_pz_item_quantity(
+        db,
+        1,
+        pz_id,
+        item_id,
+        WmsReceivingItemQuantityBody(quantity_received=20),
+        performed_by=admin,
+    )
+    line = db.query(StockDocumentItem).filter(StockDocumentItem.id == item_id).one()
+    assert float(line.received_quantity) == pytest.approx(34.0)
+    assert float(line.quantity_putaway) == pytest.approx(14.0)
+    remaining = float(line.received_quantity) - float(line.quantity_putaway)
+    assert remaining == pytest.approx(20.0)
+    doc = db.query(StockDocument).filter(StockDocument.id == pz_id).one()
+    assert doc.putaway_status == "IN_PROGRESS"
+    assert str(doc.relocation_status or "").upper() != "DONE"
+
+
+def test_c_finalize_while_receiving_open_rejected(inv_db):
+    db, admin = inv_db
+    pz_id, _ = _seed_received_putaway(db, admin, receiving="IN_PROGRESS", received=14, putaway=14)
+    with pytest.raises(PutawayFinalizeError) as ei:
+        finalize_wms_relocation_pz(db, 1, pz_id)
+    assert ei.value.code == RECEIVING_NOT_COMPLETED_CODE
+    doc = db.query(StockDocument).filter(StockDocument.id == pz_id).one()
+    assert str(doc.relocation_status or "").upper() != "DONE"
+
+
+def test_d_finalize_with_remaining_rejected(inv_db):
+    db, admin = inv_db
+    pz_id, _ = _seed_received_putaway(db, admin, receiving="DONE", received=20, putaway=14)
+    with pytest.raises(PutawayFinalizeError) as ei:
+        finalize_wms_relocation_pz(db, 1, pz_id)
+    assert ei.value.code == PUTAWAY_REMAINING_CODE
+    assert "6" in ei.value.message
+
+
+def test_e_receiving_done_full_putaway_no_auto_close(inv_db):
+    db, admin = inv_db
+    pz_id, _ = _seed_received_putaway(db, admin, receiving="DONE", received=20, putaway=20)
+    doc = db.query(StockDocument).filter(StockDocument.id == pz_id).one()
+    assert str(doc.relocation_status or "").upper() != "DONE"
+    assert doc.putaway_status == "IN_PROGRESS"
+    assert doc.status == "draft"
+    # GET/recalculate side effect must not close
+    recalculate_wms_document_completion(db, 1, pz_id)
+    db.commit()
+    doc = db.query(StockDocument).filter(StockDocument.id == pz_id).one()
+    assert str(doc.relocation_status or "").upper() != "DONE"
+
+
+def test_f_explicit_finalize_closes(inv_db):
+    db, admin = inv_db
+    pz_id, _ = _seed_received_putaway(db, admin, receiving="DONE", received=20, putaway=20)
+    with patch(
+        "backend.services.complaints.complaint_physical_receipt.filter_putaway_eligible_lines",
+        side_effect=lambda _db, rows: list(rows),
+    ):
+        out = finalize_wms_relocation_pz(db, 1, pz_id)
+    doc = db.query(StockDocument).filter(StockDocument.id == pz_id).one()
+    assert doc.relocation_status == "DONE"
+    assert doc.putaway_status == "DONE"
+    assert out.relocation_status == "DONE"
+
+
+def test_g_receiving_done_blocks_further_receive(inv_db):
+    db, admin = inv_db
+    pz_id, item_id = _seed_received_putaway(db, admin, receiving="DONE", received=20, putaway=20)
+    with pytest.raises(ValueError, match="zakończone"):
+        patch_wms_receiving_pz_item_quantity(
+            db,
+            1,
+            pz_id,
+            item_id,
+            WmsReceivingItemQuantityBody(quantity_received=5),
+            performed_by=admin,
+        )
+
+
+def test_h_concurrency_no_premature_close(inv_db):
+    db, admin = inv_db
+    pz_id, item_id = _seed_received_putaway(
+        db, admin, receiving="IN_PROGRESS", received=14, putaway=14
+    )
+    recalculate_wms_document_completion(db, 1, pz_id)
+    db.commit()
+    assert str(db.query(StockDocument).get(pz_id).relocation_status or "").upper() != "DONE"
+    patch_wms_receiving_pz_item_quantity(
+        db,
+        1,
+        pz_id,
+        item_id,
+        WmsReceivingItemQuantityBody(quantity_received=20),
+        performed_by=admin,
+    )
+    line = db.query(StockDocumentItem).filter(StockDocumentItem.id == item_id).one()
+    assert float(line.received_quantity) - float(line.quantity_putaway) == pytest.approx(20.0)
+    doc = db.query(StockDocument).filter(StockDocument.id == pz_id).one()
+    assert str(doc.relocation_status or "").upper() != "DONE"
+
+
+def test_i_recompute_unit_catchup_stays_in_progress():
     doc = SimpleNamespace(
         document_type="PZ",
         status="draft",
-        receiving_status="IN_PROGRESS",
+        receiving_status="DONE",
         putaway_status="NOT_STARTED",
         relocation_status="OPEN",
     )
@@ -193,195 +341,48 @@ def test_j_remaining_zero_while_receiving_open_not_putaway_done():
     assert doc.putaway_status == "IN_PROGRESS"
 
 
-def test_j_recalculate_does_not_auto_close_relocation_while_receiving_open(inv_db):
+def test_j_active_list_keeps_catchup_document(inv_db):
     db, admin = inv_db
-    pz_id = _pz(db, admin, receiving="IN_PROGRESS")
-    _, item_id, _ = ensure_wms_pz_product_anchor_line(db, 1, pz_id, 50, performed_by=admin, initial_received=0.0)
-    db.commit()
-    patch_wms_receiving_pz_item_quantity(
-        db, 1, pz_id, item_id, WmsReceivingItemQuantityBody(quantity_received=20), performed_by=admin
+    pz_id, _ = _seed_received_putaway(db, admin, receiving="IN_PROGRESS", received=14, putaway=14)
+    docs, _by = _load_putaway_pz_docs_with_lines(
+        db, 1, extra_filters=(StockDocument.warehouse_id == 1,)
     )
-    line = db.query(StockDocumentItem).filter(StockDocumentItem.id == item_id).one()
-    line.quantity_putaway = 20.0
-    db.commit()
-    recalculate_wms_document_completion(db, 1, pz_id)
-    db.commit()
+    assert any(int(d.id) == pz_id for d in docs)
     doc = db.query(StockDocument).filter(StockDocument.id == pz_id).one()
-    assert doc.receiving_status == "IN_PROGRESS"
-    assert doc.putaway_status == "IN_PROGRESS"
-    assert str(doc.relocation_status or "").upper() != "DONE"
-
-
-def test_k_finalize_while_receiving_open_rejected(inv_db):
-    db, admin = inv_db
-    pz_id = _pz(db, admin, receiving="IN_PROGRESS")
-    _, item_id, _ = ensure_wms_pz_product_anchor_line(db, 1, pz_id, 50, performed_by=admin, initial_received=0.0)
-    db.commit()
-    patch_wms_receiving_pz_item_quantity(
-        db, 1, pz_id, item_id, WmsReceivingItemQuantityBody(quantity_received=20), performed_by=admin
-    )
-    line = db.query(StockDocumentItem).filter(StockDocumentItem.id == item_id).one()
-    line.quantity_putaway = 20.0
-    db.commit()
-    with pytest.raises(PutawayFinalizeError) as ei:
-        finalize_wms_relocation_pz(db, 1, pz_id)
-    assert ei.value.code == RECEIVING_NOT_COMPLETED_CODE
-    assert "przyjęcie tej dostawy nadal trwa" in str(ei.value).lower()
-    detail = ei.value.to_detail()
-    assert detail["code"] == RECEIVING_NOT_COMPLETED_CODE
-    doc = db.query(StockDocument).filter(StockDocument.id == pz_id).one()
-    assert str(doc.relocation_status or "").upper() != "DONE"
-
-
-def test_l_more_receive_after_putaway_creates_new_remaining(inv_db):
-    db, admin = inv_db
-    pz_id = _pz(db, admin, receiving="IN_PROGRESS")
-    _, item_id, _ = ensure_wms_pz_product_anchor_line(db, 1, pz_id, 50, performed_by=admin, initial_received=0.0)
-    db.commit()
-    patch_wms_receiving_pz_item_quantity(
-        db, 1, pz_id, item_id, WmsReceivingItemQuantityBody(quantity_received=20), performed_by=admin
-    )
-    line = db.query(StockDocumentItem).filter(StockDocumentItem.id == item_id).one()
-    line.quantity_putaway = 20.0
-    db.commit()
-    recompute_putaway_status_for_document(
-        db.query(StockDocument).get(pz_id),
-        [line],
-        db,
-    )
-    assert db.query(StockDocument).get(pz_id).putaway_status == "IN_PROGRESS"
-
-    patch_wms_receiving_pz_item_quantity(
-        db, 1, pz_id, item_id, WmsReceivingItemQuantityBody(quantity_received=10), performed_by=admin
-    )
-    line = db.query(StockDocumentItem).filter(StockDocumentItem.id == item_id).one()
-    assert float(line.received_quantity) == pytest.approx(30.0)
-    remaining = float(line.received_quantity) - float(line.quantity_putaway or 0)
-    assert remaining == pytest.approx(10.0)
-    doc = db.query(StockDocument).filter(StockDocument.id == pz_id).one()
-    assert doc.putaway_status == "IN_PROGRESS"
-    assert str(doc.relocation_status or "").upper() != "DONE"
-
-
-def test_m_finalize_blocked_when_remaining_putaway(inv_db):
-    db, admin = inv_db
-    pz_id = _pz(db, admin, receiving="DONE")
-    _, item_id, _ = ensure_wms_pz_product_anchor_line(db, 1, pz_id, 50, performed_by=admin, initial_received=0.0)
-    db.commit()
-    # receiving DONE but allow qty patch? finish gate blocks qty when DONE.
-    # Seed line quantities directly for finalize gate test.
-    line = db.query(StockDocumentItem).filter(StockDocumentItem.id == item_id).one()
-    line.received_quantity = 20.0
-    line.quantity = 20.0
-    line.quantity_putaway = 10.0
-    db.commit()
-    with pytest.raises(PutawayFinalizeError) as ei:
-        finalize_wms_relocation_pz(db, 1, pz_id)
-    assert ei.value.code == PUTAWAY_REMAINING_CODE
-
-
-def test_n_finalize_ok_when_receiving_done_and_fully_putaway(inv_db):
-    db, admin = inv_db
-    pz_id = _pz(db, admin, receiving="DONE")
-    _, item_id, _ = ensure_wms_pz_product_anchor_line(db, 1, pz_id, 50, performed_by=admin, initial_received=0.0)
-    db.commit()
-    line = db.query(StockDocumentItem).filter(StockDocumentItem.id == item_id).one()
-    line.received_quantity = 20.0
-    line.quantity = 20.0
-    line.quantity_putaway = 20.0
+    doc.receiving_status = "DONE"
     db.commit()
     with patch(
-        "backend.services.wms_putaway_service.compute_is_fully_putaway_for_items",
-        return_value=True,
+        "backend.services.complaints.complaint_physical_receipt.filter_putaway_eligible_lines",
+        side_effect=lambda _db, rows: list(rows),
     ), patch(
-        "backend.services.complaints.complaint_physical_receipt.filter_putaway_eligible_lines",
-        side_effect=lambda _db, rows: list(rows),
-    ):
-        out = finalize_wms_relocation_pz(db, 1, pz_id)
-    doc = db.query(StockDocument).filter(StockDocument.id == pz_id).one()
-    assert doc.relocation_status == "DONE"
-    assert doc.putaway_status == "DONE"
-    assert out.relocation_status == "DONE"
-
-
-def test_o_parallel_receive_putaway_lifecycle(inv_db):
-    """receive → putaway → receive → putaway: no premature COMPLETED."""
-    db, admin = inv_db
-    pz_id = _pz(db, admin, receiving="IN_PROGRESS")
-    _, item_id, _ = ensure_wms_pz_product_anchor_line(db, 1, pz_id, 50, performed_by=admin, initial_received=0.0)
-    db.commit()
-
-    patch_wms_receiving_pz_item_quantity(
-        db, 1, pz_id, item_id, WmsReceivingItemQuantityBody(quantity_received=20), performed_by=admin
-    )
-    line = db.query(StockDocumentItem).filter(StockDocumentItem.id == item_id).one()
-    line.quantity_putaway = 20.0
-    db.commit()
-    recalculate_wms_document_completion(db, 1, pz_id)
-    db.commit()
-    doc = db.query(StockDocument).get(pz_id)
-    assert doc.putaway_status == "IN_PROGRESS"
-    assert doc.relocation_status != "DONE"
-
-    patch_wms_receiving_pz_item_quantity(
-        db, 1, pz_id, item_id, WmsReceivingItemQuantityBody(quantity_received=15), performed_by=admin
-    )
-    line = db.query(StockDocumentItem).filter(StockDocumentItem.id == item_id).one()
-    assert float(line.received_quantity) - float(line.quantity_putaway) == pytest.approx(15.0)
-    line.quantity_putaway = 35.0
-    db.commit()
-    recalculate_wms_document_completion(db, 1, pz_id)
-    db.commit()
-    doc = db.query(StockDocument).get(pz_id)
-    assert doc.receiving_status == "IN_PROGRESS"
-    assert doc.putaway_status == "IN_PROGRESS"
-    assert doc.relocation_status != "DONE"
-
-    with patch(
-        "backend.services.complaints.complaint_physical_receipt.filter_putaway_eligible_lines",
-        side_effect=lambda _db, rows: list(rows),
-    ):
-        line = db.query(StockDocumentItem).filter(StockDocumentItem.id == item_id).one()
-        finish_wms_receiving_pz(
-            db,
-            1,
-            pz_id,
-            PatchStockDocumentItemsBody(
-                items=[{"id": int(item_id), "received_quantity": float(line.received_quantity or 0)}]
-            ),
-        )
-    doc = db.query(StockDocument).get(pz_id)
-    assert doc.receiving_status == "DONE"
-    assert doc.putaway_status == "IN_PROGRESS"
-    assert str(doc.relocation_status or "").upper() != "DONE"
-    with patch(
-        "backend.services.wms_putaway_service.compute_is_fully_putaway_for_items",
+        "backend.services.complaints.complaint_physical_receipt.document_has_putaway_eligible_received_lines",
         return_value=True,
-    ), patch(
-        "backend.services.complaints.complaint_physical_receipt.filter_putaway_eligible_lines",
-        side_effect=lambda _db, rows: list(rows),
     ):
         finalize_wms_relocation_pz(db, 1, pz_id)
-    doc = db.query(StockDocument).get(pz_id)
-    assert doc.relocation_status == "DONE"
-    assert doc.putaway_status == "DONE"
+    docs2, _ = _load_putaway_pz_docs_with_lines(
+        db, 1, extra_filters=(StockDocument.warehouse_id == 1,)
+    )
+    assert not any(int(d.id) == pz_id for d in docs2)
 
 
-def test_receiving_done_full_putaway_status_stays_in_progress_until_finalize():
+def test_workflow_status_catchup_not_completed():
     doc = SimpleNamespace(
-        document_type="PZ",
         status="draft",
         receiving_status="DONE",
         putaway_status="IN_PROGRESS",
         relocation_status="OPEN",
     )
-    line = SimpleNamespace(received_quantity=10.0, quantity_putaway=10.0, product_id=1, wm_kind=None)
+    line = SimpleNamespace(received_quantity=10.0, quantity_putaway=10.0)
     with patch(
-        "backend.services.stock_document_service.doc_allows_putaway_status_recompute",
+        "backend.services.receiving_workflow_status_service.compute_is_fully_received_for_items",
         return_value=True,
     ), patch(
-        "backend.services.stock_document_service.is_stock_document_item_wm_material",
+        "backend.services.receiving_workflow_status_service.compute_is_fully_putaway_for_items",
+        return_value=True,
+    ), patch(
+        "backend.services.receiving_workflow_status_service.is_stock_document_cancelled",
         return_value=False,
     ):
-        recompute_putaway_status_for_document(doc, [line], db=None)
-    assert doc.putaway_status == "IN_PROGRESS"
+        st = derive_warehouse_workflow_status(doc, [line], db=None, full_recv=True, full_put=True)
+    assert st == WH_PUTAWAY_IN_PROGRESS
+    assert st != WH_PUTAWAY_COMPLETED

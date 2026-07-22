@@ -74,9 +74,27 @@ export function putawayDocumentGateError(
   ui: { alreadyDone: string; notAllowed: string },
 ): string | null {
   const relDone = String(doc.relocation_status ?? "").toUpperCase() === "DONE";
-  if (relDone) return ui.alreadyDone;
+  // Definitive close is shown as a status chip, not a blocking red error banner.
+  if (relDone) return null;
   if (!documentCanWmsPutaway(doc)) {
     return ui.notAllowed;
   }
   return null;
+}
+
+/** Soft status for catch-up 100% while receiving is still open. */
+export function putawayCatchUpInfo(
+  doc: {
+    receiving_status?: string | null;
+    relocation_status?: string | null;
+    is_fully_putaway?: boolean | null;
+  },
+  message: string,
+): string | null {
+  const relDone = String(doc.relocation_status ?? "").toUpperCase() === "DONE";
+  if (relDone) return null;
+  const receivingDone = String(doc.receiving_status ?? "").toUpperCase() === "DONE";
+  if (receivingDone) return null;
+  if (doc.is_fully_putaway !== true) return null;
+  return message;
 }

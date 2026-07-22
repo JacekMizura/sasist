@@ -2,7 +2,7 @@
 
 ## Active
 
-**Bez rozlokowania + anulowanie putaway** — SSOT: `StockDocumentItem.requires_putaway` + `StockDocument.default_requires_putaway`; gate `stock_document_item_requires_putaway`. Commit lokalny, bez push.
+**Rozlokowanie PZ: explicit finalize** — `remaining=0` / 14/14 ≠ COMPLETED. Auto-close usunięty z `recalculate_wms_document_completion` i `recompute_putaway_status_for_document`. Zamknięcie tylko przez `finalize_wms_relocation_pz` gdy receiving=DONE i remaining=0. Commit lokalny, bez push.
 
 ## Preferencja commitów (user)
 

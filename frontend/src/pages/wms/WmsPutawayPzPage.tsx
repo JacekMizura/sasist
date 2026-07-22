@@ -36,7 +36,7 @@ import { sumPutawayProgress } from "./putawayProgressUtils";
 import { useWmsPutawayPzScan } from "./useWmsPutawayPzScan";
 import { putawayLineQualityBadge } from "./putawayLineQualityBadge";
 import { isReturnReceiptDocumentType, documentCanWmsPutaway } from "./putawayDocumentGates";
-import { logPutawayDocumentRefresh, putawayDocumentGateError } from "./putawayDocumentStateDebug";
+import { logPutawayDocumentRefresh, putawayCatchUpInfo, putawayDocumentGateError } from "./putawayDocumentStateDebug";
 import { putawayRelocationAudit } from "../../utils/putawayLineAudit";
 import { mePutawayOperatorDisplayName } from "../../utils/putawayOperatorDisplay";
 import { useAuth } from "../../context/AuthContext";
@@ -373,8 +373,10 @@ export default function WmsPutawayPzPage() {
 
   const receivingDone = !!doc && String(doc.receiving_status ?? "").toUpperCase() === "DONE";
   const relocationOpen = !!doc && String(doc.relocation_status ?? "OPEN").toUpperCase() !== "DONE";
+  const relocationDone = !!doc && !relocationOpen;
   const putawayCardsEnabled = !!doc && documentCanWmsPutaway(doc);
   const isReturnReceiptDoc = !!doc && isReturnReceiptDocumentType(doc.document_type);
+  const catchUpInfo = doc && !isMmFlow ? putawayCatchUpInfo(doc, ui.catchUpComplete) : null;
 
   const sortedPutawayLines = useMemo(() => {
     if (!doc?.items?.length) return [];
@@ -392,6 +394,32 @@ export default function WmsPutawayPzPage() {
     () => sumPutawayProgress(doc?.items ?? [], doc?.receiving_status, doc?.total_ordered, doc?.total_received),
     [doc]
   );
+
+  const remainingPutawayQty = useMemo(() => {
+    if (!doc?.items?.length) return 0;
+    return Math.max(0, putawayProgress.target - putawayProgress.totalPut);
+  }, [doc?.items, putawayProgress]);
+
+  /** Footer visible while relocation is open and there is putaway work history / received qty. */
+  const canShowFinalizeButton = useMemo(() => {
+    if (!doc || !putawayCardsEnabled || !relocationOpen) return false;
+    if (!sortedPutawayLines.length) return false;
+    return sortedPutawayLines.some((it) => (Number(it.quantity_putaway) || 0) > PUTAWAY_FLOAT_EPS)
+      || putawayProgress.totalPut > PUTAWAY_FLOAT_EPS
+      || doc.is_fully_putaway === true;
+  }, [doc, putawayCardsEnabled, relocationOpen, sortedPutawayLines, putawayProgress.totalPut]);
+
+  const finalizeBlockedReason = useMemo(() => {
+    if (!doc || !canShowFinalizeButton) return null;
+    if (!receivingDone) return ui.finalizeBlockedReceiving;
+    if (doc.is_fully_putaway !== true || remainingPutawayQty > PUTAWAY_FLOAT_EPS) {
+      const rem = Math.max(0, Math.round(remainingPutawayQty * 100) / 100);
+      return rem > 0 ? `Pozostało ${fmtQty(rem)} szt. do rozlokowania.` : ui.finalizeBlockedRemaining;
+    }
+    return null;
+  }, [doc, canShowFinalizeButton, receivingDone, remainingPutawayQty, ui]);
+
+  const finalizeEnabled = canShowFinalizeButton && finalizeBlockedReason == null;
 
   const touchLine = useCallback((lineId: number) => {
     setLastTouchedAtByLineId((prev) => ({ ...prev, [lineId]: Date.now() }));
@@ -468,16 +496,8 @@ export default function WmsPutawayPzPage() {
     return () => window.clearTimeout(t);
   }, [flashLineId]);
 
-  const canShowFinalizeButton = useMemo(() => {
-    if (!doc || !putawayCardsEnabled || !relocationOpen) return false;
-    if (!sortedPutawayLines.length) return false;
-    if (String(doc.receiving_status ?? "").toUpperCase() !== "DONE") return false;
-    if (doc.is_fully_putaway !== true) return false;
-    return sortedPutawayLines.some((it) => (Number(it.quantity_putaway) || 0) > PUTAWAY_FLOAT_EPS);
-  }, [doc, putawayCardsEnabled, relocationOpen, sortedPutawayLines]);
-
   const handleFinalizeRelocation = useCallback(async () => {
-    if (!doc || !canShowFinalizeButton || finalizeBusy) return;
+    if (!doc || !finalizeEnabled || finalizeBusy) return;
     setFinalizeBusy(true);
     try {
       await finalizeWmsRelocationPz(tenantId, pzId);
@@ -497,7 +517,7 @@ export default function WmsPutawayPzPage() {
     } finally {
       setFinalizeBusy(false);
     }
-  }, [doc, canShowFinalizeButton, finalizeBusy, tenantId, pzId, navigate, hubListRoute, isMmFlow]);
+  }, [doc, finalizeEnabled, finalizeBusy, tenantId, pzId, navigate, hubListRoute, isMmFlow]);
 
   if (!Number.isFinite(pzId) || pzId < 1) {
     return (
@@ -541,6 +561,16 @@ export default function WmsPutawayPzPage() {
               {!isMmFlow && !receivingDone ? (
                 <span className="inline-flex rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest text-amber-900">
                   W trakcie przyjęcia
+                </span>
+              ) : null}
+              {!isMmFlow && catchUpInfo ? (
+                <span className="inline-flex rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest text-slate-700">
+                  Na bieżąco
+                </span>
+              ) : null}
+              {relocationDone ? (
+                <span className="inline-flex rounded bg-emerald-100 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest text-emerald-900">
+                  {ui.alreadyDone}
                 </span>
               ) : null}
               {(isMmFlow || receivingDone) && relocationOpen ? (
@@ -610,6 +640,17 @@ export default function WmsPutawayPzPage() {
             </div>
           )}
 
+          {relocationDone && !err ? (
+            <div className="p-4 bg-emerald-50 text-emerald-900 rounded-xl border border-emerald-200 text-sm font-medium w-full">
+              {ui.alreadyDone}
+            </div>
+          ) : null}
+
+          {catchUpInfo && !err && !relocationDone ? (
+            <div className="p-4 bg-slate-50 text-slate-700 rounded-xl border border-slate-200 text-sm font-medium w-full">
+              {catchUpInfo}
+            </div>
+          ) : null}
           {loading ? (
             <div className="text-center text-slate-500 py-10 font-medium">Wczytywanie...</div>
           ) : doc && displayLines.length > 0 ? (
@@ -642,14 +683,21 @@ export default function WmsPutawayPzPage() {
       {/* ODCHUDZONA STOPKA - FULL WIDTH */}
       {canShowFinalizeButton && (
         <footer className="fixed bottom-0 left-0 right-0 z-20 border-t border-slate-200 bg-white px-4 sm:px-6 py-3 shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.05)]">
-          <div className="flex w-full items-center justify-end">
+          <div className="flex w-full flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-end">
+            {finalizeBlockedReason ? (
+              <p className="text-center text-xs font-medium text-slate-500 sm:mr-auto sm:text-left">
+                {finalizeBlockedReason}
+              </p>
+            ) : null}
             <button
-              disabled={finalizeBusy}
+              type="button"
+              disabled={!finalizeEnabled || finalizeBusy}
+              title={finalizeBlockedReason ?? ui.finalize}
               onClick={() => void handleFinalizeRelocation()}
-              className="flex w-full sm:w-auto items-center justify-center gap-2 rounded-xl bg-emerald-600 px-8 py-3 text-sm font-black uppercase tracking-wider text-white shadow-md shadow-emerald-600/20 transition-all hover:bg-emerald-700 active:scale-95 disabled:opacity-50"
+              className="flex w-full sm:w-auto items-center justify-center gap-2 rounded-xl bg-emerald-600 px-8 py-3 text-sm font-black uppercase tracking-wider text-white shadow-md shadow-emerald-600/20 transition-all hover:bg-emerald-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <CheckCircle2 size={18} />
-              {finalizeBusy ? "Zapisywanie..." : ui.finalize}
+              {finalizeBusy ? "Zamykanie..." : ui.finalize}
             </button>
           </div>
         </footer>

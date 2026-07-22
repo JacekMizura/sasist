@@ -1,4 +1,20 @@
+## 2026-07-22 — Rozlokowanie PZ: 100% ≠ zamknięcie (explicit finalize)
+
+- Root cause: `recalculate_wms_document_completion` auto-ustawiał `relocation_status=DONE` (+ często `status=zakonczone`) przy `receiving_closed && full_put`; `recompute_putaway_status_for_document` ustawiał `putaway_status=DONE` przy catch-up 100% + receiving DONE.
+- Fix: progress remaining=0 → tylko IN_PROGRESS; DONE wyłącznie po `finalize_wms_relocation_pz` (receiving=DONE ∧ remaining=0), z rewalidacją transakcyjną.
+- UI: przycisk „Zakończ rozlokowanie” widoczny przy otwartym relocation; disabled + powód; catch-up banner slate; DONE = emerald (bez czerwonego alertu).
+- Lista aktywna: filtr `relocation_status != DONE` (nie po remaining=0).
+- Tests A–J: `test_wms_putaway_explicit_finalize.py`. **No push.**
+
+## 2026-07-21 — Skan nośnika PAL-5 w Przyjęciach: SSOT code|barcode
+
+- Root cause: Scanner Helper pokazywał syntetyczny „Nośnik / SSCC” bez DB; `/carriers/scan` zwraca zawsze 200, a lookup matchował tylko `barcode` (nie `code`).
+- SSOT: `find_carrier_by_scan_code` (code OR barcode); inventory-count używa tej samej funkcji.
+- Helper katalog: lista nośników z DB zamiast fałszywego PAL-N; MULTI_SCAN_TRACE w receiving.
+- Tests A–J: `test_wms_carrier_scan_ssot.py`. **No push.**
+
 ## 2026-07-21 — Bez rozlokowania (crossdock) + anulowanie obowiązku putaway
+
 
 - SSOT: `requires_putaway` na linii + `default_requires_putaway` na dokumencie; rozszerzony `stock_document_item_requires_putaway`.
 - NO_PUTAWAY: brak DOCK inventory / brak karty w kolejce; qty doc==actual NIE wyłącza putaway.

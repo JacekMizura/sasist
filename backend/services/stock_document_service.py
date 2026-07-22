@@ -669,12 +669,19 @@ def recompute_putaway_status_for_document(
 ) -> None:
     """PZ / Z-PZ / MM: NOT_STARTED | IN_PROGRESS | DONE from lines (received > 0).
 
-    Transient remaining=0 while receiving is still open must NOT become DONE —
-    more receipts may arrive; putaway stays IN_PROGRESS until receiving is closed.
+    Progress remaining=0 is NOT completion. ``putaway_status=DONE`` is set only when
+    relocation was explicitly finalized (``relocation_status=DONE``), or preserved
+    after that. While relocation is open, catch-up 100% stays IN_PROGRESS so more
+    receipts can reopen remaining qty on the same document.
     """
     if not doc_allows_putaway_status_recompute(doc):
         return
     from .complaints.complaint_physical_receipt import filter_putaway_eligible_lines
+
+    rls = str(getattr(doc, "relocation_status", "") or "").strip().upper()
+    if rls == "DONE":
+        doc.putaway_status = "DONE"
+        return
 
     eps = 1e-5
     rows_for_putaway = item_rows if db is None else filter_putaway_eligible_lines(db, item_rows)
@@ -686,29 +693,25 @@ def recompute_putaway_status_for_document(
     if not candidates:
         doc.putaway_status = "NOT_STARTED"
         return
-    all_done = True
     any_put = False
     for r in candidates:
-        rec = float(r.received_quantity or 0)
         if db is not None:
             put = effective_putaway_quantity_for_line(db, r)
         else:
             put = float(getattr(r, "quantity_putaway", 0) or 0)
         if put > eps:
             any_put = True
-        if put + eps < rec:
-            all_done = False
-    if all_done and receiving_is_closed_for_putaway_completion(doc):
-        doc.putaway_status = "DONE"
-    elif any_put:
-        doc.putaway_status = "IN_PROGRESS"
-    else:
-        doc.putaway_status = "NOT_STARTED"
+            break
+    # Catch-up 100% (all received put away) while relocation is still OPEN → IN_PROGRESS.
+    doc.putaway_status = "IN_PROGRESS" if any_put else "NOT_STARTED"
 
 
 def recalculate_wms_document_completion(db: Session, tenant_id: int, document_id: int) -> bool:
     """
-    Sync putaway totals from operations and auto-close WMS receiving / relocation when complete.
+    Sync putaway totals from operations and receiving progress flags.
+
+    Does NOT auto-close relocation: ``relocation_status=DONE`` / document ``zakonczone``
+    happen only via explicit ``finalize_wms_relocation_pz`` (or non-WMS office post paths).
     Returns True when document fields were updated (caller should commit).
     """
     doc = (
@@ -752,27 +755,11 @@ def recalculate_wms_document_completion(db: Session, tenant_id: int, document_id
         changed = True
     # Receiving closes ONLY via explicit finish_wms_receiving_pz (or equivalent).
     # Never auto-DONE when actual >= ordered — operator may still find surplus.
-    rs_now = str(getattr(doc, "receiving_status", "") or "").strip().upper()
-    receiving_closed = rs_now == "DONE"
+    # Relocation never auto-DONE here — explicit finalize only.
 
     ps_before = str(getattr(doc, "putaway_status", "") or "").strip().upper()
     recompute_putaway_status_for_document(doc, rows, db)
     if str(getattr(doc, "putaway_status", "") or "").strip().upper() != ps_before:
-        changed = True
-
-    rls_before = str(getattr(doc, "relocation_status", "") or "").strip().upper()
-    if (
-        receiving_closed
-        and full_put
-        and rls_before != "DONE"
-        and not is_z_pz_collective_open(doc)
-    ):
-        doc.relocation_status = "DONE"
-        changed = True
-
-    st_before = _doc_status_lower(doc)
-    if receiving_closed and full_put and st_before in ("draft", "closed"):
-        doc.status = "zakonczone"
         changed = True
 
     if changed:

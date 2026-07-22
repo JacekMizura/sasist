@@ -78,7 +78,10 @@ export const MM_RELOCATION_UI = {
   backToHub: "Wróć do przesunięć",
   invalidDoc: "Nieprawidłowy dokument przesunięcia.",
   loadFailed: "Nie udało się wczytać dokumentu przesunięcia.",
-  alreadyDone: "Przesunięcie dla tego dokumentu zostało zakończone.",
+  alreadyDone: "Przesunięcie zakończone",
+  catchUpComplete: "Wszystkie dotychczas przyjęte pozycje są przeniesione.",
+  finalizeBlockedReceiving: "Przyjęcie nadal trwa",
+  finalizeBlockedRemaining: "Pozostały ilości do przesunięcia",
   notAllowed: "Przesunięcie niedostępne dla bieżącego statusu dokumentu.",
 } as const;
 
@@ -103,7 +106,11 @@ export const PUTAWAY_FLOW_UI = {
   backToHub: "Wróć do listy",
   invalidDoc: "Nieprawidłowy identyfikator dokumentu.",
   loadFailed: "Nie udało się wczytać dokumentu.",
-  alreadyDone: "Rozlokowanie dla tego dokumentu zostało zakończone.",
+  alreadyDone: "Rozlokowanie zakończone",
+  catchUpComplete:
+    "Wszystkie dotychczas przyjęte produkty są rozlokowane. Przyjęcie nadal trwa.",
+  finalizeBlockedReceiving: "Przyjęcie nadal trwa",
+  finalizeBlockedRemaining: "Pozostały ilości do rozlokowania",
   notAllowed: "Rozlokowanie niedostępne dla bieżącego statusu dokumentu.",
 } as const;
 
