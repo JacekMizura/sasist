@@ -85,6 +85,12 @@ type CompanySettingsContextValue = {
   warehouseById: (id: number) => string;
   assignmentForTenantWarehouse: (warehouseId: number) => TenantWarehouseAssignment | null;
   defaultWarehouseName: string;
+  warehouseCreateOpen: boolean;
+  openWarehouseCreate: () => void;
+  closeWarehouseCreate: () => void;
+  tenantCreateOpen: boolean;
+  openTenantCreate: () => void;
+  closeTenantCreate: () => void;
 };
 
 const CompanySettingsContext = createContext<CompanySettingsContextValue | null>(null);
@@ -116,6 +122,8 @@ export function CompanySettingsProvider({ children }: { children: ReactNode }) {
   const [consolidationWarehouseBaseline, setConsolidationWarehouseBaseline] = useState<number | "">("");
   const [fulfillmentCfgLoading, setFulfillmentCfgLoading] = useState(false);
   const [fulfillmentCfgSaving, setFulfillmentCfgSaving] = useState(false);
+  const [warehouseCreateOpen, setWarehouseCreateOpen] = useState(false);
+  const [tenantCreateOpen, setTenantCreateOpen] = useState(false);
 
   const applyDto = useCallback((d: CompanyProfileDto) => {
     setProfile(d);
@@ -414,6 +422,12 @@ export function CompanySettingsProvider({ children }: { children: ReactNode }) {
     warehouseById,
     assignmentForTenantWarehouse,
     defaultWarehouseName,
+    warehouseCreateOpen,
+    openWarehouseCreate: () => setWarehouseCreateOpen(true),
+    closeWarehouseCreate: () => setWarehouseCreateOpen(false),
+    tenantCreateOpen,
+    openTenantCreate: () => setTenantCreateOpen(true),
+    closeTenantCreate: () => setTenantCreateOpen(false),
   };
 
   return <CompanySettingsContext.Provider value={value}>{children}</CompanySettingsContext.Provider>;

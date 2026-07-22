@@ -21,6 +21,9 @@ type Props = {
   title?: string;
   description?: string;
   kinds: ScopeKindConfig[];
+  /** When true, kind label is a heading above DocumentTemplateSelect (Firma screen). */
+  kindAsHeading?: boolean;
+  titleClassName?: string;
 };
 
 export function DocumentTemplateScopeSection({
@@ -30,6 +33,8 @@ export function DocumentTemplateScopeSection({
   title = "Szablony wydruków",
   description = "Wybierz opublikowane wersje szablonów dla tego modułu.",
   kinds,
+  kindAsHeading = false,
+  titleClassName,
 }: Props) {
   const [values, setValues] = useState<Record<string, number | null>>({});
   const [loading, setLoading] = useState(true);
@@ -78,14 +83,14 @@ export function DocumentTemplateScopeSection({
   return (
     <div className="space-y-4">
       <div>
-        <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
+        <h3 className={titleClassName?.trim() || "text-sm font-semibold text-slate-900"}>{title}</h3>
         <p className="mt-1 text-xs text-slate-500">{description}</p>
       </div>
-      <div className="grid gap-4 md:grid-cols-2">
-        {kinds.map((k) => (
-          <label key={k.kindCode} className="block text-xs font-medium text-slate-600">
-            {k.label}
-            <div className="mt-1">
+      <div className="grid gap-6 md:grid-cols-2">
+        {kinds.map((k) =>
+          kindAsHeading ? (
+            <div key={k.kindCode} className="min-w-0">
+              <p className="mb-2 text-sm font-bold text-slate-900">{k.label}</p>
               <DocumentTemplateSelect
                 tenantId={tenantId}
                 kindCode={k.kindCode}
@@ -94,8 +99,21 @@ export function DocumentTemplateScopeSection({
                 onChange={(versionId) => void onChange(k.kindCode, k.variantCode, versionId)}
               />
             </div>
-          </label>
-        ))}
+          ) : (
+            <label key={k.kindCode} className="block text-xs font-medium text-slate-600">
+              {k.label}
+              <div className="mt-1">
+                <DocumentTemplateSelect
+                  tenantId={tenantId}
+                  kindCode={k.kindCode}
+                  variantCode={k.variantCode}
+                  value={values[k.kindCode] ?? null}
+                  onChange={(versionId) => void onChange(k.kindCode, k.variantCode, versionId)}
+                />
+              </div>
+            </label>
+          ),
+        )}
       </div>
     </div>
   );
