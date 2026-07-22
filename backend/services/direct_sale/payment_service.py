@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime
 
 from sqlalchemy.orm import Session
@@ -60,6 +61,8 @@ def orchestrate_direct_sale_payment(
     method: str = "CASH",
     payment_splits: list[dict] | None = None,
     performed_by_user_id: int | None = None,
+    settle: bool = True,
+    payment_terms_days: int | None = None,
 ) -> Payment:
     existing = load_payment_for_session(db, sess, order_id=int(order.id))
     if existing is not None:
@@ -88,6 +91,11 @@ def orchestrate_direct_sale_payment(
 
     provider = _PROVIDER_FOR_METHOD.get(m if m != "MIXED" else split_rows[0][0], "CASH")
     terminal_id = str(sess.workstation_id) if sess.workstation_id else None
+    meta: dict = {}
+    if payment_terms_days is not None:
+        meta["payment_terms_days"] = int(payment_terms_days)
+    if not settle:
+        meta["awaiting_transfer"] = True
     pay = Payment(
         tenant_id=int(order.tenant_id),
         order_id=int(order.id),
@@ -102,6 +110,7 @@ def orchestrate_direct_sale_payment(
         payment_provider=provider,
         terminal_id=terminal_id,
         settlement_state="PENDING",
+        metadata_json=json.dumps(meta, ensure_ascii=False) if meta else None,
     )
     db.add(pay)
     db.flush()
@@ -111,14 +120,14 @@ def orchestrate_direct_sale_payment(
             payment_id=int(pay.id),
             method=sm,
             amount=sa,
-            status="AUTHORIZED",
+            status="AUTHORIZED" if settle else "PENDING",
         )
         db.add(txn_auth)
     db.flush()
 
     emit_operational_sales_event(
         db,
-        "payment.authorized",
+        "payment.authorized" if settle else "payment.pending",
         tenant_id=int(order.tenant_id),
         warehouse_id=int(order.warehouse_id),
         order_id=int(order.id),
@@ -126,8 +135,30 @@ def orchestrate_direct_sale_payment(
         source="direct_sales",
         performed_by_user_id=performed_by_user_id,
         device_id=int(sess.workstation_id) if sess.workstation_id else None,
-        extra={"payment_id": int(pay.id), "amount": amt, "method": m},
+        extra={"payment_id": int(pay.id), "amount": amt, "method": m, "settle": settle},
     )
+
+    if not settle:
+        pay.status = "PENDING"
+        pay.settlement_state = "PENDING"
+        pay.authorization_reference = f"AWAIT-{pay.id}"
+        pay.external_transaction_id = f"DS-{sess.id}-{pay.id}"
+        db.flush()
+        log_payment_orchestration(
+            action="pending_transfer",
+            payment_id=int(pay.id),
+            order_id=int(order.id),
+            session_id=int(sess.id),
+            tenant_id=int(order.tenant_id),
+            warehouse_id=int(order.warehouse_id),
+            amount=amt,
+            provider=provider,
+            method=m,
+            settlement_state="PENDING",
+            operator_id=performed_by_user_id,
+            workstation_id=int(sess.workstation_id) if sess.workstation_id else None,
+        )
+        return pay
 
     for sm, sa in split_rows:
         txn_settle = PaymentTransaction(

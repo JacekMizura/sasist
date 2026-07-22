@@ -258,6 +258,10 @@ def complete_direct_sale_session(
     if ui_status not in ("ACTIVE", "CHECKOUT", "SUSPENDED", "FAILED"):
         raise DirectSaleError("Sesja nie może być zakończona.", code="invalid_status")
 
+    from .fulfillment_service import validate_fulfillment_for_complete
+
+    validate_fulfillment_for_complete(sess)
+
     try:
         entities = run_staged_complete_pipeline(
             db,

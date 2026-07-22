@@ -194,6 +194,11 @@ def _stage_create_order_and_payment(
 
     pay = load_payment_for_session(db, sess, order_id=entities.order_id)
     if pay is None:
+        from .fulfillment_service import get_session_fulfillment, transfer_should_settle
+
+        fulfillment = get_session_fulfillment(sess)
+        settle = transfer_should_settle(fulfillment, payment_method)
+        terms_days = fulfillment.get("payment_terms_days")
         pay = orchestrate_direct_sale_payment(
             db,
             order=order,
@@ -202,6 +207,8 @@ def _stage_create_order_and_payment(
             method=payment_method,
             payment_splits=payment_splits,
             performed_by_user_id=performed_by_user_id,
+            settle=settle,
+            payment_terms_days=int(terms_days) if terms_days is not None else None,
         )
     entities.payment_id = int(pay.id)
     sess.order_id = int(order.id)
@@ -211,6 +218,11 @@ def _stage_create_order_and_payment(
         order,
         payment_method=payment_method,
         document_subtype=str(getattr(sess, "document_subtype", None) or "RECEIPT"),
+        payment_status_label=(
+            None
+            if str(getattr(pay, "status", "") or "").upper() in ("PAID", "SETTLED", "CAPTURED")
+            else "Oczekuje na przelew"
+        ),
     )
     if not getattr(sess, "pipeline_status", None) or str(sess.pipeline_status) == PIPELINE_FAILED:
         sess.pipeline_status = PIPELINE_PAYMENT_STARTED

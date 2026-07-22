@@ -131,13 +131,26 @@ def create_order_from_session(
     db.add(order)
     db.flush()
 
+    from .fulfillment_service import (
+        FULFILLMENT_DELIVERY,
+        apply_fulfillment_to_order,
+    )
+
+    fulfillment = apply_fulfillment_to_order(db, sess, order)
+    is_delivery = str(fulfillment.get("mode") or "").upper() == FULFILLMENT_DELIVERY
+
     from ..order_fulfillment_lifecycle_service import (
         apply_initial_fulfillment_assignment,
         on_order_shipped,
     )
 
     apply_initial_fulfillment_assignment(db, order)
-    on_order_shipped(order, db)
+    if not is_delivery:
+        # Pickup / POS: stock already issued at counter — mark shipped.
+        on_order_shipped(order, db)
+    else:
+        # Delivery: goods may still be issued at counter; shipment/label created later.
+        order.packed_at = None
 
     panel_status_id: int | None = None
     try:

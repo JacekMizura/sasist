@@ -1,9 +1,8 @@
 import { useMemo } from "react";
 
-import { formatDirectSalesAggregateTotal } from "../../../modules/directSales/settings/formatDirectSalesPrice";
 import { useResolvedDirectSalesSettings } from "../../../modules/directSales/settings/resolvedDirectSalesSettings";
-import type { DirectSaleSession } from "../../../utils/normalizeDirectSales";
-import { formatMoneyPl, paymentMethodPl, sessionStatusPl } from "../directSalesTerminology";
+import type { DirectSaleFulfillment, DirectSaleSession } from "../../../utils/normalizeDirectSales";
+import { formatMoneyPl, paymentMethodPl } from "../directSalesTerminology";
 import { CashChangePanel } from "./CashChangePanel";
 import { MixedPaymentPanel } from "./MixedPaymentPanel";
 
@@ -21,6 +20,8 @@ type Props = {
   hasSession: boolean;
   hasLines: boolean;
   session: DirectSaleSession | null;
+  fulfillment: DirectSaleFulfillment;
+  customerPaymentTermsDays: number | null;
   paymentMethod: string;
   cashReceived: number;
   mixedCashAmount: number;
@@ -29,6 +30,7 @@ type Props = {
   onMixedCashChange: (value: number) => void;
   onMixedCardChange: (value: number) => void;
   onPaymentMethodChange: (method: string) => void;
+  onPaymentTermsChange: (mode: "IMMEDIATE" | "DEFERRED", days: number | null) => void;
   onComplete: () => void;
 };
 
@@ -38,6 +40,8 @@ export function PaymentTerminalPanel({
   hasSession,
   hasLines,
   session,
+  fulfillment,
+  customerPaymentTermsDays,
   paymentMethod,
   cashReceived,
   mixedCashAmount,
@@ -46,6 +50,7 @@ export function PaymentTerminalPanel({
   onMixedCashChange,
   onMixedCardChange,
   onPaymentMethodChange,
+  onPaymentTermsChange,
   onComplete,
 }: Props) {
   const resolvedDirectSalesSettings = useResolvedDirectSalesSettings();
@@ -55,7 +60,7 @@ export function PaymentTerminalPanel({
       if (m.id === "CASH") return pm.cash;
       if (m.id === "CARD") return pm.card;
       if (m.id === "BLIK") return pm.blik;
-      if (m.id === "TRANSFER") return pm.transfer;
+      if (m.id === "TRANSFER") return pm.transfer !== false;
       if (m.id === "MIXED") return pm.mixed;
       return false;
     });
@@ -63,7 +68,7 @@ export function PaymentTerminalPanel({
 
   const isCash = paymentMethod === "CASH";
   const isMixed = paymentMethod === "MIXED";
-  const remaining = Math.max(0, total - cashReceived);
+  const isTransfer = paymentMethod === "TRANSFER";
   const mixedSum = mixedCashAmount + mixedCardAmount;
   const mixedOk = Math.abs(mixedSum - total) <= 0.02 && mixedSum > 0;
   const cashOk =
@@ -76,45 +81,85 @@ export function PaymentTerminalPanel({
     methods.length > 0 &&
     (isMixed ? mixedOk : !isCash || cashOk);
 
+  const deferredDays =
+    fulfillment.payment_terms_days ??
+    (customerPaymentTermsDays != null && customerPaymentTermsDays > 0 ? customerPaymentTermsDays : null);
+
   return (
-    <div className="space-y-2">
-      <div className="rounded-xl border border-slate-800 bg-slate-900 p-4 text-white">
-        <div className="text-xs uppercase tracking-wide text-slate-400">Do zapłaty</div>
-        <div className="mt-1 text-4xl font-bold tabular-nums">
-          {formatDirectSalesAggregateTotal(total, resolvedDirectSalesSettings.price_display)}
+    <div className="space-y-3">
+      <div>
+        <div className="mb-2 flex items-end justify-between">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-blue-900/50">Metoda płatności</h2>
+          <span className="text-[10px] font-bold uppercase text-blue-600">{paymentMethodPl(paymentMethod)}</span>
         </div>
-        {isCash && cashReceived > 0 && remaining > 0.009 ? (
-          <div className="mt-1 text-sm text-amber-300">Pozostało: {formatMoneyPl(remaining)}</div>
-        ) : null}
-        {session?.status ? (
-          <div className="mt-1 text-[11px] text-slate-400">Sesja: {sessionStatusPl(session.status)}</div>
-        ) : null}
+
+        {methods.length === 0 ? (
+          <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+            Brak włączonych metod płatności w ustawieniach sprzedaży bezpośredniej.
+          </p>
+        ) : (
+          <div className={`grid gap-1.5 ${methods.length <= 3 ? "grid-cols-3" : "grid-cols-2"}`}>
+            {methods.map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                disabled={busy}
+                onClick={() => onPaymentMethodChange(m.id)}
+                className={`rounded-xl px-2 py-3 text-sm font-semibold disabled:opacity-50 ${
+                  paymentMethod === m.id
+                    ? "bg-slate-800 text-white"
+                    : "border border-slate-200 bg-white text-slate-800 hover:bg-slate-50"
+                }`}
+              >
+                {m.label}
+                {m.key ? <span className="ml-1 text-[10px] opacity-60">{m.key}</span> : null}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
-      {methods.length === 0 ? (
-        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-          Brak włączonych metod płatności w ustawieniach sprzedaży bezpośredniej.
-        </p>
-      ) : (
-        <div className={`grid gap-1.5 ${methods.length <= 3 ? "grid-cols-3" : "grid-cols-2"}`}>
-          {methods.map((m) => (
+      {isTransfer ? (
+        <div className="space-y-2 rounded-2xl border border-slate-100 bg-slate-50/70 p-3">
+          <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Termin płatności</div>
+          <div className="grid grid-cols-2 gap-2">
             <button
-              key={m.id}
               type="button"
               disabled={busy}
-              onClick={() => onPaymentMethodChange(m.id)}
-              className={`rounded-xl px-2 py-3 text-sm font-semibold disabled:opacity-50 ${
-                paymentMethod === m.id
-                  ? "bg-slate-800 text-white"
-                  : "border border-slate-200 bg-white text-slate-800 hover:bg-slate-50"
+              onClick={() => onPaymentTermsChange("IMMEDIATE", null)}
+              className={`rounded-xl px-2 py-2 text-xs font-bold ${
+                fulfillment.payment_terms_mode === "IMMEDIATE"
+                  ? "bg-blue-600 text-white"
+                  : "border border-slate-200 bg-white text-slate-700"
               }`}
             >
-              {m.label}
-              {m.key ? <span className="ml-1 text-[10px] opacity-60">{m.key}</span> : null}
+              Natychmiast
             </button>
-          ))}
+            <button
+              type="button"
+              disabled={busy || deferredDays == null}
+              title={
+                deferredDays == null
+                  ? "Brak terminu na karcie klienta (payment_terms_days)"
+                  : `Termin klienta: ${deferredDays} dni`
+              }
+              onClick={() => onPaymentTermsChange("DEFERRED", deferredDays)}
+              className={`rounded-xl px-2 py-2 text-xs font-bold disabled:opacity-40 ${
+                fulfillment.payment_terms_mode === "DEFERRED"
+                  ? "bg-blue-600 text-white"
+                  : "border border-slate-200 bg-white text-slate-700"
+              }`}
+            >
+              {deferredDays != null ? `Termin ${deferredDays} dni` : "Termin klienta"}
+            </button>
+          </div>
+          {fulfillment.payment_terms_mode === "DEFERRED" ? (
+            <p className="text-[10px] font-medium text-slate-500">
+              Płatność pozostanie w statusie oczekującym (bez natychmiastowego PAID).
+            </p>
+          ) : null}
         </div>
-      )}
+      ) : null}
 
       {isMixed ? (
         <MixedPaymentPanel
@@ -134,8 +179,14 @@ export function PaymentTerminalPanel({
           onReceivedChange={onCashReceivedChange}
           disabled={busy}
         />
-      ) : !isCash ? (
+      ) : null}
+
+      {!isCash && !isMixed && !isTransfer ? (
         <p className="text-center text-xs text-slate-500">Wybrano: {paymentMethodPl(paymentMethod)}</p>
+      ) : null}
+
+      {session?.status === "CHECKOUT" ? (
+        <p className="text-center text-[10px] font-medium text-slate-400">Sesja w checkout — do zapłaty {formatMoneyPl(total)}</p>
       ) : null}
 
       <button

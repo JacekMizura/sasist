@@ -5,6 +5,8 @@ import { DirectSalesHistoryPanel } from "./history/DirectSalesHistoryPanel";
 import { CustomerPanel } from "./CustomerPanel";
 import { DirectSalesTotalsPanel } from "./DirectSalesTotalsPanel";
 import { DocumentPanel } from "./DocumentPanel";
+import { FulfillmentModePanel } from "./fulfillment/FulfillmentModePanel";
+import { ShippingDetailsPanel } from "./fulfillment/ShippingDetailsPanel";
 import { OrderDiscountPanel } from "./OrderDiscountPanel";
 import { RetailCustomerBadge } from "./RetailCustomerBadge";
 import { PaymentTerminalPanel } from "./payment/PaymentTerminalPanel";
@@ -96,6 +98,20 @@ export function DirectSalesLayout({ terminal }: Props) {
 
   const session = sessionState.session;
   const hasLines = (session?.lines.length ?? 0) > 0;
+  const fulfillment = session?.fulfillment ?? {
+    mode: "PICKUP" as const,
+    shipping_address: null,
+    customer_address_id: null,
+    shipping_method_id: null,
+    pickup_point_code: null,
+    pickup_point_label: null,
+    payment_terms_mode: "IMMEDIATE" as const,
+    payment_terms_days: null,
+  };
+  const showCustomer =
+    sessionState.documentSubtype === "INVOICE" ||
+    fulfillment.mode === "DELIVERY" ||
+    (session?.customer_id != null && !(session.customer_is_retail ?? false));
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-white text-slate-900 selection:bg-blue-100">
@@ -169,7 +185,7 @@ export function DirectSalesLayout({ terminal }: Props) {
               onChange={(v) => void sessionState.changeDocumentSubtype(v)}
               disabled={sessionState.busy}
             />
-            {sessionState.documentSubtype === "RECEIPT" ? (
+            {sessionState.documentSubtype === "RECEIPT" && !showCustomer ? (
               <RetailCustomerBadge />
             ) : (
               <CustomerPanel
@@ -182,6 +198,22 @@ export function DirectSalesLayout({ terminal }: Props) {
                 onSessionUpdated={sessionState.applySession}
               />
             )}
+            <FulfillmentModePanel
+              mode={fulfillment.mode}
+              disabled={sessionState.busy || session == null}
+              onChange={(mode) => void sessionState.changeFulfillment({ mode })}
+            />
+            {fulfillment.mode === "DELIVERY" ? (
+              <ShippingDetailsPanel
+                warehouseId={warehouseId}
+                fulfillment={fulfillment}
+                customerAddresses={customer.detail?.addresses ?? []}
+                customerPhone={customer.detail?.phone}
+                customerEmail={customer.detail?.email}
+                disabled={sessionState.busy || session == null}
+                onPatch={(patch) => void sessionState.changeFulfillment(patch)}
+              />
+            ) : null}
             <DirectSalesTotalsPanel totals={session?.totals} loading={sessionState.busy} />
             <OrderDiscountPanel
               disabled={sessionState.busy}
@@ -189,13 +221,14 @@ export function DirectSalesLayout({ terminal }: Props) {
               discountValue={session?.order_discount_value ?? 0}
               onApply={(type, value) => void sessionState.changeOrderDiscount(type, value)}
             />
-            {/* PaymentTerminalPanel wskakuje naturalnie zaraz pod Dokumentem */}
             <PaymentTerminalPanel
               total={sessionState.total}
               busy={sessionState.busy}
               hasSession={session != null}
               hasLines={hasLines}
               session={session}
+              fulfillment={fulfillment}
+              customerPaymentTermsDays={customer.detail?.payment_terms_days ?? null}
               paymentMethod={sessionState.paymentMethod}
               cashReceived={sessionState.cashReceived}
               mixedCashAmount={sessionState.mixedCashAmount}
@@ -204,6 +237,12 @@ export function DirectSalesLayout({ terminal }: Props) {
               onMixedCashChange={sessionState.setMixedCashAmount}
               onMixedCardChange={sessionState.setMixedCardAmount}
               onPaymentMethodChange={sessionState.setPaymentMethod}
+              onPaymentTermsChange={(mode, days) =>
+                void sessionState.changeFulfillment({
+                  paymentTermsMode: mode,
+                  paymentTermsDays: days,
+                })
+              }
               onComplete={() => void handleComplete()}
             />
           </div>

@@ -109,6 +109,44 @@ class DirectSaleInvoiceCustomerBody(BaseModel):
     city: str | None = Field(None, max_length=128)
 
 
+class DirectSaleShippingAddressBody(BaseModel):
+    first_name: str = ""
+    last_name: str = ""
+    company_name: str | None = None
+    street: str = ""
+    house_number: str = ""
+    apartment_number: str | None = None
+    postal_code: str = ""
+    city: str = ""
+    country_code: str = "PL"
+    phone: str | None = None
+    email: str | None = None
+
+
+class DirectSaleFulfillmentPatchBody(BaseModel):
+    mode: Literal["PICKUP", "DELIVERY"] | None = None
+    shipping_address: DirectSaleShippingAddressBody | None = None
+    customer_address_id: int | None = Field(None, ge=1)
+    clear_customer_address: bool = False
+    shipping_method_id: str | None = None
+    clear_shipping_method: bool = False
+    pickup_point_code: str | None = None
+    pickup_point_label: str | None = None
+    payment_terms_mode: Literal["IMMEDIATE", "DEFERRED"] | None = None
+    payment_terms_days: int | None = Field(None, ge=0)
+
+
+class DirectSaleFulfillmentRead(BaseModel):
+    mode: Literal["PICKUP", "DELIVERY"] = "PICKUP"
+    shipping_address: DirectSaleShippingAddressBody | None = None
+    customer_address_id: int | None = None
+    shipping_method_id: str | None = None
+    pickup_point_code: str | None = None
+    pickup_point_label: str | None = None
+    payment_terms_mode: Literal["IMMEDIATE", "DEFERRED"] = "IMMEDIATE"
+    payment_terms_days: int | None = None
+
+
 class DirectSaleSessionRead(BaseModel):
     id: int
     tenant_id: int
@@ -131,6 +169,7 @@ class DirectSaleSessionRead(BaseModel):
     order_discount_value: float = 0.0
     expires_at: datetime | None = None
     payment_context: dict | None = None
+    fulfillment: DirectSaleFulfillmentRead | None = None
     totals: DirectSaleSessionTotalsRead | None = None
     lines: list[DirectSaleSessionLineRead] = Field(default_factory=list)
 

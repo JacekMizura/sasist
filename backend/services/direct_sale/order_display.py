@@ -39,6 +39,10 @@ def direct_sale_customer_names(order: "Order") -> Tuple[Optional[str], Optional[
 def direct_sale_shipping_display(order: "Order") -> Tuple[Optional[str], Optional[str], Optional[str]]:
     if not is_direct_sale_order(order):
         return None, None, None
+    mode = str(getattr(order, "fulfillment_mode", None) or "").strip().upper()
+    if mode in ("DELIVERY", "WMS"):
+        method = str(getattr(order, "shipping_method", None) or "").strip() or None
+        return method or "Wysyłka", None, None
     return PICKUP_DELIVERY_LABEL, None, None
 
 
@@ -71,10 +75,11 @@ def apply_direct_sale_order_panel_metadata(
     *,
     payment_method: str,
     document_subtype: str | None = None,
+    payment_status_label: str | None = None,
 ) -> None:
     """Panel fields for completed stationary retail orders."""
     meta = _order_import_meta(order)
-    meta["panel_payment_status"] = PAID_STATUS_LABEL
+    meta["panel_payment_status"] = payment_status_label or PAID_STATUS_LABEL
     meta["panel_payment_method"] = payment_method_label_pl(payment_method)
     if document_subtype:
         sub = str(document_subtype).strip().upper()

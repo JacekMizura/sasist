@@ -88,7 +88,7 @@ export const DEFAULT_DIRECT_SALES_SETTINGS: DirectSalesSettingsConfig = {
   cancelled_order_status_id: null,
   default_document_type: "PA",
   auto_start_new_session: true,
-  payment_methods: { cash: true, card: true, blik: true, transfer: false, mixed: false },
+  payment_methods: { cash: true, card: true, blik: true, transfer: true, mixed: false },
   require_cash_received: true,
   show_change_amount: true,
   allow_incomplete_payment: false,

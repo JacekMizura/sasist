@@ -27,7 +27,7 @@ class DirectSalesPaymentMethods(BaseModel):
     cash: bool = True
     card: bool = True
     blik: bool = True
-    transfer: bool = False
+    transfer: bool = True
     mixed: bool = False
 
 

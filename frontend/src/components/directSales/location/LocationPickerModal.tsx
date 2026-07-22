@@ -92,6 +92,9 @@ export function LocationPickerModal({
                         <span className={`text-sm font-black ${active ? "text-blue-700" : "text-slate-700"}`}>
                           {loc.available} <span className="text-[10px] font-medium text-slate-400">szt.</span>
                         </span>
+                        {loc.type ? (
+                          <div className="text-[10px] font-medium text-slate-400">{loc.type}</div>
+                        ) : null}
                       </div>
                     </button>
                   </li>

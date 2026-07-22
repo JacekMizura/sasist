@@ -11,6 +11,7 @@ import {
   getDirectSaleSession,
   patchDirectSaleLine,
   patchSessionDocument,
+  patchSessionFulfillment,
   patchSessionOrderDiscount,
   resumeDirectSaleSession,
   scanDirectSaleSession,
@@ -469,6 +470,36 @@ export function useDirectSalesSession({
     [apiScope, session],
   );
 
+  const changeFulfillment = useCallback(
+    async (patch: {
+      mode?: "PICKUP" | "DELIVERY";
+      shippingAddress?: Record<string, unknown> | null;
+      customerAddressId?: number | null;
+      clearCustomerAddress?: boolean;
+      shippingMethodId?: string | null;
+      clearShippingMethod?: boolean;
+      pickupPointCode?: string | null;
+      pickupPointLabel?: string | null;
+      paymentTermsMode?: "IMMEDIATE" | "DEFERRED";
+      paymentTermsDays?: number | null;
+    }) => {
+      const scope = apiScope();
+      if (!session || !scope) return;
+      setBusy(true);
+      try {
+        const s = await patchSessionFulfillment({ ...scope, sessionId: session.id, ...patch });
+        setSession(s);
+      } catch (e) {
+        const msg = extractApiErrorMessage(e);
+        setError(msg);
+        showScannerToast(msg, "error");
+      } finally {
+        setBusy(false);
+      }
+    },
+    [apiScope, session, showScannerToast],
+  );
+
   const changeLineDiscount = useCallback(
     async (lineId: number, type: "percent" | "amount" | null, value: number) => {
       const scope = apiScope();
@@ -596,6 +627,7 @@ export function useDirectSalesSession({
     dismissCompleteError,
     documentSubtype,
     changeDocumentSubtype,
+    changeFulfillment,
     changeLineDiscount,
     changeOrderDiscount,
     lastComplete,

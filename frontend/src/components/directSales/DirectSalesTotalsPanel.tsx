@@ -18,24 +18,27 @@ export function DirectSalesTotalsPanel({ totals, loading }: Props) {
   const hasDiscount = totals.total_discount_gross > 0.009;
 
   return (
-    <div className="rounded-2xl border border-slate-100 bg-slate-50/60 p-4 space-y-2 text-sm">
+    <div className="space-y-2 rounded-2xl border border-slate-100 bg-white p-4 text-sm">
       <div className="flex justify-between text-slate-600">
         <span>Suma pozycji</span>
-        <span className="font-semibold tabular-nums">{formatMoneyPl(totals.subtotal_gross)}</span>
+        <span className="tabular-nums font-semibold">{formatMoneyPl(totals.subtotal_gross)}</span>
       </div>
       {hasDiscount ? (
         <div className="flex justify-between text-amber-800">
-          <span>Rabaty</span>
-          <span className="font-semibold tabular-nums">−{formatMoneyPl(totals.total_discount_gross)}</span>
+          <span>Rabat</span>
+          <span className="tabular-nums font-semibold">−{formatMoneyPl(totals.total_discount_gross)}</span>
         </div>
       ) : null}
-      <div className="flex justify-between text-slate-500 text-xs">
-        <span>Netto</span>
-        <span className="tabular-nums">{formatMoneyPl(totals.total_net)}</span>
-      </div>
-      <div className="flex justify-between border-t border-slate-200 pt-2 text-base font-bold text-slate-900">
-        <span>Do zapłaty</span>
-        <span className="tabular-nums text-blue-700">{formatMoneyPl(totals.total_gross)}</span>
+      <div className="flex items-end justify-between border-t border-slate-200 pt-3">
+        <div>
+          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Do zapłaty</div>
+          <div className="text-[11px] font-medium text-slate-400">
+            netto {formatMoneyPl(totals.total_net)}
+          </div>
+        </div>
+        <div className="text-3xl font-black tabular-nums tracking-tight text-slate-900">
+          {formatMoneyPl(totals.total_gross)}
+        </div>
       </div>
     </div>
   );

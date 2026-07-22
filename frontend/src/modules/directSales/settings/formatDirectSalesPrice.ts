@@ -4,6 +4,7 @@ import {
   formatResolvedSalePrice,
   resolveDirectSalesUnitPricing,
 } from "../../../utils/resolvedProductPricing";
+import { formatMoneyPl } from "../../../utils/formatOrderMoney";
 
 /** `unitPriceNet` is product sale net (same as `Product.sale_price` / session `unit_price`). */
 export function formatDirectSalesUnitPrice(
@@ -31,19 +32,19 @@ export function formatDirectSalesLineTotal(
 
 export function formatDirectSalesMargin(marginPercent: number | null | undefined): string | null {
   if (marginPercent == null || !Number.isFinite(marginPercent)) return null;
-  return `marża ${marginPercent.toFixed(1)}%`;
+  return `marża ${marginPercent.toFixed(1).replace(".", ",")}%`;
 }
 
 const DEFAULT_VAT_RATE = 23;
 
-/** Format session payment total (sum of line gross totals). */
+/** Format session payment total (sum of line gross totals) — Polish money only. */
 export function formatDirectSalesAggregateTotal(
   totalGross: number,
   mode: PriceDisplayMode,
   vatRate = DEFAULT_VAT_RATE,
 ): string {
   const totalNet = totalGross / (1 + vatRate / 100);
-  if (mode === "net") return `${totalNet.toFixed(2)} zł netto`;
-  if (mode === "both") return `${totalNet.toFixed(2)} / ${totalGross.toFixed(2)} zł`;
-  return `${totalGross.toFixed(2)} zł`;
+  if (mode === "net") return `${formatMoneyPl(totalNet)} netto`;
+  if (mode === "both") return `${formatMoneyPl(totalNet)} netto · ${formatMoneyPl(totalGross)}`;
+  return formatMoneyPl(totalGross);
 }

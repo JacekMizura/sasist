@@ -21,6 +21,8 @@ from ..schemas.direct_sales import (
     DirectSaleCompleteResponse,
     DirectSaleCompletionRead,
     DirectSaleDocumentPatchBody,
+    DirectSaleFulfillmentPatchBody,
+    DirectSaleFulfillmentRead,
     DirectSaleHistoryEntryRead,
     DirectSaleInvoiceCustomerBody,
     DirectSaleLinePatchBody,
@@ -180,6 +182,19 @@ def _session_to_read(db: Session, sess: DirectSaleSession) -> DirectSaleSessionR
             payment_ctx = json.loads(raw_pay)
         except (json.JSONDecodeError, TypeError):
             payment_ctx = None
+    from ..services.direct_sale.fulfillment_service import get_session_fulfillment
+
+    fulfillment_raw = get_session_fulfillment(sess)
+    fulfillment = DirectSaleFulfillmentRead(
+        mode=fulfillment_raw.get("mode") or "PICKUP",  # type: ignore[arg-type]
+        shipping_address=fulfillment_raw.get("shipping_address"),
+        customer_address_id=fulfillment_raw.get("customer_address_id"),
+        shipping_method_id=fulfillment_raw.get("shipping_method_id"),
+        pickup_point_code=fulfillment_raw.get("pickup_point_code"),
+        pickup_point_label=fulfillment_raw.get("pickup_point_label"),
+        payment_terms_mode=fulfillment_raw.get("payment_terms_mode") or "IMMEDIATE",  # type: ignore[arg-type]
+        payment_terms_days=fulfillment_raw.get("payment_terms_days"),
+    )
     return DirectSaleSessionRead(
         id=int(sess.id),
         tenant_id=int(sess.tenant_id),
@@ -202,6 +217,7 @@ def _session_to_read(db: Session, sess: DirectSaleSession) -> DirectSaleSessionR
         order_discount_value=float(getattr(sess, "order_discount_value", None) or 0),
         expires_at=getattr(sess, "expires_at", None),
         payment_context=payment_ctx,
+        fulfillment=fulfillment,
         totals=totals,
         lines=lines,
     )
@@ -560,6 +576,44 @@ def patch_session_document(
         return _session_to_read(db, sess)
     except DirectSaleError as exc:
         raise HTTPException(status_code=exc.http_status, detail=exc.message) from exc
+
+
+@router.patch("/session/{session_id}/fulfillment", response_model=DirectSaleSessionRead)
+def patch_session_fulfillment(
+    session_id: int,
+    body: DirectSaleFulfillmentPatchBody,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    from ..services.direct_sale.fulfillment_service import set_session_fulfillment
+
+    sess = _require_session(db, session_id=session_id, tenant_id=tenant_id)
+    try:
+        addr = body.shipping_address.model_dump() if body.shipping_address is not None else None
+        set_session_fulfillment(
+            db,
+            sess,
+            mode=body.mode,
+            shipping_address=addr,
+            customer_address_id=body.customer_address_id,
+            clear_customer_address=body.clear_customer_address,
+            shipping_method_id=body.shipping_method_id,
+            clear_shipping_method=body.clear_shipping_method,
+            pickup_point_code=body.pickup_point_code,
+            pickup_point_label=body.pickup_point_label,
+            payment_terms_mode=body.payment_terms_mode,
+            payment_terms_days=body.payment_terms_days,
+        )
+        db.commit()
+        db.refresh(sess)
+        return _session_to_read(db, sess)
+    except DirectSaleError as exc:
+        db.rollback()
+        _raise_direct_sale_http(exc)
+    except Exception as exc:
+        db.rollback()
+        _logger.exception("[direct-sales.fulfillment] session_id=%s", session_id)
+        raise HTTPException(status_code=500, detail="Nie udało się zapisać sposobu realizacji.") from exc
 
 
 @router.patch("/session/{session_id}/discount", response_model=DirectSaleSessionRead)

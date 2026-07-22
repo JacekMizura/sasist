@@ -117,6 +117,38 @@ export async function patchSessionDocument(params: DirectSalesScope & {
   return normalizeDirectSaleSession(data);
 }
 
+export async function patchSessionFulfillment(params: DirectSalesScope & {
+  sessionId: number;
+  mode?: "PICKUP" | "DELIVERY";
+  shippingAddress?: Record<string, unknown> | null;
+  customerAddressId?: number | null;
+  clearCustomerAddress?: boolean;
+  shippingMethodId?: string | null;
+  clearShippingMethod?: boolean;
+  pickupPointCode?: string | null;
+  pickupPointLabel?: string | null;
+  paymentTermsMode?: "IMMEDIATE" | "DEFERRED";
+  paymentTermsDays?: number | null;
+}): Promise<DirectSaleSession> {
+  const { data } = await api.patch(
+    `direct-sales/session/${params.sessionId}/fulfillment`,
+    {
+      mode: params.mode,
+      shipping_address: params.shippingAddress,
+      customer_address_id: params.customerAddressId,
+      clear_customer_address: params.clearCustomerAddress ?? false,
+      shipping_method_id: params.shippingMethodId,
+      clear_shipping_method: params.clearShippingMethod ?? false,
+      pickup_point_code: params.pickupPointCode,
+      pickup_point_label: params.pickupPointLabel,
+      payment_terms_mode: params.paymentTermsMode,
+      payment_terms_days: params.paymentTermsDays,
+    },
+    { params: directSalesQuery(params) },
+  );
+  return normalizeDirectSaleSession(data);
+}
+
 export async function patchSessionOrderDiscount(params: DirectSalesScope & {
   sessionId: number;
   orderDiscountType: string | null;

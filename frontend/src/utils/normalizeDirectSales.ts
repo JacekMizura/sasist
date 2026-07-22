@@ -38,6 +38,31 @@ export type DirectSaleSessionLine = {
   has_reservation: boolean;
 };
 
+export type DirectSaleShippingAddress = {
+  first_name: string;
+  last_name: string;
+  company_name: string | null;
+  street: string;
+  house_number: string;
+  apartment_number: string | null;
+  postal_code: string;
+  city: string;
+  country_code: string;
+  phone: string | null;
+  email: string | null;
+};
+
+export type DirectSaleFulfillment = {
+  mode: "PICKUP" | "DELIVERY";
+  shipping_address: DirectSaleShippingAddress | null;
+  customer_address_id: number | null;
+  shipping_method_id: string | null;
+  pickup_point_code: string | null;
+  pickup_point_label: string | null;
+  payment_terms_mode: "IMMEDIATE" | "DEFERRED";
+  payment_terms_days: number | null;
+};
+
 export type DirectSaleSession = {
   id: number;
   tenant_id: number;
@@ -56,6 +81,7 @@ export type DirectSaleSession = {
   order_discount_value: number;
   expires_at: string | null;
   payment_context: Record<string, unknown> | null;
+  fulfillment: DirectSaleFulfillment;
   totals: DirectSaleSessionTotals | null;
   lines: DirectSaleSessionLine[];
 };
@@ -147,6 +173,40 @@ export function normalizeDirectSaleLine(raw: unknown): DirectSaleSessionLine {
   };
 }
 
+export function normalizeDirectSaleFulfillment(raw: unknown): DirectSaleFulfillment {
+  const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const mode = String(r.mode || "PICKUP").toUpperCase() === "DELIVERY" ? "DELIVERY" : "PICKUP";
+  const termsMode =
+    String(r.payment_terms_mode || "IMMEDIATE").toUpperCase() === "DEFERRED" ? "DEFERRED" : "IMMEDIATE";
+  let shipping_address: DirectSaleShippingAddress | null = null;
+  if (r.shipping_address && typeof r.shipping_address === "object") {
+    const a = r.shipping_address as Record<string, unknown>;
+    shipping_address = {
+      first_name: safeDisplay(a.first_name, ""),
+      last_name: safeDisplay(a.last_name, ""),
+      company_name: strOrNull(a.company_name),
+      street: safeDisplay(a.street, ""),
+      house_number: safeDisplay(a.house_number, ""),
+      apartment_number: strOrNull(a.apartment_number),
+      postal_code: safeDisplay(a.postal_code, ""),
+      city: safeDisplay(a.city, ""),
+      country_code: safeDisplay(a.country_code, "PL"),
+      phone: strOrNull(a.phone),
+      email: strOrNull(a.email),
+    };
+  }
+  return {
+    mode,
+    shipping_address,
+    customer_address_id: numOrNull(r.customer_address_id),
+    shipping_method_id: strOrNull(r.shipping_method_id),
+    pickup_point_code: strOrNull(r.pickup_point_code),
+    pickup_point_label: strOrNull(r.pickup_point_label),
+    payment_terms_mode: termsMode,
+    payment_terms_days: numOrNull(r.payment_terms_days),
+  };
+}
+
 export function normalizeDirectSaleSession(raw: unknown): DirectSaleSession {
   const r = (raw ?? {}) as Record<string, unknown>;
   const linesRaw = Array.isArray(r.lines) ? r.lines : [];
@@ -172,6 +232,7 @@ export function normalizeDirectSaleSession(raw: unknown): DirectSaleSession {
     order_discount_value: num(r.order_discount_value),
     expires_at: strOrNull(r.expires_at),
     payment_context: payCtx,
+    fulfillment: normalizeDirectSaleFulfillment(r.fulfillment),
     totals: normalizeSessionTotals(r.totals),
     lines: linesRaw.map(normalizeDirectSaleLine),
   };
