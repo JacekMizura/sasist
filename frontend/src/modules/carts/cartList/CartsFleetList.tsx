@@ -1,18 +1,15 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { Plus } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import api from "../../../api/axios";
-import {
-  filterToolbarBtnApply,
-  filterToolbarBtnSecondary,
-} from "../../../components/filters/filterUiTokens";
+import { ConfirmModal } from "../../../components/ui/ConfirmModal";
 import { useTranslation } from "../../../locales";
 import { useWarehouse } from "../../../context/WarehouseContext";
 import { useCartsRefresh } from "../../../context/CartsRefreshContext";
 import CartCard from "../../../pages/CartsComponents/ui/CartCard";
 import { CartLabelPrintModal } from "../../../pages/CartsComponents/CartLabelPrintModal";
 import { CartsInlineGroupForm } from "../CartsInlineGroupForm";
-import { CartsListPageHeader } from "../CartsListPageHeader";
+import { useCartsTabActions } from "../CartsTabActionsContext";
+import { cartsOrangeCtaClass, cartsOutlineCtaClass } from "../cartsModuleTokens";
 import { CartsFleetGroupActions } from "./CartsFleetGroupActions";
 import { CartsFleetGroupSection } from "./CartsFleetGroupSection";
 import { CartsFleetSummaryKpi } from "./CartsFleetSummaryKpi";
@@ -66,39 +63,8 @@ export type CartsFleetListProps = {
   onEdit: (id: number) => void;
 };
 
-type FleetConfig = {
-  description: string;
-  headerExtraActions?: (ctx: { resetting: boolean; onResetFleet: () => void }) => ReactNode;
-  showHeaderAddCart: boolean;
-};
-
-function useFleetConfig(cartType: CartsFleetCartType, t: ReturnType<typeof useTranslation>): FleetConfig {
-  if (cartType === "BULK") {
-    return {
-      description: t.singleCompartmentManagement,
-      showHeaderAddCart: true,
-    };
-  }
-  return {
-    description: t.multiBasketManagement,
-    showHeaderAddCart: false,
-    headerExtraActions: ({ resetting, onResetFleet }) => (
-      <button
-        type="button"
-        onClick={onResetFleet}
-        disabled={resetting}
-        className={filterToolbarBtnSecondary}
-        title="Ustaw order.cart_id i basket_id na NULL, zeruj used_volume"
-      >
-        {resetting ? "…" : "Wyczyść przypisania"}
-      </button>
-    ),
-  };
-}
-
 export function CartsFleetList({ cartType, refreshTrigger = 0, onAddNew, onEdit }: CartsFleetListProps) {
   const t = useTranslation();
-  const config = useFleetConfig(cartType, t);
   const { warehouse } = useWarehouse();
   const ctx = useCartsRefresh();
   const refreshCarts = ctx?.refreshCarts;
@@ -112,6 +78,9 @@ export function CartsFleetList({ cartType, refreshTrigger = 0, onAddNew, onEdit 
   const [editingGroupName, setEditingGroupName] = useState("");
   const [printCart, setPrintCart] = useState<{ id: number; name: string } | null>(null);
   const [expandedCartId, setExpandedCartId] = useState<number | null>(null);
+  const [confirmReset, setConfirmReset] = useState(false);
+  const [confirmDeleteGroupId, setConfirmDeleteGroupId] = useState<number | null>(null);
+  const [confirmDeleteCartId, setConfirmDeleteCartId] = useState<number | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -149,7 +118,7 @@ export function CartsFleetList({ cartType, refreshTrigger = 0, onAddNew, onEdit 
     setExpandedCartId(null);
   }, [cartType]);
 
-  const handleResetFleet = async () => {
+  const handleResetFleet = useCallback(async () => {
     if (!warehouse?.id) return;
     setResetting(true);
     try {
@@ -162,8 +131,9 @@ export function CartsFleetList({ cartType, refreshTrigger = 0, onAddNew, onEdit 
       console.error("Reset fleet error:", err);
     } finally {
       setResetting(false);
+      setConfirmReset(false);
     }
-  };
+  }, [warehouse?.id, refreshCarts, fetchData]);
 
   const handleCreateGroup = async () => {
     if (!newGroupName.trim()) return;
@@ -181,15 +151,15 @@ export function CartsFleetList({ cartType, refreshTrigger = 0, onAddNew, onEdit 
     }
   };
 
-  const handleDeleteCart = async (id: number) => {
-    if (!window.confirm(t.confirmDeleteCart)) return;
+  const handleDeleteCart = useCallback(async (id: number) => {
     try {
       await api.delete(`/carts/${id}/`);
+      setConfirmDeleteCartId(null);
       await fetchData();
     } catch (err) {
       console.error("Błąd usuwania:", err);
     }
-  };
+  }, [fetchData]);
 
   const handleSaveGroupEdit = async () => {
     if (!editingGroupId || !editingGroupName.trim()) {
@@ -207,40 +177,48 @@ export function CartsFleetList({ cartType, refreshTrigger = 0, onAddNew, onEdit 
     }
   };
 
-  const handleDeleteGroup = async (groupId: number) => {
+  const handleDeleteGroup = useCallback(async (groupId: number) => {
     if (groupId === 999) return;
-    if (!window.confirm(t.confirmDeleteGroup)) return;
     try {
       await api.delete(`/carts/groups/${groupId}/`);
+      setConfirmDeleteGroupId(null);
       await fetchData();
     } catch (err) {
       console.error("Błąd usuwania grupy:", err);
     }
-  };
+  }, [fetchData]);
 
   const summary = useMemo(() => computeCartsFleetSummary(groups), [groups]);
   const isMulti = cartType === "MULTI";
 
-  return (
-    <div className="w-full min-w-0 space-y-6">
-      <CartsListPageHeader
-        description={config.description}
-        actions={
-          <>
-            {config.headerExtraActions?.({ resetting, onResetFleet: () => void handleResetFleet() })}
-            <button type="button" onClick={() => setShowGroupForm((v) => !v)} className={filterToolbarBtnSecondary}>
-              {showGroupForm ? t.cancel : `+ ${t.newGroup}`}
-            </button>
-            {config.showHeaderAddCart ? (
-              <button type="button" onClick={() => onAddNew()} className={filterToolbarBtnApply}>
-                <Plus className="mr-1.5 inline h-4 w-4" strokeWidth={2} aria-hidden />
-                {cartType === "BULK" ? t.addBulkCart : t.addMultiCart}
-              </button>
-            ) : null}
-          </>
-        }
-      />
+  const tabActions = useMemo(
+    () => (
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <button
+          type="button"
+          onClick={() => setConfirmReset(true)}
+          disabled={resetting || !warehouse?.id}
+          className={cartsOutlineCtaClass}
+          title="Ustaw order.cart_id i basket_id na NULL, zeruj used_volume"
+        >
+          {resetting ? "…" : "Wyczyść przypisania"}
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowGroupForm((v) => !v)}
+          className={cartsOutlineCtaClass}
+        >
+          {showGroupForm ? t.cancel : `+ ${t.newGroup}`}
+        </button>
+      </div>
+    ),
+    [resetting, warehouse?.id, showGroupForm, t.cancel, t.newGroup],
+  );
 
+  useCartsTabActions(tabActions);
+
+  return (
+    <div className="w-full min-w-0 space-y-5">
       {!loading ? <CartsFleetSummaryKpi summary={summary} /> : null}
 
       {showGroupForm ? (
@@ -267,7 +245,7 @@ export function CartsFleetList({ cartType, refreshTrigger = 0, onAddNew, onEdit 
             const isUnassigned = group.id === 999;
 
             const headerActions = isUnassigned ? (
-              <button type="button" onClick={() => onAddNew()} className={filterToolbarBtnApply}>
+              <button type="button" onClick={() => onAddNew()} className={cartsOrangeCtaClass}>
                 {cartType === "BULK" ? t.addBulkCart : t.addMultiCart}
               </button>
             ) : (
@@ -284,7 +262,7 @@ export function CartsFleetList({ cartType, refreshTrigger = 0, onAddNew, onEdit 
                   setEditingGroupId(group.id);
                   setEditingGroupName(group.name || "");
                 }}
-                onDeleteGroup={() => void handleDeleteGroup(group.id)}
+                onDeleteGroup={() => setConfirmDeleteGroupId(group.id)}
                 onAddCart={() => onAddNew(isMulti ? group.id : undefined)}
                 editLabel={t.editGroup}
                 deleteLabel={t.deleteGroup}
@@ -347,7 +325,7 @@ export function CartsFleetList({ cartType, refreshTrigger = 0, onAddNew, onEdit 
                         onSimulateSuccess={fetchData}
                         onClearSuccess={fetchData}
                         onEdit={onEdit}
-                        onDelete={handleDeleteCart}
+                        onDelete={(id) => setConfirmDeleteCartId(id)}
                         onPrintLabel={setPrintCart}
                       />
                     ))
@@ -360,6 +338,40 @@ export function CartsFleetList({ cartType, refreshTrigger = 0, onAddNew, onEdit 
       )}
 
       <CartLabelPrintModal open={printCart != null} cart={printCart} onClose={() => setPrintCart(null)} />
+
+      {confirmReset ? (
+        <ConfirmModal
+          title="Wyczyść przypisania"
+          message="Usunąć wszystkie przypisania zamówień do wózków w aktywnym magazynie? Operacji nie można cofnąć."
+          confirmLabel="Wyczyść"
+          confirmTone="danger"
+          pending={resetting}
+          onCancel={() => setConfirmReset(false)}
+          onConfirm={() => void handleResetFleet()}
+        />
+      ) : null}
+
+      {confirmDeleteGroupId != null ? (
+        <ConfirmModal
+          title="Usuń grupę"
+          message={t.confirmDeleteGroup}
+          confirmLabel="Usuń"
+          confirmTone="danger"
+          onCancel={() => setConfirmDeleteGroupId(null)}
+          onConfirm={() => void handleDeleteGroup(confirmDeleteGroupId)}
+        />
+      ) : null}
+
+      {confirmDeleteCartId != null ? (
+        <ConfirmModal
+          title="Usuń wózek"
+          message={t.confirmDeleteCart}
+          confirmLabel="Usuń"
+          confirmTone="danger"
+          onCancel={() => setConfirmDeleteCartId(null)}
+          onConfirm={() => void handleDeleteCart(confirmDeleteCartId)}
+        />
+      ) : null}
     </div>
   );
 }

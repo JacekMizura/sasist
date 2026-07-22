@@ -35,7 +35,7 @@ export function CartsFleetGroupSection({
             aria-hidden
           />
           <div className="min-w-0">
-            <h2 className="text-base font-semibold text-slate-900">{title}</h2>
+            <h2 className="text-base font-bold uppercase tracking-wide text-slate-900">{title}</h2>
             <p className="mt-0.5 text-sm text-slate-500">
               <span className="tabular-nums font-medium text-slate-700">{count}</span>{" "}
               {count === 1 ? "wózek" : count >= 2 && count <= 4 ? "wózki" : "wózków"}

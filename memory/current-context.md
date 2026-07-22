@@ -2,12 +2,7 @@
 
 ## Active
 
-**Ustawienia → Użytkownicy — korekty semantyczne/UX** (lokalny commit, bez push).
-
-- Presence: `UserSession` non-expired → Zalogowany/Niezalogowany (nie `is_active`).
-- Kolumna WMS = effective `wms_operational_modes` (empty→all jak launcher) + popover „+X innych”.
-- „Role i dostęp do statusów”; „Może pracować”; shared `StatusAccessCheckbox`.
-- Czas pracy: „Aktywności na godzinę”; heatmap Europe/Warsaw; historyczne API humanize.
+**Magazyn UI 1:1** — wspólny shell (breadcrumb + bare tabs + trailing CTA), polish Wózki / koszyki / Regały / Strefy / Planer / Nośniki. Commit lokalny, **bez push**.
 
 ## Preferencja commitów (user)
 

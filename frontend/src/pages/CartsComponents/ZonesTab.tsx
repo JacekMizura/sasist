@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { MapPin } from "lucide-react";
 
 import api from "../../api/axios";
 import { AppEmptyState } from "../../components/app-shell/AppEmptyState";
-import { cartsPageShellClass } from "../../modules/carts/cartsModuleTokens";
-import { MapPin } from "lucide-react";
-import ZoneConfigurator from "./ZoneConfigurator";
+import { useCartsTabActions } from "../../modules/carts/CartsTabActionsContext";
+import { cartsOutlineCtaClass, cartsPageShellClass } from "../../modules/carts/cartsModuleTokens";
+import ZoneConfigurator, { type ZoneConfiguratorHandle } from "./ZoneConfigurator";
 
 const TENANT_ID = 1;
 const WAREHOUSE_ID = 1;
@@ -27,6 +28,7 @@ export default function ZonesTab() {
   const [zones, setZones] = useState<Zone[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const formRef = useRef<ZoneConfiguratorHandle>(null);
 
   const fetchZones = async () => {
     setLoading(true);
@@ -44,7 +46,7 @@ export default function ZonesTab() {
               height_cm: z.height_cm ?? null,
               max_weight_kg: z.max_weight_kg ?? null,
             })) as Zone[])
-          : []
+          : [],
       );
     } catch (err: unknown) {
       console.error("[ZonesTab] Błąd pobierania stref:", err);
@@ -56,8 +58,18 @@ export default function ZonesTab() {
   };
 
   useEffect(() => {
-    fetchZones();
+    void fetchZones();
   }, []);
+
+  const tabActions = useMemo(
+    () => (
+      <button type="button" className={cartsOutlineCtaClass} onClick={() => formRef.current?.focusForm()}>
+        + Dodaj strefę
+      </button>
+    ),
+    [],
+  );
+  useCartsTabActions(tabActions);
 
   if (loading) {
     return <div className="py-10 text-center text-[13px] text-slate-500">Ładowanie stref…</div>;
@@ -71,13 +83,9 @@ export default function ZonesTab() {
 
   return (
     <div className={cartsPageShellClass}>
-      <ZoneConfigurator zones={zones} onZoneAdded={fetchZones} />
+      <ZoneConfigurator ref={formRef} zones={zones} onZoneAdded={fetchZones} />
       {zones.length === 0 ? (
-        <AppEmptyState
-          icon={MapPin}
-          title="Brak stref"
-          description="Dodaj strefę w formularzu powyżej."
-        />
+        <AppEmptyState icon={MapPin} title="Brak stref" description="Dodaj strefę w formularzu powyżej." />
       ) : null}
     </div>
   );

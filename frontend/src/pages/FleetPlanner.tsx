@@ -5,14 +5,16 @@ import { useTranslation } from "../locales";
 import { useActiveWarehouseContext, ACTIVE_WAREHOUSE_REQUIRED_MESSAGE } from "../hooks/useActiveWarehouseContext";
 import { useCartsRefresh } from "../context/CartsRefreshContext";
 import api from "../api/axios";
-import { CartsListPageHeader } from "../modules/carts/CartsListPageHeader";
-import { cartsPageShellClass } from "../modules/carts/cartsModuleTokens";
+import {
+  cartsOrangeCtaClass,
+  cartsOutlineCtaClass,
+  cartsPageShellClass,
+  cartsSectionClass,
+} from "../modules/carts/cartsModuleTokens";
 import {
   PurchasingAnalysisSection,
   PurchasingKpiCard,
   PurchasingKpiGrid,
-  purchasingBtnPrimary,
-  purchasingBtnSecondary,
 } from "../modules/purchasing/ui";
 
 type AnalyzeResult = {
@@ -136,33 +138,35 @@ export default function FleetPlanner() {
   const dash = "—";
 
   return (
-    <div className={`${cartsPageShellClass} space-y-4`}>
-      <CartsListPageHeader
-        description={
-          t.optimizer_analyze_subtitle ?? "Oblicz minimalne zapotrzebowanie na wózki dla zamówień NEW."
-        }
-        meta="Krok 1: oblicz symulację · Krok 2: zatwierdź przypisania do wózków"
-        actions={
-          <>
-            <button
-              type="button"
-              onClick={() => void handleAnalyze()}
-              disabled={loading || !hasActiveWarehouse}
-              className={purchasingBtnPrimary}
-            >
-              {loading ? t.loading : (t.optimizer_analyze_button ?? "Oblicz zapotrzebowanie")}
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleApply()}
-              disabled={applying || !result || !hasActiveWarehouse}
-              className={purchasingBtnSecondary}
-            >
-              {applying ? t.loading : "Zatwierdź i przypisz"}
-            </button>
-          </>
-        }
-      />
+    <div className={`${cartsPageShellClass} space-y-5`}>
+      <div className={`${cartsSectionClass} flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between`}>
+        <div className="min-w-0">
+          <h2 className="text-base font-bold text-slate-900">
+            {t.optimizer_analyze_subtitle ?? "Oblicz minimalne zapotrzebowanie na wózki dla zamówień NEW."}
+          </h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Krok 1: oblicz symulację · Krok 2: zatwierdź przypisania do wózków
+          </p>
+        </div>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void handleAnalyze()}
+            disabled={loading || !hasActiveWarehouse}
+            className={cartsOrangeCtaClass}
+          >
+            {loading ? t.loading : (t.optimizer_analyze_button ?? "Oblicz zapotrzebowanie na wózki")}
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleApply()}
+            disabled={applying || !result || !hasActiveWarehouse}
+            className={cartsOutlineCtaClass}
+          >
+            {applying ? t.loading : "Zatwierdź i przypisz"}
+          </button>
+        </div>
+      </div>
 
       {!hasActiveWarehouse ? (
         <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
@@ -176,7 +180,7 @@ export default function FleetPlanner() {
 
       <PurchasingKpiGrid columns={4}>
         <PurchasingKpiCard
-          title={t.optimizer_new_orders_stub ?? "Zamówienia NEW"}
+          title="Zamówienia NEW do obsłużenia"
           value={result != null ? result.orders_to_serve : dash}
           subtitle="Do obsłużenia w symulacji"
           tone="blue"
@@ -190,14 +194,14 @@ export default function FleetPlanner() {
           icon={<Box aria-hidden />}
         />
         <PurchasingKpiCard
-          title={t.sectionalCarts ?? "Wózki sekcyjne"}
+          title="Wózki sekcyjne"
           value={result != null ? result.suggested_sectional_carts : dash}
           subtitle="Proponowana liczba"
           tone="purple"
           icon={<Layers aria-hidden />}
         />
         <PurchasingKpiCard
-          title={t.bulkCarts ?? "Wózki standardowe"}
+          title="Wózki standardowe"
           value={result != null ? result.suggested_bulk_carts : dash}
           subtitle="Proponowana liczba"
           tone="emerald"

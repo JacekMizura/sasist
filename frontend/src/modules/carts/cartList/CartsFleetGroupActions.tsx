@@ -1,9 +1,5 @@
-import {
-  filterToolbarBtnApply,
-  filterToolbarBtnSecondary,
-} from "../../../components/filters/filterUiTokens";
 import { listSellasistInputClass } from "../../../components/listPage/listSellasistTokens";
-import { cartsDangerBtnClass } from "../cartsModuleTokens";
+import { cartsDangerBtnClass, cartsOrangeCtaClass, cartsOutlineCtaClass } from "../cartsModuleTokens";
 
 type Props = {
   editing: boolean;
@@ -45,10 +41,10 @@ export function CartsFleetGroupActions({
           onChange={(e) => onEditingNameChange(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && onSaveEdit()}
         />
-        <button type="button" onClick={onSaveEdit} className={filterToolbarBtnApply}>
+        <button type="button" onClick={onSaveEdit} className={cartsOrangeCtaClass}>
           {saveLabel}
         </button>
-        <button type="button" onClick={onCancelEdit} className={filterToolbarBtnSecondary}>
+        <button type="button" onClick={onCancelEdit} className={cartsOutlineCtaClass}>
           {cancelLabel}
         </button>
       </div>
@@ -57,14 +53,14 @@ export function CartsFleetGroupActions({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <button type="button" onClick={onStartEdit} className={filterToolbarBtnSecondary}>
+      <button type="button" onClick={onStartEdit} className={cartsOutlineCtaClass}>
         {editLabel}
       </button>
       <button type="button" onClick={onDeleteGroup} className={cartsDangerBtnClass}>
         {deleteLabel}
       </button>
-      <button type="button" onClick={onAddCart} className={filterToolbarBtnApply}>
-        {addCartLabel}
+      <button type="button" onClick={onAddCart} className={cartsOrangeCtaClass}>
+        {addCartLabel.startsWith("+") ? addCartLabel : `+ ${addCartLabel}`}
       </button>
     </div>
   );

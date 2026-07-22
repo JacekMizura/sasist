@@ -95,8 +95,8 @@ export function CartSummaryKpis({
 
   return (
     <section aria-label="Podsumowanie">
-      <h3 className="mb-3 text-sm font-semibold text-slate-800">Podsumowanie</h3>
-      <div className="flex flex-wrap gap-3">
+      {isSectional ? <h3 className="mb-3 text-sm font-semibold text-slate-800">Podsumowanie</h3> : null}
+      <div className={`flex flex-wrap gap-3 ${isSectional ? "" : ""}`}>
         <KpiCard
           icon={<ShoppingCart className="h-4 w-4" aria-hidden />}
           label="Zamówienia"
@@ -141,7 +141,7 @@ export function CartSummaryKpis({
             {picked} / {pickTotal || "—"}
           </div>
         </div>
-        {isSectional || sectionsTotal > 0 ? (
+        {isSectional ? (
           <KpiCard
             icon={<Layers className="h-4 w-4" aria-hidden />}
             label="Zajęte sekcje"

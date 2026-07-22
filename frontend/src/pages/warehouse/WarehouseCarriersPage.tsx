@@ -13,12 +13,12 @@ import { CarrierGroupCard } from "../../components/warehouse/carriers/CarrierGro
 import { CarriersGroupTable } from "../../components/warehouse/carriers/CarriersGroupTable";
 import { CreateCarrierGroupModal } from "../../components/warehouse/carriers/CreateCarrierGroupModal";
 import { AppEmptyState } from "../../components/app-shell/AppEmptyState";
-import {
-  filterToolbarBtnApply,
-  filterToolbarBtnSecondary,
-} from "../../components/filters/filterUiTokens";
 import { listSellasistInputClass } from "../../components/listPage/listSellasistTokens";
-import { CartsListPageHeader } from "../../modules/carts/CartsListPageHeader";
+import { useCartsTabActions } from "../../modules/carts/CartsTabActionsContext";
+import {
+  cartsOrangeCtaClass,
+  cartsOutlineCtaClass,
+} from "../../modules/carts/cartsModuleTokens";
 import { PurchasingKpiCard, PurchasingKpiGrid } from "../../modules/purchasing/ui";
 
 import {
@@ -129,58 +129,63 @@ export default function WarehouseCarriersPage() {
       <button
         type="button"
         onClick={() => openCreate(groupId, "bulk")}
-        className={`${filterToolbarBtnApply} mt-4`}
+        className={`${cartsOrangeCtaClass} mt-4`}
       >
         Dodaj nośnik
       </button>
     </div>
   );
 
+  const tabActions = useMemo(
+    () => (
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        {tenantSelectVisible ? (
+          <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+            <span className="text-xs font-medium text-slate-500">Podmiot</span>
+            <select
+              value={tenantId}
+              onChange={(e) => setTenantId(Number(e.target.value) || 1)}
+              className={`${listSellasistInputClass} !h-9 w-auto min-w-[8rem]`}
+            >
+              {tenants.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name || `Tenant #${t.id}`}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+        <button
+          type="button"
+          onClick={() => openCreate(null, "single")}
+          disabled={groups.length === 0}
+          className={cartsOutlineCtaClass}
+        >
+          Utwórz 1 nośnik
+        </button>
+        <button
+          type="button"
+          onClick={() => openCreate(null, "bulk")}
+          disabled={groups.length === 0}
+          className={cartsOrangeCtaClass}
+        >
+          Dodaj nośniki
+        </button>
+        <button type="button" onClick={() => setGroupModalOpen(true)} className={cartsOutlineCtaClass}>
+          <Plus className="h-4 w-4" strokeWidth={2.5} aria-hidden />
+          Nowa grupa
+        </button>
+      </div>
+    ),
+    [tenantSelectVisible, tenantId, tenants, groups.length, setTenantId],
+  );
+  useCartsTabActions(tabActions);
+
   return (
-    <div className="space-y-4">
-      <CartsListPageHeader
-        description="Rejestr nośników magazynowych pogrupowanych według typu (palety, kartony, wózki)."
-        actions={
-          <>
-            {tenantSelectVisible ? (
-              <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
-                <span className="text-xs font-medium text-slate-500">Podmiot</span>
-                <select
-                  value={tenantId}
-                  onChange={(e) => setTenantId(Number(e.target.value) || 1)}
-                  className={`${listSellasistInputClass} !h-9 w-auto min-w-[8rem]`}
-                >
-                  {tenants.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name || `Tenant #${t.id}`}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : null}
-            <button
-              type="button"
-              onClick={() => openCreate(null, "single")}
-              disabled={groups.length === 0}
-              className={filterToolbarBtnSecondary}
-            >
-              Utwórz 1 nośnik
-            </button>
-            <button
-              type="button"
-              onClick={() => openCreate(null, "bulk")}
-              disabled={groups.length === 0}
-              className={filterToolbarBtnApply}
-            >
-              Dodaj nośniki
-            </button>
-            <button type="button" onClick={() => setGroupModalOpen(true)} className={filterToolbarBtnSecondary}>
-              <Plus className="mr-1.5 inline h-4 w-4" strokeWidth={2} aria-hidden />
-              Nowa grupa
-            </button>
-          </>
-        }
-      />
+    <div className="space-y-5">
+      <p className="text-sm text-slate-500">
+        Rejestr nośników magazynowych pogrupowanych według typu (palety, kartony, wózki).
+      </p>
 
       {toast ? (
         <div className="flex items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-900">
@@ -244,7 +249,7 @@ export default function WarehouseCarriersPage() {
             title="Brak grup nośników"
             description="Zdefiniuj typy (np. palety euro, kartony). Potem dodasz nośniki z tej zakładki."
             action={
-              <button type="button" onClick={() => setGroupModalOpen(true)} className={filterToolbarBtnApply}>
+              <button type="button" onClick={() => setGroupModalOpen(true)} className={cartsOrangeCtaClass}>
                 Nowa grupa
               </button>
             }
@@ -262,7 +267,7 @@ export default function WarehouseCarriersPage() {
                 memberCount={list.length}
                 defaultOpen
                 headerActions={
-                  <button type="button" onClick={() => openCreate(g.id, "bulk")} className={filterToolbarBtnApply}>
+                  <button type="button" onClick={() => openCreate(g.id, "bulk")} className={cartsOrangeCtaClass}>
                     Dodaj nośnik
                   </button>
                 }

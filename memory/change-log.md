@@ -1,3 +1,22 @@
+## 2026-07-22 — Magazyn UI 1:1 (Wózki → Nośniki)
+
+- Wspólny shell: breadcrumb Magazyn > tab, bare tabs + trailing CTA (`CartsTabActionsContext`).
+- Wózki/koszyki: CTA na tabach, ConfirmModal destrukcji, KPI/zapełnienie z API; sekcje KPI tylko dla MULTI.
+- Regały: 4 KPI, pomarańczowy „+ Nowy regał”, tabs na edycji; Strefy: jeden formularz + focus z CTA; Planer/Nośniki parity.
+- Tests: `cartsFleetSummary.test.ts`. Build PASS. **No push.**
+
+## 2026-07-22 — Ustawienia: Klucze API i Eksport jako osobne pozycje menu
+
+- Flyout: Integracje ≠ Klucze API ≠ Eksport; canonical `/settings/api-keys` + redirect legacy.
+- Hub `/settings/integrations`; breadcrumbs Ustawienia → Klucze API / Eksport.
+- Tests: `settingsNavIa.test.ts`. **No push.**
+
+## 2026-07-22 — Ustawienia → Firma: UI 1:1 (4 zakładki)
+
+- Shell bare tabs + orange CTA; Dane firmy / Magazyny / Firmy / Branding pod screeny.
+- Logika bez zmian: company_profile, warehouses, fulfillment strategy, COMPANY template scope, logo SSOT.
+- Tests: `companySettingsTabs.test.ts`. **No push.**
+
 ## 2026-07-22 — Użytkownicy: sesja vs konto, WMS badges, role/statusy, czas pracy PL
 
 - Presence SSOT: `UserSession.expires_at > now` → `has_active_session` na liście (Zalogowany/Niezalogowany).

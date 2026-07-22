@@ -5,7 +5,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import ActivityLogPanel from "../../../components/activityLog/ActivityLogPanel";
 import api from "../../../api/axios";
 import { useActiveWarehouseContext, ACTIVE_WAREHOUSE_REQUIRED_MESSAGE } from "../../../hooks/useActiveWarehouseContext";
-import { cartsBtnPrimary, cartsPageShellClass } from "../../../modules/carts/cartsModuleTokens";
+import { cartsDarkCtaClass, cartsPageShellClass } from "../../../modules/carts/cartsModuleTokens";
 import { ConsolidationRackFormShell } from "../../../modules/consolidation-racks/ConsolidationRackFormShell";
 import ConsolidationRackOmsPreview from "../../../modules/consolidation-racks/ConsolidationRackOmsPreview";
 import ConsolidationRackSegmentEditPanel from "../../../modules/consolidation-racks/ConsolidationRackSegmentEditPanel";
@@ -256,14 +256,19 @@ export default function ConsolidationRackEditorPage() {
           ) : null
         }
         summaryBar={
-          <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-            <span className="font-semibold tabular-nums text-slate-800">{totalSegments} segmentów</span>
-            <span className="text-slate-500">·</span>
-            <span className="tabular-nums">{draft.levels.length} poziomów</span>
-            <span className="text-slate-500">·</span>
-            <span>
-              Skan: <span className="font-mono font-semibold">{draft.rackName.trim() || "RK-XX"}/{firstSlotLabel}</span>
-            </span>
+          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+            <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+              <span className="font-semibold tabular-nums text-slate-800">{totalSegments} segmentów</span>
+              <span className="text-slate-500">·</span>
+              <span className="tabular-nums">{draft.levels.length} poziomów</span>
+              <span className="text-slate-500">·</span>
+              <span>
+                Skan: <span className="font-mono font-semibold">{draft.rackName.trim() || "RK-XX"}/{firstSlotLabel}</span>
+              </span>
+            </div>
+            {draft.totalWidthMm != null ? (
+              <span className="font-semibold tabular-nums text-slate-700">{draft.totalWidthMm} mm</span>
+            ) : null}
           </div>
         }
         sidebar={
@@ -313,7 +318,7 @@ export default function ConsolidationRackEditorPage() {
               <button
                 type="button"
                 disabled={saving || !validation.valid || !draft.rackName.trim()}
-                className={cartsBtnPrimary}
+                className={cartsDarkCtaClass}
                 onClick={() => void (isCreate ? handleCreate() : handleSaveEdit())}
               >
                 {saving ? <Loader2 className="mr-1 inline h-4 w-4 animate-spin" /> : <Save className="mr-1 inline h-4 w-4" />}

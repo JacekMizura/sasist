@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Box, CheckCircle2, Gauge, Layers, LayoutGrid, Plus } from "lucide-react";
+import { Box, CheckCircle2, Layers, LayoutGrid, Plus } from "lucide-react";
 
 import api from "../../../api/axios";
 import { AppEmptyState } from "../../../components/app-shell/AppEmptyState";
@@ -8,12 +8,13 @@ import {
   ConsolidationRacksListTable,
   type ConsolidationRackListRow,
 } from "../../../components/consolidationRacks/rackList/ConsolidationRacksListTable";
-import { filterToolbarBtnApply } from "../../../components/filters/filterUiTokens";
+import { ConfirmModal } from "../../../components/ui/ConfirmModal";
 import { moduleTableCardClass } from "../../../components/listPage/moduleList";
 import { useActiveWarehouseContext, ACTIVE_WAREHOUSE_REQUIRED_MESSAGE } from "../../../hooks/useActiveWarehouseContext";
 import type { ConsolidationRack } from "../../../modules/consolidation-racks/consolidationRackTypes";
 import { rackOccupancyStats } from "../../../modules/consolidation-racks/rackLayoutUtils";
-import { CartsListPageHeader } from "../../../modules/carts/CartsListPageHeader";
+import { useCartsTabActions } from "../../../modules/carts/CartsTabActionsContext";
+import { cartsOrangeCtaClass } from "../../../modules/carts/cartsModuleTokens";
 import { PurchasingKpiCard, PurchasingKpiGrid } from "../../../modules/purchasing/ui";
 import { DAMAGE_TENANT_ID } from "../../damage/damageShared";
 
@@ -24,6 +25,7 @@ export default function ConsolidationRacksListPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<ConsolidationRackListRow | null>(null);
 
   const warehouseNameById = useMemo(() => {
     const map = new Map<number, string>();
@@ -57,6 +59,22 @@ export default function ConsolidationRacksListPage() {
     void fetchRacks();
   }, [fetchRacks]);
 
+  const tabActions = useMemo(
+    () => (
+      <button
+        type="button"
+        disabled={!hasActiveWarehouse}
+        className={cartsOrangeCtaClass}
+        onClick={() => navigate("/carts/racks/new")}
+      >
+        <Plus className="h-4 w-4" strokeWidth={2.5} aria-hidden />
+        Nowy regał kompletacyjny
+      </button>
+    ),
+    [hasActiveWarehouse, navigate],
+  );
+  useCartsTabActions(tabActions);
+
   const rows: ConsolidationRackListRow[] = useMemo(
     () =>
       racks.map((rack) => ({
@@ -77,27 +95,19 @@ export default function ConsolidationRacksListPage() {
       free += row.stats.free;
       occupied += row.stats.occupied;
     }
-    const avgUtilization = segments > 0 ? Math.round((occupied / segments) * 1000) / 10 : 0;
     return {
       rackCount: rows.length,
       segments,
       free,
       occupied,
-      avgUtilization,
     };
   }, [rows]);
 
   const handleDelete = async (rack: ConsolidationRackListRow) => {
-    if (
-      !window.confirm(
-        `Usunąć regał ${rack.name}? Segmenty z przypisanymi zamówieniami zostaną zwolnione.`,
-      )
-    ) {
-      return;
-    }
     setDeletingId(rack.id);
     try {
       await api.delete(`/racks/${rack.id}/`);
+      setConfirmDelete(null);
       await fetchRacks();
     } catch (err: unknown) {
       console.error("[ConsolidationRacksList] delete error:", err);
@@ -108,24 +118,13 @@ export default function ConsolidationRacksListPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <CartsListPageHeader
-        description="Konfiguracja regałów magazynowych wykorzystywanych przez procesy WMS."
-        actions={
-          <button
-            type="button"
-            disabled={!hasActiveWarehouse}
-            className={filterToolbarBtnApply}
-            onClick={() => navigate("/carts/racks/new")}
-          >
-            <Plus className="mr-1.5 inline h-4 w-4" strokeWidth={2} aria-hidden />
-            Nowy regał kompletacyjny
-          </button>
-        }
-      />
+    <div className="space-y-5">
+      <p className="text-sm text-slate-500">
+        Konfiguracja regałów magazynowych wykorzystywanych przez procesy WMS.
+      </p>
 
       {!loading && !error && hasActiveWarehouse ? (
-        <PurchasingKpiGrid columns={5}>
+        <PurchasingKpiGrid columns={4}>
           <PurchasingKpiCard title="Regały" value={aggregateStats.rackCount} tone="indigo" icon={<Layers aria-hidden />} />
           <PurchasingKpiCard
             title="Segmenty"
@@ -140,12 +139,6 @@ export default function ConsolidationRacksListPage() {
             icon={<CheckCircle2 aria-hidden />}
           />
           <PurchasingKpiCard title="Zajęte" value={aggregateStats.occupied} tone="amber" icon={<Box aria-hidden />} />
-          <PurchasingKpiCard
-            title="Średnie wykorzystanie"
-            value={`${aggregateStats.avgUtilization}%`}
-            tone="purple"
-            icon={<Gauge aria-hidden />}
-          />
         </PurchasingKpiGrid>
       ) : null}
 
@@ -177,7 +170,8 @@ export default function ConsolidationRacksListPage() {
             title="Brak regałów"
             description="Utwórz pierwszy regał kompletacyjny dla aktywnego magazynu."
             action={
-              <button type="button" className={filterToolbarBtnApply} onClick={() => navigate("/carts/racks/new")}>
+              <button type="button" className={cartsOrangeCtaClass} onClick={() => navigate("/carts/racks/new")}>
+                <Plus className="h-4 w-4" strokeWidth={2.5} aria-hidden />
                 Nowy regał kompletacyjny
               </button>
             }
@@ -191,11 +185,23 @@ export default function ConsolidationRacksListPage() {
               deleteBusyId={deletingId}
               onPreview={(id) => navigate(`/carts/racks/${id}/preview`)}
               onEdit={(id) => navigate(`/carts/racks/${id}/edit`)}
-              onDelete={(row) => void handleDelete(row)}
+              onDelete={(row) => setConfirmDelete(row)}
             />
           </div>
         </div>
       )}
+
+      {confirmDelete ? (
+        <ConfirmModal
+          title="Usuń regał"
+          message={`Usunąć regał ${confirmDelete.name}? Segmenty z przypisanymi zamówieniami zostaną zwolnione.`}
+          confirmLabel="Usuń"
+          confirmTone="danger"
+          pending={deletingId === confirmDelete.id}
+          onCancel={() => setConfirmDelete(null)}
+          onConfirm={() => void handleDelete(confirmDelete)}
+        />
+      ) : null}
     </div>
   );
 }
