@@ -92,6 +92,7 @@ _DEDUP_PREFIXES: tuple[str, ...] = (
     "/api/wms/carriers",
 )
 
+# Kept for documentation / future GET-allowlist paths (GETs are currently fully skipped).
 _POLLING_SUFFIXES: tuple[str, ...] = (
     "/poll",
     "/heartbeat",
@@ -106,8 +107,11 @@ def _normalize_path(path: str) -> str:
 
 
 def should_track_request(method: str, path: str) -> bool:
+    """Track only mutating requests — GETs (polling / list refresh) are not operational work."""
     m = (method or "").upper()
-    if m in ("OPTIONS", "HEAD"):
+    if m in ("OPTIONS", "HEAD", "GET"):
+        return False
+    if m not in ("POST", "PUT", "PATCH", "DELETE"):
         return False
     norm = _normalize_path(path)
     if norm == "/":
@@ -120,13 +124,6 @@ def should_track_request(method: str, path: str) -> bool:
     for prefix in _DEDUP_PREFIXES:
         if norm == prefix or norm.startswith(prefix + "/"):
             return False
-    if m in ("POST", "PUT", "PATCH", "DELETE"):
-        return True
-    if m != "GET":
-        return False
-    lower = norm.lower()
-    if any(lower.endswith(s) for s in _POLLING_SUFFIXES):
-        return False
     return True
 
 
@@ -147,15 +144,25 @@ def _action_from_request(method: str, path: str) -> str:
     return m.lower()
 
 
-def resolve_api_activity(method: str, path: str) -> tuple[str, str] | None:
-    """Return (module, action_type) for a tracked HTTP request."""
-    if not should_track_request(method, path):
-        return None
+def resolve_module_for_path(path: str) -> str | None:
+    """Map API path to a known operational module, or None for unmapped technical traffic."""
     norm = _normalize_path(path)
-    module = "API"
     for prefix, mod in _PREFIX_MODULES:
         if norm == prefix or norm.startswith(prefix + "/"):
-            module = mod
-            break
-    action = _action_from_request(method, norm)
+            return mod
+    return None
+
+
+def resolve_api_activity(method: str, path: str) -> tuple[str, str] | None:
+    """Return (module, action_type) for a tracked HTTP request.
+
+    Unmapped paths are skipped (no generic ``API`` module) so TOP MODUŁY / throughput
+    reflect real business areas, not catch-all HTTP noise.
+    """
+    if not should_track_request(method, path):
+        return None
+    module = resolve_module_for_path(path)
+    if module is None:
+        return None
+    action = _action_from_request(method, path)
     return module, action[:96]

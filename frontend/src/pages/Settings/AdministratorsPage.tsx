@@ -1,14 +1,18 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import {
+  Ban,
+  Filter,
+  KeyRound,
   MoreHorizontal,
   Pencil,
   Plus,
   Shield,
+  Trash2,
   Users,
   Search,
-  Settings2,
+  X,
 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -22,6 +26,7 @@ import {
 import { isSuperRole } from "../../auth/isSuperRole";
 import { useAuth } from "../../context/AuthContext";
 import { WMS_OPERATIONAL_MODE_LABELS_PL } from "../../constants/wmsOperationalModes";
+import { PLATFORM_ROLE_OPTIONS } from "../../settings/platformRoles";
 
 function initials(row: AppUserListItem) {
   const a = (row.first_name?.[0] ?? "").toUpperCase();
@@ -51,18 +56,16 @@ function displayName(row: AppUserListItem) {
   return n || row.login;
 }
 
+/** Screenshot palette: soft green chips; rose for reklamacje/zwroty. */
 function modeBadgeClass(key: string): string {
-  const palette = [
-    "bg-sky-50 text-sky-900 ring-sky-200",
-    "bg-violet-50 text-violet-900 ring-violet-200",
-    "bg-amber-50 text-amber-900 ring-amber-200",
-    "bg-emerald-50 text-emerald-900 ring-emerald-200",
-    "bg-rose-50 text-rose-900 ring-rose-200",
-  ];
-  let h = 0;
-  for (let i = 0; i < key.length; i += 1) h = (h * 31 + key.charCodeAt(i)) >>> 0;
-  return palette[h % palette.length];
+  const k = key.toLowerCase();
+  if (k === "returns" || k === "complaints" || k.includes("reklam")) {
+    return "bg-rose-50 text-rose-800 ring-rose-200";
+  }
+  return "bg-emerald-50 text-emerald-800 ring-emerald-200";
 }
+
+type ActiveFilter = "all" | "active" | "inactive";
 
 type ActionsMenuState = { userId: number; top: number; left: number };
 
@@ -76,6 +79,11 @@ export default function AdministratorsPage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [menu, setMenu] = useState<ActionsMenuState | null>(null);
+  const [search, setSearch] = useState("");
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [filterActive, setFilterActive] = useState<ActiveFilter>("all");
+  const [filterRole, setFilterRole] = useState("");
+  const [filterWarehouse, setFilterWarehouse] = useState("");
 
   const load = useCallback(async () => {
     setErr(null);
@@ -198,6 +206,46 @@ export default function AdministratorsPage() {
     setMenu(null);
   };
 
+  const filteredRows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const wh = filterWarehouse.trim().toLowerCase();
+    return rows.filter((r) => {
+      if (filterActive === "active" && !r.is_active) return false;
+      if (filterActive === "inactive" && r.is_active) return false;
+      if (filterRole && r.role !== filterRole) return false;
+      if (wh) {
+        const names = (r.warehouse_names ?? []).join(" ").toLowerCase();
+        const summary = (r.warehouse_summary ?? "").toLowerCase();
+        if (!names.includes(wh) && !summary.includes(wh)) return false;
+      }
+      if (!q) return true;
+      const blob = [
+        r.login,
+        r.email,
+        r.first_name,
+        r.last_name,
+        r.role,
+        ...(r.warehouse_names ?? []),
+        r.warehouse_summary,
+        ...(r.wms_operational_modes ?? []).map((m) => WMS_OPERATIONAL_MODE_LABELS_PL[m] ?? m),
+        r.primary_workforce_group?.name,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return blob.includes(q);
+    });
+  }, [rows, search, filterActive, filterRole, filterWarehouse]);
+
+  const filtersActive =
+    filterActive !== "all" || Boolean(filterRole) || Boolean(filterWarehouse.trim());
+
+  const clearFilters = () => {
+    setFilterActive("all");
+    setFilterRole("");
+    setFilterWarehouse("");
+  };
+
   if (!authLoading && !user) {
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
@@ -250,11 +298,12 @@ export default function AdministratorsPage() {
                 if (row) void onResetPassword(row);
               }}
             >
+              <KeyRound className="h-4 w-4 shrink-0 text-slate-500" strokeWidth={2} aria-hidden />
               Reset hasła
             </button>
             <button
               type="button"
-              className="flex w-full items-center px-3 py-2 text-left text-sm text-slate-800 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-800 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
               role="menuitem"
               disabled={(() => {
                 const row = rows.find((x) => x.id === menu.userId);
@@ -265,6 +314,7 @@ export default function AdministratorsPage() {
                 if (row) void onToggleActive(row);
               }}
             >
+              <Ban className="h-4 w-4 shrink-0 text-slate-500" strokeWidth={2} aria-hidden />
               {rows.find((x) => x.id === menu.userId)?.is_active
                 ? "Dezaktywuj"
                 : "Aktywuj"}
@@ -282,13 +332,14 @@ export default function AdministratorsPage() {
                       row.is_deletable === false),
                 );
               })()}
-              className="flex w-full items-center px-3 py-2 text-left text-sm text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
               role="menuitem"
               onClick={() => {
                 const row = rows.find((x) => x.id === menu.userId);
                 if (row) void onDelete(row);
               }}
             >
+              <Trash2 className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
               Usuń
             </button>
           </div>,
@@ -297,30 +348,99 @@ export default function AdministratorsPage() {
       : null;
 
   return (
-    <div className="min-w-0 bg-white rounded-xl border border-slate-200 p-4 md:p-6 shadow-sm space-y-6">
+    <div className="min-w-0 space-y-4">
       {err && <p className="text-sm text-red-600">{err}</p>}
 
-      {/* Górny pasek narzędzi */}
-      <div className="flex flex-col sm:flex-row items-start justify-between gap-4 sm:items-center">
-        <div className="relative w-full sm:max-w-md">
-          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-            <Search className="h-4 w-4 text-slate-400" aria-hidden="true" />
+      {/* Search + filter bar */}
+      <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative w-full sm:max-w-md">
+            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+              <Search className="h-4 w-4 text-slate-400" aria-hidden="true" />
+            </div>
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Wyszukaj..."
+              aria-label="Wyszukaj użytkowników"
+              className="block w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm placeholder-slate-400 focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-300"
+            />
           </div>
-          <input
-            type="text"
-            placeholder="Wyszukaj..."
-            className="block w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm placeholder-slate-400 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
-          />
+          <div className="flex w-full items-center gap-2 sm:w-auto">
+            <button
+              type="button"
+              aria-expanded={filterOpen}
+              onClick={() => setFilterOpen((v) => !v)}
+              className={`inline-flex w-full items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-slate-200 sm:w-auto ${
+                filtersActive || filterOpen
+                  ? "border-slate-400 bg-slate-50 text-slate-900"
+                  : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+              }`}
+            >
+              <Filter className="h-4 w-4 text-slate-500" aria-hidden="true" />
+              Filtruj
+              {filtersActive ? (
+                <span className="rounded-full bg-orange-500 px-1.5 text-[10px] font-bold text-white">!</span>
+              ) : null}
+            </button>
+          </div>
         </div>
-        <div className="flex w-full sm:w-auto items-center gap-3">
-          <button
-            type="button"
-            className="inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-200"
-          >
-            <Settings2 className="h-4 w-4 text-slate-500" aria-hidden="true" />
-            Filtruj
-          </button>
-        </div>
+
+        {filterOpen ? (
+          <div className="mt-3 grid gap-3 border-t border-slate-100 pt-3 sm:grid-cols-3">
+            <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Status
+              <select
+                value={filterActive}
+                onChange={(e) => setFilterActive(e.target.value as ActiveFilter)}
+                className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium normal-case tracking-normal text-slate-800"
+              >
+                <option value="all">Wszyscy</option>
+                <option value="active">Aktywni</option>
+                <option value="inactive">Nieaktywni</option>
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Rola
+              <select
+                value={filterRole}
+                onChange={(e) => setFilterRole(e.target.value)}
+                className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium normal-case tracking-normal text-slate-800"
+              >
+                <option value="">Wszystkie</option>
+                {PLATFORM_ROLE_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Magazyn
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={filterWarehouse}
+                  onChange={(e) => setFilterWarehouse(e.target.value)}
+                  placeholder="Nazwa magazynu…"
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium normal-case tracking-normal text-slate-800 placeholder:text-slate-400"
+                />
+                {filtersActive ? (
+                  <button
+                    type="button"
+                    onClick={clearFilters}
+                    className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-slate-200 px-2.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                    title="Wyczyść filtry"
+                  >
+                    <X className="h-3.5 w-3.5" aria-hidden />
+                    Wyczyść
+                  </button>
+                ) : null}
+              </div>
+            </label>
+          </div>
+        ) : null}
       </div>
 
       {loading ? (
@@ -337,15 +457,32 @@ export default function AdministratorsPage() {
           <button
             type="button"
             onClick={goToNewUser}
-            className="mt-6 inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-slate-800"
+            className="mt-6 inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg bg-orange-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-orange-600"
           >
             <Plus className="h-4 w-4" strokeWidth={2} aria-hidden />
             Dodaj użytkownika
           </button>
         </div>
+      ) : filteredRows.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/80 px-6 py-12 text-center">
+          <p className="text-sm font-semibold text-slate-800">Brak wyników</p>
+          <p className="mt-1 text-sm text-slate-600">Zmień wyszukiwanie lub filtry.</p>
+          {(search || filtersActive) && (
+            <button
+              type="button"
+              className="mt-4 text-sm font-medium text-orange-600 hover:text-orange-700"
+              onClick={() => {
+                setSearch("");
+                clearFilters();
+              }}
+            >
+              Wyczyść wyszukiwanie i filtry
+            </button>
+          )}
+        </div>
       ) : (
         <div className="flex flex-col gap-3">
-          {rows.map((r) => {
+          {filteredRows.map((r) => {
             // Generowanie tagów dla sekcji "Permisje"
             const allTags = [];
             if (r.primary_workforce_group) {

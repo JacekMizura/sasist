@@ -126,6 +126,7 @@ export async function fetchWorkforceActivityLogs(params?: {
   tenant_id?: number;
   user_id?: number;
   module?: string;
+  warehouse_id?: number;
   limit?: number;
 }): Promise<WorkforceActivityRow[]> {
   const res = await api.get<WorkforceActivityRow[]>("/workforce/activity-logs", { params });

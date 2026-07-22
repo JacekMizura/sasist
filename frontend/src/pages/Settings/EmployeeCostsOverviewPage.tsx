@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Briefcase, FileText, MoreHorizontal, TrendingUp, Users, Wallet } from "lucide-react";
+import { Briefcase, FileText, MoreHorizontal, Users, Wallet } from "lucide-react";
 
 import {
   fetchWorkforceCostOverview,
@@ -156,8 +156,8 @@ export default function EmployeeCostsOverviewPage() {
         </div>
       ) : data && totals ? (
         <>
-          {/* 1. KARTY KPI (Góra) */}
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          {/* 1. KARTY KPI (Góra) — 4 karty jak na screenie */}
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <div className="flex flex-col justify-between rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex flex-col">
@@ -232,25 +232,6 @@ export default function EmployeeCostsOverviewPage() {
               </div>
               <span className="mt-4 border-t border-emerald-100 pt-3 text-[11px] text-emerald-800/90">
                 Miesięcznie, szacunek
-              </span>
-            </div>
-
-            <div className="flex flex-col justify-between rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex flex-col">
-                  <span className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500">
-                    Średni Koszt
-                  </span>
-                  <span className="text-xl font-bold tabular-nums text-slate-900">
-                    {totals.avg != null ? fmtPln0(totals.avg) : "—"}
-                  </span>
-                </div>
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-100 bg-slate-50 text-slate-600">
-                  <TrendingUp className="h-5 w-5" strokeWidth={1.5} />
-                </div>
-              </div>
-              <span className="mt-4 border-t border-slate-100 pt-3 text-[11px] text-slate-500">
-                Na osobę z danymi ({totals.withNum})
               </span>
             </div>
           </div>

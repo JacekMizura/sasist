@@ -1,3 +1,25 @@
+## 2026-07-22 — Ustawienia → Użytkownicy: UI 1:1 + telemetria operacyjna
+
+- Chrome: bare tabs (orange underline), CTA „+ Dodaj użytkownika” pomarańczowe przy liście; bez dużego H1 nad tabami.
+- Lista: działające wyszukiwanie + Filtruj (status/rola/magazyn); menu … z ikonami; chipy permisji zielone/czerwone.
+- Koszty: 4 KPI jak na screenie; Historia: pagination „Załaduj więcej”; Czas pracy: expandable operatorzy + filtry.
+- Backend: GET/unmapped API poza telemetrią; `filter_operational_activity` w dashboard/analytics/activity-logs.
+- Tests: `test_workforce_activity`, `test_workforce_operational_filter`, `administratorsTabs.test.ts`. Build PASS. **No push.**
+
+## 2026-07-22 — FE: stale Vite chunk recovery (PlanningDashboard)
+
+- Prod: `PlanningDashboard-DvvOppzR.js` → 200 `text/html` (SPA rewrite); aktualny index wskazuje `PlanningDashboard-BqfS5N4m.js`.
+- Root cause: stary main bundle po deployu (nie broken import, API 200).
+- Centralnie: `lazyWithStaleChunkRecovery`, one-shot reload (sessionStorage), ErpPanelRouteErrorPage + ErrorBoundary; purchasing lazyViews + ProductList.
+- Tests: `staleChunkRecovery.test.ts`. Build PASS. **No push.**
+
+## 2026-07-22 — WMS cross-module 500: requires_putaway schema drift
+
+- Root cause: ORM kolumny `requires_putaway` / `default_requires_putaway` (ba0dc357); ensure z `BOOLEAN DEFAULT 1` (nie-PG) + ensure w batch try/except → kolumny mogą nie powstać na PROD.
+- Objaw: GET receiving/pz, putaway/pz, returns/active-z-pz → 500; warehouse-operations snapshot → 200 (COUNT bez pełnego SELECT).
+- Fix: dialect-aware default, izolowany startup ensure, request-path heal na listach; test `test_requires_putaway_schema_drift_lists.py`.
+- Lifecycle PROGRESS≠DONE i scanner SSOT bez zmian. **No push.**
+
 ## 2026-07-22 — Sprzedaż bezpośrednia: widoczny Przelew + cleanup UI
 
 - Root cause: zapisane `payment_methods.transfer=false` (stary default) + filtr w `PaymentTerminalPanel` ukrywał TRANSFER mimo backendu TRANSFER/BANK.

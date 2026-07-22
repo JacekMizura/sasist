@@ -18,6 +18,18 @@ from ..models.employee_cost_profile import EmployeeCostProfile
 from ..models.user_activity_log import UserActivityLog
 from .activity_session_service import SESSION_GAP_MINUTES
 
+# Modules that are technical / non-operational noise in workforce TOP MODUŁY & KPIs.
+_NON_OPERATIONAL_MODULES = frozenset(
+    {
+        "API",
+        "SYSTEM",
+        "UNKNOWN",
+        "HEALTH",
+        "OPERATIONAL_RUNTIME",
+        "WMS_DASHBOARD",
+    }
+)
+
 
 def _parse_meta(raw: Optional[str]) -> dict[str, Any]:
     if not raw:
@@ -27,6 +39,25 @@ def _parse_meta(raw: Optional[str]) -> dict[str, Any]:
         return out if isinstance(out, dict) else {}
     except json.JSONDecodeError:
         return {}
+
+
+def is_operational_activity_row(row: UserActivityLog) -> bool:
+    """True when the log represents real operator work (not polling / catch-all API)."""
+    mod = (row.module or "").strip().upper()
+    if not mod or mod in _NON_OPERATIONAL_MODULES:
+        return False
+    action = (row.action_type or "").strip().lower()
+    if action.startswith("view_") or action in ("view", "poll", "heartbeat", "health"):
+        return False
+    meta = _parse_meta(getattr(row, "metadata_json", None))
+    method = str(meta.get("method") or "").upper()
+    if method == "GET":
+        return False
+    return True
+
+
+def filter_operational_activity(rows: list[UserActivityLog]) -> list[UserActivityLog]:
+    return [r for r in rows if is_operational_activity_row(r)]
 
 
 def merge_activity_sessions(rows: list[UserActivityLog], gap_minutes: int = SESSION_GAP_MINUTES) -> list[dict[str, Any]]:
@@ -159,7 +190,8 @@ def dashboard_summary(
     date_from: datetime,
     date_to: datetime,
 ) -> dict[str, Any]:
-    rows = _query_logs(db, tenant_id=tenant_id, user_ids=user_ids, date_from=date_from, date_to=date_to)
+    raw_rows = _query_logs(db, tenant_id=tenant_id, user_ids=user_ids, date_from=date_from, date_to=date_to)
+    rows = filter_operational_activity(raw_rows)
 
     by_user: dict[int, list[UserActivityLog]] = defaultdict(list)
     for r in rows:
@@ -212,7 +244,8 @@ def build_workforce_analytics(
 ) -> dict[str, Any]:
     """Extended analytics payload for supervisor dashboards."""
     user_ids = [user_id] if user_id is not None else None
-    rows = _query_logs(db, tenant_id=tenant_id, user_ids=user_ids, date_from=date_from, date_to=date_to)
+    raw_rows = _query_logs(db, tenant_id=tenant_id, user_ids=user_ids, date_from=date_from, date_to=date_to)
+    rows = filter_operational_activity(raw_rows)
     dash = dashboard_summary(
         db,
         tenant_id=tenant_id,
@@ -340,6 +373,8 @@ def list_recent_logs(
     limit: int = 200,
     user_id: Optional[int] = None,
     module: Optional[str] = None,
+    warehouse_id: Optional[int] = None,
+    operational_only: bool = True,
 ) -> list[dict[str, Any]]:
     q = db.query(UserActivityLog)
     if tenant_id is not None:
@@ -348,7 +383,15 @@ def list_recent_logs(
         q = q.filter(UserActivityLog.user_id == user_id)
     if module:
         q = q.filter(UserActivityLog.module == module)
-    rows = q.order_by(desc(UserActivityLog.created_at)).limit(min(limit, 500)).all()
+    if warehouse_id is not None:
+        q = q.filter(UserActivityLog.warehouse_id == warehouse_id)
+    # Oversample when filtering technical noise so callers still get up to ``limit`` rows.
+    fetch_n = min(limit * 4, 2000) if operational_only else min(limit, 500)
+    rows = q.order_by(desc(UserActivityLog.created_at)).limit(fetch_n).all()
+    if operational_only:
+        rows = filter_operational_activity(rows)[:limit]
+    else:
+        rows = rows[:limit]
     out: list[dict[str, Any]] = []
     for r in rows:
         login = None

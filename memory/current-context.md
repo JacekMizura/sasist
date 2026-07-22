@@ -2,10 +2,11 @@
 
 ## Active
 
-**Sprzedaż bezpośrednia — UI Przelew + cleanup tekstów** — lokalny commit, bez push.
+**Ustawienia → Użytkownicy — pixel-parity + SSOT wiring** — lokalny commit, bez push.
 
-- Root cause braku „Przelew”: `payment_methods.transfer=false` z starego defaultu zapisany w settings/cache; panel filtruje po flagach.
-- Fix: migracja legacy `transfer:false` → `true` (dopóki brak `extensions.ds_payment_methods_v2`); cache `v2`; układ 2×2; usunięte helperteksty Paragon/Odbiór.
+- Moduł już istniał pod `/settings/administrators/*`; dopięto chrome 1:1 (bare tabs, pomarańczowy CTA), search/filtry listy, KPI kosztów 4 karty, filtr telemetrii bez technicznego API.
+- Activity SSOT: `user_activity_logs` + `workforce_analytics_service` (session gap 15 min); middleware nie loguje GET ani unmapped „API”.
+- Permission tree / role status matrix / grupy / koszty — bez nowych subsystemów.
 
 ## Preferencja commitów (user)
 

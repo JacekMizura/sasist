@@ -7,19 +7,22 @@ import { ADMINISTRATORS_TABS } from "./administratorsTabs";
 /**
  * Shared chrome for all tabbed routes under `/settings/administrators/*`
  * (edit/create routes stay outside this layout in {@link AdministratorsLayout}).
+ *
+ * Pixel-parity with Ustawienia → Użytkownicy screenshots:
+ * Home > Ustawienia > Użytkownicy → bare underline tabs (+ orange CTA on list tab).
  */
 export default function AdministratorsModuleFrame() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const isUserListTab = pathname === "/settings/administrators" || pathname === "/settings/administrators/";
 
-  const primaryAction = isUserListTab ? (
+  const addUserCta = isUserListTab ? (
     <button
       type="button"
       onClick={() => navigate("/settings/administrators/new")}
-      className="relative z-10 inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
+      className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-orange-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-2"
     >
-      <Plus className="h-4 w-4" strokeWidth={2} aria-hidden />
+      <Plus className="h-4 w-4" strokeWidth={2.5} aria-hidden />
       Dodaj użytkownika
     </button>
   ) : null;
@@ -30,10 +33,11 @@ export default function AdministratorsModuleFrame() {
         { label: "Ustawienia", to: "/settings/company" },
         { label: "Użytkownicy" },
       ]}
-      title="Użytkownicy"
-      actions={primaryAction}
+      hideTitle
       tabs={ADMINISTRATORS_TABS}
       tabsExact
+      tabsChrome="bare"
+      tabsTrailing={addUserCta}
       tabsAriaLabel="Moduł Użytkownicy"
     >
       <Outlet />

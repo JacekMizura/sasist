@@ -53,9 +53,15 @@ class TestActivityModuleResolver(unittest.TestCase):
         self.assertEqual(module, "ORDERS")
         self.assertIn("status", action)
 
-    def test_polling_dashboard_skipped(self):
+    def test_get_requests_skipped(self):
+        self.assertFalse(should_track_request("GET", "/api/orders"))
+        self.assertIsNone(resolve_api_activity("GET", "/api/orders"))
         self.assertFalse(should_track_request("GET", "/api/wms/dashboard/summary"))
         self.assertIsNone(resolve_api_activity("GET", "/api/wms/dashboard/summary"))
+
+    def test_unmapped_mutation_not_api_module(self):
+        """Catch-all technical paths must not become TOP MODUŁY = API."""
+        self.assertIsNone(resolve_api_activity("POST", "/api/unknown-thing/xyz"))
 
     def test_inventory_count_tracked(self):
         resolved = resolve_api_activity("PATCH", "/api/inventory-count/5/lines/10")
@@ -66,6 +72,37 @@ class TestActivityModuleResolver(unittest.TestCase):
     def test_dedup_wms_receiving_skipped(self):
         self.assertFalse(should_track_request("POST", "/api/wms/receiving/scan"))
         self.assertIsNone(resolve_api_activity("POST", "/api/wms/receiving/scan"))
+
+
+class TestOperationalActivityFilter(unittest.TestCase):
+    def test_excludes_api_and_view_noise(self):
+        from backend.services.workforce_analytics_service import filter_operational_activity
+
+        rows = [
+            SimpleNamespace(
+                module="API",
+                action_type="create_x",
+                metadata_json='{"method":"POST"}',
+            ),
+            SimpleNamespace(
+                module="WMS_PICKING",
+                action_type="view_list",
+                metadata_json='{"method":"GET"}',
+            ),
+            SimpleNamespace(
+                module="WMS_PICKING",
+                action_type="scan_product",
+                metadata_json='{"method":"POST"}',
+            ),
+            SimpleNamespace(
+                module="ORDERS",
+                action_type="create_status",
+                metadata_json=None,
+            ),
+        ]
+        kept = filter_operational_activity(rows)  # type: ignore[arg-type]
+        self.assertEqual(len(kept), 2)
+        self.assertEqual({r.module for r in kept}, {"WMS_PICKING", "ORDERS"})
 
 
 if __name__ == "__main__":

@@ -83,11 +83,20 @@ def get_activity_logs(
     tenant_id: int | None = Query(None),
     user_id: int | None = Query(None),
     module: str | None = Query(None),
+    warehouse_id: int | None = Query(None),
     limit: int = Query(200, ge=1, le=500),
     db: Session = Depends(get_db),
     _: AppUser = Depends(require_permission("workforce.activity.read")),
 ):
-    return list_recent_logs(db, tenant_id=tenant_id, limit=limit, user_id=user_id, module=module)
+    return list_recent_logs(
+        db,
+        tenant_id=tenant_id,
+        limit=limit,
+        user_id=user_id,
+        module=module,
+        warehouse_id=warehouse_id,
+        operational_only=True,
+    )
 
 
 @router.get("/dashboard")

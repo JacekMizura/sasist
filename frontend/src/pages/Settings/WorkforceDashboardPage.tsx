@@ -181,128 +181,136 @@ export default function WorkforceDashboardPage() {
             <WorkforceTopModules modules={analytics?.top_modules ?? dash.top_modules} />
           </div>
 
-          <WorkforceDailyActivity days={analytics?.daily_breakdown ?? dash.daily_breakdown} />
+          {/* Dodatkowa telemetria — poniżej viewportu screena Podsumowanie */}
+          <details className="rounded-xl border border-slate-200 bg-white shadow-sm open:shadow-md">
+            <summary className="cursor-pointer list-none px-5 py-4 text-sm font-semibold uppercase tracking-wide text-slate-700 marker:content-none [&::-webkit-details-marker]:hidden">
+              Szczegóły operacyjne i koszt okresu
+            </summary>
+            <div className="space-y-4 border-t border-slate-100 px-5 pb-5 pt-4">
+              <WorkforceDailyActivity days={analytics?.daily_breakdown ?? dash.daily_breakdown} />
 
-          <div className="grid gap-4 xl:grid-cols-2">
-            <WorkforceActivityTimeline timeline={analytics?.recent_timeline ?? []} userLabel={userLabel} />
-            <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700">Ruchy magazynowe</h3>
-              <ul className="mt-4 space-y-2 text-sm text-slate-700">
-                <li className="flex justify-between">
-                  <span>Kompletacja / pakowanie / skany</span>
-                  <span className="tabular-nums font-medium">
-                    {dash.action_buckets.picking_events} / {dash.action_buckets.packing_events} /{" "}
-                    {dash.action_buckets.scan_events}
-                  </span>
-                </li>
-                <li className="flex justify-between">
-                  <span>Przyjęcia / rozlokowanie / przesunięcia</span>
-                  <span className="tabular-nums font-medium">
-                    {dash.action_buckets.receiving_events ?? 0} / {dash.action_buckets.putaway_events ?? 0} /{" "}
-                    {dash.action_buckets.movement_events ?? 0}
-                  </span>
-                </li>
-                <li className="flex justify-between">
-                  <span>Dokumenty / inwentaryzacja / admin</span>
-                  <span className="tabular-nums font-medium">
-                    {dash.action_buckets.document_events ?? 0} / {dash.action_buckets.inventory_events ?? 0} /{" "}
-                    {dash.action_buckets.admin_events ?? 0}
-                  </span>
-                </li>
-              </ul>
-              <p className="mt-4 flex items-center gap-2 text-xs text-slate-500">
-                <BarChart3 className="h-4 w-4" aria-hidden />
-                Telemetria operacyjna WMS/ERP — nie system RCP ani payroll.
-              </p>
-            </div>
-          </div>
-
-          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-            <div className="flex flex-col justify-between gap-4 border-b border-slate-200 bg-white p-5 sm:flex-row sm:items-center lg:p-6">
-              <div>
-                <h2 className="text-base font-semibold uppercase tracking-wide text-slate-900">
-                  Szacunkowy koszt operacyjny
-                </h2>
-                <p className="mt-1 text-sm text-slate-500">
-                  {costs?.disclaimer || "Szacunki oparte na: (koszt pracodawcy) × (aktywny czas operacyjny)"}
-                </p>
+              <div className="grid gap-4 xl:grid-cols-2">
+                <WorkforceActivityTimeline timeline={analytics?.recent_timeline ?? []} userLabel={userLabel} />
+                <div className="rounded-xl border border-slate-200 bg-white p-5">
+                  <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700">Ruchy magazynowe</h3>
+                  <ul className="mt-4 space-y-2 text-sm text-slate-700">
+                    <li className="flex justify-between">
+                      <span>Kompletacja / pakowanie / skany</span>
+                      <span className="tabular-nums font-medium">
+                        {dash.action_buckets.picking_events} / {dash.action_buckets.packing_events} /{" "}
+                        {dash.action_buckets.scan_events}
+                      </span>
+                    </li>
+                    <li className="flex justify-between">
+                      <span>Przyjęcia / rozlokowanie / przesunięcia</span>
+                      <span className="tabular-nums font-medium">
+                        {dash.action_buckets.receiving_events ?? 0} / {dash.action_buckets.putaway_events ?? 0} /{" "}
+                        {dash.action_buckets.movement_events ?? 0}
+                      </span>
+                    </li>
+                    <li className="flex justify-between">
+                      <span>Dokumenty / inwentaryzacja / admin</span>
+                      <span className="tabular-nums font-medium">
+                        {dash.action_buckets.document_events ?? 0} / {dash.action_buckets.inventory_events ?? 0} /{" "}
+                        {dash.action_buckets.admin_events ?? 0}
+                      </span>
+                    </li>
+                  </ul>
+                  <p className="mt-4 flex items-center gap-2 text-xs text-slate-500">
+                    <BarChart3 className="h-4 w-4" aria-hidden />
+                    Tylko zdarzenia operacyjne (bez pollingu i technicznego API).
+                  </p>
+                </div>
               </div>
-              <div className="shrink-0">
-                <span className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-sm font-bold text-emerald-800 shadow-sm">
-                  <TrendingUp className="h-4 w-4" strokeWidth={2.5} aria-hidden />
-                  {costs?.total_estimated_cost_pln?.toFixed(2) ?? "0.00"} PLN
-                </span>
-              </div>
-            </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[800px] text-left text-sm">
-                <thead className="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-600">
-                  <tr>
-                    <th className="px-6 py-4">Pracownik</th>
-                    <th className="px-6 py-4">Zdarzenia</th>
-                    <th className="px-6 py-4">Sesje</th>
-                    <th className="px-6 py-4">Aktywny czas (szac.)</th>
-                    <th className="px-6 py-4">Stawka (szac.)</th>
-                    <th className="px-6 py-4">Koszt okresu</th>
-                    <th className="px-6 py-4 text-right">Akcje</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 bg-white">
-                  {(costs?.per_user ?? []).map((row) => {
-                    const u = userMap.get(row.user_id);
-                    const displayName = u ? rosterName(u) : `Pracownik (${row.user_id})`;
-                    const init = initials(u);
-                    const perUser = dash.per_user.find((p) => p.user_id === row.user_id);
+              <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                <div className="flex flex-col justify-between gap-4 border-b border-slate-200 bg-white p-5 sm:flex-row sm:items-center">
+                  <div>
+                    <h2 className="text-base font-semibold uppercase tracking-wide text-slate-900">
+                      Szacunkowy koszt operacyjny
+                    </h2>
+                    <p className="mt-1 text-sm text-slate-500">
+                      {costs?.disclaimer || "Szacunki oparte na: (koszt pracodawcy) × (aktywny czas operacyjny)"}
+                    </p>
+                  </div>
+                  <div className="shrink-0">
+                    <span className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-sm font-bold text-emerald-800 shadow-sm">
+                      <TrendingUp className="h-4 w-4" strokeWidth={2.5} aria-hidden />
+                      {costs?.total_estimated_cost_pln?.toFixed(2) ?? "0.00"} PLN
+                    </span>
+                  </div>
+                </div>
 
-                    return (
-                      <tr key={row.user_id} className="group transition-colors hover:bg-slate-50/60">
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-3">
-                            <span
-                              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-600 ring-1 ring-slate-200"
-                              aria-hidden
-                            >
-                              {init}
-                            </span>
-                            <span className="font-semibold text-slate-900">{displayName}</span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 tabular-nums font-medium text-slate-900">{perUser?.events ?? 0}</td>
-                        <td className="px-6 py-4 tabular-nums text-slate-700">{perUser?.sessions_count ?? 0}</td>
-                        <td className="px-6 py-4 font-medium tabular-nums text-slate-900">
-                          {row.active_hours_approx.toFixed(2)} h
-                        </td>
-                        <td className="px-6 py-4 font-medium tabular-nums text-slate-600">
-                          {row.employer_hourly_pln != null ? `${row.employer_hourly_pln.toFixed(2)} PLN/h` : "—"}
-                        </td>
-                        <td className="px-6 py-4 font-bold tabular-nums text-emerald-700">
-                          {row.estimated_cost_pln.toFixed(2)} PLN
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <button
-                            type="button"
-                            aria-label="Akcje"
-                            className="inline-flex rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-200"
-                          >
-                            <MoreHorizontal className="h-5 w-5" strokeWidth={2} />
-                          </button>
-                        </td>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[800px] text-left text-sm">
+                    <thead className="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-600">
+                      <tr>
+                        <th className="px-6 py-4">Pracownik</th>
+                        <th className="px-6 py-4">Zdarzenia</th>
+                        <th className="px-6 py-4">Sesje</th>
+                        <th className="px-6 py-4">Aktywny czas (szac.)</th>
+                        <th className="px-6 py-4">Stawka (szac.)</th>
+                        <th className="px-6 py-4">Koszt okresu</th>
+                        <th className="px-6 py-4 text-right">Akcje</th>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 bg-white">
+                      {(costs?.per_user ?? []).map((row) => {
+                        const u = userMap.get(row.user_id);
+                        const displayName = u ? rosterName(u) : `Pracownik (${row.user_id})`;
+                        const init = initials(u);
+                        const perUser = dash.per_user.find((p) => p.user_id === row.user_id);
 
-            <div className="border-t border-slate-100 bg-slate-50/50 px-6 py-4">
-              <p className="text-xs leading-relaxed text-slate-500">
-                Czas pracy liczony z aktywności w całym systemie (ERP, WMS, admin, dokumenty, produkcja itd.).
-                Przerwa powyżej 15 minut bez aktywności zamyka sesję. Dane służą do orientacji operacyjnej, nie do
-                rozliczeń płacowych.
-              </p>
+                        return (
+                          <tr key={row.user_id} className="group transition-colors hover:bg-slate-50/60">
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-3">
+                                <span
+                                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-600 ring-1 ring-slate-200"
+                                  aria-hidden
+                                >
+                                  {init}
+                                </span>
+                                <span className="font-semibold text-slate-900">{displayName}</span>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 tabular-nums font-medium text-slate-900">{perUser?.events ?? 0}</td>
+                            <td className="px-6 py-4 tabular-nums text-slate-700">{perUser?.sessions_count ?? 0}</td>
+                            <td className="px-6 py-4 font-medium tabular-nums text-slate-900">
+                              {row.active_hours_approx.toFixed(2)} h
+                            </td>
+                            <td className="px-6 py-4 font-medium tabular-nums text-slate-600">
+                              {row.employer_hourly_pln != null ? `${row.employer_hourly_pln.toFixed(2)} PLN/h` : "—"}
+                            </td>
+                            <td className="px-6 py-4 font-bold tabular-nums text-emerald-700">
+                              {row.estimated_cost_pln.toFixed(2)} PLN
+                            </td>
+                            <td className="px-6 py-4 text-right">
+                              <button
+                                type="button"
+                                aria-label="Akcje"
+                                className="inline-flex rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-200"
+                              >
+                                <MoreHorizontal className="h-5 w-5" strokeWidth={2} />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="border-t border-slate-100 bg-slate-50/50 px-6 py-4">
+                  <p className="text-xs leading-relaxed text-slate-500">
+                    Czas pracy z rzeczywistych aktywności operacyjnych (bez pollingu i technicznego API). Przerwa
+                    powyżej 15 minut bez aktywności zamyka sesję. Dane służą do orientacji operacyjnej, nie do
+                    rozliczeń płacowych.
+                  </p>
+                </div>
+              </div>
             </div>
-          </div>
+          </details>
         </>
       ) : null}
     </div>

@@ -27,7 +27,9 @@ export default function AdministratorsAuditPage() {
   const location = useLocation();
   const [rows, setRows] = useState<AuditLogItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(true);
 
   const [search, setSearch] = useState("");
   const [userFilter, setUserFilter] = useState<string>("");
@@ -36,6 +38,14 @@ export default function AdministratorsAuditPage() {
   const [dateTo, setDateTo] = useState("");
 
   const [detailModal, setDetailModal] = useState<AuditLogItem | null>(null);
+
+  const PAGE = 100;
+
+  const loadPage = async (skip: number, append: boolean) => {
+    const data = await fetchAuditLogs({ skip, limit: PAGE });
+    setHasMore(data.length >= PAGE);
+    setRows((prev) => (append ? [...prev, ...data] : data));
+  };
 
   useEffect(() => {
     if (!detailModal) return;
@@ -55,11 +65,11 @@ export default function AdministratorsAuditPage() {
       setErr(null);
       setLoading(true);
       try {
-        const data = await fetchAuditLogs({ limit: 200 });
-        setRows(data);
+        await loadPage(0, false);
       } catch {
         setErr("Brak dostępu do audytu lub błąd sieci (wymagane uprawnienie audit.view).");
         setRows([]);
+        setHasMore(false);
       } finally {
         setLoading(false);
       }
@@ -69,12 +79,26 @@ export default function AdministratorsAuditPage() {
   useEffect(() => {
     if (!hasPermission("audit.view")) return;
     const t = window.setInterval(() => {
-      void fetchAuditLogs({ limit: 200 })
-        .then(setRows)
+      void fetchAuditLogs({ skip: 0, limit: PAGE })
+        .then((data) => {
+          setRows(data);
+          setHasMore(data.length >= PAGE);
+        })
         .catch(() => {});
     }, 30_000);
     return () => window.clearInterval(t);
   }, [hasPermission]);
+
+  const onLoadMore = async () => {
+    setLoadingMore(true);
+    try {
+      await loadPage(rows.length, true);
+    } catch {
+      setErr("Nie udało się dociągnąć kolejnych wpisów audytu.");
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   const userOptions = useMemo(() => {
     const set = new Set<string>();
@@ -328,6 +352,19 @@ export default function AdministratorsAuditPage() {
           </table>
         </div>
       )}
+
+      {!loading && hasMore && filteredRows.length > 0 ? (
+        <div className="flex justify-center">
+          <button
+            type="button"
+            disabled={loadingMore}
+            onClick={() => void onLoadMore()}
+            className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          >
+            {loadingMore ? "Ładowanie…" : "Załaduj więcej"}
+          </button>
+        </div>
+      ) : null}
 
       {modal}
     </div>

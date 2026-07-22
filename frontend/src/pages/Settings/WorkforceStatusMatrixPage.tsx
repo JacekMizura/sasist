@@ -146,7 +146,7 @@ export default function WorkforceStatusMatrixPage() {
   return (
     <div className="min-w-0 space-y-4">
       <div>
-        <h2 className="text-lg font-semibold text-slate-900">Role i uprawnienia</h2>
+        <h2 className="text-2xl font-bold text-slate-900">Role i uprawnienia</h2>
         <p className="mt-1 text-sm text-slate-500">
           Domyślny dostęp do statusów zamówień dla wybranej roli w magazynie. Uprawnienia konta
           (permission tree) nadal edytujesz w karcie użytkownika.
