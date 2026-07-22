@@ -67,6 +67,7 @@ export type WmsScannerMode =
   | "putaway"
   | "packing"
   | "returns"
+  | "inventory-count"
   | "operational"
   | "operational-relocation"
   | "other";
@@ -114,6 +115,7 @@ export function deriveWmsScannerMode(pathname: string): WmsScannerMode {
   )
     return "packing";
   if (p.startsWith("/wms/returns")) return "returns";
+  if (p === "/wms/inventory-count" || p.startsWith("/wms/inventory-count/")) return "inventory-count";
   if (/^\/wms\/operational-queues\/relocation\/\d+$/.test(p)) return "operational-relocation";
   if (p.startsWith("/wms/operational-queues")) return "operational";
   if (p.startsWith("/wms")) return "other";
@@ -149,6 +151,7 @@ export function deriveActiveScanReceiverLabel(
   if (mode === "receiving-count" || mode === "receiving") return "Przyjęcie";
   if (mode === "putaway") return "Lokacje";
   if (mode === "returns") return "Zwroty";
+  if (mode === "inventory-count") return "Inwentaryzacja";
   if (mode === "operational") return "Kolejki operacyjne";
   if (hasScanHandler) return "Aktywny ekran WMS";
   return "Brak aktywnego odbiorcy";

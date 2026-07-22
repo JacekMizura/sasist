@@ -10,6 +10,7 @@ import {
   recordInventoryScan,
   resolveWmsInventoryBarcode,
   resolveWmsInventoryCarrier,
+  resolveWmsInventoryLocationScan,
   WmsBarcodeResolveError,
   type InventoryTaskRead,
   type WmsBarcodeResolveResult,
@@ -18,6 +19,12 @@ import {
 import { getWmsProductView } from "@/api/wmsProductViewApi";
 import { useScanFeedback } from "@/components/wms/execution/useScanFeedback";
 import { normalizeScanEan } from "@/utils/wmsScanNormalize";
+import { SCAN_CONSUMED } from "@/utils/wmsScanDispatch";
+import {
+  INVENTORY_SCAN_NEED_LOCATION,
+  isProductLikeCodeOnLocationStep,
+  shouldAttemptLocationSwitchOnProductStep,
+} from "../inventoryScanRouting";
 import { wmsInventoryCountPaths } from "../inventoryCountPaths";
 import { setActiveInventoryDocumentId } from "../wmsActiveDocumentStorage";
 import {
@@ -653,6 +660,11 @@ export function useWmsInventoryCountTerminal(
   const resolveLocationScan = useCallback(
     async (code: string) => {
       if (!task) return false;
+      if (isProductLikeCodeOnLocationStep(code)) {
+        scanFeedback.warning(INVENTORY_SCAN_NEED_LOCATION);
+        pulseBad();
+        return false;
+      }
       const labels = [
         task.location_code,
         task.location_name,
@@ -678,6 +690,38 @@ export function useWmsInventoryCountTerminal(
       return true;
     },
     [activateLocationContext, locationContext?.locationCode, pulseBad, scanFeedback, task, tenantId],
+  );
+
+  const switchToScannedLocation = useCallback(
+    async (code: string) => {
+      if (!task || !warehouseId) return false;
+      const docId = task.inventory_document_id;
+      try {
+        const resolved = await resolveWmsInventoryLocationScan(tenantId, warehouseId, code, docId);
+        if (!resolved.found || !resolved.task_id) {
+          return false;
+        }
+        if (resolved.inventory_document_id && resolved.inventory_document_id !== docId) {
+          scanFeedback.error("Lokalizacja należy do innego dokumentu inwentaryzacji");
+          pulseBad();
+          return true; // consumed — do not treat as product
+        }
+        if (Number(resolved.task_id) === Number(task.id)) {
+          await resolveLocationScan(code);
+          return true;
+        }
+        const session = await openWmsInventorySession(tenantId, warehouseId, {
+          document_id: docId,
+          task_id: resolved.task_id,
+        });
+        goToTask(resolved.task_id, session.id, docId);
+        scanFeedback.success(undefined);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [goToTask, pulseBad, resolveLocationScan, scanFeedback, task, tenantId, warehouseId],
   );
 
   const attachCarrier = useCallback(
@@ -927,11 +971,13 @@ export function useWmsInventoryCountTerminal(
   const handleScan = useCallback(
     async (raw: string) => {
       const code = raw.trim();
-      if (!code || !task) return;
+      if (!code || !task) return SCAN_CONSUMED;
 
       const now = Date.now();
-      if (scanInFlight.current) return;
-      if (code === lastScanSubmit.current.code && now - lastScanSubmit.current.at < SCAN_LOCK_MS) return;
+      if (scanInFlight.current) return SCAN_CONSUMED;
+      if (code === lastScanSubmit.current.code && now - lastScanSubmit.current.at < SCAN_LOCK_MS) {
+        return SCAN_CONSUMED;
+      }
 
       scanInFlight.current = true;
       lastScanSubmit.current = { code, at: now };
@@ -939,18 +985,32 @@ export function useWmsInventoryCountTerminal(
       try {
         if (!locationActive) {
           await resolveLocationScan(code);
-          return;
+          return SCAN_CONSUMED;
         }
         if (carrierScanMode || isCarrierBarcode(code)) {
           await attachCarrier(code);
-          return;
+          return SCAN_CONSUMED;
+        }
+        if (shouldAttemptLocationSwitchOnProductStep(code)) {
+          const switched = await switchToScannedLocation(code);
+          if (switched) return SCAN_CONSUMED;
+          // Ambiguous location-like SKU — fall through to product resolve.
         }
         await handleProductScan(code);
+        return SCAN_CONSUMED;
       } finally {
         scanInFlight.current = false;
       }
     },
-    [attachCarrier, carrierScanMode, handleProductScan, locationActive, resolveLocationScan, task],
+    [
+      attachCarrier,
+      carrierScanMode,
+      handleProductScan,
+      locationActive,
+      resolveLocationScan,
+      switchToScannedLocation,
+      task,
+    ],
   );
 
   const handleSearchProduct = useCallback(

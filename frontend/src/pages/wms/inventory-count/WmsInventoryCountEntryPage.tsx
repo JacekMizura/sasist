@@ -11,8 +11,14 @@ import WmsInventoryRecentLocationContext from "@/modules/inventoryCount/ui/wms/W
 import WmsInventoryScanField from "@/modules/inventoryCount/ui/wms/WmsInventoryScanField";
 import { WMS_OPERATIONAL_CONTAINER } from "@/components/wms/execution/wmsLayoutTokens";
 import { useScanFeedback } from "@/components/wms/execution/useScanFeedback";
+import { useWmsPageScanHandler } from "@/components/wms/execution/useWmsPageScanHandler";
 import { useInventoryScanInput } from "@/modules/inventoryCount/hooks/useInventoryScanInput";
 import { wmsInventoryCountPaths } from "@/modules/inventoryCount/inventoryCountPaths";
+import {
+  INVENTORY_SCAN_NEED_LOCATION,
+  inventoryScanConsumed,
+  isProductLikeCodeOnLocationStep,
+} from "@/modules/inventoryCount/inventoryScanRouting";
 import {
   loadRecentLocationSessions,
   touchRecentLocation,
@@ -21,6 +27,7 @@ import {
 import { setActiveInventoryDocumentId } from "@/modules/inventoryCount/wmsActiveDocumentStorage";
 import { WMS_INV } from "@/modules/inventoryCount/ui/wms/theme";
 import { useWarehouse } from "@/context/WarehouseContext";
+import { useWmsScanner } from "@/context/WmsScannerContext";
 
 const TENANT_ID = 1;
 
@@ -29,6 +36,7 @@ export default function WmsInventoryCountEntryPage() {
   const { documentId: documentIdParam } = useParams();
   const documentId = documentIdParam ? Number(documentIdParam) : NaN;
   const { warehouse } = useWarehouse();
+  const { setActiveDocument, setScannerInputPlaceholder } = useWmsScanner();
   const scanFeedback = useScanFeedback();
   const warehouseId = warehouse?.id;
   const tenantId = TENANT_ID;
@@ -78,6 +86,12 @@ export default function WmsInventoryCountEntryPage() {
       if (!warehouseId || busy || !Number.isFinite(documentId) || docBlocked) return;
       const trimmed = code.trim();
       if (!trimmed) return;
+
+      // Physical / Helper scans of product EAN must not open a location.
+      if (knownTaskId == null && isProductLikeCodeOnLocationStep(trimmed)) {
+        scanFeedback.warning(INVENTORY_SCAN_NEED_LOCATION);
+        return;
+      }
 
       setBusy(true);
       try {
@@ -144,6 +158,35 @@ export default function WmsInventoryCountEntryPage() {
     searchEnabled: false,
     onScan: openLocation,
   });
+
+  useEffect(() => {
+    if (!Number.isFinite(documentId) || docBlocked) {
+      setActiveDocument(null);
+      return () => setActiveDocument(null);
+    }
+    setActiveDocument({
+      kind: "custom",
+      label: docTitle ? `Inwentaryzacja · ${docTitle}` : `Inwentaryzacja #${documentId}`,
+    });
+    setScannerInputPlaceholder("Zeskanuj lokalizację");
+    return () => {
+      setActiveDocument(null);
+      setScannerInputPlaceholder("Wpisz lub wklej EAN (↑↓ historia)");
+    };
+  }, [docBlocked, docTitle, documentId, setActiveDocument, setScannerInputPlaceholder]);
+
+  const globalScanHandler = useCallback(
+    async (raw: string) => {
+      await openLocation(raw);
+      return inventoryScanConsumed();
+    },
+    [openLocation],
+  );
+
+  useWmsPageScanHandler(
+    globalScanHandler,
+    Boolean(warehouseId) && Number.isFinite(documentId) && !docBlocked,
+  );
 
   if (!warehouseId) {
     return (

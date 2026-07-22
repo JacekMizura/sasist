@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import type { InventoryTaskRead } from "@/api/inventoryCountApi";
+import { useWmsPageScanHandler } from "@/components/wms/execution/useWmsPageScanHandler";
+import { useWmsScanner } from "@/context/WmsScannerContext";
 import {
   buildLiveSearchRows,
   pickFirstLiveSearch,
@@ -20,6 +22,7 @@ export function useWmsInventoryTerminalPage(
 ) {
   const inputRef = useRef<HTMLInputElement>(null);
   const pickingRef = useRef(false);
+  const { setActiveDocument, setScannerInputPlaceholder } = useWmsScanner();
 
   const terminal = useWmsInventoryCountTerminal(taskId, tenantId, warehouseId, documentId);
 
@@ -37,7 +40,7 @@ export function useWmsInventoryTerminalPage(
     useInventoryScanInput({
       searchEnabled: counting && !terminal.carrierScanMode,
       isDedicatedScanCode: isCarrierBarcode,
-      onScan: terminal.handleScan,
+      onScan: (code) => void terminal.handleScan(code),
       onSearchQuery: runSearch,
     });
 
@@ -50,6 +53,48 @@ export function useWmsInventoryTerminalPage(
   useEffect(() => {
     inputRef.current?.focus();
   }, [terminal.locationActive, terminal.task, terminal.carrierScanMode]);
+
+  useEffect(() => {
+    if (!terminal.task) {
+      setActiveDocument(null);
+      return () => setActiveDocument(null);
+    }
+    const loc = terminal.locationLabel || terminal.task.location_code || `#${terminal.task.id}`;
+    setActiveDocument({
+      kind: "custom",
+      label: terminal.locationActive
+        ? `Inwentaryzacja · ${loc}`
+        : `Inwentaryzacja · lokalizacja · ${loc}`,
+    });
+    setScannerInputPlaceholder(
+      !terminal.locationActive
+        ? "Zeskanuj lokalizację"
+        : terminal.carrierScanMode
+          ? "Zeskanuj nośnik (PAL-…)"
+          : "Zeskanuj EAN / SKU produktu",
+    );
+    return () => {
+      setActiveDocument(null);
+      setScannerInputPlaceholder("Wpisz lub wklej EAN (↑↓ historia)");
+    };
+  }, [
+    setActiveDocument,
+    setScannerInputPlaceholder,
+    terminal.carrierScanMode,
+    terminal.locationActive,
+    terminal.locationLabel,
+    terminal.task,
+  ]);
+
+  const globalScanHandler = useCallback(
+    async (raw: string) => terminal.handleScan(raw),
+    [terminal.handleScan],
+  );
+
+  useWmsPageScanHandler(
+    globalScanHandler,
+    Boolean(terminal.task) && !terminal.loading && !terminal.error,
+  );
 
   const applyLivePick = useCallback(
     async (pick: LiveSearchPick) => {
