@@ -252,6 +252,38 @@ def _completion_read_or_404(db: Session, *, tenant_id: int, session_id: int) -> 
     return DirectSaleCompletionRead(**bundle)
 
 
+def _direct_sale_http_detail(exc: DirectSaleError) -> dict[str, str]:
+    return {"code": str(exc.code or "direct_sale_error"), "message": str(exc.message)}
+
+
+def _raise_direct_sale_http(exc: DirectSaleError) -> None:
+    raise HTTPException(status_code=int(exc.http_status), detail=_direct_sale_http_detail(exc)) from exc
+
+
+def _map_add_product_exception(exc: Exception) -> DirectSaleError:
+    """Never let schema/stock plumbing surface as anonymous 500 on add-product/scan."""
+    if isinstance(exc, DirectSaleError):
+        return exc
+    msg = str(exc).lower()
+    if "requires_putaway" in msg or "default_requires_putaway" in msg:
+        return DirectSaleError(
+            "Schemat magazynu wymaga aktualizacji (requires_putaway). Odśwież serwer / migracje.",
+            code="SCHEMA_REQUIRES_PUTAWAY",
+            http_status=503,
+        )
+    if "no such column" in msg or "undefinedcolumn" in msg or "does not exist" in msg:
+        return DirectSaleError(
+            "Błąd schematu bazy — skontaktuj się z administratorem.",
+            code="SCHEMA_MISMATCH",
+            http_status=503,
+        )
+    return DirectSaleError(
+        "Nie udało się dodać produktu do sesji.",
+        code="ADD_PRODUCT_FAILED",
+        http_status=500,
+    )
+
+
 def _require_session(
     db: Session,
     *,
@@ -386,34 +418,16 @@ def post_session_scan(
             quantity=float(line.quantity),
             suggested_locations=suggestions,
         )
-    except DirectSaleError as exc:
-        raise HTTPException(status_code=exc.http_status, detail=exc.message) from exc
-
-
-@router.post("/debug/echo")
-async def post_direct_sales_debug_echo(request: Request):
-    """Temporary — verify frontend payloads (dev/staging only)."""
-    if not allow_operational_features_debug():
-        raise HTTPException(status_code=404, detail="Not found")
-    raw = await request.body()
-    parsed: object | None = None
-    if raw:
-        try:
-            parsed = json.loads(raw)
-        except json.JSONDecodeError:
-            parsed = None
-    return {
-        "method": request.method,
-        "path": str(request.url.path),
-        "query": dict(request.query_params),
-        "headers": {
-            k: v
-            for k, v in request.headers.items()
-            if k.lower() in ("content-type", "content-length", "accept")
-        },
-        "raw_body": raw.decode("utf-8", errors="replace") if raw else "",
-        "parsed_body": parsed,
-    }
+    except Exception as exc:
+        db.rollback()
+        mapped = _map_add_product_exception(exc)
+        if not isinstance(exc, DirectSaleError):
+            _logger.exception(
+                "[direct-sales.scan] unhandled session_id=%s code=%s",
+                session_id,
+                getattr(body, "code", None),
+            )
+        _raise_direct_sale_http(mapped)
 
 
 @router.post("/session/{session_id}/add-product", response_model=DirectSaleScanResponse)
@@ -444,8 +458,42 @@ def post_session_add_product(
             quantity=float(line.quantity),
             suggested_locations=suggestions,
         )
-    except DirectSaleError as exc:
-        raise HTTPException(status_code=exc.http_status, detail=exc.message) from exc
+    except Exception as exc:
+        db.rollback()
+        mapped = _map_add_product_exception(exc)
+        if not isinstance(exc, DirectSaleError):
+            _logger.exception(
+                "[direct-sales.add-product] unhandled session_id=%s product_id=%s",
+                session_id,
+                getattr(body, "product_id", None),
+            )
+        _raise_direct_sale_http(mapped)
+
+
+@router.post("/debug/echo")
+async def post_direct_sales_debug_echo(request: Request):
+    """Temporary — verify frontend payloads (dev/staging only)."""
+    if not allow_operational_features_debug():
+        raise HTTPException(status_code=404, detail="Not found")
+    raw = await request.body()
+    parsed: object | None = None
+    if raw:
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            parsed = None
+    return {
+        "method": request.method,
+        "path": str(request.url.path),
+        "query": dict(request.query_params),
+        "headers": {
+            k: v
+            for k, v in request.headers.items()
+            if k.lower() in ("content-type", "content-length", "accept")
+        },
+        "raw_body": raw.decode("utf-8", errors="replace") if raw else "",
+        "parsed_body": parsed,
+    }
 
 
 @router.patch("/session/{session_id}/lines/{line_id}", response_model=DirectSaleSessionRead)

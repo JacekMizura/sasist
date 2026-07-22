@@ -1557,7 +1557,7 @@ def _upgrade_schema_background() -> None:
     try:
         ensure_stock_document_item_ordered_received_columns(engine)
         ensure_stock_document_item_quantity_putaway_column(engine)
-    ensure_stock_document_item_requires_putaway_column(engine)
+        ensure_stock_document_item_requires_putaway_column(engine)
         ensure_stock_document_item_putaway_meta_columns(engine)
         ensure_stock_document_item_mm_line_from_location_column(engine)
         ensure_stock_document_item_wms_line_source_column(engine)

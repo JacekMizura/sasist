@@ -86,19 +86,43 @@ def _purchase_lines_for_products(
 ) -> Dict[int, List[Tuple[StockDocumentItem, StockDocument]]]:
     if not product_ids:
         return {}
-    rows = (
-        db.query(StockDocumentItem, StockDocument)
-        .join(StockDocument, StockDocument.id == StockDocumentItem.document_id)
-        .filter(
-            StockDocument.tenant_id == int(tenant_id),
-            StockDocument.warehouse_id == int(warehouse_id),
-            func.upper(StockDocument.document_type) == PURCHASE_PZ_DOCUMENT_TYPE,
-            StockDocumentItem.product_id.in_(tuple(int(x) for x in product_ids)),
-            StockDocumentItem.received_quantity > _EPS,
+    try:
+        rows = (
+            db.query(StockDocumentItem, StockDocument)
+            .join(StockDocument, StockDocument.id == StockDocumentItem.document_id)
+            .filter(
+                StockDocument.tenant_id == int(tenant_id),
+                StockDocument.warehouse_id == int(warehouse_id),
+                func.upper(StockDocument.document_type) == PURCHASE_PZ_DOCUMENT_TYPE,
+                StockDocumentItem.product_id.in_(tuple(int(x) for x in product_ids)),
+                StockDocumentItem.received_quantity > _EPS,
+            )
+            .order_by(StockDocument.created_at.desc(), StockDocumentItem.id.desc())
+            .all()
         )
-        .order_by(StockDocument.created_at.desc(), StockDocumentItem.id.desc())
-        .all()
-    )
+    except Exception as exc:
+        # ORM added requires_putaway; stale DB without startup migration → explode add-product.
+        msg = str(exc).lower()
+        if "requires_putaway" in msg or "default_requires_putaway" in msg:
+            from ..db.schema_upgrade import ensure_stock_document_item_requires_putaway_column
+
+            ensure_stock_document_item_requires_putaway_column(db.get_bind())
+            db.rollback()
+            rows = (
+                db.query(StockDocumentItem, StockDocument)
+                .join(StockDocument, StockDocument.id == StockDocumentItem.document_id)
+                .filter(
+                    StockDocument.tenant_id == int(tenant_id),
+                    StockDocument.warehouse_id == int(warehouse_id),
+                    func.upper(StockDocument.document_type) == PURCHASE_PZ_DOCUMENT_TYPE,
+                    StockDocumentItem.product_id.in_(tuple(int(x) for x in product_ids)),
+                    StockDocumentItem.received_quantity > _EPS,
+                )
+                .order_by(StockDocument.created_at.desc(), StockDocumentItem.id.desc())
+                .all()
+            )
+        else:
+            raise
     out: Dict[int, List[Tuple[StockDocumentItem, StockDocument]]] = defaultdict(list)
     for line, doc in rows:
         if not is_purchase_pz_line(doc, line):

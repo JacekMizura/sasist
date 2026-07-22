@@ -1,3 +1,16 @@
+## 2026-07-22 — Sprzedaż bezpośrednia: add-product 500 + auth probes
+
+- **500 root cause:** `OperationalError: no such column: stock_document_items.requires_putaway` w `commercial_availability_service._purchase_lines_for_products` (stock check przed insert linii). Self-heal + mapowanie → 503/`{code,message}`; brak stock → 400 `offer_stock_unavailable`.
+- **401 unrelated:** `/operational/features` i `/wms/settings/direct-sales` używają tego samego Bearer/`get_current_user` (settings: `require_operable_warehouse`). FE nie stosuje już fallbacku flag przy 401 (`unavailableReason=auth`).
+- **Scanner:** terminal Direct Sales → `useWmsPageScanHandler` → `scanDirectSaleSession` (ten sam backend co klik/`add-product`).
+- Tests: `backend/tests/direct_sales/test_add_product_api.py`, `operationalFeatureGuard.test.ts`. **No push.**
+
+## 2026-07-22 — Inwentaryzacja: podłączenie do globalnego skanera WMS
+
+- Root cause: `handleScan` tylko w lokalnym `useInventoryScanInput` — brak `registerScanHandler` → Helper: „Brak aktywnego odbiorcy” / „Ta strona nie obsługuje jeszcze skanera.”
+- Fix: entry + terminal → `useWmsPageScanHandler`; krok lokalizacji odrzuca EAN; na liczeniu `location_like` → switch lokalizacji (fallback produkt).
+- Mode/label: `inventory-count` / „Inwentaryzacja”. Tests A–L: `inventoryScanRouting.test.ts`. **No push.**
+
 ## 2026-07-22 — Rozlokowanie PZ: 100% ≠ zamknięcie (explicit finalize)
 
 - Root cause: `recalculate_wms_document_completion` auto-ustawiał `relocation_status=DONE` (+ często `status=zakonczone`) przy `receiving_closed && full_put`; `recompute_putaway_status_for_document` ustawiał `putaway_status=DONE` przy catch-up 100% + receiving DONE.

@@ -21,6 +21,7 @@ import {
 } from "../../api/directSalesApi";
 import type { DirectSaleCompleteError, DirectSaleCompletion } from "../../types/directSalesCompletion";
 import { parseCompleteError } from "../../utils/normalizeDirectSalesCompletion";
+import { useWmsPageScanHandler } from "../../components/wms/execution/useWmsPageScanHandler";
 import { useWmsScanner } from "../../context/WmsScannerContext";
 import { DAMAGE_TENANT_ID } from "../../constants/panelTenant";
 import {
@@ -59,12 +60,12 @@ export function useDirectSalesSession({
 }: Args) {
   const resolvedDirectSalesSettings = useResolvedDirectSalesSettings();
   const {
-    scannerInputValue,
+    setActiveDocument,
     setScannerInputPlaceholder,
     setScannerInputDisabled,
     showScannerToast,
     refocusScannerInput,
-    clearScannerInput,
+    clearDevScannerInput,
   } = useWmsScanner();
 
   const [session, setSession] = useState<DirectSaleSession | null>(null);
@@ -190,13 +191,26 @@ export function useDirectSalesSession({
   );
 
   useEffect(() => {
-    setScannerInputPlaceholder("Skanuj EAN → Enter");
+    if (!enabled || warehouseId == null) {
+      setActiveDocument(null);
+      return () => setActiveDocument(null);
+    }
+    setActiveDocument({ kind: "custom", label: "Sprzedaż bezpośrednia" });
+    setScannerInputPlaceholder("Skanuj EAN / SKU → Enter");
     setScannerInputDisabled(busy);
     return () => {
-      setScannerInputPlaceholder(null);
+      setActiveDocument(null);
+      setScannerInputPlaceholder("Wpisz lub wklej EAN (↑↓ historia)");
       setScannerInputDisabled(false);
     };
-  }, [busy, setScannerInputDisabled, setScannerInputPlaceholder]);
+  }, [
+    busy,
+    enabled,
+    warehouseId,
+    setActiveDocument,
+    setScannerInputDisabled,
+    setScannerInputPlaceholder,
+  ]);
 
   useEffect(() => {
     if (!enabled || warehouseId == null) {
@@ -290,24 +304,23 @@ export function useDirectSalesSession({
 
   const handleScan = useCallback(
     async (raw: string) => {
-      if (scanBusyRef.current) return;
+      if (scanBusyRef.current) return { consumed: true as const };
       scanBusyRef.current = true;
       try {
         await addByCode(raw);
-        clearScannerInput();
+        clearDevScannerInput();
       } finally {
         scanBusyRef.current = false;
       }
+      return { consumed: true as const };
     },
-    [addByCode, clearScannerInput],
+    [addByCode, clearDevScannerInput],
   );
 
-  useEffect(() => {
-    const v = safeTrim(scannerInputValue);
-    if (!v) return;
-    void handleScan(v);
-  }, [scannerInputValue, handleScan]);
-
+  useWmsPageScanHandler(
+    enabled && warehouseId != null && !unavailable ? handleScan : null,
+    enabled && warehouseId != null && !unavailable,
+  );
   const changeLineQty = useCallback(
     async (lineId: number, quantity: number) => {
       const scope = apiScope();

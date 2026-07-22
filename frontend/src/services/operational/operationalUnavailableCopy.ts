@@ -1,4 +1,4 @@
-export type OperationalUnavailableReason = "off" | "network" | "backend" | null;
+export type OperationalUnavailableReason = "off" | "network" | "backend" | "auth" | null;
 
 export function directSalesUnavailableMessage(reason: OperationalUnavailableReason): {
   title: string;
@@ -9,6 +9,11 @@ export function directSalesUnavailableMessage(reason: OperationalUnavailableReas
       return {
         title: "Moduł został wyłączony konfiguracją systemową",
         body: "Sprzedaż bezpośrednia nie została jeszcze aktywowana dla tego magazynu. Klasyczny WMS działa bez zmian.",
+      };
+    case "auth":
+      return {
+        title: "Sesja wygasła lub brak autoryzacji",
+        body: "Nie udało się pobrać flag operacyjnych (401). Zaloguj się ponownie — nie zakładamy, że moduł jest wyłączony.",
       };
     case "network":
       return {

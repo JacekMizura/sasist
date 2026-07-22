@@ -50,8 +50,19 @@ export function useDirectSalesResolvedSettings(warehouseId: number | null) {
           applyFromApi(read);
         }
       } catch (e) {
-        if (!cached) {
-          setError(e instanceof Error ? e.message : "Nie udało się wczytać ustawień sprzedaży.");
+        const status =
+          e && typeof e === "object" && "response" in e
+            ? (e as { response?: { status?: number } }).response?.status
+            : undefined;
+        // Never silently keep defaults when auth failed — surface 401/403.
+        if (status === 401 || status === 403 || !cached) {
+          setError(
+            status === 401 || status === 403
+              ? "Brak autoryzacji przy pobieraniu ustawień sprzedaży (401). Zaloguj się ponownie."
+              : e instanceof Error
+                ? e.message
+                : "Nie udało się wczytać ustawień sprzedaży.",
+          );
         }
       } finally {
         setRefreshing(false);
