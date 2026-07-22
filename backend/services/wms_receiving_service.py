@@ -1112,6 +1112,9 @@ def list_wms_receiving_pz_documents(
     warehouse_id: int | None = None,
 ) -> List[WmsReceivingPzListRow]:
     """Draft PZ where przyjęcie workflow is not DONE yet."""
+    from ..db.schema_upgrade import ensure_stock_document_putaway_flag_schema
+
+    ensure_stock_document_putaway_flag_schema(db)
     extra: tuple = (StockDocument.receiving_status != "DONE",)
     if warehouse_id is not None:
         extra = (

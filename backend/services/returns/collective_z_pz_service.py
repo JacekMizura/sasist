@@ -101,6 +101,9 @@ def get_active_collective_z_pz_summary(
     warehouse_id: int,
     series: DocumentSeries,
 ) -> Optional[dict[str, Any]]:
+    from ...db.schema_upgrade import ensure_stock_document_putaway_flag_schema
+
+    ensure_stock_document_putaway_flag_schema(db)
     doc = find_active_collective_z_pz(
         db,
         tenant_id=int(tenant_id),

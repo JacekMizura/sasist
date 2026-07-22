@@ -36,6 +36,13 @@ def _is_sqlite(engine: Engine) -> bool:
     return engine.dialect.name == "sqlite"
 
 
+def _bool_col_default(engine: Engine, *, default_true: bool) -> str:
+    """Dialect-safe BOOLEAN NOT NULL DEFAULT for ALTER TABLE ADD COLUMN."""
+    if engine.dialect.name == "postgresql":
+        return f"BOOLEAN NOT NULL DEFAULT {'true' if default_true else 'false'}"
+    return f"BOOLEAN NOT NULL DEFAULT {1 if default_true else 0}"
+
+
 def _column_nullable(bind: Engine, table: str, column: str) -> bool | None:
     """Return nullable flag from Inspector; None if column/table missing."""
     from sqlalchemy import inspect
@@ -3301,27 +3308,35 @@ def ensure_stock_document_item_lot_columns(engine: Engine) -> None:
 
 
 def ensure_stock_document_item_requires_putaway_column(engine: Engine) -> None:
-    """Line + document default: requires_putaway (crossdock / bez rozlokowania)."""
+    """Line + document default: requires_putaway (crossdock / bez rozlokowania).
+
+    Must use dialect-aware boolean defaults — PostgreSQL rejects ``DEFAULT 1`` on BOOLEAN
+    (``datatype mismatch`` / cannot cast), which historically aborted this ensure and left
+    ORM columns missing → HTTP 500 on every full ``StockDocument`` / ``StockDocumentItem`` SELECT.
+    """
+    true_bool = _bool_col_default(engine, default_true=True)
     with engine.connect() as conn:
         if _table_exists(conn, "stock_document_items"):
             cols = _table_column_names(conn, "stock_document_items")
             if "requires_putaway" not in cols:
                 conn.execute(
-                    text(
-                        "ALTER TABLE stock_document_items ADD COLUMN requires_putaway "
-                        "BOOLEAN NOT NULL DEFAULT 1"
-                    )
+                    text(f"ALTER TABLE stock_document_items ADD COLUMN requires_putaway {true_bool}")
                 )
         if _table_exists(conn, "stock_documents"):
             cols = _table_column_names(conn, "stock_documents")
             if "default_requires_putaway" not in cols:
                 conn.execute(
-                    text(
-                        "ALTER TABLE stock_documents ADD COLUMN default_requires_putaway "
-                        "BOOLEAN NOT NULL DEFAULT 1"
-                    )
+                    text(f"ALTER TABLE stock_documents ADD COLUMN default_requires_putaway {true_bool}")
                 )
         conn.commit()
+
+
+def ensure_stock_document_putaway_flag_schema(db) -> None:
+    """Request-path heal for list endpoints that ORM-load StockDocument(+Item)."""
+    bind = getattr(db, "get_bind", lambda: None)()
+    if bind is None:
+        return
+    ensure_stock_document_item_requires_putaway_column(bind)
 
 
 def ensure_stock_document_item_quantity_putaway_column(engine: Engine) -> None:
@@ -4776,12 +4791,6 @@ def ensure_bdo_packaging_wm_ref_migration(engine: Engine) -> None:
     BdoStockCountSession.__table__.create(bind=engine, checkfirst=True)
     BdoStockCountLine.__table__.create(bind=engine, checkfirst=True)
     BdoCorrection.__table__.create(bind=engine, checkfirst=True)
-
-
-def _bool_col_default(engine: Engine, *, default_true: bool) -> str:
-    if engine.dialect.name == "postgresql":
-        return f"BOOLEAN NOT NULL DEFAULT {'true' if default_true else 'false'}"
-    return f"BOOLEAN NOT NULL DEFAULT {1 if default_true else 0}"
 
 
 def ensure_document_series_extended_columns(engine: Engine) -> None:

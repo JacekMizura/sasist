@@ -668,8 +668,10 @@ def list_wms_putaway_pz_documents(
     db: Session, tenant_id: int, *, warehouse_id: int
 ) -> List[WmsReceivingPzListRow]:
     """PZ ready for putaway: any received qty (live) + relocation OPEN. MM drafts use /wms/mm/relocation."""
+    from ..db.schema_upgrade import ensure_stock_document_putaway_flag_schema
     from .complaints.complaint_physical_receipt import document_has_putaway_eligible_received_lines
 
+    ensure_stock_document_putaway_flag_schema(db)
     pz_docs, pz_by = _load_putaway_pz_docs_with_lines(
         db, tenant_id, extra_filters=(StockDocument.warehouse_id == int(warehouse_id),)
     )

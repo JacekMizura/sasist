@@ -1129,17 +1129,27 @@ try:
     ensure_stock_documents_tables(engine)
 except Exception:
     logging.getLogger(__name__).exception("ensure_stock_documents_tables failed at import")
-try:
-    ensure_stock_document_item_ordered_received_columns(engine)
-    ensure_stock_document_item_quantity_putaway_column(engine)
-    ensure_stock_document_item_requires_putaway_column(engine)
-    ensure_stock_document_item_putaway_meta_columns(engine)
-    ensure_stock_document_item_mm_line_from_location_column(engine)
-    ensure_stock_document_item_wms_line_source_column(engine)
-    ensure_stock_document_items_wm_receipt_columns(engine)
-    ensure_stock_document_item_receiving_split_columns(engine)
-except Exception:
-    logging.getLogger(__name__).exception("ensure_stock_document_item_columns failed at import")
+    try:
+        ensure_stock_document_item_ordered_received_columns(engine)
+        ensure_stock_document_item_quantity_putaway_column(engine)
+    except Exception:
+        logging.getLogger(__name__).exception("ensure_stock_document_item_qty_columns failed at import")
+    try:
+        # Isolated: PG-unsafe DEFAULT historically aborted the whole batch and left
+        # requires_putaway missing → receiving/putaway/returns list 500.
+        ensure_stock_document_item_requires_putaway_column(engine)
+    except Exception:
+        logging.getLogger(__name__).exception(
+            "ensure_stock_document_item_requires_putaway_column failed at import"
+        )
+    try:
+        ensure_stock_document_item_putaway_meta_columns(engine)
+        ensure_stock_document_item_mm_line_from_location_column(engine)
+        ensure_stock_document_item_wms_line_source_column(engine)
+        ensure_stock_document_items_wm_receipt_columns(engine)
+        ensure_stock_document_item_receiving_split_columns(engine)
+    except Exception:
+        logging.getLogger(__name__).exception("ensure_stock_document_item_columns failed at import")
 try:
     ensure_receiving_scan_logs_table(engine)
     ensure_stock_item_locations_table(engine)
@@ -1557,7 +1567,15 @@ def _upgrade_schema_background() -> None:
     try:
         ensure_stock_document_item_ordered_received_columns(engine)
         ensure_stock_document_item_quantity_putaway_column(engine)
+    except Exception:
+        logging.getLogger(__name__).exception("ensure_stock_document_item_qty_columns failed at startup")
+    try:
         ensure_stock_document_item_requires_putaway_column(engine)
+    except Exception:
+        logging.getLogger(__name__).exception(
+            "ensure_stock_document_item_requires_putaway_column failed at startup"
+        )
+    try:
         ensure_stock_document_item_putaway_meta_columns(engine)
         ensure_stock_document_item_mm_line_from_location_column(engine)
         ensure_stock_document_item_wms_line_source_column(engine)
