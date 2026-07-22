@@ -6,13 +6,15 @@ import { formatMoneyPl, paymentMethodPl } from "../directSalesTerminology";
 import { CashChangePanel } from "./CashChangePanel";
 import { MixedPaymentPanel } from "./MixedPaymentPanel";
 
-const ALL_METHODS = [
+/** Primary POS methods — always laid out as up to 2×2 (Gotówka | Karta | BLIK | Przelew). */
+const PRIMARY_METHODS = [
   { id: "CASH", label: "Gotówka", key: "F1" },
   { id: "CARD", label: "Karta", key: "F2" },
   { id: "BLIK", label: "BLIK", key: "F3" },
   { id: "TRANSFER", label: "Przelew", key: null },
-  { id: "MIXED", label: "Mieszana", key: null },
 ] as const;
+
+const MIXED_METHOD = { id: "MIXED", label: "Mieszana", key: null } as const;
 
 type Props = {
   total: number;
@@ -34,6 +36,12 @@ type Props = {
   onComplete: () => void;
 };
 
+function methodButtonClass(active: boolean): string {
+  return `rounded-xl px-2 py-3 text-sm font-semibold disabled:opacity-50 ${
+    active ? "bg-slate-800 text-white" : "border border-slate-200 bg-white text-slate-800 hover:bg-slate-50"
+  }`;
+}
+
 export function PaymentTerminalPanel({
   total,
   busy,
@@ -54,18 +62,21 @@ export function PaymentTerminalPanel({
   onComplete,
 }: Props) {
   const resolvedDirectSalesSettings = useResolvedDirectSalesSettings();
-  const methods = useMemo(() => {
+  const { primaryMethods, showMixed } = useMemo(() => {
     const pm = resolvedDirectSalesSettings.payment_methods;
-    return ALL_METHODS.filter((m) => {
-      if (m.id === "CASH") return pm.cash;
-      if (m.id === "CARD") return pm.card;
-      if (m.id === "BLIK") return pm.blik;
-      if (m.id === "TRANSFER") return pm.transfer !== false;
-      if (m.id === "MIXED") return pm.mixed;
-      return false;
-    });
+    return {
+      primaryMethods: PRIMARY_METHODS.filter((m) => {
+        if (m.id === "CASH") return pm.cash;
+        if (m.id === "CARD") return pm.card;
+        if (m.id === "BLIK") return pm.blik;
+        if (m.id === "TRANSFER") return pm.transfer;
+        return false;
+      }),
+      showMixed: pm.mixed,
+    };
   }, [resolvedDirectSalesSettings.payment_methods]);
 
+  const methodsCount = primaryMethods.length + (showMixed ? 1 : 0);
   const isCash = paymentMethod === "CASH";
   const isMixed = paymentMethod === "MIXED";
   const isTransfer = paymentMethod === "TRANSFER";
@@ -78,7 +89,7 @@ export function PaymentTerminalPanel({
   const canComplete =
     hasSession &&
     hasLines &&
-    methods.length > 0 &&
+    methodsCount > 0 &&
     (isMixed ? mixedOk : !isCash || cashOk);
 
   const deferredDays =
@@ -93,28 +104,40 @@ export function PaymentTerminalPanel({
           <span className="text-[10px] font-bold uppercase text-blue-600">{paymentMethodPl(paymentMethod)}</span>
         </div>
 
-        {methods.length === 0 ? (
+        {methodsCount === 0 ? (
           <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
             Brak włączonych metod płatności w ustawieniach sprzedaży bezpośredniej.
           </p>
         ) : (
-          <div className={`grid gap-1.5 ${methods.length <= 3 ? "grid-cols-3" : "grid-cols-2"}`}>
-            {methods.map((m) => (
+          <div className="space-y-1.5">
+            <div
+              className={`grid gap-1.5 ${
+                primaryMethods.length <= 2 ? "grid-cols-2" : primaryMethods.length === 3 ? "grid-cols-3" : "grid-cols-2"
+              }`}
+            >
+              {primaryMethods.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => onPaymentMethodChange(m.id)}
+                  className={methodButtonClass(paymentMethod === m.id)}
+                >
+                  {m.label}
+                  {m.key ? <span className="ml-1 text-[10px] opacity-60">{m.key}</span> : null}
+                </button>
+              ))}
+            </div>
+            {showMixed ? (
               <button
-                key={m.id}
                 type="button"
                 disabled={busy}
-                onClick={() => onPaymentMethodChange(m.id)}
-                className={`rounded-xl px-2 py-3 text-sm font-semibold disabled:opacity-50 ${
-                  paymentMethod === m.id
-                    ? "bg-slate-800 text-white"
-                    : "border border-slate-200 bg-white text-slate-800 hover:bg-slate-50"
-                }`}
+                onClick={() => onPaymentMethodChange(MIXED_METHOD.id)}
+                className={`w-full ${methodButtonClass(paymentMethod === MIXED_METHOD.id)}`}
               >
-                {m.label}
-                {m.key ? <span className="ml-1 text-[10px] opacity-60">{m.key}</span> : null}
+                {MIXED_METHOD.label}
               </button>
-            ))}
+            ) : null}
           </div>
         )}
       </div>
@@ -186,7 +209,9 @@ export function PaymentTerminalPanel({
       ) : null}
 
       {session?.status === "CHECKOUT" ? (
-        <p className="text-center text-[10px] font-medium text-slate-400">Sesja w checkout — do zapłaty {formatMoneyPl(total)}</p>
+        <p className="text-center text-[10px] font-medium text-slate-400">
+          Sesja w checkout — do zapłaty {formatMoneyPl(total)}
+        </p>
       ) : null}
 
       <button

@@ -26,7 +26,7 @@ export function ValidationWarnings({
   if (config.allow_oversell) {
     warnings.push("Sprzedaż ponad stan może prowadzić do ujemnych stanów magazynowych i rozjazdów inwentaryzacyjnych.");
   }
-  if (!config.payment_methods.cash && !config.payment_methods.card && !config.payment_methods.blik) {
+  if (!config.payment_methods.cash && !config.payment_methods.card && !config.payment_methods.blik && !config.payment_methods.transfer) {
     warnings.push("Brak aktywnej metody płatności — terminal nie będzie mógł zakończyć sprzedaży.");
   }
   if (!config.enabled) {

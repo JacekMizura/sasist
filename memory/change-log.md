@@ -1,3 +1,18 @@
+## 2026-07-22 — Sprzedaż bezpośrednia: widoczny Przelew + cleanup UI
+
+- Root cause: zapisane `payment_methods.transfer=false` (stary default) + filtr w `PaymentTerminalPanel` ukrywał TRANSFER mimo backendu TRANSFER/BANK.
+- Migracja resolve/normalize: legacy false→true; po save `extensions.ds_payment_methods_v2` chroni świadome wyłączenie; cache settings `v2`.
+- UI: 2×2 Gotówka|Karta|BLIK|Przelew; cash panel tylko CASH; usunięte teksty „Paragon — klient…” i „Wydanie od ręki…”.
+- Tests: `test_direct_sales_settings_transfer.py`, `directSalesFulfillment.test.ts`. **No push.**
+
+## 2026-07-22 — Sprzedaż bezpośrednia: stock, wysyłka, przelew, UX sum
+
+- Stock SSOT: `build_location_stock` → `available_qty_hint` + badge „Dostępne: X szt.”; Lokalizacja = rozbicie location-stock.
+- Fulfillment w `session.metadata_json` + PATCH `/fulfillment`; DELIVERY → Order.addresses_json + shipping_method_id (bez nowej integracji kuriera).
+- Przelew + termin z `Customer.payment_terms_days` (IMMEDIATE settle / DEFERRED PENDING).
+- Prawa kolumna: Suma → Rabat → Do zapłaty (PLN `6,15 zł`); cash UI tylko dla Gotówka.
+- Tests: `test_fulfillment_service.py`, `directSalesFulfillment.test.ts`. **No push.**
+
 ## 2026-07-22 — Sprzedaż bezpośrednia: add-product 500 + auth probes
 
 - **500 root cause:** `OperationalError: no such column: stock_document_items.requires_putaway` w `commercial_availability_service._purchase_lines_for_products` (stock check przed insert linii). Self-heal + mapowanie → 503/`{code,message}`; brak stock → 400 `offer_stock_unavailable`.

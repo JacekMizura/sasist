@@ -21,6 +21,8 @@ from .order_status_select_service import (
 SYSTEM_DEFAULTS = DirectSalesSettingsConfig().model_dump()
 
 _LEGACY_DEFAULT_ORDER_STATUS_KEY = "default_order_status"
+# Pre-f0fa7a2e system default stamped transfer=False into saved settings JSON.
+_DS_PAYMENT_METHODS_V2_KEY = "ds_payment_methods_v2"
 _STATUS_ID_FIELDS = (
     "default_order_status_id",
     "session_created_order_status_id",
@@ -48,6 +50,28 @@ def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any
         else:
             out[key] = val
     return out
+
+
+def _migrate_payment_methods_defaults(data: dict[str, Any]) -> dict[str, Any]:
+    """Enable TRANSFER when old system default (false) was persisted before product default flipped.
+
+    Persisted ``extensions.ds_payment_methods_v2`` (written on save) means operator choice is final.
+    """
+    out = deepcopy(data)
+    ext = out.get("extensions")
+    if isinstance(ext, dict) and ext.get(_DS_PAYMENT_METHODS_V2_KEY):
+        return out
+    pm = out.get("payment_methods")
+    if isinstance(pm, dict) and pm.get("transfer") is False:
+        pm = deepcopy(pm)
+        pm["transfer"] = True
+        out["payment_methods"] = pm
+    return out
+
+
+def _upgrade_raw_settings_payload(raw: dict[str, Any]) -> dict[str, Any]:
+    """Upgrade persisted row JSON before merge so warehouse overrides cannot re-stamp legacy false."""
+    return _migrate_payment_methods_defaults(raw)
 
 
 def _parse_row(row: DirectSalesSettings | None) -> dict[str, Any]:
@@ -135,6 +159,7 @@ def _config_from_dict(
     apply_status_fallbacks: bool = False,
 ) -> DirectSalesSettingsConfig:
     merged = _deep_merge(SYSTEM_DEFAULTS, data)
+    merged = _migrate_payment_methods_defaults(merged)
     if db is not None and tenant_id is not None and warehouse_id is not None and int(warehouse_id) > 0:
         merged = _migrate_legacy_status_fields(db, merged, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id))
     cfg = DirectSalesSettingsConfig.model_validate(merged)
@@ -202,7 +227,7 @@ def resolve_direct_sales_settings(
     tenant_row = _get_row(db, tenant_id, TENANT_DEFAULT_WAREHOUSE_ID)
     wh_row = _get_row(db, tenant_id, wh_id) if wh_id > 0 else None
 
-    tenant_data = _parse_row(tenant_row)
+    tenant_data = _upgrade_raw_settings_payload(_parse_row(tenant_row))
     resolve_wh = wh_id if wh_id > 0 else None
     tenant_defaults = _config_from_dict(
         _deep_merge(SYSTEM_DEFAULTS, tenant_data),
@@ -212,7 +237,7 @@ def resolve_direct_sales_settings(
         apply_status_fallbacks=False,
     )
 
-    wh_data = _parse_row(wh_row)
+    wh_data = _upgrade_raw_settings_payload(_parse_row(wh_row))
     warehouse_overrides = (
         _config_from_dict(
             wh_data,
@@ -261,7 +286,11 @@ def save_direct_sales_settings(
 ) -> DirectSalesSettingsRead:
     scope_wh = TENANT_DEFAULT_WAREHOUSE_ID if int(warehouse_id) <= 0 else int(warehouse_id)
     row = _get_or_create_row(db, tenant_id, scope_wh)
-    row.settings_json = json.dumps(settings.model_dump(), ensure_ascii=False)
+    payload = settings.model_dump()
+    ext = payload.get("extensions") if isinstance(payload.get("extensions"), dict) else {}
+    ext = {**ext, _DS_PAYMENT_METHODS_V2_KEY: True}
+    payload["extensions"] = ext
+    row.settings_json = json.dumps(payload, ensure_ascii=False)
     row.updated_at = datetime.utcnow()
     db.flush()
     target_wh = int(warehouse_id) if int(warehouse_id) > 0 else TENANT_DEFAULT_WAREHOUSE_ID

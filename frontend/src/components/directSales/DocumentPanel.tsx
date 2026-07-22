@@ -42,12 +42,6 @@ export function DocumentPanel({ value, onChange, disabled }: Props) {
           Faktura VAT (FV)
         </button>
       </div>
-      
-      {value === "RECEIPT" ? (
-        <p className="mt-4 text-center text-[11px] font-medium text-slate-400">
-          Paragon — klient detaliczny przypisany automatycznie.
-        </p>
-      ) : null}
     </div>
   );
 }

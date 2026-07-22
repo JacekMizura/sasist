@@ -124,6 +124,20 @@ export const DEFAULT_DIRECT_SALES_SETTINGS: DirectSalesSettingsConfig = {
   extensions: {},
 };
 
+/** Matches backend ``ds_payment_methods_v2`` — after save, transfer=false is intentional. */
+export const DS_PAYMENT_METHODS_V2_KEY = "ds_payment_methods_v2";
+
+function migratePaymentMethodsDefaults(
+  pm: DirectSalesPaymentMethods,
+  extensions: Record<string, unknown>,
+): DirectSalesPaymentMethods {
+  if (extensions[DS_PAYMENT_METHODS_V2_KEY]) return pm;
+  if (pm.transfer === false) {
+    return { ...pm, transfer: true };
+  }
+  return pm;
+}
+
 function readOptionalStatusId(raw: unknown): number | null {
   if (raw == null || raw === "") return null;
   const n = Number(raw);
@@ -147,6 +161,12 @@ export function normalizeDirectSalesSettings(
   const pick = (field: keyof DirectSalesSettingsConfig) =>
     resolveDirectSalesStatusId(readOptionalStatusId(d[field]), statusOptions);
 
+  const extensions = { ...DEFAULT_DIRECT_SALES_SETTINGS.extensions, ...(d.extensions ?? {}) };
+  const payment_methods = migratePaymentMethodsDefaults(
+    { ...DEFAULT_DIRECT_SALES_SETTINGS.payment_methods, ...pm },
+    extensions,
+  );
+
   return {
     ...DEFAULT_DIRECT_SALES_SETTINGS,
     ...d,
@@ -155,11 +175,11 @@ export function normalizeDirectSalesSettings(
     paid_order_status_id: pick("paid_order_status_id"),
     issued_order_status_id: pick("issued_order_status_id"),
     cancelled_order_status_id: pick("cancelled_order_status_id"),
-    payment_methods: { ...DEFAULT_DIRECT_SALES_SETTINGS.payment_methods, ...pm },
+    payment_methods,
     discounts: {
       ...DEFAULT_DIRECT_SALES_SETTINGS.discounts,
       ...((d.discounts ?? {}) as Partial<DirectSalesDiscountSettings>),
     },
-    extensions: { ...DEFAULT_DIRECT_SALES_SETTINGS.extensions, ...(d.extensions ?? {}) },
+    extensions,
   };
 }

@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import { formatDirectSalesAggregateTotal } from "../../../modules/directSales/settings/formatDirectSalesPrice";
+import {
+  DS_PAYMENT_METHODS_V2_KEY,
+  normalizeDirectSalesSettings,
+} from "../../../modules/wmsSettings/directSales/schemas/directSalesSettingsSchema";
 import { normalizeDirectSaleFulfillment } from "../../../utils/normalizeDirectSales";
 
 describe("direct sales UX helpers", () => {
@@ -36,5 +40,20 @@ describe("direct sales UX helpers", () => {
     expect(f.shipping_method_id).toBe("abc");
     expect(f.payment_terms_days).toBe(14);
     expect(f.shipping_address?.city).toBe("Warszawa");
+  });
+
+  it("migrates legacy payment_methods.transfer=false to true", () => {
+    const cfg = normalizeDirectSalesSettings({
+      payment_methods: { cash: true, card: true, blik: true, transfer: false, mixed: false },
+    });
+    expect(cfg.payment_methods.transfer).toBe(true);
+  });
+
+  it("keeps intentional transfer=false after payment_methods_v2", () => {
+    const cfg = normalizeDirectSalesSettings({
+      payment_methods: { cash: true, card: true, blik: true, transfer: false, mixed: false },
+      extensions: { [DS_PAYMENT_METHODS_V2_KEY]: true },
+    });
+    expect(cfg.payment_methods.transfer).toBe(false);
   });
 });

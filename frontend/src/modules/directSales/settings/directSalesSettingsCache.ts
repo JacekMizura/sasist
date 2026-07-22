@@ -5,7 +5,7 @@ import {
   type DirectSalesSettingsRead,
 } from "../../wmsSettings/directSales/schemas/directSalesSettingsSchema";
 
-const CACHE_PREFIX = "direct_sales_settings_v1";
+const CACHE_PREFIX = "direct_sales_settings_v2";
 
 export type CachedDirectSalesSettings = {
   tenantId: number;

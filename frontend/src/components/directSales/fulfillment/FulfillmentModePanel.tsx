@@ -1,4 +1,4 @@
-import { MapPin, Store, Truck } from "lucide-react";
+import { Store, Truck } from "lucide-react";
 
 export type FulfillmentMode = "PICKUP" | "DELIVERY";
 
@@ -40,11 +40,6 @@ export function FulfillmentModePanel({ mode, disabled, onChange }: Props) {
           Wysyłka
         </button>
       </div>
-      {mode === "PICKUP" ? (
-        <p className="flex items-center gap-1.5 text-[10px] font-medium text-slate-400">
-          <MapPin size={12} /> Wydanie od ręki z lokalizacji sprzedaży
-        </p>
-      ) : null}
     </div>
   );
 }
