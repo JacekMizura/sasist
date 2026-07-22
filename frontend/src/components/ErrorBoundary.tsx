@@ -1,11 +1,14 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 
+import { isStaleChunkError, tryStaleChunkReload } from "../utils/staleChunkRecovery";
+
 type Props = { children: ReactNode; fallback?: ReactNode };
 type State = { hasError: boolean; error: Error | null; errorInfo: ErrorInfo | null };
 
 /**
  * Catches render errors so one broken page (e.g. Orders) doesn't freeze the whole app.
  * Shows message + stack on screen so production "white screen" reports are diagnosable.
+ * Stale Vite chunks after deploy: one controlled full reload (not ordinary TypeErrors).
  */
 export default class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
@@ -20,6 +23,9 @@ export default class ErrorBoundary extends Component<Props, State> {
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     this.setState({ errorInfo });
     console.error("[ErrorBoundary] Caught error:", error, errorInfo.componentStack);
+    if (isStaleChunkError(error)) {
+      tryStaleChunkReload();
+    }
   }
 
   render() {

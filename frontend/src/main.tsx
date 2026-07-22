@@ -4,8 +4,17 @@ import { RouterProvider } from "react-router-dom";
 import { router } from "./App";
 import "./index.css";
 import { log, error as logError } from "./utils/logger";
+import {
+  clearStaleChunkReloadFlag,
+  recoverFromStaleChunkError,
+} from "./utils/staleChunkRecovery";
 
 log("[APP] boot start");
+
+/** After a successful boot, allow future deploys to recover again — but not instantly (avoids reload loops). */
+window.setTimeout(() => {
+  clearStaleChunkReloadFlag();
+}, 4000);
 
 window.onerror = (message, source, lineno, colno, err) => {
   logError("[window.onerror]", {
@@ -19,6 +28,10 @@ window.onerror = (message, source, lineno, colno, err) => {
   });
 };
 window.onunhandledrejection = (e: PromiseRejectionEvent) => {
+  if (recoverFromStaleChunkError(e.reason)) {
+    e.preventDefault();
+    return;
+  }
   logError("[promise rejection]", e.reason);
 };
 

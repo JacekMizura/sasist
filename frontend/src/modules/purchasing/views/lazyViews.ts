@@ -1,4 +1,4 @@
-import { lazy } from "react";
+import { lazyWithStaleChunkRecovery as lazy } from "../../../utils/lazyWithStaleChunkRecovery";
 
 export const PlanningDashboard = lazy(() => import("./PlanningDashboard"));
 export const PurchasePlanView = lazy(() => import("./PurchasePlanView"));

@@ -1,8 +1,9 @@
-import { useEffect, useState, useCallback, useMemo, useRef, lazy, Suspense } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef, Suspense } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ChevronDown, Columns3, Download, Settings2, TableProperties } from "lucide-react";
 import toast from "react-hot-toast";
 import { error as logError, log } from "../../utils/logger";
+import { lazyWithStaleChunkRecovery as lazy } from "../../utils/lazyWithStaleChunkRecovery";
 import { extractApiErrorMessage } from "../../api/authApi";
 import api from "../../api/axios";
 import { fetchTenantsList } from "../../api/tenantsApi";
