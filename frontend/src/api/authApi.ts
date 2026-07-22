@@ -125,6 +125,8 @@ export type AppUserListItem = {
   wms_language?: string | null;
   primary_workforce_group?: PrimaryWorkforceGroupBadge | null;
   wms_operational_modes?: string[];
+  /** Non-expired refresh session present (presence — not account is_active). */
+  has_active_session?: boolean;
 };
 
 export type PermissionCatalogResponse = {

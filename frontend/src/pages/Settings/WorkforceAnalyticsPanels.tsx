@@ -10,8 +10,12 @@ export function WorkforceHourlyHeatmap({ buckets }: { buckets: WorkforceAnalytic
   const peak = maxHeatmapCount(data);
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-      <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700">Aktywność wg godziny</h3>
-      <p className="mt-1 text-xs text-slate-500">Liczba zdarzeń w poszczególnych godzinach doby (UTC serwera).</p>
+      <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700">
+        Aktywność według godzin
+      </h3>
+      <p className="mt-1 text-xs text-slate-500">
+        Liczba zarejestrowanych aktywności w poszczególnych godzinach (czas Europe/Warsaw).
+      </p>
       <div className="mt-4 grid grid-cols-12 gap-1 sm:grid-cols-24">
         {data.map((b) => (
           <div key={b.hour} className="flex flex-col items-center gap-1">

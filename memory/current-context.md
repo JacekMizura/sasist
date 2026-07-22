@@ -2,11 +2,12 @@
 
 ## Active
 
-**Ustawienia → Użytkownicy — pixel-parity + SSOT wiring** — lokalny commit, bez push.
+**Ustawienia → Użytkownicy — korekty semantyczne/UX** (lokalny commit, bez push).
 
-- Moduł już istniał pod `/settings/administrators/*`; dopięto chrome 1:1 (bare tabs, pomarańczowy CTA), search/filtry listy, KPI kosztów 4 karty, filtr telemetrii bez technicznego API.
-- Activity SSOT: `user_activity_logs` + `workforce_analytics_service` (session gap 15 min); middleware nie loguje GET ani unmapped „API”.
-- Permission tree / role status matrix / grupy / koszty — bez nowych subsystemów.
+- Presence: `UserSession` non-expired → Zalogowany/Niezalogowany (nie `is_active`).
+- Kolumna WMS = effective `wms_operational_modes` (empty→all jak launcher) + popover „+X innych”.
+- „Role i dostęp do statusów”; „Może pracować”; shared `StatusAccessCheckbox`.
+- Czas pracy: „Aktywności na godzinę”; heatmap Europe/Warsaw; historyczne API humanize.
 
 ## Preferencja commitów (user)
 

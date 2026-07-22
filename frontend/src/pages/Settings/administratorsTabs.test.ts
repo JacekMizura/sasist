@@ -7,7 +7,7 @@ describe("Administrators module tabs", () => {
   it("exposes all six settings tabs in screenshot order", () => {
     expect(ADMINISTRATORS_TABS.map((t) => t.label)).toEqual([
       "Użytkownicy",
-      "Role i uprawnienia",
+      "Role i dostęp do statusów",
       "Grupy użytkowników",
       "Historia aktywności",
       "Koszty pracowników",

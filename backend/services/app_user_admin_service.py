@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from datetime import datetime
+from typing import Any, Iterable
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -18,7 +19,7 @@ from .user_protection import (
     assert_deactivate_allowed,
     assert_role_change_allowed,
 )
-from ..models.app_user import AppUser, AppUserWarehouse, UserPermission, UserWmsProfile
+from ..models.app_user import AppUser, AppUserWarehouse, UserPermission, UserSession, UserWmsProfile
 from ..models.user_warehouse_assignment import UserWarehouseAssignment
 from ..models.warehouse import Warehouse
 from ..models.workforce_user_group import WorkforceUserGroup
@@ -31,6 +32,21 @@ from ..schemas.app_user import (
     WmsProfileUpdate,
 )
 from ..wms_operational_modes import is_valid_wms_mode
+
+
+def user_ids_with_active_session(db: Session, user_ids: Iterable[int]) -> set[int]:
+    """Users with at least one non-expired refresh session (login presence SSOT)."""
+    ids = [int(x) for x in user_ids if x is not None]
+    if not ids:
+        return set()
+    now = datetime.utcnow()
+    rows = (
+        db.query(UserSession.user_id)
+        .filter(UserSession.user_id.in_(ids), UserSession.expires_at > now)
+        .distinct()
+        .all()
+    )
+    return {int(r[0]) for r in rows}
 
 
 def email_taken(db: Session, email: str, *, exclude_user_id: int | None = None) -> bool:
@@ -615,12 +631,19 @@ def sort_app_users_list_items(items: list[AppUserListItem]) -> list[AppUserListI
     return sorted(items, key=sort_key)
 
 
-def app_user_to_list_item(db: Session, u: AppUser) -> AppUserListItem:
+def app_user_to_list_item(
+    db: Session,
+    u: AppUser,
+    *,
+    has_active_session: bool | None = None,
+) -> AppUserListItem:
     wp = wms_profile_response(db, u.id)
     wms_lang = getattr(u, "wms_language", None) or wp.get("language")
     gid = getattr(u, "primary_workforce_group_id", None)
     badge = primary_workforce_group_badge(db, gid)
     modes = wp.get("wms_operational_modes") or []
+    if has_active_session is None:
+        has_active_session = u.id in user_ids_with_active_session(db, [u.id])
     return AppUserListItem(
         id=u.id,
         login=u.login,
@@ -644,4 +667,5 @@ def app_user_to_list_item(db: Session, u: AppUser) -> AppUserListItem:
         wms_language=wms_lang,
         primary_workforce_group=badge,
         wms_operational_modes=list(modes) if isinstance(modes, list) else [],
+        has_active_session=bool(has_active_session),
     )

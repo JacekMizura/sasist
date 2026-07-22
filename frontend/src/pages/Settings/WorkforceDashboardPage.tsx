@@ -169,7 +169,7 @@ export default function WorkforceDashboardPage() {
               icon={Users}
             />
             <KpiCard
-              title="Throughput"
+              title="Aktywności na godzinę"
               value={`${analytics?.throughput.events_per_active_hour ?? 0}/h`}
               hint={`Średnio ${analytics?.throughput.events_per_user ?? 0} zdarzeń / osobę`}
               icon={Zap}
@@ -218,7 +218,7 @@ export default function WorkforceDashboardPage() {
                   </ul>
                   <p className="mt-4 flex items-center gap-2 text-xs text-slate-500">
                     <BarChart3 className="h-4 w-4" aria-hidden />
-                    Tylko zdarzenia operacyjne (bez pollingu i technicznego API).
+                    Tylko zdarzenia operacyjne (bez pollingu i ruchu niesklasyfikowanego).
                   </p>
                 </div>
               </div>
@@ -303,7 +303,7 @@ export default function WorkforceDashboardPage() {
 
                 <div className="border-t border-slate-100 bg-slate-50/50 px-6 py-4">
                   <p className="text-xs leading-relaxed text-slate-500">
-                    Czas pracy z rzeczywistych aktywności operacyjnych (bez pollingu i technicznego API). Przerwa
+                    Czas pracy z rzeczywistych aktywności operacyjnych (bez pollingu i ruchu niesklasyfikowanego). Przerwa
                     powyżej 15 minut bez aktywności zamyka sesję. Dane służą do orientacji operacyjnej, nie do
                     rozliczeń płacowych.
                   </p>

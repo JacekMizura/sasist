@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
 
+import { StatusAccessCheckbox } from "../../components/admin/statusAccessCheckbox";
 import { fetchStatusAccessMatrix, putStatusAccessMatrix } from "../../api/workforceApi";
 import { getOrderUiStatusSummary } from "../../api/orderUiStatusApi";
 import type { OrderUiStatusWithCount } from "../../types/orderUiStatus";
@@ -130,11 +131,6 @@ export default function WorkforceStatusMatrixPage() {
     }
   };
 
-  const roleLabel = useMemo(
-    () => PLATFORM_ROLE_OPTIONS.find((o) => o.value === role)?.label ?? "Rola",
-    [role],
-  );
-
   if (!canRead) {
     return (
       <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
@@ -146,10 +142,10 @@ export default function WorkforceStatusMatrixPage() {
   return (
     <div className="min-w-0 space-y-4">
       <div>
-        <h2 className="text-2xl font-bold text-slate-900">Role i uprawnienia</h2>
+        <h2 className="text-2xl font-bold text-slate-900">Role i dostęp do statusów</h2>
         <p className="mt-1 text-sm text-slate-500">
-          Domyślny dostęp do statusów zamówień dla wybranej roli w magazynie. Uprawnienia konta
-          (permission tree) nadal edytujesz w karcie użytkownika.
+          Ustaw domyślny dostęp do statusów zamówień dla każdej roli. Określ, które statusy
+          użytkownik z daną rolą widzi oraz w których może wykonywać pracę.
         </p>
       </div>
 
@@ -157,7 +153,7 @@ export default function WorkforceStatusMatrixPage() {
         <div className="min-w-[14rem] flex-1">
           <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Rola w systemie</label>
           <select
-            className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm font-medium text-slate-900 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
+            className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm font-medium text-slate-900 outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
             value={role}
             onChange={(e) => setRole(e.target.value)}
           >
@@ -167,7 +163,6 @@ export default function WorkforceStatusMatrixPage() {
               </option>
             ))}
           </select>
-          <p className="mt-1 text-[11px] text-slate-500">Wybrana rola: {roleLabel}</p>
         </div>
         {canWrite ? (
           <button
@@ -181,7 +176,11 @@ export default function WorkforceStatusMatrixPage() {
         ) : null}
       </div>
 
-      {loading ? <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">Ładowanie…</div> : null}
+      {loading ? (
+        <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
+          Ładowanie…
+        </div>
+      ) : null}
 
       {!loading ? (
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-900/5">
@@ -192,7 +191,7 @@ export default function WorkforceStatusMatrixPage() {
                   <th className="px-3 py-3">Status</th>
                   <th className="px-3 py-3">Etap</th>
                   <th className="px-3 py-3 text-center">Widoczny</th>
-                  <th className="px-3 py-3 text-center">Dostęp (praca)</th>
+                  <th className="px-3 py-3 text-center">Może pracować</th>
                 </tr>
               </thead>
               <tbody>
@@ -202,11 +201,11 @@ export default function WorkforceStatusMatrixPage() {
                   return (
                     <tr key={s.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/70">
                       <td className="px-3 py-3 font-medium leading-snug text-slate-900">{s.name}</td>
-                      <td className="px-3 py-3 whitespace-normal text-slate-600">{translateMainGroup(s.main_group)}</td>
+                      <td className="px-3 py-3 whitespace-normal text-slate-600">
+                        {translateMainGroup(s.main_group)}
+                      </td>
                       <td className="px-3 py-3 text-center">
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4 accent-cyan-600"
+                        <StatusAccessCheckbox
                           checked={f.can_visible}
                           disabled={!canWrite}
                           onChange={() => setVisible(s.id, !f.can_visible)}
@@ -214,13 +213,11 @@ export default function WorkforceStatusMatrixPage() {
                         />
                       </td>
                       <td className="px-3 py-3 text-center">
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4 accent-cyan-600"
+                        <StatusAccessCheckbox
                           checked={work}
                           disabled={!canWrite || !f.can_visible}
                           onChange={() => setWork(s.id, !work)}
-                          aria-label={`Praca: ${s.name}`}
+                          aria-label={`Może pracować: ${s.name}`}
                         />
                       </td>
                     </tr>

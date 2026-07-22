@@ -1,3 +1,20 @@
+## 2026-07-22 — Użytkownicy: sesja vs konto, WMS badges, role/statusy, czas pracy PL
+
+- Presence SSOT: `UserSession.expires_at > now` → `has_active_session` na liście (Zalogowany/Niezalogowany).
+- Kolumna WMS = effective operational modes (launcher parity); HoverPopover na „+X innych”.
+- Role: rename „Role i dostęp do statusów”; „Może pracować”; `StatusAccessCheckbox` shared z edycją.
+- Czas pracy: Throughput→Aktywności na godzinę; heatmap/dni w Europe/Warsaw; API historyczne humanize.
+- Tests: `test_user_session_presence`, `effectiveWmsModes.test.ts`, tabs. **No push.**
+
+## 2026-07-22 — Edycja użytkownika 1:1 + kod logowania w systemie etykiet
+
+- UI edycji: orange tabs, lewa kolumna, dirty bar, hasło tylko „nowe” (puste).
+- Zapis spójny wszystkich dirty fields; beforeunload; Anuluj = restore.
+- Kod logowania: Generuj + szablon etykiety + podgląd/druk; lista „…” → Drukuj kod logowania.
+- Label SSOT: template_type `user_login`, zmienna `{barcode_login_code}` (tekst/barcode fallback PDF).
+- DB: `user_wms_profiles.login_code_label_template_id`; unikalność `barcode_login_code`.
+- Tests: `test_user_login_code.py`, `userLoginCodeLabel.test.ts`. **No push.**
+
 ## 2026-07-22 — Ustawienia → Użytkownicy: UI 1:1 + telemetria operacyjna
 
 - Chrome: bare tabs (orange underline), CTA „+ Dodaj użytkownika” pomarańczowe przy liście; bez dużego H1 nad tabami.

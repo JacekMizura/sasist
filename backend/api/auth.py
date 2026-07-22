@@ -56,6 +56,7 @@ from ..services.app_user_admin_service import (
     save_wms_topbar_pins,
     sort_app_users_list_items,
     update_user_transaction,
+    user_ids_with_active_session,
     wms_profile_response,
 )
 from ..schemas.user_warehouse_context import SetActiveWarehouseBody, WarehouseContextResponse
@@ -558,7 +559,13 @@ def list_users(
             actor.role,
         )
     users = db.query(AppUser).all()
-    return sort_app_users_list_items([app_user_to_list_item(db, u) for u in users])
+    active_sessions = user_ids_with_active_session(db, [u.id for u in users])
+    return sort_app_users_list_items(
+        [
+            app_user_to_list_item(db, u, has_active_session=u.id in active_sessions)
+            for u in users
+        ]
+    )
 
 
 @router.post("/users", response_model=AppUserListItem)

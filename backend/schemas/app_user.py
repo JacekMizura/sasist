@@ -183,6 +183,8 @@ class AppUserListItem(BaseModel):
     wms_language: str | None = None
     primary_workforce_group: PrimaryWorkforceGroupBadge | None = None
     wms_operational_modes: list[str] = Field(default_factory=list)
+    # Session/presence — non-expired refresh token row (not account is_active).
+    has_active_session: bool = False
 
 
 class AppUserCreate(BaseModel):

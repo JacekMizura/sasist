@@ -20,6 +20,7 @@ import {
   panelSidebarSubgroupRowClass,
 } from "../../utils/panelSidebarHierarchy";
 import type { OrderUiMainGroup, OrderUiPanelSubgroupRead, OrderUiStatusPanelSummary } from "../../types/orderUiStatus";
+import { StatusAccessCheckbox } from "./statusAccessCheckbox";
 
 type FlagKey = "can_visible" | "can_edit" | "can_transition" | "can_process" | "can_print" | "can_complete";
 
@@ -389,9 +390,7 @@ export default function UserPanelStatusMatrix({ tenantId, warehouseId, targetUse
           </div>
         </td>
         <td className="px-3 py-3 text-center align-middle">
-          <input
-            type="checkbox"
-            className="h-4 w-4 accent-cyan-600"
+          <StatusAccessCheckbox
             checked={f.can_visible}
             disabled={!canWrite}
             onChange={() => setVisible(s.order_ui_status_id, !f.can_visible)}
@@ -399,13 +398,11 @@ export default function UserPanelStatusMatrix({ tenantId, warehouseId, targetUse
           />
         </td>
         <td className="px-3 py-3 text-center align-middle">
-          <input
-            type="checkbox"
-            className="h-4 w-4 accent-cyan-600"
+          <StatusAccessCheckbox
             checked={work}
             disabled={!canWrite || !f.can_visible}
             onChange={() => setWork(s.order_ui_status_id, !work)}
-            aria-label={`Dostęp do pracy: ${s.status_name ?? ""}`}
+            aria-label={`Może pracować: ${s.status_name ?? ""}`}
           />
         </td>
       </tr>
@@ -511,7 +508,7 @@ export default function UserPanelStatusMatrix({ tenantId, warehouseId, targetUse
                     <tr className="text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
                       <th className="w-[45%] px-3 py-3 align-bottom">Status</th>
                       <th className="w-[15%] px-3 py-3 text-center align-bottom">Widoczny</th>
-                      <th className="w-[15%] px-3 py-3 text-center align-bottom">Dostęp (praca)</th>
+                      <th className="w-[15%] px-3 py-3 text-center align-bottom">Może pracować</th>
                     </tr>
                   </thead>
                   <tbody>

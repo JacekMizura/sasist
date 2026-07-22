@@ -6,10 +6,13 @@ export function HoverPopover({
   children,
   content,
   className,
+  interactive = false,
 }: {
   children: ReactNode;
   content: ReactNode;
   className?: string;
+  /** When true, tooltip accepts pointer events (scroll / links) and stays open while hovered. */
+  interactive?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const anchorRef = useRef<HTMLSpanElement>(null);
@@ -59,12 +62,25 @@ export function HoverPopover({
           const centerX = anchorRect.left + anchorRect.width / 2;
           let left = centerX - minW / 2;
           left = Math.max(margin, Math.min(left, window.innerWidth - minW - margin));
-          const aboveTop = anchorRect.top - margin;
+          const spaceAbove = anchorRect.top - margin;
+          const spaceBelow = window.innerHeight - anchorRect.bottom - margin;
+          const preferAbove = spaceAbove >= 160 || spaceAbove >= spaceBelow;
+          if (preferAbove) {
+            return {
+              position: "fixed",
+              left,
+              top: Math.max(margin, anchorRect.top - margin),
+              transform: "translateY(-100%)",
+              minWidth: minW,
+              maxWidth: maxW,
+              zIndex: 200,
+            };
+          }
           return {
             position: "fixed",
             left,
-            top: Math.max(margin, aboveTop),
-            transform: "translateY(-100%)",
+            top: Math.min(window.innerHeight - margin, anchorRect.bottom + margin),
+            transform: "none",
             minWidth: minW,
             maxWidth: maxW,
             zIndex: 200,
@@ -77,7 +93,11 @@ export function HoverPopover({
       <div
         role="tooltip"
         style={tooltipStyle}
-        className="pointer-events-none max-h-[min(18rem,70vh)] overflow-y-auto rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-left text-xs leading-relaxed text-slate-800 shadow-lg ring-1 ring-slate-200/60 [overflow-wrap:anywhere] [word-break:break-word]"
+        className={`${
+          interactive ? "pointer-events-auto" : "pointer-events-none"
+        } max-h-[min(18rem,70vh)] overflow-y-auto rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-left text-xs leading-relaxed text-slate-800 shadow-lg ring-1 ring-slate-200/60 [overflow-wrap:anywhere] [word-break:break-word]`}
+        onMouseEnter={interactive ? show : undefined}
+        onMouseLeave={interactive ? hide : undefined}
       >
         <div className="whitespace-pre-wrap">{content}</div>
       </div>

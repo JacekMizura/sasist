@@ -7,8 +7,9 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
@@ -17,6 +18,16 @@ from ..models.app_user import AppUser
 from ..models.employee_cost_profile import EmployeeCostProfile
 from ..models.user_activity_log import UserActivityLog
 from .activity_session_service import SESSION_GAP_MINUTES
+
+_APP_TZ = ZoneInfo("Europe/Warsaw")
+
+
+def _to_app_tz(dt: datetime) -> datetime:
+    """Activity timestamps are stored naive UTC — present in Europe/Warsaw."""
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(_APP_TZ)
+
 
 # Modules that are technical / non-operational noise in workforce TOP MODUŁY & KPIs.
 _NON_OPERATIONAL_MODULES = frozenset(
@@ -115,7 +126,7 @@ def _hourly_heatmap(rows: list[UserActivityLog]) -> list[dict[str, Any]]:
     buckets = [0] * 24
     for r in rows:
         if r.created_at:
-            buckets[r.created_at.hour] += 1
+            buckets[_to_app_tz(r.created_at).hour] += 1
     return [{"hour": h, "count": buckets[h]} for h in range(24)]
 
 
@@ -123,7 +134,7 @@ def _daily_breakdown(rows: list[UserActivityLog]) -> list[dict[str, Any]]:
     by_day: dict[str, int] = defaultdict(int)
     for r in rows:
         if r.created_at:
-            by_day[r.created_at.date().isoformat()] += 1
+            by_day[_to_app_tz(r.created_at).date().isoformat()] += 1
     return [{"date": d, "count": by_day[d]} for d in sorted(by_day.keys())]
 
 

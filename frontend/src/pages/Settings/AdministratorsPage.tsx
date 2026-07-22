@@ -29,7 +29,8 @@ import { useAuth } from "../../context/AuthContext";
 import { WMS_OPERATIONAL_MODE_LABELS_PL } from "../../constants/wmsOperationalModes";
 import { PLATFORM_ROLE_OPTIONS } from "../../settings/platformRoles";
 import { printOrDownloadUserLoginCode } from "../../utils/userLoginCodeLabel";
-
+import { effectiveWmsModeKeys } from "./administrators/effectiveWmsModes";
+import { WmsModesOverflowPopover } from "./administrators/WmsModesOverflowPopover";
 function initials(row: AppUserListItem) {
   const a = (row.first_name?.[0] ?? "").toUpperCase();
   const b = (row.last_name?.[0] ?? "").toUpperCase();
@@ -229,7 +230,7 @@ export default function AdministratorsPage() {
         r.role,
         ...(r.warehouse_names ?? []),
         r.warehouse_summary,
-        ...(r.wms_operational_modes ?? []).map((m) => WMS_OPERATIONAL_MODE_LABELS_PL[m] ?? m),
+        ...effectiveWmsModeKeys(r.wms_operational_modes).map((m) => WMS_OPERATIONAL_MODE_LABELS_PL[m] ?? m),
         r.primary_workforce_group?.name,
       ]
         .filter(Boolean)
@@ -513,40 +514,11 @@ export default function AdministratorsPage() {
       ) : (
         <div className="flex flex-col gap-3">
           {filteredRows.map((r) => {
-            // Generowanie tagów dla sekcji "Permisje"
-            const allTags = [];
-            if (r.primary_workforce_group) {
-              allTags.push(
-                <span
-                  key="wg"
-                  className="inline-flex items-center rounded-md px-2 py-1 text-[11px] font-medium ring-1 ring-inset"
-                  style={{
-                    backgroundColor: `${r.primary_workforce_group.color}15`,
-                    color: r.primary_workforce_group.color,
-                    borderColor: `${r.primary_workforce_group.color}30`,
-                  }}
-                  title="Grupa operacyjna"
-                >
-                  {r.primary_workforce_group.name}
-                </span>
-              );
-            }
-            (r.wms_operational_modes ?? []).forEach((m) => {
-              allTags.push(
-                <span
-                  key={m}
-                  className={`inline-flex items-center rounded-md px-2 py-1 text-[11px] font-medium ring-1 ring-inset ${modeBadgeClass(
-                    m
-                  )}`}
-                  title="Tryb WMS"
-                >
-                  {WMS_OPERATIONAL_MODE_LABELS_PL[m] ?? m}
-                </span>
-              );
-            });
-
-            const displayTags = allTags.slice(0, 4);
-            const moreTagsCount = allTags.length - 4;
+            const modeKeys = effectiveWmsModeKeys(r.wms_operational_modes);
+            const modeLabels = modeKeys.map((m) => WMS_OPERATIONAL_MODE_LABELS_PL[m] ?? m);
+            const visibleKeys = modeKeys.slice(0, 4);
+            const hiddenLabels = modeLabels.slice(4);
+            const moreTagsCount = hiddenLabels.length;
 
             return (
               <div
@@ -607,18 +579,26 @@ export default function AdministratorsPage() {
                   </div>
                 </div>
 
-                {/* 4. Permisje / Tagi */}
+                {/* 4. Tryby WMS (effective modes = launcher SSOT) */}
                 <div className="flex min-w-0 flex-col">
-                  <span className="mb-1 text-xs text-slate-500">Permisje</span>
+                  <span className="mb-1 text-xs text-slate-500">WMS</span>
                   <div className="flex flex-wrap gap-1.5">
-                    {allTags.length > 0 ? (
+                    {modeKeys.length > 0 ? (
                       <>
-                        {displayTags}
-                        {moreTagsCount > 0 && (
-                          <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-600 ring-1 ring-inset ring-slate-200">
-                            +{moreTagsCount} innych
+                        {visibleKeys.map((m) => (
+                          <span
+                            key={m}
+                            className={`inline-flex items-center rounded-md px-2 py-1 text-[11px] font-medium ring-1 ring-inset ${modeBadgeClass(
+                              m
+                            )}`}
+                          >
+                            {WMS_OPERATIONAL_MODE_LABELS_PL[m] ?? m}
                           </span>
-                        )}
+                        ))}
+                        <WmsModesOverflowPopover
+                          hiddenLabels={hiddenLabels}
+                          moreCount={moreTagsCount}
+                        />
                       </>
                     ) : (
                       <span className="font-medium text-slate-800">—</span>
@@ -626,22 +606,22 @@ export default function AdministratorsPage() {
                   </div>
                 </div>
 
-                {/* 5. Status */}
+                {/* 5. Status sesji (presence — not account is_active) */}
                 <div className="flex items-center">
                   <span
                     className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
-                      r.is_active
+                      r.has_active_session
                         ? "bg-emerald-50 text-emerald-700"
                         : "bg-slate-100 text-slate-600"
                     }`}
                   >
                     <span
                       className={`h-1.5 w-1.5 rounded-full ${
-                        r.is_active ? "bg-emerald-500" : "bg-slate-400"
+                        r.has_active_session ? "bg-emerald-500" : "bg-slate-400"
                       }`}
                       aria-hidden
-                    ></span>
-                    {r.is_active ? "Aktywny" : "Nieaktywny"}
+                    />
+                    {r.has_active_session ? "Zalogowany" : "Niezalogowany"}
                   </span>
                 </div>
 
