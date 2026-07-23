@@ -11,6 +11,8 @@ import {
   type PutawayQtyState,
 } from "../../../pages/wms/putawayLineUtils";
 import PutawayTraceabilityStrip from "./PutawayTraceabilityStrip";
+import { CarrierBadge } from "../../warehouse/carriers/CarrierBadge";
+import { carrierVisualClasses } from "../../warehouse/carriers/carrierConstants";
 
 type PutawayQuantityPanelProps = {
   productName: string;
@@ -101,10 +103,14 @@ export default function PutawayQuantityPanel({
               <span className="inline-flex px-2.5 py-0.5 bg-white border border-slate-200 rounded-md text-[11px] font-mono font-bold text-slate-500">
                 EAN: {displayEan || "Brak"}
               </span>
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-white border border-slate-200 rounded-md text-slate-700 font-mono text-[11px] font-bold">
-                <Package size={12} className="text-slate-400" />
-                NOŚNIK: {activeCarrierCode || "Luzem"}
-              </span>
+              {(activeCarrierCode || "").trim() ? (
+                <CarrierBadge code={activeCarrierCode!} />
+              ) : (
+                <span className={carrierVisualClasses.monoChip}>
+                  <Package size={12} className="text-violet-500" />
+                  Luzem
+                </span>
+              )}
             </div>
           </div>
         </div>

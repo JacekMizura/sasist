@@ -1,4 +1,5 @@
 import type { ReceivingPzCarrierRead } from "../../../../api/stockDocumentsApi";
+import { carrierVisualClasses } from "../../../warehouse/carriers/carrierConstants";
 import { ReceivingCarrierBadge } from "./ReceivingCarrierBadge";
 
 type Props = {
@@ -14,13 +15,15 @@ type Props = {
 export function ReceivingCarrierSelector({ carriers, value, onChange, disabled }: Props) {
   if (!carriers.length) return null;
   return (
-    <div className="w-full space-y-2 rounded-2xl border border-[#7a5c2e]/25 bg-[#faf6f0] p-4">
-      <p className="text-center text-[10px] font-black uppercase tracking-widest text-[#5c4a32]">Nośnik</p>
+    <div className={`w-full space-y-2 rounded-2xl p-4 ${carrierVisualClasses.bar}`}>
+      <p className={`text-center text-[10px] font-black uppercase tracking-widest ${carrierVisualClasses.barLabel}`}>
+        Nośnik
+      </p>
       <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-transparent bg-white px-3 py-2.5 shadow-sm hover:border-slate-200">
         <input
           type="radio"
           name="recv-carrier"
-          className="h-4 w-4 shrink-0 accent-amber-800"
+          className="h-4 w-4 shrink-0 accent-violet-700"
           checked={value == null}
           disabled={disabled}
           onChange={() => onChange(null)}
@@ -32,12 +35,12 @@ export function ReceivingCarrierSelector({ carriers, value, onChange, disabled }
         return (
           <label
             key={c.carrier_id}
-            className="flex cursor-pointer items-center gap-3 rounded-xl border border-transparent bg-white px-3 py-2.5 shadow-sm hover:border-[#7a5c2e]/40"
+            className="flex cursor-pointer items-center gap-3 rounded-xl border border-transparent bg-white px-3 py-2.5 shadow-sm hover:border-violet-300"
           >
             <input
               type="radio"
               name="recv-carrier"
-              className="h-4 w-4 shrink-0 accent-amber-800"
+              className="h-4 w-4 shrink-0 accent-violet-700"
               checked={value === c.carrier_id}
               disabled={disabled}
               onChange={() => onChange(c.carrier_id)}

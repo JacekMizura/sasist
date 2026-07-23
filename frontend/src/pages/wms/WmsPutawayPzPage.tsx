@@ -1,6 +1,6 @@
 ﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, CheckCircle2, ScanBarcode, MoreVertical, Package, User } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ScanBarcode, MoreVertical, User } from "lucide-react";
 import axios from "axios";
 import { fetchUsers } from "../../api/authApi";
 import { type StockDocumentItemRead, type StockDocumentRead, type StockDocumentListRow } from "../../api/stockDocumentsApi";
@@ -8,6 +8,7 @@ import { mmFromLabel, mmToLabel } from "../documents/warehouseDocumentHelpers";
 import { finalizeWmsRelocationPz } from "../../api/wmsPutawayApi";
 import { getWarehouseLocations, type WarehouseLocationItem } from "../../api/warehouseGraphApi";
 import { PutawayActiveCarrierBar } from "../../components/wms/putaway/PutawayActiveCarrierBar";
+import { CarrierBadge } from "../../components/warehouse/carriers/CarrierBadge";
 import { useWmsScanner } from "../../context/WmsScannerContext";
 import {
   WMS_MM_UPDATED_EVENT,
@@ -144,9 +145,9 @@ function PutawayLineCard({
             {showSku && <p className="text-[11px] font-mono text-slate-500 truncate"><span className="text-slate-400/80 mr-1">SKU:</span>{skuRaw}</p>}
             <p className="text-[11px] font-mono text-slate-500 truncate"><span className="text-slate-400/80 mr-1">EAN:</span>{ean}</p>
             {carrierCode && (
-              <p className="text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-100 inline-flex items-center gap-1 px-1.5 py-0.5 rounded mt-1">
-                <Package size={10} /> NOŚNIK: {carrierCode}
-              </p>
+              <div className="mt-1">
+                <CarrierBadge code={carrierCode} className="!py-0.5 !text-[10px]" />
+              </div>
             )}
             {(tb || te) && (
               <div className="flex flex-col gap-0.5 mt-1 text-[10px] text-slate-400 font-medium">

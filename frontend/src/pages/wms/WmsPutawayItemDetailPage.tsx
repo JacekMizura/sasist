@@ -8,6 +8,8 @@ import {
 import { getWarehouseLocations, type WarehouseLocationItem } from "../../api/warehouseGraphApi";
 import PutawayLocationSuggestionCard from "../../components/wms/putaway/PutawayLocationSuggestionCard";
 import PutawayTraceabilityStrip from "../../components/wms/putaway/PutawayTraceabilityStrip";
+import { CarrierBadge } from "../../components/warehouse/carriers/CarrierBadge";
+import { carrierVisualClasses } from "../../components/warehouse/carriers/carrierConstants";
 import { useWmsScanner } from "../../context/WmsScannerContext";
 import { wmsReceiptLineImageUrl } from "../../utils/wmsReceiptLineMedia";
 import { normalizeScanEan } from "../../utils/wmsScanNormalize";
@@ -283,9 +285,14 @@ export default function WmsPutawayItemDetailPage() {
                 <span className="text-[10px] font-black bg-white text-slate-500 border border-slate-200 px-3 py-1.5 rounded-lg uppercase tracking-wide">
                   EAN: {ean}
                 </span>
-                <span className="text-[10px] font-black bg-white text-slate-600 border border-slate-200 px-3 py-1.5 rounded-lg flex items-center gap-1.5 uppercase tracking-wide">
-                  <Package className="w-3.5 h-3.5 text-slate-400" /> NOŚNIK: {carrier}
-                </span>
+                {(carrier || "").trim() && carrier !== "Luzem" ? (
+                  <CarrierBadge code={carrier} />
+                ) : (
+                  <span className={carrierVisualClasses.monoChip}>
+                    <Package className="h-3.5 w-3.5 text-violet-500" />
+                    Luzem
+                  </span>
+                )}
               </div>
 
               {/* DO ROZLOKOWANIA / NA MAGAZYNIE */}

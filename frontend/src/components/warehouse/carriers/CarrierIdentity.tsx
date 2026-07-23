@@ -1,6 +1,10 @@
 import type { WarehouseCarrierRead } from "../../../api/wmsCarrierApi";
 import { formatCarrierCode } from "../../../utils/formatCarrierCode";
-import { carrierPrefixMeta, CARRIER_CODE_DISPLAY_ZERO_PAD } from "./carrierConstants";
+import {
+  carrierPrefixMeta,
+  carrierVisualStyle,
+  CARRIER_CODE_DISPLAY_ZERO_PAD,
+} from "./carrierConstants";
 import { CarrierMixBadge } from "./CarrierMixBadge";
 
 type Props = {
@@ -17,6 +21,7 @@ export function CarrierIdentity({ carrier, size = "md", className = "" }: Props)
   const description = (carrier.notes || "").trim();
   const prefix = rawCode.split("-")[0]?.toUpperCase() ?? "";
   const meta = carrierPrefixMeta(prefix);
+  const visual = carrierVisualStyle();
 
   const titleClass =
     size === "lg"
@@ -33,15 +38,14 @@ export function CarrierIdentity({ carrier, size = "md", className = "" }: Props)
   return (
     <div className={`min-w-0 ${className}`}>
       <div className="flex min-w-0 items-start gap-2">
-        {meta ? (
-          <span
-            className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-[10px] font-black"
-            style={{ backgroundColor: meta.bg, color: meta.fg }}
-            title={meta.label}
-          >
-            {meta.icon}
-          </span>
-        ) : null}
+        <span
+          className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-[10px] font-black"
+          style={{ backgroundColor: visual.bg, color: visual.fg, border: `1px solid ${visual.border}` }}
+          title={meta?.label ?? "Nośnik"}
+          data-carrier-identity-icon="true"
+        >
+          {meta?.icon ?? "NS"}
+        </span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
             <p className={`truncate ${titleClass}`}>{primaryLabel}</p>

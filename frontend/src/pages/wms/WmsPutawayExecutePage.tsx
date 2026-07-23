@@ -20,6 +20,8 @@ import { WMS_ROUTES } from "./wmsRoutes";
 import { useAuth } from "../../context/AuthContext";
 import { mePutawayOperatorDisplayName } from "../../utils/putawayOperatorDisplay";
 import PutawayTraceabilityStrip from "../../components/wms/putaway/PutawayTraceabilityStrip";
+import { CarrierBadge } from "../../components/warehouse/carriers/CarrierBadge";
+import { carrierVisualClasses } from "../../components/warehouse/carriers/carrierConstants";
 
 const TENANT_STORAGE_KEY = "wms.receiving.tenantId";
 
@@ -226,9 +228,14 @@ export default function WmsPutawayExecutePage() {
                   <span className="text-xs font-semibold text-slate-600 border border-slate-200 px-3.5 py-1.5 rounded-xl uppercase">
                     EAN: {product.displayEan || "BRAK"}
                   </span>
-                  <span className="text-xs font-semibold text-slate-600 border border-slate-200 px-3.5 py-1.5 rounded-xl flex items-center gap-1.5 uppercase">
-                    <Package className="w-3.5 h-3.5 text-slate-400" /> NOŚNIK: {currentCarrierCode || "Luzem"}
-                  </span>
+                  {(currentCarrierCode || "").trim() ? (
+                    <CarrierBadge code={currentCarrierCode!} />
+                  ) : (
+                    <span className={carrierVisualClasses.monoChip}>
+                      <Package className="h-3.5 w-3.5 text-violet-500" />
+                      Luzem
+                    </span>
+                  )}
                 </div>
               </div>
             </div>

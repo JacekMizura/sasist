@@ -255,7 +255,7 @@ export function ReceivingCarrierAssignModal({ tenantId, pzId, open, onClose, onA
                         }}
                         className={`w-full flex items-center justify-between p-3.5 border-b border-slate-100 last:border-0 text-left transition-colors ${
                           sel 
-                            ? "bg-indigo-50/60" 
+                            ? "bg-violet-50/80" 
                             : "hover:bg-slate-50"
                         }`}
                       >
@@ -263,7 +263,7 @@ export function ReceivingCarrierAssignModal({ tenantId, pzId, open, onClose, onA
                           <ReceivingCarrierBadge code={label} className="text-[12px] px-2.5 py-1" />
                         </div>
                         {sel && (
-                          <div className="text-indigo-600 bg-white rounded-full p-0.5 shadow-sm border border-indigo-100 mr-1">
+                          <div className="text-violet-700 bg-white rounded-full p-0.5 shadow-sm border border-violet-200 mr-1">
                             <Check size={16} strokeWidth={3} />
                           </div>
                         )}

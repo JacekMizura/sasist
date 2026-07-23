@@ -35,6 +35,7 @@ import {
   WmsOperationalPageShell,
 } from "../../components/wms/execution/WmsOperationalPageShell";
 import { WMS_Z } from "../../components/wms/execution/wmsLayoutTokens";
+import { CarrierBadge } from "../../components/warehouse/carriers/CarrierBadge";
 function fmtQty(n: number): string {
   return new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 2 }).format(n);
 }
@@ -503,27 +504,31 @@ export default function WmsRelocationDetailPage() {
 
             <section
               className={`rounded-2xl border p-4 ${
-                activeCarrier ? "border-indigo-300 bg-indigo-50" : "border-amber-200 bg-amber-50"
+                activeCarrier
+                  ? "border-violet-300 bg-violet-50"
+                  : "border-slate-200 bg-slate-50"
               }`}
             >
               <div className="flex items-start gap-3">
-                <ScanLine className="mt-0.5 shrink-0 text-indigo-700" size={22} />
+                <ScanLine className={`mt-0.5 shrink-0 ${activeCarrier ? "text-violet-700" : "text-slate-500"}`} size={22} />
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-black uppercase tracking-widest text-slate-600">Aktywny nośnik</p>
                   {carrierLabel ? (
                     <>
-                      <p className="mt-1 text-base font-black text-indigo-950">{carrierLabel}</p>
+                      <div className="mt-1.5">
+                        <CarrierBadge code={carrierLabel} className="!text-[13px]" />
+                      </div>
                       {carrierStats ? (
-                        <p className="mt-1 text-xs font-semibold text-indigo-800">
+                        <p className="mt-1 text-xs font-semibold text-violet-800">
                           Na nośniku: {carrierStats.product_count} prod. · {fmtQty(carrierStats.total_qty)} szt.
                         </p>
                       ) : null}
-                      <p className="mt-0.5 text-[10px] font-bold text-indigo-700">
+                      <p className="mt-0.5 text-[10px] font-bold text-violet-700">
                         Do tego kosza aktualnie odkładasz towar
                       </p>
                     </>
                   ) : (
-                    <p className="mt-1 text-sm font-medium text-amber-950">
+                    <p className="mt-1 text-sm font-medium text-slate-700">
                       Zeskanuj koszyk, tote lub wózek — potem przypisz alokacje.
                     </p>
                   )}

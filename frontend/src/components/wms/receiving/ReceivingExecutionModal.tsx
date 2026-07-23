@@ -16,6 +16,8 @@ import {
   receivingQuantityDifference,
 } from "../../../utils/receivingDocumentQtyPresentation";
 import { useWmsScanner } from "../../../context/WmsScannerContext";
+import { CarrierBadge } from "../../warehouse/carriers/CarrierBadge";
+import { carrierVisualClasses } from "../../warehouse/carriers/carrierConstants";
 
 type QtyMode = "units" | "cartons";
 type QtyActionMode = "receive" | "correct";
@@ -448,10 +450,14 @@ export function ReceivingExecutionModal({
               <span className="text-xs font-black text-slate-500 border border-slate-200 px-3.5 py-1.5 rounded-xl uppercase tracking-wide">
                 EAN: {ean}
               </span>
-              <span className="text-xs font-black text-slate-600 border border-slate-200 px-3.5 py-1.5 rounded-xl flex items-center gap-1.5 uppercase tracking-wide">
-                <Package size={14} className="text-slate-400" strokeWidth={2.5} /> 
-                NOŚNIK: {carrierLabel}
-              </span>
+              {(carrierLabel || "").trim() && carrierLabel !== "Luzem" && !carrierLabel.toLowerCase().includes("luzem") ? (
+                <CarrierBadge code={carrierLabel} />
+              ) : (
+                <span className={carrierVisualClasses.monoChip}>
+                  <Package size={14} className="text-violet-500" strokeWidth={2.5} />
+                  Luzem
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -899,25 +905,25 @@ export function ReceivingExecutionModal({
               </span>
               <div className="grid grid-cols-2 gap-3">
                 
-                {/* Opcja: Luzem */}
+                {/* Opcja: Luzem — nie jest nośnikiem (neutralny slate) */}
                 <button
                   type="button"
                   onClick={() => handleCarrierChange(null)}
                   className={`flex items-center gap-3 p-4 rounded-2xl border-2 transition-all active:scale-95 ${
                     lineCarrierChoice === null 
-                      ? 'border-amber-400 bg-amber-50/50 text-amber-900 shadow-sm' 
+                      ? 'border-slate-400 bg-slate-50 text-slate-900 shadow-sm' 
                       : 'border-slate-100 bg-white hover:border-slate-200 text-slate-700'
                   }`}
                 >
                   <div className={`flex items-center justify-center w-8 h-8 rounded-xl transition-colors shrink-0 ${
-                    lineCarrierChoice === null ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-400'
+                    lineCarrierChoice === null ? 'bg-slate-200 text-slate-700' : 'bg-slate-100 text-slate-400'
                   }`}>
                     <Box size={18} strokeWidth={2.5} />
                   </div>
                   <span className="font-bold text-[13px] tracking-tight truncate">Sztuki (Luzem)</span>
                 </button>
 
-                {/* Lista nośników z dokumentu */}
+                {/* Lista nośników z dokumentu — globalny fiolet CARRIER_VISUAL */}
                 {carriers.map((carrier) => {
                   const isActive = lineCarrierChoice === carrier.carrier_id;
                   const label = carrier.code || carrier.barcode || `#${carrier.carrier_id}`;
@@ -927,20 +933,20 @@ export function ReceivingExecutionModal({
                       key={carrier.carrier_id}
                       type="button"
                       onClick={() => handleCarrierChange(carrier.carrier_id)}
-                      className={`flex items-center gap-3 p-4 rounded-2xl border-2 transition-all active:scale-95 ${
-                        isActive 
-                          ? 'border-amber-400 bg-amber-50/50 text-amber-900 shadow-sm' 
-                          : 'border-slate-100 bg-white hover:border-slate-200 text-slate-700'
+                      className={`flex items-center gap-3 rounded-2xl border-2 p-4 transition-all active:scale-95 ${
+                        isActive
+                          ? carrierVisualClasses.surfaceSelected
+                          : carrierVisualClasses.surfaceIdle
                       }`}
                     >
-                      <div className={`flex items-center justify-center w-8 h-8 rounded-xl transition-colors shrink-0 ${
-                        isActive ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-400'
-                      }`}>
+                      <div
+                        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-colors ${
+                          isActive ? carrierVisualClasses.iconSelected : carrierVisualClasses.iconIdle
+                        }`}
+                      >
                         <Layers size={18} strokeWidth={2.5} />
                       </div>
-                      <span className="font-bold text-[13px] tracking-tight truncate">
-                        {label}
-                      </span>
+                      <span className="truncate text-[13px] font-bold tracking-tight">{label}</span>
                     </button>
                   );
                 })}

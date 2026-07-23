@@ -1,5 +1,6 @@
 import type { StockDocumentItemRead } from "../../../api/stockDocumentsApi";
 import { formatExpiryDatePl } from "../../../pages/wms/putawayFormat";
+import { CarrierBadge } from "../../warehouse/carriers/CarrierBadge";
 
 type PutawayTraceabilityStripProps = {
   line: StockDocumentItemRead;
@@ -44,10 +45,10 @@ export default function PutawayTraceabilityStrip({ line, className = "" }: Putaw
           </p>
         ) : null}
         {carrierCode ? (
-          <p>
-            <span className="text-[10px] font-bold uppercase tracking-wide text-amber-800">Nośnik: </span>
-            <span className="font-mono font-bold text-amber-950">{carrierCode}</span>
-          </p>
+          <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+            <span className="text-[10px] font-bold uppercase tracking-wide text-violet-700">Nośnik:</span>
+            <CarrierBadge code={carrierCode} className="!py-0.5 !text-[10px]" />
+          </div>
         ) : null}
       </div>
     </div>
