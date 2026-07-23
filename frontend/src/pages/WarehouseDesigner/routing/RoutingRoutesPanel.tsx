@@ -64,9 +64,9 @@ export function RoutingRoutesPanel({
       <div className="flex flex-wrap gap-1">
         {(
           [
-            ["select", "Wybierz"],
-            ["add_node", "Punkt"],
-            ["draw_edge", "Odcinek"],
+            ["select", "Wybierz / przesuń"],
+            ["add_node", "Dodaj punkt"],
+            ["draw_edge", "Rysuj trasę"],
             ["test_route", "Testuj trasę"],
           ] as const
         ).map(([id, label]) => (
@@ -82,6 +82,25 @@ export function RoutingRoutesPanel({
           </button>
         ))}
       </div>
+      {tool === "draw_edge" && (
+        <div className="rounded-md border border-sky-100 bg-sky-50/70 px-2 py-1.5 text-[11px] text-sky-900">
+          Klikaj kolejne punkty trasy (istniejące lub nowe na pustym miejscu). Każdy kolejny punkt tworzy odcinek.
+          <button
+            type="button"
+            className="mt-1 block w-full rounded border border-sky-200 bg-white py-1 font-semibold"
+            onClick={() => {
+              setTool("select");
+            }}
+          >
+            Zakończ rysowanie
+          </button>
+        </div>
+      )}
+      {tool === "select" && (
+        <p className="text-[11px] text-slate-500">
+          Przeciągnij punkt trasy, aby go przesunąć (siatka 10 cm). Pan mapy: scroll; zoom: Ctrl+kółko.
+        </p>
+      )}
 
       <div className="flex gap-2">
         <button
@@ -124,7 +143,7 @@ export function RoutingRoutesPanel({
               <option value="">—</option>
               {routing.nodes.map((n) => (
                 <option key={n.uuid} value={n.uuid}>
-                  {n.label || n.uuid.slice(0, 8)}
+                  {n.label || "Punkt trasy"}
                 </option>
               ))}
             </select>
@@ -139,7 +158,7 @@ export function RoutingRoutesPanel({
               <option value="">—</option>
               {routing.nodes.map((n) => (
                 <option key={n.uuid} value={n.uuid}>
-                  {n.label || n.uuid.slice(0, 8)}
+                  {n.label || "Punkt trasy"}
                 </option>
               ))}
             </select>
@@ -288,12 +307,31 @@ export function RoutingRoutesPanel({
 
           <div className="border-t border-slate-100 pt-2">
             <div className="mb-1 font-semibold">Dostęp do lokalizacji</div>
+            <p className="mb-1 text-[10px] text-slate-500">
+              Lokalizacja może mieć wiele dostępów (np. obie strony regału). Każdy dostęp łączy lokalizację z wybranym punktem trasy.
+            </p>
+            <ul className="mb-2 max-h-24 space-y-1 overflow-auto text-[11px]">
+              {routing.accessPoints
+                .filter((a) => a.node_uuid === selectedNode.uuid)
+                .map((a) => {
+                  const locName = locations.find((l) => l.id === a.location_id)?.name ?? `Lokalizacja #${a.location_id}`;
+                  return (
+                    <li key={a.uuid} className="rounded bg-slate-50 px-1.5 py-0.5">
+                      {locName}
+                      {a.label && a.label !== locName ? ` · ${a.label}` : ""}
+                    </li>
+                  );
+                })}
+              {routing.accessPoints.filter((a) => a.node_uuid === selectedNode.uuid).length === 0 && (
+                <li className="text-slate-400">Brak przypisań do tego punktu</li>
+              )}
+            </ul>
             <select
               className="w-full rounded border border-slate-200 px-1 py-1"
               value={apLocationId}
               onChange={(e) => setApLocationId(e.target.value)}
             >
-              <option value="">— lokalizacja —</option>
+              <option value="">— wybierz lokalizację magazynową —</option>
               {locations.map((l) => (
                 <option key={l.id} value={String(l.id)}>
                   {l.name}
@@ -307,10 +345,15 @@ export function RoutingRoutesPanel({
               onClick={() => {
                 const id = Number(apLocationId);
                 if (!Number.isFinite(id)) return;
-                routing.upsertAccessPoint(id, selectedNode.uuid, locations.find((l) => l.id === id)?.name);
+                const locName = locations.find((l) => l.id === id)?.name;
+                routing.upsertAccessPoint(
+                  id,
+                  selectedNode.uuid,
+                  locName ? `Dostęp: ${locName}` : undefined
+                );
               }}
             >
-              Przypisz dostęp do lokalizacji
+              Dodaj dostęp do lokalizacji
             </button>
           </div>
         </div>
@@ -319,6 +362,11 @@ export function RoutingRoutesPanel({
       {selectedEdge && (
         <div className="space-y-2 rounded-lg border border-slate-200 p-2">
           <div className="font-semibold">Odcinek trasy</div>
+          <div className="text-[10px] text-slate-500">
+            {routing.nodes.find((n) => n.uuid === selectedEdge.from_node_uuid)?.label || "Punkt A"}
+            {" → "}
+            {routing.nodes.find((n) => n.uuid === selectedEdge.to_node_uuid)?.label || "Punkt B"}
+          </div>
           <label className="block">
             Kierunek ruchu
             <select
@@ -327,8 +375,8 @@ export function RoutingRoutesPanel({
               onChange={(e) => routing.updateEdge(selectedEdge.uuid, { direction: e.target.value })}
             >
               <option value="BOTH">Dwukierunkowy</option>
-              <option value="FORWARD">Tylko od → do</option>
-              <option value="BACKWARD">Tylko do → od</option>
+              <option value="FORWARD">Jednokierunkowy (zgodnie z kierunkiem odcinka)</option>
+              <option value="BACKWARD">Jednokierunkowy (przeciwnie do odcinka)</option>
             </select>
           </label>
           <label className="inline-flex items-center gap-2">
@@ -337,7 +385,7 @@ export function RoutingRoutesPanel({
               checked={selectedEdge.enabled}
               onChange={(e) => routing.updateEdge(selectedEdge.uuid, { enabled: e.target.checked })}
             />
-            Włączony
+            Aktywny odcinek
           </label>
           <label className="block">
             Mnożnik kosztu
@@ -353,7 +401,7 @@ export function RoutingRoutesPanel({
             />
           </label>
           <label className="block">
-            Dozwolone procesy (puste = wszystkie)
+            Dozwolone procesy (puste = bez ograniczenia)
             <select
               multiple
               className="mt-0.5 h-20 w-full rounded border border-slate-200 px-1 py-1"
@@ -371,7 +419,7 @@ export function RoutingRoutesPanel({
             </select>
           </label>
           <label className="block">
-            Dozwolony transport (puste = wszystkie)
+            Dozwolony transport (puste = bez ograniczenia)
             <select
               multiple
               className="mt-0.5 h-20 w-full rounded border border-slate-200 px-1 py-1"
@@ -406,7 +454,7 @@ export function RoutingRoutesPanel({
       )}
 
       <div className="text-[10px] text-slate-400">
-        Węzły: {routing.nodes.length} · Odcinki: {routing.edges.length} · Access:{" "}
+        Punkty: {routing.nodes.length} · Odcinki: {routing.edges.length} · Dostępy:{" "}
         {routing.accessPoints.length}
       </div>
     </aside>

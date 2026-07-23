@@ -1,4 +1,12 @@
+## 2026-07-23 — Routing Graph Etap 1: domknięcie UX TRASY
+
+- Drag punktu trasy na canvasie (snap 10 cm, CTM zoom-safe, bez auto-merge, pan≠drag).
+- Ciągłe „Rysuj trasę”, edytor odcinka PL, AP 1..N UX, unsaved (tabs/warehouse/nav/beforeunload).
+- Schema `routing.3` bez drop „starego unique AP”; testy diamond/drag/legacy smoke.
+- Osobny commit względem `993f6a9f`. **No push. Bez Etapu 2.**
+
 ## 2026-07-23 — Routing Graph Etap 1 (authored SSOT)
+
 
 - Nowe modele: `WarehouseRoutingNode` / `Edge` / `AccessPoint` (stabilne UUID).
 - Engine A→B (kierunek, enabled, process, transport, cost_multiplier) — **bez** fallbacku do WarehouseNode.

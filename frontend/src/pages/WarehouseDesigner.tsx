@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useLayoutEffect, useRef, useMemo, type MouseEvent } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useBlocker } from "react-router-dom";
 import api from "../api/axios";
 import { putProductWarehouseSlotting } from "../api/productSlottingApi";
 import { warn } from "../utils/logger";
@@ -708,16 +708,32 @@ export default function WarehouseDesigner() {
   const [layoutWorkspace, setLayoutWorkspace] = useState<"designing" | "routes">("designing");
   const routesMode = mainView === "layout" && layoutWorkspace === "routes";
   const routing = useRoutingGraph(
-    routesMode ? selectedWarehouseId : null,
+    mainView === "layout" ? selectedWarehouseId : null,
     layout.layout_id ?? null
   );
   const [routingTool, setRoutingTool] = useState<RoutingTool>("select");
   const [routingSelectedNode, setRoutingSelectedNode] = useState<string | null>(null);
   const [routingSelectedEdge, setRoutingSelectedEdge] = useState<string | null>(null);
   const [routingEdgeDraftFrom, setRoutingEdgeDraftFrom] = useState<string | null>(null);
+  const [routingDraftCursorCm, setRoutingDraftCursorCm] = useState<{ x: number; y: number } | null>(null);
   const [testStartUuid, setTestStartUuid] = useState<string | null>(null);
   const [testDestUuid, setTestDestUuid] = useState<string | null>(null);
   const [routingLocations, setRoutingLocations] = useState<{ id: number; name: string }[]>([]);
+
+  const setRoutingToolSafe = useCallback((tool: RoutingTool) => {
+    setRoutingTool(tool);
+    if (tool !== "draw_edge") {
+      setRoutingEdgeDraftFrom(null);
+      setRoutingDraftCursorCm(null);
+    }
+  }, []);
+
+  const confirmLeaveRoutingDirty = useCallback(() => {
+    if (!routing.dirty) return true;
+    return window.confirm(
+      "Masz niezapisane zmiany sieci tras. Kontynuować bez zapisu? Niezapisane zmiany zostaną utracone."
+    );
+  }, [routing.dirty]);
 
   useEffect(() => {
     if (!routesMode || selectedWarehouseId == null) return;
@@ -736,6 +752,8 @@ export default function WarehouseDesigner() {
   const selectDesignerView = useCallback(
     (view: "magazyn" | "layout") => {
       if (view === "magazyn") {
+        if (routing.dirty && !confirmLeaveRoutingDirty()) return;
+        if (routing.dirty) void routing.load();
         setMainView("magazyn");
         setLayoutWorkspace("designing");
         setEditingProductId(null);
@@ -749,8 +767,29 @@ export default function WarehouseDesigner() {
         setSearchParams(next);
       }
     },
-    [searchParams, setSearchParams],
+    [searchParams, setSearchParams, routing, confirmLeaveRoutingDirty],
   );
+
+  useEffect(() => {
+    if (!routing.dirty) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [routing.dirty]);
+
+  const routingNavBlocker = useBlocker(routing.dirty);
+  useEffect(() => {
+    if (routingNavBlocker.state !== "blocked") return;
+    if (confirmLeaveRoutingDirty()) {
+      void routing.load();
+      routingNavBlocker.proceed();
+    } else {
+      routingNavBlocker.reset();
+    }
+  }, [routingNavBlocker, confirmLeaveRoutingDirty, routing]);
   const [showWarehouseReportsPanel, setShowWarehouseReportsPanel] = useState(false);
   const [showDamageReportsPanel, setShowDamageReportsPanel] = useState(false);
   const [damagePrefill, setDamagePrefill] = useState<DamagePrefill | null>(null);
@@ -1726,10 +1765,19 @@ export default function WarehouseDesigner() {
       ) {
         return;
       }
+      if (routing.dirty && !confirmLeaveRoutingDirty()) return;
       resetDesignerStateForWarehouseSwitch();
       setWarehouse(w);
     },
-    [selectedWarehouseId, lastSavedAt, layout, resetDesignerStateForWarehouseSwitch, setWarehouse],
+    [
+      selectedWarehouseId,
+      lastSavedAt,
+      layout,
+      resetDesignerStateForWarehouseSwitch,
+      setWarehouse,
+      routing.dirty,
+      confirmLeaveRoutingDirty,
+    ],
   );
 
   useEffect(() => {
@@ -3602,14 +3650,9 @@ export default function WarehouseDesigner() {
               role="tab"
               aria-selected={layoutWorkspace === "designing"}
               onClick={() => {
-                if (
-                  layoutWorkspace === "routes" &&
-                  routing.dirty &&
-                  !window.confirm(
-                    "Masz niezapisane zmiany sieci tras. Przejście do Projektowania je odrzuci (dopóki nie zapiszesz). Kontynuować?"
-                  )
-                ) {
-                  return;
+                if (layoutWorkspace === "routes" && !confirmLeaveRoutingDirty()) return;
+                if (layoutWorkspace === "routes" && routing.dirty) {
+                  void routing.load();
                 }
                 setLayoutWorkspace("designing");
               }}
@@ -4379,7 +4422,17 @@ export default function WarehouseDesigner() {
                       : []
                   }
                   draftFromUuid={routingEdgeDraftFrom}
+                  draftCursorCm={routingDraftCursorCm}
+                  allowNodeDrag={routingTool === "select"}
                   interactive
+                  onNodeDrag={(uuid, x, y) => {
+                    routing.updateNode(uuid, { x, y });
+                  }}
+                  onNodeDragEnd={(uuid, x, y) => {
+                    routing.updateNode(uuid, { x, y });
+                    setRoutingSelectedNode(uuid);
+                    setRoutingSelectedEdge(null);
+                  }}
                   onNodeClick={(uuid) => {
                     if (routingTool === "draw_edge") {
                       if (!routingEdgeDraftFrom) {
@@ -4387,8 +4440,11 @@ export default function WarehouseDesigner() {
                         setRoutingSelectedNode(uuid);
                         return;
                       }
+                      if (uuid === routingEdgeDraftFrom) return;
                       routing.addEdge(routingEdgeDraftFrom, uuid);
-                      setRoutingEdgeDraftFrom(null);
+                      // Continuous draw: keep chain at the last point
+                      setRoutingEdgeDraftFrom(uuid);
+                      setRoutingSelectedNode(uuid);
                       return;
                     }
                     if (routingTool === "test_route") {
@@ -4405,13 +4461,30 @@ export default function WarehouseDesigner() {
                     setRoutingSelectedEdge(null);
                   }}
                   onEdgeClick={(uuid) => {
+                    if (routingTool === "draw_edge") return;
                     setRoutingSelectedEdge(uuid);
                     setRoutingSelectedNode(null);
+                    setRoutingToolSafe("select");
+                  }}
+                  onCanvasMoveCm={(x, y) => {
+                    if (routingTool === "draw_edge" && routingEdgeDraftFrom) {
+                      setRoutingDraftCursorCm({ x, y });
+                    }
                   }}
                   onCanvasClickCm={(x, y) => {
                     if (routingTool === "add_node") {
                       const id = routing.addNodeAtCm(x, y, { label: "Punkt trasy" });
                       setRoutingSelectedNode(id);
+                      return;
+                    }
+                    if (routingTool === "draw_edge") {
+                      const id = routing.addNodeAtCm(x, y, { label: "Punkt trasy" });
+                      if (routingEdgeDraftFrom) {
+                        routing.addEdge(routingEdgeDraftFrom, id);
+                      }
+                      setRoutingEdgeDraftFrom(id);
+                      setRoutingSelectedNode(id);
+                      setRoutingSelectedEdge(null);
                     }
                   }}
                 />
@@ -4422,7 +4495,7 @@ export default function WarehouseDesigner() {
             <RoutingRoutesPanel
               routing={routing}
               tool={routingTool}
-              setTool={setRoutingTool}
+              setTool={setRoutingToolSafe}
               selectedNodeUuid={routingSelectedNode}
               selectedEdgeUuid={routingSelectedEdge}
               setSelectedNodeUuid={setRoutingSelectedNode}

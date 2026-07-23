@@ -256,7 +256,7 @@ export function useRoutingGraph(warehouseId: number | null, layoutId: number | n
             warehouse_id: warehouseId ?? 0,
             location_id: locationId,
             node_uuid: nodeUuid,
-            label: label ?? `Dostęp do lokalizacji #${locationId}`,
+            label: label ?? "Dostęp do lokalizacji",
           },
         ];
       });

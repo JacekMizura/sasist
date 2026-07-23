@@ -2,7 +2,7 @@
 
 ## Active
 
-**Routing Graph Etap 1 (NOWY SSOT):** authored `WarehouseRoutingNode/Edge/AccessPoint` + engine A→B + tryb TRASY w projektancie. Legacy WarehouseNode nadal tylko dla analytics (migracja Etap 2+). **Bez push.**
+**Routing Graph Etap 1 — domknięcie:** node drag na canvasie, ciągłe rysowanie trasy, snap siatki, unsaved (warehouse / nav / beforeunload), AP 1..N UX, schema bez drop legacy unique. Commit bazowy `993f6a9f` + osobny commit domknięcia. **Bez push. Bez Etapu 2.**
 
 ## Preferencja commitów (user)
 

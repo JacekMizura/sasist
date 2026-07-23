@@ -1,4 +1,4 @@
-/** Shared types / labels for designer Routes workspace. */
+/** Shared types / labels for designer Routes workspace (Polish UX only). */
 
 export const ROUTING_OP_OPTIONS: { value: string; label: string }[] = [
   { value: "picking_start", label: "Start kompletacji" },
@@ -15,12 +15,11 @@ export const ROUTING_PROCESS_OPTIONS = [
   { value: "picking", label: "Kompletacja" },
   { value: "putaway", label: "Rozlokowanie" },
   { value: "replenishment", label: "Uzupełnienia" },
-  { value: "relocation", label: "Przesunięcia" },
 ];
 
 export const ROUTING_TRANSPORT_OPTIONS = [
   { value: "foot", label: "Pieszo" },
-  { value: "cart", label: "Wózek" },
+  { value: "cart", label: "Wózek kompletacyjny" },
   { value: "pallet_jack", label: "Paleciak" },
   { value: "forklift", label: "Wózek widłowy" },
 ];
