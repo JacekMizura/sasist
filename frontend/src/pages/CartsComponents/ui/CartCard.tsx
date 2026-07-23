@@ -52,6 +52,8 @@ export type CartCardProps = {
   image_url?: string | null;
   updated_at?: string | number | null;
   total_baskets?: number;
+  /** CartType from API: BULK | MULTI — SSOT for sectional vs ordinary cart. */
+  type?: string | null;
   length?: number;
   width?: number;
   height?: number;
@@ -97,6 +99,7 @@ export default function CartCard(props: CartCardProps) {
     image_url,
     updated_at,
     total_baskets,
+    type: cartTypeProp,
     length,
     width,
     height,
@@ -116,7 +119,11 @@ export default function CartCard(props: CartCardProps) {
     onPrintLabel,
   } = props;
 
-  const isSectional = total_baskets != null && total_baskets > 0;
+  const isSectional =
+    String(cartTypeProp ?? "")
+      .trim()
+      .toUpperCase() === "MULTI" ||
+    (cartTypeProp == null && total_baskets != null && total_baskets > 0);
   const t = useTranslation();
   const { showWmsError } = useWmsMessage();
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -178,11 +185,20 @@ export default function CartCard(props: CartCardProps) {
     Math.max(0, capacitySnapshot?.capacity_usage_percent ?? cardStats.percent_used ?? 0),
   );
 
-  const occupiedSections = isSectional ? cardStats.baskets_used : cardStats.total_orders;
+  const orderCount = cardStats.total_orders;
+  const ordersLabel =
+    orderCount === 1
+      ? "1 zamówienie"
+      : orderCount >= 2 && orderCount <= 4
+        ? `${orderCount} zamówienia`
+        : `${orderCount} zamówień`;
+
   const sectionsLabel = isSectional
     ? `${cardStats.sections_count || total_baskets || 0} sekc.`
-    : "1 sekc.";
-  const occupiedLabel = isSectional ? `${occupiedSections} zajęte` : `${cardStats.total_orders} zam.`;
+    : null;
+  const occupiedLabel = isSectional
+    ? `${cardStats.baskets_used} zajęte`
+    : ordersLabel;
 
   const toggleExpand = () => onToggleExpand?.();
 
@@ -264,8 +280,12 @@ export default function CartCard(props: CartCardProps) {
           ) : null}
           <span className={fleetResourceMetaSepClass}>|</span>
           <span className={fleetResourceMetaItemClass}>{Number(total_volume_dm3 ?? 0).toFixed(0)} dm³</span>
-          <span className={fleetResourceMetaSepClass}>|</span>
-          <span className={fleetResourceMetaItemClass}>{sectionsLabel}</span>
+          {sectionsLabel ? (
+            <>
+              <span className={fleetResourceMetaSepClass}>|</span>
+              <span className={fleetResourceMetaItemClass}>{sectionsLabel}</span>
+            </>
+          ) : null}
           <span className={fleetResourceMetaSepClass}>|</span>
           <span className={fleetResourceMetaItemClass}>{occupiedLabel}</span>
           {!isSectional && length != null ? (

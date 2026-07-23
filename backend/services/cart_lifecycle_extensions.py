@@ -246,37 +246,33 @@ def count_confirmed_picks_on_cart(db: Session, cart_id: int) -> int:
 
 def compute_pick_progress(db: Session, cart: Cart) -> tuple[int, int, float]:
     """
-    (picked_count, remaining_count, progress_pct) na poziomie produktów (SKU).
-    picked = SKU z co najmniej jednym Pick na wózku; remaining = total_products - picked.
+    (done_count, remaining_count, progress_pct) — jednostki = operacyjne linie zamówień.
+
+    Linia zamknięta gdy ``picked + shortage >= quantity`` (SSOT finalize WMS).
+    Nie liczy sekcji wózka, eventów ani nieoperacyjnych nagłówków bundle.
     """
     try:
-        from .cart_stats_service import compute_cart_stats, list_orders_on_cart
-        from ..models.order_item import OrderItem
+        from .bundle_order_item_ops import order_item_is_operational_picking_line
+        from .cart_stats_service import list_orders_on_cart
+        from .fulfillment_event_service import sum_pick_events_for_line_cart
+        from .order_fulfillment_recompute import line_closed_for_picking_finalize
 
-        stats = compute_cart_stats(db, cart)
-        total_products = int(stats.get("products_count") or 0)
         cid = int(cart.id)
-        picked_pids = {
-            int(r[0])
-            for r in db.query(Pick.product_id)
-            .filter(Pick.cart_id == cid, Pick.product_id.isnot(None))
-            .distinct()
-            .all()
-            if r[0] is not None
-        }
-        # Ogranicz do produktów z zamówień na wózku
-        on_cart_pids: set[int] = set()
-        for o in list_orders_on_cart(db, cart):
+        total = 0
+        done = 0
+        for o in list_orders_on_cart(db, cart, with_items=True):
             for it in getattr(o, "items", None) or []:
-                if getattr(it, "product_id", None) is not None:
-                    on_cart_pids.add(int(it.product_id))
-        if on_cart_pids:
-            picked_pids &= on_cart_pids
-            total_products = max(total_products, len(on_cart_pids))
-        picked = len(picked_pids)
-        remaining = max(0, total_products - picked)
-        progress = round((picked / total_products) * 100.0, 2) if total_products > 0 else 0.0
-        return picked, remaining, progress
+                if not order_item_is_operational_picking_line(it):
+                    continue
+                total += 1
+                picked = float(sum_pick_events_for_line_cart(db, int(it.id), cid))
+                if line_closed_for_picking_finalize(
+                    db, o, it, session_cart_id=cid, picked=picked
+                ):
+                    done += 1
+        remaining = max(0, total - done)
+        progress = round((done / total) * 100.0, 2) if total > 0 else 0.0
+        return done, remaining, progress
     except Exception:
         logger.exception("compute_pick_progress failed cart_id=%s", getattr(cart, "id", None))
         return 0, 0, 0.0

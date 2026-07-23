@@ -58,8 +58,10 @@ export function CartFleetDetailPanel({
     assignment_since?: string | null;
     current_session_id?: number | null;
     code?: string | null;
+    type?: string | null;
     wms_picking_product_count?: number;
     total_products?: number;
+    pick_progress?: { picked?: number; total?: number; percent?: number } | null;
   } | null>(null);
   const [wmsStats, setWmsStats] = useState<WmsCartStats>(EMPTY_WMS_CART_STATS);
   const [clearingCart, setClearingCart] = useState(false);
@@ -138,9 +140,14 @@ export function CartFleetDetailPanel({
   const stats = useMemo(() => cartStatsFromWms(wmsStats), [wmsStats]);
   const lifecycleStatus = wmsStats.status ?? detailData?.status;
   const capacity = detailData?.capacity ?? wmsStats.capacity ?? null;
+  const pickFromApi = detailData?.pick_progress;
   const pickProgress = {
-    pickedProducts: Number(detailData?.wms_picking_product_count ?? 0),
-    totalProducts: Number(detailData?.total_products ?? stats.total_products) || stats.total_products,
+    pickedProducts: Number(
+      pickFromApi?.picked ?? detailData?.wms_picking_product_count ?? 0,
+    ),
+    totalProducts: Number(
+      pickFromApi?.total ?? detailData?.total_products ?? stats.total_products ?? 0,
+    ),
   };
 
   const formatAssignmentSince = (iso: string | null | undefined): string | null => {

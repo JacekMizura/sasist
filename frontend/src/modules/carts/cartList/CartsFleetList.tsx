@@ -39,6 +39,7 @@ type CartItemType = {
   total_orders?: number;
   total_products?: number;
   baskets_used?: number;
+  type?: string | null;
   capacity?: CapacitySnapshot | null;
   capacity_strategy?: string;
   capacity_orders?: number | null;
@@ -316,6 +317,7 @@ export function CartsFleetList({ cartType, refreshTrigger = 0, onAddNew, onEdit 
                         width={c.width}
                         height={c.height}
                         total_baskets={c.total_baskets}
+                        type={c.type}
                         tenant_id={isMulti ? TENANT_ID : undefined}
                         warehouse_id={isMulti ? warehouse?.id : undefined}
                         expanded={expandedCartId === c.id}

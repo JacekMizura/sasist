@@ -50,7 +50,7 @@ export function HoverPopover({
     hideTimer.current = window.setTimeout(() => {
       setOpen(false);
       setAnchorRect(null);
-    }, 140);
+    }, interactive ? 220 : 140);
   };
 
   const tooltipStyle =
@@ -73,7 +73,7 @@ export function HoverPopover({
               transform: "translateY(-100%)",
               minWidth: minW,
               maxWidth: maxW,
-              zIndex: 200,
+              zIndex: 320,
             };
           }
           return {
@@ -83,7 +83,7 @@ export function HoverPopover({
             transform: "none",
             minWidth: minW,
             maxWidth: maxW,
-            zIndex: 200,
+            zIndex: 320,
           };
         })()
       : undefined;

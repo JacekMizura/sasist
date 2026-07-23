@@ -311,10 +311,14 @@ def batch_cart_stats(db: Session, carts: list[Cart]) -> dict[int, dict[str, Any]
 
 
 def _stats_from_orders(cart: Cart, orders: list[Order]) -> dict[str, Any]:
+    from .bundle_order_item_ops import order_item_is_operational_picking_line
+
     orders_count = len(orders)
     product_ids: set[int] = set()
     for o in orders:
         for item in getattr(o, "items", None) or []:
+            if not order_item_is_operational_picking_line(item):
+                continue
             pid = getattr(item, "product_id", None)
             if pid is not None:
                 product_ids.add(int(pid))
@@ -334,8 +338,9 @@ def _stats_from_orders(cart: Cart, orders: list[Order]) -> dict[str, Any]:
                 occupied_ids.add(int(bid))
         occupied_sections = len(occupied_ids)
     else:
-        sections_count = 1
-        occupied_sections = orders_count
+        # Zwykły wózek (BULK) = jedna przestrzeń ładunkowa, bez sekcji.
+        sections_count = 0
+        occupied_sections = 0
 
     volume_used = round(sum(_order_volume_dm3(o) for o in orders), 2)
 

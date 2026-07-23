@@ -28,7 +28,7 @@ function KpiCard({
   sub?: ReactNode;
 }) {
   return (
-    <div className="flex min-w-[9rem] flex-1 flex-col gap-2 rounded-xl border border-slate-100 bg-white px-4 py-3 shadow-sm">
+    <div className="flex min-w-0 flex-col gap-2 rounded-xl border border-slate-100 bg-white px-4 py-3 shadow-sm">
       <div className="flex items-center gap-2 text-slate-400">
         {icon}
         <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">{label}</span>
@@ -90,13 +90,13 @@ export function CartSummaryKpis({
   const sectionsUsed = stats.baskets_used || 0;
 
   const picked = Math.max(0, Number(pickProgress?.pickedProducts ?? 0));
-  const pickTotal = Math.max(picked, Number(pickProgress?.totalProducts ?? stats.total_products) || 0);
-  const pickPct = pickTotal > 0 ? (picked / pickTotal) * 100 : 0;
+  const pickTotal = Math.max(0, Number(pickProgress?.totalProducts ?? stats.total_products) || 0);
+  const pickPct = pickTotal > 0 ? Math.min(100, (picked / pickTotal) * 100) : 0;
 
   return (
     <section aria-label="Podsumowanie">
       {isSectional ? <h3 className="mb-3 text-sm font-semibold text-slate-800">Podsumowanie</h3> : null}
-      <div className={`flex flex-wrap gap-3 ${isSectional ? "" : ""}`}>
+      <div className={`grid gap-3 ${isSectional ? "grid-cols-1 sm:grid-cols-2 xl:grid-cols-5" : "grid-cols-1 sm:grid-cols-2 xl:grid-cols-4"}`}>
         <KpiCard
           icon={<ShoppingCart className="h-4 w-4" aria-hidden />}
           label="Zamówienia"
@@ -132,7 +132,7 @@ export function CartSummaryKpis({
             )
           }
         />
-        <div className="flex min-w-[9rem] flex-1 flex-col gap-1 rounded-xl border border-slate-100 bg-white px-4 py-3 shadow-sm">
+        <div className="flex min-w-0 flex-col gap-1 rounded-xl border border-slate-100 bg-white px-4 py-3 shadow-sm">
           <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
             Postęp kompletacji
           </span>

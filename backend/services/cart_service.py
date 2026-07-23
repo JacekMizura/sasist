@@ -135,7 +135,20 @@ def _wms_pick_volume_dm3_for_cart(db: Session, cart_id: int) -> float:
     return round(float((row[0] if row else 0.0) or 0.0), 3)
 
 
+def _person_name_from_mapping(src: dict) -> str | None:
+    fn = str(src.get("first_name") or "").strip()
+    ln = str(src.get("last_name") or "").strip()
+    full = f"{fn} {ln}".strip()
+    return full or None
+
+
+def _company_from_mapping(src: dict) -> str | None:
+    company = str(src.get("company") or src.get("company_name") or "").strip()
+    return company or None
+
+
 def _order_customer_name(order) -> str | None:
+    """Buyer from addresses_json: person name → company (no email/login)."""
     raw = getattr(order, "addresses_json", None)
     if not raw:
         return None
@@ -146,26 +159,22 @@ def _order_customer_name(order) -> str | None:
     shipping = data.get("shipping") if isinstance(data, dict) else None
     billing = data.get("billing") if isinstance(data, dict) else None
     src = shipping if isinstance(shipping, dict) and shipping else (billing if isinstance(billing, dict) else {})
-    company = str(src.get("company") or src.get("company_name") or "").strip()
-    if company:
-        return company
-    fn = str(src.get("first_name") or "").strip()
-    ln = str(src.get("last_name") or "").strip()
-    full = f"{fn} {ln}".strip()
-    return full or None
+    if not isinstance(src, dict):
+        return None
+    return _person_name_from_mapping(src) or _company_from_mapping(src)
 
 
-def _order_display_customer(order) -> str:
-    """Customer label for cart order preview (company preferred)."""
+def _order_display_customer(order) -> str | None:
+    """Buyer label: imię+nazwisko → firma → None (UI pokazuje „—”)."""
     cust = getattr(order, "customer", None)
     if cust is not None:
-        company = (getattr(cust, "company_name", None) or "").strip()
-        if company:
-            return company
         name = f"{getattr(cust, 'first_name', '') or ''} {getattr(cust, 'last_name', '') or ''}".strip()
         if name:
             return name
-    return _order_customer_name(order) or "—"
+        company = (getattr(cust, "company_name", None) or "").strip()
+        if company:
+            return company
+    return _order_customer_name(order)
 
 
 def _order_display_status(order) -> str:
@@ -175,6 +184,16 @@ def _order_display_status(order) -> str:
         if label:
             return label
     return str(getattr(order, "status", None) or "—")
+
+
+def _product_image_url(prod) -> str | None:
+    if prod is None:
+        return None
+    raw = getattr(prod, "image_url", None)
+    if raw is None:
+        return None
+    first = str(raw).split(";")[0].strip()
+    return first or None
 
 
 def _serialize_cart_order_product_lines(order) -> list[dict]:
@@ -188,6 +207,9 @@ def _serialize_cart_order_product_lines(order) -> list[dict]:
         if qty <= 0:
             continue
         prod = getattr(item, "product", None)
+        pid = getattr(item, "product_id", None)
+        if pid is None and prod is not None:
+            pid = getattr(prod, "id", None)
         name = (
             (getattr(prod, "name", None) or "").strip()
             if prod is not None
@@ -196,15 +218,42 @@ def _serialize_cart_order_product_lines(order) -> list[dict]:
         if not name:
             name = (getattr(item, "offer_name_snapshot", None) or "").strip()
         if not name:
-            pid = getattr(item, "product_id", None)
             name = f"Produkt #{pid}" if pid else "Produkt"
         sku = ""
+        symbol = ""
         ean = ""
         if prod is not None:
-            sku = str(getattr(prod, "sku", None) or getattr(prod, "symbol", None) or "").strip()
+            sku = str(getattr(prod, "sku", None) or "").strip()
+            symbol = str(getattr(prod, "symbol", None) or "").strip()
+            if not sku and symbol:
+                sku = symbol
             ean = str(getattr(prod, "ean", None) or getattr(prod, "barcode", None) or "").strip()
-        lines.append({"name": name, "quantity": qty, "sku": sku or None, "ean": ean or None})
+        lines.append(
+            {
+                "product_id": int(pid) if pid is not None else None,
+                "name": name,
+                "quantity": qty,
+                "sku": sku or None,
+                "symbol": symbol or sku or None,
+                "ean": ean or None,
+                "image_url": _product_image_url(prod),
+            }
+        )
     return lines
+
+
+def _pick_progress_payload(db: Session, cart) -> dict:
+    from .cart_lifecycle_extensions import compute_pick_progress
+
+    done, remaining, pct = compute_pick_progress(db, cart)
+    total = int(done) + int(remaining)
+    return {
+        "pick_progress": {
+            "picked": int(done),
+            "total": int(total),
+            "percent": float(pct),
+        }
+    }
 
 
 def _order_ids_with_picks(db: Session, order_ids: list[int], *, cart_id: int | None = None) -> set[int]:
@@ -788,12 +837,13 @@ class CartService:
             s = stats_by_cart.get(int(cart.id)) or {
                 "orders_count": 0,
                 "products_count": 0,
-                "sections_count": 1 if clean_type != "MULTI" else 0,
+                "sections_count": 0 if clean_type != "MULTI" else 0,
                 "occupied_sections": 0,
                 "volume_used": 0.0,
                 "percent_used": 0.0,
             }
             pick_extra = _wms_pick_stats_for_cart(self.db, cart.id)
+            pick_progress = _pick_progress_payload(self.db, cart)
             orders_preview = [_serialize_cart_order_preview(o, order_id=int(o.id)) for o in orders_ssot]
             assigned_orders = _assigned_orders_payload(self.db, cart, orders_ssot)
             order_numbers = [str(o.number) for o in orders_ssot if getattr(o, "number", None) not in (None, "")]
@@ -808,7 +858,7 @@ class CartService:
                 "status": clean_status,
                 "group_id": cart.group_id,
                 "image_url": cart.image_url,
-                "total_baskets": len(cart.baskets) if clean_type == "MULTI" else 1,
+                "total_baskets": len(cart.baskets) if clean_type == "MULTI" else 0,
                 "total_volume_dm3": round(cart.total_volume or 0, 2),
                 "max_volume_dm3": round(cart.total_volume or 0, 2),
                 "used_volume": s["volume_used"],
@@ -828,6 +878,7 @@ class CartService:
                 **_cart_capacity_fields(self.db, cart),
                 **assignment,
                 **pick_extra,
+                **pick_progress,
             }
 
         result = []
@@ -882,6 +933,7 @@ class CartService:
         orders_ssot = _orders_for_cart_preview(self.db, cart)
         stats = _cart_stats(self.db, int(cart.id), orders_ssot, getattr(cart, "baskets", None) or [])
         pick_extra = _wms_pick_stats_for_cart(self.db, cart.id)
+        pick_progress = _pick_progress_payload(self.db, cart)
         order_numbers = [str(o.number) for o in orders_ssot if getattr(o, "number", None) not in (None, "")]
         orders_preview = [_serialize_cart_order_preview(o, order_id=int(o.id)) for o in orders_ssot]
         assigned_orders = _assigned_orders_payload(self.db, cart, orders_ssot)
@@ -948,6 +1000,7 @@ class CartService:
             "length": cart.length or 0,
             "width": cart.width or 0,
             "height": cart.height or 0,
+            "total_baskets": len(cart.baskets or []) if clean_type == "MULTI" else 0,
             "baskets": baskets_out,
             "used_volume": stats["used_volume_dm3"],
             "total_volume_dm3": round(cart.total_volume or 0, 2),
@@ -965,6 +1018,7 @@ class CartService:
             **_cart_capacity_fields(self.db, cart),
             **assignment,
             **pick_extra,
+            **pick_progress,
         }
 
     def get_details_by_code(self, tenant_id: int, warehouse_id: int, code: str):

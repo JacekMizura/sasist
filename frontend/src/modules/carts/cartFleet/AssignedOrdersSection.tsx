@@ -1,16 +1,15 @@
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Eye, Unlink } from "lucide-react";
 
 import api from "../../../api/axios";
-import { HoverPopover } from "../../../components/ui/HoverPopover";
+import {
+  AssignedOrderHoverAnchor,
+  AssignedOrderProductsPreview,
+  type AssignedOrderProductPreview,
+} from "./AssignedOrderProductsPreview";
 
-export type AssignedOrderProduct = {
-  name: string;
-  quantity: number;
-  sku?: string | null;
-  ean?: string | null;
-};
+export type AssignedOrderProduct = AssignedOrderProductPreview;
 
 export type AssignedOrderRow = {
   order_id: number;
@@ -35,60 +34,27 @@ type AssignedOrdersSectionProps = {
   onDetachSuccess?: () => void;
 };
 
-function OrderNumberTooltip({ o, label }: { o: AssignedOrderRow; label: string }): ReactNode {
-  const products = Array.isArray(o.products) ? o.products : [];
-  const preview = products.slice(0, 5);
-  const vol = Number(o.total_volume_dm3 ?? 0);
-  const weight = Number(o.total_weight_kg ?? 0);
-  return (
-    <div className="space-y-1.5">
-      <p className="font-semibold text-slate-900">{o.customer_name?.trim() || "—"}</p>
-      <p className="text-slate-600">
-        Produktów: <span className="font-semibold text-slate-800">{o.items_count ?? products.length}</span>
-      </p>
-      <ul className="space-y-0.5 text-slate-700">
-        {preview.length ? (
-          preview.map((p, i) => (
-            <li key={`${p.name}-${i}`}>
-              {p.name} × {p.quantity}
-            </li>
-          ))
-        ) : (
-          <li>—</li>
-        )}
-        {products.length > preview.length ? (
-          <li className="text-slate-400">… +{products.length - preview.length}</li>
-        ) : null}
-      </ul>
-      <p className="border-t border-slate-100 pt-1.5 text-slate-600">
-        Objętość: {vol > 0 ? `${vol.toFixed(1)} dm³` : "—"}
-        {" · "}
-        Waga: {weight > 0 ? `${weight.toFixed(2)} kg` : "—"}
-      </p>
-      <p className="text-[10px] text-slate-400">{label}</p>
-    </div>
-  );
+function buyerLabel(o: AssignedOrderRow): string {
+  const name = (o.customer_name || "").trim();
+  return name && name !== "—" ? name : "—";
 }
 
-function ProductsTooltip({ o }: { o: AssignedOrderRow }): ReactNode {
+function OrderNumberPreview({ o, label }: { o: AssignedOrderRow; label: string }) {
   const products = Array.isArray(o.products) ? o.products : [];
-  if (!products.length) return <p>Brak pozycji.</p>;
+  const buyer = buyerLabel(o);
   return (
-    <ul className="space-y-1.5">
-      {products.map((p, i) => {
-        const codes = [p.ean ? `EAN ${p.ean}` : null, p.sku ? `SKU ${p.sku}` : null]
-          .filter(Boolean)
-          .join(" · ");
-        return (
-          <li key={`${p.name}-${i}`}>
-            <span className="font-medium text-slate-900">
-              {p.name} × {p.quantity}
-            </span>
-            {codes ? <div className="text-[11px] text-slate-500">{codes}</div> : null}
-          </li>
-        );
-      })}
-    </ul>
+    <AssignedOrderProductsPreview
+      variant="summary"
+      products={products}
+      header={
+        <div className="border-b border-slate-100 pb-2">
+          <p className="text-sm font-bold text-slate-900">Zamówienie {label}</p>
+          {buyer !== "—" ? (
+            <p className="mt-0.5 text-[13px] font-medium text-slate-700">{buyer}</p>
+          ) : null}
+        </div>
+      }
+    />
   );
 }
 
@@ -120,7 +86,8 @@ function statusBadge(o: AssignedOrderRow) {
         {o.picking_status_label || "GOTOWE"}
       </span>
     );
-  }  const raw = (o.status || "—").trim();
+  }
+  const raw = (o.status || "—").trim();
   const upper = raw.toUpperCase();
   if (upper.includes("WMS") || upper.includes("PICK") || upper === "NEW") {
     return (
@@ -137,7 +104,7 @@ function statusBadge(o: AssignedOrderRow) {
 }
 
 /**
- * Assigned orders — ERP table with hover tooltips (no modals).
+ * Assigned orders — ERP table with interactive hover previews (no modals).
  */
 export function AssignedOrdersSection({
   orders,
@@ -205,10 +172,11 @@ export function AssignedOrdersSection({
                         o.items_count === 1 ? "pozycja" : o.items_count < 5 ? "pozycje" : "pozycji"
                       }`
                     : "—";
+                const products = Array.isArray(o.products) ? o.products : [];
                 return (
                   <tr key={o.order_id} className="hover:bg-slate-50/80">
                     <td className="px-4 py-3 font-semibold">
-                      <HoverPopover content={<OrderNumberTooltip o={o} label={label} />}>
+                      <AssignedOrderHoverAnchor content={<OrderNumberPreview o={o} label={label} />}>
                         <button
                           type="button"
                           onClick={() => navigate(`/orders/${o.order_id}`)}
@@ -216,18 +184,26 @@ export function AssignedOrdersSection({
                         >
                           {label}
                         </button>
-                      </HoverPopover>
+                      </AssignedOrderHoverAnchor>
                     </td>
-                    <td className="max-w-[12rem] truncate px-4 py-3 text-slate-700">
-                      {o.customer_name?.trim() || "—"}
+                    <td className="max-w-[12rem] truncate px-4 py-3 text-slate-700" title={buyerLabel(o)}>
+                      {buyerLabel(o)}
                     </td>
                     <td className="px-4 py-3">{statusBadge(o)}</td>
                     <td className="px-4 py-3 text-right tabular-nums text-slate-700">
-                      <HoverPopover content={<ProductsTooltip o={o} />}>
+                      <AssignedOrderHoverAnchor
+                        content={
+                          <AssignedOrderProductsPreview
+                            variant="detail"
+                            products={products}
+                            interactiveProducts
+                          />
+                        }
+                      >
                         <span className="cursor-help border-b border-dotted border-slate-300">
                           {itemsLabel}
                         </span>
-                      </HoverPopover>
+                      </AssignedOrderHoverAnchor>
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums text-slate-700">
                       {vol > 0 ? `${vol.toFixed(1)} dm³` : "—"}
