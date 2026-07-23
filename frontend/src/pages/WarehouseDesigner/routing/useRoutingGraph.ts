@@ -150,9 +150,15 @@ export function useRoutingGraph(warehouseId: number | null, layoutId: number | n
   }, [warehouseId, layoutId, nodes, edges, accessPoints, revision]);
 
   const addNodeAtCm = useCallback(
-    (x: number, y: number, opts?: { operational_type?: string; label?: string }) => {
+    (x: number, y: number, opts?: { operational_type?: string; label?: string | null }) => {
       const uuid = newUuid();
       const operational_type = opts?.operational_type ?? null;
+      const label =
+        opts?.label !== undefined
+          ? opts.label
+          : operational_type
+            ? null
+            : null;
       const node: RoutingNode = {
         uuid,
         warehouse_id: warehouseId ?? 0,
@@ -161,7 +167,7 @@ export function useRoutingGraph(warehouseId: number | null, layoutId: number | n
         y,
         node_type: operational_type ? "operational" : "junction",
         operational_type,
-        label: opts?.label ?? "Punkt trasy",
+        label,
       };
       setNodes((prev) => [...prev, node]);
       setDirty(true);
@@ -221,7 +227,7 @@ export function useRoutingGraph(warehouseId: number | null, layoutId: number | n
         allowed_processes: [],
         allowed_transport_types: [],
         cost_multiplier: 1,
-        label: "Odcinek trasy",
+        label: null,
       };
       setEdges((prev) => [...prev, edge]);
       setDirty(true);
@@ -264,6 +270,20 @@ export function useRoutingGraph(warehouseId: number | null, layoutId: number | n
     },
     [warehouseId]
   );
+
+  const removeAccessPoint = useCallback((uuid: string) => {
+    setAccessPoints((prev) => prev.filter((a) => a.uuid !== uuid));
+    setDirty(true);
+  }, []);
+
+  const clearGraph = useCallback(() => {
+    setNodes([]);
+    setEdges([]);
+    setAccessPoints([]);
+    setTestResult(null);
+    setValidation(null);
+    setDirty(true);
+  }, []);
 
   const runValidate = useCallback(async () => {
     if (warehouseId == null) return;
@@ -317,6 +337,8 @@ export function useRoutingGraph(warehouseId: number | null, layoutId: number | n
     updateEdge,
     removeEdge,
     upsertAccessPoint,
+    removeAccessPoint,
+    clearGraph,
     runValidate,
     runTestRoute,
   };

@@ -81,6 +81,7 @@ import { RoutingGraphLayer } from "./WarehouseDesigner/routing/RoutingGraphLayer
 import { RoutingRoutesPanel } from "./WarehouseDesigner/routing/RoutingRoutesPanel";
 import { useRoutingGraph } from "./WarehouseDesigner/routing/useRoutingGraph";
 import type { RoutingTool } from "./WarehouseDesigner/routing/routingLabels";
+import { confirmDeleteNodeMessage } from "./WarehouseDesigner/routing/routingDisplay";
 import { DesignerGrid } from "./WarehouseDesigner/DesignerGrid";
 import { focusWarehouseCanvasScroll } from "../components/warehouse/WarehouseMainView";
 import { useDesignerMouseHandlers } from "./WarehouseDesigner/useDesignerMouseHandlers";
@@ -508,7 +509,7 @@ export default function WarehouseDesigner() {
     mainView === "layout" ? selectedWarehouseId : null,
     layout.layout_id ?? null
   );
-  const [routingTool, setRoutingTool] = useState<RoutingTool>("select");
+  const [routingTool, setRoutingTool] = useState<RoutingTool>("draw_edge");
   const [routingSelectedNode, setRoutingSelectedNode] = useState<string | null>(null);
   const [routingSelectedEdge, setRoutingSelectedEdge] = useState<string | null>(null);
   const [routingEdgeDraftFrom, setRoutingEdgeDraftFrom] = useState<string | null>(null);
@@ -524,6 +525,41 @@ export default function WarehouseDesigner() {
       setRoutingDraftCursorCm(null);
     }
   }, []);
+
+  /** Delete/Backspace removes selected routing node; Enter finishes drawing. */
+  useEffect(() => {
+    if (!routesMode) return;
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || (e.target as HTMLElement)?.isContentEditable) {
+        return;
+      }
+      if (e.key === "Enter" && routingTool === "draw_edge") {
+        e.preventDefault();
+        setRoutingToolSafe("select");
+        return;
+      }
+      if ((e.key === "Delete" || e.key === "Backspace") && routingSelectedNode) {
+        e.preventDefault();
+        const node = routing.nodes.find((n) => n.uuid === routingSelectedNode);
+        if (!node) return;
+        if (!window.confirm(confirmDeleteNodeMessage(node, routing.edges, routing.accessPoints))) return;
+        routing.removeNode(node.uuid);
+        setRoutingSelectedNode(null);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [
+    routesMode,
+    routingTool,
+    routingSelectedNode,
+    routing.nodes,
+    routing.edges,
+    routing.accessPoints,
+    routing.removeNode,
+    setRoutingToolSafe,
+  ]);
 
   const confirmLeaveRoutingDirty = useCallback(() => {
     if (!routing.dirty) return true;
@@ -3175,7 +3211,10 @@ export default function WarehouseDesigner() {
               type="button"
               role="tab"
               aria-selected={layoutWorkspace === "routes"}
-              onClick={() => setLayoutWorkspace("routes")}
+              onClick={() => {
+                setLayoutWorkspace("routes");
+                setRoutingTool("draw_edge");
+              }}
               className={`rounded-md border px-3 py-1 text-[11px] font-semibold ${
                 layoutWorkspace === "routes"
                   ? "border-sky-700 bg-sky-700 text-white"
@@ -3895,6 +3934,7 @@ export default function WarehouseDesigner() {
                 <RoutingGraphLayer
                   nodes={routing.nodes}
                   edges={routing.edges}
+                  accessPoints={routing.accessPoints}
                   cellPx={cellPx}
                   selectedNodeUuid={routingSelectedNode}
                   selectedEdgeUuid={routingSelectedEdge}
@@ -3927,7 +3967,6 @@ export default function WarehouseDesigner() {
                       }
                       if (uuid === routingEdgeDraftFrom) return;
                       routing.addEdge(routingEdgeDraftFrom, uuid);
-                      // Continuous draw: keep chain at the last point
                       setRoutingEdgeDraftFrom(uuid);
                       setRoutingSelectedNode(uuid);
                       return;
@@ -3958,12 +3997,14 @@ export default function WarehouseDesigner() {
                   }}
                   onCanvasClickCm={(x, y) => {
                     if (routingTool === "add_node") {
-                      const id = routing.addNodeAtCm(x, y, { label: "Punkt trasy" });
+                      const id = routing.addNodeAtCm(x, y);
                       setRoutingSelectedNode(id);
+                      setRoutingSelectedEdge(null);
+                      setRoutingToolSafe("select");
                       return;
                     }
                     if (routingTool === "draw_edge") {
-                      const id = routing.addNodeAtCm(x, y, { label: "Punkt trasy" });
+                      const id = routing.addNodeAtCm(x, y);
                       if (routingEdgeDraftFrom) {
                         routing.addEdge(routingEdgeDraftFrom, id);
                       }

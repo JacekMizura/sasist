@@ -1,10 +1,12 @@
 import { useCallback, useRef, useState } from "react";
-import type { RoutingEdge, RoutingNode } from "../../../api/warehouseRoutingApi";
+import type { RoutingAccessPoint, RoutingEdge, RoutingNode } from "../../../api/warehouseRoutingApi";
 import { GRID_UNIT_CM } from "../../../types/warehouse";
+import { nodeDisplayName, nodeKind, opTypeLabel } from "./routingDisplay";
 
 type Props = {
   nodes: RoutingNode[];
   edges: RoutingEdge[];
+  accessPoints?: RoutingAccessPoint[];
   cellPx: number;
   selectedNodeUuid?: string | null;
   selectedEdgeUuid?: string | null;
@@ -50,6 +52,7 @@ export function snapRoutingCm(x: number, y: number): { x: number; y: number } {
 export function RoutingGraphLayer({
   nodes,
   edges,
+  accessPoints = [],
   cellPx,
   selectedNodeUuid,
   selectedEdgeUuid,
@@ -78,6 +81,7 @@ export function RoutingGraphLayer({
     pointerId: number;
   } | null>(null);
   const [dragPreview, setDragPreview] = useState<{ uuid: string; x: number; y: number } | null>(null);
+  const [hoverUuid, setHoverUuid] = useState<string | null>(null);
 
   const resolveSvg = useCallback((el: Element): SVGSVGElement | null => {
     return (el.ownerSVGElement ?? (el as SVGSVGElement)) as SVGSVGElement;
@@ -120,6 +124,20 @@ export function RoutingGraphLayer({
         const active = selectedEdgeUuid === e.uuid || hiEdges.has(e.uuid);
         return (
           <g key={e.uuid}>
+            {/* Wider invisible stroke for easier click */}
+            <line
+              x1={a.x * scale}
+              y1={a.y * scale}
+              x2={b.x * scale}
+              y2={b.y * scale}
+              stroke="transparent"
+              strokeWidth={12}
+              style={{ cursor: interactive ? "pointer" : "default", pointerEvents: "stroke" }}
+              onClick={(ev) => {
+                ev.stopPropagation();
+                onEdgeClick?.(e.uuid);
+              }}
+            />
             <line
               x1={a.x * scale}
               y1={a.y * scale}
@@ -129,11 +147,7 @@ export function RoutingGraphLayer({
               strokeWidth={active ? 4 : 2.5}
               strokeDasharray={e.enabled ? undefined : "6 4"}
               opacity={0.9}
-              style={{ cursor: interactive ? "pointer" : "default", pointerEvents: "stroke" }}
-              onClick={(ev) => {
-                ev.stopPropagation();
-                onEdgeClick?.(e.uuid);
-              }}
+              style={{ pointerEvents: "none" }}
             />
             {(e.direction === "FORWARD" || e.direction === "BACKWARD") && (
               <circle
@@ -164,18 +178,30 @@ export function RoutingGraphLayer({
         const nx = preview?.x ?? n.x;
         const ny = preview?.y ?? n.y;
         const active = selectedNodeUuid === n.uuid || hiNodes.has(n.uuid);
-        const isOp = Boolean(n.operational_type);
+        const kind = nodeKind(n, accessPoints);
+        const tip = nodeDisplayName(n, accessPoints);
+        const showLabel = kind === "operational" && (active || hoverUuid === n.uuid);
+        const r = active ? (kind === "operational" ? 9 : 7) : kind === "operational" ? 8 : kind === "access" ? 6 : 4.5;
+        const fill =
+          active ? "#0284c7" : kind === "operational" ? "#d97706" : kind === "access" ? "#059669" : "#475569";
         return (
           <g
             key={n.uuid}
             style={{
-              cursor: allowNodeDrag ? (dragRef.current?.uuid === n.uuid ? "grabbing" : "grab") : interactive ? "pointer" : "default",
+              cursor: allowNodeDrag
+                ? dragRef.current?.uuid === n.uuid
+                  ? "grabbing"
+                  : "grab"
+                : interactive
+                  ? "pointer"
+                  : "default",
               touchAction: "none",
             }}
             onPointerDown={(ev) => {
-              if (!interactive || !allowNodeDrag) return;
-              if (ev.button !== 0) return; // left button only — middle = pan
+              if (!interactive) return;
+              if (ev.button !== 0) return;
               ev.stopPropagation();
+              if (!allowNodeDrag) return;
               ev.preventDefault();
               (ev.currentTarget as SVGGElement).setPointerCapture(ev.pointerId);
               dragRef.current = { uuid: n.uuid, moved: false, pointerId: ev.pointerId };
@@ -197,48 +223,83 @@ export function RoutingGraphLayer({
             }}
             onPointerUp={(ev) => {
               const drag = dragRef.current;
-              if (!drag || drag.uuid !== n.uuid) return;
-              ev.stopPropagation();
-              try {
-                (ev.currentTarget as SVGGElement).releasePointerCapture(ev.pointerId);
-              } catch {
-                /* ignore */
-              }
-              const svg = resolveSvg(ev.currentTarget);
-              const raw = svg ? clientToCm(svg, ev.clientX, ev.clientY, scale) : { x: n.x, y: n.y };
-              const snapped = snapRoutingCm(raw.x, raw.y);
-              const moved = drag.moved;
-              dragRef.current = null;
-              setDragPreview(null);
-              if (moved) {
-                onNodeDragEnd?.(n.uuid, snapped.x, snapped.y);
-              } else {
-                onNodeClick?.(n.uuid);
+              if (allowNodeDrag && drag && drag.uuid === n.uuid) {
+                ev.stopPropagation();
+                try {
+                  (ev.currentTarget as SVGGElement).releasePointerCapture(ev.pointerId);
+                } catch {
+                  /* ignore */
+                }
+                const svg = resolveSvg(ev.currentTarget);
+                const raw = svg ? clientToCm(svg, ev.clientX, ev.clientY, scale) : { x: n.x, y: n.y };
+                const snapped = snapRoutingCm(raw.x, raw.y);
+                const moved = drag.moved;
+                dragRef.current = null;
+                setDragPreview(null);
+                if (moved) {
+                  onNodeDragEnd?.(n.uuid, snapped.x, snapped.y);
+                } else {
+                  onNodeClick?.(n.uuid);
+                }
+                return;
               }
             }}
             onClick={(ev) => {
               ev.stopPropagation();
-              if (allowNodeDrag) return; // select/drag: click handled in pointer up
+              if (allowNodeDrag) return;
               onNodeClick?.(n.uuid);
             }}
+            onPointerEnter={() => setHoverUuid(n.uuid)}
+            onPointerLeave={() => setHoverUuid((u) => (u === n.uuid ? null : u))}
           >
-            <circle
-              cx={nx * scale}
-              cy={ny * scale}
-              r={active ? 8 : isOp ? 7 : 5}
-              fill={active ? "#0284c7" : isOp ? "#f59e0b" : "#334155"}
-              stroke="#fff"
-              strokeWidth={1.5}
-            />
-            {n.label && (
+            <title>{tip}</title>
+            {/* Larger hit target */}
+            <circle cx={nx * scale} cy={ny * scale} r={Math.max(r + 6, 12)} fill="transparent" />
+            {kind === "access" && (
+              <circle
+                cx={nx * scale}
+                cy={ny * scale}
+                r={r + 3}
+                fill="none"
+                stroke="#059669"
+                strokeWidth={1.5}
+                opacity={0.7}
+                style={{ pointerEvents: "none" }}
+              />
+            )}
+            {kind === "operational" ? (
+              <rect
+                x={nx * scale - r}
+                y={ny * scale - r}
+                width={r * 2}
+                height={r * 2}
+                rx={2}
+                fill={fill}
+                stroke="#fff"
+                strokeWidth={1.5}
+                style={{ pointerEvents: "none" }}
+              />
+            ) : (
+              <circle
+                cx={nx * scale}
+                cy={ny * scale}
+                r={r}
+                fill={fill}
+                stroke="#fff"
+                strokeWidth={1.5}
+                style={{ pointerEvents: "none" }}
+              />
+            )}
+            {showLabel && (
               <text
-                x={nx * scale + 10}
-                y={ny * scale - 8}
-                fontSize={10}
+                x={nx * scale + r + 4}
+                y={ny * scale - 4}
+                fontSize={11}
+                fontWeight={600}
                 fill="#0f172a"
                 style={{ pointerEvents: "none", userSelect: "none" }}
               >
-                {n.label}
+                {opTypeLabel(n.operational_type) || n.label}
               </text>
             )}
           </g>
