@@ -17,7 +17,7 @@ type Props = {
   /** When true (select tool), nodes can be dragged. */
   allowNodeDrag?: boolean;
   onNodeClick?: (uuid: string) => void;
-  onEdgeClick?: (uuid: string) => void;
+  onEdgeClick?: (uuid: string, cm?: { x: number; y: number }) => void;
   onCanvasClickCm?: (x: number, y: number) => void;
   onCanvasMoveCm?: (x: number, y: number) => void;
   onNodeDrag?: (uuid: string, xCm: number, yCm: number) => void;
@@ -79,6 +79,8 @@ export function RoutingGraphLayer({
     uuid: string;
     moved: boolean;
     pointerId: number;
+    startX?: number;
+    startY?: number;
   } | null>(null);
   const [dragPreview, setDragPreview] = useState<{ uuid: string; x: number; y: number } | null>(null);
   const [hoverUuid, setHoverUuid] = useState<string | null>(null);
@@ -135,7 +137,9 @@ export function RoutingGraphLayer({
               style={{ cursor: interactive ? "pointer" : "default", pointerEvents: "stroke" }}
               onClick={(ev) => {
                 ev.stopPropagation();
-                onEdgeClick?.(e.uuid);
+                const svg = resolveSvg(ev.currentTarget);
+                const cm = svg ? clientToCm(svg, ev.clientX, ev.clientY, scale) : undefined;
+                onEdgeClick?.(e.uuid, cm);
               }}
             />
             <line
@@ -202,22 +206,35 @@ export function RoutingGraphLayer({
               if (ev.button !== 0) return;
               ev.stopPropagation();
               if (!allowNodeDrag) return;
-              ev.preventDefault();
-              (ev.currentTarget as SVGGElement).setPointerCapture(ev.pointerId);
-              dragRef.current = { uuid: n.uuid, moved: false, pointerId: ev.pointerId };
-              setDragPreview({ uuid: n.uuid, x: n.x, y: n.y });
+              // Do NOT preventDefault / capture yet — that broke sticky multi-select clicks.
+              dragRef.current = {
+                uuid: n.uuid,
+                moved: false,
+                pointerId: ev.pointerId,
+                startX: ev.clientX,
+                startY: ev.clientY,
+              };
             }}
             onPointerMove={(ev) => {
               const drag = dragRef.current;
               if (!drag || drag.uuid !== n.uuid) return;
               ev.stopPropagation();
+              const startX = drag.startX ?? ev.clientX;
+              const startY = drag.startY ?? ev.clientY;
+              const pixelDist = Math.hypot(ev.clientX - startX, ev.clientY - startY);
+              if (!drag.moved && pixelDist < 6) return;
+              if (!drag.moved) {
+                drag.moved = true;
+                try {
+                  (ev.currentTarget as SVGGElement).setPointerCapture(ev.pointerId);
+                } catch {
+                  /* ignore */
+                }
+              }
               const svg = resolveSvg(ev.currentTarget);
               if (!svg) return;
               const raw = clientToCm(svg, ev.clientX, ev.clientY, scale);
               const snapped = snapRoutingCm(raw.x, raw.y);
-              if (Math.abs(snapped.x - n.x) > 0.01 || Math.abs(snapped.y - n.y) > 0.01) {
-                drag.moved = true;
-              }
               setDragPreview({ uuid: n.uuid, x: snapped.x, y: snapped.y });
               onNodeDrag?.(n.uuid, snapped.x, snapped.y);
             }}

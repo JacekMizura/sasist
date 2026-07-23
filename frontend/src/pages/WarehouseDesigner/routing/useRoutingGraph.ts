@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   computeRoutingPath,
   fetchRoutingGraph,
@@ -11,6 +11,11 @@ import {
   type RoutingNode,
   type RoutingValidationResult,
 } from "../../../api/warehouseRoutingApi";
+import {
+  applyDrawClick,
+  humanizeRouteTestMessage,
+  splitEdgeAtCm,
+} from "./routingCanvasInteraction";
 
 function newUuid(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -52,6 +57,16 @@ export function useRoutingGraph(warehouseId: number | null, layoutId: number | n
   const [testResult, setTestResult] = useState<RouteComputeResult | null>(null);
   const [dirty, setDirty] = useState(false);
 
+  // Keep latest graph for sync mutations (avoid stale closures when chaining addNode→addEdge).
+  const nodesRef = useRef(nodes);
+  const edgesRef = useRef(edges);
+  useEffect(() => {
+    nodesRef.current = nodes;
+  }, [nodes]);
+  useEffect(() => {
+    edgesRef.current = edges;
+  }, [edges]);
+
   const load = useCallback(async () => {
     if (warehouseId == null) return;
     setLoading(true);
@@ -60,8 +75,12 @@ export function useRoutingGraph(warehouseId: number | null, layoutId: number | n
       const g = await fetchRoutingGraph(warehouseId);
       setGraph(g);
       setRevision(g.revision ?? 1);
-      setNodes(g.nodes ?? []);
-      setEdges(g.edges ?? []);
+      const ns = g.nodes ?? [];
+      const es = g.edges ?? [];
+      nodesRef.current = ns;
+      edgesRef.current = es;
+      setNodes(ns);
+      setEdges(es);
       setAccessPoints(g.access_points ?? []);
       setDirty(false);
       setTestResult(null);
@@ -123,8 +142,12 @@ export function useRoutingGraph(warehouseId: number | null, layoutId: number | n
       });
       setGraph(g);
       setRevision(g.revision ?? revision + 1);
-      setNodes(g.nodes ?? []);
-      setEdges(g.edges ?? []);
+      const ns = g.nodes ?? [];
+      const es = g.edges ?? [];
+      nodesRef.current = ns;
+      edgesRef.current = es;
+      setNodes(ns);
+      setEdges(es);
       setAccessPoints(g.access_points ?? []);
       setDirty(false);
       return g;
@@ -169,37 +192,104 @@ export function useRoutingGraph(warehouseId: number | null, layoutId: number | n
         operational_type,
         label,
       };
-      setNodes((prev) => [...prev, node]);
+      nodesRef.current = [...nodesRef.current, node];
+      setNodes(nodesRef.current);
       setDirty(true);
       return uuid;
     },
     [warehouseId, layoutId]
   );
 
+  /**
+   * Polyline draw step: empty click creates point (+ edge from draft);
+   * click existing point reuses it and connects. Avoids React stale-state race.
+   */
+  const appendDrawClick = useCallback(
+    (
+      draftFromUuid: string | null,
+      click: { kind: "empty"; x: number; y: number } | { kind: "node"; uuid: string }
+    ) => {
+      const result = applyDrawClick(
+        { nodes: nodesRef.current, edges: edgesRef.current },
+        draftFromUuid,
+        click,
+        newUuid,
+        warehouseId ?? 0,
+        layoutId
+      );
+      nodesRef.current = result.graph.nodes as RoutingNode[];
+      edgesRef.current = result.graph.edges as RoutingEdge[];
+      setNodes(nodesRef.current);
+      setEdges(edgesRef.current);
+      setValidation(null);
+      setTestResult(null);
+      setDirty(true);
+      return result;
+    },
+    [warehouseId, layoutId]
+  );
+
+  /** Split edge under click during draw, then connect from draft. */
+  const splitEdgeAndContinueDraw = useCallback(
+    (draftFromUuid: string | null, edgeUuid: string, x: number, y: number) => {
+      const split = splitEdgeAtCm(
+        { nodes: nodesRef.current, edges: edgesRef.current },
+        edgeUuid,
+        x,
+        y,
+        newUuid,
+        warehouseId ?? 0,
+        layoutId
+      );
+      if (!split) return null;
+      nodesRef.current = split.graph.nodes as RoutingNode[];
+      edgesRef.current = split.graph.edges as RoutingEdge[];
+      const continued = applyDrawClick(
+        { nodes: nodesRef.current, edges: edgesRef.current },
+        draftFromUuid,
+        { kind: "node", uuid: split.junctionUuid },
+        newUuid,
+        warehouseId ?? 0,
+        layoutId
+      );
+      nodesRef.current = continued.graph.nodes as RoutingNode[];
+      edgesRef.current = continued.graph.edges as RoutingEdge[];
+      setNodes(nodesRef.current);
+      setEdges(edgesRef.current);
+      setValidation(null);
+      setTestResult(null);
+      setDirty(true);
+      return continued;
+    },
+    [warehouseId, layoutId]
+  );
+
   const updateNode = useCallback((uuid: string, patch: Partial<RoutingNode>) => {
-    setNodes((prev) => {
-      const next = prev.map((n) => (n.uuid === uuid ? { ...n, ...patch } : n));
-      if (patch.x != null || patch.y != null) {
-        const byUuid = new Map(next.map((n) => [n.uuid, n]));
-        setEdges((eds) =>
-          eds.map((e) => {
-            if (e.from_node_uuid !== uuid && e.to_node_uuid !== uuid) return e;
-            const a = byUuid.get(e.from_node_uuid);
-            const b = byUuid.get(e.to_node_uuid);
-            if (!a || !b) return e;
-            return { ...e, distance_m: physicalDistanceM(a, b) };
-          })
-        );
-      }
-      return next;
-    });
+    const next = nodesRef.current.map((n) => (n.uuid === uuid ? { ...n, ...patch } : n));
+    nodesRef.current = next;
+    setNodes(next);
+    if (patch.x != null || patch.y != null) {
+      const byUuid = new Map(next.map((n) => [n.uuid, n]));
+      edgesRef.current = edgesRef.current.map((e) => {
+        if (e.from_node_uuid !== uuid && e.to_node_uuid !== uuid) return e;
+        const a = byUuid.get(e.from_node_uuid);
+        const b = byUuid.get(e.to_node_uuid);
+        if (!a || !b) return e;
+        return { ...e, distance_m: physicalDistanceM(a, b) };
+      });
+      setEdges(edgesRef.current);
+    }
     setValidation(null);
     setDirty(true);
   }, []);
 
   const removeNode = useCallback((uuid: string) => {
-    setNodes((prev) => prev.filter((n) => n.uuid !== uuid));
-    setEdges((prev) => prev.filter((e) => e.from_node_uuid !== uuid && e.to_node_uuid !== uuid));
+    nodesRef.current = nodesRef.current.filter((n) => n.uuid !== uuid);
+    edgesRef.current = edgesRef.current.filter(
+      (e) => e.from_node_uuid !== uuid && e.to_node_uuid !== uuid
+    );
+    setNodes(nodesRef.current);
+    setEdges(edgesRef.current);
     setAccessPoints((prev) => prev.filter((a) => a.node_uuid !== uuid));
     setValidation(null);
     setTestResult(null);
@@ -208,35 +298,39 @@ export function useRoutingGraph(warehouseId: number | null, layoutId: number | n
 
   const removeOrphanNodes = useCallback(() => {
     const connected = new Set<string>();
-    for (const e of edges) {
+    for (const e of edgesRef.current) {
       if (!e.enabled) continue;
       connected.add(e.from_node_uuid);
       connected.add(e.to_node_uuid);
     }
     // If no edges at all, every node is orphan → remove all
     if (connected.size === 0) {
+      nodesRef.current = [];
       setNodes([]);
       setAccessPoints([]);
     } else {
-      setNodes((nds) => nds.filter((n) => connected.has(n.uuid)));
+      nodesRef.current = nodesRef.current.filter((n) => connected.has(n.uuid));
+      setNodes(nodesRef.current);
       setAccessPoints((aps) => aps.filter((a) => connected.has(a.node_uuid)));
     }
     setValidation(null);
     setTestResult(null);
     setDirty(true);
-  }, [edges]);
+  }, []);
 
   const addEdge = useCallback(
     (fromUuid: string, toUuid: string) => {
       if (fromUuid === toUuid) return null;
-      const exists = edges.some(
+      const nodesNow = nodesRef.current;
+      const edgesNow = edgesRef.current;
+      const exists = edgesNow.some(
         (e) =>
           (e.from_node_uuid === fromUuid && e.to_node_uuid === toUuid) ||
           (e.from_node_uuid === toUuid && e.to_node_uuid === fromUuid)
       );
       if (exists) return null;
-      const from = nodes.find((n) => n.uuid === fromUuid);
-      const to = nodes.find((n) => n.uuid === toUuid);
+      const from = nodesNow.find((n) => n.uuid === fromUuid);
+      const to = nodesNow.find((n) => n.uuid === toUuid);
       if (!from || !to) return null;
       const edge: RoutingEdge = {
         uuid: newUuid(),
@@ -252,20 +346,23 @@ export function useRoutingGraph(warehouseId: number | null, layoutId: number | n
         cost_multiplier: 1,
         label: null,
       };
-      setEdges((prev) => [...prev, edge]);
+      edgesRef.current = [...edgesNow, edge];
+      setEdges(edgesRef.current);
       setDirty(true);
       return edge.uuid;
     },
-    [edges, nodes, warehouseId, layoutId]
+    [warehouseId, layoutId]
   );
 
   const updateEdge = useCallback((uuid: string, patch: Partial<RoutingEdge>) => {
-    setEdges((prev) => prev.map((e) => (e.uuid === uuid ? { ...e, ...patch } : e)));
+    edgesRef.current = edgesRef.current.map((e) => (e.uuid === uuid ? { ...e, ...patch } : e));
+    setEdges(edgesRef.current);
     setDirty(true);
   }, []);
 
   const removeEdge = useCallback((uuid: string) => {
-    setEdges((prev) => prev.filter((e) => e.uuid !== uuid));
+    edgesRef.current = edgesRef.current.filter((e) => e.uuid !== uuid);
+    setEdges(edgesRef.current);
     setDirty(true);
   }, []);
 
@@ -285,7 +382,7 @@ export function useRoutingGraph(warehouseId: number | null, layoutId: number | n
             warehouse_id: warehouseId ?? 0,
             location_id: locationId,
             node_uuid: nodeUuid,
-            label: label ?? "Dostęp do lokalizacji",
+            label: label ?? null,
           },
         ];
       });
@@ -300,6 +397,8 @@ export function useRoutingGraph(warehouseId: number | null, layoutId: number | n
   }, []);
 
   const clearGraph = useCallback(() => {
+    nodesRef.current = [];
+    edgesRef.current = [];
     setNodes([]);
     setEdges([]);
     setAccessPoints([]);
@@ -322,6 +421,21 @@ export function useRoutingGraph(warehouseId: number | null, layoutId: number | n
   const runTestRoute = useCallback(
     async (start: string, dest: string, processType?: string | null, transportType?: string | null) => {
       if (warehouseId == null) return null;
+      if (edgesRef.current.length === 0) {
+        const empty: RouteComputeResult = {
+          ok: false,
+          error_code: "ROUTING_GRAPH_NOT_CONFIGURED",
+          message: humanizeRouteTestMessage(
+            { ok: false, error_code: "ROUTING_GRAPH_NOT_CONFIGURED" },
+            0
+          ),
+          nodes: [],
+          path_segments: [],
+          hop_count: 0,
+        };
+        setTestResult(empty);
+        return empty;
+      }
       if (dirty) {
         const saved = await save();
         if (!saved) return null;
@@ -332,8 +446,12 @@ export function useRoutingGraph(warehouseId: number | null, layoutId: number | n
         process_type: processType,
         transport_type: transportType,
       });
-      setTestResult(res);
-      return res;
+      const humanized: RouteComputeResult = {
+        ...res,
+        message: humanizeRouteTestMessage(res, edgesRef.current.length),
+      };
+      setTestResult(humanized);
+      return humanized;
     },
     [warehouseId, dirty, save]
   );
@@ -354,6 +472,8 @@ export function useRoutingGraph(warehouseId: number | null, layoutId: number | n
     load,
     save,
     addNodeAtCm,
+    appendDrawClick,
+    splitEdgeAndContinueDraw,
     updateNode,
     removeNode,
     removeOrphanNodes,

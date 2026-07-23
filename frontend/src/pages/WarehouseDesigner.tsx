@@ -527,7 +527,7 @@ export default function WarehouseDesigner() {
     }
   }, []);
 
-  /** Delete/Backspace removes selected routing node; Enter finishes drawing. */
+  /** Delete/Backspace removes selected routing node; Enter/Escape finishes drawing stroke. */
   useEffect(() => {
     if (!routesMode) return;
     const onKey = (e: KeyboardEvent) => {
@@ -535,12 +535,16 @@ export default function WarehouseDesigner() {
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || (e.target as HTMLElement)?.isContentEditable) {
         return;
       }
-      if (e.key === "Enter" && routingTool === "draw_edge") {
+      if ((e.key === "Enter" || e.key === "Escape") && routingTool === "draw_edge") {
         e.preventDefault();
-        setRoutingToolSafe("select");
+        // End current polyline stroke; stay ready for next branch via „Rysuj trasę” or empty draft.
+        setRoutingEdgeDraftFrom(null);
+        setRoutingDraftCursorCm(null);
+        setRoutingSelectedNode(null);
+        setRoutingSelectedEdge(null);
         return;
       }
-      if ((e.key === "Delete" || e.key === "Backspace") && routingSelectedNode) {
+      if ((e.key === "Delete" || e.key === "Backspace") && routingTool === "select" && routingSelectedNode) {
         e.preventDefault();
         const node = routing.nodes.find((n) => n.uuid === routingSelectedNode);
         if (!node) return;
@@ -549,6 +553,12 @@ export default function WarehouseDesigner() {
         setRoutingSelectedNode(null);
         setHighlightOrphanUuids([]);
       }
+      if ((e.key === "Delete" || e.key === "Backspace") && routingTool === "select" && routingSelectedEdge && !routingSelectedNode) {
+        e.preventDefault();
+        if (!window.confirm("Usunąć ten odcinek trasy?")) return;
+        routing.removeEdge(routingSelectedEdge);
+        setRoutingSelectedEdge(null);
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -556,12 +566,13 @@ export default function WarehouseDesigner() {
     routesMode,
     routingTool,
     routingSelectedNode,
+    routingSelectedEdge,
     routing.nodes,
     routing.edges,
     routing.accessPoints,
     routing.removeNode,
+    routing.removeEdge,
     routingLocations,
-    setRoutingToolSafe,
   ]);
 
   const confirmLeaveRoutingDirty = useCallback(() => {
@@ -3967,37 +3978,54 @@ export default function WarehouseDesigner() {
                   }}
                   onNodeClick={(uuid) => {
                     if (routingTool === "draw_edge") {
-                      if (!routingEdgeDraftFrom) {
-                        setRoutingEdgeDraftFrom(uuid);
-                        setRoutingSelectedNode(uuid);
-                        return;
-                      }
-                      if (uuid === routingEdgeDraftFrom) return;
-                      routing.addEdge(routingEdgeDraftFrom, uuid);
-                      setRoutingEdgeDraftFrom(uuid);
-                      setRoutingSelectedNode(uuid);
+                      const step = routing.appendDrawClick(routingEdgeDraftFrom, {
+                        kind: "node",
+                        uuid,
+                      });
+                      setRoutingEdgeDraftFrom(step.draftFromUuid);
+                      setRoutingSelectedNode(step.draftFromUuid);
+                      setRoutingSelectedEdge(null);
                       return;
                     }
                     if (routingTool === "test_route") {
-                      if (!testStartUuid) setTestStartUuid(uuid);
-                      else if (!testDestUuid) setTestDestUuid(uuid);
-                      else {
+                      if (!testStartUuid) {
                         setTestStartUuid(uuid);
                         setTestDestUuid(null);
+                        routing.setTestResult(null);
+                      } else if (!testDestUuid) {
+                        setTestDestUuid(uuid);
+                        void routing.runTestRoute(testStartUuid, uuid);
+                      } else {
+                        // Start a new test from this click
+                        setTestStartUuid(uuid);
+                        setTestDestUuid(null);
+                        routing.setTestResult(null);
                       }
-                      setRoutingSelectedNode(uuid);
                       return;
                     }
-                    // Wybierz: edit selection
-                    setRoutingToolSafe("select");
+                    // Wybierz — sticky tool; never switch away here
                     setRoutingSelectedNode(uuid);
                     setRoutingSelectedEdge(null);
                   }}
-                  onEdgeClick={(uuid) => {
-                    if (routingTool === "draw_edge") return;
+                  onEdgeClick={(uuid, cm) => {
+                    if (routingTool === "draw_edge") {
+                      if (!cm) return;
+                      const step = routing.splitEdgeAndContinueDraw(
+                        routingEdgeDraftFrom,
+                        uuid,
+                        cm.x,
+                        cm.y
+                      );
+                      if (!step) return;
+                      setRoutingEdgeDraftFrom(step.draftFromUuid);
+                      setRoutingSelectedNode(step.draftFromUuid);
+                      setRoutingSelectedEdge(null);
+                      return;
+                    }
+                    if (routingTool === "test_route") return;
+                    // Wybierz — sticky
                     setRoutingSelectedEdge(uuid);
                     setRoutingSelectedNode(null);
-                    setRoutingToolSafe("select");
                   }}
                   onCanvasMoveCm={(x, y) => {
                     if (routingTool === "draw_edge" && routingEdgeDraftFrom) {
@@ -4006,12 +4034,19 @@ export default function WarehouseDesigner() {
                   }}
                   onCanvasClickCm={(x, y) => {
                     if (routingTool === "draw_edge") {
-                      const id = routing.addNodeAtCm(x, y);
-                      if (routingEdgeDraftFrom) {
-                        routing.addEdge(routingEdgeDraftFrom, id);
-                      }
-                      setRoutingEdgeDraftFrom(id);
-                      setRoutingSelectedNode(id);
+                      const step = routing.appendDrawClick(routingEdgeDraftFrom, {
+                        kind: "empty",
+                        x,
+                        y,
+                      });
+                      setRoutingEdgeDraftFrom(step.draftFromUuid);
+                      setRoutingSelectedNode(step.draftFromUuid);
+                      setRoutingSelectedEdge(null);
+                      return;
+                    }
+                    if (routingTool === "select") {
+                      // Click empty map clears selection but keeps Wybierz active
+                      setRoutingSelectedNode(null);
                       setRoutingSelectedEdge(null);
                     }
                   }}
@@ -4023,7 +4058,27 @@ export default function WarehouseDesigner() {
             <RoutingRoutesPanel
               routing={routing}
               tool={routingTool}
-              setTool={setRoutingToolSafe}
+              setTool={(t) => {
+                setRoutingToolSafe(t);
+                if (t === "draw_edge") {
+                  // Explicit re-entry starts a new branch
+                  setRoutingEdgeDraftFrom(null);
+                  setRoutingDraftCursorCm(null);
+                  setRoutingSelectedNode(null);
+                  setRoutingSelectedEdge(null);
+                }
+                if (t === "test_route") {
+                  setTestStartUuid(null);
+                  setTestDestUuid(null);
+                  routing.setTestResult(null);
+                  setRoutingSelectedNode(null);
+                  setRoutingSelectedEdge(null);
+                }
+                if (t === "select") {
+                  setRoutingEdgeDraftFrom(null);
+                  setRoutingDraftCursorCm(null);
+                }
+              }}
               selectedNodeUuid={routingSelectedNode}
               selectedEdgeUuid={routingSelectedEdge}
               setSelectedNodeUuid={setRoutingSelectedNode}

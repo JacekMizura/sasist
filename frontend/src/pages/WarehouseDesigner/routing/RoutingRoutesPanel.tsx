@@ -143,10 +143,8 @@ export function RoutingRoutesPanel({
             type="button"
             onClick={() => {
               setTool(id);
-              if (id !== "select") {
-                setSelectedNodeUuid(null);
-                setSelectedEdgeUuid(null);
-              }
+              // Selection clearing is owned by parent setTool wrapper for draw/test.
+              // Wybierz must stay sticky and keep current selection.
             }}
             className={`rounded-md border px-2 py-1 text-[11px] font-semibold ${
               tool === id ? "border-sky-700 bg-sky-700 text-white" : "border-slate-200 bg-slate-50"
@@ -157,9 +155,10 @@ export function RoutingRoutesPanel({
         ))}
       </div>
 
-      {tool === "draw_edge" && !selectedNode && (
+      {tool === "draw_edge" && (
         <p className="text-[11px] text-sky-900">
-          Klikaj kolejne miejsca na mapie. Enter kończy rysowanie.
+          Klikaj kolejne miejsca na mapie — odcinki powstają automatycznie. Enter lub Esc kończy
+          rysowanie bieżącej drogi.
         </p>
       )}
 
@@ -262,56 +261,86 @@ export function RoutingRoutesPanel({
         </div>
       )}
 
-      {/* TEST */}
+      {/* TEST — map-first flow */}
       {tool === "test_route" && (
         <div className="space-y-2 rounded-lg border border-sky-100 bg-sky-50/60 p-2">
           <div className="font-semibold text-sky-900">Testuj trasę</div>
-          <p className="text-[10px] text-slate-500">Kliknij start i cel na mapie albo wybierz z listy.</p>
-          <label className="block">
-            Start
-            <select
-              className="mt-0.5 w-full rounded border border-slate-200 px-1 py-1"
-              value={testStartUuid ?? ""}
-              onChange={(e) => setTestStartUuid(e.target.value || null)}
-            >
-              <option value="">—</option>
-              {routing.nodes.map((n) => (
-                <option key={n.uuid} value={n.uuid}>
-                  {nameOf(n)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block">
-            Cel
-            <select
-              className="mt-0.5 w-full rounded border border-slate-200 px-1 py-1"
-              value={testDestUuid ?? ""}
-              onChange={(e) => setTestDestUuid(e.target.value || null)}
-            >
-              <option value="">—</option>
-              {routing.nodes.map((n) => (
-                <option key={n.uuid} value={n.uuid}>
-                  {nameOf(n)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button
-            type="button"
-            className="h-8 w-full rounded-lg bg-sky-700 text-[11px] font-semibold text-white"
-            onClick={() => {
-              if (!testStartUuid || !testDestUuid) return;
-              void routing.runTestRoute(
-                testStartUuid,
-                testDestUuid,
-                testAdvanced && processType ? processType : null,
-                testAdvanced && transportType ? transportType : null
-              );
-            }}
-          >
-            Oblicz trasę
-          </button>
+          <p className="text-[11px] text-sky-900">
+            {!testStartUuid
+              ? "Kliknij punkt początkowy na mapie."
+              : !testDestUuid
+                ? "Kliknij punkt docelowy."
+                : "Trasa obliczona. Kliknij punkt, aby zacząć nowy test."}
+          </p>
+          {(testStartUuid || testDestUuid) && (
+            <div className="text-[11px] text-slate-600">
+              {testStartUuid && (
+                <div>
+                  Start:{" "}
+                  <strong>
+                    {nameOf(
+                      routing.nodes.find((n) => n.uuid === testStartUuid) ??
+                        ({ uuid: testStartUuid, warehouse_id: 0, x: 0, y: 0, node_type: "junction" } as RoutingNode)
+                    )}
+                  </strong>
+                </div>
+              )}
+              {testDestUuid && (
+                <div>
+                  Cel:{" "}
+                  <strong>
+                    {nameOf(
+                      routing.nodes.find((n) => n.uuid === testDestUuid) ??
+                        ({ uuid: testDestUuid, warehouse_id: 0, x: 0, y: 0, node_type: "junction" } as RoutingNode)
+                    )}
+                  </strong>
+                </div>
+              )}
+            </div>
+          )}
+          <details className="text-[11px]">
+            <summary className="cursor-pointer text-slate-500">Wybór z listy (opcjonalnie)</summary>
+            <div className="mt-2 space-y-2">
+              <label className="block">
+                Start
+                <select
+                  className="mt-0.5 w-full rounded border border-slate-200 px-1 py-1"
+                  value={testStartUuid ?? ""}
+                  onChange={(e) => {
+                    const v = e.target.value || null;
+                    setTestStartUuid(v);
+                    if (v && testDestUuid) void routing.runTestRoute(v, testDestUuid);
+                  }}
+                >
+                  <option value="">—</option>
+                  {routing.nodes.map((n) => (
+                    <option key={n.uuid} value={n.uuid}>
+                      {nameOf(n)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                Cel
+                <select
+                  className="mt-0.5 w-full rounded border border-slate-200 px-1 py-1"
+                  value={testDestUuid ?? ""}
+                  onChange={(e) => {
+                    const v = e.target.value || null;
+                    setTestDestUuid(v);
+                    if (testStartUuid && v) void routing.runTestRoute(testStartUuid, v);
+                  }}
+                >
+                  <option value="">—</option>
+                  {routing.nodes.map((n) => (
+                    <option key={n.uuid} value={n.uuid}>
+                      {nameOf(n)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </details>
           <button
             type="button"
             className="text-[11px] text-sky-800 underline"
@@ -351,6 +380,21 @@ export function RoutingRoutesPanel({
                   ))}
                 </select>
               </label>
+              <button
+                type="button"
+                className="h-8 w-full rounded-lg bg-sky-700 text-[11px] font-semibold text-white"
+                onClick={() => {
+                  if (!testStartUuid || !testDestUuid) return;
+                  void routing.runTestRoute(
+                    testStartUuid,
+                    testDestUuid,
+                    processType || null,
+                    transportType || null
+                  );
+                }}
+              >
+                Przelicz z ograniczeniami
+              </button>
             </div>
           )}
           {routing.testResult && (
