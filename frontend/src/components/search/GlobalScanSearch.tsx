@@ -2,6 +2,7 @@ import { useRef, useState, useEffect, useCallback } from "react";
 import { Search } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import api from "../../api/axios";
+import { getProductDetailsPath } from "../../pages/Products/productPaths";
 
 type ScanResponse = {
   type: string | null;
@@ -77,7 +78,7 @@ export default function GlobalScanSearch({ variant = "default", className, input
 
       if (type === "product" && id != null) {
         setValue("");
-        navigate(`/products/${id}`);
+        navigate(getProductDetailsPath(id));
         return;
       }
 

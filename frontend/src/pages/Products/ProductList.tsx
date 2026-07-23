@@ -10,6 +10,7 @@ import { fetchTenantsList } from "../../api/tenantsApi";
 import { duplicateProduct } from "../../api/productsApi";
 import { getManufacturer } from "../../api/manufacturersApi";
 import { mapProductListRow, type ProductListRow } from "./productListMapper";
+import { getProductDetailsPath, productDetailsNavState } from "./productPaths";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { resolveProductPricingFromRow, resolvedSaleNetForFilter } from "../../utils/resolvedProductPricing";
 import { FilterVisibilityModal } from "../../components/filters";
@@ -152,12 +153,12 @@ export default function ProductList() {
   /** Nawigacja do karty produktu — używana przez cały wiersz tabeli (bez checkboxa i akcji). */
   const openProductEdit = useCallback(
     (p: Product) => {
-      navigate(`/products/${p.id}/edit`, {
-        state: {
+      navigate(getProductDetailsPath(p.id), {
+        state: productDetailsNavState({
           tenantId: p.tenant_id ?? undefined,
           listStockQuantity: p.stock_quantity ?? undefined,
           warehouseId: selectedWarehouseId ?? undefined,
-        },
+        }),
       });
     },
     [navigate, selectedWarehouseId],
@@ -691,7 +692,7 @@ export default function ProductList() {
       toast.success(`Utworzono kopię: ${created.name ?? "produkt"}`);
       if (clientMode) fetchClientBatch();
       else fetchServerPage();
-      navigate(`/products/${newId}/edit`, { state: { tenantId: tid } });
+      navigate(getProductDetailsPath(newId), { state: productDetailsNavState({ tenantId: tid }) });
     } catch (e: unknown) {
       console.error("duplicateProduct failed", { productId: p.id, tenantId: tid, error: e });
       logError("duplicateProduct failed", e);
@@ -838,8 +839,8 @@ export default function ProductList() {
                 if (selectedIds.size === 1) {
                   const pid = Array.from(selectedIds)[0];
                   const row = displayRows.find((p) => p.id === pid);
-                  navigate(`/products/${pid}/edit?tab=wms-validation`, {
-                    state: { tenantId: row?.tenant_id ?? exportTenantId },
+                  navigate(getProductDetailsPath(pid, { tab: "wms-validation" }), {
+                    state: productDetailsNavState({ tenantId: row?.tenant_id ?? exportTenantId }),
                   });
                   return;
                 }

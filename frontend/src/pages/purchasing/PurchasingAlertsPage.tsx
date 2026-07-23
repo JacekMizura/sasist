@@ -3,6 +3,7 @@ import { Bell, CheckCircle2, FileText, Settings2, TriangleAlert } from "lucide-r
 import { Link, useSearchParams } from "react-router-dom";
 import { fetchTenantsList } from "../../api/tenantsApi";
 import { AppEmptyState } from "../../components/app-shell";
+import { getProductDetailsPath } from "../Products/productPaths";
 import {
   PURCHASING_ALERT_RULE_TYPES,
   fetchPurchasingAlertRules,
@@ -647,7 +648,7 @@ export default function PurchasingAlertsPage({ variant = "page" }: { variant?: "
                         </td>
                         <td className="px-3 py-2 pr-3 text-slate-800">
                           {a.product_id != null ? (
-                            <Link className="block hover:opacity-90" to={`/products/${a.product_id}`}>
+                            <Link className="block hover:opacity-90" to={getProductDetailsPath(a.product_id)}>
                               <PurchasingProductCell name={prodName} />
                             </Link>
                           ) : (

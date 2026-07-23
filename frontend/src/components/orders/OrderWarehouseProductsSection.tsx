@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Package, ExternalLink } from "lucide-react";
 
+import { getProductDetailsPath, productDetailsNavState } from "../../pages/Products/productPaths";
 import { OrderLineKebabMenu } from "./OrderLineKebabMenu";
 import type {
   WmsOrderTimelineEventApi,
@@ -414,8 +415,8 @@ export function OrderWarehouseProductsSection({
                         <div className="flex flex-wrap items-center gap-2">
                           {canProductLink ? (
                             <Link
-                              to={`/products/${pid}/edit`}
-                              state={{ tenantId: productEditTenantId }}
+                              to={getProductDetailsPath(pid)}
+                              state={productDetailsNavState({ tenantId: productEditTenantId })}
                               className="text-[28px] font-bold leading-snug text-slate-900 hover:text-slate-700 flex items-center transition-colors"
                             >
                               {row.name} <ExternalLink size={14} className="ml-1.5 inline text-slate-400" />
@@ -475,8 +476,8 @@ export function OrderWarehouseProductsSection({
                       <div className="flex flex-wrap items-center gap-2">
                         {canProductLink ? (
                           <Link
-                            to={`/products/${pid}/edit`}
-                            state={{ tenantId: productEditTenantId }}
+                            to={getProductDetailsPath(pid)}
+                            state={productDetailsNavState({ tenantId: productEditTenantId })}
                             className="text-[15px] font-semibold leading-snug text-slate-900 hover:text-slate-700 flex items-center transition-colors"
                           >
                             {row.name} <ExternalLink size={14} className="ml-1.5 inline text-slate-400" />
@@ -668,8 +669,8 @@ export function OrderWarehouseProductsSection({
                       <div className="flex flex-wrap items-center gap-2">
                         {canProductLink ? (
                           <Link
-                            to={`/products/${pid}/edit`}
-                            state={{ tenantId: productEditTenantId }}
+                            to={getProductDetailsPath(pid)}
+                            state={productDetailsNavState({ tenantId: productEditTenantId })}
                             className={productTitleClass}
                           >
                             {row.name} <ExternalLink size={14} className="ml-1.5 inline text-slate-400" />
@@ -788,8 +789,8 @@ export function OrderWarehouseProductsSection({
                           <div className="flex flex-wrap items-center gap-2">
                             {canProductLink ? (
                               <Link
-                                to={`/products/${pid}/edit`}
-                                state={{ tenantId: productEditTenantId }}
+                                to={getProductDetailsPath(pid)}
+                                state={productDetailsNavState({ tenantId: productEditTenantId })}
                                 className={productTitleClass}
                               >
                                 {row.name}

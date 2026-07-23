@@ -1,3 +1,17 @@
+## 2026-07-23 — Jedna kanoniczna karta produktu (Asortyment)
+
+- Usunięto slim `ProductDetail`; `/products/:id` → `ProductDetailRedirect` → `/products/:id/edit`.
+- Helper `getProductDetailsPath` + migracja linków (WMS/magazyn, wózki, zamówienia, zakupy, produkcja, scan).
+- „Zamów u dostawcy” na `ProductEditModal`. Test: `productPaths.test.ts`. **No push.**
+
+## 2026-07-23 — Magazyn → Wózki: semantyka BULK vs MULTI + hover zamówień
+
+- BULK: `total_baskets=0`, brak sekcji w header/KPI; MULTI bez regresji.
+- Postęp kompletacji = zamknięte linie operacyjne (`compute_pick_progress` + `pick_progress` API).
+- Kupujący: imię+nazwisko → firma; produkty z `product_id`/`image_url` bez N+1.
+- Rich hover numer/pozycje + nawigacja do `/products/:id`.
+- Tests: `test_bulk_cart_fleet_semantics.py`, `bulkCartSemantics.test.ts`. **No push.**
+
 ## 2026-07-22 — Magazyn UI 1:1 (Wózki → Nośniki)
 
 - Wspólny shell: breadcrumb Magazyn > tab, bare tabs + trailing CTA (`CartsTabActionsContext`).

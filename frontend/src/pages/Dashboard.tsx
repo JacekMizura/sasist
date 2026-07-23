@@ -17,6 +17,7 @@ import { getOfficeDashboardKpis, type OfficeDashboardKpi } from "../api/officeDa
 import { getWmsDashboardSummary, type WmsDashboardSummary } from "../api/wmsDashboardApi";
 import { useWarehouse } from "../context/WarehouseContext";
 import { getBackendPublicOrigin } from "../config/apiBase";
+import { getProductDetailsPath } from "./Products/productPaths";
 import { DAMAGE_TENANT_ID } from "./damage/damageShared";
 import { ORDERS_OPERATIONS_UPDATED_EVENT, WMS_ROUTES, WMS_SHORTAGES_UPDATED_EVENT } from "./wms/wmsRoutes";
 import DashboardWarehouseNetworkSection from "../components/dashboard/DashboardWarehouseNetworkSection";
@@ -578,7 +579,7 @@ export default function Dashboard() {
                       return (
                         <Link
                           key={p.product_id}
-                          to={`/products/${p.product_id}/edit`}
+                          to={getProductDetailsPath(p.product_id)}
                           className={`${surfaceCard} ${surfaceCardHover} group flex w-[12.5rem] shrink-0 flex-col overflow-hidden`}
                         >
                           <div className="relative aspect-[5/4] w-full bg-white">

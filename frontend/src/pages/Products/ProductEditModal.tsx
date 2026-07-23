@@ -1,8 +1,12 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import toast from "react-hot-toast";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import axios from "axios";
 import { duplicateProduct } from "../../api/productsApi";
 import { extractApiErrorMessage } from "../../api/authApi";
+import { quickPurchaseOrderFromProduct } from "../../api/inboundDeliveriesApi";
+import { useActiveWarehouseContext, ACTIVE_WAREHOUSE_REQUIRED_MESSAGE } from "../../hooks/useActiveWarehouseContext";
+import { getProductDetailsPath, productDetailsNavState } from "./productPaths";
 import {
   Building2,
   ClipboardList,
@@ -389,10 +393,16 @@ export function ProductEditModal({
   listStockHint,
 }: ProductEditModalProps) {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { warehouseId, hasActiveWarehouse } = useActiveWarehouseContext();
   const isPage = variant === "page";
   const isNew = product == null;
   const [dupBusy, setDupBusy] = useState(false);
+  const [orderBusy, setOrderBusy] = useState(false);
   const { warehouse } = useWarehouse();
+  const returnToRaw = (location.state as { returnTo?: string } | null)?.returnTo;
+  const backListTo =
+    typeof returnToRaw === "string" && returnToRaw.trim() ? returnToRaw.trim() : "/products/list";
   const [activeTab, setActiveTab] = useState<TabId>(initialTab ?? "basic");
   const [productionTabVisible, setProductionTabVisible] = useState(initialTab === "production");
   const [saving, setSaving] = useState(false);
@@ -1741,6 +1751,50 @@ export function ProductEditModal({
             {!isNew && product?.id != null ? (
               <button
                 type="button"
+                disabled={orderBusy}
+                onClick={() => {
+                  void (async () => {
+                    if (product.default_supplier_id == null && defaultSupplierId == null) {
+                      toast.error("Ustaw domyślnego dostawcę w zakładce Podstawowe / Dostawcy, aby zamówić.");
+                      setActiveTab("suppliers");
+                      return;
+                    }
+                    if (!hasActiveWarehouse || warehouseId == null) {
+                      toast.error(ACTIVE_WAREHOUSE_REQUIRED_MESSAGE);
+                      return;
+                    }
+                    const tid = product.tenant_id ?? tenantId ?? 1;
+                    setOrderBusy(true);
+                    try {
+                      const d = await quickPurchaseOrderFromProduct({
+                        tenant_id: tid,
+                        warehouse_id: warehouseId,
+                        product_id: product.id!,
+                      });
+                      navigate(`/goods-orders/${d.id}?tenant_id=${tid}`);
+                    } catch (e: unknown) {
+                      let msg = "Nie udało się utworzyć szkicu zamówienia.";
+                      if (axios.isAxiosError(e)) {
+                        const data = e.response?.data;
+                        if (data && typeof data === "object" && "detail" in data) {
+                          const det = (data as { detail: unknown }).detail;
+                          if (typeof det === "string") msg = det;
+                        }
+                      }
+                      toast.error(msg);
+                    } finally {
+                      setOrderBusy(false);
+                    }
+                  })();
+                }}
+                className="flex items-center gap-2 rounded border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-900 shadow-sm transition-colors hover:bg-sky-100 disabled:opacity-50"
+              >
+                {orderBusy ? "Tworzenie…" : "Zamów u dostawcy"}
+              </button>
+            ) : null}
+            {!isNew && product?.id != null ? (
+              <button
+                type="button"
                 title="Drukuj kartę produktu"
                 disabled={printBusy}
                 onClick={() => void requestProductCardPrint({ kind: "product_card", productId: product.id! })}
@@ -1766,7 +1820,7 @@ export function ProductEditModal({
                       return;
                     }
                     toast.success(`Utworzono kopię: ${created.name ?? "produkt"}`);
-                    navigate(`/products/${newId}/edit`, { state: { tenantId } });
+                    navigate(getProductDetailsPath(newId), { state: productDetailsNavState({ tenantId }) });
                   } catch (e: unknown) {
                     logError("duplicateProduct failed", e);
                     toast.error(extractApiErrorMessage(e, "Kopiowanie produktu nie powiodło się."));
@@ -1793,8 +1847,8 @@ export function ProductEditModal({
                 <MoreHorizontal className="h-4 w-4" strokeWidth={2} aria-hidden />
               </summary>
               <div className="absolute right-0 z-50 mt-2 w-48 rounded-md border border-slate-200 bg-white py-1 text-sm shadow-xl">
-                <Link to="/products/list" className="block px-4 py-2 font-medium text-slate-700 hover:bg-slate-50 hover:text-blue-600">
-                  Wróć do listy
+                <Link to={backListTo} className="block px-4 py-2 font-medium text-slate-700 hover:bg-slate-50 hover:text-blue-600">
+                  {returnToRaw?.trim() ? "Wróć" : "Wróć do listy"}
                 </Link>
               </div>
             </details>

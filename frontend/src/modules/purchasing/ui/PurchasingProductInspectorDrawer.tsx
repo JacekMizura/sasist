@@ -1,5 +1,5 @@
 import { memo, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { X } from "lucide-react";
 
 import type { ProductForecastDetail } from "../../../api/purchasingForecastApi";
@@ -11,6 +11,7 @@ import {
   type ProductDisplayMeta,
 } from "./purchasingProductDisplayMeta";
 import { getProductImage } from "./getProductImage";
+import { getProductDetailsPath, productDetailsNavState } from "../../../pages/Products/productPaths";
 
 type Props = {
   open: boolean;
@@ -36,6 +37,7 @@ function PurchasingProductInspectorDrawerInner({
   formatQty = defaultFmtQty,
   incomingQty,
 }: Props) {
+  const location = useLocation();
   const [productMeta, setProductMeta] = useState<ProductDisplayMeta | null>(null);
   const [metaLoading, setMetaLoading] = useState(false);
 
@@ -114,7 +116,11 @@ function PurchasingProductInspectorDrawerInner({
                   EAN: {metaLoading ? "…" : ean?.trim() ? ean : "—"}
                 </p>
                 <Link
-                  to={`/products/${pr.id}`}
+                  to={getProductDetailsPath(pr.id)}
+                  state={productDetailsNavState({
+                    tenantId,
+                    returnTo: `${location.pathname}${location.search}`,
+                  })}
                   className="mt-2 inline-block text-xs font-medium text-blue-600 hover:underline"
                 >
                   Karta produktu →

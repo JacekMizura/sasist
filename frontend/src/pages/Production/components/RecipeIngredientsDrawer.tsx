@@ -3,6 +3,7 @@ import { ChevronRight, X } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { getRecipeDetail, type RecipeCardRead, type RecipeDetailRead } from "../../../api/productionApi";
+import { getProductDetailsPath } from "../../Products/productPaths";
 import { ProductThumb } from "./ProductThumb";
 
 type Props = {
@@ -99,7 +100,7 @@ export function RecipeIngredientsDrawer({ open, recipe, tenantId, warehouseId, o
               {components.map((c) => (
                 <li key={c.component_product_id}>
                   <Link
-                    to={`/products/${c.component_product_id}`}
+                    to={getProductDetailsPath(c.component_product_id)}
                     className="group flex items-center gap-3 rounded-xl border border-slate-100 bg-white p-3 transition hover:border-slate-200 hover:bg-slate-50/80"
                   >
                     <ProductThumb imageUrl={c.product_image_url} name={c.product_name} size="sm" />

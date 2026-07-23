@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { AlertTriangle } from "lucide-react";
 
 import { useMediaQuery } from "../../hooks/useMediaQuery";
+import { getProductDetailsPath, productDetailsNavState } from "../../pages/Products/productPaths";
 import { OrderLineKebabMenu } from "./OrderLineKebabMenu";
 import type { LogicalOrderEvent } from "./logicalOrderItems";
 
@@ -189,7 +190,11 @@ export function OrderSummaryProductsList({ lines, productEditTenantId, onLineAct
                   </div>
                   <div className="min-w-0">
                     {canProductLink ? (
-                      <Link to={`/products/${pid}/edit`} state={{ tenantId: productEditTenantId }} className={productLinkCls}>
+                      <Link
+                        to={getProductDetailsPath(pid)}
+                        state={productDetailsNavState({ tenantId: productEditTenantId })}
+                        className={productLinkCls}
+                      >
                         {row.name}
                       </Link>
                     ) : (
@@ -313,8 +318,8 @@ export function OrderSummaryProductsList({ lines, productEditTenantId, onLineAct
               <div className="min-w-0">
                 {canProductLink ? (
                   <Link
-                    to={`/products/${pid}/edit`}
-                    state={{ tenantId: productEditTenantId }}
+                    to={getProductDetailsPath(pid)}
+                    state={productDetailsNavState({ tenantId: productEditTenantId })}
                     className="group flex min-w-0 cursor-pointer items-start gap-3 rounded-md outline-none ring-offset-2 transition hover:bg-slate-50/90 focus-visible:ring-2 focus-visible:ring-slate-400"
                   >
                     <div className="flex h-12 w-12 shrink-0 items-center justify-center transition">

@@ -3,6 +3,7 @@ import { ExternalLink, Package, X } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import api from "../../../api/axios";
+import { getProductDetailsPath } from "../../Products/productPaths";
 
 type ProductInOrder = {
   id: number;
@@ -161,7 +162,7 @@ export default function OrderProductPreviewModal({
                     <div className="min-w-0 flex-1">
                       {productId ? (
                         <Link
-                          to={`/products/${productId}/edit`}
+                          to={getProductDetailsPath(productId)}
                           className="font-semibold text-slate-900 hover:underline"
                           onClick={onClose}
                         >

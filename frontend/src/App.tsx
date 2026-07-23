@@ -32,7 +32,7 @@ import ProductsLayout from "./pages/Products/ProductsLayout"
 import ProductList from "./pages/Products/ProductList"
 import ProductNewPage from "./pages/Products/ProductNewPage"
 import ProductEditPage from "./pages/Products/ProductEditPage"
-import ProductDetail from "./pages/Products/ProductDetail"
+import ProductDetailRedirect from "./pages/Products/ProductDetailRedirect"
 import ProductProfitabilityPage from "./pages/Products/ProductProfitabilityPage"
 import OrdersLayout from "./pages/Orders/OrdersLayout"
 import OrderList from "./pages/Orders/OrderList"
@@ -754,7 +754,7 @@ export const router = createBrowserRouter(
                   <Route path="historia" element={<ProductsImportHistoryTabPage />} />
                   <Route path="new" element={<ProductNewPage />} />
                   <Route path=":id/edit" element={<ProductEditPage />} />
-                  <Route path=":id" element={<ProductDetail />} />
+                  <Route path=":id" element={<ProductDetailRedirect />} />
                 </Route>
                 <Route path="warehouse-materials" element={<WarehouseMaterialsLayout />}>
                   <Route index element={<Navigate to="cartons" replace />} />

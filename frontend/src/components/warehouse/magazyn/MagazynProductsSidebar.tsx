@@ -2,6 +2,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { warn } from "../../../utils/logger";
 import { Link } from "react-router-dom";
 import type { LayoutState, NormalizedStorageType, RackState, WarehouseProduct } from "../../../types/warehouse";
+import { getProductDetailsPath } from "../../../pages/Products/productPaths";
 import { ConfirmModal } from "../../ui/ConfirmModal";
 import { activeBinsForRack, compareLocationUuidsByLayoutOrder } from "../warehouseUtils";
 import { resolveWarehouseLocation } from "../../../utils/resolvedWarehouseLocation";
@@ -793,7 +794,7 @@ export function MagazynProductsSidebar({
               return (
                 <Link
                   key={p.id}
-                  to={`/products/${p.id}`}
+                  to={getProductDetailsPath(p.id)}
                   onClick={(e) => {
                     if (!onToggleProductMapHighlight) return;
                     if (e.ctrlKey || e.metaKey) return;

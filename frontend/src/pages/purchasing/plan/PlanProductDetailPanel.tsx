@@ -1,11 +1,12 @@
 import { memo, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { X } from "lucide-react";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { PurchasingAlertEvent } from "../../../api/purchasingAlertsApi";
 import { fetchPurchasingForecast, type PurchasingForecastPayload } from "../../../api/purchasingForecastApi";
 import type { ReplenishmentRow } from "../../../api/purchasingReplenishmentApi";
 import { PurchasingProductThumbnail } from "../../../modules/purchasing/ui";
+import { getProductDetailsPath, productDetailsNavState } from "../../Products/productPaths";
 import { fmtShortDate, numFmt } from "./planFormatters";
 
 type Props = {
@@ -29,6 +30,7 @@ function severityClass(sev: string): string {
 }
 
 function PlanProductDetailPanelInner({ row, alerts, tenantId, warehouseId, onClose, formatQty }: Props) {
+  const location = useLocation();
   const [forecast, setForecast] = useState<PurchasingForecastPayload | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -95,7 +97,15 @@ function PlanProductDetailPanelInner({ row, alerts, tenantId, warehouseId, onClo
             <p>SKU: {row.sku ?? "—"}</p>
             <p>EAN: {row.ean ?? "—"}</p>
             <p className="mt-1 truncate">{row.supplier_name ?? "Brak dostawcy"}</p>
-            <Link to={`/products/${row.product_id}`} className="mt-2 inline-block font-medium text-blue-600 hover:underline">
+            <Link
+              to={getProductDetailsPath(row.product_id)}
+              state={productDetailsNavState({
+                tenantId,
+                warehouseId: warehouseId ?? undefined,
+                returnTo: `${location.pathname}${location.search}`,
+              })}
+              className="mt-2 inline-block font-medium text-blue-600 hover:underline"
+            >
               Karta produktu →
             </Link>
           </div>

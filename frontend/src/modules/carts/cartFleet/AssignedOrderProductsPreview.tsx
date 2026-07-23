@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 
 import { ProductThumb } from "../../../components/orders/panelList/ProductThumb";
 import { HoverPopover } from "../../../components/ui/HoverPopover";
+import { getProductDetailsPath } from "../../../pages/Products/productPaths";
 
 export type AssignedOrderProductPreview = {
   product_id?: number | null;
@@ -128,7 +129,7 @@ export function AssignedOrderProductsPreview({
           onExpand={() => setExpanded(true)}
           onProductClick={
             interactiveProducts
-              ? (productId) => navigate(`/products/${productId}`)
+              ? (productId) => navigate(getProductDetailsPath(productId))
               : undefined
           }
         />

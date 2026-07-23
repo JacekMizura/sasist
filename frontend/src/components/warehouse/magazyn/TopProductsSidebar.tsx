@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import type { WarehouseProduct } from "../../../types/warehouse";
+import { getProductDetailsPath } from "../../../pages/Products/productPaths";
 
 export interface TopProductItem {
   product: WarehouseProduct;
@@ -102,7 +103,7 @@ export function TopProductsSidebar({
             return (
               <Link
                 key={product.id}
-                to={`/products/${product.id}`}
+                to={getProductDetailsPath(product.id)}
                 title={`Otwórz produkt: ${product.name}`}
                 onMouseEnter={() => onHoverProductIdChange?.(product.id)}
                 onMouseLeave={() => onHoverProductIdChange?.(null)}

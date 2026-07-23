@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 
 import type { LocationVisualOccupancy, LocationVisualProduct } from "../../../api/wmsLocationVisualApi";
 import { DamageDispositionBadge } from "../../inventory/DamageDispositionBadge";
+import { getProductDetailsPath, productDetailsNavState } from "../../../pages/Products/productPaths";
 import { CarrierProductThumb } from "../carriers/CarrierProductThumb";
 
 type Props = {
@@ -50,11 +51,13 @@ export function LocationPreviewCarrierContents({
 }: Props) {
   const navigate = useNavigate();
 
-  /** Pełna karta produktu z katalogu (jak „Edytuj” na liście) — nie uproszczony `/products/:id`. */
+  /** Pełna karta produktu z katalogu (Asortyment). */
   const openProduct = (productId: number) => {
     if (productId < 1) return;
-    navigate(`/products/${productId}/edit`, {
-      state: tenantId != null && tenantId >= 1 ? { tenantId } : undefined,
+    navigate(getProductDetailsPath(productId), {
+      state: productDetailsNavState({
+        tenantId: tenantId != null && tenantId >= 1 ? tenantId : undefined,
+      }),
     });
   };
 
