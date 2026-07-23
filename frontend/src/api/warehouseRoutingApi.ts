@@ -68,7 +68,13 @@ export type RouteComputeResult = {
 
 export type RoutingValidationResult = {
   ok: boolean;
-  issues: { code: string; severity: string; message: string; ref_uuid?: string | null }[];
+  issues: {
+    code: string;
+    severity: string;
+    message: string;
+    ref_uuid?: string | null;
+    ref_uuids?: string[];
+  }[];
 };
 
 export async function fetchRoutingGraph(warehouseId: number): Promise<RoutingGraph> {

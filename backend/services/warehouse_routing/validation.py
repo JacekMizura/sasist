@@ -1,4 +1,4 @@
-"""Validation for authored Warehouse Routing Graph."""
+"""Validation for authored Warehouse Routing Graph — human-readable PL messages (no UUID spam)."""
 
 from __future__ import annotations
 
@@ -23,7 +23,6 @@ from .constants import (
 
 
 def _weak_undirected_adj(edges: list[WarehouseRoutingEdge]) -> dict[str, set[str]]:
-    """Physical connectivity ignoring direction (enabled edges only)."""
     adj: dict[str, set[str]] = defaultdict(set)
     for e in edges:
         if not e.enabled:
@@ -34,7 +33,6 @@ def _weak_undirected_adj(edges: list[WarehouseRoutingEdge]) -> dict[str, set[str
 
 
 def _directed_adj(edges: list[WarehouseRoutingEdge]) -> dict[str, set[str]]:
-    """Travel reachability respecting direction (enabled, no process/transport filter)."""
     adj: dict[str, set[str]] = defaultdict(set)
     for e in edges:
         if not e.enabled:
@@ -87,7 +85,7 @@ def validate_graph(db: Session, warehouse_id: int) -> RoutingValidationResult:
             ValidationIssue(
                 code="GRAPH_EMPTY",
                 severity="error",
-                message="Brak sieci tras — graf nie jest skonfigurowany.",
+                message="Nie narysowano jeszcze żadnej trasy. Wybierz „Rysuj trasę” i połącz punkty na mapie.",
             )
         )
         return RoutingValidationResult(ok=False, issues=issues)
@@ -96,14 +94,34 @@ def validate_graph(db: Session, warehouse_id: int) -> RoutingValidationResult:
     weak = _weak_undirected_adj(edges)
     directed = _directed_adj(edges)
 
-    for n in nodes:
-        if n.uuid not in weak or not weak[n.uuid]:
+    if not edges:
+        orphan_ids = [n.uuid for n in nodes]
+        issues.append(
+            ValidationIssue(
+                code="NO_EDGES",
+                severity="error",
+                message=(
+                    f"Na mapie są punkty ({len(nodes)}), ale nie tworzą jeszcze trasy. "
+                    "Połącz je narzędziem „Rysuj trasę” albo usuń niepotrzebne punkty."
+                ),
+                ref_uuids=orphan_ids,
+            )
+        )
+    else:
+        orphan_ids = [n.uuid for n in nodes if n.uuid not in weak or not weak[n.uuid]]
+        if orphan_ids:
+            n = len(orphan_ids)
+            msg = (
+                "1 punkt nie jest połączony z żadną trasą."
+                if n == 1
+                else f"{n} punktów nie jest połączonych z żadną trasą."
+            )
             issues.append(
                 ValidationIssue(
-                    code="ORPHAN_NODE",
+                    code="ORPHAN_NODES",
                     severity="warning",
-                    message=f"Punkt trasy bez połączeń: {n.label or n.uuid[:8]}",
-                    ref_uuid=n.uuid,
+                    message=msg,
+                    ref_uuids=orphan_ids,
                 )
             )
 
@@ -113,7 +131,7 @@ def validate_graph(db: Session, warehouse_id: int) -> RoutingValidationResult:
                 ValidationIssue(
                     code="INVALID_EDGE",
                     severity="error",
-                    message=f"Odcinek trasy wskazuje nieistniejący punkt: {e.uuid[:8]}",
+                    message="Jeden z odcinków trasy wskazuje nieistniejący punkt.",
                     ref_uuid=e.uuid,
                 )
             )
@@ -122,7 +140,7 @@ def validate_graph(db: Session, warehouse_id: int) -> RoutingValidationResult:
                 ValidationIssue(
                     code="INVALID_EDGE",
                     severity="error",
-                    message="Odcinek trasy łączy punkt sam ze sobą.",
+                    message="Jeden z odcinków łączy punkt sam ze sobą.",
                     ref_uuid=e.uuid,
                 )
             )
@@ -131,12 +149,11 @@ def validate_graph(db: Session, warehouse_id: int) -> RoutingValidationResult:
                 ValidationIssue(
                     code="INVALID_EDGE",
                     severity="warning",
-                    message="Mnożnik kosztu odcinka musi być > 0.",
+                    message="Mnożnik kosztu odcinka musi być większy od zera.",
                     ref_uuid=e.uuid,
                 )
             )
 
-    # Weak (physical) connectivity of enabled network
     connected_nodes = [n.uuid for n in nodes if n.uuid in weak and weak[n.uuid]]
     if connected_nodes:
         start = connected_nodes[0]
@@ -155,14 +172,11 @@ def validate_graph(db: Session, warehouse_id: int) -> RoutingValidationResult:
                 ValidationIssue(
                     code="DISCONNECTED_GRAPH",
                     severity="error",
-                    message=(
-                        f"Sieć fizycznie niespójna — {len(unreachable)} punktów poza główną składową "
-                        "(ignorując kierunki ruchu)."
-                    ),
+                    message="Część sieci tras nie jest ze sobą połączona.",
+                    ref_uuids=unreachable,
                 )
             )
 
-    # Operational: at least one of each required type (multi allowed)
     starts = [n for n in nodes if n.operational_type == OP_PICKING_START]
     packs = [n for n in nodes if n.operational_type == OP_PACKING]
     if not starts:
@@ -170,7 +184,7 @@ def validate_graph(db: Session, warehouse_id: int) -> RoutingValidationResult:
             ValidationIssue(
                 code="MISSING_PICKING_START",
                 severity="error",
-                message="Brak punktu operacyjnego: Start kompletacji (wymagany co najmniej jeden).",
+                message="Nie ustawiono punktu rozpoczęcia pracy (Start pracy).",
             )
         )
     if not packs:
@@ -178,22 +192,29 @@ def validate_graph(db: Session, warehouse_id: int) -> RoutingValidationResult:
             ValidationIssue(
                 code="MISSING_PACKING",
                 severity="error",
-                message="Brak punktu operacyjnego: Pakowanie (wymagany co najmniej jeden).",
+                message="Nie ustawiono punktu pakowania.",
             )
         )
 
     for n in nodes:
         if n.operational_type and (n.uuid not in weak or not weak[n.uuid]):
+            label = n.label or (
+                "Start pracy"
+                if n.operational_type == OP_PICKING_START
+                else "Pakowanie"
+                if n.operational_type == OP_PACKING
+                else "punkt specjalny"
+            )
             issues.append(
                 ValidationIssue(
                     code="OPERATIONAL_OFF_NETWORK",
                     severity="error",
-                    message=f"Punkt operacyjny poza siecią: {n.label or n.operational_type}",
+                    message=f"Punkt specjalny „{label}” nie jest podłączony do żadnej trasy.",
                     ref_uuid=n.uuid,
+                    ref_uuids=[n.uuid],
                 )
             )
 
-    # Directed reachability: at least one start must reach at least one packing
     if starts and packs:
         pack_ids = {p.uuid for p in packs}
         if not any(_reachable(directed, s.uuid, pack_ids) for s in starts):
@@ -202,8 +223,8 @@ def validate_graph(db: Session, warehouse_id: int) -> RoutingValidationResult:
                     code="START_CANNOT_REACH_PACKING",
                     severity="error",
                     message=(
-                        "Żaden Start kompletacji nie osiąga Pakowania przy uwzględnieniu "
-                        "kierunków odcinków (sieć jednokierunkowa zablokowana)."
+                        "Z punktu rozpoczęcia pracy nie da się dojechać do pakowania "
+                        "(sprawdź kierunki odcinków)."
                     ),
                 )
             )
@@ -214,7 +235,7 @@ def validate_graph(db: Session, warehouse_id: int) -> RoutingValidationResult:
                 ValidationIssue(
                     code="ACCESS_POINT_WITHOUT_NODE",
                     severity="error",
-                    message=f"Dostęp do lokalizacji bez punktu trasy (location_id={ap.location_id})",
+                    message="Przypisanie lokalizacji wskazuje nieistniejący punkt trasy.",
                     ref_uuid=ap.uuid,
                 )
             )
@@ -232,7 +253,10 @@ def validate_graph(db: Session, warehouse_id: int) -> RoutingValidationResult:
             ValidationIssue(
                 code="LOCATIONS_WITHOUT_ACCESS",
                 severity="warning",
-                message=f"{len(missing)} lokalizacji bez dostępu do trasy (wymagane ręczne przypisanie).",
+                message=(
+                    f"{len(missing)} lokalizacji magazynowych nie ma przypisanego dojścia do trasy "
+                    "(możesz przypisać je ręcznie przy punkcie trasy)."
+                ),
             )
         )
 

@@ -285,8 +285,92 @@ def test_13_validation_detects_issues(db):
     codes = {i.code for i in res.issues}
     assert "MISSING_PICKING_START" in codes
     assert "MISSING_PACKING" in codes
-    assert "ORPHAN_NODE" in codes or "DISCONNECTED_GRAPH" in codes
+    assert "NO_EDGES" in codes or "ORPHAN_NODES" in codes
     assert "LOCATIONS_WITHOUT_ACCESS" in codes
+    # Human UX: no UUID spam in messages
+    for issue in res.issues:
+        assert a not in issue.message
+        assert b not in issue.message
+        assert "edge" not in issue.message.lower()
+        assert "węzeł" not in issue.message.lower()
+    no_edges = next(i for i in res.issues if i.code == "NO_EDGES")
+    assert "trasy" in no_edges.message.lower() or "punkt" in no_edges.message.lower()
+    assert len(no_edges.ref_uuids) == 2
+
+
+def test_13b_delete_node_persists_after_save_reload(db):
+    """create → save → delete → save → reload → node gone (and its edges)."""
+    a, b, c, payload = _simple_graph_payload()
+    out1 = replace_graph(db, 1, payload, materialize_crossings=False)
+    assert {n.uuid for n in out1.nodes} == {a, b, c}
+    keep_nodes = [n for n in out1.nodes if n.uuid != c]
+    keep_edges = [
+        e
+        for e in out1.edges
+        if e.from_node_uuid != c and e.to_node_uuid != c
+    ]
+    payload2 = RoutingGraphReplaceRequest(
+        expected_revision=out1.revision,
+        nodes=[
+            RoutingNodeIn(
+                uuid=n.uuid,
+                x=n.x,
+                y=n.y,
+                node_type=n.node_type,
+                operational_type=n.operational_type,
+                label=n.label,
+            )
+            for n in keep_nodes
+        ],
+        edges=[
+            RoutingEdgeIn(
+                uuid=e.uuid,
+                from_node_uuid=e.from_node_uuid,
+                to_node_uuid=e.to_node_uuid,
+                direction=e.direction,
+                enabled=e.enabled,
+                distance_m=e.distance_m,
+                allowed_processes=list(e.allowed_processes or []),
+                allowed_transport_types=list(e.allowed_transport_types or []),
+                cost_multiplier=e.cost_multiplier,
+            )
+            for e in keep_edges
+        ],
+        access_points=[],
+    )
+    out2 = replace_graph(db, 1, payload2, materialize_crossings=False)
+    reloaded = get_graph(db, 1)
+    uuids = {n.uuid for n in reloaded.nodes}
+    assert c not in uuids
+    assert a in uuids and b in uuids
+    assert all(e.from_node_uuid != c and e.to_node_uuid != c for e in reloaded.edges)
+    assert out2.revision == reloaded.revision
+
+
+def test_13c_validation_aggregates_orphans_when_edges_exist(db):
+    a, b, orphan = _uid(), _uid(), _uid()
+    replace_graph(
+        db,
+        1,
+        RoutingGraphReplaceRequest(
+            nodes=[
+                RoutingNodeIn(
+                    uuid=a, x=0, y=0, node_type="operational", operational_type=OP_PICKING_START
+                ),
+                RoutingNodeIn(
+                    uuid=b, x=100, y=0, node_type="operational", operational_type=OP_PACKING
+                ),
+                RoutingNodeIn(uuid=orphan, x=500, y=500),
+            ],
+            edges=[RoutingEdgeIn(uuid=_uid(), from_node_uuid=a, to_node_uuid=b)],
+        ),
+        materialize_crossings=False,
+    )
+    res = validate_graph(db, 1)
+    orphan_issue = next(i for i in res.issues if i.code == "ORPHAN_NODES")
+    assert orphan_issue.message == "1 punkt nie jest połączony z żadną trasą."
+    assert orphan_issue.ref_uuids == [orphan]
+    assert orphan not in orphan_issue.message
 
 
 def test_14_route_uses_only_new_graph_not_legacy(db):

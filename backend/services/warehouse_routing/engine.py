@@ -109,7 +109,7 @@ def route_a_to_b(
         return RouteComputeResponse(
             ok=False,
             error_code=ERROR_ROUTING_GRAPH_NOT_CONFIGURED,
-            message="Brak skonfigurowanej sieci tras (authored Routing Graph).",
+            message="Nie skonfigurowano jeszcze sieci tras.",
         )
 
     by_uuid = {n.uuid: n for n in nodes}
@@ -117,7 +117,7 @@ def route_a_to_b(
         return RouteComputeResponse(
             ok=False,
             error_code=ERROR_NODE_NOT_FOUND,
-            message="Nie znaleziono węzła startowego lub docelowego w sieci tras.",
+            message="Nie znaleziono punktu startowego lub docelowego w sieci tras.",
         )
 
     edges = (
@@ -129,7 +129,7 @@ def route_a_to_b(
         return RouteComputeResponse(
             ok=False,
             error_code=ERROR_ROUTING_GRAPH_NOT_CONFIGURED,
-            message="Sieć tras nie ma odcinków (edges).",
+            message="Nie narysowano jeszcze żadnej trasy. Wybierz „Rysuj trasę” i połącz co najmniej dwa punkty na mapie.",
         )
 
     adj = _directed_neighbors(

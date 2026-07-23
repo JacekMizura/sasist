@@ -517,6 +517,7 @@ export default function WarehouseDesigner() {
   const [testStartUuid, setTestStartUuid] = useState<string | null>(null);
   const [testDestUuid, setTestDestUuid] = useState<string | null>(null);
   const [routingLocations, setRoutingLocations] = useState<{ id: number; name: string }[]>([]);
+  const [highlightOrphanUuids, setHighlightOrphanUuids] = useState<string[]>([]);
 
   const setRoutingToolSafe = useCallback((tool: RoutingTool) => {
     setRoutingTool(tool);
@@ -543,9 +544,10 @@ export default function WarehouseDesigner() {
         e.preventDefault();
         const node = routing.nodes.find((n) => n.uuid === routingSelectedNode);
         if (!node) return;
-        if (!window.confirm(confirmDeleteNodeMessage(node, routing.edges, routing.accessPoints))) return;
+        if (!window.confirm(confirmDeleteNodeMessage(node, routing.edges, routing.accessPoints, routing.nodes, routingLocations))) return;
         routing.removeNode(node.uuid);
         setRoutingSelectedNode(null);
+        setHighlightOrphanUuids([]);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -558,6 +560,7 @@ export default function WarehouseDesigner() {
     routing.edges,
     routing.accessPoints,
     routing.removeNode,
+    routingLocations,
     setRoutingToolSafe,
   ]);
 
@@ -3939,7 +3942,11 @@ export default function WarehouseDesigner() {
                   selectedNodeUuid={routingSelectedNode}
                   selectedEdgeUuid={routingSelectedEdge}
                   highlightNodeUuids={
-                    routing.testResult?.ok ? routing.testResult.nodes.map((n) => n.node_uuid) : []
+                    highlightOrphanUuids.length
+                      ? highlightOrphanUuids
+                      : routing.testResult?.ok
+                        ? routing.testResult.nodes.map((n) => n.node_uuid)
+                        : []
                   }
                   highlightEdgeUuids={
                     routing.testResult?.ok
@@ -3981,6 +3988,8 @@ export default function WarehouseDesigner() {
                       setRoutingSelectedNode(uuid);
                       return;
                     }
+                    // Wybierz: edit selection
+                    setRoutingToolSafe("select");
                     setRoutingSelectedNode(uuid);
                     setRoutingSelectedEdge(null);
                   }}
@@ -3996,13 +4005,6 @@ export default function WarehouseDesigner() {
                     }
                   }}
                   onCanvasClickCm={(x, y) => {
-                    if (routingTool === "add_node") {
-                      const id = routing.addNodeAtCm(x, y);
-                      setRoutingSelectedNode(id);
-                      setRoutingSelectedEdge(null);
-                      setRoutingToolSafe("select");
-                      return;
-                    }
                     if (routingTool === "draw_edge") {
                       const id = routing.addNodeAtCm(x, y);
                       if (routingEdgeDraftFrom) {
@@ -4031,6 +4033,8 @@ export default function WarehouseDesigner() {
               setTestStartUuid={setTestStartUuid}
               setTestDestUuid={setTestDestUuid}
               locations={routingLocations}
+              highlightOrphanUuids={highlightOrphanUuids}
+              setHighlightOrphanUuids={setHighlightOrphanUuids}
             />
           )}
           </div>

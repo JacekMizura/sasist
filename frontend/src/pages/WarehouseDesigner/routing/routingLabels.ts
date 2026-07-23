@@ -1,12 +1,12 @@
 /** Shared types / labels for designer Routes workspace (Polish UX only). */
 
 export const ROUTING_OP_OPTIONS: { value: string; label: string }[] = [
-  { value: "picking_start", label: "Start kompletacji" },
+  { value: "picking_start", label: "Start pracy" },
   { value: "packing", label: "Pakowanie" },
-  { value: "receiving_dock", label: "Przyjęcie / Dock" },
+  { value: "receiving_dock", label: "Dok / brama" },
   { value: "receiving_buffer", label: "Bufor przyjęcia" },
-  { value: "putaway_buffer", label: "Bufor rozlokowania" },
-  { value: "cart_parking", label: "Strefa odkładania wózków" },
+  { value: "putaway_buffer", label: "Bufor" },
+  { value: "cart_parking", label: "Strefa wózków" },
   { value: "consolidation", label: "Konsolidacja" },
   { value: "end_point", label: "Punkt końcowy" },
 ];

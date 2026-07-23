@@ -2,7 +2,7 @@
 
 ## Active
 
-**Routing Graph Etap 2 (migracja READ-ONLY):** konsumenci analytics/designer/`/route/path` na authored SSOT + `access_resolution`. Usunięto Planuj trasę + `WarehouseGraphService`/`build_graph` z `save_layout`. Modele `WarehouseNode` tabel pozostają (dormant + FK `Location.graph_node_id`). **Bez push. Bez Etapu 3 (runtime WMS).**
+**Routing Graph UX polish (TRASY designer):** bugfix usuwania punktu + human validation + kontekstowy panel. Architektura SSOT authored graph bez zmian. **Bez Etapu 3. Bez push** (lokalny commit po testach).
 
 ## Preferencja commitów (user)
 

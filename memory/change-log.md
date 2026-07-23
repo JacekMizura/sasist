@@ -1,3 +1,10 @@
+## 2026-07-23 — Routing Graph: UX polish + delete bugfix (bez Etapu 3)
+
+- Delete punktu: widoczny CTA „Usuń punkt”, Delete/Backspace, dirty+save+reload persistence test.
+- Walidacja: agregacja orphanów (bez UUID / „edges” / „węzeł”); „Usuń niepołączone” + podświetlenie.
+- Panel kontekstowy (sieć / punkt / odcinek / test); „Obsługiwane lokalizacje”; Typ punktu zamiast roli/węzła.
+- Architektura Routing Graph SSOT nienaruszona. **No push. Bez Etapu 3.**
+
 ## 2026-07-23 — Routing Graph Etap 2: cleanup legacy Planuj trasę
 
 - Designer: usunięto legacy route UX (`isRouteActive` / `routeRackIds` / `fetchRoutePath` / client aisle+grid engines). PathLayer props = null.

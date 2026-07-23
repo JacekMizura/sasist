@@ -134,6 +134,8 @@ class ValidationIssue(BaseModel):
     severity: str = "error"  # error | warning
     message: str
     ref_uuid: Optional[str] = None
+    """Optional list of related entity UUIDs (e.g. orphan nodes) for UI highlight — not for display."""
+    ref_uuids: list[str] = Field(default_factory=list)
 
 
 class RoutingValidationResult(BaseModel):

@@ -193,6 +193,7 @@ export function useRoutingGraph(warehouseId: number | null, layoutId: number | n
       }
       return next;
     });
+    setValidation(null);
     setDirty(true);
   }, []);
 
@@ -200,8 +201,30 @@ export function useRoutingGraph(warehouseId: number | null, layoutId: number | n
     setNodes((prev) => prev.filter((n) => n.uuid !== uuid));
     setEdges((prev) => prev.filter((e) => e.from_node_uuid !== uuid && e.to_node_uuid !== uuid));
     setAccessPoints((prev) => prev.filter((a) => a.node_uuid !== uuid));
+    setValidation(null);
+    setTestResult(null);
     setDirty(true);
   }, []);
+
+  const removeOrphanNodes = useCallback(() => {
+    const connected = new Set<string>();
+    for (const e of edges) {
+      if (!e.enabled) continue;
+      connected.add(e.from_node_uuid);
+      connected.add(e.to_node_uuid);
+    }
+    // If no edges at all, every node is orphan → remove all
+    if (connected.size === 0) {
+      setNodes([]);
+      setAccessPoints([]);
+    } else {
+      setNodes((nds) => nds.filter((n) => connected.has(n.uuid)));
+      setAccessPoints((aps) => aps.filter((a) => connected.has(a.node_uuid)));
+    }
+    setValidation(null);
+    setTestResult(null);
+    setDirty(true);
+  }, [edges]);
 
   const addEdge = useCallback(
     (fromUuid: string, toUuid: string) => {
@@ -333,6 +356,7 @@ export function useRoutingGraph(warehouseId: number | null, layoutId: number | n
     addNodeAtCm,
     updateNode,
     removeNode,
+    removeOrphanNodes,
     addEdge,
     updateEdge,
     removeEdge,

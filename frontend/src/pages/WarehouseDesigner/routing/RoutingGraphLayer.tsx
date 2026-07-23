@@ -179,7 +179,7 @@ export function RoutingGraphLayer({
         const ny = preview?.y ?? n.y;
         const active = selectedNodeUuid === n.uuid || hiNodes.has(n.uuid);
         const kind = nodeKind(n, accessPoints);
-        const tip = nodeDisplayName(n, accessPoints);
+        const tip = nodeDisplayName(n, accessPoints, [], nodes);
         const showLabel = kind === "operational" && (active || hoverUuid === n.uuid);
         const r = active ? (kind === "operational" ? 9 : 7) : kind === "operational" ? 8 : kind === "access" ? 6 : 4.5;
         const fill =
