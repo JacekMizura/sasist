@@ -87,8 +87,8 @@ export default function WmsInventoryProductDetailPanel({
         ) : null}
       </div>
 
-      <div className="flex flex-col items-center gap-2">
-        {locationCode ? <LocationBadge code={locationCode} type="PICK" layoutSpread className="max-w-full" /> : null}
+      <div className="flex flex-wrap items-center justify-center gap-2">
+        {locationCode ? <LocationBadge code={locationCode} type="PICK" className="max-w-full" /> : null}
 
         {carrierScanMode ? (
           <div className="flex items-center gap-2 text-sm font-bold text-indigo-700">
@@ -100,7 +100,7 @@ export default function WmsInventoryProductDetailPanel({
             ) : null}
           </div>
         ) : carrierCode ? (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <CarrierBadge code={carrierCode} />
             <button
               type="button"

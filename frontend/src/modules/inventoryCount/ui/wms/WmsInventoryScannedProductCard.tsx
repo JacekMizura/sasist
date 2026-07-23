@@ -1,6 +1,7 @@
 import { MapPin, Package } from "lucide-react";
 
 import type { WmsBarcodeResolveResult } from "@/api/inventoryCountApi";
+import { CarrierBadge } from "@/components/warehouse/carriers/CarrierBadge";
 import { WMS_INV } from "./theme";
 
 const DISC_BADGE: Record<string, { label: string; className: string }> = {
@@ -76,11 +77,7 @@ export default function WmsInventoryScannedProductCard({ scan, carrierCode, puls
                 {scan.location_code}
               </span>
             ) : null}
-            {carrierCode ? (
-              <span className="rounded-md border border-[#c5d0de] bg-white px-2 py-0.5 text-[10px] font-black uppercase text-[#5a6b7d]">
-                Nośnik: {carrierCode}
-              </span>
-            ) : null}
+            {carrierCode ? <CarrierBadge code={carrierCode} /> : null}
           </div>
         </div>
       </div>

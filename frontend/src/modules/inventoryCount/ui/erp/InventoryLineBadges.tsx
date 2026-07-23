@@ -19,7 +19,7 @@ export function InventoryLocationBadge({ code, type = "PICK" }: LocationProps) {
   return <LocationBadge code={code} type={type} />;
 }
 
-/** Location + optional carrier stacked — warehouse-native layout. */
+/** Location + optional carrier — osobne badge’e obok siebie (wrap przy wąskiej kolumnie). */
 export function InventoryLocationStack({
   locationCode,
   carrierCode,
@@ -27,10 +27,11 @@ export function InventoryLocationStack({
   locationCode: string;
   carrierCode?: string | null;
 }) {
+  const carrier = carrierCode?.trim() || "";
   return (
-    <div className="flex flex-col items-start gap-1">
+    <div className="flex min-w-0 flex-wrap items-center gap-1.5">
       <InventoryLocationBadge code={locationCode} />
-      {carrierCode?.trim() ? <CarrierBadge code={carrierCode.trim()} /> : null}
+      {carrier ? <CarrierBadge code={carrier} /> : null}
     </div>
   );
 }

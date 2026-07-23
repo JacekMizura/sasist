@@ -1,4 +1,5 @@
 import type { InventoryPostingPreview } from "@/api/inventoryCountApi";
+import { CarrierBadge } from "@/components/warehouse/carriers/CarrierBadge";
 
 type Props = {
   open: boolean;
@@ -152,7 +153,11 @@ function PreviewBlock({
           <li key={ln.line_id} className="px-2 py-1 text-[11px]">
             <span className="font-semibold">{ln.sku ?? ln.product_id}</span>
             <span className="text-slate-500"> · {ln.location_name}</span>
-            {ln.carrier_code ? <span className="text-[#1e4d8c]"> · {ln.carrier_code}</span> : null}
+            {ln.carrier_code ? (
+              <span className="ml-1.5 inline-flex align-middle">
+                <CarrierBadge code={ln.carrier_code} className="!py-0.5 !text-[10px]" />
+              </span>
+            ) : null}
             <span className="float-right tabular-nums font-bold">{ln.quantity} szt.</span>
           </li>
         ))}
