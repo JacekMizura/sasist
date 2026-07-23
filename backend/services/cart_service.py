@@ -1,4 +1,3 @@
-import json
 import logging
 import re
 from sqlalchemy import func, or_
@@ -135,46 +134,38 @@ def _wms_pick_volume_dm3_for_cart(db: Session, cart_id: int) -> float:
     return round(float((row[0] if row else 0.0) or 0.0), 3)
 
 
-def _person_name_from_mapping(src: dict) -> str | None:
-    fn = str(src.get("first_name") or "").strip()
-    ln = str(src.get("last_name") or "").strip()
-    full = f"{fn} {ln}".strip()
-    return full or None
-
-
-def _company_from_mapping(src: dict) -> str | None:
-    company = str(src.get("company") or src.get("company_name") or "").strip()
-    return company or None
-
-
-def _order_customer_name(order) -> str | None:
-    """Buyer from addresses_json: person name → company (no email/login)."""
-    raw = getattr(order, "addresses_json", None)
-    if not raw:
-        return None
-    try:
-        data = json.loads(raw) if isinstance(raw, str) else raw
-    except Exception:
-        return None
-    shipping = data.get("shipping") if isinstance(data, dict) else None
-    billing = data.get("billing") if isinstance(data, dict) else None
-    src = shipping if isinstance(shipping, dict) and shipping else (billing if isinstance(billing, dict) else {})
-    if not isinstance(src, dict):
-        return None
-    return _person_name_from_mapping(src) or _company_from_mapping(src)
-
-
 def _order_display_customer(order) -> str | None:
-    """Buyer label: imię+nazwisko → firma → None (UI pokazuje „—”)."""
+    """
+    Buyer label for cart assigned-orders / hover — same source as order card.
+
+    Uses ``_customer_names_for_order_display`` (addresses_json: Imię/Nazwisko,
+    first_name/last_name, company; + direct-sale). Linked CRM customer is only
+    a fallback when address snapshot has no person/company (unsaved buyers still
+    resolve from order data).
+    """
+    if order is None:
+        return None
+    from ..api.order import _customer_names_for_order_display
+
+    fn, ln = _customer_names_for_order_display(order)
+    name = " ".join(p for p in ((fn or "").strip(), (ln or "").strip()) if p).strip()
+    if name:
+        return name
+
     cust = getattr(order, "customer", None)
     if cust is not None:
-        name = f"{getattr(cust, 'first_name', '') or ''} {getattr(cust, 'last_name', '') or ''}".strip()
-        if name:
-            return name
+        person = f"{getattr(cust, 'first_name', '') or ''} {getattr(cust, 'last_name', '') or ''}".strip()
+        if person:
+            return person
         company = (getattr(cust, "company_name", None) or "").strip()
         if company:
             return company
-    return _order_customer_name(order)
+    return None
+
+
+def _order_customer_name(order) -> str | None:
+    """Alias — keep call sites on one buyer-resolution path."""
+    return _order_display_customer(order)
 
 
 def _order_display_status(order) -> str:
@@ -968,7 +959,7 @@ class CartService:
                 "height": b.inner_height,
                 "order_id": b.order_id,
                 "order_number": o.number if o else None,
-                "order_customer_name": _order_customer_name(o) if o else None,
+                "order_customer_name": _order_display_customer(o) if o else None,
                 "used_volume_dm3": used_dm3,
                 "total_weight_kg": w,
                 **(

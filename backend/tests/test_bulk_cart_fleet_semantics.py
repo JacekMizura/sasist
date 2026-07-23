@@ -59,19 +59,63 @@ def test_multi_cart_counts_sections():
 
 def test_order_display_customer_prefers_person_over_company():
     cust = SimpleNamespace(first_name="Jan", last_name="Kowalski", company_name="ACME Sp. z o.o.")
-    order = SimpleNamespace(customer=cust, addresses_json=None)
+    order = SimpleNamespace(customer=cust, addresses_json=None, source=None, order_channel=None)
     assert _order_display_customer(order) == "Jan Kowalski"
 
 
 def test_order_display_customer_falls_back_to_company():
     cust = SimpleNamespace(first_name="", last_name="", company_name="ACME Sp. z o.o.")
-    order = SimpleNamespace(customer=cust, addresses_json=None)
+    order = SimpleNamespace(customer=cust, addresses_json=None, source=None, order_channel=None)
     assert _order_display_customer(order) == "ACME Sp. z o.o."
 
 
 def test_order_display_customer_none_when_empty():
-    order = SimpleNamespace(customer=None, addresses_json=None)
+    order = SimpleNamespace(customer=None, addresses_json=None, source=None, order_channel=None)
     assert _order_display_customer(order) is None
+
+
+def test_order_display_customer_polish_billing_keys_without_crm():
+    """Marketplace import: Imię/Nazwisko in billing — same as order card contact.name."""
+    import json
+
+    addresses = json.dumps(
+        {
+            "billing": {"Imię": "Elwira", "Nazwisko": "Bieskiewicz"},
+            "shipping": {"Ulica": "Kwiatowa 1"},
+        },
+        ensure_ascii=False,
+    )
+    order = SimpleNamespace(customer=None, addresses_json=addresses, source="Allegro", order_channel=None)
+    assert _order_display_customer(order) == "Elwira Bieskiewicz"
+
+
+def test_order_display_customer_english_shipping_keys():
+    import json
+
+    addresses = json.dumps(
+        {"shipping": {"first_name": "Anna", "last_name": "Nowak", "company": "Skip Co"}},
+        ensure_ascii=False,
+    )
+    order = SimpleNamespace(customer=None, addresses_json=addresses, source=None, order_channel=None)
+    assert _order_display_customer(order) == "Anna Nowak"
+
+
+def test_order_display_customer_company_from_addresses_when_no_person():
+    import json
+
+    addresses = json.dumps({"billing": {"company_name": "Hurt Sp. z o.o."}}, ensure_ascii=False)
+    order = SimpleNamespace(customer=None, addresses_json=addresses, source=None, order_channel=None)
+    assert _order_display_customer(order) == "Hurt Sp. z o.o."
+
+
+def test_order_display_customer_addresses_win_over_empty_crm_link():
+    """Unsaved buyer data on order must not be blanked by missing CRM names."""
+    import json
+
+    cust = SimpleNamespace(first_name="", last_name="", company_name="")
+    addresses = json.dumps({"billing": {"Imię": "Elwira", "Nazwisko": "Bieskiewicz"}}, ensure_ascii=False)
+    order = SimpleNamespace(customer=cust, addresses_json=addresses, source=None, order_channel=None)
+    assert _order_display_customer(order) == "Elwira Bieskiewicz"
 
 
 def test_serialize_product_lines_include_ids_and_image():
