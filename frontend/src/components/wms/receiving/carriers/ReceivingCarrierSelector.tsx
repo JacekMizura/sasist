@@ -32,16 +32,19 @@ export function ReceivingCarrierSelector({ carriers, value, onChange, disabled }
       </label>
       {carriers.map((c) => {
         const label = (c.code || "").trim() || (c.barcode || "").trim() || `#${c.carrier_id}`;
+        const selected = value === c.carrier_id;
         return (
           <label
             key={c.carrier_id}
-            className="flex cursor-pointer items-center gap-3 rounded-xl border border-transparent bg-white px-3 py-2.5 shadow-sm hover:border-violet-300"
+            className={`flex cursor-pointer items-center gap-3 rounded-xl border bg-white px-3 py-2.5 shadow-sm transition-colors ${
+              selected ? "border-violet-400 ring-1 ring-violet-200" : "border-transparent hover:border-violet-200"
+            }`}
           >
             <input
               type="radio"
               name="recv-carrier"
               className="h-4 w-4 shrink-0 accent-violet-700"
-              checked={value === c.carrier_id}
+              checked={selected}
               disabled={disabled}
               onChange={() => onChange(c.carrier_id)}
             />
