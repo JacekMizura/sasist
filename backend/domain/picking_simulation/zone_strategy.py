@@ -115,7 +115,7 @@ def simulate_zone_strategy(
         nodes = zone_nodes.get(z, [])
         if not nodes:
             continue
-        dist_m, _ = compute_route_for_pick_nodes(db, warehouse_id, nodes)
+        dist_m, _, _err = compute_route_for_pick_nodes(db, warehouse_id, nodes)
         zone_distances.append(dist_m)
         zone_times_s.append(dist_m / WALKING_SPEED_M_S if dist_m else 0.0)
 

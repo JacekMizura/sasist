@@ -20,10 +20,6 @@ export interface DesignerToolbarProps {
   /** When provided, building modal is controlled by parent (e.g. so RackSidebar can open it). */
   showEditBuilding?: boolean;
   setShowEditBuilding?: (v: boolean) => void;
-  isRouteActive: boolean;
-  onToggleRoutePlanning: () => void;
-  /** When false, hide legacy „Planuj trasę” (Routes workspace uses new engine). */
-  showLegacyPlanujTrase?: boolean;
 }
 
 export function DesignerToolbar({
@@ -37,9 +33,6 @@ export function DesignerToolbar({
   warehouseUsagePct,
   showEditBuilding: showEditBuildingProp,
   setShowEditBuilding: setShowEditBuildingProp,
-  isRouteActive,
-  onToggleRoutePlanning,
-  showLegacyPlanujTrase = true,
 }: DesignerToolbarProps) {
   const { selectedWarehouseId } = useWarehouse();
   const [showEditBuildingLocal, setShowEditBuildingLocal] = useState(false);
@@ -73,21 +66,7 @@ export function DesignerToolbar({
         <span className={`inline-flex items-center rounded-md border border-slate-200/60 px-2 py-0.5 font-mono text-[10px] font-medium transition-colors duration-150 ${lastSavedAt != null ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-900"}`} title={lastSavedAt != null ? UI_STRINGS.warehouse.selector.savedToDb : UI_STRINGS.warehouse.selector.unsavedChanges}>
           {lastSavedAt != null ? UI_STRINGS.warehouse.selector.syncSaved : UI_STRINGS.warehouse.selector.notSaved}
         </span>
-        {mainView === "layout" && showLegacyPlanujTrase && (
-          <button
-            type="button"
-            onClick={onToggleRoutePlanning}
-            aria-pressed={isRouteActive}
-            className={`h-8 rounded-lg border px-3 text-[11px] font-semibold transition-all duration-150 ${
-              isRouteActive
-                ? "border-blue-600 bg-blue-600 text-white shadow-md shadow-blue-900/20"
-                : "border-slate-200/80 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
-            }`}
-          >
-            {isRouteActive ? "Zakończ trasę" : "Planuj trasę"}
-          </button>
-        )}
-        {mainView === "layout" && showLegacyPlanujTrase && (
+        {mainView === "layout" && (
           <button
             type="button"
             onClick={() => {

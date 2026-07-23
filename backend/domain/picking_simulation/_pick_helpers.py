@@ -1,9 +1,9 @@
 """
 Shared helpers for picking strategy simulation: resolve locations, compute route distance.
-Used by simulation_engine and all strategy modules to avoid circular imports.
+Distance/cost from authored Warehouse Routing Graph only (no WarehouseNode).
 """
 
-from typing import Any
+from typing import Any, Optional
 
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
@@ -13,18 +13,22 @@ from ...models.inventory import Inventory
 from ...services.bundle_order_item_ops import sqlalchemy_operational_picking_order_item_clause
 from ...models.location import Location
 from ...models.warehouse import Bin
-from ...models.warehouse_graph import WarehouseNode
 from ...storage_types import NON_PICKABLE_STORAGE_TYPE_ALIASES, get_storage_priority
-
-from ..simulation.warehouse_graph_service import (
-    get_location_to_node_map,
-    get_special_locations_xy,
-    get_node_nearest_to_point,
+from ...services.warehouse_routing.access_resolution import (
+    access_node_uuids_for_location,
+    access_node_uuids_for_locations,
+    chain_distance_through_location_ids,
+    is_routing_graph_configured,
+    packing_node_uuid,
+    picking_start_node_uuid,
 )
-from ..simulation.route_engine import (
-    compute_visit_order_euclidean,
-    compute_route_distance_euclidean,
+from ...services.warehouse_routing.constants import (
+    ERROR_ROUTING_GRAPH_NOT_CONFIGURED,
+    PROCESS_PICKING,
+    TRANSPORT_FOOT,
 )
+from ...models.warehouse_routing import WarehouseRoutingNode
+from ..simulation.route_engine import compute_visit_order_euclidean
 
 WALKING_SPEED_M_S = 1.4
 
@@ -79,8 +83,8 @@ def get_order_pick_locations(
     tenant_id: int,
 ) -> list[dict[str, Any]]:
     """
-    For one order, return list of pick nodes: [{"node_id", "x", "y", "location_id", "product_id", "quantity"}, ...].
-    Uses inventory and pick_sequence. Deduplicates by node.
+    For one order, return list of pick stops with routing node uuid (best single AP for ordering).
+    Uses inventory and pick_sequence. Deduplicates by location.
     """
     items = (
         db.query(OrderItem)
@@ -103,25 +107,44 @@ def get_order_pick_locations(
     location_ids = list(loc_to_qty.keys())
     if not location_ids:
         return []
-    loc_to_node_xy = get_location_to_node_map(db, warehouse_id)
+
+    loc_nodes = access_node_uuids_for_locations(db, warehouse_id, location_ids)
+    node_xy: dict[str, tuple[float, float]] = {}
+    all_uuids = [u for nodes in loc_nodes.values() for u in nodes]
+    if all_uuids:
+        for n in (
+            db.query(WarehouseRoutingNode)
+            .filter(
+                WarehouseRoutingNode.warehouse_id == warehouse_id,
+                WarehouseRoutingNode.uuid.in_(all_uuids),
+            )
+            .all()
+        ):
+            node_xy[n.uuid] = (float(n.x), float(n.y))
+
     loc_rows = (
         db.query(Location.id, Location.name, Location.x, Location.y, Location.pick_sequence)
         .filter(Location.id.in_(location_ids))
         .all()
     )
     pick_nodes: list[dict[str, Any]] = []
-    seen_node: set[int] = set()
+    seen_loc: set[int] = set()
     for loc_id in location_ids:
-        if loc_id not in loc_to_node_xy:
+        if loc_id in seen_loc:
             continue
-        node_id, nx, ny = loc_to_node_xy[loc_id]
-        if node_id in seen_node:
+        candidates = loc_nodes.get(loc_id) or []
+        if not candidates:
             continue
-        seen_node.add(node_id)
+        seen_loc.add(loc_id)
+        # Representative node for Euclidean visit-order heuristic (first AP); distance uses best AP later
+        node_uuid = candidates[0]
+        nx, ny = node_xy.get(node_uuid, (0.0, 0.0))
         products_here = loc_to_qty[loc_id]
         total_qty = sum(q for _, q in products_here)
         pick_nodes.append({
-            "node_id": node_id,
+            "node_id": node_uuid,  # uuid string (historical key name)
+            "node_uuid": node_uuid,
+            "access_node_uuids": candidates,
             "x": nx,
             "y": ny,
             "location_id": loc_id,
@@ -133,7 +156,12 @@ def get_order_pick_locations(
             ),
         })
     EFFECTIVE_UNSEQUENCED = 999999
-    pick_nodes.sort(key=lambda p: (p.get("pick_sequence") if p.get("pick_sequence") is not None else EFFECTIVE_UNSEQUENCED, p["location_id"]))
+    pick_nodes.sort(
+        key=lambda p: (
+            p.get("pick_sequence") if p.get("pick_sequence") is not None else EFFECTIVE_UNSEQUENCED,
+            p["location_id"],
+        )
+    )
     return pick_nodes
 
 
@@ -141,28 +169,75 @@ def compute_route_for_pick_nodes(
     db: Session,
     warehouse_id: int,
     pick_nodes: list[dict[str, Any]],
-) -> tuple[float, list[int]]:
+) -> tuple[float, list[str], Optional[str]]:
     """
-    Compute visit order START -> picks -> PACKING and total walking distance (m).
-    Returns (total_distance_m, visit_order).
+    Visit order START → picks (Euclidean NN heuristic) → PACKING;
+    physical distance from Routing Engine (best AP per hop).
+    Returns (total_distance_m, visit_order_uuids, error_code|None).
     """
-    start_xy, end_xy = get_special_locations_xy(db, warehouse_id)
-    start_node_id = get_node_nearest_to_point(db, warehouse_id, start_xy[0], start_xy[1]) if start_xy else None
-    end_node_id = get_node_nearest_to_point(db, warehouse_id, end_xy[0], end_xy[1]) if end_xy else None
-    node_ids = list({p["node_id"] for p in pick_nodes})
-    if start_node_id is not None:
-        node_ids.append(start_node_id)
-    if end_node_id is not None:
-        node_ids.append(end_node_id)
-    node_rows = db.query(WarehouseNode.id, WarehouseNode.x, WarehouseNode.y).filter(WarehouseNode.id.in_(node_ids)).all()
-    node_xy_map = {n.id: (float(n.x), float(n.y)) for n in node_rows}
+    if not is_routing_graph_configured(db, warehouse_id):
+        return 0.0, [], ERROR_ROUTING_GRAPH_NOT_CONFIGURED
+
+    start_uuid = picking_start_node_uuid(db, warehouse_id)
+    end_uuid = packing_node_uuid(db, warehouse_id)
+    if not start_uuid:
+        return 0.0, [], ERROR_ROUTING_GRAPH_NOT_CONFIGURED
+
+    node_xy_map: dict[str, tuple[float, float]] = {}
+    uuids = [start_uuid]
+    if end_uuid:
+        uuids.append(end_uuid)
+    for p in pick_nodes:
+        uuids.append(str(p.get("node_uuid") or p["node_id"]))
+        for u in p.get("access_node_uuids") or []:
+            uuids.append(u)
+    for n in (
+        db.query(WarehouseRoutingNode)
+        .filter(
+            WarehouseRoutingNode.warehouse_id == warehouse_id,
+            WarehouseRoutingNode.uuid.in_(list(set(uuids))),
+        )
+        .all()
+    ):
+        node_xy_map[n.uuid] = (float(n.x), float(n.y))
+
     if not pick_nodes:
-        return 0.0, []
+        dist, err, path = chain_distance_through_location_ids(
+            db,
+            warehouse_id,
+            [],
+            start_node_uuid=start_uuid,
+            end_node_uuid=end_uuid,
+            process_type=PROCESS_PICKING,
+            transport_type=TRANSPORT_FOOT,
+        )
+        return (dist or 0.0), path, err
+
     visit_order = compute_visit_order_euclidean(
-        start_node_id,
-        end_node_id,
-        [{"node_id": p["node_id"], "x": p["x"], "y": p["y"]} for p in pick_nodes],
+        start_uuid,
+        end_uuid,
+        [{"node_id": p.get("node_uuid") or p["node_id"], "x": p["x"], "y": p["y"]} for p in pick_nodes],
         node_xy_map,
     )
-    total_m = compute_route_distance_euclidean(visit_order, node_xy_map)
-    return total_m, visit_order
+    # Map visit middle nodes back to locations for best-AP chaining
+    uuid_to_loc = {str(p.get("node_uuid") or p["node_id"]): int(p["location_id"]) for p in pick_nodes}
+    loc_order: list[int] = []
+    for uid in visit_order:
+        if uid == start_uuid or uid == end_uuid:
+            continue
+        lid = uuid_to_loc.get(str(uid))
+        if lid is not None and (not loc_order or loc_order[-1] != lid):
+            loc_order.append(lid)
+
+    dist, err, path = chain_distance_through_location_ids(
+        db,
+        warehouse_id,
+        loc_order,
+        start_node_uuid=start_uuid,
+        end_node_uuid=end_uuid,
+        process_type=PROCESS_PICKING,
+        transport_type=TRANSPORT_FOOT,
+    )
+    if err:
+        return 0.0, path, err
+    return (dist or 0.0), path, None

@@ -13,21 +13,6 @@ import {
   logLayoutSavePayload,
   logLayoutSaveStart,
 } from "../components/warehouse/layoutRackLog";
-import {
-  aisleHalfWidthCellsFromCm,
-  collectPackingCentersCells,
-  getRackPickPointCell,
-  pickNearestPackingCell,
-} from "../components/warehouse/rackAccessPoint";
-import { computePickingRouteOrder } from "../components/warehouse/aisleRouteOrder";
-import {
-  buildAisleGraphRoutePath,
-  buildAisleGraphRoutePathPickStartToRack,
-  buildAisleGraphRoutePathSegment,
-  computeManhattanPathLengthCells,
-  getRackRouteWaypoint,
-} from "../components/warehouse/aisleGraphRoute";
-import { buildWalkabilityGrid, nearestWalkableCell } from "../components/warehouse/gridRoutePathfinding";
 import { logRackRename } from "../components/warehouse/rackRenameLog";
 import { RackSidebar } from "../components/warehouse/RackSidebar";
 import { RackSideViewGrid } from "../components/warehouse/RackSideViewGrid";
@@ -96,7 +81,6 @@ import { RoutingGraphLayer } from "./WarehouseDesigner/routing/RoutingGraphLayer
 import { RoutingRoutesPanel } from "./WarehouseDesigner/routing/RoutingRoutesPanel";
 import { useRoutingGraph } from "./WarehouseDesigner/routing/useRoutingGraph";
 import type { RoutingTool } from "./WarehouseDesigner/routing/routingLabels";
-import { getWarehouseLocations } from "../api/warehouseGraphApi";
 import { DesignerGrid } from "./WarehouseDesigner/DesignerGrid";
 import { focusWarehouseCanvasScroll } from "../components/warehouse/WarehouseMainView";
 import { useDesignerMouseHandlers } from "./WarehouseDesigner/useDesignerMouseHandlers";
@@ -110,10 +94,8 @@ import { RowPrefixModal, type RowPrefixModalResult, type RowPrefixRowConfig } fr
 import { getPositionCmAlongWall, getSvgLayoutSizePx } from "./WarehouseDesigner/utils/designerMouseUtils";
 import { normalizeProductDims } from "../utils/productNormalizer";
 import { validateAndSanitizeLayoutPayload } from "../utils/layoutSavePayload";
-import { buildPathAvoidingRacks, buildPickingRoutePolyline, simplifyPath, type PathStop } from "./WarehouseDesigner/pathVisualizationUtils";
 import type { WarehouseOccupancyMetrics } from "../api/warehouseOccupancyApi";
-import { fetchRoutePath } from "../api/routeApi";
-import { generateWarehouseGraph } from "../api/warehouseGraphApi";
+import { getWarehouseLocations } from "../api/warehouseGraphApi";
 import { buildInventoryMaps, normalizeInventoryLocationUuid, type InventoryRow, type InventoryMaps } from "./WarehouseDesigner/inventoryMaps";
 import type { DamageCandidate } from "../types/damageReport";
 import { useWarehouse, type Warehouse } from "../context/WarehouseContext";
@@ -331,126 +313,11 @@ export default function WarehouseDesigner() {
   const [previewRackId, setPreviewRackId] = useState<number | string | null>(null);
   /** Name field focus in properties drawer — suppresses floating toolbar. */
   const [editingRackId, setEditingRackId] = useState<number | string | null>(null);
-  const [pathPoints, setPathPoints] = useState<{ x: number; y: number }[] | null>(null);
-  const [pathSegments, setPathSegments] = useState<{ x: number; y: number }[][] | null>(null);
-  const [pathMarkers, setPathMarkers] = useState<{ x: number; y: number; label: string }[] | null>(null);
-  const [highlightedStopIndex, setHighlightedStopIndex] = useState<number | null>(null);
-  const [currentStopIndex, setCurrentStopIndex] = useState<number | null>(null);
-  const [pathLoading, setPathLoading] = useState(false);
-  const [pathError, setPathError] = useState<string | null>(null);
-  const [graphGenerating, setGraphGenerating] = useState(false);
-  const [retryPathKey, setRetryPathKey] = useState(0);
   type SpecialLocationsState = { pick_start: { id: number; x: number; y: number } | null; packing: { id: number; x: number; y: number } | null; dock: { id: number; x: number; y: number } | null };
   const [specialLocations, setSpecialLocations] = useState<SpecialLocationsState>({ pick_start: null, packing: null, dock: null });
-  type RouteStop = { rackId: string; position: { x: number; y: number } }; // position in cells (float)
-  const [routeRackIds, setRouteRackIds] = useState<string[]>([]);
-  const [isRouteActive, setIsRouteActive] = useState(false);
   const [inventoryRows, setInventoryRows] = useState<InventoryRow[]>([]);
   /** Server-side Σ(qty × product.volume) from inventory rows; overrides bin-based dashboard when loaded. */
   const [occupancyMetrics, setOccupancyMetrics] = useState<WarehouseOccupancyMetrics | null>(null);
-
-  useEffect(() => {
-    if (highlightedStopIndex != null && (highlightedStopIndex < 0 || highlightedStopIndex >= routeRackIds.length)) {
-      setHighlightedStopIndex(null);
-    }
-  }, [routeRackIds.length, highlightedStopIndex]);
-
-
-  const isPointInsideRect = useCallback(
-    (point: { x: number; y: number }, rect: { x: number; y: number; width: number; height: number }) => {
-      return (
-        point.x >= rect.x &&
-        point.x <= rect.x + rect.width &&
-        point.y >= rect.y &&
-        point.y <= rect.y + rect.height
-      );
-    },
-    []
-  );
-
-  const computeApproachPointCells = useCallback(
-    (params: {
-      fromCm: { x: number; y: number };
-      rack: { x: number; y: number; width: number; height: number };
-      layout: { grid_cols?: number; grid_rows?: number; racks?: Array<{ x: number; y: number; width: number; height: number }>; visual_elements?: Array<{ x: number; y: number; width: number; height: number; type: string }>; aisles?: Array<{ x: number; y: number; width: number; height: number }> };
-    }): { x: number; y: number } => {
-      const { fromCm, rack, layout } = params;
-      const rx = rack.x;
-      const ry = rack.y;
-      const rw = rack.width;
-      const rh = rack.height;
-      const gridCols = layout.grid_cols ?? 24;
-      const gridRows = layout.grid_rows ?? 16;
-      const racks = layout.racks ?? [];
-      const visuals = layout.visual_elements ?? [];
-      const aisles = layout.aisles ?? [];
-      const blockingVisualTypes = new Set<string>(["wall", "door", "column", "mezzanine"]);
-
-      const candidates = [
-        { x: rx - 0.5, y: ry + rh / 2 },
-        { x: rx + rw + 0.5, y: ry + rh / 2 },
-        { x: rx + rw / 2, y: ry - 0.5 },
-        { x: rx + rw / 2, y: ry + rh + 0.5 },
-      ];
-
-      const isValid = (c: { x: number; y: number }): boolean => {
-        if (c.x < 0 || c.x > gridCols || c.y < 0 || c.y > gridRows) return false;
-        for (const r of racks) {
-          if (isPointInsideRect(c, r)) return false;
-        }
-        for (const ve of visuals) {
-          if (blockingVisualTypes.has(ve.type) && isPointInsideRect(c, ve)) return false;
-        }
-        return true;
-      };
-
-      let validCandidates = candidates.filter(isValid);
-      if (validCandidates.length === 0) {
-        validCandidates = candidates;
-        warn("No valid approach point; using nearest candidate (may be inside rack or obstacle).");
-      }
-
-      const isInAisle = (c: { x: number; y: number }): boolean =>
-        aisles.length > 0 && aisles.some((a) => isPointInsideRect(c, a));
-
-      const aisleCandidates = validCandidates.filter(isInAisle);
-      const pool = aisleCandidates.length > 0 ? aisleCandidates : validCandidates;
-
-      let best = pool[0];
-      let bestD2 = Infinity;
-      for (const c of pool) {
-        const cx = cellsToCm(c.x);
-        const cy = cellsToCm(c.y);
-        const d2 = (fromCm.x - cx) ** 2 + (fromCm.y - cy) ** 2;
-        if (d2 < bestD2) {
-          bestD2 = d2;
-          best = c;
-        }
-      }
-      return best;
-    },
-    [isPointInsideRect]
-  );
-
-  const addRackToRoute = useCallback((rackId: number | string) => {
-    if (!isRouteActive) return;
-    const rid = String(rackId);
-    setRouteRackIds((prev) => (prev.includes(rid) ? prev.filter((id) => id !== rid) : [...prev, rid]));
-  }, [isRouteActive]);
-
-  const pickStartCell = useMemo(
-    () =>
-      specialLocations.pick_start
-        ? { x: specialLocations.pick_start.x / GRID_UNIT_CM, y: specialLocations.pick_start.y / GRID_UNIT_CM }
-        : null,
-    [specialLocations.pick_start]
-  );
-
-  /** Visit order: row bands + serpentine (not click order, not TSP). */
-  const orderedRouteRackIds = useMemo(
-    () => computePickingRouteOrder(routeRackIds, layout.racks, pickStartCell),
-    [routeRackIds, layout.racks, pickStartCell]
-  );
 
   const {
     aisleDrawStart,
@@ -478,76 +345,6 @@ export default function WarehouseDesigner() {
     aisleWidthCm,
     setAisleWidthCm,
   } = useDesignerRowState();
-
-  const aisleHalfCells = useMemo(() => aisleHalfWidthCellsFromCm(aisleWidthCm), [aisleWidthCm]);
-  const aisleRouteOpts = useMemo(() => ({ aisleHalfWidthCells: aisleHalfCells }), [aisleHalfCells]);
-
-  const [routeStepIndex, setRouteStepIndex] = useState(0);
-
-  useEffect(() => {
-    setRouteStepIndex(0);
-  }, [orderedRouteRackIds.join(",")]);
-
-  /**
-   * One stop per ordered rack id. Position: nearest walkable cell to rack pick point (grid routing).
-   */
-  const routeStops = useMemo<RouteStop[]>(() => {
-    const half = aisleHalfCells;
-    return orderedRouteRackIds
-      .map((rid) => {
-        const rack = layout.racks.find((r) => String(r.id ?? r.rack_index) === rid);
-        if (!rack) return null;
-        const pos = getRackRouteWaypoint(rack, layout, half) ?? getRackPickPointCell(rack, half);
-        return { rackId: rid, position: pos };
-      })
-      .filter((x): x is RouteStop => x != null);
-  }, [orderedRouteRackIds, layout, aisleHalfCells]);
-
-  /** Nearest packing (DB or visual packing_station) to last rack access — snapped to walkable grid cell. */
-  const routePackingCell = useMemo(() => {
-    if (routeStops.length === 0) return null;
-    const last = routeStops[routeStops.length - 1].position;
-    const candidates = collectPackingCentersCells(layout, specialLocations.packing ?? undefined);
-    const nearest = pickNearestPackingCell(last, candidates);
-    if (!nearest) return null;
-    const walkable = buildWalkabilityGrid(layout);
-    const cell = nearestWalkableCell(nearest.x, nearest.y, walkable);
-    if (!cell) return nearest;
-    return { x: cell.ix + 0.5, y: cell.iy + 0.5 };
-  }, [routeStops, layout, specialLocations.packing]);
-
-  /** Full route polyline (total distance). */
-  const routePathFull = useMemo(() => {
-    if (routeRackIds.length <= 1 || !pickStartCell || routeStops.length === 0) return null;
-    return buildAisleGraphRoutePath(layout, pickStartCell, routeStops, routePackingCell, layout.racks, aisleRouteOpts);
-  }, [routeRackIds.length, orderedRouteRackIds, routeStops, pickStartCell, routePackingCell, layout, aisleRouteOpts]);
-
-  /** Single leg for canvas: current rack → next rack (or START → first rack when only one stop). */
-  const routeSegmentPath = useMemo(() => {
-    const ids = orderedRouteRackIds;
-    if (!pickStartCell || ids.length === 0) return null;
-    if (ids.length === 1) {
-      return buildAisleGraphRoutePathPickStartToRack(layout, pickStartCell, ids[0], layout.racks, aisleRouteOpts);
-    }
-    const i = Math.min(routeStepIndex, ids.length - 1);
-    if (i < ids.length - 1) {
-      return buildAisleGraphRoutePathSegment(layout, ids[i], ids[i + 1], layout.racks, aisleRouteOpts);
-    }
-    return null;
-  }, [orderedRouteRackIds, routeStepIndex, layout, pickStartCell, aisleRouteOpts]);
-
-  /** Stops for PathLayer / RouteStopLayer: only the current leg (avoids full-route fallback when polyline is null). */
-  const routeStopsForCanvas = useMemo(() => {
-    const ids = orderedRouteRackIds;
-    if (ids.length < 2) return routeStops;
-    const i = Math.min(routeStepIndex, ids.length - 1);
-    if (i < ids.length - 1) {
-      const a = ids[i];
-      const b = ids[i + 1];
-      return routeStops.filter((s) => s.rackId === a || s.rackId === b);
-    }
-    return [];
-  }, [routeStops, orderedRouteRackIds, routeStepIndex]);
 
   const [placementMode, setPlacementMode] = useState(false);
   const [ghostPosition, setGhostPosition] = useState<{ x: number; y: number } | null>(null);
@@ -1283,7 +1080,7 @@ export default function WarehouseDesigner() {
     setSelectedProductId((prev) => (prev === productId ? null : productId));
   }, []);
 
-  /** For canvas: merge product/template highlights with full route selection + focused stops. */
+  /** For canvas: merge product/template highlights. */
   const canvasHighlightedRackIds = useMemo(() => {
     const base =
       selectedProductId != null
@@ -1291,75 +1088,12 @@ export default function WarehouseDesigner() {
         : rackIdsContainingSelectedProduct ?? new Set<string>();
     const out = new Set(base);
     for (const rid of rackIdsForSelectedTemplate) out.add(rid);
-    if (routeStops.length > 0) {
-      for (const stop of routeStops) out.add(stop.rackId);
-      if (highlightedStopIndex != null && routeStops[highlightedStopIndex]) {
-        out.add(routeStops[highlightedStopIndex].rackId);
-      }
-      if (currentStopIndex != null && routeStops[currentStopIndex]) {
-        out.add(routeStops[currentStopIndex].rackId);
-      }
-    }
     return out;
   }, [
     selectedProductId,
     rackIdsContainingSelectedProduct,
     rackIdsForSelectedTemplate,
-    routeStops,
-    highlightedStopIndex,
-    currentStopIndex,
   ]);
-
-  const routeStepBadges = useMemo(() => {
-    const ids = orderedRouteRackIds;
-    if (ids.length === 0) return null;
-    const idx = Math.min(routeStepIndex, ids.length - 1);
-    const cur = ids[idx];
-    if (ids.length === 1) {
-      return {
-        currentRackId: cur,
-        nextRackId: null as string | null,
-        currentOrder: 1,
-        nextOrder: null as number | null,
-      };
-    }
-    const next = idx < ids.length - 1 ? ids[idx + 1] : null;
-    return {
-      currentRackId: cur,
-      nextRackId: next,
-      currentOrder: idx + 1,
-      nextOrder: next != null ? idx + 2 : null,
-    };
-  }, [orderedRouteRackIds, routeStepIndex]);
-
-  const routeStopsForCanvasMode = routeStops;
-  const routeGraphPolylineForCanvas = routePathFull && routePathFull.length >= 2 ? routePathFull : routeSegmentPath;
-  const routeStepBadgesForCanvas = routeRackIds.length >= 1 ? routeStepBadges : null;
-  const highlightedStopIndexForCanvas = highlightedStopIndex;
-  const currentStopIndexForCanvas = currentStopIndex;
-  const showRouteEndpointMarkersForCanvas = routeRackIds.length === 0;
-
-  /** Total walking distance (full route, or single-leg when only one rack). */
-  const routeLengthMeters = useMemo(() => {
-    if (routeRackIds.length < 1) return 0;
-    if (routePathFull && routePathFull.length >= 2) {
-      return (computeManhattanPathLengthCells(routePathFull) * GRID_UNIT_CM) / 100;
-    }
-    if (routeRackIds.length === 1 && routeSegmentPath && routeSegmentPath.length >= 2) {
-      return (computeManhattanPathLengthCells(routeSegmentPath) * GRID_UNIT_CM) / 100;
-    }
-    return 0;
-  }, [routeRackIds.length, routePathFull, routeSegmentPath]);
-
-  /** Current leg distance (step view). */
-  const routeLegMeters = useMemo(() => {
-    if (!routeSegmentPath || routeSegmentPath.length < 2) return 0;
-    return (computeManhattanPathLengthCells(routeSegmentPath) * GRID_UNIT_CM) / 100;
-  }, [routeSegmentPath]);
-
-  const handleRouteStepNext = useCallback(() => {
-    setRouteStepIndex((i) => Math.min(i + 1, Math.max(0, orderedRouteRackIds.length - 1)));
-  }, [orderedRouteRackIds.length]);
 
   /** Quantity breakdown for the globally selected product (for ProductLocatorSidebar). */
   const selectedProductQuantityBreakdown = useMemo(() => {
@@ -1725,14 +1459,6 @@ export default function WarehouseDesigner() {
     setSelectedRackId(null);
     setPreviewRackId(null);
     setEditingRackId(null);
-    setPathPoints(null);
-    setPathSegments(null);
-    setPathMarkers(null);
-    setHighlightedStopIndex(null);
-    setCurrentStopIndex(null);
-    setPathError(null);
-    setRouteRackIds([]);
-    setIsRouteActive(false);
     setEditingProductId(null);
     setSelectedBinForFilter(null);
     setShowElevationForRackId(null);
@@ -2427,7 +2153,6 @@ export default function WarehouseDesigner() {
       ghostH,
       copyPlacementMode,
       copiedRack,
-      routeMode: isRouteActive,
     },
     setters: {
       setIsPanning,
@@ -2470,7 +2195,6 @@ export default function WarehouseDesigner() {
       stampRackAt,
       addSpecialLocation,
       placeCopiedRack,
-      addRackToRoute,
       onAddWallElement: addWallElement,
       onRequestGatePlacement: (wall: WallSide, position_cm: number) => {
         setPendingGatePlacement({ wall, position_cm });
@@ -3225,11 +2949,10 @@ export default function WarehouseDesigner() {
       : layout.racks.find((r) => rackMatchesSlotRackId(r, previewRackId));
   const selectedRacks = layout.racks.filter((r) => selectedRackIds.some((id) => rackMatchesSlotRackId(r, id)));
   const isMultiSelect = selectedRackIds.length > 1;
-  const routePanelVisible = isRouteActive || routeRackIds.length > 0;
   const rackPropertiesPanelVisible =
     mainView === "layout" &&
     !rackPanelDismissed &&
-    (previewRack != null || routePanelVisible) &&
+    previewRack != null &&
     selectedAisleIndex == null &&
     selectedVisualIds.length === 0;
 
@@ -3241,13 +2964,6 @@ export default function WarehouseDesigner() {
     setSelectedRackIds([]);
     focusWarehouseCanvasScroll();
   }, []);
-
-  useEffect(() => {
-    if (mainView !== "layout") return;
-    if (routePanelVisible) {
-      setRackPanelDismissed(false);
-    }
-  }, [mainView, routePanelVisible]);
 
   useEffect(() => {
     if (previewRackId == null || selectedRackId == null) return;
@@ -3317,70 +3033,6 @@ export default function WarehouseDesigner() {
     rackPanelOpen: rackPropertiesPanelVisible,
   });
 
-  const fetchPathToRack = useCallback(async () => {
-    if (!specialLocations.pick_start || !selectedRack) return;
-    const warehouseId = selectedWarehouseId ?? layout.warehouse_id ?? null;
-    if (warehouseId == null) {
-      setPathError("Wybierz magazyn.");
-      return;
-    }
-    setPathLoading(true);
-    setPathError(null);
-    const from = { x: specialLocations.pick_start.x, y: specialLocations.pick_start.y };
-    const approach = computeApproachPointCells({ fromCm: from, rack: selectedRack, layout });
-    const to = { x: cellsToCm(approach.x), y: cellsToCm(approach.y) };
-    const payload = { warehouseId: String(warehouseId), from, to };
-    try {
-      const res = await fetchRoutePath(payload);
-      if (res.points && res.points.length >= 2) {
-        const points = res.points.map((p) => ({ x: p.x / GRID_UNIT_CM, y: p.y / GRID_UNIT_CM }));
-        setPathPoints(simplifyPath(points));
-        setPathSegments(null);
-        setCurrentStopIndex(null);
-        setPathMarkers(null);
-      } else {
-        setPathPoints(null);
-        setPathSegments(null);
-        setCurrentStopIndex(null);
-        if (res.message) setPathError(res.message);
-      }
-    } catch (e: unknown) {
-      setPathPoints(null);
-      setPathSegments(null);
-      setCurrentStopIndex(null);
-      const err = e as { response?: { data?: { detail?: string } }; message?: string };
-      setPathError(err?.response?.data?.detail ?? err?.message ?? "Nie udało się pobrać trasy.");
-    } finally {
-      setPathLoading(false);
-    }
-  }, [specialLocations, selectedRack, selectedWarehouseId, layout, computeApproachPointCells]);
-
-  useEffect(() => {
-    if (mainView !== "layout" || routeRackIds.length > 0 || isRouteActive || !selectedRack || !specialLocations.pick_start) return;
-    const warehouseId = selectedWarehouseId ?? layout.warehouse_id;
-    if (warehouseId == null) return;
-    fetchPathToRack();
-  }, [mainView, routeRackIds.length, isRouteActive, selectedRack, specialLocations, selectedWarehouseId, layout.warehouse_id, fetchPathToRack]);
-
-  const handleGenerateGraph = useCallback(async () => {
-    const warehouseId = selectedWarehouseId ?? layout.warehouse_id ?? null;
-    if (warehouseId == null) return;
-    setGraphGenerating(true);
-    setPathError(null);
-    try {
-      await generateWarehouseGraph(warehouseId);
-      setSnackbar({ message: "Graf magazynu wygenerowany." });
-      setPathError(null);
-      setRetryPathKey((k) => k + 1);
-      await fetchPathToRack();
-    } catch (e: unknown) {
-      const err = e as { response?: { data?: { detail?: string } }; message?: string };
-      setSnackbar({ message: err?.response?.data?.detail ?? err?.message ?? "Nie udało się wygenerować grafu." });
-    } finally {
-      setGraphGenerating(false);
-    }
-  }, [selectedWarehouseId, layout.warehouse_id, fetchPathToRack]);
-
   const buildingDepthM = layout.building_depth_m ?? layout.building_height_m;
   const outsideRackIds = useMemo(() => {
     const bw = layout.building_width_m;
@@ -3403,139 +3055,6 @@ export default function WarehouseDesigner() {
       });
     }
   }, [outsideRackIds.length]);
-
-  // v1: visual path / picking route in layout view. Single-rack path from backend API; route mode builds segments via POST /route/path.
-  useEffect(() => {
-    if (!specialLocations?.pick_start) {
-      setPathPoints(null);
-      setPathSegments(null);
-      setCurrentStopIndex(null);
-      setPathMarkers(null);
-      setPathError(null);
-      return;
-    }
-    if (mainView !== "layout") {
-      setPathPoints(null);
-      setPathSegments(null);
-      setCurrentStopIndex(null);
-      setPathMarkers(null);
-      setPathError(null);
-      return;
-    }
-
-    const start = {
-      x: specialLocations.pick_start.x / GRID_UNIT_CM,
-      y: specialLocations.pick_start.y / GRID_UNIT_CM,
-    };
-    const gridCols = layout.grid_cols ?? 24;
-    const gridRows = layout.grid_rows ?? 16;
-
-    if (routeRackIds.length > 0) {
-      let cancelled = false;
-      (async () => {
-        setPathLoading(true);
-        setPathError(null);
-        const warehouseId = selectedWarehouseId ?? layout.warehouse_id ?? null;
-        if (warehouseId == null) {
-          setPathLoading(false);
-          setPathError("Wybierz magazyn.");
-          return;
-        }
-
-        const finalStops = routeStops;
-
-        const segmentsCount = finalStops.length;
-        const full: Array<{ x: number; y: number }> = [];
-        const segmentsArray: Array<{ x: number; y: number }[]> = [];
-
-        const cmFromCells = (p: { x: number; y: number }) => ({ x: cellsToCm(p.x), y: cellsToCm(p.y) });
-        const cellsFromCm = (p: { x: number; y: number }) => ({ x: p.x / GRID_UNIT_CM, y: p.y / GRID_UNIT_CM });
-        const samePoint = (a: { x: number; y: number }, b: { x: number; y: number }) =>
-          Math.abs(a.x - b.x) < 1e-6 && Math.abs(a.y - b.y) < 1e-6;
-
-        for (let i = 0; i < finalStops.length; i++) {
-          const fromCm = i === 0
-            ? { x: specialLocations.pick_start!.x, y: specialLocations.pick_start!.y }
-            : cmFromCells(finalStops[i - 1].position);
-          const toCm = cmFromCells(finalStops[i].position);
-
-          const payload = { warehouseId: String(warehouseId), from: fromCm, to: toCm };
-          const res = await fetchRoutePath(payload);
-          if (cancelled) return;
-          const segCells = (res.points ?? []).map(cellsFromCm);
-          if (segCells.length < 2) {
-            setPathError(res.message ?? "Brak ścieżki dla segmentu trasy.");
-            break;
-          }
-
-          segmentsArray.push(simplifyPath(segCells));
-          if (full.length === 0) {
-            full.push(...segCells);
-          } else {
-            const startIdx = samePoint(full[full.length - 1], segCells[0]) ? 1 : 0;
-            full.push(...segCells.slice(startIdx));
-          }
-        }
-
-        const packingCell =
-          finalStops.length > 0
-            ? pickNearestPackingCell(
-                finalStops[finalStops.length - 1].position,
-                collectPackingCentersCells(layout, specialLocations.packing ?? undefined)
-              )
-            : null;
-        if (packingCell && !cancelled && finalStops.length > 0) {
-          const fromCm = cmFromCells(finalStops[finalStops.length - 1].position);
-          const toCm = cmFromCells(packingCell);
-          const payload = { warehouseId: String(warehouseId), from: fromCm, to: toCm };
-          const res = await fetchRoutePath(payload);
-          if (cancelled) return;
-          const segCells = (res.points ?? []).map(cellsFromCm);
-          if (segCells.length >= 2) {
-            segmentsArray.push(simplifyPath(segCells));
-            const startIdx = full.length > 0 && samePoint(full[full.length - 1], segCells[0]) ? 1 : 0;
-            full.push(...segCells.slice(startIdx));
-          }
-        }
-
-        if (!cancelled) {
-          setPathPoints(full.length >= 2 ? simplifyPath(full) : null);
-          setPathSegments(segmentsArray.length > 0 ? segmentsArray : null);
-          setPathMarkers(null);
-          setCurrentStopIndex(null);
-          setPathLoading(false);
-        }
-      })().catch((e: unknown) => {
-        const err = e as { response?: { data?: { detail?: string } }; message?: string };
-        setPathLoading(false);
-        setPathError(err?.response?.data?.detail ?? err?.message ?? "Nie udało się pobrać trasy.");
-      });
-
-      return () => { cancelled = true; };
-    }
-
-    if (selectedRack == null) {
-      setPathPoints(null);
-      setPathSegments(null);
-      setCurrentStopIndex(null);
-      setPathMarkers(null);
-      return;
-    }
-
-    const rawStops = (layout.picking_path ?? []).filter((p) => Number.isFinite(p?.x) && Number.isFinite(p?.y));
-    if (routeRackIds.length === 0 && rawStops.length >= 2) {
-      const stops: PathStop[] = rawStops.map((p) => ({ x: p.x, y: p.y }));
-      const route = buildPickingRoutePolyline(start, stops, layout.racks, gridRows);
-      setPathPoints(simplifyPath(route.polylinePoints));
-      setPathSegments(null);
-      setCurrentStopIndex(null);
-      setPathMarkers(route.orderedStops.map((s, i) => ({ x: s.x, y: s.y, label: String(i + 1) })));
-      return;
-    }
-
-    // Single target (selected rack): path comes from backend API (fetchPathToRack), do not overwrite here.
-    if (routeRackIds.length === 0) return;
-  }, [mainView, selectedRack, specialLocations, layout, routeStops, routeRackIds.length, selectedWarehouseId, retryPathKey]);
 
   const applyInternalLayoutSave = useCallback(
     (rackId: number | string, internal_structure: InternalStructure, bins: BinState[] | undefined, variant?: CustomRackTemplate | null) => {
@@ -3629,18 +3148,6 @@ export default function WarehouseDesigner() {
             })()}
             showEditBuilding={showEditBuilding}
             setShowEditBuilding={setShowEditBuilding}
-            isRouteActive={isRouteActive}
-            showLegacyPlanujTrase={!routesMode}
-            onToggleRoutePlanning={() => {
-              setIsRouteActive((prev) => {
-                const next = !prev;
-                if (next) {
-                  setRouteRackIds([]);
-                  setRouteStepIndex(0);
-                }
-                return next;
-              });
-            }}
           />
         </div>
         {mainView === "layout" && (
@@ -3938,20 +3445,20 @@ export default function WarehouseDesigner() {
                             cellPx={cellPx}
                             width={width}
                             height={height}
-                            pathPoints={pathPoints}
-                            pathSegments={pathSegments}
-                            pathMarkers={pathMarkers}
-                            routeStops={routeStopsForCanvasMode}
-                            showRoute={routeRackIds.length >= 1 && routeStops.length > 0}
-                            routeStepBadges={routeStepBadgesForCanvas}
-                            routeEndCell={routePackingCell}
-                            routeGraphPolyline={routeGraphPolylineForCanvas}
-                            showRouteEndpointMarkers={showRouteEndpointMarkersForCanvas}
+                            pathPoints={null}
+                            pathSegments={null}
+                            pathMarkers={null}
+                            routeStops={null}
+                            showRoute={false}
+                            routeStepBadges={null}
+                            routeEndCell={null}
+                            routeGraphPolyline={null}
+                            showRouteEndpointMarkers={true}
                             // Magazyn map is navigation-only: no quantity badges, only rack highlighting + labels.
                             rackQuantities={mainView === "magazyn" ? undefined : productRackQuantities ?? undefined}
                             getRackDisplayId={getRackDisplayIdWithLayout}
-                            highlightedStopIndex={highlightedStopIndexForCanvas}
-                            currentStopIndex={currentStopIndexForCanvas}
+                            highlightedStopIndex={null}
+                            currentStopIndex={null}
                             svgRef={svgRef}
                             canvasContainerRef={canvasContainerRef}
                             onMouseMove={handleCanvasMouseMove}
@@ -4282,7 +3789,6 @@ export default function WarehouseDesigner() {
               setEditingRackId,
               isMultiSelect,
               onRackClickPassthrough: undefined,
-              isRoutePlanningMode: isRouteActive,
               setInternalLayoutRackId,
               setShowElevationForRackId,
               setLayout,
@@ -4356,39 +3862,18 @@ export default function WarehouseDesigner() {
               draggingWallElementId,
               dragPreviewPositionCm,
               onStartWallElementDrag: (el) => setDraggingWallElementId(el.id),
-              pathPoints,
-              pathSegments,
-              routeStops: routeStopsForCanvasMode,
-              showRoute: routesMode ? false : routeRackIds.length >= 1 && routeStops.length > 0,
-              highlightedStopIndex: highlightedStopIndexForCanvas,
-              currentStopIndex: currentStopIndexForCanvas,
+              pathPoints: null,
+              pathSegments: null,
+              routeStops: null,
+              showRoute: false,
+              highlightedStopIndex: null,
+              currentStopIndex: null,
               getRackDisplayId: getRackDisplayIdWithLayout,
-              routeStepBadges: routeStepBadgesForCanvas,
-              routeEndCell: routePackingCell,
-              routeGraphPolyline: routeGraphPolylineForCanvas,
-              showRouteEndpointMarkers: showRouteEndpointMarkersForCanvas,
-              pathMarkers,
-              routeRackIds: orderedRouteRackIds,
-              routeRackLabels: routeStops.map((s) => {
-                const stopRack = layout.racks.find((r) => String(r.id ?? r.rack_index) === s.rackId);
-                return stopRack ? getRackDisplayIdWithLayout(stopRack) : `Regał ${s.rackId}`;
-              }),
-              routeLengthMeters,
-              routeLegMeters,
-              routeStepIndex,
-              routeStepCount: orderedRouteRackIds.length,
-              onRouteStepNext: handleRouteStepNext,
-              isRouteActive: routesMode ? false : isRouteActive,
-              clearRoute: () => {
-                setRouteRackIds([]);
-                setRouteStepIndex(0);
-              },
-              optimizeRoute: () => {
-                setRouteRackIds((prev) => computePickingRouteOrder(prev, layout.racks, pickStartCell));
-                setSnackbar({ message: "Kolejność dopasowana (tryb wąż)." });
-              },
-              finishRoute: () => setIsRouteActive(false),
-              routePanelVisible: routesMode ? false : routePanelVisible,
+              routeStepBadges: null,
+              routeEndCell: null,
+              routeGraphPolyline: null,
+              showRouteEndpointMarkers: true,
+              pathMarkers: null,
               rackPanelOpen: routesMode ? false : !rackPanelDismissed,
               onCloseRackPanel: closeRackPanel,
               onSaveLayout: saveLayout,

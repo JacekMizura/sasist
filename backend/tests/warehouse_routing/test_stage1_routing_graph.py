@@ -37,7 +37,6 @@ from backend.services.warehouse_routing.constants import (
     OP_PACKING,
     OP_PICKING_START,
 )
-from backend.services.warehouse_graph_service import WarehouseGraphService
 
 
 def _uid() -> str:
@@ -105,22 +104,17 @@ def test_01_create_save_reload_uuid_identical(db):
     assert sorted(e.uuid for e in out2.edges) == sorted(e.uuid for e in out1.edges)
 
 
-def test_02_layout_save_does_not_touch_routing_graph(db, monkeypatch):
-    """Authored graph untouched when legacy build_graph runs (save_layout side-effect)."""
-    _, _, _, payload = _simple_graph_payload()
-    before = replace_graph(db, 1, payload, materialize_crossings=False)
-    before_ids = sorted(n.uuid for n in before.nodes)
+def test_02_layout_save_does_not_touch_routing_graph():
+    """save_layout must not call legacy build_graph (Stage 2 removed side-effect)."""
+    from pathlib import Path
 
-    # Legacy auto-graph rebuild must not delete authored tables
-    # Simulate: only call legacy service with empty locations → creates packing node in OLD tables
-    try:
-        WarehouseGraphService(db).build_graph(1)
-    except Exception:
-        pass
-
-    after = get_graph(db, 1)
-    assert sorted(n.uuid for n in after.nodes) == before_ids
-    assert len(after.edges) == len(before.edges)
+    src = (Path(__file__).resolve().parents[2] / "services" / "warehouse_layout_service.py").read_text(
+        encoding="utf-8"
+    )
+    assert "WarehouseGraphService" not in src
+    assert "build_graph" not in src
+    assert "assign_locations_to_graph_nodes" not in src
+    # authored graph still untouched conceptually — UUID persistence covered by test_01
 
 
 def test_03_a_to_b_shortest(db):

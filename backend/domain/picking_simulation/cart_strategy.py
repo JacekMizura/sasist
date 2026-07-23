@@ -74,7 +74,7 @@ def simulate_cart_strategy(
                         if existing["node_id"] == nid:
                             existing["quantity"] = existing.get("quantity", 0) + n.get("quantity", 0)
                             break
-        dist_m, _ = compute_route_for_pick_nodes(db, warehouse_id, all_pick_nodes)
+        dist_m, _, _err = compute_route_for_pick_nodes(db, warehouse_id, all_pick_nodes)
         total_walking_m += dist_m
 
     walking_time_s = total_walking_m / WALKING_SPEED_M_S if total_walking_m else 0.0

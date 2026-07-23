@@ -342,7 +342,7 @@ export async function getBatchPicking(
 export type WalkingCostItem = {
   order_id: number;
   order_number?: string;
-  total_distance: number;
+  total_distance: number | null;
   distinct_locations_count: number;
   total_items: number;
 };

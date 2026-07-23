@@ -23,19 +23,6 @@ export type WarehouseMainViewProps = WarehouseCanvasProps & {
   setSelectedVisualIds: React.Dispatch<React.SetStateAction<string[]>>;
   setSelectedAisleIndex: (v: number | null) => void;
   selectedRacks: RackState[];
-  routeRackIds: string[];
-  routeRackLabels: string[];
-  routeLengthMeters: number;
-  /** Current leg length (step-by-step navigation). */
-  routeLegMeters?: number;
-  routeStepIndex?: number;
-  routeStepCount?: number;
-  onRouteStepNext?: () => void;
-  isRouteActive: boolean;
-  clearRoute: () => void;
-  optimizeRoute: () => void;
-  finishRoute: () => void;
-  routePanelVisible: boolean;
   rackPanelOpen: boolean;
   /** Rack shown in properties drawer (may differ from canvas selection). */
   propertiesRack?: RackState | null;
@@ -69,18 +56,6 @@ export function WarehouseMainView(props: WarehouseMainViewProps) {
     editingRackId,
     setEditingRackId,
     selectedRacks,
-    routeRackIds,
-    routeRackLabels,
-    routeLengthMeters,
-    routeLegMeters = 0,
-    routeStepIndex = 0,
-    routeStepCount = 0,
-    onRouteStepNext,
-    isRouteActive,
-    clearRoute,
-    optimizeRoute,
-    finishRoute,
-    routePanelVisible,
     rackPanelOpen,
     onCloseRackPanel,
     onSaveLayout,
@@ -115,7 +90,7 @@ export function WarehouseMainView(props: WarehouseMainViewProps) {
 
   const showRackPanel =
     rackPanelOpen &&
-    ((propertiesRack ?? selectedRack) || routePanelVisible) &&
+    (propertiesRack ?? selectedRack) != null &&
     selectedAisleIndex == null &&
     selectedVisualIds.length === 0 &&
     showElevationForRackId == null;
@@ -412,17 +387,6 @@ export function WarehouseMainView(props: WarehouseMainViewProps) {
           setInternalLayoutRackId={setInternalLayoutRackId}
           setSelectedRackId={setSelectedRackId}
           setSelectedRackIds={setSelectedRackIds}
-          routeRackIds={routeRackIds}
-          routeRackLabels={routeRackLabels}
-          routeLengthMeters={routeLengthMeters}
-          routeLegMeters={routeLegMeters}
-          routeStepIndex={routeStepIndex}
-          routeStepCount={routeStepCount}
-          onRouteStepNext={onRouteStepNext}
-          isRouteActive={isRouteActive}
-          clearRoute={clearRoute}
-          optimizeRoute={optimizeRoute}
-          finishRoute={finishRoute}
           onClose={onCloseRackPanel}
           onSaveLayout={onSaveLayout}
           saving={saving}

@@ -64,11 +64,3 @@ export async function getWarehouseLocations(
   );
   return Array.isArray(data) ? data : [];
 }
-
-/** POST /warehouse-graph/{warehouseId}/generate — generate graph nodes/edges for the warehouse. */
-export async function generateWarehouseGraph(
-  warehouseId: number
-): Promise<unknown> {
-  const { data } = await api.post(`/warehouse-graph/${warehouseId}/generate`);
-  return data;
-}

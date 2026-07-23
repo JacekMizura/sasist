@@ -56,13 +56,13 @@ export default function WalkingCostPage() {
           </thead>
           <tbody className="divide-y divide-slate-100">
             {items.length === 0 ? (
-              <tr><td colSpan={5} className="px-4 py-6 text-center text-slate-500">Brak danych. Wygeneruj graf magazynu (POST /warehouse-graph/{"{warehouse_id}"}/generate) i upewnij się, że zamówienia mają produkty w inwentarzu.</td></tr>
+              <tr><td colSpan={5} className="px-4 py-6 text-center text-slate-500">Brak danych. Skonfiguruj sieć tras w projektancie (TRASY) i upewnij się, że zamówienia mają produkty w inwentarzu oraz Access Points.</td></tr>
             ) : (
               items.map((row) => (
                 <tr key={row.order_id}>
                   <td className="px-4 py-2">{row.order_id}</td>
                   <td className="px-4 py-2">{row.order_number ?? "—"}</td>
-                  <td className="px-4 py-2 text-right">{row.total_distance}</td>
+                  <td className="px-4 py-2 text-right">{row.total_distance == null ? "N/A" : row.total_distance}</td>
                   <td className="px-4 py-2 text-right">{row.distinct_locations_count}</td>
                   <td className="px-4 py-2 text-right">{row.total_items}</td>
                 </tr>

@@ -24,14 +24,21 @@ from ..models.inventory import Inventory
 from ..models.location import Location
 from ..models.warehouse import Bin
 from ..models.warehouse import Warehouse
-from ..models.warehouse_graph import WarehouseNode, WarehouseEdge, LocationNode
 from ..storage_types import NON_PICKABLE_STORAGE_TYPE_ALIASES, get_storage_priority
 from ..domain.simulation import (
-    get_adjacency,
-    get_start_node_for_warehouse,
-    dijkstra_dist,
     simulate_single_order,
     simulate_batch_orders,
+)
+from .warehouse_routing.access_resolution import (
+    chain_distance_through_location_ids,
+    is_routing_graph_configured,
+    packing_node_uuid,
+    picking_start_node_uuid,
+)
+from .warehouse_routing.constants import (
+    ERROR_ROUTING_GRAPH_NOT_CONFIGURED,
+    PROCESS_PICKING,
+    TRANSPORT_FOOT,
 )
 
 logger = logging.getLogger(__name__)
@@ -1006,10 +1013,10 @@ def walking_cost(
     limit: int = 200,
 ) -> list[dict[str, Any]]:
     """
-    Walking-cost using warehouse graph and order data. Does NOT use picks.
-    Data flow: orders → order_items → inventory → location → location_nodes → warehouse_nodes.
-    Path: start node (packing or closest to 0,0) → node(product1) → node(product2) → ...
-    Distance: sum of graph (Dijkstra) segment distances in meters.
+    Walking-cost via authored Warehouse Routing Graph (SSOT).
+    orders → items → inventory → location → Access Points → Routing Engine.
+    Context: process=picking, transport=foot.
+    No Euclidean fallback; missing graph → total_distance null + ROUTING_GRAPH_NOT_CONFIGURED.
     """
     order_filter = [Order.tenant_id == tenant_id]
     if warehouse_id is not None:
@@ -1027,14 +1034,12 @@ def walking_cost(
     order_ids = [o.id for o in orders]
     wh_ids = list({o.warehouse_id for o in orders})
 
-    # order_id -> [(product_id, quantity), ...] in order
     items_by_order: dict[int, list[tuple[int, int]]] = {oid: [] for oid in order_ids}
     for oi in db.query(OrderItem.order_id, OrderItem.product_id, OrderItem.quantity).filter(
         OrderItem.order_id.in_(order_ids)
     ):
         items_by_order[oi.order_id].append((oi.product_id, int(oi.quantity or 0)))
 
-    # (warehouse_id, product_id) -> location_id
     inv_filter = [Inventory.tenant_id == tenant_id, Inventory.warehouse_id.in_(wh_ids)]
     inv_rows = (
         db.query(
@@ -1068,67 +1073,75 @@ def walking_cost(
             key_to_loc[k][0],
         ):
             key_to_loc[k] = candidate
-    loc_ids = list({loc_id for loc_id, _, _ in key_to_loc.values()})
-    if not loc_ids:
-        return [
-            {
-                "order_id": o.id,
-                "order_number": o.number,
-                "total_distance": 0.0,
-                "distinct_locations_count": 0,
-                "total_items": sum(q for _, q in (items_by_order.get(o.id) or [])),
-            }
-            for o in orders
-        ]
 
-    # location_id -> node_id
-    loc_to_node: dict[int, int] = {}
-    for ln in db.query(LocationNode.location_id, LocationNode.node_id).filter(
-        LocationNode.location_id.in_(loc_ids)
-    ):
-        loc_to_node[ln.location_id] = ln.node_id
-
-    # Per-warehouse graph and start node (simulation engine)
-    wh_adj: dict[int, dict[int, list[tuple[int, float]]]] = {}
-    wh_start: dict[int, int | None] = {}
-    for wh_id in wh_ids:
-        wh_adj[wh_id] = get_adjacency(db, wh_id)
-        wh_start[wh_id] = get_start_node_for_warehouse(db, wh_id)
+    wh_configured = {wid: is_routing_graph_configured(db, wid) for wid in wh_ids}
+    wh_start = {wid: picking_start_node_uuid(db, wid) for wid in wh_ids}
+    wh_pack = {wid: packing_node_uuid(db, wid) for wid in wh_ids}
 
     result = []
     for o in orders:
         wh_id = o.warehouse_id
-        start_node = wh_start.get(wh_id)
-        adj = wh_adj.get(wh_id, {})
-        path_nodes: list[int] = []
         total_items = 0
+        loc_seq: list[int] = []
+        seen_loc: set[int] = set()
         for product_id, qty in items_by_order.get(o.id) or []:
             total_items += qty
             loc_id = key_to_loc.get((wh_id, product_id), (None, 0, 0))[0]
-            node_id = loc_to_node.get(loc_id) if loc_id else None
-            if node_id is not None:
-                path_nodes.append(node_id)
+            if loc_id is not None and loc_id not in seen_loc:
+                seen_loc.add(loc_id)
+                loc_seq.append(loc_id)
 
-        if not adj or start_node is None:
-            total_distance = 0.0
-        else:
-            total_distance = 0.0
-            prev = start_node
-            for node_id in path_nodes:
-                seg = dijkstra_dist(adj, prev, node_id)
-                if seg == float("inf"):
-                    seg = 0.0
-                total_distance += seg
-                prev = node_id
+        if not wh_configured.get(wh_id):
+            result.append({
+                "order_id": o.id,
+                "order_number": o.number,
+                "total_distance": None,
+                "distance_available": False,
+                "routing_status": ERROR_ROUTING_GRAPH_NOT_CONFIGURED,
+                "distinct_locations_count": len(loc_seq),
+                "total_items": total_items,
+            })
+            continue
 
+        start_uuid = wh_start.get(wh_id)
+        end_uuid = wh_pack.get(wh_id)
+        if not start_uuid:
+            result.append({
+                "order_id": o.id,
+                "order_number": o.number,
+                "total_distance": None,
+                "distance_available": False,
+                "routing_status": ERROR_ROUTING_GRAPH_NOT_CONFIGURED,
+                "distinct_locations_count": len(loc_seq),
+                "total_items": total_items,
+            })
+            continue
+
+        dist, err, _path = chain_distance_through_location_ids(
+            db,
+            wh_id,
+            loc_seq,
+            start_node_uuid=start_uuid,
+            end_node_uuid=end_uuid,
+            process_type=PROCESS_PICKING,
+            transport_type=TRANSPORT_FOOT,
+        )
         result.append({
             "order_id": o.id,
             "order_number": o.number,
-            "total_distance": round(total_distance, 2),
-            "distinct_locations_count": len(path_nodes),
+            "total_distance": round(dist, 2) if dist is not None else None,
+            "distance_available": dist is not None,
+            "routing_status": err,
+            "distinct_locations_count": len(loc_seq),
             "total_items": total_items,
         })
-    result.sort(key=lambda r: (-r["total_distance"], r["order_id"]))
+
+    result.sort(
+        key=lambda r: (
+            -(r["total_distance"] if r["total_distance"] is not None else -1),
+            r["order_id"],
+        )
+    )
     return result
 
 
@@ -1165,6 +1178,26 @@ def get_pick_route(db: Session, order_number: str, record_picks: bool = False) -
     product_ids = [i.product_id for i in items]
     sim = simulate_single_order(db, order, record_picks=record_picks)
 
+    if sim.get("error") == "routing_graph_not_configured":
+        return {
+            "warehouse_id": sim["warehouse_id"],
+            "route": [],
+            "start": None,
+            "end": None,
+            "total_distance": None,
+            "estimated_time": None,
+            "pick_locations": [],
+            "mapped_nodes": [],
+            "order_number": order.number,
+            "order_id": order.id,
+            "order_found": True,
+            "order_items": len(items),
+            "inventory_locations": 0,
+            "mapped_nodes_count": 0,
+            "distance_available": False,
+            "routing_status": ERROR_ROUTING_GRAPH_NOT_CONFIGURED,
+            "error": "Brak skonfigurowanej sieci tras",
+        }
     if sim.get("error") == "no_pick_start":
         return {
             "warehouse_id": sim["warehouse_id"],
@@ -1283,33 +1316,52 @@ def get_pick_route(db: Session, order_number: str, record_picks: bool = False) -
         }
 
     route_points = sim.get("route_points") or []
-    total_distance_m = sim.get("total_distance_m") or 0.0
-    estimated_time_s = sim.get("estimated_time_s") or 0.0
-    visit_order = sim.get("visit_order") or []
-    # visit_order is [start_node, pick1, pick2, ..., end_node]; pick_locations = middle nodes only
-    pick_order = visit_order[1:-1] if len(visit_order) > 1 else visit_order[1:]
+    total_distance_m = sim.get("total_distance_m")
+    estimated_time_s = sim.get("estimated_time_s")
+    if estimated_time_s is None and isinstance(total_distance_m, (int, float)) and total_distance_m:
+        estimated_time_s = round(float(total_distance_m) / WALKING_SPEED_M_S, 1)
+    elif estimated_time_s is None:
+        estimated_time_s = 0.0
+
+    # Prefer location order from pick_nodes (stable); visit_order middle may use best-AP uuids
     pick_locations = [
         {
-            "location_id": node_to_location[nid],
-            "location_name": loc_names.get(node_to_location[nid], ""),
-            "x": loc_info.get(node_to_location[nid], (0, 0))[0],
-            "y": loc_info.get(node_to_location[nid], (0, 0))[1],
-            "inventory_location": loc_names.get(node_to_location[nid], ""),
-            "inventory_location_coordinates": [
-                loc_info.get(node_to_location[nid], (0, 0))[0],
-                loc_info.get(node_to_location[nid], (0, 0))[1],
-            ],
+            "location_id": p["location_id"],
+            "location_name": loc_names.get(p["location_id"], ""),
+            "x": loc_info.get(p["location_id"], (0, 0))[0],
+            "y": loc_info.get(p["location_id"], (0, 0))[1],
+            "inventory_location": loc_names.get(p["location_id"], ""),
+            "inventory_location_coordinates": list(loc_info.get(p["location_id"], (0, 0))),
         }
-        for nid in pick_order
-        if nid in node_to_location
+        for p in pick_nodes
     ]
-    route = [{"node_id": p["node_id"], "x": p["x"], "y": p["y"]} for p in route_points]
+    route = [
+        {
+            "node_id": p.get("node_uuid") or p.get("node_id"),
+            "node_uuid": p.get("node_uuid") or p.get("node_id"),
+            "x": p["x"],
+            "y": p["y"],
+        }
+        for p in route_points
+    ]
     mapped_nodes = [
-        {"node_id": p["node_id"], "x": p["x"], "y": p["y"], "location_id": p["location_id"]}
+        {
+            "node_id": p.get("node_uuid") or p["node_id"],
+            "node_uuid": p.get("node_uuid") or p["node_id"],
+            "x": p["x"],
+            "y": p["y"],
+            "location_id": p["location_id"],
+        }
         for p in pick_nodes
     ]
 
-    logger.info("pick_route: order_number=%s order_id=%s number_of_picks=%s total_distance=%s", order.number, order.id, len(pick_nodes), round(total_distance_m, 2))
+    logger.info(
+        "pick_route: order_number=%s order_id=%s number_of_picks=%s total_distance=%s",
+        order.number,
+        order.id,
+        len(pick_nodes),
+        total_distance_m,
+    )
     return {
         "warehouse_id": sim["warehouse_id"],
         "route": route,
@@ -1317,8 +1369,10 @@ def get_pick_route(db: Session, order_number: str, record_picks: bool = False) -
         "end": {"x": end_xy[0], "y": end_xy[1]},
         "pick_locations": pick_locations,
         "mapped_nodes": mapped_nodes,
-        "total_distance": round(total_distance_m, 2),
+        "total_distance": round(total_distance_m, 2) if total_distance_m is not None else None,
         "estimated_time": estimated_time_s,
+        "distance_available": sim.get("distance_available", total_distance_m is not None),
+        "routing_status": sim.get("routing_status"),
         "order_number": order.number,
         "order_id": order.id,
         "order_found": True,

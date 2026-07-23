@@ -30,17 +30,6 @@ export type RackPropertiesSidebarProps = {
   setInternalLayoutRackId: (id: number | string | null) => void;
   setSelectedRackId: (id: number | string | null) => void;
   setSelectedRackIds: (ids: Array<number | string>) => void;
-  routeRackIds: string[];
-  routeRackLabels: string[];
-  routeLengthMeters: number;
-  routeLegMeters?: number;
-  routeStepIndex?: number;
-  routeStepCount?: number;
-  onRouteStepNext?: () => void;
-  isRouteActive: boolean;
-  clearRoute: () => void;
-  optimizeRoute: () => void;
-  finishRoute: () => void;
   onClose: () => void;
   editingRackId?: number | string | null;
   onEditingRackIdChange?: (id: number | string | null) => void;
@@ -66,17 +55,6 @@ export function RackPropertiesSidebar({
   setInternalLayoutRackId,
   setSelectedRackId,
   setSelectedRackIds,
-  routeRackIds,
-  routeRackLabels,
-  routeLengthMeters,
-  routeLegMeters = 0,
-  routeStepIndex = 0,
-  routeStepCount = 0,
-  onRouteStepNext,
-  isRouteActive,
-  clearRoute,
-  optimizeRoute,
-  finishRoute,
   onClose,
   editingRackId = null,
   onEditingRackIdChange,
@@ -86,7 +64,7 @@ export function RackPropertiesSidebar({
   warehouseLabel,
 }: RackPropertiesSidebarProps) {
   const asideScrollRef = useRef<HTMLDivElement>(null);
-  const scrollKey = `${selectedRack?.id ?? selectedRack?.rack_index ?? ""}-${routeStepIndex}-${isRouteActive}-${selectedRackIds.join(",")}`;
+  const scrollKey = `${selectedRack?.id ?? selectedRack?.rack_index ?? ""}-${selectedRackIds.join(",")}`;
   useWheelScrollBoundaryContain(asideScrollRef, true, scrollKey);
 
   const [nameDraft, setNameDraft] = useState("");
@@ -405,58 +383,6 @@ export function RackPropertiesSidebar({
                 })()}
               </>
             )}
-            <div className="mt-2 border-t border-slate-100 pt-2">
-              <p className="mb-1 text-[10px] font-bold uppercase text-slate-500">Trasa kompletacji</p>
-              {routeRackIds.length === 0 ? (
-                <p className="text-[11px] text-slate-500">
-                  {isRouteActive ? "Tryb aktywny — kliknij pierwszy regał" : "Włącz „Planuj trasę” w pasku narzędzi."}
-                </p>
-              ) : (
-                <>
-                  {routeRackIds.length >= 2 && (
-                    <p className="mb-1 text-[11px] text-slate-600">
-                      Krok {routeStepIndex + 1}/{routeStepCount} · Odcinek {routeLegMeters.toFixed(1)} m · Całość{" "}
-                      {routeLengthMeters.toFixed(1)} m
-                    </p>
-                  )}
-                  <ul className="max-h-24 space-y-0.5 overflow-y-auto">
-                    {routeRackLabels.map((label, idx) => (
-                      <li
-                        key={`${label}-${idx}`}
-                        className={`rounded px-1.5 py-0.5 text-[11px] ${
-                          routeRackIds.length >= 2 && idx === routeStepIndex
-                            ? "bg-blue-50 font-semibold text-blue-900 ring-1 ring-blue-200"
-                            : "text-slate-700"
-                        }`}
-                      >
-                        {idx + 1}. {label}
-                      </li>
-                    ))}
-                  </ul>
-                  {routeRackIds.length >= 2 && onRouteStepNext != null && (
-                    <button
-                      type="button"
-                      onClick={onRouteStepNext}
-                      disabled={routeStepIndex >= routeStepCount - 1}
-                      className="mt-1.5 w-full rounded-lg bg-blue-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-blue-500 disabled:opacity-40"
-                    >
-                      Następny krok
-                    </button>
-                  )}
-                  <div className="mt-1.5 flex flex-wrap gap-1">
-                    <button type="button" onClick={optimizeRoute} className="rounded border border-slate-300 px-2 py-0.5 text-[10px] hover:bg-slate-50">
-                      Optymalizuj
-                    </button>
-                    <button type="button" onClick={clearRoute} className="rounded border border-slate-300 px-2 py-0.5 text-[10px] hover:bg-slate-50">
-                      Wyczyść
-                    </button>
-                    <button type="button" onClick={finishRoute} className="rounded border border-slate-300 px-2 py-0.5 text-[10px] hover:bg-slate-50">
-                      Zakończ
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
           </>
         )}
       </div>

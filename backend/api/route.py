@@ -1,21 +1,24 @@
 """
-API: Route path between two points using the warehouse graph.
+API: Route path compatibility adapter.
 
-POST /route/path — shortest path (Dijkstra) from (from.x, from.y) to (to.x, to.y) in cm.
+POST /route/path — preserves request/response contract for Designer remnants,
+but computes path exclusively via Warehouse Routing Engine (authored graph).
+
+This is NOT a second engine. No legacy auto-graph imports.
+Missing graph → ROUTING_GRAPH_NOT_CONFIGURED (no silent fallback).
 """
 
+from __future__ import annotations
+
 import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models.warehouse_graph import WarehouseNode
-from ..domain.simulation.warehouse_graph_service import (
-    get_node_nearest_to_point,
-    get_adjacency,
-    shortest_path_dijkstra,
-)
+from ..services.warehouse_routing.access_resolution import route_between_points_cm
+from ..services.warehouse_routing.constants import ERROR_ROUTING_GRAPH_NOT_CONFIGURED
 
 logger = logging.getLogger(__name__)
 
@@ -36,59 +39,58 @@ class RoutePathRequest(BaseModel):
 class RoutePathResponse(BaseModel):
     points: list[PointCm]
     distance: float | None  # meters; None if no path
-    message: str | None = None  # e.g. "No path found"
+    message: str | None = None
+    # Compatibility metadata (optional for old clients)
+    engine: str = "warehouse_routing"
+    error_code: str | None = None
 
 
 @router.post("/path", response_model=RoutePathResponse)
 def route_path(request: RoutePathRequest, db: Session = Depends(get_db)):
     """
-    Compute real path between two points using the warehouse graph.
-    Finds nearest graph nodes for start/end, runs Dijkstra, returns full path coordinates (cm) and distance (m).
+    Compatibility layer: nearest authored nodes + Routing Engine A→B.
+    Missing graph → 400 ROUTING_GRAPH_NOT_CONFIGURED (no legacy fallback).
     """
     warehouse_id = int(request.warehouseId)
-    from_xy = (request.from_.x, request.from_.y)
-    to_xy = (request.to.x, request.to.y)
-
-    adj = get_adjacency(db, warehouse_id)
-    if not adj:
-        logger.warning("route/path: no graph for warehouse_id=%s", warehouse_id)
-        raise HTTPException(status_code=400, detail="No graph for this warehouse. Generate the graph first.")
-
-    start_node = get_node_nearest_to_point(db, warehouse_id, from_xy[0], from_xy[1])
-    end_node = get_node_nearest_to_point(db, warehouse_id, to_xy[0], to_xy[1])
-
-    if start_node is None or end_node is None:
-        logger.warning("route/path: no nodes for warehouse_id=%s", warehouse_id)
-        raise HTTPException(status_code=400, detail="No graph nodes for this warehouse.")
-
-    distance_m, path_node_ids = shortest_path_dijkstra(adj, start_node, end_node)
-
-    logger.info(
-        "ROUTE PATH: start_node_id=%s end_node_id=%s path_length=%s distance_m=%s",
-        start_node,
-        end_node,
-        len(path_node_ids),
-        distance_m if path_node_ids else "N/A",
+    res = route_between_points_cm(
+        db,
+        warehouse_id,
+        request.from_.x,
+        request.from_.y,
+        request.to.x,
+        request.to.y,
+        process_type=None,
+        transport_type=None,
     )
 
-    if not path_node_ids:
+    if res.error_code == ERROR_ROUTING_GRAPH_NOT_CONFIGURED:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": ERROR_ROUTING_GRAPH_NOT_CONFIGURED,
+                "message": res.message
+                or "Brak skonfigurowanej sieci tras. Skonfiguruj sieć w trybie TRASY.",
+            },
+        )
+
+    if not res.ok:
         return RoutePathResponse(
             points=[],
             distance=None,
-            message="No path found between the selected points.",
+            message=res.message or "No path found between the selected points.",
+            error_code=res.error_code,
         )
 
-    # Load node coordinates (cm) in path order
-    node_rows = (
-        db.query(WarehouseNode.id, WarehouseNode.x, WarehouseNode.y)
-        .filter(WarehouseNode.id.in_(path_node_ids))
-        .all()
+    points = [PointCm(x=p.x, y=p.y) for p in res.nodes]
+    logger.info(
+        "ROUTE PATH (warehouse_routing): warehouse_id=%s hops=%s distance_m=%s",
+        warehouse_id,
+        res.hop_count,
+        res.distance_m,
     )
-    id_to_xy = {r.id: (float(r.x), float(r.y)) for r in node_rows}
-    points = [PointCm(x=id_to_xy[nid][0], y=id_to_xy[nid][1]) for nid in path_node_ids if nid in id_to_xy]
-
     return RoutePathResponse(
         points=points,
-        distance=round(distance_m, 4),
+        distance=float(res.distance_m) if res.distance_m is not None else None,
         message=None,
+        error_code=None,
     )

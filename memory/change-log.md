@@ -1,4 +1,21 @@
+## 2026-07-23 — Routing Graph Etap 2: cleanup legacy Planuj trasę
+
+- Designer: usunięto legacy route UX (`isRouteActive` / `routeRackIds` / `fetchRoutePath` / client aisle+grid engines). PathLayer props = null.
+- Toolbar: brak przycisku „Planuj trasę”. Sidebar: usunięto sekcję „Trasa kompletacji”.
+- DELETE: `aisleGraphRoute.ts`, `aisleRouteOrder.ts`, `gridRoutePathfinding.ts`, `routeApi.ts`.
+- WalkingCostPage: N/A gdy `total_distance` null. TRASY workspace nienaruszony. **No push. Bez Etapu 3.**
+
+## 2026-07-23 — Routing Graph Etap 2 (migracja READ-ONLY)
+
+- SSOT AP: `access_resolution.py` (location 1..N → best A×B).
+- `/route/path` = compatibility adapter → Routing Engine (bez legacy fallback).
+- walking-cost / pick-route / strategy simulations → authored graph.
+- Usunięto: Planuj trasę, aisle*/gridRoute*, routeApi, WarehouseGraphService, graph_location, domain warehouse_graph_service, save_layout rebuild.
+- `/warehouse-graph` nodes/edges = projekcja authored; generate → 410.
+- Tests: stage2 + updated smoke; 55 warehouse_routing PASS. **No push. No Etap 3.**
+
 ## 2026-07-23 — Routing Graph Etap 1: domknięcie UX TRASY
+
 
 - Drag punktu trasy na canvasie (snap 10 cm, CTM zoom-safe, bez auto-merge, pan≠drag).
 - Ciągłe „Rysuj trasę”, edytor odcinka PL, AP 1..N UX, unsaved (tabs/warehouse/nav/beforeunload).

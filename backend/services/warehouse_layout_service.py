@@ -11,7 +11,6 @@ from ..models.product import Product
 from ..models.location import Location
 from ..models.inventory import Inventory
 from .warehouse_service import WarehouseService
-from .graph_location_service import assign_locations_to_graph_nodes
 from ..models.label_template import SavedLabelTemplate
 from ..storage_types import is_pickable, layout_bin_storage_type, normalize_storage_type
 from .barcode_generation import location_barcode_unique
@@ -1522,14 +1521,7 @@ class WarehouseLayoutService:
                 )
             self.db.commit()
             self.db.refresh(layout)
-            # Regenerate warehouse navigation graph after any layout change (graph generation pipeline only).
-            # Keeps API / route_engine unchanged; only graph content updates to avoid new obstacles.
-            try:
-                from .warehouse_graph_service import WarehouseGraphService
-                WarehouseGraphService(self.db).build_graph(warehouse_id)
-            except Exception:
-                logger.exception("Graph rebuild after layout save failed (warehouse_id=%s)", warehouse_id)
-            assign_locations_to_graph_nodes(self.db, warehouse_id)
+            # Authored Routing Graph is SSOT — layout save must NOT rebuild legacy WarehouseNode graph.
             return self.get_layout(tenant_id, warehouse_id)
         except HTTPException:
             self.db.rollback()

@@ -2,7 +2,7 @@
 
 ## Active
 
-**Routing Graph Etap 1 — domknięcie:** node drag na canvasie, ciągłe rysowanie trasy, snap siatki, unsaved (warehouse / nav / beforeunload), AP 1..N UX, schema bez drop legacy unique. Commit bazowy `993f6a9f` + osobny commit domknięcia. **Bez push. Bez Etapu 2.**
+**Routing Graph Etap 2 (migracja READ-ONLY):** konsumenci analytics/designer/`/route/path` na authored SSOT + `access_resolution`. Usunięto Planuj trasę + `WarehouseGraphService`/`build_graph` z `save_layout`. Modele `WarehouseNode` tabel pozostają (dormant + FK `Location.graph_node_id`). **Bez push. Bez Etapu 3 (runtime WMS).**
 
 ## Preferencja commitów (user)
 
