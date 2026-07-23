@@ -22,6 +22,8 @@ export interface DesignerToolbarProps {
   setShowEditBuilding?: (v: boolean) => void;
   isRouteActive: boolean;
   onToggleRoutePlanning: () => void;
+  /** When false, hide legacy „Planuj trasę” (Routes workspace uses new engine). */
+  showLegacyPlanujTrase?: boolean;
 }
 
 export function DesignerToolbar({
@@ -37,6 +39,7 @@ export function DesignerToolbar({
   setShowEditBuilding: setShowEditBuildingProp,
   isRouteActive,
   onToggleRoutePlanning,
+  showLegacyPlanujTrase = true,
 }: DesignerToolbarProps) {
   const { selectedWarehouseId } = useWarehouse();
   const [showEditBuildingLocal, setShowEditBuildingLocal] = useState(false);
@@ -70,7 +73,7 @@ export function DesignerToolbar({
         <span className={`inline-flex items-center rounded-md border border-slate-200/60 px-2 py-0.5 font-mono text-[10px] font-medium transition-colors duration-150 ${lastSavedAt != null ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-900"}`} title={lastSavedAt != null ? UI_STRINGS.warehouse.selector.savedToDb : UI_STRINGS.warehouse.selector.unsavedChanges}>
           {lastSavedAt != null ? UI_STRINGS.warehouse.selector.syncSaved : UI_STRINGS.warehouse.selector.notSaved}
         </span>
-        {mainView === "layout" && (
+        {mainView === "layout" && showLegacyPlanujTrase && (
           <button
             type="button"
             onClick={onToggleRoutePlanning}
@@ -84,7 +87,7 @@ export function DesignerToolbar({
             {isRouteActive ? "Zakończ trasę" : "Planuj trasę"}
           </button>
         )}
-        {mainView === "layout" && (
+        {mainView === "layout" && showLegacyPlanujTrase && (
           <button
             type="button"
             onClick={() => {

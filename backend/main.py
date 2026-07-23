@@ -30,6 +30,7 @@ from .db.production_planning_schema import ensure_production_planning_schema
 from .db.document_template_schema import ensure_document_template_schema
 from .db.stock_reservations_schema import ensure_stock_reservations_universal_schema
 from .db.wms_production_settings_schema import ensure_wms_production_settings_schema
+from .db.warehouse_routing_schema import ensure_warehouse_routing_schema
 from .db.schema_upgrade import (
     ensure_locations_columns,
     ensure_warehouse_layout_identity_columns,
@@ -296,6 +297,7 @@ from .api.consolidation_rack import router as consolidation_rack_router
 from .api.warehouse_map import router as warehouse_map_router
 from .api.warehouse_layout import router as warehouse_layout_router
 from .api.warehouse_graph import router as warehouse_graph_router
+from .api.warehouse_routing import router as warehouse_routing_router
 from .api.route import router as route_router
 from .api.warehouse_template import router as warehouse_template_router
 from .api.label_template import router as label_template_router
@@ -1206,6 +1208,7 @@ try:
     ensure_inventory_stock_disposition_columns(engine)
     ensure_stock_disposition_stage2_columns(engine)
     ensure_product_sales_offers_schema(engine)
+    ensure_warehouse_routing_schema(engine)
     from .db.offer_stock_pool_schema import ensure_offer_stock_pool_schema
 
     ensure_offer_stock_pool_schema(engine)
@@ -1670,6 +1673,7 @@ def _upgrade_schema_background() -> None:
         ensure_inventory_stock_disposition_columns(engine)
         ensure_stock_disposition_stage2_columns(engine)
         ensure_product_sales_offers_schema(engine)
+        ensure_warehouse_routing_schema(engine)
         from .db.offer_stock_pool_schema import ensure_offer_stock_pool_schema
 
         ensure_offer_stock_pool_schema(engine)
@@ -2106,6 +2110,7 @@ _API_ROUTERS = (
     warehouse_map_router,
     warehouse_layout_router,
     warehouse_graph_router,
+    warehouse_routing_router,
     route_router,
     warehouse_template_router,
     label_sizes_router,

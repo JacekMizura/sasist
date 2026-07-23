@@ -97,6 +97,8 @@ const UI_STRINGS_DEFAULTS = {
     designerSubTabs: {
       magazyn: "Magazyn",
       layoutDesigner: "Projektant Layoutu",
+      designing: "Projektowanie",
+      routes: "Trasy",
     },
     subTabs: {
       layout: "Layout Magazynu",

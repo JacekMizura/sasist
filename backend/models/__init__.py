@@ -123,6 +123,12 @@ from .stock import Stock  # noqa: F401 - register for relationships
 from .stock_reservation import StockReservation  # noqa: F401 - register for relationships
 from .stock_movement import StockMovement  # noqa: F401 - register for relationships
 from .warehouse_graph import WarehouseNode, WarehouseEdge, LocationNode  # noqa: F401
+from .warehouse_routing import (  # noqa: F401
+    WarehouseRoutingNode,
+    WarehouseRoutingEdge,
+    WarehouseRoutingAccessPoint,
+    WarehouseRoutingGraphMeta,
+)
 from .inventory_unit import InventoryUnit
 from .inventory_movement import InventoryMovement
 from .wave import Wave

@@ -294,6 +294,8 @@ export type WarehouseCanvasProps = {
   routeGraphPolyline?: { x: number; y: number }[] | null;
   /** When false, hide START/PACK on the map (step-by-step navigation). */
   showRouteEndpointMarkers?: boolean;
+  /** Extra SVG layer (e.g. authored Routing Graph overlay in Routes workspace). */
+  svgOverlay?: React.ReactNode;
 };
 
 function WarehouseCanvasInner({
@@ -434,6 +436,7 @@ function WarehouseCanvasInner({
   routeGraphPolyline = null,
   /** When false, START/PACK markers are hidden (step-by-step uses rack badges only). */
   showRouteEndpointMarkers = true,
+  svgOverlay = null,
 }: WarehouseCanvasProps) {
   void _cellPxProp;
   const isExportMode = mode === "export";
@@ -1409,6 +1412,7 @@ function WarehouseCanvasInner({
                     rowDragPreviewStart={rowDragPreviewStart ?? null}
                   />
                   )}
+                  {svgOverlay}
                 </svg>
                 {/* HTML drop zones over empty slots. When rowToolActive, do not capture so SVG receives draw events. */}
                 {isEditMode && (

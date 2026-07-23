@@ -92,6 +92,11 @@ import { generateWarehouseValueReportPDF } from "../pdf/generateWarehouseValueRe
 import { generateTopVolumeReportPDF } from "../pdf/generateTopVolumeReportPDF";
 import { useDesignerKeyboard } from "./WarehouseDesigner/DesignerKeyboard";
 import { DesignerToolbar } from "./WarehouseDesigner/DesignerToolbar";
+import { RoutingGraphLayer } from "./WarehouseDesigner/routing/RoutingGraphLayer";
+import { RoutingRoutesPanel } from "./WarehouseDesigner/routing/RoutingRoutesPanel";
+import { useRoutingGraph } from "./WarehouseDesigner/routing/useRoutingGraph";
+import type { RoutingTool } from "./WarehouseDesigner/routing/routingLabels";
+import { getWarehouseLocations } from "../api/warehouseGraphApi";
 import { DesignerGrid } from "./WarehouseDesigner/DesignerGrid";
 import { focusWarehouseCanvasScroll } from "../components/warehouse/WarehouseMainView";
 import { useDesignerMouseHandlers } from "./WarehouseDesigner/useDesignerMouseHandlers";
@@ -699,11 +704,40 @@ export default function WarehouseDesigner() {
   const [mainView, setMainView] = useState<"magazyn" | "layout">(() =>
     searchParams.get("view") === "layout" ? "layout" : "magazyn"
   );
+  /** Within Projektant: physical design vs authored Routing Graph workspace. */
+  const [layoutWorkspace, setLayoutWorkspace] = useState<"designing" | "routes">("designing");
+  const routesMode = mainView === "layout" && layoutWorkspace === "routes";
+  const routing = useRoutingGraph(
+    routesMode ? selectedWarehouseId : null,
+    layout.layout_id ?? null
+  );
+  const [routingTool, setRoutingTool] = useState<RoutingTool>("select");
+  const [routingSelectedNode, setRoutingSelectedNode] = useState<string | null>(null);
+  const [routingSelectedEdge, setRoutingSelectedEdge] = useState<string | null>(null);
+  const [routingEdgeDraftFrom, setRoutingEdgeDraftFrom] = useState<string | null>(null);
+  const [testStartUuid, setTestStartUuid] = useState<string | null>(null);
+  const [testDestUuid, setTestDestUuid] = useState<string | null>(null);
+  const [routingLocations, setRoutingLocations] = useState<{ id: number; name: string }[]>([]);
+
+  useEffect(() => {
+    if (!routesMode || selectedWarehouseId == null) return;
+    let cancelled = false;
+    void getWarehouseLocations(selectedWarehouseId).then((rows) => {
+      if (cancelled) return;
+      setRoutingLocations(
+        (rows ?? []).map((r) => ({ id: r.id, name: r.name || r.code || `#${r.id}` }))
+      );
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [routesMode, selectedWarehouseId]);
 
   const selectDesignerView = useCallback(
     (view: "magazyn" | "layout") => {
       if (view === "magazyn") {
         setMainView("magazyn");
+        setLayoutWorkspace("designing");
         setEditingProductId(null);
         const next = new URLSearchParams(searchParams);
         next.delete("view");
@@ -3548,6 +3582,7 @@ export default function WarehouseDesigner() {
             showEditBuilding={showEditBuilding}
             setShowEditBuilding={setShowEditBuilding}
             isRouteActive={isRouteActive}
+            showLegacyPlanujTrase={!routesMode}
             onToggleRoutePlanning={() => {
               setIsRouteActive((prev) => {
                 const next = !prev;
@@ -3560,6 +3595,47 @@ export default function WarehouseDesigner() {
             }}
           />
         </div>
+        {mainView === "layout" && (
+          <div className="mb-2 flex gap-1" role="tablist" aria-label="Workspace projektanta">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={layoutWorkspace === "designing"}
+              onClick={() => {
+                if (
+                  layoutWorkspace === "routes" &&
+                  routing.dirty &&
+                  !window.confirm(
+                    "Masz niezapisane zmiany sieci tras. Przejście do Projektowania je odrzuci (dopóki nie zapiszesz). Kontynuować?"
+                  )
+                ) {
+                  return;
+                }
+                setLayoutWorkspace("designing");
+              }}
+              className={`rounded-md border px-3 py-1 text-[11px] font-semibold ${
+                layoutWorkspace === "designing"
+                  ? "border-slate-800 bg-slate-800 text-white"
+                  : "border-slate-200 bg-white text-slate-700"
+              }`}
+            >
+              {UI_STRINGS.warehouse.designerSubTabs.designing}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={layoutWorkspace === "routes"}
+              onClick={() => setLayoutWorkspace("routes")}
+              className={`rounded-md border px-3 py-1 text-[11px] font-semibold ${
+                layoutWorkspace === "routes"
+                  ? "border-sky-700 bg-sky-700 text-white"
+                  : "border-slate-200 bg-white text-slate-700"
+              }`}
+            >
+              {UI_STRINGS.warehouse.designerSubTabs.routes}
+            </button>
+          </div>
+        )}
         <TabsContainer className="w-full [-webkit-overflow-scrolling:touch]">
           <nav
             className="flex w-full flex-nowrap gap-6 overflow-x-auto border-b border-slate-200 sm:justify-start"
@@ -4113,8 +4189,10 @@ export default function WarehouseDesigner() {
             )}
           </>
         ) : mainView === "layout" ? (
+          <div className="flex min-h-0 min-w-0 flex-1">
           <DesignerGrid
             mainViewProps={{
+              mode: routesMode ? "read" : "edit",
               layout,
               selectedWarehouseId,
               loading,
@@ -4238,7 +4316,7 @@ export default function WarehouseDesigner() {
               pathPoints,
               pathSegments,
               routeStops: routeStopsForCanvasMode,
-              showRoute: routeRackIds.length >= 1 && routeStops.length > 0,
+              showRoute: routesMode ? false : routeRackIds.length >= 1 && routeStops.length > 0,
               highlightedStopIndex: highlightedStopIndexForCanvas,
               currentStopIndex: currentStopIndexForCanvas,
               getRackDisplayId: getRackDisplayIdWithLayout,
@@ -4257,7 +4335,7 @@ export default function WarehouseDesigner() {
               routeStepIndex,
               routeStepCount: orderedRouteRackIds.length,
               onRouteStepNext: handleRouteStepNext,
-              isRouteActive,
+              isRouteActive: routesMode ? false : isRouteActive,
               clearRoute: () => {
                 setRouteRackIds([]);
                 setRouteStepIndex(0);
@@ -4267,14 +4345,14 @@ export default function WarehouseDesigner() {
                 setSnackbar({ message: "Kolejność dopasowana (tryb wąż)." });
               },
               finishRoute: () => setIsRouteActive(false),
-              routePanelVisible,
-              rackPanelOpen: !rackPanelDismissed,
+              routePanelVisible: routesMode ? false : routePanelVisible,
+              rackPanelOpen: routesMode ? false : !rackPanelDismissed,
               onCloseRackPanel: closeRackPanel,
               onSaveLayout: saveLayout,
               saving,
               lastSavedAt,
               warehouseLabel: layout.warehouse_name || activeWarehouse?.name || undefined,
-              showElevationForRackId,
+              showElevationForRackId: routesMode ? null : showElevationForRackId,
               products,
               selectedBinForFilter,
               setSelectedBinForFilter,
@@ -4285,8 +4363,78 @@ export default function WarehouseDesigner() {
               },
               onAddProduct: () => setEditingProductId("new"),
               onEditProduct: setEditingProductId,
+              svgOverlay: routesMode ? (
+                <RoutingGraphLayer
+                  nodes={routing.nodes}
+                  edges={routing.edges}
+                  cellPx={cellPx}
+                  selectedNodeUuid={routingSelectedNode}
+                  selectedEdgeUuid={routingSelectedEdge}
+                  highlightNodeUuids={
+                    routing.testResult?.ok ? routing.testResult.nodes.map((n) => n.node_uuid) : []
+                  }
+                  highlightEdgeUuids={
+                    routing.testResult?.ok
+                      ? routing.testResult.path_segments.map((s) => s.edge_uuid)
+                      : []
+                  }
+                  draftFromUuid={routingEdgeDraftFrom}
+                  interactive
+                  onNodeClick={(uuid) => {
+                    if (routingTool === "draw_edge") {
+                      if (!routingEdgeDraftFrom) {
+                        setRoutingEdgeDraftFrom(uuid);
+                        setRoutingSelectedNode(uuid);
+                        return;
+                      }
+                      routing.addEdge(routingEdgeDraftFrom, uuid);
+                      setRoutingEdgeDraftFrom(null);
+                      return;
+                    }
+                    if (routingTool === "test_route") {
+                      if (!testStartUuid) setTestStartUuid(uuid);
+                      else if (!testDestUuid) setTestDestUuid(uuid);
+                      else {
+                        setTestStartUuid(uuid);
+                        setTestDestUuid(null);
+                      }
+                      setRoutingSelectedNode(uuid);
+                      return;
+                    }
+                    setRoutingSelectedNode(uuid);
+                    setRoutingSelectedEdge(null);
+                  }}
+                  onEdgeClick={(uuid) => {
+                    setRoutingSelectedEdge(uuid);
+                    setRoutingSelectedNode(null);
+                  }}
+                  onCanvasClickCm={(x, y) => {
+                    if (routingTool === "add_node") {
+                      const id = routing.addNodeAtCm(x, y, { label: "Punkt trasy" });
+                      setRoutingSelectedNode(id);
+                    }
+                  }}
+                />
+              ) : null,
             }}
           />
+          {routesMode && (
+            <RoutingRoutesPanel
+              routing={routing}
+              tool={routingTool}
+              setTool={setRoutingTool}
+              selectedNodeUuid={routingSelectedNode}
+              selectedEdgeUuid={routingSelectedEdge}
+              setSelectedNodeUuid={setRoutingSelectedNode}
+              setSelectedEdgeUuid={setRoutingSelectedEdge}
+              testStartUuid={testStartUuid}
+              testDestUuid={testDestUuid}
+              setTestStartUuid={setTestStartUuid}
+              setTestDestUuid={setTestDestUuid}
+              locations={routingLocations}
+            />
+          )}
+          </div>
         ) : null}
       </div>
       </AppSplitView>

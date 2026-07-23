@@ -1,3 +1,23 @@
+## 2026-07-23 — Routing Graph Etap 1 (authored SSOT)
+
+- Nowe modele: `WarehouseRoutingNode` / `Edge` / `AccessPoint` (stabilne UUID).
+- Engine A→B (kierunek, enabled, process, transport, cost_multiplier) — **bez** fallbacku do WarehouseNode.
+- API `/warehouse-routing/{id}/graph|route|validate`; `save_layout` nie rebuilduje nowego grafu.
+- Designer: workspace **Projektowanie | Trasy**; Testuj trasę / Sprawdź sieć.
+- Tests: `backend/tests/warehouse_routing/test_stage1_routing_graph.py` (15). **No push.**
+
+## 2026-07-23 — Nośniki: globalny fiolet (CARRIER_VISUAL)
+
+- SSOT: `CARRIER_VISUAL` + `carrierVisualClasses`; wszystkie prefixy PAL/BOX/BIN/CRT/MIX fioletowe.
+- `CarrierBadge` / `CarrierIdentity`; karty wyboru PZ, paski aktywnego nośnika, putaway/relocation.
+- Lokalizacje bez zmian (niebieski). Tests: `carrierConstants.test.ts`. **No push.**
+
+## 2026-07-23 — Wózki: Kupujący w przypisanych zamówieniach
+
+- Root cause: cart `_order_customer_name` czytał tylko EN `first_name`/`last_name` (shipping-first); karta zamówienia używa `_customer_names_from_order` (PL Imię/Nazwisko w billing).
+- Fix: `_order_display_customer` → SSOT `_customer_names_for_order_display` (+ CRM fallback). Pole `customer_name` / `order_customer_name` bez N+1.
+- Tests: `test_bulk_cart_fleet_semantics.py` (PL keys). **No push.**
+
 ## 2026-07-23 — Jedna kanoniczna karta produktu (Asortyment)
 
 - Usunięto slim `ProductDetail`; `/products/:id` → `ProductDetailRedirect` → `/products/:id/edit`.
