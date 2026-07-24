@@ -239,20 +239,26 @@ def select_best_edge_for_service_point(
     edges: list[tuple[str, tuple[float, float], tuple[float, float]]],
     *,
     max_reach_m: float = DEFAULT_MAX_ACCESS_REACH_M,
-) -> Optional[EdgeCandidate]:
+) -> tuple[Optional[EdgeCandidate], str]:
     """
     Pick best road edge for access.
 
-    Preference: correct half-plane → no footprint pierce → low orthogonality → low approach_m.
+    Returns (candidate_or_None, reason) where reason is:
+    OK | UNREACHABLE | BLOCKED
+    - UNREACHABLE: nothing within reach on service half-plane
+    - BLOCKED: in-reach candidates exist but all pierce footprint (or only wrong-side beyond)
     """
+    in_reach_wrong_or_pierce = 0
     candidates: list[EdgeCandidate] = []
     for edge_uuid, a, b in edges:
         t, entry, approach = project_point_to_segment(service.x, service.y, a[0], a[1], b[0], b[1])
         if approach > max_reach_m:
             continue
         if not half_plane_ok(service, normal, entry):
+            in_reach_wrong_or_pierce += 1
             continue
         if footprint.segment_crosses_interior(service.x, service.y, entry.x, entry.y):
+            in_reach_wrong_or_pierce += 1
             continue
         ortho = orthogonality_score(service, entry, normal)
         candidates.append(
@@ -267,6 +273,8 @@ def select_best_edge_for_service_point(
             )
         )
     if not candidates:
-        return None
+        if in_reach_wrong_or_pierce > 0:
+            return None, "BLOCKED"
+        return None, "UNREACHABLE"
     candidates.sort(key=lambda c: (c.orthogonality, c.approach_m))
-    return candidates[0]
+    return candidates[0], "OK"

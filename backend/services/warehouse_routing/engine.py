@@ -338,7 +338,10 @@ def route_via_virtual_entries(
     by_uuid = {n.uuid: n for n in nodes}
     edges = (
         db.query(WarehouseRoutingEdge)
-        .filter(WarehouseRoutingEdge.warehouse_id == int(warehouse_id))
+        .filter(
+            WarehouseRoutingEdge.warehouse_id == int(warehouse_id),
+            WarehouseRoutingEdge.enabled.is_(True),
+        )
         .all()
     )
     if not edges:
@@ -397,7 +400,6 @@ def route_via_virtual_entries(
         d = (e.direction or DIRECTION_BOTH).upper()
         strip(a_id, b_id)
         strip(b_id, a_id)
-        # Clear any prior virtual stubs for this splice
         adj[virtual_id] = []
         if d == DIRECTION_FORWARD:
             adj.setdefault(a_id, []).append((virtual_id, d_a, d_a * mult, edge_uuid))
@@ -416,17 +418,20 @@ def route_via_virtual_entries(
     splice(v_start, start_edge_uuid, start_xy)
     splice(v_dest, dest_edge_uuid, dest_xy)
 
-    # Same physical edge: connect virtuals along the edge when both spliced
+    # Same physical edge: connect virtuals only in legal direction of travel (respect t-order).
     if start_edge_uuid == dest_edge_uuid:
         e = next(x for x in edges if x.uuid == start_edge_uuid)
         mult = float(e.cost_multiplier if e.cost_multiplier is not None else 1.0) or 1e-9
         mid = distance_m_between_cm(start_xy[0], start_xy[1], dest_xy[0], dest_xy[1])
         d = (e.direction or DIRECTION_BOTH).upper()
-        if d != DIRECTION_BACKWARD:
-            adj.setdefault(v_start, []).append((v_dest, mid, mid * mult, start_edge_uuid))
-        if d != DIRECTION_FORWARD:
-            adj.setdefault(v_dest, []).append((v_start, mid, mid * mult, start_edge_uuid))
-        if d == DIRECTION_BOTH:
+        st, dt = float(start_t), float(dest_t)
+        if d == DIRECTION_FORWARD:
+            if st <= dt:
+                adj.setdefault(v_start, []).append((v_dest, mid, mid * mult, start_edge_uuid))
+        elif d == DIRECTION_BACKWARD:
+            if st >= dt:
+                adj.setdefault(v_start, []).append((v_dest, mid, mid * mult, start_edge_uuid))
+        else:
             adj.setdefault(v_start, []).append((v_dest, mid, mid * mult, start_edge_uuid))
             adj.setdefault(v_dest, []).append((v_start, mid, mid * mult, start_edge_uuid))
 

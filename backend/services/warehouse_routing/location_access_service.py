@@ -14,7 +14,7 @@ from .location_access_resolver import (
     BINDING_AUTO,
     BINDING_MANUAL_OVERRIDE,
     STATUS_LEGACY_NODE,
-    STATUS_OK,
+    STATUS_RESOLVED,
     STATUS_UNREACHABLE,
     _edge_geometry,
     _graph_revision,
@@ -119,7 +119,7 @@ def set_manual_override(
     result = ResolveResult(
         location_id=lid,
         binding_mode=BINDING_MANUAL_OVERRIDE,
-        status=STATUS_OK if approach < DEFAULT_MAX_ACCESS_REACH_M else STATUS_UNREACHABLE,
+        status=STATUS_RESOLVED if approach < DEFAULT_MAX_ACCESS_REACH_M else STATUS_UNREACHABLE,
         edge_uuid=edge_uuid,
         t=t_clamped,
         service_point_x_cm=sx,

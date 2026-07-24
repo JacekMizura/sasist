@@ -97,6 +97,7 @@ def resolve_racks_for_locations(
     )
     if require_active_bin:
         q = q.filter(Bin.is_active.is_(True), Rack.is_active.is_(True))
+    q = q.order_by(Bin.id.asc())
     out: dict[int, LocationRackLink] = {}
     for loc_uuid, bin_id, rack_id, rack_uuid in q.all():
         nu = normalize_location_uuid(loc_uuid)

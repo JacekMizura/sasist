@@ -255,9 +255,10 @@ export function RoutingGraphLayer({
           ) {
             return null;
           }
-          const ok = a.status === "OK" || a.status === "LEGACY_NODE";
-          const review = a.status === "REVIEW";
-          const stroke = ok ? "#10b981" : review ? "#f59e0b" : "#f43f5e";
+          const ok = a.status === "OK" || a.status === "RESOLVED" || a.status === "LEGACY_NODE";
+          const review = a.status === "REVIEW" || a.status === "AMBIGUOUS";
+          const broken = a.status === "OVERRIDE_BROKEN" || a.status === "BLOCKED";
+          const stroke = ok ? "#10b981" : review ? "#f59e0b" : broken ? "#f43f5e" : "#f43f5e";
           return (
             <g key={`la-${a.uuid}`} style={{ pointerEvents: "none" }} opacity={0.85}>
               <line

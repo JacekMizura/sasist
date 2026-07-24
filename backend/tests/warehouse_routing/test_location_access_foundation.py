@@ -11,6 +11,7 @@ from sqlalchemy.orm import sessionmaker
 from backend.models.location import Location
 from backend.models.warehouse import Bin, Rack, Warehouse, WarehouseLayout
 from backend.models.warehouse_routing import (
+    WarehouseRoutingAccessPoint,
     WarehouseRoutingEdge,
     WarehouseRoutingGraphMeta,
     WarehouseRoutingLocationAccess,
@@ -28,7 +29,8 @@ from backend.services.warehouse_routing.location_access_geometry import (
 from backend.services.warehouse_routing.location_access_resolver import (
     BINDING_AUTO,
     BINDING_MANUAL_OVERRIDE,
-    STATUS_OK,
+    STATUS_RESOLVED,
+    migrate_access_points_to_overrides,
     recompute_location_access,
     resolve_auto_for_location,
 )
@@ -50,6 +52,7 @@ def db():
     Location.__table__.create(engine, checkfirst=True)
     WarehouseRoutingNode.__table__.create(engine, checkfirst=True)
     WarehouseRoutingEdge.__table__.create(engine, checkfirst=True)
+    WarehouseRoutingAccessPoint.__table__.create(engine, checkfirst=True)
     WarehouseRoutingLocationAccess.__table__.create(engine, checkfirst=True)
     WarehouseRoutingGraphMeta.__table__.create(engine, checkfirst=True)
 
@@ -212,7 +215,7 @@ def test_auto_picks_road_on_service_side_not_opposite(db):
     south = _road(db, w.id, 100, 160, 220, 160)  # below rack (y=10..14 → 100..140 cm)
     north = _road(db, w.id, 100, 60, 220, 60)  # above rack
     result = resolve_auto_for_location(db, w.id, loc)
-    assert result.status in (STATUS_OK, "REVIEW")
+    assert result.status in (STATUS_RESOLVED, "AMBIGUOUS", "OK", "REVIEW")
     assert result.edge_uuid == south.uuid
     assert result.edge_uuid != north.uuid
 
@@ -358,7 +361,8 @@ def test_half_plane_filter_unit():
         ("good", (-10.0, 50.0), (10.0, 50.0)),
     ]
     footprint = RackFootprint(-5, -5, 5, 5)
-    best = select_best_edge_for_service_point(S, n, footprint, edges, max_reach_m=10)
+    best, reason = select_best_edge_for_service_point(S, n, footprint, edges, max_reach_m=10)
+    assert reason == "OK"
     assert best is not None
     assert best.edge_uuid == "good"
 
@@ -372,3 +376,213 @@ def test_move_rack_keeps_uuid_link(db):
     loc.y = 520
     db.flush()
     assert resolve_rack_for_location(db, loc).id == rack.id
+
+
+def test_wrong_side_closer_road_loses_to_service_side(db):
+    """Critical: nearer road BEHIND rack must lose to farther road in front."""
+    w = _wh(db)
+    _, rack, loc = _layout_with_rack(db, w, orientation="horizontal", x=10, y=10, width=10, height=4)
+    behind = _road(db, w.id, 100, 130, 220, 130)
+    front = _road(db, w.id, 100, 220, 220, 220)
+    result = resolve_auto_for_location(db, w.id, loc)
+    assert result.edge_uuid == front.uuid
+    assert result.edge_uuid != behind.uuid
+
+
+def test_vertical_front_and_back_normals():
+    rack = Rack(
+        layout_id=1,
+        x=0,
+        y=0,
+        width=4,
+        height=10,
+        orientation="vertical",
+        length_cm=40,
+        width_cm=100,
+        service_side="FRONT",
+        rotation_degrees=0,
+    )
+    n = world_service_normal(rack)
+    assert n.x < -0.9 and abs(n.y) < 1e-6
+    rack.service_side = "BACK"
+    nb = world_service_normal(rack)
+    assert nb.x > 0.9
+    rack.service_side = "FRONT"
+    rack.rotation_degrees = 180
+    n180 = world_service_normal(rack)
+    assert n180.x > 0.9
+
+
+def test_per_location_entries_differ_along_rack(db):
+    w = _wh(db)
+    _layout, rack, _ = _layout_with_rack(db, w, orientation="horizontal", x=10, y=10, width=20, height=4)
+    road = _road(db, w.id, 80, 160, 320, 160)
+    locs = []
+    for i, cx in enumerate((110.0, 150.0, 190.0, 230.0)):
+        u = str(uuid.uuid4())
+        db.add(
+            Bin(
+                rack_id=rack.id,
+                location_uuid=u,
+                label=f"A{i + 1}",
+                level_index=0,
+                segment_index=i,
+                volume_dm3=10,
+            )
+        )
+        loc = Location(
+            warehouse_id=w.id,
+            name=f"A{i + 1}",
+            location_uuid=u,
+            type="pick",
+            x=cx,
+            y=120.0,
+            z=0,
+        )
+        db.add(loc)
+        locs.append(loc)
+    db.flush()
+    ts = []
+    for loc in locs:
+        r = resolve_auto_for_location(db, w.id, loc)
+        assert r.edge_uuid == road.uuid
+        assert r.t is not None
+        ts.append(r.t)
+    assert max(ts) - min(ts) > 0.15
+    assert ts == sorted(ts)
+
+
+def test_migrate_does_not_overwrite_restored_auto(db):
+    from backend.models.warehouse_routing import WarehouseRoutingAccessPoint
+
+    w = _wh(db)
+    _, _rack, loc = _layout_with_rack(db, w)
+    _road(db, w.id, 100, 160, 220, 160)
+    node_uuid = (
+        db.query(WarehouseRoutingNode)
+        .filter(WarehouseRoutingNode.warehouse_id == w.id)
+        .first()
+        .uuid
+    )
+    db.add(
+        WarehouseRoutingAccessPoint(
+            uuid=str(uuid.uuid4()),
+            warehouse_id=w.id,
+            location_id=loc.id,
+            node_uuid=node_uuid,
+        )
+    )
+    db.flush()
+    assert migrate_access_points_to_overrides(db, w.id) == 1
+    row = restore_auto(db, w.id, loc.id)
+    assert row.binding_mode == BINDING_AUTO
+    assert migrate_access_points_to_overrides(db, w.id) == 0
+    recompute_location_access(db, w.id, migrate_aps=True)
+    row2 = (
+        db.query(WarehouseRoutingLocationAccess)
+        .filter(WarehouseRoutingLocationAccess.location_id == loc.id)
+        .first()
+    )
+    assert row2.binding_mode == BINDING_AUTO
+
+
+def test_override_broken_when_edge_deleted(db):
+    w = _wh(db)
+    _, _rack, loc = _layout_with_rack(db, w)
+    e = _road(db, w.id, 100, 160, 220, 160)
+    set_manual_override(db, w.id, loc.id, edge_uuid=e.uuid, t=0.4)
+    db.flush()
+    db.query(WarehouseRoutingEdge).filter(WarehouseRoutingEdge.uuid == e.uuid).delete()
+    db.flush()
+    recompute_location_access(db, w.id, migrate_aps=False)
+    row = (
+        db.query(WarehouseRoutingLocationAccess)
+        .filter(WarehouseRoutingLocationAccess.location_id == loc.id)
+        .first()
+    )
+    assert row.binding_mode == BINDING_MANUAL_OVERRIDE
+    assert row.status == "OVERRIDE_BROKEN"
+
+
+def test_one_way_same_edge_respects_t_order(db):
+    w = _wh(db)
+    e = _road(db, w.id, 0, 0, 1000, 0)
+    e.direction = "FORWARD"
+    db.flush()
+    ok = route_via_virtual_entries(
+        db,
+        w.id,
+        start_edge_uuid=e.uuid,
+        start_t=0.2,
+        start_approach_m=0.5,
+        dest_edge_uuid=e.uuid,
+        dest_t=0.8,
+        dest_approach_m=0.5,
+    )
+    assert ok.ok
+    bad = route_via_virtual_entries(
+        db,
+        w.id,
+        start_edge_uuid=e.uuid,
+        start_t=0.8,
+        start_approach_m=0.5,
+        dest_edge_uuid=e.uuid,
+        dest_t=0.2,
+        dest_approach_m=0.5,
+    )
+    assert not bad.ok
+
+
+def test_graph_pollution_recompute_many_locations(db):
+    w = _wh(db)
+    _layout, rack, _ = _layout_with_rack(db, w)
+    _road(db, w.id, 80, 160, 400, 160)
+    n_before = db.query(WarehouseRoutingNode).filter(WarehouseRoutingNode.warehouse_id == w.id).count()
+    e_before = db.query(WarehouseRoutingEdge).filter(WarehouseRoutingEdge.warehouse_id == w.id).count()
+    for i in range(40):
+        u = str(uuid.uuid4())
+        db.add(
+            Bin(
+                rack_id=rack.id,
+                location_uuid=u,
+                label=f"L{i}",
+                level_index=0,
+                segment_index=i % 8,
+                volume_dm3=10,
+            )
+        )
+        db.add(
+            Location(
+                warehouse_id=w.id,
+                name=f"L{i}",
+                location_uuid=u,
+                type="pick",
+                x=100.0 + i * 5,
+                y=120.0,
+                z=0,
+            )
+        )
+    db.flush()
+    recompute_location_access(db, w.id, migrate_aps=False)
+    n_after = db.query(WarehouseRoutingNode).filter(WarehouseRoutingNode.warehouse_id == w.id).count()
+    e_after = db.query(WarehouseRoutingEdge).filter(WarehouseRoutingEdge.warehouse_id == w.id).count()
+    assert n_before == n_after
+    assert e_before == e_after
+    access_n = (
+        db.query(WarehouseRoutingLocationAccess)
+        .filter(WarehouseRoutingLocationAccess.warehouse_id == w.id)
+        .count()
+    )
+    assert access_n >= 40
+
+
+def test_layout_save_source_has_no_legacy_rebuild():
+    from pathlib import Path
+
+    src = (Path(__file__).resolve().parents[2] / "services" / "warehouse_layout_service.py").read_text(
+        encoding="utf-8"
+    )
+    assert "WarehouseGraphService" not in src
+    assert "build_graph" not in src
+    assert "assign_locations_to_graph_nodes" not in src
+    assert "recompute_location_access" in src

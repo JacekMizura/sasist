@@ -31,12 +31,29 @@ from .location_rack_link import resolve_location_rack_link, resolve_racks_for_lo
 BINDING_AUTO = "AUTO"
 BINDING_MANUAL_OVERRIDE = "MANUAL_OVERRIDE"
 
-STATUS_OK = "OK"
-STATUS_REVIEW = "REVIEW"
-STATUS_UNREACHABLE = "UNREACHABLE"
+# Canonical validation / binding statuses (user-facing semantics)
+STATUS_RESOLVED = "RESOLVED"  # dostęp poprawny
+STATUS_AMBIGUOUS = "AMBIGUOUS"  # wymaga sprawdzenia
+STATUS_UNREACHABLE = "UNREACHABLE"  # brak sensownej drogi
+STATUS_BLOCKED = "BLOCKED"  # droga w zasięgu, ale geometria blokuje
+STATUS_OVERRIDE_BROKEN = "OVERRIDE_BROKEN"  # ręczny wyjątek uszkodzony
 STATUS_NO_RACK = "NO_RACK"
 STATUS_NO_GRAPH = "NO_GRAPH"
-STATUS_LEGACY_NODE = "LEGACY_NODE"
+STATUS_LEGACY_NODE = "LEGACY_NODE"  # MANUAL via Stage-2 node (resolved if node exists)
+
+# Back-compat aliases used in early foundation rows / tests
+STATUS_OK = STATUS_RESOLVED
+STATUS_REVIEW = STATUS_AMBIGUOUS
+
+
+def _normalize_status(raw: object) -> str:
+    s = str(raw or "").strip().upper()
+    if s in ("OK", "RESOLVED"):
+        return STATUS_RESOLVED
+    if s in ("REVIEW", "AMBIGUOUS"):
+        return STATUS_AMBIGUOUS
+    return s or STATUS_UNREACHABLE
+
 
 
 @dataclass
@@ -152,7 +169,7 @@ def resolve_auto_for_location(
         return ResolveResult(
             location_id=lid,
             binding_mode=BINDING_AUTO,
-            status=STATUS_REVIEW,
+            status=STATUS_AMBIGUOUS,
             rack_id=int(rack.id),
             rack_uuid=getattr(rack, "uuid", None),
         )
@@ -170,21 +187,22 @@ def resolve_auto_for_location(
     S = service_edge_point_cm(rack, float(cx), float(cy))
     n = world_service_normal(rack)
     fp = rack_footprint_cm(rack)
-    best = select_best_edge_for_service_point(S, n, fp, edge_list, max_reach_m=max_reach_m)
+    best, reason = select_best_edge_for_service_point(S, n, fp, edge_list, max_reach_m=max_reach_m)
     if best is None:
+        status = STATUS_BLOCKED if reason == "BLOCKED" else STATUS_UNREACHABLE
         return ResolveResult(
             location_id=lid,
             binding_mode=BINDING_AUTO,
-            status=STATUS_UNREACHABLE,
+            status=status,
             service_point_x_cm=S.x,
             service_point_y_cm=S.y,
             rack_id=int(rack.id),
             rack_uuid=getattr(rack, "uuid", None),
         )
 
-    status = STATUS_OK
+    status = STATUS_RESOLVED
     if best.orthogonality > 0.35 or best.approach_m > max_reach_m * 0.75:
-        status = STATUS_REVIEW
+        status = STATUS_AMBIGUOUS
 
     return ResolveResult(
         location_id=lid,
@@ -262,7 +280,10 @@ def _upsert_row(
 
 def migrate_access_points_to_overrides(db: Session, warehouse_id: int) -> int:
     """
-    Copy existing WarehouseRoutingAccessPoint rows into MANUAL_OVERRIDE bindings.
+    One-shot copy: existing WarehouseRoutingAccessPoint → MANUAL_OVERRIDE only when
+    no location_access row exists yet.
+
+    Never overwrites AUTO (e.g. after „Przywróć automatyczny”) and never duplicates.
     Does not delete APs (Stage-2 consumers still read them until Stage 3).
     """
     wid = int(warehouse_id)
@@ -273,13 +294,18 @@ def migrate_access_points_to_overrides(db: Session, warehouse_id: int) -> int:
     )
     if not aps:
         return 0
-    # One override per location — keep first AP by id
     by_loc: dict[int, WarehouseRoutingAccessPoint] = {}
     for ap in sorted(aps, key=lambda a: int(a.id)):
         lid = int(ap.location_id)
         if lid not in by_loc:
             by_loc[lid] = ap
 
+    existing_ids = {
+        int(r[0])
+        for r in db.query(WarehouseRoutingLocationAccess.location_id)
+        .filter(WarehouseRoutingLocationAccess.warehouse_id == wid)
+        .all()
+    }
     nodes = {
         n.uuid: n
         for n in db.query(WarehouseRoutingNode)
@@ -290,31 +316,55 @@ def migrate_access_points_to_overrides(db: Session, warehouse_id: int) -> int:
     rev = _graph_revision(db, wid)
     created = 0
     for lid, ap in by_loc.items():
-        existing = (
-            db.query(WarehouseRoutingLocationAccess)
-            .filter(
-                WarehouseRoutingLocationAccess.warehouse_id == wid,
-                WarehouseRoutingLocationAccess.location_id == lid,
-            )
-            .first()
-        )
-        if existing and existing.binding_mode == BINDING_MANUAL_OVERRIDE:
+        if lid in existing_ids:
+            # Idempotent: never touch existing AUTO or MANUAL rows
             continue
         node = nodes.get(ap.node_uuid)
         result = ResolveResult(
             location_id=lid,
             binding_mode=BINDING_MANUAL_OVERRIDE,
-            status=STATUS_LEGACY_NODE,
+            status=STATUS_LEGACY_NODE if node else STATUS_OVERRIDE_BROKEN,
             legacy_node_uuid=ap.node_uuid,
             entry_x_cm=float(node.x) if node else None,
             entry_y_cm=float(node.y) if node else None,
             access_approach_m=0.0,
         )
-        _upsert_row(db, wid, result, graph_revision=rev, layout_fingerprint=fp, existing=existing)
+        _upsert_row(db, wid, result, graph_revision=rev, layout_fingerprint=fp, existing=None)
         created += 1
     if created:
         db.flush()
     return created
+
+
+def refresh_manual_override_health(
+    db: Session,
+    warehouse_id: int,
+    row: WarehouseRoutingLocationAccess,
+    *,
+    edge_uuids: set[str],
+    node_uuids: set[str],
+) -> str:
+    """Update MANUAL_OVERRIDE status if edge/node is gone. Returns new status."""
+    if row.binding_mode != BINDING_MANUAL_OVERRIDE:
+        return _normalize_status(row.status)
+    if row.legacy_node_uuid:
+        if row.legacy_node_uuid not in node_uuids:
+            row.status = STATUS_OVERRIDE_BROKEN
+            return STATUS_OVERRIDE_BROKEN
+        row.status = STATUS_LEGACY_NODE
+        return STATUS_LEGACY_NODE
+    if row.edge_uuid:
+        if row.edge_uuid not in edge_uuids:
+            row.status = STATUS_OVERRIDE_BROKEN
+            return STATUS_OVERRIDE_BROKEN
+        # Edge exists — treat as resolved override unless previously broken without reason
+        if _normalize_status(row.status) == STATUS_OVERRIDE_BROKEN:
+            row.status = STATUS_RESOLVED
+        elif _normalize_status(row.status) not in (STATUS_RESOLVED, STATUS_AMBIGUOUS, STATUS_LEGACY_NODE):
+            row.status = STATUS_RESOLVED
+        return _normalize_status(row.status)
+    row.status = STATUS_OVERRIDE_BROKEN
+    return STATUS_OVERRIDE_BROKEN
 
 
 def recompute_location_access(
@@ -342,13 +392,22 @@ def recompute_location_access(
         .all()
     }
     edges = _edge_geometry(db, wid)
+    edge_uuid_set = {e[0] for e in edges}
+    node_uuid_set = {
+        n.uuid
+        for n in db.query(WarehouseRoutingNode)
+        .filter(WarehouseRoutingNode.warehouse_id == wid)
+        .all()
+    }
     fp = _layout_fingerprint(db, wid)
     rev = _graph_revision(db, wid)
 
-    counts = {
-        STATUS_OK: 0,
-        STATUS_REVIEW: 0,
+    counts: dict[str, int] = {
+        STATUS_RESOLVED: 0,
+        STATUS_AMBIGUOUS: 0,
         STATUS_UNREACHABLE: 0,
+        STATUS_BLOCKED: 0,
+        STATUS_OVERRIDE_BROKEN: 0,
         STATUS_NO_RACK: 0,
         STATUS_NO_GRAPH: 0,
         STATUS_LEGACY_NODE: 0,
@@ -367,10 +426,13 @@ def recompute_location_access(
         lid = int(loc.id)
         existing = existing_rows.get(lid)
         if existing and existing.binding_mode == BINDING_MANUAL_OVERRIDE:
-            counts["MANUAL_OVERRIDE"] += 1
-            counts[STATUS_LEGACY_NODE if existing.status == STATUS_LEGACY_NODE else existing.status] = (
-                counts.get(existing.status, 0) + 1
+            st = refresh_manual_override_health(
+                db, wid, existing, edge_uuids=edge_uuid_set, node_uuids=node_uuid_set
             )
+            existing.graph_revision = rev
+            existing.layout_fingerprint = fp
+            counts["MANUAL_OVERRIDE"] += 1
+            counts[st] = counts.get(st, 0) + 1
             continue
         link = links.get(lid)
         rack = racks.get(link.rack_id) if link else None

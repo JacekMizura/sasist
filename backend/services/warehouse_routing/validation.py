@@ -29,6 +29,7 @@ _OPERATIONAL_ISSUE_CODES = frozenset(
         "LOCATIONS_WITHOUT_ACCESS",
         "LOCATIONS_ACCESS_UNREACHABLE",
         "LOCATIONS_ACCESS_REVIEW",
+        "LOCATIONS_ACCESS_OVERRIDE_BROKEN",
         "START_CANNOT_REACH_PACKING",
     }
 )
@@ -259,12 +260,15 @@ def validate_graph(db: Session, warehouse_id: int) -> RoutingValidationResult:
     try:
         from ...models.warehouse_routing import WarehouseRoutingLocationAccess
         from .location_access_resolver import (
-            STATUS_OK,
-            STATUS_REVIEW,
+            STATUS_RESOLVED,
+            STATUS_AMBIGUOUS,
             STATUS_UNREACHABLE,
+            STATUS_BLOCKED,
+            STATUS_OVERRIDE_BROKEN,
             STATUS_NO_RACK,
             STATUS_NO_GRAPH,
             STATUS_LEGACY_NODE,
+            _normalize_status,
         )
 
         access_rows = (
@@ -273,12 +277,20 @@ def validate_graph(db: Session, warehouse_id: int) -> RoutingValidationResult:
             .all()
         )
 
-        ok_n = sum(1 for r in access_rows if r.status in (STATUS_OK, STATUS_LEGACY_NODE))
-        review_n = sum(1 for r in access_rows if r.status == STATUS_REVIEW)
+        ok_n = sum(
+            1
+            for r in access_rows
+            if _normalize_status(r.status) in (STATUS_RESOLVED, STATUS_LEGACY_NODE)
+        )
+        review_n = sum(1 for r in access_rows if _normalize_status(r.status) == STATUS_AMBIGUOUS)
+        broken_n = sum(
+            1 for r in access_rows if _normalize_status(r.status) == STATUS_OVERRIDE_BROKEN
+        )
         bad_n = sum(
             1
             for r in access_rows
-            if r.status in (STATUS_UNREACHABLE, STATUS_NO_RACK, STATUS_NO_GRAPH)
+            if _normalize_status(r.status)
+            in (STATUS_UNREACHABLE, STATUS_BLOCKED, STATUS_NO_RACK, STATUS_NO_GRAPH)
         )
         if access_rows:
             issues.append(
@@ -294,6 +306,14 @@ def validate_graph(db: Session, warehouse_id: int) -> RoutingValidationResult:
                     code="LOCATIONS_ACCESS_REVIEW",
                     severity="info",
                     message=f"Lokalizacje do sprawdzenia: {review_n}",
+                )
+            )
+        if broken_n:
+            issues.append(
+                ValidationIssue(
+                    code="LOCATIONS_ACCESS_OVERRIDE_BROKEN",
+                    severity="info",
+                    message=f"Ręczne nadpisania nieaktualne: {broken_n}",
                 )
             )
         if bad_n:
