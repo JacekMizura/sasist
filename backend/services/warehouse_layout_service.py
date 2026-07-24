@@ -1640,13 +1640,25 @@ class WarehouseLayoutService:
             self.db.commit()
             self.db.refresh(layout)
             # Authored Routing Graph is SSOT — layout save must NOT rebuild legacy WarehouseNode graph.
-            # Deterministic service-face repair from row_containers, then AUTO location access recompute.
+            #
+            # Order (critical):
+            #   1) repair faces → flush → COMMIT (persist before recompute)
+            #   2) recompute Location Access against NEW faces → COMMIT
+            # Recompute rollback must never undo a successful face repair.
             try:
                 from .warehouse_routing.service_face_repair import repair_layout_service_faces
 
                 repair_layout_service_faces(self.db, warehouse_id, layout=layout)
                 self.db.flush()
+                self.db.commit()
+                self.db.expire_all()
+                layout = (
+                    self.db.query(WarehouseLayout)
+                    .filter(WarehouseLayout.id == layout.id)
+                    .first()
+                ) or layout
             except Exception:
+                self.db.rollback()
                 logger.exception(
                     "service_face_repair failed (warehouse_id=%s); continuing with layout save",
                     warehouse_id,
