@@ -1,11 +1,12 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import type {
   LocationAccessBinding,
   RoutingAccessPoint,
   RoutingEdge,
   RoutingNode,
 } from "../../../api/warehouseRoutingApi";
-import { GRID_UNIT_CM } from "../../../types/warehouse";
+import { GRID_UNIT_CM, type RackState } from "../../../types/warehouse";
+import { worldServiceNormal } from "../rackServiceFace";
 import { nodeDisplayName, nodeKind, opTypeLabel } from "./routingDisplay";
 import { EDGE_HIT_HALF_PX, NODE_HIT_RADIUS_PX, resolveSelectHit } from "./routingHitTest";
 
@@ -15,6 +16,12 @@ type Props = {
   accessPoints?: RoutingAccessPoint[];
   locationAccess?: LocationAccessBinding[];
   showAccessDiagnostics?: boolean;
+  /** Layout racks — used for aggregated face markers (not all S→P lines). */
+  racks?: RackState[];
+  /** When set, show detailed S→P only for these rack uuids. */
+  selectedRackUuids?: string[];
+  /** When set, show detailed S→P only for this location id. */
+  selectedLocationId?: number | null;
   cellPx: number;
   selectedNodeUuid?: string | null;
   selectedEdgeUuid?: string | null;
@@ -36,6 +43,29 @@ type Props = {
   onNodeDragEnd?: (uuid: string, xCm: number, yCm: number) => void;
   interactive?: boolean;
 };
+
+type RackAccessAgg = {
+  rackUuid: string;
+  status: "OK" | "REVIEW" | "BLOCKED";
+  nx: number;
+  ny: number;
+  cx: number;
+  cy: number;
+  w: number;
+  h: number;
+};
+
+function accessStatusRank(status: string | undefined): "OK" | "REVIEW" | "BLOCKED" {
+  const s = String(status || "").toUpperCase();
+  if (s === "OK" || s === "RESOLVED" || s === "LEGACY_NODE") return "OK";
+  if (s === "REVIEW" || s === "AMBIGUOUS") return "REVIEW";
+  return "BLOCKED";
+}
+
+function worstStatus(a: "OK" | "REVIEW" | "BLOCKED", b: "OK" | "REVIEW" | "BLOCKED") {
+  const order = { OK: 0, REVIEW: 1, BLOCKED: 2 } as const;
+  return order[b] > order[a] ? b : a;
+}
 
 function clientToCm(
   svg: SVGSVGElement,
@@ -81,6 +111,9 @@ export function RoutingGraphLayer({
   accessPoints = [],
   locationAccess = [],
   showAccessDiagnostics = false,
+  racks = [],
+  selectedRackUuids = [],
+  selectedLocationId = null,
   cellPx,
   selectedNodeUuid,
   selectedEdgeUuid,
@@ -105,6 +138,45 @@ export function RoutingGraphLayer({
   const diagEdges = new Set(diagnosticEdgeUuids);
   const scale = cellPx / GRID_UNIT_CM;
   const draftFrom = draftFromUuid ? byUuid.get(draftFromUuid) : null;
+  const selectedRackSet = useMemo(() => new Set(selectedRackUuids.filter(Boolean)), [selectedRackUuids]);
+  const detailMode = selectedRackSet.size > 0 || selectedLocationId != null;
+
+  const rackAgg = useMemo(() => {
+    const byRack = new Map<string, RackAccessAgg>();
+    const rackByUuid = new Map(racks.map((r) => [String(r.uuid || ""), r]));
+    for (const a of locationAccess) {
+      const ru = a.rack_uuid ? String(a.rack_uuid) : "";
+      if (!ru) continue;
+      const rack = rackByUuid.get(ru);
+      if (!rack) continue;
+      const n = worldServiceNormal(
+        String(rack.orientation || "vertical"),
+        rack.rotationDegrees ?? 0,
+        rack.serviceSide ?? "FRONT"
+      );
+      const st = accessStatusRank(a.status);
+      const prev = byRack.get(ru);
+      const cx = (Number(rack.x) + Number(rack.width) / 2) * GRID_UNIT_CM;
+      const cy = (Number(rack.y) + Number(rack.height) / 2) * GRID_UNIT_CM;
+      const w = Number(rack.width) * GRID_UNIT_CM;
+      const h = Number(rack.height) * GRID_UNIT_CM;
+      if (!prev) {
+        byRack.set(ru, { rackUuid: ru, status: st, nx: n.x, ny: n.y, cx, cy, w, h });
+      } else {
+        byRack.set(ru, { ...prev, status: worstStatus(prev.status, st), nx: n.x, ny: n.y });
+      }
+    }
+    return [...byRack.values()];
+  }, [locationAccess, racks]);
+
+  const detailAccess = useMemo(() => {
+    if (!showAccessDiagnostics || !detailMode) return [] as LocationAccessBinding[];
+    return locationAccess.filter((a) => {
+      if (selectedLocationId != null && a.location_id === selectedLocationId) return true;
+      if (a.rack_uuid && selectedRackSet.has(String(a.rack_uuid))) return true;
+      return false;
+    });
+  }, [showAccessDiagnostics, detailMode, locationAccess, selectedLocationId, selectedRackSet]);
 
   const dragRef = useRef<{
     uuid: string;
@@ -293,7 +365,32 @@ export function RoutingGraphLayer({
       )}
 
       {showAccessDiagnostics &&
-        locationAccess.map((a) => {
+        !detailMode &&
+        rackAgg.map((agg) => {
+          const stroke =
+            agg.status === "OK" ? "#10b981" : agg.status === "REVIEW" ? "#f59e0b" : "#f43f5e";
+          const faceLen = Math.max(10, Math.min(agg.w, agg.h) * 0.22);
+          const x1 = agg.cx * scale;
+          const y1 = agg.cy * scale;
+          const x2 = (agg.cx + agg.nx * faceLen) * scale;
+          const y2 = (agg.cy + agg.ny * faceLen) * scale;
+          return (
+            <g key={`la-agg-${agg.rackUuid}`} style={{ pointerEvents: "none" }} opacity={0.9}>
+              <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={stroke} strokeWidth={2.5} />
+              <circle cx={x2} cy={y2} r={4} fill={stroke} />
+              <title>
+                {agg.status === "OK"
+                  ? "OK — dostęp"
+                  : agg.status === "REVIEW"
+                    ? "Do sprawdzenia"
+                    : "Brak dostępu"}
+              </title>
+            </g>
+          );
+        })}
+
+      {showAccessDiagnostics &&
+        detailAccess.map((a) => {
           if (
             a.service_point_x_cm == null ||
             a.service_point_y_cm == null ||
@@ -307,22 +404,17 @@ export function RoutingGraphLayer({
           const broken = a.status === "OVERRIDE_BROKEN" || a.status === "BLOCKED";
           const stroke = ok ? "#10b981" : review ? "#f59e0b" : broken ? "#f43f5e" : "#f43f5e";
           return (
-            <g key={`la-${a.uuid}`} style={{ pointerEvents: "none" }} opacity={0.85}>
+            <g key={`la-${a.uuid}`} style={{ pointerEvents: "none" }} opacity={0.9}>
               <line
                 x1={a.service_point_x_cm * scale}
                 y1={a.service_point_y_cm * scale}
                 x2={a.entry_x_cm * scale}
                 y2={a.entry_y_cm * scale}
                 stroke={stroke}
-                strokeWidth={1.5}
-                strokeDasharray="3 2"
+                strokeWidth={2}
+                strokeDasharray="4 2"
               />
-              <circle
-                cx={a.entry_x_cm * scale}
-                cy={a.entry_y_cm * scale}
-                r={3}
-                fill={stroke}
-              />
+              <circle cx={a.entry_x_cm * scale} cy={a.entry_y_cm * scale} r={3.5} fill={stroke} />
             </g>
           );
         })}
