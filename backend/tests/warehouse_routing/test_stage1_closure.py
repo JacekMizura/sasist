@@ -337,4 +337,4 @@ def test_schema_has_no_legacy_1to1_ap_unique():
     from backend.db import warehouse_routing_schema as sch
 
     assert not hasattr(sch, "_drop_legacy_ap_unique")
-    assert sch.WAREHOUSE_ROUTING_SCHEMA_VERSION.endswith("routing.3")
+    assert sch.WAREHOUSE_ROUTING_SCHEMA_VERSION.endswith("location_access.1")

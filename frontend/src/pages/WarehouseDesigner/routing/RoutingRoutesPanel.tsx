@@ -546,10 +546,31 @@ export function RoutingRoutesPanel({
           </div>
 
           <div className="border-t border-slate-100 pt-2">
-            <div className="mb-1 font-semibold">Obsługiwane lokalizacje</div>
+            <div className="mb-1 font-semibold">Dostęp lokalizacji</div>
             <p className="mb-1 text-[10px] text-slate-500">
-              Lokalizacje magazynowe dostępne z tego miejsca trasy.
+              Dostęp do trasy wylicza się automatycznie po stronie regału. Ręczne przypisanie to wyjątek
+              (nadpisanie).
             </p>
+            <div className="mb-2 flex flex-wrap gap-1">
+              <button
+                type="button"
+                className="h-7 flex-1 rounded border border-slate-200 text-[10px] font-semibold"
+                onClick={() => void routing.recomputeAccess()}
+              >
+                Przelicz dostęp AUTO
+              </button>
+              <button
+                type="button"
+                className={`h-7 flex-1 rounded border text-[10px] font-semibold ${
+                  routing.showAccessDiagnostics
+                    ? "border-sky-300 bg-sky-50 text-sky-900"
+                    : "border-slate-200"
+                }`}
+                onClick={() => routing.setShowAccessDiagnostics((v) => !v)}
+              >
+                {routing.showAccessDiagnostics ? "Ukryj diagnostykę" : "Diagnostyka dostępu"}
+              </button>
+            </div>
             <ul className="mb-2 flex max-h-24 flex-wrap gap-1 overflow-auto">
               {routing.accessPoints
                 .filter((a) => a.node_uuid === selectedNode.uuid)
@@ -559,13 +580,14 @@ export function RoutingRoutesPanel({
                   return (
                     <li
                       key={a.uuid}
-                      className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] text-emerald-900"
+                      className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] text-amber-900"
+                      title="Ręczne nadpisanie (wyjątek)"
                     >
                       {locName}
                       <button
                         type="button"
-                        className="font-bold text-emerald-700"
-                        title="Odłącz"
+                        className="font-bold text-amber-800"
+                        title="Odłącz nadpisanie"
                         onClick={() => routing.removeAccessPoint(a.uuid)}
                       >
                         ×
@@ -574,16 +596,16 @@ export function RoutingRoutesPanel({
                   );
                 })}
               {routing.accessPoints.filter((a) => a.node_uuid === selectedNode.uuid).length === 0 && (
-                <li className="text-[10px] text-slate-400">Brak przypisanych lokalizacji.</li>
+                <li className="text-[10px] text-slate-400">Brak ręcznych nadpisań na tym punkcie.</li>
               )}
             </ul>
             {!locPickerOpen ? (
               <button
                 type="button"
-                className="h-7 w-full rounded border border-slate-200 font-semibold"
+                className="h-7 w-full rounded border border-dashed border-slate-300 text-[10px] font-semibold text-slate-600"
                 onClick={() => setLocPickerOpen(true)}
               >
-                + Przypisz lokalizację
+                Nadpisz ręcznie (wyjątek)…
               </button>
             ) : (
               <div className="space-y-1 rounded border border-slate-200 p-1.5">

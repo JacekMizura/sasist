@@ -1,3 +1,13 @@
+## 2026-07-24 — Location Access Foundation (AUTO, bez Etapu 3)
+
+- **Location→Rack SSOT:** `location_uuid`→`Bin.rack_id`→`Rack` (nie `rack_name`); brak ryzykownej migracji.
+- Persist `Rack.service_side` + `rotation_degrees`; world normal z orientation+rotation.
+- Tabela `warehouse_routing_location_access`; AUTO resolver (face edge, half-plane, reach, approach_m).
+- Virtual entry runtime + approach w koszcie; authored graph bez pollution.
+- Recompute po layout/graph save; AP → MANUAL_OVERRIDE (Stage-2 AP nadal żyje).
+- FE: walidacja dostęp/review/bez drogi; diagnostyka overlay OFF; ręczne AP = wyjątek.
+- Tests: 13 foundation + full warehouse_routing 74 PASS; FE build OK. **No push. Bez Etapu 3.**
+
 ## 2026-07-24 — TRASY: draw-time skrzyżowania + prostszy panel odcinka
 
 - ROOT: przecięcia dopiero na BE save (`materialize_intersections`); FE tylko split po kliknięciu w odcinek → wizualny X bez topologii.

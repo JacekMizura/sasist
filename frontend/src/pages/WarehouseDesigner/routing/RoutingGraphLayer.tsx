@@ -1,5 +1,10 @@
 import { useCallback, useRef, useState } from "react";
-import type { RoutingAccessPoint, RoutingEdge, RoutingNode } from "../../../api/warehouseRoutingApi";
+import type {
+  LocationAccessBinding,
+  RoutingAccessPoint,
+  RoutingEdge,
+  RoutingNode,
+} from "../../../api/warehouseRoutingApi";
 import { GRID_UNIT_CM } from "../../../types/warehouse";
 import { nodeDisplayName, nodeKind, opTypeLabel } from "./routingDisplay";
 import { EDGE_HIT_HALF_PX, NODE_HIT_RADIUS_PX, resolveSelectHit } from "./routingHitTest";
@@ -8,6 +13,8 @@ type Props = {
   nodes: RoutingNode[];
   edges: RoutingEdge[];
   accessPoints?: RoutingAccessPoint[];
+  locationAccess?: LocationAccessBinding[];
+  showAccessDiagnostics?: boolean;
   cellPx: number;
   selectedNodeUuid?: string | null;
   selectedEdgeUuid?: string | null;
@@ -68,6 +75,8 @@ export function RoutingGraphLayer({
   nodes,
   edges,
   accessPoints = [],
+  locationAccess = [],
+  showAccessDiagnostics = false,
   cellPx,
   selectedNodeUuid,
   selectedEdgeUuid,
@@ -235,6 +244,40 @@ export function RoutingGraphLayer({
           style={{ pointerEvents: "none" }}
         />
       )}
+
+      {showAccessDiagnostics &&
+        locationAccess.map((a) => {
+          if (
+            a.service_point_x_cm == null ||
+            a.service_point_y_cm == null ||
+            a.entry_x_cm == null ||
+            a.entry_y_cm == null
+          ) {
+            return null;
+          }
+          const ok = a.status === "OK" || a.status === "LEGACY_NODE";
+          const review = a.status === "REVIEW";
+          const stroke = ok ? "#10b981" : review ? "#f59e0b" : "#f43f5e";
+          return (
+            <g key={`la-${a.uuid}`} style={{ pointerEvents: "none" }} opacity={0.85}>
+              <line
+                x1={a.service_point_x_cm * scale}
+                y1={a.service_point_y_cm * scale}
+                x2={a.entry_x_cm * scale}
+                y2={a.entry_y_cm * scale}
+                stroke={stroke}
+                strokeWidth={1.5}
+                strokeDasharray="3 2"
+              />
+              <circle
+                cx={a.entry_x_cm * scale}
+                cy={a.entry_y_cm * scale}
+                r={3}
+                fill={stroke}
+              />
+            </g>
+          );
+        })}
 
       {/* 3) Nodes ON TOP — large hittable disc (never transparent-only / visiblePainted miss) */}
       {nodes.map((n) => {

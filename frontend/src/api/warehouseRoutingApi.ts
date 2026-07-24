@@ -142,3 +142,76 @@ export async function validateRoutingGraph(warehouseId: number): Promise<Routing
   const { data } = await api.post<RoutingValidationResult>(`/warehouse-routing/${warehouseId}/validate`);
   return data;
 }
+
+export type LocationAccessBinding = {
+  uuid: string;
+  warehouse_id: number;
+  location_id: number;
+  binding_mode: string;
+  status: string;
+  edge_uuid?: string | null;
+  t?: number | null;
+  service_point_x_cm?: number | null;
+  service_point_y_cm?: number | null;
+  entry_x_cm?: number | null;
+  entry_y_cm?: number | null;
+  access_approach_m?: number | null;
+  rack_id?: number | null;
+  rack_uuid?: string | null;
+  legacy_node_uuid?: string | null;
+  graph_revision?: number | null;
+};
+
+export type LocationAccessSummary = {
+  warehouse_id: number;
+  total: number;
+  by_status: Record<string, number>;
+  by_mode: Record<string, number>;
+};
+
+export async function fetchLocationAccess(warehouseId: number): Promise<LocationAccessBinding[]> {
+  const { data } = await api.get<LocationAccessBinding[]>(
+    `/warehouse-routing/${warehouseId}/location-access`
+  );
+  return data;
+}
+
+export async function fetchLocationAccessSummary(warehouseId: number): Promise<LocationAccessSummary> {
+  const { data } = await api.get<LocationAccessSummary>(
+    `/warehouse-routing/${warehouseId}/location-access/summary`
+  );
+  return data;
+}
+
+export async function recomputeLocationAccess(warehouseId: number): Promise<{
+  warehouse_id: number;
+  locations_total: number;
+  graph_revision: number;
+  layout_fingerprint: string;
+  counts: Record<string, number>;
+}> {
+  const { data } = await api.post(`/warehouse-routing/${warehouseId}/location-access/recompute`);
+  return data;
+}
+
+export async function restoreLocationAccessAuto(
+  warehouseId: number,
+  locationId: number
+): Promise<LocationAccessBinding> {
+  const { data } = await api.post<LocationAccessBinding>(
+    `/warehouse-routing/${warehouseId}/location-access/${locationId}/restore-auto`
+  );
+  return data;
+}
+
+export async function overrideLocationAccess(
+  warehouseId: number,
+  locationId: number,
+  body: { edge_uuid?: string; t?: number; node_uuid?: string }
+): Promise<LocationAccessBinding> {
+  const { data } = await api.post<LocationAccessBinding>(
+    `/warehouse-routing/${warehouseId}/location-access/${locationId}/override`,
+    body
+  );
+  return data;
+}

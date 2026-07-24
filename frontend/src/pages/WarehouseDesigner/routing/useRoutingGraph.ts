@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   computeRoutingPath,
+  fetchLocationAccess,
   fetchRoutingGraph,
+  recomputeLocationAccess,
   saveRoutingGraph,
   validateRoutingGraph,
+  type LocationAccessBinding,
   type RouteComputeResult,
   type RoutingAccessPoint,
   type RoutingEdge,
@@ -57,6 +60,8 @@ export function useRoutingGraph(warehouseId: number | null, layoutId: number | n
   const [validation, setValidation] = useState<RoutingValidationResult | null>(null);
   const [testResult, setTestResult] = useState<RouteComputeResult | null>(null);
   const [dirty, setDirty] = useState(false);
+  const [locationAccess, setLocationAccess] = useState<LocationAccessBinding[]>([]);
+  const [showAccessDiagnostics, setShowAccessDiagnostics] = useState(false);
 
   // Keep latest graph for sync mutations (avoid stale closures when chaining addNode→addEdge).
   const nodesRef = useRef(nodes);
@@ -446,7 +451,26 @@ export function useRoutingGraph(warehouseId: number | null, layoutId: number | n
     }
     const res = await validateRoutingGraph(warehouseId);
     setValidation(res);
+    try {
+      const access = await fetchLocationAccess(warehouseId);
+      setLocationAccess(access);
+    } catch {
+      /* optional */
+    }
     return res;
+  }, [warehouseId, dirty, save]);
+
+  const recomputeAccess = useCallback(async () => {
+    if (warehouseId == null) return;
+    if (dirty) {
+      const saved = await save();
+      if (!saved) return;
+    }
+    await recomputeLocationAccess(warehouseId);
+    const access = await fetchLocationAccess(warehouseId);
+    setLocationAccess(access);
+    const res = await validateRoutingGraph(warehouseId);
+    setValidation(res);
   }, [warehouseId, dirty, save]);
 
   const runTestRoute = useCallback(
@@ -517,6 +541,10 @@ export function useRoutingGraph(warehouseId: number | null, layoutId: number | n
     removeAccessPoint,
     clearGraph,
     runValidate,
+    recomputeAccess,
+    locationAccess,
+    showAccessDiagnostics,
+    setShowAccessDiagnostics,
     runTestRoute,
   };
 }
