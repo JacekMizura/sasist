@@ -9,7 +9,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
 from backend.models.location import Location
-from backend.models.warehouse import Bin, Rack, Warehouse, WarehouseLayout
+from backend.models.warehouse import Bin, Rack, Warehouse, WarehouseLayout, WarehouseRackPassage
 from backend.models.warehouse_routing import (
     WarehouseRoutingAccessPoint,
     WarehouseRoutingEdge,
@@ -48,6 +48,7 @@ def db():
     Warehouse.__table__.create(engine, checkfirst=True)
     WarehouseLayout.__table__.create(engine, checkfirst=True)
     Rack.__table__.create(engine, checkfirst=True)
+    WarehouseRackPassage.__table__.create(engine, checkfirst=True)
     Bin.__table__.create(engine, checkfirst=True)
     Location.__table__.create(engine, checkfirst=True)
     WarehouseRoutingNode.__table__.create(engine, checkfirst=True)
@@ -222,9 +223,10 @@ def test_auto_picks_road_on_service_side_not_opposite(db):
 
 def test_back_to_back_two_racks_do_not_cross_assign(db):
     w = _wh(db)
-    # Rack A faces +Y, rack B faces -Y (rotation 180), stacked
+    # Back-to-back: shared backs; service aisles on outer sides (no pierce of sibling).
+    # A faces north (−Y), B faces south (+Y).
     layout, rack_a, loc_a = _layout_with_rack(
-        db, w, orientation="horizontal", rotation_degrees=0, x=10, y=10, width=10, height=4
+        db, w, orientation="horizontal", rotation_degrees=180, x=10, y=10, width=10, height=4
     )
     rack_b = Rack(
         layout_id=layout.id,
@@ -243,7 +245,7 @@ def test_back_to_back_two_racks_do_not_cross_assign(db):
         aisle_letter="B",
         rack_index=2,
         service_side="FRONT",
-        rotation_degrees=180,
+        rotation_degrees=0,
     )
     db.add(rack_b)
     db.flush()
@@ -270,13 +272,13 @@ def test_back_to_back_two_racks_do_not_cross_assign(db):
     db.add(loc_b)
     db.flush()
 
-    road_south = _road(db, w.id, 100, 200, 220, 200)  # aisle south of A (and "north" of B if B at y=14)
-    road_north = _road(db, w.id, 100, 80, 220, 80)  # aisle north of B after 180
+    road_south = _road(db, w.id, 100, 200, 220, 200)  # outer aisle for B (+Y)
+    road_north = _road(db, w.id, 100, 80, 220, 80)  # outer aisle for A (−Y)
 
     ra = resolve_auto_for_location(db, w.id, loc_a)
     rb = resolve_auto_for_location(db, w.id, loc_b)
-    assert ra.edge_uuid == road_south.uuid
-    assert rb.edge_uuid == road_north.uuid
+    assert ra.edge_uuid == road_north.uuid
+    assert rb.edge_uuid == road_south.uuid
     assert ra.edge_uuid != rb.edge_uuid
 
 

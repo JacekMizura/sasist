@@ -1,3 +1,21 @@
+## 2026-07-24 — Physical Routing / Rack Passage Foundation
+
+- Model `WarehouseRackPassage` (osobna tabela, UUID); geometria lokalna względem Rack.
+- SSOT `physical_collision.py`: obstacle = footprint − enabled passages; eps=2cm; soft boundary.
+- Soft „Sprawdź sieć”: `EDGES_THROUGH_OBSTACLES` (warning); save graph nie blokuje; FE highlight odcinków.
+- Location Access: approach S→P + wykluczenie invalid edges; MANUAL_OVERRIDE nietknięty.
+- FE: „Dodaj przejazd pod regałem”; orthogonal prefer + Shift free-angle.
+- Tests: collision/passage/routing soft/access/draw. **No push. Bez Etapu 3.**
+
+## 2026-07-24 — FINAL AUDIT Location Access Foundation
+
+- P0 fix: migracja AP tylko gdy brak wiersza access (nie nadpisuje restore AUTO).
+- P0 fix: MANUAL po usunięciu edge → `OVERRIDE_BROKEN`.
+- P1 fix: one-way same-edge respektuje kolejność `t`; disabled edges wykluczone z virtual entry.
+- Statusy: RESOLVED / AMBIGUOUS / UNREACHABLE / BLOCKED / OVERRIDE_BROKEN.
+- Stage-2 consumers nadal OLD AP; NEW tylko Designer/API foundation (świadomy dual-store do Etapu 3).
+- Tests: 21 foundation + 87 routing/startup; FE routing 41; tsc+build OK. **No push.**
+
 ## 2026-07-24 — Location Access Foundation (AUTO, bez Etapu 3)
 
 - **Location→Rack SSOT:** `location_uuid`→`Bin.rack_id`→`Rack` (nie `rack_name`); brak ryzykownej migracji.

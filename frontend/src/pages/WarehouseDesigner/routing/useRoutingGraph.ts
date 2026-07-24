@@ -245,7 +245,7 @@ export function useRoutingGraph(warehouseId: number | null, layoutId: number | n
       draftFromUuid: string | null,
       x: number,
       y: number,
-      opts?: { preferEdgeUuid?: string; preferNodeUuid?: string }
+      opts?: { preferEdgeUuid?: string; preferNodeUuid?: string; freeAngle?: boolean }
     ) => {
       const result = applyDrawStep(
         { nodes: nodesRef.current, edges: edgesRef.current },
@@ -255,6 +255,7 @@ export function useRoutingGraph(warehouseId: number | null, layoutId: number | n
           y,
           preferEdgeUuid: opts?.preferEdgeUuid,
           preferNodeUuid: opts?.preferNodeUuid,
+          freeAngle: opts?.freeAngle,
         },
         newUuid,
         warehouseId ?? 0,

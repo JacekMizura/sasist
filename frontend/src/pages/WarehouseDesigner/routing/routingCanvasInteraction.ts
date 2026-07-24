@@ -41,6 +41,32 @@ export type InteractionGraph = {
 /** Magnetic snap radii in warehouse cm (draw mode). */
 export const DRAW_NODE_SNAP_CM = 28;
 export const DRAW_EDGE_SNAP_CM = 36;
+/** Prefer 0°/90° when cursor is within this distance of axis from draft origin. */
+export const ORTHOGONAL_SNAP_CM = 28;
+
+/**
+ * Prefer orthogonal (H/V) continuation from draft origin.
+ * Preference only — Shift / freeAngle disables it.
+ */
+export function preferOrthogonalCm(
+  from: { x: number; y: number } | null | undefined,
+  x: number,
+  y: number,
+  opts?: { freeAngle?: boolean; thresholdCm?: number }
+): { x: number; y: number; guide: "none" | "h" | "v" } {
+  const freeAngle = Boolean(opts?.freeAngle);
+  const thresholdCm = opts?.thresholdCm ?? ORTHOGONAL_SNAP_CM;
+  if (!from || freeAngle) return { x, y, guide: "none" };
+  const dx = Math.abs(x - from.x);
+  const dy = Math.abs(y - from.y);
+  if (dy <= thresholdCm && dy <= dx) {
+    return { x, y: from.y, guide: "h" };
+  }
+  if (dx <= thresholdCm && dx < dy) {
+    return { x: from.x, y, guide: "v" };
+  }
+  return { x, y, guide: "none" };
+}
 
 function distM(a: { x: number; y: number }, b: { x: number; y: number }): number {
   const dx = b.x - a.x;
@@ -307,6 +333,8 @@ export function applyDrawStep(
     y: number;
     preferEdgeUuid?: string;
     preferNodeUuid?: string;
+    /** Shift: allow free angle (no orthogonal prefer). */
+    freeAngle?: boolean;
   },
   newUuid: () => string,
   warehouseId = 0,
@@ -317,8 +345,15 @@ export function applyDrawStep(
   createdNodeUuid: string | null;
   createdEdgeUuid: string | null;
   snap: DrawSnapTarget;
+  orthoGuide: "none" | "h" | "v";
 } {
-  const snap = resolveDrawSnap(graph, raw.x, raw.y, {
+  const draftNode = draftFromUuid
+    ? graph.nodes.find((n) => n.uuid === draftFromUuid)
+    : null;
+  const ortho = preferOrthogonalCm(draftNode, raw.x, raw.y, {
+    freeAngle: Boolean(raw.freeAngle),
+  });
+  const snap = resolveDrawSnap(graph, ortho.x, ortho.y, {
     preferEdgeUuid: raw.preferEdgeUuid,
     preferNodeUuid: raw.preferNodeUuid,
   });
@@ -405,6 +440,7 @@ export function applyDrawStep(
     createdNodeUuid,
     createdEdgeUuid,
     snap,
+    orthoGuide: ortho.guide,
   };
 }
 
