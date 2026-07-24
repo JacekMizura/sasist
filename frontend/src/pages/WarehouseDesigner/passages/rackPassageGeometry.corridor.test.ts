@@ -32,14 +32,17 @@ function verticalRack(overrides: Partial<RackState> = {}): RackState {
 
 function emptyLayout(racks: RackState[]): LayoutState {
   return {
+    layout_id: null,
+    warehouse_id: null,
+    warehouse_name: "T",
     name: "T",
     grid_cols: 80,
     grid_rows: 60,
-    width_m: 8,
-    length_m: 6,
     racks,
     aisles: [],
-  } as LayoutState;
+    visual_elements: [],
+    row_containers: [],
+  };
 }
 
 describe("passage corridor group UX", () => {
