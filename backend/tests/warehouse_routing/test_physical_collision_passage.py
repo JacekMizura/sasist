@@ -562,6 +562,56 @@ def test_15_16_17_soft_validation_keeps_invalid_edge(db):
     assert db.query(WarehouseRoutingEdge).filter(WarehouseRoutingEdge.uuid == eu).count() == 1
 
 
+def test_invalid_edge_not_routable_by_engine(db):
+    """P0: soft-saved edge through rack must not be used by Dijkstra."""
+    from backend.schemas.warehouse_routing import RouteComputeRequest
+    from backend.services.warehouse_routing.engine import route_a_to_b
+
+    w, layout, rack = _rack(db, x=10, y=10, width=20, height=10)
+    fp = rack_footprint_aabb(rack)
+    na, nb = str(uuid.uuid4()), str(uuid.uuid4())
+    ax = (fp.min_x + fp.max_x) / 2
+    db.add(WarehouseRoutingNode(uuid=na, warehouse_id=w.id, x=ax, y=fp.min_y - 50, node_type="junction"))
+    db.add(WarehouseRoutingNode(uuid=nb, warehouse_id=w.id, x=ax, y=fp.max_y + 50, node_type="junction"))
+    eu = str(uuid.uuid4())
+    db.add(
+        WarehouseRoutingEdge(
+            uuid=eu,
+            warehouse_id=w.id,
+            from_node_uuid=na,
+            to_node_uuid=nb,
+            distance_m=2.0,
+            direction="BOTH",
+            enabled=True,
+        )
+    )
+    db.flush()
+    # Soft save keeps the edge
+    assert db.query(WarehouseRoutingEdge).filter(WarehouseRoutingEdge.uuid == eu).count() == 1
+    res = route_a_to_b(
+        db, w.id, RouteComputeRequest(start_node_uuid=na, destination_node_uuid=nb)
+    )
+    assert not res.ok, "physically invalid edge must not be routable"
+    assert eu not in {s.edge_uuid for s in (res.path_segments or [])}
+
+
+def test_passage_input_clamped_on_sync(db):
+    from backend.services.warehouse_layout_service import WarehouseLayoutService
+
+    w, layout, rack = _rack(db, x=10, y=10, width=10, height=4, orientation="horizontal")
+    svc = WarehouseLayoutService(db)
+    svc._sync_rack_passages(
+        rack,
+        w.id,
+        [{"uuid": str(uuid.uuid4()), "offset_along_cm": -50, "width_cm": 9999, "enabled": True}],
+    )
+    db.flush()
+    p = db.query(WarehouseRackPassage).filter(WarehouseRackPassage.rack_id == rack.id).one()
+    assert p.offset_along_cm >= 0
+    assert p.width_cm <= 100  # along = 10*10 = 100cm
+    assert p.offset_along_cm + p.width_cm <= 100 + 1e-6
+
+
 def test_18_invalid_edge_excluded_from_auto_candidates():
     """Blocked edge uuid set excludes invalid roads from AUTO selection."""
     from backend.services.warehouse_routing.location_access_geometry import (

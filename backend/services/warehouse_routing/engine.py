@@ -92,6 +92,42 @@ def _directed_neighbors(
     return adj
 
 
+def _physically_blocked_edge_uuids(
+    db: Session,
+    warehouse_id: int,
+    edges: list[WarehouseRoutingEdge],
+    nodes_by_uuid: dict[str, WarehouseRoutingNode],
+) -> set[str]:
+    """
+    Soft-validated authored edges that pierce solid rack interiors.
+    Kept in the graph for editing, excluded from operational/test routing.
+    """
+    try:
+        from .physical_collision import (
+            edge_uuids_blocked_by_obstacles,
+            load_warehouse_rack_obstacles,
+        )
+
+        obstacles = load_warehouse_rack_obstacles(db, warehouse_id)
+        if not obstacles:
+            return set()
+        return set(edge_uuids_blocked_by_obstacles(edges, nodes_by_uuid, obstacles))
+    except Exception:
+        return set()
+
+
+def _edges_for_routing(
+    db: Session,
+    warehouse_id: int,
+    edges: list[WarehouseRoutingEdge],
+    nodes_by_uuid: dict[str, WarehouseRoutingNode],
+) -> list[WarehouseRoutingEdge]:
+    blocked = _physically_blocked_edge_uuids(db, warehouse_id, edges, nodes_by_uuid)
+    if not blocked:
+        return edges
+    return [e for e in edges if e.uuid not in blocked]
+
+
 def route_a_to_b(
     db: Session,
     warehouse_id: int,
@@ -132,8 +168,9 @@ def route_a_to_b(
             message="Nie narysowano jeszcze żadnej trasy. Wybierz „Rysuj trasę” i połącz co najmniej dwa punkty na mapie.",
         )
 
+    routable = _edges_for_routing(db, warehouse_id, edges, by_uuid)
     adj = _directed_neighbors(
-        edges,
+        routable,
         process_type=request.process_type,
         transport_type=request.transport_type,
     )
@@ -351,6 +388,21 @@ def route_via_virtual_entries(
             message="Nie narysowano jeszcze żadnej trasy.",
         )
 
+    blocked = _physically_blocked_edge_uuids(db, warehouse_id, edges, by_uuid)
+    if start_edge_uuid in blocked or dest_edge_uuid in blocked:
+        return RouteComputeResponse(
+            ok=False,
+            error_code=ERROR_NO_PATH,
+            message="Odcinek wejścia lokalizacji prowadzi przez regał lub przeszkodę — popraw sieć tras.",
+        )
+    routable = [e for e in edges if e.uuid not in blocked]
+    if not routable:
+        return RouteComputeResponse(
+            ok=False,
+            error_code=ERROR_NO_PATH,
+            message="Brak legalnych odcinków trasy (wszystkie przecinają przeszkody).",
+        )
+
     def entry_xy(edge_uuid: str, t: float) -> tuple[float, float] | None:
         e = next((x for x in edges if x.uuid == edge_uuid), None)
         if e is None:
@@ -381,11 +433,11 @@ def route_via_virtual_entries(
             hop_count=0,
         )
 
-    adj = _directed_neighbors(edges, process_type=process_type, transport_type=transport_type)
+    adj = _directed_neighbors(routable, process_type=process_type, transport_type=transport_type)
     by_xy: dict[str, tuple[float, float]] = {n.uuid: (float(n.x), float(n.y)) for n in nodes}
 
     def splice(virtual_id: str, edge_uuid: str, xy: tuple[float, float]) -> None:
-        e = next(x for x in edges if x.uuid == edge_uuid)
+        e = next(x for x in routable if x.uuid == edge_uuid)
         a_id, b_id = e.from_node_uuid, e.to_node_uuid
         ax, ay = by_xy[a_id]
         bx, by_ = by_xy[b_id]

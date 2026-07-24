@@ -1021,13 +1021,23 @@ class WarehouseLayoutService:
             row.rack_id = int(rack.id)
             row.rack_uuid = getattr(rack, "uuid", None)
             try:
-                row.offset_along_cm = float(raw.get("offset_along_cm", 0) or 0)
+                offset = float(raw.get("offset_along_cm", 0) or 0)
             except (TypeError, ValueError):
-                row.offset_along_cm = 0.0
+                offset = 0.0
             try:
-                row.width_cm = max(1.0, float(raw.get("width_cm", 100) or 100))
+                width = float(raw.get("width_cm", 100) or 100)
             except (TypeError, ValueError):
-                row.width_cm = 100.0
+                width = 100.0
+            # Backend authority: clamp to rack along-axis (no negative / overflow geometry).
+            from .warehouse_routing.physical_collision import _along_is_x, rack_footprint_aabb
+
+            fp = rack_footprint_aabb(rack)
+            along = fp.width() if _along_is_x(rack) else fp.height()
+            along = max(1.0, float(along))
+            offset = max(0.0, min(offset, along - 1.0))
+            width = max(1.0, min(width, along - offset))
+            row.offset_along_cm = offset
+            row.width_cm = width
             clr = raw.get("clearance_height_cm", None)
             if clr is None or clr == "":
                 row.clearance_height_cm = None

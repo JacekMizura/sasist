@@ -379,8 +379,12 @@ def refresh_manual_override_health(
     *,
     edge_uuids: set[str],
     node_uuids: set[str],
+    blocked_edge_uuids: Optional[set[str]] = None,
+    obstacles: Optional[list] = None,
 ) -> str:
-    """Update MANUAL_OVERRIDE status if edge/node is gone. Returns new status."""
+    """Update MANUAL_OVERRIDE status if edge/node is gone or physically illegal."""
+    from .physical_collision import segment_is_physically_clear
+
     if row.binding_mode != BINDING_MANUAL_OVERRIDE:
         return _normalize_status(row.status)
     if row.legacy_node_uuid:
@@ -393,7 +397,23 @@ def refresh_manual_override_health(
         if row.edge_uuid not in edge_uuids:
             row.status = STATUS_OVERRIDE_BROKEN
             return STATUS_OVERRIDE_BROKEN
-        # Edge exists — treat as resolved override unless previously broken without reason
+        blocked = blocked_edge_uuids or set()
+        if row.edge_uuid in blocked:
+            row.status = STATUS_OVERRIDE_BROKEN
+            return STATUS_OVERRIDE_BROKEN
+        # Approach S→P must not pierce solid (override is not a teleport).
+        sx, sy = row.service_point_x_cm, row.service_point_y_cm
+        ex, ey = row.entry_x_cm, row.entry_y_cm
+        if (
+            obstacles is not None
+            and sx is not None
+            and sy is not None
+            and ex is not None
+            and ey is not None
+            and not segment_is_physically_clear(float(sx), float(sy), float(ex), float(ey), obstacles)
+        ):
+            row.status = STATUS_OVERRIDE_BROKEN
+            return STATUS_OVERRIDE_BROKEN
         if _normalize_status(row.status) == STATUS_OVERRIDE_BROKEN:
             row.status = STATUS_RESOLVED
         elif _normalize_status(row.status) not in (STATUS_RESOLVED, STATUS_AMBIGUOUS, STATUS_LEGACY_NODE):
@@ -481,7 +501,13 @@ def recompute_location_access(
         existing = existing_rows.get(lid)
         if existing and existing.binding_mode == BINDING_MANUAL_OVERRIDE:
             st = refresh_manual_override_health(
-                db, wid, existing, edge_uuids=edge_uuid_set, node_uuids=node_uuid_set
+                db,
+                wid,
+                existing,
+                edge_uuids=edge_uuid_set,
+                node_uuids=node_uuid_set,
+                blocked_edge_uuids=blocked_edge_uuids,
+                obstacles=obstacles,
             )
             existing.graph_revision = rev
             existing.layout_fingerprint = fp

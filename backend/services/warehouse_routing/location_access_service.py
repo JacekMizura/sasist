@@ -14,6 +14,7 @@ from .location_access_resolver import (
     BINDING_AUTO,
     BINDING_MANUAL_OVERRIDE,
     STATUS_LEGACY_NODE,
+    STATUS_OVERRIDE_BROKEN,
     STATUS_RESOLVED,
     STATUS_UNREACHABLE,
     _edge_geometry,
@@ -108,18 +109,49 @@ def set_manual_override(
     t_clamped = max(0.0, min(1.0, float(t)))
     entry_x = a[0] + (b[0] - a[0]) * t_clamped
     entry_y = a[1] + (b[1] - a[1]) * t_clamped
-    sx = float(loc.x) if loc.x is not None else entry_x
-    sy = float(loc.y) if loc.y is not None else entry_y
-    _, _, approach = project_point_to_segment(sx, sy, a[0], a[1], b[0], b[1])
-    # Use exact t point for approach from service approx
+
+    from .location_access_geometry import service_edge_point_cm
+    from .location_rack_link import resolve_rack_for_location
+    from .physical_collision import (
+        edge_uuids_blocked_by_obstacles,
+        load_warehouse_rack_obstacles,
+        segment_is_physically_clear,
+    )
+    from ...models.warehouse_routing import WarehouseRoutingEdge, WarehouseRoutingNode
+
+    rack = resolve_rack_for_location(db, loc)
+    if rack is not None and loc.x is not None and loc.y is not None:
+        S = service_edge_point_cm(rack, float(loc.x), float(loc.y))
+        sx, sy = S.x, S.y
+    else:
+        sx = float(loc.x) if loc.x is not None else entry_x
+        sy = float(loc.y) if loc.y is not None else entry_y
+
     from .geometry import distance_m_between_cm
 
     approach = distance_m_between_cm(sx, sy, entry_x, entry_y)
 
+    status = STATUS_RESOLVED if approach < DEFAULT_MAX_ACCESS_REACH_M else STATUS_UNREACHABLE
+    obstacles = load_warehouse_rack_obstacles(db, wid)
+    nodes = {
+        n.uuid: n
+        for n in db.query(WarehouseRoutingNode)
+        .filter(WarehouseRoutingNode.warehouse_id == wid)
+        .all()
+    }
+    edge_rows = (
+        db.query(WarehouseRoutingEdge).filter(WarehouseRoutingEdge.warehouse_id == wid).all()
+    )
+    blocked = set(edge_uuids_blocked_by_obstacles(edge_rows, nodes, obstacles))
+    if edge_uuid in blocked or not segment_is_physically_clear(
+        sx, sy, entry_x, entry_y, obstacles
+    ):
+        status = STATUS_OVERRIDE_BROKEN
+
     result = ResolveResult(
         location_id=lid,
         binding_mode=BINDING_MANUAL_OVERRIDE,
-        status=STATUS_RESOLVED if approach < DEFAULT_MAX_ACCESS_REACH_M else STATUS_UNREACHABLE,
+        status=status,
         edge_uuid=edge_uuid,
         t=t_clamped,
         service_point_x_cm=sx,
@@ -127,6 +159,8 @@ def set_manual_override(
         entry_x_cm=entry_x,
         entry_y_cm=entry_y,
         access_approach_m=approach,
+        rack_id=int(rack.id) if rack is not None else None,
+        rack_uuid=getattr(rack, "uuid", None) if rack is not None else None,
     )
     row = _upsert_row(db, wid, result, graph_revision=rev, layout_fingerprint=fp, existing=existing)
     db.flush()
