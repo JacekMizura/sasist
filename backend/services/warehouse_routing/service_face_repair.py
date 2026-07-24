@@ -7,8 +7,10 @@ Rules:
 - Unpaired horizontal rows: face the clearer neighboring aisle gap (layout space),
   never nearest routing edge.
 - Store racks: same service_side/rotation SSOT as warehouse racks; infer face from
-  nearest aisle-like gap to neighboring racks (layout space only). Default FRONT+0
-  is repaired only when a deterministic aisle face exists and mismatches.
+  nearest aisle-like gap to neighboring racks with REAL transverse footprint overlap
+  (N/S require X-overlap; E/W require Y-overlap). No lateral_slack. Default FRONT+0
+  and unjustified faces from a prior buggy inference may be repaired when expected
+  is geometrically justified; justified explicit faces are preserved.
 - Racks that cannot be decided → reported UNRESOLVED (unchanged).
 
 Legacy mutation gate (CRITICAL):
@@ -356,9 +358,11 @@ def _infer_unpaired_horizontal_face(
 # Aisle-like gap between store and neighboring rack (grid cells).
 _STORE_AISLE_GAP_MIN = 1.5
 _STORE_AISLE_GAP_MAX = 40.0
+# Numeric / near-touch only — NEVER expand footprints into diagonal "neighbors".
+_STORE_OVERLAP_EPS = 1e-6
 
 
-def _rack_aabb_cells(rack: Rack) -> tuple[float, float, float, float]:
+def _rack_aabb_cells(rack: object) -> tuple[float, float, float, float]:
     x = float(getattr(rack, "x", 0) or 0)
     y = float(getattr(rack, "y", 0) or 0)
     w = float(getattr(rack, "width", 1) or 1)
@@ -366,8 +370,76 @@ def _rack_aabb_cells(rack: Rack) -> tuple[float, float, float, float]:
     return x, y, x + w, y + h
 
 
-def _store_open_clearance(rack: Rack, others: list[Rack], direction: str) -> float:
-    """Distance from rack face midpoint outward until another rack AABB (layout only)."""
+def _real_projection_overlap(a0: float, a1: float, b0: float, b1: float) -> float:
+    """Signed overlap length on one axis (negative ⇒ separated). Not clamped."""
+    return min(a1, b1) - max(a0, b0)
+
+
+def _has_real_axis_overlap(a0: float, a1: float, b0: float, b1: float) -> bool:
+    """
+    True when projections overlap or touch (raw overlap >= -eps).
+    Separated intervals (raw << 0) never qualify — no lateral slack.
+    """
+    return _real_projection_overlap(a0, a1, b0, b1) >= -_STORE_OVERLAP_EPS
+
+
+def _store_cardinal_from_face(rack: object, face: ServiceFace) -> str:
+    n = world_service_normal(
+        orientation=str(getattr(rack, "orientation", None) or "vertical"),
+        service_side=face.service_side,
+        rotation_degrees=face.rotation_degrees,
+    )
+    if abs(n.x) >= abs(n.y):
+        return "EAST" if n.x > 0 else "WEST"
+    return "SOUTH" if n.y > 0 else "NORTH"
+
+
+def _store_neighbor_gap_candidates(rack: object, others: list) -> list[tuple[float, str]]:
+    """
+    Directional aisle gaps from neighbors with REAL transverse footprint overlap.
+
+    NORTH/SOUTH ⇒ must overlap on X
+    EAST/WEST  ⇒ must overlap on Y
+    Diagonal / laterally shifted racks never contribute.
+    """
+    ax0, ay0, ax1, ay1 = _rack_aabb_cells(rack)
+    candidates: list[tuple[float, str]] = []
+    for o in others:
+        if o is rack:
+            continue
+        if getattr(o, "id", None) is not None and getattr(rack, "id", None) is not None:
+            if int(o.id) == int(rack.id):
+                continue
+        bx0, by0, bx1, by1 = _rack_aabb_cells(o)
+        # NORTH: neighbor entirely (or touching) above, real X overlap
+        if _has_real_axis_overlap(ax0, ax1, bx0, bx1) and by1 <= ay0 + _STORE_OVERLAP_EPS:
+            gap = ay0 - by1
+            if _STORE_AISLE_GAP_MIN <= gap <= _STORE_AISLE_GAP_MAX:
+                candidates.append((gap, "NORTH"))
+        # SOUTH
+        if _has_real_axis_overlap(ax0, ax1, bx0, bx1) and by0 >= ay1 - _STORE_OVERLAP_EPS:
+            gap = by0 - ay1
+            if _STORE_AISLE_GAP_MIN <= gap <= _STORE_AISLE_GAP_MAX:
+                candidates.append((gap, "SOUTH"))
+        # WEST
+        if _has_real_axis_overlap(ay0, ay1, by0, by1) and bx1 <= ax0 + _STORE_OVERLAP_EPS:
+            gap = ax0 - bx1
+            if _STORE_AISLE_GAP_MIN <= gap <= _STORE_AISLE_GAP_MAX:
+                candidates.append((gap, "WEST"))
+        # EAST
+        if _has_real_axis_overlap(ay0, ay1, by0, by1) and bx0 >= ax1 - _STORE_OVERLAP_EPS:
+            gap = bx0 - ax1
+            if _STORE_AISLE_GAP_MIN <= gap <= _STORE_AISLE_GAP_MAX:
+                candidates.append((gap, "EAST"))
+    return candidates
+
+
+def _store_open_clearance(rack: object, others: list, direction: str) -> float:
+    """
+    Distance from rack face midpoint outward until another rack AABB.
+
+    Transverse containment uses the face midpoint only (no footprint expansion).
+    """
     ax0, ay0, ax1, ay1 = _rack_aabb_cells(rack)
     cx, cy = (ax0 + ax1) * 0.5, (ay0 + ay1) * 0.5
     if direction == "NORTH":
@@ -386,28 +458,28 @@ def _store_open_clearance(rack: Rack, others: list[Rack], direction: str) -> flo
             if int(o.id) == int(rack.id):
                 continue
         bx0, by0, bx1, by1 = _rack_aabb_cells(o)
-        # Axis-aligned ray vs AABB
         if abs(dx) < 1e-9:
-            if not (bx0 <= ox <= bx1):
+            if not (bx0 - _STORE_OVERLAP_EPS <= ox <= bx1 + _STORE_OVERLAP_EPS):
                 continue
-            if dy < 0 and by1 <= oy:
+            if dy < 0 and by1 <= oy + _STORE_OVERLAP_EPS:
                 best = min(best, oy - by1)
-            elif dy > 0 and by0 >= oy:
+            elif dy > 0 and by0 >= oy - _STORE_OVERLAP_EPS:
                 best = min(best, by0 - oy)
         else:
-            if not (by0 <= oy <= by1):
+            if not (by0 - _STORE_OVERLAP_EPS <= oy <= by1 + _STORE_OVERLAP_EPS):
                 continue
-            if dx < 0 and bx1 <= ox:
+            if dx < 0 and bx1 <= ox + _STORE_OVERLAP_EPS:
                 best = min(best, ox - bx1)
-            elif dx > 0 and bx0 >= ox:
+            elif dx > 0 and bx0 >= ox - _STORE_OVERLAP_EPS:
                 best = min(best, bx0 - ox)
     return float(best if best < 1e9 else 0.0)
 
 
-def _infer_store_face_from_open_space(rack: Rack, others: list[Rack]) -> Optional[ServiceFace]:
+def _infer_store_face_from_open_space(rack: object, others: list) -> Optional[ServiceFace]:
     """
-    Fallback when no overlapping aisle neighbor: face the largest open clearance
+    Fallback when no real-overlap aisle neighbor: face the nearest open clearance
     that still looks like a service corridor (not a sealed wall).
+    Deterministic; never invents diagonal neighbors.
     """
     scored: list[tuple[float, str]] = []
     for d in ("NORTH", "SOUTH", "EAST", "WEST"):
@@ -415,73 +487,26 @@ def _infer_store_face_from_open_space(rack: Rack, others: list[Rack]) -> Optiona
         if _STORE_AISLE_GAP_MIN <= c <= _STORE_AISLE_GAP_MAX * 2.5:
             scored.append((c, d))
     if not scored:
-        # Prefer any positive open direction over a sealed wall (c≈0).
         for d in ("NORTH", "SOUTH", "EAST", "WEST"):
             c = _store_open_clearance(rack, others, d)
             if c >= _STORE_AISLE_GAP_MIN:
                 scored.append((c, d))
     if not scored:
         return None
-    # Prefer the nearest usable corridor (smallest gap that still clears), else largest open.
     aisle_like = [s for s in scored if s[0] <= _STORE_AISLE_GAP_MAX]
     pick = min(aisle_like, key=lambda t: t[0]) if aisle_like else max(scored, key=lambda t: t[0])
     orient = str(getattr(rack, "orientation", None) or "vertical")
     return face_for_cardinal(pick[1], orientation=orient)
 
 
-def _infer_store_face_from_neighbors(rack: Rack, others: list[Rack]) -> Optional[ServiceFace]:
+def _infer_store_face_from_neighbors(rack: object, others: list) -> Optional[ServiceFace]:
     """
     Store uses the same FRONT/rotation SSOT as warehouse racks.
 
-    Infer service face from the nearest aisle-like gap to another rack
-    (layout space only — never Routing Graph). One legal side is enough.
+    Prefer nearest aisle gap to a neighbor with real transverse overlap.
+    Fallback: open-space clearance along face midpoints.
     """
-    ax0, ay0, ax1, ay1 = _rack_aabb_cells(rack)
-    candidates: list[tuple[float, str]] = []
-    # Allow neighbors slightly offset laterally (store often sits past aisle ends).
-    lateral_slack = 20.0
-
-    def _x_near(bx0: float, bx1: float) -> bool:
-        if _overlap_1d(ax0, ax1, bx0, bx1) > 0:
-            return True
-        if bx1 < ax0:
-            return (ax0 - bx1) <= lateral_slack
-        if bx0 > ax1:
-            return (bx0 - ax1) <= lateral_slack
-        return False
-
-    def _y_near(by0: float, by1: float) -> bool:
-        if _overlap_1d(ay0, ay1, by0, by1) > 0:
-            return True
-        if by1 < ay0:
-            return (ay0 - by1) <= lateral_slack
-        if by0 > ay1:
-            return (by0 - ay1) <= lateral_slack
-        return False
-
-    for o in others:
-        if o is rack:
-            continue
-        if getattr(o, "id", None) is not None and getattr(rack, "id", None) is not None:
-            if int(o.id) == int(rack.id):
-                continue
-        bx0, by0, bx1, by1 = _rack_aabb_cells(o)
-        if _x_near(bx0, bx1) and by1 <= ay0 + 0.01:
-            gap = ay0 - by1
-            if _STORE_AISLE_GAP_MIN <= gap <= _STORE_AISLE_GAP_MAX:
-                candidates.append((gap, "NORTH"))
-        if _x_near(bx0, bx1) and by0 >= ay1 - 0.01:
-            gap = by0 - ay1
-            if _STORE_AISLE_GAP_MIN <= gap <= _STORE_AISLE_GAP_MAX:
-                candidates.append((gap, "SOUTH"))
-        if _y_near(by0, by1) and bx1 <= ax0 + 0.01:
-            gap = ax0 - bx1
-            if _STORE_AISLE_GAP_MIN <= gap <= _STORE_AISLE_GAP_MAX:
-                candidates.append((gap, "WEST"))
-        if _y_near(by0, by1) and bx0 >= ax1 - 0.01:
-            gap = bx0 - ax1
-            if _STORE_AISLE_GAP_MIN <= gap <= _STORE_AISLE_GAP_MAX:
-                candidates.append((gap, "EAST"))
+    candidates = _store_neighbor_gap_candidates(rack, others)
     if candidates:
         candidates.sort(key=lambda t: t[0])
         orient = str(getattr(rack, "orientation", None) or "vertical")
@@ -489,8 +514,60 @@ def _infer_store_face_from_neighbors(rack: Rack, others: list[Rack]) -> Optional
     return _infer_store_face_from_open_space(rack, others)
 
 
-def _apply_store_face(rack: Rack, face: ServiceFace, *, reason: str, report: FaceRepairReport) -> None:
-    """Apply deterministic store face with the same legacy gate as warehouse racks."""
+def _store_face_justified_by_geometry(rack: object, others: list, face: ServiceFace) -> bool:
+    """
+    True when `face` is supported by real-overlap neighbor gaps or by open-space clearance
+    along that cardinal (same rules as inference — no diagonal slack).
+    """
+    cardinal = _store_cardinal_from_face(rack, face)
+    for _gap, d in _store_neighbor_gap_candidates(rack, others):
+        if d == cardinal:
+            return True
+    c = _store_open_clearance(rack, others, cardinal)
+    return c >= _STORE_AISLE_GAP_MIN
+
+
+def should_repair_store_face(
+    rack: object,
+    expected: ServiceFace,
+    others: list,
+    *,
+    orientation: str,
+) -> bool:
+    """
+    Store mutation gate (narrow):
+
+    1) FRONT+0 legacy mismatch vs deterministic expected → repair
+    2) Current face mismatches expected AND is NOT justified by real-overlap /
+       open-space geometry, while expected IS justified → self-heal buggy
+       prior inference (e.g. diagonal slack → false EAST). Explicit faces that
+       remain geometrically justified are preserved.
+    """
+    if rack_matches_expected_face(rack, expected, orientation=orientation):
+        return False
+    if is_default_face_fingerprint(rack):
+        return True
+    if _store_face_justified_by_geometry(rack, others, expected) and not _store_face_justified_by_geometry(
+        rack,
+        others,
+        ServiceFace(
+            service_side=normalize_service_side(getattr(rack, "service_side", None)),
+            rotation_degrees=normalize_rotation(getattr(rack, "rotation_degrees", 0)),
+        ),
+    ):
+        return True
+    return False
+
+
+def _apply_store_face(
+    rack: Rack,
+    face: ServiceFace,
+    *,
+    reason: str,
+    report: FaceRepairReport,
+    others: list[Rack],
+) -> None:
+    """Apply deterministic store face with narrow legacy / self-heal gate."""
     orient = str(getattr(rack, "orientation", None) or "vertical")
     base_meta = {
         "rack_uuid": getattr(rack, "uuid", None),
@@ -503,20 +580,25 @@ def _apply_store_face(rack: Rack, face: ServiceFace, *, reason: str, report: Fac
     if rack_matches_expected_face(rack, face, orientation=orient):
         report.skipped_matching.append({**base_meta, "reason": "store_matches_deterministic_expected"})
         return
-    if not is_default_face_fingerprint(rack):
+    if not should_repair_store_face(rack, face, others, orientation=orient):
         report.skipped_explicit.append({**base_meta, "reason": "store_explicit_ssot_preserved"})
         return
     before = (
         getattr(rack, "service_side", None),
         int(getattr(rack, "rotation_degrees", 0) or 0),
     )
+    heal = not is_default_face_fingerprint(rack)
     changed = apply_face_to_rack_obj(rack, face)
     report.repaired.append(
         {
             **base_meta,
             "before": {"service_side": before[0], "rotation_degrees": before[1]},
             "after": face.as_dict(),
-            "reason": f"{reason}:store_legacy_mismatch",
+            "reason": (
+                f"{reason}:store_unjustified_face_self_heal"
+                if heal
+                else f"{reason}:store_legacy_mismatch"
+            ),
             "changed": changed,
         }
     )
@@ -660,7 +742,7 @@ def repair_layout_service_faces(
                 }
             )
             continue
-        _apply_store_face(rack, face, reason="store_neighbor_aisle", report=report)
+        _apply_store_face(rack, face, reason="store_neighbor_aisle", report=report, others=racks)
 
     for rack in racks:
         if is_store_rack(rack):

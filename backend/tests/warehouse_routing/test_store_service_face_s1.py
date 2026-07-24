@@ -100,6 +100,26 @@ def test_store_s1_face_from_north_aisle_neighbor_and_access(db):
         rotation_degrees=270,
         is_active=True,
     )
+    c2_uuid = str(uuid.uuid4())
+    c2 = Rack(
+        layout_id=layout.id,
+        uuid=c2_uuid,
+        name="C2",
+        rack_type="warehouse",
+        x=16,
+        y=29,
+        width=15,
+        height=8,
+        orientation="vertical",
+        levels=1,
+        bins_per_level=1,
+        length_cm=80,
+        width_cm=150,
+        height_cm=200,
+        service_side="FRONT",
+        rotation_degrees=270,
+        is_active=True,
+    )
     s1 = Rack(
         layout_id=layout.id,
         uuid=s1_uuid,
@@ -119,10 +139,10 @@ def test_store_s1_face_from_north_aisle_neighbor_and_access(db):
         rotation_degrees=0,
         is_active=True,
     )
-    db.add_all([c1, s1])
+    db.add_all([c1, c2, s1])
     db.flush()
 
-    face = _infer_store_face_from_neighbors(s1, [c1, s1])
+    face = _infer_store_face_from_neighbors(s1, [c1, c2, s1])
     assert face is not None
     expected = face_for_cardinal("NORTH", orientation="vertical")
     assert face.service_side == expected.service_side
