@@ -22,6 +22,10 @@ type Props = {
   selectedRackUuids?: string[];
   /** When set, show detailed S→P only for this location id. */
   selectedLocationId?: number | null;
+  /** Emphasize problem racks (no spaghetti lines). */
+  showAllAccessProblems?: boolean;
+  /** Rack uuids with access problems — used for subtle badges when diagnostics on. */
+  problemRackUuids?: string[];
   cellPx: number;
   selectedNodeUuid?: string | null;
   selectedEdgeUuid?: string | null;
@@ -114,6 +118,8 @@ export function RoutingGraphLayer({
   racks = [],
   selectedRackUuids = [],
   selectedLocationId = null,
+  showAllAccessProblems = false,
+  problemRackUuids = [],
   cellPx,
   selectedNodeUuid,
   selectedEdgeUuid,
@@ -139,6 +145,7 @@ export function RoutingGraphLayer({
   const scale = cellPx / GRID_UNIT_CM;
   const draftFrom = draftFromUuid ? byUuid.get(draftFromUuid) : null;
   const selectedRackSet = useMemo(() => new Set(selectedRackUuids.filter(Boolean)), [selectedRackUuids]);
+  const problemRackSet = useMemo(() => new Set(problemRackUuids.filter(Boolean)), [problemRackUuids]);
   const detailMode = selectedRackSet.size > 0 || selectedLocationId != null;
 
   const rackAgg = useMemo(() => {
@@ -170,9 +177,11 @@ export function RoutingGraphLayer({
   }, [locationAccess, racks]);
 
   const detailAccess = useMemo(() => {
-    if (!showAccessDiagnostics || !detailMode) return [] as LocationAccessBinding[];
+    if (!detailMode) return [] as LocationAccessBinding[];
+    if (!showAccessDiagnostics && selectedLocationId == null) return [] as LocationAccessBinding[];
     return locationAccess.filter((a) => {
-      if (selectedLocationId != null && a.location_id === selectedLocationId) return true;
+      // Prefer single-location detail when clicked from problem list.
+      if (selectedLocationId != null) return a.location_id === selectedLocationId;
       if (a.rack_uuid && selectedRackSet.has(String(a.rack_uuid))) return true;
       return false;
     });
@@ -364,20 +373,38 @@ export function RoutingGraphLayer({
         </>
       )}
 
-      {showAccessDiagnostics &&
+      {(showAccessDiagnostics || showAllAccessProblems) &&
         !detailMode &&
-        rackAgg.map((agg) => {
+        rackAgg
+          .filter((agg) => problemRackSet.has(agg.rackUuid) || agg.status !== "OK")
+          .map((agg) => {
           const stroke =
             agg.status === "OK" ? "#10b981" : agg.status === "REVIEW" ? "#f59e0b" : "#f43f5e";
+          const emphasize = showAllAccessProblems && problemRackSet.has(agg.rackUuid);
           const faceLen = Math.max(10, Math.min(agg.w, agg.h) * 0.22);
           const x1 = agg.cx * scale;
           const y1 = agg.cy * scale;
           const x2 = (agg.cx + agg.nx * faceLen) * scale;
           const y2 = (agg.cy + agg.ny * faceLen) * scale;
+          const hw = (agg.w * scale) / 2;
+          const hh = (agg.h * scale) / 2;
           return (
-            <g key={`la-agg-${agg.rackUuid}`} style={{ pointerEvents: "none" }} opacity={0.9}>
-              <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={stroke} strokeWidth={2.5} />
-              <circle cx={x2} cy={y2} r={4} fill={stroke} />
+            <g key={`la-agg-${agg.rackUuid}`} style={{ pointerEvents: "none" }} opacity={emphasize ? 0.95 : 0.55}>
+              {emphasize && (
+                <rect
+                  x={x1 - hw}
+                  y={y1 - hh}
+                  width={agg.w * scale}
+                  height={agg.h * scale}
+                  fill="none"
+                  stroke={stroke}
+                  strokeWidth={2}
+                  strokeDasharray="5 3"
+                  rx={3}
+                />
+              )}
+              <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={stroke} strokeWidth={emphasize ? 2.5 : 1.75} />
+              <circle cx={x2} cy={y2} r={emphasize ? 4.5 : 3} fill={stroke} />
               <title>
                 {agg.status === "OK"
                   ? "OK — dostęp"
@@ -389,7 +416,7 @@ export function RoutingGraphLayer({
           );
         })}
 
-      {showAccessDiagnostics &&
+      {(showAccessDiagnostics || selectedLocationId != null) &&
         detailAccess.map((a) => {
           if (
             a.service_point_x_cm == null ||

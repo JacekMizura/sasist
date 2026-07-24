@@ -1,3 +1,10 @@
+## 2026-07-24 — UX closures: problem locations + passage corridor group
+
+- **A:** Interaktywna diagnostyka LA (lista + locate + „Pokaż wszystkie problemy”); bez 279 linii.
+- **B:** `corridor_uuid` (FE+BE+schema); multi-rack create/move/resize/delete as one; RackSchema.passages (fix strip).
+- PROD WH1 verify: 274 RESOLVED / 3× S1 BLOCKED (A23-A-1..3) / 2× NO_RACK (DOCK-IN, START).
+- Tests: corridor FE + collision B4/C4 + sync corridor_uuid. Build OK. **No push. Bez Etapu 3.**
+
 ## 2026-07-24 — Stage B passage canvas UX (FE, uncommitted)
 
 - `LayoutMode.DRAW_PASSAGE` + toolbar „Dodaj przejazd” (J); drag corridor → `worldCorridorToPassages` multi-rack.

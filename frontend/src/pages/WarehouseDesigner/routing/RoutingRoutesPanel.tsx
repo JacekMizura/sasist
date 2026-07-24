@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import type { RoutingEdge, RoutingNode } from "../../../api/warehouseRoutingApi";
+import type { RackState } from "../../../types/warehouse";
 import {
   confirmDeleteNodeMessage,
   edgesConnectedTo,
@@ -14,6 +15,8 @@ import {
   type RoutingTool,
 } from "./routingLabels";
 import type { useRoutingGraph } from "./useRoutingGraph";
+import { LocationAccessProblemsPanel } from "./LocationAccessProblemsPanel";
+import type { AccessProblemItem } from "./locationAccessProblems";
 
 type Hook = ReturnType<typeof useRoutingGraph>;
 
@@ -30,10 +33,16 @@ type Props = {
   setTestStartUuid: (u: string | null) => void;
   setTestDestUuid: (u: string | null) => void;
   locations: { id: number; name: string }[];
+  racks?: RackState[];
   highlightOrphanUuids: string[];
   setHighlightOrphanUuids: (ids: string[]) => void;
   highlightInvalidEdgeUuids?: string[];
   setHighlightInvalidEdgeUuids?: (ids: string[]) => void;
+  selectedAccessLocationId?: number | null;
+  showAllAccessProblems?: boolean;
+  onSelectAccessProblem?: (item: AccessProblemItem) => void;
+  onToggleShowAllAccessProblems?: () => void;
+  onClearAccessProblemSelection?: () => void;
 };
 
 export function deleteSelectedNode(
@@ -68,10 +77,16 @@ export function RoutingRoutesPanel({
   setTestStartUuid,
   setTestDestUuid,
   locations,
+  racks = [],
   highlightOrphanUuids,
   setHighlightOrphanUuids,
   highlightInvalidEdgeUuids = [],
   setHighlightInvalidEdgeUuids,
+  selectedAccessLocationId = null,
+  showAllAccessProblems = false,
+  onSelectAccessProblem,
+  onToggleShowAllAccessProblems,
+  onClearAccessProblemSelection,
 }: Props) {
   const [processType, setProcessType] = useState("");
   const [transportType, setTransportType] = useState("");
@@ -308,9 +323,18 @@ export function RoutingRoutesPanel({
                     : "Nie blokuje rysowania ani zapisu. Sieć nie jest jeszcze gotowa do pełnego użycia operacyjnego."}
                 </p>
                 <ul className="space-y-1 text-slate-600">
-                  {config.map((i, idx) => (
-                    <li key={`${i.code}-${idx}`}>{i.message}</li>
-                  ))}
+                  {config
+                    .filter(
+                      (i) =>
+                        i.code !== "LOCATIONS_ACCESS_OK" &&
+                        i.code !== "LOCATIONS_ACCESS_REVIEW" &&
+                        i.code !== "LOCATIONS_ACCESS_UNREACHABLE" &&
+                        i.code !== "LOCATIONS_ACCESS_OVERRIDE_BROKEN" &&
+                        i.code !== "LOCATIONS_WITHOUT_ACCESS"
+                    )
+                    .map((i, idx) => (
+                      <li key={`${i.code}-${idx}`}>{i.message}</li>
+                    ))}
                 </ul>
               </div>
             )}
@@ -325,6 +349,22 @@ export function RoutingRoutesPanel({
           </>
         );
       })()}
+
+      {showIdle &&
+        onSelectAccessProblem &&
+        onToggleShowAllAccessProblems &&
+        onClearAccessProblemSelection && (
+          <LocationAccessProblemsPanel
+            locationAccess={routing.locationAccess}
+            locations={locations}
+            racks={racks}
+            selectedLocationId={selectedAccessLocationId}
+            showAllProblems={showAllAccessProblems}
+            onSelectProblem={onSelectAccessProblem}
+            onToggleShowAll={onToggleShowAllAccessProblems}
+            onClearSelection={onClearAccessProblemSelection}
+          />
+        )}
 
       {/* TEST — map-first flow */}
       {tool === "test_route" && (
