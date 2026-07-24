@@ -80,6 +80,7 @@ import { DesignerToolbar } from "./WarehouseDesigner/DesignerToolbar";
 import { RoutingGraphLayer } from "./WarehouseDesigner/routing/RoutingGraphLayer";
 import { RoutingRoutesPanel } from "./WarehouseDesigner/routing/RoutingRoutesPanel";
 import { useRoutingGraph } from "./WarehouseDesigner/routing/useRoutingGraph";
+import { preferOrthogonalCm } from "./WarehouseDesigner/routing/routingCanvasInteraction";
 import type { RoutingTool } from "./WarehouseDesigner/routing/routingLabels";
 import { confirmDeleteNodeMessage } from "./WarehouseDesigner/routing/routingDisplay";
 import { DesignerGrid } from "./WarehouseDesigner/DesignerGrid";
@@ -518,6 +519,8 @@ export default function WarehouseDesigner() {
   const [testDestUuid, setTestDestUuid] = useState<string | null>(null);
   const [routingLocations, setRoutingLocations] = useState<{ id: number; name: string }[]>([]);
   const [highlightOrphanUuids, setHighlightOrphanUuids] = useState<string[]>([]);
+  const [highlightInvalidEdgeUuids, setHighlightInvalidEdgeUuids] = useState<string[]>([]);
+  const [routingDraftOrthoGuide, setRoutingDraftOrthoGuide] = useState<"none" | "h" | "v" | null>(null);
 
   const setRoutingToolSafe = useCallback((tool: RoutingTool) => {
     setRoutingTool(tool);
@@ -552,6 +555,8 @@ export default function WarehouseDesigner() {
         routing.removeNode(node.uuid);
         setRoutingSelectedNode(null);
         setHighlightOrphanUuids([]);
+        setHighlightInvalidEdgeUuids([]);
+        setRoutingDraftOrthoGuide(null);
       }
       if ((e.key === "Delete" || e.key === "Backspace") && routingTool === "select" && routingSelectedEdge && !routingSelectedNode) {
         e.preventDefault();
@@ -1451,6 +1456,21 @@ export default function WarehouseDesigner() {
           ).toUpperCase() === "BACK"
             ? "BACK"
             : "FRONT",
+          passages: Array.isArray((r as { passages?: unknown }).passages)
+            ? ((r as { passages: Array<Record<string, unknown>> }).passages)
+                .filter((p) => p && typeof p === "object")
+                .map((p) => ({
+                  id: typeof p.id === "number" ? p.id : undefined,
+                  uuid: typeof p.uuid === "string" && p.uuid.trim() ? p.uuid : `passage-${Math.random().toString(16).slice(2)}`,
+                  offset_along_cm: Number(p.offset_along_cm ?? 0) || 0,
+                  width_cm: Math.max(1, Number(p.width_cm ?? 100) || 100),
+                  clearance_height_cm:
+                    p.clearance_height_cm == null || p.clearance_height_cm === ""
+                      ? null
+                      : Number(p.clearance_height_cm),
+                  enabled: p.enabled !== false,
+                }))
+            : [],
         };
         }),
         aisles: (d.aisles || []).map((a: Record<string, unknown>) => ({
@@ -2029,6 +2049,14 @@ export default function WarehouseDesigner() {
           rotationDegrees: r.rotationDegrees ?? 0,
           service_side: r.serviceSide ?? "FRONT",
           serviceSide: r.serviceSide ?? "FRONT",
+          passages: (r.passages ?? []).map((p) => ({
+            id: p.id,
+            uuid: p.uuid,
+            offset_along_cm: p.offset_along_cm,
+            width_cm: p.width_cm,
+            clearance_height_cm: p.clearance_height_cm ?? null,
+            enabled: p.enabled !== false,
+          })),
         })),
         aisles: layout.aisles.map((a) => ({
           id: a.id,
@@ -3980,12 +4008,19 @@ export default function WarehouseDesigner() {
                         : []
                   }
                   highlightEdgeUuids={
-                    routing.testResult?.ok
-                      ? routing.testResult.path_segments.map((s) => s.edge_uuid)
-                      : []
+                    highlightInvalidEdgeUuids.length
+                      ? highlightInvalidEdgeUuids
+                      : routing.testResult?.ok
+                        ? routing.testResult.path_segments.map((s) => s.edge_uuid)
+                        : []
+                  }
+                  diagnosticEdgeUuids={
+                    routing.validation?.issues.find((i) => i.code === "EDGES_THROUGH_OBSTACLES")
+                      ?.ref_uuids ?? []
                   }
                   draftFromUuid={routingEdgeDraftFrom}
                   draftCursorCm={routingDraftCursorCm}
+                  draftOrthoGuide={routingDraftOrthoGuide}
                   allowNodeDrag={routingTool === "select"}
                   interactive
                   onNodeDrag={(uuid, x, y) => {
@@ -4047,17 +4082,25 @@ export default function WarehouseDesigner() {
                     setRoutingSelectedEdge(uuid);
                     setRoutingSelectedNode(null);
                   }}
-                  onCanvasMoveCm={(x, y) => {
+                  onCanvasMoveCm={(x, y, opts) => {
                     if (routingTool === "draw_edge" && routingEdgeDraftFrom) {
-                      setRoutingDraftCursorCm({ x, y });
+                      const from = routing.nodes.find((n) => n.uuid === routingEdgeDraftFrom);
+                      const ortho = preferOrthogonalCm(from, x, y, {
+                        freeAngle: Boolean(opts?.freeAngle),
+                      });
+                      setRoutingDraftCursorCm({ x: ortho.x, y: ortho.y });
+                      setRoutingDraftOrthoGuide(ortho.guide);
                     }
                   }}
-                  onCanvasClickCm={(x, y) => {
+                  onCanvasClickCm={(x, y, opts) => {
                     if (routingTool === "draw_edge") {
-                      const step = routing.drawAtCm(routingEdgeDraftFrom, x, y);
+                      const step = routing.drawAtCm(routingEdgeDraftFrom, x, y, {
+                        freeAngle: Boolean(opts?.freeAngle),
+                      });
                       setRoutingEdgeDraftFrom(step.draftFromUuid);
                       setRoutingSelectedNode(step.draftFromUuid);
                       setRoutingSelectedEdge(null);
+                      setRoutingDraftOrthoGuide(step.orthoGuide ?? null);
                       return;
                     }
                     if (routingTool === "select") {
@@ -4106,6 +4149,8 @@ export default function WarehouseDesigner() {
               locations={routingLocations}
               highlightOrphanUuids={highlightOrphanUuids}
               setHighlightOrphanUuids={setHighlightOrphanUuids}
+              highlightInvalidEdgeUuids={highlightInvalidEdgeUuids}
+              setHighlightInvalidEdgeUuids={setHighlightInvalidEdgeUuids}
             />
           )}
           </div>

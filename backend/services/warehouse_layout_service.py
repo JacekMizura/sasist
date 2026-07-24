@@ -4,7 +4,16 @@ from uuid import uuid4
 from sqlalchemy.orm import Session, joinedload
 from fastapi import HTTPException
 
-from ..models.warehouse import Warehouse, WarehouseLayout, Rack, Bin, Aisle, StorageLocation, GRID_UNIT_CM
+from ..models.warehouse import (
+    Warehouse,
+    WarehouseLayout,
+    Rack,
+    Bin,
+    Aisle,
+    StorageLocation,
+    WarehouseRackPassage,
+    GRID_UNIT_CM,
+)
 from ..models.tenant import Tenant
 from ..models.tenant_warehouse import TenantWarehouse
 from ..models.product import Product
@@ -732,7 +741,7 @@ class WarehouseLayoutService:
     def _save_layout_racks_by_identity(self, layout: WarehouseLayout, data: dict, warehouse_id: int) -> None:
         existing_racks = (
             self.db.query(Rack)
-            .options(joinedload(Rack.bins))
+            .options(joinedload(Rack.bins), joinedload(Rack.passages))
             .execution_options(include_inactive=True)
             .filter(Rack.layout_id == layout.id)
             .all()
@@ -813,6 +822,7 @@ class WarehouseLayoutService:
                     continue
                 self.db.add(rack)
                 self.db.flush()
+                self._sync_rack_passages(rack, warehouse_id, r_data.get("passages") or [])
 
                 if not BIN_IDENTITY_SAVE_ENABLED:
                     if is_new_rack:
@@ -956,6 +966,83 @@ class WarehouseLayoutService:
                     Location.warehouse_id == warehouse_id,
                     Location.location_uuid == loc_uuid,
                 ).update({"is_active": False}, synchronize_session=False)
+
+    def _serialize_rack_passages(self, rack: Rack) -> list[dict]:
+        out: list[dict] = []
+        for p in getattr(rack, "passages", None) or []:
+            out.append(
+                {
+                    "id": getattr(p, "id", None),
+                    "uuid": getattr(p, "uuid", None),
+                    "rack_uuid": getattr(p, "rack_uuid", None) or getattr(rack, "uuid", None),
+                    "offset_along_cm": float(getattr(p, "offset_along_cm", 0) or 0),
+                    "width_cm": float(getattr(p, "width_cm", 0) or 0),
+                    "clearance_height_cm": getattr(p, "clearance_height_cm", None),
+                    "enabled": bool(getattr(p, "enabled", True)),
+                }
+            )
+        return out
+
+    def _sync_rack_passages(self, rack: Rack, warehouse_id: int, passages_payload) -> None:
+        """Upsert WarehouseRackPassage by stable UUID; geometry stays local to rack."""
+        if passages_payload is None:
+            passages_payload = []
+        if not isinstance(passages_payload, list):
+            return
+
+        existing = {
+            str(p.uuid): p
+            for p in (getattr(rack, "passages", None) or [])
+            if getattr(p, "uuid", None)
+        }
+        # Also catch orphan rows if relationship not populated
+        if not existing:
+            for p in (
+                self.db.query(WarehouseRackPassage)
+                .filter(WarehouseRackPassage.rack_id == int(rack.id))
+                .all()
+            ):
+                existing[str(p.uuid)] = p
+
+        keep: set[str] = set()
+        for raw in passages_payload:
+            if not isinstance(raw, dict):
+                continue
+            pu = _normalize_uuid(raw.get("uuid")) or _new_uuid()
+            keep.add(pu)
+            row = existing.get(pu)
+            if row is None:
+                row = WarehouseRackPassage(
+                    uuid=pu,
+                    warehouse_id=int(warehouse_id),
+                    rack_id=int(rack.id),
+                )
+            row.warehouse_id = int(warehouse_id)
+            row.rack_id = int(rack.id)
+            row.rack_uuid = getattr(rack, "uuid", None)
+            try:
+                row.offset_along_cm = float(raw.get("offset_along_cm", 0) or 0)
+            except (TypeError, ValueError):
+                row.offset_along_cm = 0.0
+            try:
+                row.width_cm = max(1.0, float(raw.get("width_cm", 100) or 100))
+            except (TypeError, ValueError):
+                row.width_cm = 100.0
+            clr = raw.get("clearance_height_cm", None)
+            if clr is None or clr == "":
+                row.clearance_height_cm = None
+            else:
+                try:
+                    v = float(clr)
+                    row.clearance_height_cm = v if v > 0 else None
+                except (TypeError, ValueError):
+                    row.clearance_height_cm = None
+            row.enabled = bool(raw.get("enabled", True))
+            self.db.add(row)
+
+        for pu, row in existing.items():
+            if pu not in keep:
+                self.db.delete(row)
 
     def _upsert_layout_aisles(self, layout: WarehouseLayout, data: dict) -> None:
         existing_aisles = (
@@ -1132,6 +1219,7 @@ class WarehouseLayoutService:
             raise HTTPException(status_code=404, detail="Magazyn nie istnieje")
         layout = self.db.query(WarehouseLayout).options(
             joinedload(WarehouseLayout.racks).joinedload(Rack.bins),
+            joinedload(WarehouseLayout.racks).joinedload(Rack.passages),
             joinedload(WarehouseLayout.aisles),
         ).filter(WarehouseLayout.warehouse_id == warehouse_id).first()
         if not layout:
@@ -1213,6 +1301,7 @@ class WarehouseLayoutService:
                 "rotation_degrees": int(getattr(r, "rotation_degrees", None) or 0),
                 "rotationDegrees": int(getattr(r, "rotation_degrees", None) or 0),
                 "serviceSide": getattr(r, "service_side", None) or "FRONT",
+                "passages": self._serialize_rack_passages(r),
             })
         aisles_out = [
             {

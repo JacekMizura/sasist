@@ -17,6 +17,7 @@ import {
 import { RACK_LABEL_MEDIUM_STRIDE, type RackLabelLodLevel } from "../../../utils/rackLabelLod";
 import { clampRackRectLayout } from "../../../utils/rackMapVisual";
 import { colors, radius } from "../../../layout/designTokens";
+import { passageRectInRackPx } from "../../../pages/WarehouseDesigner/passages/rackPassageGeometry";
 
 const RACK_RADIUS_PX = parseFloat(radius.small) || 6;
 const DEFAULT_RACK_FILL = "#3b82f6";
@@ -524,6 +525,26 @@ export function RackLayer({
                 {...(tooltip ? { "aria-label": tooltip } : {})}
               />
             )}
+            {visualLod !== "line" &&
+              (r.passages ?? []).map((p) => {
+                const pr = passageRectInRackPx(r, p, layoutRect);
+                if (!pr || pr.w < 1 || pr.h < 1) return null;
+                const on = p.enabled !== false;
+                return (
+                  <rect
+                    key={`${reactKey}-passage-${p.uuid}`}
+                    x={pr.x}
+                    y={pr.y}
+                    width={pr.w}
+                    height={pr.h}
+                    fill={on ? "rgba(248,250,252,0.92)" : "rgba(148,163,184,0.35)"}
+                    stroke={on ? "#94a3b8" : "#64748b"}
+                    strokeWidth={1}
+                    strokeDasharray={on ? "3 2" : "2 3"}
+                    pointerEvents="none"
+                  />
+                );
+              })}
             {visualLod === "full" &&
               binHighlightActive &&
               rackHasHighlightedBin &&

@@ -142,6 +142,16 @@ export type RackLevel = {
   positions: RackPosition[];
 };
 
+export type RackPassageState = {
+  id?: number;
+  uuid: string;
+  /** Local offset along rack segment axis (cm). */
+  offset_along_cm: number;
+  width_cm: number;
+  clearance_height_cm?: number | null;
+  enabled: boolean;
+};
+
 export type RackState = {
   id?: number;
   uuid?: string;
@@ -189,6 +199,8 @@ export type RackState = {
   rotationDegrees?: 0 | 90 | 180;
   /** Local service face: FRONT | BACK (world normal derived with orientation + rotationDegrees). */
   serviceSide?: "FRONT" | "BACK";
+  /** Physical openings through rack footprint (drive/walk-under). Local to rack. */
+  passages?: RackPassageState[];
 };
 
 export type AisleState = {

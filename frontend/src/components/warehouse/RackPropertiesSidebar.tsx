@@ -18,6 +18,7 @@ import { logRackRename } from "./rackRenameLog";
 import { syncRackBinsDisplayFields } from "../../utils/resolvedWarehouseLocation";
 
 import { appLayoutTokens } from "../../layout/appLayoutTokens";
+import { RackPassageEditor } from "../../pages/WarehouseDesigner/passages/RackPassageEditor";
 
 export type RackPropertiesSidebarProps = {
   layout: LayoutState;
@@ -348,6 +349,7 @@ export function RackPropertiesSidebar({
                   />
                   Pokaż etykietę na mapie
                 </label>
+                {!isMultiSelect && <RackPassageEditor selectedRack={selectedRack} setLayout={setLayout} />}
                 {(() => {
                   const levels =
                     selectedRack.rackLevels ?? (selectedRack.bins?.length ? binsToLevels(selectedRack.bins) : []);
