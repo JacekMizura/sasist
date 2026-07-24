@@ -25,6 +25,8 @@ export type WarehouseLocationItem = {
   code?: string;
   /** WMS badge kind: PICK | BUFFER | BULK | INBOUND | OUTBOUND */
   type?: string;
+  /** NORMAL | PICK_START | PACKING | DOCK — functional routing vs storage */
+  location_type?: string | null;
   /** Layout bin chrome (primary | pick | buffer | reserve | damaged | unknown) */
   storage_type?: string;
   zone?: string | null;

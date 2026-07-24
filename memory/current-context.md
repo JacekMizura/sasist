@@ -2,19 +2,17 @@
 
 ## Active
 
-**UX closures A+B — lokalne commity, bez push, bez Etapu 3.**
+**Routing Designer UX + S1 store face — lokalne commity, bez push, bez Etapu 3.**
 
-### A — Problem locations UI
-Interaktywna lista (Pokaż lokalizacje / Pokaż wszystkie problemy), klik → focus + detail S→P.
-Bez spaghetti 279 linii.
+### S1 / store
+- ROOT: legacy FRONT+0 (WEST) na store S1; korytarz obsługi jest NORTH (packing y=490).
+- FIX: `service_face_repair` inferuje face store z aisle gap / open clearance (ten sam SSOT FRONT+rot).
+- Po deploy + save layout: A23-A-1..3 → RESOLVED (udowodnione unit testem).
 
-### B — Passage corridor UX
-`corridor_uuid` FE+BE; jeden drag = jedna grupa; move/resize/delete as one.
-Passages w RackSchema (wcześniej Pydantic stripował).
-
-### PROD WH1 (read-only verify)
-RESOLVED **274** / BLOCKED **3** (S1: A23-A-1..3) / NO_RACK **2** (DOCK-IN, START).
-Nie naprawiane automatycznie.
+### UX
+- Usunięty box „Konfiguracja sieci”; ostrzeżenia Start/Pakowanie jako warning.
+- Typy punktów UI: Trasa / Start / Pakowanie / Przyjęcia / Strefa buforowa (+ ikony SVG).
+- „Pokaż bez dostępu”; START/DOCK wyłączone z licznika NO_RACK.
 
 ### Preferencja
 Bez push. Bez Etapu 3.

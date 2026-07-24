@@ -9,6 +9,7 @@ import { GRID_UNIT_CM, type RackState } from "../../../types/warehouse";
 import { worldServiceNormal } from "../rackServiceFace";
 import { nodeDisplayName, nodeKind, opTypeLabel } from "./routingDisplay";
 import { EDGE_HIT_HALF_PX, NODE_HIT_RADIUS_PX, resolveSelectHit } from "./routingHitTest";
+import { RoutingPointIcon, routingPointIconKind } from "./routingPointIcons";
 
 type Props = {
   nodes: RoutingNode[];
@@ -586,17 +587,34 @@ export function RoutingGraphLayer({
               />
             )}
             {kind === "operational" ? (
-              <rect
-                x={nx * scale - r}
-                y={ny * scale - r}
-                width={r * 2}
-                height={r * 2}
-                rx={2}
-                fill={fill}
-                stroke="#fff"
-                strokeWidth={1.5}
-                style={{ pointerEvents: "none" }}
-              />
+              (() => {
+                const iconKind = routingPointIconKind(n.operational_type);
+                if (iconKind) {
+                  return (
+                    <RoutingPointIcon
+                      kind={iconKind}
+                      cx={nx * scale}
+                      cy={ny * scale}
+                      size={r + 1}
+                      fill={fill}
+                    />
+                  );
+                }
+                // Legacy / unknown operational — keep previous square marker
+                return (
+                  <rect
+                    x={nx * scale - r}
+                    y={ny * scale - r}
+                    width={r * 2}
+                    height={r * 2}
+                    rx={2}
+                    fill={fill}
+                    stroke="#fff"
+                    strokeWidth={1.5}
+                    style={{ pointerEvents: "none" }}
+                  />
+                );
+              })()
             ) : (
               <circle
                 cx={nx * scale}

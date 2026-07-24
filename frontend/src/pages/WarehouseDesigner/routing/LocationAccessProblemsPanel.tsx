@@ -9,7 +9,7 @@ import {
 
 type Props = {
   locationAccess: LocationAccessBinding[];
-  locations: { id: number; name: string }[];
+  locations: { id: number; name: string; location_type?: string | null }[];
   racks: RackState[];
   selectedLocationId: number | null;
   showAllProblems: boolean;
@@ -66,7 +66,7 @@ export function LocationAccessProblemsPanel({
             className="rounded border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-700 hover:bg-slate-50"
             onClick={() => setListOpen((v) => !v)}
           >
-            {listOpen ? "Ukryj lokalizacje" : "Pokaż lokalizacje"}
+            {listOpen ? "Ukryj bez dostępu" : "Pokaż bez dostępu"}
           </button>
           <button
             type="button"
@@ -93,6 +93,7 @@ export function LocationAccessProblemsPanel({
 
       {listOpen && problems.length > 0 && (
         <div className="max-h-52 space-y-2 overflow-auto rounded-md border border-slate-200 bg-white p-2">
+          <div className="text-[10px] font-bold uppercase tracking-wide text-rose-800">Bez dostępu</div>
           {groups.map((g) => (
             <div key={g.rackKey}>
               <div className="text-[10px] font-bold uppercase tracking-wide text-slate-500">

@@ -1,11 +1,10 @@
 /** Display helpers for Routing Graph designer (Polish warehouse language — no UUID, no “węzeł”). */
 
 import type { RoutingAccessPoint, RoutingEdge, RoutingNode } from "../../../api/warehouseRoutingApi";
-import { ROUTING_OP_OPTIONS } from "./routingLabels";
+import { ROUTING_OP_OPTIONS, operationalTypeLabel } from "./routingLabels";
 
 export function opTypeLabel(op: string | null | undefined): string | null {
-  if (!op) return null;
-  return ROUTING_OP_OPTIONS.find((o) => o.value === op)?.label ?? op;
+  return operationalTypeLabel(op);
 }
 
 function isGenericLabel(label: string | null | undefined): boolean {

@@ -6,6 +6,7 @@ import {
   edgesConnectedTo,
   isCrossroads,
   nodeDisplayName,
+  opTypeLabel,
   orphanNodeUuids,
 } from "./routingDisplay";
 import {
@@ -32,7 +33,7 @@ type Props = {
   testDestUuid: string | null;
   setTestStartUuid: (u: string | null) => void;
   setTestDestUuid: (u: string | null) => void;
-  locations: { id: number; name: string }[];
+  locations: { id: number; name: string; location_type?: string | null }[];
   racks?: RackState[];
   highlightOrphanUuids: string[];
   setHighlightOrphanUuids: (ids: string[]) => void;
@@ -49,7 +50,7 @@ export function deleteSelectedNode(
   routing: Hook,
   selectedNode: RoutingNode,
   setSelectedNodeUuid: (u: string | null) => void,
-  locations: { id: number; name: string }[] = []
+  locations: { id: number; name: string; location_type?: string | null }[] = []
 ) {
   const msg = confirmDeleteNodeMessage(
     selectedNode,
@@ -232,12 +233,17 @@ export function RoutingRoutesPanel({
         </div>
       )}
 
-      {/* Validation — structural errors vs operational config */}
+      {/* Validation — structural errors / warnings only (no vague „konfiguracja sieci”) */}
       {routing.validation && showIdle && (() => {
         const structural = routing.validation.issues.filter(
-          (i) => i.severity === "error" || i.severity === "warning"
+          (i) =>
+            (i.severity === "error" || i.severity === "warning") &&
+            i.code !== "LOCATIONS_ACCESS_OK" &&
+            i.code !== "LOCATIONS_ACCESS_REVIEW" &&
+            i.code !== "LOCATIONS_ACCESS_UNREACHABLE" &&
+            i.code !== "LOCATIONS_ACCESS_OVERRIDE_BROKEN" &&
+            i.code !== "LOCATIONS_WITHOUT_ACCESS"
         );
-        const config = routing.validation.issues.filter((i) => i.severity === "info");
         const structuralBad = structural.some((i) => i.severity === "error");
         return (
           <>
@@ -314,36 +320,12 @@ export function RoutingRoutesPanel({
                 )}
               </div>
             )}
-            {config.length > 0 && (
-              <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50/80 p-2">
-                <div className="font-semibold text-slate-700">Konfiguracja sieci</div>
-                <p className="text-[10px] text-slate-500">
-                  {routing.validation.operational_ready
-                    ? "Sieć gotowa operacyjnie."
-                    : "Nie blokuje rysowania ani zapisu. Sieć nie jest jeszcze gotowa do pełnego użycia operacyjnego."}
-                </p>
-                <ul className="space-y-1 text-slate-600">
-                  {config
-                    .filter(
-                      (i) =>
-                        i.code !== "LOCATIONS_ACCESS_OK" &&
-                        i.code !== "LOCATIONS_ACCESS_REVIEW" &&
-                        i.code !== "LOCATIONS_ACCESS_UNREACHABLE" &&
-                        i.code !== "LOCATIONS_ACCESS_OVERRIDE_BROKEN" &&
-                        i.code !== "LOCATIONS_WITHOUT_ACCESS"
-                    )
-                    .map((i, idx) => (
-                      <li key={`${i.code}-${idx}`}>{i.message}</li>
-                    ))}
-                </ul>
-              </div>
-            )}
-            {structural.length === 0 && config.length === 0 && routing.validation.operational_ready && (
+            {structural.length === 0 && routing.validation.operational_ready && (
               <div className="rounded-lg border border-emerald-100 bg-emerald-50/50 p-2 font-semibold text-emerald-800">
                 Sieć w porządku
               </div>
             )}
-            {structural.length === 0 && config.length > 0 && (
+            {structural.length === 0 && !routing.validation.operational_ready && (
               <div className="text-[10px] text-slate-500">Struktura sieci jest poprawna.</div>
             )}
           </>
@@ -562,10 +544,17 @@ export function RoutingRoutesPanel({
             Typ punktu
             <select
               className="mt-0.5 w-full rounded border border-slate-200 px-1 py-1"
-              value={selectedNode.operational_type ?? ""}
+              value={
+                selectedNode.operational_type &&
+                !ROUTING_OP_OPTIONS.some((o) => o.value === selectedNode.operational_type)
+                  ? selectedNode.operational_type
+                  : (selectedNode.operational_type ?? "")
+              }
               onChange={(e) => {
                 const v = e.target.value || null;
-                const opLab = ROUTING_OP_OPTIONS.find((o) => o.value === v)?.label;
+                const opLab = v
+                  ? ROUTING_OP_OPTIONS.find((o) => o.value === v)?.label ?? null
+                  : null;
                 routing.updateNode(selectedNode.uuid, {
                   operational_type: v,
                   node_type: v ? "operational" : "junction",
@@ -574,12 +563,18 @@ export function RoutingRoutesPanel({
                 });
               }}
             >
-              <option value="">Zwykły punkt trasy</option>
+              <option value="">Trasa</option>
               {ROUTING_OP_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
                 </option>
               ))}
+              {selectedNode.operational_type &&
+                !ROUTING_OP_OPTIONS.some((o) => o.value === selectedNode.operational_type) && (
+                  <option value={selectedNode.operational_type}>
+                    {opTypeLabel(selectedNode.operational_type) || selectedNode.operational_type}
+                  </option>
+                )}
             </select>
           </label>
 

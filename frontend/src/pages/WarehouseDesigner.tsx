@@ -523,7 +523,9 @@ export default function WarehouseDesigner() {
   const [routingDraftCursorCm, setRoutingDraftCursorCm] = useState<{ x: number; y: number } | null>(null);
   const [testStartUuid, setTestStartUuid] = useState<string | null>(null);
   const [testDestUuid, setTestDestUuid] = useState<string | null>(null);
-  const [routingLocations, setRoutingLocations] = useState<{ id: number; name: string }[]>([]);
+  const [routingLocations, setRoutingLocations] = useState<
+    { id: number; name: string; location_type?: string | null }[]
+  >([]);
   const [highlightOrphanUuids, setHighlightOrphanUuids] = useState<string[]>([]);
   const [highlightInvalidEdgeUuids, setHighlightInvalidEdgeUuids] = useState<string[]>([]);
   const [routingDraftOrthoGuide, setRoutingDraftOrthoGuide] = useState<"none" | "h" | "v" | null>(null);
@@ -667,7 +669,11 @@ export default function WarehouseDesigner() {
     void getWarehouseLocations(selectedWarehouseId).then((rows) => {
       if (cancelled) return;
       setRoutingLocations(
-        (rows ?? []).map((r) => ({ id: r.id, name: r.name || r.code || `#${r.id}` }))
+        (rows ?? []).map((r) => ({
+          id: r.id,
+          name: r.name || r.code || `#${r.id}`,
+          location_type: r.location_type ?? null,
+        }))
       );
     });
     return () => {

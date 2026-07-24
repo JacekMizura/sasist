@@ -1,3 +1,18 @@
+## 2026-07-24 — Routing Designer UX + S1 store face (no push)
+
+- Store S1: repair face z aisle geometry (FRONT+90 NORTH); bez `if store => RESOLVED`.
+- Usunięty box „Konfiguracja sieci”; MISSING Start/Packing → warning.
+- UI point types: 5 typów + SVG ikony; legacy typy zachowane w DB.
+- Location Access: „Bez dostępu” / wykluczenie START+DOCK z NO_RACK counts.
+- Tests: warehouse_routing 131; FE routing 47; tsc+build OK. **No push. Bez Etapu 3.**
+
+## 2026-07-24 — FINAL PRE-PUSH AUDIT + push (corridor UX)
+
+- TSC vs origin/main `b17b8d72`: **NEW ERRORS = 0** (po fix `LayoutState` w corridor test).
+- Persistence/collision audit tests PASS; warehouse_routing 130 PASS; FE routing/passage 58 PASS; build PASS.
+- Push `93b16293` → origin/main. PROD healthz/readyz 200; LA summary unchanged (read-only).
+- Bez Etapu 3. Bez zapisu passages na PROD WH1.
+
 ## 2026-07-24 — UX closures: problem locations + passage corridor group
 
 - **A:** Interaktywna diagnostyka LA (lista + locate + „Pokaż wszystkie problemy”); bez 279 linii.

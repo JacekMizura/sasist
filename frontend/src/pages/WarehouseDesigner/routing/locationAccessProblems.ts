@@ -33,7 +33,7 @@ export function operatorAccessReason(status: string | undefined | null): string 
     case "UNREACHABLE":
       return "Brak drogi w zasięgu";
     case "NO_RACK":
-      return "Lokalizacja bez przypisanego regału";
+      return "Bez przypisanego regału";
     case "OVERRIDE_BROKEN":
       return "Ręczny punkt dostępu jest nieaktualny";
     case "NO_GRAPH":
@@ -46,6 +46,22 @@ export function operatorAccessReason(status: string | undefined | null): string 
   }
 }
 
+/** Special warehouse Locations that represent routing points, not storage bins. */
+const FUNCTIONAL_LOCATION_TYPES = new Set(["PICK_START", "PACKING", "DOCK"]);
+
+export function isFunctionalRoutingLocation(loc: {
+  location_type?: string | null;
+  type?: string | null;
+  name?: string | null;
+}): boolean {
+  const lt = String(loc.location_type || "").trim().toUpperCase();
+  if (FUNCTIONAL_LOCATION_TYPES.has(lt)) return true;
+  // Fallback when API omits location_type (legacy payloads)
+  const n = String(loc.name || "").trim().toUpperCase();
+  if (n === "START" || n === "DOCK-IN" || n === "DOCK" || n === "PACKING") return true;
+  return false;
+}
+
 export function isProblemAccessStatus(status: string | undefined | null): boolean {
   const s = String(status || "").toUpperCase();
   if (s === "OK" || s === "RESOLVED" || s === "LEGACY_NODE") return false;
@@ -54,10 +70,10 @@ export function isProblemAccessStatus(status: string | undefined | null): boolea
 
 export function buildAccessProblemItems(
   locationAccess: LocationAccessBinding[],
-  locations: { id: number; name: string }[],
+  locations: { id: number; name: string; location_type?: string | null; type?: string | null }[],
   racks: RackState[]
 ): AccessProblemItem[] {
-  const locName = new Map(locations.map((l) => [l.id, l.name]));
+  const locById = new Map(locations.map((l) => [l.id, l]));
   const rackByUuid = new Map(
     racks.map((r) => [String(r.uuid || ""), (r.name || r.aisle_letter || "").trim() || null])
   );
@@ -70,6 +86,8 @@ export function buildAccessProblemItems(
   const items: AccessProblemItem[] = [];
   for (const a of locationAccess) {
     if (!isProblemAccessStatus(a.status)) continue;
+    const loc = locById.get(a.location_id);
+    if (loc && isFunctionalRoutingLocation(loc)) continue;
     const ru = a.rack_uuid ? String(a.rack_uuid) : null;
     let rackName: string | null = null;
     if (ru && rackByUuid.has(ru)) rackName = rackByUuid.get(ru) ?? null;
@@ -77,7 +95,7 @@ export function buildAccessProblemItems(
 
     items.push({
       locationId: a.location_id,
-      locationName: locName.get(a.location_id) || `Lokalizacja #${a.location_id}`,
+      locationName: loc?.name || `Lokalizacja #${a.location_id}`,
       rackName,
       rackUuid: ru,
       status: String(a.status || "").toUpperCase(),
