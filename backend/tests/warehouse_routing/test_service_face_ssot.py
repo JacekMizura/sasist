@@ -266,4 +266,153 @@ def test_repair_idempotent(db):
     assert r1.deterministic_count >= 2
     assert r2.deterministic_count == 0
     assert r2.repaired == []
-    assert len(r2.skipped_explicit) >= 2
+    assert len(r2.skipped_matching) >= 2
+
+
+def test_legal_front0_west_preserved(db):
+    """FRONT+0 is legitimate SSOT for vertical WEST; repair must not overwrite it."""
+    wh = Warehouse(name="WestLegal", tenant_id=1)
+    db.add(wh)
+    db.flush()
+    west_u, east_u = str(uuid.uuid4()), str(uuid.uuid4())
+    # Two vertical rows back-to-back in X → west band expected WEST = FRONT+0.
+    containers = [
+        {
+            "id": "west",
+            "orientation": "vertical",
+            "slots": [{"x": 0, "y": 0, "w": 8, "h": 20, "rackId": west_u}],
+        },
+        {
+            "id": "east",
+            "orientation": "vertical",
+            "slots": [{"x": 8, "y": 0, "w": 8, "h": 20, "rackId": east_u}],
+        },
+    ]
+    layout = WarehouseLayout(
+        warehouse_id=wh.id,
+        name="L",
+        grid_cols=40,
+        grid_rows=40,
+        row_containers_json=json.dumps(containers),
+    )
+    db.add(layout)
+    db.flush()
+    west = _rack(db, layout, name="W1", uuid_s=west_u, x=0, y=0, w=8, h=20)
+    east = _rack(db, layout, name="E1", uuid_s=east_u, x=8, y=0, w=8, h=20)
+    assert west.service_side == "FRONT" and int(west.rotation_degrees or 0) == 0
+    west_face = face_for_cardinal("WEST", orientation="vertical")
+    assert west_face.service_side == "FRONT" and west_face.rotation_degrees == 0
+    db.commit()
+
+    report = repair_layout_service_faces(db, wh.id, layout=layout)
+    db.flush()
+
+    assert west.service_side == "FRONT"
+    assert int(west.rotation_degrees or 0) == 0
+    assert any(
+        x.get("name") == "W1" and x.get("reason") == "matches_deterministic_expected"
+        for x in report.skipped_matching
+    )
+    # East starts FRONT+0 but expected EAST (FRONT+180) → legacy mismatch repaired.
+    assert int(east.rotation_degrees or 0) == 180
+    assert any(r.get("name") == "E1" and r.get("changed") for r in report.repaired)
+
+
+def test_legacy_wrong_front0_repaired(db):
+    """Old wrong FRONT+0 in deterministic horizontal pair → corrected."""
+    wh = Warehouse(name="LegacyWrong", tenant_id=1)
+    db.add(wh)
+    db.flush()
+    u1, u2 = str(uuid.uuid4()), str(uuid.uuid4())
+    containers = [
+        {"id": "b", "orientation": "horizontal", "slots": [{"x": 0, "y": 10, "w": 10, "h": 8, "rackId": u1}]},
+        {"id": "c", "orientation": "horizontal", "slots": [{"x": 0, "y": 18, "w": 10, "h": 8, "rackId": u2}]},
+    ]
+    layout = WarehouseLayout(
+        warehouse_id=wh.id, name="L", grid_cols=40, grid_rows=40,
+        row_containers_json=json.dumps(containers),
+    )
+    db.add(layout)
+    db.flush()
+    b = _rack(db, layout, name="B", uuid_s=u1, x=0, y=10, w=10, h=8)
+    c = _rack(db, layout, name="C", uuid_s=u2, x=0, y=18, w=10, h=8)
+    db.commit()
+    report = repair_layout_service_faces(db, wh.id, layout=layout)
+    db.flush()
+    nb = world_service_normal(
+        orientation=b.orientation, rotation_degrees=b.rotation_degrees, service_side=b.service_side
+    )
+    nc = world_service_normal(
+        orientation=c.orientation, rotation_degrees=c.rotation_degrees, service_side=c.service_side
+    )
+    assert nb.y == pytest.approx(-1.0)
+    assert nc.y == pytest.approx(1.0)
+    assert report.deterministic_count == 2
+
+
+def test_explicit_non_default_not_changed(db):
+    wh = Warehouse(name="Explicit", tenant_id=1)
+    db.add(wh)
+    db.flush()
+    u1, u2 = str(uuid.uuid4()), str(uuid.uuid4())
+    containers = [
+        {"id": "b", "orientation": "horizontal", "slots": [{"x": 0, "y": 10, "w": 10, "h": 8, "rackId": u1}]},
+        {"id": "c", "orientation": "horizontal", "slots": [{"x": 0, "y": 18, "w": 10, "h": 8, "rackId": u2}]},
+    ]
+    layout = WarehouseLayout(
+        warehouse_id=wh.id, name="L", grid_cols=40, grid_rows=40,
+        row_containers_json=json.dumps(containers),
+    )
+    db.add(layout)
+    db.flush()
+    b = _rack(db, layout, name="B", uuid_s=u1, x=0, y=10, w=10, h=8)
+    _rack(db, layout, name="C", uuid_s=u2, x=0, y=18, w=10, h=8)
+    b.service_side = "BACK"
+    b.rotation_degrees = 90
+    db.commit()
+    report = repair_layout_service_faces(db, wh.id, layout=layout)
+    db.flush()
+    assert b.service_side == "BACK" and int(b.rotation_degrees) == 90
+    assert any(x.get("reason") == "explicit_ssot_preserved" for x in report.skipped_explicit)
+
+
+def test_unknown_not_in_row_container_not_guessed(db):
+    """FRONT+0 rack outside row_containers must stay FRONT+0 (no guess)."""
+    wh = Warehouse(name="Unknown", tenant_id=1)
+    db.add(wh)
+    db.flush()
+    lone = str(uuid.uuid4())
+    layout = WarehouseLayout(
+        warehouse_id=wh.id,
+        name="L",
+        grid_cols=40,
+        grid_rows=40,
+        row_containers_json=json.dumps([]),
+    )
+    db.add(layout)
+    db.flush()
+    r = _rack(db, layout, name="X1", uuid_s=lone, x=5, y=5, w=10, h=8)
+    db.commit()
+    report = repair_layout_service_faces(db, wh.id, layout=layout)
+    db.flush()
+    assert r.service_side == "FRONT"
+    assert int(r.rotation_degrees or 0) == 0
+    assert report.deterministic_count == 0
+    assert report.repaired == []
+    assert any(x.get("name") == "X1" and x.get("reason") == "not_in_row_container" for x in report.unresolved)
+
+
+def test_should_repair_gate_unit():
+    from types import SimpleNamespace
+
+    from backend.services.warehouse_routing.service_face_repair import should_repair_legacy_mismatch
+
+    west = face_for_cardinal("WEST", orientation="vertical")
+    south = face_for_cardinal("SOUTH", orientation="vertical")
+    legal = SimpleNamespace(service_side="FRONT", rotation_degrees=0, rack_type="warehouse")
+    assert should_repair_legacy_mismatch(legal, west, orientation="vertical") is False
+    assert should_repair_legacy_mismatch(legal, south, orientation="vertical") is True
+    explicit = SimpleNamespace(service_side="BACK", rotation_degrees=90, rack_type="warehouse")
+    assert should_repair_legacy_mismatch(explicit, south, orientation="vertical") is False
+    store = SimpleNamespace(service_side="FRONT", rotation_degrees=0, rack_type="store")
+    assert should_repair_legacy_mismatch(store, south, orientation="vertical") is False

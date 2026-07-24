@@ -8,6 +8,15 @@ Rules:
   never nearest routing edge.
 - Store racks are skipped (product follow-up).
 - Racks that cannot be decided → reported UNRESOLVED (unchanged).
+
+Legacy mutation gate (CRITICAL):
+  FRONT+0 is a *legitimate* SSOT (vertical rack facing WEST encodes as FRONT+0).
+  Repair mutates a rack ONLY when ALL of:
+    1) deterministic expected face exists from row_containers,
+    2) current world normal ≠ expected world normal,
+    3) current fingerprint is the old generator default FRONT+0
+       (explicit non-default faces are never overwritten).
+  FRONT+0 alone is NEVER sufficient to overwrite.
 """
 
 from __future__ import annotations
@@ -15,7 +24,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Optional
 
 from ...models.warehouse import Rack, WarehouseLayout
 from .rack_service_face import (
@@ -23,6 +32,8 @@ from .rack_service_face import (
     apply_face_to_rack_obj,
     face_for_cardinal,
     is_store_rack,
+    normalize_rotation,
+    normalize_service_side,
     world_service_normal,
 )
 
@@ -32,6 +43,7 @@ logger = logging.getLogger(__name__)
 BACK_TO_BACK_MAX_GAP_CELLS = 1.0
 # Overlap ratio along shared axis to consider two rows "paired".
 PAIR_OVERLAP_RATIO = 0.5
+_NORMAL_EPS = 1e-6
 
 
 @dataclass
@@ -65,19 +77,58 @@ class FaceRepairReport:
     unresolved: list[dict] = field(default_factory=list)
     skipped_store: list[dict] = field(default_factory=list)
     skipped_explicit: list[dict] = field(default_factory=list)
+    skipped_matching: list[dict] = field(default_factory=list)
 
     @property
     def deterministic_count(self) -> int:
         return sum(1 for r in self.repaired if r.get("changed"))
 
 
-def is_legacy_default_face(rack: object) -> bool:
-    """Legacy generator bug: FRONT + rotation 0. Any other explicit face is preserved."""
-    from .rack_service_face import normalize_rotation, normalize_service_side
+def is_default_face_fingerprint(rack: object) -> bool:
+    """
+    Old generator default encoding: FRONT + rotation 0.
 
+    NOT a standalone legacy marker — WEST-facing vertical racks *legally* use FRONT+0.
+    Use only together with a deterministic expected-face mismatch.
+    """
     side = normalize_service_side(getattr(rack, "service_side", None))
     rot = normalize_rotation(getattr(rack, "rotation_degrees", 0))
     return side == "FRONT" and rot == 0
+
+
+# Backward-compatible alias (callers / older tests). Prefer is_default_face_fingerprint.
+def is_legacy_default_face(rack: object) -> bool:
+    return is_default_face_fingerprint(rack)
+
+
+def rack_matches_expected_face(rack: object, expected: ServiceFace, *, orientation: str) -> bool:
+    """True when current rack world normal equals expected world normal."""
+    cur = world_service_normal(
+        orientation=orientation,
+        rotation_degrees=getattr(rack, "rotation_degrees", 0),
+        service_side=getattr(rack, "service_side", None),
+    )
+    exp = world_service_normal(
+        orientation=orientation,
+        rotation_degrees=expected.rotation_degrees,
+        service_side=expected.service_side,
+    )
+    return abs(cur.x - exp.x) <= _NORMAL_EPS and abs(cur.y - exp.y) <= _NORMAL_EPS
+
+
+def should_repair_legacy_mismatch(rack: object, expected: ServiceFace, *, orientation: str) -> bool:
+    """
+    Mutate only when deterministic expected disagrees with FRONT+0 default fingerprint.
+
+    LEGAL FRONT+0 (matches expected) → False
+    EXPLICIT non-default → False
+    LEGACY wrong FRONT+0 (mismatch) → True
+    """
+    if is_store_rack(rack):
+        return False
+    if rack_matches_expected_face(rack, expected, orientation=orientation):
+        return False
+    return is_default_face_fingerprint(rack)
 
 
 def _parse_row_containers(layout: WarehouseLayout) -> list[dict]:
@@ -217,18 +268,6 @@ def _apply_face(
                 {"rack_uuid": getattr(rack, "uuid", None), "rack_id": getattr(rack, "id", None), "reason": "store"}
             )
             continue
-        if not is_legacy_default_face(rack):
-            report.skipped_explicit.append(
-                {
-                    "rack_uuid": getattr(rack, "uuid", None),
-                    "rack_id": getattr(rack, "id", None),
-                    "name": getattr(rack, "name", None),
-                    "service_side": getattr(rack, "service_side", None),
-                    "rotation_degrees": int(getattr(rack, "rotation_degrees", 0) or 0),
-                    "reason": "explicit_ssot_preserved",
-                }
-            )
-            continue
         orient = str(getattr(rack, "orientation", None) or "vertical")
         n = world_service_normal(
             orientation="vertical",
@@ -240,6 +279,22 @@ def _apply_face(
             if orient.lower() == "vertical"
             else encode_face_for_world_normal(n.x, n.y, orientation=orient)
         )
+        base_meta = {
+            "rack_uuid": getattr(rack, "uuid", None),
+            "rack_id": getattr(rack, "id", None),
+            "name": getattr(rack, "name", None),
+            "service_side": getattr(rack, "service_side", None),
+            "rotation_degrees": int(getattr(rack, "rotation_degrees", 0) or 0),
+        }
+        # 1) Already matches deterministic expected (includes LEGAL FRONT+0 = WEST).
+        if rack_matches_expected_face(rack, target_face, orientation=orient):
+            report.skipped_matching.append({**base_meta, "reason": "matches_deterministic_expected"})
+            continue
+        # 2) Explicit non-default SSOT — never overwrite by geometry heuristic.
+        if not is_default_face_fingerprint(rack):
+            report.skipped_explicit.append({**base_meta, "reason": "explicit_ssot_preserved"})
+            continue
+        # 3) FRONT+0 AND mismatch vs deterministic expected → legacy repair.
         before = (
             getattr(rack, "service_side", None),
             int(getattr(rack, "rotation_degrees", 0) or 0),
@@ -252,7 +307,7 @@ def _apply_face(
                 "name": getattr(rack, "name", None),
                 "before": {"service_side": before[0], "rotation_degrees": before[1]},
                 "after": target_face.as_dict(),
-                "reason": reason,
+                "reason": f"{reason}:legacy_mismatch",
                 "changed": changed,
             }
         )
@@ -303,10 +358,11 @@ def repair_layout_service_faces(
     layout: Optional[WarehouseLayout] = None,
 ) -> FaceRepairReport:
     """
-    Mutate Rack.service_side / rotation_degrees ONLY for legacy defaults (FRONT+0).
+    Mutate Rack.service_side / rotation_degrees only for proven legacy mismatches.
 
-    New racks must receive correct SSOT at creation (FE generator).
-    Explicit non-legacy faces are never overwritten by row geometry heuristics.
+    Gate: deterministic expected from row_containers AND world-normal mismatch
+    AND current fingerprint FRONT+0. LEGAL FRONT+0 (e.g. WEST) is preserved.
+    Explicit non-default faces and racks outside deterministic geometry are untouched.
     Idempotent: second run after successful repair changes nothing.
     Does not commit; caller owns the transaction.
     """
@@ -438,10 +494,12 @@ def repair_layout_service_faces(
             )
 
     logger.info(
-        "service_face_repair warehouse_id=%s repaired=%s unresolved=%s store_skipped=%s",
+        "service_face_repair warehouse_id=%s repaired=%s unresolved=%s store_skipped=%s matching=%s explicit=%s",
         warehouse_id,
         report.deterministic_count,
         len(report.unresolved),
         len(report.skipped_store),
+        len(report.skipped_matching),
+        len(report.skipped_explicit),
     )
     return report
