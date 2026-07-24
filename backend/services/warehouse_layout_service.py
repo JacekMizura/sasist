@@ -822,7 +822,7 @@ class WarehouseLayoutService:
                     continue
                 self.db.add(rack)
                 self.db.flush()
-                self._sync_rack_passages(rack, warehouse_id, r_data.get("passages") or [])
+                self._sync_rack_passages(rack, warehouse_id, r_data.get("passages"))
 
                 if not BIN_IDENTITY_SAVE_ENABLED:
                     if is_new_rack:
@@ -979,6 +979,7 @@ class WarehouseLayoutService:
                     "width_cm": float(getattr(p, "width_cm", 0) or 0),
                     "clearance_height_cm": getattr(p, "clearance_height_cm", None),
                     "enabled": bool(getattr(p, "enabled", True)),
+                    "corridor_uuid": getattr(p, "corridor_uuid", None),
                 }
             )
         return out
@@ -986,7 +987,8 @@ class WarehouseLayoutService:
     def _sync_rack_passages(self, rack: Rack, warehouse_id: int, passages_payload) -> None:
         """Upsert WarehouseRackPassage by stable UUID; geometry stays local to rack."""
         if passages_payload is None:
-            passages_payload = []
+            # Missing key → leave existing passages untouched (avoid wipe on partial payloads).
+            return
         if not isinstance(passages_payload, list):
             return
 
@@ -1048,6 +1050,11 @@ class WarehouseLayoutService:
                 except (TypeError, ValueError):
                     row.clearance_height_cm = None
             row.enabled = bool(raw.get("enabled", True))
+            cu = raw.get("corridor_uuid") or raw.get("corridorUuid") or raw.get("passage_group_uuid")
+            if cu is None or cu == "":
+                row.corridor_uuid = None
+            else:
+                row.corridor_uuid = str(cu).strip() or None
             self.db.add(row)
 
         for pu, row in existing.items():

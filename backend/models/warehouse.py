@@ -196,6 +196,9 @@ class WarehouseRackPassage(Base, BaseModelMixin):
     #: Optional SSOT clearance; NULL = derive or UNKNOWN (never invent).
     clearance_height_cm = Column(Float, nullable=True)
     enabled = Column(Boolean, nullable=False, default=True)
+    #: Optional UX group for multi-rack corridor (one gesture = one logical passage).
+    #: Physical SSOT remains per-rack; this UUID only keeps move/resize/delete coherent.
+    corridor_uuid = Column(String(36), nullable=True, index=True)
 
     rack = relationship("Rack", back_populates="passages")
     warehouse = relationship("Warehouse", foreign_keys=[warehouse_id])

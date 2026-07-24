@@ -29,6 +29,21 @@ class InternalStructureSchema(BaseModel):
     levels: List[InternalLevelSchema] = []
 
 
+class RackPassageSchema(BaseModel):
+    """Physical opening through a rack (drive/walk-under). Not a routing edge."""
+
+    id: Optional[int] = None
+    uuid: Optional[str] = None
+    offset_along_cm: float = 0
+    width_cm: float = 100
+    clearance_height_cm: Optional[float] = None
+    enabled: bool = True
+    corridor_uuid: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("corridor_uuid", "corridorUuid", "passage_group_uuid"),
+    )
+
+
 class RackSchema(BaseModel):
     id: Optional[int] = None
     uuid: Optional[str] = None
@@ -59,6 +74,7 @@ class RackSchema(BaseModel):
         default=0,
         validation_alias=AliasChoices("rotation_degrees", "rotationDegrees"),
     )
+    passages: Optional[List[RackPassageSchema]] = None
 
 
 class AisleSchema(BaseModel):

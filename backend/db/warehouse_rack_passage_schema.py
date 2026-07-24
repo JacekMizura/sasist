@@ -10,7 +10,7 @@ from .schema_introspection import ensure_model_table_from_orm, sync_model_schema
 
 logger = logging.getLogger(__name__)
 
-WAREHOUSE_RACK_PASSAGE_SCHEMA_VERSION = "2026.07.24.rack_passage.1"
+WAREHOUSE_RACK_PASSAGE_SCHEMA_VERSION = "2026.07.24.rack_passage.2"
 
 
 def ensure_warehouse_rack_passage_schema(engine: Engine) -> None:

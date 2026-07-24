@@ -184,20 +184,86 @@ def test_vertical_racks_passage_corridor_b4_c4(db):
     obs_c = build_rack_obstacle(c4, [])
     assert not segment_is_physically_clear(ax, ay, bx, by, [obs_b, obs_c])
 
-    # Full-height passages (along Y covers entire rack)
+    # Full-height passages (along Y covers entire rack) — shared corridor group
+    corridor = str(uuid.uuid4())
     pb = WarehouseRackPassage(
         uuid=str(uuid.uuid4()), warehouse_id=wh.id, rack_id=b4.id, rack_uuid=b4.uuid,
-        offset_along_cm=0, width_cm=80, enabled=True,
+        offset_along_cm=0, width_cm=80, enabled=True, corridor_uuid=corridor,
     )
     pc = WarehouseRackPassage(
         uuid=str(uuid.uuid4()), warehouse_id=wh.id, rack_id=c4.id, rack_uuid=c4.uuid,
-        offset_along_cm=0, width_cm=80, enabled=True,
+        offset_along_cm=0, width_cm=80, enabled=True, corridor_uuid=corridor,
     )
     db.add_all([pb, pc])
     db.flush()
+    assert pb.corridor_uuid == pc.corridor_uuid == corridor
     obs_b2 = build_rack_obstacle(b4, [pb])
     obs_c2 = build_rack_obstacle(c4, [pc])
     assert segment_is_physically_clear(ax, ay, bx, by, [obs_b2, obs_c2])
 
     # Only one passage still blocks
     assert not segment_is_physically_clear(ax, ay, bx, by, [obs_b2, obs_c])
+
+    # Misaligned openings → BLOCK
+    pc.offset_along_cm = 40
+    db.flush()
+    obs_c_mis = build_rack_obstacle(c4, [pc])
+    assert not segment_is_physically_clear(ax, ay, bx, by, [obs_b2, obs_c_mis])
+
+    # Disabled → BLOCK
+    pc.offset_along_cm = 0
+    pc.enabled = False
+    db.flush()
+    obs_c_off = build_rack_obstacle(c4, [pc])
+    assert not segment_is_physically_clear(ax, ay, bx, by, [obs_b2, obs_c_off])
+
+
+def test_corridor_uuid_sync_via_layout_service(db):
+    """Passages round-trip with shared corridor_uuid; graph N/E unchanged by passage create."""
+    from backend.services.warehouse_layout_service import WarehouseLayoutService
+
+    wh = Warehouse(name="CorrSync", tenant_id=1)
+    db.add(wh)
+    db.flush()
+    layout = WarehouseLayout(warehouse_id=wh.id, name="L", grid_cols=40, grid_rows=30, width_m=4, length_m=3)
+    db.add(layout)
+    db.flush()
+    ru = str(uuid.uuid4())
+    rack = Rack(
+        layout_id=layout.id, uuid=ru, name="R1",
+        x=5, y=5, width=10, height=8, orientation="vertical",
+        levels=1, bins_per_level=1, length_cm=80, width_cm=100, height_cm=200,
+        aisle_letter="R", rack_index=1, is_active=True,
+    )
+    db.add(rack)
+    db.flush()
+    corridor = str(uuid.uuid4())
+    pu = str(uuid.uuid4())
+    svc = WarehouseLayoutService(db)
+    svc._sync_rack_passages(
+        rack,
+        wh.id,
+        [
+            {
+                "uuid": pu,
+                "offset_along_cm": 10,
+                "width_cm": 50,
+                "enabled": True,
+                "corridor_uuid": corridor,
+            }
+        ],
+    )
+    db.commit()
+    db.expire_all()
+    loaded = db.query(WarehouseRackPassage).filter(WarehouseRackPassage.uuid == pu).one()
+    assert loaded.corridor_uuid == corridor
+    assert loaded.offset_along_cm == 10
+    ser = svc._serialize_rack_passages(loaded.rack if hasattr(loaded, "rack") else rack)
+    # re-query rack with passages
+    rack2 = db.query(Rack).filter(Rack.id == rack.id).one()
+    ser = svc._serialize_rack_passages(rack2)
+    assert ser[0]["corridor_uuid"] == corridor
+    # Missing passages key must not wipe
+    svc._sync_rack_passages(rack2, wh.id, None)
+    db.flush()
+    assert db.query(WarehouseRackPassage).filter(WarehouseRackPassage.uuid == pu).count() == 1
