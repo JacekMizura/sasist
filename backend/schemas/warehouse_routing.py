@@ -131,7 +131,7 @@ class RouteComputeResponse(BaseModel):
 
 class ValidationIssue(BaseModel):
     code: str
-    severity: str = "error"  # error | warning
+    severity: str = "error"  # error | warning | info
     message: str
     ref_uuid: Optional[str] = None
     """Optional list of related entity UUIDs (e.g. orphan nodes) for UI highlight — not for display."""
@@ -139,5 +139,12 @@ class ValidationIssue(BaseModel):
 
 
 class RoutingValidationResult(BaseModel):
+    """Validate authored routing graph.
+
+    - ``ok``: structural validity only (no severity=error). Safe to keep drawing/saving a sketch.
+    - ``operational_ready``: structure OK and ops config complete (start, packing, location access).
+    """
+
     ok: bool
+    operational_ready: bool = False
     issues: list[ValidationIssue] = Field(default_factory=list)

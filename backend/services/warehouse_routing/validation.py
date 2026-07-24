@@ -21,6 +21,16 @@ from .constants import (
     OP_PICKING_START,
 )
 
+# Designer "Konfiguracja sieci" — never severity=error; do not flip ok=False alone.
+_OPERATIONAL_ISSUE_CODES = frozenset(
+    {
+        "MISSING_PICKING_START",
+        "MISSING_PACKING",
+        "LOCATIONS_WITHOUT_ACCESS",
+        "START_CANNOT_REACH_PACKING",
+    }
+)
+
 
 def _weak_undirected_adj(edges: list[WarehouseRoutingEdge]) -> dict[str, set[str]]:
     adj: dict[str, set[str]] = defaultdict(set)
@@ -183,16 +193,16 @@ def validate_graph(db: Session, warehouse_id: int) -> RoutingValidationResult:
         issues.append(
             ValidationIssue(
                 code="MISSING_PICKING_START",
-                severity="error",
-                message="Nie ustawiono punktu rozpoczęcia pracy (Start pracy).",
+                severity="info",
+                message="Start kompletacji — nie ustawiono",
             )
         )
     if not packs:
         issues.append(
             ValidationIssue(
                 code="MISSING_PACKING",
-                severity="error",
-                message="Nie ustawiono punktu pakowania.",
+                severity="info",
+                message="Pakowanie — nie ustawiono",
             )
         )
 
@@ -221,11 +231,8 @@ def validate_graph(db: Session, warehouse_id: int) -> RoutingValidationResult:
             issues.append(
                 ValidationIssue(
                     code="START_CANNOT_REACH_PACKING",
-                    severity="error",
-                    message=(
-                        "Z punktu rozpoczęcia pracy nie da się dojechać do pakowania "
-                        "(sprawdź kierunki odcinków)."
-                    ),
+                    severity="info",
+                    message="Start kompletacji nie łączy się jeszcze z pakowaniem (sprawdź kierunki odcinków).",
                 )
             )
 
@@ -252,13 +259,16 @@ def validate_graph(db: Session, warehouse_id: int) -> RoutingValidationResult:
         issues.append(
             ValidationIssue(
                 code="LOCATIONS_WITHOUT_ACCESS",
-                severity="warning",
-                message=(
-                    f"{len(missing)} lokalizacji magazynowych nie ma przypisanego dojścia do trasy "
-                    "(możesz przypisać je ręcznie przy punkcie trasy)."
-                ),
+                severity="info",
+                message=f"Lokalizacje — {len(missing)} wymaga przypisania",
             )
         )
 
     errors = [i for i in issues if i.severity == "error"]
-    return RoutingValidationResult(ok=len(errors) == 0, issues=issues)
+    structural_ok = len(errors) == 0
+    operational_ready = structural_ok and not any(i.code in _OPERATIONAL_ISSUE_CODES for i in issues)
+    return RoutingValidationResult(
+        ok=structural_ok,
+        operational_ready=operational_ready,
+        issues=issues,
+    )

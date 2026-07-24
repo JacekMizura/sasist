@@ -212,54 +212,88 @@ export function RoutingRoutesPanel({
         </div>
       )}
 
-      {/* Validation — human, aggregated */}
-      {routing.validation && showIdle && (
-        <div className="space-y-2 rounded-lg border border-slate-200 p-2">
-          <div className="font-semibold">
-            {routing.validation.ok ? "Sieć w porządku" : "Uwagi do sieci"}
-          </div>
-          <ul className="max-h-48 space-y-2 overflow-auto">
-            {routing.validation.issues.map((i, idx) => (
-              <li
-                key={`${i.code}-${idx}`}
-                className={i.severity === "error" ? "text-rose-800" : "text-amber-900"}
-              >
-                <div>{i.message}</div>
-                {(i.code === "ORPHAN_NODES" || i.code === "NO_EDGES") &&
-                  (i.ref_uuids?.length || orphans.length) > 0 && (
-                    <div className="mt-1 flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        className="rounded border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold"
-                        onClick={() =>
-                          setHighlightOrphanUuids(i.ref_uuids?.length ? i.ref_uuids : orphans)
-                        }
-                      >
-                        Podświetl na mapie
-                      </button>
-                      <button
-                        type="button"
-                        className="rounded border border-rose-200 bg-rose-50 px-2 py-0.5 text-[10px] font-semibold text-rose-800"
-                        onClick={removeOrphansAction}
-                      >
-                        Usuń niepołączone punkty
-                      </button>
-                    </div>
-                  )}
-              </li>
-            ))}
-          </ul>
-          {highlightOrphanUuids.length > 0 && (
-            <button
-              type="button"
-              className="text-[10px] underline"
-              onClick={() => setHighlightOrphanUuids([])}
-            >
-              Wyłącz podświetlenie
-            </button>
-          )}
-        </div>
-      )}
+      {/* Validation — structural errors vs operational config */}
+      {routing.validation && showIdle && (() => {
+        const structural = routing.validation.issues.filter(
+          (i) => i.severity === "error" || i.severity === "warning"
+        );
+        const config = routing.validation.issues.filter((i) => i.severity === "info");
+        const structuralBad = structural.some((i) => i.severity === "error");
+        return (
+          <>
+            {structural.length > 0 && (
+              <div className="space-y-2 rounded-lg border border-slate-200 p-2">
+                <div className="font-semibold">
+                  {structuralBad ? "Uwagi do sieci" : "Sieć — ostrzeżenia"}
+                </div>
+                <ul className="max-h-40 space-y-2 overflow-auto">
+                  {structural.map((i, idx) => (
+                    <li
+                      key={`${i.code}-${idx}`}
+                      className={i.severity === "error" ? "text-rose-800" : "text-amber-900"}
+                    >
+                      <div>{i.message}</div>
+                      {(i.code === "ORPHAN_NODES" || i.code === "NO_EDGES") &&
+                        (i.ref_uuids?.length || orphans.length) > 0 && (
+                          <div className="mt-1 flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              className="rounded border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold"
+                              onClick={() =>
+                                setHighlightOrphanUuids(i.ref_uuids?.length ? i.ref_uuids : orphans)
+                              }
+                            >
+                              Podświetl na mapie
+                            </button>
+                            <button
+                              type="button"
+                              className="rounded border border-rose-200 bg-rose-50 px-2 py-0.5 text-[10px] font-semibold text-rose-800"
+                              onClick={removeOrphansAction}
+                            >
+                              Usuń niepołączone punkty
+                            </button>
+                          </div>
+                        )}
+                    </li>
+                  ))}
+                </ul>
+                {highlightOrphanUuids.length > 0 && (
+                  <button
+                    type="button"
+                    className="text-[10px] underline"
+                    onClick={() => setHighlightOrphanUuids([])}
+                  >
+                    Wyłącz podświetlenie
+                  </button>
+                )}
+              </div>
+            )}
+            {config.length > 0 && (
+              <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50/80 p-2">
+                <div className="font-semibold text-slate-700">Konfiguracja sieci</div>
+                <p className="text-[10px] text-slate-500">
+                  {routing.validation.operational_ready
+                    ? "Sieć gotowa operacyjnie."
+                    : "Nie blokuje rysowania ani zapisu. Sieć nie jest jeszcze gotowa do pełnego użycia operacyjnego."}
+                </p>
+                <ul className="space-y-1 text-slate-600">
+                  {config.map((i, idx) => (
+                    <li key={`${i.code}-${idx}`}>{i.message}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {structural.length === 0 && config.length === 0 && routing.validation.operational_ready && (
+              <div className="rounded-lg border border-emerald-100 bg-emerald-50/50 p-2 font-semibold text-emerald-800">
+                Sieć w porządku
+              </div>
+            )}
+            {structural.length === 0 && config.length > 0 && (
+              <div className="text-[10px] text-slate-500">Struktura sieci jest poprawna.</div>
+            )}
+          </>
+        );
+      })()}
 
       {/* TEST — map-first flow */}
       {tool === "test_route" && (

@@ -67,7 +67,10 @@ export type RouteComputeResult = {
 };
 
 export type RoutingValidationResult = {
+  /** Structural validity only (no severity=error). Sketch save/draw allowed when true. */
   ok: boolean;
+  /** Structure OK and ops config complete (start / packing / location access). */
+  operational_ready?: boolean;
   issues: {
     code: string;
     severity: string;

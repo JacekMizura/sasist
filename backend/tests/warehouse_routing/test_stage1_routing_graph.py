@@ -296,6 +296,30 @@ def test_13_validation_detects_issues(db):
     no_edges = next(i for i in res.issues if i.code == "NO_EDGES")
     assert "trasy" in no_edges.message.lower() or "punkt" in no_edges.message.lower()
     assert len(no_edges.ref_uuids) == 2
+    # Structural broken → ok False; ops issues are info and do not alone define ok
+    assert res.ok is False
+    assert res.operational_ready is False
+    assert all(
+        i.severity == "info"
+        for i in res.issues
+        if i.code in {"MISSING_PICKING_START", "MISSING_PACKING", "LOCATIONS_WITHOUT_ACCESS"}
+    )
+
+
+def test_13d_structural_ok_but_not_operational_ready(db):
+    """Connected graph with start+pack can be ok=True while locations still pending."""
+    loc = Location(id=12, warehouse_id=1, name="C-01", is_active=True)
+    db.add(loc)
+    db.commit()
+    _, _, _, payload = _simple_graph_payload()
+    replace_graph(db, 1, payload, materialize_crossings=False)
+    res = validate_graph(db, 1)
+    assert res.ok is True
+    assert res.operational_ready is False
+    loc_issue = next(i for i in res.issues if i.code == "LOCATIONS_WITHOUT_ACCESS")
+    assert loc_issue.severity == "info"
+    assert "MISSING_PICKING_START" not in {i.code for i in res.issues}
+    assert "MISSING_PACKING" not in {i.code for i in res.issues}
 
 
 def test_13b_delete_node_persists_after_save_reload(db):

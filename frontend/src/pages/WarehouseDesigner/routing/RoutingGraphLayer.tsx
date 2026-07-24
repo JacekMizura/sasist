@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from "react";
 import type { RoutingAccessPoint, RoutingEdge, RoutingNode } from "../../../api/warehouseRoutingApi";
 import { GRID_UNIT_CM } from "../../../types/warehouse";
 import { nodeDisplayName, nodeKind, opTypeLabel } from "./routingDisplay";
+import { EDGE_HIT_HALF_PX, NODE_HIT_RADIUS_PX, resolveSelectHit } from "./routingHitTest";
 
 type Props = {
   nodes: RoutingNode[];
@@ -38,6 +39,20 @@ function clientToCm(
   if (!ctm) return { x: 0, y: 0 };
   const loc = pt.matrixTransform(ctm.inverse());
   return { x: loc.x / scale, y: loc.y / scale };
+}
+
+function clientToSvgPx(
+  svg: SVGSVGElement,
+  clientX: number,
+  clientY: number
+): { x: number; y: number } {
+  const pt = svg.createSVGPoint();
+  pt.x = clientX;
+  pt.y = clientY;
+  const ctm = svg.getScreenCTM();
+  if (!ctm) return { x: 0, y: 0 };
+  const loc = pt.matrixTransform(ctm.inverse());
+  return { x: loc.x, y: loc.y };
 }
 
 /** Snap to layout grid (1 cell = GRID_UNIT_CM). */
@@ -83,14 +98,39 @@ export function RoutingGraphLayer({
     startY?: number;
   } | null>(null);
   const [dragPreview, setDragPreview] = useState<{ uuid: string; x: number; y: number } | null>(null);
-  const [hoverUuid, setHoverUuid] = useState<string | null>(null);
+  const [hoverNodeUuid, setHoverNodeUuid] = useState<string | null>(null);
+  const [hoverEdgeUuid, setHoverEdgeUuid] = useState<string | null>(null);
 
   const resolveSvg = useCallback((el: Element): SVGSVGElement | null => {
     return (el.ownerSVGElement ?? (el as SVGSVGElement)) as SVGSVGElement;
   }, []);
 
+  const nodePxMap = () => {
+    const m = new Map<string, { x: number; y: number }>();
+    for (const n of nodes) {
+      const preview = dragPreview?.uuid === n.uuid ? dragPreview : null;
+      m.set(n.uuid, { x: (preview?.x ?? n.x) * scale, y: (preview?.y ?? n.y) * scale });
+    }
+    return m;
+  };
+
+  /** Unified pick: POINT > EDGE (guards against transparent-fill / stroke endpoint steal). */
+  const pickAtClient = (svg: SVGSVGElement, clientX: number, clientY: number) => {
+    const px = clientToSvgPx(svg, clientX, clientY);
+    return resolveSelectHit({
+      xPx: px.x,
+      yPx: px.y,
+      nodes,
+      edges,
+      nodePx: nodePxMap(),
+      nodeHitRadiusPx: NODE_HIT_RADIUS_PX,
+      edgeHitHalfPx: EDGE_HIT_HALF_PX,
+    });
+  };
+
   return (
     <g className="routing-graph-layer" data-routing-ssot="authored">
+      {/* 1) Canvas underlay */}
       {interactive && (
         <rect
           x={0}
@@ -109,12 +149,16 @@ export function RoutingGraphLayer({
             if (dragRef.current?.moved) return;
             const svg = resolveSvg(e.currentTarget);
             if (!svg || !onCanvasClickCm) return;
+            const hit = pickAtClient(svg, e.clientX, e.clientY);
+            if (hit.kind !== "empty") return;
             const raw = clientToCm(svg, e.clientX, e.clientY, scale);
             const snapped = snapRoutingCm(raw.x, raw.y);
             onCanvasClickCm(snapped.x, snapped.y);
           }}
         />
       )}
+
+      {/* 2) Edges UNDER nodes — wide stroke for mid-segment clicks only */}
       {edges.map((e) => {
         const a0 = byUuid.get(e.from_node_uuid);
         const b0 = byUuid.get(e.to_node_uuid);
@@ -124,22 +168,35 @@ export function RoutingGraphLayer({
         const b =
           dragPreview?.uuid === b0.uuid ? { ...b0, x: dragPreview.x, y: dragPreview.y } : b0;
         const active = selectedEdgeUuid === e.uuid || hiEdges.has(e.uuid);
+        const hovered = hoverEdgeUuid === e.uuid && !hoverNodeUuid;
         return (
           <g key={e.uuid}>
-            {/* Wider invisible stroke for easier click */}
             <line
               x1={a.x * scale}
               y1={a.y * scale}
               x2={b.x * scale}
               y2={b.y * scale}
               stroke="transparent"
-              strokeWidth={12}
+              strokeWidth={EDGE_HIT_HALF_PX * 2}
               style={{ cursor: interactive ? "pointer" : "default", pointerEvents: "stroke" }}
+              onPointerEnter={() => {
+                if (!hoverNodeUuid) setHoverEdgeUuid(e.uuid);
+              }}
+              onPointerLeave={() => setHoverEdgeUuid((u) => (u === e.uuid ? null : u))}
               onClick={(ev) => {
                 ev.stopPropagation();
                 const svg = resolveSvg(ev.currentTarget);
-                const cm = svg ? clientToCm(svg, ev.clientX, ev.clientY, scale) : undefined;
-                onEdgeClick?.(e.uuid, cm);
+                if (!svg) return;
+                // POINT wins even if edge stroke received the DOM event at an endpoint.
+                const hit = pickAtClient(svg, ev.clientX, ev.clientY);
+                if (hit.kind === "node") {
+                  onNodeClick?.(hit.uuid);
+                  return;
+                }
+                if (hit.kind === "edge") {
+                  const cm = clientToCm(svg, ev.clientX, ev.clientY, scale);
+                  onEdgeClick?.(hit.uuid, cm);
+                }
               }}
             />
             <line
@@ -147,8 +204,8 @@ export function RoutingGraphLayer({
               y1={a.y * scale}
               x2={b.x * scale}
               y2={b.y * scale}
-              stroke={active ? "#0ea5e9" : e.enabled ? "#64748b" : "#cbd5e1"}
-              strokeWidth={active ? 4 : 2.5}
+              stroke={active || hovered ? "#0ea5e9" : e.enabled ? "#64748b" : "#cbd5e1"}
+              strokeWidth={active || hovered ? 4 : 2.5}
               strokeDasharray={e.enabled ? undefined : "6 4"}
               opacity={0.9}
               style={{ pointerEvents: "none" }}
@@ -165,6 +222,7 @@ export function RoutingGraphLayer({
           </g>
         );
       })}
+
       {draftFrom && draftCursorCm && (
         <line
           x1={draftFrom.x * scale}
@@ -177,23 +235,28 @@ export function RoutingGraphLayer({
           style={{ pointerEvents: "none" }}
         />
       )}
+
+      {/* 3) Nodes ON TOP — large hittable disc (never transparent-only / visiblePainted miss) */}
       {nodes.map((n) => {
         const preview = dragPreview?.uuid === n.uuid ? dragPreview : null;
         const nx = preview?.x ?? n.x;
         const ny = preview?.y ?? n.y;
         const active = selectedNodeUuid === n.uuid || hiNodes.has(n.uuid);
+        const hovered = hoverNodeUuid === n.uuid;
         const kind = nodeKind(n, accessPoints);
         const tip = nodeDisplayName(n, accessPoints, [], nodes);
-        const showLabel = kind === "operational" && (active || hoverUuid === n.uuid);
-        const r = active ? (kind === "operational" ? 9 : 7) : kind === "operational" ? 8 : kind === "access" ? 6 : 4.5;
+        const showLabel = kind === "operational" && (active || hovered);
+        const r = active || hovered ? (kind === "operational" ? 9 : 7) : kind === "operational" ? 8 : kind === "access" ? 6 : 4.5;
         const fill =
           active ? "#0284c7" : kind === "operational" ? "#d97706" : kind === "access" ? "#059669" : "#475569";
+        const hitR = NODE_HIT_RADIUS_PX;
         return (
           <g
             key={n.uuid}
+            data-routing-node={n.uuid}
             style={{
               cursor: allowNodeDrag
-                ? dragRef.current?.uuid === n.uuid
+                ? dragRef.current?.uuid === n.uuid && dragRef.current.moved
                   ? "grabbing"
                   : "grab"
                 : interactive
@@ -205,8 +268,7 @@ export function RoutingGraphLayer({
               if (!interactive) return;
               if (ev.button !== 0) return;
               ev.stopPropagation();
-              if (!allowNodeDrag) return;
-              // Do NOT preventDefault / capture yet — that broke sticky multi-select clicks.
+              // Always arm selection/drag from node hitbox (select + draw reuse).
               dragRef.current = {
                 uuid: n.uuid,
                 moved: false,
@@ -214,10 +276,12 @@ export function RoutingGraphLayer({
                 startX: ev.clientX,
                 startY: ev.clientY,
               };
+              if (!allowNodeDrag) return;
             }}
             onPointerMove={(ev) => {
               const drag = dragRef.current;
               if (!drag || drag.uuid !== n.uuid) return;
+              if (!allowNodeDrag) return;
               ev.stopPropagation();
               const startX = drag.startX ?? ev.clientX;
               const startY = drag.startY ?? ev.clientY;
@@ -240,38 +304,59 @@ export function RoutingGraphLayer({
             }}
             onPointerUp={(ev) => {
               const drag = dragRef.current;
-              if (allowNodeDrag && drag && drag.uuid === n.uuid) {
-                ev.stopPropagation();
-                try {
-                  (ev.currentTarget as SVGGElement).releasePointerCapture(ev.pointerId);
-                } catch {
-                  /* ignore */
-                }
+              if (!drag || drag.uuid !== n.uuid) return;
+              ev.stopPropagation();
+              try {
+                (ev.currentTarget as SVGGElement).releasePointerCapture(ev.pointerId);
+              } catch {
+                /* ignore */
+              }
+              const moved = drag.moved;
+              dragRef.current = null;
+              setDragPreview(null);
+              if (allowNodeDrag && moved) {
                 const svg = resolveSvg(ev.currentTarget);
                 const raw = svg ? clientToCm(svg, ev.clientX, ev.clientY, scale) : { x: n.x, y: n.y };
                 const snapped = snapRoutingCm(raw.x, raw.y);
-                const moved = drag.moved;
-                dragRef.current = null;
-                setDragPreview(null);
-                if (moved) {
-                  onNodeDragEnd?.(n.uuid, snapped.x, snapped.y);
-                } else {
-                  onNodeClick?.(n.uuid);
-                }
+                onNodeDragEnd?.(n.uuid, snapped.x, snapped.y);
                 return;
               }
-            }}
-            onClick={(ev) => {
-              ev.stopPropagation();
-              if (allowNodeDrag) return;
               onNodeClick?.(n.uuid);
             }}
-            onPointerEnter={() => setHoverUuid(n.uuid)}
-            onPointerLeave={() => setHoverUuid((u) => (u === n.uuid ? null : u))}
+            onClick={(ev) => {
+              // Fallback if pointerUp path was skipped; never let click fall through to edge.
+              ev.stopPropagation();
+            }}
+            onPointerEnter={() => {
+              setHoverNodeUuid(n.uuid);
+              setHoverEdgeUuid(null);
+            }}
+            onPointerLeave={() => setHoverNodeUuid((u) => (u === n.uuid ? null : u))}
           >
             <title>{tip}</title>
-            {/* Larger hit target */}
-            <circle cx={nx * scale} cy={ny * scale} r={Math.max(r + 6, 12)} fill="transparent" />
+            {/*
+              CRITICAL: fill must be a real paint + pointer-events:all.
+              fill="transparent" + default visiblePainted often misses hits → edge steals click.
+            */}
+            <circle
+              cx={nx * scale}
+              cy={ny * scale}
+              r={hitR}
+              fill="rgba(0,0,0,0.001)"
+              style={{ pointerEvents: "all" }}
+            />
+            {(active || hovered) && (
+              <circle
+                cx={nx * scale}
+                cy={ny * scale}
+                r={hitR}
+                fill="none"
+                stroke="#38bdf8"
+                strokeWidth={1.5}
+                opacity={0.85}
+                style={{ pointerEvents: "none" }}
+              />
+            )}
             {kind === "access" && (
               <circle
                 cx={nx * scale}
