@@ -16,6 +16,7 @@ import {
   applyDrawStep,
   humanizeRouteTestMessage,
 } from "./routingCanvasInteraction";
+import { normalizeDrawnGraph } from "./routingDrawNormalize";
 
 function newUuid(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -293,6 +294,26 @@ export function useRoutingGraph(warehouseId: number | null, layoutId: number | n
     setDirty(true);
   }, []);
 
+  /**
+   * After drag/move: materialize crossings so visual intersections become topology
+   * (same safety net as draw-time normalize).
+   */
+  const normalizeAfterEdit = useCallback(() => {
+    const result = normalizeDrawnGraph(
+      { nodes: nodesRef.current, edges: edgesRef.current },
+      newUuid,
+      warehouseId ?? 0,
+      layoutId
+    );
+    nodesRef.current = result.nodes as RoutingNode[];
+    edgesRef.current = result.edges as RoutingEdge[];
+    setNodes(nodesRef.current);
+    setEdges(edgesRef.current);
+    setValidation(null);
+    setTestResult(null);
+    setDirty(true);
+  }, [warehouseId, layoutId]);
+
   const removeNode = useCallback((uuid: string) => {
     nodesRef.current = nodesRef.current.filter((n) => n.uuid !== uuid);
     edgesRef.current = edgesRef.current.filter(
@@ -486,6 +507,7 @@ export function useRoutingGraph(warehouseId: number | null, layoutId: number | n
     drawAtCm,
     splitEdgeAndContinueDraw,
     updateNode,
+    normalizeAfterEdit,
     removeNode,
     removeOrphanNodes,
     addEdge,

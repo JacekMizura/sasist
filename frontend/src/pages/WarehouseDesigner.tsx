@@ -3973,6 +3973,7 @@ export default function WarehouseDesigner() {
                   }}
                   onNodeDragEnd={(uuid, x, y) => {
                     routing.updateNode(uuid, { x, y });
+                    routing.normalizeAfterEdit();
                     setRoutingSelectedNode(uuid);
                     setRoutingSelectedEdge(null);
                   }}

@@ -315,9 +315,43 @@ function edgeKey(a: string, b: string): string {
   return a < b ? `${a}|${b}` : `${b}|${a}`;
 }
 
+function degreeOf(uuid: string, edges: NormEdge[]): number {
+  return edges.filter((e) => e.from_node_uuid === uuid || e.to_node_uuid === uuid).length;
+}
+
+/** Nodes that must never be skipped when rebuilding a collinear chain. */
+function isProtectedNode(n: NormNode, edges: NormEdge[]): boolean {
+  if (n.operational_type) return true;
+  if (n.node_type === "operational") return true;
+  if ((n.meta as { auto_intersection?: boolean } | null)?.auto_intersection) return true;
+  if ((n.label ?? "").trim() === "Skrzyżowanie") return true;
+  return degreeOf(n.uuid, edges) >= 3;
+}
+
+function pointOnCollinearUnion(
+  n: NormNode,
+  a: NormNode,
+  b: NormNode,
+  c: NormNode,
+  d: NormNode,
+  useX: boolean,
+  eps = SNAP_EPS_CM
+): boolean {
+  const scale = Math.max(1, Math.abs(b.x - a.x) + Math.abs(b.y - a.y));
+  if (Math.abs(orient(a.x, a.y, b.x, b.y, n.x, n.y)) > eps * scale) return false;
+  const proj = (p: NormNode) => (useX ? p.x : p.y);
+  const lo = Math.min(proj(a), proj(b), proj(c), proj(d));
+  const hi = Math.max(proj(a), proj(b), proj(c), proj(d));
+  const t = proj(n);
+  return t >= lo - eps && t <= hi + eps;
+}
+
 /**
  * Collapse collinear overlapping edges into a non-overlapping chain
- * along the shared line (reuse endpoints; no stacked duplicates).
+ * along the shared line.
+ *
+ * Safety: keeps every node that lies on the union segment (junctions with
+ * branches, operational points, etc.). Never deletes nodes — only rewires edges.
  */
 export function collapseCollinearOverlaps(
   graph: NormGraph,
@@ -352,17 +386,34 @@ export function collapseCollinearOverlaps(
 
         const useX = Math.abs(b.x - a.x) >= Math.abs(b.y - a.y);
         const proj = (n: NormNode) => (useX ? n.x : n.y);
-        const unique = new Map<string, NormNode>();
-        for (const n of [a, b, c, d]) {
-          let found: NormNode | null = null;
-          for (const existing of unique.values()) {
-            if (Math.abs(proj(existing) - proj(n)) <= SNAP_EPS_CM) {
-              found = existing;
-              break;
-            }
-          }
-          if (!found) unique.set(n.uuid, n);
+
+        // All nodes on the overlapping line segment (not only the 4 endpoints).
+        const onLine: NormNode[] = [];
+        for (const n of nodes) {
+          if (pointOnCollinearUnion(n, a, b, c, d, useX)) onLine.push(n);
         }
+        // Always include the four endpoints even if float noise rejects them.
+        for (const n of [a, b, c, d]) {
+          if (!onLine.some((x) => x.uuid === n.uuid)) onLine.push(n);
+        }
+
+        // Deduplicate by UUID; only merge distinct UUIDs when both unprotected and very close.
+        const unique = new Map<string, NormNode>();
+        const sortedCandidates = [...onLine].sort((p, q) => proj(p) - proj(q));
+        for (const n of sortedCandidates) {
+          let mergeInto: NormNode | null = null;
+          for (const existing of unique.values()) {
+            if (Math.abs(proj(existing) - proj(n)) > SNAP_EPS_CM) continue;
+            const exProt = isProtectedNode(existing, edges);
+            const nProt = isProtectedNode(n, edges);
+            // Never merge away a protected node into another identity.
+            if (exProt || nProt) continue;
+            mergeInto = existing;
+            break;
+          }
+          if (!mergeInto) unique.set(n.uuid, n);
+        }
+
         const sorted = [...unique.values()].sort((p, q) => proj(p) - proj(q));
         if (sorted.length < 2) continue;
 
@@ -387,6 +438,7 @@ export function collapseCollinearOverlaps(
 
   return { nodes, edges };
 }
+
 
 /** Full draw-time topology pass after each stroke step. */
 export function normalizeDrawnGraph(
