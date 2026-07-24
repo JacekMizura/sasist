@@ -296,13 +296,18 @@ def test_13_validation_detects_issues(db):
     no_edges = next(i for i in res.issues if i.code == "NO_EDGES")
     assert "trasy" in no_edges.message.lower() or "punkt" in no_edges.message.lower()
     assert len(no_edges.ref_uuids) == 2
-    # Structural broken → ok False; ops issues are info and do not alone define ok
+    # Structural broken → ok False; missing Start/Packing are concrete warnings
     assert res.ok is False
     assert res.operational_ready is False
     assert all(
+        i.severity == "warning"
+        for i in res.issues
+        if i.code in {"MISSING_PICKING_START", "MISSING_PACKING"}
+    )
+    assert all(
         i.severity == "info"
         for i in res.issues
-        if i.code in {"MISSING_PICKING_START", "MISSING_PACKING", "LOCATIONS_WITHOUT_ACCESS"}
+        if i.code == "LOCATIONS_WITHOUT_ACCESS"
     )
 
 

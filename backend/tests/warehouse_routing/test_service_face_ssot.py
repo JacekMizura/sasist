@@ -172,9 +172,13 @@ def test_repair_abc_layout_like_prod(db):
     assert nb.y == pytest.approx(-1.0)  # NORTH
     assert nc.y == pytest.approx(1.0)  # SOUTH
     assert normals_are_opposite(nb, nc)
-    assert s.service_side == "FRONT" and int(s.rotation_degrees or 0) == 0
-    assert any(x.get("reason") == "store" for x in report.skipped_store)
-    assert report.deterministic_count >= 3
+    # Store uses same SSOT — infer NORTH from C aisle gap (not skipped forever).
+    ns = world_service_normal(
+        orientation=s.orientation, rotation_degrees=s.rotation_degrees, service_side=s.service_side
+    )
+    assert ns.y == pytest.approx(-1.0)  # NORTH toward packing corridor / C gap
+    assert any(r.get("name") == "S1" and r.get("changed") for r in report.repaired)
+    assert report.deterministic_count >= 4
 
 
 def test_repair_does_not_override_explicit_face(db):
@@ -415,4 +419,6 @@ def test_should_repair_gate_unit():
     explicit = SimpleNamespace(service_side="BACK", rotation_degrees=90, rack_type="warehouse")
     assert should_repair_legacy_mismatch(explicit, south, orientation="vertical") is False
     store = SimpleNamespace(service_side="FRONT", rotation_degrees=0, rack_type="store")
+    # Row-band gate still skips store; store uses dedicated _apply_store_face path.
     assert should_repair_legacy_mismatch(store, south, orientation="vertical") is False
+

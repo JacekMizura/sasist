@@ -151,6 +151,7 @@ def get_warehouse_locations(warehouse_id: int, db: Session = Depends(get_db)):
                     "name": code,
                     "code": code,
                     "type": wms_location_badge_kind(loc),
+                    "location_type": (getattr(loc, "location_type", None) or "NORMAL"),
                     "storage_type": st_by_lid.get(lid, "unknown"),
                     "zone": zn,
                     "capacity_type": ct,

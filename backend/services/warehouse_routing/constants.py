@@ -15,11 +15,12 @@ OP_PICKING_START = "picking_start"
 OP_PACKING = "packing"
 OP_RECEIVING_DOCK = "receiving_dock"
 OP_RECEIVING_BUFFER = "receiving_buffer"
-OP_PUTAWAY_BUFFER = "putaway_buffer"
-OP_CART_PARKING = "cart_parking"
-OP_CONSOLIDATION = "consolidation"
-OP_END_POINT = "end_point"
+OP_PUTAWAY_BUFFER = "putaway_buffer"  # legacy alias — keep for persistence
+OP_CART_PARKING = "cart_parking"  # legacy
+OP_CONSOLIDATION = "consolidation"  # legacy
+OP_END_POINT = "end_point"  # legacy
 
+# All persisted values (UI offers only the first four + junction/null "Trasa").
 OPERATIONAL_TYPES = frozenset(
     {
         OP_PICKING_START,
@@ -30,6 +31,16 @@ OPERATIONAL_TYPES = frozenset(
         OP_CART_PARKING,
         OP_CONSOLIDATION,
         OP_END_POINT,
+    }
+)
+
+# Designer select / new nodes — do not delete legacy from OPERATIONAL_TYPES.
+UI_OPERATIONAL_TYPES = frozenset(
+    {
+        OP_PICKING_START,
+        OP_PACKING,
+        OP_RECEIVING_DOCK,
+        OP_RECEIVING_BUFFER,
     }
 )
 

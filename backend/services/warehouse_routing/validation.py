@@ -21,7 +21,8 @@ from .constants import (
     OP_PICKING_START,
 )
 
-# Designer "Konfiguracja sieci" — never severity=error; do not flip ok=False alone.
+# Designer "operational readiness" soft codes — never severity=error alone.
+# Concrete issues surface as warnings / Location Access panel — not a vague config box.
 _OPERATIONAL_ISSUE_CODES = frozenset(
     {
         "MISSING_PICKING_START",
@@ -197,16 +198,16 @@ def validate_graph(db: Session, warehouse_id: int) -> RoutingValidationResult:
         issues.append(
             ValidationIssue(
                 code="MISSING_PICKING_START",
-                severity="info",
-                message="Start kompletacji — nie ustawiono",
+                severity="warning",
+                message="Brak punktu Start — ustaw typ „Start” na punkcie sieci.",
             )
         )
     if not packs:
         issues.append(
             ValidationIssue(
                 code="MISSING_PACKING",
-                severity="info",
-                message="Pakowanie — nie ustawiono",
+                severity="warning",
+                message="Brak punktu Pakowanie — ustaw typ „Pakowanie” na punkcie sieci.",
             )
         )
 
@@ -235,8 +236,8 @@ def validate_graph(db: Session, warehouse_id: int) -> RoutingValidationResult:
             issues.append(
                 ValidationIssue(
                     code="START_CANNOT_REACH_PACKING",
-                    severity="info",
-                    message="Start kompletacji nie łączy się jeszcze z pakowaniem (sprawdź kierunki odcinków).",
+                    severity="warning",
+                    message="Start nie łączy się jeszcze z pakowaniem (sprawdź kierunki odcinków).",
                 )
             )
 
@@ -282,7 +283,7 @@ def validate_graph(db: Session, warehouse_id: int) -> RoutingValidationResult:
 
     # Location Access Foundation — AUTO/OVERRIDE bindings (not mass Access Point assignment)
     locs = (
-        db.query(Location.id, Location.name)
+        db.query(Location)
         .filter(Location.warehouse_id == wid, Location.is_active.is_(True))
         .limit(5000)
         .all()
@@ -299,6 +300,7 @@ def validate_graph(db: Session, warehouse_id: int) -> RoutingValidationResult:
             STATUS_NO_GRAPH,
             STATUS_LEGACY_NODE,
             _normalize_status,
+            is_functional_routing_location,
         )
 
         access_rows = (
@@ -306,23 +308,32 @@ def validate_graph(db: Session, warehouse_id: int) -> RoutingValidationResult:
             .filter(WarehouseRoutingLocationAccess.warehouse_id == wid)
             .all()
         )
+        loc_by_id = {int(l.id): l for l in locs}
+
+        def _is_storage_access_row(r) -> bool:
+            loc = loc_by_id.get(int(r.location_id))
+            if loc is None:
+                return True
+            return not is_functional_routing_location(loc)
+
+        storage_rows = [r for r in access_rows if _is_storage_access_row(r)]
 
         ok_n = sum(
             1
-            for r in access_rows
+            for r in storage_rows
             if _normalize_status(r.status) in (STATUS_RESOLVED, STATUS_LEGACY_NODE)
         )
-        review_n = sum(1 for r in access_rows if _normalize_status(r.status) == STATUS_AMBIGUOUS)
+        review_n = sum(1 for r in storage_rows if _normalize_status(r.status) == STATUS_AMBIGUOUS)
         broken_n = sum(
-            1 for r in access_rows if _normalize_status(r.status) == STATUS_OVERRIDE_BROKEN
+            1 for r in storage_rows if _normalize_status(r.status) == STATUS_OVERRIDE_BROKEN
         )
         bad_n = sum(
             1
-            for r in access_rows
+            for r in storage_rows
             if _normalize_status(r.status)
             in (STATUS_UNREACHABLE, STATUS_BLOCKED, STATUS_NO_RACK, STATUS_NO_GRAPH)
         )
-        if access_rows:
+        if storage_rows:
             issues.append(
                 ValidationIssue(
                     code="LOCATIONS_ACCESS_OK",
@@ -354,7 +365,7 @@ def validate_graph(db: Session, warehouse_id: int) -> RoutingValidationResult:
                     message=f"Lokalizacje bez drogi w zasięgu: {bad_n}",
                 )
             )
-        elif not access_rows and locs:
+        elif not storage_rows and locs:
             issues.append(
                 ValidationIssue(
                     code="LOCATIONS_WITHOUT_ACCESS",

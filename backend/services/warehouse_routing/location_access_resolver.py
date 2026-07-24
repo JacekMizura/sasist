@@ -45,6 +45,18 @@ STATUS_LEGACY_NODE = "LEGACY_NODE"  # MANUAL via Stage-2 node (resolved if node 
 STATUS_OK = STATUS_RESOLVED
 STATUS_REVIEW = STATUS_AMBIGUOUS
 
+# Locations that represent routing functional points (Start / Packing / Dock), not storage bins.
+_FUNCTIONAL_LOCATION_TYPES = frozenset({"PICK_START", "PACKING", "DOCK"})
+
+
+def is_functional_routing_location(location: object) -> bool:
+    """True for special Locations that must not count as storage Location Access problems."""
+    lt = str(getattr(location, "location_type", None) or "").strip().upper()
+    if lt in _FUNCTIONAL_LOCATION_TYPES:
+        return True
+    name = str(getattr(location, "name", None) or "").strip().upper()
+    return name in {"START", "DOCK-IN", "DOCK", "PACKING"}
+
 
 def _normalize_status(raw: object) -> str:
     s = str(raw or "").strip().upper()
@@ -547,14 +559,29 @@ def location_access_summary(db: Session, warehouse_id: int) -> dict:
         .filter(WarehouseRoutingLocationAccess.warehouse_id == wid)
         .all()
     )
+    loc_ids = {int(r.location_id) for r in rows}
+    locs = (
+        db.query(Location).filter(Location.id.in_(loc_ids)).all() if loc_ids else []
+    )
+    loc_by_id = {int(l.id): l for l in locs}
+
     by_status: dict[str, int] = {}
     by_mode: dict[str, int] = {}
+    storage_rows = []
+    functional_n = 0
     for r in rows:
+        loc = loc_by_id.get(int(r.location_id))
+        if loc is not None and is_functional_routing_location(loc):
+            functional_n += 1
+            continue
+        storage_rows.append(r)
         by_status[r.status] = by_status.get(r.status, 0) + 1
         by_mode[r.binding_mode] = by_mode.get(r.binding_mode, 0) + 1
     return {
         "warehouse_id": wid,
-        "total": len(rows),
+        "total": len(storage_rows),
         "by_status": by_status,
         "by_mode": by_mode,
+        "functional_excluded": functional_n,
+        "raw_total": len(rows),
     }
